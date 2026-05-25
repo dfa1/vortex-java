@@ -2,6 +2,8 @@ package io.github.dfa1.vortex.io;
 
 import io.github.dfa1.vortex.core.*;
 import io.github.dfa1.vortex.encoding.DecoderRegistry;
+import io.github.dfa1.vortex.scan.ScanIterator;
+import io.github.dfa1.vortex.scan.ScanOptions;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -112,11 +114,14 @@ public final class VortexFile implements Closeable {
         );
     }
 
-    public DType   dtype()    { return dtype; }
-    public Layout  layout()   { return layout; }
-    public Footer  footer()   { return footer; }
-    public int     version()  { return version; }
-    public long    fileSize() { return fileSize; }
+    public DType           dtype()    { return dtype; }
+    public Layout          layout()   { return layout; }
+    public Footer          footer()   { return footer; }
+    public int             version()  { return version; }
+    public long            fileSize() { return fileSize; }
+    public DecoderRegistry registry() { return registry; }
+
+    public ScanIterator scan(ScanOptions options) { return new ScanIterator(this, options); }
 
     /** Zero-copy slice of the memory-mapped file. */
     public MemorySegment slice(long offset, long length) {

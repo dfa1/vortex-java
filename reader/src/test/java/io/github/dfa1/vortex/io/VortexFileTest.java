@@ -1,5 +1,11 @@
 package io.github.dfa1.vortex.io;
 
+import io.github.dfa1.vortex.encoding.Array;
+import io.github.dfa1.vortex.encoding.DecodeContext;
+import io.github.dfa1.vortex.encoding.Decoder;
+import io.github.dfa1.vortex.encoding.DecoderRegistry;
+import io.github.dfa1.vortex.scan.ScanOptions;
+import io.github.dfa1.vortex.scan.ScanResult;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -10,6 +16,7 @@ import java.net.URISyntaxException;
 import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -111,6 +118,92 @@ class VortexFileTest {
 
         // Then
         assertThat(version).isEqualTo(1);
+    }
+
+    // --- scan ---
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "primitives.vortex",
+        "booleans.vortex",
+        "null.vortex",
+        "varbin.vortex",
+        "chunked.vortex"
+    })
+    void scan_withNoDecoders_reachesDecodeStep(String name) throws URISyntaxException, IOException {
+        // Given
+        Path path = fixtureFile(name);
+
+        // When / Then — layout traversal succeeds; decode fails only on missing decoder
+        try (var sut = VortexFile.open(path, DecoderRegistry.empty());
+             var iter = sut.scan(ScanOptions.all())) {
+            assertThatThrownBy(iter::hasNext)
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("no decoder for encoding:");
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "primitives.vortex",
+        "booleans.vortex",
+        "null.vortex",
+        "varbin.vortex",
+        "chunked.vortex"
+    })
+    void scan_withStubDecoder_producesAtLeastOneChunk(String name) throws URISyntaxException, IOException {
+        // Given
+        Path path = fixtureFile(name);
+        var registry = buildUniversalStubRegistry();
+
+        // When
+        try (var sut = VortexFile.open(path, registry);
+             var iter = sut.scan(ScanOptions.all())) {
+
+            // Then
+            assertThat(iter.hasNext()).isTrue();
+            ScanResult chunk = iter.next();
+            assertThat(chunk.rowCount()).isGreaterThan(0);
+            assertThat(chunk.columns()).isNotEmpty();
+        }
+    }
+
+    @Test
+    void scan_chunkedFixture_producesExactlyOneLayoutChunk() throws URISyntaxException, IOException {
+        // Given — chunked.vortex uses a ChunkedArray *encoding* inside one flat layout node
+        Path path = fixtureFile("chunked.vortex");
+        var registry = buildUniversalStubRegistry();
+        int chunkCount = 0;
+
+        // When
+        try (var sut = VortexFile.open(path, registry);
+             var iter = sut.scan(ScanOptions.all())) {
+            while (iter.hasNext()) {
+                iter.next();
+                chunkCount++;
+            }
+        }
+
+        // Then
+        assertThat(chunkCount).isEqualTo(1);
+    }
+
+    private static DecoderRegistry buildUniversalStubRegistry() {
+        var registry = DecoderRegistry.empty();
+        Decoder stub = new Decoder() {
+            @Override public String encodingId() { return "*"; }
+            @Override public Array decode(DecodeContext ctx) { return Array.empty(ctx.dtype()); }
+        };
+        for (String id : List.of(
+                "vortex.flat", "vortex.bool", "vortex.null",
+                "vortex.varbin", "vortex.struct", "vortex.chunked",
+                "vortex.bitpacked", "vortex.constant", "vortex.sparse",
+                "fastlanes.bitpacked", "fastlanes.delta", "fastlanes.for",
+                "alp", "alp_rd", "dict", "zigzag", "roaring.bool", "roaring.int",
+                "byte_bool")) {
+            registry.register(id, stub);
+        }
+        return registry;
     }
 
     // --- helpers ---
