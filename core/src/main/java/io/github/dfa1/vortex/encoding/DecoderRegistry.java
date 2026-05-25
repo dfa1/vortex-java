@@ -5,14 +5,14 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.ServiceLoader;
 
-/** Registry mapping encoding IDs to {@link Decoder} implementations. */
+/// Registry mapping encoding IDs to [Decoder] implementations.
 public final class DecoderRegistry {
 
     private final Map<String, Decoder> decoders = new HashMap<>();
 
     private DecoderRegistry() {}
 
-    /** Load all {@link Decoder}s registered via ServiceLoader. */
+    /// Load all [Decoder]s registered via `ServiceLoader`.
     public static DecoderRegistry loadAll() {
         var registry = new DecoderRegistry();
         ServiceLoader.load(Decoder.class).forEach(d -> registry.register(d.encodingId(), d));

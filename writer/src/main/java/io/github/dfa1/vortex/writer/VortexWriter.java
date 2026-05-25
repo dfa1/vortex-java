@@ -7,19 +7,17 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.util.Map;
 
-/**
- * Writes a Vortex file.
- *
- * <p>Usage:
- * <pre>{@code
- * var schema = new DType.Struct(List.of("id", "value"),
- *                               List.of(new DType.Primitive(PType.I64, false),
- *                                       new DType.Primitive(PType.F64, false)), false);
- * try (var writer = VortexWriter.create(out, schema, WriteOptions.defaults())) {
- *     writer.writeChunk(Map.of("id", idArray, "value", valueArray));
- * }
- * }</pre>
- */
+/// Writes a Vortex file.
+///
+/// Usage:
+/// ```java
+/// var schema = new DType.Struct(List.of("id", "value"),
+///                               List.of(new DType.Primitive(PType.I64, false),
+///                                       new DType.Primitive(PType.F64, false)), false);
+/// try (var writer = VortexWriter.create(out, schema, WriteOptions.defaults())) {
+///     writer.writeChunk(Map.of("id", idArray, "value", valueArray));
+/// }
+/// ```
 public final class VortexWriter implements Closeable {
 
     private final OutputStream  out;
@@ -36,13 +34,11 @@ public final class VortexWriter implements Closeable {
         return new VortexWriter(out, schema, options);
     }
 
-    /**
-     * Write one chunk. Encoding selected per-column per-chunk:
-     * integers → FoR+BitPacking or Pcodec → Primitive fallback;
-     * floats → Pcodec → Primitive;
-     * strings → Dict(VarBinView) → VarBinView;
-     * bools → Bool (bit-packed).
-     */
+    /// Write one chunk. Encoding selected per-column per-chunk:
+    /// - integers → FoR+BitPacking or Pcodec → Primitive fallback
+    /// - floats → Pcodec → Primitive
+    /// - strings → Dict(VarBinView) → VarBinView
+    /// - bools → Bool (bit-packed)
     public void writeChunk(Map<String, Object> columns) throws IOException {
         throw new UnsupportedOperationException("VortexWriter not yet implemented");
     }

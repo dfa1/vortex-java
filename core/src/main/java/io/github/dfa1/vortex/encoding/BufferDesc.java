@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
-/** Describes one data buffer within an array segment. */
+/// Describes one data buffer within an array segment.
 public record BufferDesc(
     short padding,
     byte  alignmentExponent,

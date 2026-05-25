@@ -2,12 +2,10 @@ package io.github.dfa1.vortex.scan;
 
 import java.util.List;
 
-/**
- * Options controlling a file scan.
- *
- * <p>Empty {@code columns} = read all columns.
- * Null {@code rowFilter} = no zone-map pruning.
- */
+/// Options controlling a file scan.
+///
+/// Empty `columns` = read all columns.
+/// Null `rowFilter` = no zone-map pruning.
 public record ScanOptions(
     List<String> columns,
     RowFilter    rowFilter,

@@ -19,18 +19,16 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Iterates over decoded chunks from a {@link VortexFile}.
- *
- * <p>Usage:
- * <pre>{@code
- * try (var iter = file.scan(ScanOptions.all())) {
- *     while (iter.hasNext()) {
- *         ScanResult chunk = iter.next();
- *     }
- * }
- * }</pre>
- */
+/// Iterates over decoded chunks from a [VortexFile].
+///
+/// Usage:
+/// ```java
+/// try (var iter = file.scan(ScanOptions.all())) {
+///     while (iter.hasNext()) {
+///         ScanResult chunk = iter.next();
+///     }
+/// }
+/// ```
 public final class ScanIterator implements AutoCloseable {
 
     private final VortexFile  file;

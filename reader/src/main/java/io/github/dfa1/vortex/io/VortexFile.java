@@ -15,12 +15,10 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 
-/**
- * Handle to an open Vortex file. Memory-maps the file via the FFM API;
- * all Array buffers returned during scan are slices of this MemorySegment.
- *
- * <p>Close this to release the memory-mapped region.
- */
+/// Handle to an open Vortex file. Memory-maps the file via the FFM API;
+/// all Array buffers returned during scan are slices of this `MemorySegment`.
+///
+/// Close this to release the memory-mapped region.
 public final class VortexFile implements Closeable {
 
     static final ValueLayout.OfShort LE_SHORT =
@@ -57,10 +55,8 @@ public final class VortexFile implements Closeable {
         this.registry    = registry;
     }
 
-    /**
-     * Open a Vortex file. Memory-maps the entire file; all subsequent reads
-     * are zero-copy slices. Call {@link #close()} when done.
-     */
+    /// Open a Vortex file. Memory-maps the entire file; all subsequent reads
+    /// are zero-copy slices. Call [#close()] when done.
     public static VortexFile open(Path path) throws IOException {
         return open(path, DecoderRegistry.loadAll());
     }
@@ -123,7 +119,7 @@ public final class VortexFile implements Closeable {
 
     public ScanIterator scan(ScanOptions options) { return new ScanIterator(this, options); }
 
-    /** Zero-copy slice of the memory-mapped file. */
+    /// Zero-copy slice of the memory-mapped file.
     public MemorySegment slice(long offset, long length) {
         return fileSegment.asSlice(offset, length);
     }

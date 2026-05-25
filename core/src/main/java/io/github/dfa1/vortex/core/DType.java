@@ -2,18 +2,16 @@ package io.github.dfa1.vortex.core;
 
 import java.util.List;
 
-/**
- * Vortex logical data type. Strictly logical — defines value domain, not physical storage.
- *
- * <p>Usage with pattern matching:
- * <pre>{@code
- * switch (dtype) {
- *     case DType.Primitive(var pt, var nullable) -> ...
- *     case DType.Struct(var names, var types, var nullable) -> ...
- *     default -> ...
- * }
- * }</pre>
- */
+/// Vortex logical data type. Strictly logical — defines value domain, not physical storage.
+///
+/// Usage with pattern matching:
+/// ```java
+/// switch (dtype) {
+///     case DType.Primitive(var pt, var nullable) -> ...
+///     case DType.Struct(var names, var types, var nullable) -> ...
+///     default -> ...
+/// }
+/// ```
 public sealed interface DType
     permits DType.Null, DType.Bool, DType.Primitive, DType.Decimal,
             DType.Utf8, DType.Binary, DType.Struct,

@@ -4,10 +4,8 @@ import io.github.dfa1.vortex.core.DType;
 
 import java.lang.foreign.MemorySegment;
 
-/**
- * Decoded columnar data. Buffers are MemorySegment slices backed by the
- * memory-mapped file; lifetime is tied to the VortexFile's Arena.
- */
+/// Decoded columnar data. Buffers are `MemorySegment` slices backed by the
+/// memory-mapped file; lifetime is tied to the `VortexFile`'s Arena.
 public record Array(
     DType           dtype,
     long            length,

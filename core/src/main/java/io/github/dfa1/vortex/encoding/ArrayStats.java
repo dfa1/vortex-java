@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
-/** Per-array statistics embedded in the encoding tree. */
+/// Per-array statistics embedded in the encoding tree.
 public record ArrayStats(
     Object  min,
     Object  max,

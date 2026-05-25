@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.writer;
 
-/** Tuning knobs for the Vortex writer. */
+/// Tuning knobs for the Vortex writer.
 public record WriteOptions(
     int     chunkSize,
     boolean enableZoneMaps,

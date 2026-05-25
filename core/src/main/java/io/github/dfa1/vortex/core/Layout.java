@@ -2,12 +2,12 @@ package io.github.dfa1.vortex.core;
 
 import java.util.List;
 
-/**
- * Node in the Vortex layout tree. Describes physical arrangement of data in the file.
- *
- * <p>Typical tree shape per column:
- * <pre>Struct → Zoned(Stats) → Chunked → [Flat, Flat, ...]</pre>
- */
+/// Node in the Vortex layout tree. Describes physical arrangement of data in the file.
+///
+/// Typical tree shape per column:
+/// ```
+/// Struct → Zoned(Stats) → Chunked → [Flat, Flat, ...]
+/// ```
 public record Layout(
     String        encodingId,
     long          rowCount,
