@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.perf;
+package io.github.dfa1.vortex.performance;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
@@ -30,7 +30,7 @@ import java.util.concurrent.TimeUnit;
 
 /// Write-speed benchmark: Java `VortexWriter` vs JNI vortex writer.
 ///
-/// Run: `java -jar perf/target/benchmarks.jar WriteBenchmark`
+/// Run: `java -jar performance/target/benchmarks.jar WriteBenchmark`
 ///
 /// JNI baseline is commented out until bindings are available (TODO.md #10).
 @State(Scope.Benchmark)

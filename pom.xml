@@ -20,14 +20,14 @@
     <profile>
       <id>integration</id>
       <modules>
-        <module>it</module>
+        <module>integration</module>
       </modules>
     </profile>
-    <!-- JMH benchmarks: ./mvnw package -Pperf -pl perf && java -jar perf/target/benchmarks.jar -->
+    <!-- JMH benchmarks: ./mvnw package -Pperformance -pl performance && java -jar performance/target/benchmarks.jar -->
     <profile>
-      <id>perf</id>
+      <id>performance</id>
       <modules>
-        <module>perf</module>
+        <module>performance</module>
       </modules>
     </profile>
   </profiles>

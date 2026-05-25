@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.perf;
+package io.github.dfa1.vortex.performance;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
@@ -33,7 +33,7 @@ import java.util.concurrent.TimeUnit;
 
 /// Read-speed benchmark: Java `VortexFile` + `ScanIterator` vs JNI vortex reader.
 ///
-/// Run: `java -jar perf/target/benchmarks.jar ReadBenchmark`
+/// Run: `java -jar performance/target/benchmarks.jar ReadBenchmark`
 ///
 /// JNI baseline is commented out until bindings are available (TODO.md #11).
 @State(Scope.Benchmark)

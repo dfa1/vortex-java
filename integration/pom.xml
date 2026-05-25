@@ -9,7 +9,7 @@
     <version>0.1.0-SNAPSHOT</version>
   </parent>
 
-  <artifactId>it</artifactId>
+  <artifactId>integration</artifactId>
 
   <dependencies>
     <dependency>
