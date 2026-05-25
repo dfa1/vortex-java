@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
+import java.nio.ByteBuffer;
 
 /// Decoding context passed to each [Decoder].
 ///
@@ -28,5 +29,5 @@ public record DecodeContext(
         return segmentBuffers[node.bufferIndices()[i]];
     }
 
-    public byte[] metadata() { return node.metadata(); }
+    public ByteBuffer metadata() { return node.metadata(); }
 }

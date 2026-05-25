@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.core;
 
+import java.nio.ByteBuffer;
 import java.util.List;
 
 /// Vortex logical data type. Strictly logical — defines value domain, not physical storage.
@@ -54,9 +55,9 @@ public sealed interface DType
     record FixedSizeList(DType elementType, int fixedSize, boolean nullable) implements DType {}
 
     record Extension(
-        String extensionId,
-        DType  storageDType,
-        byte[] metadata,
-        boolean nullable
+        String     extensionId,
+        DType      storageDType,
+        ByteBuffer metadata,
+        boolean    nullable
     ) implements DType {}
 }

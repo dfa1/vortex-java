@@ -14,12 +14,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteOrder;
-import java.nio.file.Files;
+import java.nio.channels.FileChannel;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -41,8 +41,8 @@ class VortexWriterTest {
     void writeChunk_missingColumn_throwsIllegalArgument(@TempDir Path tmp) throws IOException {
         // Given
         Path file = tmp.resolve("missing.vtx");
-        try (OutputStream out = Files.newOutputStream(file);
-             var sut = VortexWriter.create(out, SCHEMA, WriteOptions.defaults())) {
+        try (var ch  = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
             // When / Then
             assertThatThrownBy(() -> sut.writeChunk(Map.of("id", new long[]{1L})))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -55,12 +55,12 @@ class VortexWriterTest {
     @Test
     void writeAndRead_singleChunk_returnsCorrectRowCount(@TempDir Path tmp) throws IOException {
         // Given
-        Path    file  = tmp.resolve("single.vtx");
-        long[]  ids   = {1L, 2L, 3L};
+        Path     file = tmp.resolve("single.vtx");
+        long[]   ids  = {1L, 2L, 3L};
         double[] vals = {1.0, 2.0, 3.0};
 
-        try (OutputStream out = Files.newOutputStream(file);
-             var sut = VortexWriter.create(out, SCHEMA, WriteOptions.defaults())) {
+        try (var ch  = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
             // When
             sut.writeChunk(Map.of("id", ids, "value", vals));
         }
@@ -80,8 +80,8 @@ class VortexWriterTest {
         // Given
         Path file = tmp.resolve("multi.vtx");
 
-        try (OutputStream out = Files.newOutputStream(file);
-             var sut = VortexWriter.create(out, SCHEMA, WriteOptions.defaults())) {
+        try (var ch  = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
             // When
             sut.writeChunk(Map.of("id", new long[]{1L, 2L}, "value", new double[]{1.0, 2.0}));
             sut.writeChunk(Map.of("id", new long[]{3L, 4L, 5L}, "value", new double[]{3.0, 4.0, 5.0}));
@@ -103,8 +103,8 @@ class VortexWriterTest {
         Path   file = tmp.resolve("values.vtx");
         long[] ids  = {42L, 100L, -1L};
 
-        try (OutputStream out = Files.newOutputStream(file);
-             var sut = VortexWriter.create(out, SCHEMA, WriteOptions.defaults())) {
+        try (var ch  = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
             // When
             sut.writeChunk(Map.of("id", ids, "value", new double[]{0.0, 0.0, 0.0}));
         }
@@ -129,8 +129,8 @@ class VortexWriterTest {
         // Given
         Path file = tmp.resolve("proj.vtx");
 
-        try (OutputStream out = Files.newOutputStream(file);
-             var sut = VortexWriter.create(out, SCHEMA, WriteOptions.defaults())) {
+        try (var ch  = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
             // When
             sut.writeChunk(Map.of("id", new long[]{1L}, "value", new double[]{9.9}));
         }

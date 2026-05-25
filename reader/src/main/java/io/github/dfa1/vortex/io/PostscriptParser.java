@@ -28,9 +28,8 @@ final class PostscriptParser {
 
     record ParsedFile(Footer footer, DType dtype, Layout layout) {}
 
-    static ParsedFile parse(byte[] postscriptBytes, MemorySegment fileSegment) throws IOException {
-        var bb = ByteBuffer.wrap(postscriptBytes).order(ByteOrder.LITTLE_ENDIAN);
-        var ps = Postscript.getRootAsPostscript(bb);
+    static ParsedFile parse(ByteBuffer postscriptBuf, MemorySegment fileSegment) throws IOException {
+        var ps = Postscript.getRootAsPostscript(postscriptBuf);
 
         var footerSeg = ps.footer();
         if (footerSeg == null) {
@@ -96,10 +95,7 @@ final class PostscriptParser {
     private static Layout convertLayout(io.github.dfa1.vortex.fbs.Layout l, List<String> layoutSpecs) {
         String encodingId = layoutSpecs.get(l.encoding());
 
-        byte[] metadata = new byte[l.metadataLength()];
-        for (int i = 0; i < metadata.length; i++) {
-            metadata[i] = (byte) l.metadata(i);
-        }
+        ByteBuffer metadata = l.metadataAsByteBuffer();
 
         var children = new ArrayList<Layout>(l.childrenLength());
         for (int i = 0; i < l.childrenLength(); i++) {
@@ -155,14 +151,10 @@ final class PostscriptParser {
             }
             case Type.Extension    -> {
                 var e = (Extension) fbs.type(new Extension());
-                byte[] meta = new byte[e.metadataLength()];
-                for (int i = 0; i < meta.length; i++) {
-                    meta[i] = (byte) e.metadata(i);
-                }
                 yield new DType.Extension(
                     e.id(),
                     convertDType(e.storageDtype(new io.github.dfa1.vortex.fbs.DType())),
-                    meta, false);
+                    e.metadataAsByteBuffer(), false);
             }
             default -> throw new IOException("vortex: unsupported DType typeType=" + typeType);
         };

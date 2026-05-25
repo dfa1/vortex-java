@@ -98,10 +98,10 @@ public final class VortexFile implements Closeable {
         }
 
         long postscriptOffset = size - TRAILER_SIZE - postscriptLen;
-        var  postscriptBytes  = seg.asSlice(postscriptOffset, postscriptLen)
-                                   .toArray(ValueLayout.JAVA_BYTE);
+        var  postscriptBuf    = seg.asSlice(postscriptOffset, postscriptLen)
+                                   .asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
 
-        var parsed = PostscriptParser.parse(postscriptBytes, seg);
+        var parsed = PostscriptParser.parse(postscriptBuf, seg);
 
         return new VortexFile(
             arena, seg, size, version,

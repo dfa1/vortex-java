@@ -123,8 +123,8 @@ public final class ScanIterator implements AutoCloseable {
         } else if (layout.isChunked()) {
             // metadata[0] == 1 means children[0] is the per-chunk stats layout; skip it
             int start = (layout.metadata() != null
-                         && layout.metadata().length > 0
-                         && layout.metadata()[0] == 1) ? 1 : 0;
+                         && layout.metadata().hasRemaining()
+                         && layout.metadata().get(0) == 1) ? 1 : 0;
             for (int i = start; i < layout.children().size(); i++) {
                 collectFlats(layout.children().get(i), out);
             }
@@ -189,11 +189,6 @@ public final class ScanIterator implements AutoCloseable {
     ) {
         String encodingId = arraySpecs.get(fbs.encoding());
 
-        byte[] metadata = new byte[fbs.metadataLength()];
-        for (int i = 0; i < metadata.length; i++) {
-            metadata[i] = (byte) fbs.metadata(i);
-        }
-
         ArrayNode[] children = new ArrayNode[fbs.childrenLength()];
         for (int i = 0; i < children.length; i++) {
             children[i] = convertArrayNode(fbs.children(i), arraySpecs);
@@ -204,7 +199,7 @@ public final class ScanIterator implements AutoCloseable {
             bufferIndices[i] = fbs.buffers(i);
         }
 
-        return new ArrayNode(encodingId, metadata, children, bufferIndices, ArrayStats.empty());
+        return new ArrayNode(encodingId, fbs.metadataAsByteBuffer(), children, bufferIndices, ArrayStats.empty());
     }
 
     // ── Internal record ───────────────────────────────────────────────────────

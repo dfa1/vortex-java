@@ -14,9 +14,9 @@ import io.github.dfa1.vortex.fbs.Type;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.channels.WritableByteChannel;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -29,14 +29,14 @@ import java.util.Map;
 /// var schema = new DType.Struct(List.of("id", "value"),
 ///                               List.of(new DType.Primitive(PType.I64, false),
 ///                                       new DType.Primitive(PType.F64, false)), false);
-/// try (var writer = VortexWriter.create(out, schema, WriteOptions.defaults())) {
+/// try (var channel = FileChannel.open(path, CREATE, WRITE);
+///      var writer = VortexWriter.create(channel, schema, WriteOptions.defaults())) {
 ///     writer.writeChunk(Map.of("id", idArray, "value", valueArray));
 /// }
 /// ```
 public final class VortexWriter implements Closeable {
 
-    private static final int     VERSION = 1;
-    private static final byte[]  MAGIC   = {'V', 'T', 'X', 'F'};
+    private static final int VERSION = 1;
 
     // Indices into layout_specs list in the Footer
     private static final int LAYOUT_FLAT    = 0;
@@ -47,20 +47,23 @@ public final class VortexWriter implements Closeable {
     private static final int ARRAY_PRIMITIVE = 0;
     private static final int ARRAY_BOOL      = 1;
 
-    private final OutputStream out;
-    private final DType.Struct schema;
-    private final WriteOptions options;
+    private static final ByteBuffer MAGIC = ByteBuffer.wrap(new byte[]{'V', 'T', 'X', 'F'})
+        .asReadOnlyBuffer();
+
+    private final WritableByteChannel channel;
+    private final DType.Struct        schema;
+    private final WriteOptions        options;
 
     private long bytesWritten = 0;
 
-    private final List<SegRef>                  segs      = new ArrayList<>();
-    private final Map<String, List<ChunkRef>>   colChunks = new LinkedHashMap<>();
+    private final List<SegRef>                segs      = new ArrayList<>();
+    private final Map<String, List<ChunkRef>> colChunks = new LinkedHashMap<>();
 
     private record SegRef(long offset, int len) {}
     private record ChunkRef(int segIdx, long rowCount) {}
 
-    private VortexWriter(OutputStream out, DType.Struct schema, WriteOptions options) {
-        this.out     = out;
+    private VortexWriter(WritableByteChannel channel, DType.Struct schema, WriteOptions options) {
+        this.channel = channel;
         this.schema  = schema;
         this.options = options;
         for (String name : schema.fieldNames()) {
@@ -68,8 +71,10 @@ public final class VortexWriter implements Closeable {
         }
     }
 
-    public static VortexWriter create(OutputStream out, DType.Struct schema, WriteOptions options) {
-        return new VortexWriter(out, schema, options);
+    public static VortexWriter create(
+        WritableByteChannel channel, DType.Struct schema, WriteOptions options
+    ) {
+        return new VortexWriter(channel, schema, options);
     }
 
     /// Write one chunk. Encoding selected per-column per-chunk:
@@ -93,60 +98,64 @@ public final class VortexWriter implements Closeable {
 
     @Override
     public void close() throws IOException {
-        byte[] footerBytes = buildFooter();
-        long   footerOff   = bytesWritten;
-        out.write(footerBytes);
-        bytesWritten += footerBytes.length;
+        ByteBuffer footerBuf = buildFooter();
+        long       footerOff = bytesWritten;
+        write(footerBuf);
 
-        byte[] dtypeBytes  = buildDType(schema);
-        long   dtypeOff    = bytesWritten;
-        out.write(dtypeBytes);
-        bytesWritten += dtypeBytes.length;
+        ByteBuffer dtypeBuf = buildDType(schema);
+        long       dtypeOff = bytesWritten;
+        write(dtypeBuf);
 
-        byte[] layoutBytes = buildLayout();
-        long   layoutOff   = bytesWritten;
-        out.write(layoutBytes);
-        bytesWritten += layoutBytes.length;
+        ByteBuffer layoutBuf = buildLayout();
+        long       layoutOff = bytesWritten;
+        write(layoutBuf);
 
-        byte[] psBytes = buildPostscript(
-            footerOff, footerBytes.length,
-            dtypeOff,  dtypeBytes.length,
-            layoutOff, layoutBytes.length);
-        out.write(psBytes);
+        ByteBuffer psBuf = buildPostscript(
+            footerOff, footerBuf.capacity(),
+            dtypeOff,  dtypeBuf.capacity(),
+            layoutOff, layoutBuf.capacity());
+        write(psBuf);
 
         // 8-byte trailer: version(u16 LE) | postscriptLen(u16 LE) | magic(4)
         var trailer = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN);
         trailer.putShort((short) VERSION);
-        trailer.putShort((short) psBytes.length);
-        trailer.put(MAGIC);
-        out.write(trailer.array());
-
-        out.flush();
+        trailer.putShort((short) psBuf.capacity());
+        trailer.put(MAGIC.duplicate());
+        trailer.flip();
+        channel.write(trailer);
     }
 
     // ── Segment encoding ─────────────────────────────────────────────────────
 
     private int writeSegment(DType dtype, Object data) throws IOException {
-        byte[] bufData  = encodeBuffer(dtype, data);
-        int    segIdx   = segs.size();
-        long   offset   = bytesWritten;
-        int    arrayEnc = (dtype instanceof DType.Bool) ? ARRAY_BOOL : ARRAY_PRIMITIVE;
-        byte[] fbBytes  = buildArrayFlatBuffer(arrayEnc, bufData.length);
+        ByteBuffer bufData  = encodeBuffer(dtype, data);
+        int        segIdx   = segs.size();
+        long       offset   = bytesWritten;
+        int        arrayEnc = (dtype instanceof DType.Bool) ? ARRAY_BOOL : ARRAY_PRIMITIVE;
+        ByteBuffer fbBuf    = buildArrayFlatBuffer(arrayEnc, bufData.remaining());
 
         // Segment format: [buffer data] [FlatBuffer Array bytes] [4-byte LE u32 = fbLen]
-        out.write(bufData);
-        out.write(fbBytes);
-        byte[] sizeBuf = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN)
-            .putInt(fbBytes.length).array();
-        out.write(sizeBuf);
+        int fbLen   = fbBuf.remaining();
+        write(bufData);
+        write(fbBuf);
+        var sizeBuf = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(fbLen);
+        sizeBuf.flip();
+        channel.write(sizeBuf);
+        bytesWritten += 4;
 
-        int segLen = bufData.length + fbBytes.length + 4;
-        segs.add(new SegRef(offset, segLen));
-        bytesWritten += segLen;
+        segs.add(new SegRef(offset, (int) (bytesWritten - offset)));
         return segIdx;
     }
 
-    private static byte[] buildArrayFlatBuffer(int encIdx, int bufLen) {
+    private void write(ByteBuffer buf) throws IOException {
+        buf.rewind();
+        while (buf.hasRemaining()) {
+            channel.write(buf);
+        }
+        bytesWritten += buf.capacity();
+    }
+
+    private static ByteBuffer buildArrayFlatBuffer(int encIdx, int bufLen) {
         var fbb = new FlatBufferBuilder(256);
 
         // ArrayNode: encoding=encIdx, buffers=[0], no children, no metadata
@@ -167,10 +176,10 @@ public final class VortexWriter implements Closeable {
 
         int arrayOff = io.github.dfa1.vortex.fbs.Array.createArray(fbb, nodeOff, bufVec);
         io.github.dfa1.vortex.fbs.Array.finishArrayBuffer(fbb, arrayOff);
-        return fbb.sizedByteArray();
+        return fbb.dataBuffer().slice(fbb.dataBuffer().position(), fbb.dataBuffer().remaining());
     }
 
-    private static byte[] encodeBuffer(DType dtype, Object data) {
+    private static ByteBuffer encodeBuffer(DType dtype, Object data) {
         return switch (dtype) {
             case DType.Primitive p -> encodePrimitive(p.ptype(), data);
             case DType.Bool __     -> encodeBool((boolean[]) data);
@@ -178,17 +187,17 @@ public final class VortexWriter implements Closeable {
         };
     }
 
-    private static byte[] encodePrimitive(PType ptype, Object data) {
+    private static ByteBuffer encodePrimitive(PType ptype, Object data) {
         int elementBytes = ptype.byteSize();
         return switch (ptype) {
-            case I8, U8 -> (byte[]) data;
+            case I8, U8 -> ByteBuffer.wrap((byte[]) data);
             case I16, U16 -> {
                 short[] arr = (short[]) data;
                 var bb = ByteBuffer.allocate(arr.length * elementBytes).order(ByteOrder.LITTLE_ENDIAN);
                 for (short v : arr) {
                     bb.putShort(v);
                 }
-                yield bb.array();
+                yield bb.flip();
             }
             case I32, U32 -> {
                 int[] arr = (int[]) data;
@@ -196,7 +205,7 @@ public final class VortexWriter implements Closeable {
                 for (int v : arr) {
                     bb.putInt(v);
                 }
-                yield bb.array();
+                yield bb.flip();
             }
             case I64, U64 -> {
                 long[] arr = (long[]) data;
@@ -204,7 +213,7 @@ public final class VortexWriter implements Closeable {
                 for (long v : arr) {
                     bb.putLong(v);
                 }
-                yield bb.array();
+                yield bb.flip();
             }
             case F32 -> {
                 float[] arr = (float[]) data;
@@ -212,7 +221,7 @@ public final class VortexWriter implements Closeable {
                 for (float v : arr) {
                     bb.putFloat(v);
                 }
-                yield bb.array();
+                yield bb.flip();
             }
             case F64 -> {
                 double[] arr = (double[]) data;
@@ -220,20 +229,20 @@ public final class VortexWriter implements Closeable {
                 for (double v : arr) {
                     bb.putDouble(v);
                 }
-                yield bb.array();
+                yield bb.flip();
             }
             case F16 -> throw new UnsupportedOperationException("F16 not supported");
         };
     }
 
-    private static byte[] encodeBool(boolean[] data) {
-        byte[] packed = new byte[(data.length + 7) / 8];
+    private static ByteBuffer encodeBool(boolean[] data) {
+        var packed = ByteBuffer.allocate((data.length + 7) / 8);
         for (int i = 0; i < data.length; i++) {
             if (data[i]) {
-                packed[i / 8] |= (byte) (1 << (i % 8));
+                packed.put(i / 8, (byte) (packed.get(i / 8) | (byte) (1 << (i % 8))));
             }
         }
-        return packed;
+        return packed.rewind();
     }
 
     private static long arrayLength(Object data) {
@@ -252,7 +261,7 @@ public final class VortexWriter implements Closeable {
 
     // ── Footer / metadata serialization ──────────────────────────────────────
 
-    private byte[] buildFooter() {
+    private ByteBuffer buildFooter() {
         var fbb = new FlatBufferBuilder(512);
 
         // array_specs: ["vortex.primitive", "vortex.bool"]
@@ -276,14 +285,14 @@ public final class VortexWriter implements Closeable {
 
         int off = Footer.createFooter(fbb, asv, lsv, ssv, 0, 0);
         fbb.finish(off);
-        return fbb.sizedByteArray();
+        return fbb.dataBuffer().slice(fbb.dataBuffer().position(), fbb.dataBuffer().remaining());
     }
 
-    private static byte[] buildDType(DType dtype) {
+    private static ByteBuffer buildDType(DType dtype) {
         var fbb = new FlatBufferBuilder(128);
         int off = serializeDType(fbb, dtype);
         io.github.dfa1.vortex.fbs.DType.finishDTypeBuffer(fbb, off);
-        return fbb.sizedByteArray();
+        return fbb.dataBuffer().slice(fbb.dataBuffer().position(), fbb.dataBuffer().remaining());
     }
 
     private static int serializeDType(FlatBufferBuilder fbb, DType dtype) {
@@ -322,14 +331,13 @@ public final class VortexWriter implements Closeable {
         };
     }
 
-    private byte[] buildLayout() {
-        var fbb = new FlatBufferBuilder(256);
-
+    private ByteBuffer buildLayout() {
+        var fbb      = new FlatBufferBuilder(256);
         int colCount = schema.fieldNames().size();
 
         // Pass 1: build all Flat layout nodes (children must precede parents in FlatBuffers)
-        int[][] flatsByCol    = new int[colCount][];
-        long[]  colRowCounts  = new long[colCount];
+        int[][] flatsByCol   = new int[colCount][];
+        long[]  colRowCounts = new long[colCount];
         for (int c = 0; c < colCount; c++) {
             String         colName = schema.fieldNames().get(c);
             List<ChunkRef> chunks  = colChunks.get(colName);
@@ -357,10 +365,10 @@ public final class VortexWriter implements Closeable {
         int rootChildV = Layout.createChildrenVector(fbb, colLayouts);
         int rootLayout = Layout.createLayout(fbb, LAYOUT_STRUCT, totalRows, 0, rootChildV, 0);
         Layout.finishLayoutBuffer(fbb, rootLayout);
-        return fbb.sizedByteArray();
+        return fbb.dataBuffer().slice(fbb.dataBuffer().position(), fbb.dataBuffer().remaining());
     }
 
-    private static byte[] buildPostscript(
+    private static ByteBuffer buildPostscript(
         long footerOff, int footerLen,
         long dtypeOff,  int dtypeLen,
         long layoutOff, int layoutLen
@@ -376,6 +384,6 @@ public final class VortexWriter implements Closeable {
 
         int psOff = Postscript.createPostscript(fbb, dtypeSegOff, layoutSegOff, 0, footerSegOff);
         Postscript.finishPostscriptBuffer(fbb, psOff);
-        return fbb.sizedByteArray();
+        return fbb.dataBuffer().slice(fbb.dataBuffer().position(), fbb.dataBuffer().remaining());
     }
 }
