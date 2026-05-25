@@ -28,8 +28,6 @@
 ## Independent
 
 - [ ] **#5 Add unit tests**
-  - `core`: `DType` pattern matching, `PType.byteSize()`, `CompressionScheme.of()` round-trip
-  - `encoding`: `DecoderRegistry` dispatch, `Array` construction
-  - `io`: ~~magic/trailer validation~~ ✓ done — `VortexFileTest` (17 tests); fixtures from `s3://vortex-compat-fixtures` v0.72.0: primitives, booleans, null, varbin, chunked
-  - `scan`: `RowFilter` zone-map evaluation against known `ArrayStats`
+  - `core`: `DType` pattern matching, `PType.byteSize()`, `CompressionScheme.of()` round-trip, `DecoderRegistry` dispatch, `Array` construction
+  - `reader`: ~~magic/trailer validation~~ ✓ done — `VortexFileTest` (17 tests); fixtures from `s3://vortex-compat-fixtures` v0.72.0: primitives, booleans, null, varbin, chunked; `RowFilter` zone-map evaluation against known `ArrayStats`
   - `writer`: `WriteOptions` defaults; round-trip write→read once #2+#4 done

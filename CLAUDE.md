@@ -15,13 +15,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ./mvnw test
 
 # Run tests in one module
-./mvnw test -pl encoding
+./mvnw test -pl reader
 
 # Run a single test class
-./mvnw test -pl encoding -Dtest=MyTest
+./mvnw test -pl reader -Dtest=MyTest
 
 # Run a single test method
-./mvnw test -pl scan -Dtest=MyTest#myMethod
+./mvnw test -pl reader -Dtest=MyTest#myMethod
 ```
 
 ## Architecture
@@ -31,17 +31,15 @@ Java 25 native implementation of the [Vortex](https://github.com/spiraldb/vortex
 ### Module dependency chain
 
 ```
-core → encoding → io → scan
-              └→ writer
+core → reader
+     → writer
 ```
 
-| Module     | Responsibility |
-|------------|----------------|
-| `core`     | Logical types (`DType`, `PType`), file-structure model (`Layout`, `Footer`, `SegmentSpec`, `CompressionScheme`) |
-| `encoding` | `Array` (decoded columnar buffers), `Decoder`/`DecoderRegistry` (ServiceLoader-based), `ArrayNode` (on-disk encoded form) |
-| `io`       | `VortexFile` — memory-maps the file via `Arena.ofConfined()`; `PostscriptParser` — parses file header |
-| `scan`     | `ScanIterator` (chunk-by-chunk reads), `ScanOptions` (projection + limit), `RowFilter` (zone-map predicate tree) |
-| `writer`   | `VortexWriter` (encodes and writes chunks), `WriteOptions` (chunk size, compression threshold) |
+| Module   | Responsibility |
+|----------|----------------|
+| `core`   | Logical types (`DType`, `PType`), file-structure model (`Layout`, `Footer`, `SegmentSpec`, `CompressionScheme`), encoding layer (`Array`, `Decoder`/`DecoderRegistry`, `ArrayNode`, `DecodeContext`) |
+| `reader` | `VortexFile` (memory-mapped file handle), `PostscriptParser`, `ScanIterator` (chunk-by-chunk reads), `ScanOptions`, `RowFilter` (zone-map predicate tree) |
+| `writer` | `VortexWriter` (encodes and writes chunks), `WriteOptions` |
 
 ### File format
 

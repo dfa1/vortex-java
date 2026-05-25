@@ -11,9 +11,7 @@
 
   <modules>
     <module>core</module>
-    <module>encoding</module>
-    <module>io</module>
-    <module>scan</module>
+    <module>reader</module>
     <module>writer</module>
   </modules>
 
@@ -36,17 +34,7 @@
       </dependency>
       <dependency>
         <groupId>io.github.dfa1.vortex</groupId>
-        <artifactId>encoding</artifactId>
-        <version>${project.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>io.github.dfa1.vortex</groupId>
-        <artifactId>io</artifactId>
-        <version>${project.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>io.github.dfa1.vortex</groupId>
-        <artifactId>scan</artifactId>
+        <artifactId>reader</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
