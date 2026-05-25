@@ -2,10 +2,10 @@
 
 ## Blocked by: FlatBuffer codegen (#1)
 
-- [ ] **#1 Generate FlatBuffer sources from schemas**
-  - Obtain `footer.fbs` / `layout.fbs` from [spiraldb/vortex](https://github.com/spiraldb/vortex)
-  - Add flatc codegen to Maven build (exec-maven-plugin or flatbuffers-maven-plugin)
-  - protobuf-java already in `core/pom.xml`
+- [x] **#1 Generate FlatBuffer + Protobuf sources** ✓
+  - Schemas in `core/src/main/flatbuffers/` and `core/src/main/proto/`
+  - `./mvnw verify` runs `flatc` + `protoc` → `target/generated-sources/`
+  - Requires: `brew install flatbuffers protobuf`
 
 - [ ] **#2 Implement `PostscriptParser.parse()`** _(needs #1)_
   - Parse postscript FlatBuffer → 4 `PostscriptSegment` entries (dtype, layout, statistics, footer)

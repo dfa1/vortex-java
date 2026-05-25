@@ -13,6 +13,10 @@
 
   <dependencies>
     <dependency>
+      <groupId>com.google.flatbuffers</groupId>
+      <artifactId>flatbuffers-java</artifactId>
+    </dependency>
+    <dependency>
       <groupId>com.google.protobuf</groupId>
       <artifactId>protobuf-java</artifactId>
     </dependency>
@@ -37,4 +41,112 @@
       <artifactId>mockito-junit-jupiter</artifactId>
     </dependency>
   </dependencies>
+
+  <build>
+    <plugins>
+
+      <!-- 1. Generate Java from FlatBuffer schemas -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.4.1</version>
+        <executions>
+          <execution>
+            <id>flatc-generate</id>
+            <phase>generate-sources</phase>
+            <goals><goal>exec</goal></goals>
+            <configuration>
+              <executable>flatc</executable>
+              <workingDirectory>${project.basedir}/src/main/flatbuffers</workingDirectory>
+              <arguments>
+                <argument>--java</argument>
+                <argument>-I</argument>
+                <argument>.</argument>
+                <argument>-o</argument>
+                <argument>${project.build.directory}/generated-sources/flatbuffers</argument>
+                <argument>vortex-file/footer.fbs</argument>
+                <argument>vortex-layout/layout.fbs</argument>
+                <argument>vortex-array/array.fbs</argument>
+                <argument>vortex-dtype/dtype.fbs</argument>
+              </arguments>
+            </configuration>
+          </execution>
+          <!-- 2. Generate Java from Protobuf schemas -->
+          <execution>
+            <id>protoc-mkdir</id>
+            <phase>generate-sources</phase>
+            <goals><goal>exec</goal></goals>
+            <configuration>
+              <executable>mkdir</executable>
+              <arguments>
+                <argument>-p</argument>
+                <argument>${project.build.directory}/generated-sources/protobuf</argument>
+              </arguments>
+            </configuration>
+          </execution>
+          <execution>
+            <id>protoc-generate</id>
+            <phase>generate-sources</phase>
+            <goals><goal>exec</goal></goals>
+            <configuration>
+              <executable>protoc</executable>
+              <arguments>
+                <argument>--java_out=${project.build.directory}/generated-sources/protobuf</argument>
+                <argument>--proto_path=${project.basedir}/src/main/proto</argument>
+                <argument>${project.basedir}/src/main/proto/dtype.proto</argument>
+                <argument>${project.basedir}/src/main/proto/scalar.proto</argument>
+              </arguments>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- 2b. Strip ValidateVersion() — flatc ties it to the exact release,
+               but Maven Central lags so the constant won't exist in flatbuffers-java. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <version>3.1.0</version>
+        <executions>
+          <execution>
+            <id>flatc-strip-version-guard</id>
+            <phase>generate-sources</phase>
+            <goals><goal>run</goal></goals>
+            <configuration>
+              <target>
+                <replaceregexp
+                  match="  public static void ValidateVersion\(\) \{ Constants\.[^}]+\}&#10;"
+                  replace=""
+                  flags="g">
+                  <fileset dir="${project.build.directory}/generated-sources/flatbuffers/io/github/dfa1/vortex/fbs"
+                           includes="*.java"/>
+                </replaceregexp>
+              </target>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- 3. Register generated-sources dirs for compilation -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>build-helper-maven-plugin</artifactId>
+        <version>3.6.0</version>
+        <executions>
+          <execution>
+            <id>add-generated-sources</id>
+            <phase>generate-sources</phase>
+            <goals><goal>add-source</goal></goals>
+            <configuration>
+              <sources>
+                <source>${project.build.directory}/generated-sources/flatbuffers</source>
+                <source>${project.build.directory}/generated-sources/protobuf</source>
+              </sources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+    </plugins>
+  </build>
 </project>

@@ -18,8 +18,8 @@
   <properties>
     <maven.compiler.release>25</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <flatbuffers.version>24.3.25</flatbuffers.version>
-    <protobuf.version>4.29.3</protobuf.version>
+    <flatbuffers.version>25.2.10</flatbuffers.version>
+    <protobuf.version>4.35.0-RC2</protobuf.version>
     <junit.version>5.11.4</junit.version>
     <assertj.version>3.26.3</assertj.version>
     <mockito.version>5.14.2</mockito.version>

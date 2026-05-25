@@ -4,6 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
+Build prerequisites: `brew install flatbuffers protobuf` (flatc + protoc must be on PATH).
+
 ```bash
 # Build all modules
 ./mvnw verify
