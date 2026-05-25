@@ -42,7 +42,7 @@ class VortexFileTest {
                 .hasMessageContaining("invalid magic bytes");
     }
 
-    // --- real fixtures: magic + trailer valid, PostscriptParser not yet implemented ---
+    // --- real fixtures: full parse ---
 
     @ParameterizedTest
     @ValueSource(strings = {
@@ -52,17 +52,19 @@ class VortexFileTest {
         "varbin.vortex",
         "chunked.vortex"
     })
-    void open_fixture_passesTrailerValidation(String name) throws URISyntaxException {
+    void open_fixture_parsesSuccessfully(String name) throws URISyntaxException, IOException {
         // Given
-        Path sut = fixtureFile(name);
+        Path path = fixtureFile(name);
 
-        // When / Then — magic + trailer pass; PostscriptParser is the next blocker
-        // open() wraps non-IOException in IOException, so UnsupportedOperationException becomes the cause
-        assertThatThrownBy(() -> VortexFile.open(sut))
-                .isInstanceOf(IOException.class)
-                .cause()
-                .isInstanceOf(UnsupportedOperationException.class)
-                .hasMessage("PostscriptParser not yet implemented");
+        // When
+        try (var sut = VortexFile.open(path)) {
+
+            // Then
+            assertThat(sut.version()).isEqualTo(1);
+            assertThat(sut.fileSize()).isGreaterThan(VortexFile.TRAILER_SIZE);
+            assertThat(sut.layout()).isNotNull();
+            assertThat(sut.footer()).isNotNull();
+        }
     }
 
     @ParameterizedTest
