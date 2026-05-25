@@ -33,12 +33,16 @@ final class PostscriptParser {
         var ps = Postscript.getRootAsPostscript(bb);
 
         var footerSeg = ps.footer();
-        if (footerSeg == null) throw new IOException("vortex: postscript missing footer segment");
+        if (footerSeg == null) {
+            throw new IOException("vortex: postscript missing footer segment");
+        }
         var fbsFooter = io.github.dfa1.vortex.fbs.Footer.getRootAsFooter(
             slice(fileSegment, footerSeg.offset(), footerSeg.length()));
 
         var layoutSeg = ps.layout();
-        if (layoutSeg == null) throw new IOException("vortex: postscript missing layout segment");
+        if (layoutSeg == null) {
+            throw new IOException("vortex: postscript missing layout segment");
+        }
         var fbsLayout = io.github.dfa1.vortex.fbs.Layout.getRootAsLayout(
             slice(fileSegment, layoutSeg.offset(), layoutSeg.length()));
 
@@ -61,10 +65,14 @@ final class PostscriptParser {
 
     private static Footer convertFooter(io.github.dfa1.vortex.fbs.Footer f) {
         var arraySpecs = new ArrayList<String>(f.arraySpecsLength());
-        for (int i = 0; i < f.arraySpecsLength(); i++) arraySpecs.add(f.arraySpecs(i).id());
+        for (int i = 0; i < f.arraySpecsLength(); i++) {
+            arraySpecs.add(f.arraySpecs(i).id());
+        }
 
         var layoutSpecs = new ArrayList<String>(f.layoutSpecsLength());
-        for (int i = 0; i < f.layoutSpecsLength(); i++) layoutSpecs.add(f.layoutSpecs(i).id());
+        for (int i = 0; i < f.layoutSpecsLength(); i++) {
+            layoutSpecs.add(f.layoutSpecs(i).id());
+        }
 
         var segmentSpecs = new ArrayList<SegmentSpec>(f.segmentSpecsLength());
         for (int i = 0; i < f.segmentSpecsLength(); i++) {
@@ -76,8 +84,9 @@ final class PostscriptParser {
         }
 
         var compressionSpecs = new ArrayList<CompressionScheme>(f.compressionSpecsLength());
-        for (int i = 0; i < f.compressionSpecsLength(); i++)
+        for (int i = 0; i < f.compressionSpecsLength(); i++) {
             compressionSpecs.add(CompressionScheme.of(f.compressionSpecs(i).scheme()));
+        }
 
         return new Footer(
             List.copyOf(arraySpecs), List.copyOf(layoutSpecs),
@@ -88,14 +97,19 @@ final class PostscriptParser {
         String encodingId = layoutSpecs.get(l.encoding());
 
         byte[] metadata = new byte[l.metadataLength()];
-        for (int i = 0; i < metadata.length; i++) metadata[i] = (byte) l.metadata(i);
+        for (int i = 0; i < metadata.length; i++) {
+            metadata[i] = (byte) l.metadata(i);
+        }
 
         var children = new ArrayList<Layout>(l.childrenLength());
-        for (int i = 0; i < l.childrenLength(); i++)
+        for (int i = 0; i < l.childrenLength(); i++) {
             children.add(convertLayout(l.children(i), layoutSpecs));
+        }
 
         var segments = new ArrayList<Integer>(l.segmentsLength());
-        for (int i = 0; i < l.segmentsLength(); i++) segments.add((int) l.segments(i));
+        for (int i = 0; i < l.segmentsLength(); i++) {
+            segments.add((int) l.segments(i));
+        }
 
         return new Layout(encodingId, l.rowCount(), metadata, List.copyOf(children), List.copyOf(segments));
     }
@@ -119,9 +133,12 @@ final class PostscriptParser {
                 var s = (Struct_) fbs.type(new Struct_());
                 var names = new ArrayList<String>(s.namesLength());
                 var types = new ArrayList<DType>(s.dtypesLength());
-                for (int i = 0; i < s.namesLength(); i++) names.add(s.names(i));
-                for (int i = 0; i < s.dtypesLength(); i++)
+                for (int i = 0; i < s.namesLength(); i++) {
+                    names.add(s.names(i));
+                }
+                for (int i = 0; i < s.dtypesLength(); i++) {
                     types.add(convertDType(s.dtypes(new io.github.dfa1.vortex.fbs.DType(), i)));
+                }
                 yield new DType.Struct(List.copyOf(names), List.copyOf(types), s.nullable());
             }
             case Type.List         -> {
@@ -139,7 +156,9 @@ final class PostscriptParser {
             case Type.Extension    -> {
                 var e = (Extension) fbs.type(new Extension());
                 byte[] meta = new byte[e.metadataLength()];
-                for (int i = 0; i < meta.length; i++) meta[i] = (byte) e.metadata(i);
+                for (int i = 0; i < meta.length; i++) {
+                    meta[i] = (byte) e.metadata(i);
+                }
                 yield new DType.Extension(
                     e.id(),
                     convertDType(e.storageDtype(new io.github.dfa1.vortex.fbs.DType())),

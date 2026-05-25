@@ -48,8 +48,12 @@ public final class ScanIterator implements AutoCloseable {
     }
 
     public boolean hasNext() throws IOException {
-        if (chunks == null) initialize();
-        if (rowsReturned >= options.limit()) return false;
+        if (chunks == null) {
+            initialize();
+        }
+        if (rowsReturned >= options.limit()) {
+            return false;
+        }
 
         while (chunkIndex < chunks.size()) {
             ChunkSpec chunk = chunks.get(chunkIndex++);
@@ -69,7 +73,9 @@ public final class ScanIterator implements AutoCloseable {
     }
 
     public ScanResult next() throws IOException {
-        if (current == null) throw new IllegalStateException("call hasNext() first");
+        if (current == null) {
+            throw new IllegalStateException("call hasNext() first");
+        }
         return current;
     }
 
@@ -90,7 +96,9 @@ public final class ScanIterator implements AutoCloseable {
             for (int i = 0; i < rootLayout.children().size(); i++) {
                 String colName  = structDtype.fieldNames().get(i);
                 DType  colDtype = structDtype.fieldTypes().get(i);
-                if (!projection.isEmpty() && !projection.contains(colName)) continue;
+                if (!projection.isEmpty() && !projection.contains(colName)) {
+                    continue;
+                }
                 var flats = new ArrayList<Layout>();
                 collectFlats(rootLayout.children().get(i), flats);
                 columnFlats.put(colName, flats);
@@ -111,20 +119,24 @@ public final class ScanIterator implements AutoCloseable {
             out.add(layout);
         } else if (layout.isZoned()) {
             // vortex.stats wraps one child (the data layout) — pass through for data
-            if (!layout.children().isEmpty())
+            if (!layout.children().isEmpty()) {
                 collectFlats(layout.children().get(0), out);
+            }
         } else if (layout.isChunked()) {
             // metadata[0] == 1 means children[0] is the per-chunk stats layout; skip it
             int start = (layout.metadata() != null
                          && layout.metadata().length > 0
                          && layout.metadata()[0] == 1) ? 1 : 0;
-            for (int i = start; i < layout.children().size(); i++)
+            for (int i = start; i < layout.children().size(); i++) {
                 collectFlats(layout.children().get(i), out);
+            }
         }
     }
 
     private static List<ChunkSpec> buildChunks(Map<String, List<Layout>> columnFlats) {
-        if (columnFlats.isEmpty()) return List.of();
+        if (columnFlats.isEmpty()) {
+            return List.of();
+        }
 
         int numChunks = columnFlats.values().iterator().next().size();
         var result    = new ArrayList<ChunkSpec>(numChunks);
@@ -141,8 +153,9 @@ public final class ScanIterator implements AutoCloseable {
     // ── Flat segment decoding ─────────────────────────────────────────────────
 
     private Array decodeFlat(Layout flat, DType dtype) throws IOException {
-        if (flat.segments().isEmpty())
+        if (flat.segments().isEmpty()) {
             throw new IOException("vortex: Flat layout has no segments");
+        }
 
         int         segIdx = flat.segments().get(0);
         SegmentSpec spec   = file.footer().segmentSpecs().get(segIdx);
@@ -179,14 +192,19 @@ public final class ScanIterator implements AutoCloseable {
         String encodingId = arraySpecs.get(fbs.encoding());
 
         byte[] metadata = new byte[fbs.metadataLength()];
-        for (int i = 0; i < metadata.length; i++) metadata[i] = (byte) fbs.metadata(i);
+        for (int i = 0; i < metadata.length; i++) {
+            metadata[i] = (byte) fbs.metadata(i);
+        }
 
         ArrayNode[] children = new ArrayNode[fbs.childrenLength()];
-        for (int i = 0; i < children.length; i++)
+        for (int i = 0; i < children.length; i++) {
             children[i] = convertArrayNode(fbs.children(i), arraySpecs);
+        }
 
         int[] bufferIndices = new int[fbs.buffersLength()];
-        for (int i = 0; i < bufferIndices.length; i++) bufferIndices[i] = fbs.buffers(i);
+        for (int i = 0; i < bufferIndices.length; i++) {
+            bufferIndices[i] = fbs.buffers(i);
+        }
 
         return new ArrayNode(encodingId, metadata, children, bufferIndices, ArrayStats.empty());
     }

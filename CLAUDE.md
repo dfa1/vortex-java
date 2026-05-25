@@ -77,6 +77,16 @@ Several entry points are stubs that throw `UnsupportedOperationException`:
 - Zero SonarQube bugs/smells policy.
 - No `sun.misc.Unsafe` or internal JDK APIs.
 - Prefer explicit over clever. Fail fast on unhandled cases.
+- Always use braces for `if`/`else`/`for`/`while` bodies, even single-liners:
+  ```java
+  // WRONG
+  if (cond) return a;
+
+  // CORRECT
+  if (cond) {
+      return a;
+  }
+  ```
 
 ## Testing
 
