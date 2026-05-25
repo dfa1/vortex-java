@@ -15,6 +15,23 @@
     <module>writer</module>
   </modules>
 
+  <profiles>
+    <!-- Cross-compatibility tests: ./mvnw verify -Pintegration -->
+    <profile>
+      <id>integration</id>
+      <modules>
+        <module>it</module>
+      </modules>
+    </profile>
+    <!-- JMH benchmarks: ./mvnw package -Pperf -pl perf && java -jar perf/target/benchmarks.jar -->
+    <profile>
+      <id>perf</id>
+      <modules>
+        <module>perf</module>
+      </modules>
+    </profile>
+  </profiles>
+
   <properties>
     <maven.compiler.release>25</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -35,6 +52,11 @@
       <dependency>
         <groupId>io.github.dfa1.vortex</groupId>
         <artifactId>reader</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.github.dfa1.vortex</groupId>
+        <artifactId>writer</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>

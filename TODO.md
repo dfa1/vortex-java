@@ -30,4 +30,15 @@
   - Use `VortexWriter` to produce a `.vtx` file
   - Decode with JNI reader, assert decoded values match input
 
-  **Suggested module:** `it/` Maven module, `test`-scoped dep on `writer` + JNI artifact, disabled by default (`-Pintegration` profile). Fixture: primitive int/float columns, multiple chunks.
+  **Module:** `it/` — activate with `-Pintegration`. Tests `@Disabled` until JNI artifact coordinates are known.
+
+## Performance (blocked by: JNI bindings for comparison baseline)
+
+- [ ] **#10 Write-speed benchmark** (`perf/` module, `-Pperf`)
+  - JMH: `VortexWriter` throughput (rows/s, MB/s) vs JNI writer
+  - Fixture: 1M rows, int64 + float64 columns; single-chunk and multi-chunk variants
+  - Java-only half already runnable; JNI half stubbed until bindings available
+
+- [ ] **#11 Read-speed benchmark** (`perf/` module, `-Pperf`)
+  - JMH: `VortexFile` + `ScanIterator` throughput vs JNI reader
+  - Same fixture as #10; full-scan and projected-column variants
