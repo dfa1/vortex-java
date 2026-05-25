@@ -66,10 +66,7 @@ Encoding IDs are strings (e.g. `"vortex.flat"`, `"fastlanes.bitpacked"`). `Decod
 
 ### Implementation status
 
-Several entry points are stubs that throw `UnsupportedOperationException`:
-- `PostscriptParser.parse()` — needs FlatBuffer generated sources
-- `ScanIterator.hasNext()` — needs layout-tree traversal + zone-map pruning
-- `VortexWriter.writeChunk()` / `close()` — needs encoding + footer serialization
+Core read/write path is functional. See `TODO.md` for open work and roadmap.
 
 ## Code style
 
