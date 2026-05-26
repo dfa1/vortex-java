@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.it;
+package io.github.dfa1.vortex.integration;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
