@@ -16,16 +16,42 @@
   - Supports `Gte`, `Lte`, `Eq`, `And` predicates on I8/I16/I32/I64, U8/U16/U32/U64, F32/F64
 
 - [ ] **#7 Additional encodings**
-  - `fastlanes.bitpacked` — integer bit-packing
+  - `fastlanes.bitpacked` — integer bit-packing (Java write/read done; JNI read broken — see #7a)
   - `fastlanes.delta` — delta encoding for monotonic sequences
   - `dict` — dictionary encoding for low-cardinality columns
   - `pcodec` — float compression
 
+- [ ] **#7a Fix `fastlanes.bitpacked` JNI decode**
+  - JNI Vortex 0.72.0 uses a different block-transpose layout than the Java writer
+  - Step 1: write an XOR-differential probe (extend to vi=2,16,64,160) to map
+    bit `b` of value at index `vi` → `(word_index, bit_position)` in the raw buffer
+  - Step 2: derive the formula and rewrite `decodeJni()` in `BitpackedCodec`
+  - Step 3: unit test with `BitpackedCodecTest` — round-trip JNI-encoded fixture
+
+- [ ] **#7b Implement `fastlanes.for` decoder**
+  - Frame-of-reference wrapper: metadata holds a scalar offset, single child is bitpacked
+  - `decodeChild(0)` gives the residuals; add offset to each element
+  - Used by JNI Vortex for small-range integer columns
+
+- [ ] **#7c Implement `vortex.sparse` decoder**
+  - Mostly-constant column: constant fill value + small list of (index, value) patches
+  - Patches encoded in protobuf metadata (field 3), constant in field 1/2
+  - Step 1: parse protobuf patches from metadata
+  - Step 2: allocate output filled with constant, apply patches at their indices
+
+- [ ] **#7d Implement `vortex.alp` decoder**
+  - ALP float compression for F64 columns (used by JNI Vortex for price/float data)
+  - Two children: encoded exponents + exceptions; apply ALP inverse transform
+  - Unblock F64 columns in OHLC benchmark
+
 ## Cross-compatibility (blocked by: JNI bindings)
 
 - [ ] **#8 Rust writes → Java reads**
-  - Use JNI vortex writer to produce a `.vtx` file
-  - Read with `VortexFile` + `ScanIterator`, assert decoded values match input
+  - Prerequisite: #7a (bitpacked JNI decode), #7b (for), #7c (sparse), #7d (alp)
+  - Step 1: integer columns only — I64 round-trip through JNI writer → Java reader
+  - Step 2: float columns — F64 (requires #7d ALP decoder)
+  - Step 3: full OHLC file (all column types) — assert sum/close values match JNI reader
+  - Tracked in `OhlcReadBenchmark`: `javaReadClose` and `javaReadSum` must equal `jniReadClose`
 
 - [ ] **#9 Java writes → Rust reads**
   - Use `VortexWriter` to produce a `.vtx` file
