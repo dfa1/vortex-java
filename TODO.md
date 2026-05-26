@@ -10,9 +10,10 @@
 
 ## Open
 
-- [ ] **#6 Zone-map pruning in `ScanIterator`**
-  - Apply `options.rowFilter()` against `vortex.stats` segments during `hasNext()`
-  - Skip chunks where min/max stats exclude the predicate range
+- [x] **#6 Zone-map pruning in `ScanIterator`**
+  - Writer embeds min/max per flat segment in `ArrayNode.stats` (Protobuf ScalarValue)
+  - Reader peeks stats from segment FlatBuffer tail, skips chunks excluded by `RowFilter`
+  - Supports `Gte`, `Lte`, `Eq`, `And` predicates on I8/I16/I32/I64, U8/U16/U32/U64, F32/F64
 
 - [ ] **#7 Additional encodings**
   - `fastlanes.bitpacked` — integer bit-packing

@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.scan;
 
+import dev.vortex.proto.ScalarProtos;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.Layout;
 import io.github.dfa1.vortex.core.SegmentSpec;
@@ -55,7 +56,9 @@ public final class ScanIterator implements AutoCloseable {
 
         while (chunkIndex < chunks.size()) {
             ChunkSpec chunk = chunks.get(chunkIndex++);
-            // TODO: zone-map pruning via options.rowFilter() using vortex.stats segment
+            if (options.hasFilter() && canPruneChunk(chunk, options.rowFilter())) {
+                continue;
+            }
 
             var columns = new LinkedHashMap<String, Array>(chunk.columnFlats().size());
             for (var entry : chunk.columnFlats().entrySet()) {
@@ -200,6 +203,115 @@ public final class ScanIterator implements AutoCloseable {
         }
 
         return new ArrayNode(encodingId, fbs.metadataAsByteBuffer(), children, bufferIndices, ArrayStats.empty());
+    }
+
+    // ── Zone-map pruning ──────────────────────────────────────────────────────
+
+    private boolean canPruneChunk(ChunkSpec chunk, RowFilter filter) throws IOException {
+        return switch (filter) {
+            case RowFilter.And(var filters) -> {
+                for (RowFilter f : filters) {
+                    if (canPruneChunk(chunk, f)) {
+                        yield true;
+                    }
+                }
+                yield false;
+            }
+            case RowFilter.Gte(var col, var val) -> {
+                Layout flat = chunk.columnFlats().get(col);
+                if (flat == null) {
+                    yield false;
+                }
+                Object max = readFlatStats(flat).max();
+                yield max != null && compareValues(max, val) < 0;
+            }
+            case RowFilter.Lte(var col, var val) -> {
+                Layout flat = chunk.columnFlats().get(col);
+                if (flat == null) {
+                    yield false;
+                }
+                Object min = readFlatStats(flat).min();
+                yield min != null && compareValues(min, val) > 0;
+            }
+            case RowFilter.Eq(var col, var val) -> {
+                Layout flat = chunk.columnFlats().get(col);
+                if (flat == null) {
+                    yield false;
+                }
+                ArrayStats stats = readFlatStats(flat);
+                Object min = stats.min();
+                Object max = stats.max();
+                if (min == null || max == null) {
+                    yield false;
+                }
+                try {
+                    @SuppressWarnings("unchecked")
+                    Comparable<Object> cv = (Comparable<Object>) val;
+                    yield cv.compareTo(min) < 0 || cv.compareTo(max) > 0;
+                } catch (ClassCastException e) {
+                    yield false;
+                }
+            }
+        };
+    }
+
+    private ArrayStats readFlatStats(Layout flat) throws IOException {
+        if (flat.segments().isEmpty()) {
+            return ArrayStats.empty();
+        }
+        int         segIdx = flat.segments().get(0);
+        SegmentSpec spec   = file.footer().segmentSpecs().get(segIdx);
+        int         segLen = spec.length();
+        MemorySegment seg  = file.slice(spec.offset(), segLen);
+        ByteBuffer bb      = seg.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
+
+        int fbLen   = bb.getInt(segLen - 4);
+        int fbStart = segLen - 4 - fbLen;
+        ByteBuffer fbBuf = bb.slice(fbStart, fbLen).order(ByteOrder.LITTLE_ENDIAN);
+        var fbArray      = io.github.dfa1.vortex.fbs.Array.getRootAsArray(fbBuf);
+
+        io.github.dfa1.vortex.fbs.ArrayNode root = fbArray.root();
+        if (root == null) {
+            return ArrayStats.empty();
+        }
+        io.github.dfa1.vortex.fbs.ArrayStats fbStats = root.stats();
+        if (fbStats == null) {
+            return ArrayStats.empty();
+        }
+
+        Object min = decodeScalarValue(fbStats.minAsByteBuffer());
+        Object max = decodeScalarValue(fbStats.maxAsByteBuffer());
+        return new ArrayStats(min, max, null, null, null, null);
+    }
+
+    private static Object decodeScalarValue(ByteBuffer bytes) {
+        if (bytes == null || !bytes.hasRemaining()) {
+            return null;
+        }
+        try {
+            byte[] arr = new byte[bytes.remaining()];
+            bytes.duplicate().get(arr);
+            ScalarProtos.ScalarValue sv = ScalarProtos.ScalarValue.parseFrom(arr);
+            return switch (sv.getKindCase()) {
+                case INT64_VALUE  -> sv.getInt64Value();
+                case UINT64_VALUE -> sv.getUint64Value();
+                case F32_VALUE    -> sv.getF32Value();
+                case F64_VALUE    -> sv.getF64Value();
+                case BOOL_VALUE   -> sv.getBoolValue();
+                default           -> null;
+            };
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+            return null;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static int compareValues(Object a, Object b) {
+        try {
+            return ((Comparable<Object>) a).compareTo(b);
+        } catch (ClassCastException e) {
+            return 0;
+        }
     }
 
     // ── Internal record ───────────────────────────────────────────────────────

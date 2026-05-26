@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.writer;
 
 import com.google.flatbuffers.FlatBufferBuilder;
+import dev.vortex.proto.ScalarProtos;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.fbs.ArraySpec;
@@ -61,6 +62,7 @@ public final class VortexWriter implements Closeable {
 
     private record SegRef(long offset, int len) {}
     private record ChunkRef(int segIdx, long rowCount) {}
+    private record StatsBytes(byte[] min, byte[] max) {}
 
     private VortexWriter(WritableByteChannel channel, DType.Struct schema, WriteOptions options) {
         this.channel = channel;
@@ -129,10 +131,11 @@ public final class VortexWriter implements Closeable {
 
     private int writeSegment(DType dtype, Object data) throws IOException {
         ByteBuffer bufData  = encodeBuffer(dtype, data);
+        StatsBytes stats    = computeStatBytes(dtype, data);
         int        segIdx   = segs.size();
         long       offset   = bytesWritten;
         int        arrayEnc = (dtype instanceof DType.Bool) ? ARRAY_BOOL : ARRAY_PRIMITIVE;
-        ByteBuffer fbBuf    = buildArrayFlatBuffer(arrayEnc, bufData.remaining());
+        ByteBuffer fbBuf    = buildArrayFlatBuffer(arrayEnc, bufData.remaining(), stats);
 
         // Segment format: [buffer data] [FlatBuffer Array bytes] [4-byte LE u32 = fbLen]
         int fbLen   = fbBuf.remaining();
@@ -155,13 +158,24 @@ public final class VortexWriter implements Closeable {
         bytesWritten += buf.capacity();
     }
 
-    private static ByteBuffer buildArrayFlatBuffer(int encIdx, int bufLen) {
+    private static ByteBuffer buildArrayFlatBuffer(int encIdx, int bufLen, StatsBytes stats) {
         var fbb = new FlatBufferBuilder(256);
+
+        // Build stats table before ArrayNode (FlatBuffers bottom-up ordering)
+        int statsOff = 0;
+        if (stats != null) {
+            int minVec = io.github.dfa1.vortex.fbs.ArrayStats.createMinVector(fbb, stats.min());
+            int maxVec = io.github.dfa1.vortex.fbs.ArrayStats.createMaxVector(fbb, stats.max());
+            io.github.dfa1.vortex.fbs.ArrayStats.startArrayStats(fbb);
+            io.github.dfa1.vortex.fbs.ArrayStats.addMin(fbb, minVec);
+            io.github.dfa1.vortex.fbs.ArrayStats.addMax(fbb, maxVec);
+            statsOff = io.github.dfa1.vortex.fbs.ArrayStats.endArrayStats(fbb);
+        }
 
         // ArrayNode: encoding=encIdx, buffers=[0], no children, no metadata
         int buffersVec = io.github.dfa1.vortex.fbs.ArrayNode.createBuffersVector(fbb, new int[]{0});
         int nodeOff    = io.github.dfa1.vortex.fbs.ArrayNode.createArrayNode(
-            fbb, encIdx, 0, 0, buffersVec, 0);
+            fbb, encIdx, 0, 0, buffersVec, statsOff);
 
         // Buffer struct vector (1 element). Buffer struct layout (LE):
         //   padding(u16) | alignment_exponent(u8) | compression(u8) | length(u32)
@@ -177,6 +191,134 @@ public final class VortexWriter implements Closeable {
         int arrayOff = io.github.dfa1.vortex.fbs.Array.createArray(fbb, nodeOff, bufVec);
         io.github.dfa1.vortex.fbs.Array.finishArrayBuffer(fbb, arrayOff);
         return fbb.dataBuffer().slice(fbb.dataBuffer().position(), fbb.dataBuffer().remaining());
+    }
+
+    private static StatsBytes computeStatBytes(DType dtype, Object data) {
+        if (!(dtype instanceof DType.Primitive p)) {
+            return null;
+        }
+        return switch (p.ptype()) {
+            case I8 -> {
+                byte[] arr = (byte[]) data;
+                if (arr.length == 0) { yield null; }
+                long min = arr[0], max = arr[0];
+                for (byte v : arr) {
+                    if (v < min) { min = v; }
+                    if (v > max) { max = v; }
+                }
+                yield new StatsBytes(scalarI64(min), scalarI64(max));
+            }
+            case I16 -> {
+                short[] arr = (short[]) data;
+                if (arr.length == 0) { yield null; }
+                long min = arr[0], max = arr[0];
+                for (short v : arr) {
+                    if (v < min) { min = v; }
+                    if (v > max) { max = v; }
+                }
+                yield new StatsBytes(scalarI64(min), scalarI64(max));
+            }
+            case I32 -> {
+                int[] arr = (int[]) data;
+                if (arr.length == 0) { yield null; }
+                long min = arr[0], max = arr[0];
+                for (int v : arr) {
+                    if (v < min) { min = v; }
+                    if (v > max) { max = v; }
+                }
+                yield new StatsBytes(scalarI64(min), scalarI64(max));
+            }
+            case I64 -> {
+                long[] arr = (long[]) data;
+                if (arr.length == 0) { yield null; }
+                long min = arr[0], max = arr[0];
+                for (long v : arr) {
+                    if (v < min) { min = v; }
+                    if (v > max) { max = v; }
+                }
+                yield new StatsBytes(scalarI64(min), scalarI64(max));
+            }
+            case U8 -> {
+                byte[] arr = (byte[]) data;
+                if (arr.length == 0) { yield null; }
+                long min = Byte.toUnsignedInt(arr[0]), max = Byte.toUnsignedInt(arr[0]);
+                for (byte v : arr) {
+                    long uv = Byte.toUnsignedInt(v);
+                    if (uv < min) { min = uv; }
+                    if (uv > max) { max = uv; }
+                }
+                yield new StatsBytes(scalarU64(min), scalarU64(max));
+            }
+            case U16 -> {
+                short[] arr = (short[]) data;
+                if (arr.length == 0) { yield null; }
+                long min = Short.toUnsignedInt(arr[0]), max = Short.toUnsignedInt(arr[0]);
+                for (short v : arr) {
+                    long uv = Short.toUnsignedInt(v);
+                    if (uv < min) { min = uv; }
+                    if (uv > max) { max = uv; }
+                }
+                yield new StatsBytes(scalarU64(min), scalarU64(max));
+            }
+            case U32 -> {
+                int[] arr = (int[]) data;
+                if (arr.length == 0) { yield null; }
+                long min = Integer.toUnsignedLong(arr[0]), max = Integer.toUnsignedLong(arr[0]);
+                for (int v : arr) {
+                    long uv = Integer.toUnsignedLong(v);
+                    if (uv < min) { min = uv; }
+                    if (uv > max) { max = uv; }
+                }
+                yield new StatsBytes(scalarU64(min), scalarU64(max));
+            }
+            case U64 -> {
+                long[] arr = (long[]) data;
+                if (arr.length == 0) { yield null; }
+                long min = arr[0], max = arr[0];
+                for (long v : arr) {
+                    if (Long.compareUnsigned(v, min) < 0) { min = v; }
+                    if (Long.compareUnsigned(v, max) > 0) { max = v; }
+                }
+                yield new StatsBytes(scalarU64(min), scalarU64(max));
+            }
+            case F32 -> {
+                float[] arr = (float[]) data;
+                if (arr.length == 0) { yield null; }
+                float min = arr[0], max = arr[0];
+                for (float v : arr) {
+                    if (v < min) { min = v; }
+                    if (v > max) { max = v; }
+                }
+                yield new StatsBytes(scalarF32(min), scalarF32(max));
+            }
+            case F64 -> {
+                double[] arr = (double[]) data;
+                if (arr.length == 0) { yield null; }
+                double min = arr[0], max = arr[0];
+                for (double v : arr) {
+                    if (v < min) { min = v; }
+                    if (v > max) { max = v; }
+                }
+                yield new StatsBytes(scalarF64(min), scalarF64(max));
+            }
+            case F16 -> null;
+        };
+    }
+
+    private static byte[] scalarI64(long v) {
+        return ScalarProtos.ScalarValue.newBuilder().setInt64Value(v).build().toByteArray();
+    }
+
+    private static byte[] scalarU64(long v) {
+        return ScalarProtos.ScalarValue.newBuilder().setUint64Value(v).build().toByteArray();
+    }
+
+    private static byte[] scalarF32(float v) {
+        return ScalarProtos.ScalarValue.newBuilder().setF32Value(v).build().toByteArray();
+    }
+
+    private static byte[] scalarF64(double v) {
+        return ScalarProtos.ScalarValue.newBuilder().setF64Value(v).build().toByteArray();
     }
 
     private static ByteBuffer encodeBuffer(DType dtype, Object data) {
