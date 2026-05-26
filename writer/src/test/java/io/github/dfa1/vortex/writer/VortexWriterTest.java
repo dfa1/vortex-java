@@ -3,10 +3,8 @@ package io.github.dfa1.vortex.writer;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.encoding.Array;
-import io.github.dfa1.vortex.encoding.ArrayStats;
-import io.github.dfa1.vortex.encoding.DecodeContext;
-import io.github.dfa1.vortex.encoding.Decoder;
 import io.github.dfa1.vortex.encoding.DecoderRegistry;
+import io.github.dfa1.vortex.encoding.PrimitiveCodec;
 import io.github.dfa1.vortex.io.VortexFile;
 import io.github.dfa1.vortex.scan.ScanOptions;
 import io.github.dfa1.vortex.scan.ScanResult;
@@ -158,25 +156,7 @@ class VortexWriterTest {
 
     private static DecoderRegistry primitiveRegistry() {
         var registry = DecoderRegistry.empty();
-        registry.register(new PrimitiveDecoder());
+        registry.register(new PrimitiveCodec());
         return registry;
-    }
-
-    // Minimal decoder: returns a zero-copy Array wrapping the raw buffer.
-    private static final class PrimitiveDecoder implements Decoder {
-        @Override
-        public String encodingId() {
-            return "vortex.primitive";
-        }
-
-        @Override
-        public Array decode(DecodeContext ctx) {
-            MemorySegment buf = ctx.buffer(0);
-            return new Array(
-                ctx.dtype(), ctx.rowCount(),
-                new MemorySegment[]{buf},
-                new Array[0],
-                ArrayStats.empty());
-        }
     }
 }

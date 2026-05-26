@@ -1,9 +1,11 @@
 package io.github.dfa1.vortex.writer;
 
 import com.google.flatbuffers.FlatBufferBuilder;
-import dev.vortex.proto.ScalarProtos;
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.encoding.BoolCodec;
+import io.github.dfa1.vortex.encoding.Codec;
+import io.github.dfa1.vortex.encoding.EncodeResult;
+import io.github.dfa1.vortex.encoding.PrimitiveCodec;
 import io.github.dfa1.vortex.fbs.ArraySpec;
 import io.github.dfa1.vortex.fbs.Footer;
 import io.github.dfa1.vortex.fbs.Layout;
@@ -44,30 +46,32 @@ public final class VortexWriter implements Closeable {
     private static final int LAYOUT_CHUNKED = 1;
     private static final int LAYOUT_STRUCT  = 2;
 
-    // Indices into array_specs list in the Footer
-    private static final int ARRAY_PRIMITIVE = 0;
-    private static final int ARRAY_BOOL      = 1;
-
     private static final ByteBuffer MAGIC = ByteBuffer.wrap(new byte[]{'V', 'T', 'X', 'F'})
         .asReadOnlyBuffer();
 
-    private final WritableByteChannel channel;
-    private final DType.Struct        schema;
-    private final WriteOptions        options;
+    private static final List<Codec> DEFAULT_CODECS = List.of(new PrimitiveCodec(), new BoolCodec());
+
+    private final WritableByteChannel  channel;
+    private final DType.Struct         schema;
+    private final WriteOptions         options;
+    private final List<Codec>          codecs;
 
     private long bytesWritten = 0;
 
-    private final List<SegRef>                segs      = new ArrayList<>();
-    private final Map<String, List<ChunkRef>> colChunks = new LinkedHashMap<>();
+    private final List<SegRef>                segs        = new ArrayList<>();
+    private final Map<String, List<ChunkRef>> colChunks   = new LinkedHashMap<>();
+    private final Map<String, Integer>        encodingIdx = new LinkedHashMap<>();
 
     private record SegRef(long offset, int len) {}
     private record ChunkRef(int segIdx, long rowCount) {}
-    private record StatsBytes(byte[] min, byte[] max) {}
 
-    private VortexWriter(WritableByteChannel channel, DType.Struct schema, WriteOptions options) {
+    private VortexWriter(
+        WritableByteChannel channel, DType.Struct schema, WriteOptions options, List<Codec> codecs
+    ) {
         this.channel = channel;
         this.schema  = schema;
         this.options = options;
+        this.codecs  = codecs;
         for (String name : schema.fieldNames()) {
             colChunks.put(name, new ArrayList<>());
         }
@@ -76,14 +80,16 @@ public final class VortexWriter implements Closeable {
     public static VortexWriter create(
         WritableByteChannel channel, DType.Struct schema, WriteOptions options
     ) {
-        return new VortexWriter(channel, schema, options);
+        return new VortexWriter(channel, schema, options, DEFAULT_CODECS);
     }
 
-    /// Write one chunk. Encoding selected per-column per-chunk:
-    /// - integers → FoR+BitPacking or Pcodec → Primitive fallback
-    /// - floats → Pcodec → Primitive
-    /// - strings → Dict(VarBinView) → VarBinView
-    /// - bools → Bool (bit-packed)
+    public static VortexWriter create(
+        WritableByteChannel channel, DType.Struct schema, WriteOptions options, List<Codec> codecs
+    ) {
+        return new VortexWriter(channel, schema, options, codecs);
+    }
+
+    /// Write one chunk. Each column is encoded by the first registered [Codec] that accepts its dtype.
     public void writeChunk(Map<String, Object> columns) throws IOException {
         for (int i = 0; i < schema.fieldNames().size(); i++) {
             String colName  = schema.fieldNames().get(i);
@@ -130,16 +136,18 @@ public final class VortexWriter implements Closeable {
     // ── Segment encoding ─────────────────────────────────────────────────────
 
     private int writeSegment(DType dtype, Object data) throws IOException {
-        ByteBuffer bufData  = encodeBuffer(dtype, data);
-        StatsBytes stats    = computeStatBytes(dtype, data);
-        int        segIdx   = segs.size();
-        long       offset   = bytesWritten;
-        int        arrayEnc = (dtype instanceof DType.Bool) ? ARRAY_BOOL : ARRAY_PRIMITIVE;
-        ByteBuffer fbBuf    = buildArrayFlatBuffer(arrayEnc, bufData.remaining(), stats);
+        Codec        codec  = findCodec(dtype);
+        EncodeResult result = codec.encode(dtype, data);
+        int encIdx = encodingIdx.computeIfAbsent(codec.encodingId(), k -> encodingIdx.size());
+
+        int  segIdx = segs.size();
+        long offset = bytesWritten;
+
+        ByteBuffer fbBuf = buildArrayFlatBuffer(encIdx, result);
 
         // Segment format: [buffer data] [FlatBuffer Array bytes] [4-byte LE u32 = fbLen]
-        int fbLen   = fbBuf.remaining();
-        write(bufData);
+        int fbLen = fbBuf.remaining();
+        write(result.data());
         write(fbBuf);
         var sizeBuf = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(fbLen);
         sizeBuf.flip();
@@ -150,6 +158,15 @@ public final class VortexWriter implements Closeable {
         return segIdx;
     }
 
+    private Codec findCodec(DType dtype) {
+        for (Codec c : codecs) {
+            if (c.accepts(dtype)) {
+                return c;
+            }
+        }
+        throw new UnsupportedOperationException("no codec for dtype: " + dtype);
+    }
+
     private void write(ByteBuffer buf) throws IOException {
         buf.rewind();
         while (buf.hasRemaining()) {
@@ -158,14 +175,14 @@ public final class VortexWriter implements Closeable {
         bytesWritten += buf.capacity();
     }
 
-    private static ByteBuffer buildArrayFlatBuffer(int encIdx, int bufLen, StatsBytes stats) {
+    private static ByteBuffer buildArrayFlatBuffer(int encIdx, EncodeResult result) {
         var fbb = new FlatBufferBuilder(256);
 
         // Build stats table before ArrayNode (FlatBuffers bottom-up ordering)
         int statsOff = 0;
-        if (stats != null) {
-            int minVec = io.github.dfa1.vortex.fbs.ArrayStats.createMinVector(fbb, stats.min());
-            int maxVec = io.github.dfa1.vortex.fbs.ArrayStats.createMaxVector(fbb, stats.max());
+        if (result.hasStats()) {
+            int minVec = io.github.dfa1.vortex.fbs.ArrayStats.createMinVector(fbb, result.statsMin());
+            int maxVec = io.github.dfa1.vortex.fbs.ArrayStats.createMaxVector(fbb, result.statsMax());
             io.github.dfa1.vortex.fbs.ArrayStats.startArrayStats(fbb);
             io.github.dfa1.vortex.fbs.ArrayStats.addMin(fbb, minVec);
             io.github.dfa1.vortex.fbs.ArrayStats.addMax(fbb, maxVec);
@@ -182,7 +199,7 @@ public final class VortexWriter implements Closeable {
         // FlatBuffers builds backward: write last field first.
         io.github.dfa1.vortex.fbs.Array.startBuffersVector(fbb, 1);
         fbb.prep(4, 8);
-        fbb.putInt(bufLen);      // length
+        fbb.putInt(result.data().remaining());
         fbb.putByte((byte) 0);   // compression = None
         fbb.putByte((byte) 0);   // alignment_exponent = 0
         fbb.putShort((short) 0); // padding = 0
@@ -191,200 +208,6 @@ public final class VortexWriter implements Closeable {
         int arrayOff = io.github.dfa1.vortex.fbs.Array.createArray(fbb, nodeOff, bufVec);
         io.github.dfa1.vortex.fbs.Array.finishArrayBuffer(fbb, arrayOff);
         return fbb.dataBuffer().slice(fbb.dataBuffer().position(), fbb.dataBuffer().remaining());
-    }
-
-    private static StatsBytes computeStatBytes(DType dtype, Object data) {
-        if (!(dtype instanceof DType.Primitive p)) {
-            return null;
-        }
-        return switch (p.ptype()) {
-            case I8 -> {
-                byte[] arr = (byte[]) data;
-                if (arr.length == 0) { yield null; }
-                long min = arr[0], max = arr[0];
-                for (byte v : arr) {
-                    if (v < min) { min = v; }
-                    if (v > max) { max = v; }
-                }
-                yield new StatsBytes(scalarI64(min), scalarI64(max));
-            }
-            case I16 -> {
-                short[] arr = (short[]) data;
-                if (arr.length == 0) { yield null; }
-                long min = arr[0], max = arr[0];
-                for (short v : arr) {
-                    if (v < min) { min = v; }
-                    if (v > max) { max = v; }
-                }
-                yield new StatsBytes(scalarI64(min), scalarI64(max));
-            }
-            case I32 -> {
-                int[] arr = (int[]) data;
-                if (arr.length == 0) { yield null; }
-                long min = arr[0], max = arr[0];
-                for (int v : arr) {
-                    if (v < min) { min = v; }
-                    if (v > max) { max = v; }
-                }
-                yield new StatsBytes(scalarI64(min), scalarI64(max));
-            }
-            case I64 -> {
-                long[] arr = (long[]) data;
-                if (arr.length == 0) { yield null; }
-                long min = arr[0], max = arr[0];
-                for (long v : arr) {
-                    if (v < min) { min = v; }
-                    if (v > max) { max = v; }
-                }
-                yield new StatsBytes(scalarI64(min), scalarI64(max));
-            }
-            case U8 -> {
-                byte[] arr = (byte[]) data;
-                if (arr.length == 0) { yield null; }
-                long min = Byte.toUnsignedInt(arr[0]), max = Byte.toUnsignedInt(arr[0]);
-                for (byte v : arr) {
-                    long uv = Byte.toUnsignedInt(v);
-                    if (uv < min) { min = uv; }
-                    if (uv > max) { max = uv; }
-                }
-                yield new StatsBytes(scalarU64(min), scalarU64(max));
-            }
-            case U16 -> {
-                short[] arr = (short[]) data;
-                if (arr.length == 0) { yield null; }
-                long min = Short.toUnsignedInt(arr[0]), max = Short.toUnsignedInt(arr[0]);
-                for (short v : arr) {
-                    long uv = Short.toUnsignedInt(v);
-                    if (uv < min) { min = uv; }
-                    if (uv > max) { max = uv; }
-                }
-                yield new StatsBytes(scalarU64(min), scalarU64(max));
-            }
-            case U32 -> {
-                int[] arr = (int[]) data;
-                if (arr.length == 0) { yield null; }
-                long min = Integer.toUnsignedLong(arr[0]), max = Integer.toUnsignedLong(arr[0]);
-                for (int v : arr) {
-                    long uv = Integer.toUnsignedLong(v);
-                    if (uv < min) { min = uv; }
-                    if (uv > max) { max = uv; }
-                }
-                yield new StatsBytes(scalarU64(min), scalarU64(max));
-            }
-            case U64 -> {
-                long[] arr = (long[]) data;
-                if (arr.length == 0) { yield null; }
-                long min = arr[0], max = arr[0];
-                for (long v : arr) {
-                    if (Long.compareUnsigned(v, min) < 0) { min = v; }
-                    if (Long.compareUnsigned(v, max) > 0) { max = v; }
-                }
-                yield new StatsBytes(scalarU64(min), scalarU64(max));
-            }
-            case F32 -> {
-                float[] arr = (float[]) data;
-                if (arr.length == 0) { yield null; }
-                float min = arr[0], max = arr[0];
-                for (float v : arr) {
-                    if (v < min) { min = v; }
-                    if (v > max) { max = v; }
-                }
-                yield new StatsBytes(scalarF32(min), scalarF32(max));
-            }
-            case F64 -> {
-                double[] arr = (double[]) data;
-                if (arr.length == 0) { yield null; }
-                double min = arr[0], max = arr[0];
-                for (double v : arr) {
-                    if (v < min) { min = v; }
-                    if (v > max) { max = v; }
-                }
-                yield new StatsBytes(scalarF64(min), scalarF64(max));
-            }
-            case F16 -> null;
-        };
-    }
-
-    private static byte[] scalarI64(long v) {
-        return ScalarProtos.ScalarValue.newBuilder().setInt64Value(v).build().toByteArray();
-    }
-
-    private static byte[] scalarU64(long v) {
-        return ScalarProtos.ScalarValue.newBuilder().setUint64Value(v).build().toByteArray();
-    }
-
-    private static byte[] scalarF32(float v) {
-        return ScalarProtos.ScalarValue.newBuilder().setF32Value(v).build().toByteArray();
-    }
-
-    private static byte[] scalarF64(double v) {
-        return ScalarProtos.ScalarValue.newBuilder().setF64Value(v).build().toByteArray();
-    }
-
-    private static ByteBuffer encodeBuffer(DType dtype, Object data) {
-        return switch (dtype) {
-            case DType.Primitive p -> encodePrimitive(p.ptype(), data);
-            case DType.Bool __     -> encodeBool((boolean[]) data);
-            default -> throw new UnsupportedOperationException("unsupported dtype: " + dtype);
-        };
-    }
-
-    private static ByteBuffer encodePrimitive(PType ptype, Object data) {
-        int elementBytes = ptype.byteSize();
-        return switch (ptype) {
-            case I8, U8 -> ByteBuffer.wrap((byte[]) data);
-            case I16, U16 -> {
-                short[] arr = (short[]) data;
-                var bb = ByteBuffer.allocate(arr.length * elementBytes).order(ByteOrder.LITTLE_ENDIAN);
-                for (short v : arr) {
-                    bb.putShort(v);
-                }
-                yield bb.flip();
-            }
-            case I32, U32 -> {
-                int[] arr = (int[]) data;
-                var bb = ByteBuffer.allocate(arr.length * elementBytes).order(ByteOrder.LITTLE_ENDIAN);
-                for (int v : arr) {
-                    bb.putInt(v);
-                }
-                yield bb.flip();
-            }
-            case I64, U64 -> {
-                long[] arr = (long[]) data;
-                var bb = ByteBuffer.allocate(arr.length * elementBytes).order(ByteOrder.LITTLE_ENDIAN);
-                for (long v : arr) {
-                    bb.putLong(v);
-                }
-                yield bb.flip();
-            }
-            case F32 -> {
-                float[] arr = (float[]) data;
-                var bb = ByteBuffer.allocate(arr.length * elementBytes).order(ByteOrder.LITTLE_ENDIAN);
-                for (float v : arr) {
-                    bb.putFloat(v);
-                }
-                yield bb.flip();
-            }
-            case F64 -> {
-                double[] arr = (double[]) data;
-                var bb = ByteBuffer.allocate(arr.length * elementBytes).order(ByteOrder.LITTLE_ENDIAN);
-                for (double v : arr) {
-                    bb.putDouble(v);
-                }
-                yield bb.flip();
-            }
-            case F16 -> throw new UnsupportedOperationException("F16 not supported");
-        };
-    }
-
-    private static ByteBuffer encodeBool(boolean[] data) {
-        var packed = ByteBuffer.allocate((data.length + 7) / 8);
-        for (int i = 0; i < data.length; i++) {
-            if (data[i]) {
-                packed.put(i / 8, (byte) (packed.get(i / 8) | (byte) (1 << (i % 8))));
-            }
-        }
-        return packed.rewind();
     }
 
     private static long arrayLength(Object data) {
@@ -406,10 +229,16 @@ public final class VortexWriter implements Closeable {
     private ByteBuffer buildFooter() {
         var fbb = new FlatBufferBuilder(512);
 
-        // array_specs: ["vortex.primitive", "vortex.bool"]
-        int ps0 = ArraySpec.createArraySpec(fbb, fbb.createString("vortex.primitive"));
-        int ps1 = ArraySpec.createArraySpec(fbb, fbb.createString("vortex.bool"));
-        int asv = Footer.createArraySpecsVector(fbb, new int[]{ps0, ps1});
+        // array_specs: all encoding IDs used across all written segments, in registration order
+        String[] encIds    = encodingIdx.entrySet().stream()
+            .sorted(Map.Entry.comparingByValue())
+            .map(Map.Entry::getKey)
+            .toArray(String[]::new);
+        int[] asOffsets = new int[encIds.length];
+        for (int i = 0; i < encIds.length; i++) {
+            asOffsets[i] = ArraySpec.createArraySpec(fbb, fbb.createString(encIds[i]));
+        }
+        int asv = Footer.createArraySpecsVector(fbb, asOffsets);
 
         // layout_specs: ["vortex.flat", "vortex.chunked", "vortex.struct"]
         int ls0 = LayoutSpec.createLayoutSpec(fbb, fbb.createString("vortex.flat"));

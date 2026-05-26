@@ -2,11 +2,8 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.encoding.Array;
-import io.github.dfa1.vortex.encoding.ArrayStats;
-import io.github.dfa1.vortex.encoding.DecodeContext;
-import io.github.dfa1.vortex.encoding.Decoder;
 import io.github.dfa1.vortex.encoding.DecoderRegistry;
+import io.github.dfa1.vortex.encoding.PrimitiveCodec;
 import io.github.dfa1.vortex.io.VortexFile;
 import io.github.dfa1.vortex.scan.RowFilter;
 import io.github.dfa1.vortex.scan.ScanOptions;
@@ -15,7 +12,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
-import java.lang.foreign.MemorySegment;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -138,14 +134,7 @@ class ZoneMapPruningTest {
 
     private static DecoderRegistry primitiveRegistry() {
         var registry = DecoderRegistry.empty();
-        registry.register(new Decoder() {
-            @Override public String encodingId() { return "vortex.primitive"; }
-            @Override public Array decode(DecodeContext ctx) {
-                MemorySegment buf = ctx.buffer(0);
-                return new Array(ctx.dtype(), ctx.rowCount(),
-                    new MemorySegment[]{buf}, new Array[0], ArrayStats.empty());
-            }
-        });
+        registry.register(new PrimitiveCodec());
         return registry;
     }
 }
