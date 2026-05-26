@@ -20,7 +20,7 @@ public final class BoolCodec implements Codec {
 
     @Override
     public EncodeResult encode(DType dtype, Object data) {
-        return new EncodeResult(encodeBool((boolean[]) data), null, null);
+        return EncodeResult.simple(encodingId(), encodeBool((boolean[]) data));
     }
 
     @Override

@@ -4,6 +4,7 @@ import com.google.flatbuffers.FlatBufferBuilder;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.encoding.BoolCodec;
 import io.github.dfa1.vortex.encoding.Codec;
+import io.github.dfa1.vortex.encoding.EncodeNode;
 import io.github.dfa1.vortex.encoding.EncodeResult;
 import io.github.dfa1.vortex.encoding.PrimitiveCodec;
 import io.github.dfa1.vortex.fbs.ArraySpec;
@@ -138,16 +139,20 @@ public final class VortexWriter implements Closeable {
     private int writeSegment(DType dtype, Object data) throws IOException {
         Codec        codec  = findCodec(dtype);
         EncodeResult result = codec.encode(dtype, data);
-        int encIdx = encodingIdx.computeIfAbsent(codec.encodingId(), k -> encodingIdx.size());
+
+        // Register all encoding IDs found in the node tree
+        registerEncodingIds(result.rootNode());
 
         int  segIdx = segs.size();
         long offset = bytesWritten;
 
-        ByteBuffer fbBuf = buildArrayFlatBuffer(encIdx, result);
+        ByteBuffer fbBuf = buildArrayFlatBuffer(result);
 
-        // Segment format: [buffer data] [FlatBuffer Array bytes] [4-byte LE u32 = fbLen]
+        // Segment format: [buffer data...] [FlatBuffer Array bytes] [4-byte LE u32 = fbLen]
         int fbLen = fbBuf.remaining();
-        write(result.data());
+        for (ByteBuffer buf : result.buffers()) {
+            write(buf);
+        }
         write(fbBuf);
         var sizeBuf = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(fbLen);
         sizeBuf.flip();
@@ -156,6 +161,13 @@ public final class VortexWriter implements Closeable {
 
         segs.add(new SegRef(offset, (int) (bytesWritten - offset)));
         return segIdx;
+    }
+
+    private void registerEncodingIds(EncodeNode node) {
+        encodingIdx.computeIfAbsent(node.encodingId(), k -> encodingIdx.size());
+        for (EncodeNode child : node.children()) {
+            registerEncodingIds(child);
+        }
     }
 
     private Codec findCodec(DType dtype) {
@@ -175,10 +187,10 @@ public final class VortexWriter implements Closeable {
         bytesWritten += buf.capacity();
     }
 
-    private static ByteBuffer buildArrayFlatBuffer(int encIdx, EncodeResult result) {
+    private ByteBuffer buildArrayFlatBuffer(EncodeResult result) {
         var fbb = new FlatBufferBuilder(256);
 
-        // Build stats table before ArrayNode (FlatBuffers bottom-up ordering)
+        // Stats for root node only (build before root ArrayNode)
         int statsOff = 0;
         if (result.hasStats()) {
             int minVec = io.github.dfa1.vortex.fbs.ArrayStats.createMinVector(fbb, result.statsMin());
@@ -189,25 +201,50 @@ public final class VortexWriter implements Closeable {
             statsOff = io.github.dfa1.vortex.fbs.ArrayStats.endArrayStats(fbb);
         }
 
-        // ArrayNode: encoding=encIdx, buffers=[0], no children, no metadata
-        int buffersVec = io.github.dfa1.vortex.fbs.ArrayNode.createBuffersVector(fbb, new int[]{0});
-        int nodeOff    = io.github.dfa1.vortex.fbs.ArrayNode.createArrayNode(
-            fbb, encIdx, 0, 0, buffersVec, statsOff);
+        int rootNodeOff = buildArrayNodeFlatBuffer(fbb, result.rootNode(), statsOff);
 
-        // Buffer struct vector (1 element). Buffer struct layout (LE):
-        //   padding(u16) | alignment_exponent(u8) | compression(u8) | length(u32)
-        // FlatBuffers builds backward: write last field first.
-        io.github.dfa1.vortex.fbs.Array.startBuffersVector(fbb, 1);
-        fbb.prep(4, 8);
-        fbb.putInt(result.data().remaining());
-        fbb.putByte((byte) 0);   // compression = None
-        fbb.putByte((byte) 0);   // alignment_exponent = 0
-        fbb.putShort((short) 0); // padding = 0
+        // Buffer struct vector — one entry per buffer in result.
+        // Layout (LE): padding(u16) | alignment_exponent(u8) | compression(u8) | length(u32)
+        // FlatBuffers builds backward: iterate in reverse.
+        var bufs = result.buffers();
+        io.github.dfa1.vortex.fbs.Array.startBuffersVector(fbb, bufs.size());
+        for (int i = bufs.size() - 1; i >= 0; i--) {
+            fbb.prep(4, 8);
+            fbb.putInt(bufs.get(i).remaining());
+            fbb.putByte((byte) 0);   // compression = None
+            fbb.putByte((byte) 0);   // alignment_exponent = 0
+            fbb.putShort((short) 0); // padding = 0
+        }
         int bufVec = fbb.endVector();
 
-        int arrayOff = io.github.dfa1.vortex.fbs.Array.createArray(fbb, nodeOff, bufVec);
+        int arrayOff = io.github.dfa1.vortex.fbs.Array.createArray(fbb, rootNodeOff, bufVec);
         io.github.dfa1.vortex.fbs.Array.finishArrayBuffer(fbb, arrayOff);
         return fbb.dataBuffer().slice(fbb.dataBuffer().position(), fbb.dataBuffer().remaining());
+    }
+
+    private int buildArrayNodeFlatBuffer(FlatBufferBuilder fbb, EncodeNode node, int statsOff) {
+        // Build children first (FlatBuffers bottom-up: nested objects before parent table)
+        int[] childOffsets = new int[node.children().length];
+        for (int i = 0; i < childOffsets.length; i++) {
+            childOffsets[i] = buildArrayNodeFlatBuffer(fbb, node.children()[i], 0);
+        }
+
+        int metaOff = 0;
+        if (node.metadata() != null && node.metadata().hasRemaining()) {
+            byte[] metaBytes = new byte[node.metadata().remaining()];
+            node.metadata().duplicate().get(metaBytes);
+            metaOff = io.github.dfa1.vortex.fbs.ArrayNode.createMetadataVector(fbb, metaBytes);
+        }
+
+        int childVec = 0;
+        if (childOffsets.length > 0) {
+            childVec = io.github.dfa1.vortex.fbs.ArrayNode.createChildrenVector(fbb, childOffsets);
+        }
+
+        int bufIdxVec = io.github.dfa1.vortex.fbs.ArrayNode.createBuffersVector(fbb, node.bufferIndices());
+        int encIdx    = encodingIdx.get(node.encodingId());
+        return io.github.dfa1.vortex.fbs.ArrayNode.createArrayNode(
+            fbb, encIdx, metaOff, childVec, bufIdxVec, statsOff);
     }
 
     private static long arrayLength(Object data) {

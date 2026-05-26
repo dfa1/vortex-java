@@ -202,7 +202,10 @@ public final class ScanIterator implements AutoCloseable {
             bufferIndices[i] = fbs.buffers(i);
         }
 
-        return new ArrayNode(encodingId, fbs.metadataAsByteBuffer(), children, bufferIndices, ArrayStats.empty());
+        // metadataAsByteBuffer() returns a duplicate with position=vectorStart; slice to normalize position to 0
+        ByteBuffer rawMeta = fbs.metadataAsByteBuffer();
+        ByteBuffer meta = (rawMeta != null) ? rawMeta.slice() : null;
+        return new ArrayNode(encodingId, meta, children, bufferIndices, ArrayStats.empty());
     }
 
     // ── Zone-map pruning ──────────────────────────────────────────────────────

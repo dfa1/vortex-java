@@ -33,7 +33,7 @@ public final class PrimitiveCodec implements Codec {
             min = stats[0];
             max = stats[1];
         }
-        return new EncodeResult(buf, min, max);
+        return EncodeResult.simple(encodingId(), buf, min, max);
     }
 
     @Override
