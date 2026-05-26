@@ -15,8 +15,10 @@ public final class DecoderRegistry {
     /// Load all [Decoder]s registered via `ServiceLoader`.
     public static DecoderRegistry loadAll() {
         var registry = new DecoderRegistry();
-        ServiceLoader.load(Decoder.class).forEach(d -> registry.register(d.encodingId(), d));
-        return registry;
+		for (Decoder d : ServiceLoader.load(Decoder.class)) {
+		    registry.register(d.encodingId(), d);
+		}
+		return registry;
     }
 
     public static DecoderRegistry empty() {
@@ -31,7 +33,7 @@ public final class DecoderRegistry {
         decoders.put(decoder.encodingId(), decoder);
     }
 
-    public Array decode(DecodeContext ctx) throws IOException {
+    public Array decode(DecodeContext ctx)  {
         String id = ctx.node().encodingId();
         Decoder d = decoders.get(id);
         if (d == null) throw new IllegalArgumentException("no decoder for encoding: " + id);

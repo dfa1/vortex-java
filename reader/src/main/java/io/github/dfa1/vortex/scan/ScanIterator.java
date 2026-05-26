@@ -46,7 +46,7 @@ public final class ScanIterator implements AutoCloseable {
         this.options = options;
     }
 
-    public boolean hasNext() throws IOException {
+    public boolean hasNext()  {
         if (chunks == null) {
             initialize();
         }
@@ -153,9 +153,9 @@ public final class ScanIterator implements AutoCloseable {
 
     // ── Flat segment decoding ─────────────────────────────────────────────────
 
-    private Array decodeFlat(Layout flat, DType dtype) throws IOException {
+    private Array decodeFlat(Layout flat, DType dtype)  {
         if (flat.segments().isEmpty()) {
-            throw new IOException("vortex: Flat layout has no segments");
+            throw new IllegalStateException("vortex: Flat layout has no segments");
         }
 
         int         segIdx = flat.segments().get(0);
@@ -210,7 +210,7 @@ public final class ScanIterator implements AutoCloseable {
 
     // ── Zone-map pruning ──────────────────────────────────────────────────────
 
-    private boolean canPruneChunk(ChunkSpec chunk, RowFilter filter) throws IOException {
+    private boolean canPruneChunk(ChunkSpec chunk, RowFilter filter)  {
         return switch (filter) {
             case RowFilter.And(var filters) -> {
                 for (RowFilter f : filters) {
@@ -258,11 +258,11 @@ public final class ScanIterator implements AutoCloseable {
         };
     }
 
-    private ArrayStats readFlatStats(Layout flat) throws IOException {
+    private ArrayStats readFlatStats(Layout flat) {
         if (flat.segments().isEmpty()) {
             return ArrayStats.empty();
         }
-        int         segIdx = flat.segments().get(0);
+        int         segIdx = flat.segments().getFirst();
         SegmentSpec spec   = file.footer().segmentSpecs().get(segIdx);
         int         segLen = spec.length();
         MemorySegment seg  = file.slice(spec.offset(), segLen);
