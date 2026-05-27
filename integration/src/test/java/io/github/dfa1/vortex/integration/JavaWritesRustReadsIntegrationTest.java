@@ -31,7 +31,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// Cross-compatibility: Java writer → Rust (JNI) reader.
-class JavaWritesRustReadsIT {
+class JavaWritesRustReadsIntegrationTest {
 
     static {
         NativeLoader.loadJni();
