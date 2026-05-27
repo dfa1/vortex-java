@@ -68,6 +68,21 @@ Encoding IDs are strings (e.g. `"vortex.flat"`, `"fastlanes.bitpacked"`). `Decod
 
 Core read/write path is functional. See `TODO.md` for open work and roadmap.
 
+## Reference implementation
+
+When stuck on encoding/decoding behavior, consult the Rust reference implementation at
+`https://github.com/spiraldb/vortex` (via `gh api repos/spiraldb/vortex/contents/<path>`).
+
+Key paths:
+- `encodings/fastlanes/src/bitpacking/` — `fastlanes.bitpacked` wire format and algorithm
+- `encodings/fastlanes/src/for/` — `fastlanes.for` (frame-of-reference)
+- `encodings/sparse/src/` — `vortex.sparse`
+- `encodings/alp/src/alp/` — `vortex.alp`
+- `https://github.com/spiraldb/fastlanes-rs` — FastLanes bit-packing algorithm (`src/bitpacking.rs`, `src/macros.rs`)
+
+Never reverse-engineer wire formats by probing byte patterns. Read the vtable `serialize`/`deserialize`
+methods in the Rust source to get the exact protobuf schema, then implement from spec.
+
 ## Code style
 
 - Java 25. No Kotlin, no Gradle.
