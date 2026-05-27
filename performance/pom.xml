@@ -26,16 +26,26 @@
       <groupId>io.github.dfa1.vortex</groupId>
       <artifactId>reader</artifactId>
     </dependency>
-    <!--
-      JNI vortex bindings — not yet published.
-      Uncomment when artifact coordinates are known (see TODO.md #10, #11):
-
-      <dependency>
-        <groupId>io.github.spiraldb</groupId>
-        <artifactId>vortex-jni</artifactId>
-        <version>TODO</version>
-      </dependency>
-    -->
+    <dependency>
+      <groupId>dev.vortex</groupId>
+      <artifactId>vortex-jni</artifactId>
+      <version>0.72.0</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.arrow</groupId>
+      <artifactId>arrow-vector</artifactId>
+      <version>19.0.0</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.arrow</groupId>
+      <artifactId>arrow-c-data</artifactId>
+      <version>19.0.0</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.arrow</groupId>
+      <artifactId>arrow-memory-unsafe</artifactId>
+      <version>19.0.0</version>
+    </dependency>
     <dependency>
       <groupId>org.openjdk.jmh</groupId>
       <artifactId>jmh-core</artifactId>
