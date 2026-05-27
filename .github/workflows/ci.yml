@@ -19,8 +19,15 @@ jobs:
           distribution: zulu
           java-version: '25'
 
-      - name: Install flatbuffers and protobuf
-        run: sudo apt-get install -y flatbuffers-compiler protobuf-compiler
+      - name: Install protobuf compiler
+        run: sudo apt-get install -y protobuf-compiler
+
+      - name: Install flatc 25.12.19
+        run: |
+          curl -fsSL -o flatc.zip https://github.com/google/flatbuffers/releases/download/v25.12.19/Linux.flatc.binary.g++-13.zip
+          unzip -j flatc.zip flatc
+          sudo install -m 755 flatc /usr/local/bin/flatc
+          flatc --version
 
       - name: Build and test
         run: ./mvnw verify
