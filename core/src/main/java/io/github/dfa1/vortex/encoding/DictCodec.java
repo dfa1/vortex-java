@@ -80,9 +80,9 @@ public final class DictCodec implements Codec {
     // ── Decode ────────────────────────────────────────────────────────────────
 
     @Override
-    public Array decode(DecodeContext ctx) throws IOException {
+    public Array decode(DecodeContext ctx) {
         if (ctx.metadata() == null || !ctx.metadata().hasRemaining()) {
-            throw new IOException("vortex.dict: missing code type metadata");
+            throw new IllegalStateException("vortex.dict: missing code type metadata");
         }
         PType codePType = PType.values()[Byte.toUnsignedInt(ctx.metadata().get(0))];
         PType valPType  = ((DType.Primitive) ctx.dtype()).ptype();
