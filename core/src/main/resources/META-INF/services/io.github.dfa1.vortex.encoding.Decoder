@@ -3,3 +3,4 @@ io.github.dfa1.vortex.encoding.BoolCodec
 io.github.dfa1.vortex.encoding.DictCodec
 io.github.dfa1.vortex.encoding.BitpackedCodec
 io.github.dfa1.vortex.encoding.DeltaCodec
+io.github.dfa1.vortex.encoding.SequenceCodec

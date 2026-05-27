@@ -67,20 +67,18 @@
   - Step 4: apply patches for exceptions that don't fit the ALP transform
   - Reference: `encodings/alp/src/alp/decompress.rs`
 
-## Cross-compatibility (blocked by: JNI bindings)
+## Cross-compatibility
 
-- [ ] **#8 Rust writes → Java reads**
-  - Prerequisite: #7a (bitpacked JNI decode), #7b (for), #7c (sparse), #7d (alp)
-  - Step 1: integer columns only — I64 round-trip through JNI writer → Java reader
-  - Step 2: float columns — F64 (requires #7d ALP decoder)
-  - Step 3: full OHLC file (all column types) — assert sum/close values match JNI reader
-  - Tracked in `OhlcReadBenchmark`: `javaReadClose` and `javaReadSum` must equal `jniReadClose`
+- [x] **#8 Rust writes → Java reads** (`RustWritesJavaReadsIT`, `-Pintegration`)
+  - JNI writes I64+F64 file; Java reader decodes via `DecoderRegistry.loadAll()`
+  - Fixed: added `SequenceCodec` (`vortex.sequence` = `A[i] = base + i * multiplier`)
+  - Covers: single chunk, multiple chunks (JNI may merge), column projection
 
-- [ ] **#9 Java writes → Rust reads**
-  - Use `VortexWriter` to produce a `.vtx` file
-  - Decode with JNI reader, assert decoded values match input
-
-  **Module:** `integration/` — activate with `-Pintegration`. Tests `@Disabled` until JNI artifact coordinates are known.
+- [x] **#9 Java writes → Rust reads** (`JavaWritesRustReadsIT`, `-Pintegration`)
+  - Java writer produces file; JNI reader decodes via Arrow C Data Interface
+  - Fixed writer: `Buffer.alignment_exponent = 6` + `SegmentSpec.alignment_exponent = 6` + pre-segment 64-byte padding
+  - Root cause: Rust decoder tracks logical alignment from FlatBuffer field; Arrow rejects buffers with alignment < 64 bytes
+  - Covers: single chunk, multiple chunks
 
 ## Performance (blocked by: JNI bindings for comparison baseline)
 

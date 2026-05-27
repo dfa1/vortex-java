@@ -22,17 +22,30 @@
       <artifactId>reader</artifactId>
       <scope>test</scope>
     </dependency>
-    <!--
-      JNI vortex bindings — not yet published.
-      Uncomment and set coordinates when the artifact is available:
-
-      <dependency>
-        <groupId>io.github.spiraldb</groupId>
-        <artifactId>vortex-jni</artifactId>
-        <version>TODO</version>
-        <scope>test</scope>
-      </dependency>
-    -->
+    <dependency>
+      <groupId>dev.vortex</groupId>
+      <artifactId>vortex-jni</artifactId>
+      <version>0.72.0</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.arrow</groupId>
+      <artifactId>arrow-vector</artifactId>
+      <version>19.0.0</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.arrow</groupId>
+      <artifactId>arrow-c-data</artifactId>
+      <version>19.0.0</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.arrow</groupId>
+      <artifactId>arrow-memory-unsafe</artifactId>
+      <version>19.0.0</version>
+      <scope>test</scope>
+    </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
@@ -42,4 +55,28 @@
       <artifactId>assertj-core</artifactId>
     </dependency>
   </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <version>3.5.2</version>
+        <configuration>
+          <argLine>
+            --add-opens java.base/java.nio=ALL-UNNAMED
+            --enable-native-access=ALL-UNNAMED
+          </argLine>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
 </project>

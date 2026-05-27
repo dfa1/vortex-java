@@ -143,6 +143,12 @@ public final class VortexWriter implements Closeable {
         // Register all encoding IDs found in the node tree
         registerEncodingIds(result.rootNode());
 
+        // Align segment start to 64 bytes so each buffer is Arrow-compatible
+        long prePad = (64 - bytesWritten % 64) % 64;
+        if (prePad > 0) {
+            writePadding((int) prePad);
+        }
+
         int  segIdx = segs.size();
         long offset = bytesWritten;
 
@@ -187,6 +193,14 @@ public final class VortexWriter implements Closeable {
         bytesWritten += buf.capacity();
     }
 
+    private void writePadding(int n) throws IOException {
+        ByteBuffer pad = ByteBuffer.allocate(n);
+        while (pad.hasRemaining()) {
+            channel.write(pad);
+        }
+        bytesWritten += n;
+    }
+
     private ByteBuffer buildArrayFlatBuffer(EncodeResult result) {
         var fbb = new FlatBufferBuilder(256);
 
@@ -212,7 +226,7 @@ public final class VortexWriter implements Closeable {
             fbb.prep(4, 8);
             fbb.putInt(bufs.get(i).remaining());
             fbb.putByte((byte) 0);   // compression = None
-            fbb.putByte((byte) 0);   // alignment_exponent = 0
+            fbb.putByte((byte) 6);   // alignment_exponent = 6 (64-byte alignment)
             fbb.putShort((short) 0); // padding = 0
         }
         int bufVec = fbb.endVector();
@@ -287,7 +301,7 @@ public final class VortexWriter implements Closeable {
         Footer.startSegmentSpecsVector(fbb, segs.size());
         for (int i = segs.size() - 1; i >= 0; i--) {
             SegRef s = segs.get(i);
-            SegmentSpec.createSegmentSpec(fbb, s.offset(), s.len(), 0, 0, 0);
+            SegmentSpec.createSegmentSpec(fbb, s.offset(), s.len(), 6, 0, 0);
         }
         int ssv = fbb.endVector();
 

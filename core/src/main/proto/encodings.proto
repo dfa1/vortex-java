@@ -6,7 +6,14 @@ package vortex.encodings;
 option java_package = "dev.vortex.proto";
 option java_outer_classname = "EncodingProtos";
 
+import "scalar.proto";
+
 message BitPackedMetadata {
   uint32 bit_width = 1;
   uint32 offset    = 2;
+}
+
+message SequenceMetadata {
+  vortex.scalar.ScalarValue base       = 1;
+  vortex.scalar.ScalarValue multiplier = 2;
 }
