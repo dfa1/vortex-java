@@ -21,7 +21,7 @@
   - `dict` — dictionary encoding for low-cardinality columns
   - `pcodec` — float compression
 
-- [ ] **#7a Fix `fastlanes.bitpacked` — spec-compliant rewrite**
+- [x] **#7a Fix `fastlanes.bitpacked` — spec-compliant rewrite**
   - Root cause: current code guesses format by metadata byte size (9 = Java, 2 = JNI). Wrong.
     The spec always uses protobuf metadata regardless of writer origin.
   - **Spec** (from `encodings/fastlanes/src/bitpacking/vtable/mod.rs`):
@@ -35,7 +35,7 @@
   - Step 5: update `BitpackedCodecTest` for round-trip with spec-compliant metadata
   - Reference: `spiraldb/vortex` `encodings/fastlanes/src/bitpacking/`, `spiraldb/fastlanes-rs` `src/bitpacking.rs` + `src/macros.rs`
 
-- [ ] **#7b Implement `fastlanes.for` decoder**
+- [x] **#7b Implement `fastlanes.for` decoder**
   - **Spec** (from `encodings/fastlanes/src/for/vtable/mod.rs`):
     - Metadata: raw `ScalarValue` protobuf bytes (the reference/minimum value; no wrapper message)
     - Child slot 0: encoded array (typically `fastlanes.bitpacked` residuals)
