@@ -60,7 +60,7 @@ class BitpackedCodecTest {
 
     @Test
     void roundTrip_allSameValue(@TempDir Path tmp) throws IOException {
-        // Given — bit_width=0 edge case
+        // Given — all identical values
         Path  file = tmp.resolve("bp_same.vtx");
         int[] data = {42, 42, 42, 42};
 

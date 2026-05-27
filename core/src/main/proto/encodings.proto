@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0
+syntax = "proto3";
+
+package vortex.encodings;
+
+option java_package = "dev.vortex.proto";
+option java_outer_classname = "EncodingProtos";
+
+message BitPackedMetadata {
+  uint32 bit_width = 1;
+  uint32 offset    = 2;
+}

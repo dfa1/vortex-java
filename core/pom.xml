@@ -95,6 +95,7 @@
                 <argument>--proto_path=${project.basedir}/src/main/proto</argument>
                 <argument>${project.basedir}/src/main/proto/dtype.proto</argument>
                 <argument>${project.basedir}/src/main/proto/scalar.proto</argument>
+                <argument>${project.basedir}/src/main/proto/encodings.proto</argument>
               </arguments>
             </configuration>
           </execution>

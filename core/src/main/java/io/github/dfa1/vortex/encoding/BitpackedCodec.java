@@ -1,5 +1,7 @@
 package io.github.dfa1.vortex.encoding;
 
+import com.google.protobuf.InvalidProtocolBufferException;
+import dev.vortex.proto.EncodingProtos;
 import dev.vortex.proto.ScalarProtos;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
@@ -10,13 +12,18 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.List;
 
-/// Codec for `fastlanes.bitpacked` — bit-packing for integer columns.
+/// Codec for {@code fastlanes.bitpacked} — spec-compliant FastLanes bit-packing.
 ///
-/// Metadata (9 bytes): bit_width (u8) | frame_of_reference (i64 LE).
-/// Values are shifted by the column minimum (frame-of-reference), then packed
-/// bit_width bits each, LSB-first, contiguous. bit_width=0 means all values
-/// equal the frame-of-reference.
+/// <p>Metadata: protobuf {@code BitPackedMetadata} — {@code bit_width u32} (tag 1),
+/// {@code offset u32} (tag 2, element offset within the first 1024-element block).
+///
+/// <p>Buffer layout: {@code ceil((len + offset) / 1024)} blocks, each block {@code 128 * bit_width}
+/// bytes. Within each block the values are transposed using the FastLanes FL_ORDER permutation so
+/// that adjacent bit-planes are contiguous (enables SIMD-friendly decompression).
 public final class BitpackedCodec implements Codec {
+
+    // FL_ORDER permutation from the FastLanes paper / spiraldb/fastlanes-rs.
+    private static final int[] FL_ORDER = {0, 4, 2, 6, 1, 5, 3, 7};
 
     @Override
     public String encodingId() {
@@ -41,148 +48,244 @@ public final class BitpackedCodec implements Codec {
         PType  ptype    = ((DType.Primitive) dtype).ptype();
         long[] longs    = toLongs(data, ptype);
         int    n        = longs.length;
+        int    typeBits = ptype.byteSize() * 8;
+        long   typeMask = typeMask(typeBits);
         boolean unsign  = isUnsigned(ptype);
 
-        long frameOfRef = 0L;
-        long maxVal     = 0L;
+        long signedMin  = 0L;
+        long signedMax  = 0L;
+        long maxUnsigned = 0L;
         int  bitWidth   = 0;
 
         if (n > 0) {
-            long min = longs[0];
-            long max = longs[0];
-            for (int i = 1; i < n; i++) {
+            signedMin = longs[0];
+            signedMax = longs[0];
+            for (int i = 0; i < n; i++) {
                 long v = longs[i];
-                if (unsign ? Long.compareUnsigned(v, min) < 0 : v < min) {
-                    min = v;
+                if (unsign ? Long.compareUnsigned(v, signedMin) < 0 : v < signedMin) {
+                    signedMin = v;
                 }
-                if (unsign ? Long.compareUnsigned(v, max) > 0 : v > max) {
-                    max = v;
+                if (unsign ? Long.compareUnsigned(v, signedMax) > 0 : v > signedMax) {
+                    signedMax = v;
+                }
+                long uv = v & typeMask;
+                if (Long.compareUnsigned(uv, maxUnsigned) > 0) {
+                    maxUnsigned = uv;
                 }
             }
-            frameOfRef = min;
-            maxVal     = max;
-            long range = max - min;
-            bitWidth   = (range == 0L) ? 0 : (64 - Long.numberOfLeadingZeros(range));
+            bitWidth = maxUnsigned == 0L ? 0 : (Long.SIZE - Long.numberOfLeadingZeros(maxUnsigned));
         }
 
-        ByteBuffer packed = pack(longs, frameOfRef, bitWidth);
+        ByteBuffer packed = packFastLanes(longs, n, bitWidth, typeBits);
 
-        ByteBuffer meta = ByteBuffer.allocate(9).order(ByteOrder.LITTLE_ENDIAN);
-        meta.put((byte) bitWidth);
-        meta.putLong(frameOfRef);
-        meta.flip();
+        byte[] metaBytes = EncodingProtos.BitPackedMetadata.newBuilder()
+            .setBitWidth(bitWidth)
+            .setOffset(0)
+            .build()
+            .toByteArray();
 
-        byte[] statsMin = n > 0 ? statsBytes(ptype, frameOfRef) : null;
-        byte[] statsMax = n > 0 ? statsBytes(ptype, maxVal)     : null;
+        byte[] statsMin = n > 0 ? statsBytes(ptype, signedMin) : null;
+        byte[] statsMax = n > 0 ? statsBytes(ptype, signedMax) : null;
 
-        EncodeNode root = new EncodeNode(encodingId(), meta, new EncodeNode[0], new int[]{0});
+        EncodeNode root = new EncodeNode(encodingId(), ByteBuffer.wrap(metaBytes),
+            new EncodeNode[0], new int[]{0});
         return new EncodeResult(root, List.of(packed), statsMin, statsMax);
     }
 
     // ── Decode ────────────────────────────────────────────────────────────────
 
     @Override
-    public Array decode(DecodeContext ctx)  {
+    public Array decode(DecodeContext ctx) {
         ByteBuffer rawMeta = ctx.metadata();
-        if (rawMeta == null || rawMeta.capacity() < 2) {
-            throw new IllegalStateException("fastlanes.bitpacked: missing or truncated metadata");
+        if (rawMeta == null) {
+            throw new IllegalStateException("fastlanes.bitpacked: missing metadata");
         }
-        if (rawMeta.capacity() == 9) {
-            return decodeJava(ctx, rawMeta);
+
+        EncodingProtos.BitPackedMetadata meta;
+        try {
+            byte[] bytes = new byte[rawMeta.remaining()];
+            rawMeta.duplicate().get(bytes);
+            meta = EncodingProtos.BitPackedMetadata.parseFrom(bytes);
+        } catch (InvalidProtocolBufferException e) {
+            throw new IllegalStateException("fastlanes.bitpacked: invalid metadata", e);
         }
-        // 2-byte JNI format: [constant:u8, bit_width:u8] — FastLanes block packing
-        return decodeJni(ctx, rawMeta);
-    }
 
-    private Array decodeJava(DecodeContext ctx, ByteBuffer rawMeta)  {
-        ByteBuffer meta = rawMeta.duplicate().order(ByteOrder.LITTLE_ENDIAN);
-        int  bitWidth   = Byte.toUnsignedInt(meta.get(0));
-        long frameOfRef = meta.getLong(1);
+        int  bitWidth = meta.getBitWidth();
+        int  offset   = meta.getOffset();
+        PType ptype   = ((DType.Primitive) ctx.dtype()).ptype();
+        int  typeBits = ptype.byteSize() * 8;
+        long rowCount = ctx.rowCount();
 
-        PType ptype    = ((DType.Primitive) ctx.dtype()).ptype();
-        long  rowCount = ctx.rowCount();
-
-        MemorySegment packed      = ctx.buffer(0);
-        byte[]        packedBytes = new byte[(int) packed.byteSize()];
-        MemorySegment.copy(packed, ValueLayout.JAVA_BYTE, 0, packedBytes, 0, packedBytes.length);
-
-        long[] longs = unpack(packedBytes, (int) rowCount, bitWidth, frameOfRef);
+        MemorySegment packed = ctx.buffer(0);
+        long[] longs = fastlanesUnpack(packed, bitWidth, offset, typeBits, rowCount);
 
         return new Array(ctx.dtype(), rowCount,
             new MemorySegment[]{fromLongs(longs, ptype)}, new Array[0], ArrayStats.empty());
     }
 
-    // Decode FastLanes block-transposed format (JNI/Rust Vortex writer).
-    // Layout: ceil(rowCount/1024) blocks, each block = bit_width * 16 * 8 bytes.
-    // Word index = bitPos * 16 + lane; bit j = bit bitPos of value at index (lane + j*16) in block.
-    private Array decodeJni(DecodeContext ctx, ByteBuffer rawMeta)  {
-        int bitWidth = Byte.toUnsignedInt(rawMeta.get(1));
+    // ── FastLanes pack ────────────────────────────────────────────────────────
 
-        PType ptype    = ((DType.Primitive) ctx.dtype()).ptype();
-        long  rowCount = ctx.rowCount();
-
-        MemorySegment packed = ctx.buffer(0);
-        long[] output = new long[(int) rowCount];
-
-        int blockCount = (int) ((rowCount + 1023) / 1024);
-        for (int block = 0; block < blockCount; block++) {
-            int  blockStart    = block * 1024;
-            long blockByteOff  = (long) block * bitWidth * 16L * 8L;
-            for (int bitPos = 0; bitPos < bitWidth; bitPos++) {
-                for (int lane = 0; lane < 16; lane++) {
-                    long wordByteOff = blockByteOff + ((long) bitPos * 16 + lane) * 8L;
-                    long word = packed.get(
-                        ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN),
-                        wordByteOff);
-                    for (int j = 0; j < 64; j++) {
-                        int vi = blockStart + lane + j * 16;
-                        if (vi >= rowCount) {
-                            break;
-                        }
-                        output[vi] |= ((word >>> j) & 1L) << bitPos;
-                    }
-                }
-            }
+    private static ByteBuffer packFastLanes(long[] values, int n, int bitWidth, int typeBits) {
+        if (bitWidth == 0 || n == 0) {
+            return ByteBuffer.wrap(new byte[0]);
         }
+        int    LANES      = 1024 / typeBits;
+        int    wordBytes  = typeBits / 8;
+        int    blockCount = (n + 1023) / 1024;
+        long   typeMask   = typeMask(typeBits);
+        byte[] buf        = new byte[blockCount * 128 * bitWidth];
 
-        return new Array(ctx.dtype(), rowCount,
-            new MemorySegment[]{fromLongs(output, ptype)}, new Array[0], ArrayStats.empty());
-    }
+        for (int block = 0; block < blockCount; block++) {
+            int blockByteOff = block * 128 * bitWidth;
+            int blockStart   = block * 1024;
 
-    // ── Bit packing ───────────────────────────────────────────────────────────
+            for (int row = 0; row < typeBits; row++) {
+                int currWord  = (row * bitWidth) / typeBits;
+                int nextWord  = ((row + 1) * bitWidth) / typeBits;
+                int shift     = (row * bitWidth) % typeBits;
+                int remainingBits = (nextWord > currWord) ? ((row + 1) * bitWidth) % typeBits : 0;
+                int currentBits   = bitWidth - remainingBits;
 
-    private static ByteBuffer pack(long[] values, long frameOfRef, int bitWidth) {
-        int    n         = values.length;
-        int    totalBits = n * bitWidth;
-        byte[] buf       = new byte[(totalBits + 7) / 8];
+                for (int lane = 0; lane < LANES; lane++) {
+                    int o = row / 8;
+                    int s = row % 8;
+                    int logicalIdx = blockStart + FL_ORDER[o] * 16 + s * 128 + lane;
+                    long value = (logicalIdx < n) ? (values[logicalIdx] & typeMask) : 0L;
 
-        for (int i = 0; i < n; i++) {
-            long shifted = values[i] - frameOfRef;
-            int  bitPos  = i * bitWidth;
-            for (int b = 0; b < bitWidth; b++) {
-                if (((shifted >>> b) & 1L) == 1L) {
-                    buf[(bitPos + b) >>> 3] |= (byte) (1 << ((bitPos + b) & 7));
+                    int wordOff = blockByteOff + (LANES * currWord + lane) * wordBytes;
+                    long existing = readWordFromBuf(buf, wordOff, typeBits);
+                    existing |= (value << shift) & typeMask;
+                    writeWordToBuf(buf, wordOff, existing, typeBits);
+
+                    if (remainingBits > 0) {
+                        int hiWordOff = blockByteOff + (LANES * nextWord + lane) * wordBytes;
+                        long existingHi = readWordFromBuf(buf, hiWordOff, typeBits);
+                        existingHi |= (value >>> currentBits) & typeMask;
+                        writeWordToBuf(buf, hiWordOff, existingHi, typeBits);
+                    }
                 }
             }
         }
         return ByteBuffer.wrap(buf);
     }
 
-    private static long[] unpack(byte[] packed, int rowCount, int bitWidth, long frameOfRef) {
-        long[] out = new long[rowCount];
-        for (int i = 0; i < rowCount; i++) {
-            long val    = 0L;
-            int  bitPos = i * bitWidth;
-            for (int b = 0; b < bitWidth; b++) {
-                int byteIdx = (bitPos + b) >>> 3;
-                int bitIdx  = (bitPos + b) & 7;
-                if (byteIdx < packed.length && ((packed[byteIdx] >>> bitIdx) & 1) == 1) {
-                    val |= 1L << b;
+    // ── FastLanes unpack ──────────────────────────────────────────────────────
+
+    private static long[] fastlanesUnpack(
+        MemorySegment buf, int bitWidth, int offset, int typeBits, long rowCount) {
+        long[] output = new long[(int) rowCount];
+        if (bitWidth == 0) {
+            return output;
+        }
+
+        int  LANES      = 1024 / typeBits;
+        int  wordBytes  = typeBits / 8;
+        long totalElems = rowCount + offset;
+        int  blockCount = (int) ((totalElems + 1023) / 1024);
+        long bitMask    = bitWidth == 64 ? -1L : (1L << bitWidth) - 1L;
+
+        for (int block = 0; block < blockCount; block++) {
+            long blockByteOff    = (long) block * 128L * bitWidth;
+            int  blockLogicStart = block * 1024 - offset;
+
+            for (int row = 0; row < typeBits; row++) {
+                int currWord      = (row * bitWidth) / typeBits;
+                int nextWord      = ((row + 1) * bitWidth) / typeBits;
+                int shift         = (row * bitWidth) % typeBits;
+                int remainingBits = (nextWord > currWord) ? ((row + 1) * bitWidth) % typeBits : 0;
+                int currentBits   = bitWidth - remainingBits;
+
+                for (int lane = 0; lane < LANES; lane++) {
+                    int o = row / 8;
+                    int s = row % 8;
+                    int logicalIdx = blockLogicStart + FL_ORDER[o] * 16 + s * 128 + lane;
+
+                    if (logicalIdx < 0 || logicalIdx >= rowCount) {
+                        continue;
+                    }
+
+                    long wordOff = blockByteOff + (long) (LANES * currWord + lane) * wordBytes;
+                    long src     = readWordFromSeg(buf, wordOff, typeBits);
+
+                    long value;
+                    if (remainingBits > 0) {
+                        long loMask = (1L << currentBits) - 1L;
+                        long lo     = (src >>> shift) & loMask;
+                        long hiOff  = blockByteOff + (long) (LANES * nextWord + lane) * wordBytes;
+                        long hi     = readWordFromSeg(buf, hiOff, typeBits)
+                                      & ((1L << remainingBits) - 1L);
+                        value = lo | (hi << currentBits);
+                    } else {
+                        value = (src >>> shift) & bitMask;
+                    }
+
+                    output[logicalIdx] = value;
                 }
             }
-            out[i] = val + frameOfRef;
         }
-        return out;
+        return output;
+    }
+
+    // ── Buffer helpers ────────────────────────────────────────────────────────
+
+    private static long readWordFromBuf(byte[] buf, int off, int typeBits) {
+        return switch (typeBits) {
+            case 8  -> buf[off] & 0xFFL;
+            case 16 -> (buf[off] & 0xFFL) | ((buf[off + 1] & 0xFFL) << 8);
+            case 32 -> Integer.toUnsignedLong(
+                (buf[off] & 0xFF) | ((buf[off + 1] & 0xFF) << 8)
+                | ((buf[off + 2] & 0xFF) << 16) | ((buf[off + 3] & 0xFF) << 24));
+            case 64 -> {
+                long lo = Integer.toUnsignedLong(
+                    (buf[off] & 0xFF) | ((buf[off + 1] & 0xFF) << 8)
+                    | ((buf[off + 2] & 0xFF) << 16) | ((buf[off + 3] & 0xFF) << 24));
+                long hi = Integer.toUnsignedLong(
+                    (buf[off + 4] & 0xFF) | ((buf[off + 5] & 0xFF) << 8)
+                    | ((buf[off + 6] & 0xFF) << 16) | ((buf[off + 7] & 0xFF) << 24));
+                yield lo | (hi << 32);
+            }
+            default -> throw new IllegalArgumentException("unsupported typeBits: " + typeBits);
+        };
+    }
+
+    private static void writeWordToBuf(byte[] buf, int off, long value, int typeBits) {
+        switch (typeBits) {
+            case 8  -> buf[off] = (byte) value;
+            case 16 -> {
+                buf[off]     = (byte) value;
+                buf[off + 1] = (byte) (value >>> 8);
+            }
+            case 32 -> {
+                buf[off]     = (byte) value;
+                buf[off + 1] = (byte) (value >>> 8);
+                buf[off + 2] = (byte) (value >>> 16);
+                buf[off + 3] = (byte) (value >>> 24);
+            }
+            case 64 -> {
+                buf[off]     = (byte) value;
+                buf[off + 1] = (byte) (value >>> 8);
+                buf[off + 2] = (byte) (value >>> 16);
+                buf[off + 3] = (byte) (value >>> 24);
+                buf[off + 4] = (byte) (value >>> 32);
+                buf[off + 5] = (byte) (value >>> 40);
+                buf[off + 6] = (byte) (value >>> 48);
+                buf[off + 7] = (byte) (value >>> 56);
+            }
+            default -> throw new IllegalArgumentException("unsupported typeBits: " + typeBits);
+        }
+    }
+
+    private static long readWordFromSeg(MemorySegment seg, long off, int typeBits) {
+        return switch (typeBits) {
+            case 8  -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, off));
+            case 16 -> Short.toUnsignedLong(
+                seg.get(ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), off));
+            case 32 -> Integer.toUnsignedLong(
+                seg.get(ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), off));
+            case 64 -> seg.get(
+                ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), off);
+            default -> throw new IllegalArgumentException("unsupported typeBits: " + typeBits);
+        };
     }
 
     // ── Type conversion ───────────────────────────────────────────────────────
@@ -247,7 +350,11 @@ public final class BitpackedCodec implements Codec {
         return MemorySegment.ofArray(bytes);
     }
 
-    // ── Stats helpers ─────────────────────────────────────────────────────────
+    // ── Misc helpers ──────────────────────────────────────────────────────────
+
+    private static long typeMask(int typeBits) {
+        return typeBits == 64 ? -1L : (1L << typeBits) - 1L;
+    }
 
     private static byte[] statsBytes(PType ptype, long value) {
         if (isUnsigned(ptype)) {
