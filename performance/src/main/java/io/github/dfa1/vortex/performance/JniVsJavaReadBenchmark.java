@@ -157,7 +157,8 @@ public class JniVsJavaReadBenchmark {
     }
 
     /// Java read: project on "close", sum all values.
-    @Benchmark
+    /// NOTE: requires vortex.alp decoder (#7d); disabled until implemented.
+    // @Benchmark
     public double javaReadClose() throws IOException {
         var layout = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
         double sum = 0.0;
@@ -170,6 +171,52 @@ public class JniVsJavaReadBenchmark {
                 long       len = arr.length();
                 for (long j = 0; j < len; j++) {
                     sum += buf.get(layout, j * Double.BYTES);
+                }
+            }
+        }
+        return sum;
+    }
+
+    /// JNI read: project on "volume", sum all values.
+    @Benchmark
+    public long jniReadVolume() throws IOException {
+        String uri  = benchFile.toAbsolutePath().toUri().toString();
+        var    opts = ScanOptions.builder()
+            .projection(Expression.select(new String[]{"volume"}, Expression.root()))
+            .build();
+
+        long sum = 0L;
+        DataSource ds = DataSource.open(SESSION, uri);
+        Scan scan = ds.scan(opts);
+        while (scan.hasNext()) {
+            Partition partition = scan.next();
+            try (ArrowReader reader = partition.scanArrow(allocator)) {
+                while (reader.loadNextBatch()) {
+                    VectorSchemaRoot root      = reader.getVectorSchemaRoot();
+                    BigIntVector     volumeVec = (BigIntVector) root.getVector("volume");
+                    for (int i = 0; i < root.getRowCount(); i++) {
+                        sum += volumeVec.get(i);
+                    }
+                }
+            }
+        }
+        return sum;
+    }
+
+    /// Java read: project on "volume", sum all values.
+    @Benchmark
+    public long javaReadVolume() throws IOException {
+        var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+        long sum = 0L;
+        try (VortexFile vf = VortexFile.open(benchFile, registry)) {
+            var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("volume"));
+            while (iter.hasNext()) {
+                ScanResult r   = iter.next();
+                Array      arr = r.columns().get("volume");
+                var        buf = arr.buffer(0);
+                long       len = arr.length();
+                for (long j = 0; j < len; j++) {
+                    sum += buf.get(layout, j * Long.BYTES);
                 }
             }
         }
