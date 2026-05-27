@@ -25,15 +25,18 @@ reads, making it easier to:
 | [spiraldb/vortex](https://github.com/spiraldb/vortex) | Rust | Reference implementation + JNI bindings |
 | [spiraldb/vortex-go](https://github.com/spiraldb/vortex-go) | Go | Pure-language port; primary inspiration for this project's approach |
 
-## Status
+## Serialization formats
 
-| Component | Status |
-|-----------|--------|
-| Trailer + postscript parsing | Working |
-| FlatBuffer footer / layout / dtype | Working |
-| Zone-map predicate pruning | Not started |
-| Scan iterator (chunked reads) | Not started |
-| Writer | Not started |
+The format uses two serialization libraries for different roles:
+
+| Format | Used for | Why |
+|--------|----------|-----|
+| **FlatBuffers** | Footer, Layout, Array structure | Zero-copy random access — fields read directly from memory-mapped bytes, no allocation |
+| **Protobuf** | Codec metadata, DType, Scalar values | Schema evolution and cross-language compatibility for small blobs |
+
+FlatBuffers suit the file-structure layer: the footer is parsed once at open and the layout tree is traversed during scan — both benefit from direct field access on mapped memory. Protobuf suits codec metadata: tiny blobs parsed once per chunk, where schema evolution matters more than zero-copy speed.
+
+Replacing protobuf with FlatBuffers is not viable — existing `.vortex` files produced by the Rust reference implementation embed protobuf bytes in codec metadata blobs, and wire compatibility requires matching the format exactly.
 
 ## Requirements
 
