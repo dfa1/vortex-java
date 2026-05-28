@@ -102,6 +102,38 @@ class RustWritesJavaReadsIntegrationTest {
         }
     }
 
+    @Test
+    void jniWriter_javaReader_fewUniqueF64Values(@TempDir Path tmp) throws IOException {
+        // Given — 10_000 rows cycling through only 3 unique F64 values to trigger dict encoding
+        int n = 10_000;
+        long[]   ids  = new long[n];
+        double[] vals = new double[n];
+        double[] unique = {1.1, 2.2, 3.3};
+        for (int i = 0; i < n; i++) {
+            ids[i]  = i;
+            vals[i] = unique[i % unique.length];
+        }
+        Path file = tmp.resolve("jni_dict.vtx");
+        writeJni(file, ids, vals);
+
+        // When / Then
+        try (var vf = VortexFile.open(file, DecoderRegistry.loadAll())) {
+            List<ScanResult> results = scanAll(vf, io.github.dfa1.vortex.scan.ScanOptions.columns("value"));
+            long total = results.stream().mapToLong(ScanResult::rowCount).sum();
+            assertThat(total).isEqualTo(n);
+            var layout = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+            double sum = 0;
+            for (ScanResult r : results) {
+                var arr = r.columns().get("value");
+                for (long j = 0; j < arr.length(); j++) {
+                    sum += arr.buffer(0).get(layout, j * Double.BYTES);
+                }
+            }
+            // 10_000 rows: 3333 full cycles of [1.1,2.2,3.3] (=6.6 each) + one 1.1 remainder
+            assertThat(sum).isCloseTo(21_998.9, org.assertj.core.data.Offset.offset(0.1));
+        }
+    }
+
     // ── JNI write helpers ─────────────────────────────────────────────────────
 
     private static void writeJni(Path file, long[] ids, double[] vals) throws IOException {
