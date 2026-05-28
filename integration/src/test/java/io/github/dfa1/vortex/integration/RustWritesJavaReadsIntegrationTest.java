@@ -5,7 +5,7 @@ import dev.vortex.api.VortexWriter;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.encoding.CodecRegistry;
-import io.github.dfa1.vortex.io.VortexFile;
+import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.ScanResult;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
@@ -55,7 +55,7 @@ class RustWritesJavaReadsIntegrationTest {
         writeJni(file, ids, vals);
 
         // When / Then
-        try (var vf = VortexFile.open(file, CodecRegistry.loadAll())) {
+        try (var vf = VortexReader.open(file, CodecRegistry.loadAll())) {
             List<ScanResult> results = scanAll(vf);
             assertThat(results).hasSize(1);
             assertThat(results.get(0).rowCount()).isEqualTo(3L);
@@ -75,7 +75,7 @@ class RustWritesJavaReadsIntegrationTest {
         }
 
         // When / Then — JNI may merge small batches; verify total rows and values
-        try (var vf = VortexFile.open(file, CodecRegistry.loadAll())) {
+        try (var vf = VortexReader.open(file, CodecRegistry.loadAll())) {
             List<ScanResult> results = scanAll(vf);
             long totalRows = results.stream().mapToLong(ScanResult::rowCount).sum();
             assertThat(totalRows).isEqualTo(5L);
@@ -93,7 +93,7 @@ class RustWritesJavaReadsIntegrationTest {
         writeJni(file, new long[]{10L, 20L}, new double[]{0.1, 0.2});
 
         // When / Then
-        try (var vf = VortexFile.open(file, CodecRegistry.loadAll())) {
+        try (var vf = VortexReader.open(file, CodecRegistry.loadAll())) {
             List<ScanResult> results = scanAll(vf, io.github.dfa1.vortex.scan.ScanOptions.columns("id"));
             assertThat(results).hasSize(1);
             assertThat(results.get(0).columns()).containsKey("id");
@@ -117,7 +117,7 @@ class RustWritesJavaReadsIntegrationTest {
         writeJni(file, ids, vals);
 
         // When / Then
-        try (var vf = VortexFile.open(file, CodecRegistry.loadAll())) {
+        try (var vf = VortexReader.open(file, CodecRegistry.loadAll())) {
             List<ScanResult> results = scanAll(vf, io.github.dfa1.vortex.scan.ScanOptions.columns("value"));
             long total = results.stream().mapToLong(ScanResult::rowCount).sum();
             assertThat(total).isEqualTo(n);
@@ -165,11 +165,11 @@ class RustWritesJavaReadsIntegrationTest {
 
     // ── Java read helpers ─────────────────────────────────────────────────────
 
-    private static List<ScanResult> scanAll(VortexFile vf) throws IOException {
+    private static List<ScanResult> scanAll(VortexReader vf) throws IOException {
         return scanAll(vf, io.github.dfa1.vortex.scan.ScanOptions.all());
     }
 
-    private static List<ScanResult> scanAll(VortexFile vf,
+    private static List<ScanResult> scanAll(VortexReader vf,
                                              io.github.dfa1.vortex.scan.ScanOptions opts) throws IOException {
         var results = new ArrayList<ScanResult>();
         var iter    = vf.scan(opts);

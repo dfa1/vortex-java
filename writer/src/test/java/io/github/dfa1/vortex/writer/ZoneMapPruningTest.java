@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.encoding.CodecRegistry;
 import io.github.dfa1.vortex.encoding.PrimitiveCodec;
-import io.github.dfa1.vortex.io.VortexFile;
+import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.RowFilter;
 import io.github.dfa1.vortex.scan.ScanOptions;
 import io.github.dfa1.vortex.scan.ScanResult;
@@ -115,7 +115,7 @@ class ZoneMapPruningTest {
         var opts     = new ScanOptions(List.of(), filter, ScanOptions.NO_LIMIT);
         var registry = primitiveRegistry();
         var results  = new ArrayList<ScanResult>();
-        try (var vf   = VortexFile.open(file, registry);
+        try (var vf   = VortexReader.open(file, registry);
              var iter = vf.scan(opts)) {
             while (iter.hasNext()) {
                 results.add(iter.next());

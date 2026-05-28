@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.encoding.CodecRegistry;
-import io.github.dfa1.vortex.io.VortexFile;
+import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.ScanOptions;
 import io.github.dfa1.vortex.scan.ScanResult;
 import io.github.dfa1.vortex.writer.VortexWriter;
@@ -119,7 +119,7 @@ public class LargeReadBenchmark {
     public long checksumId() throws IOException {
         long sum = 0;
         var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-        try (VortexFile vf = VortexFile.open(benchFile, registry)) {
+        try (VortexReader vf = VortexReader.open(benchFile, registry)) {
             var iter = vf.scan(ScanOptions.columns("id"));
             while (iter.hasNext()) {
                 ScanResult r = iter.next();
@@ -138,7 +138,7 @@ public class LargeReadBenchmark {
 
     private long scan(ScanOptions opts) throws IOException {
         long rows = 0;
-        try (VortexFile vf = VortexFile.open(benchFile, registry)) {
+        try (VortexReader vf = VortexReader.open(benchFile, registry)) {
             var iter = vf.scan(opts);
             while (iter.hasNext()) {
                 ScanResult r = iter.next();

@@ -6,9 +6,8 @@ import io.github.dfa1.vortex.core.Layout;
 import io.github.dfa1.vortex.core.SegmentSpec;
 import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
-import io.github.dfa1.vortex.io.VortexFile;
+import io.github.dfa1.vortex.io.VortexReader;
 
-import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
@@ -18,7 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/// Iterates over decoded chunks from a [VortexFile].
+/// Iterates over decoded chunks from a [VortexReader].
 ///
 /// Usage:
 /// ```java
@@ -30,7 +29,7 @@ import java.util.Map;
 /// ```
 public final class ScanIterator implements AutoCloseable {
 
-    private final VortexFile  file;
+    private final VortexReader file;
     private final ScanOptions options;
 
     private List<ChunkSpec>    chunks;
@@ -39,7 +38,7 @@ public final class ScanIterator implements AutoCloseable {
     private long               rowsReturned;
     private ScanResult         current;
 
-    public ScanIterator(VortexFile file, ScanOptions options) {
+    public ScanIterator(VortexReader file, ScanOptions options) {
         this.file    = file;
         this.options = options;
     }

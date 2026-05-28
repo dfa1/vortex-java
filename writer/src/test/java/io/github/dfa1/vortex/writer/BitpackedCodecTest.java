@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.encoding.BitpackedCodec;
 import io.github.dfa1.vortex.encoding.CodecRegistry;
-import io.github.dfa1.vortex.io.VortexFile;
+import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.ScanOptions;
 import io.github.dfa1.vortex.scan.ScanResult;
 import org.junit.jupiter.api.Test;
@@ -46,7 +46,7 @@ class BitpackedCodecTest {
         }
 
         // Then
-        try (var vf = VortexFile.open(file, bpRegistry())) {
+        try (var vf = VortexReader.open(file, bpRegistry())) {
             List<ScanResult> results = scanAll(vf);
             assertThat(results).hasSize(1);
             Array arr = results.get(0).columns().get("value");
@@ -72,7 +72,7 @@ class BitpackedCodecTest {
         }
 
         // Then
-        try (var vf = VortexFile.open(file, bpRegistry())) {
+        try (var vf = VortexReader.open(file, bpRegistry())) {
             List<ScanResult> results = scanAll(vf);
             assertThat(results).hasSize(1);
             Array arr = results.get(0).columns().get("value");
@@ -97,7 +97,7 @@ class BitpackedCodecTest {
         }
 
         // Then
-        try (var vf = VortexFile.open(file, bpRegistry())) {
+        try (var vf = VortexReader.open(file, bpRegistry())) {
             List<ScanResult> results = scanAll(vf);
             assertThat(results).hasSize(1);
             Array arr = results.get(0).columns().get("value");
@@ -124,7 +124,7 @@ class BitpackedCodecTest {
         }
 
         // Then
-        try (var vf = VortexFile.open(file, bpRegistry())) {
+        try (var vf = VortexReader.open(file, bpRegistry())) {
             List<ScanResult> results = scanAll(vf);
             assertThat(results).hasSize(2);
             var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
@@ -159,7 +159,7 @@ class BitpackedCodecTest {
         }
 
         // Then
-        try (var vf = VortexFile.open(file, bpRegistry())) {
+        try (var vf = VortexReader.open(file, bpRegistry())) {
             List<ScanResult> results = scanAll(vf);
             assertThat(results).hasSize(1);
             Array arr = results.get(0).columns().get("value");
@@ -174,7 +174,7 @@ class BitpackedCodecTest {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static List<ScanResult> scanAll(VortexFile vf) throws IOException {
+    private static List<ScanResult> scanAll(VortexReader vf) throws IOException {
         var results = new ArrayList<ScanResult>();
         var iter    = vf.scan(ScanOptions.all());
         while (iter.hasNext()) {

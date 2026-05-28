@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.encoding.CodecRegistry;
 import io.github.dfa1.vortex.encoding.DeltaCodec;
-import io.github.dfa1.vortex.io.VortexFile;
+import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.ScanOptions;
 import io.github.dfa1.vortex.scan.ScanResult;
 import org.junit.jupiter.api.Test;
@@ -46,7 +46,7 @@ class DeltaCodecTest {
         }
 
         // Then
-        try (var vf = VortexFile.open(file, deltaRegistry())) {
+        try (var vf = VortexReader.open(file, deltaRegistry())) {
             List<ScanResult> results = scanAll(vf);
             assertThat(results).hasSize(1);
             Array arr = results.get(0).columns().get("ts");
@@ -72,7 +72,7 @@ class DeltaCodecTest {
         }
 
         // Then
-        try (var vf = VortexFile.open(file, deltaRegistry())) {
+        try (var vf = VortexReader.open(file, deltaRegistry())) {
             List<ScanResult> results = scanAll(vf);
             Array arr = results.get(0).columns().get("ts");
             var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
@@ -96,7 +96,7 @@ class DeltaCodecTest {
         }
 
         // Then
-        try (var vf = VortexFile.open(file, deltaRegistry())) {
+        try (var vf = VortexReader.open(file, deltaRegistry())) {
             List<ScanResult> results = scanAll(vf);
             Array arr = results.get(0).columns().get("ts");
             var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
@@ -120,7 +120,7 @@ class DeltaCodecTest {
         }
 
         // Then
-        try (var vf = VortexFile.open(file, deltaRegistry())) {
+        try (var vf = VortexReader.open(file, deltaRegistry())) {
             List<ScanResult> results = scanAll(vf);
             Array arr = results.get(0).columns().get("ts");
             assertThat(arr.length()).isEqualTo(1L);
@@ -143,7 +143,7 @@ class DeltaCodecTest {
         }
 
         // Then
-        try (var vf = VortexFile.open(file, deltaRegistry())) {
+        try (var vf = VortexReader.open(file, deltaRegistry())) {
             List<ScanResult> results = scanAll(vf);
             Array arr = results.get(0).columns().get("ts");
             var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
@@ -169,7 +169,7 @@ class DeltaCodecTest {
         }
 
         // Then
-        try (var vf = VortexFile.open(file, deltaRegistry())) {
+        try (var vf = VortexReader.open(file, deltaRegistry())) {
             List<ScanResult> results = scanAll(vf);
             assertThat(results).hasSize(2);
             var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
@@ -201,7 +201,7 @@ class DeltaCodecTest {
         }
 
         // Then
-        try (var vf = VortexFile.open(file, deltaRegistry())) {
+        try (var vf = VortexReader.open(file, deltaRegistry())) {
             List<ScanResult> results = scanAll(vf);
             assertThat(results).hasSize(1);
             Array arr = results.get(0).columns().get("ts");
@@ -217,7 +217,7 @@ class DeltaCodecTest {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static List<ScanResult> scanAll(VortexFile vf) throws IOException {
+    private static List<ScanResult> scanAll(VortexReader vf) throws IOException {
         var results = new ArrayList<ScanResult>();
         var iter    = vf.scan(ScanOptions.all());
         while (iter.hasNext()) {

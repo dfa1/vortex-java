@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.performance;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.encoding.CodecRegistry;
-import io.github.dfa1.vortex.io.VortexFile;
+import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.ScanOptions;
 import io.github.dfa1.vortex.scan.ScanResult;
 import io.github.dfa1.vortex.writer.VortexWriter;
@@ -31,7 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-/// Read-speed benchmark: Java `VortexFile` + `ScanIterator` vs JNI vortex reader.
+/// Read-speed benchmark: Java `VortexReader` + `ScanIterator` vs JNI vortex reader.
 ///
 /// Run: `java -jar performance/target/benchmarks.jar ReadBenchmark`
 ///
@@ -97,7 +97,7 @@ public class ReadBenchmark {
             : ScanOptions.columns("id");
 
         long rows = 0;
-        try (var vf   = VortexFile.open(inputFile, registry);
+        try (var vf   = VortexReader.open(inputFile, registry);
              var iter = vf.scan(opts)) {
             while (iter.hasNext()) {
                 ScanResult r = iter.next();

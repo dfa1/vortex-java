@@ -6,7 +6,7 @@ import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.encoding.CodecRegistry;
 import io.github.dfa1.vortex.encoding.DictCodec;
 import io.github.dfa1.vortex.encoding.PrimitiveCodec;
-import io.github.dfa1.vortex.io.VortexFile;
+import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.ScanOptions;
 import io.github.dfa1.vortex.scan.ScanResult;
 import org.junit.jupiter.api.Test;
@@ -46,7 +46,7 @@ class DictCodecTest {
 
         // Then
         var registry = dictRegistry();
-        try (var vf = VortexFile.open(file, registry)) {
+        try (var vf = VortexReader.open(file, registry)) {
             List<ScanResult> results = scanAll(vf, ScanOptions.all());
             assertThat(results).hasSize(1);
             Array arr = results.get(0).columns().get("category");
@@ -77,7 +77,7 @@ class DictCodecTest {
 
         // Then
         var registry = dictRegistry();
-        try (var vf = VortexFile.open(file, registry)) {
+        try (var vf = VortexReader.open(file, registry)) {
             List<ScanResult> results = scanAll(vf, ScanOptions.all());
             assertThat(results).hasSize(1);
             Array arr = results.get(0).columns().get("category");
@@ -107,7 +107,7 @@ class DictCodecTest {
 
         // Then
         var registry = dictRegistry();
-        try (var vf = VortexFile.open(file, registry)) {
+        try (var vf = VortexReader.open(file, registry)) {
             List<ScanResult> results = scanAll(vf, ScanOptions.all());
             assertThat(results).hasSize(2);
 
@@ -130,7 +130,7 @@ class DictCodecTest {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static List<ScanResult> scanAll(VortexFile vf, ScanOptions opts) throws IOException {
+    private static List<ScanResult> scanAll(VortexReader vf, ScanOptions opts) throws IOException {
         var results = new ArrayList<ScanResult>();
         var iter    = vf.scan(opts);
         while (iter.hasNext()) {

@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.encoding.CodecRegistry;
 import io.github.dfa1.vortex.encoding.PrimitiveCodec;
-import io.github.dfa1.vortex.io.VortexFile;
+import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.ScanOptions;
 import io.github.dfa1.vortex.scan.ScanResult;
 import org.junit.jupiter.api.Test;
@@ -65,7 +65,7 @@ class VortexWriterTest {
 
         // Then
         var registry = primitiveRegistry();
-        try (var vf = VortexFile.open(file, registry)) {
+        try (var vf = VortexReader.open(file, registry)) {
             List<ScanResult> results = scanAll(vf, ScanOptions.all());
             assertThat(results).hasSize(1);
             assertThat(results.get(0).rowCount()).isEqualTo(3L);
@@ -87,7 +87,7 @@ class VortexWriterTest {
 
         // Then
         var registry = primitiveRegistry();
-        try (var vf = VortexFile.open(file, registry)) {
+        try (var vf = VortexReader.open(file, registry)) {
             List<ScanResult> results = scanAll(vf, ScanOptions.all());
             assertThat(results).hasSize(2);
             assertThat(results.get(0).rowCount()).isEqualTo(2L);
@@ -109,7 +109,7 @@ class VortexWriterTest {
 
         // Then
         var registry = primitiveRegistry();
-        try (var vf = VortexFile.open(file, registry)) {
+        try (var vf = VortexReader.open(file, registry)) {
             List<ScanResult> results = scanAll(vf, ScanOptions.all());
             assertThat(results).hasSize(1);
             Array idArray = results.get(0).columns().get("id");
@@ -135,7 +135,7 @@ class VortexWriterTest {
 
         // Then
         var registry = primitiveRegistry();
-        try (var vf = VortexFile.open(file, registry)) {
+        try (var vf = VortexReader.open(file, registry)) {
             List<ScanResult> results = scanAll(vf, ScanOptions.columns("id"));
             assertThat(results).hasSize(1);
             assertThat(results.get(0).columns()).containsKey("id");
@@ -145,7 +145,7 @@ class VortexWriterTest {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static List<ScanResult> scanAll(VortexFile vf, ScanOptions opts) throws IOException {
+    private static List<ScanResult> scanAll(VortexReader vf, ScanOptions opts) throws IOException {
         var results = new ArrayList<ScanResult>();
         var iter    = vf.scan(opts);
         while (iter.hasNext()) {

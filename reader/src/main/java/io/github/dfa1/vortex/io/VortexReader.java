@@ -19,7 +19,7 @@ import java.nio.file.StandardOpenOption;
 /// all Array buffers returned during scan are slices of this `MemorySegment`.
 ///
 /// Close this to release the memory-mapped region.
-public final class VortexFile implements Closeable {
+public final class VortexReader implements Closeable {
 
     static final ValueLayout.OfShort LE_SHORT =
         ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
@@ -40,7 +40,7 @@ public final class VortexFile implements Closeable {
     private final Layout          layout;
     private final CodecRegistry registry;
 
-    private VortexFile(
+    private VortexReader(
         Arena arena, MemorySegment fileSegment, long fileSize,
         int version, Footer footer, DType dtype, Layout layout,
         CodecRegistry registry
@@ -57,11 +57,11 @@ public final class VortexFile implements Closeable {
 
     /// Open a Vortex file. Memory-maps the entire file; all subsequent reads
     /// are zero-copy slices. Call [#close()] when done.
-    public static VortexFile open(Path path) throws IOException {
+    public static VortexReader open(Path path) throws IOException {
         return open(path, CodecRegistry.loadAll());
     }
 
-    public static VortexFile open(Path path, CodecRegistry registry) throws IOException {
+    public static VortexReader open(Path path, CodecRegistry registry) throws IOException {
         var arena = Arena.ofConfined();
         try {
             var channel = FileChannel.open(path, StandardOpenOption.READ);
@@ -79,7 +79,7 @@ public final class VortexFile implements Closeable {
         }
     }
 
-    private static VortexFile parse(
+    private static VortexReader parse(
         MemorySegment seg, long size, Arena arena, CodecRegistry registry
     ) throws IOException {
         // 8-byte trailer: version(u16 LE) | postscriptLen(u16 LE) | magic(4)
@@ -103,7 +103,7 @@ public final class VortexFile implements Closeable {
 
         var parsed = PostscriptParser.parse(postscriptBuf, seg);
 
-        return new VortexFile(
+        return new VortexReader(
             arena, seg, size, version,
             parsed.footer(), parsed.dtype(), parsed.layout(),
             registry

@@ -21,7 +21,7 @@ import java.nio.file.Path;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-class VortexFileTest {
+class VortexReaderTest {
 
 	// --- trailer / magic validation ---
 
@@ -31,7 +31,7 @@ class VortexFileTest {
 		Path sut = Files.write(tmpDir.resolve("tiny.vortex"), new byte[4]);
 
 		// When / Then
-		assertThatThrownBy(() -> VortexFile.open(sut))
+		assertThatThrownBy(() -> VortexReader.open(sut))
 				.isInstanceOf(IOException.class)
 				.hasMessageContaining("file too small");
 	}
@@ -39,7 +39,7 @@ class VortexFileTest {
 	@Test
 	void open_wrongMagic_throwsIOException(@TempDir Path tmpDir) throws IOException {
 		// Given
-		byte[] bytes = new byte[VortexFile.TRAILER_SIZE]; // exactly 8 bytes
+		byte[] bytes = new byte[VortexReader.TRAILER_SIZE]; // exactly 8 bytes
 		bytes[4] = 'X';
 		bytes[5] = 'X';
 		bytes[6] = 'X';
@@ -47,7 +47,7 @@ class VortexFileTest {
 		Path sut = Files.write(tmpDir.resolve("bad_magic.vortex"), bytes);
 
 		// When / Then
-		assertThatThrownBy(() -> VortexFile.open(sut))
+		assertThatThrownBy(() -> VortexReader.open(sut))
 				.isInstanceOf(IOException.class)
 				.hasMessageContaining("invalid magic bytes");
 	}
@@ -67,11 +67,11 @@ class VortexFileTest {
 		Path path = fixtureFile(name);
 
 		// When
-		try (var sut = VortexFile.open(path)) {
+		try (var sut = VortexReader.open(path)) {
 
 			// Then
 			assertThat(sut.version()).isEqualTo(1);
-			assertThat(sut.fileSize()).isGreaterThan(VortexFile.TRAILER_SIZE);
+			assertThat(sut.fileSize()).isGreaterThan(VortexReader.TRAILER_SIZE);
 			assertThat(sut.layout()).isNotNull();
 			assertThat(sut.footer()).isNotNull();
 		}
@@ -98,7 +98,7 @@ class VortexFileTest {
 		};
 
 		// Then
-		assertThat(trailerMagic).isEqualTo(VortexFile.MAGIC);
+		assertThat(trailerMagic).isEqualTo(VortexReader.MAGIC);
 	}
 
 	@ParameterizedTest
@@ -112,7 +112,7 @@ class VortexFileTest {
 	void fixture_trailerHasExpectedVersion(String name) throws IOException, URISyntaxException {
 		// Given
 		byte[] bytes = Files.readAllBytes(fixtureFile(name));
-		int trailerStart = bytes.length - VortexFile.TRAILER_SIZE;
+		int trailerStart = bytes.length - VortexReader.TRAILER_SIZE;
 
 		// When
 		int version = java.nio.ByteBuffer.wrap(bytes, trailerStart, 2)
@@ -138,7 +138,7 @@ class VortexFileTest {
 		Path path = fixtureFile(name);
 
 		// When / Then — layout traversal succeeds; decode fails only on missing decoder
-		try (var sut = VortexFile.open(path, CodecRegistry.empty());
+		try (var sut = VortexReader.open(path, CodecRegistry.empty());
 		     var iter = sut.scan(ScanOptions.all())) {
 			assertThatThrownBy(iter::hasNext)
 					.isInstanceOf(IllegalArgumentException.class)
@@ -160,7 +160,7 @@ class VortexFileTest {
 		var registry = buildUniversalStubRegistry();
 
 		// When
-		try (var sut = VortexFile.open(path, registry);
+		try (var sut = VortexReader.open(path, registry);
 		     var iter = sut.scan(ScanOptions.all())) {
 
 			// Then
@@ -179,7 +179,7 @@ class VortexFileTest {
 		int chunkCount = 0;
 
 		// When
-		try (var sut = VortexFile.open(path, registry);
+		try (var sut = VortexReader.open(path, registry);
 		     var iter = sut.scan(ScanOptions.all())) {
 			while (iter.hasNext()) {
 				iter.next();

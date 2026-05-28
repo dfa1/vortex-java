@@ -113,16 +113,15 @@
   - start with compressorContext allowedCascading=3
   - don't apply dict encode to dict encode
 
-## Code cleanups 
+## Code cleanups
 
-- use a dedicated exception instead of IOException? 
--   runtime exception like VortexException, indicating an non-recoverable error 
+- use a dedicated exception instead of IOException?
+-   runtime exception like VortexException, indicating an non-recoverable error
 - - introduce CodecType enum: this can be used to replace the string throw new IllegalStateException("$codec: message")
 - VertexException should have CodecType
 - avoid allocating too many intermediate ByteBuffer => always use a MemorySegment from arena
     pass the arena as part of the EncodeContext, to have more deterministic release of memory
 - use domain primitive like RowCount or Limit/Unlimited (they cannot be zero)
-- rename VortexFile to VortexReader (same as module name)
 - avoid use of IOException like:
   if (footerSeg == null) {
     throw new IOException("vortex: postscript missing footer segment");

@@ -10,7 +10,7 @@ import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.encoding.CodecRegistry;
-import io.github.dfa1.vortex.io.VortexFile;
+import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.ScanResult;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
@@ -161,7 +161,7 @@ public class JniVsJavaReadBenchmark {
     public double javaReadClose() throws IOException {
         var layout = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
         double sum = 0.0;
-        try (VortexFile vf = VortexFile.open(benchFile, registry)) {
+        try (VortexReader vf = VortexReader.open(benchFile, registry)) {
             var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("close"));
             while (iter.hasNext()) {
                 ScanResult r   = iter.next();
@@ -207,7 +207,7 @@ public class JniVsJavaReadBenchmark {
     public long javaReadVolume() throws IOException {
         var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
         long sum = 0L;
-        try (VortexFile vf = VortexFile.open(benchFile, registry)) {
+        try (VortexReader vf = VortexReader.open(benchFile, registry)) {
             var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("volume"));
             while (iter.hasNext()) {
                 ScanResult r   = iter.next();
