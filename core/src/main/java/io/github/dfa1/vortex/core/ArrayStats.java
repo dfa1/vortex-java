@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.encoding;
+package io.github.dfa1.vortex.core;
 
 /// Per-array statistics embedded in the encoding tree.
 public record ArrayStats(

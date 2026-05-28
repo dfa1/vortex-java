@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.scan;
 
-import io.github.dfa1.vortex.encoding.Array;
+import io.github.dfa1.vortex.core.Array;
 
 import java.util.Map;
 

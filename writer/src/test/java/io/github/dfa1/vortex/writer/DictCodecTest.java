@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.encoding.Array;
+import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.encoding.DecoderRegistry;
 import io.github.dfa1.vortex.encoding.DictCodec;
 import io.github.dfa1.vortex.encoding.PrimitiveCodec;

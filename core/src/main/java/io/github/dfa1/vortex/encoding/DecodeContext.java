@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
+import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.DType;
 
 import java.io.IOException;

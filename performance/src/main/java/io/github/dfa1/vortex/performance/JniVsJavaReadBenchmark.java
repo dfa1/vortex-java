@@ -8,7 +8,7 @@ import dev.vortex.api.Session;
 import dev.vortex.api.ScanOptions;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
-import io.github.dfa1.vortex.encoding.Array;
+import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.encoding.DecoderRegistry;
 import io.github.dfa1.vortex.io.VortexFile;
 import io.github.dfa1.vortex.scan.ScanResult;

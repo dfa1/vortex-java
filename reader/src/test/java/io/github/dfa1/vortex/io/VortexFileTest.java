@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.io;
 
-import io.github.dfa1.vortex.encoding.Array;
+import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.encoding.DecodeContext;
 import io.github.dfa1.vortex.encoding.Decoder;
 import io.github.dfa1.vortex.encoding.DecoderRegistry;

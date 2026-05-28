@@ -4,11 +4,8 @@ import dev.vortex.proto.ScalarProtos;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.Layout;
 import io.github.dfa1.vortex.core.SegmentSpec;
-import io.github.dfa1.vortex.encoding.Array;
-import io.github.dfa1.vortex.encoding.ArrayNode;
-import io.github.dfa1.vortex.encoding.ArrayStats;
-import io.github.dfa1.vortex.encoding.DecodeContext;
-import io.github.dfa1.vortex.fbs.Buffer;
+import io.github.dfa1.vortex.core.Array;
+import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.io.VortexFile;
 
 import java.io.IOException;
@@ -154,59 +151,14 @@ public final class ScanIterator implements AutoCloseable {
 
     // ── Flat segment decoding ─────────────────────────────────────────────────
 
-    private Array decodeFlat(Layout flat, DType dtype, Arena arena)  {
+    private Array decodeFlat(Layout flat, DType dtype, Arena arena) {
         if (flat.segments().isEmpty()) {
             throw new IllegalStateException("vortex: Flat layout has no segments");
         }
-
-        int         segIdx = flat.segments().get(0);
-        SegmentSpec spec   = file.footer().segmentSpecs().get(segIdx);
-        int         segLen = spec.length();
-        MemorySegment seg  = file.slice(spec.offset(), segLen);
-        ByteBuffer bb      = seg.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
-
-        // Segment format: [buffer data...] [FlatBuffer Array] [4-byte LE u32 = FlatBuffer size]
-        int fbLen   = bb.getInt(segLen - 4);
-        int fbStart = segLen - 4 - fbLen;
-        ByteBuffer fbBuf = bb.slice(fbStart, fbLen).order(ByteOrder.LITTLE_ENDIAN);
-        var fbArray = io.github.dfa1.vortex.fbs.Array.getRootAsArray(fbBuf);
-
-        // Buffer data is at the beginning of the segment, before the FlatBuffer
-        int numBuffers       = fbArray.buffersLength();
-        MemorySegment[] bufs = new MemorySegment[numBuffers];
-        long dataOffset      = 0;
-        for (int i = 0; i < numBuffers; i++) {
-            Buffer bufDesc = fbArray.buffers(i);
-            dataOffset += bufDesc.padding();
-            bufs[i]     = seg.asSlice(dataOffset, bufDesc.length());
-            dataOffset += bufDesc.length();
-        }
-
-        ArrayNode rootNode = convertArrayNode(fbArray.root(), file.footer().arraySpecs());
-        var ctx = new DecodeContext(rootNode, dtype, flat.rowCount(), bufs, file.registry(), arena);
-        return file.registry().decode(ctx);
-    }
-
-    private static ArrayNode convertArrayNode(
-        io.github.dfa1.vortex.fbs.ArrayNode fbs,
-        List<String> arraySpecs
-    ) {
-        String encodingId = arraySpecs.get(fbs.encoding());
-
-        ArrayNode[] children = new ArrayNode[fbs.childrenLength()];
-        for (int i = 0; i < children.length; i++) {
-            children[i] = convertArrayNode(fbs.children(i), arraySpecs);
-        }
-
-        int[] bufferIndices = new int[fbs.buffersLength()];
-        for (int i = 0; i < bufferIndices.length; i++) {
-            bufferIndices[i] = fbs.buffers(i);
-        }
-
-        // metadataAsByteBuffer() returns a duplicate with position=vectorStart; slice to normalize position to 0
-        ByteBuffer rawMeta = fbs.metadataAsByteBuffer();
-        ByteBuffer meta = (rawMeta != null) ? rawMeta.slice() : null;
-        return new ArrayNode(encodingId, meta, children, bufferIndices, ArrayStats.empty());
+        int segIdx        = flat.segments().get(0);
+        SegmentSpec spec  = file.footer().segmentSpecs().get(segIdx);
+        MemorySegment seg = file.slice(spec.offset(), spec.length());
+        return file.registry().decodeSegment(seg, file.footer().arraySpecs(), dtype, flat.rowCount(), arena);
     }
 
     // ── Zone-map pruning ──────────────────────────────────────────────────────

@@ -1,6 +1,5 @@
-package io.github.dfa1.vortex.encoding;
+package io.github.dfa1.vortex.core;
 
-import io.github.dfa1.vortex.core.DType;
 
 import java.lang.foreign.MemorySegment;
 
