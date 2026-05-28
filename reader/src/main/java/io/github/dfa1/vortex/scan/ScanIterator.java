@@ -293,9 +293,7 @@ public final class ScanIterator implements AutoCloseable {
             return null;
         }
         try {
-            byte[] arr = new byte[bytes.remaining()];
-            bytes.duplicate().get(arr);
-            ScalarProtos.ScalarValue sv = ScalarProtos.ScalarValue.parseFrom(arr);
+            ScalarProtos.ScalarValue sv = ScalarProtos.ScalarValue.parseFrom(bytes.duplicate());
             return switch (sv.getKindCase()) {
                 case INT64_VALUE  -> sv.getInt64Value();
                 case UINT64_VALUE -> sv.getUint64Value();

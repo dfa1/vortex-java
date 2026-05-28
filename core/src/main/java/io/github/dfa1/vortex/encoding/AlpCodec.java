@@ -58,12 +58,9 @@ public final class AlpCodec implements Decoder {
         if (rawMeta == null) {
             throw new IllegalStateException("vortex.alp: missing metadata");
         }
-        byte[] metaBytes = new byte[rawMeta.remaining()];
-        rawMeta.duplicate().get(metaBytes);
-
         EncodingProtos.ALPMetadata meta;
         try {
-            meta = EncodingProtos.ALPMetadata.parseFrom(metaBytes);
+            meta = EncodingProtos.ALPMetadata.parseFrom(rawMeta.duplicate());
         } catch (InvalidProtocolBufferException e) {
             throw new IllegalStateException("vortex.alp: invalid metadata", e);
         }

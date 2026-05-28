@@ -29,12 +29,9 @@ public final class FrameOfReferenceCodec implements Decoder {
         if (rawMeta == null || !rawMeta.hasRemaining()) {
             throw new IllegalStateException("fastlanes.for: missing metadata");
         }
-        byte[] metaBytes = new byte[rawMeta.remaining()];
-        rawMeta.duplicate().get(metaBytes);
-
         ScalarProtos.ScalarValue scalar;
         try {
-            scalar = ScalarProtos.ScalarValue.parseFrom(metaBytes);
+            scalar = ScalarProtos.ScalarValue.parseFrom(rawMeta.duplicate());
         } catch (InvalidProtocolBufferException e) {
             throw new IllegalStateException("fastlanes.for: invalid metadata", e);
         }

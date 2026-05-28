@@ -103,9 +103,7 @@ public final class BitpackedCodec implements Codec {
 
         EncodingProtos.BitPackedMetadata meta;
         try {
-            byte[] bytes = new byte[rawMeta.remaining()];
-            rawMeta.duplicate().get(bytes);
-            meta = EncodingProtos.BitPackedMetadata.parseFrom(bytes);
+            meta = EncodingProtos.BitPackedMetadata.parseFrom(rawMeta.duplicate());
         } catch (InvalidProtocolBufferException e) {
             throw new IllegalStateException("fastlanes.bitpacked: invalid metadata", e);
         }
@@ -117,10 +115,12 @@ public final class BitpackedCodec implements Codec {
         long rowCount = ctx.rowCount();
 
         MemorySegment packed = ctx.buffer(0);
-        long[] longs = fastlanesUnpack(packed, bitWidth, offset, typeBits, rowCount);
+        byte[] outBytes = new byte[(int) (rowCount * ptype.byteSize())];
+        MemorySegment output = MemorySegment.ofArray(outBytes);
+        fastlanesUnpackToSeg(packed, bitWidth, offset, typeBits, rowCount, output);
 
         return new Array(ctx.dtype(), rowCount,
-            new MemorySegment[]{fromLongs(longs, ptype)}, new Array[0], ArrayStats.empty());
+            new MemorySegment[]{output}, new Array[0], ArrayStats.empty());
     }
 
     // ── FastLanes pack ────────────────────────────────────────────────────────
@@ -170,67 +170,6 @@ public final class BitpackedCodec implements Codec {
     }
 
     // ── FastLanes unpack ──────────────────────────────────────────────────────
-
-    private static long[] fastlanesUnpack(
-        MemorySegment buf, int bitWidth, int offset, int typeBits, long rowCount) {
-        long[] output = new long[(int) rowCount];
-        if (bitWidth == 0) {
-            return output;
-        }
-
-        int  LANES      = 1024 / typeBits;
-        int  wordBytes  = typeBits / 8;
-        long totalElems = rowCount + offset;
-        int  blockCount = (int) ((totalElems + 1023) / 1024);
-        long bitMask    = bitWidth == 64 ? -1L : (1L << bitWidth) - 1L;
-
-        long blockByteOff    = 0L;
-        long blockByteStride = 128L * bitWidth;
-        for (int block = 0; block < blockCount; block++, blockByteOff += blockByteStride) {
-            int blockLogicStart = block * 1024 - offset;
-
-            for (int row = 0; row < typeBits; row++) {
-                int currWord      = (row * bitWidth) / typeBits;
-                int nextWord      = ((row + 1) * bitWidth) / typeBits;
-                int shift         = (row * bitWidth) % typeBits;
-                int remainingBits = (nextWord > currWord) ? ((row + 1) * bitWidth) % typeBits : 0;
-                int currentBits   = bitWidth - remainingBits;
-
-                // Hoist per-row invariants above the lane loop.
-                int  o        = row / 8;
-                int  s        = row % 8;
-                int  baseIdx  = blockLogicStart + FL_ORDER[o] * 16 + s * 128;
-                long wordBase = blockByteOff + (long) (LANES * currWord) * wordBytes;
-                long hiBase   = (remainingBits > 0)
-                    ? blockByteOff + (long) (LANES * nextWord) * wordBytes : 0L;
-                long loMask   = (remainingBits > 0) ? (1L << currentBits) - 1L : 0L;
-                long hiMask   = (remainingBits > 0) ? (1L << remainingBits) - 1L : 0L;
-
-                for (int lane = 0; lane < LANES; lane++) {
-                    int logicalIdx = baseIdx + lane;
-
-                    if (logicalIdx < 0 || logicalIdx >= rowCount) {
-                        continue;
-                    }
-
-                    long wordOff = wordBase + (long) lane * wordBytes;
-                    long src     = readWordFromSeg(buf, wordOff, typeBits);
-
-                    long value;
-                    if (remainingBits > 0) {
-                        long lo = (src >>> shift) & loMask;
-                        long hi = readWordFromSeg(buf, hiBase + (long) lane * wordBytes, typeBits) & hiMask;
-                        value = lo | (hi << currentBits);
-                    } else {
-                        value = (src >>> shift) & bitMask;
-                    }
-
-                    output[logicalIdx] = value;
-                }
-            }
-        }
-        return output;
-    }
 
     private static void fastlanesUnpackToSeg(
         MemorySegment buf, int bitWidth, int offset, int typeBits, long rowCount,
@@ -365,33 +304,6 @@ public final class BitpackedCodec implements Codec {
     }
 
     // ── Type conversion ───────────────────────────────────────────────────────
-
-    private static MemorySegment fromLongs(long[] longs, PType ptype) {
-        int    n     = longs.length;
-        int    eSize = ptype.byteSize();
-        byte[] bytes = new byte[n * eSize];
-        // Switch once outside loop: JIT sees a tight, type-specific loop it can vectorize.
-        switch (ptype) {
-            case I8, U8 -> {
-                for (int i = 0; i < n; i++) { bytes[i] = (byte) longs[i]; }
-            }
-            case I16, U16 -> {
-                ByteBuffer bb = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
-                for (long v : longs) { bb.putShort((short) v); }
-            }
-            case I32, U32 -> {
-                ByteBuffer bb = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
-                for (long v : longs) { bb.putInt((int) v); }
-            }
-            case I64, U64 -> {
-                // Raw byte copy: correct on LE JVMs (x86); JVM stores long[] in native order.
-                MemorySegment.copy(MemorySegment.ofArray(longs), 0L,
-                    MemorySegment.ofArray(bytes), 0L, (long) n * 8);
-            }
-            default -> throw new UnsupportedOperationException("unsupported ptype: " + ptype);
-        }
-        return MemorySegment.ofArray(bytes);
-    }
 
     private static long[] toLongs(Object data, PType ptype) {
         return switch (ptype) {
