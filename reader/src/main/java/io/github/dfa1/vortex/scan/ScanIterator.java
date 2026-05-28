@@ -35,6 +35,8 @@ public final class ScanIterator implements AutoCloseable {
 
 	private List<ChunkSpec>    chunks;
     private Map<String, DType> columnDtypes;
+    private List<String>       projectedNames;
+    private List<DType>        projectedDtypes;
     private int                chunkIndex;
     private long               rowsReturned;
     private ScanResult         current;
@@ -59,13 +61,7 @@ public final class ScanIterator implements AutoCloseable {
                 continue;
             }
 
-            var columns = new LinkedHashMap<String, Array>(chunk.columnFlats().size());
-            for (var entry : chunk.columnFlats().entrySet()) {
-                DType colDtype = columnDtypes.get(entry.getKey());
-                columns.put(entry.getKey(), decodeFlat(entry.getValue(), colDtype, arena));
-            }
-
-            current = new ScanResult(chunk.rowCount(), Map.copyOf(columns));
+            current = new ScanResult(chunk.rowCount(), buildColumnMap(chunk));
             rowsReturned += chunk.rowCount();
             return true;
         }
@@ -112,7 +108,9 @@ public final class ScanIterator implements AutoCloseable {
             columnDtypes.put("_col", rootDtype);
         }
 
-        chunks = buildChunks(columnFlats);
+        chunks          = buildChunks(columnFlats);
+        projectedNames  = List.copyOf(columnDtypes.keySet());
+        projectedDtypes = List.copyOf(columnDtypes.values());
     }
 
     private static void collectFlats(Layout layout, List<Layout> out) {
@@ -138,17 +136,41 @@ public final class ScanIterator implements AutoCloseable {
         if (columnFlats.isEmpty()) {
             return List.of();
         }
-
+        String[] colNames = columnFlats.keySet().toArray(String[]::new);
+        int numCols   = colNames.length;
         int numChunks = columnFlats.values().iterator().next().size();
         var result    = new ArrayList<ChunkSpec>(numChunks);
         for (int i = 0; i < numChunks; i++) {
-            final int ci = i;
-            var cols = new LinkedHashMap<String, Layout>();
-            columnFlats.forEach((col, flats) -> cols.put(col, flats.get(ci)));
-            long rowCount = cols.values().iterator().next().rowCount();
-            result.add(new ChunkSpec(rowCount, Map.copyOf(cols)));
+            Layout[] layouts = new Layout[numCols];
+            for (int j = 0; j < numCols; j++) {
+                layouts[j] = columnFlats.get(colNames[j]).get(i);
+            }
+            result.add(new ChunkSpec(layouts[0].rowCount(), colNames, layouts));
         }
         return List.copyOf(result);
+    }
+
+    // ── Column map builder ────────────────────────────────────────────────────
+
+    // Map.of with 1 or 2 args allocates Map1/Map2 (~2-4 fields) — avoids the
+    // LinkedHashMap + Map.copyOf pair that would otherwise allocate per chunk.
+    // Direct array index into ChunkSpec.columnLayouts avoids HashMap.get() per column.
+    private Map<String, Array> buildColumnMap(ChunkSpec chunk) {
+        Layout[] layouts = chunk.columnLayouts();
+        int n = projectedNames.size();
+        if (n == 1) {
+            return Map.of(projectedNames.get(0), decodeFlat(layouts[0], projectedDtypes.get(0), arena));
+        }
+        if (n == 2) {
+            return Map.of(
+                projectedNames.get(0), decodeFlat(layouts[0], projectedDtypes.get(0), arena),
+                projectedNames.get(1), decodeFlat(layouts[1], projectedDtypes.get(1), arena));
+        }
+        var scratch = new LinkedHashMap<String, Array>(n);
+        for (int i = 0; i < n; i++) {
+            scratch.put(projectedNames.get(i), decodeFlat(layouts[i], projectedDtypes.get(i), arena));
+        }
+        return Map.copyOf(scratch);
     }
 
     // ── Flat segment decoding ─────────────────────────────────────────────────
@@ -176,7 +198,7 @@ public final class ScanIterator implements AutoCloseable {
                 yield false;
             }
             case RowFilter.Gte(var col, var val) -> {
-                Layout flat = chunk.columnFlats().get(col);
+                Layout flat = chunk.layoutFor(col);
                 if (flat == null) {
                     yield false;
                 }
@@ -184,7 +206,7 @@ public final class ScanIterator implements AutoCloseable {
                 yield max != null && compareValues(max, val) < 0;
             }
             case RowFilter.Lte(var col, var val) -> {
-                Layout flat = chunk.columnFlats().get(col);
+                Layout flat = chunk.layoutFor(col);
                 if (flat == null) {
                     yield false;
                 }
@@ -192,7 +214,7 @@ public final class ScanIterator implements AutoCloseable {
                 yield min != null && compareValues(min, val) > 0;
             }
             case RowFilter.Eq(var col, var val) -> {
-                Layout flat = chunk.columnFlats().get(col);
+                Layout flat = chunk.layoutFor(col);
                 if (flat == null) {
                     yield false;
                 }
@@ -272,5 +294,14 @@ public final class ScanIterator implements AutoCloseable {
 
     // ── Internal record ───────────────────────────────────────────────────────
 
-    private record ChunkSpec(long rowCount, Map<String, Layout> columnFlats) {}
+    private record ChunkSpec(long rowCount, String[] columnNames, Layout[] columnLayouts) {
+        Layout layoutFor(String col) {
+            for (int i = 0; i < columnNames.length; i++) {
+                if (columnNames[i].equals(col)) {
+                    return columnLayouts[i];
+                }
+            }
+            return null;
+        }
+    }
 }
