@@ -18,7 +18,7 @@ import io.github.dfa1.vortex.core.DType;
 /// Registry mapping encoding IDs to [Codec] implementations.
 public final class CodecRegistry {
 
-    private final Map<String, Codec> codecs = new HashMap<>();
+    private final Map<EncodingId, Codec> codecs = new HashMap<>();
 
     private CodecRegistry() {}
 
@@ -35,16 +35,8 @@ public final class CodecRegistry {
         return new CodecRegistry();
     }
 
-    public void register(String id, Codec codec) {
-        codecs.put(id, codec);
-    }
-
     public void register(Codec codec) {
-        codecs.put(codec.encodingId().id(), codec);
-    }
-
-    public void register(EncodingId id, Codec codec) {
-        register(id.id(), codec);
+        codecs.put(codec.encodingId(), codec);
     }
 
     /// Decode a flat segment from the file's memory-mapped region.
@@ -76,17 +68,13 @@ public final class CodecRegistry {
     }
 
     Array decode(DecodeContext ctx) {
-        String id = ctx.node().encodingId().id();
+        EncodingId id = ctx.node().encodingId();
         Codec c = codecs.get(id);
         if (c == null) {
             throw new IllegalArgumentException("no codec for encoding: " + id);
         }
         return c.decode(ctx);
     }
-
-    public boolean has(String id) { return codecs.containsKey(id); }
-
-    public boolean has(EncodingId id) { return codecs.containsKey(id.id()); }
 
     private static ArrayNode convertArrayNode(
         io.github.dfa1.vortex.fbs.ArrayNode fbs,
