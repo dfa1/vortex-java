@@ -133,6 +133,13 @@
   - `vortex.struct` is never a leaf; always split into per-column arrays before element access
   - Make `buffers`/`children` package-private once accessors cover all callers
 
+- [ ] Introduce specialized typed array views: `ArrayLong`, `ArrayDouble`, etc.
+  - `ScanResult.columns().get("volume", PType.I64)` returns `ArrayLong` instead of raw `Array`
+  - `ArrayLong.forEach(LongConsumer)` — zero-allocation bulk iteration; internally hoists
+    `count = buffer.byteSize() / 8` so JIT eliminates per-element bounds check (see `javaReadVolume` benchmark)
+  - `ArrayLong.get(long i)` — random access for non-bulk callers
+  - `ArrayDouble.forEach(DoubleConsumer)` — same pattern for F64 columns
+
 ## Code cleanups
 
 - use a dedicated exception instead of IOException?
