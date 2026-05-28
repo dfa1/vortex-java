@@ -18,6 +18,17 @@ reads, making it easier to:
 - build and test on any platform with a standard JDK
 - debug and profile with standard JVM tooling
 
+## Why Vortex instead of Parquet
+
+| | Parquet | Vortex |
+|---|---------|--------|
+| Max column-chunk size | 2 GB (`int32` page offsets) | 4 GB per segment (`uint32` length) |
+| Max file offset | 2 GB (`int32` on some implementations) | 16 EB (`uint64` in footer) |
+| Encoding extensibility | Fixed codec set | Plugin registry, any encoding |
+
+Files larger than 2 GB are a practical problem with Parquet: the `int32` data-page size field in the page header caps individual column chunks at 2 GB.
+Vortex uses `uint64` offsets throughout the footer, and this library maps files with `MemorySegment` (Java FFM API), which has no per-mapping size limit — unlike the legacy `FileChannel.map()` API that caps each mapping at 2 GB.
+
 ## Prior art and inspiration
 
 | Project | Language | Notes |

@@ -124,3 +124,11 @@
 - create website
 - publish benchmarks
 - idea is to build something like hardwood.dev but for parquet files
+
+## Large-file support
+
+- [ ] **#12 Test read/write of files > 2 GB**
+  - Write a vortex file whose total segment data exceeds 2 GB (e.g., several wide int64 columns × enough rows)
+  - Verify `VortexFile.open()` maps correctly and `ScanIterator` decodes without offset truncation
+  - Parquet baseline for comparison: same data fails or requires splitting when any column chunk > 2 GB
+  - Confirm no `int` casts silently truncate `uint64` offsets or `uint32` lengths in `SegmentSpec`
