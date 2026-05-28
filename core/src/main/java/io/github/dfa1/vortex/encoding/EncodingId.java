@@ -1,5 +1,10 @@
 package io.github.dfa1.vortex.encoding;
 
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
 /// Strongly-typed encoding identifier used in place of raw strings.
 public enum EncodingId {
     VORTEX_PRIMITIVE("vortex.primitive"),
@@ -36,9 +41,14 @@ public enum EncodingId {
     public String toString() { return id; }
 
     public static EncodingId from(String id) {
-        for (EncodingId e : values()) {
-            if (e.id.equals(id)) return e;
+        EncodingId result = LOOKUP.get(id);
+        if (result == null) {
+            throw new IllegalArgumentException("unknown encoding id: " + id);
         }
-        throw new IllegalArgumentException("unknown encoding id: " + id);
+        return result;
     }
+
+    // O(1) access to EncodingId by its string representation
+    private static final Map<String, EncodingId> LOOKUP = Stream.of(EncodingId.values())
+            .collect(Collectors.toUnmodifiableMap(EncodingId::id, Function.identity()));
 }

@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.encoding.BoolCodec;
 import io.github.dfa1.vortex.encoding.Codec;
 import io.github.dfa1.vortex.encoding.EncodeNode;
 import io.github.dfa1.vortex.encoding.EncodeResult;
+import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PrimitiveCodec;
 import io.github.dfa1.vortex.fbs.ArraySpec;
 import io.github.dfa1.vortex.fbs.Footer;
@@ -61,7 +62,7 @@ public final class VortexWriter implements Closeable {
 
     private final List<SegRef>                segs        = new ArrayList<>();
     private final Map<String, List<ChunkRef>> colChunks   = new LinkedHashMap<>();
-    private final Map<String, Integer>        encodingIdx = new LinkedHashMap<>();
+    private final Map<EncodingId, Integer>        encodingIdx = new LinkedHashMap<>();
 
     private record SegRef(long offset, int len) {}
     private record ChunkRef(int segIdx, long rowCount) {}
@@ -170,7 +171,7 @@ public final class VortexWriter implements Closeable {
     }
 
     private void registerEncodingIds(EncodeNode node) {
-        encodingIdx.computeIfAbsent(node.encodingId().id(), k -> encodingIdx.size());
+        encodingIdx.computeIfAbsent(node.encodingId(), k -> encodingIdx.size());
         for (EncodeNode child : node.children()) {
             registerEncodingIds(child);
         }
@@ -256,7 +257,7 @@ public final class VortexWriter implements Closeable {
         }
 
         int bufIdxVec = io.github.dfa1.vortex.fbs.ArrayNode.createBuffersVector(fbb, node.bufferIndices());
-        int encIdx    = encodingIdx.get(node.encodingId().id());
+        int encIdx    = encodingIdx.get(node.encodingId());
         return io.github.dfa1.vortex.fbs.ArrayNode.createArrayNode(
             fbb, encIdx, metaOff, childVec, bufIdxVec, statsOff);
     }
@@ -281,13 +282,13 @@ public final class VortexWriter implements Closeable {
         var fbb = new FlatBufferBuilder(512);
 
         // array_specs: all encoding IDs used across all written segments, in registration order
-        String[] encIds    = encodingIdx.entrySet().stream()
+        EncodingId[] encIds    = encodingIdx.entrySet().stream()
             .sorted(Map.Entry.comparingByValue())
             .map(Map.Entry::getKey)
-            .toArray(String[]::new);
+            .toArray(EncodingId[]::new);
         int[] asOffsets = new int[encIds.length];
         for (int i = 0; i < encIds.length; i++) {
-            asOffsets[i] = ArraySpec.createArraySpec(fbb, fbb.createString(encIds[i]));
+            asOffsets[i] = ArraySpec.createArraySpec(fbb, fbb.createString(encIds[i].id()));
         }
         int asv = Footer.createArraySpecsVector(fbb, asOffsets);
 
