@@ -20,8 +20,8 @@ import java.util.List;
 public final class DeltaCodec implements Codec {
 
     @Override
-    public String encodingId() {
-        return "fastlanes.delta";
+    public EncodingId encodingId() {
+        return EncodingId.FASTLANES_DELTA;
     }
 
     @Override

@@ -15,8 +15,8 @@ import java.nio.ByteOrder;
 public final class PrimitiveCodec implements Codec {
 
     @Override
-    public String encodingId() {
-        return "vortex.primitive";
+    public EncodingId encodingId() {
+        return EncodingId.VORTEX_PRIMITIVE;
     }
 
     @Override

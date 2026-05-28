@@ -9,7 +9,7 @@ import io.github.dfa1.vortex.core.Array;
 /// TODO: merge inside Codec
 public interface Decoder {
     /// Encoding ID this decoder handles, e.g. `"fastlanes.bitpacked"`.
-    String encodingId();
+    EncodingId encodingId();
 
     Array decode(DecodeContext ctx) ;
 }

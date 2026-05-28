@@ -26,7 +26,7 @@ public final class DecoderRegistry {
     public static DecoderRegistry loadAll() {
         var registry = new DecoderRegistry();
         for (Decoder d : ServiceLoader.load(Decoder.class)) {
-            registry.register(d.encodingId(), d);
+            registry.register(d);
         }
         return registry;
     }
@@ -40,7 +40,11 @@ public final class DecoderRegistry {
     }
 
     public void register(Decoder decoder) {
-        decoders.put(decoder.encodingId(), decoder);
+        decoders.put(decoder.encodingId().id(), decoder);
+    }
+
+    public void register(EncodingId id, Decoder decoder) {
+        register(id.id(), decoder);
     }
 
     /// Decode a flat segment from the file's memory-mapped region.
@@ -72,7 +76,7 @@ public final class DecoderRegistry {
     }
 
     Array decode(DecodeContext ctx) {
-        String id = ctx.node().encodingId();
+        String id = ctx.node().encodingId().id();
         Decoder d = decoders.get(id);
         if (d == null) {
             throw new IllegalArgumentException("no decoder for encoding: " + id);
@@ -82,11 +86,14 @@ public final class DecoderRegistry {
 
     public boolean has(String id) { return decoders.containsKey(id); }
 
+    public boolean has(EncodingId id) { return decoders.containsKey(id.id()); }
+
     private static ArrayNode convertArrayNode(
         io.github.dfa1.vortex.fbs.ArrayNode fbs,
         List<String> encodingSpecs
     ) {
         String encodingId = encodingSpecs.get(fbs.encoding());
+        EncodingId encId = EncodingId.from(encodingId);
 
         ArrayNode[] children = new ArrayNode[fbs.childrenLength()];
         for (int i = 0; i < children.length; i++) {
@@ -101,6 +108,6 @@ public final class DecoderRegistry {
         // metadataAsByteBuffer() returns duplicate with position=vectorStart; slice to normalize to 0
         ByteBuffer rawMeta = fbs.metadataAsByteBuffer();
         ByteBuffer meta = (rawMeta != null) ? rawMeta.slice() : null;
-        return new ArrayNode(encodingId, meta, children, bufferIndices, ArrayStats.empty());
+        return new ArrayNode(encId, meta, children, bufferIndices, ArrayStats.empty());
     }
 }

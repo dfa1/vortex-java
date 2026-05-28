@@ -19,8 +19,8 @@ import java.nio.ByteOrder;
 public final class SequenceCodec implements Decoder {
 
     @Override
-    public String encodingId() {
-        return "vortex.sequence";
+    public EncodingId encodingId() {
+        return EncodingId.VORTEX_SEQUENCE;
     }
 
     @Override

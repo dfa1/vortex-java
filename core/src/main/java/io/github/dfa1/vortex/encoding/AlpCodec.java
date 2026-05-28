@@ -50,8 +50,8 @@ public final class AlpCodec implements Decoder {
     };
 
     @Override
-    public String encodingId() {
-        return "vortex.alp";
+    public EncodingId encodingId() {
+        return EncodingId.VORTEX_ALP;
     }
 
     @Override

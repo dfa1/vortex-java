@@ -21,8 +21,8 @@ import java.nio.ByteOrder;
 public final class ConstantCodec implements Decoder {
 
     @Override
-    public String encodingId() {
-        return "vortex.constant";
+    public EncodingId encodingId() {
+        return EncodingId.VORTEX_CONSTANT;
     }
 
     @Override

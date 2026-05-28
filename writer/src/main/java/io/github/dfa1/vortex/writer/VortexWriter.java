@@ -170,7 +170,7 @@ public final class VortexWriter implements Closeable {
     }
 
     private void registerEncodingIds(EncodeNode node) {
-        encodingIdx.computeIfAbsent(node.encodingId(), k -> encodingIdx.size());
+        encodingIdx.computeIfAbsent(node.encodingId().id(), k -> encodingIdx.size());
         for (EncodeNode child : node.children()) {
             registerEncodingIds(child);
         }
@@ -256,7 +256,7 @@ public final class VortexWriter implements Closeable {
         }
 
         int bufIdxVec = io.github.dfa1.vortex.fbs.ArrayNode.createBuffersVector(fbb, node.bufferIndices());
-        int encIdx    = encodingIdx.get(node.encodingId());
+        int encIdx    = encodingIdx.get(node.encodingId().id());
         return io.github.dfa1.vortex.fbs.ArrayNode.createArrayNode(
             fbb, encIdx, metaOff, childVec, bufIdxVec, statsOff);
     }

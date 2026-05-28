@@ -11,8 +11,8 @@ import java.nio.ByteBuffer;
 public final class BoolCodec implements Codec {
 
     @Override
-    public String encodingId() {
-        return "vortex.bool";
+    public EncodingId encodingId() {
+        return EncodingId.VORTEX_BOOL;
     }
 
     @Override

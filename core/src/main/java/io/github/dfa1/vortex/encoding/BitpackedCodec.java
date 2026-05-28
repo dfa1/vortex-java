@@ -32,8 +32,8 @@ public final class BitpackedCodec implements Codec {
     private static final ValueLayout.OfLong  LE_LONG  = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     @Override
-    public String encodingId() {
-        return "fastlanes.bitpacked";
+    public EncodingId encodingId() {
+        return EncodingId.FASTLANES_BITPACKED;
     }
 
     @Override

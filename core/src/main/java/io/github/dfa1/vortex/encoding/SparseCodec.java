@@ -28,8 +28,8 @@ import java.nio.ByteOrder;
 public final class SparseCodec implements Decoder {
 
     @Override
-    public String encodingId() {
-        return "vortex.sparse";
+    public EncodingId encodingId() {
+        return EncodingId.VORTEX_SPARSE;
     }
 
     @Override

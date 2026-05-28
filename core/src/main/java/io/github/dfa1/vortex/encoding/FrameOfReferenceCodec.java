@@ -21,8 +21,8 @@ import java.nio.ByteOrder;
 public final class FrameOfReferenceCodec implements Decoder {
 
     @Override
-    public String encodingId() {
-        return "fastlanes.for";
+    public EncodingId encodingId() {
+        return EncodingId.FASTLANES_FOR;
     }
 
     @Override

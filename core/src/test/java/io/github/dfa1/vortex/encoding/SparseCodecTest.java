@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.encoding.EncodingId;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.MemorySegment;
@@ -142,11 +143,11 @@ class SparseCodecTest {
         byte[] idxBuf, byte[] valBuf,
         DType idxDtype
     ) {
-        ArrayNode idxNode = new ArrayNode("vortex.primitive", null,
+        ArrayNode idxNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
             new ArrayNode[0], new int[]{1}, ArrayStats.empty());
-        ArrayNode valNode = new ArrayNode("vortex.primitive", null,
+        ArrayNode valNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
             new ArrayNode[0], new int[]{2}, ArrayStats.empty());
-        ArrayNode sparseNode = new ArrayNode("vortex.sparse",
+        ArrayNode sparseNode = new ArrayNode(EncodingId.VORTEX_SPARSE,
             ByteBuffer.wrap(metaBytes),
             new ArrayNode[]{idxNode, valNode},
             new int[]{0},

@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.encoding.EncodingId;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -143,7 +144,7 @@ class AlpCodecTest {
         ByteBuffer bb = ByteBuffer.wrap(encBuf).order(ByteOrder.LITTLE_ENDIAN);
         for (long v : encodedVals) { bb.putLong(v); }
 
-        ArrayNode encNode = new ArrayNode("vortex.primitive", null,
+        ArrayNode encNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
             new ArrayNode[0], new int[]{0}, ArrayStats.empty());
 
         MemorySegment[] segments;
@@ -158,9 +159,9 @@ class AlpCodecTest {
             ByteBuffer vb = ByteBuffer.wrap(valBuf).order(ByteOrder.LITTLE_ENDIAN);
             for (double v : patchValues) { vb.putDouble(v); }
 
-            ArrayNode idxNode = new ArrayNode("vortex.primitive", null,
+            ArrayNode idxNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
                 new ArrayNode[0], new int[]{1}, ArrayStats.empty());
-            ArrayNode valNode = new ArrayNode("vortex.primitive", null,
+            ArrayNode valNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
                 new ArrayNode[0], new int[]{2}, ArrayStats.empty());
 
             children = new ArrayNode[]{encNode, idxNode, valNode};
@@ -174,7 +175,7 @@ class AlpCodecTest {
             segments = new MemorySegment[]{MemorySegment.ofArray(encBuf)};
         }
 
-        ArrayNode alpNode = new ArrayNode("vortex.alp",
+        ArrayNode alpNode = new ArrayNode(EncodingId.VORTEX_ALP,
             ByteBuffer.wrap(metaBytes), children, new int[0], ArrayStats.empty());
 
         DecoderRegistry registry = DecoderRegistry.empty();
@@ -198,10 +199,10 @@ class AlpCodecTest {
         ByteBuffer bb = ByteBuffer.wrap(encBuf).order(ByteOrder.LITTLE_ENDIAN);
         for (int v : encodedVals) { bb.putInt(v); }
 
-        ArrayNode encNode = new ArrayNode("vortex.primitive", null,
+        ArrayNode encNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
             new ArrayNode[0], new int[]{0}, ArrayStats.empty());
 
-        ArrayNode alpNode = new ArrayNode("vortex.alp",
+        ArrayNode alpNode = new ArrayNode(EncodingId.VORTEX_ALP,
             ByteBuffer.wrap(metaBytes), new ArrayNode[]{encNode}, new int[0], ArrayStats.empty());
 
         MemorySegment[] segments = {MemorySegment.ofArray(encBuf)};

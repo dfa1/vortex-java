@@ -30,8 +30,8 @@ public final class RunEndCodec implements Decoder {
     private static final ValueLayout.OfLong  LE_LONG  = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     @Override
-    public String encodingId() {
-        return "vortex.runend";
+    public EncodingId encodingId() {
+        return EncodingId.VORTEX_RUNEND;
     }
 
     @Override

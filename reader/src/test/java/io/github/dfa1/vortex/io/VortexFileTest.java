@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.encoding.DecodeContext;
 import io.github.dfa1.vortex.encoding.Decoder;
 import io.github.dfa1.vortex.encoding.DecoderRegistry;
+import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.scan.ScanOptions;
 import io.github.dfa1.vortex.scan.ScanResult;
 import org.junit.jupiter.api.Test;
@@ -191,7 +192,7 @@ class VortexFileTest {
     private static DecoderRegistry buildUniversalStubRegistry() {
         var registry = DecoderRegistry.empty();
         Decoder stub = new Decoder() {
-            @Override public String encodingId() { return "*"; }
+            @Override public EncodingId encodingId() { return EncodingId.VORTEX_PRIMITIVE; }
             @Override public Array decode(DecodeContext ctx) { return Array.empty(ctx.dtype()); }
         };
         for (String id : List.of(
