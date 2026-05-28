@@ -237,6 +237,8 @@ public final class BitpackedCodec implements Codec {
 		long blockByteStride = 128L * bitWidth;
 		for (int block = 0; block < blockCount; block++, blockByteOff += blockByteStride) {
 			int blockLogicStart = block * 1024 - offset;
+			boolean fullBlock = blockLogicStart >= 0 && (long) blockLogicStart + 1023L < rowCount;
+
 			for (int row = 0; row < 64; row++) {
 				int currWord = (row * bitWidth) / 64;
 				int nextWord = ((row + 1) * bitWidth) / 64;
@@ -247,24 +249,46 @@ public final class BitpackedCodec implements Codec {
 				int s = row % 8;
 				int baseIdx = blockLogicStart + FL_ORDER[o] * 16 + s * 128;
 				long wordBase = blockByteOff + (long) lanes * currWord * 8;
-				long hiBase = (remainingBits > 0) ? blockByteOff + (long) lanes * nextWord * 8 : 0L;
-				long loMask = (remainingBits > 0) ? (1L << currentBits) - 1L : 0L;
-				long hiMask = (remainingBits > 0) ? (1L << remainingBits) - 1L : 0L;
-				for (int lane = 0; lane < lanes; lane++) {
-					int logicalIdx = baseIdx + lane;
-					if (logicalIdx < 0 || logicalIdx >= rowCount) {
-						continue;
-					}
-					long src = buf.get(LE_LONG, wordBase + (long) lane * 8);
-					long value;
+
+				if (fullBlock) {
+					long outBase = (long) baseIdx * 8;
 					if (remainingBits > 0) {
-						long lo = (src >>> shift) & loMask;
-						long hi = buf.get(LE_LONG, hiBase + (long) lane * 8) & hiMask;
-						value = lo | (hi << currentBits);
+						long hiBase = blockByteOff + (long) lanes * nextWord * 8;
+						long loMask = (1L << currentBits) - 1L;
+						long hiMask = (1L << remainingBits) - 1L;
+						long laneOff = 0L;
+						for (int lane = 0; lane < lanes; lane++, laneOff += 8L) {
+							long lo = (buf.get(LE_LONG, wordBase + laneOff) >>> shift) & loMask;
+							long hi = buf.get(LE_LONG, hiBase + laneOff) & hiMask;
+							out.set(LE_LONG, outBase + laneOff, lo | (hi << currentBits));
+						}
 					} else {
-						value = (src >>> shift) & bitMask;
+						long laneOff = 0L;
+						for (int lane = 0; lane < lanes; lane++, laneOff += 8L) {
+							out.set(LE_LONG, outBase + laneOff,
+									(buf.get(LE_LONG, wordBase + laneOff) >>> shift) & bitMask);
+						}
 					}
-					out.set(LE_LONG, (long) logicalIdx * 8, value);
+				} else {
+					long hiBase = (remainingBits > 0) ? blockByteOff + (long) lanes * nextWord * 8 : 0L;
+					long loMask = (remainingBits > 0) ? (1L << currentBits) - 1L : 0L;
+					long hiMask = (remainingBits > 0) ? (1L << remainingBits) - 1L : 0L;
+					for (int lane = 0; lane < lanes; lane++) {
+						int logicalIdx = baseIdx + lane;
+						if (logicalIdx < 0 || logicalIdx >= rowCount) {
+							continue;
+						}
+						long src = buf.get(LE_LONG, wordBase + (long) lane * 8);
+						long value;
+						if (remainingBits > 0) {
+							long lo = (src >>> shift) & loMask;
+							long hi = buf.get(LE_LONG, hiBase + (long) lane * 8) & hiMask;
+							value = lo | (hi << currentBits);
+						} else {
+							value = (src >>> shift) & bitMask;
+						}
+						out.set(LE_LONG, (long) logicalIdx * 8, value);
+					}
 				}
 			}
 		}
