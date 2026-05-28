@@ -23,6 +23,10 @@ import java.nio.ByteOrder;
 /// {@code [ends[i-1], ends[i])} in the output, skipping the first {@code offset} logical elements.
 public final class RunEndCodec implements Decoder {
 
+    private static final ValueLayout.OfShort LE_SHORT = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+    private static final ValueLayout.OfInt   LE_INT   = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+    private static final ValueLayout.OfLong  LE_LONG  = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+
     @Override
     public String encodingId() {
         return "vortex.runend";
@@ -34,12 +38,10 @@ public final class RunEndCodec implements Decoder {
         if (rawMeta == null) {
             throw new IllegalStateException("vortex.runend: missing metadata");
         }
-        byte[] metaBytes = new byte[rawMeta.remaining()];
-        rawMeta.duplicate().get(metaBytes);
 
         EncodingProtos.RunEndMetadata meta;
         try {
-            meta = EncodingProtos.RunEndMetadata.parseFrom(metaBytes);
+            meta = EncodingProtos.RunEndMetadata.parseFrom(rawMeta.duplicate());
         } catch (InvalidProtocolBufferException e) {
             throw new IllegalStateException("vortex.runend: invalid metadata", e);
         }
@@ -70,32 +72,72 @@ public final class RunEndCodec implements Decoder {
         long numRuns, long offset, long n,
         DType dtype
     ) {
-        int  elemBytes = valuePtype.byteSize();
-        byte[] outBytes = new byte[(int) (n * elemBytes)];
-        ByteBuffer out = ByteBuffer.wrap(outBytes).order(ByteOrder.LITTLE_ENDIAN);
+        byte[] outBytes = new byte[(int) (n * valuePtype.byteSize())];
+        MemorySegment out = MemorySegment.ofArray(outBytes);
+        switch (valuePtype) {
+            case I8,  U8  -> expandByte (endsSeg, valuesSeg, endsPtype, numRuns, offset, n, out);
+            case I16, U16 -> expandShort(endsSeg, valuesSeg, endsPtype, numRuns, offset, n, out);
+            case I32, U32 -> expandInt  (endsSeg, valuesSeg, endsPtype, numRuns, offset, n, out);
+            case I64, U64 -> expandLong (endsSeg, valuesSeg, endsPtype, numRuns, offset, n, out);
+            default -> throw new UnsupportedOperationException("vortex.runend: unsupported ptype " + valuePtype);
+        }
+        return new Array(dtype, n, new MemorySegment[]{out}, new Array[0], ArrayStats.empty());
+    }
 
-        long logicalPos = 0L; // output position (before offset subtraction)
-        long outPos     = 0L; // filled output elements
-
+    private static void expandByte(MemorySegment endsSeg, MemorySegment valuesSeg,
+                                    PType endsPtype, long numRuns, long offset, long n, MemorySegment out) {
+        long logicalPos = 0L, outPos = 0L;
         for (long run = 0; run < numRuns && outPos < n; run++) {
-            long runEnd   = readUnsigned(endsSeg, run, endsPtype); // exclusive logical end
-            long rawValue = readRaw(valuesSeg, run, valuePtype);
-
-            // logical positions for this run: [logicalPos, runEnd)
-            // after skipping offset: [max(logicalPos, offset), min(runEnd, offset+n))
-            long writeStart = Math.max(logicalPos, offset);
-            long writeEnd   = Math.min(runEnd, offset + n);
-
-            for (long lp = writeStart; lp < writeEnd; lp++) {
-                writeRaw(out, valuePtype, rawValue);
-                outPos++;
+            long runEnd    = readUnsigned(endsSeg, run, endsPtype);
+            byte rawValue  = valuesSeg.get(ValueLayout.JAVA_BYTE, run);
+            long writeEnd  = Math.min(runEnd, offset + n);
+            for (long lp = Math.max(logicalPos, offset); lp < writeEnd; lp++, outPos++) {
+                out.set(ValueLayout.JAVA_BYTE, outPos, rawValue);
             }
-
             logicalPos = runEnd;
         }
+    }
 
-        return new Array(dtype, n,
-            new MemorySegment[]{MemorySegment.ofArray(outBytes)}, new Array[0], ArrayStats.empty());
+    private static void expandShort(MemorySegment endsSeg, MemorySegment valuesSeg,
+                                     PType endsPtype, long numRuns, long offset, long n, MemorySegment out) {
+        long logicalPos = 0L, outPos = 0L;
+        for (long run = 0; run < numRuns && outPos < n; run++) {
+            long  runEnd   = readUnsigned(endsSeg, run, endsPtype);
+            short rawValue = valuesSeg.get(LE_SHORT, run * 2);
+            long  writeEnd = Math.min(runEnd, offset + n);
+            for (long lp = Math.max(logicalPos, offset); lp < writeEnd; lp++, outPos++) {
+                out.set(LE_SHORT, outPos * 2, rawValue);
+            }
+            logicalPos = runEnd;
+        }
+    }
+
+    private static void expandInt(MemorySegment endsSeg, MemorySegment valuesSeg,
+                                   PType endsPtype, long numRuns, long offset, long n, MemorySegment out) {
+        long logicalPos = 0L, outPos = 0L;
+        for (long run = 0; run < numRuns && outPos < n; run++) {
+            long runEnd   = readUnsigned(endsSeg, run, endsPtype);
+            int  rawValue = valuesSeg.get(LE_INT, run * 4);
+            long writeEnd = Math.min(runEnd, offset + n);
+            for (long lp = Math.max(logicalPos, offset); lp < writeEnd; lp++, outPos++) {
+                out.set(LE_INT, outPos * 4, rawValue);
+            }
+            logicalPos = runEnd;
+        }
+    }
+
+    private static void expandLong(MemorySegment endsSeg, MemorySegment valuesSeg,
+                                    PType endsPtype, long numRuns, long offset, long n, MemorySegment out) {
+        long logicalPos = 0L, outPos = 0L;
+        for (long run = 0; run < numRuns && outPos < n; run++) {
+            long runEnd   = readUnsigned(endsSeg, run, endsPtype);
+            long rawValue = valuesSeg.get(LE_LONG, run * 8);
+            long writeEnd = Math.min(runEnd, offset + n);
+            for (long lp = Math.max(logicalPos, offset); lp < writeEnd; lp++, outPos++) {
+                out.set(LE_LONG, outPos * 8, rawValue);
+            }
+            logicalPos = runEnd;
+        }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -110,38 +152,11 @@ public final class RunEndCodec implements Decoder {
     private static long readUnsigned(MemorySegment seg, long i, PType ptype) {
         return switch (ptype) {
             case U8  -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, i));
-            case U16 -> Short.toUnsignedLong(
-                seg.get(ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), i * 2));
-            case U32 -> Integer.toUnsignedLong(
-                seg.get(ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), i * 4));
-            case U64 -> seg.get(
-                ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), i * 8);
+            case U16 -> Short.toUnsignedLong(seg.get(LE_SHORT, i * 2));
+            case U32 -> Integer.toUnsignedLong(seg.get(LE_INT, i * 4));
+            case U64 -> seg.get(LE_LONG, i * 8);
             default  -> throw new IllegalStateException("vortex.runend: non-unsigned ends ptype " + ptype);
         };
-    }
-
-    private static long readRaw(MemorySegment seg, long i, PType ptype) {
-        int sz = ptype.byteSize();
-        return switch (sz) {
-            case 1 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, i));
-            case 2 -> Short.toUnsignedLong(
-                seg.get(ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), i * 2));
-            case 4 -> Integer.toUnsignedLong(
-                seg.get(ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), i * 4));
-            case 8 -> seg.get(
-                ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), i * 8);
-            default -> throw new UnsupportedOperationException("vortex.runend: unsupported elem size " + sz);
-        };
-    }
-
-    private static void writeRaw(ByteBuffer buf, PType ptype, long rawBits) {
-        switch (ptype.byteSize()) {
-            case 1 -> buf.put((byte) rawBits);
-            case 2 -> buf.putShort((short) rawBits);
-            case 4 -> buf.putInt((int) rawBits);
-            case 8 -> buf.putLong(rawBits);
-            default -> throw new UnsupportedOperationException("vortex.runend: unsupported ptype " + ptype);
-        }
     }
 
     private static PType ptypeFromProto(DTypeProtos.PType proto) {
