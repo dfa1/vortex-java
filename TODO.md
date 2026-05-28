@@ -91,10 +91,35 @@
   - JMH: `VortexFile` + `ScanIterator` throughput vs JNI reader
   - Same fixture as #10; full-scan and projected-column variants
 
+## Large-file support
+
+- [ ] **#12 Test read/write of files > 2 GB**
+  - Write a vortex file whose total segment data exceeds 2 GB (e.g., several wide int64 columns × enough rows)
+  - Verify `VortexFile.open()` maps correctly and `ScanIterator` decodes without offset truncation
+  - Parquet baseline for comparison: same data fails or requires splitting when any column chunk > 2 GB
+  - Confirm no `int` casts silently truncate `uint64` offsets or `uint32` lengths in `SegmentSpec`
+
+## Improve read speed
+
+- avoid switching on PType per element during a copy => embrace MemorySegment
+- the arena is a parameter: it can be allocated once and pass down, all allocations should be done there
+- reuse buffers during decoding
+- don't allocate temp byte[]
+
+## Improve write speed
+
+- this is important but focus will be firs the reading part
+- use the algorithm described here: https://vortex.dev/blog/btrblocks-compressor
+  - start with compressorContext allowedCascading=3
+  - don't apply dict encode to dict encode
+
 ## Code cleanups 
 
+- some classes are named Codec but are only Decoders (missing the Encoding part)
 - use a dedicated exception instead of IOException? 
 -   runtime exception like VortexException, indicating an non-recoverable error 
+- - introduce CodecType enum: this can be used to replace the string throw new IllegalStateException("$codec: message")
+- VertexException should have CodecType
 - avoid allocating too many intermediate ByteBuffer => always use a MemorySegment from arena
     pass the arena as part of the EncodeContext, to have more deterministic release of memory
 - use domain primitive like RowCount or Limit/Unlimited (they cannot be zero)
@@ -105,29 +130,9 @@
   }
   this is an unrecoverable exception
 
-## Performance
-- in BitpackedCodec, there are a lot of extra allocation like: 
-   try {
-   byte[] bytes = new byte[rawMeta.remaining()];
-   rawMeta.duplicate().get(bytes);
-   meta = EncodingProtos.BitPackedMetadata.parseFrom(bytes);
-   } catch (InvalidProtocolBufferException e) {
-   throw new IllegalStateException("fastlanes.bitpacked: invalid metadata", e);
-   }
-=> just use ByteBuffer in this case
-- read path should always avoid byte[] allocations or similar
-- use MethodHandle to read a long array from a ByteBuffer
-
 ## Project
 - move the project in a dedicated organization
 - create website
 - publish benchmarks
 - idea is to build something like hardwood.dev but for parquet files
 
-## Large-file support
-
-- [ ] **#12 Test read/write of files > 2 GB**
-  - Write a vortex file whose total segment data exceeds 2 GB (e.g., several wide int64 columns × enough rows)
-  - Verify `VortexFile.open()` maps correctly and `ScanIterator` decodes without offset truncation
-  - Parquet baseline for comparison: same data fails or requires splitting when any column chunk > 2 GB
-  - Confirm no `int` casts silently truncate `uint64` offsets or `uint32` lengths in `SegmentSpec`
