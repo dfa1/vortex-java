@@ -25,6 +25,10 @@ public final class BitpackedCodec implements Codec {
     // FL_ORDER permutation from the FastLanes paper / spiraldb/fastlanes-rs.
     private static final int[] FL_ORDER = {0, 4, 2, 6, 1, 5, 3, 7};
 
+    private static final ValueLayout.OfShort LE_SHORT = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+    private static final ValueLayout.OfInt   LE_INT   = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+    private static final ValueLayout.OfLong  LE_LONG  = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+
     @Override
     public String encodingId() {
         return "fastlanes.bitpacked";
@@ -177,55 +181,182 @@ public final class BitpackedCodec implements Codec {
         if (bitWidth == 0) {
             return;
         }
+        switch (typeBits) {
+            case 8  -> unpackLoop8 (buf, bitWidth, offset, rowCount, output);
+            case 16 -> unpackLoop16(buf, bitWidth, offset, rowCount, output);
+            case 32 -> unpackLoop32(buf, bitWidth, offset, rowCount, output);
+            case 64 -> unpackLoop64(buf, bitWidth, offset, rowCount, output);
+            default -> throw new IllegalArgumentException("unsupported typeBits: " + typeBits);
+        }
+    }
 
-        int  LANES      = 1024 / typeBits;
-        int  wordBytes  = typeBits / 8;
-        long totalElems = rowCount + offset;
-        int  blockCount = (int) ((totalElems + 1023) / 1024);
-        long bitMask    = bitWidth == 64 ? -1L : (1L << bitWidth) - 1L;
+    private static void unpackLoop8(MemorySegment buf, int bitWidth, int offset, long rowCount, MemorySegment out) {
+        final int LANES      = 128;
+        long      totalElems = rowCount + offset;
+        int       blockCount = (int) ((totalElems + 1023) / 1024);
+        long      bitMask    = (1L << bitWidth) - 1L;
 
         long blockByteOff    = 0L;
         long blockByteStride = 128L * bitWidth;
         for (int block = 0; block < blockCount; block++, blockByteOff += blockByteStride) {
             int blockLogicStart = block * 1024 - offset;
-
-            for (int row = 0; row < typeBits; row++) {
-                int currWord      = (row * bitWidth) / typeBits;
-                int nextWord      = ((row + 1) * bitWidth) / typeBits;
-                int shift         = (row * bitWidth) % typeBits;
-                int remainingBits = (nextWord > currWord) ? ((row + 1) * bitWidth) % typeBits : 0;
+            for (int row = 0; row < 8; row++) {
+                int currWord      = (row * bitWidth) / 8;
+                int nextWord      = ((row + 1) * bitWidth) / 8;
+                int shift         = (row * bitWidth) % 8;
+                int remainingBits = (nextWord > currWord) ? ((row + 1) * bitWidth) % 8 : 0;
                 int currentBits   = bitWidth - remainingBits;
-
-                // Hoist per-row invariants above the lane loop.
                 int  o        = row / 8;
                 int  s        = row % 8;
                 int  baseIdx  = blockLogicStart + FL_ORDER[o] * 16 + s * 128;
-                long wordBase = blockByteOff + (long) (LANES * currWord) * wordBytes;
-                long hiBase   = (remainingBits > 0)
-                    ? blockByteOff + (long) (LANES * nextWord) * wordBytes : 0L;
+                long wordBase = blockByteOff + (long) LANES * currWord;
+                long hiBase   = (remainingBits > 0) ? blockByteOff + (long) LANES * nextWord : 0L;
                 long loMask   = (remainingBits > 0) ? (1L << currentBits) - 1L : 0L;
                 long hiMask   = (remainingBits > 0) ? (1L << remainingBits) - 1L : 0L;
-
                 for (int lane = 0; lane < LANES; lane++) {
                     int logicalIdx = baseIdx + lane;
-
                     if (logicalIdx < 0 || logicalIdx >= rowCount) {
                         continue;
                     }
-
-                    long wordOff = wordBase + (long) lane * wordBytes;
-                    long src     = readWordFromSeg(buf, wordOff, typeBits);
-
+                    long src = Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, wordBase + lane));
                     long value;
                     if (remainingBits > 0) {
                         long lo = (src >>> shift) & loMask;
-                        long hi = readWordFromSeg(buf, hiBase + (long) lane * wordBytes, typeBits) & hiMask;
+                        long hi = Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, hiBase + lane)) & hiMask;
                         value = lo | (hi << currentBits);
                     } else {
                         value = (src >>> shift) & bitMask;
                     }
+                    out.set(ValueLayout.JAVA_BYTE, logicalIdx, (byte) value);
+                }
+            }
+        }
+    }
 
-                    writeWordToSeg(output, (long) logicalIdx * wordBytes, value, typeBits);
+    private static void unpackLoop16(MemorySegment buf, int bitWidth, int offset, long rowCount, MemorySegment out) {
+        final int LANES      = 64;
+        long      totalElems = rowCount + offset;
+        int       blockCount = (int) ((totalElems + 1023) / 1024);
+        long      bitMask    = (1L << bitWidth) - 1L;
+
+        long blockByteOff    = 0L;
+        long blockByteStride = 128L * bitWidth;
+        for (int block = 0; block < blockCount; block++, blockByteOff += blockByteStride) {
+            int blockLogicStart = block * 1024 - offset;
+            for (int row = 0; row < 16; row++) {
+                int currWord      = (row * bitWidth) / 16;
+                int nextWord      = ((row + 1) * bitWidth) / 16;
+                int shift         = (row * bitWidth) % 16;
+                int remainingBits = (nextWord > currWord) ? ((row + 1) * bitWidth) % 16 : 0;
+                int currentBits   = bitWidth - remainingBits;
+                int  o        = row / 8;
+                int  s        = row % 8;
+                int  baseIdx  = blockLogicStart + FL_ORDER[o] * 16 + s * 128;
+                long wordBase = blockByteOff + (long) LANES * currWord * 2;
+                long hiBase   = (remainingBits > 0) ? blockByteOff + (long) LANES * nextWord * 2 : 0L;
+                long loMask   = (remainingBits > 0) ? (1L << currentBits) - 1L : 0L;
+                long hiMask   = (remainingBits > 0) ? (1L << remainingBits) - 1L : 0L;
+                for (int lane = 0; lane < LANES; lane++) {
+                    int logicalIdx = baseIdx + lane;
+                    if (logicalIdx < 0 || logicalIdx >= rowCount) {
+                        continue;
+                    }
+                    long src = Short.toUnsignedLong(buf.get(LE_SHORT, wordBase + (long) lane * 2));
+                    long value;
+                    if (remainingBits > 0) {
+                        long lo = (src >>> shift) & loMask;
+                        long hi = Short.toUnsignedLong(buf.get(LE_SHORT, hiBase + (long) lane * 2)) & hiMask;
+                        value = lo | (hi << currentBits);
+                    } else {
+                        value = (src >>> shift) & bitMask;
+                    }
+                    out.set(LE_SHORT, (long) logicalIdx * 2, (short) value);
+                }
+            }
+        }
+    }
+
+    private static void unpackLoop32(MemorySegment buf, int bitWidth, int offset, long rowCount, MemorySegment out) {
+        final int LANES      = 32;
+        long      totalElems = rowCount + offset;
+        int       blockCount = (int) ((totalElems + 1023) / 1024);
+        long      bitMask    = (1L << bitWidth) - 1L;
+
+        long blockByteOff    = 0L;
+        long blockByteStride = 128L * bitWidth;
+        for (int block = 0; block < blockCount; block++, blockByteOff += blockByteStride) {
+            int blockLogicStart = block * 1024 - offset;
+            for (int row = 0; row < 32; row++) {
+                int currWord      = (row * bitWidth) / 32;
+                int nextWord      = ((row + 1) * bitWidth) / 32;
+                int shift         = (row * bitWidth) % 32;
+                int remainingBits = (nextWord > currWord) ? ((row + 1) * bitWidth) % 32 : 0;
+                int currentBits   = bitWidth - remainingBits;
+                int  o        = row / 8;
+                int  s        = row % 8;
+                int  baseIdx  = blockLogicStart + FL_ORDER[o] * 16 + s * 128;
+                long wordBase = blockByteOff + (long) LANES * currWord * 4;
+                long hiBase   = (remainingBits > 0) ? blockByteOff + (long) LANES * nextWord * 4 : 0L;
+                long loMask   = (remainingBits > 0) ? (1L << currentBits) - 1L : 0L;
+                long hiMask   = (remainingBits > 0) ? (1L << remainingBits) - 1L : 0L;
+                for (int lane = 0; lane < LANES; lane++) {
+                    int logicalIdx = baseIdx + lane;
+                    if (logicalIdx < 0 || logicalIdx >= rowCount) {
+                        continue;
+                    }
+                    long src = Integer.toUnsignedLong(buf.get(LE_INT, wordBase + (long) lane * 4));
+                    long value;
+                    if (remainingBits > 0) {
+                        long lo = (src >>> shift) & loMask;
+                        long hi = Integer.toUnsignedLong(buf.get(LE_INT, hiBase + (long) lane * 4)) & hiMask;
+                        value = lo | (hi << currentBits);
+                    } else {
+                        value = (src >>> shift) & bitMask;
+                    }
+                    out.set(LE_INT, (long) logicalIdx * 4, (int) value);
+                }
+            }
+        }
+    }
+
+    private static void unpackLoop64(MemorySegment buf, int bitWidth, int offset, long rowCount, MemorySegment out) {
+        final int LANES      = 16;
+        long      totalElems = rowCount + offset;
+        int       blockCount = (int) ((totalElems + 1023) / 1024);
+        long      bitMask    = bitWidth == 64 ? -1L : (1L << bitWidth) - 1L;
+
+        long blockByteOff    = 0L;
+        long blockByteStride = 128L * bitWidth;
+        for (int block = 0; block < blockCount; block++, blockByteOff += blockByteStride) {
+            int blockLogicStart = block * 1024 - offset;
+            for (int row = 0; row < 64; row++) {
+                int currWord      = (row * bitWidth) / 64;
+                int nextWord      = ((row + 1) * bitWidth) / 64;
+                int shift         = (row * bitWidth) % 64;
+                int remainingBits = (nextWord > currWord) ? ((row + 1) * bitWidth) % 64 : 0;
+                int currentBits   = bitWidth - remainingBits;
+                int  o        = row / 8;
+                int  s        = row % 8;
+                int  baseIdx  = blockLogicStart + FL_ORDER[o] * 16 + s * 128;
+                long wordBase = blockByteOff + (long) LANES * currWord * 8;
+                long hiBase   = (remainingBits > 0) ? blockByteOff + (long) LANES * nextWord * 8 : 0L;
+                long loMask   = (remainingBits > 0) ? (1L << currentBits) - 1L : 0L;
+                long hiMask   = (remainingBits > 0) ? (1L << remainingBits) - 1L : 0L;
+                for (int lane = 0; lane < LANES; lane++) {
+                    int logicalIdx = baseIdx + lane;
+                    if (logicalIdx < 0 || logicalIdx >= rowCount) {
+                        continue;
+                    }
+                    long src = buf.get(LE_LONG, wordBase + (long) lane * 8);
+                    long value;
+                    if (remainingBits > 0) {
+                        long lo = (src >>> shift) & loMask;
+                        long hi = buf.get(LE_LONG, hiBase + (long) lane * 8) & hiMask;
+                        value = lo | (hi << currentBits);
+                    } else {
+                        value = (src >>> shift) & bitMask;
+                    }
+                    out.set(LE_LONG, (long) logicalIdx * 8, value);
                 }
             }
         }
@@ -276,29 +407,6 @@ public final class BitpackedCodec implements Codec {
                 buf[off + 6] = (byte) (value >>> 48);
                 buf[off + 7] = (byte) (value >>> 56);
             }
-            default -> throw new IllegalArgumentException("unsupported typeBits: " + typeBits);
-        }
-    }
-
-    private static long readWordFromSeg(MemorySegment seg, long off, int typeBits) {
-        return switch (typeBits) {
-            case 8  -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, off));
-            case 16 -> Short.toUnsignedLong(
-                seg.get(ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), off));
-            case 32 -> Integer.toUnsignedLong(
-                seg.get(ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), off));
-            case 64 -> seg.get(
-                ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), off);
-            default -> throw new IllegalArgumentException("unsupported typeBits: " + typeBits);
-        };
-    }
-
-    private static void writeWordToSeg(MemorySegment seg, long off, long value, int typeBits) {
-        switch (typeBits) {
-            case 8  -> seg.set(ValueLayout.JAVA_BYTE, off, (byte) value);
-            case 16 -> seg.set(ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), off, (short) value);
-            case 32 -> seg.set(ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), off, (int) value);
-            case 64 -> seg.set(ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), off, value);
             default -> throw new IllegalArgumentException("unsupported typeBits: " + typeBits);
         }
     }
