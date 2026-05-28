@@ -119,7 +119,7 @@ public final class DeltaCodec implements Codec {
 			MemorySegment dst = MemorySegment.ofArray(bytes);
 			MemorySegment.copy(MemorySegment.ofArray(longs), ValueLayout.JAVA_LONG, 0L,
 					dst, ptype.valueLayout(), 0L, longs.length);
-			return dst;
+			return dst.asReadOnly();
 		}
 		// Narrowing path: per-element MethodHandle setter from PTypeIO.
 		int n = longs.length;
@@ -129,7 +129,7 @@ public final class DeltaCodec implements Codec {
 		for (int i = 0; i < n; i++) {
 			PTypeIO.set(seg, i * elemSize, ptype, longs[i]);
 		}
-		return seg;
+		return seg.asReadOnly();
 	}
 
 	// ── Bit packing ───────────────────────────────────────────────────────────

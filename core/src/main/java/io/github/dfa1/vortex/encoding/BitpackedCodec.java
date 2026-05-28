@@ -487,6 +487,6 @@ public final class BitpackedCodec implements Codec {
 		fastlanesUnpackToSeg(packed, bitWidth, offset, typeBits, rowCount, output);
 
 		return new Array(ctx.dtype(), rowCount,
-				new MemorySegment[]{output}, Array.NO_CHILDREN, ArrayStats.empty());
+				new MemorySegment[]{output.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
 	}
 }

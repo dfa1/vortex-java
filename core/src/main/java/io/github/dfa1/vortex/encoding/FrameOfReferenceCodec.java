@@ -105,6 +105,6 @@ public final class FrameOfReferenceCodec implements Codec {
 		MemorySegment src = encoded.buffer(0);
 		long n = ctx.rowCount();
 		MemorySegment dst = applyReference(src, n, p.ptype(), ref);
-		return new Array(ctx.dtype(), n, new MemorySegment[]{dst}, Array.NO_CHILDREN, ArrayStats.empty());
+		return new Array(ctx.dtype(), n, new MemorySegment[]{dst.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
 	}
 }

@@ -134,7 +134,7 @@ public final class AlpCodec implements Codec {
 			applyPatchesF64(ctx, meta.getPatches(), out, n);
 		}
 
-		return new Array(ctx.dtype(), n, new MemorySegment[]{out}, Array.NO_CHILDREN, ArrayStats.empty());
+		return new Array(ctx.dtype(), n, new MemorySegment[]{out.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
 	}
 
 	// ── Helpers ───────────────────────────────────────────────────────────────
@@ -185,7 +185,7 @@ public final class AlpCodec implements Codec {
 			applyPatchesF32(ctx, meta.getPatches(), out, n);
 		}
 
-		return new Array(ctx.dtype(), n, new MemorySegment[]{out}, Array.NO_CHILDREN, ArrayStats.empty());
+		return new Array(ctx.dtype(), n, new MemorySegment[]{out.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
 	}
 
 	private void applyPatchesF32(DecodeContext ctx, EncodingProtos.PatchesMetadata pm,
