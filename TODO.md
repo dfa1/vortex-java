@@ -126,6 +126,21 @@
     - `PType.java:38`, `PTypeIO.java:49`, `DictCodec.java:228` — implement F16
     - `WriteBenchmark.java:89`, `ReadBenchmark.java:110` — enable JNI baseline (blocked by #10/#11)
 
+## Off-heap codec output
+
+- [ ] Allocate codec output via `ctx.arena().allocate(...)` instead of `MemorySegment.ofArray(new byte[])`
+  - All decoding codecs (bitpacked, alp, sparse, delta, dict, runend) currently allocate heap-backed segments
+  - Native segments support `reinterpret(knownSize)` → JIT hoists bounds check outside read loop → parity with Unsafe
+  - `PrimitiveCodec` already zero-copy (mmap slice) but mmap = mapped segment, not native → same restriction applies
+  - Reference: https://inside.java/2025/06/12/ffm-vs-unsafe/
+
+## Array API
+
+- [ ] Add typed accessors to `Array`: `getLong(i)`, `getDouble(i)`, `getInt(i)`, `getFloat(i)`, etc.
+  - All leaf codecs (primitive, bitpacked, alp, sparse, for, delta, dict) decode into `buffers[0]` = flat LE primitives — typed accessors work uniformly
+  - `vortex.struct` is never a leaf; always split into per-column arrays before element access
+  - Make `buffers`/`children` package-private once accessors cover all callers
+
 ## Code cleanups
 
 - use a dedicated exception instead of IOException?

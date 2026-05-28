@@ -41,6 +41,7 @@ import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 
 import java.io.IOException;
+import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
@@ -169,10 +170,9 @@ public class JniVsJavaReadBenchmark {
 			while (iter.hasNext()) {
 				ScanResult r = iter.next();
 				Array arr = r.columns().get("volume");
-				var buf = arr.buffer(0);
-				long len = arr.length();
-				for (long j = 0; j < len; j++) {
-					sum += buf.get(layout, j * Long.BYTES);
+				long[] values = arr.buffer(0).toArray(layout);
+				for (long v : values) {
+					sum += v;
 				}
 			}
 		}
