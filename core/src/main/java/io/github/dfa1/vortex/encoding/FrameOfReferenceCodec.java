@@ -72,40 +72,40 @@ public final class FrameOfReferenceCodec implements Decoder {
     }
 
     private static MemorySegment applyReference(MemorySegment src, long n, PType ptype, long ref) {
-        int elemBytes = ptype.byteSize();
-        byte[] bytes = new byte[(int) (n * elemBytes)];
-        ByteBuffer dst = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
+        int wordBytes = ptype.byteSize();
+        byte[] bytes = new byte[(int) (n * wordBytes)];
+        MemorySegment dst = MemorySegment.ofArray(bytes);
         switch (ptype) {
             case I8, U8 -> {
-                for (long i = 0; i < n; i++) {
-                    byte v = src.get(ValueLayout.JAVA_BYTE, i);
-                    dst.put((byte) (v + (byte) ref));
+                for (long off = 0, end = n; off < end; off++) {
+                    byte v = src.get(ValueLayout.JAVA_BYTE, off);
+                    dst.set(ValueLayout.JAVA_BYTE, off, (byte) (v + (byte) ref));
                 }
             }
             case I16, U16 -> {
                 var layout = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-                for (long i = 0; i < n; i++) {
-                    short v = src.get(layout, i * 2);
-                    dst.putShort((short) (v + (short) ref));
+                for (long off = 0, end = n * 2; off < end; off += 2) {
+                    short v = src.get(layout, off);
+                    dst.set(layout, off, (short) (v + (short) ref));
                 }
             }
             case I32, U32 -> {
                 var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-                for (long i = 0; i < n; i++) {
-                    int v = src.get(layout, i * 4);
-                    dst.putInt(v + (int) ref);
+                for (long off = 0, end = n * 4; off < end; off += 4) {
+                    int v = src.get(layout, off);
+                    dst.set(layout, off, v + (int) ref);
                 }
             }
             case I64, U64 -> {
                 var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-                for (long i = 0; i < n; i++) {
-                    long v = src.get(layout, i * 8);
-                    dst.putLong(v + ref);
+                for (long off = 0, end = n * 8; off < end; off += 8) {
+                    long v = src.get(layout, off);
+                    dst.set(layout, off, v + ref);
                 }
             }
             default -> throw new UnsupportedOperationException(
                 "fastlanes.for: unsupported ptype " + ptype);
         }
-        return MemorySegment.ofArray(bytes);
+        return dst;
     }
 }

@@ -12,6 +12,7 @@ import io.github.dfa1.vortex.fbs.Buffer;
 import io.github.dfa1.vortex.io.VortexFile;
 
 import java.io.IOException;
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -63,7 +64,7 @@ public final class ScanIterator implements AutoCloseable {
             var columns = new LinkedHashMap<String, Array>(chunk.columnFlats().size());
             for (var entry : chunk.columnFlats().entrySet()) {
                 DType colDtype = columnDtypes.get(entry.getKey());
-                columns.put(entry.getKey(), decodeFlat(entry.getValue(), colDtype));
+                columns.put(entry.getKey(), decodeFlat(entry.getValue(), colDtype, Arena.global()));
             }
 
             current = new ScanResult(chunk.rowCount(), Map.copyOf(columns));
@@ -153,7 +154,7 @@ public final class ScanIterator implements AutoCloseable {
 
     // ── Flat segment decoding ─────────────────────────────────────────────────
 
-    private Array decodeFlat(Layout flat, DType dtype)  {
+    private Array decodeFlat(Layout flat, DType dtype, Arena arena)  {
         if (flat.segments().isEmpty()) {
             throw new IllegalStateException("vortex: Flat layout has no segments");
         }
@@ -182,7 +183,7 @@ public final class ScanIterator implements AutoCloseable {
         }
 
         ArrayNode rootNode = convertArrayNode(fbArray.root(), file.footer().arraySpecs());
-        var ctx = new DecodeContext(rootNode, dtype, flat.rowCount(), bufs, file.registry());
+        var ctx = new DecodeContext(rootNode, dtype, flat.rowCount(), bufs, file.registry(), arena);
         return file.registry().decode(ctx);
     }
 

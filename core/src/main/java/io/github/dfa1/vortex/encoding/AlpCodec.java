@@ -94,26 +94,26 @@ public final class AlpCodec implements Decoder {
         double factor = F10_F64[expF] * IF10_F64[expE];
 
         byte[] outBytes = new byte[Math.toIntExact(n * 8)];
-        ByteBuffer out = ByteBuffer.wrap(outBytes).order(ByteOrder.LITTLE_ENDIAN);
+        MemorySegment out = MemorySegment.ofArray(outBytes);
         var srcLayout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+        var dstLayout = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
         MemorySegment src = encoded.buffer(0);
         // Strength-reduce: running byte offset instead of i*8 per iteration.
         for (long off = 0, end = n * 8; off < end; off += 8) {
             long   encVal = src.get(srcLayout, off);
             double dec    = (double) encVal * factor;
-            out.putDouble(dec);
+            out.set(dstLayout, off, dec);
         }
 
         if (meta.hasPatches()) {
-            applyPatchesF64(ctx, meta.getPatches(), outBytes, n);
+            applyPatchesF64(ctx, meta.getPatches(), out, n);
         }
 
-        return new Array(ctx.dtype(), n,
-            new MemorySegment[]{MemorySegment.ofArray(outBytes)}, new Array[0], ArrayStats.empty());
+        return new Array(ctx.dtype(), n, new MemorySegment[]{out}, new Array[0], ArrayStats.empty());
     }
 
     private void applyPatchesF64(DecodeContext ctx, EncodingProtos.PatchesMetadata pm,
-                                  byte[] outBytes, long n) {
+                                  MemorySegment out, long n) {
         long numPatches  = pm.getLen();
         long offset      = pm.getOffset();
         PType idxPtype   = ptypeFromProto(pm.getIndicesPtype());
@@ -124,17 +124,16 @@ public final class AlpCodec implements Decoder {
         Array idxArr = decodeChildAs(ctx, 1, idxDtype, numPatches);
         Array valArr = decodeChildAs(ctx, 2, valDtype, numPatches);
 
-        var idxLayout = unsignedLayout(idxPtype);
         var valLayout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+        var dstLayout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
-        ByteBuffer out = ByteBuffer.wrap(outBytes).order(ByteOrder.LITTLE_ENDIAN);
         MemorySegment idxSeg = idxArr.buffer(0);
         MemorySegment valSeg = valArr.buffer(0);
 
         for (long i = 0; i < numPatches; i++) {
-            long absIdx = readUnsigned(idxSeg, i, idxPtype) - offset;
+            long absIdx  = readUnsigned(idxSeg, i, idxPtype) - offset;
             long rawBits = valSeg.get(valLayout, i * 8);
-            out.putLong((int) (absIdx * 8), rawBits);
+            out.set(dstLayout, absIdx * 8, rawBits);
         }
     }
 
@@ -147,25 +146,25 @@ public final class AlpCodec implements Decoder {
         float factor = F10_F32[expF] * IF10_F32[expE];
 
         byte[] outBytes = new byte[Math.toIntExact(n * 4)];
-        ByteBuffer out = ByteBuffer.wrap(outBytes).order(ByteOrder.LITTLE_ENDIAN);
+        MemorySegment out = MemorySegment.ofArray(outBytes);
         var srcLayout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+        var dstLayout = ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
         MemorySegment src = encoded.buffer(0);
         for (long off = 0, end = n * 4; off < end; off += 4) {
             int   encVal = src.get(srcLayout, off);
             float dec    = (float) encVal * factor;
-            out.putFloat(dec);
+            out.set(dstLayout, off, dec);
         }
 
         if (meta.hasPatches()) {
-            applyPatchesF32(ctx, meta.getPatches(), outBytes, n);
+            applyPatchesF32(ctx, meta.getPatches(), out, n);
         }
 
-        return new Array(ctx.dtype(), n,
-            new MemorySegment[]{MemorySegment.ofArray(outBytes)}, new Array[0], ArrayStats.empty());
+        return new Array(ctx.dtype(), n, new MemorySegment[]{out}, new Array[0], ArrayStats.empty());
     }
 
     private void applyPatchesF32(DecodeContext ctx, EncodingProtos.PatchesMetadata pm,
-                                  byte[] outBytes, long n) {
+                                  MemorySegment out, long n) {
         long numPatches = pm.getLen();
         long offset     = pm.getOffset();
         PType idxPtype  = ptypeFromProto(pm.getIndicesPtype());
@@ -177,15 +176,15 @@ public final class AlpCodec implements Decoder {
         Array valArr = decodeChildAs(ctx, 2, valDtype, numPatches);
 
         var valLayout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+        var dstLayout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
-        ByteBuffer out = ByteBuffer.wrap(outBytes).order(ByteOrder.LITTLE_ENDIAN);
         MemorySegment idxSeg = idxArr.buffer(0);
         MemorySegment valSeg = valArr.buffer(0);
 
         for (long i = 0; i < numPatches; i++) {
             long absIdx  = readUnsigned(idxSeg, i, idxPtype) - offset;
             int rawBits  = valSeg.get(valLayout, i * 4);
-            out.putInt((int) (absIdx * 4), rawBits);
+            out.set(dstLayout, absIdx * 4, rawBits);
         }
     }
 
@@ -194,7 +193,7 @@ public final class AlpCodec implements Decoder {
     private static Array decodeChildAs(DecodeContext parent, int childIdx, DType dtype, long rowCount) {
         ArrayNode childNode = parent.node().children()[childIdx];
         DecodeContext childCtx = new DecodeContext(
-            childNode, dtype, rowCount, parent.segmentBuffers(), parent.registry());
+            childNode, dtype, rowCount, parent.segmentBuffers(), parent.registry(), parent.arena());
         return parent.registry().decode(childCtx);
     }
 
@@ -209,10 +208,6 @@ public final class AlpCodec implements Decoder {
                 ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), i * 8);
             default  -> throw new IllegalStateException("vortex.alp: non-unsigned patch index ptype " + ptype);
         };
-    }
-
-    private static ValueLayout.OfLong unsignedLayout(PType ptype) {
-        return ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
     }
 
     private static PType ptypeFromProto(DTypeProtos.PType proto) {

@@ -179,7 +179,7 @@ class AlpCodecTest {
         registry.register(new AlpCodec());
         registry.register(new PrimitiveCodec());
 
-        return new DecodeContext(alpNode, F64_DTYPE, encodedVals.length, segments, registry);
+        return new DecodeContext(alpNode, F64_DTYPE, encodedVals.length, segments, registry, java.lang.foreign.Arena.global());
     }
 
     private static DecodeContext buildAlpCtxF32(
@@ -208,6 +208,6 @@ class AlpCodecTest {
         registry.register(new AlpCodec());
         registry.register(new PrimitiveCodec());
 
-        return new DecodeContext(alpNode, F32_DTYPE, encodedVals.length, segments, registry);
+        return new DecodeContext(alpNode, F32_DTYPE, encodedVals.length, segments, registry, java.lang.foreign.Arena.global());
     }
 }

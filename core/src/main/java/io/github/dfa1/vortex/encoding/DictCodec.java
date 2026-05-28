@@ -156,7 +156,7 @@ public final class DictCodec implements Codec {
     private static Array decodeChildAs(DecodeContext parent, int childIdx, DType dtype, long rowCount) {
         ArrayNode childNode = parent.node().children()[childIdx];
         DecodeContext childCtx = new DecodeContext(
-            childNode, dtype, rowCount, parent.segmentBuffers(), parent.registry());
+            childNode, dtype, rowCount, parent.segmentBuffers(), parent.registry(), parent.arena());
         return parent.registry().decode(childCtx);
     }
 

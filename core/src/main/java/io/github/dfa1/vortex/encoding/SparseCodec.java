@@ -71,11 +71,12 @@ public final class SparseCodec implements Decoder {
         // Allocate output buffer filled with the fill value
         int  elemBytes = valuePtype.byteSize();
         byte[] outBytes = new byte[(int) (n * elemBytes)];
-        fillBuffer(outBytes, n, valuePtype, fillScalar);
+        MemorySegment out = MemorySegment.ofArray(outBytes);
+        fillSegment(out, n, valuePtype, fillScalar);
 
         if (numPatches == 0) {
             return new Array(ctx.dtype(), n,
-                new MemorySegment[]{MemorySegment.ofArray(outBytes)}, new Array[0], ArrayStats.empty());
+                new MemorySegment[]{out}, new Array[0], ArrayStats.empty());
         }
 
         // Decode patch indices with their own dtype and rowCount
@@ -86,11 +87,11 @@ public final class SparseCodec implements Decoder {
         Array valuesArray = decodeChildWithDtype(ctx, 1, ctx.dtype(), numPatches);
 
         // Apply patches: output[index - offset] = value
-        applyPatches(outBytes, n, valuePtype,
+        applyPatches(out, n, valuePtype,
             indicesArray.buffer(0), valuesArray.buffer(0), indicesPtype, numPatches, offset);
 
         return new Array(ctx.dtype(), n,
-            new MemorySegment[]{MemorySegment.ofArray(outBytes)}, new Array[0], ArrayStats.empty());
+            new MemorySegment[]{out}, new Array[0], ArrayStats.empty());
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -98,7 +99,7 @@ public final class SparseCodec implements Decoder {
     private static Array decodeChildWithDtype(DecodeContext parent, int childIdx, DType dtype, long rowCount) {
         ArrayNode childNode = parent.node().children()[childIdx];
         DecodeContext childCtx = new DecodeContext(
-            childNode, dtype, rowCount, parent.segmentBuffers(), parent.registry());
+            childNode, dtype, rowCount, parent.segmentBuffers(), parent.registry(), parent.arena());
         try {
             return parent.registry().decode(childCtx);
         } catch (Exception e) {
@@ -106,22 +107,22 @@ public final class SparseCodec implements Decoder {
         }
     }
 
-    private static void fillBuffer(byte[] buf, long n, PType ptype, ScalarProtos.ScalarValue scalar) {
+    private static void fillSegment(MemorySegment out, long n, PType ptype, ScalarProtos.ScalarValue scalar) {
         long fillLong = scalarToLong(scalar, ptype);
         int  elemBytes = ptype.byteSize();
-        ByteBuffer bb = ByteBuffer.wrap(buf).order(ByteOrder.LITTLE_ENDIAN);
+        ByteBuffer bb = out.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
         for (long i = 0; i < n; i++) {
             writeElem(bb, ptype, fillLong);
         }
     }
 
     private static void applyPatches(
-        byte[] outBytes, long n, PType valuePtype,
+        MemorySegment out, long n, PType valuePtype,
         MemorySegment idxSeg, MemorySegment valSeg,
         PType idxPtype, long numPatches, long offset
     ) {
         int elemBytes = valuePtype.byteSize();
-        ByteBuffer out = ByteBuffer.wrap(outBytes).order(ByteOrder.LITTLE_ENDIAN);
+        ByteBuffer outBuf = out.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
         for (long i = 0; i < numPatches; i++) {
             long idx = readUnsignedIdx(idxSeg, i, idxPtype) - offset;
             if (idx < 0 || idx >= n) {
@@ -129,8 +130,8 @@ public final class SparseCodec implements Decoder {
                     "vortex.sparse: patch index " + idx + " out of range [0," + n + ")");
             }
             long val = readElem(valSeg, i, valuePtype);
-            out.position((int) (idx * elemBytes));
-            writeElem(out, valuePtype, val);
+            outBuf.position((int) (idx * elemBytes));
+            writeElem(outBuf, valuePtype, val);
         }
     }
 

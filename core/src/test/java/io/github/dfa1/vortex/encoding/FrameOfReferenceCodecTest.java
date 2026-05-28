@@ -146,6 +146,6 @@ class FrameOfReferenceCodecTest {
         registry.register(new FrameOfReferenceCodec());
         registry.register(new PrimitiveCodec());
 
-        return new DecodeContext(forNode, dtype, residuals.length, segments, registry);
+        return new DecodeContext(forNode, dtype, residuals.length, segments, registry, java.lang.foreign.Arena.global());
     }
 }

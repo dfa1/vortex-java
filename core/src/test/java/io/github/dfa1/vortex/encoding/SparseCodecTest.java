@@ -160,7 +160,7 @@ class SparseCodecTest {
         registry.register(new SparseCodec());
         registry.register(new PrimitiveCodec());
 
-        return new DecodeContext(sparseNode, dtype, rowCount, segments, registry);
+        return new DecodeContext(sparseNode, dtype, rowCount, segments, registry, java.lang.foreign.Arena.global());
     }
 
     private static byte[] buildSparseMetaBytes(long numPatches, long offset, PType idxPtype) {

@@ -112,7 +112,7 @@ class RunEndCodecTest {
         registry.register(new RunEndCodec());
         registry.register(new PrimitiveCodec());
 
-        return new DecodeContext(reNode, dtype, rowCount, segments, registry);
+        return new DecodeContext(reNode, dtype, rowCount, segments, registry, java.lang.foreign.Arena.global());
     }
 
     private static byte[] toLEBytes(long[] values, PType ptype) {

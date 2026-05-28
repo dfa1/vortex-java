@@ -117,10 +117,12 @@ public final class BitpackedCodec implements Codec {
         long rowCount = ctx.rowCount();
 
         MemorySegment packed = ctx.buffer(0);
-        long[] longs = fastlanesUnpack(packed, bitWidth, offset, typeBits, rowCount);
+        int wordBytes = typeBits / 8;
+        MemorySegment output = MemorySegment.ofArray(new byte[(int) (rowCount * wordBytes)]);
+        fastlanesUnpackToSeg(packed, bitWidth, offset, typeBits, rowCount, output);
 
         return new Array(ctx.dtype(), rowCount,
-            new MemorySegment[]{fromLongs(longs, ptype)}, new Array[0], ArrayStats.empty());
+            new MemorySegment[]{output}, new Array[0], ArrayStats.empty());
     }
 
     // ── FastLanes pack ────────────────────────────────────────────────────────
@@ -171,11 +173,11 @@ public final class BitpackedCodec implements Codec {
 
     // ── FastLanes unpack ──────────────────────────────────────────────────────
 
-    private static long[] fastlanesUnpack(
-        MemorySegment buf, int bitWidth, int offset, int typeBits, long rowCount) {
-        long[] output = new long[(int) rowCount];
+    private static void fastlanesUnpackToSeg(
+        MemorySegment buf, int bitWidth, int offset, int typeBits, long rowCount,
+        MemorySegment output) {
         if (bitWidth == 0) {
-            return output;
+            return; // output already zero-initialized by arena.allocate()
         }
 
         int  LANES      = 1024 / typeBits;
@@ -225,11 +227,10 @@ public final class BitpackedCodec implements Codec {
                         value = (src >>> shift) & bitMask;
                     }
 
-                    output[logicalIdx] = value;
+                    writeWordToSeg(output, (long) logicalIdx * wordBytes, value, typeBits);
                 }
             }
         }
-        return output;
     }
 
     // ── Buffer helpers ────────────────────────────────────────────────────────
@@ -294,6 +295,16 @@ public final class BitpackedCodec implements Codec {
         };
     }
 
+    private static void writeWordToSeg(MemorySegment seg, long off, long value, int typeBits) {
+        switch (typeBits) {
+            case 8  -> seg.set(ValueLayout.JAVA_BYTE, off, (byte) value);
+            case 16 -> seg.set(ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), off, (short) value);
+            case 32 -> seg.set(ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), off, (int) value);
+            case 64 -> seg.set(ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), off, value);
+            default -> throw new IllegalArgumentException("unsupported typeBits: " + typeBits);
+        }
+    }
+
     // ── Type conversion ───────────────────────────────────────────────────────
 
     private static long[] toLongs(Object data, PType ptype) {
@@ -337,23 +348,6 @@ public final class BitpackedCodec implements Codec {
             case I64, U64 -> (long[]) data;
             default -> throw new UnsupportedOperationException("unsupported ptype: " + ptype);
         };
-    }
-
-    private static MemorySegment fromLongs(long[] longs, PType ptype) {
-        int    n        = longs.length;
-        int    elemSize = ptype.byteSize();
-        byte[] bytes    = new byte[n * elemSize];
-        ByteBuffer bb   = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
-        for (long v : longs) {
-            switch (ptype) {
-                case I8,  U8  -> bb.put((byte)  v);
-                case I16, U16 -> bb.putShort((short) v);
-                case I32, U32 -> bb.putInt((int)   v);
-                case I64, U64 -> bb.putLong(v);
-                default -> throw new UnsupportedOperationException("unsupported ptype: " + ptype);
-            }
-        }
-        return MemorySegment.ofArray(bytes);
     }
 
     // ── Misc helpers ──────────────────────────────────────────────────────────
