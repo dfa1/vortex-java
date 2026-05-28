@@ -157,8 +157,7 @@ public class JniVsJavaReadBenchmark {
     }
 
     /// Java read: project on "close", sum all values.
-    /// NOTE: requires vortex.alp decoder (#7d); disabled until implemented.
-    // @Benchmark
+    @Benchmark
     public double javaReadClose() throws IOException {
         var layout = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
         double sum = 0.0;

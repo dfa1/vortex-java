@@ -1,5 +1,8 @@
 package io.github.dfa1.vortex.encoding;
 
+import com.google.protobuf.InvalidProtocolBufferException;
+import dev.vortex.proto.DTypeProtos;
+import dev.vortex.proto.EncodingProtos;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 
@@ -82,27 +85,75 @@ public final class DictCodec implements Codec {
     @Override
     public Array decode(DecodeContext ctx) {
         if (ctx.metadata() == null || !ctx.metadata().hasRemaining()) {
-            throw new IllegalStateException("vortex.dict: missing code type metadata");
+            throw new IllegalStateException("vortex.dict: missing metadata");
         }
-        PType codePType = PType.values()[Byte.toUnsignedInt(ctx.metadata().get(0))];
+
+        ByteBuffer meta = ctx.metadata();
+        byte[] metaBytes = new byte[meta.remaining()];
+        meta.duplicate().get(metaBytes);
+
+        // 1-byte = legacy Java format; multi-byte = Rust proto format
+        if (metaBytes.length == 1) {
+            return decodeLegacyJava(ctx, metaBytes[0]);
+        }
+        return decodeRustProto(ctx, metaBytes);
+    }
+
+    private Array decodeLegacyJava(DecodeContext ctx, byte codeTypeByte) {
+        PType codePType = PType.values()[Byte.toUnsignedInt(codeTypeByte)];
         PType valPType  = ((DType.Primitive) ctx.dtype()).ptype();
         int   elemSize  = valPType.byteSize();
         long  rowCount  = ctx.rowCount();
 
-        // Buffer layout: [0]=values, [1]=codes
+        // Legacy layout: children[0]=values (buf 0), children[1]=codes (buf 1)
         MemorySegment valuesBuf = ctx.segmentBuffers()[ctx.node().children()[0].bufferIndices()[0]];
         MemorySegment codesBuf  = ctx.segmentBuffers()[ctx.node().children()[1].bufferIndices()[0]];
 
-        // Expand: copy value[code[i]] into output for each row i
         byte[] expanded = new byte[(int) (rowCount * elemSize)];
         MemorySegment out = MemorySegment.ofArray(expanded);
         for (long i = 0; i < rowCount; i++) {
             long code = readCode(codesBuf, codePType, i);
             MemorySegment.copy(valuesBuf, code * elemSize, out, i * elemSize, elemSize);
         }
+        return new Array(ctx.dtype(), rowCount, new MemorySegment[]{out}, new Array[0], ArrayStats.empty());
+    }
 
-        return new Array(ctx.dtype(), rowCount,
-            new MemorySegment[]{out}, new Array[0], ArrayStats.empty());
+    private Array decodeRustProto(DecodeContext ctx, byte[] metaBytes) {
+        EncodingProtos.DictMetadata meta;
+        try {
+            meta = EncodingProtos.DictMetadata.parseFrom(metaBytes);
+        } catch (InvalidProtocolBufferException e) {
+            throw new IllegalStateException("vortex.dict: invalid proto metadata", e);
+        }
+
+        PType codePType  = PType.values()[meta.getCodesPtype().getNumber()];
+        long  valuesLen  = meta.getValuesLen();
+        long  rowCount   = ctx.rowCount();
+        PType valPType   = ((DType.Primitive) ctx.dtype()).ptype();
+        int   elemSize   = valPType.byteSize();
+
+        // Rust layout: children[0]=codes, children[1]=values
+        DType codesDtype = new DType.Primitive(codePType, false);
+        Array codesArr   = decodeChildAs(ctx, 0, codesDtype, rowCount);
+        Array valuesArr  = decodeChildAs(ctx, 1, ctx.dtype(), valuesLen);
+
+        MemorySegment codesBuf  = codesArr.buffer(0);
+        MemorySegment valuesBuf = valuesArr.buffer(0);
+
+        byte[] expanded = new byte[(int) (rowCount * elemSize)];
+        MemorySegment out = MemorySegment.ofArray(expanded);
+        for (long i = 0; i < rowCount; i++) {
+            long code = readCode(codesBuf, codePType, i);
+            MemorySegment.copy(valuesBuf, code * elemSize, out, i * elemSize, elemSize);
+        }
+        return new Array(ctx.dtype(), rowCount, new MemorySegment[]{out}, new Array[0], ArrayStats.empty());
+    }
+
+    private static Array decodeChildAs(DecodeContext parent, int childIdx, DType dtype, long rowCount) {
+        ArrayNode childNode = parent.node().children()[childIdx];
+        DecodeContext childCtx = new DecodeContext(
+            childNode, dtype, rowCount, parent.segmentBuffers(), parent.registry());
+        return parent.registry().decode(childCtx);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

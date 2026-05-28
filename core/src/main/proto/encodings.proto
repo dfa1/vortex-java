@@ -7,6 +7,39 @@ option java_package = "dev.vortex.proto";
 option java_outer_classname = "EncodingProtos";
 
 import "scalar.proto";
+import "dtype.proto";
+
+message PatchesMetadata {
+  uint64 len                                  = 1;
+  uint64 offset                               = 2;
+  vortex.dtype.PType indices_ptype            = 3;
+  optional uint64 chunk_offsets_len           = 4;
+  optional vortex.dtype.PType chunk_offsets_ptype = 5;
+  optional uint64 offset_within_chunk         = 6;
+}
+
+message SparseMetadata {
+  PatchesMetadata patches = 1;
+}
+
+message DictMetadata {
+  uint32 values_len                 = 1;
+  vortex.dtype.PType codes_ptype    = 2;
+  optional bool is_nullable_codes   = 3;
+  optional bool all_values_referenced = 4;
+}
+
+message RunEndMetadata {
+  vortex.dtype.PType ends_ptype = 1;
+  uint64 num_runs               = 2;
+  uint64 offset                 = 3;
+}
+
+message ALPMetadata {
+  uint32 exp_e                    = 1;
+  uint32 exp_f                    = 2;
+  optional PatchesMetadata patches = 3;
+}
 
 message BitPackedMetadata {
   uint32 bit_width = 1;

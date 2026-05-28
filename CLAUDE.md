@@ -5,6 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 Build prerequisites: `brew install flatbuffers protobuf` (flatc + protoc must be on PATH).
+Never use `mvn install` or `./mvwn install`.
 
 ```bash
 # Build all modules

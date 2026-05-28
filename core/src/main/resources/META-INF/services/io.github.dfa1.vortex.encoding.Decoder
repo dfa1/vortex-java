@@ -5,3 +5,7 @@ io.github.dfa1.vortex.encoding.BitpackedCodec
 io.github.dfa1.vortex.encoding.DeltaCodec
 io.github.dfa1.vortex.encoding.SequenceCodec
 io.github.dfa1.vortex.encoding.FrameOfReferenceCodec
+io.github.dfa1.vortex.encoding.SparseCodec
+io.github.dfa1.vortex.encoding.AlpCodec
+io.github.dfa1.vortex.encoding.RunEndCodec
+io.github.dfa1.vortex.encoding.ConstantCodec

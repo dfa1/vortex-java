@@ -44,7 +44,7 @@
   - Step 2: decode child array recursively via `DecodeContext`
   - Step 3: add reference to each element (wrapping add for unsigned types)
 
-- [ ] **#7c Implement `vortex.sparse` decoder**
+- [x] **#7c Implement `vortex.sparse` decoder**
   - **Spec** (from `encodings/sparse/src/lib.rs`):
     - Metadata: protobuf `SparseMetadata` — `patches PatchesMetadata` (tag 1, required)
     - Buffer 0: fill value serialized as `ScalarValue` protobuf bytes
@@ -55,7 +55,7 @@
   - Step 3: decode patch indices + values from child slots
   - Step 4: allocate output, fill with constant, overwrite at patch positions
 
-- [ ] **#7d Implement `vortex.alp` decoder**
+- [x] **#7d Implement `vortex.alp` decoder**
   - **Spec** (from `encodings/alp/src/alp/array.rs`):
     - Metadata: protobuf `ALPMetadata` — `exp_e u32` (tag 1), `exp_f u32` (tag 2), `patches PatchesMetadata` (tag 3, optional)
     - Child slot 0: encoded integers (I32 for F32 columns, I64 for F64 columns)
@@ -105,6 +105,19 @@
   }
   this is an unrecoverable exception
 - drop BufferDesc if not used
+
+## Performance
+- in BitpackedCodec, there are a lot of extra allocation like: 
+   try {
+   byte[] bytes = new byte[rawMeta.remaining()];
+   rawMeta.duplicate().get(bytes);
+   meta = EncodingProtos.BitPackedMetadata.parseFrom(bytes);
+   } catch (InvalidProtocolBufferException e) {
+   throw new IllegalStateException("fastlanes.bitpacked: invalid metadata", e);
+   }
+=> just use ByteBuffer in this case
+- read path should always avoid byte[] allocations or similar
+- use MethodHandle to read a long array from a ByteBuffer
 
 ## Project
 - move the project in a dedicated organization
