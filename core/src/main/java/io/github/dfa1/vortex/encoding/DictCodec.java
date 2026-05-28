@@ -140,11 +140,15 @@ public final class DictCodec implements Codec {
         MemorySegment codesBuf  = codesArr.buffer(0);
         MemorySegment valuesBuf = valuesArr.buffer(0);
 
-        byte[] expanded = new byte[(int) (rowCount * elemSize)];
+        byte[] expanded = new byte[Math.toIntExact(rowCount * elemSize)];
         MemorySegment out = MemorySegment.ofArray(expanded);
-        for (long i = 0; i < rowCount; i++) {
-            long code = readCode(codesBuf, codePType, i);
-            MemorySegment.copy(valuesBuf, code * elemSize, out, i * elemSize, elemSize);
+        // Loop-unswitch: pull the codePType switch outside the hot loop so the JIT
+        // sees a tight, type-specific loop with predictable branches.
+        switch (codePType) {
+            case U8 -> expandU8(codesBuf, valuesBuf, out, rowCount, elemSize);
+            case U16 -> expandU16(codesBuf, valuesBuf, out, rowCount, elemSize);
+            case U32 -> expandU32(codesBuf, valuesBuf, out, rowCount, elemSize);
+            default  -> throw new IllegalStateException("unexpected code type: " + codePType);
         }
         return new Array(ctx.dtype(), rowCount, new MemorySegment[]{out}, new Array[0], ArrayStats.empty());
     }
@@ -206,6 +210,38 @@ public final class DictCodec implements Codec {
             case U16 -> buf.putShort((short) code);
             case U32 -> buf.putInt(code);
             default  -> throw new IllegalStateException("unexpected code type: " + codePType);
+        }
+    }
+
+    private static void expandU8(
+        MemorySegment codes, MemorySegment values, MemorySegment out,
+        long rowCount, int elemSize
+    ) {
+        for (long i = 0, outOff = 0; i < rowCount; i++, outOff += elemSize) {
+            long code = Byte.toUnsignedLong(codes.get(ValueLayout.JAVA_BYTE, i));
+            MemorySegment.copy(values, code * elemSize, out, outOff, elemSize);
+        }
+    }
+
+    private static void expandU16(
+        MemorySegment codes, MemorySegment values, MemorySegment out,
+        long rowCount, int elemSize
+    ) {
+        var layout = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+        for (long i = 0, outOff = 0; i < rowCount; i++, outOff += elemSize) {
+            long code = Short.toUnsignedLong(codes.get(layout, i * 2));
+            MemorySegment.copy(values, code * elemSize, out, outOff, elemSize);
+        }
+    }
+
+    private static void expandU32(
+        MemorySegment codes, MemorySegment values, MemorySegment out,
+        long rowCount, int elemSize
+    ) {
+        var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+        for (long i = 0, outOff = 0; i < rowCount; i++, outOff += elemSize) {
+            long code = Integer.toUnsignedLong(codes.get(layout, i * 4));
+            MemorySegment.copy(values, code * elemSize, out, outOff, elemSize);
         }
     }
 

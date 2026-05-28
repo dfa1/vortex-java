@@ -184,9 +184,10 @@ public final class BitpackedCodec implements Codec {
         int  blockCount = (int) ((totalElems + 1023) / 1024);
         long bitMask    = bitWidth == 64 ? -1L : (1L << bitWidth) - 1L;
 
-        for (int block = 0; block < blockCount; block++) {
-            long blockByteOff    = (long) block * 128L * bitWidth;
-            int  blockLogicStart = block * 1024 - offset;
+        long blockByteOff    = 0L;
+        long blockByteStride = 128L * bitWidth;
+        for (int block = 0; block < blockCount; block++, blockByteOff += blockByteStride) {
+            int blockLogicStart = block * 1024 - offset;
 
             for (int row = 0; row < typeBits; row++) {
                 int currWord      = (row * bitWidth) / typeBits;
@@ -195,25 +196,30 @@ public final class BitpackedCodec implements Codec {
                 int remainingBits = (nextWord > currWord) ? ((row + 1) * bitWidth) % typeBits : 0;
                 int currentBits   = bitWidth - remainingBits;
 
+                // Hoist per-row invariants above the lane loop.
+                int  o        = row / 8;
+                int  s        = row % 8;
+                int  baseIdx  = blockLogicStart + FL_ORDER[o] * 16 + s * 128;
+                long wordBase = blockByteOff + (long) (LANES * currWord) * wordBytes;
+                long hiBase   = (remainingBits > 0)
+                    ? blockByteOff + (long) (LANES * nextWord) * wordBytes : 0L;
+                long loMask   = (remainingBits > 0) ? (1L << currentBits) - 1L : 0L;
+                long hiMask   = (remainingBits > 0) ? (1L << remainingBits) - 1L : 0L;
+
                 for (int lane = 0; lane < LANES; lane++) {
-                    int o = row / 8;
-                    int s = row % 8;
-                    int logicalIdx = blockLogicStart + FL_ORDER[o] * 16 + s * 128 + lane;
+                    int logicalIdx = baseIdx + lane;
 
                     if (logicalIdx < 0 || logicalIdx >= rowCount) {
                         continue;
                     }
 
-                    long wordOff = blockByteOff + (long) (LANES * currWord + lane) * wordBytes;
+                    long wordOff = wordBase + (long) lane * wordBytes;
                     long src     = readWordFromSeg(buf, wordOff, typeBits);
 
                     long value;
                     if (remainingBits > 0) {
-                        long loMask = (1L << currentBits) - 1L;
-                        long lo     = (src >>> shift) & loMask;
-                        long hiOff  = blockByteOff + (long) (LANES * nextWord + lane) * wordBytes;
-                        long hi     = readWordFromSeg(buf, hiOff, typeBits)
-                                      & ((1L << remainingBits) - 1L);
+                        long lo = (src >>> shift) & loMask;
+                        long hi = readWordFromSeg(buf, hiBase + (long) lane * wordBytes, typeBits) & hiMask;
                         value = lo | (hi << currentBits);
                     } else {
                         value = (src >>> shift) & bitMask;

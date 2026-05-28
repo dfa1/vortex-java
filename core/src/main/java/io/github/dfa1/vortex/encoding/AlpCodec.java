@@ -90,16 +90,17 @@ public final class AlpCodec implements Decoder {
         DType encodedDtype = new DType.Primitive(PType.I64, false);
         Array encoded = decodeChildAs(ctx, 0, encodedDtype, n);
 
-        double f10 = F10_F64[expF];
-        double if10 = IF10_F64[expE];
+        // Precompute single factor — avoids 2 FP mults per element in the hot loop.
+        double factor = F10_F64[expF] * IF10_F64[expE];
 
-        byte[] outBytes = new byte[(int) (n * 8)];
+        byte[] outBytes = new byte[Math.toIntExact(n * 8)];
         ByteBuffer out = ByteBuffer.wrap(outBytes).order(ByteOrder.LITTLE_ENDIAN);
         var srcLayout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
         MemorySegment src = encoded.buffer(0);
-        for (long i = 0; i < n; i++) {
-            long   encVal = src.get(srcLayout, i * 8);
-            double dec    = (double) encVal * f10 * if10;
+        // Strength-reduce: running byte offset instead of i*8 per iteration.
+        for (long off = 0, end = n * 8; off < end; off += 8) {
+            long   encVal = src.get(srcLayout, off);
+            double dec    = (double) encVal * factor;
             out.putDouble(dec);
         }
 
@@ -143,16 +144,15 @@ public final class AlpCodec implements Decoder {
         DType encodedDtype = new DType.Primitive(PType.I32, false);
         Array encoded = decodeChildAs(ctx, 0, encodedDtype, n);
 
-        float f10  = F10_F32[expF];
-        float if10 = IF10_F32[expE];
+        float factor = F10_F32[expF] * IF10_F32[expE];
 
-        byte[] outBytes = new byte[(int) (n * 4)];
+        byte[] outBytes = new byte[Math.toIntExact(n * 4)];
         ByteBuffer out = ByteBuffer.wrap(outBytes).order(ByteOrder.LITTLE_ENDIAN);
         var srcLayout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
         MemorySegment src = encoded.buffer(0);
-        for (long i = 0; i < n; i++) {
-            int   encVal = src.get(srcLayout, i * 4);
-            float dec    = (float) encVal * f10 * if10;
+        for (long off = 0, end = n * 4; off < end; off += 4) {
+            int   encVal = src.get(srcLayout, off);
+            float dec    = (float) encVal * factor;
             out.putFloat(dec);
         }
 
