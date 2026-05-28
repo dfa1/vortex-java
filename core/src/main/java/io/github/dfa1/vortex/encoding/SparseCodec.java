@@ -25,7 +25,7 @@ import java.nio.ByteOrder;
 ///
 /// <p>Decode: allocate output filled with fill_value, then overwrite
 /// {@code output[indices[i] - offset] = values[i]} for each patch.
-public final class SparseCodec implements Decoder {
+public final class SparseCodec implements Codec {
 
     @Override
     public EncodingId encodingId() {

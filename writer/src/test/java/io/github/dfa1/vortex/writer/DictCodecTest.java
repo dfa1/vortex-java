@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.writer;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.Array;
-import io.github.dfa1.vortex.encoding.DecoderRegistry;
+import io.github.dfa1.vortex.encoding.CodecRegistry;
 import io.github.dfa1.vortex.encoding.DictCodec;
 import io.github.dfa1.vortex.encoding.PrimitiveCodec;
 import io.github.dfa1.vortex.io.VortexFile;
@@ -139,8 +139,8 @@ class DictCodecTest {
         return results;
     }
 
-    private static DecoderRegistry dictRegistry() {
-        var registry = DecoderRegistry.empty();
+    private static CodecRegistry dictRegistry() {
+        var registry = CodecRegistry.empty();
         registry.register(new DictCodec());
         registry.register(new PrimitiveCodec());
         return registry;

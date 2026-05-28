@@ -2,8 +2,8 @@ package io.github.dfa1.vortex.io;
 
 import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.encoding.DecodeContext;
-import io.github.dfa1.vortex.encoding.Decoder;
-import io.github.dfa1.vortex.encoding.DecoderRegistry;
+import io.github.dfa1.vortex.encoding.Codec;
+import io.github.dfa1.vortex.encoding.CodecRegistry;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.scan.ScanOptions;
 import io.github.dfa1.vortex.scan.ScanResult;
@@ -136,11 +136,11 @@ class VortexFileTest {
         Path path = fixtureFile(name);
 
         // When / Then — layout traversal succeeds; decode fails only on missing decoder
-        try (var sut = VortexFile.open(path, DecoderRegistry.empty());
+        try (var sut = VortexFile.open(path, CodecRegistry.empty());
              var iter = sut.scan(ScanOptions.all())) {
             assertThatThrownBy(iter::hasNext)
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("no decoder for encoding:");
+                    .hasMessageContaining("no codec for encoding:");
         }
     }
 
@@ -189,9 +189,9 @@ class VortexFileTest {
         assertThat(chunkCount).isEqualTo(1);
     }
 
-    private static DecoderRegistry buildUniversalStubRegistry() {
-        var registry = DecoderRegistry.empty();
-        Decoder stub = new Decoder() {
+    private static CodecRegistry buildUniversalStubRegistry() {
+        var registry = CodecRegistry.empty();
+        Codec stub = new Codec() {
             @Override public EncodingId encodingId() { return EncodingId.VORTEX_PRIMITIVE; }
             @Override public Array decode(DecodeContext ctx) { return Array.empty(ctx.dtype()); }
         };

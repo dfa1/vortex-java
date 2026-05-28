@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.encoding.DecoderRegistry;
+import io.github.dfa1.vortex.encoding.CodecRegistry;
 import io.github.dfa1.vortex.encoding.PrimitiveCodec;
 import io.github.dfa1.vortex.io.VortexFile;
 import io.github.dfa1.vortex.scan.RowFilter;
@@ -132,8 +132,8 @@ class ZoneMapPruningTest {
         return arr;
     }
 
-    private static DecoderRegistry primitiveRegistry() {
-        var registry = DecoderRegistry.empty();
+    private static CodecRegistry primitiveRegistry() {
+        var registry = CodecRegistry.empty();
         registry.register(new PrimitiveCodec());
         return registry;
     }

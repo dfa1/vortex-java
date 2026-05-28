@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.performance;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.encoding.DecoderRegistry;
+import io.github.dfa1.vortex.encoding.CodecRegistry;
 import io.github.dfa1.vortex.io.VortexFile;
 import io.github.dfa1.vortex.scan.ScanOptions;
 import io.github.dfa1.vortex.scan.ScanResult;
@@ -60,12 +60,12 @@ public class ReadBenchmark {
     public String projection;
 
     private Path            inputFile;
-    private DecoderRegistry registry;
+    private CodecRegistry registry;
 
     @Setup(Level.Trial)
     public void setup() throws IOException {
         inputFile = Files.createTempFile("vortex-bench-read", ".vtx");
-        registry  = DecoderRegistry.loadAll();
+        registry  = CodecRegistry.loadAll();
 
         int      chunkSize = rowCount / chunkCount;
         long[]   ids       = new long[chunkSize];

@@ -23,7 +23,7 @@ import java.nio.ByteOrder;
 ///
 /// <p>Decode: for each run i, repeat {@code values[i]} for positions
 /// {@code [ends[i-1], ends[i])} in the output, skipping the first {@code offset} logical elements.
-public final class RunEndCodec implements Decoder {
+public final class RunEndCodec implements Codec {
 
     private static final ValueLayout.OfShort LE_SHORT = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
     private static final ValueLayout.OfInt   LE_INT   = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);

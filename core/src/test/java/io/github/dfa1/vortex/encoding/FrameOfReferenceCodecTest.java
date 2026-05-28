@@ -145,7 +145,7 @@ class FrameOfReferenceCodecTest {
 
         MemorySegment[] segments = {MemorySegment.ofArray(childBytes)};
 
-        DecoderRegistry registry = DecoderRegistry.empty();
+        CodecRegistry registry = CodecRegistry.empty();
         registry.register(new FrameOfReferenceCodec());
         registry.register(new PrimitiveCodec());
 

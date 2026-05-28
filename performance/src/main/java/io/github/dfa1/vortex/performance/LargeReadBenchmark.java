@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.performance;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.Array;
-import io.github.dfa1.vortex.encoding.DecoderRegistry;
+import io.github.dfa1.vortex.encoding.CodecRegistry;
 import io.github.dfa1.vortex.io.VortexFile;
 import io.github.dfa1.vortex.scan.ScanOptions;
 import io.github.dfa1.vortex.scan.ScanResult;
@@ -71,11 +71,11 @@ public class LargeReadBenchmark {
 
     private Path            benchFile;
     private boolean         ownFile;     // true = we generated it, we delete it
-    private DecoderRegistry registry;
+    private CodecRegistry registry;
 
     @Setup(Level.Trial)
     public void setup() throws IOException {
-        registry = DecoderRegistry.loadAll();
+        registry = CodecRegistry.loadAll();
 
         String externalFile = System.getProperty("vortex.bench.file");
         if (externalFile != null && !externalFile.isEmpty()) {

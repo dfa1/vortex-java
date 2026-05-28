@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.encoding.BitpackedCodec;
-import io.github.dfa1.vortex.encoding.DecoderRegistry;
+import io.github.dfa1.vortex.encoding.CodecRegistry;
 import io.github.dfa1.vortex.io.VortexFile;
 import io.github.dfa1.vortex.scan.ScanOptions;
 import io.github.dfa1.vortex.scan.ScanResult;
@@ -183,8 +183,8 @@ class BitpackedCodecTest {
         return results;
     }
 
-    private static DecoderRegistry bpRegistry() {
-        var registry = DecoderRegistry.empty();
+    private static CodecRegistry bpRegistry() {
+        var registry = CodecRegistry.empty();
         registry.register(new BitpackedCodec());
         return registry;
     }

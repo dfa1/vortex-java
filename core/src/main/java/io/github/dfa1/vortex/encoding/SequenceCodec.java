@@ -16,7 +16,7 @@ import java.nio.ByteOrder;
 /// No buffers, no children. Metadata is a protobuf {@code SequenceMetadata}
 /// with {@code base} (tag 1) and {@code multiplier} (tag 2) as {@code ScalarValue}.
 /// Output is allocated on the heap; not backed by the file's mapped region.
-public final class SequenceCodec implements Decoder {
+public final class SequenceCodec implements Codec {
 
     @Override
     public EncodingId encodingId() {

@@ -71,7 +71,7 @@ public final class ScanIterator implements AutoCloseable {
         return false;
     }
 
-    public ScanResult next() throws IOException {
+    public ScanResult next() {
         if (current == null) {
             throw new IllegalStateException("call hasNext() first");
         }
@@ -79,7 +79,8 @@ public final class ScanIterator implements AutoCloseable {
     }
 
     @Override
-    public void close() {}
+    public void close() {
+    }
 
     // ── Layout tree traversal ─────────────────────────────────────────────────
 

@@ -15,36 +15,36 @@ import java.util.ServiceLoader;
 
 import io.github.dfa1.vortex.core.DType;
 
-/// Registry mapping encoding IDs to [Decoder] implementations.
-public final class DecoderRegistry {
+/// Registry mapping encoding IDs to [Codec] implementations.
+public final class CodecRegistry {
 
-    private final Map<String, Decoder> decoders = new HashMap<>();
+    private final Map<String, Codec> codecs = new HashMap<>();
 
-    private DecoderRegistry() {}
+    private CodecRegistry() {}
 
-    /// Load all [Decoder]s registered via `ServiceLoader`.
-    public static DecoderRegistry loadAll() {
-        var registry = new DecoderRegistry();
-        for (Decoder d : ServiceLoader.load(Decoder.class)) {
-            registry.register(d);
+    /// Load all [Codec]s registered via `ServiceLoader`.
+    public static CodecRegistry loadAll() {
+        var registry = new CodecRegistry();
+        for (Codec c : ServiceLoader.load(Codec.class)) {
+            registry.register(c);
         }
         return registry;
     }
 
-    public static DecoderRegistry empty() {
-        return new DecoderRegistry();
+    public static CodecRegistry empty() {
+        return new CodecRegistry();
     }
 
-    public void register(String id, Decoder decoder) {
-        decoders.put(id, decoder);
+    public void register(String id, Codec codec) {
+        codecs.put(id, codec);
     }
 
-    public void register(Decoder decoder) {
-        decoders.put(decoder.encodingId().id(), decoder);
+    public void register(Codec codec) {
+        codecs.put(codec.encodingId().id(), codec);
     }
 
-    public void register(EncodingId id, Decoder decoder) {
-        register(id.id(), decoder);
+    public void register(EncodingId id, Codec codec) {
+        register(id.id(), codec);
     }
 
     /// Decode a flat segment from the file's memory-mapped region.
@@ -77,16 +77,16 @@ public final class DecoderRegistry {
 
     Array decode(DecodeContext ctx) {
         String id = ctx.node().encodingId().id();
-        Decoder d = decoders.get(id);
-        if (d == null) {
-            throw new IllegalArgumentException("no decoder for encoding: " + id);
+        Codec c = codecs.get(id);
+        if (c == null) {
+            throw new IllegalArgumentException("no codec for encoding: " + id);
         }
-        return d.decode(ctx);
+        return c.decode(ctx);
     }
 
-    public boolean has(String id) { return decoders.containsKey(id); }
+    public boolean has(String id) { return codecs.containsKey(id); }
 
-    public boolean has(EncodingId id) { return decoders.containsKey(id.id()); }
+    public boolean has(EncodingId id) { return codecs.containsKey(id.id()); }
 
     private static ArrayNode convertArrayNode(
         io.github.dfa1.vortex.fbs.ArrayNode fbs,

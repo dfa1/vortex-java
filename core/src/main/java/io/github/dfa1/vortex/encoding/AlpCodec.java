@@ -25,7 +25,7 @@ import java.nio.ByteOrder;
 ///
 /// <p>Decode: {@code decoded[i] = (float/double) encoded[i] * F10[exp_f] * IF10[exp_e]},
 /// then overwrite {@code decoded[indices[j] - offset] = values[j]} for each patch.
-public final class AlpCodec implements Decoder {
+public final class AlpCodec implements Codec {
 
     // Powers of 10 for F64 (index 0..18 used by the encoder).
     private static final double[] F10_F64 = {

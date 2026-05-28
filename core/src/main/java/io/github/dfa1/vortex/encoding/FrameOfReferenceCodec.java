@@ -18,7 +18,7 @@ import java.nio.ByteOrder;
 /// <p>Metadata: raw {@code ScalarValue} protobuf bytes — the reference (minimum) value.
 /// Child slot 0: encoded residuals array (same dtype as parent, typically bitpacked).
 /// Decode: {@code output[i] = encoded[i] + reference} (wrapping arithmetic).
-public final class FrameOfReferenceCodec implements Decoder {
+public final class FrameOfReferenceCodec implements Codec {
 
     @Override
     public EncodingId encodingId() {

@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.io;
 
 import io.github.dfa1.vortex.core.*;
-import io.github.dfa1.vortex.encoding.DecoderRegistry;
+import io.github.dfa1.vortex.encoding.CodecRegistry;
 import io.github.dfa1.vortex.scan.ScanIterator;
 import io.github.dfa1.vortex.scan.ScanOptions;
 
@@ -38,12 +38,12 @@ public final class VortexFile implements Closeable {
     private final Footer          footer;
     private final DType           dtype;
     private final Layout          layout;
-    private final DecoderRegistry registry;
+    private final CodecRegistry registry;
 
     private VortexFile(
         Arena arena, MemorySegment fileSegment, long fileSize,
         int version, Footer footer, DType dtype, Layout layout,
-        DecoderRegistry registry
+        CodecRegistry registry
     ) {
         this.arena       = arena;
         this.fileSegment = fileSegment;
@@ -58,10 +58,10 @@ public final class VortexFile implements Closeable {
     /// Open a Vortex file. Memory-maps the entire file; all subsequent reads
     /// are zero-copy slices. Call [#close()] when done.
     public static VortexFile open(Path path) throws IOException {
-        return open(path, DecoderRegistry.loadAll());
+        return open(path, CodecRegistry.loadAll());
     }
 
-    public static VortexFile open(Path path, DecoderRegistry registry) throws IOException {
+    public static VortexFile open(Path path, CodecRegistry registry) throws IOException {
         var arena = Arena.ofConfined();
         try {
             var channel = FileChannel.open(path, StandardOpenOption.READ);
@@ -80,7 +80,7 @@ public final class VortexFile implements Closeable {
     }
 
     private static VortexFile parse(
-        MemorySegment seg, long size, Arena arena, DecoderRegistry registry
+        MemorySegment seg, long size, Arena arena, CodecRegistry registry
     ) throws IOException {
         // 8-byte trailer: version(u16 LE) | postscriptLen(u16 LE) | magic(4)
         var trailer = seg.asSlice(size - TRAILER_SIZE, TRAILER_SIZE);
@@ -115,7 +115,7 @@ public final class VortexFile implements Closeable {
     public Footer          footer()   { return footer; }
     public int             version()  { return version; }
     public long            fileSize() { return fileSize; }
-    public DecoderRegistry registry() { return registry; }
+    public CodecRegistry registry() { return registry; }
 
     public ScanIterator scan(ScanOptions options) { return new ScanIterator(this, options); }
 

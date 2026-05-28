@@ -18,7 +18,7 @@ import java.nio.ByteOrder;
 /// proto bytes. No children.
 ///
 /// <p>Decode: fill an output buffer of {@code rowCount} elements with the constant value.
-public final class ConstantCodec implements Decoder {
+public final class ConstantCodec implements Codec {
 
     @Override
     public EncodingId encodingId() {

@@ -178,7 +178,7 @@ class AlpCodecTest {
         ArrayNode alpNode = new ArrayNode(EncodingId.VORTEX_ALP,
             ByteBuffer.wrap(metaBytes), children, new int[0], ArrayStats.empty());
 
-        DecoderRegistry registry = DecoderRegistry.empty();
+        CodecRegistry registry = CodecRegistry.empty();
         registry.register(new AlpCodec());
         registry.register(new PrimitiveCodec());
 
@@ -207,7 +207,7 @@ class AlpCodecTest {
 
         MemorySegment[] segments = {MemorySegment.ofArray(encBuf)};
 
-        DecoderRegistry registry = DecoderRegistry.empty();
+        CodecRegistry registry = CodecRegistry.empty();
         registry.register(new AlpCodec());
         registry.register(new PrimitiveCodec());
 

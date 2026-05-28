@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.writer;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.Array;
-import io.github.dfa1.vortex.encoding.DecoderRegistry;
+import io.github.dfa1.vortex.encoding.CodecRegistry;
 import io.github.dfa1.vortex.encoding.DeltaCodec;
 import io.github.dfa1.vortex.io.VortexFile;
 import io.github.dfa1.vortex.scan.ScanOptions;
@@ -226,8 +226,8 @@ class DeltaCodecTest {
         return results;
     }
 
-    private static DecoderRegistry deltaRegistry() {
-        var registry = DecoderRegistry.empty();
+    private static CodecRegistry deltaRegistry() {
+        var registry = CodecRegistry.empty();
         registry.register(new DeltaCodec());
         return registry;
     }

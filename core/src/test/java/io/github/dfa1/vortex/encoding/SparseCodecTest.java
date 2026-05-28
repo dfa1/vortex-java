@@ -159,7 +159,7 @@ class SparseCodecTest {
             MemorySegment.ofArray(valBuf)
         };
 
-        DecoderRegistry registry = DecoderRegistry.empty();
+        CodecRegistry registry = CodecRegistry.empty();
         registry.register(new SparseCodec());
         registry.register(new PrimitiveCodec());
 

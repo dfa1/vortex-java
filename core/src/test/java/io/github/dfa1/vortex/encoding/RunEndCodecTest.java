@@ -111,7 +111,7 @@ class RunEndCodecTest {
             MemorySegment.ofArray(valBuf)
         };
 
-        DecoderRegistry registry = DecoderRegistry.empty();
+        CodecRegistry registry = CodecRegistry.empty();
         registry.register(new RunEndCodec());
         registry.register(new PrimitiveCodec());
 
