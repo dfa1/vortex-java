@@ -31,16 +31,18 @@ public final class ScanIterator implements AutoCloseable {
 
     private final VortexReader file;
     private final ScanOptions options;
+	private final Arena arena;
 
-    private List<ChunkSpec>    chunks;
+	private List<ChunkSpec>    chunks;
     private Map<String, DType> columnDtypes;
     private int                chunkIndex;
     private long               rowsReturned;
     private ScanResult         current;
 
-    public ScanIterator(VortexReader file, ScanOptions options) {
+    public ScanIterator(VortexReader file, ScanOptions options, Arena arena) {
         this.file    = file;
         this.options = options;
+		this.arena = arena;
     }
 
     public boolean hasNext()  {
@@ -60,7 +62,7 @@ public final class ScanIterator implements AutoCloseable {
             var columns = new LinkedHashMap<String, Array>(chunk.columnFlats().size());
             for (var entry : chunk.columnFlats().entrySet()) {
                 DType colDtype = columnDtypes.get(entry.getKey());
-                columns.put(entry.getKey(), decodeFlat(entry.getValue(), colDtype, Arena.global()));
+                columns.put(entry.getKey(), decodeFlat(entry.getValue(), colDtype, arena));
             }
 
             current = new ScanResult(chunk.rowCount(), Map.copyOf(columns));

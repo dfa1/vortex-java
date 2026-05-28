@@ -34,168 +34,167 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// Cross-compatibility: Rust (JNI) writer → Java reader.
 class RustWritesJavaReadsIntegrationTest {
 
-    static {
-        NativeLoader.loadJni();
-    }
+	private static final Session SESSION = Session.create();
+	private static final BufferAllocator ALLOCATOR = ArrowAllocation.rootAllocator();
+	private static final Schema JNI_SCHEMA = new Schema(List.of(
+			Field.notNullable("id", new ArrowType.Int(64, true)),
+			Field.notNullable("value", new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE))
+	));
 
-    private static final Session         SESSION   = Session.create();
-    private static final BufferAllocator ALLOCATOR = ArrowAllocation.rootAllocator();
+	static {
+		NativeLoader.loadJni();
+	}
 
-    private static final Schema JNI_SCHEMA = new Schema(List.of(
-        Field.notNullable("id",    new ArrowType.Int(64, true)),
-        Field.notNullable("value", new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE))
-    ));
+	private static void writeJni(Path file, long[] ids, double[] vals) throws IOException {
+		String uri = file.toAbsolutePath().toUri().toString();
+		try (VortexWriter writer = VortexWriter.create(SESSION, uri, JNI_SCHEMA, new HashMap<>(), ALLOCATOR)) {
+			flushBatch(writer, ids, vals);
+		}
+	}
 
-    @Test
-    void jniWriter_javaReader_singleChunk(@TempDir Path tmp) throws IOException {
-        // Given
-        Path     file = tmp.resolve("jni_single.vtx");
-        long[]   ids  = {1L, 2L, 3L};
-        double[] vals = {1.1, 2.2, 3.3};
-        writeJni(file, ids, vals);
+	private static void flushBatch(VortexWriter writer, long[] ids, double[] vals) throws IOException {
+		int n = ids.length;
+		try (VectorSchemaRoot root = VectorSchemaRoot.create(JNI_SCHEMA, ALLOCATOR)) {
+			BigIntVector idVec = (BigIntVector) root.getVector("id");
+			Float8Vector valVec = (Float8Vector) root.getVector("value");
+			idVec.allocateNew(n);
+			valVec.allocateNew(n);
+			for (int i = 0; i < n; i++) {
+				idVec.setSafe(i, ids[i]);
+				valVec.setSafe(i, vals[i]);
+			}
+			root.setRowCount(n);
+			try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
+			     ArrowSchema schema = ArrowSchema.allocateNew(ALLOCATOR)) {
+				Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, schema);
+				writer.writeBatch(arr.memoryAddress(), schema.memoryAddress());
+			}
+		}
+	}
 
-        // When / Then
-        try (var vf = VortexReader.open(file, CodecRegistry.loadAll())) {
-            List<ScanResult> results = scanAll(vf);
-            assertThat(results).hasSize(1);
-            assertThat(results.get(0).rowCount()).isEqualTo(3L);
-            assertThat(toLongs(results.get(0))).containsExactly(1L, 2L, 3L);
-            assertThat(toDoubles(results.get(0))).containsExactly(1.1, 2.2, 3.3);
-        }
-    }
+	private static List<ScanResult> scanAll(VortexReader vf) {
+		return scanAll(vf, io.github.dfa1.vortex.scan.ScanOptions.all());
+	}
 
-    @Test
-    void jniWriter_javaReader_multipleChunks(@TempDir Path tmp) throws IOException {
-        // Given
-        Path   file = tmp.resolve("jni_multi.vtx");
-        String uri  = file.toAbsolutePath().toUri().toString();
-        try (VortexWriter writer = VortexWriter.create(SESSION, uri, JNI_SCHEMA, new HashMap<>(), ALLOCATOR)) {
-            flushBatch(writer, new long[]{1L, 2L}, new double[]{1.1, 2.2});
-            flushBatch(writer, new long[]{3L, 4L, 5L}, new double[]{3.3, 4.4, 5.5});
-        }
+	private static List<ScanResult> scanAll(VortexReader vf,
+	                                        io.github.dfa1.vortex.scan.ScanOptions opts) {
+		var results = new ArrayList<ScanResult>();
+		var iter = vf.scan(opts);
+		while (iter.hasNext()) {
+			results.add(iter.next());
+		}
+		return results;
+	}
 
-        // When / Then — JNI may merge small batches; verify total rows and values
-        try (var vf = VortexReader.open(file, CodecRegistry.loadAll())) {
-            List<ScanResult> results = scanAll(vf);
-            long totalRows = results.stream().mapToLong(ScanResult::rowCount).sum();
-            assertThat(totalRows).isEqualTo(5L);
-            long[] allIds = results.stream()
-                .flatMapToLong(r -> java.util.Arrays.stream(toLongs(r)))
-                .toArray();
-            assertThat(allIds).containsExactly(1L, 2L, 3L, 4L, 5L);
-        }
-    }
+	// ── JNI write helpers ─────────────────────────────────────────────────────
 
-    @Test
-    void jniWriter_javaReader_columnProjection(@TempDir Path tmp) throws IOException {
-        // Given
-        Path file = tmp.resolve("jni_proj.vtx");
-        writeJni(file, new long[]{10L, 20L}, new double[]{0.1, 0.2});
+	private static long[] toLongs(ScanResult chunk) {
+		var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+		var arr = chunk.columns().get("id");
+		long[] out = new long[(int) arr.length()];
+		for (int i = 0; i < out.length; i++) {
+			out[i] = arr.buffer(0).get(layout, (long) i * Long.BYTES);
+		}
+		return out;
+	}
 
-        // When / Then
-        try (var vf = VortexReader.open(file, CodecRegistry.loadAll())) {
-            List<ScanResult> results = scanAll(vf, io.github.dfa1.vortex.scan.ScanOptions.columns("id"));
-            assertThat(results).hasSize(1);
-            assertThat(results.get(0).columns()).containsKey("id");
-            assertThat(results.get(0).columns()).doesNotContainKey("value");
-            assertThat(toLongs(results.get(0))).containsExactly(10L, 20L);
-        }
-    }
+	private static double[] toDoubles(ScanResult chunk) {
+		var layout = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+		var arr = chunk.columns().get("value");
+		double[] out = new double[(int) arr.length()];
+		for (int i = 0; i < out.length; i++) {
+			out[i] = arr.buffer(0).get(layout, (long) i * Double.BYTES);
+		}
+		return out;
+	}
 
-    @Test
-    void jniWriter_javaReader_fewUniqueF64Values(@TempDir Path tmp) throws IOException {
-        // Given — 10_000 rows cycling through only 3 unique F64 values to trigger dict encoding
-        int n = 10_000;
-        long[]   ids  = new long[n];
-        double[] vals = new double[n];
-        double[] unique = {1.1, 2.2, 3.3};
-        for (int i = 0; i < n; i++) {
-            ids[i]  = i;
-            vals[i] = unique[i % unique.length];
-        }
-        Path file = tmp.resolve("jni_dict.vtx");
-        writeJni(file, ids, vals);
+	// ── Java read helpers ─────────────────────────────────────────────────────
 
-        // When / Then
-        try (var vf = VortexReader.open(file, CodecRegistry.loadAll())) {
-            List<ScanResult> results = scanAll(vf, io.github.dfa1.vortex.scan.ScanOptions.columns("value"));
-            long total = results.stream().mapToLong(ScanResult::rowCount).sum();
-            assertThat(total).isEqualTo(n);
-            var layout = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-            double sum = 0;
-            for (ScanResult r : results) {
-                var arr = r.columns().get("value");
-                for (long j = 0; j < arr.length(); j++) {
-                    sum += arr.buffer(0).get(layout, j * Double.BYTES);
-                }
-            }
-            // 10_000 rows: 3333 full cycles of [1.1,2.2,3.3] (=6.6 each) + one 1.1 remainder
-            assertThat(sum).isCloseTo(21_998.9, org.assertj.core.data.Offset.offset(0.1));
-        }
-    }
+	@Test
+	void jniWriter_javaReader_singleChunk(@TempDir Path tmp) throws IOException {
+		// Given
+		Path file = tmp.resolve("jni_single.vtx");
+		long[] ids = {1L, 2L, 3L};
+		double[] vals = {1.1, 2.2, 3.3};
+		writeJni(file, ids, vals);
 
-    // ── JNI write helpers ─────────────────────────────────────────────────────
+		// When / Then
+		try (var vf = VortexReader.open(file, CodecRegistry.loadAll())) {
+			List<ScanResult> results = scanAll(vf);
+			assertThat(results).hasSize(1);
+			assertThat(results.get(0).rowCount()).isEqualTo(3L);
+			assertThat(toLongs(results.get(0))).containsExactly(1L, 2L, 3L);
+			assertThat(toDoubles(results.get(0))).containsExactly(1.1, 2.2, 3.3);
+		}
+	}
 
-    private static void writeJni(Path file, long[] ids, double[] vals) throws IOException {
-        String uri = file.toAbsolutePath().toUri().toString();
-        try (VortexWriter writer = VortexWriter.create(SESSION, uri, JNI_SCHEMA, new HashMap<>(), ALLOCATOR)) {
-            flushBatch(writer, ids, vals);
-        }
-    }
+	@Test
+	void jniWriter_javaReader_multipleChunks(@TempDir Path tmp) throws IOException {
+		// Given
+		Path file = tmp.resolve("jni_multi.vtx");
+		String uri = file.toAbsolutePath().toUri().toString();
+		try (VortexWriter writer = VortexWriter.create(SESSION, uri, JNI_SCHEMA, new HashMap<>(), ALLOCATOR)) {
+			flushBatch(writer, new long[]{1L, 2L}, new double[]{1.1, 2.2});
+			flushBatch(writer, new long[]{3L, 4L, 5L}, new double[]{3.3, 4.4, 5.5});
+		}
 
-    private static void flushBatch(VortexWriter writer, long[] ids, double[] vals) throws IOException {
-        int n = ids.length;
-        try (VectorSchemaRoot root = VectorSchemaRoot.create(JNI_SCHEMA, ALLOCATOR)) {
-            BigIntVector idVec  = (BigIntVector) root.getVector("id");
-            Float8Vector valVec = (Float8Vector) root.getVector("value");
-            idVec.allocateNew(n);
-            valVec.allocateNew(n);
-            for (int i = 0; i < n; i++) {
-                idVec.setSafe(i, ids[i]);
-                valVec.setSafe(i, vals[i]);
-            }
-            root.setRowCount(n);
-            try (ArrowArray  arr    = ArrowArray.allocateNew(ALLOCATOR);
-                 ArrowSchema schema = ArrowSchema.allocateNew(ALLOCATOR)) {
-                Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, schema);
-                writer.writeBatch(arr.memoryAddress(), schema.memoryAddress());
-            }
-        }
-    }
+		// When / Then — JNI may merge small batches; verify total rows and values
+		try (var vf = VortexReader.open(file, CodecRegistry.loadAll())) {
+			List<ScanResult> results = scanAll(vf);
+			long totalRows = results.stream().mapToLong(ScanResult::rowCount).sum();
+			assertThat(totalRows).isEqualTo(5L);
+			long[] allIds = results.stream()
+					.flatMapToLong(r -> java.util.Arrays.stream(toLongs(r)))
+					.toArray();
+			assertThat(allIds).containsExactly(1L, 2L, 3L, 4L, 5L);
+		}
+	}
 
-    // ── Java read helpers ─────────────────────────────────────────────────────
+	@Test
+	void jniWriter_javaReader_columnProjection(@TempDir Path tmp) throws IOException {
+		// Given
+		Path file = tmp.resolve("jni_proj.vtx");
+		writeJni(file, new long[]{10L, 20L}, new double[]{0.1, 0.2});
 
-    private static List<ScanResult> scanAll(VortexReader vf) throws IOException {
-        return scanAll(vf, io.github.dfa1.vortex.scan.ScanOptions.all());
-    }
+		// When / Then
+		try (var vf = VortexReader.open(file, CodecRegistry.loadAll())) {
+			List<ScanResult> results = scanAll(vf, io.github.dfa1.vortex.scan.ScanOptions.columns("id"));
+			assertThat(results).hasSize(1);
+			assertThat(results.get(0).columns()).containsKey("id");
+			assertThat(results.get(0).columns()).doesNotContainKey("value");
+			assertThat(toLongs(results.get(0))).containsExactly(10L, 20L);
+		}
+	}
 
-    private static List<ScanResult> scanAll(VortexReader vf,
-                                             io.github.dfa1.vortex.scan.ScanOptions opts) throws IOException {
-        var results = new ArrayList<ScanResult>();
-        var iter    = vf.scan(opts);
-        while (iter.hasNext()) {
-            results.add(iter.next());
-        }
-        return results;
-    }
+	@Test
+	void jniWriter_javaReader_fewUniqueF64Values(@TempDir Path tmp) throws IOException {
+		// Given — 10_000 rows cycling through only 3 unique F64 values to trigger dict encoding
+		int n = 10_000;
+		long[] ids = new long[n];
+		double[] vals = new double[n];
+		double[] unique = {1.1, 2.2, 3.3};
+		for (int i = 0; i < n; i++) {
+			ids[i] = i;
+			vals[i] = unique[i % unique.length];
+		}
+		Path file = tmp.resolve("jni_dict.vtx");
+		writeJni(file, ids, vals);
 
-    private static long[] toLongs(ScanResult chunk) {
-        var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-        var arr    = chunk.columns().get("id");
-        long[] out = new long[(int) arr.length()];
-        for (int i = 0; i < out.length; i++) {
-            out[i] = arr.buffer(0).get(layout, (long) i * Long.BYTES);
-        }
-        return out;
-    }
-
-    private static double[] toDoubles(ScanResult chunk) {
-        var layout = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-        var arr    = chunk.columns().get("value");
-        double[] out = new double[(int) arr.length()];
-        for (int i = 0; i < out.length; i++) {
-            out[i] = arr.buffer(0).get(layout, (long) i * Double.BYTES);
-        }
-        return out;
-    }
+		// When / Then
+		try (var vf = VortexReader.open(file, CodecRegistry.loadAll())) {
+			List<ScanResult> results = scanAll(vf, io.github.dfa1.vortex.scan.ScanOptions.columns("value"));
+			long total = results.stream().mapToLong(ScanResult::rowCount).sum();
+			assertThat(total).isEqualTo(n);
+			var layout = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			double sum = 0;
+			for (ScanResult r : results) {
+				var arr = r.columns().get("value");
+				for (long j = 0; j < arr.length(); j++) {
+					sum += arr.buffer(0).get(layout, j * Double.BYTES);
+				}
+			}
+			// 10_000 rows: 3333 full cycles of [1.1,2.2,3.3] (=6.6 each) + one 1.1 remainder
+			assertThat(sum).isCloseTo(21_998.9, org.assertj.core.data.Offset.offset(0.1));
+		}
+	}
 }
