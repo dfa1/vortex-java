@@ -41,8 +41,8 @@ import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 
 import java.io.IOException;
+import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -162,16 +162,17 @@ public class JniVsJavaReadBenchmark {
 	/// Java read: project on "volume", sum all values.
 	@Benchmark
 	public long javaReadVolume() throws IOException {
-		var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 		long sum = 0L;
 		try (VortexReader vf = VortexReader.open(benchFile, registry)) {
 			var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("volume"));
 			while (iter.hasNext()) {
 				ScanResult r = iter.next();
 				Array arr = r.columns().get("volume");
-				long[] values = arr.buffer(0).toArray(layout);
-				for (long v : values) {
-					sum += v;
+				var layout = ValueLayout.JAVA_LONG_UNALIGNED;
+				MemorySegment buffer = arr.buffer(0);
+				long count = buffer.byteSize() / layout.byteSize();
+				for (long i = 0; i < count; i++) {
+					sum += buffer.getAtIndex(layout, i);
 				}
 			}
 		}
