@@ -104,7 +104,6 @@
     throw new IOException("vortex: postscript missing footer segment");
   }
   this is an unrecoverable exception
-- drop BufferDesc if not used
 
 ## Performance
 - in BitpackedCodec, there are a lot of extra allocation like: 
