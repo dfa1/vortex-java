@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.core;
 
-import java.nio.ByteOrder;
 import java.lang.foreign.ValueLayout;
+import java.nio.ByteOrder;
 
 public enum PType {
     U8, U16, U32, U64,
@@ -26,13 +26,16 @@ public enum PType {
             || this == F16 || this == F32 || this == F64;
     }
 
+    /// Little-endian, unaligned `ValueLayout` for this ptype.
     public ValueLayout valueLayout() {
         return switch (this) {
-            case I8, U8 -> ValueLayout.JAVA_BYTE;
+            case I8,  U8  -> ValueLayout.JAVA_BYTE;
             case I16, U16 -> ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-            case I32, U32, F32 -> ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-            case I64, U64, F64 -> ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-            default -> throw new UnsupportedOperationException("unsupported ptype: " + this);
+            case I32, U32 -> ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+            case I64, U64 -> ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+            case F32      -> ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+            case F64      -> ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+            case F16      -> throw new UnsupportedOperationException("F16 not supported"); // TODO: implement F16
         };
     }
 }

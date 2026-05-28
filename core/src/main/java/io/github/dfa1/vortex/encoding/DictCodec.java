@@ -51,13 +51,12 @@ public final class DictCodec implements Codec {
         PType codePType = codePType(dictSize);
         int   codeBytes = codePType.byteSize();
 
-        // Values buffer: unique values in insertion order
-        ByteBuffer valuesBuf = ByteBuffer.allocate(dictSize * ptype.byteSize())
-            .order(ByteOrder.LITTLE_ENDIAN);
-        for (Object v : valueMap.keySet()) {
-            writeElement(valuesBuf, ptype, v);
-        }
-        valuesBuf.flip();
+        // Values buffer: unique values in insertion order.
+        // Materialize as typed primitive array, then bulk-copy with byte-order conversion
+        // via `MemorySegment.copy` — avoids per-element `switch (ptype)` dispatch.
+        Object uniqueArray = buildUniqueArray(ptype, valueMap.keySet(), dictSize);
+        ByteBuffer valuesBuf = PTypeIO.copyArray(ptype, uniqueArray, dictSize)
+            .asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
 
         // Codes buffer: per-row index into values
         ByteBuffer codesBuf = ByteBuffer.allocate(len * codeBytes)
@@ -194,16 +193,40 @@ public final class DictCodec implements Codec {
         };
     }
 
-    private static void writeElement(ByteBuffer buf, PType ptype, Object v) {
-        switch (ptype) {
-            case I8,  U8  -> buf.put((Byte)    v);
-            case I16, U16 -> buf.putShort((Short)  v);
-            case I32, U32 -> buf.putInt((Integer) v);
-            case I64, U64 -> buf.putLong((Long)   v);
-            case F32      -> buf.putFloat((Float)  v);
-            case F64      -> buf.putDouble((Double) v);
-            case F16 -> throw new UnsupportedOperationException("F16 not supported");
-        }
+    private static Object buildUniqueArray(PType ptype, Iterable<Object> uniques, int dictSize) {
+        return switch (ptype) {
+            case I8,  U8 -> {
+                byte[] a = new byte[dictSize]; int i = 0;
+                for (Object v : uniques) { a[i++] = (Byte) v; }
+                yield a;
+            }
+            case I16, U16 -> {
+                short[] a = new short[dictSize]; int i = 0;
+                for (Object v : uniques) { a[i++] = (Short) v; }
+                yield a;
+            }
+            case I32, U32 -> {
+                int[] a = new int[dictSize]; int i = 0;
+                for (Object v : uniques) { a[i++] = (Integer) v; }
+                yield a;
+            }
+            case I64, U64 -> {
+                long[] a = new long[dictSize]; int i = 0;
+                for (Object v : uniques) { a[i++] = (Long) v; }
+                yield a;
+            }
+            case F32 -> {
+                float[] a = new float[dictSize]; int i = 0;
+                for (Object v : uniques) { a[i++] = (Float) v; }
+                yield a;
+            }
+            case F64 -> {
+                double[] a = new double[dictSize]; int i = 0;
+                for (Object v : uniques) { a[i++] = (Double) v; }
+                yield a;
+            }
+            case F16 -> throw new UnsupportedOperationException("F16 not supported"); // TODO: implement F16
+        };
     }
 
     private static void writeCode(ByteBuffer buf, PType codePType, int code) {

@@ -203,20 +203,23 @@ public final class DeltaCodec implements Codec {
     }
 
     private static MemorySegment fromLongs(long[] longs, PType ptype) {
-        int    n        = longs.length;
-        int    elemSize = ptype.byteSize();
-        byte[] bytes    = new byte[n * elemSize];
-        ByteBuffer bb   = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
-        for (long v : longs) {
-            switch (ptype) {
-                case I8,  U8  -> bb.put((byte)  v);
-                case I16, U16 -> bb.putShort((short) v);
-                case I32, U32 -> bb.putInt((int)   v);
-                case I64, U64 -> bb.putLong(v);
-                default -> throw new UnsupportedOperationException("unsupported ptype: " + ptype);
-            }
+        // Fast path: 64-bit target — bulk byte-order copy, no per-element narrowing.
+        if (ptype == PType.I64 || ptype == PType.U64) {
+            byte[] bytes = new byte[longs.length * 8];
+            MemorySegment dst = MemorySegment.ofArray(bytes);
+            MemorySegment.copy(MemorySegment.ofArray(longs), ValueLayout.JAVA_LONG, 0L,
+                dst, ptype.valueLayout(), 0L, longs.length);
+            return dst;
         }
-        return MemorySegment.ofArray(bytes);
+        // Narrowing path: per-element MethodHandle setter from PTypeIO.
+        int n = longs.length;
+        long elemSize = ptype.byteSize();
+        byte[] bytes = new byte[(int) (n * elemSize)];
+        MemorySegment seg = MemorySegment.ofArray(bytes);
+        for (int i = 0; i < n; i++) {
+            PTypeIO.set(seg, i * elemSize, ptype, longs[i]);
+        }
+        return seg;
     }
 
     // ── Stats helpers ─────────────────────────────────────────────────────────

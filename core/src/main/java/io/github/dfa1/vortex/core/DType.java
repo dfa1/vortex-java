@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.core;
 
 import java.nio.ByteBuffer;
-import java.util.List;
 
 /// Vortex logical data type. Strictly logical — defines value domain, not physical storage.
 ///
