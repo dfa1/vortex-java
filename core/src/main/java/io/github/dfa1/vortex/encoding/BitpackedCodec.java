@@ -102,6 +102,8 @@ public final class BitpackedCodec implements Codec {
 		long blockByteStride = 128L * bitWidth;
 		for (int block = 0; block < blockCount; block++, blockByteOff += blockByteStride) {
 			int blockLogicStart = block * 1024 - offset;
+			boolean fullBlock = blockLogicStart >= 0 && (long) blockLogicStart + 1023L < rowCount;
+
 			for (int row = 0; row < 8; row++) {
 				int currWord = (row * bitWidth) / 8;
 				int nextWord = ((row + 1) * bitWidth) / 8;
@@ -112,24 +114,43 @@ public final class BitpackedCodec implements Codec {
 				int s = row % 8;
 				int baseIdx = blockLogicStart + FL_ORDER[o] * 16 + s * 128;
 				long wordBase = blockByteOff + (long) lanes * currWord;
-				long hiBase = (remainingBits > 0) ? blockByteOff + (long) lanes * nextWord : 0L;
-				long loMask = (remainingBits > 0) ? (1L << currentBits) - 1L : 0L;
-				long hiMask = (remainingBits > 0) ? (1L << remainingBits) - 1L : 0L;
-				for (int lane = 0; lane < lanes; lane++) {
-					int logicalIdx = baseIdx + lane;
-					if (logicalIdx < 0 || logicalIdx >= rowCount) {
-						continue;
-					}
-					long src = Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, wordBase + lane));
-					long value;
+
+				if (fullBlock) {
 					if (remainingBits > 0) {
-						long lo = (src >>> shift) & loMask;
-						long hi = Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, hiBase + lane)) & hiMask;
-						value = lo | (hi << currentBits);
+						long hiBase = blockByteOff + (long) lanes * nextWord;
+						long loMask = (1L << currentBits) - 1L;
+						long hiMask = (1L << remainingBits) - 1L;
+						for (int lane = 0; lane < lanes; lane++) {
+							long lo = (Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, wordBase + lane)) >>> shift) & loMask;
+							long hi = Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, hiBase + lane)) & hiMask;
+							out.set(ValueLayout.JAVA_BYTE, baseIdx + lane, (byte) (lo | (hi << currentBits)));
+						}
 					} else {
-						value = (src >>> shift) & bitMask;
+						for (int lane = 0; lane < lanes; lane++) {
+							out.set(ValueLayout.JAVA_BYTE, baseIdx + lane,
+									(byte) ((Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, wordBase + lane)) >>> shift) & bitMask));
+						}
 					}
-					out.set(ValueLayout.JAVA_BYTE, logicalIdx, (byte) value);
+				} else {
+					long hiBase = (remainingBits > 0) ? blockByteOff + (long) lanes * nextWord : 0L;
+					long loMask = (remainingBits > 0) ? (1L << currentBits) - 1L : 0L;
+					long hiMask = (remainingBits > 0) ? (1L << remainingBits) - 1L : 0L;
+					for (int lane = 0; lane < lanes; lane++) {
+						int logicalIdx = baseIdx + lane;
+						if (logicalIdx < 0 || logicalIdx >= rowCount) {
+							continue;
+						}
+						long src = Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, wordBase + lane));
+						long value;
+						if (remainingBits > 0) {
+							long lo = (src >>> shift) & loMask;
+							long hi = Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, hiBase + lane)) & hiMask;
+							value = lo | (hi << currentBits);
+						} else {
+							value = (src >>> shift) & bitMask;
+						}
+						out.set(ValueLayout.JAVA_BYTE, logicalIdx, (byte) value);
+					}
 				}
 			}
 		}
@@ -147,6 +168,8 @@ public final class BitpackedCodec implements Codec {
 		long blockByteStride = 128L * bitWidth;
 		for (int block = 0; block < blockCount; block++, blockByteOff += blockByteStride) {
 			int blockLogicStart = block * 1024 - offset;
+			boolean fullBlock = blockLogicStart >= 0 && (long) blockLogicStart + 1023L < rowCount;
+
 			for (int row = 0; row < 16; row++) {
 				int currWord = (row * bitWidth) / 16;
 				int nextWord = ((row + 1) * bitWidth) / 16;
@@ -157,24 +180,46 @@ public final class BitpackedCodec implements Codec {
 				int s = row % 8;
 				int baseIdx = blockLogicStart + FL_ORDER[o] * 16 + s * 128;
 				long wordBase = blockByteOff + (long) lanes * currWord * 2;
-				long hiBase = (remainingBits > 0) ? blockByteOff + (long) lanes * nextWord * 2 : 0L;
-				long loMask = (remainingBits > 0) ? (1L << currentBits) - 1L : 0L;
-				long hiMask = (remainingBits > 0) ? (1L << remainingBits) - 1L : 0L;
-				for (int lane = 0; lane < lanes; lane++) {
-					int logicalIdx = baseIdx + lane;
-					if (logicalIdx < 0 || logicalIdx >= rowCount) {
-						continue;
-					}
-					long src = Short.toUnsignedLong(buf.get(LE_SHORT, wordBase + (long) lane * 2));
-					long value;
+
+				if (fullBlock) {
+					long outBase = (long) baseIdx * 2;
 					if (remainingBits > 0) {
-						long lo = (src >>> shift) & loMask;
-						long hi = Short.toUnsignedLong(buf.get(LE_SHORT, hiBase + (long) lane * 2)) & hiMask;
-						value = lo | (hi << currentBits);
+						long hiBase = blockByteOff + (long) lanes * nextWord * 2;
+						long loMask = (1L << currentBits) - 1L;
+						long hiMask = (1L << remainingBits) - 1L;
+						long laneOff = 0L;
+						for (int lane = 0; lane < lanes; lane++, laneOff += 2L) {
+							long lo = (Short.toUnsignedLong(buf.get(LE_SHORT, wordBase + laneOff)) >>> shift) & loMask;
+							long hi = Short.toUnsignedLong(buf.get(LE_SHORT, hiBase + laneOff)) & hiMask;
+							out.set(LE_SHORT, outBase + laneOff, (short) (lo | (hi << currentBits)));
+						}
 					} else {
-						value = (src >>> shift) & bitMask;
+						long laneOff = 0L;
+						for (int lane = 0; lane < lanes; lane++, laneOff += 2L) {
+							out.set(LE_SHORT, outBase + laneOff,
+									(short) ((Short.toUnsignedLong(buf.get(LE_SHORT, wordBase + laneOff)) >>> shift) & bitMask));
+						}
 					}
-					out.set(LE_SHORT, (long) logicalIdx * 2, (short) value);
+				} else {
+					long hiBase = (remainingBits > 0) ? blockByteOff + (long) lanes * nextWord * 2 : 0L;
+					long loMask = (remainingBits > 0) ? (1L << currentBits) - 1L : 0L;
+					long hiMask = (remainingBits > 0) ? (1L << remainingBits) - 1L : 0L;
+					for (int lane = 0; lane < lanes; lane++) {
+						int logicalIdx = baseIdx + lane;
+						if (logicalIdx < 0 || logicalIdx >= rowCount) {
+							continue;
+						}
+						long src = Short.toUnsignedLong(buf.get(LE_SHORT, wordBase + (long) lane * 2));
+						long value;
+						if (remainingBits > 0) {
+							long lo = (src >>> shift) & loMask;
+							long hi = Short.toUnsignedLong(buf.get(LE_SHORT, hiBase + (long) lane * 2)) & hiMask;
+							value = lo | (hi << currentBits);
+						} else {
+							value = (src >>> shift) & bitMask;
+						}
+						out.set(LE_SHORT, (long) logicalIdx * 2, (short) value);
+					}
 				}
 			}
 		}
@@ -192,6 +237,8 @@ public final class BitpackedCodec implements Codec {
 		long blockByteStride = 128L * bitWidth;
 		for (int block = 0; block < blockCount; block++, blockByteOff += blockByteStride) {
 			int blockLogicStart = block * 1024 - offset;
+			boolean fullBlock = blockLogicStart >= 0 && (long) blockLogicStart + 1023L < rowCount;
+
 			for (int row = 0; row < 32; row++) {
 				int currWord = (row * bitWidth) / 32;
 				int nextWord = ((row + 1) * bitWidth) / 32;
@@ -202,24 +249,46 @@ public final class BitpackedCodec implements Codec {
 				int s = row % 8;
 				int baseIdx = blockLogicStart + FL_ORDER[o] * 16 + s * 128;
 				long wordBase = blockByteOff + (long) lanes * currWord * 4;
-				long hiBase = (remainingBits > 0) ? blockByteOff + (long) lanes * nextWord * 4 : 0L;
-				long loMask = (remainingBits > 0) ? (1L << currentBits) - 1L : 0L;
-				long hiMask = (remainingBits > 0) ? (1L << remainingBits) - 1L : 0L;
-				for (int lane = 0; lane < lanes; lane++) {
-					int logicalIdx = baseIdx + lane;
-					if (logicalIdx < 0 || logicalIdx >= rowCount) {
-						continue;
-					}
-					long src = Integer.toUnsignedLong(buf.get(LE_INT, wordBase + (long) lane * 4));
-					long value;
+
+				if (fullBlock) {
+					long outBase = (long) baseIdx * 4;
 					if (remainingBits > 0) {
-						long lo = (src >>> shift) & loMask;
-						long hi = Integer.toUnsignedLong(buf.get(LE_INT, hiBase + (long) lane * 4)) & hiMask;
-						value = lo | (hi << currentBits);
+						long hiBase = blockByteOff + (long) lanes * nextWord * 4;
+						long loMask = (1L << currentBits) - 1L;
+						long hiMask = (1L << remainingBits) - 1L;
+						long laneOff = 0L;
+						for (int lane = 0; lane < lanes; lane++, laneOff += 4L) {
+							long lo = (Integer.toUnsignedLong(buf.get(LE_INT, wordBase + laneOff)) >>> shift) & loMask;
+							long hi = Integer.toUnsignedLong(buf.get(LE_INT, hiBase + laneOff)) & hiMask;
+							out.set(LE_INT, outBase + laneOff, (int) (lo | (hi << currentBits)));
+						}
 					} else {
-						value = (src >>> shift) & bitMask;
+						long laneOff = 0L;
+						for (int lane = 0; lane < lanes; lane++, laneOff += 4L) {
+							out.set(LE_INT, outBase + laneOff,
+									(int) ((Integer.toUnsignedLong(buf.get(LE_INT, wordBase + laneOff)) >>> shift) & bitMask));
+						}
 					}
-					out.set(LE_INT, (long) logicalIdx * 4, (int) value);
+				} else {
+					long hiBase = (remainingBits > 0) ? blockByteOff + (long) lanes * nextWord * 4 : 0L;
+					long loMask = (remainingBits > 0) ? (1L << currentBits) - 1L : 0L;
+					long hiMask = (remainingBits > 0) ? (1L << remainingBits) - 1L : 0L;
+					for (int lane = 0; lane < lanes; lane++) {
+						int logicalIdx = baseIdx + lane;
+						if (logicalIdx < 0 || logicalIdx >= rowCount) {
+							continue;
+						}
+						long src = Integer.toUnsignedLong(buf.get(LE_INT, wordBase + (long) lane * 4));
+						long value;
+						if (remainingBits > 0) {
+							long lo = (src >>> shift) & loMask;
+							long hi = Integer.toUnsignedLong(buf.get(LE_INT, hiBase + (long) lane * 4)) & hiMask;
+							value = lo | (hi << currentBits);
+						} else {
+							value = (src >>> shift) & bitMask;
+						}
+						out.set(LE_INT, (long) logicalIdx * 4, (int) value);
+					}
 				}
 			}
 		}
