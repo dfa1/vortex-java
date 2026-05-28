@@ -20,7 +20,6 @@ performance improvements in Java/Maven projects.
 setup → benchmark → profile → analyse → change → repeat
 ```
 
-
 ---
 
 ## Step 1 — Verify readiness
@@ -72,6 +71,7 @@ Make it executable: `chmod +x benchmark.sh`
 ```
 
 Read both output files:
+
 - `target/jmh-results.json` — throughput / latency per benchmark
 - `target/recording-filtered.json` — JFR events
 
@@ -84,11 +84,13 @@ Store the baseline score. You will compare every subsequent run against it.
 Key things to look for:
 
 **In jmh-results.json:**
+
 - `primaryMetric.score` — the main result (ops/s or ns/op depending on mode)
 - `primaryMetric.scoreError` — high error = unstable benchmark, increase `-i`
 - Compare `AverageTime` vs `Throughput` to understand the shape of the workload
 
 **In recording-filtered.json:**
+
 - `jdk.ObjectAllocationInNewTLAB` — allocation hotspots; look for large `allocationSize`
   or high-frequency small allocations in hot methods
 - `jdk.GarbageCollection` — GC pause duration and frequency; long pauses = allocation pressure
@@ -96,6 +98,7 @@ Key things to look for:
 - `jdk.GCHeapSummary` — heap growth between events reveals live-set size
 
 **Priority order for investigation:**
+
 1. If GC pauses are long → reduce allocations first
 2. If allocations are high but pauses are short → object pooling or value types
 3. If TLB misses are high → evaluate huge pages or access pattern changes
@@ -143,6 +146,7 @@ If performance regressed, revert the change immediately and explain why it likel
 ## Step 7 — Stop conditions
 
 Stop iterating when any of the following is true:
+
 - The goal stated by the user has been reached
 - Three consecutive iterations produce < 2% improvement
 - All obvious hotspots from JFR have been addressed

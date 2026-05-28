@@ -6,6 +6,7 @@ import java.util.Map;
 
 /// One decoded chunk returned by [ScanIterator].
 public record ScanResult(
-    long               rowCount,
-    Map<String, Array> columns
-) {}
+		long rowCount,
+		Map<String, Array> columns
+) {
+}

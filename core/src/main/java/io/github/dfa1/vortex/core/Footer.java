@@ -7,8 +7,9 @@ import java.util.List;
 /// All spec lists are index-stable: array/layout/segment indices in the tree refer
 /// into these lists by position.
 public record Footer(
-    List<String>            arraySpecs,
-    List<String>            layoutSpecs,
-    List<SegmentSpec>       segmentSpecs,
-    List<CompressionScheme> compressionSpecs
-) {}
+		List<String> arraySpecs,
+		List<String> layoutSpecs,
+		List<SegmentSpec> segmentSpecs,
+		List<CompressionScheme> compressionSpecs
+) {
+}

@@ -5,18 +5,33 @@ import java.util.List;
 /// Predicate tree for zone-map pruning. Evaluated against per-chunk min/max statistics;
 /// chunks where no row can satisfy the filter are skipped entirely.
 public sealed interface RowFilter
-    permits RowFilter.And, RowFilter.Gte, RowFilter.Lte, RowFilter.Eq {
+		permits RowFilter.And, RowFilter.Gte, RowFilter.Lte, RowFilter.Eq {
 
-    record And(List<RowFilter> filters) implements RowFilter {}
+	static RowFilter and(RowFilter... filters) {
+		return new And(List.of(filters));
+	}
 
-    record Gte(String column, Comparable<?> value) implements RowFilter {}
+	static RowFilter gte(String col, Comparable<?> val) {
+		return new Gte(col, val);
+	}
 
-    record Lte(String column, Comparable<?> value) implements RowFilter {}
+	static RowFilter lte(String col, Comparable<?> val) {
+		return new Lte(col, val);
+	}
 
-    record Eq(String column, Object value) implements RowFilter {}
+	static RowFilter eq(String col, Object val) {
+		return new Eq(col, val);
+	}
 
-    static RowFilter and(RowFilter... filters) { return new And(List.of(filters)); }
-    static RowFilter gte(String col, Comparable<?> val) { return new Gte(col, val); }
-    static RowFilter lte(String col, Comparable<?> val) { return new Lte(col, val); }
-    static RowFilter eq(String col, Object val)         { return new Eq(col, val); }
+	record And(List<RowFilter> filters) implements RowFilter {
+	}
+
+	record Gte(String column, Comparable<?> value) implements RowFilter {
+	}
+
+	record Lte(String column, Comparable<?> value) implements RowFilter {
+	}
+
+	record Eq(String column, Object value) implements RowFilter {
+	}
 }

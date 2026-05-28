@@ -1,6 +1,8 @@
 package io.github.dfa1.vortex.io;
 
-import io.github.dfa1.vortex.core.*;
+import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.Footer;
+import io.github.dfa1.vortex.core.Layout;
 import io.github.dfa1.vortex.encoding.CodecRegistry;
 import io.github.dfa1.vortex.scan.ScanIterator;
 import io.github.dfa1.vortex.scan.ScanOptions;
@@ -63,7 +65,7 @@ public final class VortexReader implements Closeable {
 
 	public static VortexReader open(Path path, CodecRegistry registry) throws IOException {
 		Arena arena = Arena.ofConfined();
-		try  {
+		try {
 			var channel = FileChannel.open(path, StandardOpenOption.READ);
 			long size = channel.size();
 			if (size < TRAILER_SIZE) {

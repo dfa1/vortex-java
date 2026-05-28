@@ -4,45 +4,59 @@ description: Code review skill for high-throughput Java data processing, focusin
 ---
 
 ## Overview
-This skill provides specialized instructions for reviewing high-performance Java code, particularly data processing pipelines, columnar decoders, and hot-loop execution. When asked to review Java code for performance, apply these advanced heuristics rather than generic advice.
+
+This skill provides specialized instructions for reviewing high-performance Java code, particularly data processing
+pipelines, columnar decoders, and hot-loop execution. When asked to review Java code for performance, apply these
+advanced heuristics rather than generic advice.
 
 ---
 
 ## Core Optimization Rules
 
 ### 1. Hot-Loop Optimization
-- **Loop Unswitching:** Hoist polymorphic branches (e.g., `switch` on primitive types) *outside* tight loops to improve branch predictability and enable vectorization.
-- **Strength Reduction:** Replace repeated multiplications (`base + i * stride`) with incremental additions (`v += stride`).
-  - Warn about IEEE‑754 drift when accumulating `float`/`double` over large iteration counts.
+
+- **Loop Unswitching:** Hoist polymorphic branches (e.g., `switch` on primitive types) *outside* tight loops to improve
+  branch predictability and enable vectorization.
+- **Strength Reduction:** Replace repeated multiplications (`base + i * stride`) with incremental additions (
+  `v += stride`).
+    - Warn about IEEE‑754 drift when accumulating `float`/`double` over large iteration counts.
 - **Invariant Hoisting:** Move loop-invariant loads, bounds, and metadata outside the loop.
 - **Predictability:** Flag unpredictable, data-dependent branches inside hot loops.
-- **Bounds Check Elimination:** Encourage patterns that allow the JIT to remove array bounds checks (e.g., using indexed loops with prevalidated ranges).
+- **Bounds Check Elimination:** Encourage patterns that allow the JIT to remove array bounds checks (e.g., using indexed
+  loops with prevalidated ranges).
 - **mark opportunities for Java Vector API**
+
 ---
 
 ### 2. Memory Rules: Heap, Direct, and FFM
-- **2GB Limit:** Flag any `(int) (n * elemBytes)` or similar size computation that may overflow `Integer.MAX_VALUE` (~2.14 GB).
-- **Prefer FFM for Large Buffers:** Recommend migrating large `ByteBuffer` allocations to the Foreign Function & Memory API (`MemorySegment`).
-  - Use `Arena.ofAuto().allocate(size, alignment)` for 64‑bit capacity and fast unaligned access via `ValueLayout`.
+
+- **2GB Limit:** Flag any `(int) (n * elemBytes)` or similar size computation that may overflow `Integer.MAX_VALUE` (~
+  2.14 GB).
+- **Prefer FFM for Large Buffers:** Recommend migrating large `ByteBuffer` allocations to the Foreign Function & Memory
+  API (`MemorySegment`).
+    - Use `Arena.ofAuto().allocate(size, alignment)` for 64‑bit capacity and fast unaligned access via `ValueLayout`.
 - **Alignment & VarHandles:**
-  - Warn when using `ValueLayout.JAVA_INT` or similar on potentially unaligned addresses.
-  - Prefer `ValueLayout` constants over manual offset math.
-  - Flag aliasing between overlapping `MemorySegment` slices.
+    - Warn when using `ValueLayout.JAVA_INT` or similar on potentially unaligned addresses.
+    - Prefer `ValueLayout` constants over manual offset math.
+    - Flag aliasing between overlapping `MemorySegment` slices.
 - **Mixed Heap/Off‑Heap Pipelines:**
-  - Flag transitions between heap arrays, direct buffers, and `MemorySegment` unless explicitly justified.
-  - Require clear ownership and lifetime rules when mixing arenas, slices, and native handles.
+    - Flag transitions between heap arrays, direct buffers, and `MemorySegment` unless explicitly justified.
+    - Require clear ownership and lifetime rules when mixing arenas, slices, and native handles.
 
 ---
 
 ### 3. Zero-Copy I/O and Protobuf
-- **Eliminate Intermediate `byte[]`:** Flag any heap array created solely to bridge between `ByteBuffer` and parsing frameworks.
+
+- **Eliminate Intermediate `byte[]`:** Flag any heap array created solely to bridge between `ByteBuffer` and parsing
+  frameworks.
 - **Direct Protobuf Parsing:**
-  - Recommend `CodedInputStream.newInstance(ByteBuffer)` for metadata parsing.
-  - Note: Protobuf does not support `MemorySegment`; `ByteBuffer` is optimal for small metadata payloads.
+    - Recommend `CodedInputStream.newInstance(ByteBuffer)` for metadata parsing.
+    - Note: Protobuf does not support `MemorySegment`; `ByteBuffer` is optimal for small metadata payloads.
 
 ---
 
 ## Profiling-Driven Overrides
+
 When the user provides profiling data (JFR, async-profiler, perf, flamegraphs):
 
 - Prioritize empirical evidence over static heuristics.
@@ -52,14 +66,17 @@ When the user provides profiling data (JFR, async-profiler, perf, flamegraphs):
 ---
 
 ## Conflict Resolution Rules
+
 - **Correctness > Performance:** If an optimization risks semantic drift, warn instead of rewriting.
-- **FFM vs ByteBuffer:** Prefer FFM for large or long-lived buffers; prefer `ByteBuffer` for tiny metadata payloads or Protobuf interop.
+- **FFM vs ByteBuffer:** Prefer FFM for large or long-lived buffers; prefer `ByteBuffer` for tiny metadata payloads or
+  Protobuf interop.
 - **Precision vs Speed:** When strength reduction introduces floating-point drift, warn and let the user decide.
 - **Safety First:** If memory aliasing, lifetime, or alignment is unclear, flag it even if performance would improve.
 
 ---
 
 ## When to Apply
+
 Apply these guidelines automatically whenever the user asks to:
 
 - Review array, columnar, or sequence decoders.

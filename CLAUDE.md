@@ -29,7 +29,8 @@ Never use `mvn install` or `./mvwn install`.
 
 ## Architecture
 
-Java 25 native implementation of the [Vortex](https://github.com/spiraldb/vortex) columnar file format. Uses FFM (`MemorySegment`/`Arena`) instead of JNI or `sun.misc.Unsafe`.
+Java 25 native implementation of the [Vortex](https://github.com/spiraldb/vortex) columnar file format. Uses FFM (
+`MemorySegment`/`Arena`) instead of JNI or `sun.misc.Unsafe`.
 
 ### Module dependency chain
 
@@ -38,15 +39,17 @@ core → reader
      → writer
 ```
 
-| Module   | Responsibility |
-|----------|----------------|
+| Module   | Responsibility                                                                                                                                                                                       |
+|----------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `core`   | Logical types (`DType`, `PType`), file-structure model (`Layout`, `Footer`, `SegmentSpec`, `CompressionScheme`), encoding layer (`Array`, `Decoder`/`DecoderRegistry`, `ArrayNode`, `DecodeContext`) |
-| `reader` | `VortexFile` (memory-mapped file handle), `PostscriptParser`, `ScanIterator` (chunk-by-chunk reads), `ScanOptions`, `RowFilter` (zone-map predicate tree) |
-| `writer` | `VortexWriter` (encodes and writes chunks), `WriteOptions` |
+| `reader` | `VortexFile` (memory-mapped file handle), `PostscriptParser`, `ScanIterator` (chunk-by-chunk reads), `ScanOptions`, `RowFilter` (zone-map predicate tree)                                            |
+| `writer` | `VortexWriter` (encodes and writes chunks), `WriteOptions`                                                                                                                                           |
 
 ### File format
 
-8-byte trailer at EOF: `version(u16 LE) | postscriptLen(u16 LE) | magic(VTXF)`. The postscript is a FlatBuffer blob immediately before the trailer; it points (offset+length) to the Footer (FlatBuffer), DType (Protobuf), and Layout (FlatBuffer) blobs elsewhere in the file.
+8-byte trailer at EOF: `version(u16 LE) | postscriptLen(u16 LE) | magic(VTXF)`. The postscript is a FlatBuffer blob
+immediately before the trailer; it points (offset+length) to the Footer (FlatBuffer), DType (Protobuf), and Layout (
+FlatBuffer) blobs elsewhere in the file.
 
 ### Layout tree
 
@@ -59,11 +62,14 @@ Struct → Zoned(Stats) → Chunked → [Flat, Flat, ...]
 - **Zoned** (`vortex.stats`): wraps a child with per-chunk min/max statistics used for zone-map pruning
 - **Struct**: one child per column
 
-Encoding IDs are strings (e.g. `"vortex.flat"`, `"fastlanes.bitpacked"`). `DecoderRegistry` maps IDs → `Decoder` impls via `ServiceLoader`; register custom decoders with `registry.register(decoder)`.
+Encoding IDs are strings (e.g. `"vortex.flat"`, `"fastlanes.bitpacked"`). `DecoderRegistry` maps IDs → `Decoder` impls
+via `ServiceLoader`; register custom decoders with `registry.register(decoder)`.
 
 ### Memory model
 
-`VortexFile` memory-maps the entire file into one `MemorySegment` (confined `Arena`). All `Array` buffers returned during scan are zero-copy slices of that segment — their lifetime is tied to the `VortexFile`. Close the file to release the mapped region.
+`VortexFile` memory-maps the entire file into one `MemorySegment` (confined `Arena`). All `Array` buffers returned
+during scan are zero-copy slices of that segment — their lifetime is tied to the `VortexFile`. Close the file to release
+the mapped region.
 
 ### Implementation status
 
@@ -75,6 +81,7 @@ When stuck on encoding/decoding behavior, consult the Rust reference implementat
 `https://github.com/spiraldb/vortex` (via `gh api repos/spiraldb/vortex/contents/<path>`).
 
 Key paths:
+
 - `encodings/fastlanes/src/bitpacking/` — `fastlanes.bitpacked` wire format and algorithm
 - `encodings/fastlanes/src/for/` — `fastlanes.for` (frame-of-reference)
 - `encodings/sparse/src/` — `vortex.sparse`
@@ -107,12 +114,17 @@ methods in the Rust source to get the exact protobuf schema, then implement from
 - JUnit 5 + Mockito (BDDMockito) + AssertJ.
 - Every test has `// Given` / `// When` / `// Then` sections.
 - Class under test is always named `sut`.
-- Use `BDDMockito` exclusively: `given(mock.method()).willReturn(value)`. Never the reverse form. Only static-import `given` and `then` — not `willReturn`/`willThrow`.
-- Prefer `@ParameterizedTest` over copy-pasting tests. Use `@ValueSource` when possible; `@ArgumentsSource` when more structure needed (test case must have a name).
+- Use `BDDMockito` exclusively: `given(mock.method()).willReturn(value)`. Never the reverse form. Only static-import
+  `given` and `then` — not `willReturn`/`willThrow`.
+- Prefer `@ParameterizedTest` over copy-pasting tests. Use `@ValueSource` when possible; `@ArgumentsSource` when more
+  structure needed (test case must have a name).
 - Acceptance tests run the built jar end-to-end with hosh scripts.
 
 ## Property-Based Testing (jqwik)
 
-**Known issue:** jqwik 1.9.3 targets JUnit Platform 1.x; project uses JUnit 6 (Platform 6.x). `@Property` tests compile and are structurally correct but the jqwik engine does not execute them at runtime. Track https://github.com/jqwik-team/jqwik/issues for jqwik 2.x.
+**Known issue:** jqwik 1.9.3 targets JUnit Platform 1.x; project uses JUnit 6 (Platform 6.x). `@Property` tests compile
+and are structurally correct but the jqwik engine does not execute them at runtime.
+Track https://github.com/jqwik-team/jqwik/issues for jqwik 2.x.
 
-Write property tests: `@Property` + `@ForAll` for parameters, `@Provide` for custom arbitraries, `Assume.that(...)` for preconditions.
+Write property tests: `@Property` + `@ForAll` for parameters, `@Provide` for custom arbitraries, `Assume.that(...)` for
+preconditions.

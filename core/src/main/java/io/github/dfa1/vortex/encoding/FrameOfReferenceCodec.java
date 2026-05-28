@@ -20,91 +20,91 @@ import java.nio.ByteOrder;
 /// Decode: {@code output[i] = encoded[i] + reference} (wrapping arithmetic).
 public final class FrameOfReferenceCodec implements Codec {
 
-    @Override
-    public EncodingId encodingId() {
-        return EncodingId.FASTLANES_FOR;
-    }
+	private static long referenceValue(ScalarProtos.ScalarValue scalar) {
+		return switch (scalar.getKindCase()) {
+			case INT64_VALUE -> scalar.getInt64Value();
+			case UINT64_VALUE -> scalar.getUint64Value();
+			case KIND_NOT_SET -> 0L;
+			default -> throw new IllegalStateException(
+					"fastlanes.for: unexpected scalar kind " + scalar.getKindCase());
+		};
+	}
 
-    @Override
-    public Array decode(DecodeContext ctx) {
-        ByteBuffer rawMeta = ctx.metadata();
-        if (rawMeta == null || !rawMeta.hasRemaining()) {
-            throw new IllegalStateException("fastlanes.for: missing metadata");
-        }
-        ScalarProtos.ScalarValue scalar;
-        try {
-            scalar = ScalarProtos.ScalarValue.parseFrom(rawMeta.duplicate());
-        } catch (InvalidProtocolBufferException e) {
-            throw new IllegalStateException("fastlanes.for: invalid metadata", e);
-        }
+	private static MemorySegment applyReference(MemorySegment src, long n, PType ptype, long ref) {
+		int wordBytes = ptype.byteSize();
+		byte[] bytes = new byte[(int) (n * wordBytes)];
+		MemorySegment dst = MemorySegment.ofArray(bytes);
+		switch (ptype) {
+			case I8, U8 -> {
+				for (long off = 0, end = n; off < end; off++) {
+					byte v = src.get(ValueLayout.JAVA_BYTE, off);
+					dst.set(ValueLayout.JAVA_BYTE, off, (byte) (v + (byte) ref));
+				}
+			}
+			case I16, U16 -> {
+				var layout = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+				for (long off = 0, end = n * 2; off < end; off += 2) {
+					short v = src.get(layout, off);
+					dst.set(layout, off, (short) (v + (short) ref));
+				}
+			}
+			case I32, U32 -> {
+				var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+				for (long off = 0, end = n * 4; off < end; off += 4) {
+					int v = src.get(layout, off);
+					dst.set(layout, off, v + (int) ref);
+				}
+			}
+			case I64, U64 -> {
+				var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+				for (long off = 0, end = n * 8; off < end; off += 8) {
+					long v = src.get(layout, off);
+					dst.set(layout, off, v + ref);
+				}
+			}
+			default -> throw new UnsupportedOperationException(
+					"fastlanes.for: unsupported ptype " + ptype);
+		}
+		return dst;
+	}
 
-        Array encoded;
-        try {
-            encoded = ctx.decodeChild(0);
-        } catch (IOException e) {
-            throw new IllegalStateException("fastlanes.for: failed to decode child", e);
-        }
+	@Override
+	public EncodingId encodingId() {
+		return EncodingId.FASTLANES_FOR;
+	}
 
-        if (!(ctx.dtype() instanceof DType.Primitive p)) {
-            throw new IllegalStateException("fastlanes.for: expected primitive dtype, got " + ctx.dtype());
-        }
+	@Override
+	public Array decode(DecodeContext ctx) {
+		ByteBuffer rawMeta = ctx.metadata();
+		if (rawMeta == null || !rawMeta.hasRemaining()) {
+			throw new IllegalStateException("fastlanes.for: missing metadata");
+		}
+		ScalarProtos.ScalarValue scalar;
+		try {
+			scalar = ScalarProtos.ScalarValue.parseFrom(rawMeta.duplicate());
+		} catch (InvalidProtocolBufferException e) {
+			throw new IllegalStateException("fastlanes.for: invalid metadata", e);
+		}
 
-        long ref = referenceValue(scalar);
-        if (ref == 0L) {
-            return encoded;
-        }
+		Array encoded;
+		try {
+			encoded = ctx.decodeChild(0);
+		} catch (IOException e) {
+			throw new IllegalStateException("fastlanes.for: failed to decode child", e);
+		}
 
-        MemorySegment src = encoded.buffer(0);
-        long n = ctx.rowCount();
-        MemorySegment dst = applyReference(src, n, p.ptype(), ref);
-        return new Array(ctx.dtype(), n, new MemorySegment[]{dst}, new Array[0], ArrayStats.empty());
-    }
+		if (!(ctx.dtype() instanceof DType.Primitive p)) {
+			throw new IllegalStateException("fastlanes.for: expected primitive dtype, got " + ctx.dtype());
+		}
 
-    private static long referenceValue(ScalarProtos.ScalarValue scalar) {
-        return switch (scalar.getKindCase()) {
-            case INT64_VALUE  -> scalar.getInt64Value();
-            case UINT64_VALUE -> scalar.getUint64Value();
-            case KIND_NOT_SET -> 0L;
-            default -> throw new IllegalStateException(
-                "fastlanes.for: unexpected scalar kind " + scalar.getKindCase());
-        };
-    }
+		long ref = referenceValue(scalar);
+		if (ref == 0L) {
+			return encoded;
+		}
 
-    private static MemorySegment applyReference(MemorySegment src, long n, PType ptype, long ref) {
-        int wordBytes = ptype.byteSize();
-        byte[] bytes = new byte[(int) (n * wordBytes)];
-        MemorySegment dst = MemorySegment.ofArray(bytes);
-        switch (ptype) {
-            case I8, U8 -> {
-                for (long off = 0, end = n; off < end; off++) {
-                    byte v = src.get(ValueLayout.JAVA_BYTE, off);
-                    dst.set(ValueLayout.JAVA_BYTE, off, (byte) (v + (byte) ref));
-                }
-            }
-            case I16, U16 -> {
-                var layout = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-                for (long off = 0, end = n * 2; off < end; off += 2) {
-                    short v = src.get(layout, off);
-                    dst.set(layout, off, (short) (v + (short) ref));
-                }
-            }
-            case I32, U32 -> {
-                var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-                for (long off = 0, end = n * 4; off < end; off += 4) {
-                    int v = src.get(layout, off);
-                    dst.set(layout, off, v + (int) ref);
-                }
-            }
-            case I64, U64 -> {
-                var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-                for (long off = 0, end = n * 8; off < end; off += 8) {
-                    long v = src.get(layout, off);
-                    dst.set(layout, off, v + ref);
-                }
-            }
-            default -> throw new UnsupportedOperationException(
-                "fastlanes.for: unsupported ptype " + ptype);
-        }
-        return dst;
-    }
+		MemorySegment src = encoded.buffer(0);
+		long n = ctx.rowCount();
+		MemorySegment dst = applyReference(src, n, p.ptype(), ref);
+		return new Array(ctx.dtype(), n, new MemorySegment[]{dst}, new Array[0], ArrayStats.empty());
+	}
 }

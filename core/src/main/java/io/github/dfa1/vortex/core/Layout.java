@@ -10,20 +10,31 @@ import java.util.List;
 /// Struct → Zoned(Stats) → Chunked → [Flat, Flat, ...]
 /// ```
 public record Layout(
-    String        encodingId,
-    long          rowCount,
-    ByteBuffer    metadata,
-    List<Layout>  children,
-    List<Integer> segments
+		String encodingId,
+		long rowCount,
+		ByteBuffer metadata,
+		List<Layout> children,
+		List<Integer> segments
 ) {
-    public static final String FLAT    = "vortex.flat";
-    public static final String CHUNKED = "vortex.chunked";
-    public static final String STRUCT  = "vortex.struct";
-    public static final String ZONED   = "vortex.stats";
-    public static final String DICT    = "vortex.dict";
+	public static final String FLAT = "vortex.flat";
+	public static final String CHUNKED = "vortex.chunked";
+	public static final String STRUCT = "vortex.struct";
+	public static final String ZONED = "vortex.stats";
+	public static final String DICT = "vortex.dict";
 
-    public boolean isFlat()    { return FLAT.equals(encodingId); }
-    public boolean isChunked() { return CHUNKED.equals(encodingId); }
-    public boolean isStruct()  { return STRUCT.equals(encodingId); }
-    public boolean isZoned()   { return ZONED.equals(encodingId); }
+	public boolean isFlat() {
+		return FLAT.equals(encodingId);
+	}
+
+	public boolean isChunked() {
+		return CHUNKED.equals(encodingId);
+	}
+
+	public boolean isStruct() {
+		return STRUCT.equals(encodingId);
+	}
+
+	public boolean isZoned() {
+		return ZONED.equals(encodingId);
+	}
 }

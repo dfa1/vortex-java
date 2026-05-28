@@ -44,72 +44,72 @@ import java.util.concurrent.TimeUnit;
 @Fork(1)
 public class ReadBenchmark {
 
-    private static final DType.Struct SCHEMA = new DType.Struct(
-        List.of("id", "value"),
-        List.of(new DType.Primitive(PType.I64, false),
-                new DType.Primitive(PType.F64, false)),
-        false);
+	private static final DType.Struct SCHEMA = new DType.Struct(
+			List.of("id", "value"),
+			List.of(new DType.Primitive(PType.I64, false),
+					new DType.Primitive(PType.F64, false)),
+			false);
 
-    @Param({"10000", "100000", "1000000"})
-    public int rowCount;
+	@Param({"10000", "100000", "1000000"})
+	public int rowCount;
 
-    @Param({"1", "10"})
-    public int chunkCount;
+	@Param({"1", "10"})
+	public int chunkCount;
 
-    @Param({"all", "id"})
-    public String projection;
+	@Param({"all", "id"})
+	public String projection;
 
-    private Path            inputFile;
-    private CodecRegistry registry;
+	private Path inputFile;
+	private CodecRegistry registry;
 
-    @Setup(Level.Trial)
-    public void setup() throws IOException {
-        inputFile = Files.createTempFile("vortex-bench-read", ".vtx");
-        registry  = CodecRegistry.loadAll();
+	@Setup(Level.Trial)
+	public void setup() throws IOException {
+		inputFile = Files.createTempFile("vortex-bench-read", ".vtx");
+		registry = CodecRegistry.loadAll();
 
-        int      chunkSize = rowCount / chunkCount;
-        long[]   ids       = new long[chunkSize];
-        double[] values    = new double[chunkSize];
-        for (int i = 0; i < chunkSize; i++) {
-            ids[i]    = i;
-            values[i] = i * 1.5;
-        }
+		int chunkSize = rowCount / chunkCount;
+		long[] ids = new long[chunkSize];
+		double[] values = new double[chunkSize];
+		for (int i = 0; i < chunkSize; i++) {
+			ids[i] = i;
+			values[i] = i * 1.5;
+		}
 
-        try (var ch  = FileChannel.open(inputFile,
-                           StandardOpenOption.CREATE, StandardOpenOption.WRITE,
-                           StandardOpenOption.TRUNCATE_EXISTING);
-             var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
-            for (int i = 0; i < chunkCount; i++) {
-                sut.writeChunk(Map.of("id", ids, "value", values));
-            }
-        }
-    }
+		try (var ch = FileChannel.open(inputFile,
+				StandardOpenOption.CREATE, StandardOpenOption.WRITE,
+				StandardOpenOption.TRUNCATE_EXISTING);
+		     var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
+			for (int i = 0; i < chunkCount; i++) {
+				sut.writeChunk(Map.of("id", ids, "value", values));
+			}
+		}
+	}
 
-    @TearDown(Level.Trial)
-    public void cleanup() throws IOException {
-        Files.deleteIfExists(inputFile);
-    }
+	@TearDown(Level.Trial)
+	public void cleanup() throws IOException {
+		Files.deleteIfExists(inputFile);
+	}
 
-    @Benchmark
-    public long javaReader() throws IOException {
-        ScanOptions opts = "all".equals(projection)
-            ? ScanOptions.all()
-            : ScanOptions.columns("id");
+	@Benchmark
+	public long javaReader() throws IOException {
+		ScanOptions opts = "all".equals(projection)
+				? ScanOptions.all()
+				: ScanOptions.columns("id");
 
-        long rows = 0;
-        try (var vf   = VortexReader.open(inputFile, registry);
-             var iter = vf.scan(opts)) {
-            while (iter.hasNext()) {
-                ScanResult r = iter.next();
-                rows += r.rowCount();
-            }
-        }
-        return rows;
-    }
+		long rows = 0;
+		try (var vf = VortexReader.open(inputFile, registry);
+		     var iter = vf.scan(opts)) {
+			while (iter.hasNext()) {
+				ScanResult r = iter.next();
+				rows += r.rowCount();
+			}
+		}
+		return rows;
+	}
 
-    // TODO: enable once JNI bindings are available (see TODO.md #11)
-    // @Benchmark
-    // public long jniReader() throws IOException {
-    //     return VortexJni.countRows(inputFile);
-    // }
+	// TODO: enable once JNI bindings are available (see TODO.md #11)
+	// @Benchmark
+	// public long jniReader() throws IOException {
+	//     return VortexJni.countRows(inputFile);
+	// }
 }

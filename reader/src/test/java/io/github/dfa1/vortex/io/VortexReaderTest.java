@@ -25,6 +25,35 @@ class VortexReaderTest {
 
 	// --- trailer / magic validation ---
 
+	private static CodecRegistry buildUniversalStubRegistry() {
+		var registry = CodecRegistry.empty();
+		Codec stub = new Codec() {
+			@Override
+			public EncodingId encodingId() {
+				return EncodingId.VORTEX_PRIMITIVE;
+			}
+
+			@Override
+			public Array decode(DecodeContext ctx) {
+				return Array.empty(ctx.dtype());
+			}
+		};
+		for (EncodingId encodingId : EncodingId.values()) {
+			registry.register(new Codec() {
+				@Override
+				public EncodingId encodingId() {
+					return encodingId;
+				}
+
+				@Override
+				public Array decode(DecodeContext ctx) {
+					return Array.empty(ctx.dtype());
+				}
+			});
+		}
+		return registry;
+	}
+
 	@Test
 	void open_fileTooSmall_throwsIOException(@TempDir Path tmpDir) throws IOException {
 		// Given
@@ -35,6 +64,8 @@ class VortexReaderTest {
 				.isInstanceOf(IOException.class)
 				.hasMessageContaining("file too small");
 	}
+
+	// --- real fixtures: full parse ---
 
 	@Test
 	void open_wrongMagic_throwsIOException(@TempDir Path tmpDir) throws IOException {
@@ -51,8 +82,6 @@ class VortexReaderTest {
 				.isInstanceOf(IOException.class)
 				.hasMessageContaining("invalid magic bytes");
 	}
-
-	// --- real fixtures: full parse ---
 
 	@ParameterizedTest
 	@ValueSource(strings = {
@@ -101,6 +130,8 @@ class VortexReaderTest {
 		assertThat(trailerMagic).isEqualTo(VortexReader.MAGIC);
 	}
 
+	// --- scan ---
+
 	@ParameterizedTest
 	@ValueSource(strings = {
 			"primitives.vortex",
@@ -122,8 +153,6 @@ class VortexReaderTest {
 		// Then
 		assertThat(version).isEqualTo(1);
 	}
-
-	// --- scan ---
 
 	@ParameterizedTest
 	@ValueSource(strings = {
@@ -189,35 +218,6 @@ class VortexReaderTest {
 
 		// Then
 		assertThat(chunkCount).isEqualTo(1);
-	}
-
-	private static CodecRegistry buildUniversalStubRegistry() {
-		var registry = CodecRegistry.empty();
-		Codec stub = new Codec() {
-			@Override
-			public EncodingId encodingId() {
-				return EncodingId.VORTEX_PRIMITIVE;
-			}
-
-			@Override
-			public Array decode(DecodeContext ctx) {
-				return Array.empty(ctx.dtype());
-			}
-		};
-		for (EncodingId encodingId : EncodingId.values()) {
-			registry.register(new Codec() {
-				@Override
-				public EncodingId encodingId() {
-					return encodingId;
-				}
-
-				@Override
-				public Array decode(DecodeContext ctx) {
-					return Array.empty(ctx.dtype());
-				}
-			});
-		}
-		return registry;
 	}
 
 	// --- helpers ---

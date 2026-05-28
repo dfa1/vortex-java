@@ -7,7 +7,6 @@ import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.encoding.EncodingId;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.MemorySegment;
@@ -19,187 +18,187 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class SparseCodecTest {
 
-    private static final DType I64_DTYPE = new DType.Primitive(PType.I64, false);
-    private static final DType F64_DTYPE = new DType.Primitive(PType.F64, false);
+	private static final DType I64_DTYPE = new DType.Primitive(PType.I64, false);
+	private static final DType F64_DTYPE = new DType.Primitive(PType.F64, false);
 
-    @Test
-    void decode_noPatches_returnsFillValue() {
-        // Given — 5 elements, fill=99, no patches
-        long fill = 99L;
-        DecodeContext ctx = buildSparseCtx(I64_DTYPE, 5, fill, PType.U32, new long[0], new long[0]);
-        SparseCodec sut = new SparseCodec();
+	private static DecodeContext buildSparseCtx(
+			DType dtype, long rowCount, long fillLong, PType idxPtype,
+			long[] patchIndices, long[] patchValues
+	) {
+		return buildSparseCtxWithOffset(dtype, rowCount, fillLong, idxPtype, patchIndices, patchValues, 0L);
+	}
 
-        // When
-        Array result = sut.decode(ctx);
+	private static DecodeContext buildSparseCtxWithOffset(
+			DType dtype, long rowCount, long fillLong, PType idxPtype,
+			long[] patchIndices, long[] patchValues, long offset
+	) {
+		byte[] fillBytes = ScalarProtos.ScalarValue.newBuilder()
+				.setInt64Value(fillLong).build().toByteArray();
 
-        // Then
-        assertThat(result.length()).isEqualTo(5L);
-        var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-        for (int i = 0; i < 5; i++) {
-            assertThat(result.buffer(0).get(layout, (long) i * 8))
-                .as("index %d", i).isEqualTo(fill);
-        }
-    }
+		byte[] metaBytes = buildSparseMetaBytes(patchIndices.length, offset, idxPtype);
 
-    @Test
-    void decode_withPatches_overwritesAtIndices() {
-        // Given — 8 elements, fill=0, patches at indices [1, 5] with values [10, 50]
-        long fill = 0L;
-        long[] patchIndices = {1L, 5L};
-        long[] patchValues  = {10L, 50L};
-        DecodeContext ctx = buildSparseCtx(I64_DTYPE, 8, fill, PType.U32, patchIndices, patchValues);
-        SparseCodec sut = new SparseCodec();
+		byte[] idxBuf = toLEBytes(patchIndices, idxPtype);
+		byte[] valBuf = toLEBytes(patchValues, PType.I64);
 
-        // When
-        Array result = sut.decode(ctx);
+		return buildCtx(dtype, rowCount, fillBytes, metaBytes, idxBuf, valBuf,
+				new DType.Primitive(idxPtype, false));
+	}
 
-        // Then
-        var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-        long[] expected = {0, 10, 0, 0, 0, 50, 0, 0};
-        for (int i = 0; i < expected.length; i++) {
-            assertThat(result.buffer(0).get(layout, (long) i * 8))
-                .as("index %d", i).isEqualTo(expected[i]);
-        }
-    }
+	private static DecodeContext buildSparseCtxF64(
+			DType dtype, long rowCount, double fillDouble,
+			long[] patchIndices, double[] patchValues
+	) {
+		byte[] fillBytes = ScalarProtos.ScalarValue.newBuilder()
+				.setF64Value(fillDouble).build().toByteArray();
+		byte[] metaBytes = buildSparseMetaBytes(patchIndices.length, 0L, PType.U32);
 
-    @Test
-    void decode_f64_fillAndPatches() {
-        // Given — 4 F64 elements, fill=NaN bits, patch at index 2 with value 3.14
-        double fillVal = Double.NaN;
-        double patchVal = 3.14;
-        DecodeContext ctx = buildSparseCtxF64(F64_DTYPE, 4, fillVal, new long[]{2L}, new double[]{patchVal});
-        SparseCodec sut = new SparseCodec();
+		byte[] idxBuf = toLEBytes(patchIndices, PType.U32);
+		byte[] valBuf = f64LEBytes(patchValues);
 
-        // When
-        Array result = sut.decode(ctx);
+		return buildCtx(dtype, rowCount, fillBytes, metaBytes, idxBuf, valBuf,
+				new DType.Primitive(PType.U32, false));
+	}
 
-        // Then
-        var layout = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-        assertThat(result.buffer(0).get(layout, 0L)).isNaN();
-        assertThat(result.buffer(0).get(layout, 8L)).isNaN();
-        assertThat(result.buffer(0).get(layout, 16L)).isEqualTo(3.14);
-        assertThat(result.buffer(0).get(layout, 24L)).isNaN();
-    }
+	private static DecodeContext buildCtx(
+			DType dtype, long rowCount,
+			byte[] fillBytes, byte[] metaBytes,
+			byte[] idxBuf, byte[] valBuf,
+			DType idxDtype
+	) {
+		ArrayNode idxNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
+				new ArrayNode[0], new int[]{1}, ArrayStats.empty());
+		ArrayNode valNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
+				new ArrayNode[0], new int[]{2}, ArrayStats.empty());
+		ArrayNode sparseNode = new ArrayNode(EncodingId.VORTEX_SPARSE,
+				ByteBuffer.wrap(metaBytes),
+				new ArrayNode[]{idxNode, valNode},
+				new int[]{0},
+				ArrayStats.empty());
 
-    @Test
-    void decode_offsetSubtracted() {
-        // Given — offset=10, patch index=12 → absolute position = 12 - 10 = 2
-        long[] patchIndices = {12L};
-        long[] patchValues  = {777L};
-        DecodeContext ctx = buildSparseCtxWithOffset(I64_DTYPE, 5, 0L, PType.U32, patchIndices, patchValues, 10L);
-        SparseCodec sut = new SparseCodec();
+		MemorySegment[] segments = {
+				MemorySegment.ofArray(fillBytes),
+				MemorySegment.ofArray(idxBuf),
+				MemorySegment.ofArray(valBuf)
+		};
 
-        // When
-        Array result = sut.decode(ctx);
+		CodecRegistry registry = CodecRegistry.empty();
+		registry.register(new SparseCodec());
+		registry.register(new PrimitiveCodec());
 
-        // Then
-        var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-        assertThat(result.buffer(0).get(layout, 16L)).isEqualTo(777L);
-    }
+		return new DecodeContext(sparseNode, dtype, rowCount, segments, registry, java.lang.foreign.Arena.global());
+	}
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+	// ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static DecodeContext buildSparseCtx(
-        DType dtype, long rowCount, long fillLong, PType idxPtype,
-        long[] patchIndices, long[] patchValues
-    ) {
-        return buildSparseCtxWithOffset(dtype, rowCount, fillLong, idxPtype, patchIndices, patchValues, 0L);
-    }
+	private static byte[] buildSparseMetaBytes(long numPatches, long offset, PType idxPtype) {
+		EncodingProtos.PatchesMetadata patchesMeta = EncodingProtos.PatchesMetadata.newBuilder()
+				.setLen(numPatches)
+				.setOffset(offset)
+				.setIndicesPtype(DTypeProtos.PType.forNumber(idxPtype.ordinal()))
+				.build();
+		return EncodingProtos.SparseMetadata.newBuilder()
+				.setPatches(patchesMeta)
+				.build()
+				.toByteArray();
+	}
 
-    private static DecodeContext buildSparseCtxWithOffset(
-        DType dtype, long rowCount, long fillLong, PType idxPtype,
-        long[] patchIndices, long[] patchValues, long offset
-    ) {
-        byte[] fillBytes = ScalarProtos.ScalarValue.newBuilder()
-            .setInt64Value(fillLong).build().toByteArray();
+	private static byte[] toLEBytes(long[] values, PType ptype) {
+		int elemBytes = ptype.byteSize();
+		byte[] buf = new byte[values.length * elemBytes];
+		ByteBuffer bb = ByteBuffer.wrap(buf).order(ByteOrder.LITTLE_ENDIAN);
+		for (long v : values) {
+			switch (ptype) {
+				case U8, I8 -> bb.put((byte) v);
+				case U16, I16 -> bb.putShort((short) v);
+				case U32, I32 -> bb.putInt((int) v);
+				case U64, I64 -> bb.putLong(v);
+				default -> throw new UnsupportedOperationException(ptype.name());
+			}
+		}
+		return buf;
+	}
 
-        byte[] metaBytes = buildSparseMetaBytes(patchIndices.length, offset, idxPtype);
+	private static byte[] f64LEBytes(double[] values) {
+		byte[] buf = new byte[values.length * 8];
+		ByteBuffer bb = ByteBuffer.wrap(buf).order(ByteOrder.LITTLE_ENDIAN);
+		for (double v : values) {
+			bb.putDouble(v);
+		}
+		return buf;
+	}
 
-        byte[] idxBuf = toLEBytes(patchIndices, idxPtype);
-        byte[] valBuf = toLEBytes(patchValues, PType.I64);
+	@Test
+	void decode_noPatches_returnsFillValue() {
+		// Given — 5 elements, fill=99, no patches
+		long fill = 99L;
+		DecodeContext ctx = buildSparseCtx(I64_DTYPE, 5, fill, PType.U32, new long[0], new long[0]);
+		SparseCodec sut = new SparseCodec();
 
-        return buildCtx(dtype, rowCount, fillBytes, metaBytes, idxBuf, valBuf,
-            new DType.Primitive(idxPtype, false));
-    }
+		// When
+		Array result = sut.decode(ctx);
 
-    private static DecodeContext buildSparseCtxF64(
-        DType dtype, long rowCount, double fillDouble,
-        long[] patchIndices, double[] patchValues
-    ) {
-        byte[] fillBytes = ScalarProtos.ScalarValue.newBuilder()
-            .setF64Value(fillDouble).build().toByteArray();
-        byte[] metaBytes = buildSparseMetaBytes(patchIndices.length, 0L, PType.U32);
+		// Then
+		assertThat(result.length()).isEqualTo(5L);
+		var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+		for (int i = 0; i < 5; i++) {
+			assertThat(result.buffer(0).get(layout, (long) i * 8))
+					.as("index %d", i).isEqualTo(fill);
+		}
+	}
 
-        byte[] idxBuf = toLEBytes(patchIndices, PType.U32);
-        byte[] valBuf = f64LEBytes(patchValues);
+	@Test
+	void decode_withPatches_overwritesAtIndices() {
+		// Given — 8 elements, fill=0, patches at indices [1, 5] with values [10, 50]
+		long fill = 0L;
+		long[] patchIndices = {1L, 5L};
+		long[] patchValues = {10L, 50L};
+		DecodeContext ctx = buildSparseCtx(I64_DTYPE, 8, fill, PType.U32, patchIndices, patchValues);
+		SparseCodec sut = new SparseCodec();
 
-        return buildCtx(dtype, rowCount, fillBytes, metaBytes, idxBuf, valBuf,
-            new DType.Primitive(PType.U32, false));
-    }
+		// When
+		Array result = sut.decode(ctx);
 
-    private static DecodeContext buildCtx(
-        DType dtype, long rowCount,
-        byte[] fillBytes, byte[] metaBytes,
-        byte[] idxBuf, byte[] valBuf,
-        DType idxDtype
-    ) {
-        ArrayNode idxNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
-            new ArrayNode[0], new int[]{1}, ArrayStats.empty());
-        ArrayNode valNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
-            new ArrayNode[0], new int[]{2}, ArrayStats.empty());
-        ArrayNode sparseNode = new ArrayNode(EncodingId.VORTEX_SPARSE,
-            ByteBuffer.wrap(metaBytes),
-            new ArrayNode[]{idxNode, valNode},
-            new int[]{0},
-            ArrayStats.empty());
+		// Then
+		var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+		long[] expected = {0, 10, 0, 0, 0, 50, 0, 0};
+		for (int i = 0; i < expected.length; i++) {
+			assertThat(result.buffer(0).get(layout, (long) i * 8))
+					.as("index %d", i).isEqualTo(expected[i]);
+		}
+	}
 
-        MemorySegment[] segments = {
-            MemorySegment.ofArray(fillBytes),
-            MemorySegment.ofArray(idxBuf),
-            MemorySegment.ofArray(valBuf)
-        };
+	@Test
+	void decode_f64_fillAndPatches() {
+		// Given — 4 F64 elements, fill=NaN bits, patch at index 2 with value 3.14
+		double fillVal = Double.NaN;
+		double patchVal = 3.14;
+		DecodeContext ctx = buildSparseCtxF64(F64_DTYPE, 4, fillVal, new long[]{2L}, new double[]{patchVal});
+		SparseCodec sut = new SparseCodec();
 
-        CodecRegistry registry = CodecRegistry.empty();
-        registry.register(new SparseCodec());
-        registry.register(new PrimitiveCodec());
+		// When
+		Array result = sut.decode(ctx);
 
-        return new DecodeContext(sparseNode, dtype, rowCount, segments, registry, java.lang.foreign.Arena.global());
-    }
+		// Then
+		var layout = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+		assertThat(result.buffer(0).get(layout, 0L)).isNaN();
+		assertThat(result.buffer(0).get(layout, 8L)).isNaN();
+		assertThat(result.buffer(0).get(layout, 16L)).isEqualTo(3.14);
+		assertThat(result.buffer(0).get(layout, 24L)).isNaN();
+	}
 
-    private static byte[] buildSparseMetaBytes(long numPatches, long offset, PType idxPtype) {
-        EncodingProtos.PatchesMetadata patchesMeta = EncodingProtos.PatchesMetadata.newBuilder()
-            .setLen(numPatches)
-            .setOffset(offset)
-            .setIndicesPtype(DTypeProtos.PType.forNumber(idxPtype.ordinal()))
-            .build();
-        return EncodingProtos.SparseMetadata.newBuilder()
-            .setPatches(patchesMeta)
-            .build()
-            .toByteArray();
-    }
+	@Test
+	void decode_offsetSubtracted() {
+		// Given — offset=10, patch index=12 → absolute position = 12 - 10 = 2
+		long[] patchIndices = {12L};
+		long[] patchValues = {777L};
+		DecodeContext ctx = buildSparseCtxWithOffset(I64_DTYPE, 5, 0L, PType.U32, patchIndices, patchValues, 10L);
+		SparseCodec sut = new SparseCodec();
 
-    private static byte[] toLEBytes(long[] values, PType ptype) {
-        int elemBytes = ptype.byteSize();
-        byte[] buf = new byte[values.length * elemBytes];
-        ByteBuffer bb = ByteBuffer.wrap(buf).order(ByteOrder.LITTLE_ENDIAN);
-        for (long v : values) {
-            switch (ptype) {
-                case U8,  I8  -> bb.put((byte) v);
-                case U16, I16 -> bb.putShort((short) v);
-                case U32, I32 -> bb.putInt((int) v);
-                case U64, I64 -> bb.putLong(v);
-                default -> throw new UnsupportedOperationException(ptype.name());
-            }
-        }
-        return buf;
-    }
+		// When
+		Array result = sut.decode(ctx);
 
-    private static byte[] f64LEBytes(double[] values) {
-        byte[] buf = new byte[values.length * 8];
-        ByteBuffer bb = ByteBuffer.wrap(buf).order(ByteOrder.LITTLE_ENDIAN);
-        for (double v : values) {
-            bb.putDouble(v);
-        }
-        return buf;
-    }
+		// Then
+		var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+		assertThat(result.buffer(0).get(layout, 16L)).isEqualTo(777L);
+	}
 }

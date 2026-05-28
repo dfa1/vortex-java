@@ -23,7 +23,6 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -41,54 +40,54 @@ import java.util.concurrent.TimeUnit;
 @Fork(1)
 public class WriteBenchmark {
 
-    private static final DType.Struct SCHEMA = new DType.Struct(
-        List.of("id", "value"),
-        List.of(new DType.Primitive(PType.I64, false),
-                new DType.Primitive(PType.F64, false)),
-        false);
+	private static final DType.Struct SCHEMA = new DType.Struct(
+			List.of("id", "value"),
+			List.of(new DType.Primitive(PType.I64, false),
+					new DType.Primitive(PType.F64, false)),
+			false);
 
-    @Param({"10000", "100000", "1000000"})
-    public int rowCount;
+	@Param({"10000", "100000", "1000000"})
+	public int rowCount;
 
-    @Param({"1", "10"})
-    public int chunkCount;
+	@Param({"1", "10"})
+	public int chunkCount;
 
-    private long[]   ids;
-    private double[] values;
-    private Path     outputFile;
+	private long[] ids;
+	private double[] values;
+	private Path outputFile;
 
-    @Setup(Level.Trial)
-    public void setup() throws IOException {
-        int chunkSize = rowCount / chunkCount;
-        ids    = new long[chunkSize];
-        values = new double[chunkSize];
-        for (int i = 0; i < chunkSize; i++) {
-            ids[i]    = i;
-            values[i] = i * 1.5;
-        }
-        outputFile = Files.createTempFile("vortex-bench-write", ".vtx");
-    }
+	@Setup(Level.Trial)
+	public void setup() throws IOException {
+		int chunkSize = rowCount / chunkCount;
+		ids = new long[chunkSize];
+		values = new double[chunkSize];
+		for (int i = 0; i < chunkSize; i++) {
+			ids[i] = i;
+			values[i] = i * 1.5;
+		}
+		outputFile = Files.createTempFile("vortex-bench-write", ".vtx");
+	}
 
-    @TearDown(Level.Invocation)
-    public void cleanup() throws IOException {
-        Files.deleteIfExists(outputFile);
-    }
+	@TearDown(Level.Invocation)
+	public void cleanup() throws IOException {
+		Files.deleteIfExists(outputFile);
+	}
 
-    @Benchmark
-    public void javaWriter() throws IOException {
-        try (var ch  = FileChannel.open(outputFile,
-                           StandardOpenOption.CREATE, StandardOpenOption.WRITE,
-                           StandardOpenOption.TRUNCATE_EXISTING);
-             var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
-            for (int i = 0; i < chunkCount; i++) {
-                sut.writeChunk(Map.of("id", ids, "value", values));
-            }
-        }
-    }
+	@Benchmark
+	public void javaWriter() throws IOException {
+		try (var ch = FileChannel.open(outputFile,
+				StandardOpenOption.CREATE, StandardOpenOption.WRITE,
+				StandardOpenOption.TRUNCATE_EXISTING);
+		     var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
+			for (int i = 0; i < chunkCount; i++) {
+				sut.writeChunk(Map.of("id", ids, "value", values));
+			}
+		}
+	}
 
-    // TODO: enable once JNI bindings are available (see TODO.md #10)
-    // @Benchmark
-    // public void jniWriter() throws IOException {
-    //     VortexJni.write(outputFile, SCHEMA, buildChunks());
-    // }
+	// TODO: enable once JNI bindings are available (see TODO.md #10)
+	// @Benchmark
+	// public void jniWriter() throws IOException {
+	//     VortexJni.write(outputFile, SCHEMA, buildChunks());
+	// }
 }

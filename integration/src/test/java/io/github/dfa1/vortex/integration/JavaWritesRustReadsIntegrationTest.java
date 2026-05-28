@@ -33,101 +33,100 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// Cross-compatibility: Java writer → Rust (JNI) reader.
 class JavaWritesRustReadsIntegrationTest {
 
-    static {
-        NativeLoader.loadJni();
-    }
+	private static final Session SESSION = Session.create();
+	private static final BufferAllocator ALLOCATOR = ArrowAllocation.rootAllocator();
+	private static final DType.Struct SCHEMA = new DType.Struct(
+			List.of("id", "value"),
+			List.of(new DType.Primitive(PType.I64, false),
+					new DType.Primitive(PType.F64, false)),
+			false);
 
-    private static final Session         SESSION   = Session.create();
-    private static final BufferAllocator ALLOCATOR = ArrowAllocation.rootAllocator();
+	static {
+		NativeLoader.loadJni();
+	}
 
-    private static final DType.Struct SCHEMA = new DType.Struct(
-        List.of("id", "value"),
-        List.of(new DType.Primitive(PType.I64, false),
-                new DType.Primitive(PType.F64, false)),
-        false);
+	private static long[] readLongColumn(Path file, String column) throws IOException {
+		String uri = file.toAbsolutePath().toUri().toString();
+		ScanOptions opts = ScanOptions.builder()
+				.projection(Expression.select(new String[]{column}, Expression.root()))
+				.build();
+		var longs = new ArrayList<Long>();
+		DataSource ds = DataSource.open(SESSION, uri);
+		Scan scan = ds.scan(opts);
+		while (scan.hasNext()) {
+			Partition partition = scan.next();
+			try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
+				while (reader.loadNextBatch()) {
+					VectorSchemaRoot root = reader.getVectorSchemaRoot();
+					BigIntVector vec = (BigIntVector) root.getVector(column);
+					for (int i = 0; i < root.getRowCount(); i++) {
+						longs.add(vec.get(i));
+					}
+				}
+			}
+		}
+		return longs.stream().mapToLong(Long::longValue).toArray();
+	}
 
-    @Test
-    void javaWriter_jniReader_singleChunk(@TempDir Path tmp) throws IOException {
-        // Given
-        Path     file = tmp.resolve("java_single.vtx");
-        long[]   ids  = {1L, 2L, 3L};
-        double[] vals = {1.1, 2.2, 3.3};
-        try (var ch  = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
-            sut.writeChunk(Map.of("id", ids, "value", vals));
-        }
+	private static double[] readDoubleColumn(Path file, String column) throws IOException {
+		String uri = file.toAbsolutePath().toUri().toString();
+		ScanOptions opts = ScanOptions.builder()
+				.projection(Expression.select(new String[]{column}, Expression.root()))
+				.build();
+		var doubles = new ArrayList<Double>();
+		DataSource ds = DataSource.open(SESSION, uri);
+		Scan scan = ds.scan(opts);
+		while (scan.hasNext()) {
+			Partition partition = scan.next();
+			try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
+				while (reader.loadNextBatch()) {
+					VectorSchemaRoot root = reader.getVectorSchemaRoot();
+					Float8Vector vec = (Float8Vector) root.getVector(column);
+					for (int i = 0; i < root.getRowCount(); i++) {
+						doubles.add(vec.get(i));
+					}
+				}
+			}
+		}
+		return doubles.stream().mapToDouble(Double::doubleValue).toArray();
+	}
 
-        // When
-        long[]   decodedIds  = readLongColumn(file, "id");
-        double[] decodedVals = readDoubleColumn(file, "value");
+	// ── JNI read helpers ──────────────────────────────────────────────────────
 
-        // Then
-        assertThat(decodedIds).containsExactly(1L, 2L, 3L);
-        assertThat(decodedVals).containsExactly(1.1, 2.2, 3.3);
-    }
+	@Test
+	void javaWriter_jniReader_singleChunk(@TempDir Path tmp) throws IOException {
+		// Given
+		Path file = tmp.resolve("java_single.vtx");
+		long[] ids = {1L, 2L, 3L};
+		double[] vals = {1.1, 2.2, 3.3};
+		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+		     var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
+			sut.writeChunk(Map.of("id", ids, "value", vals));
+		}
 
-    @Test
-    void javaWriter_jniReader_multipleChunks(@TempDir Path tmp) throws IOException {
-        // Given
-        Path file = tmp.resolve("java_multi.vtx");
-        try (var ch  = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
-            sut.writeChunk(Map.of("id", new long[]{1L, 2L},     "value", new double[]{1.1, 2.2}));
-            sut.writeChunk(Map.of("id", new long[]{3L, 4L, 5L}, "value", new double[]{3.3, 4.4, 5.5}));
-        }
+		// When
+		long[] decodedIds = readLongColumn(file, "id");
+		double[] decodedVals = readDoubleColumn(file, "value");
 
-        // When
-        long[] decodedIds = readLongColumn(file, "id");
+		// Then
+		assertThat(decodedIds).containsExactly(1L, 2L, 3L);
+		assertThat(decodedVals).containsExactly(1.1, 2.2, 3.3);
+	}
 
-        // Then — JNI may merge chunks; verify all values present regardless of partition count
-        assertThat(decodedIds).containsExactly(1L, 2L, 3L, 4L, 5L);
-    }
+	@Test
+	void javaWriter_jniReader_multipleChunks(@TempDir Path tmp) throws IOException {
+		// Given
+		Path file = tmp.resolve("java_multi.vtx");
+		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+		     var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
+			sut.writeChunk(Map.of("id", new long[]{1L, 2L}, "value", new double[]{1.1, 2.2}));
+			sut.writeChunk(Map.of("id", new long[]{3L, 4L, 5L}, "value", new double[]{3.3, 4.4, 5.5}));
+		}
 
-    // ── JNI read helpers ──────────────────────────────────────────────────────
+		// When
+		long[] decodedIds = readLongColumn(file, "id");
 
-    private static long[] readLongColumn(Path file, String column) throws IOException {
-        String     uri  = file.toAbsolutePath().toUri().toString();
-        ScanOptions opts = ScanOptions.builder()
-            .projection(Expression.select(new String[]{column}, Expression.root()))
-            .build();
-        var longs = new ArrayList<Long>();
-        DataSource ds   = DataSource.open(SESSION, uri);
-        Scan       scan = ds.scan(opts);
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    BigIntVector vec = (BigIntVector) root.getVector(column);
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        longs.add(vec.get(i));
-                    }
-                }
-            }
-        }
-        return longs.stream().mapToLong(Long::longValue).toArray();
-    }
-
-    private static double[] readDoubleColumn(Path file, String column) throws IOException {
-        String     uri  = file.toAbsolutePath().toUri().toString();
-        ScanOptions opts = ScanOptions.builder()
-            .projection(Expression.select(new String[]{column}, Expression.root()))
-            .build();
-        var doubles = new ArrayList<Double>();
-        DataSource ds   = DataSource.open(SESSION, uri);
-        Scan       scan = ds.scan(opts);
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    Float8Vector vec = (Float8Vector) root.getVector(column);
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        doubles.add(vec.get(i));
-                    }
-                }
-            }
-        }
-        return doubles.stream().mapToDouble(Double::doubleValue).toArray();
-    }
+		// Then — JNI may merge chunks; verify all values present regardless of partition count
+		assertThat(decodedIds).containsExactly(1L, 2L, 3L, 4L, 5L);
+	}
 }

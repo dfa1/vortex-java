@@ -15,24 +15,26 @@ import java.nio.ByteBuffer;
 /// The arena is scoped to one chunk epoch — all decode output allocated from it is
 /// valid until the next [io.github.dfa1.vortex.scan.ScanIterator#hasNext()] call.
 public record DecodeContext(
-    ArrayNode        node,
-    DType            dtype,
-    long             rowCount,
-    MemorySegment[]  segmentBuffers,
-    CodecRegistry    registry,
-    Arena            arena
+		ArrayNode node,
+		DType dtype,
+		long rowCount,
+		MemorySegment[] segmentBuffers,
+		CodecRegistry registry,
+		Arena arena
 ) {
-    /// Recursively decode child `i` using the same segment buffers, registry and arena.
-    public Array decodeChild(int i) throws IOException {
-        ArrayNode child = node.children()[i];
-        var childCtx = new DecodeContext(child, dtype, rowCount, segmentBuffers, registry, arena);
-        return registry.decode(childCtx);
-    }
+	/// Recursively decode child `i` using the same segment buffers, registry and arena.
+	public Array decodeChild(int i) throws IOException {
+		ArrayNode child = node.children()[i];
+		var childCtx = new DecodeContext(child, dtype, rowCount, segmentBuffers, registry, arena);
+		return registry.decode(childCtx);
+	}
 
-    /// Return the buffer at position `i` in this node's bufferIndices.
-    public MemorySegment buffer(int i) {
-        return segmentBuffers[node.bufferIndices()[i]];
-    }
+	/// Return the buffer at position `i` in this node's bufferIndices.
+	public MemorySegment buffer(int i) {
+		return segmentBuffers[node.bufferIndices()[i]];
+	}
 
-    public ByteBuffer metadata() { return node.metadata(); }
+	public ByteBuffer metadata() {
+		return node.metadata();
+	}
 }
