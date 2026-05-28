@@ -279,6 +279,6 @@ public final class PrimitiveCodec implements Codec {
 	public Array decode(DecodeContext ctx) {
 		MemorySegment buf = ctx.buffer(0);
 		return new Array(ctx.dtype(), ctx.rowCount(),
-				new MemorySegment[]{buf}, new Array[0], ArrayStats.empty());
+				new MemorySegment[]{buf}, Array.NO_CHILDREN, ArrayStats.empty());
 	}
 }

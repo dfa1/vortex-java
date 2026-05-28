@@ -170,7 +170,7 @@ public final class SparseCodec implements Codec {
 
 		if (numPatches == 0) {
 			return new Array(ctx.dtype(), n,
-					new MemorySegment[]{out}, new Array[0], ArrayStats.empty());
+					new MemorySegment[]{out}, Array.NO_CHILDREN, ArrayStats.empty());
 		}
 
 		// Decode patch indices with their own dtype and rowCount
@@ -185,6 +185,6 @@ public final class SparseCodec implements Codec {
 				indicesArray.buffer(0), valuesArray.buffer(0), indicesPtype, numPatches, offset);
 
 		return new Array(ctx.dtype(), n,
-				new MemorySegment[]{out}, new Array[0], ArrayStats.empty());
+				new MemorySegment[]{out}, Array.NO_CHILDREN, ArrayStats.empty());
 	}
 }

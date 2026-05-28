@@ -44,7 +44,7 @@ public final class RunEndCodec implements Codec {
 			case I64, U64 -> expandLong(endsSeg, valuesSeg, endsPtype, numRuns, offset, n, out);
 			default -> throw new UnsupportedOperationException("vortex.runend: unsupported ptype " + valuePtype);
 		}
-		return new Array(dtype, n, new MemorySegment[]{out}, new Array[0], ArrayStats.empty());
+		return new Array(dtype, n, new MemorySegment[]{out}, Array.NO_CHILDREN, ArrayStats.empty());
 	}
 
 	private static void expandByte(MemorySegment endsSeg, MemorySegment valuesSeg,

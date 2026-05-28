@@ -9,7 +9,9 @@ public record ArrayStats(
 		Boolean isSorted,
 		Boolean isStrictSorted
 ) {
+	private static final ArrayStats EMPTY = new ArrayStats(null, null, null, null, null, null);
+
 	public static ArrayStats empty() {
-		return new ArrayStats(null, null, null, null, null, null);
+		return EMPTY;
 	}
 }

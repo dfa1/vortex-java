@@ -251,6 +251,6 @@ public final class DeltaCodec implements Codec {
 		}
 
 		return new Array(ctx.dtype(), rowCount,
-				new MemorySegment[]{fromLongs(longs, ptype)}, new Array[0], ArrayStats.empty());
+				new MemorySegment[]{fromLongs(longs, ptype)}, Array.NO_CHILDREN, ArrayStats.empty());
 	}
 }

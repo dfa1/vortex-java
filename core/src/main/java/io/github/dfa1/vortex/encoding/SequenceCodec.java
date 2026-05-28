@@ -37,7 +37,7 @@ public final class SequenceCodec implements Codec {
 		}
 		buf.flip();
 		return new Array(dtype, n, new MemorySegment[]{MemorySegment.ofBuffer(buf)},
-				new Array[0], ArrayStats.empty());
+				Array.NO_CHILDREN, ArrayStats.empty());
 	}
 
 	private static Array decodeF32(EncodingProtos.SequenceMetadata meta, long n, DType dtype) {
@@ -49,7 +49,7 @@ public final class SequenceCodec implements Codec {
 		}
 		buf.flip();
 		return new Array(dtype, n, new MemorySegment[]{MemorySegment.ofBuffer(buf)},
-				new Array[0], ArrayStats.empty());
+				Array.NO_CHILDREN, ArrayStats.empty());
 	}
 
 	private static Array decodeF64(EncodingProtos.SequenceMetadata meta, long n, DType dtype) {
@@ -61,7 +61,7 @@ public final class SequenceCodec implements Codec {
 		}
 		buf.flip();
 		return new Array(dtype, n, new MemorySegment[]{MemorySegment.ofBuffer(buf)},
-				new Array[0], ArrayStats.empty());
+				Array.NO_CHILDREN, ArrayStats.empty());
 	}
 
 	private static long signedValue(dev.vortex.proto.ScalarProtos.ScalarValue sv) {

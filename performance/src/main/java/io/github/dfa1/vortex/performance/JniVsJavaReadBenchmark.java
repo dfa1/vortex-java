@@ -77,7 +77,7 @@ import java.util.concurrent.TimeUnit;
 })
 public class JniVsJavaReadBenchmark {
 
-	private static final int TOTAL_ROWS = 1_000_000;
+	private static final int TOTAL_ROWS = 10_000_000;
 	private static final int BATCH_SIZE = 50_000;   // 20 chunks
 	private static final ArrowType F64_TYPE = new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE);
 	private static final Schema JNI_SCHEMA = new Schema(List.of(
@@ -129,52 +129,6 @@ public class JniVsJavaReadBenchmark {
 		if (ownFile) {
 			Files.deleteIfExists(benchFile);
 		}
-	}
-
-	/// JNI read: project on "close", sum all values.
-	@Benchmark
-	public double jniReadClose() throws IOException {
-		String uri = benchFile.toAbsolutePath().toUri().toString();
-		var opts = ScanOptions.builder()
-				.projection(Expression.select(new String[]{"close"}, Expression.root()))
-				.build();
-
-		double sum = 0.0;
-		DataSource ds = DataSource.open(SESSION, uri);
-		Scan scan = ds.scan(opts);
-		while (scan.hasNext()) {
-			Partition partition = scan.next();
-			try (ArrowReader reader = partition.scanArrow(allocator)) {
-				while (reader.loadNextBatch()) {
-					VectorSchemaRoot root = reader.getVectorSchemaRoot();
-					Float8Vector closeVec = (Float8Vector) root.getVector("close");
-					for (int i = 0; i < root.getRowCount(); i++) {
-						sum += closeVec.get(i);
-					}
-				}
-			}
-		}
-		return sum;
-	}
-
-	/// Java read: project on "close", sum all values.
-	@Benchmark
-	public double javaReadClose() throws IOException {
-		var layout = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-		double sum = 0.0;
-		try (VortexReader vf = VortexReader.open(benchFile, registry)) {
-			var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("close"));
-			while (iter.hasNext()) {
-				ScanResult r = iter.next();
-				Array arr = r.columns().get("close");
-				var buf = arr.buffer(0);
-				long len = arr.length();
-				for (long j = 0; j < len; j++) {
-					sum += buf.get(layout, j * Double.BYTES);
-				}
-			}
-		}
-		return sum;
 	}
 
 	/// JNI read: project on "volume", sum all values.

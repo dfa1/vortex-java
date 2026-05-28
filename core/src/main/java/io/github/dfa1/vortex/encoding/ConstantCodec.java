@@ -77,6 +77,6 @@ public final class ConstantCodec implements Codec {
 		}
 
 		return new Array(ctx.dtype(), n,
-				new MemorySegment[]{MemorySegment.ofArray(outBytes)}, new Array[0], ArrayStats.empty());
+				new MemorySegment[]{MemorySegment.ofArray(outBytes)}, Array.NO_CHILDREN, ArrayStats.empty());
 	}
 }

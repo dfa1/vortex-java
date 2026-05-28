@@ -12,8 +12,10 @@ public record Array(
 		Array[] children,
 		ArrayStats stats
 ) {
+	public static final Array[] NO_CHILDREN = new Array[0];
+
 	public static Array empty(DType dtype) {
-		return new Array(dtype, 0, new MemorySegment[0], new Array[0], ArrayStats.empty());
+		return new Array(dtype, 0, new MemorySegment[0], NO_CHILDREN, ArrayStats.empty());
 	}
 
 	public MemorySegment buffer(int i) {

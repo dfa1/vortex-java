@@ -263,7 +263,7 @@ public final class DictCodec implements Codec {
 			long code = readCode(codesBuf, codePType, i);
 			MemorySegment.copy(valuesBuf, code * elemSize, out, i * elemSize, elemSize);
 		}
-		return new Array(ctx.dtype(), rowCount, new MemorySegment[]{out}, new Array[0], ArrayStats.empty());
+		return new Array(ctx.dtype(), rowCount, new MemorySegment[]{out}, Array.NO_CHILDREN, ArrayStats.empty());
 	}
 
 	private Array decodeRustProto(DecodeContext ctx, byte[] metaBytes) {
@@ -298,6 +298,6 @@ public final class DictCodec implements Codec {
 			case U32 -> expandU32(codesBuf, valuesBuf, out, rowCount, elemSize);
 			default -> throw new IllegalStateException("unexpected code type: " + codePType);
 		}
-		return new Array(ctx.dtype(), rowCount, new MemorySegment[]{out}, new Array[0], ArrayStats.empty());
+		return new Array(ctx.dtype(), rowCount, new MemorySegment[]{out}, Array.NO_CHILDREN, ArrayStats.empty());
 	}
 }
