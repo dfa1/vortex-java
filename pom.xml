@@ -13,24 +13,9 @@
     <module>core</module>
     <module>reader</module>
     <module>writer</module>
+    <module>integration</module>
+    <module>performance</module>
   </modules>
-
-  <profiles>
-    <!-- Cross-compatibility tests: ./mvnw verify -Pintegration -->
-    <profile>
-      <id>integration</id>
-      <modules>
-        <module>integration</module>
-      </modules>
-    </profile>
-    <!-- JMH benchmarks: ./mvnw package -Pperformance -pl performance && java -jar performance/target/benchmarks.jar -->
-    <profile>
-      <id>performance</id>
-      <modules>
-        <module>performance</module>
-      </modules>
-    </profile>
-  </profiles>
 
   <properties>
     <maven.compiler.release>25</maven.compiler.release>
