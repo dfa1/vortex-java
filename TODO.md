@@ -115,7 +115,6 @@
 
 ## Code cleanups 
 
-- some classes are named Codec but are only Decoders (missing the Encoding part)
 - use a dedicated exception instead of IOException? 
 -   runtime exception like VortexException, indicating an non-recoverable error 
 - - introduce CodecType enum: this can be used to replace the string throw new IllegalStateException("$codec: message")
