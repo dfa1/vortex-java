@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.scan;
 
-import dev.vortex.proto.ScalarProtos;
 import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
@@ -82,25 +81,6 @@ public final class ScanIterator implements AutoCloseable {
 			result.add(new ChunkSpec(layouts[0].rowCount(), colNames, layouts));
 		}
 		return List.copyOf(result);
-	}
-
-	private static Object decodeScalarValue(ByteBuffer bytes) {
-		if (bytes == null || !bytes.hasRemaining()) {
-			return null;
-		}
-		try {
-			ScalarProtos.ScalarValue sv = ScalarProtos.ScalarValue.parseFrom(bytes.duplicate());
-			return switch (sv.getKindCase()) {
-				case INT64_VALUE -> sv.getInt64Value();
-				case UINT64_VALUE -> sv.getUint64Value();
-				case F32_VALUE -> sv.getF32Value();
-				case F64_VALUE -> sv.getF64Value();
-				case BOOL_VALUE -> sv.getBoolValue();
-				default -> null;
-			};
-		} catch (com.google.protobuf.InvalidProtocolBufferException e) {
-			return null;
-		}
 	}
 
 	// ── Layout tree traversal ─────────────────────────────────────────────────
@@ -282,14 +262,7 @@ public final class ScanIterator implements AutoCloseable {
 		if (root == null) {
 			return ArrayStats.empty();
 		}
-		io.github.dfa1.vortex.fbs.ArrayStats fbStats = root.stats();
-		if (fbStats == null) {
-			return ArrayStats.empty();
-		}
-
-		Object min = decodeScalarValue(fbStats.minAsByteBuffer());
-		Object max = decodeScalarValue(fbStats.maxAsByteBuffer());
-		return new ArrayStats(min, max, null, null, null, null);
+		return ArrayStats.fromFbs(root.stats());
 	}
 
 	// ── Internal record ───────────────────────────────────────────────────────

@@ -2,7 +2,6 @@ package io.github.dfa1.vortex.encoding;
 
 import dev.vortex.proto.ScalarProtos;
 import io.github.dfa1.vortex.core.Array;
-import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 
@@ -279,6 +278,6 @@ public final class PrimitiveCodec implements Codec {
 	public Array decode(DecodeContext ctx) {
 		MemorySegment buf = ctx.buffer(0);
 		return new Array(ctx.dtype(), ctx.rowCount(),
-				new MemorySegment[]{buf}, Array.NO_CHILDREN, ArrayStats.empty());
+				new MemorySegment[]{buf}, Array.NO_CHILDREN, ctx.node().stats());
 	}
 }

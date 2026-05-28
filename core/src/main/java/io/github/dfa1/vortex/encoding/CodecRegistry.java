@@ -55,7 +55,7 @@ public final class CodecRegistry {
 		// metadataAsByteBuffer() returns duplicate with position=vectorStart; slice to normalize to 0
 		ByteBuffer rawMeta = fbs.metadataAsByteBuffer();
 		ByteBuffer meta = (rawMeta != null) ? rawMeta.slice() : null;
-		return new ArrayNode(encId, meta, children, bufferIndices, ArrayStats.empty());
+		return new ArrayNode(encId, meta, children, bufferIndices, ArrayStats.fromFbs(fbs.stats()));
 	}
 
 	public void register(Codec codec) {
