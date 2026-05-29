@@ -123,6 +123,11 @@ exactly.
 - Java 25+
 - `flatc` and `protoc` on `PATH` (build-time only: `brew install flatbuffers protobuf`)
 
+Java 25 is the minimum because the FFM API (`MemorySegment`, `Arena`) was finalized as a
+standard API in JDK 22 (JEP 454) — it was preview/incubator in JDK 19–21 and required
+`--enable-preview` flags. Java 25 is the first LTS release to ship FFM as stable, so
+requiring it means no preview flags, no upgrade risk, and a supported LTS for users.
+
 ## Build
 
 ```bash
