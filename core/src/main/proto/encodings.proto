@@ -44,6 +44,7 @@ message ALPMetadata {
 message BitPackedMetadata {
   uint32 bit_width = 1;
   uint32 offset = 2;
+  optional PatchesMetadata patches = 3;
 }
 
 message SequenceMetadata {

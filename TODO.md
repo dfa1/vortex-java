@@ -11,6 +11,10 @@
     - Writer embeds min/max per flat segment in `ArrayNode.stats` (Protobuf ScalarValue)
     - Reader peeks stats from segment FlatBuffer tail, skips chunks excluded by `RowFilter`
     - Supports `Gte`, `Lte`, `Eq`, `And` predicates on I8/I16/I32/I64, U8/U16/U32/U64, F32/F64
+- [x] **#7a `fastlanes.bitpacked` — spec-compliant rewrite** (all 5 steps incl. patches)
+    - Protobuf `BitPackedMetadata` (tags 1+2+3); unified FastLanes `unpack` for I8/I16/I32/I64 (signed + unsigned);
+      patches decoded from children slots 0 (indices) + 1 (values), overwritten by absolute index.
+    - Encoder writes spec-compliant protobuf metadata; round-trip + patch decode covered by tests.
 - [x] **#7b `fastlanes.for` decoder** (reference + bitpacked residuals)
 - [x] **#7c `vortex.sparse` decoder** (fill value + patches)
 - [x] **#7d `vortex.alp` decoder** (ALP inverse + patches)
@@ -24,29 +28,8 @@
 ## Open
 
 - [ ] **#7 Additional encodings**
-    - `fastlanes.bitpacked` — integer bit-packing (steps 1/2/4/5 done; step 3 patches still open, see #7a)
-    - `fastlanes.delta` — delta encoding for monotonic sequences
-    - `dict` — dictionary encoding for low-cardinality columns
-    - `pcodec` — float compression
-    - `fsst` — string compression (in-flight, see `FsstCodec.java`)
-
-- [ ] **#7a Fix `fastlanes.bitpacked` — spec-compliant rewrite**
-    - Root cause: current code guesses format by metadata byte size (9 = Java, 2 = JNI). Wrong.
-      The spec always uses protobuf metadata regardless of writer origin.
-    - **Spec** (from `encodings/fastlanes/src/bitpacking/vtable/mod.rs`):
-        - Metadata: protobuf `BitPackedMetadata` — `bit_width u32` (tag 1), `offset u32` (tag 2, 0≤offset<1024),
-          `patches PatchesMetadata` (tag 3, optional)
-        - Buffer size: `ceil((len + offset) / 1024) * 128 * bit_width` bytes
-        - FastLanes block layout: `LANES = 1024 / T` (T = element bit-width); `FL_ORDER = [0,4,2,6,1,5,3,7]`; logical
-          index for `(row, lane)` = `FL_ORDER[row/8]*16 + (row%8)*128 + lane` — same formula for all types
-    - Step 1: delete `decodeJni()` and `decodeJava()`; parse metadata as protobuf (tags 1+2)
-    - Step 2: implement single unified `unpack(buf, bitWidth, offset, T, rowCount) → long[]` using the FastLanes
-      algorithm above
-    - Step 3: handle patches — decode child slots (indices + values), overwrite output at patch indices (**missing**; steps 1,2,4,5 done)
-    - Step 4: align `encode()` to write protobuf metadata (tags 1+2) instead of the 9-byte custom format
-    - Step 5: update `BitpackedCodecTest` for round-trip with spec-compliant metadata
-    - Reference: `spiraldb/vortex` `encodings/fastlanes/src/bitpacking/`, `spiraldb/fastlanes-rs` `src/bitpacking.rs` +
-      `src/macros.rs`
+    - `pcodec` — float compression (only remaining gap; bitpacked, delta, for, sparse, alp, dict, fsst, sequence,
+      varbin, constant, runend all landed)
 
 ## Performance
 

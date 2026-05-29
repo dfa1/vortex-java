@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.encoding;
 
 import com.google.protobuf.InvalidProtocolBufferException;
+import dev.vortex.proto.DTypeProtos;
 import dev.vortex.proto.EncodingProtos;
 import dev.vortex.proto.ScalarProtos;
 import io.github.dfa1.vortex.core.Array;
@@ -578,7 +579,61 @@ public final class BitpackedCodec implements Codec {
 		MemorySegment output = ctx.arena().allocate(rowCount * ptype.byteSize());
 		fastlanesUnpackToSeg(packed, bitWidth, offset, typeBits, rowCount, output);
 
+		if (meta.hasPatches()) {
+			applyPatches(ctx, meta.getPatches(), output, ptype.byteSize());
+		}
+
 		return new Array(ctx.dtype(), rowCount,
 				new MemorySegment[]{output.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
+	}
+
+	// ── Patches ───────────────────────────────────────────────────────────────
+
+	private static Array decodeChildAs(DecodeContext parent, int childIdx, DType dtype, long rowCount) {
+		ArrayNode childNode = parent.node().children()[childIdx];
+		DecodeContext childCtx = new DecodeContext(
+				childNode, dtype, rowCount, parent.segmentBuffers(), parent.registry(), parent.arena());
+		return parent.registry().decode(childCtx);
+	}
+
+	private static long readUnsignedIdx(MemorySegment seg, long i, PType ptype) {
+		return switch (ptype) {
+			case U8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, i));
+			case U16 -> Short.toUnsignedLong(seg.get(LE_SHORT, i * 2));
+			case U32 -> Integer.toUnsignedLong(seg.get(LE_INT, i * 4));
+			case U64 -> seg.get(LE_LONG, i * 8);
+			default -> throw new IllegalStateException(
+					"fastlanes.bitpacked: non-unsigned patch index ptype " + ptype);
+		};
+	}
+
+	private static PType ptypeFromProto(DTypeProtos.PType proto) {
+		return PType.values()[proto.getNumber()];
+	}
+
+	private static void applyPatches(DecodeContext ctx, EncodingProtos.PatchesMetadata pm,
+	                                 MemorySegment out, int elemBytes) {
+		long numPatches = pm.getLen();
+		if (numPatches == 0) {
+			return;
+		}
+		long offset = pm.getOffset();
+		PType idxPtype = ptypeFromProto(pm.getIndicesPtype());
+
+		Array idxArr = decodeChildAs(ctx, 0, new DType.Primitive(idxPtype, false), numPatches);
+		Array valArr = decodeChildAs(ctx, 1, ctx.dtype(), numPatches);
+
+		MemorySegment idxSeg = idxArr.buffer(0);
+		MemorySegment valSeg = valArr.buffer(0);
+
+		long n = ctx.rowCount();
+		for (long i = 0; i < numPatches; i++) {
+			long absIdx = readUnsignedIdx(idxSeg, i, idxPtype) - offset;
+			if (absIdx < 0 || absIdx >= n) {
+				throw new IllegalStateException(
+						"fastlanes.bitpacked: patch index " + absIdx + " out of range [0," + n + ")");
+			}
+			MemorySegment.copy(valSeg, i * elemBytes, out, absIdx * elemBytes, elemBytes);
+		}
 	}
 }
