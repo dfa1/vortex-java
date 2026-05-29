@@ -140,6 +140,16 @@
   - `ArrayLong.get(long i)` — random access for non-bulk callers
   - `ArrayDouble.forEach(DoubleConsumer)` — same pattern for F64 columns
 
+- [ ] Optional `vortex-arrow` bridge module for Arrow ecosystem interop
+  - Primary API stays `ArrayLong`/`ArrayDouble` (zero-copy, no deps, no Unsafe)
+  - Bridge wraps typed views into Arrow `BigIntVector`, `Float8Vector`, etc. for users who need
+    Arrow Flight / DuckDB ADBC / pandas interop
+  - Conversion involves a copy (MemorySegment → Arrow off-heap buffer) — cost is explicit and opt-in
+  - Arrow JVM uses `sun.misc.Unsafe` / Netty internally; keeping it in a separate module means
+    the core library stays Unsafe-free
+  - Arrow JVM is actively moving to FFM (`MemorySegment`-based allocator); once that lands
+    the bridge can become zero-copy (share the mmap region directly, no copy needed)
+
 ## Code cleanups
 
 - use a dedicated exception instead of IOException?
