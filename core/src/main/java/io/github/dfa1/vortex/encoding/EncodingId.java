@@ -21,6 +21,7 @@ public enum EncodingId {
 	VORTEX_VARBIN("vortex.varbin"),
 	VORTEX_FSST("vortex.fsst"),
 	VORTEX_NULL("vortex.null"),
+	VORTEX_BYTEBOOL("vortex.bytebool"),
 	VORTEX_PCO("vortex.pco"),
 
 	// Layout encoding IDs included so parser/registry can represent them safely

@@ -80,6 +80,7 @@ class VortexHttpReaderIT {
 			"alp.vortex",
 			"bitpacked.vortex",
 			"booleans.vortex",
+			"bytebool.vortex",
 			"constant.vortex",
 			"fsst.vortex",
 			"null.vortex",

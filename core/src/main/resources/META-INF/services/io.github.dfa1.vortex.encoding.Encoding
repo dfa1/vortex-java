@@ -14,3 +14,4 @@ io.github.dfa1.vortex.encoding.FsstEncoding
 io.github.dfa1.vortex.encoding.PcoEncoding
 io.github.dfa1.vortex.encoding.StructEncoding
 io.github.dfa1.vortex.encoding.NullEncoding
+io.github.dfa1.vortex.encoding.ByteBoolEncoding
