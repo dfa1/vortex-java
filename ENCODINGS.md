@@ -18,16 +18,16 @@
 | `fastlanes.bitpacked`  | `BitpackedEncoding`    | unsigned integer PTypes                 |
 | `fastlanes.for`        | `FrameOfReferenceEncoding` | integer PTypes                      |
 | `fastlanes.delta`      | `DeltaEncoding`        | integer PTypes                          |
+| `vortex.null`          | `NullEncoding`         | Null                                            |
+| `vortex.bytebool`      | `ByteBoolEncoding`     | Bool (one byte per element → bit-packed)        |
+| `vortex.zigzag`        | `ZigZagEncoding`       | signed integer PTypes (I8/I16/I32/I64)          |
+| `vortex.ext`           | `ExtEncoding`          | Extension (transparent wrapper → storage dtype) |
 | `vortex.pco`           | `PcoEncoding`          | stub — throws (ANS + bin tokenization not ported) |
 
 ## Missing
 
 | Encoding ID                   | Effort  | Unblocks                                        |
 |----------------------------|---------|-------------------------------------------------|
-| `vortex.null`              | trivial | `null.vortex`                                   |
-| `vortex.bytebool`          | low     | `bytebool.vortex`                               |
-| `vortex.zigzag`            | low     | `zigzag.vortex`                                 |
-| `vortex.ext`               | low     | `datetime.vortex` (transparent storage wrapper) |
 | `vortex.varbinview`        | medium  | `varbinview.vortex`, `dict.vortex`, `sparse.vortex` |
 | `vortex.chunked`           | medium  | `chunked.vortex` (segment-level chunked array)  |
 | `fastlanes.rle`            | medium  | `rle.vortex`                                    |
@@ -56,10 +56,10 @@
 | `sequence.vortex`                | ✅     |                               |
 | `varbin.vortex`                  | ✅     |                               |
 | `struct_nested.vortex`           | ✅     |                               |
-| `null.vortex`                    | ❌     | `vortex.null` not registered  |
-| `bytebool.vortex`                | ❌     | `vortex.bytebool` missing     |
-| `zigzag.vortex`                  | ❌     | `vortex.zigzag` missing       |
-| `datetime.vortex`                | ❌     | `vortex.ext` missing          |
+| `null.vortex`                    | ✅     |                               |
+| `bytebool.vortex`                | ✅     |                               |
+| `zigzag.vortex`                  | ✅     |                               |
+| `datetime.vortex`                | ✅     |                               |
 | `dict.vortex`                    | ❌     | `vortex.varbinview` missing   |
 | `sparse.vortex`                  | ❌     | `vortex.varbinview` missing   |
 | `varbinview.vortex`              | ❌     | `vortex.varbinview` missing   |
@@ -81,4 +81,4 @@
 | `clickbench_hits_5k.compact.vortex` | ❌  | `vortex.pco`                  |
 | `clickbench_hits_5k.regular.vortex` | ❌  | `vortex.pco`                  |
 
-**Score: 11/35** (including `for.vortex` scanned separately from `scan_fixture_decodesAllRows`)
+**Score: 15/35** (including `for.vortex` scanned separately from `scan_fixture_decodesAllRows`)
