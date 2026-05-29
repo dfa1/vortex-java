@@ -2,28 +2,28 @@
 
 ## Implemented
 
-| Encoding ID               | Class               | Dtypes supported                        |
-|------------------------|---------------------|-----------------------------------------|
-| `vortex.primitive`     | `PrimitiveEncoding`    | all `PType` (I8–I64, U8–U64, F32, F64) |
-| `vortex.bool`          | `BoolEncoding`         | Bool (bit-packed)                       |
-| `vortex.struct`        | `StructEncoding`       | Struct (single-field unwrap + multi-field → StructArray) |
-| `vortex.constant`      | `ConstantEncoding`     | Primitive, Utf8, Binary, Bool, Null, Decimal, Extension |
-| `vortex.dict`          | `DictEncoding`         | Utf8/Binary values (VarBin only; VarBinView blocks dict.vortex) |
-| `vortex.sparse`        | `SparseEncoding`       | Primitive (VarBinView blocks sparse.vortex) |
-| `vortex.varbin`        | `VarBinEncoding`       | Utf8, Binary                            |
-| `vortex.fsst`          | `FsstEncoding`         | Utf8, Binary                            |
-| `vortex.runend`        | `RunEndEncoding`       | Primitive, Utf8/Binary, Bool            |
-| `vortex.sequence`      | `SequenceEncoding`     | Primitive                               |
-| `vortex.alp`           | `AlpEncoding`          | F64, F32                                |
-| `fastlanes.bitpacked`  | `BitpackedEncoding`    | unsigned integer PTypes                 |
-| `fastlanes.for`        | `FrameOfReferenceEncoding` | integer PTypes                      |
-| `fastlanes.delta`      | `DeltaEncoding`        | integer PTypes                          |
-| `vortex.null`          | `NullEncoding`         | Null                                            |
-| `vortex.bytebool`      | `ByteBoolEncoding`     | Bool (one byte per element → bit-packed)        |
-| `vortex.zigzag`        | `ZigZagEncoding`       | signed integer PTypes (I8/I16/I32/I64)          |
-| `vortex.ext`           | `ExtEncoding`          | Extension (transparent wrapper → storage dtype) |
-| `vortex.varbinview`    | `VarBinViewEncoding`   | Utf8, Binary (16-byte views; materialises to VarBinArray) |
-| `vortex.pco`           | `PcoEncoding`          | stub — throws (ANS + bin tokenization not ported) |
+| Encoding ID               | Class               | Decode | Encode | Encode effort | Dtypes supported |
+|------------------------|---------------------|--------|--------|---------------|------------------|
+| `vortex.primitive`     | `PrimitiveEncoding`    | ✅ | ✅ | — | all `PType` (I8–I64, U8–U64, F32, F64) |
+| `vortex.bool`          | `BoolEncoding`         | ✅ | ✅ | — | Bool (bit-packed) |
+| `vortex.dict`          | `DictEncoding`         | ✅ | ✅ | — | Primitive (VarBin via dict.vortex blocked by VarBinView) |
+| `fastlanes.delta`      | `DeltaEncoding`        | ✅ | ✅ | — | integer PTypes |
+| `fastlanes.bitpacked`  | `BitpackedEncoding`    | ✅ | ✅ | — | unsigned integer PTypes |
+| `vortex.null`          | `NullEncoding`         | ✅ | trivial | no data to store | Null |
+| `vortex.bytebool`      | `ByteBoolEncoding`     | ✅ | trivial | `boolean[]` → 1 byte/elem | Bool |
+| `vortex.zigzag`        | `ZigZagEncoding`       | ✅ | trivial | `(v<<1)^(v>>63)`, delegate | signed integer PTypes |
+| `fastlanes.for`        | `FrameOfReferenceEncoding` | ✅ | low | find min, emit deltas child | integer PTypes |
+| `vortex.runend`        | `RunEndEncoding`       | ✅ | low | scan runs → ends + values arrays | Primitive, Utf8/Binary, Bool |
+| `vortex.constant`      | `ConstantEncoding`     | ✅ | low | validate uniform, emit `ScalarValue` proto | Primitive, Utf8, Binary, Bool, Null, Decimal, Extension |
+| `vortex.sparse`        | `SparseEncoding`       | ✅ | medium | collect non-fill indices + values; needs fill-value detection | Primitive |
+| `vortex.varbin`        | `VarBinEncoding`       | ✅ | medium | offsets buf + bytes buf + `VarBinMetadata` proto | Utf8, Binary |
+| `vortex.sequence`      | `SequenceEncoding`     | ✅ | medium | detect arithmetic progression (base + i×step) | Primitive |
+| `vortex.struct`        | `StructEncoding`       | ✅ | medium | encode each field, emit children | Struct |
+| `vortex.ext`           | `ExtEncoding`          | ✅ | medium | encode storage dtype, wrap with extension | Extension |
+| `vortex.alp`           | `AlpEncoding`          | ✅ | hard | ALP float quantization + patch residuals | F64, F32 |
+| `vortex.fsst`          | `FsstEncoding`         | ✅ | hard | FSST symbol-table building | Utf8, Binary |
+| `vortex.varbinview`    | `VarBinViewEncoding`   | ✅ | hard | 16-byte view layout + inline vs heap split | Utf8, Binary |
+| `vortex.pco`           | `PcoEncoding`          | ❌ stub | ❌ | very hard — ANS + bin tokenization not ported | Primitive |
 
 ## Missing
 
