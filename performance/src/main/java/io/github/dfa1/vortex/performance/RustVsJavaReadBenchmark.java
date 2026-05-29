@@ -183,6 +183,32 @@ public class RustVsJavaReadBenchmark {
 		return sum;
 	}
 
+	/// JNI read: project on "symbol" (short UTF-8 string, varbin), sum byte lengths.
+	@Benchmark
+	public long jniReadSymbol() throws IOException {
+		String uri = benchFile.toAbsolutePath().toUri().toString();
+		var opts = ScanOptions.builder()
+				.projection(Expression.select(new String[]{"symbol"}, Expression.root()))
+				.build();
+
+		long sum = 0L;
+		DataSource ds = DataSource.open(SESSION, uri);
+		Scan scan = ds.scan(opts);
+		while (scan.hasNext()) {
+			Partition partition = scan.next();
+			try (ArrowReader reader = partition.scanArrow(allocator)) {
+				while (reader.loadNextBatch()) {
+					VectorSchemaRoot root = reader.getVectorSchemaRoot();
+					VarCharVector symbolVec = (VarCharVector) root.getVector("symbol");
+					for (int i = 0; i < root.getRowCount(); i++) {
+						sum += symbolVec.getObject(i).getBytes().length;
+					}
+				}
+			}
+		}
+		return sum;
+	}
+
 	// ── JNI file generation ───────────────────────────────────────────────────
 
 	/// Java read: project on "volume", sum all values.
@@ -219,6 +245,31 @@ public class RustVsJavaReadBenchmark {
 				long count = buffer.byteSize() / layout.byteSize();
 				for (long i = 0; i < count; i++) {
 					sum += buffer.getAtIndex(layout, i);
+				}
+			}
+		}
+		return sum;
+	}
+
+	/// Java read: project on "symbol" (short UTF-8 string, varbin), sum byte lengths.
+	@Benchmark
+	public long javaReadSymbol() throws IOException {
+		long sum = 0L;
+		try (VortexReader vf = VortexReader.open(benchFile, registry)) {
+			var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("symbol"));
+			while (iter.hasNext()) {
+				ScanResult r = iter.next();
+				Array arr = r.columns().get("symbol");
+				// buffer(0) = raw bytes; child(0) = offsets
+				MemorySegment bytes = arr.buffer(0);
+				Array offsets = arr.child(0);
+				MemorySegment offsetSeg = offsets.buffer(0);
+				var offsetLayout = ValueLayout.JAVA_INT_UNALIGNED;
+				long n = arr.length();
+				for (long i = 0; i < n; i++) {
+					int start = offsetSeg.getAtIndex(offsetLayout, i);
+					int end = offsetSeg.getAtIndex(offsetLayout, i + 1);
+					sum += end - start;
 				}
 			}
 		}

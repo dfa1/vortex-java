@@ -8,15 +8,17 @@ Pure-Java reader/writer for the [Vortex](https://github.com/spiraldb/vortex) col
 
 `RustVsJavaReadBenchmark` — 10M OHLC rows, JMH throughput (higher = better), Apple M-series, Java 25:
 
-| Column          | Encoding      | vortex-jni  | vortex-java  | ratio         |
-|-----------------|---------------|-------------|--------------|---------------|
-| `volume` (I64)  | primitive     | 51.9 ops/s  | 120.7 ops/s  | **Java 2.3×** |
-| `close` (F64)   | ALP           | 62.6 ops/s  | 118.0 ops/s  | **Java 1.9×** |
+| Column           | Encoding          | vortex-jni  | vortex-java  | ratio         |
+|------------------|-------------------|-------------|--------------|---------------|
+| `volume` (I64)   | primitive         | 51.9 ops/s  | 120.7 ops/s  | **Java 2.3×** |
+| `close` (F64)    | ALP               | 62.6 ops/s  | 118.0 ops/s  | **Java 1.9×** |
+| `symbol` (UTF-8) | constant (varbin) | 10.9 ops/s  | 27.8 ops/s   | **Java 2.5×** |
 
-Both columns decoded faster in pure Java than via JNI + Apache Arrow. Key optimisations on
-the ALP path: `static final` ValueLayout constants (JIT constant-folding), aligned arena
-allocation (`allocate(n, alignment)`), and `getAtIndex()`/`setAtIndex()` instead of raw byte
-offsets (clearer stride for the auto-vectoriser).
+All columns decoded faster in pure Java than via JNI + Apache Arrow. Key optimisations:
+`static final` ValueLayout constants (JIT constant-folding), aligned arena allocation
+(`allocate(n, alignment)`), `getAtIndex()`/`setAtIndex()` (clearer stride for the
+auto-vectoriser), and O(1) bytes allocation for constant strings (alternating offsets
+into a single shared byte buffer).
 
 ## Motivation
 

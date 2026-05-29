@@ -11,6 +11,7 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 
 /// Decoder for {@code vortex.constant} — all elements share the same value.
 ///
@@ -56,10 +57,6 @@ public final class ConstantCodec implements Codec {
 
 	@Override
 	public Array decode(DecodeContext ctx) {
-		if (!(ctx.dtype() instanceof DType.Primitive p)) {
-			throw new IllegalStateException("vortex.constant: expected primitive dtype, got " + ctx.dtype());
-		}
-
 		MemorySegment scalarBuf = ctx.buffer(0);
 		byte[] scalarBytes = scalarBuf.toArray(ValueLayout.JAVA_BYTE);
 
@@ -70,8 +67,17 @@ public final class ConstantCodec implements Codec {
 			throw new IllegalStateException("vortex.constant: invalid scalar value", e);
 		}
 
-		PType ptype = p.ptype();
 		long n = ctx.rowCount();
+
+		if (ctx.dtype() instanceof DType.Utf8 || ctx.dtype() instanceof DType.Binary) {
+			return decodeString(ctx, scalar, n);
+		}
+
+		if (!(ctx.dtype() instanceof DType.Primitive p)) {
+			throw new IllegalStateException("vortex.constant: unsupported dtype " + ctx.dtype());
+		}
+
+		PType ptype = p.ptype();
 		int elemBytes = ptype.byteSize();
 		long rawBits = scalarToRawBits(scalar, ptype);
 
@@ -83,5 +89,34 @@ public final class ConstantCodec implements Codec {
 
 		return new Array(ctx.dtype(), n,
 				new MemorySegment[]{outSeg.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
+	}
+
+	private static Array decodeString(DecodeContext ctx, ScalarProtos.ScalarValue scalar, long n) {
+		byte[] strBytes = scalar.hasStringValue()
+				? scalar.getStringValue().getBytes(StandardCharsets.UTF_8)
+				: scalar.getBytesValue().toByteArray();
+
+		int strLen = strBytes.length;
+
+		// Store the string bytes once; all n offsets point into the same [0, strLen] range.
+		// Offsets layout: [0, strLen, 0, strLen, ...] — each pair encodes the same slice.
+		MemorySegment bytesSeg = ctx.arena().allocate(strLen);
+		MemorySegment.copy(MemorySegment.ofArray(strBytes), 0, bytesSeg, 0, strLen);
+
+		// Offsets: n+1 I32 values, alternating start/end of the single string.
+		MemorySegment offsetsSeg = ctx.arena().allocate((n + 1) * 4L, 4);
+		var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+		for (long i = 0; i <= n; i++) {
+			// even index → 0 (start), odd → strLen (end); wraps back to 0 for the next string's start
+			offsetsSeg.setAtIndex(layout, i, (i % 2 == 0) ? 0 : strLen);
+		}
+
+		Array offsets = new Array(new DType.Primitive(PType.I32, false), n + 1,
+				new MemorySegment[]{offsetsSeg.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
+
+		return new Array(ctx.dtype(), n,
+				new MemorySegment[]{bytesSeg.asReadOnly()},
+				new Array[]{offsets},
+				ArrayStats.empty());
 	}
 }

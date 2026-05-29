@@ -50,3 +50,7 @@ message SequenceMetadata {
   vortex.scalar.ScalarValue base = 1;
   vortex.scalar.ScalarValue multiplier = 2;
 }
+
+message VarBinMetadata {
+  vortex.dtype.PType offsets_ptype = 1;
+}

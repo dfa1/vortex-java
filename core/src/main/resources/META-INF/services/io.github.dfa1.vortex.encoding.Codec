@@ -9,3 +9,4 @@ io.github.dfa1.vortex.encoding.SparseCodec
 io.github.dfa1.vortex.encoding.AlpCodec
 io.github.dfa1.vortex.encoding.RunEndCodec
 io.github.dfa1.vortex.encoding.ConstantCodec
+io.github.dfa1.vortex.encoding.VarBinCodec
