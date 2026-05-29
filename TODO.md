@@ -86,13 +86,6 @@
     - Arrow JVM uses `sun.misc.Unsafe` / Netty internally; keeping it in a separate module means
       the core library stays Unsafe-free
 
-## Code quality
-
-- [ ] Use a dedicated `VortexException` (unchecked) instead of `IOException` for unrecoverable errors
-- [ ] Introduce `CodecType` enum to replace stringly-typed error messages
-- [ ] Avoid allocating intermediate `ByteBuffer` — always use `MemorySegment` from arena
-- [ ] Domain primitives: `RowCount`, `Limit`/`Unlimited` (cannot be zero)
-
 ## Skills
 
 - [ ] Keep `.claude/skills/improve-performance.md` and `.claude/skills/review-performance.md` in sync with

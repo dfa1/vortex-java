@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.io;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.Footer;
 import io.github.dfa1.vortex.core.Layout;
+import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.CodecRegistry;
 import io.github.dfa1.vortex.scan.ScanIterator;
 import io.github.dfa1.vortex.scan.ScanOptions;
@@ -65,27 +66,21 @@ public final class VortexReader implements Closeable {
 
 	public static VortexReader open(Path path, CodecRegistry registry) throws IOException {
 		Arena arena = Arena.ofConfined();
-		try {
-			var channel = FileChannel.open(path, StandardOpenOption.READ);
-			long size = channel.size();
-			if (size < TRAILER_SIZE) {
-				throw new IOException("vortex: file too small (" + size + " bytes)");
-			}
-			var segment = channel.map(FileChannel.MapMode.READ_ONLY, 0, size, arena);
-			// TODO: explain why it should be closed
+		var channel = FileChannel.open(path, StandardOpenOption.READ);
+		long size = channel.size();
+		if (size < TRAILER_SIZE) {
 			channel.close();
-			return parse(segment, size, arena, registry);
-		} catch (Exception e) {
-			if (e instanceof IOException ioe) {
-				throw ioe;
-			}
-			throw new IOException(e);
+			throw new VortexException("file too small (" + size + " bytes)");
 		}
+		var segment = channel.map(FileChannel.MapMode.READ_ONLY, 0, size, arena);
+		// TODO: explain why it should be closed
+		channel.close();
+		return parse(segment, size, arena, registry);
 	}
 
 	private static VortexReader parse(
 			MemorySegment seg, long size, Arena arena, CodecRegistry registry
-	) throws IOException {
+	) {
 		// 8-byte trailer: version(u16 LE) | postscriptLen(u16 LE) | magic(4)
 		var trailer = seg.asSlice(size - TRAILER_SIZE, TRAILER_SIZE);
 
@@ -97,8 +92,8 @@ public final class VortexReader implements Closeable {
 		byte m2 = trailer.get(ValueLayout.JAVA_BYTE, 6);
 		byte m3 = trailer.get(ValueLayout.JAVA_BYTE, 7);
 		if (m0 != MAGIC[0] || m1 != MAGIC[1] || m2 != MAGIC[2] || m3 != MAGIC[3]) {
-			throw new IOException(
-					"vortex: invalid magic bytes [%02x %02x %02x %02x]".formatted(m0, m1, m2, m3));
+			throw new VortexException(
+					"invalid magic bytes [%02x %02x %02x %02x]".formatted(m0, m1, m2, m3));
 		}
 
 		long postscriptOffset = size - TRAILER_SIZE - postscriptLen;

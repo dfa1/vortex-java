@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -42,7 +43,7 @@ public final class RunEndCodec implements Codec {
 			case I16, U16 -> expandShort(endsSeg, valuesSeg, endsPtype, numRuns, offset, n, out);
 			case I32, U32 -> expandInt(endsSeg, valuesSeg, endsPtype, numRuns, offset, n, out);
 			case I64, U64 -> expandLong(endsSeg, valuesSeg, endsPtype, numRuns, offset, n, out);
-			default -> throw new UnsupportedOperationException("vortex.runend: unsupported ptype " + valuePtype);
+			default -> throw new VortexException(CodecId.VORTEX_RUNEND, "unsupported ptype " + valuePtype);
 		}
 		return new Array(dtype, n, new MemorySegment[]{out.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
 	}
@@ -118,7 +119,7 @@ public final class RunEndCodec implements Codec {
 			case U16 -> Short.toUnsignedLong(seg.get(LE_SHORT, i * 2));
 			case U32 -> Integer.toUnsignedLong(seg.get(LE_INT, i * 4));
 			case U64 -> seg.get(LE_LONG, i * 8);
-			default -> throw new IllegalStateException("vortex.runend: non-unsigned ends ptype " + ptype);
+			default -> throw new VortexException(CodecId.VORTEX_RUNEND, "non-unsigned ends ptype " + ptype);
 		};
 	}
 
@@ -142,14 +143,14 @@ public final class RunEndCodec implements Codec {
 	public Array decode(DecodeContext ctx) {
 		ByteBuffer rawMeta = ctx.metadata();
 		if (rawMeta == null) {
-			throw new IllegalStateException("vortex.runend: missing metadata");
+			throw new VortexException(CodecId.VORTEX_RUNEND, "missing metadata");
 		}
 
 		EncodingProtos.RunEndMetadata meta;
 		try {
 			meta = EncodingProtos.RunEndMetadata.parseFrom(rawMeta.duplicate());
 		} catch (InvalidProtocolBufferException e) {
-			throw new IllegalStateException("vortex.runend: invalid metadata", e);
+			throw new VortexException(CodecId.VORTEX_RUNEND, "invalid metadata", e);
 		}
 
 		PType endsPtype = ptypeFromProto(meta.getEndsPtype());
@@ -157,7 +158,7 @@ public final class RunEndCodec implements Codec {
 		long offset = meta.getOffset();
 
 		if (!(ctx.dtype() instanceof DType.Primitive p)) {
-			throw new IllegalStateException("vortex.runend: expected primitive dtype, got " + ctx.dtype());
+			throw new VortexException(CodecId.VORTEX_RUNEND, "expected primitive dtype, got " + ctx.dtype());
 		}
 		PType valuePtype = p.ptype();
 		long n = ctx.rowCount();

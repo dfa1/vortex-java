@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.Footer;
 import io.github.dfa1.vortex.core.Layout;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.SegmentSpec;
+import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.fbs.Binary;
 import io.github.dfa1.vortex.fbs.Bool;
 import io.github.dfa1.vortex.fbs.Decimal;
@@ -17,7 +18,6 @@ import io.github.dfa1.vortex.fbs.Struct_;
 import io.github.dfa1.vortex.fbs.Type;
 import io.github.dfa1.vortex.fbs.Utf8;
 
-import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -29,19 +29,19 @@ final class PostscriptParser {
 	private PostscriptParser() {
 	}
 
-	static ParsedFile parse(ByteBuffer postscriptBuf, MemorySegment fileSegment) throws IOException {
+	static ParsedFile parse(ByteBuffer postscriptBuf, MemorySegment fileSegment) {
 		var ps = Postscript.getRootAsPostscript(postscriptBuf);
 
 		var footerSeg = ps.footer();
 		if (footerSeg == null) {
-			throw new IOException("vortex: postscript missing footer segment");
+			throw new VortexException("postscript missing footer segment");
 		}
 		var fbsFooter = io.github.dfa1.vortex.fbs.Footer.getRootAsFooter(
 				slice(fileSegment, footerSeg.offset(), footerSeg.length()));
 
 		var layoutSeg = ps.layout();
 		if (layoutSeg == null) {
-			throw new IOException("vortex: postscript missing layout segment");
+			throw new VortexException("postscript missing layout segment");
 		}
 		var fbsLayout = io.github.dfa1.vortex.fbs.Layout.getRootAsLayout(
 				slice(fileSegment, layoutSeg.offset(), layoutSeg.length()));
@@ -111,7 +111,7 @@ final class PostscriptParser {
 		return new Layout(encodingId, l.rowCount(), metadata, List.copyOf(children), List.copyOf(segments));
 	}
 
-	private static DType convertDType(io.github.dfa1.vortex.fbs.DType fbs) throws IOException {
+	private static DType convertDType(io.github.dfa1.vortex.fbs.DType fbs) {
 		byte typeType = fbs.typeType();
 		return switch (typeType) {
 			case Type.Null -> new DType.Null(true);
@@ -157,11 +157,11 @@ final class PostscriptParser {
 						convertDType(e.storageDtype(new io.github.dfa1.vortex.fbs.DType())),
 						e.metadataAsByteBuffer(), false);
 			}
-			default -> throw new IOException("vortex: unsupported DType typeType=" + typeType);
+			default -> throw new VortexException("unsupported DType typeType=" + typeType);
 		};
 	}
 
-	private static PType convertPType(int fbsPType) throws IOException {
+	private static PType convertPType(int fbsPType) {
 		return switch (fbsPType) {
 			case io.github.dfa1.vortex.fbs.PType.U8 -> PType.U8;
 			case io.github.dfa1.vortex.fbs.PType.U16 -> PType.U16;
@@ -174,7 +174,7 @@ final class PostscriptParser {
 			case io.github.dfa1.vortex.fbs.PType.F16 -> PType.F16;
 			case io.github.dfa1.vortex.fbs.PType.F32 -> PType.F32;
 			case io.github.dfa1.vortex.fbs.PType.F64 -> PType.F64;
-			default -> throw new IOException("vortex: unrecognized PType=" + fbsPType);
+			default -> throw new VortexException("unrecognized PType=" + fbsPType);
 		};
 	}
 

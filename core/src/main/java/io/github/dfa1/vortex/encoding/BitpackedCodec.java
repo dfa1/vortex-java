@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -87,7 +88,7 @@ public final class BitpackedCodec implements Codec {
 			case 16 -> unpackLoop16(buf, bitWidth, offset, rowCount, output);
 			case 32 -> unpackLoop32(buf, bitWidth, offset, rowCount, output);
 			case 64 -> unpackLoop64(buf, bitWidth, offset, rowCount, output);
-			default -> throw new IllegalArgumentException("unsupported typeBits: " + typeBits);
+			default -> throw new VortexException(CodecId.FASTLANES_BITPACKED, "unsupported typeBits: " + typeBits);
 		}
 	}
 
@@ -380,7 +381,7 @@ public final class BitpackedCodec implements Codec {
 								| ((buf[off + 6] & 0xFF) << 16) | ((buf[off + 7] & 0xFF) << 24));
 				yield lo | (hi << 32);
 			}
-			default -> throw new IllegalArgumentException("unsupported typeBits: " + typeBits);
+			default -> throw new VortexException(CodecId.FASTLANES_BITPACKED, "unsupported typeBits: " + typeBits);
 		};
 	}
 
@@ -407,7 +408,7 @@ public final class BitpackedCodec implements Codec {
 				buf[off + 6] = (byte) (value >>> 48);
 				buf[off + 7] = (byte) (value >>> 56);
 			}
-			default -> throw new IllegalArgumentException("unsupported typeBits: " + typeBits);
+			default -> throw new VortexException(CodecId.FASTLANES_BITPACKED, "unsupported typeBits: " + typeBits);
 		}
 	}
 
@@ -462,7 +463,7 @@ public final class BitpackedCodec implements Codec {
 				yield r;
 			}
 			case I64, U64 -> (long[]) data;
-			default -> throw new UnsupportedOperationException("unsupported ptype: " + ptype);
+			default -> throw new VortexException(CodecId.FASTLANES_BITPACKED, "unsupported ptype: " + ptype);
 		};
 	}
 
@@ -559,14 +560,14 @@ public final class BitpackedCodec implements Codec {
 	public Array decode(DecodeContext ctx) {
 		ByteBuffer rawMeta = ctx.metadata();
 		if (rawMeta == null) {
-			throw new IllegalStateException("fastlanes.bitpacked: missing metadata");
+			throw new VortexException(CodecId.FASTLANES_BITPACKED, "missing metadata");
 		}
 
 		EncodingProtos.BitPackedMetadata meta;
 		try {
 			meta = EncodingProtos.BitPackedMetadata.parseFrom(rawMeta.duplicate());
 		} catch (InvalidProtocolBufferException e) {
-			throw new IllegalStateException("fastlanes.bitpacked: invalid metadata", e);
+			throw new VortexException(CodecId.FASTLANES_BITPACKED, "invalid metadata", e);
 		}
 
 		int bitWidth = meta.getBitWidth();
@@ -602,8 +603,8 @@ public final class BitpackedCodec implements Codec {
 			case U16 -> Short.toUnsignedLong(seg.get(LE_SHORT, i * 2));
 			case U32 -> Integer.toUnsignedLong(seg.get(LE_INT, i * 4));
 			case U64 -> seg.get(LE_LONG, i * 8);
-			default -> throw new IllegalStateException(
-					"fastlanes.bitpacked: non-unsigned patch index ptype " + ptype);
+			default -> throw new VortexException(CodecId.FASTLANES_BITPACKED,
+					"non-unsigned patch index ptype " + ptype);
 		};
 	}
 
@@ -630,8 +631,8 @@ public final class BitpackedCodec implements Codec {
 		for (long i = 0; i < numPatches; i++) {
 			long absIdx = readUnsignedIdx(idxSeg, i, idxPtype) - offset;
 			if (absIdx < 0 || absIdx >= n) {
-				throw new IllegalStateException(
-						"fastlanes.bitpacked: patch index " + absIdx + " out of range [0," + n + ")");
+				throw new VortexException(CodecId.FASTLANES_BITPACKED,
+						"patch index " + absIdx + " out of range [0," + n + ")");
 			}
 			MemorySegment.copy(valSeg, i * elemBytes, out, absIdx * elemBytes, elemBytes);
 		}

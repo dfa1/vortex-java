@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -128,7 +129,7 @@ public final class DictCodec implements Codec {
 			case U8 -> buf.put((byte) code);
 			case U16 -> buf.putShort((short) code);
 			case U32 -> buf.putInt(code);
-			default -> throw new IllegalStateException("unexpected code type: " + codePType);
+			default -> throw new VortexException(CodecId.VORTEX_DICT, "unexpected code type: " + codePType);
 		}
 	}
 
@@ -169,7 +170,7 @@ public final class DictCodec implements Codec {
 			case U8 -> Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, i));
 			case U16 -> Short.toUnsignedLong(buf.get(LE_SHORT, i * 2));
 			case U32 -> Integer.toUnsignedLong(buf.get(LE_INT, i * 4));
-			default -> throw new IllegalStateException("unexpected code type: " + codePType);
+			default -> throw new VortexException(CodecId.VORTEX_DICT, "unexpected code type: " + codePType);
 		};
 	}
 
@@ -232,7 +233,7 @@ public final class DictCodec implements Codec {
 	@Override
 	public Array decode(DecodeContext ctx) {
 		if (ctx.metadata() == null || !ctx.metadata().hasRemaining()) {
-			throw new IllegalStateException("vortex.dict: missing metadata");
+			throw new VortexException(CodecId.VORTEX_DICT, "missing metadata");
 		}
 
 		ByteBuffer meta = ctx.metadata();
@@ -269,7 +270,7 @@ public final class DictCodec implements Codec {
 		try {
 			meta = EncodingProtos.DictMetadata.parseFrom(metaBytes);
 		} catch (InvalidProtocolBufferException e) {
-			throw new IllegalStateException("vortex.dict: invalid proto metadata", e);
+			throw new VortexException(CodecId.VORTEX_DICT, "invalid proto metadata", e);
 		}
 
 		PType codePType = PType.values()[meta.getCodesPtype().getNumber()];
@@ -293,7 +294,7 @@ public final class DictCodec implements Codec {
 			case U8 -> expandU8(codesBuf, valuesBuf, out, rowCount, elemSize);
 			case U16 -> expandU16(codesBuf, valuesBuf, out, rowCount, elemSize);
 			case U32 -> expandU32(codesBuf, valuesBuf, out, rowCount, elemSize);
-			default -> throw new IllegalStateException("unexpected code type: " + codePType);
+			default -> throw new VortexException(CodecId.VORTEX_DICT, "unexpected code type: " + codePType);
 		}
 		return new Array(ctx.dtype(), rowCount, new MemorySegment[]{out.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
 	}

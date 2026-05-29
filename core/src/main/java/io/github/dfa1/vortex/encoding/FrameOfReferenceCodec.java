@@ -6,8 +6,8 @@ import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.VortexException;
 
-import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -30,8 +30,8 @@ public final class FrameOfReferenceCodec implements Codec {
 			case INT64_VALUE -> scalar.getInt64Value();
 			case UINT64_VALUE -> scalar.getUint64Value();
 			case KIND_NOT_SET -> 0L;
-			default -> throw new IllegalStateException(
-					"fastlanes.for: unexpected scalar kind " + scalar.getKindCase());
+			default -> throw new VortexException(CodecId.FASTLANES_FOR,
+					"unexpected scalar kind " + scalar.getKindCase());
 		};
 	}
 
@@ -63,8 +63,8 @@ public final class FrameOfReferenceCodec implements Codec {
 					dst.set(LE_LONG, off, v + ref);
 				}
 			}
-			default -> throw new UnsupportedOperationException(
-					"fastlanes.for: unsupported ptype " + ptype);
+			default -> throw new VortexException(CodecId.FASTLANES_FOR,
+					"unsupported ptype " + ptype);
 		}
 		return dst;
 	}
@@ -83,24 +83,19 @@ public final class FrameOfReferenceCodec implements Codec {
 	public Array decode(DecodeContext ctx) {
 		ByteBuffer rawMeta = ctx.metadata();
 		if (rawMeta == null || !rawMeta.hasRemaining()) {
-			throw new IllegalStateException("fastlanes.for: missing metadata");
+			throw new VortexException(CodecId.FASTLANES_FOR, "missing metadata");
 		}
 		ScalarProtos.ScalarValue scalar;
 		try {
 			scalar = ScalarProtos.ScalarValue.parseFrom(rawMeta.duplicate());
 		} catch (InvalidProtocolBufferException e) {
-			throw new IllegalStateException("fastlanes.for: invalid metadata", e);
+			throw new VortexException(CodecId.FASTLANES_FOR, "invalid metadata", e);
 		}
 
-		Array encoded;
-		try {
-			encoded = ctx.decodeChild(0);
-		} catch (IOException e) {
-			throw new IllegalStateException("fastlanes.for: failed to decode child", e);
-		}
+		Array encoded = ctx.decodeChild(0);
 
 		if (!(ctx.dtype() instanceof DType.Primitive p)) {
-			throw new IllegalStateException("fastlanes.for: expected primitive dtype, got " + ctx.dtype());
+			throw new VortexException(CodecId.FASTLANES_FOR, "expected primitive dtype, got " + ctx.dtype());
 		}
 
 		long ref = referenceValue(scalar);

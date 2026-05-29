@@ -3,7 +3,6 @@ package io.github.dfa1.vortex.encoding;
 import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.DType;
 
-import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
@@ -23,7 +22,7 @@ public record DecodeContext(
 		Arena arena
 ) {
 	/// Recursively decode child `i` using the same segment buffers, registry and arena.
-	public Array decodeChild(int i) throws IOException {
+	public Array decodeChild(int i) {
 		ArrayNode child = node.children()[i];
 		var childCtx = new DecodeContext(child, dtype, rowCount, segmentBuffers, registry, arena);
 		return registry.decode(childCtx);

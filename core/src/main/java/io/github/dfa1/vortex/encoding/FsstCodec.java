@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -46,13 +47,13 @@ public final class FsstCodec implements Codec {
     public Array decode(DecodeContext ctx) {
         ByteBuffer rawMeta = ctx.metadata();
         if (rawMeta == null) {
-            throw new IllegalStateException("vortex.fsst: missing metadata");
+            throw new VortexException(CodecId.VORTEX_FSST, "missing metadata");
         }
         EncodingProtos.FSSTMetadata meta;
         try {
             meta = EncodingProtos.FSSTMetadata.parseFrom(rawMeta.duplicate());
         } catch (InvalidProtocolBufferException e) {
-            throw new IllegalStateException("vortex.fsst: invalid metadata", e);
+            throw new VortexException(CodecId.VORTEX_FSST, "invalid metadata", e);
         }
 
         PType uncompLenPType = PType.values()[meta.getUncompressedLengthsPtype().getNumber()];
@@ -136,7 +137,7 @@ public final class FsstCodec implements Codec {
             case U32 -> Integer.toUnsignedLong(seg.getAtIndex(LE_INT, idx));
             case I32 -> seg.getAtIndex(LE_INT, idx);
             case I64, U64 -> seg.getAtIndex(LE_LONG, idx);
-            default  -> throw new IllegalArgumentException("vortex.fsst: unsupported ptype " + ptype);
+            default  -> throw new VortexException(CodecId.VORTEX_FSST, "unsupported ptype " + ptype);
         };
     }
 }

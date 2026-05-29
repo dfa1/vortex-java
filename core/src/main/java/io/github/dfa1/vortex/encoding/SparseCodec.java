@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -37,7 +38,7 @@ public final class SparseCodec implements Codec {
 		try {
 			return parent.registry().decode(childCtx);
 		} catch (Exception e) {
-			throw new IllegalStateException("vortex.sparse: failed to decode child " + childIdx, e);
+			throw new VortexException(CodecId.VORTEX_SPARSE, "failed to decode child " + childIdx, e);
 		}
 	}
 
@@ -62,8 +63,8 @@ public final class SparseCodec implements Codec {
 		for (long i = 0; i < numPatches; i++) {
 			long idx = readUnsignedIdx(idxSeg, i, idxPtype) - offset;
 			if (idx < 0 || idx >= n) {
-				throw new IllegalStateException(
-						"vortex.sparse: patch index " + idx + " out of range [0," + n + ")");
+				throw new VortexException(CodecId.VORTEX_SPARSE,
+						"patch index " + idx + " out of range [0," + n + ")");
 			}
 			long val = readElem(valSeg, i, valuePtype);
 			outBuf.position((int) (idx * elemBytes));
@@ -77,7 +78,7 @@ public final class SparseCodec implements Codec {
 			case U16 -> Short.toUnsignedLong(seg.get(LE_SHORT, i * 2));
 			case U32 -> Integer.toUnsignedLong(seg.get(LE_INT, i * 4));
 			case U64 -> seg.get(LE_LONG, i * 8);
-			default -> throw new IllegalStateException("vortex.sparse: non-unsigned index ptype " + ptype);
+			default -> throw new VortexException(CodecId.VORTEX_SPARSE, "non-unsigned index ptype " + ptype);
 		};
 	}
 
@@ -108,8 +109,8 @@ public final class SparseCodec implements Codec {
 			case F32_VALUE -> Float.floatToRawIntBits(scalar.getF32Value());
 			case F64_VALUE -> Double.doubleToRawLongBits(scalar.getF64Value());
 			case KIND_NOT_SET -> 0L;
-			default -> throw new IllegalStateException(
-					"vortex.sparse: unexpected scalar kind " + scalar.getKindCase());
+			default -> throw new VortexException(CodecId.VORTEX_SPARSE,
+					"unexpected scalar kind " + scalar.getKindCase());
 		};
 	}
 
@@ -132,7 +133,7 @@ public final class SparseCodec implements Codec {
 	public Array decode(DecodeContext ctx) {
 		ByteBuffer rawMeta = ctx.metadata();
 		if (rawMeta == null || !rawMeta.hasRemaining()) {
-			throw new IllegalStateException("vortex.sparse: missing metadata");
+			throw new VortexException(CodecId.VORTEX_SPARSE, "missing metadata");
 		}
 		byte[] metaBytes = new byte[rawMeta.remaining()];
 		rawMeta.duplicate().get(metaBytes);
@@ -141,7 +142,7 @@ public final class SparseCodec implements Codec {
 		try {
 			sparseMeta = EncodingProtos.SparseMetadata.parseFrom(metaBytes);
 		} catch (InvalidProtocolBufferException e) {
-			throw new IllegalStateException("vortex.sparse: invalid metadata", e);
+			throw new VortexException(CodecId.VORTEX_SPARSE, "invalid metadata", e);
 		}
 
 		EncodingProtos.PatchesMetadata patches = sparseMeta.getPatches();
@@ -150,7 +151,7 @@ public final class SparseCodec implements Codec {
 		PType indicesPtype = ptypeFromProto(patches.getIndicesPtype());
 
 		if (!(ctx.dtype() instanceof DType.Primitive)) {
-			throw new IllegalStateException("vortex.sparse: expected primitive dtype, got " + ctx.dtype());
+			throw new VortexException(CodecId.VORTEX_SPARSE, "expected primitive dtype, got " + ctx.dtype());
 		}
 		PType valuePtype = ((DType.Primitive) ctx.dtype()).ptype();
 
@@ -161,7 +162,7 @@ public final class SparseCodec implements Codec {
 		try {
 			fillScalar = ScalarProtos.ScalarValue.parseFrom(fillBytes);
 		} catch (InvalidProtocolBufferException e) {
-			throw new IllegalStateException("vortex.sparse: invalid fill value", e);
+			throw new VortexException(CodecId.VORTEX_SPARSE, "invalid fill value", e);
 		}
 
 		long n = ctx.rowCount();

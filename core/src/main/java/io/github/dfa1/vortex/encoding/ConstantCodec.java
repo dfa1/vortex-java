@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -30,8 +31,8 @@ public final class ConstantCodec implements Codec {
 			case F32_VALUE -> Float.floatToRawIntBits(scalar.getF32Value());
 			case F64_VALUE -> Double.doubleToRawLongBits(scalar.getF64Value());
 			case KIND_NOT_SET -> 0L;
-			default -> throw new IllegalStateException(
-					"vortex.constant: unexpected scalar kind " + scalar.getKindCase());
+			default -> throw new VortexException(CodecId.VORTEX_CONSTANT,
+					"unexpected scalar kind " + scalar.getKindCase());
 		};
 	}
 
@@ -41,7 +42,7 @@ public final class ConstantCodec implements Codec {
 			case 2 -> buf.putShort((short) rawBits);
 			case 4 -> buf.putInt((int) rawBits);
 			case 8 -> buf.putLong(rawBits);
-			default -> throw new UnsupportedOperationException("vortex.constant: unsupported ptype " + ptype);
+			default -> throw new VortexException(CodecId.VORTEX_CONSTANT, "unsupported ptype " + ptype);
 		}
 	}
 
@@ -66,7 +67,7 @@ public final class ConstantCodec implements Codec {
 		try {
 			scalar = ScalarProtos.ScalarValue.parseFrom(scalarBytes);
 		} catch (InvalidProtocolBufferException e) {
-			throw new IllegalStateException("vortex.constant: invalid scalar value", e);
+			throw new VortexException(CodecId.VORTEX_CONSTANT, "invalid scalar value", e);
 		}
 
 		long n = ctx.rowCount();
@@ -76,7 +77,7 @@ public final class ConstantCodec implements Codec {
 		}
 
 		if (!(ctx.dtype() instanceof DType.Primitive p)) {
-			throw new IllegalStateException("vortex.constant: unsupported dtype " + ctx.dtype());
+			throw new VortexException(CodecId.VORTEX_CONSTANT, "unsupported dtype " + ctx.dtype());
 		}
 
 		PType ptype = p.ptype();

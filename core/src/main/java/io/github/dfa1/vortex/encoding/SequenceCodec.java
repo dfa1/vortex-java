@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
@@ -69,7 +70,7 @@ public final class SequenceCodec implements Codec {
 			case INT64_VALUE -> sv.getInt64Value();
 			case UINT64_VALUE -> sv.getUint64Value();
 			case KIND_NOT_SET -> 0L;
-			default -> throw new IllegalStateException("vortex.sequence: unexpected scalar kind " + sv.getKindCase());
+			default -> throw new VortexException(CodecId.VORTEX_SEQUENCE, "unexpected scalar kind " + sv.getKindCase());
 		};
 	}
 
@@ -87,7 +88,7 @@ public final class SequenceCodec implements Codec {
 	public Array decode(DecodeContext ctx) {
 		ByteBuffer metaBuf = ctx.metadata();
 		if (metaBuf == null || !metaBuf.hasRemaining()) {
-			throw new IllegalStateException("vortex.sequence: missing metadata");
+			throw new VortexException(CodecId.VORTEX_SEQUENCE, "missing metadata");
 		}
 		byte[] metaBytes = new byte[metaBuf.remaining()];
 		metaBuf.duplicate().get(metaBytes);
@@ -96,11 +97,11 @@ public final class SequenceCodec implements Codec {
 		try {
 			meta = EncodingProtos.SequenceMetadata.parseFrom(metaBytes);
 		} catch (InvalidProtocolBufferException e) {
-			throw new IllegalStateException("vortex.sequence: invalid metadata", e);
+			throw new VortexException(CodecId.VORTEX_SEQUENCE, "invalid metadata", e);
 		}
 
 		if (!(ctx.dtype() instanceof DType.Primitive p)) {
-			throw new IllegalStateException("vortex.sequence: expected primitive dtype, got " + ctx.dtype());
+			throw new VortexException(CodecId.VORTEX_SEQUENCE, "expected primitive dtype, got " + ctx.dtype());
 		}
 
 		long n = ctx.rowCount();
@@ -109,7 +110,7 @@ public final class SequenceCodec implements Codec {
 			case I8, I16, I32, I64, U8, U16, U32, U64 -> decodeInteger(meta, pt, n, ctx.dtype());
 			case F32 -> decodeF32(meta, n, ctx.dtype());
 			case F64 -> decodeF64(meta, n, ctx.dtype());
-			case F16 -> throw new IllegalStateException("vortex.sequence: F16 not supported");
+			case F16 -> throw new VortexException(CodecId.VORTEX_SEQUENCE, "F16 not supported");
 		};
 	}
 }

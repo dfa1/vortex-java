@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.io;
 
 import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.Codec;
 import io.github.dfa1.vortex.encoding.CodecId;
 import io.github.dfa1.vortex.encoding.CodecRegistry;
@@ -67,20 +68,20 @@ class VortexReaderTest {
 	}
 
 	@Test
-	void open_fileTooSmall_throwsIOException(@TempDir Path tmpDir) throws IOException {
+	void open_fileTooSmall_throwsVortexException(@TempDir Path tmpDir) throws IOException {
 		// Given
 		Path sut = Files.write(tmpDir.resolve("tiny.vortex"), new byte[4]);
 
 		// When / Then
 		assertThatThrownBy(() -> VortexReader.open(sut))
-				.isInstanceOf(IOException.class)
+				.isInstanceOf(VortexException.class)
 				.hasMessageContaining("file too small");
 	}
 
 	// --- real fixtures: full parse ---
 
 	@Test
-	void open_wrongMagic_throwsIOException(@TempDir Path tmpDir) throws IOException {
+	void open_wrongMagic_throwsVortexException(@TempDir Path tmpDir) throws IOException {
 		// Given
 		byte[] bytes = new byte[VortexReader.TRAILER_SIZE]; // exactly 8 bytes
 		bytes[4] = 'X';
@@ -91,7 +92,7 @@ class VortexReaderTest {
 
 		// When / Then
 		assertThatThrownBy(() -> VortexReader.open(sut))
-				.isInstanceOf(IOException.class)
+				.isInstanceOf(VortexException.class)
 				.hasMessageContaining("invalid magic bytes");
 	}
 
@@ -182,8 +183,8 @@ class VortexReaderTest {
 		try (var sut = VortexReader.open(path, CodecRegistry.empty());
 		     var iter = sut.scan(ScanOptions.all())) {
 			assertThatThrownBy(iter::hasNext)
-					.isInstanceOf(IllegalArgumentException.class)
-					.hasMessageContaining("no codec for encoding:");
+					.isInstanceOf(VortexException.class)
+					.hasMessageContaining("no codec registered");
 		}
 	}
 

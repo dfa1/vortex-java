@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -107,7 +108,7 @@ public final class DeltaCodec implements Codec {
 				yield r;
 			}
 			case I64, U64 -> (long[]) data;
-			default -> throw new UnsupportedOperationException("unsupported ptype: " + ptype);
+			default -> throw new VortexException(CodecId.FASTLANES_DELTA, "unsupported ptype: " + ptype);
 		};
 	}
 
@@ -226,7 +227,7 @@ public final class DeltaCodec implements Codec {
 	public Array decode(DecodeContext ctx) {
 		ByteBuffer rawMeta = ctx.metadata();
 		if (rawMeta == null || rawMeta.capacity() < 17) {
-			throw new IllegalStateException("fastlanes.delta: missing or truncated metadata");
+			throw new VortexException(CodecId.FASTLANES_DELTA, "missing or truncated metadata");
 		}
 		ByteBuffer meta = rawMeta.duplicate().order(ByteOrder.LITTLE_ENDIAN);
 		long baseValue = meta.getLong(0);

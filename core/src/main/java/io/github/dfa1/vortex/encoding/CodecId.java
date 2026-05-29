@@ -1,5 +1,7 @@
 package io.github.dfa1.vortex.encoding;
 
+import io.github.dfa1.vortex.core.VortexException;
+
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -42,7 +44,7 @@ public enum CodecId {
 	public static CodecId from(String id) {
 		CodecId result = LOOKUP.get(id);
 		if (result == null) {
-			throw new IllegalArgumentException("unknown encoding id: " + id);
+			throw new VortexException("unknown encoding id: " + id);
 		}
 		return result;
 	}

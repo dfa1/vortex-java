@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.encoding;
 import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.fbs.Buffer;
 
 import java.lang.foreign.Arena;
@@ -94,7 +95,7 @@ public final class CodecRegistry {
 		CodecId id = ctx.node().encodingId();
 		Codec c = codecs.get(id);
 		if (c == null) {
-			throw new IllegalArgumentException("no codec for encoding: " + id);
+			throw new VortexException(id, "no codec registered");
 		}
 		return c.decode(ctx);
 	}

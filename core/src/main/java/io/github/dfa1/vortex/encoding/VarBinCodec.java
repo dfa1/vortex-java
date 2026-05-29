@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
@@ -40,13 +41,13 @@ public final class VarBinCodec implements Codec {
 	public Array decode(DecodeContext ctx) {
 		ByteBuffer rawMeta = ctx.metadata();
 		if (rawMeta == null) {
-			throw new IllegalStateException("vortex.varbin: missing metadata");
+			throw new VortexException(CodecId.VORTEX_VARBIN, "missing metadata");
 		}
 		EncodingProtos.VarBinMetadata meta;
 		try {
 			meta = EncodingProtos.VarBinMetadata.parseFrom(rawMeta.duplicate());
 		} catch (InvalidProtocolBufferException e) {
-			throw new IllegalStateException("vortex.varbin: invalid metadata", e);
+			throw new VortexException(CodecId.VORTEX_VARBIN, "invalid metadata", e);
 		}
 
 		PType offsetsPtype = PType.values()[meta.getOffsetsPtype().getNumber()];

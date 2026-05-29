@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -71,7 +72,7 @@ public final class AlpCodec implements Codec {
 			case U16 -> Short.toUnsignedLong(seg.get(LE_SHORT, i * 2));
 			case U32 -> Integer.toUnsignedLong(seg.get(LE_INT, i * 4));
 			case U64 -> seg.get(LE_LONG, i * 8);
-			default -> throw new IllegalStateException("vortex.alp: non-unsigned patch index ptype " + ptype);
+			default -> throw new VortexException(CodecId.VORTEX_ALP, "non-unsigned patch index ptype " + ptype);
 		};
 	}
 
@@ -95,17 +96,17 @@ public final class AlpCodec implements Codec {
 	public Array decode(DecodeContext ctx) {
 		ByteBuffer rawMeta = ctx.metadata();
 		if (rawMeta == null) {
-			throw new IllegalStateException("vortex.alp: missing metadata");
+			throw new VortexException(CodecId.VORTEX_ALP, "missing metadata");
 		}
 		EncodingProtos.ALPMetadata meta;
 		try {
 			meta = EncodingProtos.ALPMetadata.parseFrom(rawMeta.duplicate());
 		} catch (InvalidProtocolBufferException e) {
-			throw new IllegalStateException("vortex.alp: invalid metadata", e);
+			throw new VortexException(CodecId.VORTEX_ALP, "invalid metadata", e);
 		}
 
 		if (!(ctx.dtype() instanceof DType.Primitive p)) {
-			throw new IllegalStateException("vortex.alp: expected primitive dtype, got " + ctx.dtype());
+			throw new VortexException(CodecId.VORTEX_ALP, "expected primitive dtype, got " + ctx.dtype());
 		}
 
 		int expE = meta.getExpE();
@@ -116,7 +117,7 @@ public final class AlpCodec implements Codec {
 		return switch (ptype) {
 			case F64 -> decodeF64(ctx, meta, expE, expF, n);
 			case F32 -> decodeF32(ctx, meta, expE, expF, n);
-			default -> throw new IllegalStateException("vortex.alp: unsupported dtype " + ptype);
+			default -> throw new VortexException(CodecId.VORTEX_ALP, "unsupported dtype " + ptype);
 		};
 	}
 

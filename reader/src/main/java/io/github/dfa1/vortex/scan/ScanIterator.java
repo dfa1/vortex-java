@@ -8,6 +8,8 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.Layout;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.SegmentSpec;
+import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.encoding.CodecId;
 import io.github.dfa1.vortex.io.VortexReader;
 
 import java.lang.foreign.Arena;
@@ -128,7 +130,7 @@ public final class ScanIterator implements AutoCloseable {
 
 	public ScanResult next() {
 		if (current == null) {
-			throw new IllegalStateException("call hasNext() first");
+			throw new VortexException("call hasNext() first");
 		}
 		return current;
 	}
@@ -211,12 +213,12 @@ public final class ScanIterator implements AutoCloseable {
 			collectFlats(layout, flats);
 			return decodeConcatPrimitive(flats, dtype, layout.rowCount(), arena);
 		}
-		throw new IllegalStateException("vortex: cannot decode layout " + layout.encodingId());
+		throw new VortexException("cannot decode layout " + layout.encodingId());
 	}
 
 	private Array decodeConcatPrimitive(List<Layout> flats, DType dtype, long totalRows, Arena arena) {
 		if (flats.isEmpty()) {
-			throw new IllegalStateException("vortex: chunked layout has no flat children");
+			throw new VortexException(CodecId.VORTEX_CHUNKED, "no flat children");
 		}
 		if (flats.size() == 1) {
 			return decodeFlat(flats.get(0), dtype, arena);
@@ -236,7 +238,7 @@ public final class ScanIterator implements AutoCloseable {
 
 	private Array decodeFlat(Layout flat, DType dtype, Arena arena) {
 		if (flat.segments().isEmpty()) {
-			throw new IllegalStateException("vortex: Flat layout has no segments");
+			throw new VortexException(CodecId.VORTEX_FLAT, "no segments");
 		}
 		int segIdx = flat.segments().get(0);
 		SegmentSpec spec = file.footer().segmentSpecs().get(segIdx);
@@ -247,13 +249,13 @@ public final class ScanIterator implements AutoCloseable {
 	private Array decodeDictLayout(Layout dictLayout, DType dtype, Arena arena) {
 		ByteBuffer rawMeta = dictLayout.metadata();
 		if (rawMeta == null) {
-			throw new IllegalStateException("vortex.dict layout: missing metadata");
+			throw new VortexException(CodecId.VORTEX_DICT, "layout: missing metadata");
 		}
 		EncodingProtos.DictLayoutMetadata meta;
 		try {
 			meta = EncodingProtos.DictLayoutMetadata.parseFrom(rawMeta.duplicate());
 		} catch (InvalidProtocolBufferException e) {
-			throw new IllegalStateException("vortex.dict layout: invalid metadata", e);
+			throw new VortexException(CodecId.VORTEX_DICT, "layout: invalid metadata", e);
 		}
 		PType codesPType = PType.values()[meta.getCodesPtype().getNumber()];
 
@@ -320,7 +322,7 @@ public final class ScanIterator implements AutoCloseable {
 			case U32 -> Integer.toUnsignedLong(seg.getAtIndex(LE_INT, idx));
 			case I32 -> seg.getAtIndex(LE_INT, idx);
 			case I64, U64 -> seg.getAtIndex(LE_LONG, idx);
-			default  -> throw new IllegalArgumentException("dict layout: unsupported ptype " + ptype);
+			default  -> throw new VortexException(CodecId.VORTEX_DICT, "layout: unsupported ptype " + ptype);
 		};
 	}
 
