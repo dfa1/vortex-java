@@ -33,6 +33,30 @@
 
 ## Remote / HTTP reads
 
+- [ ] **Extract `VortexHandle` interface** (`reader` module, prerequisite for HTTP reader)
+    - Interface: `dtype()`, `layout()`, `footer()`, `version()`, `fileSize()`, `registry()`,
+      `slice(long offset, long length)`.
+    - `VortexReader` implements it (mmap path, unchanged behaviour).
+    - `VortexInspector.inspect()` and `ScanIterator` accept `VortexHandle` — both transports work
+      transparently without overloads.
+
+- [ ] **`VortexHttpReader`** (`reader` module, requires `VortexHandle`)
+    - Constructor takes `URI`; uses JDK `HttpClient` (no extra deps).
+    - On open: fetch last 65 KB via `Range: bytes=-65536`, parse trailer + postscript.
+    - `slice(offset, length)`: fires a targeted `Range: bytes=<offset>-<end>` request,
+      allocates result off-heap via `Arena`, returns `MemorySegment`.
+    - Segments fetched lazily — no full-file download.
+    - Rust/Java mapping for reference:
+
+      | Rust (`vortex-io`)       | Java                                      |
+      |--------------------------|-------------------------------------------|
+      | `VortexReadAt` trait     | `VortexHandle` interface                  |
+      | `read_at(offset, len)`   | `slice(offset, length) → MemorySegment`   |
+      | async `BoxFuture`        | sync `HttpClient` (blocking)              |
+      | `object_store` crate     | raw `HttpClient` (JDK built-in, no deps)  |
+      | `BufferHandle` heap alloc| `ctx.arena().allocate(n)` (off-heap)      |
+      | `CoalesceConfig`         | not yet — future optimisation             |
+
 - [ ] **Integration test: read real Vortex files over HTTPS**
     - Source: public S3 bucket `vortex-compat-fixtures` (no auth required), e.g.
       `https://vortex-compat-fixtures.s3.amazonaws.com/v0.72.0/arrays/tpch_lineitem.compact.vortex`
