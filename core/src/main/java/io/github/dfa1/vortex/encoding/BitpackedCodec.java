@@ -575,8 +575,7 @@ public final class BitpackedCodec implements Codec {
 		long rowCount = ctx.rowCount();
 
 		MemorySegment packed = ctx.buffer(0);
-		byte[] outBytes = new byte[(int) (rowCount * ptype.byteSize())];
-		MemorySegment output = MemorySegment.ofArray(outBytes);
+		MemorySegment output = ctx.arena().allocate(rowCount * ptype.byteSize());
 		fastlanesUnpackToSeg(packed, bitWidth, offset, typeBits, rowCount, output);
 
 		return new Array(ctx.dtype(), rowCount,
