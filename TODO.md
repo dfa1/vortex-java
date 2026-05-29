@@ -235,6 +235,16 @@ the JIT can specialise the hot path with a constant `ValueLayout`.
 - [ ] Keep `.claude/skills/improve-performance.md` and `.claude/skills/review-performance.md` in sync with
   `CLAUDE.md` and README perf notes. Re-audit whenever memory model, allocation rule, or benchmark layout changes.
 
+## Naming alignment
+
+- [ ] **Rename `Codec` → `Encoding` throughout Java codebase**
+    - Vortex uses "encoding" everywhere: `VortexEncoding` trait, `vortex-encodings` crate, encoding IDs (`vortex.primitive`, etc.).
+    - Java currently uses `Codec`, `CodecId`, `CodecRegistry`, `DecodeContext`, `EncodeResult` — drifts from domain vocabulary.
+    - Rename: `Codec` → `Encoding`, `CodecId` → `EncodingId`, `CodecRegistry` → `EncodingRegistry`,
+      `DecodeContext` → `DecodingContext` (or keep as-is), `EncodeResult` → `EncodingResult`.
+    - Also rename `CODECS.md` → `ENCODINGS.md`.
+    - Large mechanical refactor; no behaviour change. Good first-issue candidate.
+
 ## Project
 
 - [ ] Move project to a dedicated organization
