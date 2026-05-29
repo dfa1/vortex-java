@@ -20,12 +20,6 @@
     - Capture JMH JSON + JFR profile alongside README table; cite hardware (CPU model), JDK build (`java -version`),
       and benchmark commit SHA so numbers don't rot silently.
 
-- [ ] Improve read speed
-    - avoid switching on PType per element during a copy — use MemorySegment bulk copy
-    - arena is a parameter: allocate once, pass down; all allocations go there
-    - reuse buffers during decoding
-    - don't allocate temp byte[]
-
 - [ ] **#13 BtrBlocks-style cascading compressor** (`core`, `writer`)
     - Reference: https://vortex.dev/blog/btrblocks-compressor
     - Rust source: `vortex-sampling-compressor` crate in spiraldb/vortex
@@ -111,116 +105,23 @@
         - Capture: ratio of compressed bytes (Java cascade / JNI), write throughput, decode
           throughput on the resulting file.
 
-## Remote / HTTP reads
-
-- [x] **Extract `VortexHandle` interface** (`reader` module, prerequisite for HTTP reader)
-    - Interface: `dtype()`, `layout()`, `footer()`, `version()`, `fileSize()`, `registry()`,
-      `slice(long offset, long length)`.
-    - `VortexReader` implements it (mmap path, unchanged behaviour).
-    - `VortexInspector.inspect()` and `ScanIterator` accept `VortexHandle` — both transports work
-      transparently without overloads.
-
-- [x] **`VortexHttpReader`** (`reader` module, requires `VortexHandle`)
-    - Constructor takes `URI`; uses JDK `HttpClient` (no extra deps).
-    - On open: fetch last 65 KB via `Range: bytes=-65536`, parse trailer + postscript.
-    - `slice(offset, length)`: fires a targeted `Range: bytes=<offset>-<end>` request,
-      allocates result off-heap via `Arena`, returns `MemorySegment`.
-    - Segments fetched lazily — no full-file download.
-    - Rust/Java mapping for reference:
-
-      | Rust (`vortex-io`)       | Java                                      |
-      |--------------------------|-------------------------------------------|
-      | `VortexReadAt` trait     | `VortexHandle` interface                  |
-      | `read_at(offset, len)`   | `slice(offset, length) → MemorySegment`   |
-      | async `BoxFuture`        | sync `HttpClient` (blocking)              |
-      | `object_store` crate     | raw `HttpClient` (JDK built-in, no deps)  |
-      | `BufferHandle` heap alloc| `ctx.arena().allocate(n)` (off-heap)      |
-      | `CoalesceConfig`         | not yet — future optimisation             |
-
-- [x] **Integration test: read real Vortex files over HTTPS**
-    - Source: public S3 bucket `vortex-compat-fixtures` (no auth required).
-    - `VortexHttpReaderIT`: parses metadata, verifies layout row count, scans `for.vortex`
-      (frame-of-reference, 10 columns, 1024 rows) end-to-end. Skipped when network unavailable.
-    - `tpch_lineitem.compact.vortex` metadata reads fine; full scan blocked by `vortex.pco` (not implemented).
-
 ## Large-file support
 
 - [ ] **#12 Test read/write of files > 2 GB**
-    - [x] `SegmentSpec.length` widened from `int` to `long` (wire field is `uint32`, so values 2–4 GB were
-      silently truncated to negative). `PostscriptParser`, `VortexWriter.SegRef`, and
-      `ScanIterator.readFlatStats` follow the type through end-to-end. Covered by
-      `PostscriptParserBigSegmentTest` (FlatBuffer footer with length = 3 GB round-trips correctly).
-    - [x] `ScanIterator.readFlatStats` no longer materialises the whole segment as a `ByteBuffer`
-      (2 GB cap); it slices the FlatBuffer tail off the `MemorySegment` first.
-    - [x] End-to-end multi-GB scan benchmark: `RustWritesJavaReadsBigFileBenchmark.javaScan` —
-      JNI writes ~3 GB of random I64 columns (random data defeats bit-packing so segments stay
-      large), Java reader scans via `VortexReader`. Skip the JNI fixture build by passing
-      `-Dvortex.bench.bigfile=<path>`.
-    - [x] Wire a real correctness assertion alongside the benchmark (e.g. compare summed columns
-      against JNI reader) so any regression in the >2 GB path surfaces even without measuring
-      throughput.
     - [ ] Parquet baseline for comparison: same data should fail or require splitting when any
       column chunk exceeds 2 GB.
 
 ## Array API
 
-### Typed accessors (in progress)
+### Typed accessors
 
 Replace raw `arr.buffer(0).getAtIndex(layout, i)` with `arr.getLong(i)` /
 `arr.getDouble(i)` / `arr.forEachLong(c)`. Encodings pick a concrete subtype so
 the JIT can specialise the hot path with a constant `ValueLayout`.
 
-**Design**
-
-- `ArrayOperations` (interface, `core`): primitive accessors — `getBoolean`,
-  `getByte`, `getShort`, `getInt`, `getLong`, `getFloat`, `getDouble`,
-  `getBytes`, plus `forEachLong`/`forEachDouble`/... bulk variants. All
-  default to `throw VortexException("<class> does not support <op>")`.
-- `Array` (sealed interface, `core`) extends `ArrayOperations`. Keeps
-  public `buffer(int)` / `child(int)` for encoding internals during migration.
-- Concrete subtypes in `core.array` sub-package:
-    - `LongArray`, `DoubleArray`, `IntArray`, `FloatArray`,
-      `ShortArray`, `ByteArray` — single `MemorySegment` + length +
-      `static final ValueLayout`. Tight `getXxx` / `forEachXxx`.
-    - `BoolArray` — bitmap.
-    - `VarBinArray` — bytes segment + offsets segment + offsets ptype.
-    - `NullArray` — length only.
-    - `StructArray` — `Map<String, Array>` columns.
-    - `GenericArray` — fallback that holds the current record shape
-      (`MemorySegment[]` + `Array[]`) and dispatches via dtype switch;
-      lets encodings migrate one at a time.
-
-**Encoding dispatch**
-
-| Encoding                                  | Returns                                 |
-|----------------------------------------|-----------------------------------------|
-| `vortex.primitive` (I64/U64)           | `LongArray`                             |
-| `vortex.primitive` (I32/U32)           | `IntArray`                              |
-| `vortex.primitive` (F64)               | `DoubleArray`                           |
-| `fastlanes.bitpacked`, `for`, `delta`, `vortex.sparse`, `vortex.dict` (int values) | `LongArray` / `IntArray` per dtype |
-| `vortex.alp` (F64)                     | `DoubleArray`                           |
-| `vortex.alp` (F32)                     | `FloatArray`                            |
-| `vortex.varbin`, `vortex.fsst`, `vortex.constant` (string) | `VarBinArray`         |
-| `vortex.bool`                          | `BoolArray`                             |
-| `vortex.null`                          | `NullArray`                             |
-| layout `vortex.struct`                 | `StructArray`                           |
-
-**Migration phases**
-
-- [x] **Phase A**: interface + sealed `Array` + `GenericArray` shim. All
-      existing encodings keep current behaviour. Migrate `PrimitiveEncoding`
-      and `AlpEncoding` so `volume` (Primitive I64) returns `LongArray` and
-      `close` (ALP F64) returns `DoubleArray`. Update
-      `RustVsJavaReadBenchmark.javaReadVolume`/`javaReadClose` to use
-      `forEachLong` / `forEachDouble`. Confirm no regression vs raw
-      MemorySegment loop.
-- [x] **Phase B**: migrate remaining leaf encodings (Bitpacked, FoR, Delta,
-      Sparse, Dict, Bool, Constant, VarBin, FSST, RunEnd, Sequence)
-      one at a time, each with a bench check.
 - [ ] **Phase C**: once all leaf encodings return concrete subtypes,
       consider tightening `buffer(int)` / `child(int)` to
       package-private or moving to an internal helper interface.
-
 
 - [ ] Optional `vortex-arrow` bridge module for Arrow ecosystem interop
     - Primary API stays `ArrayLong`/`ArrayDouble` (zero-copy, no deps, no Unsafe)
