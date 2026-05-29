@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.encoding.AlpEncoding;
 import io.github.dfa1.vortex.encoding.BoolEncoding;
 import io.github.dfa1.vortex.encoding.Encoding;
+import io.github.dfa1.vortex.encoding.VarBinEncoding;
 import io.github.dfa1.vortex.encoding.EncodeNode;
 import io.github.dfa1.vortex.encoding.EncodeResult;
 import io.github.dfa1.vortex.encoding.EncodingId;
@@ -53,7 +54,8 @@ public final class VortexWriter implements Closeable {
 	private static final ByteBuffer MAGIC = ByteBuffer.wrap(new byte[]{'V', 'T', 'X', 'F'})
 			.asReadOnlyBuffer();
 
-	private static final List<Encoding> DEFAULT_CODECS = List.of(new AlpEncoding(), new PrimitiveEncoding(), new BoolEncoding());
+	private static final List<Encoding> DEFAULT_CODECS = List.of(
+			new AlpEncoding(), new VarBinEncoding(), new PrimitiveEncoding(), new BoolEncoding());
 
 	private final WritableByteChannel channel;
 	private final DType.Struct schema;
@@ -97,6 +99,7 @@ public final class VortexWriter implements Closeable {
 			case float[] a -> a.length;
 			case double[] a -> a.length;
 			case boolean[] a -> a.length;
+			case String[] a -> a.length;
 			default -> throw new UnsupportedOperationException(
 					"unsupported data type: " + data.getClass());
 		};
@@ -140,6 +143,10 @@ public final class VortexWriter implements Closeable {
 				int inner = io.github.dfa1.vortex.fbs.Struct_.createStruct_(
 						fbb, namesVec, dtypesVec, s.nullable());
 				yield io.github.dfa1.vortex.fbs.DType.createDType(fbb, Type.Struct_, inner);
+			}
+			case DType.Utf8 u -> {
+				int inner = io.github.dfa1.vortex.fbs.Utf8.createUtf8(fbb, u.nullable());
+				yield io.github.dfa1.vortex.fbs.DType.createDType(fbb, Type.Utf8, inner);
 			}
 			default -> throw new UnsupportedOperationException("unsupported DType: " + dtype);
 		};

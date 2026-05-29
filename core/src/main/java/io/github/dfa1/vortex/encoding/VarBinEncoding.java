@@ -9,8 +9,13 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.core.VortexException;
 
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 /// Decoder for {@code vortex.varbin} — variable-length binary / UTF-8 string arrays.
 ///
@@ -34,8 +39,44 @@ public final class VarBinEncoding implements Encoding {
 	}
 
 	@Override
+	public boolean accepts(DType dtype) {
+		return dtype instanceof DType.Utf8 || dtype instanceof DType.Binary;
+	}
+
+	@Override
 	public EncodeResult encode(DType dtype, Object data) {
-		throw new UnsupportedOperationException("encode not supported by " + encodingId());
+		String[] strings = (String[]) data;
+		int n = strings.length;
+
+		byte[][] byteArrays = new byte[n][];
+		int totalBytes = 0;
+		for (int i = 0; i < n; i++) {
+			byteArrays[i] = strings[i].getBytes(StandardCharsets.UTF_8);
+			totalBytes += byteArrays[i].length;
+		}
+
+		Arena arena = Arena.ofAuto();
+		MemorySegment bytesBuf = arena.allocate(totalBytes > 0 ? totalBytes : 1);
+		MemorySegment offsetsBuf = arena.allocate((long) (n + 1) * Long.BYTES, Long.BYTES);
+		ValueLayout.OfLong leI64 = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+
+		long pos = 0;
+		offsetsBuf.setAtIndex(leI64, 0, 0L);
+		for (int i = 0; i < n; i++) {
+			MemorySegment.copy(MemorySegment.ofArray(byteArrays[i]), 0, bytesBuf, pos, byteArrays[i].length);
+			pos += byteArrays[i].length;
+			offsetsBuf.setAtIndex(leI64, i + 1, pos);
+		}
+
+		byte[] metaBytes = EncodingProtos.VarBinMetadata.newBuilder()
+				.setOffsetsPtype(dev.vortex.proto.DTypeProtos.PType.forNumber(PType.I64.ordinal()))
+				.build()
+				.toByteArray();
+
+		EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
+		EncodeNode root = new EncodeNode(encodingId(), ByteBuffer.wrap(metaBytes),
+				new EncodeNode[]{offsetsNode}, new int[]{0});
+		return new EncodeResult(root, List.of(bytesBuf, offsetsBuf), null, null);
 	}
 
 	@Override

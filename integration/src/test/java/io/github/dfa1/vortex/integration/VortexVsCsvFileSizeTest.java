@@ -29,9 +29,16 @@ class VortexVsCsvFileSizeTest {
 	private static final int TOTAL_ROWS = 100_000;
 	private static final int BATCH_SIZE = 50_000;
 
+	private static final String[] SYMBOLS = {
+			"AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "BRK.B", "JPM", "V",
+			"UNH", "XOM", "LLY", "JNJ", "MA", "PG", "HD", "MRK", "AVGO", "CVX",
+			"PEP", "ABBV", "KO", "COST", "WMT", "MCD", "CSCO", "ACN", "BAC", "CRM"
+	};
+
 	private static final DType.Struct SCHEMA = new DType.Struct(
-			List.of("date", "open", "high", "low", "close", "volume"),
+			List.of("symbol", "date", "open", "high", "low", "close", "volume"),
 			List.of(
+					new DType.Utf8(false),
 					new DType.Primitive(PType.I32, false),
 					new DType.Primitive(PType.F64, false),
 					new DType.Primitive(PType.F64, false),
@@ -42,7 +49,7 @@ class VortexVsCsvFileSizeTest {
 			false
 	);
 
-	private record OhlcBatch(int[] dates, double[] open, double[] high,
+	private record OhlcBatch(String[] symbols, int[] dates, double[] open, double[] high,
 	                         double[] low, double[] close, long[] volume) {}
 
 	private static List<OhlcBatch> generateBatches() {
@@ -55,6 +62,7 @@ class VortexVsCsvFileSizeTest {
 
 		while (rowsLeft > 0) {
 			int n = Math.min(rowsLeft, BATCH_SIZE);
+			String[] symbols = new String[n];
 			int[] dates = new int[n];
 			double[] open = new double[n], high = new double[n], low = new double[n], close = new double[n];
 			long[] volume = new long[n];
@@ -65,6 +73,7 @@ class VortexVsCsvFileSizeTest {
 				double o = Math.round(px * (1 + ret * 0.3) * 100.0) / 100.0;
 				double c = Math.round(px * (1 + ret) * 100.0) / 100.0;
 				double spread = Math.abs(px * rng.nextDouble() * 0.03);
+				symbols[i] = SYMBOLS[ticker];
 				dates[i]  = startDay + (rowsDone + i) / 30;
 				open[i]   = o;
 				high[i]   = Math.round((Math.max(o, c) + spread) * 100.0) / 100.0;
@@ -73,7 +82,7 @@ class VortexVsCsvFileSizeTest {
 				volume[i] = Math.max(100_000L, Math.round(1_000_000 + rng.nextGaussian() * 200_000));
 				prices[ticker] = c;
 			}
-			batches.add(new OhlcBatch(dates, open, high, low, close, volume));
+			batches.add(new OhlcBatch(symbols, dates, open, high, low, close, volume));
 			rowsLeft -= n;
 			rowsDone += n;
 		}
@@ -92,7 +101,7 @@ class VortexVsCsvFileSizeTest {
 		     VortexWriter writer = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
 			for (OhlcBatch b : batches) {
 				writer.writeChunk(Map.of(
-						"date", b.dates(), "open", b.open(), "high", b.high(),
+						"symbol", b.symbols(), "date", b.dates(), "open", b.open(), "high", b.high(),
 						"low", b.low(), "close", b.close(), "volume", b.volume()
 				));
 			}
@@ -100,10 +109,11 @@ class VortexVsCsvFileSizeTest {
 
 		// When — write CSV
 		try (BufferedWriter csv = Files.newBufferedWriter(csvFile)) {
-			csv.write("date,open,high,low,close,volume\n");
+			csv.write("symbol,date,open,high,low,close,volume\n");
 			for (OhlcBatch b : batches) {
 				for (int i = 0; i < b.dates().length; i++) {
-					csv.write(LocalDate.ofEpochDay(b.dates()[i]) + "," + b.open()[i] + "," + b.high()[i] + ","
+					csv.write(b.symbols()[i] + "," + LocalDate.ofEpochDay(b.dates()[i]) + ","
+							+ b.open()[i] + "," + b.high()[i] + ","
 							+ b.low()[i] + "," + b.close()[i] + "," + b.volume()[i] + "\n");
 				}
 			}
