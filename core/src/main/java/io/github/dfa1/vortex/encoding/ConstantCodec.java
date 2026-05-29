@@ -6,6 +6,9 @@ import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.array.BoolArray;
+import io.github.dfa1.vortex.core.array.GenericArray;
+import io.github.dfa1.vortex.core.array.NullArray;
 import io.github.dfa1.vortex.core.array.ByteArray;
 import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.FloatArray;
@@ -77,8 +80,28 @@ public final class ConstantCodec implements Codec {
 
 		long n = ctx.rowCount();
 
+		if (ctx.dtype() instanceof DType.Null) {
+			return new NullArray(ctx.dtype(), n);
+		}
+
 		if (ctx.dtype() instanceof DType.Utf8 || ctx.dtype() instanceof DType.Binary) {
 			return decodeString(ctx, scalar, n);
+		}
+
+		if (ctx.dtype() instanceof DType.Bool) {
+			return decodeBool(ctx, scalar, n);
+		}
+
+		if (ctx.dtype() instanceof DType.Decimal) {
+			return decodeDecimal(ctx, scalar, n);
+		}
+
+		if (ctx.dtype() instanceof DType.Extension ext) {
+			// Decode using the storage dtype, re-wrap with the extension dtype
+			var storageCtx = new DecodeContext(ctx.node(), ext.storageDType(), ctx.rowCount(),
+					ctx.segmentBuffers(), ctx.registry(), ctx.arena());
+			Array storage = decode(storageCtx);
+			return new GenericArray(ctx.dtype(), n, storage.buffer(0));
 		}
 
 		if (!(ctx.dtype() instanceof DType.Primitive p)) {
@@ -105,6 +128,30 @@ public final class ConstantCodec implements Codec {
 			case I8, U8   -> new ByteArray(ctx.dtype(), n, ro, ArrayStats.empty());
 			default -> throw new VortexException(CodecId.VORTEX_CONSTANT, "unsupported ptype " + ptype);
 		};
+	}
+
+	private static Array decodeDecimal(DecodeContext ctx, ScalarProtos.ScalarValue scalar, long n) {
+		// Decimal stored as i128 (16 bytes LE) in bytes_value
+		byte[] elemBytes = scalar.getBytesValue().toByteArray();
+		int elemLen = elemBytes.length;
+		MemorySegment outSeg = ctx.arena().allocate(n * elemLen);
+		MemorySegment elemSeg = MemorySegment.ofArray(elemBytes);
+		for (long i = 0; i < n; i++) {
+			MemorySegment.copy(elemSeg, 0L, outSeg, i * elemLen, elemLen);
+		}
+		return new GenericArray(ctx.dtype(), n, outSeg.asReadOnly());
+	}
+
+	private static Array decodeBool(DecodeContext ctx, ScalarProtos.ScalarValue scalar, long n) {
+		boolean value = scalar.getBoolValue();
+		long numBytes = (n + 7) >>> 3;
+		MemorySegment seg = ctx.arena().allocate(numBytes);
+		if (value) {
+			for (long i = 0; i < numBytes; i++) {
+				seg.set(ValueLayout.JAVA_BYTE, i, (byte) 0xFF);
+			}
+		}
+		return new BoolArray(ctx.dtype(), n, seg.asReadOnly(), ArrayStats.empty());
 	}
 
 	private static Array decodeString(DecodeContext ctx, ScalarProtos.ScalarValue scalar, long n) {

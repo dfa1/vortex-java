@@ -113,14 +113,14 @@
 
 ## Remote / HTTP reads
 
-- [ ] **Extract `VortexHandle` interface** (`reader` module, prerequisite for HTTP reader)
+- [x] **Extract `VortexHandle` interface** (`reader` module, prerequisite for HTTP reader)
     - Interface: `dtype()`, `layout()`, `footer()`, `version()`, `fileSize()`, `registry()`,
       `slice(long offset, long length)`.
     - `VortexReader` implements it (mmap path, unchanged behaviour).
     - `VortexInspector.inspect()` and `ScanIterator` accept `VortexHandle` — both transports work
       transparently without overloads.
 
-- [ ] **`VortexHttpReader`** (`reader` module, requires `VortexHandle`)
+- [x] **`VortexHttpReader`** (`reader` module, requires `VortexHandle`)
     - Constructor takes `URI`; uses JDK `HttpClient` (no extra deps).
     - On open: fetch last 65 KB via `Range: bytes=-65536`, parse trailer + postscript.
     - `slice(offset, length)`: fires a targeted `Range: bytes=<offset>-<end>` request,
@@ -137,14 +137,11 @@
       | `BufferHandle` heap alloc| `ctx.arena().allocate(n)` (off-heap)      |
       | `CoalesceConfig`         | not yet — future optimisation             |
 
-- [ ] **Integration test: read real Vortex files over HTTPS**
-    - Source: public S3 bucket `vortex-compat-fixtures` (no auth required), e.g.
-      `https://vortex-compat-fixtures.s3.amazonaws.com/v0.72.0/arrays/tpch_lineitem.compact.vortex`
-    - Fetch last 65 KB via HTTP `Range: bytes=-65536` to locate trailer + postscript (mirrors what a
-      remote reader would do before deciding how much more to pull).
-    - Decode with Java reader; compare column sums / row count against the Rust JNI reader on the
-      same bytes to catch any decoding divergence.
-    - Test should be `@Tag("integration")` and skipped in offline / CI-without-network environments.
+- [x] **Integration test: read real Vortex files over HTTPS**
+    - Source: public S3 bucket `vortex-compat-fixtures` (no auth required).
+    - `VortexHttpReaderIT`: parses metadata, verifies layout row count, scans `for.vortex`
+      (frame-of-reference, 10 columns, 1024 rows) end-to-end. Skipped when network unavailable.
+    - `tpch_lineitem.compact.vortex` metadata reads fine; full scan blocked by `vortex.pco` (not implemented).
 
 ## Large-file support
 
@@ -224,13 +221,6 @@ the JIT can specialise the hot path with a constant `ValueLayout`.
       consider tightening `buffer(int)` / `child(int)` to
       package-private or moving to an internal helper interface.
 
-- [ ] Optional `vortex-arrow` bridge module for Arrow ecosystem interop
-    - Primary API stays `LongArray`/`DoubleArray` (zero-copy, no deps, no Unsafe)
-    - Bridge wraps typed views into Arrow `BigIntVector`, `Float8Vector`, etc. for users who need
-      Arrow Flight / DuckDB ADBC / pandas interop
-    - Conversion involves a copy (MemorySegment → Arrow off-heap buffer) — cost is explicit and opt-in
-    - Arrow JVM uses `sun.misc.Unsafe` / Netty internally; keeping it in a separate module means
-      the core library stays Unsafe-free
 
 - [ ] Optional `vortex-arrow` bridge module for Arrow ecosystem interop
     - Primary API stays `ArrayLong`/`ArrayDouble` (zero-copy, no deps, no Unsafe)

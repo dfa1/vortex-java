@@ -11,6 +11,8 @@ import io.github.dfa1.vortex.core.array.ByteArray;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
+import io.github.dfa1.vortex.core.array.BoolArray;
+import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.Arena;
@@ -134,6 +136,97 @@ public final class RunEndCodec implements Codec {
 		};
 	}
 
+	private static Array expandBool(
+			Array endsArr, BoolArray valuesArr,
+			PType endsPtype, long numRuns, long offset, long n,
+			DType dtype, Arena arena
+	) {
+		MemorySegment endsSeg = endsArr.buffer(0);
+		long numBytes = (n + 7) >>> 3;
+		MemorySegment out = arena.allocate(numBytes);
+
+		long outIdx = 0;
+		long logicalPos = 0;
+		for (long run = 0; run < numRuns && outIdx < n; run++) {
+			long runEnd = readUnsigned(endsSeg, run, endsPtype);
+			boolean val = valuesArr.getBoolean(run);
+			long lo = Math.max(logicalPos, offset);
+			long hi = Math.min(runEnd, offset + n);
+			for (long lp = lo; lp < hi; lp++, outIdx++) {
+				if (val) {
+					long byteIdx = outIdx >>> 3;
+					byte cur = out.get(ValueLayout.JAVA_BYTE, byteIdx);
+					out.set(ValueLayout.JAVA_BYTE, byteIdx, (byte) (cur | (1 << (outIdx & 7))));
+				}
+			}
+			logicalPos = runEnd;
+		}
+		return new BoolArray(dtype, n, out.asReadOnly(), ArrayStats.empty());
+	}
+
+	private static Array expandStrings(
+			Array endsArr, VarBinArray valuesArr,
+			PType endsPtype, long numRuns, long offset, long n,
+			DType dtype, Arena arena
+	) {
+		MemorySegment endsSeg = endsArr.buffer(0);
+		MemorySegment valBytes = valuesArr.buffer(0);
+		MemorySegment valOffsets = valuesArr.child(0).buffer(0);
+		PType valOffPtype = ((DType.Primitive) valuesArr.child(0).dtype()).ptype();
+
+		// First pass: total output byte length
+		long totalBytes = 0;
+		long logicalPos = 0;
+		for (long run = 0; run < numRuns; run++) {
+			long runEnd = readUnsigned(endsSeg, run, endsPtype);
+			long lo = Math.max(logicalPos, offset);
+			long hi = Math.min(runEnd, offset + n);
+			long count = Math.max(0, hi - lo);
+			long strLen = readVarBinOffset(valOffsets, run + 1, valOffPtype)
+					- readVarBinOffset(valOffsets, run, valOffPtype);
+			totalBytes += count * strLen;
+			logicalPos = runEnd;
+		}
+
+		MemorySegment outBytes = arena.allocate(totalBytes > 0 ? totalBytes : 1);
+		MemorySegment outOffsets = arena.allocate((n + 1) * 4L, 4);
+		outOffsets.setAtIndex(LE_INT, 0, 0);
+
+		long bytePos = 0;
+		long outIdx = 0;
+		logicalPos = 0;
+		for (long run = 0; run < numRuns && outIdx < n; run++) {
+			long runEnd = readUnsigned(endsSeg, run, endsPtype);
+			long lo = Math.max(logicalPos, offset);
+			long hi = Math.min(runEnd, offset + n);
+			if (hi > lo) {
+				long strStart = readVarBinOffset(valOffsets, run, valOffPtype);
+				long strEnd = readVarBinOffset(valOffsets, run + 1, valOffPtype);
+				long strLen = strEnd - strStart;
+				for (long lp = lo; lp < hi; lp++, outIdx++) {
+					if (strLen > 0) {
+						MemorySegment.copy(valBytes, strStart, outBytes, bytePos, strLen);
+						bytePos += strLen;
+					}
+					outOffsets.setAtIndex(LE_INT, outIdx + 1, (int) bytePos);
+				}
+			}
+			logicalPos = runEnd;
+		}
+
+		DType i32 = new DType.Primitive(PType.I32, false);
+		Array offsetArr = new IntArray(i32, n + 1, outOffsets.asReadOnly(), ArrayStats.empty());
+		return new VarBinArray(dtype, n, outBytes.asReadOnly(), offsetArr, PType.I32, ArrayStats.empty());
+	}
+
+	private static long readVarBinOffset(MemorySegment seg, long i, PType ptype) {
+		return switch (ptype) {
+			case I32, U32 -> Integer.toUnsignedLong(seg.getAtIndex(LE_INT, i));
+			case I64, U64 -> seg.getAtIndex(LE_LONG, i);
+			default -> throw new VortexException(CodecId.VORTEX_RUNEND, "unsupported offset ptype " + ptype);
+		};
+	}
+
 	// ── Helpers ───────────────────────────────────────────────────────────────
 
 	private static PType ptypeFromProto(DTypeProtos.PType proto) {
@@ -168,14 +261,24 @@ public final class RunEndCodec implements Codec {
 		long numRuns = meta.getNumRuns();
 		long offset = meta.getOffset();
 
+		long n = ctx.rowCount();
+		DType endsDtype = new DType.Primitive(endsPtype, false);
+		Array endsArr = decodeChildAs(ctx, 0, endsDtype, numRuns);
+
+		if (ctx.dtype() instanceof DType.Utf8 || ctx.dtype() instanceof DType.Binary) {
+			Array valuesArr = decodeChildAs(ctx, 1, ctx.dtype(), numRuns);
+			return expandStrings(endsArr, (VarBinArray) valuesArr, endsPtype, numRuns, offset, n, ctx.dtype(), ctx.arena());
+		}
+
+		if (ctx.dtype() instanceof DType.Bool) {
+			Array valuesArr = decodeChildAs(ctx, 1, ctx.dtype(), numRuns);
+			return expandBool(endsArr, (BoolArray) valuesArr, endsPtype, numRuns, offset, n, ctx.dtype(), ctx.arena());
+		}
+
 		if (!(ctx.dtype() instanceof DType.Primitive p)) {
 			throw new VortexException(CodecId.VORTEX_RUNEND, "expected primitive dtype, got " + ctx.dtype());
 		}
 		PType valuePtype = p.ptype();
-		long n = ctx.rowCount();
-
-		DType endsDtype = new DType.Primitive(endsPtype, false);
-		Array endsArr = decodeChildAs(ctx, 0, endsDtype, numRuns);
 		Array valuesArr = decodeChildAs(ctx, 1, ctx.dtype(), numRuns);
 
 		return expand(endsArr.buffer(0), valuesArr.buffer(0),
