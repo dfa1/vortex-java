@@ -237,14 +237,12 @@ public final class DictCodec implements Codec {
 		}
 
 		ByteBuffer meta = ctx.metadata();
-		byte[] metaBytes = new byte[meta.remaining()];
-		meta.duplicate().get(metaBytes);
 
 		// 1-byte = legacy Java format; multi-byte = Rust proto format
-		if (metaBytes.length == 1) {
-			return decodeLegacyJava(ctx, metaBytes[0]);
+		if (meta.remaining() == 1) {
+			return decodeLegacyJava(ctx, meta.get(0));
 		}
-		return decodeRustProto(ctx, metaBytes);
+		return decodeRustProto(ctx, meta.duplicate());
 	}
 
 	private Array decodeLegacyJava(DecodeContext ctx, byte codeTypeByte) {
@@ -265,10 +263,10 @@ public final class DictCodec implements Codec {
 		return new Array(ctx.dtype(), rowCount, new MemorySegment[]{out.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
 	}
 
-	private Array decodeRustProto(DecodeContext ctx, byte[] metaBytes) {
+	private Array decodeRustProto(DecodeContext ctx, ByteBuffer metaBuf) {
 		EncodingProtos.DictMetadata meta;
 		try {
-			meta = EncodingProtos.DictMetadata.parseFrom(metaBytes);
+			meta = EncodingProtos.DictMetadata.parseFrom(metaBuf);
 		} catch (InvalidProtocolBufferException e) {
 			throw new VortexException(CodecId.VORTEX_DICT, "invalid proto metadata", e);
 		}

@@ -38,15 +38,16 @@ public final class DeltaCodec implements Codec {
 		return ByteBuffer.wrap(buf);
 	}
 
-	private static long[] unpack(byte[] packed, int count, int bitWidth, long frameOfRef) {
+	private static long[] unpack(MemorySegment packed, int count, int bitWidth, long frameOfRef) {
 		long[] out = new long[count];
+		long size = packed.byteSize();
 		for (int i = 0; i < count; i++) {
 			long val = 0L;
 			int bitPos = i * bitWidth;
 			for (int b = 0; b < bitWidth; b++) {
 				int byteIdx = (bitPos + b) >>> 3;
 				int bitIdx = (bitPos + b) & 7;
-				if (byteIdx < packed.length && ((packed[byteIdx] >>> bitIdx) & 1) == 1) {
+				if (byteIdx < size && ((packed.get(ValueLayout.JAVA_BYTE, byteIdx) >>> bitIdx) & 1) == 1) {
 					val |= 1L << b;
 				}
 			}
@@ -238,13 +239,11 @@ public final class DeltaCodec implements Codec {
 		long rowCount = ctx.rowCount();
 
 		MemorySegment packed = ctx.buffer(0);
-		byte[] packedBytes = new byte[(int) packed.byteSize()];
-		MemorySegment.copy(packed, ValueLayout.JAVA_BYTE, 0, packedBytes, 0, packedBytes.length);
 
 		long[] longs = new long[(int) rowCount];
 		if (rowCount > 0) {
 			longs[0] = baseValue;
-			long[] deltas = unpack(packedBytes, (int) rowCount - 1, bitWidth, deltaFor);
+			long[] deltas = unpack(packed, (int) rowCount - 1, bitWidth, deltaFor);
 			for (int i = 0; i < deltas.length; i++) {
 				longs[i + 1] = longs[i] + deltas[i];
 			}

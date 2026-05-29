@@ -135,12 +135,9 @@ public final class SparseCodec implements Codec {
 		if (rawMeta == null || !rawMeta.hasRemaining()) {
 			throw new VortexException(CodecId.VORTEX_SPARSE, "missing metadata");
 		}
-		byte[] metaBytes = new byte[rawMeta.remaining()];
-		rawMeta.duplicate().get(metaBytes);
-
 		EncodingProtos.SparseMetadata sparseMeta;
 		try {
-			sparseMeta = EncodingProtos.SparseMetadata.parseFrom(metaBytes);
+			sparseMeta = EncodingProtos.SparseMetadata.parseFrom(rawMeta.duplicate());
 		} catch (InvalidProtocolBufferException e) {
 			throw new VortexException(CodecId.VORTEX_SPARSE, "invalid metadata", e);
 		}
@@ -157,10 +154,9 @@ public final class SparseCodec implements Codec {
 
 		// Fill value from buffer[0]
 		MemorySegment fillBuf = ctx.buffer(0);
-		byte[] fillBytes = fillBuf.toArray(ValueLayout.JAVA_BYTE);
 		ScalarProtos.ScalarValue fillScalar;
 		try {
-			fillScalar = ScalarProtos.ScalarValue.parseFrom(fillBytes);
+			fillScalar = ScalarProtos.ScalarValue.parseFrom(fillBuf.asByteBuffer());
 		} catch (InvalidProtocolBufferException e) {
 			throw new VortexException(CodecId.VORTEX_SPARSE, "invalid fill value", e);
 		}

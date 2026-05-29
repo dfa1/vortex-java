@@ -90,12 +90,9 @@ public final class SequenceCodec implements Codec {
 		if (metaBuf == null || !metaBuf.hasRemaining()) {
 			throw new VortexException(CodecId.VORTEX_SEQUENCE, "missing metadata");
 		}
-		byte[] metaBytes = new byte[metaBuf.remaining()];
-		metaBuf.duplicate().get(metaBytes);
-
 		EncodingProtos.SequenceMetadata meta;
 		try {
-			meta = EncodingProtos.SequenceMetadata.parseFrom(metaBytes);
+			meta = EncodingProtos.SequenceMetadata.parseFrom(metaBuf.duplicate());
 		} catch (InvalidProtocolBufferException e) {
 			throw new VortexException(CodecId.VORTEX_SEQUENCE, "invalid metadata", e);
 		}

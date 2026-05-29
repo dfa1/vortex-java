@@ -61,11 +61,9 @@ public final class ConstantCodec implements Codec {
 	@Override
 	public Array decode(DecodeContext ctx) {
 		MemorySegment scalarBuf = ctx.buffer(0);
-		byte[] scalarBytes = scalarBuf.toArray(ValueLayout.JAVA_BYTE);
-
 		ScalarProtos.ScalarValue scalar;
 		try {
-			scalar = ScalarProtos.ScalarValue.parseFrom(scalarBytes);
+			scalar = ScalarProtos.ScalarValue.parseFrom(scalarBuf.asByteBuffer());
 		} catch (InvalidProtocolBufferException e) {
 			throw new VortexException(CodecId.VORTEX_CONSTANT, "invalid scalar value", e);
 		}
@@ -104,7 +102,7 @@ public final class ConstantCodec implements Codec {
 		// Store the string bytes once; all n offsets point into the same [0, strLen] range.
 		// Offsets layout: [0, strLen, 0, strLen, ...] — each pair encodes the same slice.
 		MemorySegment bytesSeg = ctx.arena().allocate(strLen);
-		MemorySegment.copy(MemorySegment.ofArray(strBytes), 0, bytesSeg, 0, strLen);
+		bytesSeg.asByteBuffer().put(strBytes);
 
 		// Offsets: n+1 I32 values, alternating start/end of the single string.
 		MemorySegment offsetsSeg = ctx.arena().allocate((n + 1) * 4L, 4);
