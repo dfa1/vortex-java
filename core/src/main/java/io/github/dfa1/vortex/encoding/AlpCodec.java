@@ -9,7 +9,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.DoubleArray;
-import io.github.dfa1.vortex.core.array.GenericArray;
+import io.github.dfa1.vortex.core.array.FloatArray;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -158,7 +158,7 @@ public final class AlpCodec implements Codec {
 			applyPatches(ctx, meta.getPatches(), out, LE_INT, 4);
 		}
 
-		return new GenericArray(ctx.dtype(), n, new MemorySegment[]{out.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
+		return new FloatArray(ctx.dtype(), n, out.asReadOnly(), ArrayStats.empty());
 	}
 
 	private void applyPatches(DecodeContext ctx, EncodingProtos.PatchesMetadata pm,

@@ -108,7 +108,7 @@ the JIT can specialise the hot path with a constant `ValueLayout`.
       `RustVsJavaReadBenchmark.javaReadVolume`/`javaReadClose` to use
       `forEachLong` / `forEachDouble`. Confirm no regression vs raw
       MemorySegment loop.
-- [ ] **Phase B**: migrate remaining leaf codecs (Bitpacked, FoR, Delta,
+- [x] **Phase B**: migrate remaining leaf codecs (Bitpacked, FoR, Delta,
       Sparse, Dict, Bool, Constant, VarBin, FSST, RunEnd, Sequence)
       one at a time, each with a bench check.
 - [ ] **Phase C**: once all leaf codecs return concrete subtypes,

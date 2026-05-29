@@ -3,9 +3,8 @@ package io.github.dfa1.vortex.encoding;
 import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.array.GenericArray;
+import io.github.dfa1.vortex.core.array.BoolArray;
 
-import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 
 /// Codec for `vortex.bool` — bit-packed boolean arrays (LSB first).
@@ -38,8 +37,6 @@ public final class BoolCodec implements Codec {
 
 	@Override
 	public Array decode(DecodeContext ctx) {
-		MemorySegment buf = ctx.buffer(0);
-		return new GenericArray(ctx.dtype(), ctx.rowCount(),
-				new MemorySegment[]{buf}, Array.NO_CHILDREN, ArrayStats.empty());
+		return new BoolArray(ctx.dtype(), ctx.rowCount(), ctx.buffer(0), ArrayStats.empty());
 	}
 }
