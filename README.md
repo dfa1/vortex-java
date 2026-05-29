@@ -6,7 +6,7 @@ Pure-Java reader/writer for the [Vortex](https://github.com/spiraldb/vortex) col
 
 ## Performance
 
-`RustVsJavaReadBenchmark` — 10M OHLC rows, JMH throughput (higher = better), Apple M-series, Java 25:
+`RustVsJavaReadBenchmark` — 10M OHLC rows, JMH throughput (higher = better), Apple M5 / 32 GB, Java 25:
 
 | Column           | Encoding          | vortex-jni  | vortex-java  | ratio         |
 |------------------|-------------------|-------------|--------------|---------------|
@@ -25,7 +25,7 @@ bit-packing so segments stay large), projection on `c0`, JMH throughput:
 | vortex-jni  | 5.9 ops/s      | ~170  | ~4.7 GB/s   |
 | vortex-java | **19.7 ops/s** | ~51   | ~15.7 GB/s — **Java 3.4×** |
 
-Memory-bandwidth bound on Apple M-series. Reproduce: `./benchmark.sh RustWritesJavaReadsBigFileBenchmark`
+Memory-bandwidth bound on Apple M5 / 32 GB. Reproduce: `./benchmark.sh RustWritesJavaReadsBigFileBenchmark`
 (adds a ~30 s fixture build for the JNI write). Pass `-Dvortex.bench.bigfile=<path>` to reuse an existing
 fixture between runs.
 
