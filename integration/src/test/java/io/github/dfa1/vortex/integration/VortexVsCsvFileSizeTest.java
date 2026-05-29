@@ -103,7 +103,7 @@ class VortexVsCsvFileSizeTest {
 			csv.write("date,open,high,low,close,volume\n");
 			for (OhlcBatch b : batches) {
 				for (int i = 0; i < b.dates().length; i++) {
-					csv.write(b.dates()[i] + "," + b.open()[i] + "," + b.high()[i] + ","
+					csv.write(LocalDate.ofEpochDay(b.dates()[i]) + "," + b.open()[i] + "," + b.high()[i] + ","
 							+ b.low()[i] + "," + b.close()[i] + "," + b.volume()[i] + "\n");
 				}
 			}
