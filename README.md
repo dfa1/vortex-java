@@ -97,6 +97,10 @@ which has no per-mapping size limit — unlike the legacy `FileChannel.map()` AP
 | [spiraldb/vortex](https://github.com/spiraldb/vortex)       | Rust     | Reference implementation + JNI bindings                             |
 | [spiraldb/vortex-go](https://github.com/spiraldb/vortex-go) | Go       | Pure-language port; primary inspiration for this project's approach |
 
+### Further reading
+
+- [FFM vs Unsafe](https://inside.java/2025/06/12/ffm-vs-unsafe/) — Maurizio Cimadamore's deep-dive on why FFM (`MemorySegment`/`Arena`) supersedes `sun.misc.Unsafe`: safety, performance, and the JVM's path forward
+
 ## Serialization formats
 
 The format uses two serialization libraries for different roles:
