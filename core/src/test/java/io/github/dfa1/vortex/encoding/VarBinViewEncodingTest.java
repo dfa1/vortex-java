@@ -2,58 +2,103 @@ package io.github.dfa1.vortex.encoding;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.array.VarBinArray;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// Property: decode reconstructs every string value exactly,
+/// regardless of inlined vs reference layout.
 class VarBinViewEncodingTest {
 
-	private static final ValueLayout.OfInt  LE_INT  = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+	private static final ValueLayout.OfInt LE_INT = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 	private static final DType UTF8 = new DType.Utf8(false);
 
-	// Writes a 16-byte inlined view: [size:u32 | data:12bytes]
-	private static void writeInlined(MemorySegment views, long viewIdx, byte[] value) {
-		long off = viewIdx * 16;
-		views.set(LE_INT, off, value.length);
-		MemorySegment.copy(MemorySegment.ofArray(value), 0, views, off + 4, value.length);
+	static Stream<Arguments> stringArrays() {
+		return Stream.of(
+				Arguments.of("empty-array",         new String[0]),
+				Arguments.of("single-empty-string", new String[]{""}),
+				Arguments.of("short-strings",        new String[]{"hi", "ok", "no"}),
+				Arguments.of("exactly-12-bytes",     new String[]{"123456789012"}),       // max inlined
+				Arguments.of("just-over-12-bytes",   new String[]{"1234567890123"}),      // min reference
+				Arguments.of("long-strings",         new String[]{"the quick brown fox jumps over the lazy dog"}),
+				Arguments.of("mixed-lengths",        new String[]{"a", "hello", "this is a longer string than twelve"}),
+				Arguments.of("repeated-short",       repeat("ab", 50)),
+				Arguments.of("repeated-long",        repeat("this exceeds twelve bytes easily", 10)),
+				Arguments.of("all-empty",            new String[]{"", "", "", ""}),
+				Arguments.of("unicode",              new String[]{"héllo", "wörld", "こんにちは"})
+		);
 	}
 
-	// Writes a 16-byte reference view: [size:u32 | prefix:4bytes | buffer_index:u32 | offset:u32]
-	private static void writeRef(MemorySegment views, long viewIdx,
-	                              int size, int bufferIndex, int offset) {
-		long off = viewIdx * 16;
-		views.set(LE_INT, off,      size);
-		views.set(LE_INT, off + 8,  bufferIndex);
-		views.set(LE_INT, off + 12, offset);
+	private static String[] repeat(String s, int n) {
+		String[] arr = new String[n];
+		java.util.Arrays.fill(arr, s);
+		return arr;
 	}
 
-	@Test
-	void decode_inlinedValues_returnsCorrectStrings() {
-		// Given — 3 short strings, all ≤12 bytes → inlined
-		String[] words = {"hello", "world", "hi"};
-		long n = words.length;
-
+	@ParameterizedTest(name = "{0}")
+	@MethodSource("stringArrays")
+	void decode_roundtrip_returnsAllStrings(String name, String[] values) {
+		// Given
 		Arena arena = Arena.ofAuto();
-		MemorySegment views = arena.allocate(n * 16);
-		for (int i = 0; i < n; i++) {
-			writeInlined(views, i, words[i].getBytes(StandardCharsets.UTF_8));
+		long n = values.length;
+
+		// Encode all long strings into one data buffer
+		byte[][] bytesArr = new byte[values.length][];
+		int dataBufLen = 0;
+		for (int i = 0; i < values.length; i++) {
+			bytesArr[i] = values[i].getBytes(StandardCharsets.UTF_8);
+			if (bytesArr[i].length > 12) {
+				dataBufLen += bytesArr[i].length;
+			}
 		}
 
-		// No data buffers; views is buffer[0] (only buffer)
+		MemorySegment dataBuf = arena.allocate(dataBufLen > 0 ? dataBufLen : 1);
+		MemorySegment views   = arena.allocate(n > 0 ? n * 16 : 1);
+
+		int dataOffset = 0;
+		for (int i = 0; i < values.length; i++) {
+			byte[] b = bytesArr[i];
+			long viewOff = (long) i * 16;
+			views.set(LE_INT, viewOff, b.length);
+			if (b.length <= 12) {
+				// inlined: data at viewOff+4
+				MemorySegment.copy(MemorySegment.ofArray(b), 0, views, viewOff + 4, b.length);
+			} else {
+				// reference: buffer_index=0, offset=dataOffset
+				views.set(LE_INT, viewOff + 8,  0);           // buffer_index
+				views.set(LE_INT, viewOff + 12, dataOffset);  // offset
+				MemorySegment.copy(MemorySegment.ofArray(b), 0, dataBuf, dataOffset, b.length);
+				dataOffset += b.length;
+			}
+		}
+
+		// bufferIndices: [0=dataBuf, 1=views] when data buffer needed, else just [0=views]
+		int[] bufIndices;
+		MemorySegment[] segBufs;
+		if (dataBufLen > 0) {
+			bufIndices = new int[]{0, 1};
+			segBufs    = new MemorySegment[]{dataBuf, views};
+		} else {
+			bufIndices = new int[]{0};
+			segBufs    = new MemorySegment[]{views};
+		}
+
 		ArrayNode node = new ArrayNode(EncodingId.VORTEX_VARBINVIEW, null,
-				new ArrayNode[0], new int[]{0}, null);
+				new ArrayNode[0], bufIndices, null);
 
 		EncodingRegistry registry = EncodingRegistry.empty();
 		registry.register(new VarBinViewEncoding());
 
-		DecodeContext ctx = new DecodeContext(node, UTF8, n,
-				new MemorySegment[]{views}, registry, arena);
+		DecodeContext ctx = new DecodeContext(node, UTF8, n, segBufs, registry, arena);
 		var sut = new VarBinViewEncoding();
 
 		// When
@@ -62,82 +107,9 @@ class VarBinViewEncodingTest {
 		// Then
 		assertThat(result).isInstanceOf(VarBinArray.class);
 		assertThat(result.length()).isEqualTo(n);
-		for (int i = 0; i < n; i++) {
-			assertThat(new String(result.getBytes(i), StandardCharsets.UTF_8)).isEqualTo(words[i]);
+		for (int i = 0; i < values.length; i++) {
+			String decoded = new String(result.getBytes(i), StandardCharsets.UTF_8);
+			assertThat(decoded).as("index %d", i).isEqualTo(values[i]);
 		}
-	}
-
-	@Test
-	void decode_referenceValues_returnsCorrectStrings() {
-		// Given — one long string (>12 bytes) stored in an external data buffer
-		String longStr = "a longer string here";
-		byte[] longBytes = longStr.getBytes(StandardCharsets.UTF_8);
-		long n = 1;
-
-		Arena arena = Arena.ofAuto();
-
-		// data buffer (buffer index 0 in segment array)
-		MemorySegment dataBuf = arena.allocate(longBytes.length);
-		MemorySegment.copy(MemorySegment.ofArray(longBytes), 0, dataBuf, 0, longBytes.length);
-
-		// views buffer (buffer index 1 in segment array — last)
-		MemorySegment views = arena.allocate(n * 16);
-		writeRef(views, 0, longBytes.length, 0, 0); // buffer_index=0, offset=0
-
-		// bufferIndices: [0=dataBuf, 1=views] — views is last
-		ArrayNode node = new ArrayNode(EncodingId.VORTEX_VARBINVIEW, null,
-				new ArrayNode[0], new int[]{0, 1}, null);
-
-		EncodingRegistry registry = EncodingRegistry.empty();
-		registry.register(new VarBinViewEncoding());
-
-		DecodeContext ctx = new DecodeContext(node, UTF8, n,
-				new MemorySegment[]{dataBuf, views}, registry, arena);
-		var sut = new VarBinViewEncoding();
-
-		// When
-		var result = sut.decode(ctx);
-
-		// Then
-		assertThat(result).isInstanceOf(VarBinArray.class);
-		assertThat(result.length()).isEqualTo(n);
-		assertThat(new String(result.getBytes(0), StandardCharsets.UTF_8)).isEqualTo(longStr);
-	}
-
-	@Test
-	void decode_mixedValues_returnsAllStrings() {
-		// Given — mix of inlined and reference values
-		String shortStr = "short";
-		String longStr  = "this is definitely longer than twelve bytes";
-		long n = 2;
-
-		Arena arena = Arena.ofAuto();
-		byte[] longBytes = longStr.getBytes(StandardCharsets.UTF_8);
-
-		MemorySegment dataBuf = arena.allocate(longBytes.length);
-		MemorySegment.copy(MemorySegment.ofArray(longBytes), 0, dataBuf, 0, longBytes.length);
-
-		MemorySegment views = arena.allocate(n * 16);
-		writeInlined(views, 0, shortStr.getBytes(StandardCharsets.UTF_8));
-		writeRef(views, 1, longBytes.length, 0, 0);
-
-		// bufferIndices: [0=dataBuf, 1=views]
-		ArrayNode node = new ArrayNode(EncodingId.VORTEX_VARBINVIEW, null,
-				new ArrayNode[0], new int[]{0, 1}, null);
-
-		EncodingRegistry registry = EncodingRegistry.empty();
-		registry.register(new VarBinViewEncoding());
-
-		DecodeContext ctx = new DecodeContext(node, UTF8, n,
-				new MemorySegment[]{dataBuf, views}, registry, arena);
-		var sut = new VarBinViewEncoding();
-
-		// When
-		var result = sut.decode(ctx);
-
-		// Then
-		assertThat(result.length()).isEqualTo(n);
-		assertThat(new String(result.getBytes(0), StandardCharsets.UTF_8)).isEqualTo(shortStr);
-		assertThat(new String(result.getBytes(1), StandardCharsets.UTF_8)).isEqualTo(longStr);
 	}
 }
