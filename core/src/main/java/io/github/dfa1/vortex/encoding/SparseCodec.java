@@ -169,8 +169,7 @@ public final class SparseCodec implements Codec {
 
 		// Allocate output buffer filled with the fill value
 		int elemBytes = valuePtype.byteSize();
-		byte[] outBytes = new byte[(int) (n * elemBytes)];
-		MemorySegment out = MemorySegment.ofArray(outBytes);
+		MemorySegment out = ctx.arena().allocate(n * elemBytes);
 		fillSegment(out, n, valuePtype, fillScalar);
 
 		if (numPatches == 0) {

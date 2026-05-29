@@ -71,6 +71,19 @@ via `ServiceLoader`; register custom decoders with `registry.register(decoder)`.
 during scan are zero-copy slices of that segment — their lifetime is tied to the `VortexFile`. Close the file to release
 the mapped region.
 
+**Codec output allocation rule:** never allocate `byte[]` + wrap with `MemorySegment.ofArray()` for decode output.
+Always allocate from `ctx.arena()`:
+```java
+// WRONG — heap allocation, GC pressure, extra copy
+byte[] outBytes = new byte[(int) (n * elemBytes)];
+MemorySegment out = MemorySegment.ofArray(outBytes);
+
+// CORRECT — off-heap, zero GC, same lifetime as the scan chunk
+MemorySegment out = ctx.arena().allocate(n * elemBytes);
+```
+If the allocation is in a private static helper that doesn't receive `DecodeContext`, add an `Arena arena` parameter
+and pass `ctx.arena()` from the `decode()` call site.
+
 ### Implementation status
 
 Core read/write path is functional. See `TODO.md` for open work and roadmap.

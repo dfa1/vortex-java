@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
@@ -33,10 +34,9 @@ public final class RunEndCodec implements Codec {
 			MemorySegment endsSeg, MemorySegment valuesSeg,
 			PType endsPtype, PType valuePtype,
 			long numRuns, long offset, long n,
-			DType dtype
+			DType dtype, Arena arena
 	) {
-		byte[] outBytes = new byte[(int) (n * valuePtype.byteSize())];
-		MemorySegment out = MemorySegment.ofArray(outBytes);
+		MemorySegment out = arena.allocate(n * valuePtype.byteSize());
 		switch (valuePtype) {
 			case I8, U8 -> expandByte(endsSeg, valuesSeg, endsPtype, numRuns, offset, n, out);
 			case I16, U16 -> expandShort(endsSeg, valuesSeg, endsPtype, numRuns, offset, n, out);
@@ -167,6 +167,6 @@ public final class RunEndCodec implements Codec {
 		Array valuesArr = decodeChildAs(ctx, 1, ctx.dtype(), numRuns);
 
 		return expand(endsArr.buffer(0), valuesArr.buffer(0),
-				endsPtype, valuePtype, numRuns, offset, n, ctx.dtype());
+				endsPtype, valuePtype, numRuns, offset, n, ctx.dtype(), ctx.arena());
 	}
 }

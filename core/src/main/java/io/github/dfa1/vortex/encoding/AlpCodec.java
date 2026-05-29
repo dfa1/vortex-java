@@ -123,8 +123,7 @@ public final class AlpCodec implements Codec {
 		// Precompute single factor — avoids 2 FP mults per element in the hot loop.
 		double factor = F10_F64[expF] * IF10_F64[expE];
 
-		byte[] outBytes = new byte[Math.toIntExact(n * 8)];
-		MemorySegment out = MemorySegment.ofArray(outBytes);
+		MemorySegment out = ctx.arena().allocate(n * 8);
 		var srcLayout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 		var dstLayout = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 		MemorySegment src = encoded.buffer(0);
@@ -175,8 +174,7 @@ public final class AlpCodec implements Codec {
 
 		float factor = F10_F32[expF] * IF10_F32[expE];
 
-		byte[] outBytes = new byte[Math.toIntExact(n * 4)];
-		MemorySegment out = MemorySegment.ofArray(outBytes);
+		MemorySegment out = ctx.arena().allocate(n * 4);
 		var srcLayout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 		var dstLayout = ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 		MemorySegment src = encoded.buffer(0);

@@ -75,13 +75,13 @@ public final class ConstantCodec implements Codec {
 		int elemBytes = ptype.byteSize();
 		long rawBits = scalarToRawBits(scalar, ptype);
 
-		byte[] outBytes = new byte[(int) (n * elemBytes)];
-		ByteBuffer out = ByteBuffer.wrap(outBytes).order(ByteOrder.LITTLE_ENDIAN);
+		MemorySegment outSeg = ctx.arena().allocate(n * elemBytes);
+		ByteBuffer out = outSeg.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
 		for (long i = 0; i < n; i++) {
 			writeRaw(out, ptype, rawBits);
 		}
 
 		return new Array(ctx.dtype(), n,
-				new MemorySegment[]{MemorySegment.ofArray(outBytes).asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
+				new MemorySegment[]{outSeg.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
 	}
 }

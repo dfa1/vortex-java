@@ -257,8 +257,7 @@ public final class DictCodec implements Codec {
 		MemorySegment valuesBuf = ctx.segmentBuffers()[ctx.node().children()[0].bufferIndices()[0]];
 		MemorySegment codesBuf = ctx.segmentBuffers()[ctx.node().children()[1].bufferIndices()[0]];
 
-		byte[] expanded = new byte[(int) (rowCount * elemSize)];
-		MemorySegment out = MemorySegment.ofArray(expanded);
+		MemorySegment out = ctx.arena().allocate(rowCount * (long) elemSize);
 		for (long i = 0; i < rowCount; i++) {
 			long code = readCode(codesBuf, codePType, i);
 			MemorySegment.copy(valuesBuf, code * elemSize, out, i * elemSize, elemSize);
@@ -288,8 +287,7 @@ public final class DictCodec implements Codec {
 		MemorySegment codesBuf = codesArr.buffer(0);
 		MemorySegment valuesBuf = valuesArr.buffer(0);
 
-		byte[] expanded = new byte[Math.toIntExact(rowCount * elemSize)];
-		MemorySegment out = MemorySegment.ofArray(expanded);
+		MemorySegment out = ctx.arena().allocate(rowCount * (long) elemSize);
 		// Loop-unswitch: pull the codePType switch outside the hot loop so the JIT
 		// sees a tight, type-specific loop with predictable branches.
 		switch (codePType) {

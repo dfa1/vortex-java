@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
@@ -112,11 +113,10 @@ public final class DeltaCodec implements Codec {
 
 	// ── Decode ────────────────────────────────────────────────────────────────
 
-	private static MemorySegment fromLongs(long[] longs, PType ptype) {
+	private static MemorySegment fromLongs(long[] longs, PType ptype, Arena arena) {
 		// Fast path: 64-bit target — bulk byte-order copy, no per-element narrowing.
 		if (ptype == PType.I64 || ptype == PType.U64) {
-			byte[] bytes = new byte[longs.length * 8];
-			MemorySegment dst = MemorySegment.ofArray(bytes);
+			MemorySegment dst = arena.allocate((long) longs.length * 8);
 			MemorySegment.copy(MemorySegment.ofArray(longs), ValueLayout.JAVA_LONG, 0L,
 					dst, ptype.valueLayout(), 0L, longs.length);
 			return dst.asReadOnly();
@@ -124,8 +124,7 @@ public final class DeltaCodec implements Codec {
 		// Narrowing path: per-element MethodHandle setter from PTypeIO.
 		int n = longs.length;
 		long elemSize = ptype.byteSize();
-		byte[] bytes = new byte[(int) (n * elemSize)];
-		MemorySegment seg = MemorySegment.ofArray(bytes);
+		MemorySegment seg = arena.allocate(n * elemSize);
 		for (int i = 0; i < n; i++) {
 			PTypeIO.set(seg, i * elemSize, ptype, longs[i]);
 		}
@@ -251,6 +250,6 @@ public final class DeltaCodec implements Codec {
 		}
 
 		return new Array(ctx.dtype(), rowCount,
-				new MemorySegment[]{fromLongs(longs, ptype)}, Array.NO_CHILDREN, ArrayStats.empty());
+				new MemorySegment[]{fromLongs(longs, ptype, ctx.arena())}, Array.NO_CHILDREN, ArrayStats.empty());
 	}
 }

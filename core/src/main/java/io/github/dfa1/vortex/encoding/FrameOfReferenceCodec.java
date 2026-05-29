@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 
 import java.io.IOException;
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
@@ -30,10 +31,9 @@ public final class FrameOfReferenceCodec implements Codec {
 		};
 	}
 
-	private static MemorySegment applyReference(MemorySegment src, long n, PType ptype, long ref) {
+	private static MemorySegment applyReference(MemorySegment src, long n, PType ptype, long ref, Arena arena) {
 		int wordBytes = ptype.byteSize();
-		byte[] bytes = new byte[(int) (n * wordBytes)];
-		MemorySegment dst = MemorySegment.ofArray(bytes);
+		MemorySegment dst = arena.allocate(n * wordBytes);
 		switch (ptype) {
 			case I8, U8 -> {
 				for (long off = 0, end = n; off < end; off++) {
@@ -109,7 +109,7 @@ public final class FrameOfReferenceCodec implements Codec {
 
 		MemorySegment src = encoded.buffer(0);
 		long n = ctx.rowCount();
-		MemorySegment dst = applyReference(src, n, p.ptype(), ref);
+		MemorySegment dst = applyReference(src, n, p.ptype(), ref, ctx.arena());
 		return new Array(ctx.dtype(), n, new MemorySegment[]{dst.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
 	}
 }
