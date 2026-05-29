@@ -18,6 +18,51 @@ reads, making it easier to:
 - build and test on any platform with a standard JDK
 - debug and profile with standard JVM tooling
 
+### Why fewer layers = faster
+
+```
+  vortex-jni                              vortex-java
+  ──────────────────────────────          ──────────────────────────
+  ┌──────────────────────────┐            ┌──────────────────────┐
+  │  Java App                │            │  Java App            │
+  │  (BigIntVector.get(i))   │            │  (buffer.getAtIndex) │
+  └────────────┬─────────────┘            └──────────┬───────────┘
+               │ Arrow Java API                      │ FFM API
+  ┌────────────▼─────────────┐                      │ (MemorySegment,
+  │  Apache Arrow (Java)     │                      │  zero-copy slice)
+  │  VectorSchemaRoot,       │                      │
+  │  BigIntVector, …         │                      │
+  └────────────┬─────────────┘            ┌──────────▼───────────┐
+               │ Arrow C Data Interface   │  OS mmap region      │
+               │ (ArrowArray/ArrowSchema) │  (file on disk)      │
+               │ + JNI boundary crossing  └──────────────────────┘
+  ┌────────────▼─────────────┐
+  │  Native lib              │
+  │  (.so / .dylib)          │
+  │  Rust decode             │
+  └────────────┬─────────────┘
+               │ mmap / read
+  ┌────────────▼─────────────┐
+  │  OS mmap region          │
+  │  (file on disk)          │
+  └──────────────────────────┘
+
+  4 layers, 1 JNI crossing,              2 layers, 0 boundary crossings,
+  Arrow C Data Interface overhead         no intermediate format
+```
+
+The JNI path pays three costs per batch: (1) a JNI boundary crossing to call into native
+code, (2) the Arrow C Data Interface handshake to pass decoded buffers back to the JVM as
+`ArrowArray`/`ArrowSchema` structs, and (3) materialising the result into Apache Arrow
+`VectorSchemaRoot` objects before the application can read a single value. The JIT cannot
+inline or optimise across the JNI boundary.
+
+`vortex-java` eliminates all of that. The FFM API (`MemorySegment`) gives Java code a
+typed, bounds-checked view directly into the OS mmap region — the same physical memory the
+file occupies. Decoding reads bytes directly from that view with no copies, no intermediate
+Arrow format, and no boundary crossings. The JIT sees the full decode path as ordinary Java
+bytecode.
+
 ## Why Vortex instead of Parquet
 
 |                        | Parquet                                | Vortex                             |
