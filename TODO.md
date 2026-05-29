@@ -119,9 +119,10 @@ Replace raw `arr.buffer(0).getAtIndex(layout, i)` with `arr.getLong(i)` /
 `arr.getDouble(i)` / `arr.forEachLong(c)`. Encodings pick a concrete subtype so
 the JIT can specialise the hot path with a constant `ValueLayout`.
 
-- [ ] **Phase C**: once all leaf encodings return concrete subtypes,
-      consider tightening `buffer(int)` / `child(int)` to
-      package-private or moving to an internal helper interface.
+- [x] **Phase C**: `buffer(int)` / `child(int)` remain on `Array` with default-throw.
+      Package-private is not viable (callers span `encoding`, `reader`, `performance` packages).
+      JPMS would only enforce access on the module path, not the classpath. Accepted as
+      internal-by-convention; typed accessors (`getLong`, `forEachDouble`, etc.) are the public API.
 
 - [ ] Optional `vortex-arrow` bridge module for Arrow ecosystem interop
     - Primary API stays `ArrayLong`/`ArrayDouble` (zero-copy, no deps, no Unsafe)
