@@ -22,13 +22,13 @@
 | `vortex.bytebool`      | `ByteBoolEncoding`     | Bool (one byte per element → bit-packed)        |
 | `vortex.zigzag`        | `ZigZagEncoding`       | signed integer PTypes (I8/I16/I32/I64)          |
 | `vortex.ext`           | `ExtEncoding`          | Extension (transparent wrapper → storage dtype) |
+| `vortex.varbinview`    | `VarBinViewEncoding`   | Utf8, Binary (16-byte views; materialises to VarBinArray) |
 | `vortex.pco`           | `PcoEncoding`          | stub — throws (ANS + bin tokenization not ported) |
 
 ## Missing
 
 | Encoding ID                   | Effort  | Unblocks                                        |
 |----------------------------|---------|-------------------------------------------------|
-| `vortex.varbinview`        | medium  | `varbinview.vortex`, `dict.vortex`, `sparse.vortex` |
 | `vortex.chunked`           | medium  | `chunked.vortex` (segment-level chunked array)  |
 | `fastlanes.rle`            | medium  | `rle.vortex`                                    |
 | `vortex.alprd`             | medium  | `alprd.vortex`                                  |
@@ -60,9 +60,9 @@
 | `bytebool.vortex`                | ✅     |                               |
 | `zigzag.vortex`                  | ✅     |                               |
 | `datetime.vortex`                | ✅     |                               |
-| `dict.vortex`                    | ❌     | `vortex.varbinview` missing   |
-| `sparse.vortex`                  | ❌     | `vortex.varbinview` missing   |
-| `varbinview.vortex`              | ❌     | `vortex.varbinview` missing   |
+| `dict.vortex`                    | ✅     |                               |
+| `sparse.vortex`                  | ✅     |                               |
+| `varbinview.vortex`              | ✅     |                               |
 | `chunked.vortex`                 | ❌     | `vortex.chunked` at segment level |
 | `rle.vortex`                     | ❌     | `fastlanes.rle` missing       |
 | `alprd.vortex`                   | ❌     | `vortex.alprd` missing        |
@@ -81,4 +81,4 @@
 | `clickbench_hits_5k.compact.vortex` | ❌  | `vortex.pco`                  |
 | `clickbench_hits_5k.regular.vortex` | ❌  | `vortex.pco`                  |
 
-**Score: 15/35** (including `for.vortex` scanned separately from `scan_fixture_decodesAllRows`)
+**Score: 18/35** (including `for.vortex` scanned separately from `scan_fixture_decodesAllRows`)

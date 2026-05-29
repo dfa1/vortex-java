@@ -17,3 +17,4 @@ io.github.dfa1.vortex.encoding.NullEncoding
 io.github.dfa1.vortex.encoding.ByteBoolEncoding
 io.github.dfa1.vortex.encoding.ZigZagEncoding
 io.github.dfa1.vortex.encoding.ExtEncoding
+io.github.dfa1.vortex.encoding.VarBinViewEncoding

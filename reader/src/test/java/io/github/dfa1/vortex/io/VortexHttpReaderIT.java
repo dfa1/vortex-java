@@ -90,6 +90,9 @@ class VortexHttpReaderIT {
 			"zigzag.vortex",
 			"struct_nested.vortex",
 			"datetime.vortex",
+			"varbinview.vortex",
+			"dict.vortex",
+			"sparse.vortex",
 	})
 	void scan_fixture_decodesAllRows(String fixture) throws Exception {
 		// Given
