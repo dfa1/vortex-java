@@ -58,17 +58,70 @@
 
 ## Array API
 
-- [ ] Add typed accessors to `Array`: `getLong(i)`, `getDouble(i)`, `getInt(i)`, `getFloat(i)`, etc.
-    - All leaf codecs (primitive, bitpacked, alp, sparse, for, delta, dict) decode into `buffers[0]` = flat LE primitives — typed accessors work uniformly
-    - `vortex.struct` is never a leaf; always split into per-column arrays before element access
-    - Make `buffers`/`children` package-private once accessors cover all callers
+### Typed accessors (in progress)
 
-- [ ] Introduce specialized typed array views: `ArrayLong`, `ArrayDouble`, etc.
-    - `ScanResult.columns().get("volume", PType.I64)` returns `ArrayLong` instead of raw `Array`
-    - `ArrayLong.forEach(LongConsumer)` — zero-allocation bulk iteration; internally hoists
-      `count = buffer.byteSize() / 8` so JIT eliminates per-element bounds check
-    - `ArrayLong.get(long i)` — random access for non-bulk callers
-    - `ArrayDouble.forEach(DoubleConsumer)` — same pattern for F64 columns
+Replace raw `arr.buffer(0).getAtIndex(layout, i)` with `arr.getLong(i)` /
+`arr.getDouble(i)` / `arr.forEachLong(c)`. Codecs pick a concrete subtype so
+the JIT can specialise the hot path with a constant `ValueLayout`.
+
+**Design**
+
+- `ArrayOperations` (interface, `core`): primitive accessors — `getBoolean`,
+  `getByte`, `getShort`, `getInt`, `getLong`, `getFloat`, `getDouble`,
+  `getBytes`, plus `forEachLong`/`forEachDouble`/... bulk variants. All
+  default to `throw VortexException("<class> does not support <op>")`.
+- `Array` (sealed interface, `core`) extends `ArrayOperations`. Keeps
+  public `buffer(int)` / `child(int)` for codec internals during migration.
+- Concrete subtypes in `core.array` sub-package:
+    - `LongArray`, `DoubleArray`, `IntArray`, `FloatArray`,
+      `ShortArray`, `ByteArray` — single `MemorySegment` + length +
+      `static final ValueLayout`. Tight `getXxx` / `forEachXxx`.
+    - `BoolArray` — bitmap.
+    - `VarBinArray` — bytes segment + offsets segment + offsets ptype.
+    - `NullArray` — length only.
+    - `StructArray` — `Map<String, Array>` columns.
+    - `GenericArray` — fallback that holds the current record shape
+      (`MemorySegment[]` + `Array[]`) and dispatches via dtype switch;
+      lets codecs migrate one at a time.
+
+**Codec dispatch**
+
+| Codec                                  | Returns                                 |
+|----------------------------------------|-----------------------------------------|
+| `vortex.primitive` (I64/U64)           | `LongArray`                             |
+| `vortex.primitive` (I32/U32)           | `IntArray`                              |
+| `vortex.primitive` (F64)               | `DoubleArray`                           |
+| `fastlanes.bitpacked`, `for`, `delta`, `vortex.sparse`, `vortex.dict` (int values) | `LongArray` / `IntArray` per dtype |
+| `vortex.alp` (F64)                     | `DoubleArray`                           |
+| `vortex.alp` (F32)                     | `FloatArray`                            |
+| `vortex.varbin`, `vortex.fsst`, `vortex.constant` (string) | `VarBinArray`         |
+| `vortex.bool`                          | `BoolArray`                             |
+| `vortex.null`                          | `NullArray`                             |
+| layout `vortex.struct`                 | `StructArray`                           |
+
+**Migration phases**
+
+- [x] **Phase A**: interface + sealed `Array` + `GenericArray` shim. All
+      existing codecs keep current behaviour. Migrate `PrimitiveCodec`
+      and `AlpCodec` so `volume` (Primitive I64) returns `LongArray` and
+      `close` (ALP F64) returns `DoubleArray`. Update
+      `RustVsJavaReadBenchmark.javaReadVolume`/`javaReadClose` to use
+      `forEachLong` / `forEachDouble`. Confirm no regression vs raw
+      MemorySegment loop.
+- [ ] **Phase B**: migrate remaining leaf codecs (Bitpacked, FoR, Delta,
+      Sparse, Dict, Bool, Constant, VarBin, FSST, RunEnd, Sequence)
+      one at a time, each with a bench check.
+- [ ] **Phase C**: once all leaf codecs return concrete subtypes,
+      consider tightening `buffer(int)` / `child(int)` to
+      package-private or moving to an internal helper interface.
+
+- [ ] Optional `vortex-arrow` bridge module for Arrow ecosystem interop
+    - Primary API stays `LongArray`/`DoubleArray` (zero-copy, no deps, no Unsafe)
+    - Bridge wraps typed views into Arrow `BigIntVector`, `Float8Vector`, etc. for users who need
+      Arrow Flight / DuckDB ADBC / pandas interop
+    - Conversion involves a copy (MemorySegment → Arrow off-heap buffer) — cost is explicit and opt-in
+    - Arrow JVM uses `sun.misc.Unsafe` / Netty internally; keeping it in a separate module means
+      the core library stays Unsafe-free
 
 - [ ] Optional `vortex-arrow` bridge module for Arrow ecosystem interop
     - Primary API stays `ArrayLong`/`ArrayDouble` (zero-copy, no deps, no Unsafe)
