@@ -3,8 +3,8 @@ package io.github.dfa1.vortex.encoding;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.DType;
 
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 import java.nio.ByteBuffer;
 
 /// Decoding context passed to each [Codec].
@@ -19,7 +19,7 @@ public record DecodeContext(
 		long rowCount,
 		MemorySegment[] segmentBuffers,
 		CodecRegistry registry,
-		Arena arena
+		SegmentAllocator arena
 ) {
 	/// Recursively decode child `i` using the same segment buffers, registry and arena.
 	public Array decodeChild(int i) {

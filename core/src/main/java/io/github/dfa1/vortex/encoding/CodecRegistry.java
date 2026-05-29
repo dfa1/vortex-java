@@ -6,8 +6,8 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.fbs.Buffer;
 
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.HashMap;
@@ -67,7 +67,7 @@ public final class CodecRegistry {
 	///
 	/// Segment format: [bufferdata...] [FlatBufferArray] [4-byteLEu32=FlatBuffersize].
 	public Array decodeSegment(MemorySegment seg, List<String> encodingSpecs,
-	                           DType dtype, long rowCount, Arena arena) {
+	                           DType dtype, long rowCount, SegmentAllocator arena) {
 		int segLen = (int) seg.byteSize();
 		ByteBuffer bb = seg.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
 

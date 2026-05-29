@@ -13,8 +13,8 @@ import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.core.VortexException;
 
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -40,7 +40,7 @@ public final class FrameOfReferenceCodec implements Codec {
 		};
 	}
 
-	private static MemorySegment applyReference(MemorySegment src, long n, PType ptype, long ref, Arena arena) {
+	private static MemorySegment applyReference(MemorySegment src, long n, PType ptype, long ref, SegmentAllocator arena) {
 		int wordBytes = ptype.byteSize();
 		MemorySegment dst = arena.allocate(n * wordBytes);
 		switch (ptype) {
@@ -111,13 +111,12 @@ public final class FrameOfReferenceCodec implements Codec {
 		MemorySegment src = encoded.buffer(0);
 		long n = ctx.rowCount();
 		MemorySegment dst = applyReference(src, n, p.ptype(), ref, ctx.arena());
-		MemorySegment ro = dst.asReadOnly();
 		return switch (p.ptype()) {
-			case I64, U64 -> new LongArray(ctx.dtype(), n, ro, ArrayStats.empty());
-			case I32, U32 -> new IntArray(ctx.dtype(), n, ro, ArrayStats.empty());
-			case F64 -> new DoubleArray(ctx.dtype(), n, ro, ArrayStats.empty());
-			case I16, U16 -> new ShortArray(ctx.dtype(), n, ro, ArrayStats.empty());
-			case I8, U8   -> new ByteArray(ctx.dtype(), n, ro, ArrayStats.empty());
+			case I64, U64 -> new LongArray(ctx.dtype(), n, dst, ArrayStats.empty());
+			case I32, U32 -> new IntArray(ctx.dtype(), n, dst, ArrayStats.empty());
+			case F64 -> new DoubleArray(ctx.dtype(), n, dst, ArrayStats.empty());
+			case I16, U16 -> new ShortArray(ctx.dtype(), n, dst, ArrayStats.empty());
+			case I8, U8   -> new ByteArray(ctx.dtype(), n, dst, ArrayStats.empty());
 			default -> throw new VortexException(CodecId.FASTLANES_FOR, "unsupported ptype " + p.ptype());
 		};
 	}

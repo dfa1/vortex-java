@@ -15,7 +15,7 @@ import io.github.dfa1.vortex.core.array.BoolArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.core.VortexException;
 
-import java.lang.foreign.Arena;
+import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
@@ -41,7 +41,7 @@ public final class RunEndCodec implements Codec {
 			MemorySegment endsSeg, MemorySegment valuesSeg,
 			PType endsPtype, PType valuePtype,
 			long numRuns, long offset, long n,
-			DType dtype, Arena arena
+			DType dtype, SegmentAllocator arena
 	) {
 		MemorySegment out = arena.allocate(n * valuePtype.byteSize());
 		switch (valuePtype) {
@@ -139,7 +139,7 @@ public final class RunEndCodec implements Codec {
 	private static Array expandBool(
 			Array endsArr, BoolArray valuesArr,
 			PType endsPtype, long numRuns, long offset, long n,
-			DType dtype, Arena arena
+			DType dtype, SegmentAllocator arena
 	) {
 		MemorySegment endsSeg = endsArr.buffer(0);
 		long numBytes = (n + 7) >>> 3;
@@ -167,7 +167,7 @@ public final class RunEndCodec implements Codec {
 	private static Array expandStrings(
 			Array endsArr, VarBinArray valuesArr,
 			PType endsPtype, long numRuns, long offset, long n,
-			DType dtype, Arena arena
+			DType dtype, SegmentAllocator arena
 	) {
 		MemorySegment endsSeg = endsArr.buffer(0);
 		MemorySegment valBytes = valuesArr.buffer(0);

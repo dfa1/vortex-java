@@ -182,14 +182,13 @@ public final class SparseCodec implements Codec {
 					indicesArray.buffer(0), valuesArray.buffer(0), indicesPtype, numPatches, offset);
 		}
 
-		MemorySegment ro = out.asReadOnly();
 		return switch (valuePtype) {
-			case I64, U64 -> new LongArray(ctx.dtype(), n, ro, ArrayStats.empty());
-			case I32, U32 -> new IntArray(ctx.dtype(), n, ro, ArrayStats.empty());
-			case F64 -> new DoubleArray(ctx.dtype(), n, ro, ArrayStats.empty());
-			case F32 -> new FloatArray(ctx.dtype(), n, ro, ArrayStats.empty());
-			case I16, U16 -> new ShortArray(ctx.dtype(), n, ro, ArrayStats.empty());
-			case I8, U8   -> new ByteArray(ctx.dtype(), n, ro, ArrayStats.empty());
+			case I64, U64 -> new LongArray(ctx.dtype(), n, out, ArrayStats.empty());
+			case I32, U32 -> new IntArray(ctx.dtype(), n, out, ArrayStats.empty());
+			case F64 -> new DoubleArray(ctx.dtype(), n, out, ArrayStats.empty());
+			case F32 -> new FloatArray(ctx.dtype(), n, out, ArrayStats.empty());
+			case I16, U16 -> new ShortArray(ctx.dtype(), n, out, ArrayStats.empty());
+			case I8, U8   -> new ByteArray(ctx.dtype(), n, out, ArrayStats.empty());
 			default -> throw new VortexException(CodecId.VORTEX_SPARSE, "unsupported ptype " + valuePtype);
 		};
 	}

@@ -262,16 +262,24 @@ public final class AlpCodec implements Codec {
 		double factor = F10_F64[expF] * IF10_F64[expE];
 
 		MemorySegment src = encoded.buffer(0);
-		MemorySegment out = ctx.arena().allocate(n * 8, 8);
-		for (long i = 0; i < n; i++) {
-			out.setAtIndex(LE_DOUBLE, i, (double) src.getAtIndex(LE_LONG, i) * factor);
+		// In-place when the child returned a writable arena buffer (e.g. BitpackedCodec, DeltaCodec).
+		// Fall back to a new allocation when the source is a read-only mmap slice (PrimitiveCodec).
+		MemorySegment buf = src.isReadOnly() ? ctx.arena().allocate(n * 8, 8) : src;
+		if (src.isReadOnly()) {
+			for (long i = 0; i < n; i++) {
+				buf.setAtIndex(LE_DOUBLE, i, (double) src.getAtIndex(LE_LONG, i) * factor);
+			}
+		} else {
+			for (long i = 0; i < n; i++) {
+				buf.setAtIndex(LE_DOUBLE, i, (double) buf.getAtIndex(LE_LONG, i) * factor);
+			}
 		}
 
 		if (meta.hasPatches()) {
-			applyPatches(ctx, meta.getPatches(), out, LE_LONG, 8);
+			applyPatches(ctx, meta.getPatches(), buf, LE_LONG, 8);
 		}
 
-		return new DoubleArray(ctx.dtype(), n, out.asReadOnly(), ArrayStats.empty());
+		return new DoubleArray(ctx.dtype(), n, buf.asReadOnly(), ArrayStats.empty());
 	}
 
 	private Array decodeF32(DecodeContext ctx, EncodingProtos.ALPMetadata meta, int expE, int expF, long n) {
@@ -280,17 +288,23 @@ public final class AlpCodec implements Codec {
 		// Precompute single factor — avoids 2 FP mults per element in the hot loop.
 		float factor = F10_F32[expF] * IF10_F32[expE];
 
-		MemorySegment src = encoded.buffer(0);
-		MemorySegment out = ctx.arena().allocate(n * 4, 4);
-		for (long i = 0; i < n; i++) {
-			out.setAtIndex(LE_FLOAT, i, (float) src.getAtIndex(LE_INT, i) * factor);
+		MemorySegment src32 = encoded.buffer(0);
+		MemorySegment buf32 = src32.isReadOnly() ? ctx.arena().allocate(n * 4, 4) : src32;
+		if (src32.isReadOnly()) {
+			for (long i = 0; i < n; i++) {
+				buf32.setAtIndex(LE_FLOAT, i, (float) src32.getAtIndex(LE_INT, i) * factor);
+			}
+		} else {
+			for (long i = 0; i < n; i++) {
+				buf32.setAtIndex(LE_FLOAT, i, (float) buf32.getAtIndex(LE_INT, i) * factor);
+			}
 		}
 
 		if (meta.hasPatches()) {
-			applyPatches(ctx, meta.getPatches(), out, LE_INT, 4);
+			applyPatches(ctx, meta.getPatches(), buf32, LE_INT, 4);
 		}
 
-		return new FloatArray(ctx.dtype(), n, out.asReadOnly(), ArrayStats.empty());
+		return new FloatArray(ctx.dtype(), n, buf32.asReadOnly(), ArrayStats.empty());
 	}
 
 	private void applyPatches(DecodeContext ctx, EncodingProtos.PatchesMetadata pm,

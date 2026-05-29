@@ -22,6 +22,7 @@ import io.github.dfa1.vortex.io.VortexHandle;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -46,9 +47,12 @@ public final class ScanIterator implements AutoCloseable {
 	private static final ValueLayout.OfInt   LE_INT   = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 	private static final ValueLayout.OfLong  LE_LONG  = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
+	private static final long SLAB_SIZE = 4 * 1024 * 1024L;
+
 	private final VortexHandle file;
 	private final ScanOptions options;
 	private final Arena arena;
+	private MemorySegment chunkSlab;
 
 	private List<ChunkSpec> chunks;
 	private Map<String, DType> columnDtypes;
@@ -181,6 +185,7 @@ public final class ScanIterator implements AutoCloseable {
 		chunks = buildChunks(columnFlats);
 		projectedNames = List.copyOf(columnDtypes.keySet());
 		projectedDtypes = List.copyOf(columnDtypes.values());
+		chunkSlab = arena.allocate(SLAB_SIZE, 64);
 	}
 
 	// ── Zone-map pruning ──────────────────────────────────────────────────────
@@ -189,10 +194,11 @@ public final class ScanIterator implements AutoCloseable {
 	// LinkedHashMap + Map.copyOf pair that would otherwise allocate per chunk.
 	// Direct array index into ChunkSpec.columnLayouts avoids HashMap.get() per column.
 	private Map<String, Array> buildColumnMap(ChunkSpec chunk) {
+		SegmentAllocator chunkAlloc = SegmentAllocator.slicingAllocator(chunkSlab);
 		Layout[] layouts = chunk.columnLayouts();
 		int n = projectedNames.size();
 		if (n == 1) {
-			Array arr = decodeLayout(layouts[0], projectedDtypes.get(0), arena);
+			Array arr = decodeLayout(layouts[0], projectedDtypes.get(0), chunkAlloc);
 			if (arr instanceof StructArray sa) {
 				return expandStruct(sa);
 			}
@@ -200,12 +206,12 @@ public final class ScanIterator implements AutoCloseable {
 		}
 		if (n == 2) {
 			return Map.of(
-					projectedNames.get(0), decodeLayout(layouts[0], projectedDtypes.get(0), arena),
-					projectedNames.get(1), decodeLayout(layouts[1], projectedDtypes.get(1), arena));
+					projectedNames.get(0), decodeLayout(layouts[0], projectedDtypes.get(0), chunkAlloc),
+					projectedNames.get(1), decodeLayout(layouts[1], projectedDtypes.get(1), chunkAlloc));
 		}
 		var scratch = new LinkedHashMap<String, Array>(n);
 		for (int i = 0; i < n; i++) {
-			scratch.put(projectedNames.get(i), decodeLayout(layouts[i], projectedDtypes.get(i), arena));
+			scratch.put(projectedNames.get(i), decodeLayout(layouts[i], projectedDtypes.get(i), chunkAlloc));
 		}
 		return Map.copyOf(scratch);
 	}
@@ -221,7 +227,7 @@ public final class ScanIterator implements AutoCloseable {
 		return Map.copyOf(map);
 	}
 
-	private Array decodeLayout(Layout layout, DType dtype, Arena arena) {
+	private Array decodeLayout(Layout layout, DType dtype, SegmentAllocator arena) {
 		if (layout.isFlat()) {
 			return decodeFlat(layout, dtype, arena);
 		}
@@ -239,7 +245,7 @@ public final class ScanIterator implements AutoCloseable {
 		throw new VortexException("cannot decode layout " + layout.encodingId());
 	}
 
-	private Array decodeConcatPrimitive(List<Layout> flats, DType dtype, long totalRows, Arena arena) {
+	private Array decodeConcatPrimitive(List<Layout> flats, DType dtype, long totalRows, SegmentAllocator arena) {
 		if (flats.isEmpty()) {
 			throw new VortexException(CodecId.VORTEX_CHUNKED, "no flat children");
 		}
@@ -267,7 +273,7 @@ public final class ScanIterator implements AutoCloseable {
 		};
 	}
 
-	private Array decodeFlat(Layout flat, DType dtype, Arena arena) {
+	private Array decodeFlat(Layout flat, DType dtype, SegmentAllocator arena) {
 		if (flat.segments().isEmpty()) {
 			throw new VortexException(CodecId.VORTEX_FLAT, "no segments");
 		}
@@ -277,7 +283,7 @@ public final class ScanIterator implements AutoCloseable {
 		return file.registry().decodeSegment(seg, file.footer().arraySpecs(), dtype, flat.rowCount(), arena);
 	}
 
-	private Array decodeDictLayout(Layout dictLayout, DType dtype, Arena arena) {
+	private Array decodeDictLayout(Layout dictLayout, DType dtype, SegmentAllocator arena) {
 		ByteBuffer rawMeta = dictLayout.metadata();
 		if (rawMeta == null) {
 			throw new VortexException(CodecId.VORTEX_DICT, "layout: missing metadata");
@@ -311,7 +317,7 @@ public final class ScanIterator implements AutoCloseable {
 	private static Array expandDictStrings(
 			Array values, Array codes,
 			PType codesPType, DType dtype,
-			long n, Arena arena
+			long n, SegmentAllocator arena
 	) {
 		MemorySegment valBytes   = values.buffer(0);
 		MemorySegment valOffsets = values.child(0).buffer(0);

@@ -588,12 +588,11 @@ public final class BitpackedCodec implements Codec {
 			applyPatches(ctx, meta.getPatches(), output, ptype.byteSize());
 		}
 
-		MemorySegment ro = output.asReadOnly();
 		return switch (ptype) {
-			case I64, U64 -> new LongArray(ctx.dtype(), rowCount, ro, ArrayStats.empty());
-			case I32, U32 -> new IntArray(ctx.dtype(), rowCount, ro, ArrayStats.empty());
-			case I16, U16 -> new ShortArray(ctx.dtype(), rowCount, ro, ArrayStats.empty());
-			case I8, U8   -> new ByteArray(ctx.dtype(), rowCount, ro, ArrayStats.empty());
+			case I64, U64 -> new LongArray(ctx.dtype(), rowCount, output, ArrayStats.empty());
+			case I32, U32 -> new IntArray(ctx.dtype(), rowCount, output, ArrayStats.empty());
+			case I16, U16 -> new ShortArray(ctx.dtype(), rowCount, output, ArrayStats.empty());
+			case I8, U8   -> new ByteArray(ctx.dtype(), rowCount, output, ArrayStats.empty());
 			default -> throw new VortexException(CodecId.FASTLANES_BITPACKED, "unsupported ptype " + ptype);
 		};
 	}
