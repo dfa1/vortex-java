@@ -24,58 +24,42 @@ setup → benchmark → profile → analyse → change → repeat
 
 ## Step 1 — Verify readiness
 
-Check if the required part is covered by existing performance tests under the performance module.
-If anything is missing, fix it before proceeding.
+Confirm the workload under test is already covered by a JMH benchmark in the `performance/` module
+(e.g. `RustVsJavaReadBenchmark`). If the column / codec / path is not benched, add it before profiling.
+Always pass a fully-qualified JMH filter (`ClassName.methodName`) when invoking the harness — never
+class-only or empty.
 
 ---
 
-## Step 2 — Create the benchmark script
+## Step 2 — Use the existing benchmark script
 
-Create `benchmark.sh` in the project root if it does not exist:
+`./benchmark.sh` in the repo root drives JMH + JFR. It runs:
 
 ```bash
-#!/bin/bash
-set -e
-
-BENCHMARK_FILTER="${1:-}"
-JFR_EVENTS="${2:-jdk.GarbageCollection,jdk.ObjectAllocationInNewTLAB,jdk.TLBMiss,jdk.CPULoad,jdk.GCHeapSummary}"
-
-echo "=== Building ==="
-mvn package -DskipTests -q
-
-echo "=== Running benchmarks ==="
-java -jar target/benchmarks.jar \
+./mvnw package -DskipTests -q -pl performance --also-make
+java -jar performance/target/benchmarks.jar \
   ${BENCHMARK_FILTER} \
   -f 1 -wi 3 -i 5 \
-  -rf json -rff target/jmh-results.json \
-  -jvmArgs "-XX:StartFlightRecording=filename=target/recording.jfr,settings=profile"
-
-echo "=== Extracting JFR events ==="
-jfr print --json \
-  --events "${JFR_EVENTS}" \
-  target/recording.jfr > target/recording-filtered.json
-
-echo "=== Done ==="
-echo "JMH results : target/jmh-results.json"
-echo "JFR profile : target/recording-filtered.json"
+  -rf json -rff performance/target/jmh-results.json \
+  -jvmArgs "-XX:StartFlightRecording=filename=performance/target/recording.jfr,settings=profile"
 ```
 
-Make it executable: `chmod +x benchmark.sh`
+Never substitute `mvn` for `./mvnw` (project mandates the wrapper) and never run `mvn install`.
 
 ---
 
 ## Step 3 — Run the baseline
 
 ```bash
-./benchmark.sh
+./benchmark.sh RustVsJavaReadBenchmark.javaReadVolume
 ```
 
 Read both output files:
 
-- `target/jmh-results.json` — throughput / latency per benchmark
-- `target/recording-filtered.json` — JFR events
+- `performance/target/jmh-results.json` — throughput / latency per benchmark
+- `performance/target/recording-filtered.json` — JFR events
 
-Store the baseline score. You will compare every subsequent run against it.
+Store the baseline score. Compare every subsequent run against it.
 
 ---
 
@@ -115,11 +99,22 @@ before/after comparison so regressions are traceable.
 
 Common optimizations to consider (in order of typical impact):
 
-1. **Reduce allocations** — reuse objects, use primitives, avoid boxing, use `StringBuilder`
-2. **Improve data locality** — colocate fields accessed together, prefer arrays over linked structures
-3. **Avoid synchronization on hot paths** — use `VarHandle`, `AtomicLong`, lock-free structures
-4. **Reduce GC pressure** — pool expensive objects, avoid finalizers, use off-heap where justified
-5. **Enable huge pages** — add `-XX:+UseTransparentHugePages` to `jvmArgs` in benchmark for comparison
+1. **Allocate decode output from `ctx.arena()`** — hard rule from `CLAUDE.md`. Never
+   `new byte[n]` + `MemorySegment.ofArray()` for codec output: heap allocation, GC pressure,
+   extra copy. Use `ctx.arena().allocate(n * elemBytes, alignment)` so the buffer lives on the
+   confined arena tied to the `VortexFile`.
+2. **Reduce allocations** elsewhere — reuse objects, use primitives, avoid boxing.
+3. **Hoist `ValueLayout` constants** — declare `static final ValueLayout.OfXxx L = ...` so JIT
+   constant-folds the stride / alignment / order. Inline `ValueLayout.JAVA_LONG_UNALIGNED` on each
+   call defeats this.
+4. **Use `getAtIndex` / `setAtIndex`** in tight loops over a `MemorySegment` — stride is implicit,
+   bounds check hoists, and the auto-vectoriser reads the shape cleanly.
+5. **Aligned arena allocation** — `arena.allocate(n, 64)` keeps SIMD-friendly addresses.
+6. **Improve data locality** — colocate fields accessed together, prefer flat arrays / segments
+   over linked structures.
+7. **Avoid synchronization on hot paths** — `VarHandle`, `AtomicLong`, lock-free structures.
+8. **Reduce GC pressure** — pool expensive objects, avoid finalizers, off-heap where justified.
+9. **Enable huge pages** — add `-XX:+UseTransparentHugePages` to `jvmArgs` for comparison.
 
 After each change, run `./benchmark.sh` and compare the new score against the stored baseline.
 

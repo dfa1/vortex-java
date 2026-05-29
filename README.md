@@ -14,6 +14,9 @@ Pure-Java reader/writer for the [Vortex](https://github.com/spiraldb/vortex) col
 | `close` (F64)    | ALP               | 62.6 ops/s  | 118.0 ops/s  | **Java 1.9×** |
 | `symbol` (UTF-8) | constant (varbin) | 10.9 ops/s  | 27.8 ops/s   | **Java 2.5×** |
 
+Reproduce: `./benchmark.sh RustVsJavaReadBenchmark`. Hardware / JDK build / commit SHA used to produce
+this snapshot should be captured alongside any update (see TODO #10c).
+
 All columns decoded faster in pure Java than via JNI + Apache Arrow. Key optimisations:
 `static final` ValueLayout constants (JIT constant-folding), aligned arena allocation
 (`allocate(n, alignment)`), `getAtIndex()`/`setAtIndex()` (clearer stride for the

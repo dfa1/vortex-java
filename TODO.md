@@ -7,95 +7,49 @@
 - [x] **#3 Implement `ScanIterator.hasNext()` / `next()`** (layout traversal + flat decode; zone-map pruning pending)
 - [x] **#4 Implement `VortexWriter.writeChunk()` + `close()`** (primitive + bool encodings, full file format)
 - [x] **#5 Round-trip unit tests** (`VortexWriterTest`: 5 tests; `VortexFileTest`: 17 tests)
-
-## Open
-
 - [x] **#6 Zone-map pruning in `ScanIterator`**
     - Writer embeds min/max per flat segment in `ArrayNode.stats` (Protobuf ScalarValue)
     - Reader peeks stats from segment FlatBuffer tail, skips chunks excluded by `RowFilter`
     - Supports `Gte`, `Lte`, `Eq`, `And` predicates on I8/I16/I32/I64, U8/U16/U32/U64, F32/F64
+- [x] **#7b `fastlanes.for` decoder** (reference + bitpacked residuals)
+- [x] **#7c `vortex.sparse` decoder** (fill value + patches)
+- [x] **#7d `vortex.alp` decoder** (ALP inverse + patches)
+- [x] **#8 Rust writes → Java reads** (`RustWritesJavaReadsIT`, `-Pintegration`)
+    - JNI writes I64+F64 file; Java reader decodes via `DecoderRegistry.loadAll()`
+    - Added `SequenceCodec` (`vortex.sequence` = `A[i] = base + i * multiplier`)
+- [x] **#9 Java writes → Rust reads** (`JavaWritesRustReadsIT`, `-Pintegration`)
+    - Java writer produces file; JNI reader decodes via Arrow C Data Interface
+    - `Buffer.alignment_exponent = 6` + `SegmentSpec.alignment_exponent = 6` + pre-segment 64-byte padding
+
+## Open
 
 - [ ] **#7 Additional encodings**
-    - `fastlanes.bitpacked` — integer bit-packing (Java write/read done; JNI read broken — see #7a)
+    - `fastlanes.bitpacked` — integer bit-packing (steps 1/2/4/5 done; step 3 patches still open, see #7a)
     - `fastlanes.delta` — delta encoding for monotonic sequences
     - `dict` — dictionary encoding for low-cardinality columns
     - `pcodec` — float compression
+    - `fsst` — string compression (in-flight, see `FsstCodec.java`)
 
-- [x] **#7a Fix `fastlanes.bitpacked` — spec-compliant rewrite**
-    - Root cause: current code guesses format by metadata byte size (9 = Java, 2 = JNI). Wrong.
-      The spec always uses protobuf metadata regardless of writer origin.
-    - **Spec** (from `encodings/fastlanes/src/bitpacking/vtable/mod.rs`):
-        - Metadata: protobuf `BitPackedMetadata` — `bit_width u32` (tag 1), `offset u32` (tag 2, 0≤offset<1024),
-          `patches PatchesMetadata` (tag 3, optional)
-        - Buffer size: `ceil((len + offset) / 1024) * 128 * bit_width` bytes
-        - FastLanes block layout: `LANES = 1024 / T` (T = element bit-width); `FL_ORDER = [0,4,2,6,1,5,3,7]`; logical
-          index for `(row, lane)` = `FL_ORDER[row/8]*16 + (row%8)*128 + lane` — same formula for all types
-    - Step 1: delete `decodeJni()` and `decodeJava()`; parse metadata as protobuf (tags 1+2)
-    - Step 2: implement single unified `unpack(buf, bitWidth, offset, T, rowCount) → long[]` using the FastLanes
-      algorithm above
-    - Step 3: handle patches — decode child slots (indices + values), overwrite output at patch indices
-    - Step 4: align `encode()` to write protobuf metadata (tags 1+2) instead of the 9-byte custom format
-    - Step 5: update `BitpackedCodecTest` for round-trip with spec-compliant metadata
+- [ ] **#7a `fastlanes.bitpacked` — patches (step 3)**
+    - Steps 1, 2, 4, 5 landed: protobuf metadata (tags 1+2), unified `unpack(buf, bitWidth, offset, T, rowCount)` using
+      FastLanes algorithm, encoder writes protobuf, round-trip test green.
+    - Step 3 still open: decode child slots (indices + values), overwrite output at patch indices.
     - Reference: `spiraldb/vortex` `encodings/fastlanes/src/bitpacking/`, `spiraldb/fastlanes-rs` `src/bitpacking.rs` +
       `src/macros.rs`
 
-- [x] **#7b Implement `fastlanes.for` decoder**
-    - **Spec** (from `encodings/fastlanes/src/for/vtable/mod.rs`):
-        - Metadata: raw `ScalarValue` protobuf bytes (the reference/minimum value; no wrapper message)
-        - Child slot 0: encoded array (typically `fastlanes.bitpacked` residuals)
-        - Decode: `output[i] = encoded[i].wrapping_add(reference)`
-    - Step 1: parse `ScalarValue` bytes from metadata using existing proto classes
-    - Step 2: decode child array recursively via `DecodeContext`
-    - Step 3: add reference to each element (wrapping add for unsigned types)
+## Performance
 
-- [x] **#7c Implement `vortex.sparse` decoder**
-    - **Spec** (from `encodings/sparse/src/lib.rs`):
-        - Metadata: protobuf `SparseMetadata` — `patches PatchesMetadata` (tag 1, required)
-        - Buffer 0: fill value serialized as `ScalarValue` protobuf bytes
-        - Child slot 0: patch indices; slot 1: patch values
-        - Decode: allocate output filled with fill_value, then apply patches at their indices
-    - Step 1: parse `SparseMetadata` from metadata bytes
-    - Step 2: read fill value from `ctx.buffer(0)` as `ScalarValue` proto bytes
-    - Step 3: decode patch indices + values from child slots
-    - Step 4: allocate output, fill with constant, overwrite at patch positions
+- [x] **#10a Java vs JNI read benchmark** — `RustVsJavaReadBenchmark` covers volume (I64), close (F64 ALP), symbol
+  (varbin) on 10M OHLC rows. Drives README perf table.
 
-- [x] **#7d Implement `vortex.alp` decoder**
-    - **Spec** (from `encodings/alp/src/alp/array.rs`):
-        - Metadata: protobuf `ALPMetadata` — `exp_e u32` (tag 1), `exp_f u32` (tag 2), `patches PatchesMetadata` (tag 3,
-          optional)
-        - Child slot 0: encoded integers (I32 for F32 columns, I64 for F64 columns)
-        - Child slots 1–3 (optional): patch indices, patch values, patch chunk offsets
-        - Decode: apply ALP inverse transform to encoded integers → floats; then apply patches
-    - Step 1: parse `ALPMetadata` from metadata bytes
-    - Step 2: decode encoded child (I32/I64)
-    - Step 3: apply ALP inverse: `value = encoded / 10^e * 10^f` (integer → float reconstruction)
-    - Step 4: apply patches for exceptions that don't fit the ALP transform
-    - Reference: `encodings/alp/src/alp/decompress.rs`
+- [ ] **#10b Java vs JNI write benchmark** (`performance/` module, `-Pperformance`)
+    - Add `RustVsJavaWriteBenchmark` mirroring read side: same 10M-row OHLC fixture, JMH throughput, both writers.
+    - Old `WriteBenchmark.java` (Java-only) removed; rewrite from scratch using JNI bindings already on classpath
+      (`dev.vortex:vortex-jni:0.72.0`).
 
-## Cross-compatibility
-
-- [x] **#8 Rust writes → Java reads** (`RustWritesJavaReadsIT`, `-Pintegration`)
-    - JNI writes I64+F64 file; Java reader decodes via `DecoderRegistry.loadAll()`
-    - Fixed: added `SequenceCodec` (`vortex.sequence` = `A[i] = base + i * multiplier`)
-    - Covers: single chunk, multiple chunks (JNI may merge), column projection
-
-- [x] **#9 Java writes → Rust reads** (`JavaWritesRustReadsIT`, `-Pintegration`)
-    - Java writer produces file; JNI reader decodes via Arrow C Data Interface
-    - Fixed writer: `Buffer.alignment_exponent = 6` + `SegmentSpec.alignment_exponent = 6` + pre-segment 64-byte padding
-    - Root cause: Rust decoder tracks logical alignment from FlatBuffer field; Arrow rejects buffers with alignment < 64
-      bytes
-    - Covers: single chunk, multiple chunks
-
-## Performance (blocked by: JNI bindings for comparison baseline)
-
-- [ ] **#10 Write-speed benchmark** (`performance/` module, `-Pperformance`)
-    - JMH: `VortexWriter` throughput (rows/s, MB/s) vs JNI writer
-    - Fixture: 1M rows, int64 + float64 columns; single-chunk and multi-chunk variants
-    - Java-only half already runnable; JNI half stubbed until bindings available
-
-- [ ] **#11 Read-speed benchmark** (`performance/` module, `-Pperformance`)
-    - JMH: `VortexFile` + `ScanIterator` throughput vs JNI reader
-    - Same fixture as #10; full-scan and projected-column variants
+- [ ] **#10c Publish reproducible perf artifacts**
+    - Capture JMH JSON + JFR profile alongside README table; cite hardware (CPU model), JDK build (`java -version`),
+      and benchmark commit SHA so numbers don't rot silently.
 
 ## Large-file support
 
@@ -124,7 +78,6 @@
 - [ ] Re-enable `TodoComment` in `checkstyle.xml` once all inline TODOs are resolved:
     - `VortexReader.java:73` — explain why reader should be closed
     - `PType.java:38`, `PTypeIO.java:49`, `DictCodec.java:228` — implement F16
-    - `WriteBenchmark.java:89`, `ReadBenchmark.java:110` — enable JNI baseline (blocked by #10/#11)
 
 ## Array API
 
@@ -166,6 +119,12 @@
   throw new IOException("vortex: postscript missing footer segment");
   }
   this is an unrecoverable exception
+
+## Skills
+
+- [ ] Keep `.claude/skills/improve-performance.md` and `.claude/skills/review-performance.md` in sync with
+  `CLAUDE.md` and README perf notes. Re-audit whenever the memory model, allocation rule, or benchmark
+  layout changes — skills drift silently and start producing wrong guidance.
 
 ## Project
 

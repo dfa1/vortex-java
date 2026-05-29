@@ -78,7 +78,7 @@ import java.util.concurrent.TimeUnit;
 public class RustVsJavaReadBenchmark {
 
 	private static final int TOTAL_ROWS = 10_000_000;
-	private static final int BATCH_SIZE = 50_000;   // 20 chunks
+	private static final int BATCH_SIZE = 50_000;   // 200 chunks
 	private static final ArrowType F64_TYPE = new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE);
 	private static final Schema JNI_SCHEMA = new Schema(List.of(
 			Field.notNullable("date", new ArrowType.Date(DateUnit.DAY)),

@@ -1,6 +1,6 @@
 ---
-name: java-perf-reviewer
-description: Code review skill for high-throughput Java data processing, focusing on memory bounds (FFM API), zero-copy I/O, and hot-loop optimization.
+name: review-performance
+description: Code review skill for high-throughput Java data processing, focusing on memory bounds (FFM API), zero-copy I/O, and hot-loop optimization. Tailored to the vortex-java columnar reader/writer (confined Arena, ctx.arena() for codec output).
 ---
 
 ## Overview
@@ -24,7 +24,7 @@ advanced heuristics rather than generic advice.
 - **Predictability:** Flag unpredictable, data-dependent branches inside hot loops.
 - **Bounds Check Elimination:** Encourage patterns that allow the JIT to remove array bounds checks (e.g., using indexed
   loops with prevalidated ranges).
-- **mark opportunities for Java Vector API**
+- **Mark opportunities for Java Vector API.**
 
 ---
 
@@ -34,7 +34,13 @@ advanced heuristics rather than generic advice.
   2.14 GB).
 - **Prefer FFM for Large Buffers:** Recommend migrating large `ByteBuffer` allocations to the Foreign Function & Memory
   API (`MemorySegment`).
-    - Use `Arena.ofAuto().allocate(size, alignment)` for 64‑bit capacity and fast unaligned access via `ValueLayout`.
+    - **Codec output allocation rule (hard, from `CLAUDE.md`):** never allocate `byte[]` + wrap with
+      `MemorySegment.ofArray()` for decode output. Always allocate from the `DecodeContext` arena:
+      `ctx.arena().allocate(n * elemBytes, alignment)`. The buffer's lifetime is the confined `Arena` owned
+      by the `VortexFile` — `Arena.ofAuto()` / `Arena.ofShared()` violate that ownership model and leak / drop
+      the segment at the wrong time.
+    - If the allocation lives in a private static helper without `DecodeContext`, add an `Arena arena`
+      parameter and pass `ctx.arena()` at the call site.
 - **Alignment & VarHandles:**
     - Warn when using `ValueLayout.JAVA_INT` or similar on potentially unaligned addresses.
     - Prefer `ValueLayout` constants over manual offset math.
