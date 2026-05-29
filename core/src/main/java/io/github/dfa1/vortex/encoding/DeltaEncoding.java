@@ -18,12 +18,12 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.List;
 
-/// Codec for `fastlanes.delta` — delta encoding for integer columns.
+/// Encoding for `fastlanes.delta` — delta encoding for integer columns.
 ///
 /// Metadata (17 bytes): base_value (i64 LE) | bit_width (u8) | delta_frame_of_ref (i64 LE).
 /// Stores the first value as base, then bit-packs per-element deltas (LSB-first).
 /// Optimal for monotonic or near-monotonic integer sequences.
-public final class DeltaCodec implements Codec {
+public final class DeltaEncoding implements Encoding {
 
 	private static ByteBuffer pack(long[] values, long frameOfRef, int bitWidth) {
 		int n = values.length;
@@ -113,7 +113,7 @@ public final class DeltaCodec implements Codec {
 				yield r;
 			}
 			case I64, U64 -> (long[]) data;
-			default -> throw new VortexException(CodecId.FASTLANES_DELTA, "unsupported ptype: " + ptype);
+			default -> throw new VortexException(EncodingId.FASTLANES_DELTA, "unsupported ptype: " + ptype);
 		};
 	}
 
@@ -156,8 +156,8 @@ public final class DeltaCodec implements Codec {
 	// ── Type conversion ───────────────────────────────────────────────────────
 
 	@Override
-	public CodecId encodingId() {
-		return CodecId.FASTLANES_DELTA;
+	public EncodingId encodingId() {
+		return EncodingId.FASTLANES_DELTA;
 	}
 
 	@Override
@@ -232,7 +232,7 @@ public final class DeltaCodec implements Codec {
 	public Array decode(DecodeContext ctx) {
 		ByteBuffer rawMeta = ctx.metadata();
 		if (rawMeta == null || rawMeta.capacity() < 17) {
-			throw new VortexException(CodecId.FASTLANES_DELTA, "missing or truncated metadata");
+			throw new VortexException(EncodingId.FASTLANES_DELTA, "missing or truncated metadata");
 		}
 		ByteBuffer meta = rawMeta.duplicate().order(ByteOrder.LITTLE_ENDIAN);
 		long baseValue = meta.getLong(0);
@@ -259,7 +259,7 @@ public final class DeltaCodec implements Codec {
 			case I32, U32 -> new IntArray(ctx.dtype(), rowCount, seg, ArrayStats.empty());
 			case I16, U16 -> new ShortArray(ctx.dtype(), rowCount, seg, ArrayStats.empty());
 			case I8, U8   -> new ByteArray(ctx.dtype(), rowCount, seg, ArrayStats.empty());
-			default -> throw new VortexException(CodecId.FASTLANES_DELTA, "unsupported ptype " + ptype);
+			default -> throw new VortexException(EncodingId.FASTLANES_DELTA, "unsupported ptype " + ptype);
 		};
 	}
 }

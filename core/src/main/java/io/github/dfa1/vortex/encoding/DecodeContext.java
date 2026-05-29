@@ -7,7 +7,7 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
 import java.nio.ByteBuffer;
 
-/// Decoding context passed to each [Codec].
+/// Decoding context passed to each [Encoding].
 ///
 /// Buffers are `MemorySegment` slices materialized from the file's segment table;
 /// children are decoded recursively via [#decodeChild(int)].
@@ -18,7 +18,7 @@ public record DecodeContext(
 		DType dtype,
 		long rowCount,
 		MemorySegment[] segmentBuffers,
-		CodecRegistry registry,
+		EncodingRegistry registry,
 		SegmentAllocator arena
 ) {
 	/// Recursively decode child `i` using the same segment buffers, registry and arena.

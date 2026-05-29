@@ -15,9 +15,9 @@ import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
-/// Codec for `vortex.primitive` — raw little-endian primitive arrays.
+/// Encoding for `vortex.primitive` — raw little-endian primitive arrays.
 /// Encodes all [DType.Primitive] types; embeds min/max stats as Protobuf ScalarValue bytes.
-public final class PrimitiveCodec implements Codec {
+public final class PrimitiveEncoding implements Encoding {
 
 	private static ByteBuffer encodePrimitive(PType ptype, Object data) {
 		int elementBytes = ptype.byteSize();
@@ -280,8 +280,8 @@ public final class PrimitiveCodec implements Codec {
 	}
 
 	@Override
-	public CodecId encodingId() {
-		return CodecId.VORTEX_PRIMITIVE;
+	public EncodingId encodingId() {
+		return EncodingId.VORTEX_PRIMITIVE;
 	}
 
 	@Override

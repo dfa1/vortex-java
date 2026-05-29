@@ -24,7 +24,7 @@ import java.nio.ByteOrder;
 /// <p>Metadata: raw {@code ScalarValue} protobuf bytes — the reference (minimum) value.
 /// Child slot 0: encoded residuals array (same dtype as parent, typically bitpacked).
 /// Decode: {@code output[i] = encoded[i] + reference} (wrapping arithmetic).
-public final class FrameOfReferenceCodec implements Codec {
+public final class FrameOfReferenceEncoding implements Encoding {
 
 	private static final ValueLayout.OfShort LE_SHORT = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 	private static final ValueLayout.OfInt   LE_INT   = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
@@ -35,7 +35,7 @@ public final class FrameOfReferenceCodec implements Codec {
 			case INT64_VALUE -> scalar.getInt64Value();
 			case UINT64_VALUE -> scalar.getUint64Value();
 			case KIND_NOT_SET -> 0L;
-			default -> throw new VortexException(CodecId.FASTLANES_FOR,
+			default -> throw new VortexException(EncodingId.FASTLANES_FOR,
 					"unexpected scalar kind " + scalar.getKindCase());
 		};
 	}
@@ -68,15 +68,15 @@ public final class FrameOfReferenceCodec implements Codec {
 					dst.set(LE_LONG, off, v + ref);
 				}
 			}
-			default -> throw new VortexException(CodecId.FASTLANES_FOR,
+			default -> throw new VortexException(EncodingId.FASTLANES_FOR,
 					"unsupported ptype " + ptype);
 		}
 		return dst;
 	}
 
 	@Override
-	public CodecId encodingId() {
-		return CodecId.FASTLANES_FOR;
+	public EncodingId encodingId() {
+		return EncodingId.FASTLANES_FOR;
 	}
 
 	@Override
@@ -88,19 +88,19 @@ public final class FrameOfReferenceCodec implements Codec {
 	public Array decode(DecodeContext ctx) {
 		ByteBuffer rawMeta = ctx.metadata();
 		if (rawMeta == null || !rawMeta.hasRemaining()) {
-			throw new VortexException(CodecId.FASTLANES_FOR, "missing metadata");
+			throw new VortexException(EncodingId.FASTLANES_FOR, "missing metadata");
 		}
 		ScalarProtos.ScalarValue scalar;
 		try {
 			scalar = ScalarProtos.ScalarValue.parseFrom(rawMeta.duplicate());
 		} catch (InvalidProtocolBufferException e) {
-			throw new VortexException(CodecId.FASTLANES_FOR, "invalid metadata", e);
+			throw new VortexException(EncodingId.FASTLANES_FOR, "invalid metadata", e);
 		}
 
 		Array encoded = ctx.decodeChild(0);
 
 		if (!(ctx.dtype() instanceof DType.Primitive p)) {
-			throw new VortexException(CodecId.FASTLANES_FOR, "expected primitive dtype, got " + ctx.dtype());
+			throw new VortexException(EncodingId.FASTLANES_FOR, "expected primitive dtype, got " + ctx.dtype());
 		}
 
 		long ref = referenceValue(scalar);
@@ -117,7 +117,7 @@ public final class FrameOfReferenceCodec implements Codec {
 			case F64 -> new DoubleArray(ctx.dtype(), n, dst, ArrayStats.empty());
 			case I16, U16 -> new ShortArray(ctx.dtype(), n, dst, ArrayStats.empty());
 			case I8, U8   -> new ByteArray(ctx.dtype(), n, dst, ArrayStats.empty());
-			default -> throw new VortexException(CodecId.FASTLANES_FOR, "unsupported ptype " + p.ptype());
+			default -> throw new VortexException(EncodingId.FASTLANES_FOR, "unsupported ptype " + p.ptype());
 		};
 	}
 }

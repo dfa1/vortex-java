@@ -20,7 +20,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.List;
 
-/// Codec for {@code fastlanes.bitpacked} — spec-compliant FastLanes bit-packing.
+/// Encoding for {@code fastlanes.bitpacked} — spec-compliant FastLanes bit-packing.
 ///
 /// <p>Metadata: protobuf {@code BitPackedMetadata} — {@code bit_width u32} (tag 1),
 /// {@code offset u32} (tag 2, element offset within the first 1024-element block).
@@ -28,7 +28,7 @@ import java.util.List;
 /// <p>Buffer layout: {@code ceil((len + offset) / 1024)} blocks, each block {@code 128 * bit_width}
 /// bytes. Within each block the values are transposed using the FastLanes FL_ORDER permutation so
 /// that adjacent bit-planes are contiguous (enables SIMD-friendly decompression).
-public final class BitpackedCodec implements Codec {
+public final class BitpackedEncoding implements Encoding {
 
 	// FL_ORDER permutation from the FastLanes paper / spiraldb/fastlanes-rs.
 	private static final int[] FL_ORDER = {0, 4, 2, 6, 1, 5, 3, 7};
@@ -92,7 +92,7 @@ public final class BitpackedCodec implements Codec {
 			case 16 -> unpackLoop16(buf, bitWidth, offset, rowCount, output);
 			case 32 -> unpackLoop32(buf, bitWidth, offset, rowCount, output);
 			case 64 -> unpackLoop64(buf, bitWidth, offset, rowCount, output);
-			default -> throw new VortexException(CodecId.FASTLANES_BITPACKED, "unsupported typeBits: " + typeBits);
+			default -> throw new VortexException(EncodingId.FASTLANES_BITPACKED, "unsupported typeBits: " + typeBits);
 		}
 	}
 
@@ -385,7 +385,7 @@ public final class BitpackedCodec implements Codec {
 								| ((buf[off + 6] & 0xFF) << 16) | ((buf[off + 7] & 0xFF) << 24));
 				yield lo | (hi << 32);
 			}
-			default -> throw new VortexException(CodecId.FASTLANES_BITPACKED, "unsupported typeBits: " + typeBits);
+			default -> throw new VortexException(EncodingId.FASTLANES_BITPACKED, "unsupported typeBits: " + typeBits);
 		};
 	}
 
@@ -412,7 +412,7 @@ public final class BitpackedCodec implements Codec {
 				buf[off + 6] = (byte) (value >>> 48);
 				buf[off + 7] = (byte) (value >>> 56);
 			}
-			default -> throw new VortexException(CodecId.FASTLANES_BITPACKED, "unsupported typeBits: " + typeBits);
+			default -> throw new VortexException(EncodingId.FASTLANES_BITPACKED, "unsupported typeBits: " + typeBits);
 		}
 	}
 
@@ -467,7 +467,7 @@ public final class BitpackedCodec implements Codec {
 				yield r;
 			}
 			case I64, U64 -> (long[]) data;
-			default -> throw new VortexException(CodecId.FASTLANES_BITPACKED, "unsupported ptype: " + ptype);
+			default -> throw new VortexException(EncodingId.FASTLANES_BITPACKED, "unsupported ptype: " + ptype);
 		};
 	}
 
@@ -494,8 +494,8 @@ public final class BitpackedCodec implements Codec {
 	// ── Type conversion ───────────────────────────────────────────────────────
 
 	@Override
-	public CodecId encodingId() {
-		return CodecId.FASTLANES_BITPACKED;
+	public EncodingId encodingId() {
+		return EncodingId.FASTLANES_BITPACKED;
 	}
 
 	// ── Misc helpers ──────────────────────────────────────────────────────────
@@ -564,14 +564,14 @@ public final class BitpackedCodec implements Codec {
 	public Array decode(DecodeContext ctx) {
 		ByteBuffer rawMeta = ctx.metadata();
 		if (rawMeta == null) {
-			throw new VortexException(CodecId.FASTLANES_BITPACKED, "missing metadata");
+			throw new VortexException(EncodingId.FASTLANES_BITPACKED, "missing metadata");
 		}
 
 		EncodingProtos.BitPackedMetadata meta;
 		try {
 			meta = EncodingProtos.BitPackedMetadata.parseFrom(rawMeta.duplicate());
 		} catch (InvalidProtocolBufferException e) {
-			throw new VortexException(CodecId.FASTLANES_BITPACKED, "invalid metadata", e);
+			throw new VortexException(EncodingId.FASTLANES_BITPACKED, "invalid metadata", e);
 		}
 
 		int bitWidth = meta.getBitWidth();
@@ -593,7 +593,7 @@ public final class BitpackedCodec implements Codec {
 			case I32, U32 -> new IntArray(ctx.dtype(), rowCount, output, ArrayStats.empty());
 			case I16, U16 -> new ShortArray(ctx.dtype(), rowCount, output, ArrayStats.empty());
 			case I8, U8   -> new ByteArray(ctx.dtype(), rowCount, output, ArrayStats.empty());
-			default -> throw new VortexException(CodecId.FASTLANES_BITPACKED, "unsupported ptype " + ptype);
+			default -> throw new VortexException(EncodingId.FASTLANES_BITPACKED, "unsupported ptype " + ptype);
 		};
 	}
 
@@ -612,7 +612,7 @@ public final class BitpackedCodec implements Codec {
 			case U16 -> Short.toUnsignedLong(seg.get(LE_SHORT, i * 2));
 			case U32 -> Integer.toUnsignedLong(seg.get(LE_INT, i * 4));
 			case U64 -> seg.get(LE_LONG, i * 8);
-			default -> throw new VortexException(CodecId.FASTLANES_BITPACKED,
+			default -> throw new VortexException(EncodingId.FASTLANES_BITPACKED,
 					"non-unsigned patch index ptype " + ptype);
 		};
 	}
@@ -640,7 +640,7 @@ public final class BitpackedCodec implements Codec {
 		for (long i = 0; i < numPatches; i++) {
 			long absIdx = readUnsignedIdx(idxSeg, i, idxPtype) - offset;
 			if (absIdx < 0 || absIdx >= n) {
-				throw new VortexException(CodecId.FASTLANES_BITPACKED,
+				throw new VortexException(EncodingId.FASTLANES_BITPACKED,
 						"patch index " + absIdx + " out of range [0," + n + ")");
 			}
 			MemorySegment.copy(valSeg, i * elemBytes, out, absIdx * elemBytes, elemBytes);

@@ -27,7 +27,7 @@ import java.nio.ByteOrder;
 /// </ul>
 ///
 /// <p>Output: varbin-compatible {@code Array} (buffer[0] = uncompressed bytes, child[0] = I32 offsets).
-public final class FsstCodec implements Codec {
+public final class FsstEncoding implements Encoding {
 
     private static final int ESCAPE = 0xFF;
 
@@ -36,8 +36,8 @@ public final class FsstCodec implements Codec {
     private static final ValueLayout.OfShort  LE_SHORT = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     @Override
-    public CodecId encodingId() {
-        return CodecId.VORTEX_FSST;
+    public EncodingId encodingId() {
+        return EncodingId.VORTEX_FSST;
     }
 
     @Override
@@ -49,13 +49,13 @@ public final class FsstCodec implements Codec {
     public Array decode(DecodeContext ctx) {
         ByteBuffer rawMeta = ctx.metadata();
         if (rawMeta == null) {
-            throw new VortexException(CodecId.VORTEX_FSST, "missing metadata");
+            throw new VortexException(EncodingId.VORTEX_FSST, "missing metadata");
         }
         EncodingProtos.FSSTMetadata meta;
         try {
             meta = EncodingProtos.FSSTMetadata.parseFrom(rawMeta.duplicate());
         } catch (InvalidProtocolBufferException e) {
-            throw new VortexException(CodecId.VORTEX_FSST, "invalid metadata", e);
+            throw new VortexException(EncodingId.VORTEX_FSST, "invalid metadata", e);
         }
 
         PType uncompLenPType = PType.values()[meta.getUncompressedLengthsPtype().getNumber()];
@@ -136,7 +136,7 @@ public final class FsstCodec implements Codec {
             case U32 -> Integer.toUnsignedLong(seg.getAtIndex(LE_INT, idx));
             case I32 -> seg.getAtIndex(LE_INT, idx);
             case I64, U64 -> seg.getAtIndex(LE_LONG, idx);
-            default  -> throw new VortexException(CodecId.VORTEX_FSST, "unsupported ptype " + ptype);
+            default  -> throw new VortexException(EncodingId.VORTEX_FSST, "unsupported ptype " + ptype);
         };
     }
 }

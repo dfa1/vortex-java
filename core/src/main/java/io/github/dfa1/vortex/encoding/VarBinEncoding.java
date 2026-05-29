@@ -26,11 +26,11 @@ import java.nio.ByteBuffer;
 ///   <li>{@code buffer(0)} — the raw bytes segment</li>
 ///   <li>{@code child(0)} — the offsets array (I32 or I64 primitives)</li>
 /// </ul>
-public final class VarBinCodec implements Codec {
+public final class VarBinEncoding implements Encoding {
 
 	@Override
-	public CodecId encodingId() {
-		return CodecId.VORTEX_VARBIN;
+	public EncodingId encodingId() {
+		return EncodingId.VORTEX_VARBIN;
 	}
 
 	@Override
@@ -42,13 +42,13 @@ public final class VarBinCodec implements Codec {
 	public Array decode(DecodeContext ctx) {
 		ByteBuffer rawMeta = ctx.metadata();
 		if (rawMeta == null) {
-			throw new VortexException(CodecId.VORTEX_VARBIN, "missing metadata");
+			throw new VortexException(EncodingId.VORTEX_VARBIN, "missing metadata");
 		}
 		EncodingProtos.VarBinMetadata meta;
 		try {
 			meta = EncodingProtos.VarBinMetadata.parseFrom(rawMeta.duplicate());
 		} catch (InvalidProtocolBufferException e) {
-			throw new VortexException(CodecId.VORTEX_VARBIN, "invalid metadata", e);
+			throw new VortexException(EncodingId.VORTEX_VARBIN, "invalid metadata", e);
 		}
 
 		PType offsetsPtype = PType.values()[meta.getOffsetsPtype().getNumber()];

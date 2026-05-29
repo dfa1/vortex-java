@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.Footer;
 import io.github.dfa1.vortex.core.Layout;
 import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.encoding.CodecRegistry;
+import io.github.dfa1.vortex.encoding.EncodingRegistry;
 import io.github.dfa1.vortex.fbs.Postscript;
 import io.github.dfa1.vortex.scan.ScanIterator;
 import io.github.dfa1.vortex.scan.ScanOptions;
@@ -26,7 +26,7 @@ import java.nio.ByteOrder;
 /// and metadata blobs (footer, layout, dtype). Each [#slice] call fires a targeted
 /// Range request; no full-file download occurs.
 ///
-/// All allocated buffers (segment bytes and codec outputs) share a single
+/// All allocated buffers (segment bytes and encoding outputs) share a single
 /// confined [Arena] and are released when this handle is closed.
 public final class VortexHttpReader implements VortexHandle {
 
@@ -42,12 +42,12 @@ public final class VortexHttpReader implements VortexHandle {
 	private final Footer footer;
 	private final DType dtype;
 	private final Layout layout;
-	private final CodecRegistry registry;
+	private final EncodingRegistry registry;
 
 	private VortexHttpReader(
 			URI uri, HttpClient client, Arena arena, long fileSize,
 			int version, Footer footer, DType dtype, Layout layout,
-			CodecRegistry registry
+			EncodingRegistry registry
 	) {
 		this.uri = uri;
 		this.client = client;
@@ -61,10 +61,10 @@ public final class VortexHttpReader implements VortexHandle {
 	}
 
 	public static VortexHttpReader open(URI uri) throws IOException {
-		return open(uri, CodecRegistry.loadAll());
+		return open(uri, EncodingRegistry.loadAll());
 	}
 
-	public static VortexHttpReader open(URI uri, CodecRegistry registry) throws IOException {
+	public static VortexHttpReader open(URI uri, EncodingRegistry registry) throws IOException {
 		HttpClient client = HttpClient.newHttpClient();
 		Arena arena = Arena.ofConfined();
 		try {
@@ -152,7 +152,7 @@ public final class VortexHttpReader implements VortexHandle {
 	}
 
 	@Override
-	public CodecRegistry registry() {
+	public EncodingRegistry registry() {
 		return registry;
 	}
 

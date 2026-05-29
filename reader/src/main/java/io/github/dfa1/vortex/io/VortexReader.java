@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.Footer;
 import io.github.dfa1.vortex.core.Layout;
 import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.encoding.CodecRegistry;
+import io.github.dfa1.vortex.encoding.EncodingRegistry;
 import io.github.dfa1.vortex.scan.ScanIterator;
 import io.github.dfa1.vortex.scan.ScanOptions;
 
@@ -40,12 +40,12 @@ public final class VortexReader implements VortexHandle {
 	private final Footer footer;
 	private final DType dtype;
 	private final Layout layout;
-	private final CodecRegistry registry;
+	private final EncodingRegistry registry;
 
 	private VortexReader(
 			Arena arena, MemorySegment fileSegment, long fileSize,
 			int version, Footer footer, DType dtype, Layout layout,
-			CodecRegistry registry
+			EncodingRegistry registry
 	) {
 		this.arena = arena;
 		this.fileSegment = fileSegment;
@@ -60,10 +60,10 @@ public final class VortexReader implements VortexHandle {
 	/// Open a Vortex file. Memory-maps the entire file; all subsequent reads
 	/// are zero-copy slices. Call [#close()] when done.
 	public static VortexReader open(Path path) throws IOException {
-		return open(path, CodecRegistry.loadAll());
+		return open(path, EncodingRegistry.loadAll());
 	}
 
-	public static VortexReader open(Path path, CodecRegistry registry) throws IOException {
+	public static VortexReader open(Path path, EncodingRegistry registry) throws IOException {
 		Arena arena = Arena.ofConfined();
 		try (var channel = FileChannel.open(path, StandardOpenOption.READ)) {
 			long size = channel.size();
@@ -82,7 +82,7 @@ public final class VortexReader implements VortexHandle {
 	}
 
 	private static VortexReader parse(
-			MemorySegment seg, long size, Arena arena, CodecRegistry registry
+			MemorySegment seg, long size, Arena arena, EncodingRegistry registry
 	) {
 		// 8-byte trailer: version(u16 LE) | postscriptLen(u16 LE) | magic(4)
 		var trailer = seg.asSlice(size - TRAILER_SIZE, TRAILER_SIZE);
@@ -138,7 +138,7 @@ public final class VortexReader implements VortexHandle {
 	}
 
 	@Override
-	public CodecRegistry registry() {
+	public EncodingRegistry registry() {
 		return registry;
 	}
 

@@ -1,42 +1,42 @@
 package io.github.dfa1.vortex.core;
 
-import io.github.dfa1.vortex.encoding.CodecId;
+import io.github.dfa1.vortex.encoding.EncodingId;
 
 import java.util.Optional;
 
-/// Unrecoverable Vortex error: malformed file, unsupported feature, or codec failure.
+/// Unrecoverable Vortex error: malformed file, unsupported feature, or encoding failure.
 ///
-/// Carries an optional [CodecId] so callers can attribute decode failures to a specific
+/// Carries an optional [EncodingId] so callers can attribute decode failures to a specific
 /// encoding without parsing the message.
 public final class VortexException extends RuntimeException {
 
-	private final CodecId codecId;
+	private final EncodingId encodingId;
 
 	public VortexException(String message) {
 		super(message);
-		this.codecId = null;
+		this.encodingId = null;
 	}
 
 	public VortexException(String message, Throwable cause) {
 		super(message, cause);
-		this.codecId = null;
+		this.encodingId = null;
 	}
 
-	public VortexException(CodecId codecId, String message) {
-		super(prefix(codecId) + message);
-		this.codecId = codecId;
+	public VortexException(EncodingId encodingId, String message) {
+		super(prefix(encodingId) + message);
+		this.encodingId = encodingId;
 	}
 
-	public VortexException(CodecId codecId, String message, Throwable cause) {
-		super(prefix(codecId) + message, cause);
-		this.codecId = codecId;
+	public VortexException(EncodingId encodingId, String message, Throwable cause) {
+		super(prefix(encodingId) + message, cause);
+		this.encodingId = encodingId;
 	}
 
-	public Optional<CodecId> codecId() {
-		return Optional.ofNullable(codecId);
+	public Optional<EncodingId> encodingId() {
+		return Optional.ofNullable(encodingId);
 	}
 
-	private static String prefix(CodecId codecId) {
-		return codecId == null ? "" : codecId.id() + ": ";
+	private static String prefix(EncodingId encodingId) {
+		return encodingId == null ? "" : encodingId.id() + ": ";
 	}
 }

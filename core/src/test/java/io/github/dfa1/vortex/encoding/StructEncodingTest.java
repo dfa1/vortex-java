@@ -14,7 +14,7 @@ import java.nio.ByteOrder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class StructCodecTest {
+class StructEncodingTest {
 
 	private static final DType I64 = new DType.Primitive(PType.I64, false);
 	private static final ValueLayout.OfLong LE_LONG =
@@ -30,14 +30,14 @@ class StructCodecTest {
 	}
 
 	private static ArrayNode primitiveNode(int bufferIdx) {
-		return new ArrayNode(CodecId.VORTEX_PRIMITIVE, null, new ArrayNode[0],
+		return new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0],
 				new int[]{bufferIdx}, ArrayStats.empty());
 	}
 
 	private static DecodeContext buildStructCtx(ArrayNode structNode, MemorySegment[] segs, long rowCount) {
-		CodecRegistry registry = CodecRegistry.empty();
-		registry.register(new StructCodec());
-		registry.register(new PrimitiveCodec());
+		EncodingRegistry registry = EncodingRegistry.empty();
+		registry.register(new StructEncoding());
+		registry.register(new PrimitiveEncoding());
 		return new DecodeContext(structNode, I64, rowCount, segs, registry, Arena.global());
 	}
 
@@ -47,11 +47,11 @@ class StructCodecTest {
 		long[] data = {10L, 20L, 30L};
 		MemorySegment seg = longSegment(data);
 		ArrayNode valuesNode = primitiveNode(0);
-		ArrayNode structNode = new ArrayNode(CodecId.VORTEX_STRUCT, null,
+		ArrayNode structNode = new ArrayNode(EncodingId.VORTEX_STRUCT, null,
 				new ArrayNode[]{valuesNode}, new int[0], ArrayStats.empty());
 
 		DecodeContext ctx = buildStructCtx(structNode, new MemorySegment[]{seg}, data.length);
-		StructCodec sut = new StructCodec();
+		StructEncoding sut = new StructEncoding();
 
 		// When
 		Array result = sut.decode(ctx);
@@ -73,18 +73,18 @@ class StructCodecTest {
 
 		ArrayNode validityNode = primitiveNode(0); // slot 0 = dummy validity
 		ArrayNode valuesNode = primitiveNode(1);   // slot 1 = actual values
-		ArrayNode structNode = new ArrayNode(CodecId.VORTEX_STRUCT, null,
+		ArrayNode structNode = new ArrayNode(EncodingId.VORTEX_STRUCT, null,
 				new ArrayNode[]{validityNode, valuesNode}, new int[0], ArrayStats.empty());
 
-		CodecRegistry registry = CodecRegistry.empty();
-		registry.register(new StructCodec());
-		registry.register(new PrimitiveCodec());
+		EncodingRegistry registry = EncodingRegistry.empty();
+		registry.register(new StructEncoding());
+		registry.register(new PrimitiveEncoding());
 		DecodeContext ctx = new DecodeContext(
 				structNode, I64, data.length,
 				new MemorySegment[]{validitySeg, valuesSeg},
 				registry, Arena.global());
 
-		StructCodec sut = new StructCodec();
+		StructEncoding sut = new StructEncoding();
 
 		// When
 		Array result = sut.decode(ctx);

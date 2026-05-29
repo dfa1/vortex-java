@@ -11,11 +11,11 @@ public record EncodeResult(
 		byte[] statsMax
 ) {
 	/// Convenience factory for single-buffer leaf encodings.
-	public static EncodeResult simple(CodecId encodingId, ByteBuffer data, byte[] min, byte[] max) {
+	public static EncodeResult simple(EncodingId encodingId, ByteBuffer data, byte[] min, byte[] max) {
 		return new EncodeResult(EncodeNode.leaf(encodingId, 0), List.of(data), min, max);
 	}
 
-	public static EncodeResult simple(CodecId encodingId, ByteBuffer data) {
+	public static EncodeResult simple(EncodingId encodingId, ByteBuffer data) {
 		return simple(encodingId, data, null, null);
 	}
 

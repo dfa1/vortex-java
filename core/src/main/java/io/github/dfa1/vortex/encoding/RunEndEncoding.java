@@ -31,7 +31,7 @@ import java.nio.ByteOrder;
 ///
 /// <p>Decode: for each run i, repeat {@code values[i]} for positions
 /// {@code [ends[i-1], ends[i])} in the output, skipping the first {@code offset} logical elements.
-public final class RunEndCodec implements Codec {
+public final class RunEndEncoding implements Encoding {
 
 	private static final ValueLayout.OfShort LE_SHORT = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 	private static final ValueLayout.OfInt LE_INT = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
@@ -49,7 +49,7 @@ public final class RunEndCodec implements Codec {
 			case I16, U16 -> expandShort(endsSeg, valuesSeg, endsPtype, numRuns, offset, n, out);
 			case I32, U32 -> expandInt(endsSeg, valuesSeg, endsPtype, numRuns, offset, n, out);
 			case I64, U64 -> expandLong(endsSeg, valuesSeg, endsPtype, numRuns, offset, n, out);
-			default -> throw new VortexException(CodecId.VORTEX_RUNEND, "unsupported ptype " + valuePtype);
+			default -> throw new VortexException(EncodingId.VORTEX_RUNEND, "unsupported ptype " + valuePtype);
 		}
 		MemorySegment ro = out.asReadOnly();
 		return switch (valuePtype) {
@@ -57,7 +57,7 @@ public final class RunEndCodec implements Codec {
 			case I32, U32 -> new IntArray(dtype, n, ro, ArrayStats.empty());
 			case I16, U16 -> new ShortArray(dtype, n, ro, ArrayStats.empty());
 			case I8, U8   -> new ByteArray(dtype, n, ro, ArrayStats.empty());
-			default -> throw new VortexException(CodecId.VORTEX_RUNEND, "unsupported ptype " + valuePtype);
+			default -> throw new VortexException(EncodingId.VORTEX_RUNEND, "unsupported ptype " + valuePtype);
 		};
 	}
 
@@ -132,7 +132,7 @@ public final class RunEndCodec implements Codec {
 			case U16 -> Short.toUnsignedLong(seg.get(LE_SHORT, i * 2));
 			case U32 -> Integer.toUnsignedLong(seg.get(LE_INT, i * 4));
 			case U64 -> seg.get(LE_LONG, i * 8);
-			default -> throw new VortexException(CodecId.VORTEX_RUNEND, "non-unsigned ends ptype " + ptype);
+			default -> throw new VortexException(EncodingId.VORTEX_RUNEND, "non-unsigned ends ptype " + ptype);
 		};
 	}
 
@@ -223,7 +223,7 @@ public final class RunEndCodec implements Codec {
 		return switch (ptype) {
 			case I32, U32 -> Integer.toUnsignedLong(seg.getAtIndex(LE_INT, i));
 			case I64, U64 -> seg.getAtIndex(LE_LONG, i);
-			default -> throw new VortexException(CodecId.VORTEX_RUNEND, "unsupported offset ptype " + ptype);
+			default -> throw new VortexException(EncodingId.VORTEX_RUNEND, "unsupported offset ptype " + ptype);
 		};
 	}
 
@@ -234,8 +234,8 @@ public final class RunEndCodec implements Codec {
 	}
 
 	@Override
-	public CodecId encodingId() {
-		return CodecId.VORTEX_RUNEND;
+	public EncodingId encodingId() {
+		return EncodingId.VORTEX_RUNEND;
 	}
 
 	@Override
@@ -247,14 +247,14 @@ public final class RunEndCodec implements Codec {
 	public Array decode(DecodeContext ctx) {
 		ByteBuffer rawMeta = ctx.metadata();
 		if (rawMeta == null) {
-			throw new VortexException(CodecId.VORTEX_RUNEND, "missing metadata");
+			throw new VortexException(EncodingId.VORTEX_RUNEND, "missing metadata");
 		}
 
 		EncodingProtos.RunEndMetadata meta;
 		try {
 			meta = EncodingProtos.RunEndMetadata.parseFrom(rawMeta.duplicate());
 		} catch (InvalidProtocolBufferException e) {
-			throw new VortexException(CodecId.VORTEX_RUNEND, "invalid metadata", e);
+			throw new VortexException(EncodingId.VORTEX_RUNEND, "invalid metadata", e);
 		}
 
 		PType endsPtype = ptypeFromProto(meta.getEndsPtype());
@@ -276,7 +276,7 @@ public final class RunEndCodec implements Codec {
 		}
 
 		if (!(ctx.dtype() instanceof DType.Primitive p)) {
-			throw new VortexException(CodecId.VORTEX_RUNEND, "expected primitive dtype, got " + ctx.dtype());
+			throw new VortexException(EncodingId.VORTEX_RUNEND, "expected primitive dtype, got " + ctx.dtype());
 		}
 		PType valuePtype = p.ptype();
 		Array valuesArr = decodeChildAs(ctx, 1, ctx.dtype(), numRuns);

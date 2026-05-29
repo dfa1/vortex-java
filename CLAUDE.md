@@ -83,7 +83,7 @@ via `ServiceLoader`; register custom decoders with `registry.register(decoder)`.
 during scan are zero-copy slices of that segment — their lifetime is tied to the `VortexFile`. Close the file to release
 the mapped region.
 
-**Codec output allocation rule:** never allocate `byte[]` + wrap with `MemorySegment.ofArray()` for decode output.
+**Encoding output allocation rule:** never allocate `byte[]` + wrap with `MemorySegment.ofArray()` for decode output.
 Always allocate from `ctx.arena()`:
 ```java
 // WRONG — heap allocation, GC pressure, extra copy

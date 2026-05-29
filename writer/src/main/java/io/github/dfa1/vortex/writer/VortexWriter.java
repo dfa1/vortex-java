@@ -2,13 +2,13 @@ package io.github.dfa1.vortex.writer;
 
 import com.google.flatbuffers.FlatBufferBuilder;
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.encoding.AlpCodec;
-import io.github.dfa1.vortex.encoding.BoolCodec;
-import io.github.dfa1.vortex.encoding.Codec;
+import io.github.dfa1.vortex.encoding.AlpEncoding;
+import io.github.dfa1.vortex.encoding.BoolEncoding;
+import io.github.dfa1.vortex.encoding.Encoding;
 import io.github.dfa1.vortex.encoding.EncodeNode;
 import io.github.dfa1.vortex.encoding.EncodeResult;
-import io.github.dfa1.vortex.encoding.CodecId;
-import io.github.dfa1.vortex.encoding.PrimitiveCodec;
+import io.github.dfa1.vortex.encoding.EncodingId;
+import io.github.dfa1.vortex.encoding.PrimitiveEncoding;
 import io.github.dfa1.vortex.fbs.ArraySpec;
 import io.github.dfa1.vortex.fbs.Footer;
 import io.github.dfa1.vortex.fbs.Layout;
@@ -52,24 +52,24 @@ public final class VortexWriter implements Closeable {
 	private static final ByteBuffer MAGIC = ByteBuffer.wrap(new byte[]{'V', 'T', 'X', 'F'})
 			.asReadOnlyBuffer();
 
-	private static final List<Codec> DEFAULT_CODECS = List.of(new AlpCodec(), new PrimitiveCodec(), new BoolCodec());
+	private static final List<Encoding> DEFAULT_CODECS = List.of(new AlpEncoding(), new PrimitiveEncoding(), new BoolEncoding());
 
 	private final WritableByteChannel channel;
 	private final DType.Struct schema;
 	private final WriteOptions options;
-	private final List<Codec> codecs;
+	private final List<Encoding> encodings;
 	private final List<SegRef> segs = new ArrayList<>();
 	private final Map<String, List<ChunkRef>> colChunks = new LinkedHashMap<>();
-	private final Map<CodecId, Integer> encodingIdx = new LinkedHashMap<>();
+	private final Map<EncodingId, Integer> encodingIdx = new LinkedHashMap<>();
 	private long bytesWritten = 0;
 
 	private VortexWriter(
-			WritableByteChannel channel, DType.Struct schema, WriteOptions options, List<Codec> codecs
+			WritableByteChannel channel, DType.Struct schema, WriteOptions options, List<Encoding> encodings
 	) {
 		this.channel = channel;
 		this.schema = schema;
 		this.options = options;
-		this.codecs = codecs;
+		this.encodings = encodings;
 		for (String name : schema.fieldNames()) {
 			colChunks.put(name, new ArrayList<>());
 		}
@@ -82,9 +82,9 @@ public final class VortexWriter implements Closeable {
 	}
 
 	public static VortexWriter create(
-			WritableByteChannel channel, DType.Struct schema, WriteOptions options, List<Codec> codecs
+			WritableByteChannel channel, DType.Struct schema, WriteOptions options, List<Encoding> encodings
 	) {
-		return new VortexWriter(channel, schema, options, codecs);
+		return new VortexWriter(channel, schema, options, encodings);
 	}
 
 	private static long arrayLength(Object data) {
@@ -165,7 +165,7 @@ public final class VortexWriter implements Closeable {
 
 	// ── Segment encoding ─────────────────────────────────────────────────────
 
-	/// Write one chunk. Each column is encoded by the first registered [Codec] that accepts its dtype.
+	/// Write one chunk. Each column is encoded by the first registered [Encoding] that accepts its dtype.
 	public void writeChunk(Map<String, Object> columns) throws IOException {
 		for (int i = 0; i < schema.fieldNames().size(); i++) {
 			String colName = schema.fieldNames().get(i);
@@ -210,11 +210,11 @@ public final class VortexWriter implements Closeable {
 	}
 
 	private int writeSegment(DType dtype, Object data) throws IOException {
-		Codec codec = findCodec(dtype);
-		EncodeResult result = codec.encode(dtype, data);
+		Encoding encoding = findEncoding(dtype);
+		EncodeResult result = encoding.encode(dtype, data);
 
 		// Register all encoding IDs found in the node tree
-		registerCodecIds(result.rootNode());
+		registerEncodingIds(result.rootNode());
 
 		// Align segment start to 64 bytes so each buffer is Arrow-compatible
 		long prePad = (64 - bytesWritten % 64) % 64;
@@ -242,20 +242,20 @@ public final class VortexWriter implements Closeable {
 		return segIdx;
 	}
 
-	private void registerCodecIds(EncodeNode node) {
+	private void registerEncodingIds(EncodeNode node) {
 		encodingIdx.computeIfAbsent(node.encodingId(), k -> encodingIdx.size());
 		for (EncodeNode child : node.children()) {
-			registerCodecIds(child);
+			registerEncodingIds(child);
 		}
 	}
 
-	private Codec findCodec(DType dtype) {
-		for (Codec c : codecs) {
+	private Encoding findEncoding(DType dtype) {
+		for (Encoding c : encodings) {
 			if (c.accepts(dtype)) {
 				return c;
 			}
 		}
-		throw new UnsupportedOperationException("no codec for dtype: " + dtype);
+		throw new UnsupportedOperationException("no encoding for dtype: " + dtype);
 	}
 
 	private void write(ByteBuffer buf) throws IOException {
@@ -340,10 +340,10 @@ public final class VortexWriter implements Closeable {
 		var fbb = new FlatBufferBuilder(512);
 
 		// array_specs: all encoding IDs used across all written segments, in registration order
-		CodecId[] encIds = encodingIdx.entrySet().stream()
+		EncodingId[] encIds = encodingIdx.entrySet().stream()
 				.sorted(Map.Entry.comparingByValue())
 				.map(Map.Entry::getKey)
-				.toArray(CodecId[]::new);
+				.toArray(EncodingId[]::new);
 		int[] asOffsets = new int[encIds.length];
 		for (int i = 0; i < encIds.length; i++) {
 			asOffsets[i] = ArraySpec.createArraySpec(fbb, fbb.createString(encIds[i].id()));

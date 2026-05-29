@@ -4,7 +4,7 @@ import dev.vortex.api.Session;
 import dev.vortex.api.VortexWriter;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
-import io.github.dfa1.vortex.encoding.CodecRegistry;
+import io.github.dfa1.vortex.encoding.EncodingRegistry;
 import io.github.dfa1.vortex.io.VortexInspector;
 import io.github.dfa1.vortex.io.VortexReader;
 import org.apache.arrow.c.ArrowArray;
@@ -65,7 +65,7 @@ class OhlcEncodingInspectionIntegrationTest {
 
 		// When
 		String report;
-		try (VortexReader vf = VortexReader.open(file, CodecRegistry.loadAll())) {
+		try (VortexReader vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
 			report = VortexInspector.inspect(vf);
 		}
 

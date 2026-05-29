@@ -7,7 +7,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.LongArray;
-import io.github.dfa1.vortex.encoding.CodecRegistry;
+import io.github.dfa1.vortex.encoding.EncodingRegistry;
 import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
@@ -194,7 +194,7 @@ class WriteFileSizeIntegrationTest {
 
 		// Then — readable and correct row count
 		long totalRows = 0L;
-		try (VortexReader reader = VortexReader.open(file, CodecRegistry.loadAll())) {
+		try (VortexReader reader = VortexReader.open(file, EncodingRegistry.loadAll())) {
 			var iter = reader.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("volume"));
 			while (iter.hasNext()) {
 				totalRows += iter.next().<LongArray>column("volume").length();
@@ -216,7 +216,7 @@ class WriteFileSizeIntegrationTest {
 
 		// Then — readable and correct row count
 		long totalRows = 0L;
-		try (VortexReader reader = VortexReader.open(file, CodecRegistry.loadAll())) {
+		try (VortexReader reader = VortexReader.open(file, EncodingRegistry.loadAll())) {
 			var iter = reader.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("close"));
 			while (iter.hasNext()) {
 				totalRows += iter.next().<DoubleArray>column("close").length();
@@ -248,7 +248,7 @@ class WriteFileSizeIntegrationTest {
 
 		assertThat(javaSize).isPositive();
 		assertThat(jniSize).isPositive();
-		// Java writer uses ALP (no further compression) for F64, PrimitiveCodec for integers.
+		// Java writer uses ALP (no further compression) for F64, PrimitiveEncoding for integers.
 		// JNI uses ALP+FastLanes delta+bitpacking. Bound < 6× catches gross regressions.
 		assertThat(javaSize).isLessThan(jniSize * 6);
 	}

@@ -16,7 +16,7 @@ import java.nio.ByteOrder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class SparseCodecTest {
+class SparseEncodingTest {
 
 	private static final DType I64_DTYPE = new DType.Primitive(PType.I64, false);
 	private static final DType F64_DTYPE = new DType.Primitive(PType.F64, false);
@@ -65,11 +65,11 @@ class SparseCodecTest {
 			byte[] idxBuf, byte[] valBuf,
 			DType idxDtype
 	) {
-		ArrayNode idxNode = new ArrayNode(CodecId.VORTEX_PRIMITIVE, null,
+		ArrayNode idxNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
 				new ArrayNode[0], new int[]{1}, ArrayStats.empty());
-		ArrayNode valNode = new ArrayNode(CodecId.VORTEX_PRIMITIVE, null,
+		ArrayNode valNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
 				new ArrayNode[0], new int[]{2}, ArrayStats.empty());
-		ArrayNode sparseNode = new ArrayNode(CodecId.VORTEX_SPARSE,
+		ArrayNode sparseNode = new ArrayNode(EncodingId.VORTEX_SPARSE,
 				ByteBuffer.wrap(metaBytes),
 				new ArrayNode[]{idxNode, valNode},
 				new int[]{0},
@@ -81,9 +81,9 @@ class SparseCodecTest {
 				MemorySegment.ofArray(valBuf)
 		};
 
-		CodecRegistry registry = CodecRegistry.empty();
-		registry.register(new SparseCodec());
-		registry.register(new PrimitiveCodec());
+		EncodingRegistry registry = EncodingRegistry.empty();
+		registry.register(new SparseEncoding());
+		registry.register(new PrimitiveEncoding());
 
 		return new DecodeContext(sparseNode, dtype, rowCount, segments, registry, java.lang.foreign.Arena.global());
 	}
@@ -132,7 +132,7 @@ class SparseCodecTest {
 		// Given — 5 elements, fill=99, no patches
 		long fill = 99L;
 		DecodeContext ctx = buildSparseCtx(I64_DTYPE, 5, fill, PType.U32, new long[0], new long[0]);
-		SparseCodec sut = new SparseCodec();
+		SparseEncoding sut = new SparseEncoding();
 
 		// When
 		Array result = sut.decode(ctx);
@@ -153,7 +153,7 @@ class SparseCodecTest {
 		long[] patchIndices = {1L, 5L};
 		long[] patchValues = {10L, 50L};
 		DecodeContext ctx = buildSparseCtx(I64_DTYPE, 8, fill, PType.U32, patchIndices, patchValues);
-		SparseCodec sut = new SparseCodec();
+		SparseEncoding sut = new SparseEncoding();
 
 		// When
 		Array result = sut.decode(ctx);
@@ -173,7 +173,7 @@ class SparseCodecTest {
 		double fillVal = Double.NaN;
 		double patchVal = 3.14;
 		DecodeContext ctx = buildSparseCtxF64(F64_DTYPE, 4, fillVal, new long[]{2L}, new double[]{patchVal});
-		SparseCodec sut = new SparseCodec();
+		SparseEncoding sut = new SparseEncoding();
 
 		// When
 		Array result = sut.decode(ctx);
@@ -192,7 +192,7 @@ class SparseCodecTest {
 		long[] patchIndices = {12L};
 		long[] patchValues = {777L};
 		DecodeContext ctx = buildSparseCtxWithOffset(I64_DTYPE, 5, 0L, PType.U32, patchIndices, patchValues, 10L);
-		SparseCodec sut = new SparseCodec();
+		SparseEncoding sut = new SparseEncoding();
 
 		// When
 		Array result = sut.decode(ctx);

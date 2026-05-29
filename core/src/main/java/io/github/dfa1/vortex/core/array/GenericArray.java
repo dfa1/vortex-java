@@ -7,7 +7,7 @@ import java.lang.foreign.MemorySegment;
 
 /// Fallback [Array] for dtypes that lack a dedicated concrete subtype.
 ///
-/// Holds raw buffer segments and child arrays. Used by codecs during migration
+/// Holds raw buffer segments and child arrays. Used by encodings during migration
 /// and for less-common dtypes (e.g. Decimal, Ext) where typed accessors are
 /// not yet implemented.
 public final class GenericArray implements Array {

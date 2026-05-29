@@ -4,9 +4,9 @@ import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.LongArray;
-import io.github.dfa1.vortex.encoding.AlpCodec;
-import io.github.dfa1.vortex.encoding.CodecRegistry;
-import io.github.dfa1.vortex.encoding.PrimitiveCodec;
+import io.github.dfa1.vortex.encoding.AlpEncoding;
+import io.github.dfa1.vortex.encoding.EncodingRegistry;
+import io.github.dfa1.vortex.encoding.PrimitiveEncoding;
 import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.ScanOptions;
 import io.github.dfa1.vortex.scan.ScanResult;
@@ -48,10 +48,10 @@ class VortexWriterTest {
 
 	// ── Round-trip: write then read ───────────────────────────────────────────
 
-	private static CodecRegistry primitiveRegistry() {
-		var registry = CodecRegistry.empty();
-		registry.register(new AlpCodec());
-		registry.register(new PrimitiveCodec());
+	private static EncodingRegistry primitiveRegistry() {
+		var registry = EncodingRegistry.empty();
+		registry.register(new AlpEncoding());
+		registry.register(new PrimitiveEncoding());
 		return registry;
 	}
 

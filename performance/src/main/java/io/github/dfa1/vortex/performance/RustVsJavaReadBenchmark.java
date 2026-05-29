@@ -11,7 +11,7 @@ import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
-import io.github.dfa1.vortex.encoding.CodecRegistry;
+import io.github.dfa1.vortex.encoding.EncodingRegistry;
 import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.ScanResult;
 import org.apache.arrow.c.ArrowArray;
@@ -101,7 +101,7 @@ public class RustVsJavaReadBenchmark {
 	private static int sharedRefCount;
 
 	private Path benchFile;
-	private CodecRegistry registry;
+	private EncodingRegistry registry;
 	private BufferAllocator allocator;
 
 	private static double round(double v) {
@@ -110,7 +110,7 @@ public class RustVsJavaReadBenchmark {
 
 	@Setup(Level.Trial)
 	public void setup() throws IOException {
-		registry = CodecRegistry.loadAll();
+		registry = EncodingRegistry.loadAll();
 		allocator = ArrowAllocation.rootAllocator();
 
 		synchronized (FILE_LOCK) {

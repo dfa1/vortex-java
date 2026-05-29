@@ -18,7 +18,7 @@ import java.util.function.IntConsumer;
 /// need lengths, and allocating {@link #getBytes} for full value retrieval.
 ///
 /// Stays backward-compatible via {@code buffer(0)} (→ bytes) and
-/// {@code child(0)} (→ offsets Array) so codec internals that haven't
+/// {@code child(0)} (→ offsets Array) so encoding internals that haven't
 /// been updated continue to work.
 ///
 /// Dict mode: created via {@link #ofDict}. Stores dict values + codes directly;

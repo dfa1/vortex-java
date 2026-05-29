@@ -7,8 +7,8 @@ import io.github.dfa1.vortex.core.array.BoolArray;
 
 import java.nio.ByteBuffer;
 
-/// Codec for `vortex.bool` — bit-packed boolean arrays (LSB first).
-public final class BoolCodec implements Codec {
+/// Encoding for `vortex.bool` — bit-packed boolean arrays (LSB first).
+public final class BoolEncoding implements Encoding {
 
 	private static ByteBuffer encodeBool(boolean[] data) {
 		var packed = ByteBuffer.allocate((data.length + 7) / 8);
@@ -21,8 +21,8 @@ public final class BoolCodec implements Codec {
 	}
 
 	@Override
-	public CodecId encodingId() {
-		return CodecId.VORTEX_BOOL;
+	public EncodingId encodingId() {
+		return EncodingId.VORTEX_BOOL;
 	}
 
 	@Override

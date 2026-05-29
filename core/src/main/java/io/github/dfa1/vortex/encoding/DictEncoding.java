@@ -21,12 +21,12 @@ import java.nio.ByteOrder;
 import java.util.LinkedHashMap;
 import java.util.List;
 
-/// Codec for `vortex.dict` — dictionary encoding for low-cardinality columns.
+/// Encoding for `vortex.dict` — dictionary encoding for low-cardinality columns.
 ///
 /// Segment layout: [valuesbuffer(uniquevalues,primitive)] [codesbuffer(per-rowindices)].
 /// Metadata (1 byte): code PType ordinal (0=U8, 1=U16, 2=U32).
 /// Node tree: DictNode{ children=[ValuesNode{buf=0},CodesNode{buf=1}] }.
-public final class DictCodec implements Codec {
+public final class DictEncoding implements Encoding {
 
 	private static final ValueLayout.OfShort LE_SHORT = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 	private static final ValueLayout.OfInt   LE_INT   = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
@@ -141,7 +141,7 @@ public final class DictCodec implements Codec {
 			case U8 -> buf.put((byte) code);
 			case U16 -> buf.putShort((short) code);
 			case U32 -> buf.putInt(code);
-			default -> throw new VortexException(CodecId.VORTEX_DICT, "unexpected code type: " + codePType);
+			default -> throw new VortexException(EncodingId.VORTEX_DICT, "unexpected code type: " + codePType);
 		}
 	}
 
@@ -182,13 +182,13 @@ public final class DictCodec implements Codec {
 			case U8 -> Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, i));
 			case U16 -> Short.toUnsignedLong(buf.get(LE_SHORT, i * 2));
 			case U32 -> Integer.toUnsignedLong(buf.get(LE_INT, i * 4));
-			default -> throw new VortexException(CodecId.VORTEX_DICT, "unexpected code type: " + codePType);
+			default -> throw new VortexException(EncodingId.VORTEX_DICT, "unexpected code type: " + codePType);
 		};
 	}
 
 	@Override
-	public CodecId encodingId() {
-		return CodecId.VORTEX_DICT;
+	public EncodingId encodingId() {
+		return EncodingId.VORTEX_DICT;
 	}
 
 	@Override
@@ -232,10 +232,10 @@ public final class DictCodec implements Codec {
 		// Metadata: code PType ordinal
 		ByteBuffer meta = ByteBuffer.allocate(1).put(0, (byte) codePType.ordinal());
 
-		EncodeNode valuesNode = EncodeNode.leaf(CodecId.VORTEX_PRIMITIVE, 0);
-		EncodeNode codesNode = EncodeNode.leaf(CodecId.VORTEX_PRIMITIVE, 1);
+		EncodeNode valuesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
+		EncodeNode codesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
 		EncodeNode rootNode = new EncodeNode(
-				CodecId.VORTEX_DICT, meta,
+				EncodingId.VORTEX_DICT, meta,
 				new EncodeNode[]{valuesNode, codesNode},
 				new int[0]);
 
@@ -245,7 +245,7 @@ public final class DictCodec implements Codec {
 	@Override
 	public Array decode(DecodeContext ctx) {
 		if (ctx.metadata() == null || !ctx.metadata().hasRemaining()) {
-			throw new VortexException(CodecId.VORTEX_DICT, "missing metadata");
+			throw new VortexException(EncodingId.VORTEX_DICT, "missing metadata");
 		}
 
 		ByteBuffer meta = ctx.metadata();
@@ -280,7 +280,7 @@ public final class DictCodec implements Codec {
 		try {
 			meta = EncodingProtos.DictMetadata.parseFrom(metaBuf);
 		} catch (InvalidProtocolBufferException e) {
-			throw new VortexException(CodecId.VORTEX_DICT, "invalid proto metadata", e);
+			throw new VortexException(EncodingId.VORTEX_DICT, "invalid proto metadata", e);
 		}
 
 		PType codePType = PType.values()[meta.getCodesPtype().getNumber()];
@@ -304,7 +304,7 @@ public final class DictCodec implements Codec {
 			case U8 -> expandU8(codesBuf, valuesBuf, out, rowCount, elemSize);
 			case U16 -> expandU16(codesBuf, valuesBuf, out, rowCount, elemSize);
 			case U32 -> expandU32(codesBuf, valuesBuf, out, rowCount, elemSize);
-			default -> throw new VortexException(CodecId.VORTEX_DICT, "unexpected code type: " + codePType);
+			default -> throw new VortexException(EncodingId.VORTEX_DICT, "unexpected code type: " + codePType);
 		}
 		return typedArray(ctx.dtype(), valPType, rowCount, out.asReadOnly());
 	}
@@ -317,7 +317,7 @@ public final class DictCodec implements Codec {
 			case F32 -> new FloatArray(dtype, n, seg, ArrayStats.empty());
 			case I16, U16 -> new ShortArray(dtype, n, seg, ArrayStats.empty());
 			case I8, U8   -> new ByteArray(dtype, n, seg, ArrayStats.empty());
-			default -> throw new VortexException(CodecId.VORTEX_DICT, "unsupported ptype " + ptype);
+			default -> throw new VortexException(EncodingId.VORTEX_DICT, "unsupported ptype " + ptype);
 		};
 	}
 }

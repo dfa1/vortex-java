@@ -16,7 +16,7 @@ import java.nio.ByteOrder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class BitpackedCodecPatchesTest {
+class BitpackedEncodingPatchesTest {
 
 	private static final DType I32_DTYPE = new DType.Primitive(PType.I32, false);
 	private static final ValueLayout.OfInt LE_INT = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
@@ -26,7 +26,7 @@ class BitpackedCodecPatchesTest {
 		// Given — bit-pack [10, 20, 30, 40, 50] via the production encoder (bitWidth = 6),
 		// then attach synthetic patches metadata that rewrites indices [1, 3] with [777, 999].
 		int[] base = {10, 20, 30, 40, 50};
-		BitpackedCodec sut = new BitpackedCodec();
+		BitpackedEncoding sut = new BitpackedEncoding();
 		EncodeResult packed = sut.encode(I32_DTYPE, base);
 
 		ByteBuffer packedBuf = packed.buffers().get(0);
@@ -51,11 +51,11 @@ class BitpackedCodecPatchesTest {
 		byte[] valBuf = new byte[2 * 4];
 		ByteBuffer.wrap(valBuf).order(ByteOrder.LITTLE_ENDIAN).putInt(777).putInt(999);
 
-		ArrayNode idxNode = new ArrayNode(CodecId.VORTEX_PRIMITIVE, null,
+		ArrayNode idxNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
 				new ArrayNode[0], new int[]{1}, ArrayStats.empty());
-		ArrayNode valNode = new ArrayNode(CodecId.VORTEX_PRIMITIVE, null,
+		ArrayNode valNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
 				new ArrayNode[0], new int[]{2}, ArrayStats.empty());
-		ArrayNode bpNode = new ArrayNode(CodecId.FASTLANES_BITPACKED,
+		ArrayNode bpNode = new ArrayNode(EncodingId.FASTLANES_BITPACKED,
 				ByteBuffer.wrap(metaBytes),
 				new ArrayNode[]{idxNode, valNode},
 				new int[]{0},
@@ -67,9 +67,9 @@ class BitpackedCodecPatchesTest {
 				MemorySegment.ofArray(valBuf)
 		};
 
-		CodecRegistry registry = CodecRegistry.empty();
-		registry.register(new BitpackedCodec());
-		registry.register(new PrimitiveCodec());
+		EncodingRegistry registry = EncodingRegistry.empty();
+		registry.register(new BitpackedEncoding());
+		registry.register(new PrimitiveEncoding());
 
 		DecodeContext ctx = new DecodeContext(
 				bpNode, I32_DTYPE, base.length, segments, registry, Arena.global());

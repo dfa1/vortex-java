@@ -3,7 +3,7 @@
 ## Encodings
 
 - [ ] **#7 Additional encodings**
-    - `pcodec` — PCodec numerical compression. Currently a stub (`PcoCodec`) that throws
+    - `pcodec` — PCodec numerical compression. Currently a stub (`PcoEncoding`) that throws
       `VortexException(VORTEX_PCO, "not implemented")` so affected files fail with clear attribution.
       Full decoder requires a port of ANS, delta predictions, and bin tokenization from the
       upstream Rust `pco` crate (https://github.com/mwlon/pcodec) — no mainstream Java port exists.
@@ -31,18 +31,18 @@
     - Rust source: `vortex-sampling-compressor` crate in spiraldb/vortex
     - **Scope (first cut)**: integers + floats only. Strings stay on current first-match.
     - **Rollout**: opt-in via `WriteOptions.cascading(int allowedCascading)`. Default `allowedCascading=0`
-      preserves today's `findCodec()` first-match behaviour so existing tests are unaffected.
-    - Exclusion rule: don't apply dict encode to dict encode, FoR to FoR, etc. — codec ids exclude
+      preserves today's `findEncoding()` first-match behaviour so existing tests are unaffected.
+    - Exclusion rule: don't apply dict encode to dict encode, FoR to FoR, etc. — encoding ids exclude
       themselves on recursion via `CompressorContext.excluded`.
 
     **Sub-tasks**
 
     - [ ] **a. `CompressorContext` record** (`core/encoding`)
-        - Fields: `int allowedCascading`, `Set<CodecId> excluded`, `long sampleSeed`,
+        - Fields: `int allowedCascading`, `Set<EncodingId> excluded`, `long sampleSeed`,
           `int minSampleSize` (default 1024), `double sampleFraction` (default 0.01).
-        - Immutable; `withDecrementedDepth()` and `withExcluded(CodecId)` helpers.
+        - Immutable; `withDecrementedDepth()` and `withExcluded(EncodingId)` helpers.
 
-    - [ ] **b. Cascade-aware encode API** (`core/encoding/Codec.java`)
+    - [ ] **b. Cascade-aware encode API** (`core/encoding/Encoding.java`)
         - Add default method:
           ```java
           default CascadeStep encodeCascade(DType dtype, Object data, CompressorContext ctx) {
@@ -55,47 +55,47 @@
         - `ChildSlot(DType childDtype, Object childData, int parentChildIdx)` — slot the
           compressor recursively encodes, then splices result into `partialRoot.children[parentChildIdx]`
           while remapping its `bufferIndices` to follow `ownedBuffers`.
-        - Codecs that don't expose intermediates use the default (terminal); they get tried as
+        - Encodings that don't expose intermediates use the default (terminal); they get tried as
           leaf candidates only.
 
-    - [ ] **c. Refactor cascading-friendly codecs to emit children**
-        - `AlpCodec`: F64 → `(metadata{expE,expF,patches}, child long[] encodedInts)` +
+    - [ ] **c. Refactor cascading-friendly encodings to emit children**
+        - `AlpEncoding`: F64 → `(metadata{expE,expF,patches}, child long[] encodedInts)` +
           optional patch children. Today's hard-coded `EncodeNode.leaf(VORTEX_PRIMITIVE, 0)` for
           the I64 child becomes an open `ChildSlot(I64, encodedArr)`.
-        - `DictCodec`: codes child (currently emitted as `VORTEX_PRIMITIVE` leaf) becomes an
+        - `DictEncoding`: codes child (currently emitted as `VORTEX_PRIMITIVE` leaf) becomes an
           open `ChildSlot(unsigned int, codes[])` so cascade can bit-pack it. Values child stays
           primitive (or recurses too if `allowedCascading>0`).
-        - `FrameOfReferenceCodec`: **implement encode** (currently decode-only, throws on encode).
+        - `FrameOfReferenceEncoding`: **implement encode** (currently decode-only, throws on encode).
           Produces `(reference, child long[] deltas)` → `ChildSlot(I64, deltas)`. Pure intermediate;
           requires `allowedCascading>0` because raw FoR without downstream pack is no win.
-        - `DeltaCodec`: refactor to emit `(bases child, deltas child)` matching Rust's 2-child
+        - `DeltaEncoding`: refactor to emit `(bases child, deltas child)` matching Rust's 2-child
           wire format (currently 1-buffer flat — incompatible with Rust reader, see commit 09685a2).
           Blocks cross-compat for delta cascades; track as sub-task c.4, can land separately.
-        - `BitpackedCodec`: stays terminal (no open children). Patch indices/values already handled.
-        - `PrimitiveCodec`: terminal.
+        - `BitpackedEncoding`: stays terminal (no open children). Patch indices/values already handled.
+        - `PrimitiveEncoding`: terminal.
 
     - [ ] **d. `CascadingCompressor`** (`core/encoding`)
-        - Constructor: `(List<Codec> codecs, CompressorContext rootCtx)`.
+        - Constructor: `(List<Encoding> encodings, CompressorContext rootCtx)`.
         - `EncodeResult encode(DType dtype, Object data)` algorithm:
             1. Build sample: stratified contiguous slices, total ≈ `max(minSampleSize,
                sampleFraction * n)`. Fixed-seed `Random` for reproducibility.
-            2. Build candidate list: every codec where `accepts(dtype)` and id ∉ `ctx.excluded`.
+            2. Build candidate list: every encoding where `accepts(dtype)` and id ∉ `ctx.excluded`.
             3. For each candidate: invoke `encodeCascade(dtype, sample, ctx)`. If the step has
-               open children, recurse on each with `ctx.withDecrementedDepth().withExcluded(thisCodec.id())`.
+               open children, recurse on each with `ctx.withDecrementedDepth().withExcluded(thisEncoding.id())`.
                Sum total byte size across all owned buffers.
             4. Pick winner by smallest total size; require ratio ≥ 1.0 vs raw primitive baseline,
-               else fall through to `PrimitiveCodec`.
+               else fall through to `PrimitiveEncoding`.
             5. Re-run winner on **full** data (sample-time stats are estimates only).
         - Splicing: when a child recursion returns its own `EncodeResult`, append its buffers to
           the parent's flat list and remap the child's `bufferIndices` by the offset.
-        - Terminal stop: when `ctx.allowedCascading == 0`, only codecs whose default-API
+        - Terminal stop: when `ctx.allowedCascading == 0`, only encodings whose default-API
           `encodeCascade` returns no open children are considered.
 
     - [ ] **e. `WriteOptions.cascading(int)`** (`writer/WriteOptions.java`)
         - Add field `int allowedCascading` (default `0`).
         - `WriteOptions.cascading(int n)` factory mirrors `defaults()`.
         - `VortexWriter.writeSegment` (writer/VortexWriter.java:212) branches:
-          if `options.allowedCascading() > 0`, use `CascadingCompressor`; else current `findCodec()`.
+          if `options.allowedCascading() > 0`, use `CascadingCompressor`; else current `findEncoding()`.
 
     - [ ] **f. Tests** (`core` + `writer` + `integration`)
         - Unit: `CascadingCompressorTest` — sample stratification, exclusion list propagation,
@@ -103,7 +103,7 @@
         - Round-trip: each cascade combo (ALP+Bitpacked F64, FoR+Bitpacked I64, Dict+Bitpacked I32,
           Delta+Bitpacked I64) round-trips bit-exact through `VortexReader`.
         - Cross-compat: `JavaWritesRustReadsIntegrationTest` runs with `allowedCascading=3`,
-          confirms Rust JNI reader decodes the same OHLC data (gates DeltaCodec wire-format fix).
+          confirms Rust JNI reader decodes the same OHLC data (gates DeltaEncoding wire-format fix).
         - `WriteFileSizeIntegrationTest`: assert Java file ≤ JNI file size with cascade on.
 
     - [ ] **g. Benchmark**
@@ -167,7 +167,7 @@
 ### Typed accessors (in progress)
 
 Replace raw `arr.buffer(0).getAtIndex(layout, i)` with `arr.getLong(i)` /
-`arr.getDouble(i)` / `arr.forEachLong(c)`. Codecs pick a concrete subtype so
+`arr.getDouble(i)` / `arr.forEachLong(c)`. Encodings pick a concrete subtype so
 the JIT can specialise the hot path with a constant `ValueLayout`.
 
 **Design**
@@ -177,7 +177,7 @@ the JIT can specialise the hot path with a constant `ValueLayout`.
   `getBytes`, plus `forEachLong`/`forEachDouble`/... bulk variants. All
   default to `throw VortexException("<class> does not support <op>")`.
 - `Array` (sealed interface, `core`) extends `ArrayOperations`. Keeps
-  public `buffer(int)` / `child(int)` for codec internals during migration.
+  public `buffer(int)` / `child(int)` for encoding internals during migration.
 - Concrete subtypes in `core.array` sub-package:
     - `LongArray`, `DoubleArray`, `IntArray`, `FloatArray`,
       `ShortArray`, `ByteArray` — single `MemorySegment` + length +
@@ -188,11 +188,11 @@ the JIT can specialise the hot path with a constant `ValueLayout`.
     - `StructArray` — `Map<String, Array>` columns.
     - `GenericArray` — fallback that holds the current record shape
       (`MemorySegment[]` + `Array[]`) and dispatches via dtype switch;
-      lets codecs migrate one at a time.
+      lets encodings migrate one at a time.
 
-**Codec dispatch**
+**Encoding dispatch**
 
-| Codec                                  | Returns                                 |
+| Encoding                                  | Returns                                 |
 |----------------------------------------|-----------------------------------------|
 | `vortex.primitive` (I64/U64)           | `LongArray`                             |
 | `vortex.primitive` (I32/U32)           | `IntArray`                              |
@@ -208,16 +208,16 @@ the JIT can specialise the hot path with a constant `ValueLayout`.
 **Migration phases**
 
 - [x] **Phase A**: interface + sealed `Array` + `GenericArray` shim. All
-      existing codecs keep current behaviour. Migrate `PrimitiveCodec`
-      and `AlpCodec` so `volume` (Primitive I64) returns `LongArray` and
+      existing encodings keep current behaviour. Migrate `PrimitiveEncoding`
+      and `AlpEncoding` so `volume` (Primitive I64) returns `LongArray` and
       `close` (ALP F64) returns `DoubleArray`. Update
       `RustVsJavaReadBenchmark.javaReadVolume`/`javaReadClose` to use
       `forEachLong` / `forEachDouble`. Confirm no regression vs raw
       MemorySegment loop.
-- [x] **Phase B**: migrate remaining leaf codecs (Bitpacked, FoR, Delta,
+- [x] **Phase B**: migrate remaining leaf encodings (Bitpacked, FoR, Delta,
       Sparse, Dict, Bool, Constant, VarBin, FSST, RunEnd, Sequence)
       one at a time, each with a bench check.
-- [ ] **Phase C**: once all leaf codecs return concrete subtypes,
+- [ ] **Phase C**: once all leaf encodings return concrete subtypes,
       consider tightening `buffer(int)` / `child(int)` to
       package-private or moving to an internal helper interface.
 
@@ -234,16 +234,6 @@ the JIT can specialise the hot path with a constant `ValueLayout`.
 
 - [ ] Keep `.claude/skills/improve-performance.md` and `.claude/skills/review-performance.md` in sync with
   `CLAUDE.md` and README perf notes. Re-audit whenever memory model, allocation rule, or benchmark layout changes.
-
-## Naming alignment
-
-- [ ] **Rename `Codec` → `Encoding` throughout Java codebase**
-    - Vortex uses "encoding" everywhere: `VortexEncoding` trait, `vortex-encodings` crate, encoding IDs (`vortex.primitive`, etc.).
-    - Java currently uses `Codec`, `CodecId`, `CodecRegistry`, `DecodeContext`, `EncodeResult` — drifts from domain vocabulary.
-    - Rename: `Codec` → `Encoding`, `CodecId` → `EncodingId`, `CodecRegistry` → `EncodingRegistry`,
-      `DecodeContext` → `DecodingContext` (or keep as-is), `EncodeResult` → `EncodingResult`.
-    - Also rename `CODECS.md` → `ENCODINGS.md`.
-    - Large mechanical refactor; no behaviour change. Good first-issue candidate.
 
 ## Project
 

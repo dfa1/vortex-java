@@ -30,7 +30,7 @@ import java.nio.charset.StandardCharsets;
 /// proto bytes. No children.
 ///
 /// <p>Decode: fill an output buffer of {@code rowCount} elements with the constant value.
-public final class ConstantCodec implements Codec {
+public final class ConstantEncoding implements Encoding {
 
 	private static final ValueLayout.OfInt LE_INT = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
@@ -41,7 +41,7 @@ public final class ConstantCodec implements Codec {
 			case F32_VALUE -> Float.floatToRawIntBits(scalar.getF32Value());
 			case F64_VALUE -> Double.doubleToRawLongBits(scalar.getF64Value());
 			case KIND_NOT_SET -> 0L;
-			default -> throw new VortexException(CodecId.VORTEX_CONSTANT,
+			default -> throw new VortexException(EncodingId.VORTEX_CONSTANT,
 					"unexpected scalar kind " + scalar.getKindCase());
 		};
 	}
@@ -52,15 +52,15 @@ public final class ConstantCodec implements Codec {
 			case 2 -> buf.putShort((short) rawBits);
 			case 4 -> buf.putInt((int) rawBits);
 			case 8 -> buf.putLong(rawBits);
-			default -> throw new VortexException(CodecId.VORTEX_CONSTANT, "unsupported ptype " + ptype);
+			default -> throw new VortexException(EncodingId.VORTEX_CONSTANT, "unsupported ptype " + ptype);
 		}
 	}
 
 	// ── Helpers ───────────────────────────────────────────────────────────────
 
 	@Override
-	public CodecId encodingId() {
-		return CodecId.VORTEX_CONSTANT;
+	public EncodingId encodingId() {
+		return EncodingId.VORTEX_CONSTANT;
 	}
 
 	@Override
@@ -75,7 +75,7 @@ public final class ConstantCodec implements Codec {
 		try {
 			scalar = ScalarProtos.ScalarValue.parseFrom(scalarBuf.asByteBuffer());
 		} catch (InvalidProtocolBufferException e) {
-			throw new VortexException(CodecId.VORTEX_CONSTANT, "invalid scalar value", e);
+			throw new VortexException(EncodingId.VORTEX_CONSTANT, "invalid scalar value", e);
 		}
 
 		long n = ctx.rowCount();
@@ -105,7 +105,7 @@ public final class ConstantCodec implements Codec {
 		}
 
 		if (!(ctx.dtype() instanceof DType.Primitive p)) {
-			throw new VortexException(CodecId.VORTEX_CONSTANT, "unsupported dtype " + ctx.dtype());
+			throw new VortexException(EncodingId.VORTEX_CONSTANT, "unsupported dtype " + ctx.dtype());
 		}
 
 		PType ptype = p.ptype();
@@ -126,7 +126,7 @@ public final class ConstantCodec implements Codec {
 			case F32 -> new FloatArray(ctx.dtype(), n, ro, ArrayStats.empty());
 			case I16, U16 -> new ShortArray(ctx.dtype(), n, ro, ArrayStats.empty());
 			case I8, U8   -> new ByteArray(ctx.dtype(), n, ro, ArrayStats.empty());
-			default -> throw new VortexException(CodecId.VORTEX_CONSTANT, "unsupported ptype " + ptype);
+			default -> throw new VortexException(EncodingId.VORTEX_CONSTANT, "unsupported ptype " + ptype);
 		};
 	}
 

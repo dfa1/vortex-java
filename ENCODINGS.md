@@ -1,28 +1,28 @@
-# Codec Coverage
+# Encoding Coverage
 
 ## Implemented
 
-| Codec ID               | Class               | Dtypes supported                        |
+| Encoding ID               | Class               | Dtypes supported                        |
 |------------------------|---------------------|-----------------------------------------|
-| `vortex.primitive`     | `PrimitiveCodec`    | all `PType` (I8–I64, U8–U64, F32, F64) |
-| `vortex.bool`          | `BoolCodec`         | Bool (bit-packed)                       |
-| `vortex.struct`        | `StructCodec`       | Struct (single-field unwrap + multi-field → StructArray) |
-| `vortex.constant`      | `ConstantCodec`     | Primitive, Utf8, Binary, Bool, Null, Decimal, Extension |
-| `vortex.dict`          | `DictCodec`         | Utf8/Binary values (VarBin only; VarBinView blocks dict.vortex) |
-| `vortex.sparse`        | `SparseCodec`       | Primitive (VarBinView blocks sparse.vortex) |
-| `vortex.varbin`        | `VarBinCodec`       | Utf8, Binary                            |
-| `vortex.fsst`          | `FsstCodec`         | Utf8, Binary                            |
-| `vortex.runend`        | `RunEndCodec`       | Primitive, Utf8/Binary, Bool            |
-| `vortex.sequence`      | `SequenceCodec`     | Primitive                               |
-| `vortex.alp`           | `AlpCodec`          | F64, F32                                |
-| `fastlanes.bitpacked`  | `BitpackedCodec`    | unsigned integer PTypes                 |
-| `fastlanes.for`        | `FrameOfReferenceCodec` | integer PTypes                      |
-| `fastlanes.delta`      | `DeltaCodec`        | integer PTypes                          |
-| `vortex.pco`           | `PcoCodec`          | stub — throws (ANS + bin tokenization not ported) |
+| `vortex.primitive`     | `PrimitiveEncoding`    | all `PType` (I8–I64, U8–U64, F32, F64) |
+| `vortex.bool`          | `BoolEncoding`         | Bool (bit-packed)                       |
+| `vortex.struct`        | `StructEncoding`       | Struct (single-field unwrap + multi-field → StructArray) |
+| `vortex.constant`      | `ConstantEncoding`     | Primitive, Utf8, Binary, Bool, Null, Decimal, Extension |
+| `vortex.dict`          | `DictEncoding`         | Utf8/Binary values (VarBin only; VarBinView blocks dict.vortex) |
+| `vortex.sparse`        | `SparseEncoding`       | Primitive (VarBinView blocks sparse.vortex) |
+| `vortex.varbin`        | `VarBinEncoding`       | Utf8, Binary                            |
+| `vortex.fsst`          | `FsstEncoding`         | Utf8, Binary                            |
+| `vortex.runend`        | `RunEndEncoding`       | Primitive, Utf8/Binary, Bool            |
+| `vortex.sequence`      | `SequenceEncoding`     | Primitive                               |
+| `vortex.alp`           | `AlpEncoding`          | F64, F32                                |
+| `fastlanes.bitpacked`  | `BitpackedEncoding`    | unsigned integer PTypes                 |
+| `fastlanes.for`        | `FrameOfReferenceEncoding` | integer PTypes                      |
+| `fastlanes.delta`      | `DeltaEncoding`        | integer PTypes                          |
+| `vortex.pco`           | `PcoEncoding`          | stub — throws (ANS + bin tokenization not ported) |
 
 ## Missing
 
-| Codec ID                   | Effort  | Unblocks                                        |
+| Encoding ID                   | Effort  | Unblocks                                        |
 |----------------------------|---------|-------------------------------------------------|
 | `vortex.null`              | trivial | `null.vortex`                                   |
 | `vortex.bytebool`          | low     | `bytebool.vortex`                               |

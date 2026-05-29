@@ -15,7 +15,7 @@ import java.nio.ByteOrder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class RunEndCodecTest {
+class RunEndEncodingTest {
 
 	private static final DType I64_DTYPE = new DType.Primitive(PType.I64, false);
 
@@ -33,11 +33,11 @@ class RunEndCodecTest {
 		byte[] endsBuf = toLEBytes(ends, endsPtype);
 		byte[] valBuf = toLEBytes(values, PType.I64);
 
-		ArrayNode endsNode = new ArrayNode(CodecId.VORTEX_PRIMITIVE, null,
+		ArrayNode endsNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
 				new ArrayNode[0], new int[]{0}, ArrayStats.empty());
-		ArrayNode valsNode = new ArrayNode(CodecId.VORTEX_PRIMITIVE, null,
+		ArrayNode valsNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
 				new ArrayNode[0], new int[]{1}, ArrayStats.empty());
-		ArrayNode reNode = new ArrayNode(CodecId.VORTEX_RUNEND,
+		ArrayNode reNode = new ArrayNode(EncodingId.VORTEX_RUNEND,
 				ByteBuffer.wrap(metaBytes),
 				new ArrayNode[]{endsNode, valsNode},
 				new int[0], ArrayStats.empty());
@@ -47,9 +47,9 @@ class RunEndCodecTest {
 				MemorySegment.ofArray(valBuf)
 		};
 
-		CodecRegistry registry = CodecRegistry.empty();
-		registry.register(new RunEndCodec());
-		registry.register(new PrimitiveCodec());
+		EncodingRegistry registry = EncodingRegistry.empty();
+		registry.register(new RunEndEncoding());
+		registry.register(new PrimitiveEncoding());
 
 		return new DecodeContext(reNode, dtype, rowCount, segments, registry, java.lang.foreign.Arena.global());
 	}
@@ -76,7 +76,7 @@ class RunEndCodecTest {
 		long[] ends = {5L};
 		long[] values = {42L};
 		DecodeContext ctx = buildCtx(I64_DTYPE, 5, ends, values, PType.U32, 0L);
-		RunEndCodec sut = new RunEndCodec();
+		RunEndEncoding sut = new RunEndEncoding();
 
 		// When
 		Array result = sut.decode(ctx);
@@ -98,7 +98,7 @@ class RunEndCodecTest {
 		long[] ends = {2L, 5L, 7L};
 		long[] values = {10L, 20L, 30L};
 		DecodeContext ctx = buildCtx(I64_DTYPE, 7, ends, values, PType.U32, 0L);
-		RunEndCodec sut = new RunEndCodec();
+		RunEndEncoding sut = new RunEndEncoding();
 
 		// When
 		Array result = sut.decode(ctx);
@@ -119,7 +119,7 @@ class RunEndCodecTest {
 		long[] ends = {3L, 6L};
 		long[] values = {10L, 20L};
 		DecodeContext ctx = buildCtx(I64_DTYPE, 3, ends, values, PType.U32, 2L);
-		RunEndCodec sut = new RunEndCodec();
+		RunEndEncoding sut = new RunEndEncoding();
 
 		// When
 		Array result = sut.decode(ctx);

@@ -8,7 +8,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /// Strongly-typed encoding identifier used in place of raw strings.
-public enum CodecId {
+public enum EncodingId {
 	VORTEX_PRIMITIVE("vortex.primitive"),
 	VORTEX_BOOL("vortex.bool"),
 	VORTEX_DICT("vortex.dict"),
@@ -33,17 +33,17 @@ public enum CodecId {
 	FASTLANES_FOR("fastlanes.for"),
 	FASTLANES_DELTA("fastlanes.delta");
 
-	// O(1) access to CodecId by its string representation
-	private static final Map<String, CodecId> LOOKUP = Stream.of(CodecId.values())
-			.collect(Collectors.toUnmodifiableMap(CodecId::id, Function.identity()));
+	// O(1) access to EncodingId by its string representation
+	private static final Map<String, EncodingId> LOOKUP = Stream.of(EncodingId.values())
+			.collect(Collectors.toUnmodifiableMap(EncodingId::id, Function.identity()));
 	private final String id;
 
-	CodecId(String id) {
+	EncodingId(String id) {
 		this.id = id;
 	}
 
-	public static CodecId from(String id) {
-		CodecId result = LOOKUP.get(id);
+	public static EncodingId from(String id) {
+		EncodingId result = LOOKUP.get(id);
 		if (result == null) {
 			throw new VortexException("unknown encoding id: " + id);
 		}

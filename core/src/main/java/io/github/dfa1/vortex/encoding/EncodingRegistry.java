@@ -15,25 +15,25 @@ import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
 
-/// Registry mapping encoding IDs to [Codec] implementations.
-public final class CodecRegistry {
+/// Registry mapping encoding IDs to [Encoding] implementations.
+public final class EncodingRegistry {
 
-	private final Map<CodecId, Codec> codecs = new HashMap<>();
+	private final Map<EncodingId, Encoding> encodings = new HashMap<>();
 
-	private CodecRegistry() {
+	private EncodingRegistry() {
 	}
 
-	/// Load all [Codec]s registered via `ServiceLoader`.
-	public static CodecRegistry loadAll() {
-		var registry = new CodecRegistry();
-		for (Codec c : ServiceLoader.load(Codec.class)) {
+	/// Load all [Encoding]s registered via `ServiceLoader`.
+	public static EncodingRegistry loadAll() {
+		var registry = new EncodingRegistry();
+		for (Encoding c : ServiceLoader.load(Encoding.class)) {
 			registry.register(c);
 		}
 		return registry;
 	}
 
-	public static CodecRegistry empty() {
-		return new CodecRegistry();
+	public static EncodingRegistry empty() {
+		return new EncodingRegistry();
 	}
 
 	private static ArrayNode convertArrayNode(
@@ -41,7 +41,7 @@ public final class CodecRegistry {
 			List<String> encodingSpecs
 	) {
 		String encodingId = encodingSpecs.get(fbs.encoding());
-		CodecId encId = CodecId.from(encodingId);
+		EncodingId encId = EncodingId.from(encodingId);
 
 		ArrayNode[] children = new ArrayNode[fbs.childrenLength()];
 		for (int i = 0; i < children.length; i++) {
@@ -59,8 +59,8 @@ public final class CodecRegistry {
 		return new ArrayNode(encId, meta, children, bufferIndices, ArrayStats.fromFbs(fbs.stats()));
 	}
 
-	public void register(Codec codec) {
-		codecs.put(codec.encodingId(), codec);
+	public void register(Encoding encoding) {
+		encodings.put(encoding.encodingId(), encoding);
 	}
 
 	/// Decode a flat segment from the file's memory-mapped region.
@@ -92,10 +92,10 @@ public final class CodecRegistry {
 	}
 
 	Array decode(DecodeContext ctx) {
-		CodecId id = ctx.node().encodingId();
-		Codec c = codecs.get(id);
+		EncodingId id = ctx.node().encodingId();
+		Encoding c = encodings.get(id);
 		if (c == null) {
-			throw new VortexException(id, "no codec registered");
+			throw new VortexException(id, "no encoding registered");
 		}
 		return c.decode(ctx);
 	}

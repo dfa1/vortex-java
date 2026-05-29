@@ -4,15 +4,15 @@ import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.DType;
 
 /// Combines encode and decode for one encoding type.
-/// Register via [CodecRegistry] — implementations are discoverable via ServiceLoader.
-public interface Codec {
-	/// Return the encoding id for this codec.
-	CodecId encodingId();
+/// Register via [EncodingRegistry] — implementations are discoverable via ServiceLoader.
+public interface Encoding {
+	/// Return the encoding id for this encoding.
+	EncodingId encodingId();
 
 	/// Decode an array node from the file using the provided context.
 	Array decode(DecodeContext ctx);
 
-	/// Returns true if this codec can encode the given dtype.
+	/// Returns true if this encoding can encode the given dtype.
 	default boolean accepts(DType dtype) {
 		return false;
 	}

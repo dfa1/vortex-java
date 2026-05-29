@@ -17,7 +17,7 @@ import java.nio.ByteOrder;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
-class AlpCodecTest {
+class AlpEncodingTest {
 
 	private static final DType F64_DTYPE = new DType.Primitive(PType.F64, false);
 	private static final DType F32_DTYPE = new DType.Primitive(PType.F32, false);
@@ -49,7 +49,7 @@ class AlpCodecTest {
 			bb.putLong(v);
 		}
 
-		ArrayNode encNode = new ArrayNode(CodecId.VORTEX_PRIMITIVE, null,
+		ArrayNode encNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
 				new ArrayNode[0], new int[]{0}, ArrayStats.empty());
 
 		MemorySegment[] segments;
@@ -68,9 +68,9 @@ class AlpCodecTest {
 				vb.putDouble(v);
 			}
 
-			ArrayNode idxNode = new ArrayNode(CodecId.VORTEX_PRIMITIVE, null,
+			ArrayNode idxNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
 					new ArrayNode[0], new int[]{1}, ArrayStats.empty());
-			ArrayNode valNode = new ArrayNode(CodecId.VORTEX_PRIMITIVE, null,
+			ArrayNode valNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
 					new ArrayNode[0], new int[]{2}, ArrayStats.empty());
 
 			children = new ArrayNode[]{encNode, idxNode, valNode};
@@ -84,12 +84,12 @@ class AlpCodecTest {
 			segments = new MemorySegment[]{MemorySegment.ofArray(encBuf)};
 		}
 
-		ArrayNode alpNode = new ArrayNode(CodecId.VORTEX_ALP,
+		ArrayNode alpNode = new ArrayNode(EncodingId.VORTEX_ALP,
 				ByteBuffer.wrap(metaBytes), children, new int[0], ArrayStats.empty());
 
-		CodecRegistry registry = CodecRegistry.empty();
-		registry.register(new AlpCodec());
-		registry.register(new PrimitiveCodec());
+		EncodingRegistry registry = EncodingRegistry.empty();
+		registry.register(new AlpEncoding());
+		registry.register(new PrimitiveEncoding());
 
 		return new DecodeContext(alpNode, F64_DTYPE, encodedVals.length, segments, registry, java.lang.foreign.Arena.global());
 	}
@@ -110,17 +110,17 @@ class AlpCodecTest {
 			bb.putInt(v);
 		}
 
-		ArrayNode encNode = new ArrayNode(CodecId.VORTEX_PRIMITIVE, null,
+		ArrayNode encNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
 				new ArrayNode[0], new int[]{0}, ArrayStats.empty());
 
-		ArrayNode alpNode = new ArrayNode(CodecId.VORTEX_ALP,
+		ArrayNode alpNode = new ArrayNode(EncodingId.VORTEX_ALP,
 				ByteBuffer.wrap(metaBytes), new ArrayNode[]{encNode}, new int[0], ArrayStats.empty());
 
 		MemorySegment[] segments = {MemorySegment.ofArray(encBuf)};
 
-		CodecRegistry registry = CodecRegistry.empty();
-		registry.register(new AlpCodec());
-		registry.register(new PrimitiveCodec());
+		EncodingRegistry registry = EncodingRegistry.empty();
+		registry.register(new AlpEncoding());
+		registry.register(new PrimitiveEncoding());
 
 		return new DecodeContext(alpNode, F32_DTYPE, encodedVals.length, segments, registry, java.lang.foreign.Arena.global());
 	}
@@ -137,7 +137,7 @@ class AlpCodecTest {
 		double[] expected = {1.23, 4.56, 7.89};
 
 		DecodeContext ctx = buildAlpCtxF64(expE, expF, encoded, null, null, null);
-		AlpCodec sut = new AlpCodec();
+		AlpEncoding sut = new AlpEncoding();
 
 		// When
 		Array result = sut.decode(ctx);
@@ -161,7 +161,7 @@ class AlpCodecTest {
 		double[] patchValues = {Double.NaN, Double.POSITIVE_INFINITY};
 
 		DecodeContext ctx = buildAlpCtxF64(expE, expF, encoded, patchIndices, patchValues, null);
-		AlpCodec sut = new AlpCodec();
+		AlpEncoding sut = new AlpEncoding();
 
 		// When
 		Array result = sut.decode(ctx);
@@ -189,7 +189,7 @@ class AlpCodecTest {
 		long[] encoded = {encVal};
 
 		DecodeContext ctx = buildAlpCtxF64(expE, expF, encoded, null, null, null);
-		AlpCodec sut = new AlpCodec();
+		AlpEncoding sut = new AlpEncoding();
 
 		// When
 		Array result = sut.decode(ctx);
@@ -208,7 +208,7 @@ class AlpCodecTest {
 		float[] expected = {1.0f, 2.5f, 10.0f};
 
 		DecodeContext ctx = buildAlpCtxF32(expE, expF, encoded, null, null);
-		AlpCodec sut = new AlpCodec();
+		AlpEncoding sut = new AlpEncoding();
 
 		// When
 		Array result = sut.decode(ctx);

@@ -31,7 +31,7 @@ import java.util.List;
 ///
 /// <p>Decode: {@code decoded[i] = (float/double) encoded[i] * F10[exp_f] * IF10[exp_e]},
 /// then overwrite {@code decoded[indices[j] - offset] = values[j]} for each patch.
-public final class AlpCodec implements Codec {
+public final class AlpEncoding implements Encoding {
 
 	// Powers of 10 for F64 (index 0..18 used by the encoder).
 	private static final double[] F10_F64 = {
@@ -77,7 +77,7 @@ public final class AlpCodec implements Codec {
 			case U16 -> Short.toUnsignedLong(seg.get(LE_SHORT, i * 2));
 			case U32 -> Integer.toUnsignedLong(seg.get(LE_INT, i * 4));
 			case U64 -> seg.get(LE_LONG, i * 8);
-			default -> throw new VortexException(CodecId.VORTEX_ALP, "non-unsigned patch index ptype " + ptype);
+			default -> throw new VortexException(EncodingId.VORTEX_ALP, "non-unsigned patch index ptype " + ptype);
 		};
 	}
 
@@ -90,8 +90,8 @@ public final class AlpCodec implements Codec {
 	private static final int SAMPLE_SIZE = 512;
 
 	@Override
-	public CodecId encodingId() {
-		return CodecId.VORTEX_ALP;
+	public EncodingId encodingId() {
+		return EncodingId.VORTEX_ALP;
 	}
 
 	@Override
@@ -182,12 +182,12 @@ public final class AlpCodec implements Codec {
 		}
 		encodedBuf.flip();
 
-		EncodeNode encodedNode = EncodeNode.leaf(CodecId.VORTEX_PRIMITIVE, 0);
+		EncodeNode encodedNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
 
 		if (patchIndices.isEmpty()) {
 			byte[] metaBytes = EncodingProtos.ALPMetadata.newBuilder()
 					.setExpE(expE).setExpF(expF).build().toByteArray();
-			EncodeNode root = new EncodeNode(CodecId.VORTEX_ALP,
+			EncodeNode root = new EncodeNode(EncodingId.VORTEX_ALP,
 					ByteBuffer.wrap(metaBytes), new EncodeNode[]{encodedNode}, new int[0]);
 			return new EncodeResult(root, List.of(encodedBuf), statsMin, statsMax);
 		}
@@ -210,9 +210,9 @@ public final class AlpCodec implements Codec {
 		byte[] metaBytes = EncodingProtos.ALPMetadata.newBuilder()
 				.setExpE(expE).setExpF(expF).setPatches(patches).build().toByteArray();
 
-		EncodeNode idxNode = EncodeNode.leaf(CodecId.VORTEX_PRIMITIVE, 1);
-		EncodeNode valNode = EncodeNode.leaf(CodecId.VORTEX_PRIMITIVE, 2);
-		EncodeNode root = new EncodeNode(CodecId.VORTEX_ALP,
+		EncodeNode idxNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
+		EncodeNode valNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
+		EncodeNode root = new EncodeNode(EncodingId.VORTEX_ALP,
 				ByteBuffer.wrap(metaBytes),
 				new EncodeNode[]{encodedNode, idxNode, valNode},
 				new int[0]);
@@ -235,12 +235,12 @@ public final class AlpCodec implements Codec {
 			try {
 				meta = EncodingProtos.ALPMetadata.parseFrom(rawMeta.duplicate());
 			} catch (InvalidProtocolBufferException e) {
-				throw new VortexException(CodecId.VORTEX_ALP, "invalid metadata", e);
+				throw new VortexException(EncodingId.VORTEX_ALP, "invalid metadata", e);
 			}
 		}
 
 		if (!(ctx.dtype() instanceof DType.Primitive p)) {
-			throw new VortexException(CodecId.VORTEX_ALP, "expected primitive dtype, got " + ctx.dtype());
+			throw new VortexException(EncodingId.VORTEX_ALP, "expected primitive dtype, got " + ctx.dtype());
 		}
 
 		int expE = meta.getExpE();
@@ -251,7 +251,7 @@ public final class AlpCodec implements Codec {
 		return switch (ptype) {
 			case F64 -> decodeF64(ctx, meta, expE, expF, n);
 			case F32 -> decodeF32(ctx, meta, expE, expF, n);
-			default -> throw new VortexException(CodecId.VORTEX_ALP, "unsupported dtype " + ptype);
+			default -> throw new VortexException(EncodingId.VORTEX_ALP, "unsupported dtype " + ptype);
 		};
 	}
 
@@ -262,8 +262,8 @@ public final class AlpCodec implements Codec {
 		double factor = F10_F64[expF] * IF10_F64[expE];
 
 		MemorySegment src = encoded.buffer(0);
-		// In-place when the child returned a writable arena buffer (e.g. BitpackedCodec, DeltaCodec).
-		// Fall back to a new allocation when the source is a read-only mmap slice (PrimitiveCodec).
+		// In-place when the child returned a writable arena buffer (e.g. BitpackedEncoding, DeltaEncoding).
+		// Fall back to a new allocation when the source is a read-only mmap slice (PrimitiveEncoding).
 		MemorySegment buf = src.isReadOnly() ? ctx.arena().allocate(n * 8, 8) : src;
 		if (src.isReadOnly()) {
 			for (long i = 0; i < n; i++) {

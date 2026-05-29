@@ -3,9 +3,9 @@ package io.github.dfa1.vortex.io;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.encoding.Codec;
-import io.github.dfa1.vortex.encoding.CodecId;
-import io.github.dfa1.vortex.encoding.CodecRegistry;
+import io.github.dfa1.vortex.encoding.Encoding;
+import io.github.dfa1.vortex.encoding.EncodingId;
+import io.github.dfa1.vortex.encoding.EncodingRegistry;
 import io.github.dfa1.vortex.encoding.DecodeContext;
 import io.github.dfa1.vortex.encoding.EncodeResult;
 import io.github.dfa1.vortex.scan.ScanOptions;
@@ -28,12 +28,12 @@ class VortexReaderTest {
 
 	// --- trailer / magic validation ---
 
-	private static CodecRegistry buildUniversalStubRegistry() {
-		var registry = CodecRegistry.empty();
-		Codec stub = new Codec() {
+	private static EncodingRegistry buildUniversalStubRegistry() {
+		var registry = EncodingRegistry.empty();
+		Encoding stub = new Encoding() {
 			@Override
-			public CodecId encodingId() {
-				return CodecId.VORTEX_PRIMITIVE;
+			public EncodingId encodingId() {
+				return EncodingId.VORTEX_PRIMITIVE;
 			}
 
 			@Override
@@ -46,10 +46,10 @@ class VortexReaderTest {
 				return Array.empty(ctx.dtype());
 			}
 		};
-		for (CodecId encodingId : CodecId.values()) {
-			registry.register(new Codec() {
+		for (EncodingId encodingId : EncodingId.values()) {
+			registry.register(new Encoding() {
 				@Override
-				public CodecId encodingId() {
+				public EncodingId encodingId() {
 					return encodingId;
 				}
 
@@ -180,11 +180,11 @@ class VortexReaderTest {
 		Path path = fixtureFile(name);
 
 		// When / Then — layout traversal succeeds; decode fails only on missing decoder
-		try (var sut = VortexReader.open(path, CodecRegistry.empty());
+		try (var sut = VortexReader.open(path, EncodingRegistry.empty());
 		     var iter = sut.scan(ScanOptions.all())) {
 			assertThatThrownBy(iter::hasNext)
 					.isInstanceOf(VortexException.class)
-					.hasMessageContaining("no codec registered");
+					.hasMessageContaining("no encoding registered");
 		}
 	}
 

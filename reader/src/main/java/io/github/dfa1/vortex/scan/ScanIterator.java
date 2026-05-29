@@ -17,7 +17,7 @@ import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.encoding.CodecId;
+import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.io.VortexHandle;
 
 import java.lang.foreign.Arena;
@@ -247,7 +247,7 @@ public final class ScanIterator implements AutoCloseable {
 
 	private Array decodeConcatPrimitive(List<Layout> flats, DType dtype, long totalRows, SegmentAllocator arena) {
 		if (flats.isEmpty()) {
-			throw new VortexException(CodecId.VORTEX_CHUNKED, "no flat children");
+			throw new VortexException(EncodingId.VORTEX_CHUNKED, "no flat children");
 		}
 		if (flats.size() == 1) {
 			return decodeFlat(flats.get(0), dtype, arena);
@@ -275,7 +275,7 @@ public final class ScanIterator implements AutoCloseable {
 
 	private Array decodeFlat(Layout flat, DType dtype, SegmentAllocator arena) {
 		if (flat.segments().isEmpty()) {
-			throw new VortexException(CodecId.VORTEX_FLAT, "no segments");
+			throw new VortexException(EncodingId.VORTEX_FLAT, "no segments");
 		}
 		int segIdx = flat.segments().get(0);
 		SegmentSpec spec = file.footer().segmentSpecs().get(segIdx);
@@ -286,13 +286,13 @@ public final class ScanIterator implements AutoCloseable {
 	private Array decodeDictLayout(Layout dictLayout, DType dtype, SegmentAllocator arena) {
 		ByteBuffer rawMeta = dictLayout.metadata();
 		if (rawMeta == null) {
-			throw new VortexException(CodecId.VORTEX_DICT, "layout: missing metadata");
+			throw new VortexException(EncodingId.VORTEX_DICT, "layout: missing metadata");
 		}
 		EncodingProtos.DictLayoutMetadata meta;
 		try {
 			meta = EncodingProtos.DictLayoutMetadata.parseFrom(rawMeta.duplicate());
 		} catch (InvalidProtocolBufferException e) {
-			throw new VortexException(CodecId.VORTEX_DICT, "layout: invalid metadata", e);
+			throw new VortexException(EncodingId.VORTEX_DICT, "layout: invalid metadata", e);
 		}
 		PType codesPType = PType.values()[meta.getCodesPtype().getNumber()];
 
@@ -362,7 +362,7 @@ public final class ScanIterator implements AutoCloseable {
 			case U32 -> Integer.toUnsignedLong(seg.getAtIndex(LE_INT, idx));
 			case I32 -> seg.getAtIndex(LE_INT, idx);
 			case I64, U64 -> seg.getAtIndex(LE_LONG, idx);
-			default  -> throw new VortexException(CodecId.VORTEX_DICT, "layout: unsupported ptype " + ptype);
+			default  -> throw new VortexException(EncodingId.VORTEX_DICT, "layout: unsupported ptype " + ptype);
 		};
 	}
 

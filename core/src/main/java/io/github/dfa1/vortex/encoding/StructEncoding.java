@@ -22,11 +22,11 @@ import java.util.List;
 /// <p>For multi-field structs the outer dtype is {@link DType.Struct}. For single-field
 /// nullable scalar wrappers the outer dtype is the scalar type (e.g. {@link DType.Primitive})
 /// and {@code nfields == 1}.
-public final class StructCodec implements Codec {
+public final class StructEncoding implements Encoding {
 
 	@Override
-	public CodecId encodingId() {
-		return CodecId.VORTEX_STRUCT;
+	public EncodingId encodingId() {
+		return EncodingId.VORTEX_STRUCT;
 	}
 
 	@Override
@@ -42,7 +42,7 @@ public final class StructCodec implements Codec {
 			// Struct array: children = [validity?, field_0, ..., field_n-1]
 			int nfields = structDtype.fieldTypes().size();
 			if (numChildren != nfields && numChildren != nfields + 1) {
-				throw new VortexException(CodecId.VORTEX_STRUCT,
+				throw new VortexException(EncodingId.VORTEX_STRUCT,
 						"expected %d or %d children for struct dtype, got %d"
 								.formatted(nfields, nfields + 1, numChildren));
 			}
@@ -74,7 +74,7 @@ public final class StructCodec implements Codec {
 		int valuesIdx = switch (numChildren) {
 			case 1 -> 0;
 			case 2 -> 1;
-			default -> throw new VortexException(CodecId.VORTEX_STRUCT,
+			default -> throw new VortexException(EncodingId.VORTEX_STRUCT,
 					"unexpected child count " + numChildren + " for scalar wrapper");
 		};
 

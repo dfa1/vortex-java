@@ -3,8 +3,8 @@ package io.github.dfa1.vortex.writer;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.encoding.CodecRegistry;
-import io.github.dfa1.vortex.encoding.DeltaCodec;
+import io.github.dfa1.vortex.encoding.EncodingRegistry;
+import io.github.dfa1.vortex.encoding.DeltaEncoding;
 import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.ScanOptions;
 import io.github.dfa1.vortex.scan.ScanResult;
@@ -25,7 +25,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class DeltaCodecTest {
+class DeltaEncodingTest {
 
 	private static final DType.Struct I64_SCHEMA = new DType.Struct(
 			List.of("ts"),
@@ -41,9 +41,9 @@ class DeltaCodecTest {
 		return results;
 	}
 
-	private static CodecRegistry deltaRegistry() {
-		var registry = CodecRegistry.empty();
-		registry.register(new DeltaCodec());
+	private static EncodingRegistry deltaRegistry() {
+		var registry = EncodingRegistry.empty();
+		registry.register(new DeltaEncoding());
 		return registry;
 	}
 
@@ -55,7 +55,7 @@ class DeltaCodecTest {
 
 		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
 		     var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults(),
-					 List.of(new DeltaCodec()))) {
+					 List.of(new DeltaEncoding()))) {
 			// When
 			sut.writeChunk(Map.of("ts", data));
 		}
@@ -81,7 +81,7 @@ class DeltaCodecTest {
 
 		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
 		     var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults(),
-					 List.of(new DeltaCodec()))) {
+					 List.of(new DeltaEncoding()))) {
 			// When
 			sut.writeChunk(Map.of("ts", data));
 		}
@@ -105,7 +105,7 @@ class DeltaCodecTest {
 
 		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
 		     var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults(),
-					 List.of(new DeltaCodec()))) {
+					 List.of(new DeltaEncoding()))) {
 			// When
 			sut.writeChunk(Map.of("ts", data));
 		}
@@ -129,7 +129,7 @@ class DeltaCodecTest {
 
 		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
 		     var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults(),
-					 List.of(new DeltaCodec()))) {
+					 List.of(new DeltaEncoding()))) {
 			// When
 			sut.writeChunk(Map.of("ts", data));
 		}
@@ -152,7 +152,7 @@ class DeltaCodecTest {
 
 		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
 		     var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults(),
-					 List.of(new DeltaCodec()))) {
+					 List.of(new DeltaEncoding()))) {
 			// When
 			sut.writeChunk(Map.of("ts", data));
 		}
@@ -179,7 +179,7 @@ class DeltaCodecTest {
 
 		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
 		     var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults(),
-					 List.of(new DeltaCodec()))) {
+					 List.of(new DeltaEncoding()))) {
 			// When
 			sut.writeChunk(Map.of("ts", chunk1));
 			sut.writeChunk(Map.of("ts", chunk2));
@@ -214,7 +214,7 @@ class DeltaCodecTest {
 
 		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
 		     var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults(),
-					 List.of(new DeltaCodec()))) {
+					 List.of(new DeltaEncoding()))) {
 			// When
 			sut.writeChunk(Map.of("ts", data));
 		}

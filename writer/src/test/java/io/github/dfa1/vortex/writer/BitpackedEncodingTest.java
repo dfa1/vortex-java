@@ -3,8 +3,8 @@ package io.github.dfa1.vortex.writer;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.encoding.BitpackedCodec;
-import io.github.dfa1.vortex.encoding.CodecRegistry;
+import io.github.dfa1.vortex.encoding.BitpackedEncoding;
+import io.github.dfa1.vortex.encoding.EncodingRegistry;
 import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.ScanOptions;
 import io.github.dfa1.vortex.scan.ScanResult;
@@ -25,7 +25,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class BitpackedCodecTest {
+class BitpackedEncodingTest {
 
 	private static final DType.Struct I32_SCHEMA = new DType.Struct(
 			List.of("value"),
@@ -41,9 +41,9 @@ class BitpackedCodecTest {
 		return results;
 	}
 
-	private static CodecRegistry bpRegistry() {
-		var registry = CodecRegistry.empty();
-		registry.register(new BitpackedCodec());
+	private static EncodingRegistry bpRegistry() {
+		var registry = EncodingRegistry.empty();
+		registry.register(new BitpackedEncoding());
 		return registry;
 	}
 
@@ -55,7 +55,7 @@ class BitpackedCodecTest {
 
 		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
 		     var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults(),
-					 List.of(new BitpackedCodec()))) {
+					 List.of(new BitpackedEncoding()))) {
 			// When
 			sut.writeChunk(Map.of("value", data));
 		}
@@ -81,7 +81,7 @@ class BitpackedCodecTest {
 
 		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
 		     var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults(),
-					 List.of(new BitpackedCodec()))) {
+					 List.of(new BitpackedEncoding()))) {
 			// When
 			sut.writeChunk(Map.of("value", data));
 		}
@@ -106,7 +106,7 @@ class BitpackedCodecTest {
 
 		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
 		     var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults(),
-					 List.of(new BitpackedCodec()))) {
+					 List.of(new BitpackedEncoding()))) {
 			// When
 			sut.writeChunk(Map.of("value", data));
 		}
@@ -134,7 +134,7 @@ class BitpackedCodecTest {
 
 		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
 		     var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults(),
-					 List.of(new BitpackedCodec()))) {
+					 List.of(new BitpackedEncoding()))) {
 			// When
 			sut.writeChunk(Map.of("value", chunk1));
 			sut.writeChunk(Map.of("value", chunk2));
@@ -172,7 +172,7 @@ class BitpackedCodecTest {
 
 		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
 		     var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults(),
-					 List.of(new BitpackedCodec()))) {
+					 List.of(new BitpackedEncoding()))) {
 			// When
 			sut.writeChunk(Map.of("value", data));
 		}

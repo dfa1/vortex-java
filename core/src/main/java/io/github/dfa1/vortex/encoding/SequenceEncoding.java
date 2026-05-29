@@ -25,7 +25,7 @@ import java.nio.ByteOrder;
 /// No buffers, no children. Metadata is a protobuf {@code SequenceMetadata}
 /// with {@code base} (tag 1) and {@code multiplier} (tag 2) as {@code ScalarValue}.
 /// Output is allocated on the heap; not backed by the file's mapped region.
-public final class SequenceCodec implements Codec {
+public final class SequenceEncoding implements Encoding {
 
 	private static final ValueLayout.OfLong   LE_LONG   = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 	private static final ValueLayout.OfInt    LE_INT    = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
@@ -55,7 +55,7 @@ public final class SequenceCodec implements Codec {
 			case I32, U32 -> new IntArray(dtype, n, seg, ArrayStats.empty());
 			case I16, U16 -> new ShortArray(dtype, n, seg, ArrayStats.empty());
 			case I8, U8   -> new ByteArray(dtype, n, seg, ArrayStats.empty());
-			default -> throw new VortexException(CodecId.VORTEX_SEQUENCE, "unsupported ptype " + pt);
+			default -> throw new VortexException(EncodingId.VORTEX_SEQUENCE, "unsupported ptype " + pt);
 		};
 	}
 
@@ -84,13 +84,13 @@ public final class SequenceCodec implements Codec {
 			case INT64_VALUE -> sv.getInt64Value();
 			case UINT64_VALUE -> sv.getUint64Value();
 			case KIND_NOT_SET -> 0L;
-			default -> throw new VortexException(CodecId.VORTEX_SEQUENCE, "unexpected scalar kind " + sv.getKindCase());
+			default -> throw new VortexException(EncodingId.VORTEX_SEQUENCE, "unexpected scalar kind " + sv.getKindCase());
 		};
 	}
 
 	@Override
-	public CodecId encodingId() {
-		return CodecId.VORTEX_SEQUENCE;
+	public EncodingId encodingId() {
+		return EncodingId.VORTEX_SEQUENCE;
 	}
 
 	@Override
@@ -102,17 +102,17 @@ public final class SequenceCodec implements Codec {
 	public Array decode(DecodeContext ctx) {
 		ByteBuffer metaBuf = ctx.metadata();
 		if (metaBuf == null || !metaBuf.hasRemaining()) {
-			throw new VortexException(CodecId.VORTEX_SEQUENCE, "missing metadata");
+			throw new VortexException(EncodingId.VORTEX_SEQUENCE, "missing metadata");
 		}
 		EncodingProtos.SequenceMetadata meta;
 		try {
 			meta = EncodingProtos.SequenceMetadata.parseFrom(metaBuf.duplicate());
 		} catch (InvalidProtocolBufferException e) {
-			throw new VortexException(CodecId.VORTEX_SEQUENCE, "invalid metadata", e);
+			throw new VortexException(EncodingId.VORTEX_SEQUENCE, "invalid metadata", e);
 		}
 
 		if (!(ctx.dtype() instanceof DType.Primitive p)) {
-			throw new VortexException(CodecId.VORTEX_SEQUENCE, "expected primitive dtype, got " + ctx.dtype());
+			throw new VortexException(EncodingId.VORTEX_SEQUENCE, "expected primitive dtype, got " + ctx.dtype());
 		}
 
 		long n = ctx.rowCount();
@@ -121,7 +121,7 @@ public final class SequenceCodec implements Codec {
 			case I8, I16, I32, I64, U8, U16, U32, U64 -> decodeInteger(meta, pt, n, ctx.dtype(), ctx.arena());
 			case F32 -> decodeF32(meta, n, ctx.dtype(), ctx.arena());
 			case F64 -> decodeF64(meta, n, ctx.dtype(), ctx.arena());
-			case F16 -> throw new VortexException(CodecId.VORTEX_SEQUENCE, "F16 not supported");
+			case F16 -> throw new VortexException(EncodingId.VORTEX_SEQUENCE, "F16 not supported");
 		};
 	}
 }

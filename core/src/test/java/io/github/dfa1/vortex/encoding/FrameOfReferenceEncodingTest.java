@@ -16,7 +16,7 @@ import java.nio.ByteOrder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class FrameOfReferenceCodecTest {
+class FrameOfReferenceEncodingTest {
 
 	private static final DType I64_DTYPE = new DType.Primitive(PType.I64, false);
 	private static final DType I32_DTYPE = new DType.Primitive(PType.I32, false);
@@ -44,7 +44,7 @@ class FrameOfReferenceCodecTest {
 
 		// ArrayNode for vortex.primitive child: bufferIndices=[0], no children
 		ArrayNode childNode = new ArrayNode(
-				CodecId.VORTEX_PRIMITIVE,
+				EncodingId.VORTEX_PRIMITIVE,
 				null,
 				new ArrayNode[0],
 				new int[]{0},
@@ -53,7 +53,7 @@ class FrameOfReferenceCodecTest {
 
 		// ArrayNode for fastlanes.for: metadata=scalarBytes, child=childNode, no buffers
 		ArrayNode forNode = new ArrayNode(
-				CodecId.FASTLANES_FOR,
+				EncodingId.FASTLANES_FOR,
 				ByteBuffer.wrap(metaBytes),
 				new ArrayNode[]{childNode},
 				new int[0],
@@ -62,9 +62,9 @@ class FrameOfReferenceCodecTest {
 
 		MemorySegment[] segments = {MemorySegment.ofArray(childBytes)};
 
-		CodecRegistry registry = CodecRegistry.empty();
-		registry.register(new FrameOfReferenceCodec());
-		registry.register(new PrimitiveCodec());
+		EncodingRegistry registry = EncodingRegistry.empty();
+		registry.register(new FrameOfReferenceEncoding());
+		registry.register(new PrimitiveEncoding());
 
 		return new DecodeContext(forNode, dtype, residuals.length, segments, registry, java.lang.foreign.Arena.global());
 	}
@@ -77,7 +77,7 @@ class FrameOfReferenceCodecTest {
 		long[] expected = {1000, 1001, 1002, 1003, 1004};
 
 		DecodeContext ctx = buildForContext(I64_DTYPE, reference, residuals, PType.I64);
-		FrameOfReferenceCodec sut = new FrameOfReferenceCodec();
+		FrameOfReferenceEncoding sut = new FrameOfReferenceEncoding();
 
 		// When
 		Array result = sut.decode(ctx);
@@ -100,7 +100,7 @@ class FrameOfReferenceCodecTest {
 		int[] expected = {-100, -95, -90, -85};
 
 		DecodeContext ctx = buildForContext(I32_DTYPE, reference, residuals, PType.I32);
-		FrameOfReferenceCodec sut = new FrameOfReferenceCodec();
+		FrameOfReferenceEncoding sut = new FrameOfReferenceEncoding();
 
 		// When
 		Array result = sut.decode(ctx);
@@ -120,7 +120,7 @@ class FrameOfReferenceCodecTest {
 		// Given — reference == 0, should skip the add entirely
 		long[] residuals = {7, 8, 9};
 		DecodeContext ctx = buildForContext(I64_DTYPE, 0L, residuals, PType.I64);
-		FrameOfReferenceCodec sut = new FrameOfReferenceCodec();
+		FrameOfReferenceEncoding sut = new FrameOfReferenceEncoding();
 
 		// When
 		Array result = sut.decode(ctx);
@@ -140,7 +140,7 @@ class FrameOfReferenceCodecTest {
 		// Given — wrapping arithmetic: MAX + 1 wraps to MIN
 		long[] residuals = {1L};
 		DecodeContext ctx = buildForContext(I64_DTYPE, reference, residuals, PType.I64);
-		FrameOfReferenceCodec sut = new FrameOfReferenceCodec();
+		FrameOfReferenceEncoding sut = new FrameOfReferenceEncoding();
 
 		// When
 		Array result = sut.decode(ctx);
