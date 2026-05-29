@@ -4,6 +4,20 @@
 
 Pure-Java reader/writer for the [Vortex](https://github.com/spiraldb/vortex) columnar file format.
 
+## Performance
+
+`JniVsJavaReadBenchmark` — 10M OHLC rows, project + sum `volume` (I64) column,
+JMH throughput (higher = better), Apple M-series, Java 25:
+
+| Reader        | Throughput  | vs JNI  |
+|---------------|-------------|---------|
+| vortex-jni    | 51.9 ops/s  | 1×      |
+| vortex-java   | 120.7 ops/s | **2.3×** |
+
+JNI overhead: Arrow C Data Interface handshake + JNI boundary crossing + `VectorSchemaRoot`
+materialisation per batch. vortex-java reads directly from the mmap region via `MemorySegment`
+with zero copies and no intermediate format.
+
 ## Motivation
 
 The official Vortex ecosystem provides JVM bindings via JNI (bundled native `.so`/`.dylib`).
