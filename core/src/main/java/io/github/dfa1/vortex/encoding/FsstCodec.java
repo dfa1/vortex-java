@@ -30,6 +30,7 @@ public final class FsstCodec implements Codec {
 
     private static final ValueLayout.OfLong   LE_LONG  = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
     private static final ValueLayout.OfInt    LE_INT   = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+    private static final ValueLayout.OfShort  LE_SHORT = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     @Override
     public CodecId encodingId() {
@@ -131,8 +132,7 @@ public final class FsstCodec implements Codec {
     private static long readUnsigned(MemorySegment seg, long idx, PType ptype) {
         return switch (ptype) {
             case U8  -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, idx));
-            case U16 -> Short.toUnsignedLong(seg.get(
-                    ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), idx * 2));
+            case U16 -> Short.toUnsignedLong(seg.get(LE_SHORT, idx * 2));
             case U32 -> Integer.toUnsignedLong(seg.getAtIndex(LE_INT, idx));
             case I32 -> seg.getAtIndex(LE_INT, idx);
             case I64, U64 -> seg.getAtIndex(LE_LONG, idx);

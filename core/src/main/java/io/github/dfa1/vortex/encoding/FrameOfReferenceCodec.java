@@ -21,6 +21,10 @@ import java.nio.ByteOrder;
 /// Decode: {@code output[i] = encoded[i] + reference} (wrapping arithmetic).
 public final class FrameOfReferenceCodec implements Codec {
 
+	private static final ValueLayout.OfShort LE_SHORT = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+	private static final ValueLayout.OfInt   LE_INT   = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+	private static final ValueLayout.OfLong  LE_LONG  = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+
 	private static long referenceValue(ScalarProtos.ScalarValue scalar) {
 		return switch (scalar.getKindCase()) {
 			case INT64_VALUE -> scalar.getInt64Value();
@@ -42,24 +46,21 @@ public final class FrameOfReferenceCodec implements Codec {
 				}
 			}
 			case I16, U16 -> {
-				var layout = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 				for (long off = 0, end = n * 2; off < end; off += 2) {
-					short v = src.get(layout, off);
-					dst.set(layout, off, (short) (v + (short) ref));
+					short v = src.get(LE_SHORT, off);
+					dst.set(LE_SHORT, off, (short) (v + (short) ref));
 				}
 			}
 			case I32, U32 -> {
-				var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 				for (long off = 0, end = n * 4; off < end; off += 4) {
-					int v = src.get(layout, off);
-					dst.set(layout, off, v + (int) ref);
+					int v = src.get(LE_INT, off);
+					dst.set(LE_INT, off, v + (int) ref);
 				}
 			}
 			case I64, U64 -> {
-				var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 				for (long off = 0, end = n * 8; off < end; off += 8) {
-					long v = src.get(layout, off);
-					dst.set(layout, off, v + ref);
+					long v = src.get(LE_LONG, off);
+					dst.set(LE_LONG, off, v + ref);
 				}
 			}
 			default -> throw new UnsupportedOperationException(

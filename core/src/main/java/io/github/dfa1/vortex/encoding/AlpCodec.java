@@ -49,6 +49,7 @@ public final class AlpCodec implements Codec {
 			1e-0f, 1e-1f, 1e-2f, 1e-3f, 1e-4f, 1e-5f, 1e-6f, 1e-7f, 1e-8f, 1e-9f, 1e-10f
 	};
 
+	private static final ValueLayout.OfShort  LE_SHORT  = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 	private static final ValueLayout.OfLong   LE_LONG   = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 	private static final ValueLayout.OfDouble LE_DOUBLE = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 	private static final ValueLayout.OfInt    LE_INT    = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
@@ -67,12 +68,9 @@ public final class AlpCodec implements Codec {
 	private static long readUnsigned(MemorySegment seg, long i, PType ptype) {
 		return switch (ptype) {
 			case U8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, i));
-			case U16 -> Short.toUnsignedLong(
-					seg.get(ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), i * 2));
-			case U32 -> Integer.toUnsignedLong(
-					seg.get(ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), i * 4));
-			case U64 -> seg.get(
-					ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), i * 8);
+			case U16 -> Short.toUnsignedLong(seg.get(LE_SHORT, i * 2));
+			case U32 -> Integer.toUnsignedLong(seg.get(LE_INT, i * 4));
+			case U64 -> seg.get(LE_LONG, i * 8);
 			default -> throw new IllegalStateException("vortex.alp: non-unsigned patch index ptype " + ptype);
 		};
 	}

@@ -26,6 +26,10 @@ import java.nio.ByteOrder;
 /// {@code output[indices[i] - offset] = values[i]} for each patch.
 public final class SparseCodec implements Codec {
 
+	private static final ValueLayout.OfShort LE_SHORT = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+	private static final ValueLayout.OfInt   LE_INT   = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+	private static final ValueLayout.OfLong  LE_LONG  = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+
 	private static Array decodeChildWithDtype(DecodeContext parent, int childIdx, DType dtype, long rowCount) {
 		ArrayNode childNode = parent.node().children()[childIdx];
 		DecodeContext childCtx = new DecodeContext(
@@ -70,11 +74,9 @@ public final class SparseCodec implements Codec {
 	private static long readUnsignedIdx(MemorySegment seg, long i, PType ptype) {
 		return switch (ptype) {
 			case U8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, i));
-			case U16 -> Short.toUnsignedLong(
-					seg.get(ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), i * 2));
-			case U32 -> Integer.toUnsignedLong(
-					seg.get(ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), i * 4));
-			case U64 -> seg.get(ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), i * 8);
+			case U16 -> Short.toUnsignedLong(seg.get(LE_SHORT, i * 2));
+			case U32 -> Integer.toUnsignedLong(seg.get(LE_INT, i * 4));
+			case U64 -> seg.get(LE_LONG, i * 8);
 			default -> throw new IllegalStateException("vortex.sparse: non-unsigned index ptype " + ptype);
 		};
 	}
@@ -82,12 +84,9 @@ public final class SparseCodec implements Codec {
 	private static long readElem(MemorySegment seg, long i, PType ptype) {
 		return switch (ptype) {
 			case I8, U8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, i));
-			case I16, U16 -> Short.toUnsignedLong(
-					seg.get(ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), i * 2));
-			case I32, U32 -> Integer.toUnsignedLong(
-					seg.get(ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), i * 4));
-			case I64, U64, F32, F64 ->
-					seg.get(ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), i * 8);
+			case I16, U16 -> Short.toUnsignedLong(seg.get(LE_SHORT, i * 2));
+			case I32, U32 -> Integer.toUnsignedLong(seg.get(LE_INT, i * 4));
+			case I64, U64, F32, F64 -> seg.get(LE_LONG, i * 8);
 			default -> throw new UnsupportedOperationException("vortex.sparse: unsupported ptype " + ptype);
 		};
 	}

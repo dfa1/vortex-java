@@ -21,6 +21,9 @@ import java.util.List;
 /// Node tree: DictNode{ children=[ValuesNode{buf=0},CodesNode{buf=1}] }.
 public final class DictCodec implements Codec {
 
+	private static final ValueLayout.OfShort LE_SHORT = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+	private static final ValueLayout.OfInt   LE_INT   = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+
 	private static Array decodeChildAs(DecodeContext parent, int childIdx, DType dtype, long rowCount) {
 		ArrayNode childNode = parent.node().children()[childIdx];
 		DecodeContext childCtx = new DecodeContext(
@@ -145,9 +148,8 @@ public final class DictCodec implements Codec {
 			MemorySegment codes, MemorySegment values, MemorySegment out,
 			long rowCount, int elemSize
 	) {
-		var layout = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 		for (long i = 0, outOff = 0; i < rowCount; i++, outOff += elemSize) {
-			long code = Short.toUnsignedLong(codes.get(layout, i * 2));
+			long code = Short.toUnsignedLong(codes.get(LE_SHORT, i * 2));
 			MemorySegment.copy(values, code * elemSize, out, outOff, elemSize);
 		}
 	}
@@ -156,9 +158,8 @@ public final class DictCodec implements Codec {
 			MemorySegment codes, MemorySegment values, MemorySegment out,
 			long rowCount, int elemSize
 	) {
-		var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 		for (long i = 0, outOff = 0; i < rowCount; i++, outOff += elemSize) {
-			long code = Integer.toUnsignedLong(codes.get(layout, i * 4));
+			long code = Integer.toUnsignedLong(codes.get(LE_INT, i * 4));
 			MemorySegment.copy(values, code * elemSize, out, outOff, elemSize);
 		}
 	}
@@ -166,10 +167,8 @@ public final class DictCodec implements Codec {
 	private static long readCode(MemorySegment buf, PType codePType, long i) {
 		return switch (codePType) {
 			case U8 -> Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, i));
-			case U16 -> Short.toUnsignedLong(
-					buf.get(ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), i * 2));
-			case U32 -> Integer.toUnsignedLong(
-					buf.get(ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), i * 4));
+			case U16 -> Short.toUnsignedLong(buf.get(LE_SHORT, i * 2));
+			case U32 -> Integer.toUnsignedLong(buf.get(LE_INT, i * 4));
 			default -> throw new IllegalStateException("unexpected code type: " + codePType);
 		};
 	}

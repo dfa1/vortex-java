@@ -32,6 +32,10 @@ import java.util.Map;
 /// ```
 public final class ScanIterator implements AutoCloseable {
 
+	private static final ValueLayout.OfShort LE_SHORT = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+	private static final ValueLayout.OfInt   LE_INT   = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+	private static final ValueLayout.OfLong  LE_LONG  = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+
 	private final VortexReader file;
 	private final ScanOptions options;
 	private final Arena arena;
@@ -275,8 +279,6 @@ public final class ScanIterator implements AutoCloseable {
 		PType valOffPType        = ((DType.Primitive) values.child(0).dtype()).ptype();
 		MemorySegment codesSegs  = codes.buffer(0);
 
-		var outOffLayout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-
 		// First pass: total output byte length
 		long totalBytes = 0L;
 		for (long i = 0; i < n; i++) {
@@ -288,7 +290,7 @@ public final class ScanIterator implements AutoCloseable {
 
 		MemorySegment outBytes   = arena.allocate(totalBytes > 0 ? totalBytes : 1);
 		MemorySegment outOffsets = arena.allocate((n + 1) * 4L, 4);
-		outOffsets.setAtIndex(outOffLayout, 0, 0);
+		outOffsets.setAtIndex(LE_INT, 0, 0);
 
 		long bytePos = 0L;
 		for (long i = 0; i < n; i++) {
@@ -300,7 +302,7 @@ public final class ScanIterator implements AutoCloseable {
 				MemorySegment.copy(valBytes, start, outBytes, bytePos, strLen);
 				bytePos += strLen;
 			}
-			outOffsets.setAtIndex(outOffLayout, i + 1, (int) bytePos);
+			outOffsets.setAtIndex(LE_INT, i + 1, (int) bytePos);
 		}
 
 		Array offsetArr = new Array(new DType.Primitive(PType.I32, false), n + 1,
@@ -314,14 +316,10 @@ public final class ScanIterator implements AutoCloseable {
 	private static long readUnsigned(MemorySegment seg, long idx, PType ptype) {
 		return switch (ptype) {
 			case U8  -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, idx));
-			case U16 -> Short.toUnsignedLong(seg.get(
-					ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), idx * 2));
-			case U32 -> Integer.toUnsignedLong(seg.getAtIndex(
-					ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), idx));
-			case I32 -> seg.getAtIndex(
-					ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), idx);
-			case I64, U64 -> seg.getAtIndex(
-					ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), idx);
+			case U16 -> Short.toUnsignedLong(seg.get(LE_SHORT, idx * 2));
+			case U32 -> Integer.toUnsignedLong(seg.getAtIndex(LE_INT, idx));
+			case I32 -> seg.getAtIndex(LE_INT, idx);
+			case I64, U64 -> seg.getAtIndex(LE_LONG, idx);
 			default  -> throw new IllegalArgumentException("dict layout: unsupported ptype " + ptype);
 		};
 	}
@@ -385,8 +383,7 @@ public final class ScanIterator implements AutoCloseable {
 
 		// Stats FlatBuffer lives in the segment's last 4+fbLen bytes; reading the whole
 		// segment as a ByteBuffer would fail for segments larger than 2 GB (ByteBuffer cap).
-		var leInt = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-		int fbLen = seg.get(leInt, segLen - 4);
+		int fbLen = seg.get(LE_INT, segLen - 4);
 		long fbStart = segLen - 4L - fbLen;
 		ByteBuffer fbBuf = seg.asSlice(fbStart, fbLen).asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
 		var fbArray = io.github.dfa1.vortex.fbs.Array.getRootAsArray(fbBuf);

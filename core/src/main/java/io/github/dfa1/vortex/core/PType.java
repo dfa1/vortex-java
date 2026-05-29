@@ -8,6 +8,12 @@ public enum PType {
 	I8, I16, I32, I64,
 	F16, F32, F64;
 
+	private static final ValueLayout.OfShort  LE_SHORT  = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+	private static final ValueLayout.OfInt    LE_INT    = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+	private static final ValueLayout.OfLong   LE_LONG   = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+	private static final ValueLayout.OfFloat  LE_FLOAT  = ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+	private static final ValueLayout.OfDouble LE_DOUBLE = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+
 	public int byteSize() {
 		return switch (this) {
 			case U8, I8 -> 1;
@@ -26,15 +32,16 @@ public enum PType {
 				|| this == F16 || this == F32 || this == F64;
 	}
 
-	/// Little-endian, unaligned `ValueLayout` for this ptype.
+	/// Little-endian, unaligned `ValueLayout` for this ptype. Returns a shared `static final`
+	/// instance so the JIT can constant-fold the VarHandle and vectorise hot loops.
 	public ValueLayout valueLayout() {
 		return switch (this) {
 			case I8, U8 -> ValueLayout.JAVA_BYTE;
-			case I16, U16 -> ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-			case I32, U32 -> ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-			case I64, U64 -> ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-			case F32 -> ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-			case F64 -> ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			case I16, U16 -> LE_SHORT;
+			case I32, U32 -> LE_INT;
+			case I64, U64 -> LE_LONG;
+			case F32 -> LE_FLOAT;
+			case F64 -> LE_DOUBLE;
 			case F16 -> throw new UnsupportedOperationException("F16 not supported"); // TODO: implement F16
 		};
 	}
