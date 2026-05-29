@@ -66,16 +66,20 @@ public final class VortexReader implements Closeable {
 
 	public static VortexReader open(Path path, CodecRegistry registry) throws IOException {
 		Arena arena = Arena.ofConfined();
-		var channel = FileChannel.open(path, StandardOpenOption.READ);
-		long size = channel.size();
-		if (size < TRAILER_SIZE) {
-			channel.close();
-			throw new VortexException("file too small (" + size + " bytes)");
+		try (var channel = FileChannel.open(path, StandardOpenOption.READ)) {
+			long size = channel.size();
+			if (size < TRAILER_SIZE) {
+				throw new VortexException("file too small (" + size + " bytes)");
+			}
+			// The channel is no longer needed after map(): the Arena owns the mapping's
+			// lifetime. try-with-resources closes the file descriptor while all Array
+			// buffers remain valid zero-copy slices until arena.close() is called.
+			var segment = channel.map(FileChannel.MapMode.READ_ONLY, 0, size, arena);
+			return parse(segment, size, arena, registry);
+		} catch (Exception e) {
+			arena.close();
+			throw e;
 		}
-		var segment = channel.map(FileChannel.MapMode.READ_ONLY, 0, size, arena);
-		// TODO: explain why it should be closed
-		channel.close();
-		return parse(segment, size, arena, registry);
 	}
 
 	private static VortexReader parse(
