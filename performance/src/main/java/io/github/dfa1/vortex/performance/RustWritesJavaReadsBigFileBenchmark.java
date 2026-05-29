@@ -38,6 +38,7 @@ import org.openjdk.jmh.annotations.Warmup;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
@@ -68,6 +69,9 @@ import java.util.concurrent.TimeUnit;
 		"--sun-misc-unsafe-memory-access=allow"
 })
 public class RustWritesJavaReadsBigFileBenchmark {
+
+	private static final ValueLayout.OfLong LE_LONG =
+			ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
 	private static final long TARGET_BYTES = 3L * 1024 * 1024 * 1024; // ~3 GB
 	private static final int BATCH_SIZE = 1_000_000; // 1 M rows/batch → ~32 MB raw per col per batch
@@ -153,7 +157,6 @@ public class RustWritesJavaReadsBigFileBenchmark {
 	@Benchmark
 	public long javaScan() throws IOException {
 		long sum = 0L;
-		var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(java.nio.ByteOrder.LITTLE_ENDIAN);
 		try (VortexReader vf = VortexReader.open(benchFile, registry)) {
 			var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("c0"));
 			while (iter.hasNext()) {
@@ -162,7 +165,7 @@ public class RustWritesJavaReadsBigFileBenchmark {
 				MemorySegment buf = arr.buffer(0);
 				long count = buf.byteSize() / Long.BYTES;
 				for (long i = 0; i < count; i++) {
-					sum += buf.getAtIndex(layout, i);
+					sum += buf.getAtIndex(LE_LONG, i);
 				}
 			}
 		}

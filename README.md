@@ -17,6 +17,18 @@ Pure-Java reader/writer for the [Vortex](https://github.com/spiraldb/vortex) col
 Reproduce: `./benchmark.sh RustVsJavaReadBenchmark`. Hardware / JDK build / commit SHA used to produce
 this snapshot should be captured alongside any update (see TODO #10c).
 
+`RustWritesJavaReadsBigFileBenchmark` — 3 GB file, 4 × I64 columns of random data (defeats
+bit-packing so segments stay large), projection on `c0`, JMH throughput:
+
+| Reader      | Throughput     | ms/op | Decode rate |
+|-------------|----------------|-------|-------------|
+| vortex-jni  | 5.9 ops/s      | ~170  | ~4.7 GB/s   |
+| vortex-java | **19.7 ops/s** | ~51   | ~15.7 GB/s — **Java 3.4×** |
+
+Memory-bandwidth bound on Apple M-series. Reproduce: `./benchmark.sh RustWritesJavaReadsBigFileBenchmark`
+(adds a ~30 s fixture build for the JNI write). Pass `-Dvortex.bench.bigfile=<path>` to reuse an existing
+fixture between runs.
+
 All columns decoded faster in pure Java than via JNI + Apache Arrow. Key optimisations:
 `static final` ValueLayout constants (JIT constant-folding), aligned arena allocation
 (`allocate(n, alignment)`), `getAtIndex()`/`setAtIndex()` (clearer stride for the
