@@ -219,7 +219,8 @@ public class RustVsJavaReadBenchmark {
 			var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("volume"));
 			while (iter.hasNext()) {
 				ScanResult r = iter.next();
-				sum += r.<LongArray>column("volume").fold(0L, Long::sum);
+				LongArray volume = r.column("volume");
+				sum += volume.fold(0L, Long::sum);
 			}
 		}
 		return sum;
@@ -233,7 +234,8 @@ public class RustVsJavaReadBenchmark {
 			var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("close"));
 			while (iter.hasNext()) {
 				ScanResult r = iter.next();
-				sum += r.<DoubleArray>column("close").fold(0.0, Double::sum);
+				DoubleArray close = r.column("close");
+				sum += close.fold(0.0, Double::sum);
 			}
 		}
 		return sum;
@@ -247,7 +249,8 @@ public class RustVsJavaReadBenchmark {
 			var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("symbol"));
 			while (iter.hasNext()) {
 				ScanResult r = iter.next();
-				((VarBinArray) r.columns().get("symbol")).forEachByteLength(v -> sum[0] += v);
+				VarBinArray symbol = r.column("symbol");
+				symbol.forEachByteLength(v -> sum[0] += v);
 			}
 		}
 		return sum[0];
