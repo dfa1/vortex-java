@@ -49,6 +49,14 @@ public final class AlpCodec implements Codec {
 			1e-0f, 1e-1f, 1e-2f, 1e-3f, 1e-4f, 1e-5f, 1e-6f, 1e-7f, 1e-8f, 1e-9f, 1e-10f
 	};
 
+	private static final ValueLayout.OfLong   LE_LONG   = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+	private static final ValueLayout.OfDouble LE_DOUBLE = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+	private static final ValueLayout.OfInt    LE_INT    = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+	private static final ValueLayout.OfFloat  LE_FLOAT  = ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+
+	private static final DType I64_DTYPE = new DType.Primitive(PType.I64, false);
+	private static final DType I32_DTYPE = new DType.Primitive(PType.I32, false);
+
 	private static Array decodeChildAs(DecodeContext parent, int childIdx, DType dtype, long rowCount) {
 		ArrayNode childNode = parent.node().children()[childIdx];
 		DecodeContext childCtx = new DecodeContext(
@@ -85,8 +93,6 @@ public final class AlpCodec implements Codec {
 		throw new UnsupportedOperationException("encode not supported by " + encodingId());
 	}
 
-	// ── F32 ───────────────────────────────────────────────────────────────────
-
 	@Override
 	public Array decode(DecodeContext ctx) {
 		ByteBuffer rawMeta = ctx.metadata();
@@ -117,102 +123,58 @@ public final class AlpCodec implements Codec {
 	}
 
 	private Array decodeF64(DecodeContext ctx, EncodingProtos.ALPMetadata meta, int expE, int expF, long n) {
-		DType encodedDtype = new DType.Primitive(PType.I64, false);
-		Array encoded = decodeChildAs(ctx, 0, encodedDtype, n);
+		Array encoded = decodeChildAs(ctx, 0, I64_DTYPE, n);
 
 		// Precompute single factor — avoids 2 FP mults per element in the hot loop.
 		double factor = F10_F64[expF] * IF10_F64[expE];
 
-		MemorySegment out = ctx.arena().allocate(n * 8);
-		var srcLayout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-		var dstLayout = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 		MemorySegment src = encoded.buffer(0);
-		// Strength-reduce: running byte offset instead of i*8 per iteration.
-		for (long off = 0, end = n * 8; off < end; off += 8) {
-			long encVal = src.get(srcLayout, off);
-			double dec = (double) encVal * factor;
-			out.set(dstLayout, off, dec);
+		MemorySegment out = ctx.arena().allocate(n * 8, 8);
+		for (long i = 0; i < n; i++) {
+			out.setAtIndex(LE_DOUBLE, i, (double) src.getAtIndex(LE_LONG, i) * factor);
 		}
 
 		if (meta.hasPatches()) {
-			applyPatchesF64(ctx, meta.getPatches(), out, n);
+			applyPatches(ctx, meta.getPatches(), out, LE_LONG, 8);
 		}
 
 		return new Array(ctx.dtype(), n, new MemorySegment[]{out.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
-	}
-
-	// ── Helpers ───────────────────────────────────────────────────────────────
-
-	private void applyPatchesF64(DecodeContext ctx, EncodingProtos.PatchesMetadata pm,
-	                             MemorySegment out, long n) {
-		long numPatches = pm.getLen();
-		long offset = pm.getOffset();
-		PType idxPtype = ptypeFromProto(pm.getIndicesPtype());
-
-		DType idxDtype = new DType.Primitive(idxPtype, false);
-		DType valDtype = ctx.dtype();
-
-		Array idxArr = decodeChildAs(ctx, 1, idxDtype, numPatches);
-		Array valArr = decodeChildAs(ctx, 2, valDtype, numPatches);
-
-		var valLayout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-		var dstLayout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-
-		MemorySegment idxSeg = idxArr.buffer(0);
-		MemorySegment valSeg = valArr.buffer(0);
-
-		for (long i = 0; i < numPatches; i++) {
-			long absIdx = readUnsigned(idxSeg, i, idxPtype) - offset;
-			long rawBits = valSeg.get(valLayout, i * 8);
-			out.set(dstLayout, absIdx * 8, rawBits);
-		}
 	}
 
 	private Array decodeF32(DecodeContext ctx, EncodingProtos.ALPMetadata meta, int expE, int expF, long n) {
-		DType encodedDtype = new DType.Primitive(PType.I32, false);
-		Array encoded = decodeChildAs(ctx, 0, encodedDtype, n);
+		Array encoded = decodeChildAs(ctx, 0, I32_DTYPE, n);
 
+		// Precompute single factor — avoids 2 FP mults per element in the hot loop.
 		float factor = F10_F32[expF] * IF10_F32[expE];
 
-		MemorySegment out = ctx.arena().allocate(n * 4);
-		var srcLayout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-		var dstLayout = ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 		MemorySegment src = encoded.buffer(0);
-		for (long off = 0, end = n * 4; off < end; off += 4) {
-			int encVal = src.get(srcLayout, off);
-			float dec = (float) encVal * factor;
-			out.set(dstLayout, off, dec);
+		MemorySegment out = ctx.arena().allocate(n * 4, 4);
+		for (long i = 0; i < n; i++) {
+			out.setAtIndex(LE_FLOAT, i, (float) src.getAtIndex(LE_INT, i) * factor);
 		}
 
 		if (meta.hasPatches()) {
-			applyPatchesF32(ctx, meta.getPatches(), out, n);
+			applyPatches(ctx, meta.getPatches(), out, LE_INT, 4);
 		}
 
 		return new Array(ctx.dtype(), n, new MemorySegment[]{out.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
 	}
 
-	private void applyPatchesF32(DecodeContext ctx, EncodingProtos.PatchesMetadata pm,
-	                             MemorySegment out, long n) {
+	private void applyPatches(DecodeContext ctx, EncodingProtos.PatchesMetadata pm,
+	                          MemorySegment out, ValueLayout elemLayout, int elemBytes) {
 		long numPatches = pm.getLen();
 		long offset = pm.getOffset();
 		PType idxPtype = ptypeFromProto(pm.getIndicesPtype());
 
-		DType idxDtype = new DType.Primitive(idxPtype, false);
-		DType valDtype = ctx.dtype();
-
-		Array idxArr = decodeChildAs(ctx, 1, idxDtype, numPatches);
-		Array valArr = decodeChildAs(ctx, 2, valDtype, numPatches);
-
-		var valLayout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-		var dstLayout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+		Array idxArr = decodeChildAs(ctx, 1, new DType.Primitive(idxPtype, false), numPatches);
+		Array valArr = decodeChildAs(ctx, 2, ctx.dtype(), numPatches);
 
 		MemorySegment idxSeg = idxArr.buffer(0);
 		MemorySegment valSeg = valArr.buffer(0);
 
 		for (long i = 0; i < numPatches; i++) {
 			long absIdx = readUnsigned(idxSeg, i, idxPtype) - offset;
-			int rawBits = valSeg.get(valLayout, i * 4);
-			out.set(dstLayout, absIdx * 4, rawBits);
+			MemorySegment.copy(valSeg, i * elemBytes, out, absIdx * elemBytes, elemBytes);
 		}
 	}
 }

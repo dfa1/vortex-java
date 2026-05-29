@@ -8,17 +8,15 @@ Pure-Java reader/writer for the [Vortex](https://github.com/spiraldb/vortex) col
 
 `RustVsJavaReadBenchmark` — 10M OHLC rows, JMH throughput (higher = better), Apple M-series, Java 25:
 
-| Column          | Encoding      | vortex-jni  | vortex-java  | ratio        |
-|-----------------|---------------|-------------|--------------|--------------|
+| Column          | Encoding      | vortex-jni  | vortex-java  | ratio         |
+|-----------------|---------------|-------------|--------------|---------------|
 | `volume` (I64)  | primitive     | 51.9 ops/s  | 120.7 ops/s  | **Java 2.3×** |
-| `close` (F64)   | ALP           | 57.3 ops/s  | 44.3 ops/s   | JNI 1.3×     |
+| `close` (F64)   | ALP           | 62.6 ops/s  | 118.0 ops/s  | **Java 1.9×** |
 
-`volume` (I64, primitive encoding): vortex-java wins decisively — no JNI boundary, no Arrow
-materialisation, direct `MemorySegment` read from the mmap region.
-
-`close` (F64, ALP-encoded): JNI currently wins — the Rust ALP inverse transform is more
-optimised than the Java implementation. The per-element float multiply loop is the next
-target for improvement.
+Both columns decoded faster in pure Java than via JNI + Apache Arrow. Key optimisations on
+the ALP path: `static final` ValueLayout constants (JIT constant-folding), aligned arena
+allocation (`allocate(n, alignment)`), and `getAtIndex()`/`setAtIndex()` instead of raw byte
+offsets (clearer stride for the auto-vectoriser).
 
 ## Motivation
 
