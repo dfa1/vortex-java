@@ -31,6 +31,17 @@
     - start with compressorContext allowedCascading=3
     - don't apply dict encode to dict encode
 
+## Remote / HTTP reads
+
+- [ ] **Integration test: read real Vortex files over HTTPS**
+    - Source: public S3 bucket `vortex-compat-fixtures` (no auth required), e.g.
+      `https://vortex-compat-fixtures.s3.amazonaws.com/v0.72.0/arrays/tpch_lineitem.compact.vortex`
+    - Fetch last 65 KB via HTTP `Range: bytes=-65536` to locate trailer + postscript (mirrors what a
+      remote reader would do before deciding how much more to pull).
+    - Decode with Java reader; compare column sums / row count against the Rust JNI reader on the
+      same bytes to catch any decoding divergence.
+    - Test should be `@Tag("integration")` and skipped in offline / CI-without-network environments.
+
 ## Large-file support
 
 - [ ] **#12 Test read/write of files > 2 GB**
