@@ -49,14 +49,6 @@ public sealed interface DType
 			}
 			return fieldTypes.get(i);
 		}
-
-		public int fieldIndex(String name) {
-			int i = fieldNames.indexOf(name);
-			if (i < 0) {
-				throw new IllegalArgumentException("unknown field: " + name);
-			}
-			return i;
-		}
 	}
 
 	record List(DType elementType, boolean nullable) implements DType {
