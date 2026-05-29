@@ -6,7 +6,8 @@ import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.core.array.GenericArray;
+import io.github.dfa1.vortex.core.array.IntArray;
+import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.MemorySegment;
@@ -91,12 +92,9 @@ public final class FsstCodec implements Codec {
             outOffsets.setAtIndex(LE_INT, i + 1, (int) outPos);
         }
 
-        Array offsets = new GenericArray(new DType.Primitive(PType.I32, false), n + 1,
-                new MemorySegment[]{outOffsets.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
-        return new GenericArray(ctx.dtype(), n,
-                new MemorySegment[]{outBytes.asReadOnly()},
-                new Array[]{offsets},
-                ArrayStats.empty());
+        DType i32 = new DType.Primitive(PType.I32, false);
+        Array offsets = new IntArray(i32, n + 1, outOffsets.asReadOnly(), ArrayStats.empty());
+        return new VarBinArray(ctx.dtype(), n, outBytes.asReadOnly(), offsets, PType.I32, ArrayStats.empty());
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

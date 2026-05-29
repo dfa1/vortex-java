@@ -6,7 +6,7 @@ import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.core.array.GenericArray;
+import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.MemorySegment;
@@ -64,9 +64,6 @@ public final class VarBinCodec implements Codec {
 
 		MemorySegment bytes = ctx.buffer(0);
 
-		return new GenericArray(ctx.dtype(), n,
-				new MemorySegment[]{bytes},
-				new Array[]{offsets},
-				ArrayStats.empty());
+		return new VarBinArray(ctx.dtype(), n, bytes, offsets, offsetsPtype, ArrayStats.empty());
 	}
 }

@@ -50,6 +50,10 @@ public interface ArrayOperations {
 		throw unsupported("getBytes");
 	}
 
+	default int getByteLength(long i) {
+		return getBytes(i).length;
+	}
+
 	default void forEachInt(IntConsumer c) {
 		long n = length();
 		for (long i = 0; i < n; i++) {
@@ -68,6 +72,13 @@ public interface ArrayOperations {
 		long n = length();
 		for (long i = 0; i < n; i++) {
 			c.accept(getDouble(i));
+		}
+	}
+
+	default void forEachByteLength(IntConsumer c) {
+		long n = length();
+		for (long i = 0; i < n; i++) {
+			c.accept(getByteLength(i));
 		}
 	}
 

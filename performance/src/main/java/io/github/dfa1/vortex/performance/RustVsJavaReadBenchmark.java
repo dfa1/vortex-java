@@ -8,7 +8,6 @@ import dev.vortex.api.ScanOptions;
 import dev.vortex.api.Session;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
-import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.encoding.CodecRegistry;
 import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.ScanResult;
@@ -41,9 +40,7 @@ import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 
 import java.io.IOException;
-import java.lang.foreign.MemorySegment;
 import java.util.Arrays;
-import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -242,26 +239,15 @@ public class RustVsJavaReadBenchmark {
 	/// Java read: project on "symbol" (short UTF-8 string, varbin), sum byte lengths.
 	@Benchmark
 	public long javaReadSymbol() throws IOException {
-		long sum = 0L;
+		long[] sum = {0L};
 		try (VortexReader vf = VortexReader.open(benchFile, registry)) {
 			var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("symbol"));
 			while (iter.hasNext()) {
 				ScanResult r = iter.next();
-				Array arr = r.columns().get("symbol");
-				// buffer(0) = raw bytes; child(0) = offsets
-				MemorySegment bytes = arr.buffer(0);
-				Array offsets = arr.child(0);
-				MemorySegment offsetSeg = offsets.buffer(0);
-				var offsetLayout = ValueLayout.JAVA_INT_UNALIGNED;
-				long n = arr.length();
-				for (long i = 0; i < n; i++) {
-					int start = offsetSeg.getAtIndex(offsetLayout, i);
-					int end = offsetSeg.getAtIndex(offsetLayout, i + 1);
-					sum += end - start;
-				}
+				r.columns().get("symbol").forEachByteLength(v -> sum[0] += v);
 			}
 		}
-		return sum;
+		return sum[0];
 	}
 
 	// Real Nasdaq tickers — mix of lengths (1–5 chars) for realistic varbin distribution.
