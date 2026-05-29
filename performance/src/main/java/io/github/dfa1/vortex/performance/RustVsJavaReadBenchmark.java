@@ -95,8 +95,12 @@ public class RustVsJavaReadBenchmark {
 		NativeLoader.loadJni();
 	}
 
+	private static final Object FILE_LOCK = new Object();
+	private static Path sharedBenchFile;
+	private static boolean sharedOwnFile;
+	private static int sharedRefCount;
+
 	private Path benchFile;
-	private boolean ownFile;
 	private CodecRegistry registry;
 	private BufferAllocator allocator;
 
@@ -109,25 +113,35 @@ public class RustVsJavaReadBenchmark {
 		registry = CodecRegistry.loadAll();
 		allocator = ArrowAllocation.rootAllocator();
 
-		String externalFile = System.getProperty("vortex.bench.ohlc");
-		if (externalFile != null && !externalFile.isEmpty()) {
-			benchFile = Path.of(externalFile);
-			ownFile = false;
-			System.out.printf("[RustVsJavaReadBenchmark] using external file: %s%n", benchFile);
-		} else {
-			benchFile = Files.createTempFile("ohlc-bench", ".vtx");
-			ownFile = true;
-			System.out.printf("[RustVsJavaReadBenchmark] writing %d OHLC rows via JNI...%n", TOTAL_ROWS);
-			writeJni(benchFile);
-			System.out.printf("[RustVsJavaReadBenchmark] file size: %.1f MB%n",
-					Files.size(benchFile) / 1_048_576.0);
+		synchronized (FILE_LOCK) {
+			if (sharedBenchFile == null) {
+				String externalFile = System.getProperty("vortex.bench.ohlc");
+				if (externalFile != null && !externalFile.isEmpty()) {
+					sharedBenchFile = Path.of(externalFile);
+					sharedOwnFile = false;
+					System.out.printf("[RustVsJavaReadBenchmark] using external file: %s%n", sharedBenchFile);
+				} else {
+					sharedBenchFile = Files.createTempFile("ohlc-bench", ".vtx");
+					sharedOwnFile = true;
+					System.out.printf("[RustVsJavaReadBenchmark] writing %d OHLC rows via JNI...%n", TOTAL_ROWS);
+					writeJni(sharedBenchFile);
+					System.out.printf("[RustVsJavaReadBenchmark] file size: %.1f MB%n",
+							Files.size(sharedBenchFile) / 1_048_576.0);
+				}
+			}
+			sharedRefCount++;
+			benchFile = sharedBenchFile;
 		}
 	}
 
 	@TearDown(Level.Trial)
 	public void cleanup() throws IOException {
-		if (ownFile) {
-			Files.deleteIfExists(benchFile);
+		synchronized (FILE_LOCK) {
+			sharedRefCount--;
+			if (sharedRefCount == 0 && sharedOwnFile) {
+				Files.deleteIfExists(sharedBenchFile);
+				sharedBenchFile = null;
+			}
 		}
 	}
 
