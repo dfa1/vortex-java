@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.core.DType;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteOrder;
+import java.util.function.DoubleBinaryOperator;
 import java.util.function.DoubleConsumer;
 
 /// Concrete [Array] for F64 primitive columns. Hoists a single `MemorySegment`,
@@ -64,5 +65,15 @@ public final class DoubleArray implements Array {
 		for (long i = 0; i < n; i++) {
 			c.accept(buf.getAtIndex(LAYOUT, i));
 		}
+	}
+
+	public double fold(double identity, DoubleBinaryOperator op) {
+		MemorySegment buf = buffer;
+		long n = length;
+		double result = identity;
+		for (long i = 0; i < n; i++) {
+			result = op.applyAsDouble(result, buf.getAtIndex(LAYOUT, i));
+		}
+		return result;
 	}
 }

@@ -8,6 +8,8 @@ import dev.vortex.api.ScanOptions;
 import dev.vortex.api.Session;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
+import io.github.dfa1.vortex.core.array.DoubleArray;
+import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.encoding.CodecRegistry;
 import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.ScanResult;
@@ -208,32 +210,32 @@ public class RustVsJavaReadBenchmark {
 
 	// ── JNI file generation ───────────────────────────────────────────────────
 
-	/// Java read: project on "volume", sum all values via typed `forEachLong`.
+	/// Java read: project on "volume", sum all values via fold.
 	@Benchmark
 	public long javaReadVolume() throws IOException {
-		long[] sum = {0L};
+		long sum = 0L;
 		try (VortexReader vf = VortexReader.open(benchFile, registry)) {
 			var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("volume"));
 			while (iter.hasNext()) {
 				ScanResult r = iter.next();
-				r.columns().get("volume").forEachLong(v -> sum[0] += v);
+				sum += r.<LongArray>column("volume").fold(0L, Long::sum);
 			}
 		}
-		return sum[0];
+		return sum;
 	}
 
-	/// Java read: project on "close" (F64, ALP-encoded), sum via typed `forEachDouble`.
+	/// Java read: project on "close" (F64, ALP-encoded), sum via fold.
 	@Benchmark
 	public double javaReadClose() throws IOException {
-		double[] sum = {0.0};
+		double sum = 0.0;
 		try (VortexReader vf = VortexReader.open(benchFile, registry)) {
 			var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("close"));
 			while (iter.hasNext()) {
 				ScanResult r = iter.next();
-				r.columns().get("close").forEachDouble(v -> sum[0] += v);
+				sum += r.<DoubleArray>column("close").fold(0.0, Double::sum);
 			}
 		}
-		return sum[0];
+		return sum;
 	}
 
 	/// Java read: project on "symbol" (short UTF-8 string, varbin), sum byte lengths.
