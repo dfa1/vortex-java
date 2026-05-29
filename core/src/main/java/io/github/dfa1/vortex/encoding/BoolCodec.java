@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.encoding;
 import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.array.GenericArray;
 
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
@@ -38,7 +39,7 @@ public final class BoolCodec implements Codec {
 	@Override
 	public Array decode(DecodeContext ctx) {
 		MemorySegment buf = ctx.buffer(0);
-		return new Array(ctx.dtype(), ctx.rowCount(),
+		return new GenericArray(ctx.dtype(), ctx.rowCount(),
 				new MemorySegment[]{buf}, Array.NO_CHILDREN, ArrayStats.empty());
 	}
 }

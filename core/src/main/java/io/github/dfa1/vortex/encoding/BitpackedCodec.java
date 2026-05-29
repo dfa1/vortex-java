@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.array.GenericArray;
 import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.MemorySegment;
@@ -584,7 +585,7 @@ public final class BitpackedCodec implements Codec {
 			applyPatches(ctx, meta.getPatches(), output, ptype.byteSize());
 		}
 
-		return new Array(ctx.dtype(), rowCount,
+		return new GenericArray(ctx.dtype(), rowCount,
 				new MemorySegment[]{output.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
 	}
 

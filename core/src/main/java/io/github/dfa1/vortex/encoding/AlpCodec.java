@@ -8,6 +8,8 @@ import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.core.array.DoubleArray;
+import io.github.dfa1.vortex.core.array.GenericArray;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -137,7 +139,7 @@ public final class AlpCodec implements Codec {
 			applyPatches(ctx, meta.getPatches(), out, LE_LONG, 8);
 		}
 
-		return new Array(ctx.dtype(), n, new MemorySegment[]{out.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
+		return new DoubleArray(ctx.dtype(), n, out.asReadOnly(), ArrayStats.empty());
 	}
 
 	private Array decodeF32(DecodeContext ctx, EncodingProtos.ALPMetadata meta, int expE, int expF, long n) {
@@ -156,7 +158,7 @@ public final class AlpCodec implements Codec {
 			applyPatches(ctx, meta.getPatches(), out, LE_INT, 4);
 		}
 
-		return new Array(ctx.dtype(), n, new MemorySegment[]{out.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
+		return new GenericArray(ctx.dtype(), n, new MemorySegment[]{out.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
 	}
 
 	private void applyPatches(DecodeContext ctx, EncodingProtos.PatchesMetadata pm,

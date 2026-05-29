@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.Layout;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.SegmentSpec;
+import io.github.dfa1.vortex.core.array.GenericArray;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.CodecId;
 import io.github.dfa1.vortex.io.VortexReader;
@@ -232,7 +233,7 @@ public final class ScanIterator implements AutoCloseable {
 			MemorySegment.copy(src, 0, combined, byteOffset, src.byteSize());
 			byteOffset += src.byteSize();
 		}
-		return new Array(dtype, totalRows,
+		return new GenericArray(dtype, totalRows,
 				new MemorySegment[]{combined.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
 	}
 
@@ -307,9 +308,9 @@ public final class ScanIterator implements AutoCloseable {
 			outOffsets.setAtIndex(LE_INT, i + 1, (int) bytePos);
 		}
 
-		Array offsetArr = new Array(new DType.Primitive(PType.I32, false), n + 1,
+		Array offsetArr = new GenericArray(new DType.Primitive(PType.I32, false), n + 1,
 				new MemorySegment[]{outOffsets.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
-		return new Array(dtype, n,
+		return new GenericArray(dtype, n,
 				new MemorySegment[]{outBytes.asReadOnly()},
 				new Array[]{offsetArr},
 				ArrayStats.empty());

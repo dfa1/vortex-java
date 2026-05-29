@@ -4,6 +4,9 @@ import dev.vortex.proto.ScalarProtos;
 import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.array.DoubleArray;
+import io.github.dfa1.vortex.core.array.GenericArray;
+import io.github.dfa1.vortex.core.array.LongArray;
 
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
@@ -277,7 +280,14 @@ public final class PrimitiveCodec implements Codec {
 	@Override
 	public Array decode(DecodeContext ctx) {
 		MemorySegment buf = ctx.buffer(0);
-		return new Array(ctx.dtype(), ctx.rowCount(),
-				new MemorySegment[]{buf}, Array.NO_CHILDREN, ctx.node().stats());
+		long n = ctx.rowCount();
+		DType dt = ctx.dtype();
+		PType ptype = ((DType.Primitive) dt).ptype();
+		return switch (ptype) {
+			case I64, U64 -> new LongArray(dt, n, buf, ctx.node().stats());
+			case F64 -> new DoubleArray(dt, n, buf, ctx.node().stats());
+			default -> new GenericArray(dt, n,
+					new MemorySegment[]{buf}, Array.NO_CHILDREN, ctx.node().stats());
+		};
 	}
 }

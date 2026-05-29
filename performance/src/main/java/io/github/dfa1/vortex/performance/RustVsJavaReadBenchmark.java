@@ -211,44 +211,32 @@ public class RustVsJavaReadBenchmark {
 
 	// ── JNI file generation ───────────────────────────────────────────────────
 
-	/// Java read: project on "volume", sum all values.
+	/// Java read: project on "volume", sum all values via typed `forEachLong`.
 	@Benchmark
 	public long javaReadVolume() throws IOException {
-		long sum = 0L;
+		long[] sum = {0L};
 		try (VortexReader vf = VortexReader.open(benchFile, registry)) {
 			var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("volume"));
 			while (iter.hasNext()) {
 				ScanResult r = iter.next();
-				Array arr = r.columns().get("volume");
-				var layout = ValueLayout.JAVA_LONG_UNALIGNED;
-				MemorySegment buffer = arr.buffer(0);
-				long count = buffer.byteSize() / layout.byteSize();
-				for (long i = 0; i < count; i++) {
-					sum += buffer.getAtIndex(layout, i);
-				}
+				r.columns().get("volume").forEachLong(v -> sum[0] += v);
 			}
 		}
-		return sum;
+		return sum[0];
 	}
 
-	/// Java read: project on "close" (F64, ALP-encoded), sum all values.
+	/// Java read: project on "close" (F64, ALP-encoded), sum via typed `forEachDouble`.
 	@Benchmark
 	public double javaReadClose() throws IOException {
-		double sum = 0.0;
+		double[] sum = {0.0};
 		try (VortexReader vf = VortexReader.open(benchFile, registry)) {
 			var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("close"));
 			while (iter.hasNext()) {
 				ScanResult r = iter.next();
-				Array arr = r.columns().get("close");
-				var layout = ValueLayout.JAVA_DOUBLE_UNALIGNED;
-				MemorySegment buffer = arr.buffer(0);
-				long count = buffer.byteSize() / layout.byteSize();
-				for (long i = 0; i < count; i++) {
-					sum += buffer.getAtIndex(layout, i);
-				}
+				r.columns().get("close").forEachDouble(v -> sum[0] += v);
 			}
 		}
-		return sum;
+		return sum[0];
 	}
 
 	/// Java read: project on "symbol" (short UTF-8 string, varbin), sum byte lengths.

@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.array.GenericArray;
 import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.Arena;
@@ -106,6 +107,6 @@ public final class FrameOfReferenceCodec implements Codec {
 		MemorySegment src = encoded.buffer(0);
 		long n = ctx.rowCount();
 		MemorySegment dst = applyReference(src, n, p.ptype(), ref, ctx.arena());
-		return new Array(ctx.dtype(), n, new MemorySegment[]{dst.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
+		return new GenericArray(ctx.dtype(), n, new MemorySegment[]{dst.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
 	}
 }

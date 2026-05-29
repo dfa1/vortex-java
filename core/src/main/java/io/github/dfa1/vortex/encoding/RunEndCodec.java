@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.array.GenericArray;
 import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.Arena;
@@ -45,7 +46,7 @@ public final class RunEndCodec implements Codec {
 			case I64, U64 -> expandLong(endsSeg, valuesSeg, endsPtype, numRuns, offset, n, out);
 			default -> throw new VortexException(CodecId.VORTEX_RUNEND, "unsupported ptype " + valuePtype);
 		}
-		return new Array(dtype, n, new MemorySegment[]{out.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
+		return new GenericArray(dtype, n, new MemorySegment[]{out.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
 	}
 
 	private static void expandByte(MemorySegment endsSeg, MemorySegment valuesSeg,

@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.array.GenericArray;
 import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.MemorySegment;
@@ -37,7 +38,7 @@ public final class SequenceCodec implements Codec {
 			}
 		}
 		buf.flip();
-		return new Array(dtype, n, new MemorySegment[]{MemorySegment.ofBuffer(buf)},
+		return new GenericArray(dtype, n, new MemorySegment[]{MemorySegment.ofBuffer(buf)},
 				Array.NO_CHILDREN, ArrayStats.empty());
 	}
 
@@ -49,7 +50,7 @@ public final class SequenceCodec implements Codec {
 			buf.putFloat(base + i * mul);
 		}
 		buf.flip();
-		return new Array(dtype, n, new MemorySegment[]{MemorySegment.ofBuffer(buf)},
+		return new GenericArray(dtype, n, new MemorySegment[]{MemorySegment.ofBuffer(buf)},
 				Array.NO_CHILDREN, ArrayStats.empty());
 	}
 
@@ -61,7 +62,7 @@ public final class SequenceCodec implements Codec {
 			buf.putDouble(base + i * mul);
 		}
 		buf.flip();
-		return new Array(dtype, n, new MemorySegment[]{MemorySegment.ofBuffer(buf)},
+		return new GenericArray(dtype, n, new MemorySegment[]{MemorySegment.ofBuffer(buf)},
 				Array.NO_CHILDREN, ArrayStats.empty());
 	}
 

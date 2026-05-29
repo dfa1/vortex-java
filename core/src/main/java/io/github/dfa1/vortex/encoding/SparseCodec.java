@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.array.GenericArray;
 import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.MemorySegment;
@@ -169,7 +170,7 @@ public final class SparseCodec implements Codec {
 		fillSegment(out, n, valuePtype, fillScalar);
 
 		if (numPatches == 0) {
-			return new Array(ctx.dtype(), n,
+			return new GenericArray(ctx.dtype(), n,
 					new MemorySegment[]{out.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
 		}
 
@@ -184,7 +185,7 @@ public final class SparseCodec implements Codec {
 		applyPatches(out, n, valuePtype,
 				indicesArray.buffer(0), valuesArray.buffer(0), indicesPtype, numPatches, offset);
 
-		return new Array(ctx.dtype(), n,
+		return new GenericArray(ctx.dtype(), n,
 				new MemorySegment[]{out.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
 	}
 }

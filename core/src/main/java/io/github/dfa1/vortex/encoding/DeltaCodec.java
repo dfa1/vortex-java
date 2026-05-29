@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.array.GenericArray;
 import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.Arena;
@@ -249,7 +250,7 @@ public final class DeltaCodec implements Codec {
 			}
 		}
 
-		return new Array(ctx.dtype(), rowCount,
+		return new GenericArray(ctx.dtype(), rowCount,
 				new MemorySegment[]{fromLongs(longs, ptype, ctx.arena())}, Array.NO_CHILDREN, ArrayStats.empty());
 	}
 }
