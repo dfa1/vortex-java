@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.io;
 
+import io.github.dfa1.vortex.scan.ScanOptions;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -51,6 +52,24 @@ class VortexHttpReaderIT {
 			assertThat(sut.layout().rowCount()).isGreaterThan(0);
 			assertThat(sut.footer().segmentSpecs()).isNotEmpty();
 		}
+	}
+
+	@Test
+	void scan_forVortex_decodesAllRows() throws Exception {
+		// Given
+		assumeNetworkAvailable();
+
+		// When
+		long totalRows = 0;
+		try (var sut = VortexHttpReader.open(FOR_ARRAY);
+		     var iter = sut.scan(ScanOptions.all())) {
+			while (iter.hasNext()) {
+				totalRows += iter.next().rowCount();
+			}
+		}
+
+		// Then
+		assertThat(totalRows).isGreaterThan(0);
 	}
 
 	private static void assumeNetworkAvailable() {

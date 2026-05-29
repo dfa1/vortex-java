@@ -25,6 +25,18 @@ Never use `mvn install` or `./mvwn install`.
 
 # Run a single test method
 ./mvnw test -pl reader -Dtest=MyTest#myMethod
+
+# Build benchmark fat jar
+./mvnw package -pl performance -am -DskipTests
+
+# Run all benchmarks
+java -jar performance/target/benchmarks.jar
+
+# Run specific benchmark class
+java -jar performance/target/benchmarks.jar RustVsJavaReadBenchmark
+
+# Run specific benchmark method (always use ClassName.methodName filter)
+java -jar performance/target/benchmarks.jar RustVsJavaReadBenchmark.javaReadVolume
 ```
 
 ## Architecture

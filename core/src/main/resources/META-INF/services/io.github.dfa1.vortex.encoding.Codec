@@ -12,3 +12,4 @@ io.github.dfa1.vortex.encoding.ConstantCodec
 io.github.dfa1.vortex.encoding.VarBinCodec
 io.github.dfa1.vortex.encoding.FsstCodec
 io.github.dfa1.vortex.encoding.PcoCodec
+io.github.dfa1.vortex.encoding.StructCodec

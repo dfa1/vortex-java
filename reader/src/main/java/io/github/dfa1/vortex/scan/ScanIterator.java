@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.scan;
 import com.google.protobuf.InvalidProtocolBufferException;
 import dev.vortex.proto.EncodingProtos;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.StructArray;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.Layout;
@@ -191,7 +192,11 @@ public final class ScanIterator implements AutoCloseable {
 		Layout[] layouts = chunk.columnLayouts();
 		int n = projectedNames.size();
 		if (n == 1) {
-			return Map.of(projectedNames.get(0), decodeLayout(layouts[0], projectedDtypes.get(0), arena));
+			Array arr = decodeLayout(layouts[0], projectedDtypes.get(0), arena);
+			if (arr instanceof StructArray sa) {
+				return expandStruct(sa);
+			}
+			return Map.of(projectedNames.get(0), arr);
 		}
 		if (n == 2) {
 			return Map.of(
@@ -203,6 +208,17 @@ public final class ScanIterator implements AutoCloseable {
 			scratch.put(projectedNames.get(i), decodeLayout(layouts[i], projectedDtypes.get(i), arena));
 		}
 		return Map.copyOf(scratch);
+	}
+
+	private static Map<String, Array> expandStruct(StructArray sa) {
+		DType.Struct sd = (DType.Struct) sa.dtype();
+		List<String> names = sd.fieldNames();
+		int n = names.size();
+		var map = new LinkedHashMap<String, Array>(n);
+		for (int i = 0; i < n; i++) {
+			map.put(names.get(i), sa.field(i));
+		}
+		return Map.copyOf(map);
 	}
 
 	private Array decodeLayout(Layout layout, DType dtype, Arena arena) {
