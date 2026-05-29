@@ -299,6 +299,12 @@ public final class ScanIterator implements AutoCloseable {
 		Array values = decodeLayout(valuesLayout, dtype, arena);
 		Array codes  = decodeLayout(codesLayout, new DType.Primitive(codesPType, false), arena);
 
+		if (values instanceof VarBinArray) {
+			MemorySegment valOffsets = values.child(0).buffer(0);
+			PType valOffPType = ((DType.Primitive) values.child(0).dtype()).ptype();
+			return VarBinArray.ofDict(dtype, n, values.buffer(0), valOffsets, valOffPType,
+					codes.buffer(0), codesPType, ArrayStats.empty());
+		}
 		return expandDictStrings(values, codes, codesPType, dtype, n, arena);
 	}
 
