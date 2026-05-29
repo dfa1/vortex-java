@@ -5,9 +5,10 @@ import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.core.array.GenericArray;
+import io.github.dfa1.vortex.core.array.ByteArray;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
+import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.Arena;
@@ -256,8 +257,9 @@ public final class DeltaCodec implements Codec {
 		return switch (ptype) {
 			case I64, U64 -> new LongArray(ctx.dtype(), rowCount, seg, ArrayStats.empty());
 			case I32, U32 -> new IntArray(ctx.dtype(), rowCount, seg, ArrayStats.empty());
-			default -> new GenericArray(ctx.dtype(), rowCount,
-					new MemorySegment[]{seg}, Array.NO_CHILDREN, ArrayStats.empty());
+			case I16, U16 -> new ShortArray(ctx.dtype(), rowCount, seg, ArrayStats.empty());
+			case I8, U8   -> new ByteArray(ctx.dtype(), rowCount, seg, ArrayStats.empty());
+			default -> throw new VortexException(CodecId.FASTLANES_DELTA, "unsupported ptype " + ptype);
 		};
 	}
 }

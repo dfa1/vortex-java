@@ -6,10 +6,11 @@ import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.array.ByteArray;
 import io.github.dfa1.vortex.core.array.DoubleArray;
-import io.github.dfa1.vortex.core.array.GenericArray;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
+import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.Arena;
@@ -110,12 +111,14 @@ public final class FrameOfReferenceCodec implements Codec {
 		MemorySegment src = encoded.buffer(0);
 		long n = ctx.rowCount();
 		MemorySegment dst = applyReference(src, n, p.ptype(), ref, ctx.arena());
+		MemorySegment ro = dst.asReadOnly();
 		return switch (p.ptype()) {
-			case I64, U64 -> new LongArray(ctx.dtype(), n, dst.asReadOnly(), ArrayStats.empty());
-			case I32, U32 -> new IntArray(ctx.dtype(), n, dst.asReadOnly(), ArrayStats.empty());
-			case F64 -> new DoubleArray(ctx.dtype(), n, dst.asReadOnly(), ArrayStats.empty());
-			default -> new GenericArray(ctx.dtype(), n,
-					new MemorySegment[]{dst.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
+			case I64, U64 -> new LongArray(ctx.dtype(), n, ro, ArrayStats.empty());
+			case I32, U32 -> new IntArray(ctx.dtype(), n, ro, ArrayStats.empty());
+			case F64 -> new DoubleArray(ctx.dtype(), n, ro, ArrayStats.empty());
+			case I16, U16 -> new ShortArray(ctx.dtype(), n, ro, ArrayStats.empty());
+			case I8, U8   -> new ByteArray(ctx.dtype(), n, ro, ArrayStats.empty());
+			default -> throw new VortexException(CodecId.FASTLANES_FOR, "unsupported ptype " + p.ptype());
 		};
 	}
 }

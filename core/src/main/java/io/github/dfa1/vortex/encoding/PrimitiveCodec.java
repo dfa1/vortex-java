@@ -4,9 +4,13 @@ import dev.vortex.proto.ScalarProtos;
 import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.array.ByteArray;
 import io.github.dfa1.vortex.core.array.DoubleArray;
-import io.github.dfa1.vortex.core.array.GenericArray;
+import io.github.dfa1.vortex.core.array.FloatArray;
+import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
+import io.github.dfa1.vortex.core.array.ShortArray;
+import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
@@ -283,11 +287,15 @@ public final class PrimitiveCodec implements Codec {
 		long n = ctx.rowCount();
 		DType dt = ctx.dtype();
 		PType ptype = ((DType.Primitive) dt).ptype();
+		var stats = ctx.node().stats();
 		return switch (ptype) {
-			case I64, U64 -> new LongArray(dt, n, buf, ctx.node().stats());
-			case F64 -> new DoubleArray(dt, n, buf, ctx.node().stats());
-			default -> new GenericArray(dt, n,
-					new MemorySegment[]{buf}, Array.NO_CHILDREN, ctx.node().stats());
+			case I64, U64 -> new LongArray(dt, n, buf, stats);
+			case I32, U32 -> new IntArray(dt, n, buf, stats);
+			case F64 -> new DoubleArray(dt, n, buf, stats);
+			case F32 -> new FloatArray(dt, n, buf, stats);
+			case I16, U16 -> new ShortArray(dt, n, buf, stats);
+			case I8, U8 -> new ByteArray(dt, n, buf, stats);
+			default -> throw new VortexException(CodecId.VORTEX_PRIMITIVE, "unsupported ptype " + ptype);
 		};
 	}
 }

@@ -7,9 +7,10 @@ import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.core.array.GenericArray;
+import io.github.dfa1.vortex.core.array.ByteArray;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
+import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.Arena;
@@ -52,7 +53,9 @@ public final class RunEndCodec implements Codec {
 		return switch (valuePtype) {
 			case I64, U64 -> new LongArray(dtype, n, ro, ArrayStats.empty());
 			case I32, U32 -> new IntArray(dtype, n, ro, ArrayStats.empty());
-			default -> new GenericArray(dtype, n, new MemorySegment[]{ro}, Array.NO_CHILDREN, ArrayStats.empty());
+			case I16, U16 -> new ShortArray(dtype, n, ro, ArrayStats.empty());
+			case I8, U8   -> new ByteArray(dtype, n, ro, ArrayStats.empty());
+			default -> throw new VortexException(CodecId.VORTEX_RUNEND, "unsupported ptype " + valuePtype);
 		};
 	}
 

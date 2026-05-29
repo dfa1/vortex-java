@@ -8,7 +8,13 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.Layout;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.SegmentSpec;
-import io.github.dfa1.vortex.core.array.GenericArray;
+import io.github.dfa1.vortex.core.array.ByteArray;
+import io.github.dfa1.vortex.core.array.DoubleArray;
+import io.github.dfa1.vortex.core.array.FloatArray;
+import io.github.dfa1.vortex.core.array.IntArray;
+import io.github.dfa1.vortex.core.array.LongArray;
+import io.github.dfa1.vortex.core.array.ShortArray;
+import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.CodecId;
 import io.github.dfa1.vortex.io.VortexReader;
@@ -233,8 +239,16 @@ public final class ScanIterator implements AutoCloseable {
 			MemorySegment.copy(src, 0, combined, byteOffset, src.byteSize());
 			byteOffset += src.byteSize();
 		}
-		return new GenericArray(dtype, totalRows,
-				new MemorySegment[]{combined.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
+		MemorySegment ro = combined.asReadOnly();
+		return switch (ptype) {
+			case I64, U64 -> new LongArray(dtype, totalRows, ro, ArrayStats.empty());
+			case I32, U32 -> new IntArray(dtype, totalRows, ro, ArrayStats.empty());
+			case F64 -> new DoubleArray(dtype, totalRows, ro, ArrayStats.empty());
+			case F32 -> new FloatArray(dtype, totalRows, ro, ArrayStats.empty());
+			case I16, U16 -> new ShortArray(dtype, totalRows, ro, ArrayStats.empty());
+			case I8, U8   -> new ByteArray(dtype, totalRows, ro, ArrayStats.empty());
+			default -> throw new VortexException("unsupported ptype for concat: " + ptype);
+		};
 	}
 
 	private Array decodeFlat(Layout flat, DType dtype, Arena arena) {
@@ -308,12 +322,9 @@ public final class ScanIterator implements AutoCloseable {
 			outOffsets.setAtIndex(LE_INT, i + 1, (int) bytePos);
 		}
 
-		Array offsetArr = new GenericArray(new DType.Primitive(PType.I32, false), n + 1,
-				new MemorySegment[]{outOffsets.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
-		return new GenericArray(dtype, n,
-				new MemorySegment[]{outBytes.asReadOnly()},
-				new Array[]{offsetArr},
-				ArrayStats.empty());
+		DType i32 = new DType.Primitive(PType.I32, false);
+		Array offsetArr = new IntArray(i32, n + 1, outOffsets.asReadOnly(), ArrayStats.empty());
+		return new VarBinArray(dtype, n, outBytes.asReadOnly(), offsetArr, PType.I32, ArrayStats.empty());
 	}
 
 	private static long readUnsigned(MemorySegment seg, long idx, PType ptype) {

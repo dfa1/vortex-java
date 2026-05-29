@@ -1,12 +1,11 @@
 package io.github.dfa1.vortex.core;
 
-import io.github.dfa1.vortex.core.array.GenericArray;
+import io.github.dfa1.vortex.core.array.EmptyArray;
 
 import java.lang.foreign.MemorySegment;
 
-/// Decoded columnar data. Concrete subtypes specialise element access for the
-/// JIT; [GenericArray] is the legacy multi-buffer fallback used by codecs that
-/// haven't been migrated yet.
+/// Decoded columnar data. Concrete subtypes in [io.github.dfa1.vortex.core.array]
+/// specialise element access for the JIT; each covers a specific dtype family.
 ///
 /// Buffers are `MemorySegment` slices backed by the memory-mapped file; lifetime
 /// is tied to the `VortexFile`'s Arena.
@@ -18,10 +17,8 @@ import java.lang.foreign.MemorySegment;
 /// should implement this interface.
 public interface Array extends ArrayOperations {
 
-	Array[] NO_CHILDREN = new Array[0];
-
 	static Array empty(DType dtype) {
-		return new GenericArray(dtype, 0, new MemorySegment[0], NO_CHILDREN, ArrayStats.empty());
+		return new EmptyArray(dtype);
 	}
 
 	default ArrayStats stats() {
