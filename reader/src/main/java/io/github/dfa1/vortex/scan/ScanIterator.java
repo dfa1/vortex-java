@@ -1,14 +1,18 @@
 package io.github.dfa1.vortex.scan;
 
+import com.google.protobuf.InvalidProtocolBufferException;
+import dev.vortex.proto.EncodingProtos;
 import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.Layout;
+import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.SegmentSpec;
 import io.github.dfa1.vortex.io.VortexReader;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
@@ -48,6 +52,9 @@ public final class ScanIterator implements AutoCloseable {
 
 	private static void collectFlats(Layout layout, List<Layout> out) {
 		if (layout.isFlat()) {
+			out.add(layout);
+		} else if (layout.isDict()) {
+			// Dict layout is a leaf chunk — decoded as a unit (values + codes).
 			out.add(layout);
 		} else if (layout.isZoned()) {
 			// vortex.stats wraps one child (the data layout) — pass through for data
@@ -171,18 +178,56 @@ public final class ScanIterator implements AutoCloseable {
 		Layout[] layouts = chunk.columnLayouts();
 		int n = projectedNames.size();
 		if (n == 1) {
-			return Map.of(projectedNames.get(0), decodeFlat(layouts[0], projectedDtypes.get(0), arena));
+			return Map.of(projectedNames.get(0), decodeLayout(layouts[0], projectedDtypes.get(0), arena));
 		}
 		if (n == 2) {
 			return Map.of(
-					projectedNames.get(0), decodeFlat(layouts[0], projectedDtypes.get(0), arena),
-					projectedNames.get(1), decodeFlat(layouts[1], projectedDtypes.get(1), arena));
+					projectedNames.get(0), decodeLayout(layouts[0], projectedDtypes.get(0), arena),
+					projectedNames.get(1), decodeLayout(layouts[1], projectedDtypes.get(1), arena));
 		}
 		var scratch = new LinkedHashMap<String, Array>(n);
 		for (int i = 0; i < n; i++) {
-			scratch.put(projectedNames.get(i), decodeFlat(layouts[i], projectedDtypes.get(i), arena));
+			scratch.put(projectedNames.get(i), decodeLayout(layouts[i], projectedDtypes.get(i), arena));
 		}
 		return Map.copyOf(scratch);
+	}
+
+	private Array decodeLayout(Layout layout, DType dtype, Arena arena) {
+		if (layout.isFlat()) {
+			return decodeFlat(layout, dtype, arena);
+		}
+		if (layout.isDict()) {
+			return decodeDictLayout(layout, dtype, arena);
+		}
+		if (layout.isZoned() && !layout.children().isEmpty()) {
+			return decodeLayout(layout.children().get(0), dtype, arena);
+		}
+		if (layout.isChunked()) {
+			var flats = new ArrayList<Layout>();
+			collectFlats(layout, flats);
+			return decodeConcatPrimitive(flats, dtype, layout.rowCount(), arena);
+		}
+		throw new IllegalStateException("vortex: cannot decode layout " + layout.encodingId());
+	}
+
+	private Array decodeConcatPrimitive(List<Layout> flats, DType dtype, long totalRows, Arena arena) {
+		if (flats.isEmpty()) {
+			throw new IllegalStateException("vortex: chunked layout has no flat children");
+		}
+		if (flats.size() == 1) {
+			return decodeFlat(flats.get(0), dtype, arena);
+		}
+		PType ptype = ((DType.Primitive) dtype).ptype();
+		MemorySegment combined = arena.allocate(totalRows * ptype.byteSize());
+		long byteOffset = 0;
+		for (Layout flat : flats) {
+			Array chunk = decodeFlat(flat, dtype, arena);
+			MemorySegment src = chunk.buffer(0);
+			MemorySegment.copy(src, 0, combined, byteOffset, src.byteSize());
+			byteOffset += src.byteSize();
+		}
+		return new Array(dtype, totalRows,
+				new MemorySegment[]{combined.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
 	}
 
 	private Array decodeFlat(Layout flat, DType dtype, Arena arena) {
@@ -193,6 +238,92 @@ public final class ScanIterator implements AutoCloseable {
 		SegmentSpec spec = file.footer().segmentSpecs().get(segIdx);
 		MemorySegment seg = file.slice(spec.offset(), spec.length());
 		return file.registry().decodeSegment(seg, file.footer().arraySpecs(), dtype, flat.rowCount(), arena);
+	}
+
+	private Array decodeDictLayout(Layout dictLayout, DType dtype, Arena arena) {
+		ByteBuffer rawMeta = dictLayout.metadata();
+		if (rawMeta == null) {
+			throw new IllegalStateException("vortex.dict layout: missing metadata");
+		}
+		EncodingProtos.DictLayoutMetadata meta;
+		try {
+			meta = EncodingProtos.DictLayoutMetadata.parseFrom(rawMeta.duplicate());
+		} catch (InvalidProtocolBufferException e) {
+			throw new IllegalStateException("vortex.dict layout: invalid metadata", e);
+		}
+		PType codesPType = PType.values()[meta.getCodesPtype().getNumber()];
+
+		// child[0] = values layout; child[1] = codes layout
+		Layout valuesLayout = dictLayout.children().get(0);
+		Layout codesLayout  = dictLayout.children().get(1);
+		long valuesLen = valuesLayout.rowCount();
+		long n         = codesLayout.rowCount();
+
+		Array values = decodeLayout(valuesLayout, dtype, arena);
+		Array codes  = decodeLayout(codesLayout, new DType.Primitive(codesPType, false), arena);
+
+		return expandDictStrings(values, codes, codesPType, dtype, n, arena);
+	}
+
+	private static Array expandDictStrings(
+			Array values, Array codes,
+			PType codesPType, DType dtype,
+			long n, Arena arena
+	) {
+		MemorySegment valBytes   = values.buffer(0);
+		MemorySegment valOffsets = values.child(0).buffer(0);
+		PType valOffPType        = ((DType.Primitive) values.child(0).dtype()).ptype();
+		MemorySegment codesSegs  = codes.buffer(0);
+
+		var outOffLayout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+
+		// First pass: total output byte length
+		long totalBytes = 0L;
+		for (long i = 0; i < n; i++) {
+			long code  = readUnsigned(codesSegs, i, codesPType);
+			long start = readUnsigned(valOffsets, code, valOffPType);
+			long end   = readUnsigned(valOffsets, code + 1, valOffPType);
+			totalBytes += end - start;
+		}
+
+		MemorySegment outBytes   = arena.allocate(totalBytes > 0 ? totalBytes : 1);
+		MemorySegment outOffsets = arena.allocate((n + 1) * 4L, 4);
+		outOffsets.setAtIndex(outOffLayout, 0, 0);
+
+		long bytePos = 0L;
+		for (long i = 0; i < n; i++) {
+			long code  = readUnsigned(codesSegs, i, codesPType);
+			long start = readUnsigned(valOffsets, code, valOffPType);
+			long end   = readUnsigned(valOffsets, code + 1, valOffPType);
+			long strLen = end - start;
+			if (strLen > 0) {
+				MemorySegment.copy(valBytes, start, outBytes, bytePos, strLen);
+				bytePos += strLen;
+			}
+			outOffsets.setAtIndex(outOffLayout, i + 1, (int) bytePos);
+		}
+
+		Array offsetArr = new Array(new DType.Primitive(PType.I32, false), n + 1,
+				new MemorySegment[]{outOffsets.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
+		return new Array(dtype, n,
+				new MemorySegment[]{outBytes.asReadOnly()},
+				new Array[]{offsetArr},
+				ArrayStats.empty());
+	}
+
+	private static long readUnsigned(MemorySegment seg, long idx, PType ptype) {
+		return switch (ptype) {
+			case U8  -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, idx));
+			case U16 -> Short.toUnsignedLong(seg.get(
+					ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), idx * 2));
+			case U32 -> Integer.toUnsignedLong(seg.getAtIndex(
+					ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), idx));
+			case I32 -> seg.getAtIndex(
+					ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), idx);
+			case I64, U64 -> seg.getAtIndex(
+					ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), idx);
+			default  -> throw new IllegalArgumentException("dict layout: unsupported ptype " + ptype);
+		};
 	}
 
 	private boolean canPruneChunk(ChunkSpec chunk, RowFilter filter) {

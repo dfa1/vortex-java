@@ -42,12 +42,12 @@ import org.openjdk.jmh.annotations.Warmup;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
+import java.util.Arrays;
 import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
@@ -276,11 +276,25 @@ public class RustVsJavaReadBenchmark {
 		return sum;
 	}
 
+	// Real Nasdaq tickers — mix of lengths (1–5 chars) for realistic varbin distribution.
+	private static final String[] NASDAQ_TICKERS = {
+			"AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "TSLA", "AVGO", "COST", "NFLX",
+			"AMD", "ADBE", "QCOM", "PEP", "CSCO", "TXN", "INTC", "CMCSA", "INTU", "AMGN",
+			"HON", "AMAT", "MU", "LRCX", "KLAC", "MRVL", "PANW", "SNPS", "CDNS", "REGN"
+	};
+	private static final byte[][] TICKER_BYTES;
+
+	static {
+		TICKER_BYTES = new byte[NASDAQ_TICKERS.length][];
+		for (int i = 0; i < NASDAQ_TICKERS.length; i++) {
+			TICKER_BYTES[i] = NASDAQ_TICKERS[i].getBytes(StandardCharsets.UTF_8);
+		}
+	}
+
 	private void writeJni(Path path) throws IOException {
 		String uri = path.toAbsolutePath().toUri().toString();
 		try (dev.vortex.api.VortexWriter writer = dev.vortex.api.VortexWriter.create(
 				SESSION, uri, JNI_SCHEMA, new HashMap<>(), allocator)) {
-			var batch = new ArrayList<double[]>(BATCH_SIZE);
 			// reuse arrays — filled per-batch
 			int[] epochDays = new int[BATCH_SIZE];
 			byte[][] symbols = new byte[BATCH_SIZE][];
@@ -290,29 +304,35 @@ public class RustVsJavaReadBenchmark {
 			double[] close = new double[BATCH_SIZE];
 			long[] volume = new long[BATCH_SIZE];
 
+			// Per-ticker price state so each symbol has independent price evolution.
+			double[] prices = new double[NASDAQ_TICKERS.length];
+			Arrays.fill(prices, 100.0);
+
 			var rng = new Random(42L);
-			double px = 100.0;
 			int day = (int) LocalDate.of(2020, 1, 2).toEpochDay();
 			int rowsLeft = TOTAL_ROWS;
 
 			while (rowsLeft > 0) {
 				int n = Math.min(rowsLeft, BATCH_SIZE);
 				for (int i = 0; i < n; i++) {
+					int ticker = i % NASDAQ_TICKERS.length;
+					double px = prices[ticker];
 					double ret = rng.nextGaussian() * 0.02;
 					double o = round(px * (1 + ret * 0.3));
 					double c = round(px * (1 + ret));
 					double rng2 = Math.abs(px * rng.nextDouble() * 0.03);
 					double h = round(Math.max(o, c) + rng2);
 					double l = round(Math.min(o, c) - rng2);
-					epochDays[i] = day++;
-					symbols[i] = "ACME".getBytes(StandardCharsets.UTF_8);
+					epochDays[i] = day + i / NASDAQ_TICKERS.length;
+					symbols[i] = TICKER_BYTES[ticker];
 					open[i] = o;
 					high[i] = h;
 					low[i] = l;
 					close[i] = c;
 					volume[i] = Math.max(100_000L, Math.round(1_000_000 + rng.nextGaussian() * 200_000));
-					px = c;
+					prices[ticker] = c;
 				}
+				day += n / NASDAQ_TICKERS.length;
 				flushJni(writer, epochDays, symbols, open, high, low, close, volume, n);
 				rowsLeft -= n;
 			}

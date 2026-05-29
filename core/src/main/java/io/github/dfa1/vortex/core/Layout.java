@@ -37,4 +37,8 @@ public record Layout(
 	public boolean isZoned() {
 		return ZONED.equals(encodingId);
 	}
+
+	public boolean isDict() {
+		return DICT.equals(encodingId);
+	}
 }

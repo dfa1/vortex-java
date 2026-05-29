@@ -54,3 +54,15 @@ message SequenceMetadata {
 message VarBinMetadata {
   vortex.dtype.PType offsets_ptype = 1;
 }
+
+message FSSTMetadata {
+  vortex.dtype.PType uncompressed_lengths_ptype = 1;
+  vortex.dtype.PType codes_offsets_ptype = 2;
+}
+
+// Layout-level dict metadata (different field ordering from codec DictMetadata).
+message DictLayoutMetadata {
+  vortex.dtype.PType codes_ptype = 1;
+  optional bool is_nullable_codes = 2;
+  optional bool all_values_referenced = 3;
+}

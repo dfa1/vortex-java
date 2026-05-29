@@ -17,6 +17,7 @@ public enum CodecId {
 	VORTEX_ALP("vortex.alp"),
 	VORTEX_BITPACKED("vortex.bitpacked"),
 	VORTEX_VARBIN("vortex.varbin"),
+	VORTEX_FSST("vortex.fsst"),
 	VORTEX_NULL("vortex.null"),
 
 	// Layout encoding IDs included so parser/registry can represent them safely
