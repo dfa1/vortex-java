@@ -50,12 +50,6 @@
     - [ ] Parquet baseline for comparison: same data should fail or require splitting when any
       column chunk exceeds 2 GB.
 
-## Checkstyle
-
-- [ ] Re-enable `TodoComment` in `checkstyle.xml` once all inline TODOs are resolved:
-    - `VortexReader.java:73` — explain why reader should be closed
-    - `PType.java:38`, `PTypeIO.java:49`, `DictCodec.java:228` — implement F16
-
 ## Array API
 
 ### Typed accessors (in progress)

@@ -53,6 +53,10 @@
 
 		<module name="ArrayTypeStyle"/>
 		<module name="UpperEll"/>
+
+		<module name="TodoComment">
+			<property name="format" value="TODO:"/>
+		</module>
 	</module>
 
 </module>
