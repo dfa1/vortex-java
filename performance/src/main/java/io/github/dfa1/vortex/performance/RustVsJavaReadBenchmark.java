@@ -61,10 +61,10 @@ import java.util.concurrent.TimeUnit;
 /// Both benchmarks project onto the "close" column (F64) and sum all values so
 /// the JVM can't optimise away the decode work.
 ///
-/// Run: java -jar performance/target/benchmarks.jar JniVsJavaReadBenchmark
+/// Run: java -jar performance/target/benchmarks.jar RustVsJavaReadBenchmark
 ///
 /// To test against a pre-existing JNI-written file:
-///   java -Dvortex.bench.ohlc=/path/to/file.vtx -jar target/benchmarks.jar JniVsJavaReadBenchmark
+///   java -Dvortex.bench.ohlc=/path/to/file.vtx -jar target/benchmarks.jar RustVsJavaReadBenchmark
 @State(Scope.Benchmark)
 @BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.SECONDS)
@@ -75,7 +75,7 @@ import java.util.concurrent.TimeUnit;
 		"--enable-native-access=ALL-UNNAMED",
 		"--sun-misc-unsafe-memory-access=allow"
 })
-public class JniVsJavaReadBenchmark {
+public class RustVsJavaReadBenchmark {
 
 	private static final int TOTAL_ROWS = 10_000_000;
 	private static final int BATCH_SIZE = 50_000;   // 20 chunks
@@ -113,13 +113,13 @@ public class JniVsJavaReadBenchmark {
 		if (externalFile != null && !externalFile.isEmpty()) {
 			benchFile = Path.of(externalFile);
 			ownFile = false;
-			System.out.printf("[JniVsJavaReadBenchmark] using external file: %s%n", benchFile);
+			System.out.printf("[RustVsJavaReadBenchmark] using external file: %s%n", benchFile);
 		} else {
 			benchFile = Files.createTempFile("ohlc-bench", ".vtx");
 			ownFile = true;
-			System.out.printf("[JniVsJavaReadBenchmark] writing %d OHLC rows via JNI...%n", TOTAL_ROWS);
+			System.out.printf("[RustVsJavaReadBenchmark] writing %d OHLC rows via JNI...%n", TOTAL_ROWS);
 			writeJni(benchFile);
-			System.out.printf("[JniVsJavaReadBenchmark] file size: %.1f MB%n",
+			System.out.printf("[RustVsJavaReadBenchmark] file size: %.1f MB%n",
 					Files.size(benchFile) / 1_048_576.0);
 		}
 	}

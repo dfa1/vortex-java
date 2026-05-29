@@ -6,7 +6,7 @@ Pure-Java reader/writer for the [Vortex](https://github.com/spiraldb/vortex) col
 
 ## Performance
 
-`JniVsJavaReadBenchmark` — 10M OHLC rows, project + sum `volume` (I64) column,
+`RustVsJavaReadBenchmark` — 10M OHLC rows, project + sum `volume` (I64) column,
 JMH throughput (higher = better), Apple M-series, Java 25:
 
 | Reader        | Throughput  | vs JNI  |
