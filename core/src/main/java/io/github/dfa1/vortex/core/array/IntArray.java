@@ -3,8 +3,6 @@ package io.github.dfa1.vortex.core.array;
 import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
-
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteOrder;
@@ -53,19 +51,10 @@ public final class IntArray implements Array {
 		return buffer;
 	}
 
-	@Override
 	public int getInt(long i) {
 		return buffer.getAtIndex(LAYOUT, i);
 	}
 
-	@Override
-	public long getLong(long i) {
-		int raw = buffer.getAtIndex(LAYOUT, i);
-		boolean unsigned = dtype instanceof DType.Primitive p && p.ptype() == PType.U32;
-		return unsigned ? Integer.toUnsignedLong(raw) : raw;
-	}
-
-	@Override
 	public void forEachInt(IntConsumer c) {
 		MemorySegment buf = buffer;
 		long n = length;

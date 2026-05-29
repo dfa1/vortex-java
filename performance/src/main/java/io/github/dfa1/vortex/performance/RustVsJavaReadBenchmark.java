@@ -10,6 +10,7 @@ import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.LongArray;
+import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.encoding.CodecRegistry;
 import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.ScanResult;
@@ -246,7 +247,7 @@ public class RustVsJavaReadBenchmark {
 			var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("symbol"));
 			while (iter.hasNext()) {
 				ScanResult r = iter.next();
-				r.columns().get("symbol").forEachByteLength(v -> sum[0] += v);
+				((VarBinArray) r.columns().get("symbol")).forEachByteLength(v -> sum[0] += v);
 			}
 		}
 		return sum[0];

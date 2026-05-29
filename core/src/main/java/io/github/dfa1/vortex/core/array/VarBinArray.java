@@ -75,7 +75,6 @@ public final class VarBinArray implements Array {
 		return offsetsArr;
 	}
 
-	@Override
 	public byte[] getBytes(long i) {
 		long start = readOffset(i);
 		long end   = readOffset(i + 1);
@@ -84,12 +83,10 @@ public final class VarBinArray implements Array {
 		return out;
 	}
 
-	@Override
 	public int getByteLength(long i) {
 		return (int) (readOffset(i + 1) - readOffset(i));
 	}
 
-	@Override
 	public void forEachByteLength(IntConsumer c) {
 		MemorySegment seg = offsetsSeg;
 		long n = length;

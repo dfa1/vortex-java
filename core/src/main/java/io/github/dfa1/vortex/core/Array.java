@@ -15,11 +15,11 @@ import java.lang.foreign.MemorySegment;
 /// JLS only allows cross-package `permits` inside the same named module. The
 /// effective hierarchy is still closed: only types in [io.github.dfa1.vortex.core.array]
 /// should implement this interface.
-public interface Array extends ArrayOperations {
+public interface Array {
 
-	static Array empty(DType dtype) {
-		return new EmptyArray(dtype);
-	}
+	long length();
+
+	DType dtype();
 
 	default ArrayStats stats() {
 		return ArrayStats.empty();
@@ -31,5 +31,9 @@ public interface Array extends ArrayOperations {
 
 	default Array child(int i) {
 		throw new VortexException(getClass().getSimpleName() + " has no children");
+	}
+
+	static Array empty(DType dtype) {
+		return new EmptyArray(dtype);
 	}
 }

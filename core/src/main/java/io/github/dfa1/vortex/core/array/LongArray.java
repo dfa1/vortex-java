@@ -53,17 +53,10 @@ public final class LongArray implements Array {
 		return buffer;
 	}
 
-	@Override
 	public long getLong(long i) {
 		return buffer.getAtIndex(LAYOUT, i);
 	}
 
-	@Override
-	public int getInt(long i) {
-		return (int) buffer.getAtIndex(LAYOUT, i);
-	}
-
-	@Override
 	public void forEachLong(LongConsumer c) {
 		MemorySegment buf = buffer;
 		long n = length;

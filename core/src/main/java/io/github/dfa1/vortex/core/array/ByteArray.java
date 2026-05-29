@@ -46,20 +46,13 @@ public final class ByteArray implements Array {
 		return buffer;
 	}
 
-	@Override
 	public byte getByte(long i) {
 		return buffer.get(ValueLayout.JAVA_BYTE, i);
 	}
 
-	@Override
-	public long getLong(long i) {
+	public int getInt(long i) {
 		byte raw = buffer.get(ValueLayout.JAVA_BYTE, i);
 		boolean unsigned = dtype instanceof DType.Primitive p && p.ptype() == PType.U8;
-		return unsigned ? Byte.toUnsignedLong(raw) : raw;
-	}
-
-	@Override
-	public int getInt(long i) {
-		return (int) getLong(i);
+		return unsigned ? Byte.toUnsignedInt(raw) : raw;
 	}
 }

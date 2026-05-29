@@ -45,7 +45,6 @@ public final class BoolArray implements Array {
 		return buffer;
 	}
 
-	@Override
 	public boolean getBoolean(long i) {
 		byte b = buffer.get(ValueLayout.JAVA_BYTE, i >>> 3);
 		return (b & (1 << (i & 7))) != 0;

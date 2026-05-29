@@ -50,20 +50,13 @@ public final class ShortArray implements Array {
 		return buffer;
 	}
 
-	@Override
 	public short getShort(long i) {
 		return buffer.getAtIndex(LAYOUT, i);
 	}
 
-	@Override
-	public long getLong(long i) {
+	public int getInt(long i) {
 		short raw = buffer.getAtIndex(LAYOUT, i);
 		boolean unsigned = dtype instanceof DType.Primitive p && p.ptype() == PType.U16;
-		return unsigned ? Short.toUnsignedLong(raw) : raw;
-	}
-
-	@Override
-	public int getInt(long i) {
-		return (int) getLong(i);
+		return unsigned ? Short.toUnsignedInt(raw) : raw;
 	}
 }

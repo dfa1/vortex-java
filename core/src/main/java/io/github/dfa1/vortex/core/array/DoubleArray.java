@@ -53,12 +53,10 @@ public final class DoubleArray implements Array {
 		return buffer;
 	}
 
-	@Override
 	public double getDouble(long i) {
 		return buffer.getAtIndex(LAYOUT, i);
 	}
 
-	@Override
 	public void forEachDouble(DoubleConsumer c) {
 		MemorySegment buf = buffer;
 		long n = length;

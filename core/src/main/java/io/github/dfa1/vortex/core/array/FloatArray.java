@@ -50,13 +50,7 @@ public final class FloatArray implements Array {
 		return buffer;
 	}
 
-	@Override
 	public float getFloat(long i) {
-		return buffer.getAtIndex(LAYOUT, i);
-	}
-
-	@Override
-	public double getDouble(long i) {
 		return buffer.getAtIndex(LAYOUT, i);
 	}
 }
