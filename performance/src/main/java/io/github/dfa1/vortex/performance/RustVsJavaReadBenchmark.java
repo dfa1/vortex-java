@@ -157,6 +157,32 @@ public class RustVsJavaReadBenchmark {
 		return sum;
 	}
 
+	/// JNI read: project on "close" (F64, ALP-encoded), sum all values.
+	@Benchmark
+	public double jniReadClose() throws IOException {
+		String uri = benchFile.toAbsolutePath().toUri().toString();
+		var opts = ScanOptions.builder()
+				.projection(Expression.select(new String[]{"close"}, Expression.root()))
+				.build();
+
+		double sum = 0.0;
+		DataSource ds = DataSource.open(SESSION, uri);
+		Scan scan = ds.scan(opts);
+		while (scan.hasNext()) {
+			Partition partition = scan.next();
+			try (ArrowReader reader = partition.scanArrow(allocator)) {
+				while (reader.loadNextBatch()) {
+					VectorSchemaRoot root = reader.getVectorSchemaRoot();
+					Float8Vector closeVec = (Float8Vector) root.getVector("close");
+					for (int i = 0; i < root.getRowCount(); i++) {
+						sum += closeVec.get(i);
+					}
+				}
+			}
+		}
+		return sum;
+	}
+
 	// ── JNI file generation ───────────────────────────────────────────────────
 
 	/// Java read: project on "volume", sum all values.
@@ -169,6 +195,26 @@ public class RustVsJavaReadBenchmark {
 				ScanResult r = iter.next();
 				Array arr = r.columns().get("volume");
 				var layout = ValueLayout.JAVA_LONG_UNALIGNED;
+				MemorySegment buffer = arr.buffer(0);
+				long count = buffer.byteSize() / layout.byteSize();
+				for (long i = 0; i < count; i++) {
+					sum += buffer.getAtIndex(layout, i);
+				}
+			}
+		}
+		return sum;
+	}
+
+	/// Java read: project on "close" (F64, ALP-encoded), sum all values.
+	@Benchmark
+	public double javaReadClose() throws IOException {
+		double sum = 0.0;
+		try (VortexReader vf = VortexReader.open(benchFile, registry)) {
+			var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("close"));
+			while (iter.hasNext()) {
+				ScanResult r = iter.next();
+				Array arr = r.columns().get("close");
+				var layout = ValueLayout.JAVA_DOUBLE_UNALIGNED;
 				MemorySegment buffer = arr.buffer(0);
 				long count = buffer.byteSize() / layout.byteSize();
 				for (long i = 0; i < count; i++) {
