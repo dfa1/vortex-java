@@ -58,7 +58,7 @@ public final class DictCodec implements Codec {
 			case I64, U64 -> ((long[]) data).length;
 			case F32 -> ((float[]) data).length;
 			case F64 -> ((double[]) data).length;
-			case F16 -> throw new UnsupportedOperationException("F16 not supported");
+			case F16 -> ((short[]) data).length;
 		};
 	}
 
@@ -67,12 +67,11 @@ public final class DictCodec implements Codec {
 	private static Object readElement(Object data, PType ptype, int i) {
 		return switch (ptype) {
 			case I8, U8 -> ((byte[]) data)[i];
-			case I16, U16 -> ((short[]) data)[i];
+			case I16, U16, F16 -> ((short[]) data)[i];
 			case I32, U32 -> ((int[]) data)[i];
 			case I64, U64 -> ((long[]) data)[i];
 			case F32 -> ((float[]) data)[i];
 			case F64 -> ((double[]) data)[i];
-			case F16 -> throw new UnsupportedOperationException("F16 not supported");
 		};
 	}
 
@@ -126,7 +125,14 @@ public final class DictCodec implements Codec {
 				}
 				yield a;
 			}
-			case F16 -> throw new UnsupportedOperationException("F16 not supported"); // TODO: implement F16
+			case F16 -> {
+				short[] a = new short[dictSize];
+				int i = 0;
+				for (Object v : uniques) {
+					a[i++] = (Short) v;
+				}
+				yield a;
+			}
 		};
 	}
 

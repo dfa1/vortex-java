@@ -1,0 +1,56 @@
+package io.github.dfa1.vortex.core.array;
+
+import io.github.dfa1.vortex.core.ArrayStats;
+import io.github.dfa1.vortex.core.DType;
+
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import java.nio.ByteOrder;
+
+/// Concrete [Array] for F16 (IEEE 754 half-precision) columns.
+/// Wire format: little-endian shorts (2 bytes/element). Element access
+/// widens to `float` via [Float#float16ToFloat].
+public final class Float16Array implements Array {
+
+	private static final ValueLayout.OfShort LAYOUT =
+			ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+
+	private final DType dtype;
+	private final long length;
+	private final MemorySegment buffer;
+	private final ArrayStats stats;
+
+	public Float16Array(DType dtype, long length, MemorySegment buffer, ArrayStats stats) {
+		this.dtype = dtype;
+		this.length = length;
+		this.buffer = buffer;
+		this.stats = stats;
+	}
+
+	@Override
+	public DType dtype() {
+		return dtype;
+	}
+
+	@Override
+	public long length() {
+		return length;
+	}
+
+	@Override
+	public ArrayStats stats() {
+		return stats;
+	}
+
+	@Override
+	public MemorySegment buffer(int i) {
+		if (i != 0) {
+			throw new IndexOutOfBoundsException(i);
+		}
+		return buffer;
+	}
+
+	public float getFloat(long i) {
+		return Float.float16ToFloat(buffer.getAtIndex(LAYOUT, i));
+	}
+}

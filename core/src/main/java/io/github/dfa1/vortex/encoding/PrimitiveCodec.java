@@ -6,12 +6,11 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.ByteArray;
 import io.github.dfa1.vortex.core.array.DoubleArray;
+import io.github.dfa1.vortex.core.array.Float16Array;
 import io.github.dfa1.vortex.core.array.FloatArray;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
-import io.github.dfa1.vortex.core.VortexException;
-
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -64,7 +63,14 @@ public final class PrimitiveCodec implements Codec {
 				}
 				yield bb.flip();
 			}
-			case F16 -> throw new UnsupportedOperationException("F16 not supported");
+			case F16 -> {
+				short[] arr = (short[]) data;
+				var bb = ByteBuffer.allocate(arr.length * elementBytes).order(ByteOrder.LITTLE_ENDIAN);
+				for (short v : arr) {
+					bb.putShort(v);
+				}
+				yield bb.flip();
+			}
 		};
 	}
 
@@ -233,7 +239,23 @@ public final class PrimitiveCodec implements Codec {
 				}
 				yield new byte[][]{scalarF64(min), scalarF64(max)};
 			}
-			case F16 -> null;
+			case F16 -> {
+				short[] arr = (short[]) data;
+				if (arr.length == 0) {
+					yield null;
+				}
+				float min = Float.float16ToFloat(arr[0]), max = Float.float16ToFloat(arr[0]);
+				for (short v : arr) {
+					float fv = Float.float16ToFloat(v);
+					if (fv < min) {
+						min = fv;
+					}
+					if (fv > max) {
+						max = fv;
+					}
+				}
+				yield new byte[][]{scalarF32(min), scalarF32(max)};
+			}
 		};
 	}
 
@@ -295,7 +317,7 @@ public final class PrimitiveCodec implements Codec {
 			case F32 -> new FloatArray(dt, n, buf, stats);
 			case I16, U16 -> new ShortArray(dt, n, buf, stats);
 			case I8, U8 -> new ByteArray(dt, n, buf, stats);
-			default -> throw new VortexException(CodecId.VORTEX_PRIMITIVE, "unsupported ptype " + ptype);
+			case F16 -> new Float16Array(dt, n, buf, stats);
 		};
 	}
 }

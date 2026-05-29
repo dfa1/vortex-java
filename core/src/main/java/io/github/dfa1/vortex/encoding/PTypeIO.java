@@ -39,7 +39,7 @@ final class PTypeIO {
 			case I64, U64 -> LE_LONG;
 			case F32      -> LE_FLOAT;
 			case F64      -> LE_DOUBLE;
-			case F16      -> throw new UnsupportedOperationException("F16 not supported");
+			case F16      -> LE_SHORT;
 		};
 	}
 
@@ -66,9 +66,6 @@ final class PTypeIO {
 		MethodHandle longBitsToFloat = MethodHandles.filterArguments(intBitsToFloat, 0, longToInt);
 
 		for (PType p : PType.values()) {
-			if (p == PType.F16) {
-				continue; // TODO: implement F16
-			}
 			VarHandle vh = valueLayout(p).varHandle();
 			// VarHandle SET access: (MemorySegment, long offset, T) -> void
 			MethodHandle setter = vh.toMethodHandle(VarHandle.AccessMode.SET);
