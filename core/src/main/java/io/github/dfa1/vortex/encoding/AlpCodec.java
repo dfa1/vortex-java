@@ -80,6 +80,11 @@ public final class AlpCodec implements Codec {
 		return CodecId.VORTEX_ALP;
 	}
 
+	@Override
+	public EncodeResult encode(DType dtype, Object data) {
+		throw new UnsupportedOperationException("encode not supported by " + encodingId());
+	}
+
 	// ── F32 ───────────────────────────────────────────────────────────────────
 
 	@Override

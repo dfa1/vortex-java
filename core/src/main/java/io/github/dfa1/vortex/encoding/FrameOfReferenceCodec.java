@@ -74,6 +74,11 @@ public final class FrameOfReferenceCodec implements Codec {
 	}
 
 	@Override
+	public EncodeResult encode(DType dtype, Object data) {
+		throw new UnsupportedOperationException("encode not supported by " + encodingId());
+	}
+
+	@Override
 	public Array decode(DecodeContext ctx) {
 		ByteBuffer rawMeta = ctx.metadata();
 		if (rawMeta == null || !rawMeta.hasRemaining()) {

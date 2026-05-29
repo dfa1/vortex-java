@@ -50,6 +50,11 @@ public final class ConstantCodec implements Codec {
 	}
 
 	@Override
+	public EncodeResult encode(DType dtype, Object data) {
+		throw new UnsupportedOperationException("encode not supported by " + encodingId());
+	}
+
+	@Override
 	public Array decode(DecodeContext ctx) {
 		if (!(ctx.dtype() instanceof DType.Primitive p)) {
 			throw new IllegalStateException("vortex.constant: expected primitive dtype, got " + ctx.dtype());

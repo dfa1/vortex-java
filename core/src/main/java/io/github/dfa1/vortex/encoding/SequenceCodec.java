@@ -79,6 +79,11 @@ public final class SequenceCodec implements Codec {
 	}
 
 	@Override
+	public EncodeResult encode(DType dtype, Object data) {
+		throw new UnsupportedOperationException("encode not supported by " + encodingId());
+	}
+
+	@Override
 	public Array decode(DecodeContext ctx) {
 		ByteBuffer metaBuf = ctx.metadata();
 		if (metaBuf == null || !metaBuf.hasRemaining()) {

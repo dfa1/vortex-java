@@ -18,7 +18,5 @@ public interface Codec {
 	}
 
 	/// Encodes `data` to bytes, including per-chunk min/max stats when available.
-	default EncodeResult encode(DType dtype, Object data) {
-		throw new UnsupportedOperationException("encode not supported by this codec");
-	}
+	EncodeResult encode(DType dtype, Object data);
 }
