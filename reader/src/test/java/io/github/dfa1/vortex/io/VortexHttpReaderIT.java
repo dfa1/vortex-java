@@ -87,6 +87,7 @@ class VortexHttpReaderIT {
 			"runend.vortex",
 			"sequence.vortex",
 			"varbin.vortex",
+			"zigzag.vortex",
 			"struct_nested.vortex",
 	})
 	void scan_fixture_decodesAllRows(String fixture) throws Exception {
