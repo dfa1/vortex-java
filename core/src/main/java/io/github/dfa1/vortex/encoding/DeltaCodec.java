@@ -124,7 +124,7 @@ public final class DeltaCodec implements Codec {
 		if (ptype == PType.I64 || ptype == PType.U64) {
 			MemorySegment dst = arena.allocate((long) longs.length * 8);
 			MemorySegment.copy(MemorySegment.ofArray(longs), ValueLayout.JAVA_LONG, 0L,
-					dst, ptype.valueLayout(), 0L, longs.length);
+					dst, PTypeIO.valueLayout(ptype), 0L, longs.length);
 			return dst.asReadOnly();
 		}
 		// Narrowing path: per-element MethodHandle setter from PTypeIO.

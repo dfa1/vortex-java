@@ -1,19 +1,35 @@
 package io.github.dfa1.vortex.core;
 
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
-
+/// Physical primitive type — the wire-level numeric kind for a column.
+///
+/// Unsigned integers ({@code U8}–{@code U64}) and signed integers ({@code I8}–{@code I64})
+/// share the same in-memory bit pattern; signedness only affects interpretation.
+/// Floating-point types follow IEEE 754: {@code F16} (half), {@code F32} (single), {@code F64} (double).
 public enum PType {
-	U8, U16, U32, U64,
-	I8, I16, I32, I64,
-	F16, F32, F64;
+	/// Unsigned 8-bit integer.
+	U8,
+	/// Unsigned 16-bit integer.
+	U16,
+	/// Unsigned 32-bit integer.
+	U32,
+	/// Unsigned 64-bit integer.
+	U64,
+	/// Signed 8-bit integer.
+	I8,
+	/// Signed 16-bit integer.
+	I16,
+	/// Signed 32-bit integer.
+	I32,
+	/// Signed 64-bit integer.
+	I64,
+	/// IEEE 754 half-precision float (16-bit). Decoding not yet supported.
+	F16,
+	/// IEEE 754 single-precision float (32-bit).
+	F32,
+	/// IEEE 754 double-precision float (64-bit).
+	F64;
 
-	private static final ValueLayout.OfShort  LE_SHORT  = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-	private static final ValueLayout.OfInt    LE_INT    = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-	private static final ValueLayout.OfLong   LE_LONG   = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-	private static final ValueLayout.OfFloat  LE_FLOAT  = ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-	private static final ValueLayout.OfDouble LE_DOUBLE = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-
+	/// Number of bytes per element on the wire (1, 2, 4, or 8).
 	public int byteSize() {
 		return switch (this) {
 			case U8, I8 -> 1;
@@ -23,26 +39,14 @@ public enum PType {
 		};
 	}
 
+	/// Returns {@code true} for {@code F16}, {@code F32}, and {@code F64}.
 	public boolean isFloating() {
 		return this == F16 || this == F32 || this == F64;
 	}
 
+	/// Returns {@code true} for signed integers ({@code I8}–{@code I64}) and all floating-point types.
 	public boolean isSigned() {
 		return this == I8 || this == I16 || this == I32 || this == I64
 				|| this == F16 || this == F32 || this == F64;
-	}
-
-	/// Little-endian, unaligned `ValueLayout` for this ptype. Returns a shared `static final`
-	/// instance so the JIT can constant-fold the VarHandle and vectorise hot loops.
-	public ValueLayout valueLayout() {
-		return switch (this) {
-			case I8, U8 -> ValueLayout.JAVA_BYTE;
-			case I16, U16 -> LE_SHORT;
-			case I32, U32 -> LE_INT;
-			case I64, U64 -> LE_LONG;
-			case F32 -> LE_FLOAT;
-			case F64 -> LE_DOUBLE;
-			case F16 -> throw new UnsupportedOperationException("F16 not supported"); // TODO: implement F16
-		};
 	}
 }

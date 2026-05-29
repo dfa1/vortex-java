@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.core.PType;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.nio.ByteOrder;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
@@ -18,9 +19,28 @@ import java.lang.invoke.VarHandle;
 /// dispatch on `PType`.
 final class PTypeIO {
 
+	private static final ValueLayout.OfShort  LE_SHORT  = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+	private static final ValueLayout.OfInt    LE_INT    = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+	private static final ValueLayout.OfLong   LE_LONG   = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+	private static final ValueLayout.OfFloat  LE_FLOAT  = ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+	private static final ValueLayout.OfDouble LE_DOUBLE = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+
 	private static final MethodHandle[] SETTERS = buildSetters();
 
 	private PTypeIO() {
+	}
+
+	/// Little-endian, unaligned `ValueLayout` for the given ptype.
+	static ValueLayout valueLayout(PType ptype) {
+		return switch (ptype) {
+			case I8, U8   -> ValueLayout.JAVA_BYTE;
+			case I16, U16 -> LE_SHORT;
+			case I32, U32 -> LE_INT;
+			case I64, U64 -> LE_LONG;
+			case F32      -> LE_FLOAT;
+			case F64      -> LE_DOUBLE;
+			case F16      -> throw new UnsupportedOperationException("F16 not supported");
+		};
 	}
 
 	private static MethodHandle[] buildSetters() {
@@ -49,7 +69,7 @@ final class PTypeIO {
 			if (p == PType.F16) {
 				continue; // TODO: implement F16
 			}
-			VarHandle vh = p.valueLayout().varHandle();
+			VarHandle vh = valueLayout(p).varHandle();
 			// VarHandle SET access: (MemorySegment, long offset, T) -> void
 			MethodHandle setter = vh.toMethodHandle(VarHandle.AccessMode.SET);
 
@@ -109,7 +129,7 @@ final class PTypeIO {
 					"unsupported array type: " + typedArray.getClass());
 		}
 		MemorySegment dst = Arena.ofAuto().allocate((long) count * ptype.byteSize());
-		MemorySegment.copy(src, srcLayout, 0L, dst, ptype.valueLayout(), 0L, count);
+		MemorySegment.copy(src, srcLayout, 0L, dst, valueLayout(ptype), 0L, count);
 		return dst;
 	}
 }
