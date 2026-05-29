@@ -37,9 +37,13 @@
       `PostscriptParserBigSegmentTest` (FlatBuffer footer with length = 3 GB round-trips correctly).
     - [x] `ScanIterator.readFlatStats` no longer materialises the whole segment as a `ByteBuffer`
       (2 GB cap); it slices the FlatBuffer tail off the `MemorySegment` first.
-    - [ ] End-to-end multi-GB round-trip: write a file whose total segment data exceeds 2 GB
-      (several wide I64 columns × enough rows), open + scan + verify. Run under a slow profile
-      so it stays out of the default test suite.
+    - [x] End-to-end multi-GB scan benchmark: `RustWritesJavaReadsBigFileBenchmark.javaScan` —
+      JNI writes ~3 GB of random I64 columns (random data defeats bit-packing so segments stay
+      large), Java reader scans via `VortexReader`. Skip the JNI fixture build by passing
+      `-Dvortex.bench.bigfile=<path>`.
+    - [ ] Wire a real correctness assertion alongside the benchmark (e.g. compare summed columns
+      against JNI reader) so any regression in the >2 GB path surfaces even without measuring
+      throughput.
     - [ ] Parquet baseline for comparison: same data should fail or require splitting when any
       column chunk exceeds 2 GB.
 
