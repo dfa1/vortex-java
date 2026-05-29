@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.encoding;
 
 import dev.vortex.proto.ScalarProtos;
-import io.github.dfa1.vortex.core.Array;
+import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.ByteArray;
