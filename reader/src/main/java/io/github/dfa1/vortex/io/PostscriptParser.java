@@ -63,7 +63,7 @@ final class PostscriptParser {
 		return seg.asSlice(offset, length).asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
 	}
 
-	private static Footer convertFooter(io.github.dfa1.vortex.fbs.Footer f) {
+	static Footer convertFooter(io.github.dfa1.vortex.fbs.Footer f) {
 		var arraySpecs = new ArrayList<String>(f.arraySpecsLength());
 		for (int i = 0; i < f.arraySpecsLength(); i++) {
 			arraySpecs.add(f.arraySpecs(i).id());
@@ -78,7 +78,7 @@ final class PostscriptParser {
 		for (int i = 0; i < f.segmentSpecsLength(); i++) {
 			var s = f.segmentSpecs(i);
 			segmentSpecs.add(new SegmentSpec(
-					s.offset(), (int) s.length(),
+					s.offset(), s.length(),
 					(byte) s.alignmentExponent(),
 					CompressionScheme.of(s._Compression())));
 		}

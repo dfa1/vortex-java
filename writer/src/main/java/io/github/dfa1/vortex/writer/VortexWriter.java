@@ -237,7 +237,7 @@ public final class VortexWriter implements Closeable {
 		channel.write(sizeBuf);
 		bytesWritten += 4;
 
-		segs.add(new SegRef(offset, (int) (bytesWritten - offset)));
+		segs.add(new SegRef(offset, bytesWritten - offset));
 		return segIdx;
 	}
 
@@ -405,7 +405,7 @@ public final class VortexWriter implements Closeable {
 		return fbb.dataBuffer().slice(fbb.dataBuffer().position(), fbb.dataBuffer().remaining());
 	}
 
-	private record SegRef(long offset, int len) {
+	private record SegRef(long offset, long len) {
 	}
 
 	private record ChunkRef(int segIdx, long rowCount) {

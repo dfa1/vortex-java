@@ -380,13 +380,15 @@ public final class ScanIterator implements AutoCloseable {
 		}
 		int segIdx = flat.segments().getFirst();
 		SegmentSpec spec = file.footer().segmentSpecs().get(segIdx);
-		int segLen = spec.length();
+		long segLen = spec.length();
 		MemorySegment seg = file.slice(spec.offset(), segLen);
-		ByteBuffer bb = seg.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
 
-		int fbLen = bb.getInt(segLen - 4);
-		int fbStart = segLen - 4 - fbLen;
-		ByteBuffer fbBuf = bb.slice(fbStart, fbLen).order(ByteOrder.LITTLE_ENDIAN);
+		// Stats FlatBuffer lives in the segment's last 4+fbLen bytes; reading the whole
+		// segment as a ByteBuffer would fail for segments larger than 2 GB (ByteBuffer cap).
+		var leInt = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+		int fbLen = seg.get(leInt, segLen - 4);
+		long fbStart = segLen - 4L - fbLen;
+		ByteBuffer fbBuf = seg.asSlice(fbStart, fbLen).asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
 		var fbArray = io.github.dfa1.vortex.fbs.Array.getRootAsArray(fbBuf);
 
 		io.github.dfa1.vortex.fbs.ArrayNode root = fbArray.root();

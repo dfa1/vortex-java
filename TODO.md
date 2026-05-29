@@ -31,10 +31,17 @@
 ## Large-file support
 
 - [ ] **#12 Test read/write of files > 2 GB**
-    - Write a vortex file whose total segment data exceeds 2 GB (e.g., several wide int64 columns × enough rows)
-    - Verify `VortexFile.open()` maps correctly and `ScanIterator` decodes without offset truncation
-    - Parquet baseline for comparison: same data fails or requires splitting when any column chunk > 2 GB
-    - Confirm no `int` casts silently truncate `uint64` offsets or `uint32` lengths in `SegmentSpec`
+    - [x] `SegmentSpec.length` widened from `int` to `long` (wire field is `uint32`, so values 2–4 GB were
+      silently truncated to negative). `PostscriptParser`, `VortexWriter.SegRef`, and
+      `ScanIterator.readFlatStats` follow the type through end-to-end. Covered by
+      `PostscriptParserBigSegmentTest` (FlatBuffer footer with length = 3 GB round-trips correctly).
+    - [x] `ScanIterator.readFlatStats` no longer materialises the whole segment as a `ByteBuffer`
+      (2 GB cap); it slices the FlatBuffer tail off the `MemorySegment` first.
+    - [ ] End-to-end multi-GB round-trip: write a file whose total segment data exceeds 2 GB
+      (several wide I64 columns × enough rows), open + scan + verify. Run under a slow profile
+      so it stays out of the default test suite.
+    - [ ] Parquet baseline for comparison: same data should fail or require splitting when any
+      column chunk exceeds 2 GB.
 
 ## Checkstyle
 
