@@ -82,6 +82,7 @@ class VortexHttpReaderIT {
 			"booleans.vortex",
 			"constant.vortex",
 			"fsst.vortex",
+			"null.vortex",
 			"runend.vortex",
 			"sequence.vortex",
 			"varbin.vortex",
