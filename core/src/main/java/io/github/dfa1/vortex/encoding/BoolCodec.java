@@ -21,8 +21,8 @@ public final class BoolCodec implements Codec {
 	}
 
 	@Override
-	public EncodingId encodingId() {
-		return EncodingId.VORTEX_BOOL;
+	public CodecId encodingId() {
+		return CodecId.VORTEX_BOOL;
 	}
 
 	@Override

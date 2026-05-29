@@ -65,11 +65,11 @@ class SparseCodecTest {
 			byte[] idxBuf, byte[] valBuf,
 			DType idxDtype
 	) {
-		ArrayNode idxNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
+		ArrayNode idxNode = new ArrayNode(CodecId.VORTEX_PRIMITIVE, null,
 				new ArrayNode[0], new int[]{1}, ArrayStats.empty());
-		ArrayNode valNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
+		ArrayNode valNode = new ArrayNode(CodecId.VORTEX_PRIMITIVE, null,
 				new ArrayNode[0], new int[]{2}, ArrayStats.empty());
-		ArrayNode sparseNode = new ArrayNode(EncodingId.VORTEX_SPARSE,
+		ArrayNode sparseNode = new ArrayNode(CodecId.VORTEX_SPARSE,
 				ByteBuffer.wrap(metaBytes),
 				new ArrayNode[]{idxNode, valNode},
 				new int[]{0},

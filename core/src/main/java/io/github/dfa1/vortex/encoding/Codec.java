@@ -7,7 +7,7 @@ import io.github.dfa1.vortex.core.DType;
 /// Register via [CodecRegistry] — implementations are discoverable via ServiceLoader.
 public interface Codec {
 	/// Return the encoding id for this codec.
-	EncodingId encodingId();
+	CodecId encodingId();
 
 	/// Decode an array node from the file using the provided context.
 	Array decode(DecodeContext ctx);

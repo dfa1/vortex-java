@@ -488,8 +488,8 @@ public final class BitpackedCodec implements Codec {
 	// ── Type conversion ───────────────────────────────────────────────────────
 
 	@Override
-	public EncodingId encodingId() {
-		return EncodingId.FASTLANES_BITPACKED;
+	public CodecId encodingId() {
+		return CodecId.FASTLANES_BITPACKED;
 	}
 
 	// ── Misc helpers ──────────────────────────────────────────────────────────

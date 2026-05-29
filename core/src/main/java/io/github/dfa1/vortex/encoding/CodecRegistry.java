@@ -17,7 +17,7 @@ import java.util.ServiceLoader;
 /// Registry mapping encoding IDs to [Codec] implementations.
 public final class CodecRegistry {
 
-	private final Map<EncodingId, Codec> codecs = new HashMap<>();
+	private final Map<CodecId, Codec> codecs = new HashMap<>();
 
 	private CodecRegistry() {
 	}
@@ -40,7 +40,7 @@ public final class CodecRegistry {
 			List<String> encodingSpecs
 	) {
 		String encodingId = encodingSpecs.get(fbs.encoding());
-		EncodingId encId = EncodingId.from(encodingId);
+		CodecId encId = CodecId.from(encodingId);
 
 		ArrayNode[] children = new ArrayNode[fbs.childrenLength()];
 		for (int i = 0; i < children.length; i++) {
@@ -91,7 +91,7 @@ public final class CodecRegistry {
 	}
 
 	Array decode(DecodeContext ctx) {
-		EncodingId id = ctx.node().encodingId();
+		CodecId id = ctx.node().encodingId();
 		Codec c = codecs.get(id);
 		if (c == null) {
 			throw new IllegalArgumentException("no codec for encoding: " + id);

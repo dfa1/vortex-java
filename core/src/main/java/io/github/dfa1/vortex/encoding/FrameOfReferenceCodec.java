@@ -69,8 +69,8 @@ public final class FrameOfReferenceCodec implements Codec {
 	}
 
 	@Override
-	public EncodingId encodingId() {
-		return EncodingId.FASTLANES_FOR;
+	public CodecId encodingId() {
+		return CodecId.FASTLANES_FOR;
 	}
 
 	@Override

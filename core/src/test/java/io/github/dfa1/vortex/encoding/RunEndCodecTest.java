@@ -33,11 +33,11 @@ class RunEndCodecTest {
 		byte[] endsBuf = toLEBytes(ends, endsPtype);
 		byte[] valBuf = toLEBytes(values, PType.I64);
 
-		ArrayNode endsNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
+		ArrayNode endsNode = new ArrayNode(CodecId.VORTEX_PRIMITIVE, null,
 				new ArrayNode[0], new int[]{0}, ArrayStats.empty());
-		ArrayNode valsNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
+		ArrayNode valsNode = new ArrayNode(CodecId.VORTEX_PRIMITIVE, null,
 				new ArrayNode[0], new int[]{1}, ArrayStats.empty());
-		ArrayNode reNode = new ArrayNode(EncodingId.VORTEX_RUNEND,
+		ArrayNode reNode = new ArrayNode(CodecId.VORTEX_RUNEND,
 				ByteBuffer.wrap(metaBytes),
 				new ArrayNode[]{endsNode, valsNode},
 				new int[0], ArrayStats.empty());

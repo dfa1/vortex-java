@@ -251,8 +251,8 @@ public final class PrimitiveCodec implements Codec {
 	}
 
 	@Override
-	public EncodingId encodingId() {
-		return EncodingId.VORTEX_PRIMITIVE;
+	public CodecId encodingId() {
+		return CodecId.VORTEX_PRIMITIVE;
 	}
 
 	@Override

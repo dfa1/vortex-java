@@ -6,7 +6,7 @@ import io.github.dfa1.vortex.encoding.BoolCodec;
 import io.github.dfa1.vortex.encoding.Codec;
 import io.github.dfa1.vortex.encoding.EncodeNode;
 import io.github.dfa1.vortex.encoding.EncodeResult;
-import io.github.dfa1.vortex.encoding.EncodingId;
+import io.github.dfa1.vortex.encoding.CodecId;
 import io.github.dfa1.vortex.encoding.PrimitiveCodec;
 import io.github.dfa1.vortex.fbs.ArraySpec;
 import io.github.dfa1.vortex.fbs.Footer;
@@ -59,7 +59,7 @@ public final class VortexWriter implements Closeable {
 	private final List<Codec> codecs;
 	private final List<SegRef> segs = new ArrayList<>();
 	private final Map<String, List<ChunkRef>> colChunks = new LinkedHashMap<>();
-	private final Map<EncodingId, Integer> encodingIdx = new LinkedHashMap<>();
+	private final Map<CodecId, Integer> encodingIdx = new LinkedHashMap<>();
 	private long bytesWritten = 0;
 
 	private VortexWriter(
@@ -213,7 +213,7 @@ public final class VortexWriter implements Closeable {
 		EncodeResult result = codec.encode(dtype, data);
 
 		// Register all encoding IDs found in the node tree
-		registerEncodingIds(result.rootNode());
+		registerCodecIds(result.rootNode());
 
 		// Align segment start to 64 bytes so each buffer is Arrow-compatible
 		long prePad = (64 - bytesWritten % 64) % 64;
@@ -241,10 +241,10 @@ public final class VortexWriter implements Closeable {
 		return segIdx;
 	}
 
-	private void registerEncodingIds(EncodeNode node) {
+	private void registerCodecIds(EncodeNode node) {
 		encodingIdx.computeIfAbsent(node.encodingId(), k -> encodingIdx.size());
 		for (EncodeNode child : node.children()) {
-			registerEncodingIds(child);
+			registerCodecIds(child);
 		}
 	}
 
@@ -339,10 +339,10 @@ public final class VortexWriter implements Closeable {
 		var fbb = new FlatBufferBuilder(512);
 
 		// array_specs: all encoding IDs used across all written segments, in registration order
-		EncodingId[] encIds = encodingIdx.entrySet().stream()
+		CodecId[] encIds = encodingIdx.entrySet().stream()
 				.sorted(Map.Entry.comparingByValue())
 				.map(Map.Entry::getKey)
-				.toArray(EncodingId[]::new);
+				.toArray(CodecId[]::new);
 		int[] asOffsets = new int[encIds.length];
 		for (int i = 0; i < encIds.length; i++) {
 			asOffsets[i] = ArraySpec.createArraySpec(fbb, fbb.createString(encIds[i].id()));

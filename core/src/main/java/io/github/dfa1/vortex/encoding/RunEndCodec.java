@@ -129,8 +129,8 @@ public final class RunEndCodec implements Codec {
 	}
 
 	@Override
-	public EncodingId encodingId() {
-		return EncodingId.VORTEX_RUNEND;
+	public CodecId encodingId() {
+		return CodecId.VORTEX_RUNEND;
 	}
 
 	@Override

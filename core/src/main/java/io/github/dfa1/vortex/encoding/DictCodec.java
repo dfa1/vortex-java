@@ -175,8 +175,8 @@ public final class DictCodec implements Codec {
 	}
 
 	@Override
-	public EncodingId encodingId() {
-		return EncodingId.VORTEX_DICT;
+	public CodecId encodingId() {
+		return CodecId.VORTEX_DICT;
 	}
 
 	@Override
@@ -220,10 +220,10 @@ public final class DictCodec implements Codec {
 		// Metadata: code PType ordinal
 		ByteBuffer meta = ByteBuffer.allocate(1).put(0, (byte) codePType.ordinal());
 
-		EncodeNode valuesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
-		EncodeNode codesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
+		EncodeNode valuesNode = EncodeNode.leaf(CodecId.VORTEX_PRIMITIVE, 0);
+		EncodeNode codesNode = EncodeNode.leaf(CodecId.VORTEX_PRIMITIVE, 1);
 		EncodeNode rootNode = new EncodeNode(
-				EncodingId.VORTEX_DICT, meta,
+				CodecId.VORTEX_DICT, meta,
 				new EncodeNode[]{valuesNode, codesNode},
 				new int[0]);
 

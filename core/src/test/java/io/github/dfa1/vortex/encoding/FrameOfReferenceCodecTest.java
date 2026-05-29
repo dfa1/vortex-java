@@ -44,7 +44,7 @@ class FrameOfReferenceCodecTest {
 
 		// ArrayNode for vortex.primitive child: bufferIndices=[0], no children
 		ArrayNode childNode = new ArrayNode(
-				EncodingId.VORTEX_PRIMITIVE,
+				CodecId.VORTEX_PRIMITIVE,
 				null,
 				new ArrayNode[0],
 				new int[]{0},
@@ -53,7 +53,7 @@ class FrameOfReferenceCodecTest {
 
 		// ArrayNode for fastlanes.for: metadata=scalarBytes, child=childNode, no buffers
 		ArrayNode forNode = new ArrayNode(
-				EncodingId.FASTLANES_FOR,
+				CodecId.FASTLANES_FOR,
 				ByteBuffer.wrap(metaBytes),
 				new ArrayNode[]{childNode},
 				new int[0],

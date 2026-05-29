@@ -45,8 +45,8 @@ public final class ConstantCodec implements Codec {
 	// ── Helpers ───────────────────────────────────────────────────────────────
 
 	@Override
-	public EncodingId encodingId() {
-		return EncodingId.VORTEX_CONSTANT;
+	public CodecId encodingId() {
+		return CodecId.VORTEX_CONSTANT;
 	}
 
 	@Override

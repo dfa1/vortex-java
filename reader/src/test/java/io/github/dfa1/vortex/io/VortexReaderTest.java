@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.encoding.Codec;
 import io.github.dfa1.vortex.encoding.CodecRegistry;
 import io.github.dfa1.vortex.encoding.DecodeContext;
-import io.github.dfa1.vortex.encoding.EncodingId;
+import io.github.dfa1.vortex.encoding.CodecId;
 import io.github.dfa1.vortex.scan.ScanOptions;
 import io.github.dfa1.vortex.scan.ScanResult;
 import org.junit.jupiter.api.Test;
@@ -29,8 +29,8 @@ class VortexReaderTest {
 		var registry = CodecRegistry.empty();
 		Codec stub = new Codec() {
 			@Override
-			public EncodingId encodingId() {
-				return EncodingId.VORTEX_PRIMITIVE;
+			public CodecId encodingId() {
+				return CodecId.VORTEX_PRIMITIVE;
 			}
 
 			@Override
@@ -38,10 +38,10 @@ class VortexReaderTest {
 				return Array.empty(ctx.dtype());
 			}
 		};
-		for (EncodingId encodingId : EncodingId.values()) {
+		for (CodecId encodingId : CodecId.values()) {
 			registry.register(new Codec() {
 				@Override
-				public EncodingId encodingId() {
+				public CodecId encodingId() {
 					return encodingId;
 				}
 

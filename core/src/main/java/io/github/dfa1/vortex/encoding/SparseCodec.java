@@ -120,8 +120,8 @@ public final class SparseCodec implements Codec {
 	}
 
 	@Override
-	public EncodingId encodingId() {
-		return EncodingId.VORTEX_SPARSE;
+	public CodecId encodingId() {
+		return CodecId.VORTEX_SPARSE;
 	}
 
 	@Override

@@ -151,8 +151,8 @@ public final class DeltaCodec implements Codec {
 	// ── Type conversion ───────────────────────────────────────────────────────
 
 	@Override
-	public EncodingId encodingId() {
-		return EncodingId.FASTLANES_DELTA;
+	public CodecId encodingId() {
+		return CodecId.FASTLANES_DELTA;
 	}
 
 	@Override

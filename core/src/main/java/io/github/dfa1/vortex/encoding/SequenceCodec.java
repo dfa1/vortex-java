@@ -74,8 +74,8 @@ public final class SequenceCodec implements Codec {
 	}
 
 	@Override
-	public EncodingId encodingId() {
-		return EncodingId.VORTEX_SEQUENCE;
+	public CodecId encodingId() {
+		return CodecId.VORTEX_SEQUENCE;
 	}
 
 	@Override

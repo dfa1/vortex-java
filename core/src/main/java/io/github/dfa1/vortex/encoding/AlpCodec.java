@@ -76,8 +76,8 @@ public final class AlpCodec implements Codec {
 	}
 
 	@Override
-	public EncodingId encodingId() {
-		return EncodingId.VORTEX_ALP;
+	public CodecId encodingId() {
+		return CodecId.VORTEX_ALP;
 	}
 
 	// ── F32 ───────────────────────────────────────────────────────────────────
