@@ -156,7 +156,7 @@
       JNI writes ~3 GB of random I64 columns (random data defeats bit-packing so segments stay
       large), Java reader scans via `VortexReader`. Skip the JNI fixture build by passing
       `-Dvortex.bench.bigfile=<path>`.
-    - [ ] Wire a real correctness assertion alongside the benchmark (e.g. compare summed columns
+    - [x] Wire a real correctness assertion alongside the benchmark (e.g. compare summed columns
       against JNI reader) so any regression in the >2 GB path surfaces even without measuring
       throughput.
     - [ ] Parquet baseline for comparison: same data should fail or require splitting when any

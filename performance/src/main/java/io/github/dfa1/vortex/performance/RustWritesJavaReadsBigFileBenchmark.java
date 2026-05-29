@@ -108,15 +108,23 @@ public class RustWritesJavaReadsBigFileBenchmark {
 			ownFile = false;
 			System.out.printf("[BigFileBenchmark] using external file: %s (%.2f GB)%n",
 					benchFile, Files.size(benchFile) / (double) (1L << 30));
-			return;
+		} else {
+			benchFile = Files.createTempFile("vortex-bigfile-bench", ".vtx");
+			ownFile = true;
+			System.out.printf("[BigFileBenchmark] writing %d rows × %d I64 cols (~%.2f GB)...%n",
+					TOTAL_ROWS, COLUMNS, TARGET_BYTES / (double) (1L << 30));
+			writeJni(benchFile);
+			System.out.printf("[BigFileBenchmark] file size: %.2f GB%n",
+					Files.size(benchFile) / (double) (1L << 30));
 		}
-		benchFile = Files.createTempFile("vortex-bigfile-bench", ".vtx");
-		ownFile = true;
-		System.out.printf("[BigFileBenchmark] writing %d rows × %d I64 cols (~%.2f GB)...%n",
-				TOTAL_ROWS, COLUMNS, TARGET_BYTES / (double) (1L << 30));
-		writeJni(benchFile);
-		System.out.printf("[BigFileBenchmark] file size: %.2f GB%n",
-				Files.size(benchFile) / (double) (1L << 30));
+
+		long jniSum = scanJni();
+		long javaSum = scanJava();
+		if (jniSum != javaSum) {
+			throw new AssertionError(
+					"Big-file correctness check failed: JNI c0 sum=" + jniSum + " Java c0 sum=" + javaSum);
+		}
+		System.out.printf("[BigFileBenchmark] correctness OK: c0 sum=%d%n", javaSum);
 	}
 
 	@TearDown(Level.Trial)
@@ -129,6 +137,17 @@ public class RustWritesJavaReadsBigFileBenchmark {
 	/// JNI reader scans the first column ("c0") via Arrow C Data Interface and sums every value.
 	@Benchmark
 	public long jniScan() throws IOException {
+		return scanJni();
+	}
+
+	/// Java reader scans the first column and sums every value. Sum prevents the JIT
+	/// from eliding the decode loop.
+	@Benchmark
+	public long javaScan() throws IOException {
+		return scanJava();
+	}
+
+	private long scanJni() throws IOException {
 		String uri = benchFile.toAbsolutePath().toUri().toString();
 		var opts = ScanOptions.builder()
 				.projection(Expression.select(new String[]{"c0"}, Expression.root()))
@@ -152,10 +171,7 @@ public class RustWritesJavaReadsBigFileBenchmark {
 		return sum;
 	}
 
-	/// Java reader scans the first column and sums every value. Sum prevents the JIT
-	/// from eliding the decode loop.
-	@Benchmark
-	public long javaScan() throws IOException {
+	private long scanJava() throws IOException {
 		long sum = 0L;
 		try (VortexReader vf = VortexReader.open(benchFile, registry)) {
 			var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("c0"));
