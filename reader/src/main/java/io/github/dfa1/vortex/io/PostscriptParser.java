@@ -36,26 +36,33 @@ final class PostscriptParser {
 		if (footerSeg == null) {
 			throw new VortexException("postscript missing footer segment");
 		}
-		var fbsFooter = io.github.dfa1.vortex.fbs.Footer.getRootAsFooter(
-				slice(fileSegment, footerSeg.offset(), footerSeg.length()));
-
 		var layoutSeg = ps.layout();
 		if (layoutSeg == null) {
 			throw new VortexException("postscript missing layout segment");
 		}
-		var fbsLayout = io.github.dfa1.vortex.fbs.Layout.getRootAsLayout(
-				slice(fileSegment, layoutSeg.offset(), layoutSeg.length()));
+		var dtypeSeg = ps.dtype();
+
+		ByteBuffer footerBuf = slice(fileSegment, footerSeg.offset(), footerSeg.length());
+		ByteBuffer layoutBuf = slice(fileSegment, layoutSeg.offset(), layoutSeg.length());
+		ByteBuffer dtypeBuf = (dtypeSeg != null && dtypeSeg.length() > 0)
+				? slice(fileSegment, dtypeSeg.offset(), dtypeSeg.length())
+				: null;
+
+		return parseBlobs(footerBuf, layoutBuf, dtypeBuf);
+	}
+
+	static ParsedFile parseBlobs(ByteBuffer footerBuf, ByteBuffer layoutBuf, ByteBuffer dtypeBuf) {
+		var fbsFooter = io.github.dfa1.vortex.fbs.Footer.getRootAsFooter(footerBuf);
+		var fbsLayout = io.github.dfa1.vortex.fbs.Layout.getRootAsLayout(layoutBuf);
+
+		Footer footer = convertFooter(fbsFooter);
+		Layout layout = convertLayout(fbsLayout, footer.layoutSpecs());
 
 		DType dtype = null;
-		var dtypeSeg = ps.dtype();
-		if (dtypeSeg != null && dtypeSeg.length() > 0) {
-			var fbsDtype = io.github.dfa1.vortex.fbs.DType.getRootAsDType(
-					slice(fileSegment, dtypeSeg.offset(), dtypeSeg.length()));
-			dtype = convertDType(fbsDtype);
+		if (dtypeBuf != null && dtypeBuf.hasRemaining()) {
+			dtype = convertDType(io.github.dfa1.vortex.fbs.DType.getRootAsDType(dtypeBuf));
 		}
 
-		var footer = convertFooter(fbsFooter);
-		var layout = convertLayout(fbsLayout, footer.layoutSpecs());
 		return new ParsedFile(footer, dtype, layout);
 	}
 

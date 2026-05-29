@@ -18,7 +18,7 @@ public final class VortexInspector {
 	private VortexInspector() {
 	}
 
-	public static String inspect(VortexReader reader) {
+	public static String inspect(VortexHandle reader) {
 		Footer footer = reader.footer();
 		Layout layout = reader.layout();
 		DType dtype = reader.dtype();
@@ -55,13 +55,13 @@ public final class VortexInspector {
 
 	// ── Used encodings ────────────────────────────────────────────────────────
 
-	private static Set<String> collectUsedEncodings(VortexReader reader) {
+	private static Set<String> collectUsedEncodings(VortexHandle reader) {
 		var used = new LinkedHashSet<String>();
 		collectLayoutEncodings(reader.layout(), reader, used);
 		return used;
 	}
 
-	private static void collectLayoutEncodings(Layout layout, VortexReader reader, Set<String> used) {
+	private static void collectLayoutEncodings(Layout layout, VortexHandle reader, Set<String> used) {
 		if (layout.isFlat() && !layout.segments().isEmpty()) {
 			int segIdx = layout.segments().get(0);
 			SegmentSpec spec = reader.footer().segmentSpecs().get(segIdx);
@@ -91,7 +91,7 @@ public final class VortexInspector {
 	// ── Layout tree ───────────────────────────────────────────────────────────
 
 	private static void appendLayout(StringBuilder sb, Layout layout, List<String> colNames,
-	                                  VortexReader reader, String indent) {
+	                                  VortexHandle reader, String indent) {
 		if (layout.isStruct()) {
 			sb.append(indent).append("struct (").append(layout.rowCount()).append(" rows)\n");
 			for (int i = 0; i < layout.children().size(); i++) {

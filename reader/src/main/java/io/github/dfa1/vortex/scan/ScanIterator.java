@@ -17,7 +17,7 @@ import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.CodecId;
-import io.github.dfa1.vortex.io.VortexReader;
+import io.github.dfa1.vortex.io.VortexHandle;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -45,7 +45,7 @@ public final class ScanIterator implements AutoCloseable {
 	private static final ValueLayout.OfInt   LE_INT   = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 	private static final ValueLayout.OfLong  LE_LONG  = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
-	private final VortexReader file;
+	private final VortexHandle file;
 	private final ScanOptions options;
 	private final Arena arena;
 
@@ -57,7 +57,7 @@ public final class ScanIterator implements AutoCloseable {
 	private long rowsReturned;
 	private ScanResult current;
 
-	public ScanIterator(VortexReader file, ScanOptions options, Arena arena) {
+	public ScanIterator(VortexHandle file, ScanOptions options, Arena arena) {
 		this.file = file;
 		this.options = options;
 		this.arena = arena;

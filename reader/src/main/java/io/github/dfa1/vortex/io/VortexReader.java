@@ -8,7 +8,6 @@ import io.github.dfa1.vortex.encoding.CodecRegistry;
 import io.github.dfa1.vortex.scan.ScanIterator;
 import io.github.dfa1.vortex.scan.ScanOptions;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -22,7 +21,7 @@ import java.nio.file.StandardOpenOption;
 /// all Array buffers returned during scan are slices of this `MemorySegment`.
 ///
 /// Close this to release the memory-mapped region.
-public final class VortexReader implements Closeable {
+public final class VortexReader implements VortexHandle {
 
 	static final ValueLayout.OfShort LE_SHORT =
 			ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
@@ -113,35 +112,43 @@ public final class VortexReader implements Closeable {
 		);
 	}
 
+	@Override
 	public DType dtype() {
 		return dtype;
 	}
 
+	@Override
 	public Layout layout() {
 		return layout;
 	}
 
+	@Override
 	public Footer footer() {
 		return footer;
 	}
 
+	@Override
 	public int version() {
 		return version;
 	}
 
+	@Override
 	public long fileSize() {
 		return fileSize;
 	}
 
+	@Override
 	public CodecRegistry registry() {
 		return registry;
 	}
 
+	@Override
 	public ScanIterator scan(ScanOptions options) {
 		return new ScanIterator(this, options, this.arena);
 	}
 
 	/// Zero-copy slice of the memory-mapped file.
+	@Override
 	public MemorySegment slice(long offset, long length) {
 		return fileSegment.asSlice(offset, length);
 	}
