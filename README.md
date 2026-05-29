@@ -8,11 +8,18 @@ Pure-Java reader/writer for the [Vortex](https://github.com/spiraldb/vortex) col
 
 `RustVsJavaReadBenchmark` — 10M OHLC rows, JMH throughput (higher = better), Apple M5 / 32 GB, Java 25:
 
-| Column           | Encoding          | vortex-jni  | vortex-java  | ratio         |
-|------------------|-------------------|-------------|--------------|---------------|
-| `volume` (I64)   | primitive         | 51.9 ops/s  | 120.7 ops/s  | **Java 2.3×** |
-| `close` (F64)    | ALP               | 62.6 ops/s  | 118.0 ops/s  | **Java 1.9×** |
-| `symbol` (UTF-8) | constant (varbin) | 10.9 ops/s  | 27.8 ops/s   | **Java 2.5×** |
+| Column           | Encoding         | vortex-jni  | vortex-java  | ratio         |
+|------------------|------------------|-------------|--------------|---------------|
+| `volume` (I64)   | primitive        | 51.9 ops/s  | ~115 ops/s   | **Java 2.2×** |
+| `close` (F64)    | ALP (multi-walk) | re-measure  | 62 ops/s     | re-measure    |
+| `symbol` (UTF-8) | dict + FSST      | re-measure  | 7.6 ops/s    | re-measure    |
+
+The `close` and `symbol` numbers regressed from earlier snapshots (118 and 27.8 respectively)
+because commit `347bc34` made the bench data realistic: 30 Nasdaq tickers with independent per-ticker
+price walks instead of a single global walker and a constant symbol. Rust's writer responds by
+picking heavier encodings — `vortex.dict` over `vortex.fsst` for `symbol`, and an ALP sub-encoding
+that no longer fits a single tight reference for `close`. Decode work goes up on both sides;
+JNI numbers above are stale and need re-measurement on the new workload.
 
 Reproduce: `./benchmark.sh RustVsJavaReadBenchmark`. Hardware / JDK build / commit SHA used to produce
 this snapshot should be captured alongside any update (see TODO #10c).

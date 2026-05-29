@@ -3,21 +3,13 @@
 ## Encodings
 
 - [ ] **#7 Additional encodings**
-    - `pcodec` — float compression (only remaining gap; bitpacked, delta, for, sparse, alp, dict, fsst, sequence,
-      varbin, constant, runend all landed)
+    - `pcodec` — PCodec numerical compression. Currently a stub (`PcoCodec`) that throws
+      `VortexException(VORTEX_PCO, "not implemented")` so affected files fail with clear attribution.
+      Full decoder requires a port of ANS, delta predictions, and bin tokenization from the
+      upstream Rust `pco` crate (https://github.com/mwlon/pcodec) — no mainstream Java port exists.
+      Multi-day effort; not on the critical path while ALP covers typical float workloads.
 
 ## Performance
-
-- [ ] **OHLC bench regression on `close` and `symbol`**
-    - Measured 2026-05-29 on M5 / 32 GB: `javaReadClose` 62 ops/s (README claims 118),
-      `javaReadSymbol` 7.6 ops/s (README claims 27.8). `javaReadVolume` still ~115 (was 120).
-    - Sweep `513fc09` was inert for these columns (the swept layouts are not on their hot path),
-      so the regression predates it. Prime suspect: commit `347bc34` (vortex.dict layout +
-      vortex.fsst codec) changed the encoding pipeline so `symbol` now routes through
-      `vortex.dict` instead of constant/varbin, and ALP picks a different sub-encoding for
-      `close`.
-    - Bisect between the README capture and `347bc34`, then either: (a) restore the fast path,
-      or (b) update the README table with the new numbers and reasoning.
 
 - [ ] **#10b Java vs JNI write benchmark** (`performance/` module, `-Pperformance`)
     - Add `RustVsJavaWriteBenchmark` mirroring read side: same 10M-row OHLC fixture, JMH throughput, both writers.
