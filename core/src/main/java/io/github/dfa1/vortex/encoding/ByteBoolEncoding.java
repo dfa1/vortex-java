@@ -30,7 +30,12 @@ public final class ByteBoolEncoding implements Encoding {
 
 	@Override
 	public EncodeResult encode(DType dtype, Object data) {
-		throw new UnsupportedOperationException("encode not supported by " + encodingId());
+		boolean[] bools = (boolean[]) data;
+		MemorySegment seg = java.lang.foreign.Arena.ofAuto().allocate(bools.length);
+		for (int i = 0; i < bools.length; i++) {
+			seg.set(ValueLayout.JAVA_BYTE, i, bools[i] ? (byte) 1 : (byte) 0);
+		}
+		return EncodeResult.simple(encodingId(), seg);
 	}
 
 	@Override

@@ -13,11 +13,13 @@ import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.core.VortexException;
 
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.List;
 
 /// Decoder for {@code fastlanes.for} (Frame of Reference).
 ///
@@ -81,7 +83,76 @@ public final class FrameOfReferenceEncoding implements Encoding {
 
 	@Override
 	public EncodeResult encode(DType dtype, Object data) {
-		throw new UnsupportedOperationException("encode not supported by " + encodingId());
+		if (!(dtype instanceof DType.Primitive p)) {
+			throw new VortexException(encodingId(), "expected primitive dtype, got " + dtype);
+		}
+		PType ptype = p.ptype();
+		long[] longs = toLongs(data, ptype);
+		int n = longs.length;
+
+		long ref = n > 0 ? longs[0] : 0L;
+		for (long v : longs) {
+			if (v < ref) {
+				ref = v;
+			}
+		}
+
+		MemorySegment residuals = toResidualBuffer(longs, ref, ptype);
+
+		boolean unsigned = switch (ptype) {
+			case U8, U16, U32, U64 -> true;
+			default -> false;
+		};
+		ScalarProtos.ScalarValue scalar = unsigned
+				? ScalarProtos.ScalarValue.newBuilder().setUint64Value(ref).build()
+				: ScalarProtos.ScalarValue.newBuilder().setInt64Value(ref).build();
+		ByteBuffer meta = ByteBuffer.wrap(scalar.toByteArray());
+
+		EncodeNode child = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
+		EncodeNode root = new EncodeNode(encodingId(), meta, new EncodeNode[]{child}, new int[0]);
+		return new EncodeResult(root, List.of(residuals), null, null);
+	}
+
+	private static long[] toLongs(Object data, PType ptype) {
+		return switch (ptype) {
+			case I8, U8 -> {
+				byte[] arr = (byte[]) data;
+				long[] r = new long[arr.length];
+				for (int i = 0; i < arr.length; i++) {
+					r[i] = ptype == PType.U8 ? Byte.toUnsignedLong(arr[i]) : arr[i];
+				}
+				yield r;
+			}
+			case I16, U16 -> {
+				short[] arr = (short[]) data;
+				long[] r = new long[arr.length];
+				for (int i = 0; i < arr.length; i++) {
+					r[i] = ptype == PType.U16 ? Short.toUnsignedLong(arr[i]) : arr[i];
+				}
+				yield r;
+			}
+			case I32, U32 -> {
+				int[] arr = (int[]) data;
+				long[] r = new long[arr.length];
+				for (int i = 0; i < arr.length; i++) {
+					r[i] = ptype == PType.U32 ? Integer.toUnsignedLong(arr[i]) : arr[i];
+				}
+				yield r;
+			}
+			case I64, U64 -> (long[]) data;
+			default -> throw new VortexException(EncodingId.FASTLANES_FOR, "unsupported ptype: " + ptype);
+		};
+	}
+
+	private static MemorySegment toResidualBuffer(long[] longs, long ref, PType ptype) {
+		int n = longs.length;
+		int elemBytes = ptype.byteSize();
+		MemorySegment seg = Arena.ofAuto().allocate((long) n * elemBytes, elemBytes);
+		for (int i = 0; i < n; i++) {
+			long r = longs[i] - ref;
+			PTypeIO.set(seg, (long) i * elemBytes, ptype, r);
+		}
+		return seg;
 	}
 
 	@Override

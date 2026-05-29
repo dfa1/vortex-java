@@ -145,6 +145,15 @@ public final class DictEncoding implements Encoding {
 		}
 	}
 
+	private static void writeCodeToSeg(MemorySegment seg, PType codePType, int idx, int code) {
+		switch (codePType) {
+			case U8 -> seg.set(ValueLayout.JAVA_BYTE, idx, (byte) code);
+			case U16 -> seg.set(LE_SHORT, (long) idx * 2, (short) code);
+			case U32 -> seg.set(LE_INT, (long) idx * 4, code);
+			default -> throw new VortexException(EncodingId.VORTEX_DICT, "unexpected code type: " + codePType);
+		}
+	}
+
 	private static void expandU8(
 			MemorySegment codes, MemorySegment values, MemorySegment out,
 			long rowCount, int elemSize
@@ -213,21 +222,16 @@ public final class DictEncoding implements Encoding {
 		int codeBytes = codePType.byteSize();
 
 		// Values buffer: unique values in insertion order.
-		// Materialize as typed primitive array, then bulk-copy with byte-order conversion
-		// via `MemorySegment.copy` — avoids per-element `switch (ptype)` dispatch.
 		Object uniqueArray = buildUniqueArray(ptype, valueMap.keySet(), dictSize);
-		ByteBuffer valuesBuf = PTypeIO.copyArray(ptype, uniqueArray, dictSize)
-				.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
+		MemorySegment valuesBuf = PTypeIO.copyArray(ptype, uniqueArray, dictSize);
 
 		// Codes buffer: per-row index into values
-		ByteBuffer codesBuf = ByteBuffer.allocate(len * codeBytes)
-				.order(ByteOrder.LITTLE_ENDIAN);
+		MemorySegment codesBuf = java.lang.foreign.Arena.ofAuto().allocate((long) len * codeBytes);
 		for (int i = 0; i < len; i++) {
 			Object v = readElement(data, ptype, i);
 			int code = valueMap.get(v);
-			writeCode(codesBuf, codePType, code);
+			writeCodeToSeg(codesBuf, codePType, i, code);
 		}
-		codesBuf.flip();
 
 		// Metadata: code PType ordinal
 		ByteBuffer meta = ByteBuffer.allocate(1).put(0, (byte) codePType.ordinal());

@@ -111,8 +111,8 @@ class DictEncodingTest {
 		EncodeResult encoded = sut.encode(I32_DTYPE, data);
 
 		// Then — dict-encoded size < raw size (n * 4 bytes)
-		int encodedBytes = encoded.buffers().stream().mapToInt(java.nio.Buffer::limit).sum();
-		int rawBytes = data.length * 4;
+		long encodedBytes = encoded.buffers().stream().mapToLong(java.lang.foreign.MemorySegment::byteSize).sum();
+		long rawBytes = (long) data.length * 4;
 		assertThat(encodedBytes).isLessThan(rawBytes);
 	}
 }

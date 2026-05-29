@@ -12,6 +12,7 @@ import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.FloatArray;
 
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
@@ -176,11 +177,10 @@ public final class AlpEncoding implements Encoding {
 		byte[] statsMin = n > 0 ? scalarF64(min) : null;
 		byte[] statsMax = n > 0 ? scalarF64(max) : null;
 
-		ByteBuffer encodedBuf = ByteBuffer.allocate(n * 8).order(ByteOrder.LITTLE_ENDIAN);
-		for (long v : encodedArr) {
-			encodedBuf.putLong(v);
+		MemorySegment encodedBuf = Arena.ofAuto().allocate((long) n * 8, 8);
+		for (int i = 0; i < n; i++) {
+			encodedBuf.setAtIndex(LE_LONG, i, encodedArr[i]);
 		}
-		encodedBuf.flip();
 
 		EncodeNode encodedNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
 
@@ -193,14 +193,12 @@ public final class AlpEncoding implements Encoding {
 		}
 
 		int numPatches = patchIndices.size();
-		ByteBuffer idxBuf = ByteBuffer.allocate(numPatches * 4).order(ByteOrder.LITTLE_ENDIAN);
-		ByteBuffer valBuf = ByteBuffer.allocate(numPatches * 8).order(ByteOrder.LITTLE_ENDIAN);
+		MemorySegment idxBuf = Arena.ofAuto().allocate((long) numPatches * 4, 4);
+		MemorySegment valBuf = Arena.ofAuto().allocate((long) numPatches * 8, 8);
 		for (int i = 0; i < numPatches; i++) {
-			idxBuf.putInt(patchIndices.get(i));
-			valBuf.putDouble(patchValues.get(i));
+			idxBuf.setAtIndex(LE_INT, i, patchIndices.get(i));
+			valBuf.setAtIndex(LE_DOUBLE, i, patchValues.get(i));
 		}
-		idxBuf.flip();
-		valBuf.flip();
 
 		EncodingProtos.PatchesMetadata patches = EncodingProtos.PatchesMetadata.newBuilder()
 				.setLen(numPatches)

@@ -53,6 +53,7 @@ public final class ScanIterator implements AutoCloseable {
 	private final ScanOptions options;
 	private final Arena arena;
 	private MemorySegment chunkSlab;
+	private SegmentAllocator chunkAlloc;
 
 	private List<ChunkSpec> chunks;
 	private Map<String, DType> columnDtypes;
@@ -186,6 +187,7 @@ public final class ScanIterator implements AutoCloseable {
 		projectedNames = List.copyOf(columnDtypes.keySet());
 		projectedDtypes = List.copyOf(columnDtypes.values());
 		chunkSlab = arena.allocate(SLAB_SIZE, 64);
+		chunkAlloc = SegmentAllocator.slicingAllocator(chunkSlab);
 	}
 
 	// ── Zone-map pruning ──────────────────────────────────────────────────────
@@ -194,7 +196,6 @@ public final class ScanIterator implements AutoCloseable {
 	// LinkedHashMap + Map.copyOf pair that would otherwise allocate per chunk.
 	// Direct array index into ChunkSpec.columnLayouts avoids HashMap.get() per column.
 	private Map<String, Array> buildColumnMap(ChunkSpec chunk) {
-		SegmentAllocator chunkAlloc = SegmentAllocator.slicingAllocator(chunkSlab);
 		Layout[] layouts = chunk.columnLayouts();
 		int n = projectedNames.size();
 		if (n == 1) {

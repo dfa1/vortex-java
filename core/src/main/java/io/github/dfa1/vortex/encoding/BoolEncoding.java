@@ -5,19 +5,27 @@ import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.array.BoolArray;
 
-import java.nio.ByteBuffer;
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 
 /// Encoding for `vortex.bool` — bit-packed boolean arrays (LSB first).
 public final class BoolEncoding implements Encoding {
 
-	private static ByteBuffer encodeBool(boolean[] data) {
-		var packed = ByteBuffer.allocate((data.length + 7) / 8);
+	private static MemorySegment encodeBool(boolean[] data) {
+		long packedBytes = (data.length + 7L) / 8;
+		if (packedBytes == 0) {
+			return MemorySegment.NULL;
+		}
+		MemorySegment seg = Arena.ofAuto().allocate(packedBytes);
 		for (int i = 0; i < data.length; i++) {
 			if (data[i]) {
-				packed.put(i / 8, (byte) (packed.get(i / 8) | (byte) (1 << (i % 8))));
+				long byteIdx = i / 8;
+				byte cur = seg.get(ValueLayout.JAVA_BYTE, byteIdx);
+				seg.set(ValueLayout.JAVA_BYTE, byteIdx, (byte) (cur | (1 << (i % 8))));
 			}
 		}
-		return packed.rewind();
+		return seg;
 	}
 
 	@Override

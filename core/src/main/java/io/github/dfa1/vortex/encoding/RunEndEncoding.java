@@ -15,11 +15,14 @@ import io.github.dfa1.vortex.core.array.BoolArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.core.VortexException;
 
+import java.lang.foreign.Arena;
 import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.ArrayList;
+import java.util.List;
 
 /// Decoder for {@code vortex.runend} — run-end (RLE) encoding.
 ///
@@ -240,7 +243,77 @@ public final class RunEndEncoding implements Encoding {
 
 	@Override
 	public EncodeResult encode(DType dtype, Object data) {
-		throw new UnsupportedOperationException("encode not supported by " + encodingId());
+		if (!(dtype instanceof DType.Primitive p)) {
+			throw new VortexException(encodingId(), "encode only supports Primitive dtype, got " + dtype);
+		}
+		PType ptype = p.ptype();
+		int n = arrayLength(data, ptype);
+
+		// Scan runs: collect (end, value) pairs
+		List<Integer> ends = new ArrayList<>();
+		List<Long> values = new ArrayList<>();
+		if (n > 0) {
+			long runVal = readLong(data, ptype, 0);
+			for (int i = 1; i < n; i++) {
+				long cur = readLong(data, ptype, i);
+				if (cur != runVal) {
+					ends.add(i);
+					values.add(runVal);
+					runVal = cur;
+				}
+			}
+			ends.add(n);
+			values.add(runVal);
+		}
+
+		int numRuns = ends.size();
+
+		MemorySegment endsBuf = Arena.ofAuto().allocate((long) numRuns * 4, 4);
+		for (int i = 0; i < numRuns; i++) {
+			endsBuf.setAtIndex(LE_INT, i, ends.get(i));
+		}
+
+		int elemBytes = ptype.byteSize();
+		MemorySegment valuesBuf = Arena.ofAuto().allocate((long) numRuns * elemBytes, elemBytes);
+		for (int i = 0; i < numRuns; i++) {
+			PTypeIO.set(valuesBuf, (long) i * elemBytes, ptype, values.get(i));
+		}
+
+		byte[] metaBytes = EncodingProtos.RunEndMetadata.newBuilder()
+				.setEndsPtype(dev.vortex.proto.DTypeProtos.PType.forNumber(PType.U32.ordinal()))
+				.setNumRuns(numRuns)
+				.setOffset(0)
+				.build()
+				.toByteArray();
+
+		EncodeNode endsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
+		EncodeNode valuesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
+		EncodeNode root = new EncodeNode(encodingId(), ByteBuffer.wrap(metaBytes),
+				new EncodeNode[]{endsNode, valuesNode}, new int[0]);
+		return new EncodeResult(root, List.of(endsBuf, valuesBuf), null, null);
+	}
+
+	private static int arrayLength(Object data, PType ptype) {
+		return switch (ptype) {
+			case I8, U8 -> ((byte[]) data).length;
+			case I16, U16 -> ((short[]) data).length;
+			case I32, U32 -> ((int[]) data).length;
+			case I64, U64 -> ((long[]) data).length;
+			default -> throw new VortexException(EncodingId.VORTEX_RUNEND, "unsupported ptype: " + ptype);
+		};
+	}
+
+	private static long readLong(Object data, PType ptype, int i) {
+		return switch (ptype) {
+			case I8 -> ((byte[]) data)[i];
+			case U8 -> Byte.toUnsignedLong(((byte[]) data)[i]);
+			case I16 -> ((short[]) data)[i];
+			case U16 -> Short.toUnsignedLong(((short[]) data)[i]);
+			case I32 -> ((int[]) data)[i];
+			case U32 -> Integer.toUnsignedLong(((int[]) data)[i]);
+			case I64, U64 -> ((long[]) data)[i];
+			default -> throw new VortexException(EncodingId.VORTEX_RUNEND, "unsupported ptype: " + ptype);
+		};
 	}
 
 	@Override

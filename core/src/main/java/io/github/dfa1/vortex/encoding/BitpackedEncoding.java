@@ -14,6 +14,7 @@ import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.core.VortexException;
 
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
@@ -37,15 +38,15 @@ public final class BitpackedEncoding implements Encoding {
 	private static final ValueLayout.OfInt LE_INT = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 	private static final ValueLayout.OfLong LE_LONG = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
-	private static ByteBuffer packFastLanes(long[] values, int n, int bitWidth, int typeBits) {
+	private static MemorySegment packFastLanes(long[] values, int n, int bitWidth, int typeBits) {
 		if (bitWidth == 0 || n == 0) {
-			return ByteBuffer.wrap(new byte[0]);
+			return MemorySegment.ofArray(new byte[0]);
 		}
 		int lanes = 1024 / typeBits;
 		int wordBytes = typeBits / 8;
 		int blockCount = (n + 1023) / 1024;
 		long typeMask = typeMask(typeBits);
-		byte[] buf = new byte[blockCount * 128 * bitWidth];
+		MemorySegment seg = Arena.ofAuto().allocate((long) blockCount * 128 * bitWidth);
 
 		for (int block = 0; block < blockCount; block++) {
 			int blockByteOff = block * 128 * bitWidth;
@@ -65,20 +66,20 @@ public final class BitpackedEncoding implements Encoding {
 					long value = (logicalIdx < n) ? (values[logicalIdx] & typeMask) : 0L;
 
 					int wordOff = blockByteOff + (lanes * currWord + lane) * wordBytes;
-					long existing = readWordFromBuf(buf, wordOff, typeBits);
+					long existing = readWordFromSeg(seg, wordOff, typeBits);
 					existing |= (value << shift) & typeMask;
-					writeWordToBuf(buf, wordOff, existing, typeBits);
+					writeWordToSeg(seg, wordOff, existing, typeBits);
 
 					if (remainingBits > 0) {
 						int hiWordOff = blockByteOff + (lanes * nextWord + lane) * wordBytes;
-						long existingHi = readWordFromBuf(buf, hiWordOff, typeBits);
+						long existingHi = readWordFromSeg(seg, hiWordOff, typeBits);
 						existingHi |= (value >>> currentBits) & typeMask;
-						writeWordToBuf(buf, hiWordOff, existingHi, typeBits);
+						writeWordToSeg(seg, hiWordOff, existingHi, typeBits);
 					}
 				}
 			}
 		}
-		return ByteBuffer.wrap(buf);
+		return seg;
 	}
 
 	private static void fastlanesUnpackToSeg(
@@ -369,49 +370,22 @@ public final class BitpackedEncoding implements Encoding {
 		}
 	}
 
-	private static long readWordFromBuf(byte[] buf, int off, int typeBits) {
+	private static long readWordFromSeg(MemorySegment seg, int off, int typeBits) {
 		return switch (typeBits) {
-			case 8 -> buf[off] & 0xFFL;
-			case 16 -> (buf[off] & 0xFFL) | ((buf[off + 1] & 0xFFL) << 8);
-			case 32 -> Integer.toUnsignedLong(
-					(buf[off] & 0xFF) | ((buf[off + 1] & 0xFF) << 8)
-							| ((buf[off + 2] & 0xFF) << 16) | ((buf[off + 3] & 0xFF) << 24));
-			case 64 -> {
-				long lo = Integer.toUnsignedLong(
-						(buf[off] & 0xFF) | ((buf[off + 1] & 0xFF) << 8)
-								| ((buf[off + 2] & 0xFF) << 16) | ((buf[off + 3] & 0xFF) << 24));
-				long hi = Integer.toUnsignedLong(
-						(buf[off + 4] & 0xFF) | ((buf[off + 5] & 0xFF) << 8)
-								| ((buf[off + 6] & 0xFF) << 16) | ((buf[off + 7] & 0xFF) << 24));
-				yield lo | (hi << 32);
-			}
+			case 8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, off));
+			case 16 -> Short.toUnsignedLong(seg.get(LE_SHORT, off));
+			case 32 -> Integer.toUnsignedLong(seg.get(LE_INT, off));
+			case 64 -> seg.get(LE_LONG, off);
 			default -> throw new VortexException(EncodingId.FASTLANES_BITPACKED, "unsupported typeBits: " + typeBits);
 		};
 	}
 
-	private static void writeWordToBuf(byte[] buf, int off, long value, int typeBits) {
+	private static void writeWordToSeg(MemorySegment seg, int off, long value, int typeBits) {
 		switch (typeBits) {
-			case 8 -> buf[off] = (byte) value;
-			case 16 -> {
-				buf[off] = (byte) value;
-				buf[off + 1] = (byte) (value >>> 8);
-			}
-			case 32 -> {
-				buf[off] = (byte) value;
-				buf[off + 1] = (byte) (value >>> 8);
-				buf[off + 2] = (byte) (value >>> 16);
-				buf[off + 3] = (byte) (value >>> 24);
-			}
-			case 64 -> {
-				buf[off] = (byte) value;
-				buf[off + 1] = (byte) (value >>> 8);
-				buf[off + 2] = (byte) (value >>> 16);
-				buf[off + 3] = (byte) (value >>> 24);
-				buf[off + 4] = (byte) (value >>> 32);
-				buf[off + 5] = (byte) (value >>> 40);
-				buf[off + 6] = (byte) (value >>> 48);
-				buf[off + 7] = (byte) (value >>> 56);
-			}
+			case 8 -> seg.set(ValueLayout.JAVA_BYTE, off, (byte) value);
+			case 16 -> seg.set(LE_SHORT, off, (short) value);
+			case 32 -> seg.set(LE_INT, off, (int) value);
+			case 64 -> seg.set(LE_LONG, off, value);
 			default -> throw new VortexException(EncodingId.FASTLANES_BITPACKED, "unsupported typeBits: " + typeBits);
 		}
 	}
@@ -544,7 +518,7 @@ public final class BitpackedEncoding implements Encoding {
 			bitWidth = maxUnsigned == 0L ? 0 : (Long.SIZE - Long.numberOfLeadingZeros(maxUnsigned));
 		}
 
-		ByteBuffer packed = packFastLanes(longs, n, bitWidth, typeBits);
+		MemorySegment packed = packFastLanes(longs, n, bitWidth, typeBits);
 
 		byte[] metaBytes = EncodingProtos.BitPackedMetadata.newBuilder()
 				.setBitWidth(bitWidth)

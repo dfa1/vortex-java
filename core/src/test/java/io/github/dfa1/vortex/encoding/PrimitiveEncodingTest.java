@@ -122,7 +122,7 @@ class PrimitiveEncodingTest {
 		EncodeResult encoded = sut.encode(dtype, data);
 
 		// Then — no compression: wire size = n * elemBytes
-		int totalBytes = encoded.buffers().stream().mapToInt(java.nio.Buffer::limit).sum();
-		assertThat(totalBytes).isEqualTo(data.length * 8);
+		long totalBytes = encoded.buffers().stream().mapToLong(java.lang.foreign.MemorySegment::byteSize).sum();
+		assertThat(totalBytes).isEqualTo((long) data.length * 8);
 	}
 }

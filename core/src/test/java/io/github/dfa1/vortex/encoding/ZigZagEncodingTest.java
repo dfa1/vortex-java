@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.encoding;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.IntArray;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -67,6 +68,69 @@ class ZigZagEncodingTest {
 		for (int i = 0; i < expected.length; i++) {
 			assertThat(seg.get(ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), (long) i * 4))
 					.as("index %d", i).isEqualTo(expected[i]);
+		}
+	}
+
+	static Stream<int[]> i32RoundtripArrays() {
+		return Stream.of(
+				new int[]{},
+				new int[]{0},
+				new int[]{-1, 1, -2, 2},
+				new int[]{Integer.MIN_VALUE, Integer.MAX_VALUE, 0},
+				new int[]{-100, 0, 100, -1000, 1000}
+		);
+	}
+
+	static Stream<long[]> i64RoundtripArrays() {
+		return Stream.of(
+				new long[]{},
+				new long[]{0L},
+				new long[]{Long.MIN_VALUE, Long.MAX_VALUE, 0L},
+				new long[]{-1L, 1L, -2L, 2L}
+		);
+	}
+
+	@ParameterizedTest
+	@MethodSource("i32RoundtripArrays")
+	void encodeDecode_i32_isLossless(int[] data) {
+		// Given
+		var sut = new ZigZagEncoding();
+		EncodingRegistry registry = EncodingRegistry.empty();
+		registry.register(sut);
+		registry.register(new PrimitiveEncoding());
+		var le = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+
+		// When
+		EncodeResult encoded = sut.encode(I32_DTYPE, data);
+		DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, I32_DTYPE, registry);
+		Array result = sut.decode(ctx);
+
+		// Then
+		assertThat(result.length()).isEqualTo(data.length);
+		for (int i = 0; i < data.length; i++) {
+			assertThat(result.buffer(0).get(le, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
+		}
+	}
+
+	@ParameterizedTest
+	@MethodSource("i64RoundtripArrays")
+	void encodeDecode_i64_isLossless(long[] data) {
+		// Given
+		var sut = new ZigZagEncoding();
+		EncodingRegistry registry = EncodingRegistry.empty();
+		registry.register(sut);
+		registry.register(new PrimitiveEncoding());
+		var le = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+
+		// When
+		EncodeResult encoded = sut.encode(I64_DTYPE, data);
+		DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, I64_DTYPE, registry);
+		Array result = sut.decode(ctx);
+
+		// Then
+		assertThat(result.length()).isEqualTo(data.length);
+		for (int i = 0; i < data.length; i++) {
+			assertThat(result.buffer(0).get(le, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
 		}
 	}
 

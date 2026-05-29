@@ -20,6 +20,7 @@ import io.github.dfa1.vortex.fbs.Type;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.WritableByteChannel;
@@ -229,8 +230,8 @@ public final class VortexWriter implements Closeable {
 
 		// Segment format: [buffer data...] [FlatBuffer Array bytes] [4-byte LE u32 = fbLen]
 		int fbLen = fbBuf.remaining();
-		for (ByteBuffer buf : result.buffers()) {
-			write(buf);
+		for (MemorySegment seg : result.buffers()) {
+			write(seg);
 		}
 		write(fbBuf);
 		var sizeBuf = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(fbLen);
@@ -256,6 +257,14 @@ public final class VortexWriter implements Closeable {
 			}
 		}
 		throw new UnsupportedOperationException("no encoding for dtype: " + dtype);
+	}
+
+	private void write(MemorySegment seg) throws IOException {
+		ByteBuffer buf = seg.asByteBuffer();
+		while (buf.hasRemaining()) {
+			channel.write(buf);
+		}
+		bytesWritten += seg.byteSize();
 	}
 
 	private void write(ByteBuffer buf) throws IOException {
@@ -297,7 +306,7 @@ public final class VortexWriter implements Closeable {
 		io.github.dfa1.vortex.fbs.Array.startBuffersVector(fbb, bufs.size());
 		for (int i = bufs.size() - 1; i >= 0; i--) {
 			fbb.prep(4, 8);
-			fbb.putInt(bufs.get(i).remaining());
+			fbb.putInt((int) bufs.get(i).byteSize());
 			fbb.putByte((byte) 0);   // compression = None
 			fbb.putByte((byte) 6);   // alignment_exponent = 6 (64-byte alignment)
 			fbb.putShort((short) 0); // padding = 0

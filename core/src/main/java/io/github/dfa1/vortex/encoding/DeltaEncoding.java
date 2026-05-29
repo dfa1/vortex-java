@@ -11,6 +11,7 @@ import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.core.VortexException;
 
+import java.lang.foreign.Arena;
 import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -25,21 +26,23 @@ import java.util.List;
 /// Optimal for monotonic or near-monotonic integer sequences.
 public final class DeltaEncoding implements Encoding {
 
-	private static ByteBuffer pack(long[] values, long frameOfRef, int bitWidth) {
+	private static MemorySegment pack(long[] values, long frameOfRef, int bitWidth) {
 		int n = values.length;
 		int totalBits = n * bitWidth;
-		byte[] buf = new byte[(totalBits + 7) / 8];
-
+		long byteLen = (totalBits + 7) / 8;
+		MemorySegment seg = Arena.ofAuto().allocate(byteLen > 0 ? byteLen : 1);
 		for (int i = 0; i < n; i++) {
 			long shifted = values[i] - frameOfRef;
 			int bitPos = i * bitWidth;
 			for (int b = 0; b < bitWidth; b++) {
 				if (((shifted >>> b) & 1L) == 1L) {
-					buf[(bitPos + b) >>> 3] |= (byte) (1 << ((bitPos + b) & 7));
+					int byteIdx = (bitPos + b) >>> 3;
+					byte cur = seg.get(ValueLayout.JAVA_BYTE, byteIdx);
+					seg.set(ValueLayout.JAVA_BYTE, byteIdx, (byte) (cur | (1 << ((bitPos + b) & 7))));
 				}
 			}
 		}
-		return ByteBuffer.wrap(buf);
+		return seg;
 	}
 
 	private static long[] unpack(MemorySegment packed, int count, int bitWidth, long frameOfRef) {
@@ -213,7 +216,7 @@ public final class DeltaEncoding implements Encoding {
 			bitWidth = (range == 0L) ? 0 : (64 - Long.numberOfLeadingZeros(range));
 		}
 
-		ByteBuffer packed = pack(deltas, deltaFor, bitWidth);
+		MemorySegment packed = pack(deltas, deltaFor, bitWidth);
 
 		ByteBuffer meta = ByteBuffer.allocate(17).order(ByteOrder.LITTLE_ENDIAN);
 		meta.putLong(baseValue);

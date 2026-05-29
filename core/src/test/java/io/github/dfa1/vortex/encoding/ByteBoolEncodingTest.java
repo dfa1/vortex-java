@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.encoding;
 
 import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.BoolArray;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -32,6 +33,38 @@ class ByteBoolEncodingTest {
 				Arguments.of("mixed", new byte[]{0, 1, 0, 1}, new boolean[]{false, true, false, true}),
 				Arguments.of("empty", new byte[]{}, new boolean[]{})
 		);
+	}
+
+	static Stream<boolean[]> boolArrays() {
+		return Stream.of(
+				new boolean[]{},
+				new boolean[]{false},
+				new boolean[]{true},
+				new boolean[]{true, false, true, false, true},
+				new boolean[]{false, false, false, false},
+				new boolean[]{true, true, true, true, true, true, true, true, true}
+		);
+	}
+
+	@ParameterizedTest
+	@MethodSource("boolArrays")
+	void encodeDecode_isLossless(boolean[] data) {
+		// Given
+		var sut = new ByteBoolEncoding();
+		EncodingRegistry registry = EncodingRegistry.empty();
+		registry.register(sut);
+
+		// When
+		EncodeResult encoded = sut.encode(BOOL_DTYPE, data);
+		DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, BOOL_DTYPE, registry);
+		Array result = sut.decode(ctx);
+
+		// Then
+		assertThat(result.length()).isEqualTo(data.length);
+		BoolArray boolArr = (BoolArray) result;
+		for (int i = 0; i < data.length; i++) {
+			assertThat(boolArr.getBoolean(i)).as("index %d", i).isEqualTo(data[i]);
+		}
 	}
 
 	@ParameterizedTest(name = "{0}")

@@ -7,12 +7,14 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -129,6 +131,69 @@ class FrameOfReferenceEncodingTest {
 		var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 		for (int i = 0; i < residuals.length; i++) {
 			assertThat(result.buffer(0).get(layout, (long) i * 8)).isEqualTo(residuals[i]);
+		}
+	}
+
+	static Stream<long[]> i64Arrays() {
+		return Stream.of(
+				new long[]{0L},
+				new long[]{1000L, 1001L, 1002L, 1003L},
+				new long[]{-500L, -499L, -498L},
+				new long[]{Long.MIN_VALUE, Long.MIN_VALUE + 1L, Long.MIN_VALUE + 2L},
+				new long[]{42L, 42L, 42L}
+		);
+	}
+
+	static Stream<int[]> i32Arrays() {
+		return Stream.of(
+				new int[]{0},
+				new int[]{100, 101, 102, 103},
+				new int[]{-10, -9, -8, -7},
+				new int[]{Integer.MIN_VALUE, Integer.MIN_VALUE + 1}
+		);
+	}
+
+	@ParameterizedTest
+	@MethodSource("i64Arrays")
+	void encodeDecode_i64_isLossless(long[] data) {
+		// Given
+		var sut = new FrameOfReferenceEncoding();
+		EncodingRegistry registry = EncodingRegistry.empty();
+		registry.register(sut);
+		registry.register(new PrimitiveEncoding());
+		var le = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+
+		// When
+		EncodeResult encoded = sut.encode(I64_DTYPE, data);
+		DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, I64_DTYPE, registry);
+		Array result = sut.decode(ctx);
+
+		// Then
+		assertThat(result.length()).isEqualTo(data.length);
+		for (int i = 0; i < data.length; i++) {
+			assertThat(result.buffer(0).get(le, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
+		}
+	}
+
+	@ParameterizedTest
+	@MethodSource("i32Arrays")
+	void encodeDecode_i32_isLossless(int[] data) {
+		// Given
+		var sut = new FrameOfReferenceEncoding();
+		EncodingRegistry registry = EncodingRegistry.empty();
+		registry.register(sut);
+		registry.register(new PrimitiveEncoding());
+		var le = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+
+		// When
+		EncodeResult encoded = sut.encode(I32_DTYPE, data);
+		DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, I32_DTYPE, registry);
+		Array result = sut.decode(ctx);
+
+		// Then
+		assertThat(result.length()).isEqualTo(data.length);
+		for (int i = 0; i < data.length; i++) {
+			assertThat(result.buffer(0).get(le, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
 		}
 	}
 

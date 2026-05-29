@@ -2,12 +2,9 @@
 
 ## Encodings
 
-- [ ] **#7 Additional encodings**
-    - `pcodec` — PCodec numerical compression. Currently a stub (`PcoEncoding`) that throws
-      `VortexException(VORTEX_PCO, "not implemented")` so affected files fail with clear attribution.
-      Full decoder requires a port of ANS, delta predictions, and bin tokenization from the
-      upstream Rust `pco` crate (https://github.com/mwlon/pcodec) — no mainstream Java port exists.
-      Multi-day effort; not on the critical path while ALP covers typical float workloads.
+- [ ] following code is copied over multiple classes => let's move them in
+private static final ValueLayout.OfShort  LE_SHORT  = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+private static final ValueLayout.OfInt    LE_INT    = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
 ## Performance
 

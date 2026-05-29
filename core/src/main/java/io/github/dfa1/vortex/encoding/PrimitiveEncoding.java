@@ -11,65 +11,63 @@ import io.github.dfa1.vortex.core.array.FloatArray;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
+import java.lang.foreign.ValueLayout;
 import java.nio.ByteOrder;
 
 /// Encoding for `vortex.primitive` — raw little-endian primitive arrays.
 /// Encodes all [DType.Primitive] types; embeds min/max stats as Protobuf ScalarValue bytes.
 public final class PrimitiveEncoding implements Encoding {
 
-	private static ByteBuffer encodePrimitive(PType ptype, Object data) {
-		int elementBytes = ptype.byteSize();
+	private static final ValueLayout.OfShort  LE_SHORT  = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+	private static final ValueLayout.OfInt    LE_INT    = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+	private static final ValueLayout.OfLong   LE_LONG   = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+	private static final ValueLayout.OfFloat  LE_FLOAT  = ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+	private static final ValueLayout.OfDouble LE_DOUBLE = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+
+	private static MemorySegment encodePrimitive(PType ptype, Object data) {
 		return switch (ptype) {
-			case I8, U8 -> ByteBuffer.wrap((byte[]) data);
-			case I16, U16 -> {
+			case I8, U8 -> MemorySegment.ofArray((byte[]) data);
+			case I16, U16, F16 -> {
 				short[] arr = (short[]) data;
-				var bb = ByteBuffer.allocate(arr.length * elementBytes).order(ByteOrder.LITTLE_ENDIAN);
-				for (short v : arr) {
-					bb.putShort(v);
+				MemorySegment seg = Arena.ofAuto().allocate((long) arr.length * 2, 2);
+				for (int i = 0; i < arr.length; i++) {
+					seg.setAtIndex(LE_SHORT, i, arr[i]);
 				}
-				yield bb.flip();
+				yield seg;
 			}
 			case I32, U32 -> {
 				int[] arr = (int[]) data;
-				var bb = ByteBuffer.allocate(arr.length * elementBytes).order(ByteOrder.LITTLE_ENDIAN);
-				for (int v : arr) {
-					bb.putInt(v);
+				MemorySegment seg = Arena.ofAuto().allocate((long) arr.length * 4, 4);
+				for (int i = 0; i < arr.length; i++) {
+					seg.setAtIndex(LE_INT, i, arr[i]);
 				}
-				yield bb.flip();
+				yield seg;
 			}
 			case I64, U64 -> {
 				long[] arr = (long[]) data;
-				var bb = ByteBuffer.allocate(arr.length * elementBytes).order(ByteOrder.LITTLE_ENDIAN);
-				for (long v : arr) {
-					bb.putLong(v);
+				MemorySegment seg = Arena.ofAuto().allocate((long) arr.length * 8, 8);
+				for (int i = 0; i < arr.length; i++) {
+					seg.setAtIndex(LE_LONG, i, arr[i]);
 				}
-				yield bb.flip();
+				yield seg;
 			}
 			case F32 -> {
 				float[] arr = (float[]) data;
-				var bb = ByteBuffer.allocate(arr.length * elementBytes).order(ByteOrder.LITTLE_ENDIAN);
-				for (float v : arr) {
-					bb.putFloat(v);
+				MemorySegment seg = Arena.ofAuto().allocate((long) arr.length * 4, 4);
+				for (int i = 0; i < arr.length; i++) {
+					seg.setAtIndex(LE_FLOAT, i, arr[i]);
 				}
-				yield bb.flip();
+				yield seg;
 			}
 			case F64 -> {
 				double[] arr = (double[]) data;
-				var bb = ByteBuffer.allocate(arr.length * elementBytes).order(ByteOrder.LITTLE_ENDIAN);
-				for (double v : arr) {
-					bb.putDouble(v);
+				MemorySegment seg = Arena.ofAuto().allocate((long) arr.length * 8, 8);
+				for (int i = 0; i < arr.length; i++) {
+					seg.setAtIndex(LE_DOUBLE, i, arr[i]);
 				}
-				yield bb.flip();
-			}
-			case F16 -> {
-				short[] arr = (short[]) data;
-				var bb = ByteBuffer.allocate(arr.length * elementBytes).order(ByteOrder.LITTLE_ENDIAN);
-				for (short v : arr) {
-					bb.putShort(v);
-				}
-				yield bb.flip();
+				yield seg;
 			}
 		};
 	}
@@ -292,7 +290,7 @@ public final class PrimitiveEncoding implements Encoding {
 	@Override
 	public EncodeResult encode(DType dtype, Object data) {
 		PType ptype = ((DType.Primitive) dtype).ptype();
-		ByteBuffer buf = encodePrimitive(ptype, data);
+		MemorySegment seg = encodePrimitive(ptype, data);
 		byte[] min = null;
 		byte[] max = null;
 		byte[][] stats = computeStats(ptype, data);
@@ -300,7 +298,7 @@ public final class PrimitiveEncoding implements Encoding {
 			min = stats[0];
 			max = stats[1];
 		}
-		return EncodeResult.simple(encodingId(), buf, min, max);
+		return EncodeResult.simple(encodingId(), seg, min, max);
 	}
 
 	@Override

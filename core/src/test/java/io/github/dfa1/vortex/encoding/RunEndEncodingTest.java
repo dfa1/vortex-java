@@ -7,11 +7,14 @@ import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -86,6 +89,38 @@ class RunEndEncodingTest {
 		var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 		for (int i = 0; i < 5; i++) {
 			assertThat(result.buffer(0).get(layout, (long) i * 8)).isEqualTo(42L);
+		}
+	}
+
+	static Stream<long[]> i64Arrays() {
+		return Stream.of(
+				new long[]{42L},
+				new long[]{1L, 1L, 2L, 2L, 3L},
+				new long[]{0L, 0L, 0L, 0L, 0L},
+				new long[]{10L, 20L, 10L, 20L},
+				new long[]{-1L, -1L, -1L, 0L, 0L, 1L}
+		);
+	}
+
+	@ParameterizedTest
+	@MethodSource("i64Arrays")
+	void encodeDecode_i64_isLossless(long[] data) {
+		// Given
+		var sut = new RunEndEncoding();
+		EncodingRegistry registry = EncodingRegistry.empty();
+		registry.register(sut);
+		registry.register(new PrimitiveEncoding());
+		var le = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+
+		// When
+		EncodeResult encoded = sut.encode(I64_DTYPE, data);
+		DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, I64_DTYPE, registry);
+		Array result = sut.decode(ctx);
+
+		// Then
+		assertThat(result.length()).isEqualTo(data.length);
+		for (int i = 0; i < data.length; i++) {
+			assertThat(result.buffer(0).get(le, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
 		}
 	}
 

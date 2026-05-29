@@ -10,9 +10,11 @@ import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
 
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteOrder;
+import java.util.List;
 
 /// Encoding for {@code vortex.zigzag} — signed integers stored as zigzag-encoded unsigned values.
 ///
@@ -43,7 +45,49 @@ public final class ZigZagEncoding implements Encoding {
 
 	@Override
 	public EncodeResult encode(DType dtype, Object data) {
-		throw new UnsupportedOperationException("encode not supported by " + encodingId());
+		PType signed = ((DType.Primitive) dtype).ptype();
+		MemorySegment seg = switch (signed) {
+			case I8 -> {
+				byte[] arr = (byte[]) data;
+				MemorySegment s = Arena.ofAuto().allocate(arr.length);
+				for (int i = 0; i < arr.length; i++) {
+					byte v = arr[i];
+					s.set(ValueLayout.JAVA_BYTE, i, (byte) ((v << 1) ^ (v >> 7)));
+				}
+				yield s;
+			}
+			case I16 -> {
+				short[] arr = (short[]) data;
+				MemorySegment s = Arena.ofAuto().allocate((long) arr.length * 2, 2);
+				for (int i = 0; i < arr.length; i++) {
+					short v = arr[i];
+					s.setAtIndex(LE_SHORT, i, (short) ((v << 1) ^ (v >> 15)));
+				}
+				yield s;
+			}
+			case I32 -> {
+				int[] arr = (int[]) data;
+				MemorySegment s = Arena.ofAuto().allocate((long) arr.length * 4, 4);
+				for (int i = 0; i < arr.length; i++) {
+					int v = arr[i];
+					s.setAtIndex(LE_INT, i, (v << 1) ^ (v >> 31));
+				}
+				yield s;
+			}
+			case I64 -> {
+				long[] arr = (long[]) data;
+				MemorySegment s = Arena.ofAuto().allocate((long) arr.length * 8, 8);
+				for (int i = 0; i < arr.length; i++) {
+					long v = arr[i];
+					s.setAtIndex(LE_LONG, i, (v << 1) ^ (v >> 63));
+				}
+				yield s;
+			}
+			default -> throw new VortexException(encodingId(), "unsupported ptype: " + signed);
+		};
+		EncodeNode child = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
+		EncodeNode root = new EncodeNode(encodingId(), null, new EncodeNode[]{child}, new int[0]);
+		return new EncodeResult(root, List.of(seg), null, null);
 	}
 
 	private static PType toUnsigned(PType signed) {

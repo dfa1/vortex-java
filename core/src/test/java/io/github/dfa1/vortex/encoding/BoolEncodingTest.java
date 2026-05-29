@@ -61,7 +61,7 @@ class BoolEncodingTest {
 		EncodeResult encoded = sut.encode(BOOL_DTYPE, data);
 
 		// Then — bit-packed: ceiling(n/8) bytes, always ≤ n bytes raw
-		int totalBytes = encoded.buffers().stream().mapToInt(java.nio.Buffer::limit).sum();
-		assertThat(totalBytes).isEqualTo((data.length + 7) / 8);
+		long totalBytes = encoded.buffers().stream().mapToLong(java.lang.foreign.MemorySegment::byteSize).sum();
+		assertThat(totalBytes).isEqualTo((long) (data.length + 7) / 8);
 	}
 }
