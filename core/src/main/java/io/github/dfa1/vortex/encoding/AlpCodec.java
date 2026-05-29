@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.encoding;
 import com.google.protobuf.InvalidProtocolBufferException;
 import dev.vortex.proto.DTypeProtos;
 import dev.vortex.proto.EncodingProtos;
+import dev.vortex.proto.ScalarProtos;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
@@ -15,6 +16,7 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.ArrayList;
 
 /// Decoder for {@code vortex.alp} — Adaptive Lossless floating-Point compression.
 ///
@@ -61,6 +63,9 @@ public final class AlpCodec implements Codec {
 	private static final DType I64_DTYPE = new DType.Primitive(PType.I64, false);
 	private static final DType I32_DTYPE = new DType.Primitive(PType.I32, false);
 
+	// Cascade: encoded I64s are delta-compressed to reduce storage size.
+	private static final DeltaCodec DELTA_CODEC = new DeltaCodec();
+
 	private static Array decodeChildAs(DecodeContext parent, int childIdx, DType dtype, long rowCount) {
 		ArrayNode childNode = parent.node().children()[childIdx];
 		DecodeContext childCtx = new DecodeContext(
@@ -84,27 +89,160 @@ public final class AlpCodec implements Codec {
 		return PType.values()[proto.getNumber()];
 	}
 
+	private static final int SAMPLE_SIZE = 512;
+
 	@Override
 	public CodecId encodingId() {
 		return CodecId.VORTEX_ALP;
 	}
 
 	@Override
+	public boolean accepts(DType dtype) {
+		if (!(dtype instanceof DType.Primitive p)) {
+			return false;
+		}
+		return p.ptype() == PType.F64 || p.ptype() == PType.F32;
+	}
+
+	@Override
 	public EncodeResult encode(DType dtype, Object data) {
-		throw new UnsupportedOperationException("encode not supported by " + encodingId());
+		PType ptype = ((DType.Primitive) dtype).ptype();
+		if (ptype == PType.F64) {
+			return encodeF64((double[]) data, dtype);
+		}
+		throw new UnsupportedOperationException("ALP encode not yet supported for " + ptype);
+	}
+
+	// ── F64 encode ────────────────────────────────────────────────────────────
+
+	private static int[] findExponentsF64(double[] values) {
+		int sampleLen = Math.min(SAMPLE_SIZE, values.length);
+		int bestExpE = 0, bestExpF = 0, bestExceptions = sampleLen + 1;
+
+		outer:
+		for (int expE = 0; expE < F10_F64.length; expE++) {
+			for (int expF = 0; expF < F10_F64.length; expF++) {
+				double encFactor = F10_F64[expE] * IF10_F64[expF];
+				int exceptions = 0;
+				for (int i = 0; i < sampleLen; i++) {
+					double enc = values[i] * encFactor;
+					// Use division for the roundtrip check: x*(a*b) ≠ x/a in IEEE 754
+					// when a is not a power of 2, so decoded = encoded/encFactor gives
+					// the correct result for values generated as integers divided by a power of 10.
+					if (!Double.isFinite(enc) || (double) Math.round(enc) / encFactor != values[i]) {
+						exceptions++;
+					}
+				}
+				if (exceptions < bestExceptions) {
+					bestExceptions = exceptions;
+					bestExpE = expE;
+					bestExpF = expF;
+					if (bestExceptions == 0) {
+						break outer;
+					}
+				}
+			}
+		}
+		return new int[]{bestExpE, bestExpF};
+	}
+
+	private static EncodeResult encodeF64(double[] values, DType dtype) {
+		int n = values.length;
+		int[] exps = findExponentsF64(values);
+		int expE = exps[0], expF = exps[1];
+		double encFactor = F10_F64[expE] * IF10_F64[expF];
+
+		long[] encodedArr = new long[n];
+		var patchIndices = new ArrayList<Integer>();
+		var patchValues  = new ArrayList<Double>();
+
+		double min = Double.MAX_VALUE, max = -Double.MAX_VALUE;
+		for (int i = 0; i < n; i++) {
+			double v = values[i];
+			double enc = v * encFactor;
+			long encoded;
+			if (Double.isFinite(enc) && (double) (encoded = Math.round(enc)) / encFactor == v) {
+				encodedArr[i] = encoded;
+			} else {
+				encodedArr[i] = 0L;
+				patchIndices.add(i);
+				patchValues.add(v);
+			}
+			if (v < min) {
+				min = v;
+			}
+			if (v > max) {
+				max = v;
+			}
+		}
+
+		byte[] statsMin = n > 0 ? scalarF64(min) : null;
+		byte[] statsMax = n > 0 ? scalarF64(max) : null;
+
+		// Cascade: delta-compress the ALP-encoded I64s to reduce storage size.
+		EncodeResult deltaResult = DELTA_CODEC.encode(I64_DTYPE, encodedArr);
+
+		if (patchIndices.isEmpty()) {
+			byte[] metaBytes = EncodingProtos.ALPMetadata.newBuilder()
+					.setExpE(expE).setExpF(expF).build().toByteArray();
+			EncodeNode root = new EncodeNode(CodecId.VORTEX_ALP,
+					ByteBuffer.wrap(metaBytes), new EncodeNode[]{deltaResult.rootNode()}, new int[0]);
+			return new EncodeResult(root, deltaResult.buffers(), statsMin, statsMax);
+		}
+
+		// Patch buffers follow the delta buffer(s) in the combined list.
+		int numPatches = patchIndices.size();
+		int patchIdxBufOffset = deltaResult.buffers().size();
+		int patchValBufOffset = patchIdxBufOffset + 1;
+
+		ByteBuffer idxBuf = ByteBuffer.allocate(numPatches * 4).order(ByteOrder.LITTLE_ENDIAN);
+		ByteBuffer valBuf = ByteBuffer.allocate(numPatches * 8).order(ByteOrder.LITTLE_ENDIAN);
+		for (int i = 0; i < numPatches; i++) {
+			idxBuf.putInt(patchIndices.get(i));
+			valBuf.putDouble(patchValues.get(i));
+		}
+		idxBuf.flip();
+		valBuf.flip();
+
+		EncodingProtos.PatchesMetadata patches = EncodingProtos.PatchesMetadata.newBuilder()
+				.setLen(numPatches)
+				.setOffset(0)
+				.setIndicesPtype(DTypeProtos.PType.forNumber(PType.U32.ordinal()))
+				.build();
+		byte[] metaBytes = EncodingProtos.ALPMetadata.newBuilder()
+				.setExpE(expE).setExpF(expF).setPatches(patches).build().toByteArray();
+
+		EncodeNode idxNode = EncodeNode.leaf(CodecId.VORTEX_PRIMITIVE, patchIdxBufOffset);
+		EncodeNode valNode = EncodeNode.leaf(CodecId.VORTEX_PRIMITIVE, patchValBufOffset);
+		EncodeNode root = new EncodeNode(CodecId.VORTEX_ALP,
+				ByteBuffer.wrap(metaBytes),
+				new EncodeNode[]{deltaResult.rootNode(), idxNode, valNode},
+				new int[0]);
+
+		var combinedBuffers = new ArrayList<>(deltaResult.buffers());
+		combinedBuffers.add(idxBuf);
+		combinedBuffers.add(valBuf);
+		return new EncodeResult(root, combinedBuffers, statsMin, statsMax);
+	}
+
+	private static byte[] scalarF64(double v) {
+		return ScalarProtos.ScalarValue.newBuilder().setF64Value(v).build().toByteArray();
 	}
 
 	@Override
 	public Array decode(DecodeContext ctx) {
 		ByteBuffer rawMeta = ctx.metadata();
-		if (rawMeta == null) {
-			throw new VortexException(CodecId.VORTEX_ALP, "missing metadata");
-		}
+		// Proto3 omits fields equal to their default value (0), so ALPMetadata{expE=0,expF=0}
+		// serialises to 0 bytes; treat null/empty metadata as the all-zero default instance.
 		EncodingProtos.ALPMetadata meta;
-		try {
-			meta = EncodingProtos.ALPMetadata.parseFrom(rawMeta.duplicate());
-		} catch (InvalidProtocolBufferException e) {
-			throw new VortexException(CodecId.VORTEX_ALP, "invalid metadata", e);
+		if (rawMeta == null || !rawMeta.hasRemaining()) {
+			meta = EncodingProtos.ALPMetadata.getDefaultInstance();
+		} else {
+			try {
+				meta = EncodingProtos.ALPMetadata.parseFrom(rawMeta.duplicate());
+			} catch (InvalidProtocolBufferException e) {
+				throw new VortexException(CodecId.VORTEX_ALP, "invalid metadata", e);
+			}
 		}
 
 		if (!(ctx.dtype() instanceof DType.Primitive p)) {

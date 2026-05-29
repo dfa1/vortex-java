@@ -201,6 +201,8 @@ class WriteFileSizeIntegrationTest {
 			}
 		}
 		assertThat(totalRows).isEqualTo(TOTAL_ROWS);
+		System.out.printf("[WriteFileSizeIntegrationTest] Java file: %,d bytes (%.2f MB)%n",
+				Files.size(file), Files.size(file) / 1_048_576.0);
 	}
 
 	@Test
@@ -246,8 +248,8 @@ class WriteFileSizeIntegrationTest {
 
 		assertThat(javaSize).isPositive();
 		assertThat(jniSize).isPositive();
-		// Java writer uses only PrimitiveCodec (no ALP/bitpacking), so larger files are expected.
-		// Bound: Java file < 6× JNI to catch gross regressions (e.g. duplicate data, unbounded growth).
-		assertThat(javaSize).isLessThan(jniSize * 6);
+		// Java writer uses ALP+Delta for F64, PrimitiveCodec for integers. JNI also uses bitpacking.
+		// Bound: Java file < 3× JNI to catch gross regressions (e.g. duplicate data, unbounded growth).
+		assertThat(javaSize).isLessThan(jniSize * 3);
 	}
 }

@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.writer;
 
 import com.google.flatbuffers.FlatBufferBuilder;
 import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.encoding.AlpCodec;
 import io.github.dfa1.vortex.encoding.BoolCodec;
 import io.github.dfa1.vortex.encoding.Codec;
 import io.github.dfa1.vortex.encoding.EncodeNode;
@@ -51,7 +52,7 @@ public final class VortexWriter implements Closeable {
 	private static final ByteBuffer MAGIC = ByteBuffer.wrap(new byte[]{'V', 'T', 'X', 'F'})
 			.asReadOnlyBuffer();
 
-	private static final List<Codec> DEFAULT_CODECS = List.of(new PrimitiveCodec(), new BoolCodec());
+	private static final List<Codec> DEFAULT_CODECS = List.of(new AlpCodec(), new PrimitiveCodec(), new BoolCodec());
 
 	private final WritableByteChannel channel;
 	private final DType.Struct schema;
