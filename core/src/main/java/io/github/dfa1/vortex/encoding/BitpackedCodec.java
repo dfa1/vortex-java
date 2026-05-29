@@ -9,6 +9,8 @@ import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.GenericArray;
+import io.github.dfa1.vortex.core.array.IntArray;
+import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.MemorySegment;
@@ -585,8 +587,12 @@ public final class BitpackedCodec implements Codec {
 			applyPatches(ctx, meta.getPatches(), output, ptype.byteSize());
 		}
 
-		return new GenericArray(ctx.dtype(), rowCount,
-				new MemorySegment[]{output.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
+		return switch (ptype) {
+			case I64, U64 -> new LongArray(ctx.dtype(), rowCount, output.asReadOnly(), ArrayStats.empty());
+			case I32, U32 -> new IntArray(ctx.dtype(), rowCount, output.asReadOnly(), ArrayStats.empty());
+			default -> new GenericArray(ctx.dtype(), rowCount,
+					new MemorySegment[]{output.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
+		};
 	}
 
 	// ── Patches ───────────────────────────────────────────────────────────────

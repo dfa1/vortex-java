@@ -8,7 +8,10 @@ import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.GenericArray;
+import io.github.dfa1.vortex.core.array.IntArray;
+import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.MemorySegment;
@@ -169,23 +172,20 @@ public final class SparseCodec implements Codec {
 		MemorySegment out = ctx.arena().allocate(n * elemBytes);
 		fillSegment(out, n, valuePtype, fillScalar);
 
-		if (numPatches == 0) {
-			return new GenericArray(ctx.dtype(), n,
-					new MemorySegment[]{out.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
+		if (numPatches > 0) {
+			DType indicesDtype = new DType.Primitive(indicesPtype, false);
+			Array indicesArray = decodeChildWithDtype(ctx, 0, indicesDtype, numPatches);
+			Array valuesArray = decodeChildWithDtype(ctx, 1, ctx.dtype(), numPatches);
+			applyPatches(out, n, valuePtype,
+					indicesArray.buffer(0), valuesArray.buffer(0), indicesPtype, numPatches, offset);
 		}
 
-		// Decode patch indices with their own dtype and rowCount
-		DType indicesDtype = new DType.Primitive(indicesPtype, false);
-		Array indicesArray = decodeChildWithDtype(ctx, 0, indicesDtype, numPatches);
-
-		// Decode patch values with parent dtype and numPatches rowCount
-		Array valuesArray = decodeChildWithDtype(ctx, 1, ctx.dtype(), numPatches);
-
-		// Apply patches: output[index - offset] = value
-		applyPatches(out, n, valuePtype,
-				indicesArray.buffer(0), valuesArray.buffer(0), indicesPtype, numPatches, offset);
-
-		return new GenericArray(ctx.dtype(), n,
-				new MemorySegment[]{out.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
+		MemorySegment ro = out.asReadOnly();
+		return switch (valuePtype) {
+			case I64, U64 -> new LongArray(ctx.dtype(), n, ro, ArrayStats.empty());
+			case I32, U32 -> new IntArray(ctx.dtype(), n, ro, ArrayStats.empty());
+			case F64 -> new DoubleArray(ctx.dtype(), n, ro, ArrayStats.empty());
+			default -> new GenericArray(ctx.dtype(), n, new MemorySegment[]{ro}, Array.NO_CHILDREN, ArrayStats.empty());
+		};
 	}
 }

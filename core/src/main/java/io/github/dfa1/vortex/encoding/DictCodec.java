@@ -6,7 +6,10 @@ import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.GenericArray;
+import io.github.dfa1.vortex.core.array.IntArray;
+import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.MemorySegment;
@@ -261,7 +264,7 @@ public final class DictCodec implements Codec {
 			long code = readCode(codesBuf, codePType, i);
 			MemorySegment.copy(valuesBuf, code * elemSize, out, i * elemSize, elemSize);
 		}
-		return new GenericArray(ctx.dtype(), rowCount, new MemorySegment[]{out.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
+		return typedArray(ctx.dtype(), valPType, rowCount, out.asReadOnly());
 	}
 
 	private Array decodeRustProto(DecodeContext ctx, ByteBuffer metaBuf) {
@@ -295,6 +298,15 @@ public final class DictCodec implements Codec {
 			case U32 -> expandU32(codesBuf, valuesBuf, out, rowCount, elemSize);
 			default -> throw new VortexException(CodecId.VORTEX_DICT, "unexpected code type: " + codePType);
 		}
-		return new GenericArray(ctx.dtype(), rowCount, new MemorySegment[]{out.asReadOnly()}, Array.NO_CHILDREN, ArrayStats.empty());
+		return typedArray(ctx.dtype(), valPType, rowCount, out.asReadOnly());
+	}
+
+	private static Array typedArray(DType dtype, PType ptype, long n, MemorySegment seg) {
+		return switch (ptype) {
+			case I64, U64 -> new LongArray(dtype, n, seg, ArrayStats.empty());
+			case I32, U32 -> new IntArray(dtype, n, seg, ArrayStats.empty());
+			case F64 -> new DoubleArray(dtype, n, seg, ArrayStats.empty());
+			default -> new GenericArray(dtype, n, new MemorySegment[]{seg}, Array.NO_CHILDREN, ArrayStats.empty());
+		};
 	}
 }

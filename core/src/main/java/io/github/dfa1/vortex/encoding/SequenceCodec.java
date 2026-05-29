@@ -6,10 +6,15 @@ import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.GenericArray;
+import io.github.dfa1.vortex.core.array.IntArray;
+import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.VortexException;
 
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
@@ -20,50 +25,56 @@ import java.nio.ByteOrder;
 /// Output is allocated on the heap; not backed by the file's mapped region.
 public final class SequenceCodec implements Codec {
 
+	private static final ValueLayout.OfLong   LE_LONG   = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+	private static final ValueLayout.OfInt    LE_INT    = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+	private static final ValueLayout.OfShort  LE_SHORT  = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+	private static final ValueLayout.OfDouble LE_DOUBLE = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+	private static final ValueLayout.OfFloat  LE_FLOAT  = ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+
 	private static Array decodeInteger(
-			EncodingProtos.SequenceMetadata meta, PType pt, long n, DType dtype
+			EncodingProtos.SequenceMetadata meta, PType pt, long n, DType dtype, Arena arena
 	) {
 		long base = signedValue(meta.getBase());
 		long mul = signedValue(meta.getMultiplier());
 		int elemBytes = pt.byteSize();
-		ByteBuffer buf = ByteBuffer.allocate((int) (n * elemBytes)).order(ByteOrder.LITTLE_ENDIAN);
+		MemorySegment seg = arena.allocate(n * elemBytes);
 		for (long i = 0; i < n; i++) {
 			long v = base + i * mul;
 			switch (pt) {
-				case I8, U8 -> buf.put((byte) v);
-				case I16, U16 -> buf.putShort((short) v);
-				case I32, U32 -> buf.putInt((int) v);
-				case I64, U64 -> buf.putLong(v);
+				case I8, U8 -> seg.set(ValueLayout.JAVA_BYTE, i, (byte) v);
+				case I16, U16 -> seg.setAtIndex(LE_SHORT, i, (short) v);
+				case I32, U32 -> seg.setAtIndex(LE_INT, i, (int) v);
+				case I64, U64 -> seg.setAtIndex(LE_LONG, i, v);
 				default -> throw new IllegalStateException("unreachable");
 			}
 		}
-		buf.flip();
-		return new GenericArray(dtype, n, new MemorySegment[]{MemorySegment.ofBuffer(buf)},
-				Array.NO_CHILDREN, ArrayStats.empty());
+		MemorySegment ro = seg.asReadOnly();
+		return switch (pt) {
+			case I64, U64 -> new LongArray(dtype, n, ro, ArrayStats.empty());
+			case I32, U32 -> new IntArray(dtype, n, ro, ArrayStats.empty());
+			default -> new GenericArray(dtype, n, new MemorySegment[]{ro}, Array.NO_CHILDREN, ArrayStats.empty());
+		};
 	}
 
-	private static Array decodeF32(EncodingProtos.SequenceMetadata meta, long n, DType dtype) {
+	private static Array decodeF32(EncodingProtos.SequenceMetadata meta, long n, DType dtype, Arena arena) {
 		float base = meta.getBase().getF32Value();
 		float mul = meta.getMultiplier().getF32Value();
-		ByteBuffer buf = ByteBuffer.allocate((int) (n * 4)).order(ByteOrder.LITTLE_ENDIAN);
+		MemorySegment seg = arena.allocate(n * 4L);
 		for (long i = 0; i < n; i++) {
-			buf.putFloat(base + i * mul);
+			seg.setAtIndex(LE_FLOAT, i, base + i * mul);
 		}
-		buf.flip();
-		return new GenericArray(dtype, n, new MemorySegment[]{MemorySegment.ofBuffer(buf)},
+		return new GenericArray(dtype, n, new MemorySegment[]{seg.asReadOnly()},
 				Array.NO_CHILDREN, ArrayStats.empty());
 	}
 
-	private static Array decodeF64(EncodingProtos.SequenceMetadata meta, long n, DType dtype) {
+	private static Array decodeF64(EncodingProtos.SequenceMetadata meta, long n, DType dtype, Arena arena) {
 		double base = meta.getBase().getF64Value();
 		double mul = meta.getMultiplier().getF64Value();
-		ByteBuffer buf = ByteBuffer.allocate((int) (n * 8)).order(ByteOrder.LITTLE_ENDIAN);
+		MemorySegment seg = arena.allocate(n * 8L);
 		for (long i = 0; i < n; i++) {
-			buf.putDouble(base + i * mul);
+			seg.setAtIndex(LE_DOUBLE, i, base + i * mul);
 		}
-		buf.flip();
-		return new GenericArray(dtype, n, new MemorySegment[]{MemorySegment.ofBuffer(buf)},
-				Array.NO_CHILDREN, ArrayStats.empty());
+		return new DoubleArray(dtype, n, seg.asReadOnly(), ArrayStats.empty());
 	}
 
 	private static long signedValue(dev.vortex.proto.ScalarProtos.ScalarValue sv) {
@@ -105,9 +116,9 @@ public final class SequenceCodec implements Codec {
 		long n = ctx.rowCount();
 		PType pt = p.ptype();
 		return switch (pt) {
-			case I8, I16, I32, I64, U8, U16, U32, U64 -> decodeInteger(meta, pt, n, ctx.dtype());
-			case F32 -> decodeF32(meta, n, ctx.dtype());
-			case F64 -> decodeF64(meta, n, ctx.dtype());
+			case I8, I16, I32, I64, U8, U16, U32, U64 -> decodeInteger(meta, pt, n, ctx.dtype(), ctx.arena());
+			case F32 -> decodeF32(meta, n, ctx.dtype(), ctx.arena());
+			case F64 -> decodeF64(meta, n, ctx.dtype(), ctx.arena());
 			case F16 -> throw new VortexException(CodecId.VORTEX_SEQUENCE, "F16 not supported");
 		};
 	}
