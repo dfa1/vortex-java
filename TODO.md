@@ -8,6 +8,17 @@
 
 ## Performance
 
+- [ ] **OHLC bench regression on `close` and `symbol`**
+    - Measured 2026-05-29 on M5 / 32 GB: `javaReadClose` 62 ops/s (README claims 118),
+      `javaReadSymbol` 7.6 ops/s (README claims 27.8). `javaReadVolume` still ~115 (was 120).
+    - Sweep `513fc09` was inert for these columns (the swept layouts are not on their hot path),
+      so the regression predates it. Prime suspect: commit `347bc34` (vortex.dict layout +
+      vortex.fsst codec) changed the encoding pipeline so `symbol` now routes through
+      `vortex.dict` instead of constant/varbin, and ALP picks a different sub-encoding for
+      `close`.
+    - Bisect between the README capture and `347bc34`, then either: (a) restore the fast path,
+      or (b) update the README table with the new numbers and reasoning.
+
 - [ ] **#10b Java vs JNI write benchmark** (`performance/` module, `-Pperformance`)
     - Add `RustVsJavaWriteBenchmark` mirroring read side: same 10M-row OHLC fixture, JMH throughput, both writers.
     - Old `WriteBenchmark.java` (Java-only) removed; rewrite from scratch using JNI bindings already on classpath
