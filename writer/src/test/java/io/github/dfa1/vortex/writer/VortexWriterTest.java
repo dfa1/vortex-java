@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.writer;
 import io.github.dfa1.vortex.core.Array;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.encoding.CodecRegistry;
 import io.github.dfa1.vortex.encoding.PrimitiveCodec;
 import io.github.dfa1.vortex.io.VortexReader;
@@ -135,6 +136,48 @@ class VortexWriterTest {
 			assertThat(buf.get(ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), 0)).isEqualTo(42L);
 			assertThat(buf.get(ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), 8)).isEqualTo(100L);
 			assertThat(buf.get(ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), 16)).isEqualTo(-1L);
+		}
+	}
+
+	@Test
+	void scanResult_column_returnsTypedArray(@TempDir Path tmp) throws IOException {
+		// Given
+		Path file = tmp.resolve("typed.vtx");
+		long[] ids = {10L, 20L, 30L};
+
+		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+		     var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
+			sut.writeChunk(Map.of("id", ids, "value", new double[]{1.0, 2.0, 3.0}));
+		}
+
+		// When
+		var registry = primitiveRegistry();
+		try (var vf = VortexReader.open(file, registry)) {
+			List<ScanResult> results = scanAll(vf, ScanOptions.all());
+			LongArray idArray = results.get(0).column("id");
+
+			// Then
+			assertThat(idArray.fold(0L, Long::sum)).isEqualTo(60L);
+		}
+	}
+
+	@Test
+	void scanResult_column_unknownName_throwsVortexException(@TempDir Path tmp) throws IOException {
+		// Given
+		Path file = tmp.resolve("unknown.vtx");
+
+		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+		     var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
+			sut.writeChunk(Map.of("id", new long[]{1L}, "value", new double[]{1.0}));
+		}
+
+		// When / Then
+		var registry = primitiveRegistry();
+		try (var vf = VortexReader.open(file, registry)) {
+			List<ScanResult> results = scanAll(vf, ScanOptions.all());
+			ScanResult sut = results.get(0);
+			assertThatThrownBy(() -> sut.column("nonexistent"))
+					.hasMessageContaining("unknown column: nonexistent");
 		}
 	}
 

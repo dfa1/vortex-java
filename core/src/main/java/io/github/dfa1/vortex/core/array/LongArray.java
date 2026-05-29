@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.core.DType;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteOrder;
+import java.util.function.LongBinaryOperator;
 import java.util.function.LongConsumer;
 
 /// Concrete [Array] for I64/U64 primitive columns. Hoists a single
@@ -69,5 +70,15 @@ public final class LongArray implements Array {
 		for (long i = 0; i < n; i++) {
 			c.accept(buf.getAtIndex(LAYOUT, i));
 		}
+	}
+
+	public long fold(long identity, LongBinaryOperator op) {
+		MemorySegment buf = buffer;
+		long n = length;
+		long result = identity;
+		for (long i = 0; i < n; i++) {
+			result = op.applyAsLong(result, buf.getAtIndex(LAYOUT, i));
+		}
+		return result;
 	}
 }
