@@ -6,7 +6,6 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.encoding.AlpCodec;
 import io.github.dfa1.vortex.encoding.CodecRegistry;
-import io.github.dfa1.vortex.encoding.DeltaCodec;
 import io.github.dfa1.vortex.encoding.PrimitiveCodec;
 import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.ScanOptions;
@@ -52,7 +51,6 @@ class VortexWriterTest {
 	private static CodecRegistry primitiveRegistry() {
 		var registry = CodecRegistry.empty();
 		registry.register(new AlpCodec());
-		registry.register(new DeltaCodec());
 		registry.register(new PrimitiveCodec());
 		return registry;
 	}

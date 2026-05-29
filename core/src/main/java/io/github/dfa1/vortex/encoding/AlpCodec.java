@@ -17,6 +17,7 @@ import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
+import java.util.List;
 
 /// Decoder for {@code vortex.alp} — Adaptive Lossless floating-Point compression.
 ///
@@ -62,9 +63,6 @@ public final class AlpCodec implements Codec {
 
 	private static final DType I64_DTYPE = new DType.Primitive(PType.I64, false);
 	private static final DType I32_DTYPE = new DType.Primitive(PType.I32, false);
-
-	// Cascade: encoded I64s are delta-compressed to reduce storage size.
-	private static final DeltaCodec DELTA_CODEC = new DeltaCodec();
 
 	private static Array decodeChildAs(DecodeContext parent, int childIdx, DType dtype, long rowCount) {
 		ArrayNode childNode = parent.node().children()[childIdx];
@@ -123,13 +121,11 @@ public final class AlpCodec implements Codec {
 		for (int expE = 0; expE < F10_F64.length; expE++) {
 			for (int expF = 0; expF < F10_F64.length; expF++) {
 				double encFactor = F10_F64[expE] * IF10_F64[expF];
+				double decFactor = F10_F64[expF] * IF10_F64[expE];
 				int exceptions = 0;
 				for (int i = 0; i < sampleLen; i++) {
 					double enc = values[i] * encFactor;
-					// Use division for the roundtrip check: x*(a*b) ≠ x/a in IEEE 754
-					// when a is not a power of 2, so decoded = encoded/encFactor gives
-					// the correct result for values generated as integers divided by a power of 10.
-					if (!Double.isFinite(enc) || (double) Math.round(enc) / encFactor != values[i]) {
+					if (!Double.isFinite(enc) || (double) Math.round(enc) * decFactor != values[i]) {
 						exceptions++;
 					}
 				}
@@ -151,6 +147,7 @@ public final class AlpCodec implements Codec {
 		int[] exps = findExponentsF64(values);
 		int expE = exps[0], expF = exps[1];
 		double encFactor = F10_F64[expE] * IF10_F64[expF];
+		double decFactor = F10_F64[expF] * IF10_F64[expE];
 
 		long[] encodedArr = new long[n];
 		var patchIndices = new ArrayList<Integer>();
@@ -161,7 +158,7 @@ public final class AlpCodec implements Codec {
 			double v = values[i];
 			double enc = v * encFactor;
 			long encoded;
-			if (Double.isFinite(enc) && (double) (encoded = Math.round(enc)) / encFactor == v) {
+			if (Double.isFinite(enc) && (double) (encoded = Math.round(enc)) * decFactor == v) {
 				encodedArr[i] = encoded;
 			} else {
 				encodedArr[i] = 0L;
@@ -179,22 +176,23 @@ public final class AlpCodec implements Codec {
 		byte[] statsMin = n > 0 ? scalarF64(min) : null;
 		byte[] statsMax = n > 0 ? scalarF64(max) : null;
 
-		// Cascade: delta-compress the ALP-encoded I64s to reduce storage size.
-		EncodeResult deltaResult = DELTA_CODEC.encode(I64_DTYPE, encodedArr);
+		ByteBuffer encodedBuf = ByteBuffer.allocate(n * 8).order(ByteOrder.LITTLE_ENDIAN);
+		for (long v : encodedArr) {
+			encodedBuf.putLong(v);
+		}
+		encodedBuf.flip();
+
+		EncodeNode encodedNode = EncodeNode.leaf(CodecId.VORTEX_PRIMITIVE, 0);
 
 		if (patchIndices.isEmpty()) {
 			byte[] metaBytes = EncodingProtos.ALPMetadata.newBuilder()
 					.setExpE(expE).setExpF(expF).build().toByteArray();
 			EncodeNode root = new EncodeNode(CodecId.VORTEX_ALP,
-					ByteBuffer.wrap(metaBytes), new EncodeNode[]{deltaResult.rootNode()}, new int[0]);
-			return new EncodeResult(root, deltaResult.buffers(), statsMin, statsMax);
+					ByteBuffer.wrap(metaBytes), new EncodeNode[]{encodedNode}, new int[0]);
+			return new EncodeResult(root, List.of(encodedBuf), statsMin, statsMax);
 		}
 
-		// Patch buffers follow the delta buffer(s) in the combined list.
 		int numPatches = patchIndices.size();
-		int patchIdxBufOffset = deltaResult.buffers().size();
-		int patchValBufOffset = patchIdxBufOffset + 1;
-
 		ByteBuffer idxBuf = ByteBuffer.allocate(numPatches * 4).order(ByteOrder.LITTLE_ENDIAN);
 		ByteBuffer valBuf = ByteBuffer.allocate(numPatches * 8).order(ByteOrder.LITTLE_ENDIAN);
 		for (int i = 0; i < numPatches; i++) {
@@ -212,17 +210,13 @@ public final class AlpCodec implements Codec {
 		byte[] metaBytes = EncodingProtos.ALPMetadata.newBuilder()
 				.setExpE(expE).setExpF(expF).setPatches(patches).build().toByteArray();
 
-		EncodeNode idxNode = EncodeNode.leaf(CodecId.VORTEX_PRIMITIVE, patchIdxBufOffset);
-		EncodeNode valNode = EncodeNode.leaf(CodecId.VORTEX_PRIMITIVE, patchValBufOffset);
+		EncodeNode idxNode = EncodeNode.leaf(CodecId.VORTEX_PRIMITIVE, 1);
+		EncodeNode valNode = EncodeNode.leaf(CodecId.VORTEX_PRIMITIVE, 2);
 		EncodeNode root = new EncodeNode(CodecId.VORTEX_ALP,
 				ByteBuffer.wrap(metaBytes),
-				new EncodeNode[]{deltaResult.rootNode(), idxNode, valNode},
+				new EncodeNode[]{encodedNode, idxNode, valNode},
 				new int[0]);
-
-		var combinedBuffers = new ArrayList<>(deltaResult.buffers());
-		combinedBuffers.add(idxBuf);
-		combinedBuffers.add(valBuf);
-		return new EncodeResult(root, combinedBuffers, statsMin, statsMax);
+		return new EncodeResult(root, List.of(encodedBuf, idxBuf, valBuf), statsMin, statsMax);
 	}
 
 	private static byte[] scalarF64(double v) {

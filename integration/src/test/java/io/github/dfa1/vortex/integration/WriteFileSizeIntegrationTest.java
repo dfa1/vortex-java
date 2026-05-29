@@ -248,8 +248,8 @@ class WriteFileSizeIntegrationTest {
 
 		assertThat(javaSize).isPositive();
 		assertThat(jniSize).isPositive();
-		// Java writer uses ALP+Delta for F64, PrimitiveCodec for integers. JNI also uses bitpacking.
-		// Bound: Java file < 3× JNI to catch gross regressions (e.g. duplicate data, unbounded growth).
-		assertThat(javaSize).isLessThan(jniSize * 3);
+		// Java writer uses ALP (no further compression) for F64, PrimitiveCodec for integers.
+		// JNI uses ALP+FastLanes delta+bitpacking. Bound < 6× catches gross regressions.
+		assertThat(javaSize).isLessThan(jniSize * 6);
 	}
 }
