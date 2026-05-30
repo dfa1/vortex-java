@@ -32,8 +32,6 @@
 
 - [ ] **#14 CSV import/export + CLI tool** — remaining work
 
-    - [ ] `export <file>` CLI subcommand — write CSV to stdout via `CsvExporter`
-    - [ ] `schema <file>` CLI subcommand — print dtype only (machine-readable)
     - [ ] `CliIT` acceptance test — write CSV → import → export → diff original CSV
 
 ## Large-file support
