@@ -30,9 +30,6 @@
 
 ## Tooling
 
-- [ ] **#14 CSV import/export + CLI tool** — remaining work
-
-    - [ ] `CliIT` acceptance test — write CSV → import → export → diff original CSV
 
 ## Large-file support
 
