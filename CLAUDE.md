@@ -130,6 +130,31 @@ methods in the Rust source to get the exact protobuf schema, then implement from
   }
   ```
 
+## Encoding class structure
+
+Encoding classes with non-trivial encode **and** decode paths must separate them into
+private static inner classes named `Encoder` and `Decoder`. Shared low-level helpers
+(buffer math, proto serialization) live in the side that owns them or in a third inner
+class if genuinely shared by both.
+
+```java
+public final class FooEncoding implements Encoding {
+
+    @Override public EncodeResult encode(DType dtype, Object data) { return Encoder.encode(dtype, data); }
+    @Override public Array decode(DecodeContext ctx) { return Decoder.decode(ctx); }
+
+    private static final class Encoder {
+        static EncodeResult encode(DType dtype, Object data) { ... }
+    }
+
+    private static final class Decoder {
+        static Array decode(DecodeContext ctx) { ... }
+    }
+}
+```
+
+Simple encodings (≤ ~80 lines total, e.g. `NullEncoding`, `BoolEncoding`) are exempt.
+
 ## Testing
 
 - All features covered by unit tests. Always check the happy path at minimum.
@@ -141,6 +166,15 @@ methods in the Rust source to get the exact protobuf schema, then implement from
 - Prefer `@ParameterizedTest` over copy-pasting tests. Use `@ValueSource` when possible; `@ArgumentsSource` when more
   structure needed (test case must have a name).
 - Acceptance tests run the built jar end-to-end with hosh scripts.
+- Use `@Nested` to group related tests by scenario or feature within a test class:
+  ```java
+  class FooEncodingTest {
+      @Nested class Encode { @Test void roundTrips() { ... } }
+      @Nested class Decode { @Test void handlesEmpty() { ... } }
+  }
+  ```
+  `@BeforeEach` inside a `@Nested` class applies only to that group. Private helpers go
+  at the end of the class they serve, after all `@Test` methods.
 
 ## Property-Based Testing (jqwik)
 
