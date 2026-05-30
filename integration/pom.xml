@@ -58,6 +58,12 @@
 			<groupId>net.jqwik</groupId>
 			<artifactId>jqwik</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-nop</artifactId>
+			<version>2.0.18</version>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 	<build>
