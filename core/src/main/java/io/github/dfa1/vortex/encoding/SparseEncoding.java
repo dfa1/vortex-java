@@ -33,94 +33,6 @@ import java.nio.ByteOrder;
 /// {@code output[indices[i] - offset] = values[i]} for each patch.
 public final class SparseEncoding implements Encoding {
 
-	private static Array decodeChildWithDtype(DecodeContext parent, int childIdx, DType dtype, long rowCount) {
-		ArrayNode childNode = parent.node().children()[childIdx];
-		DecodeContext childCtx = new DecodeContext(
-				childNode, dtype, rowCount, parent.segmentBuffers(), parent.registry(), parent.arena());
-		try {
-			return parent.registry().decode(childCtx);
-		} catch (Exception e) {
-			throw new VortexException(EncodingId.VORTEX_SPARSE, "failed to decode child " + childIdx, e);
-		}
-	}
-
-	private static void fillSegment(MemorySegment out, long n, PType ptype, ScalarProtos.ScalarValue scalar) {
-		long fillLong = scalarToLong(scalar, ptype);
-		int elemBytes = ptype.byteSize();
-		ByteBuffer bb = out.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
-		for (long i = 0; i < n; i++) {
-			writeElem(bb, ptype, fillLong);
-		}
-	}
-
-	// ── Helpers ───────────────────────────────────────────────────────────────
-
-	private static void applyPatches(
-			MemorySegment out, long n, PType valuePtype,
-			MemorySegment idxSeg, MemorySegment valSeg,
-			PType idxPtype, long numPatches, long offset
-	) {
-		int elemBytes = valuePtype.byteSize();
-		ByteBuffer outBuf = out.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
-		for (long i = 0; i < numPatches; i++) {
-			long idx = readUnsignedIdx(idxSeg, i, idxPtype) - offset;
-			if (idx < 0 || idx >= n) {
-				throw new VortexException(EncodingId.VORTEX_SPARSE,
-						"patch index " + idx + " out of range [0," + n + ")");
-			}
-			long val = readElem(valSeg, i, valuePtype);
-			outBuf.position((int) (idx * elemBytes));
-			writeElem(outBuf, valuePtype, val);
-		}
-	}
-
-	private static long readUnsignedIdx(MemorySegment seg, long i, PType ptype) {
-		return switch (ptype) {
-			case U8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, i));
-			case U16 -> Short.toUnsignedLong(seg.get(PTypeIO.LE_SHORT, i * 2));
-			case U32 -> Integer.toUnsignedLong(seg.get(PTypeIO.LE_INT, i * 4));
-			case U64 -> seg.get(PTypeIO.LE_LONG, i * 8);
-			default -> throw new VortexException(EncodingId.VORTEX_SPARSE, "non-unsigned index ptype " + ptype);
-		};
-	}
-
-	private static long readElem(MemorySegment seg, long i, PType ptype) {
-		return switch (ptype) {
-			case I8, U8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, i));
-			case I16, U16 -> Short.toUnsignedLong(seg.get(PTypeIO.LE_SHORT, i * 2));
-			case I32, U32 -> Integer.toUnsignedLong(seg.get(PTypeIO.LE_INT, i * 4));
-			case I64, U64, F32, F64 -> seg.get(PTypeIO.LE_LONG, i * 8);
-			default -> throw new UnsupportedOperationException("vortex.sparse: unsupported ptype " + ptype);
-		};
-	}
-
-	private static void writeElem(ByteBuffer bb, PType ptype, long bits) {
-		switch (ptype) {
-			case I8, U8 -> bb.put((byte) bits);
-			case I16, U16 -> bb.putShort((short) bits);
-			case I32, U32 -> bb.putInt((int) bits);
-			case I64, U64, F32, F64 -> bb.putLong(bits);
-			default -> throw new UnsupportedOperationException("vortex.sparse: unsupported ptype " + ptype);
-		}
-	}
-
-	private static long scalarToLong(ScalarProtos.ScalarValue scalar, PType ptype) {
-		return switch (scalar.getKindCase()) {
-			case INT64_VALUE -> scalar.getInt64Value();
-			case UINT64_VALUE -> scalar.getUint64Value();
-			case F32_VALUE -> Float.floatToRawIntBits(scalar.getF32Value());
-			case F64_VALUE -> Double.doubleToRawLongBits(scalar.getF64Value());
-			case KIND_NOT_SET -> 0L;
-			default -> throw new VortexException(EncodingId.VORTEX_SPARSE,
-					"unexpected scalar kind " + scalar.getKindCase());
-		};
-	}
-
-	// PType proto enum ordinals match Java PType ordinals (U8=0..F64=10)
-	private static PType ptypeFromProto(DTypeProtos.PType proto) {
-		return PType.values()[proto.getNumber()];
-	}
-
 	@Override
 	public EncodingId encodingId() {
 		return EncodingId.VORTEX_SPARSE;
@@ -133,59 +45,148 @@ public final class SparseEncoding implements Encoding {
 
 	@Override
 	public Array decode(DecodeContext ctx) {
-		ByteBuffer rawMeta = ctx.metadata();
-		if (rawMeta == null || !rawMeta.hasRemaining()) {
-			throw new VortexException(EncodingId.VORTEX_SPARSE, "missing metadata");
+		return Decoder.decode(ctx);
+	}
+
+	private static final class Decoder {
+
+		private static Array decode(DecodeContext ctx) {
+			ByteBuffer rawMeta = ctx.metadata();
+			if (rawMeta == null || !rawMeta.hasRemaining()) {
+				throw new VortexException(EncodingId.VORTEX_SPARSE, "missing metadata");
+			}
+			EncodingProtos.SparseMetadata sparseMeta;
+			try {
+				sparseMeta = EncodingProtos.SparseMetadata.parseFrom(rawMeta.duplicate());
+			} catch (InvalidProtocolBufferException e) {
+				throw new VortexException(EncodingId.VORTEX_SPARSE, "invalid metadata", e);
+			}
+
+			EncodingProtos.PatchesMetadata patches = sparseMeta.getPatches();
+			long numPatches = patches.getLen();
+			long offset = patches.getOffset();
+			PType indicesPtype = ptypeFromProto(patches.getIndicesPtype());
+
+			if (!(ctx.dtype() instanceof DType.Primitive)) {
+				throw new VortexException(EncodingId.VORTEX_SPARSE, "expected primitive dtype, got " + ctx.dtype());
+			}
+			PType valuePtype = ((DType.Primitive) ctx.dtype()).ptype();
+
+			MemorySegment fillBuf = ctx.buffer(0);
+			ScalarProtos.ScalarValue fillScalar;
+			try {
+				fillScalar = ScalarProtos.ScalarValue.parseFrom(fillBuf.asByteBuffer());
+			} catch (InvalidProtocolBufferException e) {
+				throw new VortexException(EncodingId.VORTEX_SPARSE, "invalid fill value", e);
+			}
+
+			long n = ctx.rowCount();
+			int elemBytes = valuePtype.byteSize();
+			MemorySegment out = ctx.arena().allocate(n * elemBytes);
+			fillSegment(out, n, valuePtype, fillScalar);
+
+			if (numPatches > 0) {
+				DType indicesDtype = new DType.Primitive(indicesPtype, false);
+				Array indicesArray = decodeChild(ctx, 0, indicesDtype, numPatches);
+				Array valuesArray = decodeChild(ctx, 1, ctx.dtype(), numPatches);
+				applyPatches(out, n, valuePtype,
+						indicesArray.buffer(0), valuesArray.buffer(0), indicesPtype, numPatches, offset);
+			}
+
+			return switch (valuePtype) {
+				case I64, U64 -> new LongArray(ctx.dtype(), n, out, ArrayStats.empty());
+				case I32, U32 -> new IntArray(ctx.dtype(), n, out, ArrayStats.empty());
+				case F64 -> new DoubleArray(ctx.dtype(), n, out, ArrayStats.empty());
+				case F32 -> new FloatArray(ctx.dtype(), n, out, ArrayStats.empty());
+				case I16, U16 -> new ShortArray(ctx.dtype(), n, out, ArrayStats.empty());
+				case I8, U8   -> new ByteArray(ctx.dtype(), n, out, ArrayStats.empty());
+				default -> throw new VortexException(EncodingId.VORTEX_SPARSE, "unsupported ptype " + valuePtype);
+			};
 		}
-		EncodingProtos.SparseMetadata sparseMeta;
-		try {
-			sparseMeta = EncodingProtos.SparseMetadata.parseFrom(rawMeta.duplicate());
-		} catch (InvalidProtocolBufferException e) {
-			throw new VortexException(EncodingId.VORTEX_SPARSE, "invalid metadata", e);
+
+		private static Array decodeChild(DecodeContext parent, int childIdx, DType dtype, long rowCount) {
+			ArrayNode childNode = parent.node().children()[childIdx];
+			DecodeContext childCtx = new DecodeContext(
+					childNode, dtype, rowCount, parent.segmentBuffers(), parent.registry(), parent.arena());
+			try {
+				return parent.registry().decode(childCtx);
+			} catch (Exception e) {
+				throw new VortexException(EncodingId.VORTEX_SPARSE, "failed to decode child " + childIdx, e);
+			}
 		}
 
-		EncodingProtos.PatchesMetadata patches = sparseMeta.getPatches();
-		long numPatches = patches.getLen();
-		long offset = patches.getOffset();
-		PType indicesPtype = ptypeFromProto(patches.getIndicesPtype());
-
-		if (!(ctx.dtype() instanceof DType.Primitive)) {
-			throw new VortexException(EncodingId.VORTEX_SPARSE, "expected primitive dtype, got " + ctx.dtype());
-		}
-		PType valuePtype = ((DType.Primitive) ctx.dtype()).ptype();
-
-		// Fill value from buffer[0]
-		MemorySegment fillBuf = ctx.buffer(0);
-		ScalarProtos.ScalarValue fillScalar;
-		try {
-			fillScalar = ScalarProtos.ScalarValue.parseFrom(fillBuf.asByteBuffer());
-		} catch (InvalidProtocolBufferException e) {
-			throw new VortexException(EncodingId.VORTEX_SPARSE, "invalid fill value", e);
+		private static void fillSegment(MemorySegment out, long n, PType ptype, ScalarProtos.ScalarValue scalar) {
+			long fillLong = scalarToLong(scalar, ptype);
+			ByteBuffer bb = out.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
+			for (long i = 0; i < n; i++) {
+				writeElem(bb, ptype, fillLong);
+			}
 		}
 
-		long n = ctx.rowCount();
-
-		// Allocate output buffer filled with the fill value
-		int elemBytes = valuePtype.byteSize();
-		MemorySegment out = ctx.arena().allocate(n * elemBytes);
-		fillSegment(out, n, valuePtype, fillScalar);
-
-		if (numPatches > 0) {
-			DType indicesDtype = new DType.Primitive(indicesPtype, false);
-			Array indicesArray = decodeChildWithDtype(ctx, 0, indicesDtype, numPatches);
-			Array valuesArray = decodeChildWithDtype(ctx, 1, ctx.dtype(), numPatches);
-			applyPatches(out, n, valuePtype,
-					indicesArray.buffer(0), valuesArray.buffer(0), indicesPtype, numPatches, offset);
+		private static void applyPatches(
+				MemorySegment out, long n, PType valuePtype,
+				MemorySegment idxSeg, MemorySegment valSeg,
+				PType idxPtype, long numPatches, long offset
+		) {
+			int elemBytes = valuePtype.byteSize();
+			ByteBuffer outBuf = out.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
+			for (long i = 0; i < numPatches; i++) {
+				long idx = readUnsignedIdx(idxSeg, i, idxPtype) - offset;
+				if (idx < 0 || idx >= n) {
+					throw new VortexException(EncodingId.VORTEX_SPARSE,
+							"patch index " + idx + " out of range [0," + n + ")");
+				}
+				long val = readElem(valSeg, i, valuePtype);
+				outBuf.position((int) (idx * elemBytes));
+				writeElem(outBuf, valuePtype, val);
+			}
 		}
 
-		return switch (valuePtype) {
-			case I64, U64 -> new LongArray(ctx.dtype(), n, out, ArrayStats.empty());
-			case I32, U32 -> new IntArray(ctx.dtype(), n, out, ArrayStats.empty());
-			case F64 -> new DoubleArray(ctx.dtype(), n, out, ArrayStats.empty());
-			case F32 -> new FloatArray(ctx.dtype(), n, out, ArrayStats.empty());
-			case I16, U16 -> new ShortArray(ctx.dtype(), n, out, ArrayStats.empty());
-			case I8, U8   -> new ByteArray(ctx.dtype(), n, out, ArrayStats.empty());
-			default -> throw new VortexException(EncodingId.VORTEX_SPARSE, "unsupported ptype " + valuePtype);
-		};
+		private static long readUnsignedIdx(MemorySegment seg, long i, PType ptype) {
+			return switch (ptype) {
+				case U8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, i));
+				case U16 -> Short.toUnsignedLong(seg.get(PTypeIO.LE_SHORT, i * 2));
+				case U32 -> Integer.toUnsignedLong(seg.get(PTypeIO.LE_INT, i * 4));
+				case U64 -> seg.get(PTypeIO.LE_LONG, i * 8);
+				default -> throw new VortexException(EncodingId.VORTEX_SPARSE, "non-unsigned index ptype " + ptype);
+			};
+		}
+
+		private static long readElem(MemorySegment seg, long i, PType ptype) {
+			return switch (ptype) {
+				case I8, U8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, i));
+				case I16, U16 -> Short.toUnsignedLong(seg.get(PTypeIO.LE_SHORT, i * 2));
+				case I32, U32 -> Integer.toUnsignedLong(seg.get(PTypeIO.LE_INT, i * 4));
+				case I64, U64, F32, F64 -> seg.get(PTypeIO.LE_LONG, i * 8);
+				default -> throw new UnsupportedOperationException("vortex.sparse: unsupported ptype " + ptype);
+			};
+		}
+
+		private static void writeElem(ByteBuffer bb, PType ptype, long bits) {
+			switch (ptype) {
+				case I8, U8 -> bb.put((byte) bits);
+				case I16, U16 -> bb.putShort((short) bits);
+				case I32, U32 -> bb.putInt((int) bits);
+				case I64, U64, F32, F64 -> bb.putLong(bits);
+				default -> throw new UnsupportedOperationException("vortex.sparse: unsupported ptype " + ptype);
+			}
+		}
+
+		private static long scalarToLong(ScalarProtos.ScalarValue scalar, PType ptype) {
+			return switch (scalar.getKindCase()) {
+				case INT64_VALUE -> scalar.getInt64Value();
+				case UINT64_VALUE -> scalar.getUint64Value();
+				case F32_VALUE -> Float.floatToRawIntBits(scalar.getF32Value());
+				case F64_VALUE -> Double.doubleToRawLongBits(scalar.getF64Value());
+				case KIND_NOT_SET -> 0L;
+				default -> throw new VortexException(EncodingId.VORTEX_SPARSE,
+						"unexpected scalar kind " + scalar.getKindCase());
+			};
+		}
+
+		// PType proto enum ordinals match Java PType ordinals (U8=0..F64=10)
+		private static PType ptypeFromProto(DTypeProtos.PType proto) {
+			return PType.values()[proto.getNumber()];
+		}
 	}
 }
