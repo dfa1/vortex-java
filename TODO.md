@@ -30,35 +30,11 @@
 
 ## Tooling
 
-- [ ] **#14 CSV import/export + CLI tool** (new modules `csv` + `cli`)
+- [ ] **#14 CSV import/export + CLI tool** — remaining work
 
-    ### `csv` module
-
-    - `CsvExporter` — reads a `VortexFile` via `ScanIterator` and writes rows to a `Writer` / `OutputStream`.
-      Emit header row from `DType.Struct` field names; one row per element; quote strings with commas.
-    - `CsvImporter` — parses a CSV file, infers column types (long, double, boolean, string fallback),
-      writes a `.vortex` file via `VortexWriter`. Schema override via `ImportOptions.withSchema(DType)`.
-
-    ### `cli` module
-
-    Uber-jar built with Maven Shade Plugin (`cli/pom.xml`, classifier `executable`).
-    Main class `io.github.dfa1.vortex.cli.VortexCli` dispatches subcommands:
-
-    | Subcommand | Description |
-    |------------|-------------|
-    | `inspect <file>` | Print version, file size, dtype, layout tree, row count, segment count |
-    | `export <file>` | Write CSV to stdout (uses `CsvExporter`) |
-    | `import <csv> <out.vortex>` | Write vortex from CSV (uses `CsvImporter`) |
-    | `schema <file>` | Print dtype only (machine-readable) |
-
-    **Exit codes**: 0 = success, 1 = usage error, 2 = file not found, 3 = decode error.
-
-    **Sub-tasks**
-
-    - [ ] **a. `csv` module** — `CsvExporter` + `CsvImporter` + unit tests
-    - [ ] **b. `cli` module** — `VortexCli` dispatcher + subcommand classes
-    - [ ] **c. Shade plugin** — fat jar with `Main-Class` manifest entry; exclude `module-info.class` conflicts
-    - [ ] **d. Tests** — `CliIT` acceptance test: write CSV → import → export → diff original CSV
+    - [ ] `export <file>` CLI subcommand — write CSV to stdout via `CsvExporter`
+    - [ ] `schema <file>` CLI subcommand — print dtype only (machine-readable)
+    - [ ] `CliIT` acceptance test — write CSV → import → export → diff original CSV
 
 ## Large-file support
 
