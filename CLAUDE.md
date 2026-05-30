@@ -26,21 +26,14 @@ Never use `mvn install` or `./mvwn install`.
 # Run a single test method
 ./mvnw test -pl reader -Dtest=MyTest#myMethod
 
-# Build benchmark fat jar (slow: ~20s, use for final runs)
-./mvnw package -pl performance -am -DskipTests
-
 # Run all benchmarks
-java -jar performance/target/benchmarks.jar
+./mvnw compile exec:java -pl performance -am -DskipTests
 
 # Run specific benchmark class
-java -jar performance/target/benchmarks.jar RustVsJavaReadBenchmark
+./mvnw compile exec:java -pl performance -am -DskipTests -Dexec.args="RustVsJavaReadBenchmark"
 
 # Run specific benchmark method (always use ClassName.methodName filter)
-java -jar performance/target/benchmarks.jar RustVsJavaReadBenchmark.javaReadVolume
-
-# Fast iteration (no shade, ~2s compile): compile then exec:java
-./mvnw compile -pl performance -am -DskipTests
-./mvnw exec:java -pl performance -Dexec.args="RustVsJavaReadBenchmark.javaReadVolume"
+./mvnw compile exec:java -pl performance -am -DskipTests -Dexec.args="RustVsJavaReadBenchmark.javaReadVolume"
 ```
 
 ## Architecture
