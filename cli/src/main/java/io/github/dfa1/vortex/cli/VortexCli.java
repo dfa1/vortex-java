@@ -23,6 +23,7 @@ public final class VortexCli {
             case "count"   -> CountCommand.run(args);
             case "select"  -> SelectCommand.run(args);
             case "stats"   -> StatsCommand.run(args);
+            case "filter"  -> FilterCommand.run(args);
             default -> {
                 System.err.println("unknown subcommand: " + args[0]);
                 printUsage(System.err);
@@ -41,5 +42,6 @@ public final class VortexCli {
         out.println("  count   <file.vortex>               print row count");
         out.println("  select  <file.vortex> <col> [...]   project columns to CSV on stdout");
         out.println("  stats   <file.vortex>               print per-column min/max statistics");
+        out.println("  filter  <file.vortex> <expr>        filter rows to CSV (e.g. \"price >= 100\")");
     }
 }

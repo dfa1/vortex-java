@@ -30,7 +30,6 @@
 
 ## Tooling
 
-- [ ] `filter` subcommand — push predicates into scan, skip chunks via zone-maps
 - [ ] `head` subcommand — first N rows via `ScanOptions.limit`
 - [ ] String min/max in stats — requires utf8 scalar encoding in the proto
 

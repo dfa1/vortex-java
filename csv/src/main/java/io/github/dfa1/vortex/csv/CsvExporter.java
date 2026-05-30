@@ -42,12 +42,19 @@ public final class CsvExporter {
              CsvWriter csvWriter = CsvWriter.builder()
                      .fieldSeparator(options.delimiter())
                      .build(csvPath)) {
-            export(reader, csvWriter, options);
+            export(reader, csvWriter, options, ScanOptions.all(), (chunk, rowIdx) -> true);
         }
     }
 
     /// Export to a caller-owned [Writer]; the writer is flushed but not closed.
     public static void exportCsv(Path vortexPath, Writer out, ExportOptions options) throws IOException {
+        exportCsvFiltered(vortexPath, out, options, ScanOptions.all(), (chunk, rowIdx) -> true);
+    }
+
+    /// Like [#exportCsv(Path, Writer, ExportOptions)] but with zone-map chunk pruning
+    /// ([ScanOptions#rowFilter]) and a row-level predicate applied after decoding.
+    public static void exportCsvFiltered(Path vortexPath, Writer out, ExportOptions options,
+                                         ScanOptions scanOptions, RowPredicate predicate) throws IOException {
         Writer shielded = new FilterWriter(out) {
             @Override
             public void close() {
@@ -58,11 +65,12 @@ public final class CsvExporter {
              CsvWriter csvWriter = CsvWriter.builder()
                      .fieldSeparator(options.delimiter())
                      .build(shielded)) {
-            export(reader, csvWriter, options);
+            export(reader, csvWriter, options, scanOptions, predicate);
         }
     }
 
-    private static void export(VortexReader reader, CsvWriter csvWriter, ExportOptions options) throws IOException {
+    private static void export(VortexReader reader, CsvWriter csvWriter, ExportOptions options,
+                                ScanOptions scanOptions, RowPredicate predicate) throws IOException {
         if (!(reader.dtype() instanceof DType.Struct schema)) {
             throw new VortexException("only struct root dtype supported for CSV export");
         }
@@ -73,9 +81,6 @@ public final class CsvExporter {
             csvWriter.writeRecord(colNames);
         }
 
-        ScanOptions scanOptions = options.hasProjection()
-                ? new ScanOptions(colNames, null, ScanOptions.NO_LIMIT)
-                : ScanOptions.all();
         String[] row = new String[colCount];
         try (ScanIterator iter = reader.scan(scanOptions)) {
             while (iter.hasNext()) {
@@ -86,6 +91,9 @@ public final class CsvExporter {
                 }
                 long rowCount = chunk.rowCount();
                 for (long r = 0; r < rowCount; r++) {
+                    if (!predicate.test(chunk, r)) {
+                        continue;
+                    }
                     for (int c = 0; c < colCount; c++) {
                         row[c] = cellValue(arrays[c], r);
                     }
