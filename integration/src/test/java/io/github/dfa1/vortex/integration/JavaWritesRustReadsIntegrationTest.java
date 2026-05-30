@@ -13,6 +13,11 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.encoding.VarBinEncoding;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
+import net.jqwik.api.Arbitraries;
+import net.jqwik.api.Arbitrary;
+import net.jqwik.api.ForAll;
+import net.jqwik.api.Property;
+import net.jqwik.api.Provide;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.Float8Vector;
@@ -20,11 +25,6 @@ import org.apache.arrow.vector.IntVector;
 import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.ipc.ArrowReader;
-import net.jqwik.api.Arbitraries;
-import net.jqwik.api.Arbitrary;
-import net.jqwik.api.ForAll;
-import net.jqwik.api.Property;
-import net.jqwik.api.Provide;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -65,6 +65,16 @@ class JavaWritesRustReadsIntegrationTest {
 	private static final DType.Struct TS_SCHEMA = new DType.Struct(
 			List.of("ts"),
 			List.of(new DType.Primitive(PType.I64, false)),
+			false);
+
+	private static final DType.Struct F32_SCHEMA = new DType.Struct(
+			List.of("v"),
+			List.of(new DType.Primitive(PType.F32, false)),
+			false);
+
+	private static final DType.Struct F64_SCHEMA = new DType.Struct(
+			List.of("v"),
+			List.of(new DType.Primitive(PType.F64, false)),
 			false);
 
 	private static final DType.Struct OHLC_SCHEMA = new DType.Struct(
@@ -129,6 +139,33 @@ class JavaWritesRustReadsIntegrationTest {
 		return doubles.stream().mapToDouble(Double::doubleValue).toArray();
 	}
 
+	private static float[] readFloatColumn(Path file, String column) throws IOException {
+		String uri = file.toAbsolutePath().toUri().toString();
+		ScanOptions opts = ScanOptions.builder()
+				.projection(Expression.select(new String[]{column}, Expression.root()))
+				.build();
+		var floats = new ArrayList<Float>();
+		DataSource ds = DataSource.open(SESSION, uri);
+		Scan scan = ds.scan(opts);
+		while (scan.hasNext()) {
+			Partition partition = scan.next();
+			try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
+				while (reader.loadNextBatch()) {
+					VectorSchemaRoot root = reader.getVectorSchemaRoot();
+					org.apache.arrow.vector.Float4Vector vec = (org.apache.arrow.vector.Float4Vector) root.getVector(column);
+					for (int i = 0; i < root.getRowCount(); i++) {
+						floats.add(vec.get(i));
+					}
+				}
+			}
+		}
+		float[] result = new float[floats.size()];
+		for (int i = 0; i < result.length; i++) {
+			result[i] = floats.get(i);
+		}
+		return result;
+	}
+
 	private static int[] readIntColumn(Path file, String column) throws IOException {
 		String uri = file.toAbsolutePath().toUri().toString();
 		ScanOptions opts = ScanOptions.builder()
@@ -187,24 +224,24 @@ class JavaWritesRustReadsIntegrationTest {
 		     var sut = VortexWriter.create(ch, OHLC_SCHEMA, WriteOptions.cascading(3))) {
 			for (OhlcGenerator.OhlcBatch b : batches) {
 				sut.writeChunk(Map.of(
-						"date",   b.dates(),
+						"date", b.dates(),
 						"symbol", b.symbols(),
-						"open",   b.open(),
-						"high",   b.high(),
-						"low",    b.low(),
-						"close",  b.close(),
+						"open", b.open(),
+						"high", b.high(),
+						"low", b.low(),
+						"close", b.close(),
 						"volume", b.volume()));
 			}
 		}
 
 		// When
-		long[]   volumes = readLongColumn(file, "volume");
-		double[] closes  = readDoubleColumn(file, "close");
+		long[] volumes = readLongColumn(file, "volume");
+		double[] closes = readDoubleColumn(file, "close");
 
 		// Then — JNI reader may return chunks in a different order for cascaded files;
 		// verify all values round-trip correctly regardless of partition order.
-		long[]   expectedVolumes = batches.stream().flatMapToLong(b -> Arrays.stream(b.volume())).toArray();
-		double[] expectedCloses  = batches.stream().flatMapToDouble(b -> Arrays.stream(b.close())).toArray();
+		long[] expectedVolumes = batches.stream().flatMapToLong(b -> Arrays.stream(b.volume())).toArray();
+		double[] expectedCloses = batches.stream().flatMapToDouble(b -> Arrays.stream(b.close())).toArray();
 		assertThat(volumes).containsExactlyInAnyOrder(expectedVolumes);
 		assertThat(closes).containsExactlyInAnyOrder(expectedCloses);
 	}
@@ -468,7 +505,57 @@ class JavaWritesRustReadsIntegrationTest {
 				.ofMinSize(0).ofMaxSize(10_000);
 	}
 
-		private static void deleteDir(Path dir) throws IOException {
+	/// F64 column: finite doubles (ALP encoding), empty and large arrays.
+	@Property(tries = 30)
+	void prop_f64_roundTripsViaRust(@ForAll("f64Arrays") double[] data) throws IOException {
+		Path tmp = Files.createTempDirectory("vortex-pbt-f64");
+		try {
+			Path file = tmp.resolve("pbt_f64.vtx");
+			try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+			     var sut = VortexWriter.create(ch, F64_SCHEMA, WriteOptions.defaults())) {
+				sut.writeChunk(Map.of("v", data));
+			}
+			double[] decoded = readDoubleColumn(file, "v");
+			assertThat(decoded).containsExactly(data);
+		} finally {
+			deleteDir(tmp);
+		}
+	}
+
+	/// F32 column: finite floats, empty and large arrays.
+	@Property(tries = 30)
+	void prop_f32_roundTripsViaRust(@ForAll("f32Arrays") float[] data) throws IOException {
+		Path tmp = Files.createTempDirectory("vortex-pbt-f32");
+		try {
+			Path file = tmp.resolve("pbt_f32.vtx");
+			try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+			     var sut = VortexWriter.create(ch, F32_SCHEMA, WriteOptions.defaults())) {
+				sut.writeChunk(Map.of("v", data));
+			}
+			float[] decoded = readFloatColumn(file, "v");
+			assertThat(decoded).containsExactly(data);
+		} finally {
+			deleteDir(tmp);
+		}
+	}
+
+	@Provide
+	Arbitrary<double[]> f64Arrays() {
+		return Arbitraries.doubles()
+				.filter(Double::isFinite)
+				.array(double[].class)
+				.ofMinSize(0).ofMaxSize(5_000);
+	}
+
+	@Provide
+	Arbitrary<float[]> f32Arrays() {
+		return Arbitraries.floats()
+				.filter(Float::isFinite)
+				.array(float[].class)
+				.ofMinSize(0).ofMaxSize(5_000);
+	}
+
+	private static void deleteDir(Path dir) throws IOException {
 		try (var walk = Files.walk(dir)) {
 			walk.sorted(Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
 		}

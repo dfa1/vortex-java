@@ -33,7 +33,12 @@ import java.util.List;
 /// then overwrite {@code decoded[indices[j] - offset] = values[j]} for each patch.
 public final class AlpEncoding implements Encoding {
 
-	// Powers of 10 for F64 (index 0..18 used by the encoder).
+	// Rust ALPFloat::MAX_EXPONENT bounds (inclusive): f64 → 18, f32 → 10.
+	// Exponents outside these ranges are rejected by the Rust decoder.
+	private static final int MAX_EXPONENT_F64 = 18;
+	private static final int MAX_EXPONENT_F32 = 10;
+
+	// Powers of 10 for F64.
 	private static final double[] F10_F64 = {
 			1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9,
 			1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19,
@@ -126,14 +131,16 @@ public final class AlpEncoding implements Encoding {
 		int bestExpE = 0, bestExpF = 0, bestExceptions = sampleLen + 1;
 
 		outer:
-		for (int expE = 0; expE < F10_F64.length; expE++) {
-			for (int expF = 0; expF < F10_F64.length; expF++) {
-				double encFactor = F10_F64[expE] * IF10_F64[expF];
-				double decFactor = F10_F64[expF] * IF10_F64[expE];
+		for (int expE = 0; expE <= MAX_EXPONENT_F64; expE++) {
+			for (int expF = 0; expF <= MAX_EXPONENT_F64; expF++) {
+				double ef = F10_F64[expE];
+				double iff = IF10_F64[expF];
+				double df = F10_F64[expF];
+				double de = IF10_F64[expE];
 				int exceptions = 0;
 				for (int i = 0; i < sampleLen; i++) {
-					double enc = values[i] * encFactor;
-					if (!Double.isFinite(enc) || (double) Math.round(enc) * decFactor != values[i]) {
+					double enc = values[i] * ef * iff;
+					if (!Double.isFinite(enc) || (double) Math.round(enc) * df * de != values[i]) {
 						exceptions++;
 					}
 				}
@@ -154,8 +161,10 @@ public final class AlpEncoding implements Encoding {
 		int n = values.length;
 		int[] exps = findExponentsF64(values);
 		int expE = exps[0], expF = exps[1];
-		double encFactor = F10_F64[expE] * IF10_F64[expF];
-		double decFactor = F10_F64[expF] * IF10_F64[expE];
+		double ef = F10_F64[expE];
+		double iff = IF10_F64[expF];
+		double df = F10_F64[expF];
+		double de = IF10_F64[expE];
 
 		long[] encodedArr = new long[n];
 		var patchIndices = new ArrayList<Integer>();
@@ -164,9 +173,9 @@ public final class AlpEncoding implements Encoding {
 		double min = Double.MAX_VALUE, max = -Double.MAX_VALUE;
 		for (int i = 0; i < n; i++) {
 			double v = values[i];
-			double enc = v * encFactor;
+			double enc = v * ef * iff;
 			long encoded;
-			if (Double.isFinite(enc) && (double) (encoded = Math.round(enc)) * decFactor == v) {
+			if (Double.isFinite(enc) && (double) (encoded = Math.round(enc)) * df * de == v) {
 				encodedArr[i] = encoded;
 			} else {
 				encodedArr[i] = 0L;
@@ -282,14 +291,16 @@ public final class AlpEncoding implements Encoding {
 		int bestExpE = 0, bestExpF = 0, bestExceptions = sampleLen + 1;
 
 		outer:
-		for (int expE = 0; expE < F10_F32.length; expE++) {
-			for (int expF = 0; expF < F10_F32.length; expF++) {
-				float encFactor = F10_F32[expE] * IF10_F32[expF];
-				float decFactor = F10_F32[expF] * IF10_F32[expE];
+		for (int expE = 0; expE <= MAX_EXPONENT_F32; expE++) {
+			for (int expF = 0; expF <= MAX_EXPONENT_F32; expF++) {
+				float ef = F10_F32[expE];
+				float iff = IF10_F32[expF];
+				float df = F10_F32[expF];
+				float de = IF10_F32[expE];
 				int exceptions = 0;
 				for (int i = 0; i < sampleLen; i++) {
-					float enc = values[i] * encFactor;
-					if (!Float.isFinite(enc) || (float) Math.round(enc) * decFactor != values[i]) {
+					float enc = values[i] * ef * iff;
+					if (!Float.isFinite(enc) || (float) Math.round(enc) * df * de != values[i]) {
 						exceptions++;
 					}
 				}
@@ -310,8 +321,10 @@ public final class AlpEncoding implements Encoding {
 		int n = values.length;
 		int[] exps = findExponentsF32(values);
 		int expE = exps[0], expF = exps[1];
-		float encFactor = F10_F32[expE] * IF10_F32[expF];
-		float decFactor = F10_F32[expF] * IF10_F32[expE];
+		float ef = F10_F32[expE];
+		float iff = IF10_F32[expF];
+		float df = F10_F32[expF];
+		float de = IF10_F32[expE];
 
 		int[] encodedArr = new int[n];
 		var patchIndices = new ArrayList<Integer>();
@@ -320,9 +333,9 @@ public final class AlpEncoding implements Encoding {
 		float min = Float.MAX_VALUE, max = -Float.MAX_VALUE;
 		for (int i = 0; i < n; i++) {
 			float v = values[i];
-			float enc = v * encFactor;
+			float enc = v * ef * iff;
 			int encoded;
-			if (Float.isFinite(enc) && (float) (encoded = Math.round(enc)) * decFactor == v) {
+			if (Float.isFinite(enc) && (float) (encoded = Math.round(enc)) * df * de == v) {
 				encodedArr[i] = encoded;
 			} else {
 				encodedArr[i] = 0;
@@ -419,8 +432,11 @@ public final class AlpEncoding implements Encoding {
 	private Array decodeF64(DecodeContext ctx, EncodingProtos.ALPMetadata meta, int expE, int expF, long n) {
 		Array encoded = decodeChildAs(ctx, 0, I64_DTYPE, n);
 
-		// Precompute single factor — avoids 2 FP mults per element in the hot loop.
-		double factor = F10_F64[expF] * IF10_F64[expE];
+		// Two separate lookups match Rust's left-to-right: (encoded * F10[f]) * IF10[e].
+		// Precomputing a single factor = F10[f] * IF10[e] then encoded * factor uses different
+		// associativity and can produce different IEEE 754 results for some (expE, expF) pairs.
+		double df = F10_F64[expF];
+		double de = IF10_F64[expE];
 
 		MemorySegment src = encoded.buffer(0);
 		// In-place when the child returned a writable arena buffer (e.g. BitpackedEncoding, DeltaEncoding).
@@ -428,11 +444,11 @@ public final class AlpEncoding implements Encoding {
 		MemorySegment buf = src.isReadOnly() ? ctx.arena().allocate(n * 8, 8) : src;
 		if (src.isReadOnly()) {
 			for (long i = 0; i < n; i++) {
-				buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) src.getAtIndex(PTypeIO.LE_LONG, i) * factor);
+				buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) src.getAtIndex(PTypeIO.LE_LONG, i) * df * de);
 			}
 		} else {
 			for (long i = 0; i < n; i++) {
-				buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) buf.getAtIndex(PTypeIO.LE_LONG, i) * factor);
+				buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) buf.getAtIndex(PTypeIO.LE_LONG, i) * df * de);
 			}
 		}
 
@@ -446,18 +462,19 @@ public final class AlpEncoding implements Encoding {
 	private Array decodeF32(DecodeContext ctx, EncodingProtos.ALPMetadata meta, int expE, int expF, long n) {
 		Array encoded = decodeChildAs(ctx, 0, I32_DTYPE, n);
 
-		// Precompute single factor — avoids 2 FP mults per element in the hot loop.
-		float factor = F10_F32[expF] * IF10_F32[expE];
+		// Two separate lookups match Rust's left-to-right: (encoded * F10[f]) * IF10[e].
+		float df = F10_F32[expF];
+		float de = IF10_F32[expE];
 
 		MemorySegment src32 = encoded.buffer(0);
 		MemorySegment buf32 = src32.isReadOnly() ? ctx.arena().allocate(n * 4, 4) : src32;
 		if (src32.isReadOnly()) {
 			for (long i = 0; i < n; i++) {
-				buf32.setAtIndex(PTypeIO.LE_FLOAT, i, (float) src32.getAtIndex(PTypeIO.LE_INT, i) * factor);
+				buf32.setAtIndex(PTypeIO.LE_FLOAT, i, (float) src32.getAtIndex(PTypeIO.LE_INT, i) * df * de);
 			}
 		} else {
 			for (long i = 0; i < n; i++) {
-				buf32.setAtIndex(PTypeIO.LE_FLOAT, i, (float) buf32.getAtIndex(PTypeIO.LE_INT, i) * factor);
+				buf32.setAtIndex(PTypeIO.LE_FLOAT, i, (float) buf32.getAtIndex(PTypeIO.LE_INT, i) * df * de);
 			}
 		}
 
