@@ -28,110 +28,113 @@ import java.nio.ByteBuffer;
 /// <p>Output: varbin-compatible {@code Array} (buffer[0] = uncompressed bytes, child[0] = I32 offsets).
 public final class FsstEncoding implements Encoding {
 
-    private static final int ESCAPE = 0xFF;
+	@Override
+	public EncodingId encodingId() {
+		return EncodingId.VORTEX_FSST;
+	}
 
-    @Override
-    public EncodingId encodingId() {
-        return EncodingId.VORTEX_FSST;
-    }
+	@Override
+	public EncodeResult encode(DType dtype, Object data) {
+		throw new UnsupportedOperationException("encode not supported by " + encodingId());
+	}
 
-    @Override
-    public EncodeResult encode(DType dtype, Object data) {
-        throw new UnsupportedOperationException("encode not supported by " + encodingId());
-    }
+	@Override
+	public Array decode(DecodeContext ctx) {
+		return Decoder.decode(ctx);
+	}
 
-    @Override
-    public Array decode(DecodeContext ctx) {
-        ByteBuffer rawMeta = ctx.metadata();
-        if (rawMeta == null) {
-            throw new VortexException(EncodingId.VORTEX_FSST, "missing metadata");
-        }
-        EncodingProtos.FSSTMetadata meta;
-        try {
-            meta = EncodingProtos.FSSTMetadata.parseFrom(rawMeta.duplicate());
-        } catch (InvalidProtocolBufferException e) {
-            throw new VortexException(EncodingId.VORTEX_FSST, "invalid metadata", e);
-        }
+	private static final class Decoder {
 
-        PType uncompLenPType = PType.values()[meta.getUncompressedLengthsPtype().getNumber()];
-        PType codesOffPType  = PType.values()[meta.getCodesOffsetsPtype().getNumber()];
+		private static final int ESCAPE = 0xFF;
 
-        long n = ctx.rowCount();
+		private static Array decode(DecodeContext ctx) {
+			ByteBuffer rawMeta = ctx.metadata();
+			if (rawMeta == null) {
+				throw new VortexException(EncodingId.VORTEX_FSST, "missing metadata");
+			}
+			EncodingProtos.FSSTMetadata meta;
+			try {
+				meta = EncodingProtos.FSSTMetadata.parseFrom(rawMeta.duplicate());
+			} catch (InvalidProtocolBufferException e) {
+				throw new VortexException(EncodingId.VORTEX_FSST, "invalid metadata", e);
+			}
 
-        MemorySegment symbolsBuf      = ctx.buffer(0); // 8 bytes per symbol (LE u64)
-        MemorySegment symbolLensBuf   = ctx.buffer(1); // 1 byte per symbol
-        MemorySegment compressedBytes = ctx.buffer(2); // FSST-compressed heap
+			PType uncompLenPType = PType.values()[meta.getUncompressedLengthsPtype().getNumber()];
+			PType codesOffPType  = PType.values()[meta.getCodesOffsetsPtype().getNumber()];
 
-        // Decode child arrays
-        Array uncompLens = decodeChild(ctx, 0, uncompLenPType, n);
-        Array codesOffsets = decodeChild(ctx, 1, codesOffPType, n + 1);
-        MemorySegment uncompLensSeg   = uncompLens.buffer(0);
-        MemorySegment codesOffsetsSeg = codesOffsets.buffer(0);
+			long n = ctx.rowCount();
 
-        // Total uncompressed size (sum of uncompressed_lengths)
-        long totalUncompressed = 0L;
-        for (long i = 0; i < n; i++) {
-            totalUncompressed += readUnsigned(uncompLensSeg, i, uncompLenPType);
-        }
+			MemorySegment symbolsBuf      = ctx.buffer(0); // 8 bytes per symbol (LE u64)
+			MemorySegment symbolLensBuf   = ctx.buffer(1); // 1 byte per symbol
+			MemorySegment compressedBytes = ctx.buffer(2); // FSST-compressed heap
 
-        MemorySegment outBytes   = ctx.arena().allocate(totalUncompressed);
-        MemorySegment outOffsets = ctx.arena().allocate((n + 1) * 4L, 4);
-        outOffsets.setAtIndex(PTypeIO.LE_INT, 0, 0);
+			Array uncompLens = decodeChild(ctx, 0, uncompLenPType, n);
+			Array codesOffsets = decodeChild(ctx, 1, codesOffPType, n + 1);
+			MemorySegment uncompLensSeg   = uncompLens.buffer(0);
+			MemorySegment codesOffsetsSeg = codesOffsets.buffer(0);
 
-        long outPos = 0L;
-        for (long i = 0; i < n; i++) {
-            long cStart = readUnsigned(codesOffsetsSeg, i, codesOffPType);
-            long cEnd   = readUnsigned(codesOffsetsSeg, i + 1, codesOffPType);
-            outPos = decompressString(compressedBytes, symbolsBuf, symbolLensBuf,
-                    cStart, cEnd, outBytes, outPos);
-            outOffsets.setAtIndex(PTypeIO.LE_INT, i + 1, (int) outPos);
-        }
+			long totalUncompressed = 0L;
+			for (long i = 0; i < n; i++) {
+				totalUncompressed += readUnsigned(uncompLensSeg, i, uncompLenPType);
+			}
 
-        DType i32 = new DType.Primitive(PType.I32, false);
-        Array offsets = new IntArray(i32, n + 1, outOffsets.asReadOnly(), ArrayStats.empty());
-        return new VarBinArray(ctx.dtype(), n, outBytes.asReadOnly(), offsets, PType.I32, ArrayStats.empty());
-    }
+			MemorySegment outBytes   = ctx.arena().allocate(totalUncompressed);
+			MemorySegment outOffsets = ctx.arena().allocate((n + 1) * 4L, 4);
+			outOffsets.setAtIndex(PTypeIO.LE_INT, 0, 0);
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+			long outPos = 0L;
+			for (long i = 0; i < n; i++) {
+				long cStart = readUnsigned(codesOffsetsSeg, i, codesOffPType);
+				long cEnd   = readUnsigned(codesOffsetsSeg, i + 1, codesOffPType);
+				outPos = decompressString(compressedBytes, symbolsBuf, symbolLensBuf,
+						cStart, cEnd, outBytes, outPos);
+				outOffsets.setAtIndex(PTypeIO.LE_INT, i + 1, (int) outPos);
+			}
 
-    private Array decodeChild(DecodeContext parent, int idx, PType ptype, long rowCount) {
-        ArrayNode childNode = parent.node().children()[idx];
-        DType dtype = new DType.Primitive(ptype, false);
-        DecodeContext childCtx = new DecodeContext(
-                childNode, dtype, rowCount,
-                parent.segmentBuffers(), parent.registry(), parent.arena());
-        return parent.registry().decode(childCtx);
-    }
+			DType i32 = new DType.Primitive(PType.I32, false);
+			Array offsets = new IntArray(i32, n + 1, outOffsets.asReadOnly(), ArrayStats.empty());
+			return new VarBinArray(ctx.dtype(), n, outBytes.asReadOnly(), offsets, PType.I32, ArrayStats.empty());
+		}
 
-    private static long decompressString(
-            MemorySegment compressed, MemorySegment symbols, MemorySegment symLens,
-            long start, long end, MemorySegment out, long outPos
-    ) {
-        for (long j = start; j < end; j++) {
-            int b = Byte.toUnsignedInt(compressed.get(ValueLayout.JAVA_BYTE, j));
-            if (b == ESCAPE) {
-                // next byte is literal
-                out.set(ValueLayout.JAVA_BYTE, outPos++, compressed.get(ValueLayout.JAVA_BYTE, ++j));
-            } else {
-                int symLen = Byte.toUnsignedInt(symLens.get(ValueLayout.JAVA_BYTE, b));
-                // symbols[b] is 8 bytes LE; emit first symLen bytes
-                long sym = symbols.getAtIndex(PTypeIO.LE_LONG, b);
-                for (int k = 0; k < symLen; k++) {
-                    out.set(ValueLayout.JAVA_BYTE, outPos++, (byte) (sym >>> (k * 8)));
-                }
-            }
-        }
-        return outPos;
-    }
+		private static Array decodeChild(DecodeContext parent, int idx, PType ptype, long rowCount) {
+			ArrayNode childNode = parent.node().children()[idx];
+			DType dtype = new DType.Primitive(ptype, false);
+			DecodeContext childCtx = new DecodeContext(
+					childNode, dtype, rowCount,
+					parent.segmentBuffers(), parent.registry(), parent.arena());
+			return parent.registry().decode(childCtx);
+		}
 
-    private static long readUnsigned(MemorySegment seg, long idx, PType ptype) {
-        return switch (ptype) {
-            case U8  -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, idx));
-            case U16 -> Short.toUnsignedLong(seg.get(PTypeIO.LE_SHORT, idx * 2));
-            case U32 -> Integer.toUnsignedLong(seg.getAtIndex(PTypeIO.LE_INT, idx));
-            case I32 -> seg.getAtIndex(PTypeIO.LE_INT, idx);
-            case I64, U64 -> seg.getAtIndex(PTypeIO.LE_LONG, idx);
-            default  -> throw new VortexException(EncodingId.VORTEX_FSST, "unsupported ptype " + ptype);
-        };
-    }
+		private static long decompressString(
+				MemorySegment compressed, MemorySegment symbols, MemorySegment symLens,
+				long start, long end, MemorySegment out, long outPos
+		) {
+			for (long j = start; j < end; j++) {
+				int b = Byte.toUnsignedInt(compressed.get(ValueLayout.JAVA_BYTE, j));
+				if (b == ESCAPE) {
+					// next byte is literal
+					out.set(ValueLayout.JAVA_BYTE, outPos++, compressed.get(ValueLayout.JAVA_BYTE, ++j));
+				} else {
+					int symLen = Byte.toUnsignedInt(symLens.get(ValueLayout.JAVA_BYTE, b));
+					// symbols[b] is 8 bytes LE; emit first symLen bytes
+					long sym = symbols.getAtIndex(PTypeIO.LE_LONG, b);
+					for (int k = 0; k < symLen; k++) {
+						out.set(ValueLayout.JAVA_BYTE, outPos++, (byte) (sym >>> (k * 8)));
+					}
+				}
+			}
+			return outPos;
+		}
+
+		private static long readUnsigned(MemorySegment seg, long idx, PType ptype) {
+			return switch (ptype) {
+				case U8  -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, idx));
+				case U16 -> Short.toUnsignedLong(seg.get(PTypeIO.LE_SHORT, idx * 2));
+				case U32 -> Integer.toUnsignedLong(seg.getAtIndex(PTypeIO.LE_INT, idx));
+				case I32 -> seg.getAtIndex(PTypeIO.LE_INT, idx);
+				case I64, U64 -> seg.getAtIndex(PTypeIO.LE_LONG, idx);
+				default  -> throw new VortexException(EncodingId.VORTEX_FSST, "unsupported ptype " + ptype);
+			};
+		}
+	}
 }
