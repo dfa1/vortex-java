@@ -53,10 +53,3 @@
 ## Encodings
 
 - [ ] the classes are very long of complex, most likely we should group the impl detail in private static inner classes Encoder/Decoder
-
-- [ ] fix this comment in Array
-     /// Not declared `sealed` because the project does not declare a JPMS module —
-     /// JLS only allows cross-package `permits` inside the same named module. The
-     /// effective hierarchy is still closed: only types in this package should implement
-     /// this interface.
-     public interface Array {

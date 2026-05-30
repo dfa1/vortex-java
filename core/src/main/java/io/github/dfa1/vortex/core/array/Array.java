@@ -14,12 +14,10 @@ import java.util.function.LongConsumer;
 ///
 /// Buffers are `MemorySegment` slices backed by the memory-mapped file; lifetime
 /// is tied to the `VortexFile`'s Arena.
-///
-/// Not declared `sealed` because the project does not declare a JPMS module —
-/// JLS only allows cross-package `permits` inside the same named module. The
-/// effective hierarchy is still closed: only types in this package should implement
-/// this interface.
-public interface Array {
+public sealed interface Array
+        permits BoolArray, ByteArray, DoubleArray, EmptyArray, Float16Array, FloatArray,
+                GenericArray, IntArray, LongArray, NullArray, ShortArray, StructArray,
+                VarBinArray {
 
 	long length();
 
