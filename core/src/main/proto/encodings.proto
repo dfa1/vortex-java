@@ -67,3 +67,8 @@ message DictLayoutMetadata {
   optional bool is_nullable_codes = 2;
   optional bool all_values_referenced = 3;
 }
+
+message DeltaMetadata {
+  uint64 deltas_len = 1;
+  uint32 offset = 2;
+}

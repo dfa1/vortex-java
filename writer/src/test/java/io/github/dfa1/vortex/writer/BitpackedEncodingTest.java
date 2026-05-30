@@ -140,23 +140,26 @@ class BitpackedEncodingTest {
 			sut.writeChunk(Map.of("value", chunk2));
 		}
 
-		// Then
-		try (var vf = VortexReader.open(file, bpRegistry())) {
-			List<ScanResult> results = scanAll(vf);
-			assertThat(results).hasSize(2);
+		// Then — process each chunk before advancing; hasNext() closes the previous chunk's arena
+		try (var vf = VortexReader.open(file, bpRegistry());
+		     var iter = vf.scan(ScanOptions.all())) {
 			var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
-			Array a1 = results.get(0).columns().get("value");
+			assertThat(iter.hasNext()).isTrue();
+			Array a1 = iter.next().columns().get("value");
 			assertThat(a1.length()).isEqualTo(3L);
 			for (int i = 0; i < chunk1.length; i++) {
 				assertThat(a1.buffer(0).get(layout, (long) i * 4)).isEqualTo(chunk1[i]);
 			}
 
-			Array a2 = results.get(1).columns().get("value");
+			assertThat(iter.hasNext()).isTrue();
+			Array a2 = iter.next().columns().get("value");
 			assertThat(a2.length()).isEqualTo(3L);
 			for (int i = 0; i < chunk2.length; i++) {
 				assertThat(a2.buffer(0).get(layout, (long) i * 4)).isEqualTo(chunk2[i]);
 			}
+
+			assertThat(iter.hasNext()).isFalse();
 		}
 	}
 

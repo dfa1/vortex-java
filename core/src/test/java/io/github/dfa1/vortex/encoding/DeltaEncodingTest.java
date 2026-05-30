@@ -56,6 +56,7 @@ class DeltaEncodingTest {
 		var sut = new DeltaEncoding();
 		EncodingRegistry registry = EncodingRegistry.empty();
 		registry.register(sut);
+		registry.register(new PrimitiveEncoding());
 
 		// When
 		EncodeResult encoded = sut.encode(I64_DTYPE, data);
@@ -77,6 +78,7 @@ class DeltaEncodingTest {
 		var sut = new DeltaEncoding();
 		EncodingRegistry registry = EncodingRegistry.empty();
 		registry.register(sut);
+		registry.register(new PrimitiveEncoding());
 
 		// When
 		EncodeResult encoded = sut.encode(I32_DTYPE, data);
@@ -93,16 +95,23 @@ class DeltaEncodingTest {
 
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("monotoneI64Arrays")
-	void encodedSize_monotoneSequence_compressesWellVsRaw(String name, long[] data) {
+	void encodeDecode_monotoneI64_isLossless(String name, long[] data) {
 		// Given
 		var sut = new DeltaEncoding();
+		EncodingRegistry registry = EncodingRegistry.empty();
+		registry.register(sut);
+		registry.register(new PrimitiveEncoding());
 
 		// When
 		EncodeResult encoded = sut.encode(I64_DTYPE, data);
+		DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, I64_DTYPE, registry);
+		Array result = sut.decode(ctx);
 
-		// Then — delta-encoded size < raw size (n * 8 bytes)
-		long encodedBytes = encoded.buffers().stream().mapToLong(java.lang.foreign.MemorySegment::byteSize).sum();
-		long rawBytes = (long) data.length * 8;
-		assertThat(encodedBytes).isLessThan(rawBytes);
+		// Then
+		assertThat(result.length()).isEqualTo(data.length);
+		var le = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+		for (int i = 0; i < data.length; i++) {
+			assertThat(result.buffer(0).get(le, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
+		}
 	}
 }

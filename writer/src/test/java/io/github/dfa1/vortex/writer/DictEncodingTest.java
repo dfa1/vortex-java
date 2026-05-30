@@ -123,26 +123,27 @@ class DictEncodingTest {
 			sut.writeChunk(Map.of("category", chunk2));
 		}
 
-		// Then
-		var registry = dictRegistry();
-		try (var vf = VortexReader.open(file, registry)) {
-			List<ScanResult> results = scanAll(vf, ScanOptions.all());
-			assertThat(results).hasSize(2);
-
+		// Then — process each chunk before advancing; hasNext() closes the previous chunk's arena
+		try (var vf = VortexReader.open(file, dictRegistry());
+		     var iter = vf.scan(ScanOptions.all())) {
 			var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
-			Array a1 = results.get(0).columns().get("category");
+			assertThat(iter.hasNext()).isTrue();
+			Array a1 = iter.next().columns().get("category");
 			assertThat(a1.length()).isEqualTo(3L);
 			assertThat(a1.buffer(0).get(layout, 0)).isEqualTo(10);
 			assertThat(a1.buffer(0).get(layout, 4)).isEqualTo(20);
 			assertThat(a1.buffer(0).get(layout, 8)).isEqualTo(10);
 
-			Array a2 = results.get(1).columns().get("category");
+			assertThat(iter.hasNext()).isTrue();
+			Array a2 = iter.next().columns().get("category");
 			assertThat(a2.length()).isEqualTo(4L);
 			assertThat(a2.buffer(0).get(layout, 0)).isEqualTo(30);
 			assertThat(a2.buffer(0).get(layout, 4)).isEqualTo(10);
 			assertThat(a2.buffer(0).get(layout, 8)).isEqualTo(20);
 			assertThat(a2.buffer(0).get(layout, 12)).isEqualTo(30);
+
+			assertThat(iter.hasNext()).isFalse();
 		}
 	}
 }

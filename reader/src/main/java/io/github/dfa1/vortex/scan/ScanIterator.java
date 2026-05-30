@@ -137,7 +137,8 @@ public final class ScanIterator implements AutoCloseable {
 			rowsReturned += chunk.rowCount();
 			return true;
 		}
-		close();
+		// Do not close here — the last chunk's arena stays open until close() is called.
+		// This preserves data validity for callers that collect results before processing.
 		return false;
 	}
 

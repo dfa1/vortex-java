@@ -1,268 +1,391 @@
 package io.github.dfa1.vortex.encoding;
 
+import com.google.protobuf.InvalidProtocolBufferException;
+import dev.vortex.proto.EncodingProtos;
 import dev.vortex.proto.ScalarProtos;
-import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.ByteArray;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
-import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.Arena;
-import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.List;
 
-/// Encoding for `fastlanes.delta` — delta encoding for integer columns.
+/// Encoding for {@code fastlanes.delta} — FastLanes delta encoding for integer columns.
 ///
-/// Metadata (17 bytes): base_value (i64 LE) | bit_width (u8) | delta_frame_of_ref (i64 LE).
-/// Stores the first value as base, then bit-packs per-element deltas (LSB-first).
-/// Optimal for monotonic or near-monotonic integer sequences.
+/// Wire format matches the Rust reference implementation:
+/// <ul>
+///   <li>0 buffers, 2 child slots: {@code bases} (child 0) and {@code deltas} (child 1).</li>
+///   <li>Metadata: protobuf {@code DeltaMetadata{deltas_len, offset}}.</li>
+///   <li>{@code bases} holds {@code (paddedLen / 1024) * LANES} elements of the column dtype.</li>
+///   <li>{@code deltas} holds {@code paddedLen} elements (padded to a multiple of 1024).</li>
+/// </ul>
+///
+/// Algorithm: FastLanes transpose → per-lane delta with wrapping arithmetic.
+/// {@code LANES = 1024 / typeBits}, where {@code typeBits = byteSize * 8}.
 public final class DeltaEncoding implements Encoding {
 
-	private static MemorySegment pack(long[] values, long frameOfRef, int bitWidth) {
-		int n = values.length;
-		int totalBits = n * bitWidth;
-		long byteLen = (totalBits + 7) / 8;
-		MemorySegment seg = Arena.ofAuto().allocate(byteLen > 0 ? byteLen : 1);
-		for (int i = 0; i < n; i++) {
-			long shifted = values[i] - frameOfRef;
-			int bitPos = i * bitWidth;
-			for (int b = 0; b < bitWidth; b++) {
-				if (((shifted >>> b) & 1L) == 1L) {
-					int byteIdx = (bitPos + b) >>> 3;
-					byte cur = seg.get(ValueLayout.JAVA_BYTE, byteIdx);
-					seg.set(ValueLayout.JAVA_BYTE, byteIdx, (byte) (cur | (1 << ((bitPos + b) & 7))));
-				}
-			}
-		}
-		return seg;
-	}
+    private static final int FL_CHUNK_SIZE = 1024;
+    private static final int[] FL_ORDER = {0, 4, 2, 6, 1, 5, 3, 7};
 
-	private static long[] unpack(MemorySegment packed, int count, int bitWidth, long frameOfRef) {
-		long[] out = new long[count];
-		long size = packed.byteSize();
-		for (int i = 0; i < count; i++) {
-			long val = 0L;
-			int bitPos = i * bitWidth;
-			for (int b = 0; b < bitWidth; b++) {
-				int byteIdx = (bitPos + b) >>> 3;
-				int bitIdx = (bitPos + b) & 7;
-				if (byteIdx < size && ((packed.get(ValueLayout.JAVA_BYTE, byteIdx) >>> bitIdx) & 1) == 1) {
-					val |= 1L << b;
-				}
-			}
-			out[i] = val + frameOfRef;
-		}
-		return out;
-	}
+    // ── FastLanes index helpers ───────────────────────────────────────────────
 
-	// ── Encode ────────────────────────────────────────────────────────────────
+    private static int transposeIndex(int idx) {
+        int lane = idx % 16;
+        int order = (idx / 16) % 8;
+        int row = idx / 128;
+        return lane * 64 + FL_ORDER[order] * 8 + row;
+    }
 
-	private static long[] toLongs(Object data, PType ptype) {
-		return switch (ptype) {
-			case I8 -> {
-				byte[] arr = (byte[]) data;
-				long[] r = new long[arr.length];
-				for (int i = 0; i < arr.length; i++) {
-					r[i] = arr[i];
-				}
-				yield r;
-			}
-			case U8 -> {
-				byte[] arr = (byte[]) data;
-				long[] r = new long[arr.length];
-				for (int i = 0; i < arr.length; i++) {
-					r[i] = Byte.toUnsignedLong(arr[i]);
-				}
-				yield r;
-			}
-			case I16 -> {
-				short[] arr = (short[]) data;
-				long[] r = new long[arr.length];
-				for (int i = 0; i < arr.length; i++) {
-					r[i] = arr[i];
-				}
-				yield r;
-			}
-			case U16 -> {
-				short[] arr = (short[]) data;
-				long[] r = new long[arr.length];
-				for (int i = 0; i < arr.length; i++) {
-					r[i] = Short.toUnsignedLong(arr[i]);
-				}
-				yield r;
-			}
-			case I32 -> {
-				int[] arr = (int[]) data;
-				long[] r = new long[arr.length];
-				for (int i = 0; i < arr.length; i++) {
-					r[i] = arr[i];
-				}
-				yield r;
-			}
-			case U32 -> {
-				int[] arr = (int[]) data;
-				long[] r = new long[arr.length];
-				for (int i = 0; i < arr.length; i++) {
-					r[i] = Integer.toUnsignedLong(arr[i]);
-				}
-				yield r;
-			}
-			case I64, U64 -> (long[]) data;
-			default -> throw new VortexException(EncodingId.FASTLANES_DELTA, "unsupported ptype: " + ptype);
-		};
-	}
+    private static int iterateIndex(int row, int lane) {
+        int o = row / 8;
+        int s = row % 8;
+        return FL_ORDER[o] * 16 + s * 128 + lane;
+    }
 
-	// ── Decode ────────────────────────────────────────────────────────────────
+    // ── Type helpers ──────────────────────────────────────────────────────────
 
-	private static MemorySegment fromLongs(long[] longs, PType ptype, SegmentAllocator arena) {
-		// Fast path: 64-bit target — bulk byte-order copy, no per-element narrowing.
-		if (ptype == PType.I64 || ptype == PType.U64) {
-			MemorySegment dst = arena.allocate((long) longs.length * 8);
-			MemorySegment.copy(MemorySegment.ofArray(longs), ValueLayout.JAVA_LONG, 0L,
-					dst, PTypeIO.valueLayout(ptype), 0L, longs.length);
-			return dst;
-		}
-		// Narrowing path: per-element MethodHandle setter from PTypeIO.
-		int n = longs.length;
-		long elemSize = ptype.byteSize();
-		MemorySegment seg = arena.allocate(n * elemSize);
-		for (int i = 0; i < n; i++) {
-			PTypeIO.set(seg, i * elemSize, ptype, longs[i]);
-		}
-		return seg;
-	}
+    private static int lanes(PType ptype) {
+        return FL_CHUNK_SIZE / (ptype.byteSize() * 8);
+    }
 
-	// ── Bit packing ───────────────────────────────────────────────────────────
+    private static int typeBits(PType ptype) {
+        return ptype.byteSize() * 8;
+    }
 
-	private static byte[] statsBytes(PType ptype, long value) {
-		if (isUnsigned(ptype)) {
-			return ScalarProtos.ScalarValue.newBuilder().setUint64Value(value).build().toByteArray();
-		}
-		return ScalarProtos.ScalarValue.newBuilder().setInt64Value(value).build().toByteArray();
-	}
+    private static long typeMask(PType ptype) {
+        int bits = ptype.byteSize() * 8;
+        return bits == 64 ? -1L : (1L << bits) - 1;
+    }
 
-	private static boolean isUnsigned(PType ptype) {
-		return switch (ptype) {
-			case U8, U16, U32, U64 -> true;
-			default -> false;
-		};
-	}
+    private static boolean isUnsigned(PType ptype) {
+        return switch (ptype) {
+            case U8, U16, U32, U64 -> true;
+            default -> false;
+        };
+    }
 
-	// ── Type conversion ───────────────────────────────────────────────────────
+    // ── FastLanes delta/undelta ───────────────────────────────────────────────
 
-	@Override
-	public EncodingId encodingId() {
-		return EncodingId.FASTLANES_DELTA;
-	}
+    private static long[] deltaChunk(long[] transposed, long[] bases, int lanes, int typeBits, long mask) {
+        long[] out = new long[FL_CHUNK_SIZE];
+        for (int lane = 0; lane < lanes; lane++) {
+            long prev = bases[lane] & mask;
+            for (int row = 0; row < typeBits; row++) {
+                int idx = iterateIndex(row, lane);
+                long next = transposed[idx] & mask;
+                out[idx] = (next - prev) & mask;
+                prev = next;
+            }
+        }
+        return out;
+    }
 
-	@Override
-	public boolean accepts(DType dtype) {
-		if (!(dtype instanceof DType.Primitive p)) {
-			return false;
-		}
-		return switch (p.ptype()) {
-			case I8, I16, I32, I64, U8, U16, U32, U64 -> true;
-			default -> false;
-		};
-	}
+    private static long[] undeltaChunk(long[] deltas, long[] bases, int lanes, int typeBits, long mask) {
+        long[] out = new long[FL_CHUNK_SIZE];
+        for (int lane = 0; lane < lanes; lane++) {
+            long prev = bases[lane] & mask;
+            for (int row = 0; row < typeBits; row++) {
+                int idx = iterateIndex(row, lane);
+                long next = ((deltas[idx] & mask) + prev) & mask;
+                out[idx] = next;
+                prev = next;
+            }
+        }
+        return out;
+    }
 
-	// ── Stats helpers ─────────────────────────────────────────────────────────
+    // ── toLongs (encode input) ────────────────────────────────────────────────
 
-	@Override
-	public EncodeResult encode(DType dtype, Object data) {
-		PType ptype = ((DType.Primitive) dtype).ptype();
-		long[] longs = toLongs(data, ptype);
-		int n = longs.length;
-		boolean unsign = isUnsigned(ptype);
+    private static long[] toLongs(Object data, PType ptype) {
+        return switch (ptype) {
+            case I8 -> {
+                byte[] arr = (byte[]) data;
+                long[] r = new long[arr.length];
+                for (int i = 0; i < arr.length; i++) {
+                    r[i] = arr[i];
+                }
+                yield r;
+            }
+            case U8 -> {
+                byte[] arr = (byte[]) data;
+                long[] r = new long[arr.length];
+                for (int i = 0; i < arr.length; i++) {
+                    r[i] = Byte.toUnsignedLong(arr[i]);
+                }
+                yield r;
+            }
+            case I16 -> {
+                short[] arr = (short[]) data;
+                long[] r = new long[arr.length];
+                for (int i = 0; i < arr.length; i++) {
+                    r[i] = arr[i];
+                }
+                yield r;
+            }
+            case U16 -> {
+                short[] arr = (short[]) data;
+                long[] r = new long[arr.length];
+                for (int i = 0; i < arr.length; i++) {
+                    r[i] = Short.toUnsignedLong(arr[i]);
+                }
+                yield r;
+            }
+            case I32 -> {
+                int[] arr = (int[]) data;
+                long[] r = new long[arr.length];
+                for (int i = 0; i < arr.length; i++) {
+                    r[i] = arr[i];
+                }
+                yield r;
+            }
+            case U32 -> {
+                int[] arr = (int[]) data;
+                long[] r = new long[arr.length];
+                for (int i = 0; i < arr.length; i++) {
+                    r[i] = Integer.toUnsignedLong(arr[i]);
+                }
+                yield r;
+            }
+            case I64, U64 -> (long[]) data;
+            default -> throw new VortexException(EncodingId.FASTLANES_DELTA, "unsupported ptype: " + ptype);
+        };
+    }
 
-		long baseValue = n > 0 ? longs[0] : 0L;
-		long minVal = baseValue;
-		long maxVal = baseValue;
+    // ── readLongs (decode child buffers) ─────────────────────────────────────
 
-		long[] deltas = new long[Math.max(n - 1, 0)];
-		for (int i = 1; i < n; i++) {
-			deltas[i - 1] = longs[i] - longs[i - 1];
-			if (unsign ? Long.compareUnsigned(longs[i], minVal) < 0 : longs[i] < minVal) {
-				minVal = longs[i];
-			}
-			if (unsign ? Long.compareUnsigned(longs[i], maxVal) > 0 : longs[i] > maxVal) {
-				maxVal = longs[i];
-			}
-		}
+    private static long[] readLongs(MemorySegment buf, int count, PType ptype) {
+        long[] out = new long[count];
+        int elemSize = ptype.byteSize();
+        for (int i = 0; i < count; i++) {
+            long off = (long) i * elemSize;
+            out[i] = switch (ptype) {
+                case I8 -> buf.get(ValueLayout.JAVA_BYTE, off);
+                case U8 -> Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, off));
+                case I16 -> buf.get(PTypeIO.LE_SHORT, off);
+                case U16 -> Short.toUnsignedLong(buf.get(PTypeIO.LE_SHORT, off));
+                case I32 -> buf.get(PTypeIO.LE_INT, off);
+                case U32 -> Integer.toUnsignedLong(buf.get(PTypeIO.LE_INT, off));
+                case I64, U64 -> buf.get(PTypeIO.LE_LONG, off);
+                default -> throw new VortexException(EncodingId.FASTLANES_DELTA, "unsupported ptype: " + ptype);
+            };
+        }
+        return out;
+    }
 
-		long deltaFor = 0L;
-		int bitWidth = 0;
-		if (deltas.length > 0) {
-			long dMin = deltas[0];
-			long dMax = deltas[0];
-			for (long d : deltas) {
-				if (d < dMin) {
-					dMin = d;
-				}
-				if (d > dMax) {
-					dMax = d;
-				}
-			}
-			deltaFor = dMin;
-			long range = dMax - dMin;
-			bitWidth = (range == 0L) ? 0 : (64 - Long.numberOfLeadingZeros(range));
-		}
+    // ── fromLongs (write typed segment) ──────────────────────────────────────
 
-		MemorySegment packed = pack(deltas, deltaFor, bitWidth);
+    private static MemorySegment fromLongs(long[] longs, PType ptype, SegmentAllocator arena) {
+        if (ptype == PType.I64 || ptype == PType.U64) {
+            MemorySegment dst = arena.allocate((long) longs.length * 8);
+            MemorySegment.copy(MemorySegment.ofArray(longs), ValueLayout.JAVA_LONG, 0L,
+                    dst, PTypeIO.LE_LONG, 0L, longs.length);
+            return dst;
+        }
+        int n = longs.length;
+        long elemSize = ptype.byteSize();
+        MemorySegment seg = arena.allocate(n * elemSize);
+        for (int i = 0; i < n; i++) {
+            PTypeIO.set(seg, i * elemSize, ptype, longs[i]);
+        }
+        return seg;
+    }
 
-		ByteBuffer meta = ByteBuffer.allocate(17).order(ByteOrder.LITTLE_ENDIAN);
-		meta.putLong(baseValue);
-		meta.put((byte) bitWidth);
-		meta.putLong(deltaFor);
-		meta.flip();
+    // ── Stats helpers ─────────────────────────────────────────────────────────
 
-		byte[] statsMin = n > 0 ? statsBytes(ptype, minVal) : null;
-		byte[] statsMax = n > 0 ? statsBytes(ptype, maxVal) : null;
+    private static byte[] statsBytes(PType ptype, long value) {
+        if (isUnsigned(ptype)) {
+            return ScalarProtos.ScalarValue.newBuilder().setUint64Value(value).build().toByteArray();
+        }
+        return ScalarProtos.ScalarValue.newBuilder().setInt64Value(value).build().toByteArray();
+    }
 
-		EncodeNode root = new EncodeNode(encodingId(), meta, new EncodeNode[0], new int[]{0});
-		return new EncodeResult(root, List.of(packed), statsMin, statsMax);
-	}
+    // ── decodeChildAs helper ──────────────────────────────────────────────────
 
-	@Override
-	public Array decode(DecodeContext ctx) {
-		ByteBuffer rawMeta = ctx.metadata();
-		if (rawMeta == null || rawMeta.capacity() < 17) {
-			throw new VortexException(EncodingId.FASTLANES_DELTA, "missing or truncated metadata");
-		}
-		ByteBuffer meta = rawMeta.duplicate().order(ByteOrder.LITTLE_ENDIAN);
-		long baseValue = meta.getLong(0);
-		int bitWidth = Byte.toUnsignedInt(meta.get(8));
-		long deltaFor = meta.getLong(9);
+    private static Array decodeChildAs(DecodeContext parent, int childIdx, DType dtype, long rowCount) {
+        ArrayNode childNode = parent.node().children()[childIdx];
+        DecodeContext childCtx = new DecodeContext(
+                childNode, dtype, rowCount, parent.segmentBuffers(), parent.registry(), parent.arena());
+        return parent.registry().decode(childCtx);
+    }
 
-		PType ptype = ((DType.Primitive) ctx.dtype()).ptype();
-		long rowCount = ctx.rowCount();
+    // ── Encoding interface ────────────────────────────────────────────────────
 
-		MemorySegment packed = ctx.buffer(0);
+    @Override
+    public EncodingId encodingId() {
+        return EncodingId.FASTLANES_DELTA;
+    }
 
-		long[] longs = new long[(int) rowCount];
-		if (rowCount > 0) {
-			longs[0] = baseValue;
-			long[] deltas = unpack(packed, (int) rowCount - 1, bitWidth, deltaFor);
-			for (int i = 0; i < deltas.length; i++) {
-				longs[i + 1] = longs[i] + deltas[i];
-			}
-		}
+    @Override
+    public boolean accepts(DType dtype) {
+        if (!(dtype instanceof DType.Primitive p)) {
+            return false;
+        }
+        return switch (p.ptype()) {
+            case I8, I16, I32, I64, U8, U16, U32, U64 -> true;
+            default -> false;
+        };
+    }
 
-		MemorySegment seg = fromLongs(longs, ptype, ctx.arena());
-		return switch (ptype) {
-			case I64, U64 -> new LongArray(ctx.dtype(), rowCount, seg, ArrayStats.empty());
-			case I32, U32 -> new IntArray(ctx.dtype(), rowCount, seg, ArrayStats.empty());
-			case I16, U16 -> new ShortArray(ctx.dtype(), rowCount, seg, ArrayStats.empty());
-			case I8, U8   -> new ByteArray(ctx.dtype(), rowCount, seg, ArrayStats.empty());
-			default -> throw new VortexException(EncodingId.FASTLANES_DELTA, "unsupported ptype " + ptype);
-		};
-	}
+    @Override
+    public EncodeResult encode(DType dtype, Object data) {
+        PType ptype = ((DType.Primitive) dtype).ptype();
+        long[] longs = toLongs(data, ptype);
+        int n = longs.length;
+        int typeBits = typeBits(ptype);
+        int lanes = lanes(ptype);
+        long mask = typeMask(ptype);
+        boolean unsign = isUnsigned(ptype);
+
+        long minVal = 0L, maxVal = 0L;
+        if (n > 0) {
+            minVal = longs[0];
+            maxVal = longs[0];
+            for (int i = 1; i < n; i++) {
+                long v = longs[i];
+                if (unsign ? Long.compareUnsigned(v, minVal) < 0 : v < minVal) {
+                    minVal = v;
+                }
+                if (unsign ? Long.compareUnsigned(v, maxVal) > 0 : v > maxVal) {
+                    maxVal = v;
+                }
+            }
+        }
+
+        int numChunks = n == 0 ? 0 : (n + FL_CHUNK_SIZE - 1) / FL_CHUNK_SIZE;
+        long paddedLen = (long) numChunks * FL_CHUNK_SIZE;
+        int basesLen = numChunks * lanes;
+
+        long[] basesAll = new long[basesLen];
+        long[] deltasAll = new long[(int) paddedLen];
+
+        long[] chunkBuf = new long[FL_CHUNK_SIZE];
+        long[] transposed = new long[FL_CHUNK_SIZE];
+
+        for (int chunk = 0; chunk < numChunks; chunk++) {
+            int start = chunk * FL_CHUNK_SIZE;
+            int end = Math.min(start + FL_CHUNK_SIZE, n);
+            for (int i = start; i < end; i++) {
+                chunkBuf[i - start] = longs[i] & mask;
+            }
+            for (int i = end - start; i < FL_CHUNK_SIZE; i++) {
+                chunkBuf[i] = 0L;
+            }
+            for (int i = 0; i < FL_CHUNK_SIZE; i++) {
+                transposed[i] = chunkBuf[transposeIndex(i)];
+            }
+            int basesOff = chunk * lanes;
+            System.arraycopy(transposed, 0, basesAll, basesOff, lanes);
+            long[] chunkBases = new long[lanes];
+            System.arraycopy(basesAll, basesOff, chunkBases, 0, lanes);
+            long[] chunkDelta = deltaChunk(transposed, chunkBases, lanes, typeBits, mask);
+            System.arraycopy(chunkDelta, 0, deltasAll, chunk * FL_CHUNK_SIZE, FL_CHUNK_SIZE);
+        }
+
+        MemorySegment basesSeg = fromLongs(basesAll, ptype, Arena.ofAuto());
+        MemorySegment deltasSeg = fromLongs(deltasAll, ptype, Arena.ofAuto());
+
+        byte[] metaBytes = EncodingProtos.DeltaMetadata.newBuilder()
+                .setDeltasLen(paddedLen)
+                .setOffset(0)
+                .build()
+                .toByteArray();
+
+        byte[] statsMin = n > 0 ? statsBytes(ptype, minVal) : null;
+        byte[] statsMax = n > 0 ? statsBytes(ptype, maxVal) : null;
+
+        EncodeNode basesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
+        EncodeNode deltasNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
+        EncodeNode root = new EncodeNode(encodingId(), ByteBuffer.wrap(metaBytes),
+                new EncodeNode[]{basesNode, deltasNode}, new int[0]);
+        return new EncodeResult(root, List.of(basesSeg, deltasSeg), statsMin, statsMax);
+    }
+
+    @Override
+    public Array decode(DecodeContext ctx) {
+        ByteBuffer rawMeta = ctx.metadata();
+        EncodingProtos.DeltaMetadata meta;
+        if (rawMeta == null || !rawMeta.hasRemaining()) {
+            meta = EncodingProtos.DeltaMetadata.getDefaultInstance();
+        } else {
+            try {
+                meta = EncodingProtos.DeltaMetadata.parseFrom(rawMeta.duplicate());
+            } catch (InvalidProtocolBufferException e) {
+                throw new VortexException(EncodingId.FASTLANES_DELTA, "invalid metadata", e);
+            }
+        }
+
+        PType ptype = ((DType.Primitive) ctx.dtype()).ptype();
+        long rowCount = ctx.rowCount();
+        int typeBits = typeBits(ptype);
+        int lanes = lanes(ptype);
+        long mask = typeMask(ptype);
+
+        long deltasLen = meta.getDeltasLen();
+        int offset = (int) meta.getOffset();
+
+        if (deltasLen == 0L) {
+            MemorySegment empty = ctx.arena().allocate(0);
+            return switch (ptype) {
+                case I64, U64 -> new LongArray(ctx.dtype(), 0L, empty, ArrayStats.empty());
+                case I32, U32 -> new IntArray(ctx.dtype(), 0L, empty, ArrayStats.empty());
+                case I16, U16 -> new ShortArray(ctx.dtype(), 0L, empty, ArrayStats.empty());
+                case I8, U8   -> new ByteArray(ctx.dtype(), 0L, empty, ArrayStats.empty());
+                default -> throw new VortexException(EncodingId.FASTLANES_DELTA, "unsupported ptype: " + ptype);
+            };
+        }
+
+        long basesLen = (deltasLen / FL_CHUNK_SIZE) * lanes;
+        DType dtype = ctx.dtype();
+
+        Array basesArr = decodeChildAs(ctx, 0, dtype, basesLen);
+        Array deltasArr = decodeChildAs(ctx, 1, dtype, deltasLen);
+
+        long[] basesAll = readLongs(basesArr.buffer(0), (int) basesLen, ptype);
+        long[] deltasAll = readLongs(deltasArr.buffer(0), (int) deltasLen, ptype);
+
+        int numChunks = (int) (deltasLen / FL_CHUNK_SIZE);
+        long[] decoded = new long[(int) deltasLen];
+
+        long[] undeltaed = new long[FL_CHUNK_SIZE];
+        long[] untransposedChunk = new long[FL_CHUNK_SIZE];
+
+        for (int chunk = 0; chunk < numChunks; chunk++) {
+            int basesOff = chunk * lanes;
+            int deltaOff = chunk * FL_CHUNK_SIZE;
+
+            long[] chunkBases = new long[lanes];
+            System.arraycopy(basesAll, basesOff, chunkBases, 0, lanes);
+            long[] chunkDeltas = new long[FL_CHUNK_SIZE];
+            System.arraycopy(deltasAll, deltaOff, chunkDeltas, 0, FL_CHUNK_SIZE);
+
+            long[] chunkUndelta = undeltaChunk(chunkDeltas, chunkBases, lanes, typeBits, mask);
+
+            for (int i = 0; i < FL_CHUNK_SIZE; i++) {
+                untransposedChunk[transposeIndex(i)] = chunkUndelta[i];
+            }
+            System.arraycopy(untransposedChunk, 0, decoded, deltaOff, FL_CHUNK_SIZE);
+        }
+
+        long[] result = new long[(int) rowCount];
+        System.arraycopy(decoded, offset, result, 0, (int) rowCount);
+
+        MemorySegment seg = fromLongs(result, ptype, ctx.arena());
+        return switch (ptype) {
+            case I64, U64 -> new LongArray(ctx.dtype(), rowCount, seg, ArrayStats.empty());
+            case I32, U32 -> new IntArray(ctx.dtype(), rowCount, seg, ArrayStats.empty());
+            case I16, U16 -> new ShortArray(ctx.dtype(), rowCount, seg, ArrayStats.empty());
+            case I8, U8   -> new ByteArray(ctx.dtype(), rowCount, seg, ArrayStats.empty());
+            default -> throw new VortexException(EncodingId.FASTLANES_DELTA, "unsupported ptype: " + ptype);
+        };
+    }
 }

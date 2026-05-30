@@ -44,6 +44,7 @@ class DeltaEncodingTest {
 	private static EncodingRegistry deltaRegistry() {
 		var registry = EncodingRegistry.empty();
 		registry.register(new DeltaEncoding());
+		registry.register(new io.github.dfa1.vortex.encoding.PrimitiveEncoding());
 		return registry;
 	}
 
@@ -185,20 +186,24 @@ class DeltaEncodingTest {
 			sut.writeChunk(Map.of("ts", chunk2));
 		}
 
-		// Then
-		try (var vf = VortexReader.open(file, deltaRegistry())) {
-			List<ScanResult> results = scanAll(vf);
-			assertThat(results).hasSize(2);
+		// Then — process each chunk before advancing; hasNext() closes the previous chunk's arena
+		try (var vf = VortexReader.open(file, deltaRegistry());
+		     var iter = vf.scan(ScanOptions.all())) {
 			var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
-			Array a1 = results.get(0).columns().get("ts");
+			assertThat(iter.hasNext()).isTrue();
+			Array a1 = iter.next().columns().get("ts");
 			for (int i = 0; i < chunk1.length; i++) {
 				assertThat(a1.buffer(0).get(layout, (long) i * 8)).isEqualTo(chunk1[i]);
 			}
-			Array a2 = results.get(1).columns().get("ts");
+
+			assertThat(iter.hasNext()).isTrue();
+			Array a2 = iter.next().columns().get("ts");
 			for (int i = 0; i < chunk2.length; i++) {
 				assertThat(a2.buffer(0).get(layout, (long) i * 8)).isEqualTo(chunk2[i]);
 			}
+
+			assertThat(iter.hasNext()).isFalse();
 		}
 	}
 
