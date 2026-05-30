@@ -4,6 +4,7 @@ import com.google.flatbuffers.FlatBufferBuilder;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.encoding.AlpEncoding;
 import io.github.dfa1.vortex.encoding.BoolEncoding;
+import io.github.dfa1.vortex.encoding.DictEncoding;
 import io.github.dfa1.vortex.encoding.Encoding;
 import io.github.dfa1.vortex.encoding.VarBinEncoding;
 import io.github.dfa1.vortex.encoding.EncodeNode;
@@ -55,7 +56,7 @@ public final class VortexWriter implements Closeable {
 			.asReadOnlyBuffer();
 
 	private static final List<Encoding> DEFAULT_CODECS = List.of(
-			new AlpEncoding(), new VarBinEncoding(), new PrimitiveEncoding(), new BoolEncoding());
+			new AlpEncoding(), new PrimitiveEncoding(), new BoolEncoding(), new DictEncoding(), new VarBinEncoding());
 
 	private final WritableByteChannel channel;
 	private final DType.Struct schema;
