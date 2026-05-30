@@ -14,10 +14,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.LocalDate;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -28,12 +26,6 @@ class VortexVsCsvFileSizeTest {
 
 	private static final int TOTAL_ROWS = 100_000;
 	private static final int BATCH_SIZE = 50_000;
-
-	private static final String[] SYMBOLS = {
-			"AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "BRK.B", "JPM", "V",
-			"UNH", "XOM", "LLY", "JNJ", "MA", "PG", "HD", "MRK", "AVGO", "CVX",
-			"PEP", "ABBV", "KO", "COST", "WMT", "MCD", "CSCO", "ACN", "BAC", "CRM"
-	};
 
 	private static final DType.Struct SCHEMA = new DType.Struct(
 			List.of("symbol", "date", "open", "high", "low", "close", "volume"),
@@ -49,57 +41,18 @@ class VortexVsCsvFileSizeTest {
 			false
 	);
 
-	private record OhlcBatch(String[] symbols, int[] dates, double[] open, double[] high,
-	                         double[] low, double[] close, long[] volume) {}
-
-	private static List<OhlcBatch> generateBatches() {
-		double[] prices = new double[30];
-		Arrays.fill(prices, 100.0);
-		var rng = new Random(42L);
-		int startDay = (int) LocalDate.of(2020, 1, 2).toEpochDay();
-		int rowsLeft = TOTAL_ROWS, rowsDone = 0;
-		var batches = new java.util.ArrayList<OhlcBatch>();
-
-		while (rowsLeft > 0) {
-			int n = Math.min(rowsLeft, BATCH_SIZE);
-			String[] symbols = new String[n];
-			int[] dates = new int[n];
-			double[] open = new double[n], high = new double[n], low = new double[n], close = new double[n];
-			long[] volume = new long[n];
-			for (int i = 0; i < n; i++) {
-				int ticker = i % 30;
-				double px = prices[ticker];
-				double ret = rng.nextGaussian() * 0.02;
-				double o = Math.round(px * (1 + ret * 0.3) * 100.0) * 0.01;
-				double c = Math.round(px * (1 + ret) * 100.0) * 0.01;
-				double spread = Math.abs(px * rng.nextDouble() * 0.03);
-				symbols[i] = SYMBOLS[ticker];
-				dates[i]  = startDay + (rowsDone + i) / 30;
-				open[i]   = o;
-				high[i]   = Math.round((Math.max(o, c) + spread) * 100.0) * 0.01;
-				low[i]    = Math.round((Math.min(o, c) - spread) * 100.0) * 0.01;
-				close[i]  = c;
-				volume[i] = Math.max(100_000L, Math.round(1_000_000 + rng.nextGaussian() * 200_000));
-				prices[ticker] = c;
-			}
-			batches.add(new OhlcBatch(symbols, dates, open, high, low, close, volume));
-			rowsLeft -= n;
-			rowsDone += n;
-		}
-		return batches;
-	}
 
 	@Test
 	void vortexSmallerThanCsv(@TempDir Path tmp) throws IOException {
 		// Given
-		List<OhlcBatch> batches = generateBatches();
+		List<OhlcGenerator.OhlcBatch> batches = OhlcGenerator.generate(TOTAL_ROWS, BATCH_SIZE);
 		Path vortexFile = tmp.resolve("ohlc.vtx");
 		Path csvFile    = tmp.resolve("ohlc.csv");
 
 		// When — write Vortex with cascading (ALP+Bitpacked for F64, FoR+Bitpacked for I64, Dict+Bitpacked for symbol codes)
 		try (FileChannel ch = FileChannel.open(vortexFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
 		     VortexWriter writer = VortexWriter.create(ch, SCHEMA, WriteOptions.cascading(2))) {
-			for (OhlcBatch b : batches) {
+			for (OhlcGenerator.OhlcBatch b : batches) {
 				writer.writeChunk(Map.of(
 						"symbol", b.symbols(), "date", b.dates(), "open", b.open(), "high", b.high(),
 						"low", b.low(), "close", b.close(), "volume", b.volume()
@@ -110,7 +63,7 @@ class VortexVsCsvFileSizeTest {
 		// When — write CSV
 		try (BufferedWriter csv = Files.newBufferedWriter(csvFile)) {
 			csv.write("symbol,date,open,high,low,close,volume\n");
-			for (OhlcBatch b : batches) {
+			for (OhlcGenerator.OhlcBatch b : batches) {
 				for (int i = 0; i < b.dates().length; i++) {
 					csv.write(b.symbols()[i] + "," + LocalDate.ofEpochDay(b.dates()[i]) + ","
 							+ b.open()[i] + "," + b.high()[i] + ","

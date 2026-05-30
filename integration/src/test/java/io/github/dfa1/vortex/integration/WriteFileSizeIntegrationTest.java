@@ -32,12 +32,9 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.time.LocalDate;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -80,58 +77,13 @@ class WriteFileSizeIntegrationTest {
 		NativeLoader.loadJni();
 	}
 
-	private static double round(double v) {
-		return Math.round(v * 100.0) / 100.0;
-	}
-
-	// ── Data generation ───────────────────────────────────────────────────────
-
-	private record OhlcBatch(int[] dates, double[] open, double[] high, double[] low,
-	                         double[] close, long[] volume) {
-	}
-
-	private static List<OhlcBatch> generateBatches() {
-		double[] prices = new double[30];
-		Arrays.fill(prices, 100.0);
-		var rng = new Random(42L);
-		int startDay = (int) LocalDate.of(2020, 1, 2).toEpochDay();
-		int rowsLeft = TOTAL_ROWS;
-		int rowsDone = 0;
-		var batches = new java.util.ArrayList<OhlcBatch>();
-
-		while (rowsLeft > 0) {
-			int n = Math.min(rowsLeft, BATCH_SIZE);
-			int[] dates = new int[n];
-			double[] open = new double[n], high = new double[n], low = new double[n], close = new double[n];
-			long[] volume = new long[n];
-			for (int i = 0; i < n; i++) {
-				int ticker = i % 30;
-				double px = prices[ticker];
-				double ret = rng.nextGaussian() * 0.02;
-				double o = round(px * (1 + ret * 0.3));
-				double c = round(px * (1 + ret));
-				double spread = Math.abs(px * rng.nextDouble() * 0.03);
-				dates[i] = startDay + (rowsDone + i) / 30;
-				open[i]  = o;
-				high[i]  = round(Math.max(o, c) + spread);
-				low[i]   = round(Math.min(o, c) - spread);
-				close[i] = c;
-				volume[i] = Math.max(100_000L, Math.round(1_000_000 + rng.nextGaussian() * 200_000));
-				prices[ticker] = c;
-			}
-			batches.add(new OhlcBatch(dates, open, high, low, close, volume));
-			rowsLeft -= n;
-			rowsDone += n;
-		}
-		return batches;
-	}
 
 	// ── Writers ───────────────────────────────────────────────────────────────
 
-	private static void writeJava(Path file, List<OhlcBatch> batches) throws IOException {
+	private static void writeJava(Path file, List<OhlcGenerator.OhlcBatch> batches) throws IOException {
 		try (FileChannel ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
 		     VortexWriter writer = VortexWriter.create(ch, JAVA_SCHEMA, WriteOptions.defaults())) {
-			for (OhlcBatch b : batches) {
+			for (OhlcGenerator.OhlcBatch b : batches) {
 				writer.writeChunk(Map.of(
 						"date", b.dates(), "open", b.open(), "high", b.high(),
 						"low", b.low(), "close", b.close(), "volume", b.volume()
@@ -140,11 +92,11 @@ class WriteFileSizeIntegrationTest {
 		}
 	}
 
-	private static void writeJni(Path file, List<OhlcBatch> batches) throws IOException {
+	private static void writeJni(Path file, List<OhlcGenerator.OhlcBatch> batches) throws IOException {
 		String uri = file.toAbsolutePath().toUri().toString();
 		try (dev.vortex.api.VortexWriter writer = dev.vortex.api.VortexWriter.create(
 				SESSION, uri, JNI_SCHEMA, new HashMap<>(), ALLOCATOR)) {
-			for (OhlcBatch b : batches) {
+			for (OhlcGenerator.OhlcBatch b : batches) {
 				try (VectorSchemaRoot root = VectorSchemaRoot.create(JNI_SCHEMA, ALLOCATOR)) {
 					DateDayVector dateVec  = (DateDayVector) root.getVector("date");
 					Float8Vector  openVec  = (Float8Vector)  root.getVector("open");
@@ -187,7 +139,7 @@ class WriteFileSizeIntegrationTest {
 	void javaFile_isReadable_withCorrectRowCount(@TempDir Path tmp) throws IOException {
 		// Given
 		Path file = tmp.resolve("ohlc-java.vtx");
-		List<OhlcBatch> batches = generateBatches();
+		List<OhlcGenerator.OhlcBatch> batches = OhlcGenerator.generate(TOTAL_ROWS, BATCH_SIZE);
 
 		// When
 		writeJava(file, batches);
@@ -209,7 +161,7 @@ class WriteFileSizeIntegrationTest {
 	void jniFile_isReadable_withCorrectRowCount(@TempDir Path tmp) throws IOException {
 		// Given
 		Path file = tmp.resolve("ohlc-jni.vtx");
-		List<OhlcBatch> batches = generateBatches();
+		List<OhlcGenerator.OhlcBatch> batches = OhlcGenerator.generate(TOTAL_ROWS, BATCH_SIZE);
 
 		// When
 		writeJni(file, batches);
@@ -230,7 +182,7 @@ class WriteFileSizeIntegrationTest {
 		// Given
 		Path javaFile = tmp.resolve("ohlc-java.vtx");
 		Path jniFile  = tmp.resolve("ohlc-jni.vtx");
-		List<OhlcBatch> batches = generateBatches();
+		List<OhlcGenerator.OhlcBatch> batches = OhlcGenerator.generate(TOTAL_ROWS, BATCH_SIZE);
 
 		// When
 		writeJava(javaFile, batches);
