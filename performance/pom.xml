@@ -116,6 +116,15 @@
 					</execution>
 				</executions>
 			</plugin>
+			<!-- Fast iteration: ./mvnw compile exec:java -pl performance -am -DskipTests -Dexec.args="ClassName.method" -->
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>exec-maven-plugin</artifactId>
+				<version>3.5.0</version>
+				<configuration>
+					<mainClass>org.openjdk.jmh.Main</mainClass>
+				</configuration>
+			</plugin>
 		</plugins>
 	</build>
 </project>

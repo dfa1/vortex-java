@@ -251,18 +251,17 @@ requiring it means no preview flags, no upgrade risk, and a supported LTS for us
 ## Running benchmarks
 
 ```bash
-# Build the benchmark fat jar
+# Fast iteration — compile only (~2 s, no shade step)
+./mvnw compile -pl performance -am -DskipTests
+./mvnw exec:java -pl performance -Dexec.args="RustVsJavaReadBenchmark.javaReadVolume"
+
+# Full fat jar — use for final/published numbers (~20 s)
 ./mvnw package -pl performance -am -DskipTests
+java -jar performance/target/benchmarks.jar RustVsJavaReadBenchmark.javaReadVolume
+java -jar performance/target/benchmarks.jar RustVsJavaWriteBenchmark.javaWrite
 
 # Run all benchmarks
 java -jar performance/target/benchmarks.jar
-
-# Run a specific class
-java -jar performance/target/benchmarks.jar RustVsJavaReadBenchmark
-
-# Run a specific method (recommended — always use ClassName.methodName)
-java -jar performance/target/benchmarks.jar RustVsJavaReadBenchmark.javaReadVolume
-java -jar performance/target/benchmarks.jar RustVsJavaWriteBenchmark.javaWrite
 ```
 
 ## License
