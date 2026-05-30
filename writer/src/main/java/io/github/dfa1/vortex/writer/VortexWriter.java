@@ -3,8 +3,13 @@ package io.github.dfa1.vortex.writer;
 import com.google.flatbuffers.FlatBufferBuilder;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.encoding.AlpEncoding;
+import io.github.dfa1.vortex.encoding.BitpackedEncoding;
 import io.github.dfa1.vortex.encoding.BoolEncoding;
+import io.github.dfa1.vortex.encoding.CascadingCompressor;
+import io.github.dfa1.vortex.encoding.CompressorContext;
+import io.github.dfa1.vortex.encoding.DictEncoding;
 import io.github.dfa1.vortex.encoding.Encoding;
+import io.github.dfa1.vortex.encoding.FrameOfReferenceEncoding;
 import io.github.dfa1.vortex.encoding.VarBinEncoding;
 import io.github.dfa1.vortex.encoding.EncodeNode;
 import io.github.dfa1.vortex.encoding.EncodeResult;
@@ -56,6 +61,10 @@ public final class VortexWriter implements Closeable {
 
 	private static final List<Encoding> DEFAULT_CODECS = List.of(
 			new AlpEncoding(), new VarBinEncoding(), new PrimitiveEncoding(), new BoolEncoding());
+
+	private static final List<Encoding> CASCADE_CODECS = List.of(
+			new AlpEncoding(), new FrameOfReferenceEncoding(), new DictEncoding(),
+			new BitpackedEncoding(), new VarBinEncoding(), new PrimitiveEncoding(), new BoolEncoding());
 
 	private final WritableByteChannel channel;
 	private final DType.Struct schema;
@@ -218,8 +227,15 @@ public final class VortexWriter implements Closeable {
 	}
 
 	private int writeSegment(DType dtype, Object data) throws IOException {
-		Encoding encoding = findEncoding(dtype);
-		EncodeResult result = encoding.encode(dtype, data);
+		EncodeResult result;
+		if (options.allowedCascading() > 0) {
+			CompressorContext ctx = CompressorContext.ofDepth(options.allowedCascading());
+			CascadingCompressor compressor = new CascadingCompressor(CASCADE_CODECS, ctx);
+			result = compressor.encode(dtype, data);
+		} else {
+			Encoding encoding = findEncoding(dtype);
+			result = encoding.encode(dtype, data);
+		}
 
 		// Register all encoding IDs found in the node tree
 		registerEncodingIds(result.rootNode());

@@ -19,4 +19,10 @@ public interface Encoding {
 
 	/// Encodes `data` to bytes, including per-chunk min/max stats when available.
 	EncodeResult encode(DType dtype, Object data);
+
+	/// Cascade-aware encode: returns a partial step with open child slots.
+	/// Default wraps the terminal {@link #encode} result; override to expose children.
+	default CascadeStep encodeCascade(DType dtype, Object data, CompressorContext ctx) {
+		return CascadeStep.terminal(encode(dtype, data));
+	}
 }

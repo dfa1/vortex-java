@@ -85,15 +85,44 @@ public final class FrameOfReferenceEncoding implements Encoding {
 		long[] longs = toLongs(data, ptype);
 		int n = longs.length;
 
+		long ref = computeRef(longs, n);
+		MemorySegment residuals = toResidualBuffer(longs, ref, ptype);
+		ByteBuffer meta = buildForMeta(ref, ptype);
+
+		EncodeNode child = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
+		EncodeNode root = new EncodeNode(encodingId(), meta, new EncodeNode[]{child}, new int[0]);
+		return new EncodeResult(root, List.of(residuals), null, null);
+	}
+
+	@Override
+	public CascadeStep encodeCascade(DType dtype, Object data, CompressorContext ctx) {
+		if (!(dtype instanceof DType.Primitive p)) {
+			throw new VortexException(encodingId(), "expected primitive dtype, got " + dtype);
+		}
+		PType ptype = p.ptype();
+		long[] longs = toLongs(data, ptype);
+		int n = longs.length;
+
+		long ref = computeRef(longs, n);
+		ByteBuffer meta = buildForMeta(ref, ptype);
+
+		// residuals are the open child slot — compressor will bitpack them
+		EncodeNode partialRoot = new EncodeNode(encodingId(), meta, new EncodeNode[1], new int[0]);
+		ChildSlot slot = new ChildSlot(dtype, residualsAsNativeArray(longs, ref, ptype), 0);
+		return new CascadeStep(partialRoot, List.of(), List.of(slot), null, null);
+	}
+
+	private static long computeRef(long[] longs, int n) {
 		long ref = n > 0 ? longs[0] : 0L;
 		for (long v : longs) {
 			if (v < ref) {
 				ref = v;
 			}
 		}
+		return ref;
+	}
 
-		MemorySegment residuals = toResidualBuffer(longs, ref, ptype);
-
+	private static ByteBuffer buildForMeta(long ref, PType ptype) {
 		boolean unsigned = switch (ptype) {
 			case U8, U16, U32, U64 -> true;
 			default -> false;
@@ -101,11 +130,43 @@ public final class FrameOfReferenceEncoding implements Encoding {
 		ScalarProtos.ScalarValue scalar = unsigned
 				? ScalarProtos.ScalarValue.newBuilder().setUint64Value(ref).build()
 				: ScalarProtos.ScalarValue.newBuilder().setInt64Value(ref).build();
-		ByteBuffer meta = ByteBuffer.wrap(scalar.toByteArray());
+		return ByteBuffer.wrap(scalar.toByteArray());
+	}
 
-		EncodeNode child = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
-		EncodeNode root = new EncodeNode(encodingId(), meta, new EncodeNode[]{child}, new int[0]);
-		return new EncodeResult(root, List.of(residuals), null, null);
+	/// Returns residuals as a Java primitive array of the correct type (for passing as ChildSlot data).
+	private static Object residualsAsNativeArray(long[] longs, long ref, PType ptype) {
+		int n = longs.length;
+		return switch (ptype) {
+			case I8, U8 -> {
+				byte[] r = new byte[n];
+				for (int i = 0; i < n; i++) {
+					r[i] = (byte) (longs[i] - ref);
+				}
+				yield r;
+			}
+			case I16, U16 -> {
+				short[] r = new short[n];
+				for (int i = 0; i < n; i++) {
+					r[i] = (short) (longs[i] - ref);
+				}
+				yield r;
+			}
+			case I32, U32 -> {
+				int[] r = new int[n];
+				for (int i = 0; i < n; i++) {
+					r[i] = (int) (longs[i] - ref);
+				}
+				yield r;
+			}
+			case I64, U64 -> {
+				long[] r = new long[n];
+				for (int i = 0; i < n; i++) {
+					r[i] = longs[i] - ref;
+				}
+				yield r;
+			}
+			default -> throw new VortexException(EncodingId.FASTLANES_FOR, "unsupported ptype: " + ptype);
+		};
 	}
 
 	private static long[] toLongs(Object data, PType ptype) {

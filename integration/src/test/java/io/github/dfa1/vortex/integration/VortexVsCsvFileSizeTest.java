@@ -96,9 +96,9 @@ class VortexVsCsvFileSizeTest {
 		Path vortexFile = tmp.resolve("ohlc.vtx");
 		Path csvFile    = tmp.resolve("ohlc.csv");
 
-		// When — write Vortex
+		// When — write Vortex with cascading (ALP+Bitpacked for F64, FoR+Bitpacked for I64, Dict+Bitpacked for symbol codes)
 		try (FileChannel ch = FileChannel.open(vortexFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-		     VortexWriter writer = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
+		     VortexWriter writer = VortexWriter.create(ch, SCHEMA, WriteOptions.cascading(2))) {
 			for (OhlcBatch b : batches) {
 				writer.writeChunk(Map.of(
 						"symbol", b.symbols(), "date", b.dates(), "open", b.open(), "high", b.high(),
@@ -129,11 +129,10 @@ class VortexVsCsvFileSizeTest {
 				csvBytes,  csvBytes  / 1_048_576.0,
 				vortexBytes, vortexBytes / 1_048_576.0,
 				ratio);
-		System.out.println("[VortexVsCsv] Note: Java writer uses first-match encoding without cascading.");
-		System.out.println("[VortexVsCsv]       Cascading (ALP+Bitpacked) would narrow the gap significantly.");
 
-		// Sanity: both files written and non-trivial
-		assertThat(vortexBytes).isPositive();
-		assertThat(csvBytes).isPositive();
+		// Vortex with cascading should beat CSV
+		assertThat(vortexBytes)
+				.as("Vortex with cascading (depth=2) should be smaller than CSV")
+				.isLessThan(csvBytes);
 	}
 }

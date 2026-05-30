@@ -201,11 +201,10 @@ public final class DictEncoding implements Encoding {
 		return dtype instanceof DType.Primitive;
 	}
 
-	@Override
-	public EncodeResult encode(DType dtype, Object data) {
-		PType ptype = ((DType.Primitive) dtype).ptype();
+	private record DictData(MemorySegment valuesBuf, Object codesArr, PType codePType, int len) {}
 
-		// Build value→code map preserving insertion order
+	private static DictData buildDictData(DType dtype, Object data) {
+		PType ptype = ((DType.Primitive) dtype).ptype();
 		var valueMap = new LinkedHashMap<Object, Integer>();
 		int len = arrayLength(data, ptype);
 		for (int i = 0; i < len; i++) {
@@ -217,11 +216,9 @@ public final class DictEncoding implements Encoding {
 		PType codePType = codePType(dictSize);
 		int codeBytes = codePType.byteSize();
 
-		// Values buffer: unique values in insertion order.
 		Object uniqueArray = buildUniqueArray(ptype, valueMap.keySet(), dictSize);
 		MemorySegment valuesBuf = PTypeIO.copyArray(ptype, uniqueArray, dictSize);
 
-		// Codes buffer: per-row index into values
 		MemorySegment codesBuf = java.lang.foreign.Arena.ofAuto().allocate((long) len * codeBytes);
 		for (int i = 0; i < len; i++) {
 			Object v = readElement(data, ptype, i);
@@ -229,9 +226,45 @@ public final class DictEncoding implements Encoding {
 			writeCodeToSeg(codesBuf, codePType, i, code);
 		}
 
-		// Metadata: code PType ordinal
-		ByteBuffer meta = ByteBuffer.allocate(1).put(0, (byte) codePType.ordinal());
+		// Also build native array for cascade use
+		Object codesArr = switch (codePType) {
+			case U8 -> {
+				byte[] a = new byte[len];
+				for (int i = 0; i < len; i++) {
+					a[i] = codesBuf.get(ValueLayout.JAVA_BYTE, i);
+				}
+				yield a;
+			}
+			case U16 -> {
+				short[] a = new short[len];
+				for (int i = 0; i < len; i++) {
+					a[i] = codesBuf.get(PTypeIO.LE_SHORT, (long) i * 2);
+				}
+				yield a;
+			}
+			default -> {
+				int[] a = new int[len];
+				for (int i = 0; i < len; i++) {
+					a[i] = codesBuf.get(PTypeIO.LE_INT, (long) i * 4);
+				}
+				yield a;
+			}
+		};
+		return new DictData(valuesBuf, codesArr, codePType, len);
+	}
 
+	@Override
+	public EncodeResult encode(DType dtype, Object data) {
+		DictData d = buildDictData(dtype, data);
+		PType codePType = d.codePType();
+		int codeBytes = codePType.byteSize();
+
+		MemorySegment codesBuf = java.lang.foreign.Arena.ofAuto().allocate((long) d.len() * codeBytes);
+		for (int i = 0; i < d.len(); i++) {
+			writeCodeToSeg(codesBuf, codePType, i, readCodeFromArr(d.codesArr(), codePType, i));
+		}
+
+		ByteBuffer meta = ByteBuffer.allocate(1).put(0, (byte) codePType.ordinal());
 		EncodeNode valuesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
 		EncodeNode codesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
 		EncodeNode rootNode = new EncodeNode(
@@ -239,7 +272,33 @@ public final class DictEncoding implements Encoding {
 				new EncodeNode[]{valuesNode, codesNode},
 				new int[0]);
 
-		return new EncodeResult(rootNode, List.of(valuesBuf, codesBuf), null, null);
+		return new EncodeResult(rootNode, List.of(d.valuesBuf(), codesBuf), null, null);
+	}
+
+	@Override
+	public CascadeStep encodeCascade(DType dtype, Object data, CompressorContext ctx) {
+		DictData d = buildDictData(dtype, data);
+		PType codePType = d.codePType();
+
+		// valuesBuf stays owned; codes become open child slot so cascade can bitpack them
+		ByteBuffer meta = ByteBuffer.allocate(1).put(0, (byte) codePType.ordinal());
+		EncodeNode valuesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
+		EncodeNode partialRoot = new EncodeNode(
+				EncodingId.VORTEX_DICT, meta,
+				new EncodeNode[]{valuesNode, null},
+				new int[0]);
+
+		DType codesDtype = new DType.Primitive(codePType, false);
+		ChildSlot slot = new ChildSlot(codesDtype, d.codesArr(), 1);
+		return new CascadeStep(partialRoot, List.of(d.valuesBuf()), List.of(slot), null, null);
+	}
+
+	private static int readCodeFromArr(Object arr, PType codePType, int i) {
+		return switch (codePType) {
+			case U8 -> Byte.toUnsignedInt(((byte[]) arr)[i]);
+			case U16 -> Short.toUnsignedInt(((short[]) arr)[i]);
+			default -> ((int[]) arr)[i];
+		};
 	}
 
 	@Override
@@ -263,14 +322,25 @@ public final class DictEncoding implements Encoding {
 		int elemSize = valPType.byteSize();
 		long rowCount = ctx.rowCount();
 
-		// Legacy layout: children[0]=values (buf 0), children[1]=codes (buf 1)
+		// Values: always VORTEX_PRIMITIVE leaf, read direct
 		MemorySegment valuesBuf = ctx.segmentBuffers()[ctx.node().children()[0].bufferIndices()[0]];
-		MemorySegment codesBuf = ctx.segmentBuffers()[ctx.node().children()[1].bufferIndices()[0]];
+
+		// Codes: decode through registry — supports both raw (VORTEX_PRIMITIVE) and cascade (FASTLANES_BITPACKED) children
+		DType codesDtype = new DType.Primitive(codePType, false);
+		Array codesArr = decodeChildAs(ctx, 1, codesDtype, rowCount);
+		MemorySegment codesBuf = codesArr.buffer(0);
 
 		MemorySegment out = ctx.arena().allocate(rowCount * (long) elemSize);
-		for (long i = 0; i < rowCount; i++) {
-			long code = readCode(codesBuf, codePType, i);
-			MemorySegment.copy(valuesBuf, code * elemSize, out, i * elemSize, elemSize);
+		switch (codePType) {
+			case U8 -> expandU8(codesBuf, valuesBuf, out, rowCount, elemSize);
+			case U16 -> expandU16(codesBuf, valuesBuf, out, rowCount, elemSize);
+			case U32 -> expandU32(codesBuf, valuesBuf, out, rowCount, elemSize);
+			default -> {
+				for (long i = 0; i < rowCount; i++) {
+					long code = readCode(codesBuf, codePType, i);
+					MemorySegment.copy(valuesBuf, code * elemSize, out, i * elemSize, elemSize);
+				}
+			}
 		}
 		return typedArray(ctx.dtype(), valPType, rowCount, out.asReadOnly());
 	}
