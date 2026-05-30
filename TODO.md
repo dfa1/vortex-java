@@ -1,8 +1,12 @@
 # TODO
 
-## Encodings
+## Project
 
-- [ ] the classes are very long of complex, most likely we should group the impl detail in private static inner classes Encoder/Decoder
+- [ ] Move project to a dedicated organization
+- [ ] Create website
+- [ ] Publish benchmarks
+- [ ] Build something like hardwood.dev but for vortex files
+- [ ] Publish to Maven Central (OSSRH/SONATYPE setup, GPG signing, coordinates, CI release pipeline)
 
 ## Performance
 
@@ -72,15 +76,7 @@
     - Arrow JVM uses `sun.misc.Unsafe` / Netty internally; keeping it in a separate module means
       the core library stays Unsafe-free
 
-## Project
+## Encodings
 
-- [ ] Move project to a dedicated organization
-- [ ] Create website
-- [ ] Publish benchmarks
-- [ ] Build something like hardwood.dev but for vortex files
-- [ ] Publish to Maven Central (OSSRH/SONATYPE setup, GPG signing, coordinates, CI release pipeline)
+- [ ] the classes are very long of complex, most likely we should group the impl detail in private static inner classes Encoder/Decoder
 
-## JDK
-
-- [ ] use Java Modules
-- [ ] wait for Vector API lands on stable to improve read performance
