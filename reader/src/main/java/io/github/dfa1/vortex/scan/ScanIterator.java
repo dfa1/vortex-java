@@ -134,6 +134,7 @@ public final class ScanIterator implements AutoCloseable {
 				continue;
 			}
 
+			chunkAlloc = SegmentAllocator.slicingAllocator(chunkSlab);
 			current = new ScanResult(chunk.rowCount(), buildColumnMap(chunk));
 			rowsReturned += chunk.rowCount();
 			return true;
