@@ -82,7 +82,7 @@ class WriteFileSizeIntegrationTest {
 
 	private static void writeJava(Path file, List<OhlcGenerator.OhlcBatch> batches) throws IOException {
 		try (FileChannel ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-		     VortexWriter writer = VortexWriter.create(ch, JAVA_SCHEMA, WriteOptions.defaults())) {
+		     VortexWriter writer = VortexWriter.create(ch, JAVA_SCHEMA, WriteOptions.cascading(3))) {
 			for (OhlcGenerator.OhlcBatch b : batches) {
 				writer.writeChunk(Map.of(
 						"date", b.dates(), "open", b.open(), "high", b.high(),
@@ -200,8 +200,8 @@ class WriteFileSizeIntegrationTest {
 
 		assertThat(javaSize).isPositive();
 		assertThat(jniSize).isPositive();
-		// Java writer uses ALP (no further compression) for F64, PrimitiveEncoding for integers.
-		// JNI uses ALP+FastLanes delta+bitpacking. Bound < 6× catches gross regressions.
-		assertThat(javaSize).isLessThan(jniSize * 6);
+		// Both writers use cascading(3): ALP+bitpacking for F64, delta+bitpacking for I64.
+		// Bound < 2× catches regressions while tolerating minor encoding strategy differences.
+		assertThat(javaSize).isLessThan(jniSize * 2);
 	}
 }
