@@ -2,7 +2,6 @@
 
 ## Encodings
 
-- [ ] in one case F32 and F64 are accepted but only F64 is really implemented
 - [ ] the classes are very long of complex, most likely we should group the impl detail in private static inner classes Encoder/Decoder
 
 ## Performance

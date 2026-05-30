@@ -12,19 +12,25 @@ import io.github.dfa1.vortex.core.array.FloatArray;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
+import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.core.VortexException;
 
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
 
 /// Encoding for `vortex.dict` — dictionary encoding for low-cardinality columns.
 ///
-/// Segment layout: [valuesbuffer(uniquevalues,primitive)] [codesbuffer(per-rowindices)].
-/// Metadata (1 byte): code PType ordinal (0=U8, 1=U16, 2=U32).
+/// Primitive: [valuesbuffer(uniquevalues)] [codesbuffer]. Metadata (1 byte): code PType ordinal.
 /// Node tree: DictNode{ children=[ValuesNode{buf=0},CodesNode{buf=1}] }.
+///
+/// Utf8: buf 0 = dict bytes, buf 1 = dict offsets (I64 LE, n_unique+1), buf 2 = codes.
+/// Metadata (2 bytes): [codePType ordinal, I64 ordinal]. Flat node (no children), bufferIndices=[0,1,2].
+/// Decoded as a {@link VarBinArray} in dict mode — no string materialization at decode time.
 public final class DictEncoding implements Encoding {
 
 	private static Array decodeChildAs(DecodeContext parent, int childIdx, DType dtype, long rowCount) {
@@ -198,7 +204,7 @@ public final class DictEncoding implements Encoding {
 
 	@Override
 	public boolean accepts(DType dtype) {
-		return dtype instanceof DType.Primitive;
+		return dtype instanceof DType.Primitive || dtype instanceof DType.Utf8;
 	}
 
 	private record DictData(MemorySegment valuesBuf, Object codesArr, PType codePType, int len) {}
@@ -255,6 +261,9 @@ public final class DictEncoding implements Encoding {
 
 	@Override
 	public EncodeResult encode(DType dtype, Object data) {
+		if (dtype instanceof DType.Utf8) {
+			return encodeUtf8((String[]) data, dtype);
+		}
 		DictData d = buildDictData(dtype, data);
 		PType codePType = d.codePType();
 		int codeBytes = codePType.byteSize();
@@ -277,6 +286,9 @@ public final class DictEncoding implements Encoding {
 
 	@Override
 	public CascadeStep encodeCascade(DType dtype, Object data, CompressorContext ctx) {
+		if (dtype instanceof DType.Utf8) {
+			return CascadeStep.terminal(encodeUtf8((String[]) data, dtype));
+		}
 		DictData d = buildDictData(dtype, data);
 		PType codePType = d.codePType();
 
@@ -301,6 +313,75 @@ public final class DictEncoding implements Encoding {
 		};
 	}
 
+	// ── Utf8 encode ───────────────────────────────────────────────────────────
+
+	private EncodeResult encodeUtf8(String[] strings, DType dtype) {
+		int n = strings.length;
+
+		var valueMap = new LinkedHashMap<String, Integer>();
+		for (String s : strings) {
+			valueMap.computeIfAbsent(s, k -> valueMap.size());
+		}
+
+		int dictSize = valueMap.size();
+		PType codePType = codePType(dictSize);
+		int codeBytes = codePType.byteSize();
+
+		byte[][] dictByteArrays = new byte[dictSize][];
+		int j = 0;
+		long totalDictBytes = 0;
+		for (String s : valueMap.keySet()) {
+			dictByteArrays[j] = s.getBytes(StandardCharsets.UTF_8);
+			totalDictBytes += dictByteArrays[j].length;
+			j++;
+		}
+
+		Arena arena = Arena.ofAuto();
+		MemorySegment dictBytesBuf = arena.allocate(totalDictBytes > 0 ? totalDictBytes : 1);
+		MemorySegment dictOffsetsBuf = arena.allocate((long) (dictSize + 1) * Long.BYTES, Long.BYTES);
+
+		long pos = 0;
+		dictOffsetsBuf.setAtIndex(PTypeIO.LE_LONG, 0, 0L);
+		for (int i = 0; i < dictSize; i++) {
+			MemorySegment.copy(MemorySegment.ofArray(dictByteArrays[i]), 0, dictBytesBuf, pos, dictByteArrays[i].length);
+			pos += dictByteArrays[i].length;
+			dictOffsetsBuf.setAtIndex(PTypeIO.LE_LONG, i + 1, pos);
+		}
+
+		MemorySegment codesBuf = Arena.ofAuto().allocate((long) n * codeBytes);
+		for (int i = 0; i < n; i++) {
+			writeCodeToSeg(codesBuf, codePType, i, valueMap.get(strings[i]));
+		}
+
+		// 2 bytes: [codePType ordinal, I64 ordinal] — distinguishes from 1-byte primitive format
+		ByteBuffer meta = ByteBuffer.allocate(2)
+				.put(0, (byte) codePType.ordinal())
+				.put(1, (byte) PType.I64.ordinal());
+
+		EncodeNode root = new EncodeNode(
+				EncodingId.VORTEX_DICT, meta,
+				new EncodeNode[0],
+				new int[]{0, 1, 2});
+
+		return new EncodeResult(root, List.of(dictBytesBuf, dictOffsetsBuf, codesBuf), null, null);
+	}
+
+	// ── Utf8 decode ───────────────────────────────────────────────────────────
+
+	private static Array decodeUtf8Dict(DecodeContext ctx, ByteBuffer meta) {
+		PType codePType = PType.values()[Byte.toUnsignedInt(meta.get(0))];
+		long n = ctx.rowCount();
+
+		MemorySegment dictBytes   = ctx.buffer(0);
+		MemorySegment dictOffsets = ctx.buffer(1);
+		MemorySegment codes       = ctx.buffer(2);
+
+		return VarBinArray.ofDict(ctx.dtype(), n,
+				dictBytes, dictOffsets, PType.I64,
+				codes, codePType,
+				ArrayStats.empty());
+	}
+
 	@Override
 	public Array decode(DecodeContext ctx) {
 		if (ctx.metadata() == null || !ctx.metadata().hasRemaining()) {
@@ -308,6 +389,10 @@ public final class DictEncoding implements Encoding {
 		}
 
 		ByteBuffer meta = ctx.metadata();
+
+		if (ctx.dtype() instanceof DType.Utf8) {
+			return decodeUtf8Dict(ctx, meta);
+		}
 
 		// 1-byte = legacy Java format; multi-byte = Rust proto format
 		if (meta.remaining() == 1) {

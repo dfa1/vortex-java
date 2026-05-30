@@ -99,10 +99,11 @@ public final class AlpEncoding implements Encoding {
 	@Override
 	public EncodeResult encode(DType dtype, Object data) {
 		PType ptype = ((DType.Primitive) dtype).ptype();
-		if (ptype == PType.F64) {
-			return encodeF64((double[]) data, dtype);
-		}
-		throw new UnsupportedOperationException("ALP encode not yet supported for " + ptype);
+		return switch (ptype) {
+			case F64 -> encodeF64((double[]) data, dtype);
+			case F32 -> encodeF32((float[]) data, dtype);
+			default -> throw new UnsupportedOperationException("ALP encode not supported for " + ptype);
+		};
 	}
 
 	@Override
@@ -272,6 +273,115 @@ public final class AlpEncoding implements Encoding {
 
 	private static byte[] scalarF64(double v) {
 		return ScalarProtos.ScalarValue.newBuilder().setF64Value(v).build().toByteArray();
+	}
+
+	// ── F32 encode ────────────────────────────────────────────────────────────
+
+	private static int[] findExponentsF32(float[] values) {
+		int sampleLen = Math.min(SAMPLE_SIZE, values.length);
+		int bestExpE = 0, bestExpF = 0, bestExceptions = sampleLen + 1;
+
+		outer:
+		for (int expE = 0; expE < F10_F32.length; expE++) {
+			for (int expF = 0; expF < F10_F32.length; expF++) {
+				float encFactor = F10_F32[expE] * IF10_F32[expF];
+				float decFactor = F10_F32[expF] * IF10_F32[expE];
+				int exceptions = 0;
+				for (int i = 0; i < sampleLen; i++) {
+					float enc = values[i] * encFactor;
+					if (!Float.isFinite(enc) || (float) Math.round(enc) * decFactor != values[i]) {
+						exceptions++;
+					}
+				}
+				if (exceptions < bestExceptions) {
+					bestExceptions = exceptions;
+					bestExpE = expE;
+					bestExpF = expF;
+					if (bestExceptions == 0) {
+						break outer;
+					}
+				}
+			}
+		}
+		return new int[]{bestExpE, bestExpF};
+	}
+
+	private static EncodeResult encodeF32(float[] values, DType dtype) {
+		int n = values.length;
+		int[] exps = findExponentsF32(values);
+		int expE = exps[0], expF = exps[1];
+		float encFactor = F10_F32[expE] * IF10_F32[expF];
+		float decFactor = F10_F32[expF] * IF10_F32[expE];
+
+		int[] encodedArr = new int[n];
+		var patchIndices = new ArrayList<Integer>();
+		var patchValues = new ArrayList<Float>();
+
+		float min = Float.MAX_VALUE, max = -Float.MAX_VALUE;
+		for (int i = 0; i < n; i++) {
+			float v = values[i];
+			float enc = v * encFactor;
+			int encoded;
+			if (Float.isFinite(enc) && (float) (encoded = Math.round(enc)) * decFactor == v) {
+				encodedArr[i] = encoded;
+			} else {
+				encodedArr[i] = 0;
+				patchIndices.add(i);
+				patchValues.add(v);
+			}
+			if (v < min) {
+				min = v;
+			}
+			if (v > max) {
+				max = v;
+			}
+		}
+
+		byte[] statsMin = n > 0 ? scalarF32(min) : null;
+		byte[] statsMax = n > 0 ? scalarF32(max) : null;
+
+		MemorySegment encodedBuf = Arena.ofAuto().allocate((long) n * 4, 4);
+		for (int i = 0; i < n; i++) {
+			encodedBuf.setAtIndex(PTypeIO.LE_INT, i, encodedArr[i]);
+		}
+
+		EncodeNode encodedNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
+
+		if (patchIndices.isEmpty()) {
+			byte[] metaBytes = EncodingProtos.ALPMetadata.newBuilder()
+					.setExpE(expE).setExpF(expF).build().toByteArray();
+			EncodeNode root = new EncodeNode(EncodingId.VORTEX_ALP,
+					ByteBuffer.wrap(metaBytes), new EncodeNode[]{encodedNode}, new int[0]);
+			return new EncodeResult(root, List.of(encodedBuf), statsMin, statsMax);
+		}
+
+		int numPatches = patchIndices.size();
+		MemorySegment idxBuf = Arena.ofAuto().allocate((long) numPatches * 4, 4);
+		MemorySegment valBuf = Arena.ofAuto().allocate((long) numPatches * 4, 4);
+		for (int i = 0; i < numPatches; i++) {
+			idxBuf.setAtIndex(PTypeIO.LE_INT, i, patchIndices.get(i));
+			valBuf.setAtIndex(PTypeIO.LE_FLOAT, i, patchValues.get(i));
+		}
+
+		EncodingProtos.PatchesMetadata patches = EncodingProtos.PatchesMetadata.newBuilder()
+				.setLen(numPatches)
+				.setOffset(0)
+				.setIndicesPtype(DTypeProtos.PType.forNumber(PType.U32.ordinal()))
+				.build();
+		byte[] metaBytes = EncodingProtos.ALPMetadata.newBuilder()
+				.setExpE(expE).setExpF(expF).setPatches(patches).build().toByteArray();
+
+		EncodeNode idxNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
+		EncodeNode valNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
+		EncodeNode root = new EncodeNode(EncodingId.VORTEX_ALP,
+				ByteBuffer.wrap(metaBytes),
+				new EncodeNode[]{encodedNode, idxNode, valNode},
+				new int[0]);
+		return new EncodeResult(root, List.of(encodedBuf, idxBuf, valBuf), statsMin, statsMax);
+	}
+
+	private static byte[] scalarF32(float v) {
+		return ScalarProtos.ScalarValue.newBuilder().setF32Value(v).build().toByteArray();
 	}
 
 	@Override

@@ -60,7 +60,7 @@ public final class VortexWriter implements Closeable {
 			.asReadOnlyBuffer();
 
 	private static final List<Encoding> DEFAULT_CODECS = List.of(
-			new AlpEncoding(), new VarBinEncoding(), new PrimitiveEncoding(), new BoolEncoding());
+			new AlpEncoding(), new PrimitiveEncoding(), new BoolEncoding(), new DictEncoding(), new VarBinEncoding());
 
 	private static final List<Encoding> CASCADE_CODECS = List.of(
 			new AlpEncoding(), new FrameOfReferenceEncoding(), new DictEncoding(),

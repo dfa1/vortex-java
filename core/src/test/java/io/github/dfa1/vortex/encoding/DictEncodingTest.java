@@ -3,12 +3,16 @@ package io.github.dfa1.vortex.encoding;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.VarBinArray;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -111,8 +115,69 @@ class DictEncodingTest {
 		EncodeResult encoded = sut.encode(I32_DTYPE, data);
 
 		// Then — dict-encoded size < raw size (n * 4 bytes)
-		long encodedBytes = encoded.buffers().stream().mapToLong(java.lang.foreign.MemorySegment::byteSize).sum();
+		long encodedBytes = encoded.buffers().stream().mapToLong(MemorySegment::byteSize).sum();
 		long rawBytes = (long) data.length * 4;
 		assertThat(encodedBytes).isLessThan(rawBytes);
+	}
+
+	// ── Utf8 tests ────────────────────────────────────────────────────────────
+
+	private static final DType UTF8_DTYPE = new DType.Utf8(false);
+
+	static Stream<Arguments> utf8Arrays() {
+		return Stream.of(
+				Arguments.of("single", new String[]{"hello"}),
+				Arguments.of("all-unique", new String[]{"a", "b", "c"}),
+				Arguments.of("repeated", new String[]{"AAPL", "GOOG", "AAPL", "MSFT", "GOOG", "AAPL"}),
+				Arguments.of("unicode", new String[]{"café", "naïve", "café", "résumé", "naïve"}),
+				Arguments.of("empty-string", new String[]{"", "x", "", "y", ""})
+		);
+	}
+
+	@ParameterizedTest(name = "{0}")
+	@MethodSource("utf8Arrays")
+	void encodeDecode_utf8_isLossless(String name, String[] data) {
+		// Given
+		var sut = new DictEncoding();
+		EncodingRegistry registry = EncodingRegistry.empty();
+		registry.register(sut);
+
+		// When
+		EncodeResult encoded = sut.encode(UTF8_DTYPE, data);
+		DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, UTF8_DTYPE, registry);
+		Array result = sut.decode(ctx);
+
+		// Then
+		assertThat(result).isInstanceOf(VarBinArray.class);
+		VarBinArray arr = (VarBinArray) result;
+		assertThat(arr.length()).isEqualTo(data.length);
+		for (int i = 0; i < data.length; i++) {
+			String actual = new String(arr.getBytes(i), StandardCharsets.UTF_8);
+			assertThat(actual).as("index %d", i).isEqualTo(data[i]);
+		}
+	}
+
+	@Test
+	void encodedSize_lowCardinalityUtf8_compressesWellVsRaw() {
+		// Given
+		var sut = new DictEncoding();
+		String[] symbols = {"AAPL", "GOOG", "MSFT"};
+		String[] data = repeat(symbols, 1000);  // 3 000 rows, 3 unique ~4-byte symbols
+
+		// When
+		EncodeResult encoded = sut.encode(UTF8_DTYPE, data);
+
+		// Then — dict overhead << repeating every string verbatim
+		long encodedBytes = encoded.buffers().stream().mapToLong(MemorySegment::byteSize).sum();
+		long rawBytes = 3000L * 5;  // avg 5 bytes/symbol (4 chars + 1 for overhead)
+		assertThat(encodedBytes).isLessThan(rawBytes);
+	}
+
+	private static String[] repeat(String[] pattern, int times) {
+		String[] result = new String[pattern.length * times];
+		for (int i = 0; i < times; i++) {
+			System.arraycopy(pattern, 0, result, i * pattern.length, pattern.length);
+		}
+		return result;
 	}
 }
