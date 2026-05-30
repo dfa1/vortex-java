@@ -14,6 +14,7 @@ import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.DateDayVector;
 import org.apache.arrow.vector.Float8Vector;
 import org.apache.arrow.vector.BigIntVector;
+import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.types.DateUnit;
 import org.apache.arrow.vector.types.FloatingPointPrecision;
@@ -35,6 +36,7 @@ import org.openjdk.jmh.annotations.Warmup;
 
 import java.io.IOException;
 import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -46,10 +48,9 @@ import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
-/// Write benchmark: Java writer vs JNI (Rust) writer on the same numeric OHLC dataset.
+/// Write benchmark: Java writer vs JNI (Rust) writer on the same OHLC dataset.
 ///
-/// Schema: date(I32/DATE32), open/high/low/close(F64), volume(I64) — 6 columns, no strings.
-/// String column (symbol) omitted: Java writer does not yet support varbin.
+/// Schema: date(I32/DATE32), symbol(Utf8), open/high/low/close(F64), volume(I64) — 7 columns.
 ///
 /// Data is pre-generated in @Setup so only encoding + I/O is measured.
 /// Each invocation writes 10 M rows; the file size is returned as the benchmark result
@@ -75,6 +76,7 @@ public class RustVsJavaWriteBenchmark {
 	private static final ArrowType F64_TYPE = new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE);
 	private static final Schema JNI_SCHEMA = new Schema(List.of(
 			Field.notNullable("date", new ArrowType.Date(DateUnit.DAY)),
+			Field.notNullable("symbol", ArrowType.Utf8.INSTANCE),
 			Field.notNullable("open", F64_TYPE),
 			Field.notNullable("high", F64_TYPE),
 			Field.notNullable("low", F64_TYPE),
@@ -83,9 +85,10 @@ public class RustVsJavaWriteBenchmark {
 	));
 
 	private static final DType.Struct JAVA_SCHEMA = new DType.Struct(
-			List.of("date", "open", "high", "low", "close", "volume"),
+			List.of("date", "symbol", "open", "high", "low", "close", "volume"),
 			List.of(
 					new DType.Primitive(PType.I32, false),
+					new DType.Utf8(false),
 					new DType.Primitive(PType.F64, false),
 					new DType.Primitive(PType.F64, false),
 					new DType.Primitive(PType.F64, false),
@@ -95,6 +98,21 @@ public class RustVsJavaWriteBenchmark {
 			false
 	);
 
+	// Real Nasdaq tickers — mix of lengths (1–5 chars) for realistic varbin distribution.
+	private static final String[] NASDAQ_TICKERS = {
+			"AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "TSLA", "AVGO", "COST", "NFLX",
+			"AMD", "ADBE", "QCOM", "PEP", "CSCO", "TXN", "INTC", "CMCSA", "INTU", "AMGN",
+			"HON", "AMAT", "MU", "LRCX", "KLAC", "MRVL", "PANW", "SNPS", "CDNS", "REGN"
+	};
+	private static final byte[][] TICKER_BYTES;
+
+	static {
+		TICKER_BYTES = new byte[NASDAQ_TICKERS.length][];
+		for (int i = 0; i < NASDAQ_TICKERS.length; i++) {
+			TICKER_BYTES[i] = NASDAQ_TICKERS[i].getBytes(StandardCharsets.UTF_8);
+		}
+	}
+
 	private static final Session SESSION = Session.create();
 
 	static {
@@ -103,6 +121,7 @@ public class RustVsJavaWriteBenchmark {
 
 	// Pre-generated batch data — filled once in @Setup, reused across invocations.
 	private int[][] batchDates;
+	private String[][] batchSymbols;
 	private double[][] batchOpen;
 	private double[][] batchHigh;
 	private double[][] batchLow;
@@ -123,21 +142,22 @@ public class RustVsJavaWriteBenchmark {
 		jniFile = Files.createTempFile("ohlc-jni-write", ".vtx");
 		javaFile = Files.createTempFile("ohlc-java-write", ".vtx");
 
-		batchDates = new int[NUM_BATCHES][BATCH_SIZE];
-		batchOpen  = new double[NUM_BATCHES][BATCH_SIZE];
-		batchHigh  = new double[NUM_BATCHES][BATCH_SIZE];
-		batchLow   = new double[NUM_BATCHES][BATCH_SIZE];
-		batchClose = new double[NUM_BATCHES][BATCH_SIZE];
-		batchVolume = new long[NUM_BATCHES][BATCH_SIZE];
+		batchDates   = new int[NUM_BATCHES][BATCH_SIZE];
+		batchSymbols = new String[NUM_BATCHES][BATCH_SIZE];
+		batchOpen    = new double[NUM_BATCHES][BATCH_SIZE];
+		batchHigh    = new double[NUM_BATCHES][BATCH_SIZE];
+		batchLow     = new double[NUM_BATCHES][BATCH_SIZE];
+		batchClose   = new double[NUM_BATCHES][BATCH_SIZE];
+		batchVolume  = new long[NUM_BATCHES][BATCH_SIZE];
 
-		double[] prices = new double[30];
+		double[] prices = new double[NASDAQ_TICKERS.length];
 		Arrays.fill(prices, 100.0);
 		var rng = new Random(42L);
 		int day = (int) LocalDate.of(2020, 1, 2).toEpochDay();
 
 		for (int b = 0; b < NUM_BATCHES; b++) {
 			for (int i = 0; i < BATCH_SIZE; i++) {
-				int ticker = i % 30;
+				int ticker = i % NASDAQ_TICKERS.length;
 				double px = prices[ticker];
 				double ret = rng.nextGaussian() * 0.02;
 				double o = round(px * (1 + ret * 0.3));
@@ -145,15 +165,16 @@ public class RustVsJavaWriteBenchmark {
 				double spread = Math.abs(px * rng.nextDouble() * 0.03);
 				double h = round(Math.max(o, c) + spread);
 				double l = round(Math.min(o, c) - spread);
-				batchDates[b][i] = day + (b * BATCH_SIZE + i) / 30;
-				batchOpen[b][i]  = o;
-				batchHigh[b][i]  = h;
-				batchLow[b][i]   = l;
-				batchClose[b][i] = c;
-				batchVolume[b][i] = Math.max(100_000L, Math.round(1_000_000 + rng.nextGaussian() * 200_000));
+				batchDates[b][i]   = day + (b * BATCH_SIZE + i) / NASDAQ_TICKERS.length;
+				batchSymbols[b][i] = NASDAQ_TICKERS[ticker];
+				batchOpen[b][i]    = o;
+				batchHigh[b][i]    = h;
+				batchLow[b][i]     = l;
+				batchClose[b][i]   = c;
+				batchVolume[b][i]  = Math.max(100_000L, Math.round(1_000_000 + rng.nextGaussian() * 200_000));
 				prices[ticker] = c;
 			}
-			day += BATCH_SIZE / 30;
+			day += BATCH_SIZE / NASDAQ_TICKERS.length;
 		}
 
 		System.out.printf("[RustVsJavaWriteBenchmark] data pre-generated: %d rows in %d batches%n",
@@ -187,6 +208,7 @@ public class RustVsJavaWriteBenchmark {
 			for (int b = 0; b < NUM_BATCHES; b++) {
 				Map<String, Object> chunk = Map.of(
 						"date",   batchDates[b],
+						"symbol", batchSymbols[b],
 						"open",   batchOpen[b],
 						"high",   batchHigh[b],
 						"low",    batchLow[b],
@@ -201,15 +223,17 @@ public class RustVsJavaWriteBenchmark {
 
 	private void flushJni(dev.vortex.api.VortexWriter writer, int b) throws IOException {
 		try (VectorSchemaRoot root = VectorSchemaRoot.create(JNI_SCHEMA, allocator)) {
-			DateDayVector dateVec  = (DateDayVector) root.getVector("date");
-			Float8Vector  openVec  = (Float8Vector)  root.getVector("open");
-			Float8Vector  highVec  = (Float8Vector)  root.getVector("high");
-			Float8Vector  lowVec   = (Float8Vector)  root.getVector("low");
-			Float8Vector  closeVec = (Float8Vector)  root.getVector("close");
-			BigIntVector  volVec   = (BigIntVector)  root.getVector("volume");
+			DateDayVector dateVec   = (DateDayVector) root.getVector("date");
+			VarCharVector symbolVec = (VarCharVector) root.getVector("symbol");
+			Float8Vector  openVec   = (Float8Vector)  root.getVector("open");
+			Float8Vector  highVec   = (Float8Vector)  root.getVector("high");
+			Float8Vector  lowVec    = (Float8Vector)  root.getVector("low");
+			Float8Vector  closeVec  = (Float8Vector)  root.getVector("close");
+			BigIntVector  volVec    = (BigIntVector)  root.getVector("volume");
 
 			int n = batchDates[b].length;
 			dateVec.allocateNew(n);
+			symbolVec.allocateNew(n);
 			openVec.allocateNew(n);
 			highVec.allocateNew(n);
 			lowVec.allocateNew(n);
@@ -218,6 +242,7 @@ public class RustVsJavaWriteBenchmark {
 
 			for (int i = 0; i < n; i++) {
 				dateVec.setSafe(i, batchDates[b][i]);
+				symbolVec.setSafe(i, TICKER_BYTES[i % NASDAQ_TICKERS.length]);
 				openVec.setSafe(i, batchOpen[b][i]);
 				highVec.setSafe(i, batchHigh[b][i]);
 				lowVec.setSafe(i, batchLow[b][i]);

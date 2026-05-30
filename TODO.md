@@ -6,11 +6,6 @@
 
 ## Performance
 
-- [ ] **#10b Java vs JNI write benchmark** (`performance/` module, `-Pperformance`)
-    - Add `RustVsJavaWriteBenchmark` mirroring read side: same 10M-row OHLC fixture, JMH throughput, both writers.
-    - Old `WriteBenchmark.java` (Java-only) removed; rewrite from scratch using JNI bindings already on classpath
-      (`dev.vortex:vortex-jni:0.72.0`).
-
 - [ ] **#10c Publish reproducible perf artifacts**
     - Capture JMH JSON + JFR profile alongside README table; cite hardware (CPU model), JDK build (`java -version`),
       and benchmark commit SHA so numbers don't rot silently.
