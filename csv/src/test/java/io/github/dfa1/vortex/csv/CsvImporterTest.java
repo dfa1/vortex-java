@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.csv;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.writer.WriteOptions;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.io.VortexReader;
@@ -61,7 +62,7 @@ class CsvImporterTest {
         Path vortex = tmp.resolve("data.vortex");
 
         // When
-        CsvImporter.importCsv(csv, vortex, new ImportOptions(';', 65_536, true, null, null));
+        CsvImporter.importCsv(csv, vortex, new ImportOptions(';', 65_536, true, null, null, WriteOptions.defaults()));
 
         // Then
         try (VortexReader reader = VortexReader.open(vortex)) {
@@ -78,7 +79,7 @@ class CsvImporterTest {
         Path vortex = tmp.resolve("data.vortex");
 
         // When
-        CsvImporter.importCsv(csv, vortex, new ImportOptions(',', 65_536, false, null, null));
+        CsvImporter.importCsv(csv, vortex, new ImportOptions(',', 65_536, false, null, null, WriteOptions.defaults()));
 
         // Then
         try (VortexReader reader = VortexReader.open(vortex)) {

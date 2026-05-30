@@ -5,7 +5,6 @@ import de.siegmar.fastcsv.reader.CsvRecord;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.writer.VortexWriter;
-import io.github.dfa1.vortex.writer.WriteOptions;
 
 import java.io.IOException;
 import java.nio.channels.FileChannel;
@@ -59,7 +58,7 @@ public final class CsvImporter {
         try (FileChannel channel = FileChannel.open(
                 vortexPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE,
                 StandardOpenOption.TRUNCATE_EXISTING);
-             VortexWriter writer = VortexWriter.create(channel, schema, WriteOptions.defaults())) {
+             VortexWriter writer = VortexWriter.create(channel, schema, options.writeOptions())) {
             int chunkSize = options.chunkSize();
             int total = dataRows.size();
             for (int start = 0; start < total; start += chunkSize) {

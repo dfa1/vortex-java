@@ -31,8 +31,10 @@ final class ImportCommand {
             long csvBytes = Files.size(csvPath);
             long vortexBytes = Files.size(vortexPath);
             double savings = 1.0 - (double) vortexBytes / csvBytes;
-            System.out.printf("written: %s  (%s → %s, %.1f%% smaller)%n",
-                    vortexPath, formatBytes(csvBytes), formatBytes(vortexBytes), savings * 100);
+            int cascadingDepth = options.writeOptions().allowedCascading();
+            String cascadingInfo = cascadingDepth > 0 ? String.format(", cascading depth %d", cascadingDepth) : "";
+            System.out.printf("written: %s  (%s → %s, %.1f%% smaller%s)%n",
+                    vortexPath, formatBytes(csvBytes), formatBytes(vortexBytes), savings * 100, cascadingInfo);
             return 0;
         } catch (IOException e) {
             clearProgress();
