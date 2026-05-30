@@ -220,4 +220,74 @@ class AlpEncodingTest {
 					.as("index %d", i).isCloseTo(expected[i], within(1e-6f));
 		}
 	}
+
+	@Test
+	void encode_f32_roundTrip_noPatches() {
+		// Given
+		float[] values = {1.0f, 2.5f, 3.75f, 10.0f, 0.1f};
+		AlpEncoding sut = new AlpEncoding();
+
+		EncodingRegistry registry = EncodingRegistry.empty();
+		registry.register(sut);
+		registry.register(new PrimitiveEncoding());
+
+		// When
+		EncodeResult encoded = sut.encode(F32_DTYPE, values);
+		DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, values.length, F32_DTYPE, registry);
+		Array result = sut.decode(ctx);
+
+		// Then
+		var layout = ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+		for (int i = 0; i < values.length; i++) {
+			assertThat(result.buffer(0).get(layout, (long) i * 4))
+					.as("index %d", i).isCloseTo(values[i], within(1e-6f));
+		}
+	}
+
+	@Test
+	void encode_f32_roundTrip_withPatches() {
+		// Given — Float.NaN and Float.POSITIVE_INFINITY can't be ALP-encoded; must become patches
+		float[] values = {1.0f, Float.NaN, 2.5f, Float.POSITIVE_INFINITY, 3.0f};
+		AlpEncoding sut = new AlpEncoding();
+
+		EncodingRegistry registry = EncodingRegistry.empty();
+		registry.register(sut);
+		registry.register(new PrimitiveEncoding());
+
+		// When
+		EncodeResult encoded = sut.encode(F32_DTYPE, values);
+		DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, values.length, F32_DTYPE, registry);
+		Array result = sut.decode(ctx);
+
+		// Then
+		var layout = ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+		assertThat(result.buffer(0).get(layout, 0L)).isCloseTo(1.0f, within(1e-6f));
+		assertThat(result.buffer(0).get(layout, 4L)).isNaN();
+		assertThat(result.buffer(0).get(layout, 8L)).isCloseTo(2.5f, within(1e-6f));
+		assertThat(result.buffer(0).get(layout, 12L)).isInfinite();
+		assertThat(result.buffer(0).get(layout, 16L)).isCloseTo(3.0f, within(1e-6f));
+	}
+
+	@Test
+	void encode_f64_roundTrip_noPatches() {
+		// Given
+		double[] values = {1.23, 4.56, 7.89, 0.001, 100.0};
+		AlpEncoding sut = new AlpEncoding();
+
+		EncodingRegistry registry = EncodingRegistry.empty();
+		registry.register(sut);
+		registry.register(new PrimitiveEncoding());
+
+		// When
+		EncodeResult encoded = sut.encode(F64_DTYPE, values);
+		DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, values.length, F64_DTYPE, registry);
+		Array result = sut.decode(ctx);
+
+		// Then
+		var layout = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+		for (int i = 0; i < values.length; i++) {
+			assertThat(result.buffer(0).get(layout, (long) i * 8))
+					.as("index %d", i).isCloseTo(values[i], within(1e-9));
+		}
+	}
 }
