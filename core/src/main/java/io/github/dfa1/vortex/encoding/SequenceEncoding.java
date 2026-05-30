@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.encoding;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import dev.vortex.proto.EncodingProtos;
+import io.github.dfa1.vortex.proto.EncodingProtos;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
@@ -115,7 +115,7 @@ public final class SequenceEncoding implements Encoding {
 			return new DoubleArray(dtype, n, seg, ArrayStats.empty());
 		}
 
-		private static long signedValue(dev.vortex.proto.ScalarProtos.ScalarValue sv) {
+		private static long signedValue(io.github.dfa1.vortex.proto.ScalarProtos.ScalarValue sv) {
 			return switch (sv.getKindCase()) {
 				case INT64_VALUE -> sv.getInt64Value();
 				case UINT64_VALUE -> sv.getUint64Value();

@@ -1,8 +1,8 @@
 package io.github.dfa1.vortex.encoding;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import dev.vortex.proto.DTypeProtos;
-import dev.vortex.proto.EncodingProtos;
+import io.github.dfa1.vortex.proto.DTypeProtos;
+import io.github.dfa1.vortex.proto.EncodingProtos;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
@@ -89,7 +89,7 @@ public final class RunEndEncoding implements Encoding {
 			}
 
 			byte[] metaBytes = EncodingProtos.RunEndMetadata.newBuilder()
-					.setEndsPtype(dev.vortex.proto.DTypeProtos.PType.forNumber(PType.U32.ordinal()))
+					.setEndsPtype(io.github.dfa1.vortex.proto.DTypeProtos.PType.forNumber(PType.U32.ordinal()))
 					.setNumRuns(numRuns)
 					.setOffset(0)
 					.build()

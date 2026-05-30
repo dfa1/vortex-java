@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.encoding;
 
-import dev.vortex.proto.EncodingProtos;
-import dev.vortex.proto.ScalarProtos;
+import io.github.dfa1.vortex.proto.EncodingProtos;
+import io.github.dfa1.vortex.proto.ScalarProtos;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;

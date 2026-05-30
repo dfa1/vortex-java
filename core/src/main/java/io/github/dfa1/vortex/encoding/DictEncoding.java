@@ -1,8 +1,8 @@
 package io.github.dfa1.vortex.encoding;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import dev.vortex.proto.EncodingProtos;
-import dev.vortex.proto.ScalarProtos;
+import io.github.dfa1.vortex.proto.EncodingProtos;
+import io.github.dfa1.vortex.proto.ScalarProtos;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
@@ -146,12 +146,12 @@ public final class DictEncoding implements Encoding {
 
 			byte[] metaBytes = EncodingProtos.DictMetadata.newBuilder()
 					.setValuesLen(dictSize)
-					.setCodesPtype(dev.vortex.proto.DTypeProtos.PType.forNumber(codePType.ordinal()))
+					.setCodesPtype(io.github.dfa1.vortex.proto.DTypeProtos.PType.forNumber(codePType.ordinal()))
 					.build()
 					.toByteArray();
 
 			byte[] varBinMetaBytes = EncodingProtos.VarBinMetadata.newBuilder()
-					.setOffsetsPtype(dev.vortex.proto.DTypeProtos.PType.forNumber(PType.I64.ordinal()))
+					.setOffsetsPtype(io.github.dfa1.vortex.proto.DTypeProtos.PType.forNumber(PType.I64.ordinal()))
 					.build()
 					.toByteArray();
 

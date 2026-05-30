@@ -1,9 +1,9 @@
 package io.github.dfa1.vortex.encoding;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import dev.vortex.proto.DTypeProtos;
-import dev.vortex.proto.EncodingProtos;
-import dev.vortex.proto.ScalarProtos;
+import io.github.dfa1.vortex.proto.DTypeProtos;
+import io.github.dfa1.vortex.proto.EncodingProtos;
+import io.github.dfa1.vortex.proto.ScalarProtos;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;

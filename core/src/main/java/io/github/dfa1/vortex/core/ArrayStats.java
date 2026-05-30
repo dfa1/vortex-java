@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.core;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import dev.vortex.proto.ScalarProtos;
+import io.github.dfa1.vortex.proto.ScalarProtos;
 
 import java.nio.ByteBuffer;
 

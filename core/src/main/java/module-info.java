@@ -6,7 +6,7 @@ module io.github.dfa1.vortex.core {
     exports io.github.dfa1.vortex.core.array;
     exports io.github.dfa1.vortex.encoding;
     exports io.github.dfa1.vortex.fbs;
-    exports dev.vortex.proto;
+    exports io.github.dfa1.vortex.proto;
 
     uses io.github.dfa1.vortex.encoding.Encoding;
 

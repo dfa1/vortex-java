@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
-import dev.vortex.proto.EncodingProtos;
+import io.github.dfa1.vortex.proto.EncodingProtos;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
@@ -35,7 +35,7 @@ class AlpEncodingTest {
 			EncodingProtos.PatchesMetadata pm = EncodingProtos.PatchesMetadata.newBuilder()
 					.setLen(patchIndices.length)
 					.setOffset(0)
-					.setIndicesPtype(dev.vortex.proto.DTypeProtos.PType.U32)
+					.setIndicesPtype(io.github.dfa1.vortex.proto.DTypeProtos.PType.U32)
 					.build();
 			metaBuilder.setPatches(pm);
 		}
