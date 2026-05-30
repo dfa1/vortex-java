@@ -8,10 +8,51 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.function.IntSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class CliIT {
+
+    @Test
+    void fullPipeline(@TempDir Path tmp) throws Exception {
+        // Given
+        Path csvIn = tmp.resolve("data.csv");
+        Files.writeString(csvIn, "id,name\n1,Alice\n2,Bob\n");
+
+        // Step 1: import CSV → vortex
+        assertThat(ImportCommand.run(new String[]{"import", csvIn.toString()})).isZero();
+        Path vortex = tmp.resolve("data.vortex");
+        assertThat(vortex).exists();
+
+        // Step 2: inspect
+        String inspect = captureStdout(
+                () -> InspectCommand.run(new String[]{"inspect", vortex.toString()}));
+        assertThat(inspect).contains("Schema:").contains("id").contains("name");
+
+        // Step 3: schema
+        String schema = captureStdout(
+                () -> SchemaCommand.run(new String[]{"schema", vortex.toString()}));
+        assertThat(schema.strip()).isEqualTo("struct<id: I64, name: utf8>");
+
+        // Step 4: export vortex → CSV
+        String exported = captureStdout(
+                () -> ExportCommand.run(new String[]{"export", vortex.toString()}));
+        String[] exportedLines = exported.split("\r?\n");
+        assertThat(exportedLines).hasSize(3);
+        assertThat(exportedLines[0]).isEqualTo("id,name");
+        assertThat(exportedLines[1]).isEqualTo("1,Alice");
+        assertThat(exportedLines[2]).isEqualTo("2,Bob");
+
+        // Step 5: import the exported CSV again and verify schema is preserved
+        Path csvIn2 = tmp.resolve("data2.csv");
+        Files.writeString(csvIn2, exported);
+        assertThat(ImportCommand.run(new String[]{"import", csvIn2.toString()})).isZero();
+        Path vortex2 = tmp.resolve("data2.vortex");
+        String schema2 = captureStdout(
+                () -> SchemaCommand.run(new String[]{"schema", vortex2.toString()}));
+        assertThat(schema2.strip()).isEqualTo(schema.strip());
+    }
 
     @Test
     void importExportRoundTrip(@TempDir Path tmp) throws Exception {
@@ -19,25 +60,14 @@ class CliIT {
         Path csvIn = tmp.resolve("data.csv");
         Files.writeString(csvIn, "id,name\n1,Alice\n2,Bob\n3,Charlie\n");
 
-        // When — import CSV to Vortex
-        int importExit = ImportCommand.run(new String[]{"import", csvIn.toString()});
-        assertThat(importExit).isZero();
-
-        // When — export Vortex back to CSV via stdout
+        // When
+        assertThat(ImportCommand.run(new String[]{"import", csvIn.toString()})).isZero();
         Path vortexPath = tmp.resolve("data.vortex");
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        PrintStream saved = System.out;
-        System.setOut(new PrintStream(baos, true, StandardCharsets.UTF_8));
-        int exportExit;
-        try {
-            exportExit = ExportCommand.run(new String[]{"export", vortexPath.toString()});
-        } finally {
-            System.setOut(saved);
-        }
+        String exported = captureStdout(
+                () -> ExportCommand.run(new String[]{"export", vortexPath.toString()}));
 
         // Then
-        assertThat(exportExit).isZero();
-        String[] lines = baos.toString(StandardCharsets.UTF_8).split("\r?\n");
+        String[] lines = exported.split("\r?\n");
         assertThat(lines).hasSize(4);
         assertThat(lines[0]).isEqualTo("id,name");
         assertThat(lines[1]).isEqualTo("1,Alice");
@@ -47,53 +77,45 @@ class CliIT {
 
     @Test
     void inspectPrintsSchema(@TempDir Path tmp) throws Exception {
-        // Given — create a vortex file via import
+        // Given
         Path csvIn = tmp.resolve("data.csv");
         Files.writeString(csvIn, "id,score\n1,9.5\n");
         ImportCommand.run(new String[]{"import", csvIn.toString()});
         Path vortexPath = tmp.resolve("data.vortex");
 
         // When
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        PrintStream saved = System.out;
-        System.setOut(new PrintStream(baos, true, StandardCharsets.UTF_8));
-        int exit;
-        try {
-            exit = InspectCommand.run(new String[]{"inspect", vortexPath.toString()});
-        } finally {
-            System.setOut(saved);
-        }
+        String output = captureStdout(
+                () -> InspectCommand.run(new String[]{"inspect", vortexPath.toString()}));
 
         // Then
-        assertThat(exit).isZero();
-        String output = baos.toString(StandardCharsets.UTF_8);
-        assertThat(output).contains("Schema:");
-        assertThat(output).contains("id");
-        assertThat(output).contains("score");
+        assertThat(output).contains("Schema:").contains("id").contains("score");
     }
 
     @Test
     void schemaPrintsMachineReadableDType(@TempDir Path tmp) throws Exception {
-        // Given — create a vortex file via import
+        // Given
         Path csvIn = tmp.resolve("data.csv");
         Files.writeString(csvIn, "id,name\n1,Alice\n");
         ImportCommand.run(new String[]{"import", csvIn.toString()});
         Path vortexPath = tmp.resolve("data.vortex");
 
         // When
+        String output = captureStdout(
+                () -> SchemaCommand.run(new String[]{"schema", vortexPath.toString()}));
+
+        // Then
+        assertThat(output.strip()).isEqualTo("struct<id: I64, name: utf8>");
+    }
+
+    private static String captureStdout(IntSupplier action) {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PrintStream saved = System.out;
         System.setOut(new PrintStream(baos, true, StandardCharsets.UTF_8));
-        int exit;
         try {
-            exit = SchemaCommand.run(new String[]{"schema", vortexPath.toString()});
+            action.getAsInt();
         } finally {
             System.setOut(saved);
         }
-
-        // Then
-        assertThat(exit).isZero();
-        assertThat(baos.toString(StandardCharsets.UTF_8).strip())
-                .isEqualTo("struct<id: I64, name: utf8>");
+        return baos.toString(StandardCharsets.UTF_8);
     }
 }
