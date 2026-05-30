@@ -61,7 +61,7 @@ class CsvImporterTest {
         Path vortex = tmp.resolve("data.vortex");
 
         // When
-        CsvImporter.importCsv(csv, vortex, new ImportOptions(';', 65_536, true, null));
+        CsvImporter.importCsv(csv, vortex, new ImportOptions(';', 65_536, true, null, null));
 
         // Then
         try (VortexReader reader = VortexReader.open(vortex)) {
@@ -78,7 +78,7 @@ class CsvImporterTest {
         Path vortex = tmp.resolve("data.vortex");
 
         // When
-        CsvImporter.importCsv(csv, vortex, new ImportOptions(',', 65_536, false, null));
+        CsvImporter.importCsv(csv, vortex, new ImportOptions(',', 65_536, false, null, null));
 
         // Then
         try (VortexReader reader = VortexReader.open(vortex)) {

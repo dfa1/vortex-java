@@ -61,9 +61,13 @@ public final class CsvImporter {
                 StandardOpenOption.TRUNCATE_EXISTING);
              VortexWriter writer = VortexWriter.create(channel, schema, WriteOptions.defaults())) {
             int chunkSize = options.chunkSize();
-            for (int start = 0; start < dataRows.size(); start += chunkSize) {
-                int end = Math.min(start + chunkSize, dataRows.size());
+            int total = dataRows.size();
+            for (int start = 0; start < total; start += chunkSize) {
+                int end = Math.min(start + chunkSize, total);
                 writer.writeChunk(buildChunk(schema, dataRows.subList(start, end)));
+                if (options.progressListener() != null) {
+                    options.progressListener().onProgress(end, total);
+                }
             }
         }
     }
