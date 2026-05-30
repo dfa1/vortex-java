@@ -49,4 +49,3 @@
 
 ## Encodings
 
-- [ ] the classes are very long of complex, most likely we should group the impl detail in private static inner classes Encoder/Decoder
