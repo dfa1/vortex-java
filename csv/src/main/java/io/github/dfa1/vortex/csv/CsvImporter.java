@@ -105,6 +105,10 @@ public final class CsvImporter {
     /// Priority: long → double → bool → utf8. Each flag starts true and can only
     /// transition to false. Empty cells are skipped (compatible with any type).
     /// An all-empty column is inferred as long (all flags remain true).
+    ///
+    /// Integer values always infer as i64 (not i32/i16): CSV has no type annotations,
+    /// so the widest safe integer is chosen. Use [ImportOptions#withSchema] to force i32/i16.
+    /// Floating-point values always infer as f64 (not f32) for the same reason.
     private static DType inferColumnType(List<String[]> rows, int colIdx) {
         boolean canBeLong = true;
         boolean canBeDouble = true;
