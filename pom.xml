@@ -13,6 +13,7 @@
 		<module>core</module>
 		<module>reader</module>
 		<module>writer</module>
+		<module>csv</module>
 		<module>integration</module>
 		<module>performance</module>
 	</modules>
@@ -26,6 +27,7 @@
 		<assertj.version>3.26.3</assertj.version>
 		<mockito.version>5.14.2</mockito.version>
 		<jqwik.version>1.9.3</jqwik.version>
+		<fastcsv.version>3.6.0</fastcsv.version>
 	</properties>
 
 	<dependencyManagement>
@@ -44,6 +46,16 @@
 				<groupId>io.github.dfa1.vortex</groupId>
 				<artifactId>writer</artifactId>
 				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>io.github.dfa1.vortex</groupId>
+				<artifactId>csv</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>de.siegmar</groupId>
+				<artifactId>fastcsv</artifactId>
+				<version>${fastcsv.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>com.google.flatbuffers</groupId>
