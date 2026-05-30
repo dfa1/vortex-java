@@ -41,12 +41,12 @@ final class FilterCommand {
     static int run(String[] args) {
         if (args.length < 3) {
             System.err.println("usage: filter <file.vortex> <expr>  (e.g. \"price >= 100\")");
-            return 1;
+            return ExitStatus.USAGE_ERROR;
         }
         Path path = Path.of(args[1]);
         if (!Files.exists(path)) {
             System.err.println("file not found: " + path);
-            return 2;
+            return ExitStatus.FILE_NOT_FOUND;
         }
         String expr = String.join(" ", Arrays.asList(args).subList(2, args.length));
         ParsedFilter pf;
@@ -54,7 +54,7 @@ final class FilterCommand {
             pf = parseFilter(expr);
         } catch (IllegalArgumentException e) {
             System.err.println("error: " + e.getMessage());
-            return 1;
+            return ExitStatus.USAGE_ERROR;
         }
         ScanOptions scanOptions = new ScanOptions(List.of(), toRowFilter(pf), ScanOptions.NO_LIMIT);
         RowPredicate rowPred = toRowPredicate(pf);
@@ -62,10 +62,10 @@ final class FilterCommand {
             Writer stdout = new OutputStreamWriter(System.out, StandardCharsets.UTF_8);
             CsvExporter.exportCsvFiltered(path, stdout, ExportOptions.defaults(), scanOptions, rowPred);
             stdout.flush();
-            return 0;
+            return ExitStatus.OK;
         } catch (IOException e) {
             System.err.println("error: " + e.getMessage());
-            return 3;
+            return ExitStatus.ERROR;
         }
     }
 

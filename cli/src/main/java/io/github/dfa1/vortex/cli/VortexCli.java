@@ -4,7 +4,7 @@ import java.io.PrintStream;
 
 /// Entry point for the Vortex command-line tool.
 ///
-/// Exit codes: 0 = success, 1 = usage error, 2 = file not found, 3 = decode error.
+/// Exit codes: see {@link ExitStatus}.
 public final class VortexCli {
 
     private VortexCli() {
@@ -13,7 +13,7 @@ public final class VortexCli {
     public static void main(String[] args) {
         if (args.length == 0) {
             printUsage(System.err);
-            System.exit(1);
+            System.exit(ExitStatus.USAGE_ERROR);
         }
         int exit = switch (args[0]) {
             case "inspect" -> InspectCommand.run(args);
@@ -27,7 +27,7 @@ public final class VortexCli {
             default -> {
                 System.err.println("unknown subcommand: " + args[0]);
                 printUsage(System.err);
-                yield 1;
+                yield ExitStatus.USAGE_ERROR;
             }
         };
         System.exit(exit);

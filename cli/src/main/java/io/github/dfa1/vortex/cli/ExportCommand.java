@@ -18,21 +18,21 @@ final class ExportCommand {
     static int run(String[] args) {
         if (args.length != 2) {
             System.err.println("usage: export <file.vortex>");
-            return 1;
+            return ExitStatus.USAGE_ERROR;
         }
         Path path = Path.of(args[1]);
         if (!Files.exists(path)) {
             System.err.println("file not found: " + path);
-            return 2;
+            return ExitStatus.FILE_NOT_FOUND;
         }
         try {
             Writer stdout = new OutputStreamWriter(System.out, StandardCharsets.UTF_8);
             CsvExporter.exportCsv(path, stdout, ExportOptions.defaults());
             stdout.flush();
-            return 0;
+            return ExitStatus.OK;
         } catch (IOException e) {
             System.err.println("error: " + e.getMessage());
-            return 3;
+            return ExitStatus.ERROR;
         }
     }
 }

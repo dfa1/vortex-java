@@ -15,12 +15,12 @@ final class ImportCommand {
     static int run(String[] args) {
         if (args.length < 2 || args.length > 3) {
             System.err.println("usage: import <file.csv> [out.vortex]");
-            return 1;
+            return ExitStatus.USAGE_ERROR;
         }
         Path csvPath = Path.of(args[1]);
         if (!Files.exists(csvPath)) {
             System.err.println("file not found: " + csvPath);
-            return 2;
+            return ExitStatus.FILE_NOT_FOUND;
         }
         Path vortexPath = args.length == 3 ? Path.of(args[2]) : deriveOutputPath(csvPath);
         ImportOptions options = ImportOptions.defaults()
@@ -35,11 +35,11 @@ final class ImportCommand {
             String cascadingInfo = cascadingDepth > 0 ? String.format(", cascading depth %d", cascadingDepth) : "";
             System.out.printf("written: %s  (%s → %s, %.1f%% smaller%s)%n",
                     vortexPath, formatBytes(csvBytes), formatBytes(vortexBytes), savings * 100, cascadingInfo);
-            return 0;
+            return ExitStatus.OK;
         } catch (IOException e) {
             clearProgress();
             System.err.println("error: " + e.getMessage());
-            return 3;
+            return ExitStatus.ERROR;
         }
     }
 

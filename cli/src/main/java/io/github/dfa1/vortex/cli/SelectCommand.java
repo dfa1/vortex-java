@@ -20,12 +20,12 @@ final class SelectCommand {
     static int run(String[] args) {
         if (args.length < 3) {
             System.err.println("usage: select <file.vortex> <col1> [col2 ...]");
-            return 1;
+            return ExitStatus.USAGE_ERROR;
         }
         Path path = Path.of(args[1]);
         if (!Files.exists(path)) {
             System.err.println("file not found: " + path);
-            return 2;
+            return ExitStatus.FILE_NOT_FOUND;
         }
         List<String> columns = Arrays.asList(args).subList(2, args.length);
         ExportOptions options = ExportOptions.defaults().withColumns(columns);
@@ -33,10 +33,10 @@ final class SelectCommand {
             Writer stdout = new OutputStreamWriter(System.out, StandardCharsets.UTF_8);
             CsvExporter.exportCsv(path, stdout, options);
             stdout.flush();
-            return 0;
+            return ExitStatus.OK;
         } catch (IOException e) {
             System.err.println("error: " + e.getMessage());
-            return 3;
+            return ExitStatus.ERROR;
         }
     }
 }

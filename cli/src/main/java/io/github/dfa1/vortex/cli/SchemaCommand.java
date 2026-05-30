@@ -15,19 +15,19 @@ final class SchemaCommand {
     static int run(String[] args) {
         if (args.length != 2) {
             System.err.println("usage: schema <file.vortex>");
-            return 1;
+            return ExitStatus.USAGE_ERROR;
         }
         Path path = Path.of(args[1]);
         if (!Files.exists(path)) {
             System.err.println("file not found: " + path);
-            return 2;
+            return ExitStatus.FILE_NOT_FOUND;
         }
         try (VortexReader reader = VortexReader.open(path)) {
             System.out.println(formatDType(reader.dtype()));
-            return 0;
+            return ExitStatus.OK;
         } catch (IOException e) {
             System.err.println("error: " + e.getMessage());
-            return 3;
+            return ExitStatus.ERROR;
         }
     }
 

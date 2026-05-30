@@ -18,17 +18,17 @@ final class StatsCommand {
     static int run(String[] args) {
         if (args.length != 2) {
             System.err.println("usage: stats <file.vortex>");
-            return 1;
+            return ExitStatus.USAGE_ERROR;
         }
         Path path = Path.of(args[1]);
         if (!Files.exists(path)) {
             System.err.println("file not found: " + path);
-            return 2;
+            return ExitStatus.FILE_NOT_FOUND;
         }
         try (VortexReader reader = VortexReader.open(path)) {
             if (!(reader.dtype() instanceof DType.Struct schema)) {
                 System.err.println("error: root dtype is not a struct");
-                return 3;
+                return ExitStatus.ERROR;
             }
             long totalRows = reader.layout().rowCount();
             Map<String, ArrayStats> stats = reader.columnStats();
@@ -47,10 +47,10 @@ final class StatsCommand {
                 String max = s.max() != null ? s.max().toString() : "n/a";
                 System.out.printf("%-20s  %-12s  %15s  %15s%n", name, type, min, max);
             }
-            return 0;
+            return ExitStatus.OK;
         } catch (IOException e) {
             System.err.println("error: " + e.getMessage());
-            return 3;
+            return ExitStatus.ERROR;
         }
     }
 
