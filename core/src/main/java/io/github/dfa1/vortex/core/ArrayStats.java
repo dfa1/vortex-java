@@ -43,6 +43,8 @@ public record ArrayStats(
 				case F32_VALUE -> sv.getF32Value();
 				case F64_VALUE -> sv.getF64Value();
 				case BOOL_VALUE -> sv.getBoolValue();
+				case STRING_VALUE -> sv.getStringValue();
+				case BYTES_VALUE -> sv.getBytesValue().toStringUtf8();
 				default -> null;
 			};
 		} catch (com.google.protobuf.InvalidProtocolBufferException e) {
