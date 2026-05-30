@@ -20,11 +20,13 @@ import net.jqwik.api.Property;
 import net.jqwik.api.Provide;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
+import org.apache.arrow.vector.Float2Vector;
 import org.apache.arrow.vector.Float8Vector;
 import org.apache.arrow.vector.IntVector;
 import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.ipc.ArrowReader;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -75,6 +77,11 @@ class JavaWritesRustReadsIntegrationTest {
 	private static final DType.Struct F64_SCHEMA = new DType.Struct(
 			List.of("v"),
 			List.of(new DType.Primitive(PType.F64, false)),
+			false);
+
+	private static final DType.Struct F16_SCHEMA = new DType.Struct(
+			List.of("v"),
+			List.of(new DType.Primitive(PType.F16, false)),
 			false);
 
 	private static final DType.Struct OHLC_SCHEMA = new DType.Struct(
@@ -162,6 +169,33 @@ class JavaWritesRustReadsIntegrationTest {
 		float[] result = new float[floats.size()];
 		for (int i = 0; i < result.length; i++) {
 			result[i] = floats.get(i);
+		}
+		return result;
+	}
+
+	private static short[] readHalfColumn(Path file, String column) throws IOException {
+		String uri = file.toAbsolutePath().toUri().toString();
+		ScanOptions opts = ScanOptions.builder()
+				.projection(Expression.select(new String[]{column}, Expression.root()))
+				.build();
+		var halfs = new ArrayList<Short>();
+		DataSource ds = DataSource.open(SESSION, uri);
+		Scan scan = ds.scan(opts);
+		while (scan.hasNext()) {
+			Partition partition = scan.next();
+			try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
+				while (reader.loadNextBatch()) {
+					VectorSchemaRoot root = reader.getVectorSchemaRoot();
+					Float2Vector vec = (Float2Vector) root.getVector(column);
+					for (int i = 0; i < root.getRowCount(); i++) {
+						halfs.add(vec.get(i));
+					}
+				}
+			}
+		}
+		short[] result = new short[halfs.size()];
+		for (int i = 0; i < result.length; i++) {
+			result[i] = halfs.get(i);
 		}
 		return result;
 	}
@@ -553,6 +587,78 @@ class JavaWritesRustReadsIntegrationTest {
 				.filter(Float::isFinite)
 				.array(float[].class)
 				.ofMinSize(0).ofMaxSize(5_000);
+	}
+
+	/// F64: NaN and Inf go to ALP patches (raw bits). containsExactly fails for NaN — use bitwise comparison.
+	@Test
+	void javaWriter_jniReader_f64_nanAndInf(@TempDir Path tmp) throws IOException {
+		// Given
+		Path file = tmp.resolve("f64_nan_inf.vtx");
+		double[] data = {Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY, 0.0, 1.5, -1.5};
+		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+		     var sut = VortexWriter.create(ch, F64_SCHEMA, WriteOptions.defaults())) {
+			// When
+			sut.writeChunk(Map.of("v", data));
+		}
+
+		// Then
+		double[] decoded = readDoubleColumn(file, "v");
+		assertBitwiseEqualsF64(decoded, data);
+	}
+
+	/// F32: same as F64 — NaN and Inf go to ALP patches, require bitwise comparison.
+	@Test
+	void javaWriter_jniReader_f32_nanAndInf(@TempDir Path tmp) throws IOException {
+		// Given
+		Path file = tmp.resolve("f32_nan_inf.vtx");
+		float[] data = {Float.NaN, Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY, 0.0f, 1.5f, -1.5f};
+		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+		     var sut = VortexWriter.create(ch, F32_SCHEMA, WriteOptions.defaults())) {
+			// When
+			sut.writeChunk(Map.of("v", data));
+		}
+
+		// Then
+		float[] decoded = readFloatColumn(file, "v");
+		assertBitwiseEqualsF32(decoded, data);
+	}
+
+	/// F16: PrimitiveEncoding stores raw short bits — NaN and Inf are just bit patterns.
+	/// Disabled: vortex-jni 0.72 does not export F16 via Arrow C Data Interface.
+	@Disabled
+	@Test
+	void javaWriter_jniReader_f16_nanAndInf(@TempDir Path tmp) throws IOException {
+		// Given
+		Path file = tmp.resolve("f16_nan_inf.vtx");
+		// Half-precision: +Inf=0x7C00, -Inf=0xFC00, quiet NaN=0x7E00, 1.0=0x3C00, 0.0=0x0000
+		short[] data = {(short) 0x7E00, (short) 0x7C00, (short) 0xFC00, (short) 0x3C00, (short) 0x0000};
+		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+		     var sut = VortexWriter.create(ch, F16_SCHEMA, WriteOptions.defaults())) {
+			// When
+			sut.writeChunk(Map.of("v", data));
+		}
+
+		// Then
+		short[] decoded = readHalfColumn(file, "v");
+		assertThat(decoded).containsExactly(data);
+	}
+
+	private static void assertBitwiseEqualsF64(double[] actual, double[] expected) {
+		assertThat(actual).hasSize(expected.length);
+		for (int i = 0; i < expected.length; i++) {
+			assertThat(Double.doubleToRawLongBits(actual[i]))
+					.as("element %d", i)
+					.isEqualTo(Double.doubleToRawLongBits(expected[i]));
+		}
+	}
+
+	private static void assertBitwiseEqualsF32(float[] actual, float[] expected) {
+		assertThat(actual).hasSize(expected.length);
+		for (int i = 0; i < expected.length; i++) {
+			assertThat(Float.floatToRawIntBits(actual[i]))
+					.as("element %d", i)
+					.isEqualTo(Float.floatToRawIntBits(expected[i]));
+		}
 	}
 
 	private static void deleteDir(Path dir) throws IOException {
