@@ -24,9 +24,6 @@ import java.lang.foreign.MemorySegment;
 /// <p>Decode materialises all values into a flat {@link VarBinArray} (bytes + I64 offsets).
 public final class VarBinViewEncoding implements Encoding {
 
-	private static final int MAX_INLINED_SIZE = 12;
-	private static final int VIEW_SIZE = 16;
-
 	@Override
 	public EncodingId encodingId() {
 		return EncodingId.VORTEX_VARBINVIEW;
@@ -39,56 +36,64 @@ public final class VarBinViewEncoding implements Encoding {
 
 	@Override
 	public Array decode(DecodeContext ctx) {
-		if (!(ctx.dtype() instanceof DType.Utf8 || ctx.dtype() instanceof DType.Binary)) {
-			throw new VortexException(EncodingId.VORTEX_VARBINVIEW,
-					"expected Utf8/Binary dtype, got " + ctx.dtype());
-		}
+		return Decoder.decode(ctx);
+	}
 
-		int numBufs = ctx.node().bufferIndices().length;
-		if (numBufs < 1) {
-			throw new VortexException(EncodingId.VORTEX_VARBINVIEW,
-					"expected at least 1 buffer (views), got 0");
-		}
+	private static final class Decoder {
 
-		// Views buffer is the last; data buffers are 0..numBufs-2
-		MemorySegment viewsBuf = ctx.buffer(numBufs - 1);
-		MemorySegment[] dataBufs = new MemorySegment[numBufs - 1];
-		for (int i = 0; i < dataBufs.length; i++) {
-			dataBufs[i] = ctx.buffer(i);
-		}
+		private static final int MAX_INLINED_SIZE = 12;
+		private static final int VIEW_SIZE = 16;
 
-		long n = ctx.rowCount();
-
-		// First pass: total output bytes
-		long totalBytes = 0;
-		for (long i = 0; i < n; i++) {
-			long size = Integer.toUnsignedLong(viewsBuf.get(PTypeIO.LE_INT, i * VIEW_SIZE));
-			totalBytes += size;
-		}
-
-		MemorySegment outBytes = ctx.arena().allocate(totalBytes > 0 ? totalBytes : 1);
-		MemorySegment outOffsets = ctx.arena().allocate((n + 1) * Long.BYTES, Long.BYTES);
-
-		// Second pass: fill bytes + offsets
-		long bytePos = 0;
-		outOffsets.setAtIndex(PTypeIO.LE_LONG, 0, 0L);
-		for (long i = 0; i < n; i++) {
-			long viewOff = i * VIEW_SIZE;
-			long size = Integer.toUnsignedLong(viewsBuf.get(PTypeIO.LE_INT, viewOff));
-			if (size <= MAX_INLINED_SIZE) {
-				MemorySegment.copy(viewsBuf, viewOff + 4, outBytes, bytePos, size);
-			} else {
-				int bufferIndex = viewsBuf.get(PTypeIO.LE_INT, viewOff + 8);
-				long srcOffset = Integer.toUnsignedLong(viewsBuf.get(PTypeIO.LE_INT, viewOff + 12));
-				MemorySegment.copy(dataBufs[bufferIndex], srcOffset, outBytes, bytePos, size);
+		private static Array decode(DecodeContext ctx) {
+			if (!(ctx.dtype() instanceof DType.Utf8 || ctx.dtype() instanceof DType.Binary)) {
+				throw new VortexException(EncodingId.VORTEX_VARBINVIEW,
+						"expected Utf8/Binary dtype, got " + ctx.dtype());
 			}
-			bytePos += size;
-			outOffsets.setAtIndex(PTypeIO.LE_LONG, i + 1, bytePos);
-		}
 
-		Array offsetsArr = new LongArray(new DType.Primitive(PType.I64, false), n + 1,
-				outOffsets, ArrayStats.empty());
-		return new VarBinArray(ctx.dtype(), n, outBytes.asReadOnly(), offsetsArr, PType.I64,
-				ArrayStats.empty());
+			int numBufs = ctx.node().bufferIndices().length;
+			if (numBufs < 1) {
+				throw new VortexException(EncodingId.VORTEX_VARBINVIEW,
+						"expected at least 1 buffer (views), got 0");
+			}
+
+			// Views buffer is the last; data buffers are 0..numBufs-2
+			MemorySegment viewsBuf = ctx.buffer(numBufs - 1);
+			MemorySegment[] dataBufs = new MemorySegment[numBufs - 1];
+			for (int i = 0; i < dataBufs.length; i++) {
+				dataBufs[i] = ctx.buffer(i);
+			}
+
+			long n = ctx.rowCount();
+
+			long totalBytes = 0;
+			for (long i = 0; i < n; i++) {
+				long size = Integer.toUnsignedLong(viewsBuf.get(PTypeIO.LE_INT, i * VIEW_SIZE));
+				totalBytes += size;
+			}
+
+			MemorySegment outBytes = ctx.arena().allocate(totalBytes > 0 ? totalBytes : 1);
+			MemorySegment outOffsets = ctx.arena().allocate((n + 1) * Long.BYTES, Long.BYTES);
+
+			long bytePos = 0;
+			outOffsets.setAtIndex(PTypeIO.LE_LONG, 0, 0L);
+			for (long i = 0; i < n; i++) {
+				long viewOff = i * VIEW_SIZE;
+				long size = Integer.toUnsignedLong(viewsBuf.get(PTypeIO.LE_INT, viewOff));
+				if (size <= MAX_INLINED_SIZE) {
+					MemorySegment.copy(viewsBuf, viewOff + 4, outBytes, bytePos, size);
+				} else {
+					int bufferIndex = viewsBuf.get(PTypeIO.LE_INT, viewOff + 8);
+					long srcOffset = Integer.toUnsignedLong(viewsBuf.get(PTypeIO.LE_INT, viewOff + 12));
+					MemorySegment.copy(dataBufs[bufferIndex], srcOffset, outBytes, bytePos, size);
+				}
+				bytePos += size;
+				outOffsets.setAtIndex(PTypeIO.LE_LONG, i + 1, bytePos);
+			}
+
+			Array offsetsArr = new LongArray(new DType.Primitive(PType.I64, false), n + 1,
+					outOffsets, ArrayStats.empty());
+			return new VarBinArray(ctx.dtype(), n, outBytes.asReadOnly(), offsetsArr, PType.I64,
+					ArrayStats.empty());
+		}
 	}
 }
