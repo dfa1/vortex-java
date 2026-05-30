@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
+import dev.vortex.proto.ScalarProtos;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
@@ -40,7 +41,26 @@ public final class BoolEncoding implements Encoding {
 
 	@Override
 	public EncodeResult encode(DType dtype, Object data) {
-		return EncodeResult.simple(encodingId(), encodeBool((boolean[]) data));
+		boolean[] bools = (boolean[]) data;
+		boolean hasTrue = false;
+		boolean hasFalse = false;
+		for (boolean b : bools) {
+			if (b) {
+				hasTrue = true;
+			} else {
+				hasFalse = true;
+			}
+			if (hasTrue && hasFalse) {
+				break;
+			}
+		}
+		byte[] statsMin = bools.length > 0
+				? ScalarProtos.ScalarValue.newBuilder().setBoolValue(!hasFalse).build().toByteArray()
+				: null;
+		byte[] statsMax = bools.length > 0
+				? ScalarProtos.ScalarValue.newBuilder().setBoolValue(hasTrue).build().toByteArray()
+				: null;
+		return EncodeResult.simple(encodingId(), encodeBool(bools), statsMin, statsMax);
 	}
 
 	@Override

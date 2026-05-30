@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.encoding;
 
 import com.google.protobuf.InvalidProtocolBufferException;
 import dev.vortex.proto.EncodingProtos;
+import dev.vortex.proto.ScalarProtos;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
@@ -71,10 +72,28 @@ public final class VarBinEncoding implements Encoding {
 				.build()
 				.toByteArray();
 
+		String minStr = null;
+		String maxStr = null;
+		for (String s : strings) {
+			if (s == null) {
+				continue;
+			}
+			if (minStr == null || s.compareTo(minStr) < 0) {
+				minStr = s;
+			}
+			if (maxStr == null || s.compareTo(maxStr) > 0) {
+				maxStr = s;
+			}
+		}
+		byte[] statsMin = minStr != null
+				? ScalarProtos.ScalarValue.newBuilder().setStringValue(minStr).build().toByteArray() : null;
+		byte[] statsMax = maxStr != null
+				? ScalarProtos.ScalarValue.newBuilder().setStringValue(maxStr).build().toByteArray() : null;
+
 		EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
 		EncodeNode root = new EncodeNode(encodingId(), ByteBuffer.wrap(metaBytes),
 				new EncodeNode[]{offsetsNode}, new int[]{0});
-		return new EncodeResult(root, List.of(bytesBuf, offsetsBuf), null, null);
+		return new EncodeResult(root, List.of(bytesBuf, offsetsBuf), statsMin, statsMax);
 	}
 
 	@Override

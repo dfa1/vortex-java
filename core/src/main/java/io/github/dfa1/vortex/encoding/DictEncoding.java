@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.encoding;
 
 import com.google.protobuf.InvalidProtocolBufferException;
 import dev.vortex.proto.EncodingProtos;
+import dev.vortex.proto.ScalarProtos;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
@@ -380,7 +381,13 @@ public final class DictEncoding implements Encoding {
 				new EncodeNode[]{codesNode, valuesNode},
 				new int[0]);
 
-		return new EncodeResult(root, List.of(dictBytesBuf, dictOffsetsBuf, codesBuf), null, null);
+		String minStr = valueMap.keySet().stream().min(String::compareTo).orElse(null);
+		String maxStr = valueMap.keySet().stream().max(String::compareTo).orElse(null);
+		byte[] statsMin = minStr != null
+				? ScalarProtos.ScalarValue.newBuilder().setStringValue(minStr).build().toByteArray() : null;
+		byte[] statsMax = maxStr != null
+				? ScalarProtos.ScalarValue.newBuilder().setStringValue(maxStr).build().toByteArray() : null;
+		return new EncodeResult(root, List.of(dictBytesBuf, dictOffsetsBuf, codesBuf), statsMin, statsMax);
 	}
 
 	// ── Utf8 decode ───────────────────────────────────────────────────────────
