@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.core;
 
+import com.google.protobuf.InvalidProtocolBufferException;
 import dev.vortex.proto.ScalarProtos;
 
 import java.nio.ByteBuffer;
@@ -47,8 +48,8 @@ public record ArrayStats(
 				case BYTES_VALUE -> sv.getBytesValue().toStringUtf8();
 				default -> null;
 			};
-		} catch (com.google.protobuf.InvalidProtocolBufferException e) {
-			return null;
+		} catch (InvalidProtocolBufferException e) {
+			throw new VortexException("invalid scalar value in array stats", e);
 		}
 	}
 }
