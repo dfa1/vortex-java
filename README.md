@@ -146,27 +146,60 @@ exactly.
 Add the library to your build (example, Maven):
 
 ```xml
-<!-- TODO: replace with released coordinates -->
+<!-- TODO: replace with released coordinates once published to Maven Central -->
 <dependency>
   <groupId>io.github.dfa1</groupId>
   <artifactId>vortex-java</artifactId>
-  <version>0.0.0-SNAPSHOT</version>
+  <version>0.1.0-SNAPSHOT</version>
 </dependency>
 ```
 
-Open and read a Vortex file:
+### Read a Vortex file
 
 ```java
-import io.github.dfa1.vortex.reader.VortexFile;
-import io.github.dfa1.vortex.reader.ScanIterator;
+import io.github.dfa1.vortex.io.VortexReader;
+import io.github.dfa1.vortex.scan.ScanOptions;
+import io.github.dfa1.vortex.core.array.LongArray;
 
-try (VortexFile vf = VortexFile.open(Path.of("data/example.vortex"))) {
-    try (ScanIterator it = vf.scan()) {
-        while (it.hasNext()) {
-            var row = it.next();
-            // process row
+try (VortexReader vf = VortexReader.open(Path.of("data/example.vortex"));
+     var iter = vf.scan(ScanOptions.all())) {
+    while (iter.hasNext()) {
+        var chunk = iter.next();
+        // access a typed column
+        LongArray ts = chunk.column("timestamp");
+        for (long i = 0; i < ts.length(); i++) {
+            System.out.println(ts.getLong(i));
         }
+        // or get all columns as a map
+        chunk.columns().forEach((name, arr) ->
+            System.out.printf("%s: %d rows%n", name, arr.length()));
     }
+}
+```
+
+> **Note:** `iter.hasNext()` closes the previous chunk's arena. Access all column data
+> before calling `hasNext()` again.
+
+### Write a Vortex file
+
+```java
+import io.github.dfa1.vortex.writer.VortexWriter;
+import io.github.dfa1.vortex.writer.WriteOptions;
+import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.PType;
+
+var schema = new DType.Struct(
+    List.of("timestamp", "value"),
+    List.of(new DType.Primitive(PType.I64, false),
+            new DType.Primitive(PType.F64, false)),
+    false);
+
+long[]   timestamps = {1_700_000_000L, 1_700_000_001L, 1_700_000_002L};
+double[] values     = {1.23, 4.56, 7.89};
+
+try (var ch = FileChannel.open(Path.of("out.vortex"), CREATE, WRITE);
+     var writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+    writer.writeChunk(Map.of("timestamp", timestamps, "value", values));
 }
 ```
 
