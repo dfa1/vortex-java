@@ -9,7 +9,7 @@
 | `vortex.dict`          | `DictEncoding`         | ✅ | ✅ | — | Primitive (VarBin via dict.vortex blocked by VarBinView) |
 | `fastlanes.delta`      | `DeltaEncoding`        | ✅ | ✅ | — | integer PTypes |
 | `fastlanes.bitpacked`  | `BitpackedEncoding`    | ✅ | ✅ | — | unsigned integer PTypes |
-| `vortex.null`          | `NullEncoding`         | ✅ | trivial | no data to store | Null |
+| `vortex.null`          | `NullEncoding`         | ✅ | ❌ stub | no data to store | Null |
 | `vortex.bytebool`      | `ByteBoolEncoding`     | ✅ | trivial | `boolean[]` → 1 byte/elem | Bool |
 | `vortex.zigzag`        | `ZigZagEncoding`       | ✅ | trivial | `(v<<1)^(v>>63)`, delegate | signed integer PTypes |
 | `fastlanes.for`        | `FrameOfReferenceEncoding` | ✅ | low | find min, emit deltas child | integer PTypes |
@@ -17,7 +17,7 @@
 | `vortex.constant`      | `ConstantEncoding`     | ✅ | low | validate uniform, emit `ScalarValue` proto | Primitive, Utf8, Binary, Bool, Null, Decimal, Extension |
 | `vortex.sparse`        | `SparseEncoding`       | ✅ | medium | collect non-fill indices + values; needs fill-value detection | Primitive |
 | `vortex.varbin`        | `VarBinEncoding`       | ✅ | medium | offsets buf + bytes buf + `VarBinMetadata` proto | Utf8, Binary |
-| `vortex.sequence`      | `SequenceEncoding`     | ✅ | medium | detect arithmetic progression (base + i×step) | Primitive |
+| `vortex.sequence`      | `SequenceEncoding`     | ✅ | ❌ stub | detect arithmetic progression (base + i×step) | Primitive |
 | `vortex.struct`        | `StructEncoding`       | ✅ | medium | encode each field, emit children | Struct |
 | `vortex.ext`           | `ExtEncoding`          | ✅ | medium | encode storage dtype, wrap with extension | Extension |
 | `vortex.alp`           | `AlpEncoding`          | ✅ | hard | ALP float quantization + patch residuals | F64, F32 |
