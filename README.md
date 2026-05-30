@@ -119,6 +119,28 @@ JMH throughput (ops/s = full-file scans per second). Higher is better.
 - Align with vortex-rust and Vortex-go semantics
 - Make the JIT happy (constant layouts, predictable strides, no virtual dispatch in hot loops)
 - Prepare for the Vector API / Valhalla
+- Rigorous testing: unit tests + property-based testing + cross-language integration tests
+
+### Testing strategy
+
+Unit tests verify internal correctness (encoding round-trips, edge cases), but the format has no
+formal specification — the Rust implementation is the ground truth. Unit tests alone miss
+cross-language wire-format bugs: Java can round-trip a value internally while writing bytes that
+another implementation cannot decode.
+
+The `integration` module addresses this by using the Rust JNI reader as a **test oracle**:
+Java writes a file, the Rust reader decodes it, and the values are compared exactly.
+[Property-based testing](https://jqwik.net/) (jqwik) generates large, diverse inputs automatically,
+covering edge cases no hand-written test would anticipate.
+
+This combination caught two real bugs in ALP floating-point encoding:
+- Java selected exponents outside the range Rust's decoder accepts (silent data corruption)
+- Java's encode round-trip check used a different floating-point associativity than Rust's decode
+  (`encoded * (F10[f] * IF10[e])` vs `(encoded * F10[f]) * IF10[e]`), passing values that Rust
+  decoded differently
+
+Both bugs were invisible to pure-Java tests and would have shipped undetected without the
+cross-language oracle.
 
 ## Implementations
 
