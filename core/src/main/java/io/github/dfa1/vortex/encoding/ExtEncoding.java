@@ -4,14 +4,13 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
 
-/// Decoder for {@code vortex.ext} — extension type transparent storage wrapper.
+/// Encoder/decoder for {@code vortex.ext} — extension type transparent storage wrapper.
 ///
-/// <p>No buffers, empty metadata. Child slot 0: the storage array decoded using
+/// <p>No buffers, empty metadata. Child slot 0: the storage array encoded/decoded using
 /// the extension dtype's storage dtype and same row count.
 ///
-/// <p>Decode: unwraps the single child and returns it directly.
-/// The extension type information (name, metadata) is carried by {@link DType.Extension}
-/// on the parent but is not needed for decoding.
+/// <p>Encode: delegates to {@link PrimitiveEncoding} for the storage child, wraps in ext node.
+/// Decode: unwraps the single child and returns it directly.
 public final class ExtEncoding implements Encoding {
 
 	@Override
@@ -20,8 +19,18 @@ public final class ExtEncoding implements Encoding {
 	}
 
 	@Override
+	public boolean accepts(DType dtype) {
+		return dtype instanceof DType.Extension;
+	}
+
+	@Override
 	public EncodeResult encode(DType dtype, Object data) {
-		throw new UnsupportedOperationException("encode not supported by " + encodingId());
+		if (!(dtype instanceof DType.Extension ext)) {
+			throw new VortexException(EncodingId.VORTEX_EXT, "expected extension dtype, got " + dtype);
+		}
+		EncodeResult childResult = new PrimitiveEncoding().encode(ext.storageDType(), data);
+		EncodeNode root = new EncodeNode(EncodingId.VORTEX_EXT, null, new EncodeNode[]{childResult.rootNode()}, new int[0]);
+		return new EncodeResult(root, childResult.buffers(), childResult.statsMin(), childResult.statsMax());
 	}
 
 	@Override

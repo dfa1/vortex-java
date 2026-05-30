@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.encoding;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.LongArray;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
@@ -16,6 +17,74 @@ class ExtEncodingTest {
 
 	private static final ValueLayout.OfLong LE_LONG =
 			ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+
+	@Nested
+	class Encode {
+
+		@Test
+		void accepts_extensionDtype_returnsTrue() {
+			// Given
+			DType extDType = new DType.Extension("vortex.timestamp",
+					new DType.Primitive(PType.I64, false), null, false);
+			var sut = new ExtEncoding();
+
+			// When / Then
+			assertThat(sut.accepts(extDType)).isTrue();
+		}
+
+		@Test
+		void accepts_primitiveDtype_returnsFalse() {
+			// Given
+			var sut = new ExtEncoding();
+
+			// When / Then
+			assertThat(sut.accepts(new DType.Primitive(PType.I64, false))).isFalse();
+		}
+
+		@Test
+		void encode_extensionWrappingI64_roundTrips() {
+			// Given
+			long[] data = {100L, 200L, 300L, 400L};
+			DType storageDType = new DType.Primitive(PType.I64, false);
+			DType extDType = new DType.Extension("vortex.timestamp", storageDType, null, false);
+			var sut = new ExtEncoding();
+
+			// When
+			EncodeResult result = sut.encode(extDType, data);
+
+			// Then — root is ext, child is primitive
+			assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_EXT);
+			assertThat(result.rootNode().children()).hasSize(1);
+			assertThat(result.rootNode().children()[0].encodingId()).isEqualTo(EncodingId.VORTEX_PRIMITIVE);
+
+			// Decode back
+			EncodingRegistry registry = EncodingRegistry.empty();
+			registry.register(new PrimitiveEncoding());
+			registry.register(new ExtEncoding());
+			ArrayNode rootNode = encodeNodeToArrayNode(result.rootNode());
+			DecodeContext ctx = new DecodeContext(
+					rootNode, extDType, data.length,
+					result.buffers().toArray(MemorySegment[]::new),
+					registry, Arena.ofAuto());
+			var decoded = sut.decode(ctx);
+
+			assertThat(decoded).isInstanceOf(LongArray.class);
+			for (int i = 0; i < data.length; i++) {
+				assertThat(decoded.getLong(i)).isEqualTo(data[i]);
+			}
+		}
+
+		private ArrayNode encodeNodeToArrayNode(EncodeNode n) {
+			ArrayNode[] children = new ArrayNode[n.children().length];
+			for (int i = 0; i < children.length; i++) {
+				children[i] = encodeNodeToArrayNode(n.children()[i]);
+			}
+			return new ArrayNode(n.encodingId(), n.metadata(), children, n.bufferIndices(), null);
+		}
+	}
+
+	@Nested
+	class Decode {
 
 	@Test
 	void decode_extensionWrappingI64_returnsStorageArray() {
@@ -55,5 +124,6 @@ class ExtEncodingTest {
 		for (int i = 0; i < n; i++) {
 			assertThat(result.getLong(i)).isEqualTo(values[i]);
 		}
+	}
 	}
 }
