@@ -25,7 +25,6 @@ import net.jqwik.api.Arbitrary;
 import net.jqwik.api.ForAll;
 import net.jqwik.api.Property;
 import net.jqwik.api.Provide;
-import net.jqwik.api.constraints.Size;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -418,13 +417,11 @@ class JavaWritesRustReadsIntegrationTest {
 		}
 	}
 
-	/// I64 column: arbitrary longs survive Java write → Rust JNI read.
-	@Property(tries = 20)
-	void prop_i64_roundTripsViaRust(
-			@ForAll @Size(min = 1, max = 500) List<Long> values) throws IOException {
+	/// I64 column: full Long range (MIN_VALUE, MAX_VALUE, negatives), empty and large arrays.
+	@Property(tries = 30)
+	void prop_i64_roundTripsViaRust(@ForAll("i64Arrays") long[] data) throws IOException {
 		Path tmp = Files.createTempDirectory("vortex-pbt-i64");
 		try {
-			long[] data = values.stream().mapToLong(Long::longValue).toArray();
 			Path file = tmp.resolve("pbt_i64.vtx");
 			try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
 			     var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.defaults())) {
@@ -441,30 +438,37 @@ class JavaWritesRustReadsIntegrationTest {
 	Arbitrary<String[]> asciiStringArrays() {
 		Arbitrary<String> strings = Arbitraries.strings()
 				.alpha()
-				.ofMinLength(0).ofMaxLength(20);
-		return strings.array(String[].class).ofMinSize(1).ofMaxSize(200);
+				.ofMinLength(0).ofMaxLength(100);
+		return strings.array(String[].class).ofMinSize(0).ofMaxSize(5_000);
 	}
 
 	@Provide
 	Arbitrary<String[]> u16DictStringArrays() {
-		// 257 unique strings guaranteed by @UniqueElements on a list, then a suffix of repeats
+		// 257–5000 unique strings → U16 codes territory
 		Arbitrary<String> strings = Arbitraries.strings()
 				.alpha()
-				.ofMinLength(3).ofMaxLength(12);
-		return strings.list().ofMinSize(257).ofMaxSize(300)
-				.map(list -> list.stream().distinct().limit(300).toArray(String[]::new))
+				.ofMinLength(3).ofMaxLength(20);
+		return strings.list().ofMinSize(257).ofMaxSize(5_000)
+				.map(list -> list.stream().distinct().toArray(String[]::new))
 				.filter(arr -> arr.length >= 257);
 	}
 
 	@Provide
 	Arbitrary<String[]> unicodeStringArrays() {
 		Arbitrary<String> strings = Arbitraries.strings()
-				.withCharRange('', '퟿')
-				.ofMinLength(1).ofMaxLength(10);
-		return strings.array(String[].class).ofMinSize(1).ofMaxSize(100);
+				.withCharRange('\u4E00', '\uD7FF')
+				.ofMinLength(0).ofMaxLength(50);
+		return strings.array(String[].class).ofMinSize(0).ofMaxSize(1_000);
 	}
 
-	private static void deleteDir(Path dir) throws IOException {
+	@Provide
+	Arbitrary<long[]> i64Arrays() {
+		return Arbitraries.longs()
+				.array(long[].class)
+				.ofMinSize(0).ofMaxSize(10_000);
+	}
+
+		private static void deleteDir(Path dir) throws IOException {
 		try (var walk = Files.walk(dir)) {
 			walk.sorted(Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
 		}
