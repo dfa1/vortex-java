@@ -50,7 +50,7 @@ final class ImportCommand {
     }
 
     private static void clearProgress() {
-        System.err.printf("\r%60s\r", "");
+        System.err.printf("\r%-80s\r", "");
         System.err.flush();
     }
 
