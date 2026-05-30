@@ -11,7 +11,7 @@ Pure-Java reader/writer for the [Vortex](https://github.com/spiraldb/vortex) col
 - Pure-Java reader for primitive, sequence, ALP, dict, FSST (stable)
 - Local (mmap) or Remote (HTTPS, single read of last 65K) (stable)
 - Writer: in progress
-- Benchmark vs Rust+JNI: Java beats JNI 1.5×–6.5× across read/write workloads (see Benchmarks)
+- Benchmark vs Rust+JNI: Java beats JNI 1.5×–11.5× across read/write workloads (see Benchmarks)
 - Full encoding coverage: in progress
 - Vectorized decode paths (Panama Vector API): planned
 - Iceberg/Spark/Flink integration: not available yet
@@ -91,21 +91,21 @@ JMH throughput (ops/s = full-file scans per second). Higher is better.
 
 | Benchmark      | Java (ops/s)     | JNI/Rust (ops/s) | Java speedup |
 |----------------|------------------|------------------|--------------|
-| close (F64/ALP)| 76.4 ± 1.6       | 50.8 ± 2.2       | **1.5×**     |
-| volume (I64)   | 128.6 ± 1.5      | 52.3 ± 1.1       | **2.5×**     |
-| symbol (varbin)| 63.4 ± 21.6      | 9.8 ± 1.4        | **6.5×**     |
+| close (F64/ALP)| 76.7 ± 0.3       | 50.4 ± 2.8       | **1.5×**     |
+| volume (I64)   | 127.9 ± 2.3      | 52.9 ± 0.6       | **2.4×**     |
+| symbol (varbin)| 110.4 ± 0.4      | 9.6 ± 0.9        | **11.5×**    |
 
 ### OHLC write — 10 M rows
 
 | Benchmark | Java (ops/s) | JNI/Rust (ops/s) | Java speedup |
 |-----------|--------------|------------------|--------------|
-| write     | 4.6 ± 0.6    | 0.7 ± 0.0        | **6.5×**     |
+| write     | 4.4 ± 1.1    | 0.7 ± 0.1        | **6.4×**     |
 
 ### Big-file scan — 100 M rows × 4 I64 columns, ~3 GB (Rust-written file, all columns)
 
 | Benchmark | Java (ops/s) | JNI/Rust (ops/s) | Java speedup |
 |-----------|--------------|------------------|--------------|
-| scan      | 20.3 ± 1.0   | 5.7 ± 0.2        | **3.6×**     |
+| scan      | 20.4 ± 0.9   | 5.7 ± 0.6        | **3.6×**     |
 
 ## Design principles
 
