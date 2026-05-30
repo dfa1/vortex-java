@@ -100,6 +100,11 @@ public final class CsvImporter {
         return new DType.Struct(names, types, false);
     }
 
+    /// Infers the narrowest type for a column using a single pass.
+    ///
+    /// Priority: long → double → bool → utf8. Each flag starts true and can only
+    /// transition to false. Empty cells are skipped (compatible with any type).
+    /// An all-empty column is inferred as long (all flags remain true).
     private static DType inferColumnType(List<String[]> rows, int colIdx) {
         boolean canBeLong = true;
         boolean canBeDouble = true;
