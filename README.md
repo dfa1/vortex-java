@@ -6,6 +6,10 @@
 
 Pure-Java reader/writer for the [Vortex](https://github.com/spiraldb/vortex) columnar file format.
 
+Vortex is a shared open format with multiple independent implementations (Rust, Go, Java).
+Files written by any implementation are readable by all others — no vendor lock-in, no
+format translation at the boundary.
+
 ## Status
 
 - Pure-Java reader for primitive, sequence, ALP, dict, FSST (stable)
@@ -116,12 +120,15 @@ JMH throughput (ops/s = full-file scans per second). Higher is better.
 - Make the JIT happy (constant layouts, predictable strides, no virtual dispatch in hot loops)
 - Prepare for the Vector API / Valhalla
 
-## Prior art and inspiration
+## Implementations
 
 | Project                                                     | Language | Notes                                                               |
 |-------------------------------------------------------------|----------|---------------------------------------------------------------------|
 | [spiraldb/vortex](https://github.com/spiraldb/vortex)       | Rust     | Reference implementation + JNI bindings                             |
-| [spiraldb/vortex-go](https://github.com/spiraldb/vortex-go) | Go       | Pure-language port; primary inspiration for this project's approach |
+| [spiraldb/vortex-go](https://github.com/spiraldb/vortex-go) | Go       | Pure-language port                                                  |
+| [dfa1/vortex-java](https://github.com/dfa1/vortex-java)     | Java     | This project — FFM-based, no JNI, no Unsafe                        |
+
+All three implementations share the same binary format and can read each other's files.
 
 
 ## Serialization formats

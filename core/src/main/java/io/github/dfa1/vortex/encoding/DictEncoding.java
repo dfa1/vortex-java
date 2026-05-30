@@ -353,22 +353,39 @@ public final class DictEncoding implements Encoding {
 			writeCodeToSeg(codesBuf, codePType, i, valueMap.get(strings[i]));
 		}
 
-		// 2 bytes: [codePType ordinal, I64 ordinal] — distinguishes from 1-byte primitive format
-		ByteBuffer meta = ByteBuffer.allocate(2)
-				.put(0, (byte) codePType.ordinal())
-				.put(1, (byte) PType.I64.ordinal());
+		// DictMetadata proto (field 1=values_len, field 2=codes_ptype) — Rust reads this message
+		// for both primitive and varbin dict layouts to discover dictSize and code type.
+		byte[] metaBytes = EncodingProtos.DictMetadata.newBuilder()
+				.setValuesLen(dictSize)
+				.setCodesPtype(dev.vortex.proto.DTypeProtos.PType.forNumber(codePType.ordinal()))
+				.build()
+				.toByteArray();
 
+		// VarBin metadata for the values child (unique strings stored as VarBin)
+		byte[] varBinMetaBytes = EncodingProtos.VarBinMetadata.newBuilder()
+				.setOffsetsPtype(dev.vortex.proto.DTypeProtos.PType.forNumber(PType.I64.ordinal()))
+				.build()
+				.toByteArray();
+
+		// Buffer layout: [0]=dictBytesBuf, [1]=dictOffsetsBuf, [2]=codesBuf
+		// Rust layout: children[0]=codes, children[1]=values(VarBin)
+		EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
+		EncodeNode valuesNode = new EncodeNode(EncodingId.VORTEX_VARBIN,
+				ByteBuffer.wrap(varBinMetaBytes),
+				new EncodeNode[]{offsetsNode},
+				new int[]{0});
+		EncodeNode codesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
 		EncodeNode root = new EncodeNode(
-				EncodingId.VORTEX_DICT, meta,
-				new EncodeNode[0],
-				new int[]{0, 1, 2});
+				EncodingId.VORTEX_DICT, ByteBuffer.wrap(metaBytes),
+				new EncodeNode[]{codesNode, valuesNode},
+				new int[0]);
 
 		return new EncodeResult(root, List.of(dictBytesBuf, dictOffsetsBuf, codesBuf), null, null);
 	}
 
 	// ── Utf8 decode ───────────────────────────────────────────────────────────
 
-	private static Array decodeUtf8Dict(DecodeContext ctx, ByteBuffer meta) {
+	private static Array decodeUtf8DictLegacy(DecodeContext ctx, ByteBuffer meta) {
 		PType codePType = PType.values()[Byte.toUnsignedInt(meta.get(0))];
 		long n = ctx.rowCount();
 
@@ -382,16 +399,54 @@ public final class DictEncoding implements Encoding {
 				ArrayStats.empty());
 	}
 
+	private static Array decodeUtf8DictProto(DecodeContext ctx, ByteBuffer metaBuf) {
+		// DictMetadata proto (field 1=values_len, field 2=codes_ptype) — same message Rust uses.
+		EncodingProtos.DictMetadata meta;
+		try {
+			meta = EncodingProtos.DictMetadata.parseFrom(metaBuf);
+		} catch (com.google.protobuf.InvalidProtocolBufferException e) {
+			throw new VortexException(EncodingId.VORTEX_DICT, "invalid utf8 dict proto metadata", e);
+		}
+		PType codePType = PType.values()[meta.getCodesPtype().getNumber()];
+		long dictSize = meta.getValuesLen();
+		long n = ctx.rowCount();
+
+		// Rust layout: children[0]=codes, children[1]=values(VarBin)
+		DType codesDtype = new DType.Primitive(codePType, false);
+		Array codesArr = decodeChildAs(ctx, 0, codesDtype, n);
+		MemorySegment codesBuf = codesArr.buffer(0);
+
+		Array valuesArr = decodeChildAs(ctx, 1, ctx.dtype(), dictSize);
+		MemorySegment dictBytes = valuesArr.buffer(0);
+		MemorySegment dictOffsets = valuesArr.child(0).buffer(0);
+
+		return VarBinArray.ofDict(ctx.dtype(), n,
+				dictBytes, dictOffsets, PType.I64,
+				codesBuf, codePType,
+				ArrayStats.empty());
+	}
+
 	@Override
 	public Array decode(DecodeContext ctx) {
-		if (ctx.metadata() == null || !ctx.metadata().hasRemaining()) {
-			throw new VortexException(EncodingId.VORTEX_DICT, "missing metadata");
-		}
-
 		ByteBuffer meta = ctx.metadata();
 
 		if (ctx.dtype() instanceof DType.Utf8) {
-			return decodeUtf8Dict(ctx, meta);
+			if (ctx.node().children().length == 0) {
+				// Old Java flat format: bufferIndices=[0,1,2], 2-byte custom metadata
+				if (meta == null || !meta.hasRemaining()) {
+					throw new VortexException(EncodingId.VORTEX_DICT, "missing metadata for legacy utf8 dict");
+				}
+				return decodeUtf8DictLegacy(ctx, meta);
+			}
+			// New proto format (DictMetadata with values_len): compatible with Rust
+			if (meta == null || !meta.hasRemaining()) {
+				throw new VortexException(EncodingId.VORTEX_DICT, "missing metadata for utf8 dict");
+			}
+			return decodeUtf8DictProto(ctx, meta.duplicate());
+		}
+
+		if (meta == null || !meta.hasRemaining()) {
+			throw new VortexException(EncodingId.VORTEX_DICT, "missing metadata");
 		}
 
 		// 1-byte = legacy Java format; multi-byte = Rust proto format

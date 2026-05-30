@@ -257,14 +257,29 @@ class JavaWritesRustReadsIntegrationTest {
 
 	@Test
 	void javaWriter_jniReader_utf8Column(@TempDir Path tmp) throws IOException {
-		// Given — force VarBinEncoding; DictEncoding.encodeUtf8 writes non-protobuf metadata
-		// that the Rust reader rejects (known issue, tracked in DictEncoding)
+		// Given — VarBin encoding (raw bytes + offsets, no dictionary)
 		Path file = tmp.resolve("java_utf8.vtx");
 		String[] data = {"apple", "banana", "cherry", "date", "elderberry"};
 		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
 		     var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults(),
 					 List.of(new VarBinEncoding()))) {
 			// When
+			sut.writeChunk(Map.of("s", data));
+		}
+
+		// Then
+		String[] decoded = readStringColumn(file, "s");
+		assertThat(decoded).containsExactly(data);
+	}
+
+	@Test
+	void javaWriter_jniReader_dictEncodedUtf8Column(@TempDir Path tmp) throws IOException {
+		// Given — DictEncoding (DictLayoutMetadata proto + children[0]=codes, children[1]=VarBin values)
+		Path file = tmp.resolve("java_dict_utf8.vtx");
+		String[] data = {"apple", "banana", "cherry", "date", "elderberry"};
+		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+		     var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults())) {
+			// When — default pipeline selects DictEncoding for Utf8
 			sut.writeChunk(Map.of("s", data));
 		}
 

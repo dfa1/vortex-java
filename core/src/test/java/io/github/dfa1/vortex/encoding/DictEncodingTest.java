@@ -141,6 +141,8 @@ class DictEncodingTest {
 		var sut = new DictEncoding();
 		EncodingRegistry registry = EncodingRegistry.empty();
 		registry.register(sut);
+		registry.register(new PrimitiveEncoding());
+		registry.register(new VarBinEncoding());
 
 		// When
 		EncodeResult encoded = sut.encode(UTF8_DTYPE, data);

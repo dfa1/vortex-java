@@ -3,10 +3,6 @@
 ## Encodings
 
 - [ ] the classes are very long of complex, most likely we should group the impl detail in private static inner classes Encoder/Decoder
-- [ ] **`DictEncoding.encodeUtf8` Rust cross-compat bug**: `encodeUtf8` writes a 2-byte custom metadata
-  format (`[codePType ordinal, I64 ordinal]`) instead of a protobuf `DictMetadata` message. Rust reader
-  calls `parseFrom` on these 2 bytes and fails with "invalid tag value: 0" when codePType = U8 (ordinal 0).
-  Fix: rewrite `encodeUtf8` metadata to emit a proper `DictLayoutMetadata` protobuf (matching Rust wire format).
 
 ## Performance
 
