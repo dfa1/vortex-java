@@ -236,6 +236,78 @@ try (var ch = FileChannel.open(Path.of("out.vortex"), CREATE, WRITE);
 }
 ```
 
+## CLI
+
+The `cli` module ships a fat jar with subcommands for inspecting, converting, and querying Vortex files without writing any code.
+
+**Build:**
+
+```bash
+./mvnw package -pl cli -am -DskipTests
+# produces cli/target/vortex.jar
+```
+
+**Run:**
+
+```bash
+java -jar cli/target/vortex.jar <subcommand> [args]
+```
+
+### Subcommands
+
+| Subcommand | Syntax | Description |
+|---|---|---|
+| `inspect` | `inspect <file.vortex>` | Print file structure (layout tree, encodings, row counts) |
+| `schema` | `schema <file.vortex>` | Print column types in machine-readable form |
+| `count` | `count <file.vortex>` | Print total row count |
+| `stats` | `stats <file.vortex>` | Print per-column min/max statistics |
+| `export` | `export <file.vortex>` | Write all columns to CSV on stdout |
+| `select` | `select <file.vortex> <col> [col2 ...]` | Project specific columns to CSV on stdout |
+| `filter` | `filter <file.vortex> <expr>` | Filter rows to CSV (e.g. `"price >= 100"`) |
+| `import` | `import <file.csv> [out.vortex]` | Convert CSV to Vortex (output defaults to `<input>.vortex`) |
+
+Filter operators: `>`, `>=`, `<`, `<=`, `=`, `==`. Values are parsed as integer, double, boolean, or string.
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| 0 | Success |
+| 1 | Usage error |
+| 2 | File not found |
+| 3 | Decode / I/O error |
+
+### Examples
+
+```bash
+# inspect encoding layout
+java -jar cli/target/vortex.jar inspect data/ohlc.vortex
+
+# print schema
+java -jar cli/target/vortex.jar schema data/ohlc.vortex
+# → struct<symbol: utf8, open: F64, close: F64, volume: I64>
+
+# row count
+java -jar cli/target/vortex.jar count data/ohlc.vortex
+# → 10000000
+
+# per-column stats
+java -jar cli/target/vortex.jar stats data/ohlc.vortex
+
+# export to CSV
+java -jar cli/target/vortex.jar export data/ohlc.vortex > out.csv
+
+# project two columns
+java -jar cli/target/vortex.jar select data/ohlc.vortex symbol close > prices.csv
+
+# filter rows
+java -jar cli/target/vortex.jar filter data/ohlc.vortex "volume >= 1000000" > large_trades.csv
+
+# convert CSV to Vortex
+java -jar cli/target/vortex.jar import data/trades.csv
+# writes data/trades.vortex, prints size savings
+```
+
 ## Requirements
 
 - Java 25+
