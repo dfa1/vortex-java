@@ -16,6 +16,10 @@ format translation at the boundary.
 - Local (mmap) or Remote (HTTPS, single read of last 65K) (stable)
 - Writer: in progress
 - Benchmark vs Rust+JNI: Java beats JNI 1.5×–11.5× across read/write workloads (see Benchmarks)
+- **File size trade-off:** Java-written files are larger than Rust-written files (up to ~2×
+  with `cascading(3)`). The Rust writer applies more compression passes; the Java writer
+  covers ALP, bitpacking, and FSST but not the full Rust encoding set yet. Files are still
+  significantly smaller than CSV. Cross-implementation verified by `FileSizeComparisonIntegrationTest`.
 - Full encoding coverage: in progress
 - Vectorized decode paths (Panama Vector API): planned
 - Iceberg/Spark/Flink integration: not available yet
