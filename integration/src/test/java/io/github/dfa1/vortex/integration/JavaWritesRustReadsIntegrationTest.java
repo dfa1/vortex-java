@@ -20,15 +20,23 @@ import org.apache.arrow.vector.IntVector;
 import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.ipc.ArrowReader;
+import net.jqwik.api.Arbitraries;
+import net.jqwik.api.Arbitrary;
+import net.jqwik.api.ForAll;
+import net.jqwik.api.Property;
+import net.jqwik.api.Provide;
+import net.jqwik.api.constraints.Size;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.channels.FileChannel;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
@@ -351,5 +359,114 @@ class JavaWritesRustReadsIntegrationTest {
 		// Then
 		long[] expected = batches.stream().flatMapToLong(b -> Arrays.stream(b.volume())).toArray();
 		assertThat(volumes).containsExactlyInAnyOrder(expected);
+	}
+
+	// ── Property-based tests ──────────────────────────────────────────────────
+
+	/// Dict utf8 with arbitrary strings (small dict → U8 codes).
+	/// Validates that random string data survives Java dict-encode → Rust JNI read.
+	@Property(tries = 20)
+	void prop_dictUtf8_ascii_roundTripsViaRust(
+			@ForAll("asciiStringArrays") String[] data) throws IOException {
+		Path tmp = Files.createTempDirectory("vortex-pbt-ascii");
+		try {
+			Path file = tmp.resolve("pbt_dict_utf8_ascii.vtx");
+			try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+			     var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults())) {
+				sut.writeChunk(Map.of("s", data));
+			}
+			String[] decoded = readStringColumn(file, "s");
+			assertThat(decoded).containsExactly(data);
+		} finally {
+			deleteDir(tmp);
+		}
+	}
+
+	/// Dict utf8 with 257+ unique strings → forces U16 codes (crosses U8→U16 boundary at 256).
+	@Property(tries = 10)
+	void prop_dictUtf8_u16Codes_roundTripsViaRust(
+			@ForAll("u16DictStringArrays") String[] data) throws IOException {
+		Path tmp = Files.createTempDirectory("vortex-pbt-u16");
+		try {
+			Path file = tmp.resolve("pbt_dict_utf8_u16.vtx");
+			try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+			     var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults())) {
+				sut.writeChunk(Map.of("s", data));
+			}
+			String[] decoded = readStringColumn(file, "s");
+			assertThat(decoded).containsExactly(data);
+		} finally {
+			deleteDir(tmp);
+		}
+	}
+
+	/// Dict utf8 with unicode strings (multi-byte UTF-8, emoji, CJK).
+	@Property(tries = 20)
+	void prop_dictUtf8_unicode_roundTripsViaRust(
+			@ForAll("unicodeStringArrays") String[] data) throws IOException {
+		Path tmp = Files.createTempDirectory("vortex-pbt-unicode");
+		try {
+			Path file = tmp.resolve("pbt_dict_utf8_unicode.vtx");
+			try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+			     var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults())) {
+				sut.writeChunk(Map.of("s", data));
+			}
+			String[] decoded = readStringColumn(file, "s");
+			assertThat(decoded).containsExactly(data);
+		} finally {
+			deleteDir(tmp);
+		}
+	}
+
+	/// I64 column: arbitrary longs survive Java write → Rust JNI read.
+	@Property(tries = 20)
+	void prop_i64_roundTripsViaRust(
+			@ForAll @Size(min = 1, max = 500) List<Long> values) throws IOException {
+		Path tmp = Files.createTempDirectory("vortex-pbt-i64");
+		try {
+			long[] data = values.stream().mapToLong(Long::longValue).toArray();
+			Path file = tmp.resolve("pbt_i64.vtx");
+			try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+			     var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.defaults())) {
+				sut.writeChunk(Map.of("ts", data));
+			}
+			long[] decoded = readLongColumn(file, "ts");
+			assertThat(decoded).containsExactly(data);
+		} finally {
+			deleteDir(tmp);
+		}
+	}
+
+	@Provide
+	Arbitrary<String[]> asciiStringArrays() {
+		Arbitrary<String> strings = Arbitraries.strings()
+				.alpha()
+				.ofMinLength(0).ofMaxLength(20);
+		return strings.array(String[].class).ofMinSize(1).ofMaxSize(200);
+	}
+
+	@Provide
+	Arbitrary<String[]> u16DictStringArrays() {
+		// 257 unique strings guaranteed by @UniqueElements on a list, then a suffix of repeats
+		Arbitrary<String> strings = Arbitraries.strings()
+				.alpha()
+				.ofMinLength(3).ofMaxLength(12);
+		return strings.list().ofMinSize(257).ofMaxSize(300)
+				.map(list -> list.stream().distinct().limit(300).toArray(String[]::new))
+				.filter(arr -> arr.length >= 257);
+	}
+
+	@Provide
+	Arbitrary<String[]> unicodeStringArrays() {
+		Arbitrary<String> strings = Arbitraries.strings()
+				.withCharRange('', '퟿')
+				.ofMinLength(1).ofMaxLength(10);
+		return strings.array(String[].class).ofMinSize(1).ofMaxSize(100);
+	}
+
+	private static void deleteDir(Path dir) throws IOException {
+		try (var walk = Files.walk(dir)) {
+			walk.sorted(Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
+		}
 	}
 }

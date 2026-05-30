@@ -147,9 +147,8 @@ methods in the Rust source to get the exact protobuf schema, then implement from
 
 ## Property-Based Testing (jqwik)
 
-**Known issue:** jqwik 1.9.3 targets JUnit Platform 1.x; project uses JUnit 6 (Platform 6.x). `@Property` tests compile
-and are structurally correct but the jqwik engine does not execute them at runtime.
-Track https://github.com/jqwik-team/jqwik/issues for jqwik 2.x.
+jqwik 1.9.3 works with JUnit Jupiter 5.11.x (JUnit Platform 1.x). Use `@Property` + `@ForAll` for parameters,
+`@Provide` for custom arbitraries, `Assume.that(...)` for preconditions.
 
-Write property tests: `@Property` + `@ForAll` for parameters, `@Provide` for custom arbitraries, `Assume.that(...)` for
-preconditions.
+Keep `tries` low (10–20) for integration tests that involve file I/O or JNI; unit-level properties can use the
+default (100).
