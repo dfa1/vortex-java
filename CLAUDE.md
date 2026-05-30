@@ -143,13 +143,8 @@ public final class FooEncoding implements Encoding {
     @Override public EncodeResult encode(DType dtype, Object data) { return Encoder.encode(dtype, data); }
     @Override public Array decode(DecodeContext ctx) { return Decoder.decode(ctx); }
 
-    private static final class Encoder {
-        static EncodeResult encode(DType dtype, Object data) { ... }
-    }
-
-    private static final class Decoder {
-        static Array decode(DecodeContext ctx) { ... }
-    }
+    private static final class Encoder { static EncodeResult encode(DType dtype, Object data) { ... } }
+    private static final class Decoder { static Array decode(DecodeContext ctx) { ... } }
 }
 ```
 

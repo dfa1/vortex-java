@@ -59,8 +59,6 @@ public final class BitpackedEncoding implements Encoding {
 		return Decoder.decode(ctx);
 	}
 
-	// ── Encoder ───────────────────────────────────────────────────────────────
-
 	private static final class Encoder {
 
 		static EncodeResult encode(DType dtype, Object data) {
@@ -248,8 +246,6 @@ public final class BitpackedEncoding implements Encoding {
 			}
 		}
 	}
-
-	// ── Decoder ───────────────────────────────────────────────────────────────
 
 	private static final class Decoder {
 
