@@ -2,9 +2,6 @@
 
 ## Encodings
 
-- [ ] following code is copied over multiple classes => let's move them in PTypeIO
-private static final ValueLayout.OfShort  LE_SHORT  = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-private static final ValueLayout.OfInt    LE_INT    = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 - [ ] in one case F32 and F64 are accepted but only F64 is really implemented
 - [ ] the classes are very long of complex, most likely we should group the impl detail in private static inner classes Encoder/Decoder
 

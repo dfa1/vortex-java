@@ -2,20 +2,14 @@ package io.github.dfa1.vortex.core.array;
 
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.encoding.PTypeIO;
 
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
 import java.util.function.DoubleBinaryOperator;
 import java.util.function.DoubleConsumer;
 
-/// Concrete [Array] for F64 primitive columns. Hoists a single `MemorySegment`,
-/// length, and a `static final` LE double layout for JIT constant-folding and
-/// auto-vectorisation.
+/// Concrete [Array] for F64 primitive columns.
 public final class DoubleArray implements Array {
-
-	private static final ValueLayout.OfDouble LAYOUT =
-			ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
 	private final DType dtype;
 	private final long length;
@@ -53,14 +47,14 @@ public final class DoubleArray implements Array {
 	}
 
 	public double getDouble(long i) {
-		return buffer.getAtIndex(LAYOUT, i);
+		return buffer.getAtIndex(PTypeIO.LE_DOUBLE, i);
 	}
 
 	public void forEachDouble(DoubleConsumer c) {
 		MemorySegment buf = buffer;
 		long n = length;
 		for (long i = 0; i < n; i++) {
-			c.accept(buf.getAtIndex(LAYOUT, i));
+			c.accept(buf.getAtIndex(PTypeIO.LE_DOUBLE, i));
 		}
 	}
 
@@ -69,7 +63,7 @@ public final class DoubleArray implements Array {
 		long n = length;
 		double result = identity;
 		for (long i = 0; i < n; i++) {
-			result = op.applyAsDouble(result, buf.getAtIndex(LAYOUT, i));
+			result = op.applyAsDouble(result, buf.getAtIndex(PTypeIO.LE_DOUBLE, i));
 		}
 		return result;
 	}

@@ -18,7 +18,6 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.List;
 
 /// Decoder for {@code fastlanes.for} (Frame of Reference).
@@ -27,10 +26,6 @@ import java.util.List;
 /// Child slot 0: encoded residuals array (same dtype as parent, typically bitpacked).
 /// Decode: {@code output[i] = encoded[i] + reference} (wrapping arithmetic).
 public final class FrameOfReferenceEncoding implements Encoding {
-
-	private static final ValueLayout.OfShort LE_SHORT = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-	private static final ValueLayout.OfInt   LE_INT   = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-	private static final ValueLayout.OfLong  LE_LONG  = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
 	private static long referenceValue(ScalarProtos.ScalarValue scalar) {
 		return switch (scalar.getKindCase()) {
@@ -54,20 +49,20 @@ public final class FrameOfReferenceEncoding implements Encoding {
 			}
 			case I16, U16 -> {
 				for (long off = 0, end = n * 2; off < end; off += 2) {
-					short v = src.get(LE_SHORT, off);
-					dst.set(LE_SHORT, off, (short) (v + (short) ref));
+					short v = src.get(PTypeIO.LE_SHORT, off);
+					dst.set(PTypeIO.LE_SHORT, off, (short) (v + (short) ref));
 				}
 			}
 			case I32, U32 -> {
 				for (long off = 0, end = n * 4; off < end; off += 4) {
-					int v = src.get(LE_INT, off);
-					dst.set(LE_INT, off, v + (int) ref);
+					int v = src.get(PTypeIO.LE_INT, off);
+					dst.set(PTypeIO.LE_INT, off, v + (int) ref);
 				}
 			}
 			case I64, U64 -> {
 				for (long off = 0, end = n * 8; off < end; off += 8) {
-					long v = src.get(LE_LONG, off);
-					dst.set(LE_LONG, off, v + ref);
+					long v = src.get(PTypeIO.LE_LONG, off);
+					dst.set(PTypeIO.LE_LONG, off, v + ref);
 				}
 			}
 			default -> throw new VortexException(EncodingId.FASTLANES_FOR,

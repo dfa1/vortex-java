@@ -3,16 +3,12 @@ package io.github.dfa1.vortex.core.array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.encoding.PTypeIO;
 
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
 
 /// Concrete [Array] for I16/U16 primitive columns.
 public final class ShortArray implements Array {
-
-	private static final ValueLayout.OfShort LAYOUT =
-			ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
 	private final DType dtype;
 	private final long length;
@@ -50,11 +46,11 @@ public final class ShortArray implements Array {
 	}
 
 	public short getShort(long i) {
-		return buffer.getAtIndex(LAYOUT, i);
+		return buffer.getAtIndex(PTypeIO.LE_SHORT, i);
 	}
 
 	public int getInt(long i) {
-		short raw = buffer.getAtIndex(LAYOUT, i);
+		short raw = buffer.getAtIndex(PTypeIO.LE_SHORT, i);
 		boolean unsigned = dtype instanceof DType.Primitive p && p.ptype() == PType.U16;
 		return unsigned ? Short.toUnsignedInt(raw) : raw;
 	}

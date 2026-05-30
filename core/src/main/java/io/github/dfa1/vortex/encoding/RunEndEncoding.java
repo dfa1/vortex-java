@@ -20,7 +20,6 @@ import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -35,10 +34,6 @@ import java.util.List;
 /// <p>Decode: for each run i, repeat {@code values[i]} for positions
 /// {@code [ends[i-1], ends[i])} in the output, skipping the first {@code offset} logical elements.
 public final class RunEndEncoding implements Encoding {
-
-	private static final ValueLayout.OfShort LE_SHORT = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-	private static final ValueLayout.OfInt LE_INT = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-	private static final ValueLayout.OfLong LE_LONG = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
 	private static Array expand(
 			MemorySegment endsSeg, MemorySegment valuesSeg,
@@ -85,10 +80,10 @@ public final class RunEndEncoding implements Encoding {
 		long logicalPos = 0L, outPos = 0L;
 		for (long run = 0; run < numRuns && outPos < n; run++) {
 			long runEnd = readUnsigned(endsSeg, run, endsPtype);
-			short rawValue = valuesSeg.get(LE_SHORT, run * 2);
+			short rawValue = valuesSeg.get(PTypeIO.LE_SHORT, run * 2);
 			long writeEnd = Math.min(runEnd, offset + n);
 			for (long lp = Math.max(logicalPos, offset); lp < writeEnd; lp++, outPos++) {
-				out.set(LE_SHORT, outPos * 2, rawValue);
+				out.set(PTypeIO.LE_SHORT, outPos * 2, rawValue);
 			}
 			logicalPos = runEnd;
 		}
@@ -99,10 +94,10 @@ public final class RunEndEncoding implements Encoding {
 		long logicalPos = 0L, outPos = 0L;
 		for (long run = 0; run < numRuns && outPos < n; run++) {
 			long runEnd = readUnsigned(endsSeg, run, endsPtype);
-			int rawValue = valuesSeg.get(LE_INT, run * 4);
+			int rawValue = valuesSeg.get(PTypeIO.LE_INT, run * 4);
 			long writeEnd = Math.min(runEnd, offset + n);
 			for (long lp = Math.max(logicalPos, offset); lp < writeEnd; lp++, outPos++) {
-				out.set(LE_INT, outPos * 4, rawValue);
+				out.set(PTypeIO.LE_INT, outPos * 4, rawValue);
 			}
 			logicalPos = runEnd;
 		}
@@ -113,10 +108,10 @@ public final class RunEndEncoding implements Encoding {
 		long logicalPos = 0L, outPos = 0L;
 		for (long run = 0; run < numRuns && outPos < n; run++) {
 			long runEnd = readUnsigned(endsSeg, run, endsPtype);
-			long rawValue = valuesSeg.get(LE_LONG, run * 8);
+			long rawValue = valuesSeg.get(PTypeIO.LE_LONG, run * 8);
 			long writeEnd = Math.min(runEnd, offset + n);
 			for (long lp = Math.max(logicalPos, offset); lp < writeEnd; lp++, outPos++) {
-				out.set(LE_LONG, outPos * 8, rawValue);
+				out.set(PTypeIO.LE_LONG, outPos * 8, rawValue);
 			}
 			logicalPos = runEnd;
 		}
@@ -132,9 +127,9 @@ public final class RunEndEncoding implements Encoding {
 	private static long readUnsigned(MemorySegment seg, long i, PType ptype) {
 		return switch (ptype) {
 			case U8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, i));
-			case U16 -> Short.toUnsignedLong(seg.get(LE_SHORT, i * 2));
-			case U32 -> Integer.toUnsignedLong(seg.get(LE_INT, i * 4));
-			case U64 -> seg.get(LE_LONG, i * 8);
+			case U16 -> Short.toUnsignedLong(seg.get(PTypeIO.LE_SHORT, i * 2));
+			case U32 -> Integer.toUnsignedLong(seg.get(PTypeIO.LE_INT, i * 4));
+			case U64 -> seg.get(PTypeIO.LE_LONG, i * 8);
 			default -> throw new VortexException(EncodingId.VORTEX_RUNEND, "non-unsigned ends ptype " + ptype);
 		};
 	}
@@ -193,7 +188,7 @@ public final class RunEndEncoding implements Encoding {
 
 		MemorySegment outBytes = arena.allocate(totalBytes > 0 ? totalBytes : 1);
 		MemorySegment outOffsets = arena.allocate((n + 1) * 4L, 4);
-		outOffsets.setAtIndex(LE_INT, 0, 0);
+		outOffsets.setAtIndex(PTypeIO.LE_INT, 0, 0);
 
 		long bytePos = 0;
 		long outIdx = 0;
@@ -211,7 +206,7 @@ public final class RunEndEncoding implements Encoding {
 						MemorySegment.copy(valBytes, strStart, outBytes, bytePos, strLen);
 						bytePos += strLen;
 					}
-					outOffsets.setAtIndex(LE_INT, outIdx + 1, (int) bytePos);
+					outOffsets.setAtIndex(PTypeIO.LE_INT, outIdx + 1, (int) bytePos);
 				}
 			}
 			logicalPos = runEnd;
@@ -224,8 +219,8 @@ public final class RunEndEncoding implements Encoding {
 
 	private static long readVarBinOffset(MemorySegment seg, long i, PType ptype) {
 		return switch (ptype) {
-			case I32, U32 -> Integer.toUnsignedLong(seg.getAtIndex(LE_INT, i));
-			case I64, U64 -> seg.getAtIndex(LE_LONG, i);
+			case I32, U32 -> Integer.toUnsignedLong(seg.getAtIndex(PTypeIO.LE_INT, i));
+			case I64, U64 -> seg.getAtIndex(PTypeIO.LE_LONG, i);
 			default -> throw new VortexException(EncodingId.VORTEX_RUNEND, "unsupported offset ptype " + ptype);
 		};
 	}
@@ -270,7 +265,7 @@ public final class RunEndEncoding implements Encoding {
 
 		MemorySegment endsBuf = Arena.ofAuto().allocate((long) numRuns * 4, 4);
 		for (int i = 0; i < numRuns; i++) {
-			endsBuf.setAtIndex(LE_INT, i, ends.get(i));
+			endsBuf.setAtIndex(PTypeIO.LE_INT, i, ends.get(i));
 		}
 
 		int elemBytes = ptype.byteSize();

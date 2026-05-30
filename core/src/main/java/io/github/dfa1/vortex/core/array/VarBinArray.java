@@ -4,10 +4,10 @@ import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.encoding.PTypeIO;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
 import java.util.function.IntConsumer;
 
 /// Concrete [Array] for variable-length binary / UTF-8 string columns.
@@ -24,10 +24,6 @@ import java.util.function.IntConsumer;
 /// Dict mode: created via {@link #ofDict}. Stores dict values + codes directly;
 /// all accessors resolve through the dictionary without materializing strings.
 public final class VarBinArray implements Array {
-
-	private static final ValueLayout.OfShort LE_SHORT = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-	private static final ValueLayout.OfInt   LE_INT   = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-	private static final ValueLayout.OfLong  LE_LONG  = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
 	private final DType dtype;
 	private final long length;
@@ -156,37 +152,37 @@ public final class VarBinArray implements Array {
 		long n = length;
 		if (offsetsPtype == PType.I32 || offsetsPtype == PType.U32) {
 			for (long i = 0; i < n; i++) {
-				c.accept(seg.getAtIndex(LE_INT, i + 1) - seg.getAtIndex(LE_INT, i));
+				c.accept(seg.getAtIndex(PTypeIO.LE_INT, i + 1) - seg.getAtIndex(PTypeIO.LE_INT, i));
 			}
 		} else {
 			for (long i = 0; i < n; i++) {
-				c.accept((int) (seg.getAtIndex(LE_LONG, i + 1) - seg.getAtIndex(LE_LONG, i)));
+				c.accept((int) (seg.getAtIndex(PTypeIO.LE_LONG, i + 1) - seg.getAtIndex(PTypeIO.LE_LONG, i)));
 			}
 		}
 	}
 
 	private long readOffset(long i) {
 		if (offsetsPtype == PType.I32 || offsetsPtype == PType.U32) {
-			return offsetsSeg.getAtIndex(LE_INT, i);
+			return offsetsSeg.getAtIndex(PTypeIO.LE_INT, i);
 		}
-		return offsetsSeg.getAtIndex(LE_LONG, i);
+		return offsetsSeg.getAtIndex(PTypeIO.LE_LONG, i);
 	}
 
 	private long dictReadCode(long i) {
 		return switch (dictCodesPType) {
 			case U8  -> Byte.toUnsignedLong(dictCodesSegs.get(ValueLayout.JAVA_BYTE, i));
-			case U16 -> Short.toUnsignedLong(dictCodesSegs.getAtIndex(LE_SHORT, i));
-			case U32 -> Integer.toUnsignedLong(dictCodesSegs.getAtIndex(LE_INT, i));
-			case I32 -> dictCodesSegs.getAtIndex(LE_INT, i);
-			case I64, U64 -> dictCodesSegs.getAtIndex(LE_LONG, i);
+			case U16 -> Short.toUnsignedLong(dictCodesSegs.getAtIndex(PTypeIO.LE_SHORT, i));
+			case U32 -> Integer.toUnsignedLong(dictCodesSegs.getAtIndex(PTypeIO.LE_INT, i));
+			case I32 -> dictCodesSegs.getAtIndex(PTypeIO.LE_INT, i);
+			case I64, U64 -> dictCodesSegs.getAtIndex(PTypeIO.LE_LONG, i);
 			default  -> throw new VortexException("unsupported codes ptype: " + dictCodesPType);
 		};
 	}
 
 	private long dictReadOff(long i) {
 		if (dictValOffPType == PType.I32 || dictValOffPType == PType.U32) {
-			return dictValOffsets.getAtIndex(LE_INT, i);
+			return dictValOffsets.getAtIndex(PTypeIO.LE_INT, i);
 		}
-		return dictValOffsets.getAtIndex(LE_LONG, i);
+		return dictValOffsets.getAtIndex(PTypeIO.LE_LONG, i);
 	}
 }

@@ -18,7 +18,6 @@ import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 
 /// Decoder for {@code vortex.sequence}: {@code A[i] = base + i * multiplier}.
 ///
@@ -26,12 +25,6 @@ import java.nio.ByteOrder;
 /// with {@code base} (tag 1) and {@code multiplier} (tag 2) as {@code ScalarValue}.
 /// Output is allocated on the heap; not backed by the file's mapped region.
 public final class SequenceEncoding implements Encoding {
-
-	private static final ValueLayout.OfLong   LE_LONG   = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-	private static final ValueLayout.OfInt    LE_INT    = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-	private static final ValueLayout.OfShort  LE_SHORT  = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-	private static final ValueLayout.OfDouble LE_DOUBLE = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-	private static final ValueLayout.OfFloat  LE_FLOAT  = ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
 	private static Array decodeInteger(
 			EncodingProtos.SequenceMetadata meta, PType pt, long n, DType dtype, SegmentAllocator arena
@@ -44,9 +37,9 @@ public final class SequenceEncoding implements Encoding {
 			long v = base + i * mul;
 			switch (pt) {
 				case I8, U8 -> seg.set(ValueLayout.JAVA_BYTE, i, (byte) v);
-				case I16, U16 -> seg.setAtIndex(LE_SHORT, i, (short) v);
-				case I32, U32 -> seg.setAtIndex(LE_INT, i, (int) v);
-				case I64, U64 -> seg.setAtIndex(LE_LONG, i, v);
+				case I16, U16 -> seg.setAtIndex(PTypeIO.LE_SHORT, i, (short) v);
+				case I32, U32 -> seg.setAtIndex(PTypeIO.LE_INT, i, (int) v);
+				case I64, U64 -> seg.setAtIndex(PTypeIO.LE_LONG, i, v);
 				default -> throw new IllegalStateException("unreachable");
 			}
 		}
@@ -64,7 +57,7 @@ public final class SequenceEncoding implements Encoding {
 		float mul = meta.getMultiplier().getF32Value();
 		MemorySegment seg = arena.allocate(n * 4L);
 		for (long i = 0; i < n; i++) {
-			seg.setAtIndex(LE_FLOAT, i, base + i * mul);
+			seg.setAtIndex(PTypeIO.LE_FLOAT, i, base + i * mul);
 		}
 		return new FloatArray(dtype, n, seg, ArrayStats.empty());
 	}
@@ -74,7 +67,7 @@ public final class SequenceEncoding implements Encoding {
 		double mul = meta.getMultiplier().getF64Value();
 		MemorySegment seg = arena.allocate(n * 8L);
 		for (long i = 0; i < n; i++) {
-			seg.setAtIndex(LE_DOUBLE, i, base + i * mul);
+			seg.setAtIndex(PTypeIO.LE_DOUBLE, i, base + i * mul);
 		}
 		return new DoubleArray(dtype, n, seg, ArrayStats.empty());
 	}

@@ -16,7 +16,6 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -56,12 +55,6 @@ public final class AlpEncoding implements Encoding {
 			1e-0f, 1e-1f, 1e-2f, 1e-3f, 1e-4f, 1e-5f, 1e-6f, 1e-7f, 1e-8f, 1e-9f, 1e-10f
 	};
 
-	private static final ValueLayout.OfShort  LE_SHORT  = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-	private static final ValueLayout.OfLong   LE_LONG   = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-	private static final ValueLayout.OfDouble LE_DOUBLE = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-	private static final ValueLayout.OfInt    LE_INT    = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-	private static final ValueLayout.OfFloat  LE_FLOAT  = ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-
 	private static final DType I64_DTYPE = new DType.Primitive(PType.I64, false);
 	private static final DType I32_DTYPE = new DType.Primitive(PType.I32, false);
 
@@ -75,9 +68,9 @@ public final class AlpEncoding implements Encoding {
 	private static long readUnsigned(MemorySegment seg, long i, PType ptype) {
 		return switch (ptype) {
 			case U8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, i));
-			case U16 -> Short.toUnsignedLong(seg.get(LE_SHORT, i * 2));
-			case U32 -> Integer.toUnsignedLong(seg.get(LE_INT, i * 4));
-			case U64 -> seg.get(LE_LONG, i * 8);
+			case U16 -> Short.toUnsignedLong(seg.get(PTypeIO.LE_SHORT, i * 2));
+			case U32 -> Integer.toUnsignedLong(seg.get(PTypeIO.LE_INT, i * 4));
+			case U64 -> seg.get(PTypeIO.LE_LONG, i * 8);
 			default -> throw new VortexException(EncodingId.VORTEX_ALP, "non-unsigned patch index ptype " + ptype);
 		};
 	}
@@ -179,7 +172,7 @@ public final class AlpEncoding implements Encoding {
 
 		MemorySegment encodedBuf = Arena.ofAuto().allocate((long) n * 8, 8);
 		for (int i = 0; i < n; i++) {
-			encodedBuf.setAtIndex(LE_LONG, i, encodedArr[i]);
+			encodedBuf.setAtIndex(PTypeIO.LE_LONG, i, encodedArr[i]);
 		}
 
 		EncodeNode encodedNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
@@ -196,8 +189,8 @@ public final class AlpEncoding implements Encoding {
 		MemorySegment idxBuf = Arena.ofAuto().allocate((long) numPatches * 4, 4);
 		MemorySegment valBuf = Arena.ofAuto().allocate((long) numPatches * 8, 8);
 		for (int i = 0; i < numPatches; i++) {
-			idxBuf.setAtIndex(LE_INT, i, patchIndices.get(i));
-			valBuf.setAtIndex(LE_DOUBLE, i, patchValues.get(i));
+			idxBuf.setAtIndex(PTypeIO.LE_INT, i, patchIndices.get(i));
+			valBuf.setAtIndex(PTypeIO.LE_DOUBLE, i, patchValues.get(i));
 		}
 
 		EncodingProtos.PatchesMetadata patches = EncodingProtos.PatchesMetadata.newBuilder()
@@ -265,16 +258,16 @@ public final class AlpEncoding implements Encoding {
 		MemorySegment buf = src.isReadOnly() ? ctx.arena().allocate(n * 8, 8) : src;
 		if (src.isReadOnly()) {
 			for (long i = 0; i < n; i++) {
-				buf.setAtIndex(LE_DOUBLE, i, (double) src.getAtIndex(LE_LONG, i) * factor);
+				buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) src.getAtIndex(PTypeIO.LE_LONG, i) * factor);
 			}
 		} else {
 			for (long i = 0; i < n; i++) {
-				buf.setAtIndex(LE_DOUBLE, i, (double) buf.getAtIndex(LE_LONG, i) * factor);
+				buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) buf.getAtIndex(PTypeIO.LE_LONG, i) * factor);
 			}
 		}
 
 		if (meta.hasPatches()) {
-			applyPatches(ctx, meta.getPatches(), buf, LE_LONG, 8);
+			applyPatches(ctx, meta.getPatches(), buf, PTypeIO.LE_LONG, 8);
 		}
 
 		return new DoubleArray(ctx.dtype(), n, buf.asReadOnly(), ArrayStats.empty());
@@ -290,16 +283,16 @@ public final class AlpEncoding implements Encoding {
 		MemorySegment buf32 = src32.isReadOnly() ? ctx.arena().allocate(n * 4, 4) : src32;
 		if (src32.isReadOnly()) {
 			for (long i = 0; i < n; i++) {
-				buf32.setAtIndex(LE_FLOAT, i, (float) src32.getAtIndex(LE_INT, i) * factor);
+				buf32.setAtIndex(PTypeIO.LE_FLOAT, i, (float) src32.getAtIndex(PTypeIO.LE_INT, i) * factor);
 			}
 		} else {
 			for (long i = 0; i < n; i++) {
-				buf32.setAtIndex(LE_FLOAT, i, (float) buf32.getAtIndex(LE_INT, i) * factor);
+				buf32.setAtIndex(PTypeIO.LE_FLOAT, i, (float) buf32.getAtIndex(PTypeIO.LE_INT, i) * factor);
 			}
 		}
 
 		if (meta.hasPatches()) {
-			applyPatches(ctx, meta.getPatches(), buf32, LE_INT, 4);
+			applyPatches(ctx, meta.getPatches(), buf32, PTypeIO.LE_INT, 4);
 		}
 
 		return new FloatArray(ctx.dtype(), n, buf32.asReadOnly(), ArrayStats.empty());

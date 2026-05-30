@@ -13,7 +13,6 @@ import io.github.dfa1.vortex.core.array.ShortArray;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
 import java.util.List;
 
 /// Encoding for {@code vortex.zigzag} — signed integers stored as zigzag-encoded unsigned values.
@@ -24,10 +23,6 @@ import java.util.List;
 ///
 /// <p>Decode: {@code signed = (unsigned >>> 1) ^ -(unsigned & 1)} applied element-wise.
 public final class ZigZagEncoding implements Encoding {
-
-	private static final ValueLayout.OfShort LE_SHORT = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-	private static final ValueLayout.OfInt   LE_INT   = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-	private static final ValueLayout.OfLong  LE_LONG  = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
 	@Override
 	public EncodingId encodingId() {
@@ -61,7 +56,7 @@ public final class ZigZagEncoding implements Encoding {
 				MemorySegment s = Arena.ofAuto().allocate((long) arr.length * 2, 2);
 				for (int i = 0; i < arr.length; i++) {
 					short v = arr[i];
-					s.setAtIndex(LE_SHORT, i, (short) ((v << 1) ^ (v >> 15)));
+					s.setAtIndex(PTypeIO.LE_SHORT, i, (short) ((v << 1) ^ (v >> 15)));
 				}
 				yield s;
 			}
@@ -70,7 +65,7 @@ public final class ZigZagEncoding implements Encoding {
 				MemorySegment s = Arena.ofAuto().allocate((long) arr.length * 4, 4);
 				for (int i = 0; i < arr.length; i++) {
 					int v = arr[i];
-					s.setAtIndex(LE_INT, i, (v << 1) ^ (v >> 31));
+					s.setAtIndex(PTypeIO.LE_INT, i, (v << 1) ^ (v >> 31));
 				}
 				yield s;
 			}
@@ -79,7 +74,7 @@ public final class ZigZagEncoding implements Encoding {
 				MemorySegment s = Arena.ofAuto().allocate((long) arr.length * 8, 8);
 				for (int i = 0; i < arr.length; i++) {
 					long v = arr[i];
-					s.setAtIndex(LE_LONG, i, (v << 1) ^ (v >> 63));
+					s.setAtIndex(PTypeIO.LE_LONG, i, (v << 1) ^ (v >> 63));
 				}
 				yield s;
 			}
@@ -128,22 +123,22 @@ public final class ZigZagEncoding implements Encoding {
 			}
 			case I16 -> {
 				for (long i = 0; i < n; i++) {
-					int u = Short.toUnsignedInt(src.get(LE_SHORT, i * 2));
-					dst.set(LE_SHORT, i * 2, (short) ((u >>> 1) ^ -(u & 1)));
+					int u = Short.toUnsignedInt(src.get(PTypeIO.LE_SHORT, i * 2));
+					dst.set(PTypeIO.LE_SHORT, i * 2, (short) ((u >>> 1) ^ -(u & 1)));
 				}
 				yield new ShortArray(ctx.dtype(), n, dst, ArrayStats.empty());
 			}
 			case I32 -> {
 				for (long i = 0; i < n; i++) {
-					int u = src.get(LE_INT, i * 4);
-					dst.set(LE_INT, i * 4, (u >>> 1) ^ -(u & 1));
+					int u = src.get(PTypeIO.LE_INT, i * 4);
+					dst.set(PTypeIO.LE_INT, i * 4, (u >>> 1) ^ -(u & 1));
 				}
 				yield new IntArray(ctx.dtype(), n, dst, ArrayStats.empty());
 			}
 			case I64 -> {
 				for (long i = 0; i < n; i++) {
-					long u = src.get(LE_LONG, i * 8);
-					dst.set(LE_LONG, i * 8, (u >>> 1) ^ -(u & 1));
+					long u = src.get(PTypeIO.LE_LONG, i * 8);
+					dst.set(PTypeIO.LE_LONG, i * 8, (u >>> 1) ^ -(u & 1));
 				}
 				yield new LongArray(ctx.dtype(), n, dst, ArrayStats.empty());
 			}

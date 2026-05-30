@@ -11,9 +11,7 @@ import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
@@ -58,14 +56,14 @@ public final class VarBinEncoding implements Encoding {
 		Arena arena = Arena.ofAuto();
 		MemorySegment bytesBuf = arena.allocate(totalBytes > 0 ? totalBytes : 1);
 		MemorySegment offsetsBuf = arena.allocate((long) (n + 1) * Long.BYTES, Long.BYTES);
-		ValueLayout.OfLong leI64 = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+
 
 		long pos = 0;
-		offsetsBuf.setAtIndex(leI64, 0, 0L);
+		offsetsBuf.setAtIndex(PTypeIO.LE_LONG, 0, 0L);
 		for (int i = 0; i < n; i++) {
 			MemorySegment.copy(MemorySegment.ofArray(byteArrays[i]), 0, bytesBuf, pos, byteArrays[i].length);
 			pos += byteArrays[i].length;
-			offsetsBuf.setAtIndex(leI64, i + 1, pos);
+			offsetsBuf.setAtIndex(PTypeIO.LE_LONG, i + 1, pos);
 		}
 
 		byte[] metaBytes = EncodingProtos.VarBinMetadata.newBuilder()

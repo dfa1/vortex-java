@@ -17,7 +17,6 @@ import io.github.dfa1.vortex.core.VortexException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.LinkedHashMap;
 import java.util.List;
 
@@ -27,9 +26,6 @@ import java.util.List;
 /// Metadata (1 byte): code PType ordinal (0=U8, 1=U16, 2=U32).
 /// Node tree: DictNode{ children=[ValuesNode{buf=0},CodesNode{buf=1}] }.
 public final class DictEncoding implements Encoding {
-
-	private static final ValueLayout.OfShort LE_SHORT = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-	private static final ValueLayout.OfInt   LE_INT   = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
 	private static Array decodeChildAs(DecodeContext parent, int childIdx, DType dtype, long rowCount) {
 		ArrayNode childNode = parent.node().children()[childIdx];
@@ -148,8 +144,8 @@ public final class DictEncoding implements Encoding {
 	private static void writeCodeToSeg(MemorySegment seg, PType codePType, int idx, int code) {
 		switch (codePType) {
 			case U8 -> seg.set(ValueLayout.JAVA_BYTE, idx, (byte) code);
-			case U16 -> seg.set(LE_SHORT, (long) idx * 2, (short) code);
-			case U32 -> seg.set(LE_INT, (long) idx * 4, code);
+			case U16 -> seg.set(PTypeIO.LE_SHORT, (long) idx * 2, (short) code);
+			case U32 -> seg.set(PTypeIO.LE_INT, (long) idx * 4, code);
 			default -> throw new VortexException(EncodingId.VORTEX_DICT, "unexpected code type: " + codePType);
 		}
 	}
@@ -171,7 +167,7 @@ public final class DictEncoding implements Encoding {
 			long rowCount, int elemSize
 	) {
 		for (long i = 0, outOff = 0; i < rowCount; i++, outOff += elemSize) {
-			long code = Short.toUnsignedLong(codes.get(LE_SHORT, i * 2));
+			long code = Short.toUnsignedLong(codes.get(PTypeIO.LE_SHORT, i * 2));
 			MemorySegment.copy(values, code * elemSize, out, outOff, elemSize);
 		}
 	}
@@ -181,7 +177,7 @@ public final class DictEncoding implements Encoding {
 			long rowCount, int elemSize
 	) {
 		for (long i = 0, outOff = 0; i < rowCount; i++, outOff += elemSize) {
-			long code = Integer.toUnsignedLong(codes.get(LE_INT, i * 4));
+			long code = Integer.toUnsignedLong(codes.get(PTypeIO.LE_INT, i * 4));
 			MemorySegment.copy(values, code * elemSize, out, outOff, elemSize);
 		}
 	}
@@ -189,8 +185,8 @@ public final class DictEncoding implements Encoding {
 	private static long readCode(MemorySegment buf, PType codePType, long i) {
 		return switch (codePType) {
 			case U8 -> Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, i));
-			case U16 -> Short.toUnsignedLong(buf.get(LE_SHORT, i * 2));
-			case U32 -> Integer.toUnsignedLong(buf.get(LE_INT, i * 4));
+			case U16 -> Short.toUnsignedLong(buf.get(PTypeIO.LE_SHORT, i * 2));
+			case U32 -> Integer.toUnsignedLong(buf.get(PTypeIO.LE_INT, i * 4));
 			default -> throw new VortexException(EncodingId.VORTEX_DICT, "unexpected code type: " + codePType);
 		};
 	}

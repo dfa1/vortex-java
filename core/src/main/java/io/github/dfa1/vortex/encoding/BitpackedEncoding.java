@@ -18,7 +18,6 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.List;
 
 /// Encoding for {@code fastlanes.bitpacked} — spec-compliant FastLanes bit-packing.
@@ -33,10 +32,6 @@ public final class BitpackedEncoding implements Encoding {
 
 	// FL_ORDER permutation from the FastLanes paper / spiraldb/fastlanes-rs.
 	private static final int[] FL_ORDER = {0, 4, 2, 6, 1, 5, 3, 7};
-
-	private static final ValueLayout.OfShort LE_SHORT = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-	private static final ValueLayout.OfInt LE_INT = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-	private static final ValueLayout.OfLong LE_LONG = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
 	private static MemorySegment packFastLanes(long[] values, int n, int bitWidth, int typeBits) {
 		if (bitWidth == 0 || n == 0) {
@@ -196,15 +191,15 @@ public final class BitpackedEncoding implements Encoding {
 						long hiMask = (1L << remainingBits) - 1L;
 						long laneOff = 0L;
 						for (int lane = 0; lane < lanes; lane++, laneOff += 2L) {
-							long lo = (Short.toUnsignedLong(buf.get(LE_SHORT, wordBase + laneOff)) >>> shift) & loMask;
-							long hi = Short.toUnsignedLong(buf.get(LE_SHORT, hiBase + laneOff)) & hiMask;
-							out.set(LE_SHORT, outBase + laneOff, (short) (lo | (hi << currentBits)));
+							long lo = (Short.toUnsignedLong(buf.get(PTypeIO.LE_SHORT, wordBase + laneOff)) >>> shift) & loMask;
+							long hi = Short.toUnsignedLong(buf.get(PTypeIO.LE_SHORT, hiBase + laneOff)) & hiMask;
+							out.set(PTypeIO.LE_SHORT, outBase + laneOff, (short) (lo | (hi << currentBits)));
 						}
 					} else {
 						long laneOff = 0L;
 						for (int lane = 0; lane < lanes; lane++, laneOff += 2L) {
-							out.set(LE_SHORT, outBase + laneOff,
-									(short) ((Short.toUnsignedLong(buf.get(LE_SHORT, wordBase + laneOff)) >>> shift) & bitMask));
+							out.set(PTypeIO.LE_SHORT, outBase + laneOff,
+									(short) ((Short.toUnsignedLong(buf.get(PTypeIO.LE_SHORT, wordBase + laneOff)) >>> shift) & bitMask));
 						}
 					}
 				} else {
@@ -216,16 +211,16 @@ public final class BitpackedEncoding implements Encoding {
 						if (logicalIdx < 0 || logicalIdx >= rowCount) {
 							continue;
 						}
-						long src = Short.toUnsignedLong(buf.get(LE_SHORT, wordBase + (long) lane * 2));
+						long src = Short.toUnsignedLong(buf.get(PTypeIO.LE_SHORT, wordBase + (long) lane * 2));
 						long value;
 						if (remainingBits > 0) {
 							long lo = (src >>> shift) & loMask;
-							long hi = Short.toUnsignedLong(buf.get(LE_SHORT, hiBase + (long) lane * 2)) & hiMask;
+							long hi = Short.toUnsignedLong(buf.get(PTypeIO.LE_SHORT, hiBase + (long) lane * 2)) & hiMask;
 							value = lo | (hi << currentBits);
 						} else {
 							value = (src >>> shift) & bitMask;
 						}
-						out.set(LE_SHORT, (long) logicalIdx * 2, (short) value);
+						out.set(PTypeIO.LE_SHORT, (long) logicalIdx * 2, (short) value);
 					}
 				}
 			}
@@ -265,15 +260,15 @@ public final class BitpackedEncoding implements Encoding {
 						long hiMask = (1L << remainingBits) - 1L;
 						long laneOff = 0L;
 						for (int lane = 0; lane < lanes; lane++, laneOff += 4L) {
-							long lo = (Integer.toUnsignedLong(buf.get(LE_INT, wordBase + laneOff)) >>> shift) & loMask;
-							long hi = Integer.toUnsignedLong(buf.get(LE_INT, hiBase + laneOff)) & hiMask;
-							out.set(LE_INT, outBase + laneOff, (int) (lo | (hi << currentBits)));
+							long lo = (Integer.toUnsignedLong(buf.get(PTypeIO.LE_INT, wordBase + laneOff)) >>> shift) & loMask;
+							long hi = Integer.toUnsignedLong(buf.get(PTypeIO.LE_INT, hiBase + laneOff)) & hiMask;
+							out.set(PTypeIO.LE_INT, outBase + laneOff, (int) (lo | (hi << currentBits)));
 						}
 					} else {
 						long laneOff = 0L;
 						for (int lane = 0; lane < lanes; lane++, laneOff += 4L) {
-							out.set(LE_INT, outBase + laneOff,
-									(int) ((Integer.toUnsignedLong(buf.get(LE_INT, wordBase + laneOff)) >>> shift) & bitMask));
+							out.set(PTypeIO.LE_INT, outBase + laneOff,
+									(int) ((Integer.toUnsignedLong(buf.get(PTypeIO.LE_INT, wordBase + laneOff)) >>> shift) & bitMask));
 						}
 					}
 				} else {
@@ -285,16 +280,16 @@ public final class BitpackedEncoding implements Encoding {
 						if (logicalIdx < 0 || logicalIdx >= rowCount) {
 							continue;
 						}
-						long src = Integer.toUnsignedLong(buf.get(LE_INT, wordBase + (long) lane * 4));
+						long src = Integer.toUnsignedLong(buf.get(PTypeIO.LE_INT, wordBase + (long) lane * 4));
 						long value;
 						if (remainingBits > 0) {
 							long lo = (src >>> shift) & loMask;
-							long hi = Integer.toUnsignedLong(buf.get(LE_INT, hiBase + (long) lane * 4)) & hiMask;
+							long hi = Integer.toUnsignedLong(buf.get(PTypeIO.LE_INT, hiBase + (long) lane * 4)) & hiMask;
 							value = lo | (hi << currentBits);
 						} else {
 							value = (src >>> shift) & bitMask;
 						}
-						out.set(LE_INT, (long) logicalIdx * 4, (int) value);
+						out.set(PTypeIO.LE_INT, (long) logicalIdx * 4, (int) value);
 					}
 				}
 			}
@@ -334,15 +329,15 @@ public final class BitpackedEncoding implements Encoding {
 						long hiMask = (1L << remainingBits) - 1L;
 						long laneOff = 0L;
 						for (int lane = 0; lane < lanes; lane++, laneOff += 8L) {
-							long lo = (buf.get(LE_LONG, wordBase + laneOff) >>> shift) & loMask;
-							long hi = buf.get(LE_LONG, hiBase + laneOff) & hiMask;
-							out.set(LE_LONG, outBase + laneOff, lo | (hi << currentBits));
+							long lo = (buf.get(PTypeIO.LE_LONG, wordBase + laneOff) >>> shift) & loMask;
+							long hi = buf.get(PTypeIO.LE_LONG, hiBase + laneOff) & hiMask;
+							out.set(PTypeIO.LE_LONG, outBase + laneOff, lo | (hi << currentBits));
 						}
 					} else {
 						long laneOff = 0L;
 						for (int lane = 0; lane < lanes; lane++, laneOff += 8L) {
-							out.set(LE_LONG, outBase + laneOff,
-									(buf.get(LE_LONG, wordBase + laneOff) >>> shift) & bitMask);
+							out.set(PTypeIO.LE_LONG, outBase + laneOff,
+									(buf.get(PTypeIO.LE_LONG, wordBase + laneOff) >>> shift) & bitMask);
 						}
 					}
 				} else {
@@ -354,16 +349,16 @@ public final class BitpackedEncoding implements Encoding {
 						if (logicalIdx < 0 || logicalIdx >= rowCount) {
 							continue;
 						}
-						long src = buf.get(LE_LONG, wordBase + (long) lane * 8);
+						long src = buf.get(PTypeIO.LE_LONG, wordBase + (long) lane * 8);
 						long value;
 						if (remainingBits > 0) {
 							long lo = (src >>> shift) & loMask;
-							long hi = buf.get(LE_LONG, hiBase + (long) lane * 8) & hiMask;
+							long hi = buf.get(PTypeIO.LE_LONG, hiBase + (long) lane * 8) & hiMask;
 							value = lo | (hi << currentBits);
 						} else {
 							value = (src >>> shift) & bitMask;
 						}
-						out.set(LE_LONG, (long) logicalIdx * 8, value);
+						out.set(PTypeIO.LE_LONG, (long) logicalIdx * 8, value);
 					}
 				}
 			}
@@ -373,9 +368,9 @@ public final class BitpackedEncoding implements Encoding {
 	private static long readWordFromSeg(MemorySegment seg, int off, int typeBits) {
 		return switch (typeBits) {
 			case 8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, off));
-			case 16 -> Short.toUnsignedLong(seg.get(LE_SHORT, off));
-			case 32 -> Integer.toUnsignedLong(seg.get(LE_INT, off));
-			case 64 -> seg.get(LE_LONG, off);
+			case 16 -> Short.toUnsignedLong(seg.get(PTypeIO.LE_SHORT, off));
+			case 32 -> Integer.toUnsignedLong(seg.get(PTypeIO.LE_INT, off));
+			case 64 -> seg.get(PTypeIO.LE_LONG, off);
 			default -> throw new VortexException(EncodingId.FASTLANES_BITPACKED, "unsupported typeBits: " + typeBits);
 		};
 	}
@@ -383,9 +378,9 @@ public final class BitpackedEncoding implements Encoding {
 	private static void writeWordToSeg(MemorySegment seg, int off, long value, int typeBits) {
 		switch (typeBits) {
 			case 8 -> seg.set(ValueLayout.JAVA_BYTE, off, (byte) value);
-			case 16 -> seg.set(LE_SHORT, off, (short) value);
-			case 32 -> seg.set(LE_INT, off, (int) value);
-			case 64 -> seg.set(LE_LONG, off, value);
+			case 16 -> seg.set(PTypeIO.LE_SHORT, off, (short) value);
+			case 32 -> seg.set(PTypeIO.LE_INT, off, (int) value);
+			case 64 -> seg.set(PTypeIO.LE_LONG, off, value);
 			default -> throw new VortexException(EncodingId.FASTLANES_BITPACKED, "unsupported typeBits: " + typeBits);
 		}
 	}
@@ -583,9 +578,9 @@ public final class BitpackedEncoding implements Encoding {
 	private static long readUnsignedIdx(MemorySegment seg, long i, PType ptype) {
 		return switch (ptype) {
 			case U8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, i));
-			case U16 -> Short.toUnsignedLong(seg.get(LE_SHORT, i * 2));
-			case U32 -> Integer.toUnsignedLong(seg.get(LE_INT, i * 4));
-			case U64 -> seg.get(LE_LONG, i * 8);
+			case U16 -> Short.toUnsignedLong(seg.get(PTypeIO.LE_SHORT, i * 2));
+			case U32 -> Integer.toUnsignedLong(seg.get(PTypeIO.LE_INT, i * 4));
+			case U64 -> seg.get(PTypeIO.LE_LONG, i * 8);
 			default -> throw new VortexException(EncodingId.FASTLANES_BITPACKED,
 					"non-unsigned patch index ptype " + ptype);
 		};

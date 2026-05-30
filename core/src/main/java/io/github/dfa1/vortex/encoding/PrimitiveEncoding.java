@@ -13,18 +13,10 @@ import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
 
 /// Encoding for `vortex.primitive` — raw little-endian primitive arrays.
 /// Encodes all [DType.Primitive] types; embeds min/max stats as Protobuf ScalarValue bytes.
 public final class PrimitiveEncoding implements Encoding {
-
-	private static final ValueLayout.OfShort  LE_SHORT  = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-	private static final ValueLayout.OfInt    LE_INT    = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-	private static final ValueLayout.OfLong   LE_LONG   = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-	private static final ValueLayout.OfFloat  LE_FLOAT  = ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-	private static final ValueLayout.OfDouble LE_DOUBLE = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
 	private static MemorySegment encodePrimitive(PType ptype, Object data) {
 		return switch (ptype) {
@@ -33,7 +25,7 @@ public final class PrimitiveEncoding implements Encoding {
 				short[] arr = (short[]) data;
 				MemorySegment seg = Arena.ofAuto().allocate((long) arr.length * 2, 2);
 				for (int i = 0; i < arr.length; i++) {
-					seg.setAtIndex(LE_SHORT, i, arr[i]);
+					seg.setAtIndex(PTypeIO.LE_SHORT, i, arr[i]);
 				}
 				yield seg;
 			}
@@ -41,7 +33,7 @@ public final class PrimitiveEncoding implements Encoding {
 				int[] arr = (int[]) data;
 				MemorySegment seg = Arena.ofAuto().allocate((long) arr.length * 4, 4);
 				for (int i = 0; i < arr.length; i++) {
-					seg.setAtIndex(LE_INT, i, arr[i]);
+					seg.setAtIndex(PTypeIO.LE_INT, i, arr[i]);
 				}
 				yield seg;
 			}
@@ -49,7 +41,7 @@ public final class PrimitiveEncoding implements Encoding {
 				long[] arr = (long[]) data;
 				MemorySegment seg = Arena.ofAuto().allocate((long) arr.length * 8, 8);
 				for (int i = 0; i < arr.length; i++) {
-					seg.setAtIndex(LE_LONG, i, arr[i]);
+					seg.setAtIndex(PTypeIO.LE_LONG, i, arr[i]);
 				}
 				yield seg;
 			}
@@ -57,7 +49,7 @@ public final class PrimitiveEncoding implements Encoding {
 				float[] arr = (float[]) data;
 				MemorySegment seg = Arena.ofAuto().allocate((long) arr.length * 4, 4);
 				for (int i = 0; i < arr.length; i++) {
-					seg.setAtIndex(LE_FLOAT, i, arr[i]);
+					seg.setAtIndex(PTypeIO.LE_FLOAT, i, arr[i]);
 				}
 				yield seg;
 			}
@@ -65,7 +57,7 @@ public final class PrimitiveEncoding implements Encoding {
 				double[] arr = (double[]) data;
 				MemorySegment seg = Arena.ofAuto().allocate((long) arr.length * 8, 8);
 				for (int i = 0; i < arr.length; i++) {
-					seg.setAtIndex(LE_DOUBLE, i, arr[i]);
+					seg.setAtIndex(PTypeIO.LE_DOUBLE, i, arr[i]);
 				}
 				yield seg;
 			}

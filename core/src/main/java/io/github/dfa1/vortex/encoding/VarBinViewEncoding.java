@@ -9,8 +9,6 @@ import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
 
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
 
 /// Decoder for {@code vortex.varbinview} — Apache Arrow StringView/BinaryView format.
 ///
@@ -28,9 +26,6 @@ public final class VarBinViewEncoding implements Encoding {
 
 	private static final int MAX_INLINED_SIZE = 12;
 	private static final int VIEW_SIZE = 16;
-
-	private static final ValueLayout.OfInt  LE_INT  = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-	private static final ValueLayout.OfLong LE_LONG = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
 	@Override
 	public EncodingId encodingId() {
@@ -67,7 +62,7 @@ public final class VarBinViewEncoding implements Encoding {
 		// First pass: total output bytes
 		long totalBytes = 0;
 		for (long i = 0; i < n; i++) {
-			long size = Integer.toUnsignedLong(viewsBuf.get(LE_INT, i * VIEW_SIZE));
+			long size = Integer.toUnsignedLong(viewsBuf.get(PTypeIO.LE_INT, i * VIEW_SIZE));
 			totalBytes += size;
 		}
 
@@ -76,19 +71,19 @@ public final class VarBinViewEncoding implements Encoding {
 
 		// Second pass: fill bytes + offsets
 		long bytePos = 0;
-		outOffsets.setAtIndex(LE_LONG, 0, 0L);
+		outOffsets.setAtIndex(PTypeIO.LE_LONG, 0, 0L);
 		for (long i = 0; i < n; i++) {
 			long viewOff = i * VIEW_SIZE;
-			long size = Integer.toUnsignedLong(viewsBuf.get(LE_INT, viewOff));
+			long size = Integer.toUnsignedLong(viewsBuf.get(PTypeIO.LE_INT, viewOff));
 			if (size <= MAX_INLINED_SIZE) {
 				MemorySegment.copy(viewsBuf, viewOff + 4, outBytes, bytePos, size);
 			} else {
-				int bufferIndex = viewsBuf.get(LE_INT, viewOff + 8);
-				long srcOffset = Integer.toUnsignedLong(viewsBuf.get(LE_INT, viewOff + 12));
+				int bufferIndex = viewsBuf.get(PTypeIO.LE_INT, viewOff + 8);
+				long srcOffset = Integer.toUnsignedLong(viewsBuf.get(PTypeIO.LE_INT, viewOff + 12));
 				MemorySegment.copy(dataBufs[bufferIndex], srcOffset, outBytes, bytePos, size);
 			}
 			bytePos += size;
-			outOffsets.setAtIndex(LE_LONG, i + 1, bytePos);
+			outOffsets.setAtIndex(PTypeIO.LE_LONG, i + 1, bytePos);
 		}
 
 		Array offsetsArr = new LongArray(new DType.Primitive(PType.I64, false), n + 1,

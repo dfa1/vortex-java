@@ -2,17 +2,12 @@ package io.github.dfa1.vortex.core.array;
 
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.encoding.PTypeIO;
 
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
 
-/// Concrete [Array] for F32 primitive columns. Hoists a single `MemorySegment`,
-/// length, and a `static final` LE float layout for JIT constant-folding.
+/// Concrete [Array] for F32 primitive columns.
 public final class FloatArray implements Array {
-
-	private static final ValueLayout.OfFloat LAYOUT =
-			ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
 	private final DType dtype;
 	private final long length;
@@ -50,6 +45,6 @@ public final class FloatArray implements Array {
 	}
 
 	public float getFloat(long i) {
-		return buffer.getAtIndex(LAYOUT, i);
+		return buffer.getAtIndex(PTypeIO.LE_FLOAT, i);
 	}
 }

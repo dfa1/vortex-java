@@ -13,7 +13,6 @@ import io.github.dfa1.vortex.core.VortexException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 
 /// Decoder for {@code vortex.fsst} — Fast Static Symbol Table string compression.
 ///
@@ -30,10 +29,6 @@ import java.nio.ByteOrder;
 public final class FsstEncoding implements Encoding {
 
     private static final int ESCAPE = 0xFF;
-
-    private static final ValueLayout.OfLong   LE_LONG  = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-    private static final ValueLayout.OfInt    LE_INT   = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-    private static final ValueLayout.OfShort  LE_SHORT = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     @Override
     public EncodingId encodingId() {
@@ -81,7 +76,7 @@ public final class FsstEncoding implements Encoding {
 
         MemorySegment outBytes   = ctx.arena().allocate(totalUncompressed);
         MemorySegment outOffsets = ctx.arena().allocate((n + 1) * 4L, 4);
-        outOffsets.setAtIndex(LE_INT, 0, 0);
+        outOffsets.setAtIndex(PTypeIO.LE_INT, 0, 0);
 
         long outPos = 0L;
         for (long i = 0; i < n; i++) {
@@ -89,7 +84,7 @@ public final class FsstEncoding implements Encoding {
             long cEnd   = readUnsigned(codesOffsetsSeg, i + 1, codesOffPType);
             outPos = decompressString(compressedBytes, symbolsBuf, symbolLensBuf,
                     cStart, cEnd, outBytes, outPos);
-            outOffsets.setAtIndex(LE_INT, i + 1, (int) outPos);
+            outOffsets.setAtIndex(PTypeIO.LE_INT, i + 1, (int) outPos);
         }
 
         DType i32 = new DType.Primitive(PType.I32, false);
@@ -120,7 +115,7 @@ public final class FsstEncoding implements Encoding {
             } else {
                 int symLen = Byte.toUnsignedInt(symLens.get(ValueLayout.JAVA_BYTE, b));
                 // symbols[b] is 8 bytes LE; emit first symLen bytes
-                long sym = symbols.getAtIndex(LE_LONG, b);
+                long sym = symbols.getAtIndex(PTypeIO.LE_LONG, b);
                 for (int k = 0; k < symLen; k++) {
                     out.set(ValueLayout.JAVA_BYTE, outPos++, (byte) (sym >>> (k * 8)));
                 }
@@ -132,10 +127,10 @@ public final class FsstEncoding implements Encoding {
     private static long readUnsigned(MemorySegment seg, long idx, PType ptype) {
         return switch (ptype) {
             case U8  -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, idx));
-            case U16 -> Short.toUnsignedLong(seg.get(LE_SHORT, idx * 2));
-            case U32 -> Integer.toUnsignedLong(seg.getAtIndex(LE_INT, idx));
-            case I32 -> seg.getAtIndex(LE_INT, idx);
-            case I64, U64 -> seg.getAtIndex(LE_LONG, idx);
+            case U16 -> Short.toUnsignedLong(seg.get(PTypeIO.LE_SHORT, idx * 2));
+            case U32 -> Integer.toUnsignedLong(seg.getAtIndex(PTypeIO.LE_INT, idx));
+            case I32 -> seg.getAtIndex(PTypeIO.LE_INT, idx);
+            case I64, U64 -> seg.getAtIndex(PTypeIO.LE_LONG, idx);
             default  -> throw new VortexException(EncodingId.VORTEX_FSST, "unsupported ptype " + ptype);
         };
     }

@@ -2,18 +2,12 @@ package io.github.dfa1.vortex.core.array;
 
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.encoding.PTypeIO;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
 import java.util.function.IntConsumer;
 
-/// Concrete [Array] for I32/U32 primitive columns. Hoists a single
-/// `MemorySegment`, length, and a `static final` LE int layout so the JIT can
-/// constant-fold the VarHandle and auto-vectorise hot loops.
+/// Concrete [Array] for I32/U32 primitive columns.
 public final class IntArray implements Array {
-
-	private static final ValueLayout.OfInt LAYOUT =
-			ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
 	private final DType dtype;
 	private final long length;
@@ -51,14 +45,14 @@ public final class IntArray implements Array {
 	}
 
 	public int getInt(long i) {
-		return buffer.getAtIndex(LAYOUT, i);
+		return buffer.getAtIndex(PTypeIO.LE_INT, i);
 	}
 
 	public void forEachInt(IntConsumer c) {
 		MemorySegment buf = buffer;
 		long n = length;
 		for (long i = 0; i < n; i++) {
-			c.accept(buf.getAtIndex(LAYOUT, i));
+			c.accept(buf.getAtIndex(PTypeIO.LE_INT, i));
 		}
 	}
 }

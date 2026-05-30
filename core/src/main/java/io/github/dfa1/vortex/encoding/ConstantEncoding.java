@@ -32,8 +32,6 @@ import java.nio.charset.StandardCharsets;
 /// <p>Decode: fill an output buffer of {@code rowCount} elements with the constant value.
 public final class ConstantEncoding implements Encoding {
 
-	private static final ValueLayout.OfInt LE_INT = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-
 	private static long scalarToRawBits(ScalarProtos.ScalarValue scalar, PType ptype) {
 		return switch (scalar.getKindCase()) {
 			case INT64_VALUE -> scalar.getInt64Value();
@@ -226,7 +224,7 @@ public final class ConstantEncoding implements Encoding {
 		// offsets: sequential, stride = strLen
 		MemorySegment offsetsSeg = ctx.arena().allocate((n + 1) * 4L, 4);
 		for (long i = 0; i <= n; i++) {
-			offsetsSeg.setAtIndex(LE_INT, i, (int) (i * strLen));
+			offsetsSeg.setAtIndex(PTypeIO.LE_INT, i, (int) (i * strLen));
 		}
 
 		DType i32 = new DType.Primitive(PType.I32, false);
