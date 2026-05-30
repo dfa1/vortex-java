@@ -66,15 +66,18 @@ public final class CsvExporter {
         if (!(reader.dtype() instanceof DType.Struct schema)) {
             throw new VortexException("only struct root dtype supported for CSV export");
         }
-        List<String> colNames = schema.fieldNames();
+        List<String> colNames = options.hasProjection() ? options.columns() : schema.fieldNames();
         int colCount = colNames.size();
 
         if (options.writeHeader()) {
             csvWriter.writeRecord(colNames);
         }
 
+        ScanOptions scanOptions = options.hasProjection()
+                ? new ScanOptions(colNames, null, ScanOptions.NO_LIMIT)
+                : ScanOptions.all();
         String[] row = new String[colCount];
-        try (ScanIterator iter = reader.scan(ScanOptions.all())) {
+        try (ScanIterator iter = reader.scan(scanOptions)) {
             while (iter.hasNext()) {
                 ScanResult chunk = iter.next();
                 Array[] arrays = new Array[colCount];

@@ -20,6 +20,8 @@ public final class VortexCli {
             case "export"  -> ExportCommand.run(args);
             case "import"  -> ImportCommand.run(args);
             case "schema"  -> SchemaCommand.run(args);
+            case "count"   -> CountCommand.run(args);
+            case "select"  -> SelectCommand.run(args);
             default -> {
                 System.err.println("unknown subcommand: " + args[0]);
                 printUsage(System.err);
@@ -31,9 +33,11 @@ public final class VortexCli {
 
     static void printUsage(PrintStream out) {
         out.println("Usage: java -jar vortex.jar <subcommand> [args]");
-        out.println("  inspect <file.vortex>            print file structure");
-        out.println("  export  <file.vortex>            write CSV to stdout");
-        out.println("  import  <file.csv> [out.vortex]  convert CSV to Vortex");
-        out.println("  schema  <file.vortex>            print dtype (machine-readable)");
+        out.println("  inspect <file.vortex>               print file structure");
+        out.println("  export  <file.vortex>               write CSV to stdout");
+        out.println("  import  <file.csv> [out.vortex]     convert CSV to Vortex");
+        out.println("  schema  <file.vortex>               print dtype (machine-readable)");
+        out.println("  count   <file.vortex>               print row count");
+        out.println("  select  <file.vortex> <col> [...]   project columns to CSV on stdout");
     }
 }
