@@ -73,6 +73,7 @@
 - [ ] Create website
 - [ ] Publish benchmarks
 - [ ] Build something like hardwood.dev but for vortex files
+- [ ] Publish to Maven Central (OSSRH/SONATYPE setup, GPG signing, coordinates, CI release pipeline)
 
 ## JDK
 

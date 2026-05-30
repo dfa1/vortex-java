@@ -1,16 +1,20 @@
 # vortex-java
 
+[![CI](https://github.com/dfa1/vortex-java/actions/workflows/ci.yml/badge.svg)](https://github.com/dfa1/vortex-java/actions)
+
 > **Alpha** — not production-ready. APIs will change without notice.
 
 Pure-Java reader/writer for the [Vortex](https://github.com/spiraldb/vortex) columnar file format.
 
-- ✅ Pure-Java reader for primitive, sequence, ALP, dict, FSST
-- ✅ Local (mmap) or Remote (HTTPS, single read of last 65K)
-- 🚧 Writer (in progress)
-- 🚧 Benchmark against Rust+JNI (in progress)
-- 🚧 Full encoding coverage (in progress)
-- 🚧 Vectorized decode paths (Panama Vector API)
-- ❌ No Iceberg/Spark/Flink integration yet
+## Status
+
+- Pure-Java reader for primitive, sequence, ALP, dict, FSST (stable)
+- Local (mmap) or Remote (HTTPS, single read of last 65K) (stable)
+- Writer: in progress
+- Benchmark vs Rust+JNI: in progress
+- Full encoding coverage: in progress
+- Vectorized decode paths (Panama Vector API): planned
+- Iceberg/Spark/Flink integration: not available yet
 
 ## Motivation
 
@@ -19,8 +23,7 @@ JNI bindings are fast but add deployment friction: platform-specific artifacts, 
 toolchains, and crash-domain coupling between the JVM and native code.
 
 This library takes a different approach — 100% Java, no JNI, no `sun.misc.Unsafe`.
-It uses the Java FFM API (`MemorySegment` / `Arena`, Java 22+) for zero-copy memory-mapped
-reads, making it easier to:
+It uses the Java FFM API (`MemorySegment` / `Arena`, Java 25+) for zero-copy memory-mapped reads, making it easier to:
 
 - embed in any JVM project without native-library management
 - build and test on any platform with a standard JDK
@@ -112,6 +115,35 @@ Replacing protobuf with FlatBuffers is not viable — existing `.vortex` files p
 implementation embed protobuf bytes in codec metadata blobs, and wire compatibility requires matching the format
 exactly.
 
+## Quickstart
+
+Add the library to your build (example, Maven):
+
+```xml
+<!-- TODO: replace with released coordinates -->
+<dependency>
+  <groupId>io.github.dfa1</groupId>
+  <artifactId>vortex-java</artifactId>
+  <version>0.0.0-SNAPSHOT</version>
+</dependency>
+```
+
+Open and read a Vortex file (illustrative API):
+
+```java
+import io.github.dfa1.vortex.reader.VortexFile;
+import io.github.dfa1.vortex.reader.ScanIterator;
+
+try (VortexFile vf = VortexFile.open(Path.of("data/example.vortex"))) {
+    try (ScanIterator it = vf.scan()) {
+        while (it.hasNext()) {
+            var row = it.next();
+            // process row
+        }
+    }
+}
+```
+
 ## Requirements
 
 - Java 25+
@@ -126,6 +158,8 @@ requiring it means no preview flags, no upgrade risk, and a supported LTS for us
 
 ```bash
 ./mvnw verify
+# Run tests
+./mvnw test
 ```
 
 ## License
