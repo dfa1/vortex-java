@@ -83,9 +83,9 @@ bytecode.
 
 ## Design principles
 
-- Zero-copy as much as possible
+- Zero-copy everywhere
 - No JNI
-- No Unsafe -- don't remove safety to gain few %
+- No Unsafe -- [FFM vs Unsafe](https://inside.java/2025/06/12/ffm-vs-unsafe/) — Maurizio Cimadamore's deep-dive on why FFM (`MemorySegment`/`Arena`) supersedes `sun.misc.Unsafe`: safety, performance, and the JVM's path forward
 - Align with vortex-rust and Vortex-go semantics
 - Make the JIT happy (constant layouts, predictable strides, no virtual dispatch in hot loops)
 - Prepare for the Vector API / Valhalla
@@ -96,7 +96,7 @@ bytecode.
 |-------------------------------------------------------------|----------|---------------------------------------------------------------------|
 | [spiraldb/vortex](https://github.com/spiraldb/vortex)       | Rust     | Reference implementation + JNI bindings                             |
 | [spiraldb/vortex-go](https://github.com/spiraldb/vortex-go) | Go       | Pure-language port; primary inspiration for this project's approach |
-- [FFM vs Unsafe](https://inside.java/2025/06/12/ffm-vs-unsafe/) — Maurizio Cimadamore's deep-dive on why FFM (`MemorySegment`/`Arena`) supersedes `sun.misc.Unsafe`: safety, performance, and the JVM's path forward
+
 
 ## Serialization formats
 
@@ -128,7 +128,7 @@ Add the library to your build (example, Maven):
 </dependency>
 ```
 
-Open and read a Vortex file (illustrative API):
+Open and read a Vortex file:
 
 ```java
 import io.github.dfa1.vortex.reader.VortexFile;
@@ -158,8 +158,6 @@ requiring it means no preview flags, no upgrade risk, and a supported LTS for us
 
 ```bash
 ./mvnw verify
-# Run tests
-./mvnw test
 ```
 
 ## License
