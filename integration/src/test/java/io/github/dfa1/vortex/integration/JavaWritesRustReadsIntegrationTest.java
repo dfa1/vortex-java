@@ -25,6 +25,7 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -39,6 +40,18 @@ class JavaWritesRustReadsIntegrationTest {
 			List.of("id", "value"),
 			List.of(new DType.Primitive(PType.I64, false),
 					new DType.Primitive(PType.F64, false)),
+			false);
+
+	private static final DType.Struct OHLC_SCHEMA = new DType.Struct(
+			List.of("date", "symbol", "open", "high", "low", "close", "volume"),
+			List.of(
+					new DType.Primitive(PType.I32, false),
+					new DType.Utf8(false),
+					new DType.Primitive(PType.F64, false),
+					new DType.Primitive(PType.F64, false),
+					new DType.Primitive(PType.F64, false),
+					new DType.Primitive(PType.F64, false),
+					new DType.Primitive(PType.I64, false)),
 			false);
 
 	static {
@@ -92,6 +105,38 @@ class JavaWritesRustReadsIntegrationTest {
 	}
 
 	// ── JNI read helpers ──────────────────────────────────────────────────────
+
+	@Test
+	void javaWriter_jniReader_cascading_ohlc(@TempDir Path tmp) throws IOException {
+		// Given — OHLC data written with cascading(3): exercises ALP→FOR→bitpacked chain
+		Path file = tmp.resolve("java_cascade_ohlc.vtx");
+		List<OhlcGenerator.OhlcBatch> batches = OhlcGenerator.generate(10_000, 1_000);
+
+		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+		     var sut = VortexWriter.create(ch, OHLC_SCHEMA, WriteOptions.cascading(3))) {
+			for (OhlcGenerator.OhlcBatch b : batches) {
+				sut.writeChunk(Map.of(
+						"date",   b.dates(),
+						"symbol", b.symbols(),
+						"open",   b.open(),
+						"high",   b.high(),
+						"low",    b.low(),
+						"close",  b.close(),
+						"volume", b.volume()));
+			}
+		}
+
+		// When
+		long[]   volumes = readLongColumn(file, "volume");
+		double[] closes  = readDoubleColumn(file, "close");
+
+		// Then — JNI reader may return chunks in a different order for cascaded files;
+		// verify all values round-trip correctly regardless of partition order.
+		long[]   expectedVolumes = batches.stream().flatMapToLong(b -> Arrays.stream(b.volume())).toArray();
+		double[] expectedCloses  = batches.stream().flatMapToDouble(b -> Arrays.stream(b.close())).toArray();
+		assertThat(volumes).containsExactlyInAnyOrder(expectedVolumes);
+		assertThat(closes).containsExactlyInAnyOrder(expectedCloses);
+	}
 
 	@Test
 	void javaWriter_jniReader_singleChunk(@TempDir Path tmp) throws IOException {
