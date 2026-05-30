@@ -186,6 +186,23 @@ requiring it means no preview flags, no upgrade risk, and a supported LTS for us
 ./mvnw verify
 ```
 
+## Running benchmarks
+
+```bash
+# Build the benchmark fat jar
+./mvnw package -pl performance -am -DskipTests
+
+# Run all benchmarks
+java -jar performance/target/benchmarks.jar
+
+# Run a specific class
+java -jar performance/target/benchmarks.jar RustVsJavaReadBenchmark
+
+# Run a specific method (recommended — always use ClassName.methodName)
+java -jar performance/target/benchmarks.jar RustVsJavaReadBenchmark.javaReadVolume
+java -jar performance/target/benchmarks.jar RustVsJavaWriteBenchmark.javaWrite
+```
+
 ## License
 
 Apache 2.0
