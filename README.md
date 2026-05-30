@@ -11,7 +11,7 @@ Pure-Java reader/writer for the [Vortex](https://github.com/spiraldb/vortex) col
 - Pure-Java reader for primitive, sequence, ALP, dict, FSST (stable)
 - Local (mmap) or Remote (HTTPS, single read of last 65K) (stable)
 - Writer: in progress
-- Benchmark vs Rust+JNI: in progress
+- Benchmark vs Rust+JNI: Java beats JNI 1.5×–6.5× across read/write workloads (see Benchmarks)
 - Full encoding coverage: in progress
 - Vectorized decode paths (Panama Vector API): planned
 - Iceberg/Spark/Flink integration: not available yet
@@ -80,6 +80,32 @@ typed, bounds-checked view directly into the OS mmap region — the same physica
 file occupies. Decoding reads bytes directly from that view with no copies, no intermediate
 Arrow format, and no boundary crossings. The JIT sees the full decode path as ordinary Java
 bytecode.
+
+## Benchmarks
+
+JMH throughput (ops/s = full-file scans per second). Higher is better.
+
+**Environment:** Apple M5, OpenJDK 27-jep401ea3 (Valhalla EA), 3 warmup × 3 s, 5 measurement × 5 s, fork 1.
+
+### OHLC read — 10 M rows, 58.9 MB (Rust-written file, single-column projection)
+
+| Benchmark      | Java (ops/s)     | JNI/Rust (ops/s) | Java speedup |
+|----------------|------------------|------------------|--------------|
+| close (F64/ALP)| 76.4 ± 1.6       | 50.8 ± 2.2       | **1.5×**     |
+| volume (I64)   | 128.6 ± 1.5      | 52.3 ± 1.1       | **2.5×**     |
+| symbol (varbin)| 63.4 ± 21.6      | 9.8 ± 1.4        | **6.5×**     |
+
+### OHLC write — 10 M rows
+
+| Benchmark | Java (ops/s) | JNI/Rust (ops/s) | Java speedup |
+|-----------|--------------|------------------|--------------|
+| write     | 4.6 ± 0.6    | 0.7 ± 0.0        | **6.5×**     |
+
+### Big-file scan — 100 M rows × 4 I64 columns, ~3 GB (Rust-written file, all columns)
+
+| Benchmark | Java (ops/s) | JNI/Rust (ops/s) | Java speedup |
+|-----------|--------------|------------------|--------------|
+| scan      | 20.3 ± 1.0   | 5.7 ± 0.2        | **3.6×**     |
 
 ## Design principles
 

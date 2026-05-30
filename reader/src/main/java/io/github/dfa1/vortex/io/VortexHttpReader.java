@@ -174,7 +174,7 @@ public final class VortexHttpReader implements VortexHandle {
 
 	@Override
 	public ScanIterator scan(ScanOptions options) {
-		return new ScanIterator(this, options, arena);
+		return new ScanIterator(this, options);
 	}
 
 	@Override

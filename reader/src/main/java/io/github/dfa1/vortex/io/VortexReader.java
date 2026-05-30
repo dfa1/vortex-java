@@ -144,7 +144,7 @@ public final class VortexReader implements VortexHandle {
 
 	@Override
 	public ScanIterator scan(ScanOptions options) {
-		return new ScanIterator(this, options, this.arena);
+		return new ScanIterator(this, options);
 	}
 
 	/// Zero-copy slice of the memory-mapped file.

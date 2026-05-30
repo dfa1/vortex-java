@@ -47,13 +47,9 @@ public final class ScanIterator implements AutoCloseable {
 	private static final ValueLayout.OfInt   LE_INT   = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 	private static final ValueLayout.OfLong  LE_LONG  = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
-	private static final long SLAB_SIZE = 4 * 1024 * 1024L;
-
 	private final VortexHandle file;
 	private final ScanOptions options;
-	private final Arena arena;
-	private MemorySegment chunkSlab;
-	private SegmentAllocator chunkAlloc;
+	private Arena chunkArena;
 
 	private List<ChunkSpec> chunks;
 	private Map<String, DType> columnDtypes;
@@ -63,10 +59,9 @@ public final class ScanIterator implements AutoCloseable {
 	private long rowsReturned;
 	private ScanResult current;
 
-	public ScanIterator(VortexHandle file, ScanOptions options, Arena arena) {
+	public ScanIterator(VortexHandle file, ScanOptions options) {
 		this.file = file;
 		this.options = options;
-		this.arena = arena;
 	}
 
 	private static void collectFlats(Layout layout, List<Layout> out) {
@@ -134,11 +129,15 @@ public final class ScanIterator implements AutoCloseable {
 				continue;
 			}
 
-			chunkAlloc = SegmentAllocator.slicingAllocator(chunkSlab);
+			if (chunkArena != null) {
+				chunkArena.close();
+			}
+			chunkArena = Arena.ofConfined();
 			current = new ScanResult(chunk.rowCount(), buildColumnMap(chunk));
 			rowsReturned += chunk.rowCount();
 			return true;
 		}
+		close();
 		return false;
 	}
 
@@ -153,6 +152,10 @@ public final class ScanIterator implements AutoCloseable {
 
 	@Override
 	public void close() {
+		if (chunkArena != null) {
+			chunkArena.close();
+			chunkArena = null;
+		}
 	}
 
 	// ── Flat segment decoding ─────────────────────────────────────────────────
@@ -187,8 +190,6 @@ public final class ScanIterator implements AutoCloseable {
 		chunks = buildChunks(columnFlats);
 		projectedNames = List.copyOf(columnDtypes.keySet());
 		projectedDtypes = List.copyOf(columnDtypes.values());
-		chunkSlab = arena.allocate(SLAB_SIZE, 64);
-		chunkAlloc = SegmentAllocator.slicingAllocator(chunkSlab);
 	}
 
 	// ── Zone-map pruning ──────────────────────────────────────────────────────
@@ -200,7 +201,7 @@ public final class ScanIterator implements AutoCloseable {
 		Layout[] layouts = chunk.columnLayouts();
 		int n = projectedNames.size();
 		if (n == 1) {
-			Array arr = decodeLayout(layouts[0], projectedDtypes.get(0), chunkAlloc);
+			Array arr = decodeLayout(layouts[0], projectedDtypes.get(0), chunkArena);
 			if (arr instanceof StructArray sa) {
 				return expandStruct(sa);
 			}
@@ -208,12 +209,12 @@ public final class ScanIterator implements AutoCloseable {
 		}
 		if (n == 2) {
 			return Map.of(
-					projectedNames.get(0), decodeLayout(layouts[0], projectedDtypes.get(0), chunkAlloc),
-					projectedNames.get(1), decodeLayout(layouts[1], projectedDtypes.get(1), chunkAlloc));
+					projectedNames.get(0), decodeLayout(layouts[0], projectedDtypes.get(0), chunkArena),
+					projectedNames.get(1), decodeLayout(layouts[1], projectedDtypes.get(1), chunkArena));
 		}
 		var scratch = new LinkedHashMap<String, Array>(n);
 		for (int i = 0; i < n; i++) {
-			scratch.put(projectedNames.get(i), decodeLayout(layouts[i], projectedDtypes.get(i), chunkAlloc));
+			scratch.put(projectedNames.get(i), decodeLayout(layouts[i], projectedDtypes.get(i), chunkArena));
 		}
 		return Map.copyOf(scratch);
 	}
