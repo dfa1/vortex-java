@@ -26,61 +26,6 @@ import java.nio.ByteBuffer;
 /// Output is allocated on the heap; not backed by the file's mapped region.
 public final class SequenceEncoding implements Encoding {
 
-	private static Array decodeInteger(
-			EncodingProtos.SequenceMetadata meta, PType pt, long n, DType dtype, SegmentAllocator arena
-	) {
-		long base = signedValue(meta.getBase());
-		long mul = signedValue(meta.getMultiplier());
-		int elemBytes = pt.byteSize();
-		MemorySegment seg = arena.allocate(n * elemBytes);
-		for (long i = 0; i < n; i++) {
-			long v = base + i * mul;
-			switch (pt) {
-				case I8, U8 -> seg.set(ValueLayout.JAVA_BYTE, i, (byte) v);
-				case I16, U16 -> seg.setAtIndex(PTypeIO.LE_SHORT, i, (short) v);
-				case I32, U32 -> seg.setAtIndex(PTypeIO.LE_INT, i, (int) v);
-				case I64, U64 -> seg.setAtIndex(PTypeIO.LE_LONG, i, v);
-				default -> throw new IllegalStateException("unreachable");
-			}
-		}
-		return switch (pt) {
-			case I64, U64 -> new LongArray(dtype, n, seg, ArrayStats.empty());
-			case I32, U32 -> new IntArray(dtype, n, seg, ArrayStats.empty());
-			case I16, U16 -> new ShortArray(dtype, n, seg, ArrayStats.empty());
-			case I8, U8   -> new ByteArray(dtype, n, seg, ArrayStats.empty());
-			default -> throw new VortexException(EncodingId.VORTEX_SEQUENCE, "unsupported ptype " + pt);
-		};
-	}
-
-	private static Array decodeF32(EncodingProtos.SequenceMetadata meta, long n, DType dtype, SegmentAllocator arena) {
-		float base = meta.getBase().getF32Value();
-		float mul = meta.getMultiplier().getF32Value();
-		MemorySegment seg = arena.allocate(n * 4L);
-		for (long i = 0; i < n; i++) {
-			seg.setAtIndex(PTypeIO.LE_FLOAT, i, base + i * mul);
-		}
-		return new FloatArray(dtype, n, seg, ArrayStats.empty());
-	}
-
-	private static Array decodeF64(EncodingProtos.SequenceMetadata meta, long n, DType dtype, SegmentAllocator arena) {
-		double base = meta.getBase().getF64Value();
-		double mul = meta.getMultiplier().getF64Value();
-		MemorySegment seg = arena.allocate(n * 8L);
-		for (long i = 0; i < n; i++) {
-			seg.setAtIndex(PTypeIO.LE_DOUBLE, i, base + i * mul);
-		}
-		return new DoubleArray(dtype, n, seg, ArrayStats.empty());
-	}
-
-	private static long signedValue(dev.vortex.proto.ScalarProtos.ScalarValue sv) {
-		return switch (sv.getKindCase()) {
-			case INT64_VALUE -> sv.getInt64Value();
-			case UINT64_VALUE -> sv.getUint64Value();
-			case KIND_NOT_SET -> 0L;
-			default -> throw new VortexException(EncodingId.VORTEX_SEQUENCE, "unexpected scalar kind " + sv.getKindCase());
-		};
-	}
-
 	@Override
 	public EncodingId encodingId() {
 		return EncodingId.VORTEX_SEQUENCE;
@@ -93,28 +38,90 @@ public final class SequenceEncoding implements Encoding {
 
 	@Override
 	public Array decode(DecodeContext ctx) {
-		ByteBuffer metaBuf = ctx.metadata();
-		if (metaBuf == null || !metaBuf.hasRemaining()) {
-			throw new VortexException(EncodingId.VORTEX_SEQUENCE, "missing metadata");
-		}
-		EncodingProtos.SequenceMetadata meta;
-		try {
-			meta = EncodingProtos.SequenceMetadata.parseFrom(metaBuf.duplicate());
-		} catch (InvalidProtocolBufferException e) {
-			throw new VortexException(EncodingId.VORTEX_SEQUENCE, "invalid metadata", e);
+		return Decoder.decode(ctx);
+	}
+
+	private static final class Decoder {
+
+		private static Array decode(DecodeContext ctx) {
+			ByteBuffer metaBuf = ctx.metadata();
+			if (metaBuf == null || !metaBuf.hasRemaining()) {
+				throw new VortexException(EncodingId.VORTEX_SEQUENCE, "missing metadata");
+			}
+			EncodingProtos.SequenceMetadata meta;
+			try {
+				meta = EncodingProtos.SequenceMetadata.parseFrom(metaBuf.duplicate());
+			} catch (InvalidProtocolBufferException e) {
+				throw new VortexException(EncodingId.VORTEX_SEQUENCE, "invalid metadata", e);
+			}
+
+			if (!(ctx.dtype() instanceof DType.Primitive p)) {
+				throw new VortexException(EncodingId.VORTEX_SEQUENCE, "expected primitive dtype, got " + ctx.dtype());
+			}
+
+			long n = ctx.rowCount();
+			PType pt = p.ptype();
+			return switch (pt) {
+				case I8, I16, I32, I64, U8, U16, U32, U64 -> decodeInteger(meta, pt, n, ctx.dtype(), ctx.arena());
+				case F32 -> decodeF32(meta, n, ctx.dtype(), ctx.arena());
+				case F64 -> decodeF64(meta, n, ctx.dtype(), ctx.arena());
+				case F16 -> throw new VortexException(EncodingId.VORTEX_SEQUENCE, "F16 not supported");
+			};
 		}
 
-		if (!(ctx.dtype() instanceof DType.Primitive p)) {
-			throw new VortexException(EncodingId.VORTEX_SEQUENCE, "expected primitive dtype, got " + ctx.dtype());
+		private static Array decodeInteger(
+				EncodingProtos.SequenceMetadata meta, PType pt, long n, DType dtype, SegmentAllocator arena
+		) {
+			long base = signedValue(meta.getBase());
+			long mul = signedValue(meta.getMultiplier());
+			int elemBytes = pt.byteSize();
+			MemorySegment seg = arena.allocate(n * elemBytes);
+			for (long i = 0; i < n; i++) {
+				long v = base + i * mul;
+				switch (pt) {
+					case I8, U8 -> seg.set(ValueLayout.JAVA_BYTE, i, (byte) v);
+					case I16, U16 -> seg.setAtIndex(PTypeIO.LE_SHORT, i, (short) v);
+					case I32, U32 -> seg.setAtIndex(PTypeIO.LE_INT, i, (int) v);
+					case I64, U64 -> seg.setAtIndex(PTypeIO.LE_LONG, i, v);
+					default -> throw new IllegalStateException("unreachable");
+				}
+			}
+			return switch (pt) {
+				case I64, U64 -> new LongArray(dtype, n, seg, ArrayStats.empty());
+				case I32, U32 -> new IntArray(dtype, n, seg, ArrayStats.empty());
+				case I16, U16 -> new ShortArray(dtype, n, seg, ArrayStats.empty());
+				case I8, U8   -> new ByteArray(dtype, n, seg, ArrayStats.empty());
+				default -> throw new VortexException(EncodingId.VORTEX_SEQUENCE, "unsupported ptype " + pt);
+			};
 		}
 
-		long n = ctx.rowCount();
-		PType pt = p.ptype();
-		return switch (pt) {
-			case I8, I16, I32, I64, U8, U16, U32, U64 -> decodeInteger(meta, pt, n, ctx.dtype(), ctx.arena());
-			case F32 -> decodeF32(meta, n, ctx.dtype(), ctx.arena());
-			case F64 -> decodeF64(meta, n, ctx.dtype(), ctx.arena());
-			case F16 -> throw new VortexException(EncodingId.VORTEX_SEQUENCE, "F16 not supported");
-		};
+		private static Array decodeF32(EncodingProtos.SequenceMetadata meta, long n, DType dtype, SegmentAllocator arena) {
+			float base = meta.getBase().getF32Value();
+			float mul = meta.getMultiplier().getF32Value();
+			MemorySegment seg = arena.allocate(n * 4L);
+			for (long i = 0; i < n; i++) {
+				seg.setAtIndex(PTypeIO.LE_FLOAT, i, base + i * mul);
+			}
+			return new FloatArray(dtype, n, seg, ArrayStats.empty());
+		}
+
+		private static Array decodeF64(EncodingProtos.SequenceMetadata meta, long n, DType dtype, SegmentAllocator arena) {
+			double base = meta.getBase().getF64Value();
+			double mul = meta.getMultiplier().getF64Value();
+			MemorySegment seg = arena.allocate(n * 8L);
+			for (long i = 0; i < n; i++) {
+				seg.setAtIndex(PTypeIO.LE_DOUBLE, i, base + i * mul);
+			}
+			return new DoubleArray(dtype, n, seg, ArrayStats.empty());
+		}
+
+		private static long signedValue(dev.vortex.proto.ScalarProtos.ScalarValue sv) {
+			return switch (sv.getKindCase()) {
+				case INT64_VALUE -> sv.getInt64Value();
+				case UINT64_VALUE -> sv.getUint64Value();
+				case KIND_NOT_SET -> 0L;
+				default -> throw new VortexException(EncodingId.VORTEX_SEQUENCE, "unexpected scalar kind " + sv.getKindCase());
+			};
+		}
 	}
 }
