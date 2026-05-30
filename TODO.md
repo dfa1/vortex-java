@@ -149,14 +149,14 @@
     - Arrow JVM uses `sun.misc.Unsafe` / Netty internally; keeping it in a separate module means
       the core library stays Unsafe-free
 
-## Skills
-
-- [ ] Keep `.claude/skills/improve-performance.md` and `.claude/skills/review-performance.md` in sync with
-  `CLAUDE.md` and README perf notes. Re-audit whenever memory model, allocation rule, or benchmark layout changes.
-
 ## Project
 
 - [ ] Move project to a dedicated organization
 - [ ] Create website
 - [ ] Publish benchmarks
 - [ ] Build something like hardwood.dev but for vortex files
+
+## JDK
+
+- [ ] use Java Modules
+- [ ] wait for Vector API lands on stable to improve read performance
