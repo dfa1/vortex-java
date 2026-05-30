@@ -1,8 +1,10 @@
 package io.github.dfa1.vortex.io;
 
+import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.Footer;
 import io.github.dfa1.vortex.core.Layout;
+import io.github.dfa1.vortex.core.SegmentSpec;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingRegistry;
 import io.github.dfa1.vortex.scan.ScanIterator;
@@ -16,6 +18,10 @@ import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 /// Handle to an open Vortex file. Memory-maps the file via the FFM API;
 /// all Array buffers returned during scan are slices of this `MemorySegment`.
@@ -145,6 +151,86 @@ public final class VortexReader implements VortexHandle {
 	@Override
 	public ScanIterator scan(ScanOptions options) {
 		return new ScanIterator(this, options);
+	}
+
+	/// Aggregated per-column statistics (global min/max across all chunks).
+	/// Returns an empty map if the root layout is not a struct.
+	/// Columns with no embedded stats return [ArrayStats#empty()].
+	public Map<String, ArrayStats> columnStats() {
+		if (!layout.isStruct() || !(dtype instanceof DType.Struct schema)) {
+			return Map.of();
+		}
+		List<String> names = schema.fieldNames();
+		List<Layout> colLayouts = layout.children();
+		Map<String, ArrayStats> result = new LinkedHashMap<>();
+		for (int i = 0; i < names.size() && i < colLayouts.size(); i++) {
+			List<Layout> flats = new ArrayList<>();
+			collectFlats(colLayouts.get(i), flats);
+			result.put(names.get(i), aggregateStats(flats));
+		}
+		return Map.copyOf(result);
+	}
+
+	private ArrayStats aggregateStats(List<Layout> flats) {
+		Object globalMin = null;
+		Object globalMax = null;
+		for (Layout flat : flats) {
+			ArrayStats s = readFlatStats(flat);
+			if (s.min() != null) {
+				globalMin = globalMin == null ? s.min() : minOf(globalMin, s.min());
+			}
+			if (s.max() != null) {
+				globalMax = globalMax == null ? s.max() : maxOf(globalMax, s.max());
+			}
+		}
+		if (globalMin == null && globalMax == null) {
+			return ArrayStats.empty();
+		}
+		return new ArrayStats(globalMin, globalMax, null, null, null, null);
+	}
+
+	private ArrayStats readFlatStats(Layout flat) {
+		if (flat.segments().isEmpty()) {
+			return ArrayStats.empty();
+		}
+		int segIdx = flat.segments().getFirst();
+		SegmentSpec spec = footer.segmentSpecs().get(segIdx);
+		long segLen = spec.length();
+		MemorySegment seg = fileSegment.asSlice(spec.offset(), segLen);
+		int fbLen = seg.get(LE_INT, segLen - 4);
+		long fbStart = segLen - 4L - fbLen;
+		var fbBuf = seg.asSlice(fbStart, fbLen).asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
+		var fbArray = io.github.dfa1.vortex.fbs.Array.getRootAsArray(fbBuf);
+		var root = fbArray.root();
+		if (root == null) {
+			return ArrayStats.empty();
+		}
+		return ArrayStats.fromFbs(root.stats());
+	}
+
+	private static void collectFlats(Layout layout, List<Layout> out) {
+		if (layout.isFlat() || layout.isDict()) {
+			out.add(layout);
+		} else if (layout.isZoned() && !layout.children().isEmpty()) {
+			collectFlats(layout.children().get(0), out);
+		} else if (layout.isChunked()) {
+			int start = (layout.metadata() != null
+					&& layout.metadata().hasRemaining()
+					&& layout.metadata().get(0) == 1) ? 1 : 0;
+			for (int i = start; i < layout.children().size(); i++) {
+				collectFlats(layout.children().get(i), out);
+			}
+		}
+	}
+
+	@SuppressWarnings("unchecked")
+	private static Object minOf(Object a, Object b) {
+		return ((Comparable<Object>) a).compareTo(b) <= 0 ? a : b;
+	}
+
+	@SuppressWarnings("unchecked")
+	private static Object maxOf(Object a, Object b) {
+		return ((Comparable<Object>) a).compareTo(b) >= 0 ? a : b;
 	}
 
 	/// Zero-copy slice of the memory-mapped file.
