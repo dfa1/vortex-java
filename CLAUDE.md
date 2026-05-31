@@ -133,6 +133,19 @@ public final class FooEncoding implements Encoding {
 
 Simple encodings (≤ ~80 lines total, e.g. `NullEncoding`, `BoolEncoding`) are exempt.
 
+### Metadata-only encodings
+
+Some encodings store all data in protobuf metadata — no buffers, no children (e.g. `SequenceEncoding`).
+Their `EncodeResult` uses an `EncodeNode` with `metadata` set and an empty `bufferIndices` array:
+
+```java
+ByteBuffer metaBuf = ByteBuffer.wrap(meta.toByteArray());
+EncodeNode node = new EncodeNode(encodingId, metaBuf, new EncodeNode[0], new int[]{});
+return new EncodeResult(node, List.of(), null, null);
+```
+
+The decoder reads back via `ctx.metadata()`, not `ctx.buffer(n)`.
+
 ## Testing
 
 - Every feature needs unit tests covering: happy path, negative cases (invalid input, error conditions), and corner cases (empty, zero, max values, boundary conditions).
