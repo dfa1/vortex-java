@@ -59,6 +59,11 @@ written: /var/folders/dq/w0lpx2tj70g0cgv4ckcyth740000gn/T/junit-7248856963330236
 
 ## Array API
 
+- [ ] Use domain primitives (`UInt32`, `UInt64`, etc.) as value classes via Project Valhalla instead of raw `long`/`int`
+    - See https://dfa1.github.io/articles/rethink-domain-primitives-with-valhalla
+    - Candidates: `PType` integer kinds, buffer offsets, row indices, byte lengths
+    - Goal: type-safety at zero cost (value class = no heap alloc, no boxing)
+
 - [ ] Optional `vortex-arrow` bridge module for Arrow ecosystem interop
     - Primary API stays `ArrayLong`/`ArrayDouble` (zero-copy, no deps, no Unsafe)
     - Bridge wraps typed views into Arrow `BigIntVector`, `Float8Vector`, etc. for users who need
