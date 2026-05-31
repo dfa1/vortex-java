@@ -11,39 +11,41 @@
 
 	<artifactId>performance</artifactId>
 
-	<properties>
-		<!-- override: benchmarks are not unit tests -->
-		<maven.test.skip>true</maven.test.skip>
-	</properties>
-
 	<dependencies>
 		<dependency>
 			<groupId>io.github.dfa1.vortex</groupId>
 			<artifactId>writer</artifactId>
+			<scope>compile</scope>
 		</dependency>
 		<dependency>
 			<groupId>io.github.dfa1.vortex</groupId>
 			<artifactId>reader</artifactId>
+			<scope>compile</scope>
 		</dependency>
 		<dependency>
 			<groupId>dev.vortex</groupId>
 			<artifactId>vortex-jni</artifactId>
+			<scope>compile</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.arrow</groupId>
 			<artifactId>arrow-vector</artifactId>
+			<scope>compile</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.arrow</groupId>
 			<artifactId>arrow-c-data</artifactId>
+			<scope>compile</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.arrow</groupId>
 			<artifactId>arrow-memory-unsafe</artifactId>
+			<scope>compile</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.openjdk.jmh</groupId>
 			<artifactId>jmh-core</artifactId>
+			<scope>compile</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.openjdk.jmh</groupId>
