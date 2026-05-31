@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
+import com.google.protobuf.InvalidProtocolBufferException;
 import io.github.dfa1.vortex.proto.DTypeProtos;
 import io.github.dfa1.vortex.proto.EncodingProtos;
 import io.github.dfa1.vortex.proto.ScalarProtos;
@@ -9,11 +10,15 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -21,6 +26,113 @@ class SparseEncodingTest {
 
 	private static final DType I64_DTYPE = new DType.Primitive(PType.I64, false);
 	private static final DType F64_DTYPE = new DType.Primitive(PType.F64, false);
+
+	@Nested
+	class Encode {
+
+		@Test
+		void encode_allZeros_noPatches() throws InvalidProtocolBufferException {
+			// Given
+			long[] data = {0L, 0L, 0L, 0L};
+			SparseEncoding sut = new SparseEncoding();
+
+			// When
+			EncodeResult result = sut.encode(I64_DTYPE, data);
+
+			// Then
+			EncodingProtos.SparseMetadata meta = EncodingProtos.SparseMetadata.parseFrom(
+					result.rootNode().metadata().array());
+			assertThat(meta.getPatches().getLen()).isZero();
+		}
+
+		@Test
+		void encode_withNonZero_createsPatches() throws InvalidProtocolBufferException {
+			// Given — [0, 10, 0, 50, 0]
+			long[] data = {0L, 10L, 0L, 50L, 0L};
+			SparseEncoding sut = new SparseEncoding();
+
+			// When
+			EncodeResult result = sut.encode(I64_DTYPE, data);
+
+			// Then
+			EncodingProtos.SparseMetadata meta = EncodingProtos.SparseMetadata.parseFrom(
+					result.rootNode().metadata().array());
+			assertThat(meta.getPatches().getLen()).isEqualTo(2);
+		}
+
+		@Test
+		void encode_roundTrip_i64() {
+			// Given — sparse long array
+			long[] data = {0L, 0L, 42L, 0L, 99L, 0L, 0L, 7L};
+			SparseEncoding sut = new SparseEncoding();
+
+			// When
+			EncodeResult encoded = sut.encode(I64_DTYPE, data);
+			Array decoded = decodeResult(encoded, I64_DTYPE, data.length);
+
+			// Then
+			var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			for (int i = 0; i < data.length; i++) {
+				assertThat(decoded.buffer(0).get(layout, (long) i * 8))
+						.as("index %d", i).isEqualTo(data[i]);
+			}
+		}
+
+		@Test
+		void encode_roundTrip_f64() {
+			// Given
+			double[] data = {0.0, 3.14, 0.0, 0.0, 2.72};
+			SparseEncoding sut = new SparseEncoding();
+
+			// When
+			EncodeResult encoded = sut.encode(F64_DTYPE, data);
+			Array decoded = decodeResult(encoded, F64_DTYPE, data.length);
+
+			// Then
+			var layout = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			for (int i = 0; i < data.length; i++) {
+				assertThat(decoded.buffer(0).get(layout, (long) i * 8))
+						.as("index %d", i).isEqualTo(data[i]);
+			}
+		}
+
+		@ParameterizedTest
+		@ValueSource(ints = {0, 1, 100})
+		void encode_empty_or_allZero_noPatches(int size) throws InvalidProtocolBufferException {
+			// Given
+			long[] data = new long[size];
+			SparseEncoding sut = new SparseEncoding();
+
+			// When
+			EncodeResult result = sut.encode(I64_DTYPE, data);
+
+			// Then
+			EncodingProtos.SparseMetadata meta = EncodingProtos.SparseMetadata.parseFrom(
+					result.rootNode().metadata().array());
+			assertThat(meta.getPatches().getLen()).isZero();
+		}
+
+		private static Array decodeResult(EncodeResult encoded, DType dtype, int n) {
+			EncodeNode root = encoded.rootNode();
+			List<MemorySegment> bufs = encoded.buffers();
+
+			MemorySegment[] segments = bufs.toArray(new MemorySegment[0]);
+
+			ArrayNode idxNode = new ArrayNode(root.children()[0].encodingId(), null,
+					new ArrayNode[0], root.children()[0].bufferIndices(), ArrayStats.empty());
+			ArrayNode valNode = new ArrayNode(root.children()[1].encodingId(), null,
+					new ArrayNode[0], root.children()[1].bufferIndices(), ArrayStats.empty());
+			ArrayNode sparseNode = new ArrayNode(root.encodingId(), root.metadata(),
+					new ArrayNode[]{idxNode, valNode}, root.bufferIndices(), ArrayStats.empty());
+
+			EncodingRegistry registry = EncodingRegistry.empty();
+			registry.register(new SparseEncoding());
+			registry.register(new PrimitiveEncoding());
+
+			DecodeContext ctx = new DecodeContext(sparseNode, dtype, n, segments, registry, Arena.global());
+			return new SparseEncoding().decode(ctx);
+		}
+	}
 
 	@Nested
 	class Decode {

@@ -45,6 +45,10 @@ written: /var/folders/dq/w0lpx2tj70g0cgv4ckcyth740000gn/T/junit-7248856963330236
 [WARNING] /Users/dfa/projects/vortex-java/csv/src/main/java/module-info.java:[1,17] module name component dfa1 should avoid terminal digits
 ```
 
+## Documentation
+
+- [ ] Format specification: byte-exact diagrams for file layout and each encoding, with annotated examples (Arrow spec style)
+
 ## Tooling
 
 
@@ -84,7 +88,7 @@ written: /var/folders/dq/w0lpx2tj70g0cgv4ckcyth740000gn/T/junit-7248856963330236
 | `fastlanes.delta`            | `DeltaEncoding`            | ✅       | ✅       | —         | integer PTypes |
 | `fastlanes.bitpacked`        | `BitpackedEncoding`        | ✅       | ✅       | —         | unsigned integer PTypes |
 | `fastlanes.for`              | `FrameOfReferenceEncoding` | ✅       | ✅       | —         | integer PTypes |
-| `vortex.sparse`              | `SparseEncoding`           | ✅       | ❌ stub  | —         | Primitive |
+| `vortex.sparse`              | `SparseEncoding`           | ✅       | ✅       | —         | Primitive |
 | `vortex.sequence`            | `SequenceEncoding`         | ✅       | ✅       | —         | Primitive |
 | `vortex.struct`              | `StructEncoding`           | ✅       | ❌ stub  | —         | Struct |
 | `vortex.fsst`                | `FsstEncoding`             | ✅       | ❌ stub  | —         | Utf8, Binary |
@@ -99,7 +103,7 @@ written: /var/folders/dq/w0lpx2tj70g0cgv4ckcyth740000gn/T/junit-7248856963330236
 | `vortex.list`                | —                          | ❌       | ❌       | hard      | needs list array model; unblocks `list.vortex` |
 | `vortex.listview`            | —                          | ❌       | ❌       | hard      | unblocks `listview.vortex` |
 | `vortex.fixed_size_list`     | —                          | ❌       | ❌       | hard      | unblocks `fixed_size_list.vortex` |
-| `vortex.zstd`                | —                          | ❌       | ❌       | hard      | needs zstd native lib; unblocks `zstd.vortex` |
+| `vortex.zstd`                | —                          | ❌       | ❌       | hard      | use [airlift/aircompressor](https://github.com/airlift/aircompressor) (pure Java zstd, no native); unblocks `zstd.vortex` |
 
 ### S3 Fixture Status (`v0.72.0/arrays/`)
 
@@ -132,7 +136,7 @@ written: /var/folders/dq/w0lpx2tj70g0cgv4ckcyth740000gn/T/junit-7248856963330236
 | `list.vortex`                    | ❌     | `vortex.list` + list array model |
 | `listview.vortex`                | ❌     | `vortex.listview` missing     |
 | `fixed_size_list.vortex`         | ❌     | `vortex.fixed_size_list` missing |
-| `zstd.vortex`                    | ❌     | needs zstd native library     |
+| `zstd.vortex`                    | ❌     | `vortex.zstd` (use aircompressor) |
 | `tpch_lineitem.compact.vortex`   | ❌     | `vortex.pco`                  |
 | `tpch_lineitem.regular.vortex`   | ❌     | `vortex.pco`                  |
 | `tpch_orders.compact.vortex`     | ❌     | `vortex.pco`                  |

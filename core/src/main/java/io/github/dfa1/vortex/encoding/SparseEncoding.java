@@ -16,10 +16,13 @@ import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.core.VortexException;
 
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.ArrayList;
+import java.util.List;
 
 /// Decoder for {@code vortex.sparse}.
 ///
@@ -40,12 +43,126 @@ public final class SparseEncoding implements Encoding {
 
 	@Override
 	public EncodeResult encode(DType dtype, Object data) {
-		throw new UnsupportedOperationException("encode not supported by " + encodingId());
+		return Encoder.encode(dtype, data);
 	}
 
 	@Override
 	public Array decode(DecodeContext ctx) {
 		return Decoder.decode(ctx);
+	}
+
+	private static final class Encoder {
+
+		private static EncodeResult encode(DType dtype, Object data) {
+			if (!(dtype instanceof DType.Primitive p)) {
+				throw new VortexException(EncodingId.VORTEX_SPARSE,
+						"encode only supports Primitive dtype, got " + dtype);
+			}
+			PType ptype = p.ptype();
+			int n = arrayLength(data, ptype);
+
+			List<Integer> patchIdx = new ArrayList<>();
+			List<Long> patchBits = new ArrayList<>();
+			for (int i = 0; i < n; i++) {
+				long bits = readBits(data, ptype, i);
+				if (bits != 0L) {
+					patchIdx.add(i);
+					patchBits.add(bits);
+				}
+			}
+
+			int numPatches = patchIdx.size();
+			PType idxPtype = chooseIdxPtype(n);
+
+			ScalarProtos.ScalarValue fillScalar = zeroScalar(ptype);
+			byte[] fillBytes = fillScalar.toByteArray();
+			MemorySegment fillBuf = Arena.ofAuto().allocate(fillBytes.length);
+			MemorySegment.copy(MemorySegment.ofArray(fillBytes), 0, fillBuf, 0, fillBytes.length);
+
+			MemorySegment idxBuf = buildIdxBuf(patchIdx, idxPtype, numPatches);
+			MemorySegment valBuf = buildValBuf(patchBits, ptype, numPatches);
+
+			byte[] metaBytes = EncodingProtos.SparseMetadata.newBuilder()
+					.setPatches(EncodingProtos.PatchesMetadata.newBuilder()
+							.setLen(numPatches)
+							.setOffset(0)
+							.setIndicesPtype(DTypeProtos.PType.forNumber(idxPtype.ordinal()))
+							.build())
+					.build()
+					.toByteArray();
+
+			EncodeNode idxNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
+			EncodeNode valNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
+			EncodeNode root = new EncodeNode(EncodingId.VORTEX_SPARSE, ByteBuffer.wrap(metaBytes),
+					new EncodeNode[]{idxNode, valNode}, new int[]{0});
+			return new EncodeResult(root, List.of(fillBuf, idxBuf, valBuf), null, null);
+		}
+
+		private static int arrayLength(Object data, PType ptype) {
+			return switch (ptype) {
+				case I8, U8   -> ((byte[]) data).length;
+				case I16, U16 -> ((short[]) data).length;
+				case I32, U32 -> ((int[]) data).length;
+				case I64, U64 -> ((long[]) data).length;
+				case F32      -> ((float[]) data).length;
+				case F64      -> ((double[]) data).length;
+				default -> throw new VortexException(EncodingId.VORTEX_SPARSE, "unsupported ptype: " + ptype);
+			};
+		}
+
+		private static long readBits(Object data, PType ptype, int i) {
+			return switch (ptype) {
+				case I8       -> ((byte[]) data)[i];
+				case U8       -> Byte.toUnsignedLong(((byte[]) data)[i]);
+				case I16      -> ((short[]) data)[i];
+				case U16      -> Short.toUnsignedLong(((short[]) data)[i]);
+				case I32      -> ((int[]) data)[i];
+				case U32      -> Integer.toUnsignedLong(((int[]) data)[i]);
+				case I64, U64 -> ((long[]) data)[i];
+				case F32      -> Float.floatToRawIntBits(((float[]) data)[i]);
+				case F64      -> Double.doubleToRawLongBits(((double[]) data)[i]);
+				default -> throw new VortexException(EncodingId.VORTEX_SPARSE, "unsupported ptype: " + ptype);
+			};
+		}
+
+		private static PType chooseIdxPtype(int n) {
+			if (n <= 0xFF) {
+				return PType.U8;
+			} else if (n <= 0xFFFF) {
+				return PType.U16;
+			} else {
+				return PType.U32;
+			}
+		}
+
+		private static ScalarProtos.ScalarValue zeroScalar(PType ptype) {
+			ScalarProtos.ScalarValue.Builder b = ScalarProtos.ScalarValue.newBuilder();
+			return switch (ptype) {
+				case I8, I16, I32, I64 -> b.setInt64Value(0L).build();
+				case U8, U16, U32, U64 -> b.setUint64Value(0L).build();
+				case F32               -> b.setF32Value(0.0f).build();
+				case F64               -> b.setF64Value(0.0).build();
+				default -> throw new VortexException(EncodingId.VORTEX_SPARSE, "unsupported ptype: " + ptype);
+			};
+		}
+
+		private static MemorySegment buildIdxBuf(List<Integer> patchIdx, PType idxPtype, int numPatches) {
+			int elemBytes = idxPtype.byteSize();
+			MemorySegment seg = Arena.ofAuto().allocate(Math.max(1L, (long) numPatches * elemBytes), elemBytes);
+			for (int i = 0; i < numPatches; i++) {
+				PTypeIO.set(seg, (long) i * elemBytes, idxPtype, patchIdx.get(i));
+			}
+			return seg;
+		}
+
+		private static MemorySegment buildValBuf(List<Long> patchBits, PType ptype, int numPatches) {
+			int elemBytes = ptype.byteSize();
+			MemorySegment seg = Arena.ofAuto().allocate(Math.max(1L, (long) numPatches * elemBytes), elemBytes);
+			for (int i = 0; i < numPatches; i++) {
+				PTypeIO.set(seg, (long) i * elemBytes, ptype, patchBits.get(i));
+			}
+			return seg;
+		}
 	}
 
 	private static final class Decoder {
