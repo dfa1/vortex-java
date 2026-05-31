@@ -76,19 +76,19 @@ written: /var/folders/dq/w0lpx2tj70g0cgv4ckcyth740000gn/T/junit-7248856963330236
 | `fastlanes.delta`      | `DeltaEncoding`        | ✅ | ✅ | — | integer PTypes |
 | `fastlanes.bitpacked`  | `BitpackedEncoding`    | ✅ | ✅ | — | unsigned integer PTypes |
 | `vortex.null`          | `NullEncoding`         | ✅ | ✅ | — | Null |
-| `vortex.bytebool`      | `ByteBoolEncoding`     | ✅ | trivial | `boolean[]` → 1 byte/elem | Bool |
-| `vortex.zigzag`        | `ZigZagEncoding`       | ✅ | trivial | `(v<<1)^(v>>63)`, delegate | signed integer PTypes |
-| `fastlanes.for`        | `FrameOfReferenceEncoding` | ✅ | low | find min, emit deltas child | integer PTypes |
-| `vortex.runend`        | `RunEndEncoding`       | ✅ | low | scan runs → ends + values arrays | Primitive, Utf8/Binary, Bool |
-| `vortex.constant`      | `ConstantEncoding`     | ✅ | low | validate uniform, emit `ScalarValue` proto | Primitive, Utf8, Binary, Bool, Null, Decimal, Extension |
-| `vortex.sparse`        | `SparseEncoding`       | ✅ | medium | collect non-fill indices + values; needs fill-value detection | Primitive |
-| `vortex.varbin`        | `VarBinEncoding`       | ✅ | medium | offsets buf + bytes buf + `VarBinMetadata` proto | Utf8, Binary |
-| `vortex.sequence`      | `SequenceEncoding`     | ✅ | ❌ stub | detect arithmetic progression (base + i×step) | Primitive |
-| `vortex.struct`        | `StructEncoding`       | ✅ | medium | encode each field, emit children | Struct |
+| `vortex.bytebool`      | `ByteBoolEncoding`     | ✅ | ✅ | — | Bool |
+| `vortex.zigzag`        | `ZigZagEncoding`       | ✅ | ✅ | — | signed integer PTypes |
+| `fastlanes.for`        | `FrameOfReferenceEncoding` | ✅ | ✅ | — | integer PTypes |
+| `vortex.runend`        | `RunEndEncoding`       | ✅ | ✅ | — | Primitive, Utf8/Binary, Bool |
+| `vortex.constant`      | `ConstantEncoding`     | ✅ | ✅ | — | Primitive, Utf8, Binary, Bool, Null, Decimal, Extension |
+| `vortex.sparse`        | `SparseEncoding`       | ✅ | ❌ stub | — | Primitive |
+| `vortex.varbin`        | `VarBinEncoding`       | ✅ | ✅ | — | Utf8, Binary |
+| `vortex.sequence`      | `SequenceEncoding`     | ✅ | ❌ stub | — | Primitive |
+| `vortex.struct`        | `StructEncoding`       | ✅ | ❌ stub | — | Struct |
 | `vortex.ext`           | `ExtEncoding`          | ✅ | ✅ | — | Extension |
-| `vortex.alp`           | `AlpEncoding`          | ✅ | hard | ALP float quantization + patch residuals | F64, F32 |
-| `vortex.fsst`          | `FsstEncoding`         | ✅ | hard | FSST symbol-table building | Utf8, Binary |
-| `vortex.varbinview`    | `VarBinViewEncoding`   | ✅ | hard | 16-byte view layout + inline vs heap split | Utf8, Binary |
+| `vortex.alp`           | `AlpEncoding`          | ✅ | ✅ | — | F64, F32 |
+| `vortex.fsst`          | `FsstEncoding`         | ✅ | ❌ stub | — | Utf8, Binary |
+| `vortex.varbinview`    | `VarBinViewEncoding`   | ✅ | ❌ stub | — | Utf8, Binary |
 | `vortex.pco`           | `PcoEncoding`          | ❌ stub | ❌ | very hard — ANS + bin tokenization not ported | Primitive |
 
 ### Missing
