@@ -1,37 +1,38 @@
 # vortex-java
 
 [![CI](https://github.com/dfa1/vortex-java/actions/workflows/ci.yml/badge.svg)](https://github.com/dfa1/vortex-java/actions)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/license/Apache-2.0)
 
 > **Alpha** — not production-ready. APIs will change without notice.
 
 Pure-Java reader/writer for the [Vortex](https://github.com/spiraldb/vortex) columnar file format.
 
-Vortex is a shared open format with multiple independent implementations (Rust, Go, Java).
-Files written by any implementation are readable by all others — no vendor lock-in, no
-format translation at the boundary.
+From (https://vortex.dev/blog/btrblocks-compressor):
+> We've written about individual compression codecs in Vortex before: FastLanes for bit-packing integers, FSST for strings, and ALP for floating point. But we've never explained how Vortex decides which codec to use for a given column, or how it layers multiple codecs on top of each other.
 
-## Status
+> On TPC-H at scale factor 10, Vortex files are 38% smaller and decompress 10–25x faster than Parquet with ZSTD, without using any general-purpose compression. The difference comes down to how the codecs are selected and composed, a framework inspired by the BtrBlocks paper from TU Munich.
 
-- Pure-Java reader for primitive, sequence, ALP, dict, FSST (stable)
-- Local (mmap) or Remote (HTTPS, single read of last 65K) (stable)
-- Writer: in progress
-- Benchmark vs Rust+JNI: Java beats JNI 1.5×–11.5× across read/write workloads (see Benchmarks)
-- **File size trade-off:** Java-written files are larger than Rust-written files (up to ~2×
-  with `cascading(3)`). The Rust writer applies more compression passes; the Java writer
-  covers ALP, bitpacking, and FSST but not the full Rust encoding set yet. Files are still
-  significantly smaller than CSV. Cross-implementation verified by `FileSizeComparisonIntegrationTest`.
-- Full encoding coverage: in progress
-- Vectorized decode paths (Panama Vector API): planned
-- Iceberg/Spark/Flink integration: not available yet
+🎓 Maximilian Kuschewski, David Sauerwein, Adnan Alhomssi, and Viktor Leis. 2023. BtrBlocks: Efficient Columnar Compression for Data Lakes. Proc. ACM Manag. Data 1, 2, Article 118 (June 2023). > https://doi.org/10.1145/3589263
+
+> The core idea: don't pick one codec. Try them all, and let the data decide.
 
 ## Motivation
+
+This is a third-party implementation with the idea that files written by any implementation
+are readable by all others — no vendor lock-in, no format translation at the boundary.
+
+| Project                                                     | Language | Notes                                                               |
+|-------------------------------------------------------------|----------|---------------------------------------------------------------------|
+| [spiraldb/vortex](https://github.com/spiraldb/vortex)       | Rust     | Reference implementation + JNI bindings                             |
+| [spiraldb/vortex-go](https://github.com/spiraldb/vortex-go) | Go       | Pure-language port                     
 
 The official Vortex ecosystem provides JVM bindings via JNI (bundled native `.so`/`.dylib`).
 JNI bindings are fast but add deployment friction: platform-specific artifacts, native build
 toolchains, and crash-domain coupling between the JVM and native code.
 
 This library takes a different approach — 100% Java, no JNI, no `sun.misc.Unsafe`.
-It uses the Java FFM API (`MemorySegment` / `Arena`, Java 25+) for zero-copy memory-mapped reads, making it easier to:
+It uses the Java FFM API (`MemorySegment` / `Arena`, Java 25+) for zero-copy memory-mapped reads, 
+making it easier to:
 
 - embed in any JVM project without native-library management
 - build and test on any platform with a standard JDK
@@ -43,136 +44,6 @@ It uses the Java FFM API (`MemorySegment` / `Arena`, Java 25+) for zero-copy mem
 - JVM-based OLAP systems
 - Anyone who wants mmap‑backed, zero‑copy columnar reads without first decompressing
   the whole file (or row chunk)
-
-### Why fewer layers = faster
-
-```
-  vortex-jni                              vortex-java
-  ──────────────────────────────          ──────────────────────────
-  ┌──────────────────────────┐            ┌──────────────────────┐
-  │  Java App                │            │  Java App            │
-  │  (BigIntVector.get(i))   │            │  (buffer.getAtIndex) │
-  └────────────┬─────────────┘            └──────────┬───────────┘
-               │ Arrow Java API                      │ FFM API
-  ┌────────────▼─────────────┐                       │ (MemorySegment,
-  │  Apache Arrow (Java)     │                       │  zero-copy slice)
-  │  VectorSchemaRoot,       │                       │
-  │  BigIntVector, …         │                       │
-  └────────────┬─────────────┘            ┌──────────▼───────────┐
-               │ Arrow C Data Interface   │  OS mmap region      │
-               │ (ArrowArray/ArrowSchema) │  (file on disk)      │
-               │ + JNI boundary crossing  └──────────────────────┘
-  ┌────────────▼─────────────┐
-  │  Native lib              │
-  │  (.so / .dylib)          │
-  │  Rust decode             │
-  └────────────┬─────────────┘
-               │ mmap / read
-  ┌────────────▼─────────────┐
-  │  OS mmap region          │
-  │  (file on disk)          │
-  └──────────────────────────┘
-
-  4 layers, 1 JNI crossing,              2 layers, 0 boundary crossings,
-  Arrow C Data Interface overhead         no intermediate format
-```
-
-The JNI path pays three costs per batch: (1) a JNI boundary crossing to call into native
-code, (2) the Arrow C Data Interface handshake to pass decoded buffers back to the JVM as
-`ArrowArray`/`ArrowSchema` structs, and (3) materialising the result into Apache Arrow
-`VectorSchemaRoot` objects before the application can read a single value. The JIT cannot
-inline or optimise across the JNI boundary.
-
-`vortex-java` eliminates all of that. The FFM API (`MemorySegment`) gives Java code a
-typed, bounds-checked view directly into the OS mmap region — the same physical memory the
-file occupies. Decoding reads bytes directly from that view with no copies, no intermediate
-Arrow format, and no boundary crossings. The JIT sees the full decode path as ordinary Java
-bytecode.
-
-## Benchmarks
-
-JMH throughput (ops/s = full-file scans per second). Higher is better.
-
-**Environment:** Apple M5, OpenJDK 27-jep401ea3 (Valhalla EA), 3 warmup × 3 s, 5 measurement × 5 s, fork 1.
-
-### OHLC read — 10 M rows, 58.9 MB (Rust-written file, single-column projection)
-
-| Benchmark      | Java (ops/s)     | JNI/Rust (ops/s) | Java speedup |
-|----------------|------------------|------------------|--------------|
-| close (F64/ALP)| 76.7 ± 0.3       | 50.4 ± 2.8       | **1.5×**     |
-| volume (I64)   | 127.9 ± 2.3      | 52.9 ± 0.6       | **2.4×**     |
-| symbol (varbin)| 110.4 ± 0.4      | 9.6 ± 0.9        | **11.5×**    |
-
-### OHLC write — 10 M rows
-
-| Benchmark | Java (ops/s) | JNI/Rust (ops/s) | Java speedup |
-|-----------|--------------|------------------|--------------|
-| write     | 4.4 ± 1.1    | 0.7 ± 0.1        | **6.4×**     |
-
-### Big-file scan — 100 M rows × 4 I64 columns, ~3 GB (Rust-written file, all columns)
-
-| Benchmark | Java (ops/s) | JNI/Rust (ops/s) | Java speedup |
-|-----------|--------------|------------------|--------------|
-| scan      | 20.4 ± 0.9   | 5.7 ± 0.6        | **3.6×**     |
-
-## Design principles
-
-- Zero-copy everywhere
-- No JNI
-- No Unsafe -- [FFM vs Unsafe](https://inside.java/2025/06/12/ffm-vs-unsafe/) — Maurizio Cimadamore's deep-dive on why FFM (`MemorySegment`/`Arena`) supersedes `sun.misc.Unsafe`: safety, performance, and the JVM's path forward
-- Align with vortex-rust and Vortex-go semantics
-- Make the JIT happy (constant layouts, predictable strides, no virtual dispatch in hot loops)
-- Prepare for the Vector API / Valhalla
-- Rigorous testing: unit tests + property-based testing + cross-language integration tests
-
-### Testing strategy
-
-Unit tests verify internal correctness (encoding round-trips, edge cases), but the format has no
-formal specification — the Rust implementation is the ground truth. Unit tests alone miss
-cross-language wire-format bugs: Java can round-trip a value internally while writing bytes that
-another implementation cannot decode.
-
-The `integration` module addresses this by using the Rust JNI reader as a **test oracle**:
-Java writes a file, the Rust reader decodes it, and the values are compared exactly.
-[Property-based testing](https://jqwik.net/) (jqwik) generates large, diverse inputs automatically,
-covering edge cases no hand-written test would anticipate.
-
-This combination caught two real bugs in ALP floating-point encoding:
-- Java selected exponents outside the range Rust's decoder accepts (silent data corruption)
-- Java's encode round-trip check used a different floating-point associativity than Rust's decode
-  (`encoded * (F10[f] * IF10[e])` vs `(encoded * F10[f]) * IF10[e]`), passing values that Rust
-  decoded differently
-
-Both bugs were invisible to pure-Java tests and would have shipped undetected without the
-cross-language oracle.
-
-## Implementations
-
-| Project                                                     | Language | Notes                                                               |
-|-------------------------------------------------------------|----------|---------------------------------------------------------------------|
-| [spiraldb/vortex](https://github.com/spiraldb/vortex)       | Rust     | Reference implementation + JNI bindings                             |
-| [spiraldb/vortex-go](https://github.com/spiraldb/vortex-go) | Go       | Pure-language port                                                  |
-| [dfa1/vortex-java](https://github.com/dfa1/vortex-java)     | Java     | This project — FFM-based, no JNI, no Unsafe                        |
-
-All three implementations share the same binary format and can read each other's files.
-
-
-## Serialization formats
-
-The format uses two serialization libraries for different roles:
-
-| Format          | Used for                             | Why                                                                                    |
-|-----------------|--------------------------------------|----------------------------------------------------------------------------------------|
-| **FlatBuffers** | Footer, Layout, Array structure      | Zero-copy random access — fields read directly from memory-mapped bytes, no allocation |
-| **Protobuf**    | Codec metadata, DType, Scalar values | Schema evolution and cross-language compatibility for small blobs                      |
-
-FlatBuffers suit the file-structure layer: the footer is parsed once at open and the layout tree is traversed during
-scan — both benefit from direct field access on mapped memory. Protobuf suits codec metadata: tiny blobs parsed once per
-chunk, where schema evolution matters more than zero-copy speed.
-
-Replacing protobuf with FlatBuffers is not viable — existing `.vortex` files produced by the Rust reference
-implementation embed protobuf bytes in codec metadata blobs, and wire compatibility requires matching the format
-exactly.
 
 ## Quickstart
 
@@ -308,6 +179,9 @@ java -jar cli/target/vortex.jar import data/trades.csv
 # writes data/trades.vortex, prints size savings
 ```
 
+
+# Development
+
 ## Requirements
 
 - Java 25+
@@ -340,6 +214,123 @@ java -jar performance/target/benchmarks.jar RustVsJavaWriteBenchmark.javaWrite
 java -jar performance/target/benchmarks.jar
 ```
 
-## License
+## Design principles
 
-Apache 2.0
+- Zero-copy everywhere
+- No JNI
+- No Unsafe -- [FFM vs Unsafe](https://inside.java/2025/06/12/ffm-vs-unsafe/) — Maurizio Cimadamore's deep-dive on why FFM (`MemorySegment`/`Arena`) supersedes `sun.misc.Unsafe`: safety, performance, and the JVM's path forward
+- Align with vortex-rust and Vortex-go semantics
+- Make the JIT happy (constant layouts, predictable strides, no virtual dispatch in hot loops)
+- Prepare for the Vector API / Valhalla
+- Rigorous testing: unit tests + property-based testing + cross-language integration tests
+- Target Vector API as soon it is available https://openjdk.org/jeps/338
+
+### Testing strategy
+
+Unit tests verify internal correctness (encoding round-trips, edge cases), but the format has no
+formal specification — the Rust implementation is the ground truth. Unit tests alone miss
+cross-language wire-format bugs: Java can round-trip a value internally while writing bytes that
+another implementation cannot decode.
+
+The `integration` module addresses this by using the Rust JNI reader as a **test oracle**:
+Java writes a file, the Rust reader decodes it, and the values are compared exactly.
+[Property-based testing](https://jqwik.net/) (jqwik) generates large, diverse inputs automatically,
+covering edge cases no hand-written test would anticipate.
+
+This combination caught two real bugs in ALP floating-point encoding:
+- Java selected exponents outside the range Rust's decoder accepts (silent data corruption)
+- Java's encode round-trip check used a different floating-point associativity than Rust's decode
+  (`encoded * (F10[f] * IF10[e])` vs `(encoded * F10[f]) * IF10[e]`), passing values that Rust
+  decoded differently
+
+Both bugs were invisible to pure-Java tests and would have shipped undetected without the
+cross-language oracle.
+
+## Reference
+                             |
+
+## Benchmarks
+
+JMH throughput (ops/s = full-file scans per second). Higher is better.
+
+**Environment:** Apple M5, OpenJDK 25, 3 warmup × 3 s, 5 measurement × 5 s, fork 1.
+
+### OHLC read — 10 M rows, 58.9 MB (Rust-written file, single-column projection)
+
+| Benchmark      | Java (ops/s)     | JNI/Rust (ops/s) | Java speedup |
+|----------------|------------------|------------------|--------------|
+| close (F64/ALP)| 76.7 ± 0.3       | 50.4 ± 2.8       | **1.5×**     |
+| volume (I64)   | 127.9 ± 2.3      | 52.9 ± 0.6       | **2.4×**     |
+| symbol (varbin)| 110.4 ± 0.4      | 9.6 ± 0.9        | **11.5×**    |
+
+### OHLC write — 10 M rows
+
+| Benchmark | Java (ops/s) | JNI/Rust (ops/s) | Java speedup |
+|-----------|--------------|------------------|--------------|
+| write     | 4.4 ± 1.1    | 0.7 ± 0.1        | **6.4×**     |
+
+* the Java part is faster but also produces bigger files (there much more work there)
+
+### Big-file scan — 100 M rows × 4 I64 columns, ~3 GB (Rust-written file, all columns)
+
+| Benchmark | Java (ops/s) | JNI/Rust (ops/s) | Java speedup |
+|-----------|--------------|------------------|--------------|
+| scan      | 20.4 ± 0.9   | 5.7 ± 0.6        | **3.6×**     |
+
+### Why fewer layers = faster
+
+This is my hypothesis: 
+```
+  vortex-jni                              vortex-java
+  ──────────────────────────────          ──────────────────────────
+  ┌──────────────────────────┐            ┌──────────────────────┐
+  │  Java App                │            │  Java App            │
+  │  (BigIntVector.get(i))   │            │  (buffer.getAtIndex) │
+  └────────────┬─────────────┘            └──────────┬───────────┘
+               │ Arrow Java API                      │ FFM API
+  ┌────────────▼─────────────┐                       │ (MemorySegment,
+  │  Apache Arrow (Java)     │                       │  zero-copy slice)
+  │  VectorSchemaRoot,       │                       │
+  │  BigIntVector, …         │                       │
+  └────────────┬─────────────┘            ┌──────────▼───────────┐
+               │ Arrow C Data Interface   │  OS mmap region      │
+               │ (ArrowArray/ArrowSchema) │  (file on disk)      │
+               │ + JNI boundary crossing  └──────────────────────┘
+  ┌────────────▼─────────────┐
+  │  Native lib              │
+  │  (.so / .dylib)          │
+  │  Rust decode             │
+  └────────────┬─────────────┘
+               │ mmap / read
+  ┌────────────▼─────────────┐
+  │  OS mmap region          │
+  │  (file on disk)          │
+  └──────────────────────────┘
+
+  4 layers, 1 JNI crossing,              2 layers, 0 boundary crossings,
+  Arrow C Data Interface overhead         no intermediate format
+```
+
+The JNI path pays three costs per batch: (1) a JNI boundary crossing to call into native
+code, (2) the Arrow C Data Interface handshake to pass decoded buffers back to the JVM as
+`ArrowArray`/`ArrowSchema` structs, and (3) materialising the result into Apache Arrow
+`VectorSchemaRoot` objects before the application can read a single value. The JIT cannot
+inline or optimise across the JNI boundary.
+
+`vortex-java` eliminates all of that. The FFM API (`MemorySegment`) gives Java code a
+typed, bounds-checked view directly into the OS mmap region — the same physical memory the
+file occupies. Decoding reads bytes directly from that view with no copies, no intermediate
+Arrow format, and no boundary crossings. The JIT sees the full decode path as ordinary Java
+bytecode.
+
+## Contributing
+
+Forks and contributions are welcome! Please feel free to fork the repository and open a pull request. 
+When submitting a PR, include tests and update documentation where applicable 
+(follow guidelines in CLAUDE.md).
+
+### AI-assisted development 
+
+This project uses [Claude Code](https://claude.ai/code) heavily for implementation
+work — generating mapping, test generation and documentation. 
+**Architecture, API design, and all decisions are human-driven**.

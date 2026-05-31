@@ -32,6 +32,8 @@ written: /var/folders/dq/w0lpx2tj70g0cgv4ckcyth740000gn/T/junit-7248856963330236
 
 ## Build
 
+- [ ] add BOM module
+- [ ] deploy to maven central
 - [ ] drop warnings about flatbuffers
 ```shell
 [WARNING] ****************************************************************************************************************************************************
