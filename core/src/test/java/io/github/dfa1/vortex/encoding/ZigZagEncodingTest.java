@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.IntArray;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -23,127 +24,135 @@ class ZigZagEncodingTest {
 	private static final DType I32_DTYPE = new DType.Primitive(PType.I32, false);
 	private static final DType I64_DTYPE = new DType.Primitive(PType.I64, false);
 
-	private static DecodeContext buildI32Ctx(int[] encodedUnsigned) {
-		ByteBuffer buf = ByteBuffer.allocate(encodedUnsigned.length * 4).order(ByteOrder.LITTLE_ENDIAN);
-		for (int v : encodedUnsigned) {
-			buf.putInt(v);
+	@Nested
+	class Decode {
+
+		@ParameterizedTest(name = "{0}")
+		@MethodSource("i32Cases")
+		void decode_i32_zigzagDecodesCorrectly(String name, int[] encoded, int[] expected) {
+			// Given
+			DecodeContext ctx = buildI32Ctx(encoded);
+			var sut = new ZigZagEncoding();
+
+			// When
+			var result = sut.decode(ctx);
+
+			// Then
+			assertThat(result).isInstanceOf(IntArray.class);
+			assertThat(result.length()).isEqualTo(expected.length);
+			MemorySegment seg = result.buffer(0);
+			for (int i = 0; i < expected.length; i++) {
+				assertThat(seg.get(ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), (long) i * 4))
+						.as("index %d", i).isEqualTo(expected[i]);
+			}
 		}
-		buf.flip();
-		MemorySegment seg = MemorySegment.ofBuffer(buf);
 
-		ArrayNode primitiveNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0}, null);
-		ArrayNode zigzagNode = new ArrayNode(EncodingId.VORTEX_ZIGZAG, null, new ArrayNode[]{primitiveNode}, new int[0], null);
+		@Test
+		void decode_empty_returnsEmptyArray() {
+			// Given
+			DecodeContext ctx = buildI32Ctx(new int[]{});
+			var sut = new ZigZagEncoding();
 
-		EncodingRegistry registry = EncodingRegistry.empty();
-		registry.register(new ZigZagEncoding());
-		registry.register(new PrimitiveEncoding());
-		return new DecodeContext(zigzagNode, I32_DTYPE, encodedUnsigned.length,
-				new MemorySegment[]{seg}, registry, Arena.ofAuto());
-	}
+			// When
+			var result = sut.decode(ctx);
 
-	static Stream<Arguments> i32Cases() {
-		return Stream.of(
-				// zigzag: 0→0, 1→-1, 2→1, 3→-2, 4→2
-				Arguments.of("zeros", new int[]{0, 0, 0}, new int[]{0, 0, 0}),
-				Arguments.of("mixed", new int[]{0, 1, 2, 3, 4}, new int[]{0, -1, 1, -2, 2}),
-				Arguments.of("large", new int[]{Integer.MAX_VALUE & ~1, (Integer.MAX_VALUE & ~1) | 1},
-						new int[]{Integer.MAX_VALUE / 2, Integer.MIN_VALUE / 2})
-		);
-	}
-
-	@ParameterizedTest(name = "{0}")
-	@MethodSource("i32Cases")
-	void decode_i32_zigzagDecodesCorrectly(String name, int[] encoded, int[] expected) {
-		// Given
-		DecodeContext ctx = buildI32Ctx(encoded);
-		var sut = new ZigZagEncoding();
-
-		// When
-		var result = sut.decode(ctx);
-
-		// Then
-		assertThat(result).isInstanceOf(IntArray.class);
-		assertThat(result.length()).isEqualTo(expected.length);
-		MemorySegment seg = result.buffer(0);
-		for (int i = 0; i < expected.length; i++) {
-			assertThat(seg.get(ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), (long) i * 4))
-					.as("index %d", i).isEqualTo(expected[i]);
+			// Then
+			assertThat(result.length()).isZero();
 		}
-	}
 
-	static Stream<int[]> i32RoundtripArrays() {
-		return Stream.of(
-				new int[]{},
-				new int[]{0},
-				new int[]{-1, 1, -2, 2},
-				new int[]{Integer.MIN_VALUE, Integer.MAX_VALUE, 0},
-				new int[]{-100, 0, 100, -1000, 1000}
-		);
-	}
+		static Stream<Arguments> i32Cases() {
+			return Stream.of(
+					// zigzag: 0→0, 1→-1, 2→1, 3→-2, 4→2
+					Arguments.of("zeros", new int[]{0, 0, 0}, new int[]{0, 0, 0}),
+					Arguments.of("mixed", new int[]{0, 1, 2, 3, 4}, new int[]{0, -1, 1, -2, 2}),
+					Arguments.of("large", new int[]{Integer.MAX_VALUE & ~1, (Integer.MAX_VALUE & ~1) | 1},
+							new int[]{Integer.MAX_VALUE / 2, Integer.MIN_VALUE / 2})
+			);
+		}
 
-	static Stream<long[]> i64RoundtripArrays() {
-		return Stream.of(
-				new long[]{},
-				new long[]{0L},
-				new long[]{Long.MIN_VALUE, Long.MAX_VALUE, 0L},
-				new long[]{-1L, 1L, -2L, 2L}
-		);
-	}
+		private static DecodeContext buildI32Ctx(int[] encodedUnsigned) {
+			ByteBuffer buf = ByteBuffer.allocate(encodedUnsigned.length * 4).order(ByteOrder.LITTLE_ENDIAN);
+			for (int v : encodedUnsigned) {
+				buf.putInt(v);
+			}
+			buf.flip();
+			MemorySegment seg = MemorySegment.ofBuffer(buf);
 
-	@ParameterizedTest
-	@MethodSource("i32RoundtripArrays")
-	void encodeDecode_i32_isLossless(int[] data) {
-		// Given
-		var sut = new ZigZagEncoding();
-		EncodingRegistry registry = EncodingRegistry.empty();
-		registry.register(sut);
-		registry.register(new PrimitiveEncoding());
-		var le = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			ArrayNode primitiveNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0}, null);
+			ArrayNode zigzagNode = new ArrayNode(EncodingId.VORTEX_ZIGZAG, null, new ArrayNode[]{primitiveNode}, new int[0], null);
 
-		// When
-		EncodeResult encoded = sut.encode(I32_DTYPE, data);
-		DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, I32_DTYPE, registry);
-		Array result = sut.decode(ctx);
-
-		// Then
-		assertThat(result.length()).isEqualTo(data.length);
-		for (int i = 0; i < data.length; i++) {
-			assertThat(result.buffer(0).get(le, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
+			EncodingRegistry registry = EncodingRegistry.empty();
+			registry.register(new ZigZagEncoding());
+			registry.register(new PrimitiveEncoding());
+			return new DecodeContext(zigzagNode, I32_DTYPE, encodedUnsigned.length,
+					new MemorySegment[]{seg}, registry, Arena.ofAuto());
 		}
 	}
 
-	@ParameterizedTest
-	@MethodSource("i64RoundtripArrays")
-	void encodeDecode_i64_isLossless(long[] data) {
-		// Given
-		var sut = new ZigZagEncoding();
-		EncodingRegistry registry = EncodingRegistry.empty();
-		registry.register(sut);
-		registry.register(new PrimitiveEncoding());
-		var le = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+	@Nested
+	class Encode {
 
-		// When
-		EncodeResult encoded = sut.encode(I64_DTYPE, data);
-		DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, I64_DTYPE, registry);
-		Array result = sut.decode(ctx);
+		@ParameterizedTest
+		@MethodSource("i32RoundtripArrays")
+		void encodeDecode_i32_isLossless(int[] data) {
+			// Given
+			var sut = new ZigZagEncoding();
+			EncodingRegistry registry = EncodingRegistry.empty();
+			registry.register(sut);
+			registry.register(new PrimitiveEncoding());
+			var le = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
-		// Then
-		assertThat(result.length()).isEqualTo(data.length);
-		for (int i = 0; i < data.length; i++) {
-			assertThat(result.buffer(0).get(le, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
+			// When
+			EncodeResult encoded = sut.encode(I32_DTYPE, data);
+			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, I32_DTYPE, registry);
+			Array result = sut.decode(ctx);
+
+			// Then
+			assertThat(result.length()).isEqualTo(data.length);
+			for (int i = 0; i < data.length; i++) {
+				assertThat(result.buffer(0).get(le, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
+			}
 		}
-	}
 
-	@Test
-	void decode_empty_returnsEmptyArray() {
-		// Given
-		DecodeContext ctx = buildI32Ctx(new int[]{});
-		var sut = new ZigZagEncoding();
+		@ParameterizedTest
+		@MethodSource("i64RoundtripArrays")
+		void encodeDecode_i64_isLossless(long[] data) {
+			// Given
+			var sut = new ZigZagEncoding();
+			EncodingRegistry registry = EncodingRegistry.empty();
+			registry.register(sut);
+			registry.register(new PrimitiveEncoding());
+			var le = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
-		// When
-		var result = sut.decode(ctx);
+			// When
+			EncodeResult encoded = sut.encode(I64_DTYPE, data);
+			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, I64_DTYPE, registry);
+			Array result = sut.decode(ctx);
 
-		// Then
-		assertThat(result.length()).isZero();
+			// Then
+			assertThat(result.length()).isEqualTo(data.length);
+			for (int i = 0; i < data.length; i++) {
+				assertThat(result.buffer(0).get(le, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
+			}
+		}
+
+		static Stream<int[]> i32RoundtripArrays() {
+			return Stream.of(
+					new int[]{},
+					new int[]{0},
+					new int[]{-1, 1, -2, 2},
+					new int[]{Integer.MIN_VALUE, Integer.MAX_VALUE, 0},
+					new int[]{-100, 0, 100, -1000, 1000}
+			);
+		}
+
+		static Stream<long[]> i64RoundtripArrays() {
+			return Stream.of(
+					new long[]{},
+					new long[]{0L},
+					new long[]{Long.MIN_VALUE, Long.MAX_VALUE, 0L},
+					new long[]{-1L, 1L, -2L, 2L}
+			);
+		}
 	}
 }

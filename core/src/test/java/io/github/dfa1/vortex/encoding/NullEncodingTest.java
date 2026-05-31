@@ -14,13 +14,6 @@ class NullEncodingTest {
 
 	private static final DType NULL_DTYPE = new DType.Null(true);
 
-	private static DecodeContext buildNullCtx(long rowCount) {
-		ArrayNode node = new ArrayNode(EncodingId.VORTEX_NULL, null, new ArrayNode[0], new int[0], null);
-		EncodingRegistry registry = EncodingRegistry.empty();
-		registry.register(new NullEncoding());
-		return new DecodeContext(node, NULL_DTYPE, rowCount, new MemorySegment[0], registry, Arena.ofAuto());
-	}
-
 	@Nested
 	class Encode {
 
@@ -60,20 +53,27 @@ class NullEncodingTest {
 	@Nested
 	class Decode {
 
-	@Test
-	void decode_nullArray_returnsNullArrayWithCorrectLength() {
-		// Given
-		long rowCount = 42L;
-		DecodeContext ctx = buildNullCtx(rowCount);
-		var sut = new NullEncoding();
+		@Test
+		void decode_nullArray_returnsNullArrayWithCorrectLength() {
+			// Given
+			long rowCount = 42L;
+			DecodeContext ctx = buildNullCtx(rowCount);
+			var sut = new NullEncoding();
 
-		// When
-		var result = sut.decode(ctx);
+			// When
+			var result = sut.decode(ctx);
 
-		// Then
-		assertThat(result).isInstanceOf(NullArray.class);
-		assertThat(result.length()).isEqualTo(rowCount);
-		assertThat(result.dtype()).isEqualTo(NULL_DTYPE);
-	}
+			// Then
+			assertThat(result).isInstanceOf(NullArray.class);
+			assertThat(result.length()).isEqualTo(rowCount);
+			assertThat(result.dtype()).isEqualTo(NULL_DTYPE);
+		}
+
+		private static DecodeContext buildNullCtx(long rowCount) {
+			ArrayNode node = new ArrayNode(EncodingId.VORTEX_NULL, null, new ArrayNode[0], new int[0], null);
+			EncodingRegistry registry = EncodingRegistry.empty();
+			registry.register(new NullEncoding());
+			return new DecodeContext(node, NULL_DTYPE, rowCount, new MemorySegment[0], registry, Arena.ofAuto());
+		}
 	}
 }

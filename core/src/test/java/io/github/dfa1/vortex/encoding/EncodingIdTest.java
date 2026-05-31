@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.encoding;
 
 import io.github.dfa1.vortex.core.VortexException;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -10,35 +11,43 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class EncodingIdTest {
 
-	@ParameterizedTest
-	@EnumSource(EncodingId.class)
-	void from_knownId_roundTrips(EncodingId id) {
-		// Given / When
-		EncodingId result = EncodingId.from(id.id());
+	@Nested
+	class From {
 
-		// Then
-		assertThat(result).isSameAs(id);
+		@ParameterizedTest
+		@EnumSource(EncodingId.class)
+		void from_knownId_roundTrips(EncodingId id) {
+			// Given / When
+			EncodingId result = EncodingId.from(id.id());
+
+			// Then
+			assertThat(result).isSameAs(id);
+		}
+
+		@Test
+		void from_unknownId_throwsVortexException() {
+			// Given / When / Then
+			assertThatThrownBy(() -> EncodingId.from("vortex.does.not.exist"))
+					.isInstanceOf(VortexException.class)
+					.hasMessageContaining("vortex.does.not.exist");
+		}
 	}
 
-	@Test
-	void from_unknownId_throwsVortexException() {
-		// Given / When / Then
-		assertThatThrownBy(() -> EncodingId.from("vortex.does.not.exist"))
-				.isInstanceOf(VortexException.class)
-				.hasMessageContaining("vortex.does.not.exist");
-	}
+	@Nested
+	class Properties {
 
-	@ParameterizedTest
-	@EnumSource(EncodingId.class)
-	void id_isNonBlankString(EncodingId id) {
-		// Given / When / Then
-		assertThat(id.id()).isNotBlank();
-	}
+		@ParameterizedTest
+		@EnumSource(EncodingId.class)
+		void id_isNonBlankString(EncodingId id) {
+			// Given / When / Then
+			assertThat(id.id()).isNotBlank();
+		}
 
-	@ParameterizedTest
-	@EnumSource(EncodingId.class)
-	void toString_equalsId(EncodingId id) {
-		// Given / When / Then
-		assertThat(id.toString()).isEqualTo(id.id());
+		@ParameterizedTest
+		@EnumSource(EncodingId.class)
+		void toString_equalsId(EncodingId id) {
+			// Given / When / Then
+			assertThat(id.toString()).isEqualTo(id.id());
+		}
 	}
 }
