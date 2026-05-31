@@ -16,7 +16,6 @@
 
 ## Testing
 
-- [ ] missing unit tests for VarBinArray
 - [ ] a lot of tests are doing "new String(array.getBytes()", let's add a method there
 - [ ] lots of repetitions like in every test
 ```java
