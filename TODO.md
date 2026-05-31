@@ -28,6 +28,35 @@
       Warm up the file in `@Setup`; measure decode throughput (rows/s). Compare against `javaRead()`
       (no cascading) and `jniRead()` to show the cascading cost/benefit at read time.
 
+## Testing
+
+- [ ] missing unit tests for VarBinArray
+- [ ] a lot of tests are doing "new String(array.getBytes()", let's add a method there
+- [ ] lots of repetitions like in every test
+```java
+   private static final DType I64 = new DType.Primitive(PType.I64, false);
+	private static final ValueLayout.OfLong LE_LONG =
+			ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+```
+- [ ] fix weird output in CliIT
+```
+[INFO] Running io.github.dfa1.vortex.cli.CliIT
+written: /var/folders/dq/w0lpx2tj70g0cgv4ckcyth740000gn/T/junit-724885696333023617/data.vortex  (15 B → 888 B, -5820.0% smaller, cascading depth 3)
+```
+
+## Build
+
+- [ ] drop warnings about flatbuffers
+```shell
+[WARNING] ****************************************************************************************************************************************************
+[WARNING] * Required filename-based automodules detected: [flatbuffers-java-25.2.10.jar]. Please don't publish this project to a public artifact repository! *
+[WARNING] ****************************************************************************************************************************************************
+```
+- [ ] warnings about using dfa1 as module name
+```
+[WARNING] /Users/dfa/projects/vortex-java/csv/src/main/java/module-info.java:[1,17] module name component dfa1 should avoid terminal digits
+```
+
 ## Tooling
 
 
@@ -131,4 +160,5 @@
 | `clickbench_hits_5k.regular.vortex` | ❌  | `vortex.pco`                  |
 
 **Score: 18/35** (including `for.vortex` scanned separately from `scan_fixture_decodesAllRows`)
+
 
