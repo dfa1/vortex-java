@@ -8,11 +8,15 @@ import dev.vortex.api.ScanOptions;
 import dev.vortex.api.Session;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
+import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.encoding.EncodingRegistry;
 import io.github.dfa1.vortex.io.VortexReader;
+import io.github.dfa1.vortex.writer.VortexWriter;
+import io.github.dfa1.vortex.writer.WriteOptions;
 import io.github.dfa1.vortex.scan.ScanResult;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
@@ -43,13 +47,16 @@ import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 
 import java.io.IOException;
-import java.util.Arrays;
+import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
@@ -95,12 +102,27 @@ public class RustVsJavaReadBenchmark {
 		NativeLoader.loadJni();
 	}
 
+	private static final DType.Struct JAVA_SCHEMA = new DType.Struct(
+			List.of("date", "symbol", "open", "high", "low", "close", "volume"),
+			List.of(
+					new DType.Primitive(PType.I32, false),
+					new DType.Utf8(false),
+					new DType.Primitive(PType.F64, false),
+					new DType.Primitive(PType.F64, false),
+					new DType.Primitive(PType.F64, false),
+					new DType.Primitive(PType.F64, false),
+					new DType.Primitive(PType.I64, false)
+			),
+			false);
+
 	private static final Object FILE_LOCK = new Object();
 	private static Path sharedBenchFile;
 	private static boolean sharedOwnFile;
+	private static Path sharedCascadingFile;
 	private static int sharedRefCount;
 
 	private Path benchFile;
+	private Path cascadingFile;
 	private EncodingRegistry registry;
 	private BufferAllocator allocator;
 
@@ -129,8 +151,16 @@ public class RustVsJavaReadBenchmark {
 							Files.size(sharedBenchFile) / 1_048_576.0);
 				}
 			}
+			if (sharedCascadingFile == null) {
+				sharedCascadingFile = Files.createTempFile("ohlc-java-cascading", ".vtx");
+				System.out.printf("[RustVsJavaReadBenchmark] writing %d OHLC rows (cascading depth 3) via Java...%n", TOTAL_ROWS);
+				writeJavaCascading(sharedCascadingFile);
+				System.out.printf("[RustVsJavaReadBenchmark] cascading file size: %.1f MB%n",
+						Files.size(sharedCascadingFile) / 1_048_576.0);
+			}
 			sharedRefCount++;
 			benchFile = sharedBenchFile;
+			cascadingFile = sharedCascadingFile;
 		}
 	}
 
@@ -138,9 +168,15 @@ public class RustVsJavaReadBenchmark {
 	public void cleanup() throws IOException {
 		synchronized (FILE_LOCK) {
 			sharedRefCount--;
-			if (sharedRefCount == 0 && sharedOwnFile) {
-				Files.deleteIfExists(sharedBenchFile);
-				sharedBenchFile = null;
+			if (sharedRefCount == 0) {
+				if (sharedOwnFile) {
+					Files.deleteIfExists(sharedBenchFile);
+					sharedBenchFile = null;
+				}
+				if (sharedCascadingFile != null) {
+					Files.deleteIfExists(sharedCascadingFile);
+					sharedCascadingFile = null;
+				}
 			}
 		}
 	}
@@ -223,6 +259,23 @@ public class RustVsJavaReadBenchmark {
 		return sum;
 	}
 
+	// ── Cascading (Java-written) benchmarks ──────────────────────────────────
+
+	/// Java read: cascading file (depth 3), project on "volume", sum via fold.
+	@Benchmark
+	public long javaReadCascading() throws IOException {
+		long sum = 0L;
+		try (VortexReader vf = VortexReader.open(cascadingFile, registry)) {
+			var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("volume"));
+			while (iter.hasNext()) {
+				ScanResult r = iter.next();
+				LongArray volume = r.column("volume");
+				sum += volume.fold(0L, Long::sum);
+			}
+		}
+		return sum;
+	}
+
 	// ── JNI file generation ───────────────────────────────────────────────────
 
 	/// Java read: project on "volume", sum all values via fold.
@@ -282,6 +335,59 @@ public class RustVsJavaReadBenchmark {
 		TICKER_BYTES = new byte[NASDAQ_TICKERS.length][];
 		for (int i = 0; i < NASDAQ_TICKERS.length; i++) {
 			TICKER_BYTES[i] = NASDAQ_TICKERS[i].getBytes(StandardCharsets.UTF_8);
+		}
+	}
+
+	private void writeJavaCascading(Path path) throws IOException {
+		int[] epochDays = new int[BATCH_SIZE];
+		String[] symbols = new String[BATCH_SIZE];
+		double[] open = new double[BATCH_SIZE];
+		double[] high = new double[BATCH_SIZE];
+		double[] low = new double[BATCH_SIZE];
+		double[] close = new double[BATCH_SIZE];
+		long[] volume = new long[BATCH_SIZE];
+
+		double[] prices = new double[NASDAQ_TICKERS.length];
+		Arrays.fill(prices, 100.0);
+		var rng = new Random(42L);
+		int day = (int) LocalDate.of(2020, 1, 2).toEpochDay();
+		int rowsLeft = TOTAL_ROWS;
+
+		try (FileChannel ch = FileChannel.open(path,
+				StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
+		     VortexWriter writer = VortexWriter.create(ch, JAVA_SCHEMA, WriteOptions.cascading(3))) {
+			while (rowsLeft > 0) {
+				int n = Math.min(rowsLeft, BATCH_SIZE);
+				for (int i = 0; i < n; i++) {
+					int ticker = i % NASDAQ_TICKERS.length;
+					double px = prices[ticker];
+					double ret = rng.nextGaussian() * 0.02;
+					double o = round(px * (1 + ret * 0.3));
+					double c = round(px * (1 + ret));
+					double spread = Math.abs(px * rng.nextDouble() * 0.03);
+					double h = round(Math.max(o, c) + spread);
+					double l = round(Math.min(o, c) - spread);
+					epochDays[i] = day + i / NASDAQ_TICKERS.length;
+					symbols[i] = NASDAQ_TICKERS[ticker];
+					open[i] = o;
+					high[i] = h;
+					low[i] = l;
+					close[i] = c;
+					volume[i] = Math.max(100_000L, Math.round(1_000_000 + rng.nextGaussian() * 200_000));
+					prices[ticker] = c;
+				}
+				day += n / NASDAQ_TICKERS.length;
+				writer.writeChunk(Map.of(
+						"date",   epochDays,
+						"symbol", symbols,
+						"open",   open,
+						"high",   high,
+						"low",    low,
+						"close",  close,
+						"volume", volume
+				));
+				rowsLeft -= n;
+			}
 		}
 	}
 

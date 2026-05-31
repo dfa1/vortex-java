@@ -152,7 +152,9 @@ Simple encodings (≤ ~80 lines total, e.g. `NullEncoding`, `BoolEncoding`) are 
 
 ## Testing
 
-- All features covered by unit tests. Always check the happy path at minimum.
+- Every feature needs unit tests covering: happy path, negative cases (invalid input, error conditions), and corner cases (empty, zero, max values, boundary conditions).
+- Unit tests must be fast — no file I/O, no network, no sleep. Mock or use in-memory data.
+- Integration tests are critical: there is no formal spec, so interoperability with the Rust reference implementation is the ground truth. Write integration tests for every encoding round-trip and file format boundary.
 - JUnit 5 + Mockito (BDDMockito) + AssertJ.
 - Every test has `// Given` / `// When` / `// Then` sections.
 - Class under test is always named `sut`.
@@ -160,6 +162,7 @@ Simple encodings (≤ ~80 lines total, e.g. `NullEncoding`, `BoolEncoding`) are 
   `given` and `then` — not `willReturn`/`willThrow`.
 - Prefer `@ParameterizedTest` over copy-pasting tests. Use `@ValueSource` when possible; `@ArgumentsSource` when more
   structure needed (test case must have a name).
+- Use property-based tests (`@Property`) for encoding/decoding logic where input space is large — they find corner cases that example tests miss.
 - Acceptance tests run the built jar end-to-end with hosh scripts.
 - Use `@Nested` to group related tests by scenario or feature within a test class:
   ```java

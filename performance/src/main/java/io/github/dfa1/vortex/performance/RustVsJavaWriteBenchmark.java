@@ -130,6 +130,7 @@ public class RustVsJavaWriteBenchmark {
 
 	private Path jniFile;
 	private Path javaFile;
+	private Path javaFileCascading;
 	private BufferAllocator allocator;
 
 	private static double round(double v) {
@@ -141,6 +142,7 @@ public class RustVsJavaWriteBenchmark {
 		allocator = ArrowAllocation.rootAllocator();
 		jniFile = Files.createTempFile("ohlc-jni-write", ".vtx");
 		javaFile = Files.createTempFile("ohlc-java-write", ".vtx");
+		javaFileCascading = Files.createTempFile("ohlc-java-cascading-write", ".vtx");
 
 		batchDates   = new int[NUM_BATCHES][BATCH_SIZE];
 		batchSymbols = new String[NUM_BATCHES][BATCH_SIZE];
@@ -183,8 +185,15 @@ public class RustVsJavaWriteBenchmark {
 
 	@TearDown(Level.Trial)
 	public void cleanup() throws IOException {
+		if (Files.exists(javaFile) && Files.exists(javaFileCascading)) {
+			long plain = Files.size(javaFile);
+			long cascading = Files.size(javaFileCascading);
+			System.out.printf("[RustVsJavaWriteBenchmark] cascading/plain size ratio: %.3f (%d B / %d B)%n",
+					(double) cascading / plain, cascading, plain);
+		}
 		Files.deleteIfExists(jniFile);
 		Files.deleteIfExists(javaFile);
+		Files.deleteIfExists(javaFileCascading);
 	}
 
 	/// JNI write: encode and write 10 M rows via Rust VortexWriter.
@@ -197,6 +206,28 @@ public class RustVsJavaWriteBenchmark {
 			}
 		}
 		return Files.size(jniFile);
+	}
+
+	/// Java write with cascading compression (depth 3): ALP → FOR → bitpacked.
+	@Benchmark
+	public long javaWriteCascading() throws IOException {
+		try (FileChannel ch = FileChannel.open(javaFileCascading,
+				StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
+		     VortexWriter writer = VortexWriter.create(ch, JAVA_SCHEMA, WriteOptions.cascading(3))) {
+			for (int b = 0; b < NUM_BATCHES; b++) {
+				Map<String, Object> chunk = Map.of(
+						"date",   batchDates[b],
+						"symbol", batchSymbols[b],
+						"open",   batchOpen[b],
+						"high",   batchHigh[b],
+						"low",    batchLow[b],
+						"close",  batchClose[b],
+						"volume", batchVolume[b]
+				);
+				writer.writeChunk(chunk);
+			}
+		}
+		return Files.size(javaFileCascading);
 	}
 
 	/// Java write: encode and write 10 M rows via Java VortexWriter.

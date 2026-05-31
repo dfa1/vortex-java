@@ -14,20 +14,6 @@
     - Capture JMH JSON + JFR profile alongside README table; cite hardware (CPU model), JDK build (`java -version`),
       and benchmark commit SHA so numbers don't rot silently.
 
-- [ ] **#13 Cascading compressor — remaining follow-ups**
-    - [ ] **Cross-compat test**: Add `JavaWritesRustReadsIntegrationTest` in the `integration` module.
-      Write OHLC data with `WriteOptions.cascading(3)` via Java writer; read it back with the Rust JNI
-      reader and assert values round-trip correctly. Same OHLC schema / dataset as `RustVsJavaWriteBenchmark`.
-    - [ ] **Benchmark — cascading write variants**: In `RustVsJavaWriteBenchmark`, add:
-        - `javaWriteCascading()` — same body as `javaWrite()` but use `WriteOptions.cascading(3)` instead of `WriteOptions.defaults()`
-        - After both `javaWrite` and `javaWriteCascading` run, log the compressed-bytes ratio
-          (`javaWriteCascading file size / javaWrite file size`) via a JMH `AuxCounters` or a
-          `@TearDown` print so it appears in the benchmark output.
-    - [ ] **Benchmark — cascading read variants**: In `RustVsJavaReadBenchmark`, add a
-      `javaReadCascading()` method that reads a file written with `WriteOptions.cascading(3)`.
-      Warm up the file in `@Setup`; measure decode throughput (rows/s). Compare against `javaRead()`
-      (no cascading) and `jniRead()` to show the cascading cost/benefit at read time.
-
 ## Testing
 
 - [ ] missing unit tests for VarBinArray
