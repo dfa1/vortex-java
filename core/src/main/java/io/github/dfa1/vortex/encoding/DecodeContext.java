@@ -12,7 +12,7 @@ import java.nio.ByteBuffer;
 /// Buffers are `MemorySegment` slices materialized from the file's segment table;
 /// children are decoded recursively via [#decodeChild(int)].
 /// The arena is scoped to one chunk epoch — all decode output allocated from it is
-/// valid until the next [io.github.dfa1.vortex.scan.ScanIterator#hasNext()] call.
+/// valid until the next chunk is opened.
 public record DecodeContext(
 		ArrayNode node,
 		DType dtype,

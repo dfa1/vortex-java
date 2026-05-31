@@ -38,10 +38,10 @@ public final class CsvImporter {
         String[] headers;
         int dataStart;
         if (options.hasHeader()) {
-            headers = rows.get(0);
+            headers = rows.getFirst();
             dataStart = 1;
         } else {
-            headers = generateHeaders(rows.get(0).length);
+            headers = generateHeaders(rows.getFirst().length);
             dataStart = 0;
         }
 

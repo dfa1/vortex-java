@@ -89,6 +89,6 @@ class CsvExporterTest {
         // Then
         List<String> lines = Files.readAllLines(csv);
         assertThat(lines).hasSize(1);
-        assertThat(lines.get(0)).isEqualTo("7");
+        assertThat(lines.getFirst()).isEqualTo("7");
     }
 }

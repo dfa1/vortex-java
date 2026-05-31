@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import org.junit.jupiter.api.Test;
 
+import java.lang.foreign.MemorySegment;
 import java.util.List;
 import java.util.Set;
 
@@ -58,7 +59,7 @@ class CascadingCompressorTest {
 		EncodeResult result = sut.encode(F64, values);
 
 		// Then - cascaded result should be smaller than raw primitive (4096 * 8 = 32768 bytes)
-		long totalBytes = result.buffers().stream().mapToLong(s -> s.byteSize()).sum();
+		long totalBytes = result.buffers().stream().mapToLong(MemorySegment::byteSize).sum();
 		assertThat(totalBytes).isLessThan(4096L * 8);
 	}
 

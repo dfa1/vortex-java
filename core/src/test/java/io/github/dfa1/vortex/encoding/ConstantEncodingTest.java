@@ -21,20 +21,20 @@ class ConstantEncodingTest {
 
 	static Stream<Arguments> i32ConstantArrays() {
 		return Stream.of(
-				Arguments.of(new int[]{0}),
-				Arguments.of(new int[]{42, 42, 42}),
-				Arguments.of(new int[]{Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE}),
-				Arguments.of(new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE}),
-				Arguments.of(new int[]{-1, -1, -1, -1, -1})
+				Arguments.of((Object) new int[]{0}),
+				Arguments.of((Object) new int[]{42, 42, 42}),
+				Arguments.of((Object) new int[]{Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE}),
+				Arguments.of((Object) new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE}),
+				Arguments.of((Object) new int[]{-1, -1, -1, -1, -1})
 		);
 	}
 
 	static Stream<Arguments> i64ConstantArrays() {
 		return Stream.of(
-				Arguments.of(new long[]{0L}),
-				Arguments.of(new long[]{100L, 100L, 100L}),
-				Arguments.of(new long[]{Long.MIN_VALUE, Long.MIN_VALUE}),
-				Arguments.of(new long[]{Long.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE})
+				Arguments.of((Object) new long[]{0L}),
+				Arguments.of((Object) new long[]{100L, 100L, 100L}),
+				Arguments.of((Object) new long[]{Long.MIN_VALUE, Long.MIN_VALUE}),
+				Arguments.of((Object) new long[]{Long.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE})
 		);
 	}
 

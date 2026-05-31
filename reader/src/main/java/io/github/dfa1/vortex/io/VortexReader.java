@@ -212,7 +212,7 @@ public final class VortexReader implements VortexHandle {
 		if (layout.isFlat() || layout.isDict()) {
 			out.add(layout);
 		} else if (layout.isZoned() && !layout.children().isEmpty()) {
-			collectFlats(layout.children().get(0), out);
+			collectFlats(layout.children().getFirst(), out);
 		} else if (layout.isChunked()) {
 			int start = (layout.metadata() != null
 					&& layout.metadata().hasRemaining()

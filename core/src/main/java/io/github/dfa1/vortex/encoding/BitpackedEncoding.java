@@ -77,8 +77,7 @@ public final class BitpackedEncoding implements Encoding {
 			if (n > 0) {
 				signedMin = longs[0];
 				signedMax = longs[0];
-				for (int i = 0; i < n; i++) {
-					long v = longs[i];
+				for (long v : longs) {
 					if (unsign ? Long.compareUnsigned(v, signedMin) < 0 : v < signedMin) {
 						signedMin = v;
 					}

@@ -8,7 +8,7 @@ import io.github.dfa1.vortex.core.VortexException;
 ///
 /// Not implemented: the PEncoding wire format requires a port of the ANS decoder,
 /// delta predictions, and bin tokenization from the upstream `pco` Rust crate
-/// (https://github.com/mwlon/pcodec). No mainstream Java port exists.
+/// ([pcodec](https://github.com/mwlon/pcodec)). No mainstream Java port exists.
 ///
 /// Registered so files using this encoding fail with a clear attributed error
 /// instead of "no encoding for encoding". Replace this stub once a Java port lands.

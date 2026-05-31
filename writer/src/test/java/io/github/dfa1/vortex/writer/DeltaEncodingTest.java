@@ -65,7 +65,7 @@ class DeltaEncodingTest {
 		try (var vf = VortexReader.open(file, deltaRegistry())) {
 			List<ScanResult> results = scanAll(vf);
 			assertThat(results).hasSize(1);
-			Array arr = results.get(0).columns().get("ts");
+			Array arr = results.getFirst().columns().get("ts");
 			assertThat(arr.length()).isEqualTo(5L);
 			var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 			for (int i = 0; i < data.length; i++) {
@@ -90,7 +90,7 @@ class DeltaEncodingTest {
 		// Then
 		try (var vf = VortexReader.open(file, deltaRegistry())) {
 			List<ScanResult> results = scanAll(vf);
-			Array arr = results.get(0).columns().get("ts");
+			Array arr = results.getFirst().columns().get("ts");
 			var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 			for (int i = 0; i < data.length; i++) {
 				assertThat(arr.buffer(0).get(layout, (long) i * 8)).isEqualTo(data[i]);
@@ -114,7 +114,7 @@ class DeltaEncodingTest {
 		// Then
 		try (var vf = VortexReader.open(file, deltaRegistry())) {
 			List<ScanResult> results = scanAll(vf);
-			Array arr = results.get(0).columns().get("ts");
+			Array arr = results.getFirst().columns().get("ts");
 			var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 			for (int i = 0; i < data.length; i++) {
 				assertThat(arr.buffer(0).get(layout, (long) i * 8)).isEqualTo(42L);
@@ -138,7 +138,7 @@ class DeltaEncodingTest {
 		// Then
 		try (var vf = VortexReader.open(file, deltaRegistry())) {
 			List<ScanResult> results = scanAll(vf);
-			Array arr = results.get(0).columns().get("ts");
+			Array arr = results.getFirst().columns().get("ts");
 			assertThat(arr.length()).isEqualTo(1L);
 			var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 			assertThat(arr.buffer(0).get(layout, 0L)).isEqualTo(99L);
@@ -161,7 +161,7 @@ class DeltaEncodingTest {
 		// Then
 		try (var vf = VortexReader.open(file, deltaRegistry())) {
 			List<ScanResult> results = scanAll(vf);
-			Array arr = results.get(0).columns().get("ts");
+			Array arr = results.getFirst().columns().get("ts");
 			var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 			for (int i = 0; i < data.length; i++) {
 				assertThat(arr.buffer(0).get(layout, (long) i * 8)).isEqualTo(data[i]);
@@ -228,7 +228,7 @@ class DeltaEncodingTest {
 		try (var vf = VortexReader.open(file, deltaRegistry())) {
 			List<ScanResult> results = scanAll(vf);
 			assertThat(results).hasSize(1);
-			Array arr = results.get(0).columns().get("ts");
+			Array arr = results.getFirst().columns().get("ts");
 			assertThat(arr.length()).isEqualTo((long) n);
 			var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 			for (int i = 0; i < n; i++) {

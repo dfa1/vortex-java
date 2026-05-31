@@ -31,6 +31,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -663,7 +664,13 @@ class JavaWritesRustReadsIntegrationTest {
 
 	private static void deleteDir(Path dir) throws IOException {
 		try (var walk = Files.walk(dir)) {
-			walk.sorted(Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
+			walk.sorted(Comparator.reverseOrder()).forEach(p -> {
+				try {
+					Files.delete(p);
+				} catch (IOException e) {
+					throw new UncheckedIOException(e);
+				}
+			});
 		}
 	}
 }

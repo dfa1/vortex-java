@@ -105,7 +105,7 @@ class CsvImporterTest {
         // Then
         try (VortexReader reader = VortexReader.open(vortex)) {
             DType.Struct schema = (DType.Struct) reader.dtype();
-            assertThat(schema.fieldTypes().get(0)).isEqualTo(new DType.Utf8(false));
+            assertThat(schema.fieldTypes().getFirst()).isEqualTo(new DType.Utf8(false));
             try (ScanIterator iter = reader.scan(ScanOptions.all())) {
                 assertThat(iter.hasNext()).isTrue();
                 ScanResult chunk = iter.next();

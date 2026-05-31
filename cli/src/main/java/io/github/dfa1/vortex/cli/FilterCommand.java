@@ -120,9 +120,6 @@ final class FilterCommand {
     private static RowPredicate toRowPredicate(ParsedFilter pf) {
         return (chunk, rowIdx) -> {
             Array arr = chunk.column(pf.column());
-            if (arr == null) {
-                return false;
-            }
             int cmp = compareValue(arr, rowIdx, pf.value());
             return switch (pf.op()) {
                 case GT  -> cmp > 0;

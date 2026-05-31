@@ -29,7 +29,7 @@ class BitpackedEncodingPatchesTest {
 		BitpackedEncoding sut = new BitpackedEncoding();
 		EncodeResult packed = sut.encode(I32_DTYPE, base);
 
-		MemorySegment packedSeg = packed.buffers().get(0);
+		MemorySegment packedSeg = packed.buffers().getFirst();
 		byte[] packedBytes = packedSeg.toArray(java.lang.foreign.ValueLayout.JAVA_BYTE);
 
 		// Build new BitPackedMetadata that re-uses the packed bytes but advertises patches.

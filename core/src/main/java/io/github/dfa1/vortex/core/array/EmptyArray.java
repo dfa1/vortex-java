@@ -4,18 +4,7 @@ import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 
 /// Zero-length [Array] returned by [Array#empty]. Has no buffers or children.
-public final class EmptyArray implements Array {
-
-	private final DType dtype;
-
-	public EmptyArray(DType dtype) {
-		this.dtype = dtype;
-	}
-
-	@Override
-	public DType dtype() {
-		return dtype;
-	}
+public record EmptyArray(DType dtype) implements Array {
 
 	@Override
 	public long length() {

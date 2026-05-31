@@ -29,7 +29,7 @@ class PostscriptParserBigSegmentTest {
 
 		// Then
 		assertThat(footer.segmentSpecs()).hasSize(1);
-		SegmentSpec spec = footer.segmentSpecs().get(0);
+		SegmentSpec spec = footer.segmentSpecs().getFirst();
 		assertThat(spec.offset()).isEqualTo(bigOffset);
 		assertThat(spec.length())
 				.as("u32 segment length above Integer.MAX_VALUE must not be truncated")

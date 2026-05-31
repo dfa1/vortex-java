@@ -65,7 +65,7 @@ class DictEncodingTest {
 		try (var vf = VortexReader.open(file, registry)) {
 			List<ScanResult> results = scanAll(vf, ScanOptions.all());
 			assertThat(results).hasSize(1);
-			Array arr = results.get(0).columns().get("category");
+			Array arr = results.getFirst().columns().get("category");
 			assertThat(arr.length()).isEqualTo(6L);
 			var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 			var buf = arr.buffer(0);
@@ -98,7 +98,7 @@ class DictEncodingTest {
 		try (var vf = VortexReader.open(file, registry)) {
 			List<ScanResult> results = scanAll(vf, ScanOptions.all());
 			assertThat(results).hasSize(1);
-			Array arr = results.get(0).columns().get("category");
+			Array arr = results.getFirst().columns().get("category");
 			assertThat(arr.length()).isEqualTo(4L);
 			var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 			var buf = arr.buffer(0);

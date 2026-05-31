@@ -122,9 +122,9 @@ class RustWritesJavaReadsIntegrationTest {
 		try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
 			List<ScanResult> results = scanAll(vf);
 			assertThat(results).hasSize(1);
-			assertThat(results.get(0).rowCount()).isEqualTo(3L);
-			assertThat(toLongs(results.get(0))).containsExactly(1L, 2L, 3L);
-			assertThat(toDoubles(results.get(0))).containsExactly(1.1, 2.2, 3.3);
+			assertThat(results.getFirst().rowCount()).isEqualTo(3L);
+			assertThat(toLongs(results.getFirst())).containsExactly(1L, 2L, 3L);
+			assertThat(toDoubles(results.getFirst())).containsExactly(1.1, 2.2, 3.3);
 		}
 	}
 
@@ -160,9 +160,9 @@ class RustWritesJavaReadsIntegrationTest {
 		try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
 			List<ScanResult> results = scanAll(vf, io.github.dfa1.vortex.scan.ScanOptions.columns("id"));
 			assertThat(results).hasSize(1);
-			assertThat(results.get(0).columns()).containsKey("id");
-			assertThat(results.get(0).columns()).doesNotContainKey("value");
-			assertThat(toLongs(results.get(0))).containsExactly(10L, 20L);
+			assertThat(results.getFirst().columns()).containsKey("id");
+			assertThat(results.getFirst().columns()).doesNotContainKey("value");
+			assertThat(toLongs(results.getFirst())).containsExactly(10L, 20L);
 		}
 	}
 

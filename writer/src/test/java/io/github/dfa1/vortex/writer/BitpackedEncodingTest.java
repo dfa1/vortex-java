@@ -64,7 +64,7 @@ class BitpackedEncodingTest {
 		try (var vf = VortexReader.open(file, bpRegistry())) {
 			List<ScanResult> results = scanAll(vf);
 			assertThat(results).hasSize(1);
-			Array arr = results.get(0).columns().get("value");
+			Array arr = results.getFirst().columns().get("value");
 			assertThat(arr.length()).isEqualTo(8L);
 			var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 			for (int i = 0; i < data.length; i++) {
@@ -90,7 +90,7 @@ class BitpackedEncodingTest {
 		try (var vf = VortexReader.open(file, bpRegistry())) {
 			List<ScanResult> results = scanAll(vf);
 			assertThat(results).hasSize(1);
-			Array arr = results.get(0).columns().get("value");
+			Array arr = results.getFirst().columns().get("value");
 			var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 			for (int i = 0; i < data.length; i++) {
 				assertThat(arr.buffer(0).get(layout, (long) i * 4)).isEqualTo(42);
@@ -115,7 +115,7 @@ class BitpackedEncodingTest {
 		try (var vf = VortexReader.open(file, bpRegistry())) {
 			List<ScanResult> results = scanAll(vf);
 			assertThat(results).hasSize(1);
-			Array arr = results.get(0).columns().get("value");
+			Array arr = results.getFirst().columns().get("value");
 			var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 			for (int i = 0; i < data.length; i++) {
 				assertThat(arr.buffer(0).get(layout, (long) i * 4)).isEqualTo(data[i]);
@@ -184,7 +184,7 @@ class BitpackedEncodingTest {
 		try (var vf = VortexReader.open(file, bpRegistry())) {
 			List<ScanResult> results = scanAll(vf);
 			assertThat(results).hasSize(1);
-			Array arr = results.get(0).columns().get("value");
+			Array arr = results.getFirst().columns().get("value");
 			var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 			for (int i = 0; i < data.length; i++) {
 				assertThat(arr.buffer(0).get(layout, (long) i * 4))

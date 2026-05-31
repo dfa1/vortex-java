@@ -52,7 +52,7 @@ public final class CsvExporter {
     }
 
     /// Like [#exportCsv(Path, Writer, ExportOptions)] but with zone-map chunk pruning
-    /// ([ScanOptions#rowFilter]) and a row-level predicate applied after decoding.
+    /// ([ScanOptions#rowFilter()]) and a row-level predicate applied after decoding.
     public static void exportCsvFiltered(Path vortexPath, Writer out, ExportOptions options,
                                          ScanOptions scanOptions, RowPredicate predicate) throws IOException {
         Writer shielded = new FilterWriter(out) {

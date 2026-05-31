@@ -56,7 +56,7 @@ public final class StructEncoding implements Encoding {
 				int fieldOffset = hasValidity ? 1 : 0;
 
 				if (nfields == 1) {
-					DType fieldDtype = structDtype.fieldTypes().get(0);
+					DType fieldDtype = structDtype.fieldTypes().getFirst();
 					ArrayNode fieldNode = ctx.node().children()[fieldOffset];
 					var fieldCtx = new DecodeContext(fieldNode, fieldDtype, ctx.rowCount(),
 							ctx.segmentBuffers(), ctx.registry(), ctx.arena());

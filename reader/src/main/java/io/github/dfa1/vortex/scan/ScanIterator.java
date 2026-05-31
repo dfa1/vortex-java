@@ -73,7 +73,7 @@ public final class ScanIterator implements AutoCloseable {
 		} else if (layout.isZoned()) {
 			// vortex.stats wraps one child (the data layout) — pass through for data
 			if (!layout.children().isEmpty()) {
-				collectFlats(layout.children().get(0), out);
+				collectFlats(layout.children().getFirst(), out);
 			}
 		} else if (layout.isChunked()) {
 			// metadata[0] == 1 means children[0] is the per-chunk stats layout; skip it
@@ -202,11 +202,11 @@ public final class ScanIterator implements AutoCloseable {
 		Layout[] layouts = chunk.columnLayouts();
 		int n = projectedNames.size();
 		if (n == 1) {
-			Array arr = decodeLayout(layouts[0], projectedDtypes.get(0), chunkArena);
+			Array arr = decodeLayout(layouts[0], projectedDtypes.getFirst(), chunkArena);
 			if (arr instanceof StructArray sa) {
 				return expandStruct(sa);
 			}
-			return Map.of(projectedNames.get(0), arr);
+			return Map.of(projectedNames.getFirst(), arr);
 		}
 		if (n == 2) {
 			return Map.of(
@@ -239,7 +239,7 @@ public final class ScanIterator implements AutoCloseable {
 			return decodeDictLayout(layout, dtype, arena);
 		}
 		if (layout.isZoned() && !layout.children().isEmpty()) {
-			return decodeLayout(layout.children().get(0), dtype, arena);
+			return decodeLayout(layout.children().getFirst(), dtype, arena);
 		}
 		if (layout.isChunked()) {
 			var flats = new ArrayList<Layout>();
@@ -254,7 +254,7 @@ public final class ScanIterator implements AutoCloseable {
 			throw new VortexException(EncodingId.VORTEX_CHUNKED, "no flat children");
 		}
 		if (flats.size() == 1) {
-			return decodeFlat(flats.get(0), dtype, arena);
+			return decodeFlat(flats.getFirst(), dtype, arena);
 		}
 		PType ptype = ((DType.Primitive) dtype).ptype();
 		MemorySegment combined = arena.allocate(totalRows * ptype.byteSize());
@@ -281,7 +281,7 @@ public final class ScanIterator implements AutoCloseable {
 		if (flat.segments().isEmpty()) {
 			throw new VortexException(EncodingId.VORTEX_FLAT, "no segments");
 		}
-		int segIdx = flat.segments().get(0);
+		int segIdx = flat.segments().getFirst();
 		SegmentSpec spec = file.footer().segmentSpecs().get(segIdx);
 		MemorySegment seg = file.slice(spec.offset(), spec.length());
 		return file.registry().decodeSegment(seg, file.footer().arraySpecs(), dtype, flat.rowCount(), arena);

@@ -108,7 +108,7 @@ class ZoneMapPruningTest {
 
 		// Then
 		assertThat(results).hasSize(1);
-		assertThat(results.get(0).rowCount()).isEqualTo(50L); // chunk 2
+		assertThat(results.getFirst().rowCount()).isEqualTo(50L); // chunk 2
 	}
 
 	@Test
@@ -123,7 +123,7 @@ class ZoneMapPruningTest {
 
 		// Then
 		assertThat(results).hasSize(1);
-		assertThat(results.get(0).rowCount()).isEqualTo(50L); // chunk 2
+		assertThat(results.getFirst().rowCount()).isEqualTo(50L); // chunk 2
 	}
 
 	@Test

@@ -86,8 +86,8 @@ class VortexWriterTest {
 		try (var vf = VortexReader.open(file, registry)) {
 			List<ScanResult> results = scanAll(vf, ScanOptions.all());
 			assertThat(results).hasSize(1);
-			assertThat(results.get(0).rowCount()).isEqualTo(3L);
-			assertThat(results.get(0).columns()).containsKeys("id", "value");
+			assertThat(results.getFirst().rowCount()).isEqualTo(3L);
+			assertThat(results.getFirst().columns()).containsKeys("id", "value");
 		}
 	}
 
@@ -132,7 +132,7 @@ class VortexWriterTest {
 		try (var vf = VortexReader.open(file, registry)) {
 			List<ScanResult> results = scanAll(vf, ScanOptions.all());
 			assertThat(results).hasSize(1);
-			Array idArray = results.get(0).columns().get("id");
+			Array idArray = results.getFirst().columns().get("id");
 			assertThat(idArray.length()).isEqualTo(3L);
 			MemorySegment buf = idArray.buffer(0);
 			assertThat(buf.get(ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), 0)).isEqualTo(42L);
@@ -156,7 +156,7 @@ class VortexWriterTest {
 		var registry = primitiveRegistry();
 		try (var vf = VortexReader.open(file, registry)) {
 			List<ScanResult> results = scanAll(vf, ScanOptions.all());
-			LongArray idArray = results.get(0).column("id");
+			LongArray idArray = results.getFirst().column("id");
 
 			// Then
 			assertThat(idArray.fold(0L, Long::sum)).isEqualTo(60L);
@@ -177,7 +177,7 @@ class VortexWriterTest {
 		var registry = primitiveRegistry();
 		try (var vf = VortexReader.open(file, registry)) {
 			List<ScanResult> results = scanAll(vf, ScanOptions.all());
-			ScanResult sut = results.get(0);
+			ScanResult sut = results.getFirst();
 			assertThatThrownBy(() -> sut.column("nonexistent"))
 					.hasMessageContaining("unknown column: nonexistent");
 		}
@@ -200,8 +200,8 @@ class VortexWriterTest {
 		try (var vf = VortexReader.open(file, registry)) {
 			List<ScanResult> results = scanAll(vf, ScanOptions.columns("id"));
 			assertThat(results).hasSize(1);
-			assertThat(results.get(0).columns()).containsKey("id");
-			assertThat(results.get(0).columns()).doesNotContainKey("value");
+			assertThat(results.getFirst().columns()).containsKey("id");
+			assertThat(results.getFirst().columns()).doesNotContainKey("value");
 		}
 	}
 }

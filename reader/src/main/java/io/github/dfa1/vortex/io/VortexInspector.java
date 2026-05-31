@@ -63,7 +63,7 @@ public final class VortexInspector {
 
 	private static void collectLayoutEncodings(Layout layout, VortexHandle reader, Set<String> used) {
 		if (layout.isFlat() && !layout.segments().isEmpty()) {
-			int segIdx = layout.segments().get(0);
+			int segIdx = layout.segments().getFirst();
 			SegmentSpec spec = reader.footer().segmentSpecs().get(segIdx);
 			if (spec.compression().code == 0) {
 				MemorySegment seg = reader.slice(spec.offset(), spec.length());
@@ -90,8 +90,9 @@ public final class VortexInspector {
 
 	// ── Layout tree ───────────────────────────────────────────────────────────
 
+	@SuppressWarnings("SameParameterValue")
 	private static void appendLayout(StringBuilder sb, Layout layout, List<String> colNames,
-	                                  VortexHandle reader, String indent) {
+	                                 VortexHandle reader, String indent) {
 		if (layout.isStruct()) {
 			sb.append(indent).append("struct (").append(layout.rowCount()).append(" rows)\n");
 			for (int i = 0; i < layout.children().size(); i++) {
@@ -119,16 +120,17 @@ public final class VortexInspector {
 		}
 		sb.append(" → ");
 		if (layout.children().size() == 1) {
-			appendLayoutInline(sb, layout.children().get(0));
+			appendLayoutInline(sb, layout.children().getFirst());
 		} else {
 			sb.append(layout.children().size()).append("× [");
-			appendLayoutInline(sb, layout.children().get(0));
+			appendLayoutInline(sb, layout.children().getFirst());
 			sb.append("]");
 		}
 	}
 
 	// ── Formatting ────────────────────────────────────────────────────────────
 
+	@SuppressWarnings("SameParameterValue")
 	private static void appendSchema(StringBuilder sb, DType dtype, String indent) {
 		if (dtype instanceof DType.Struct s) {
 			int maxLen = s.fieldNames().stream().mapToInt(String::length).max().orElse(0);
