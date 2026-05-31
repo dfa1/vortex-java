@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## What it is
+
+Java 25 native implementation of the [Vortex](https://github.com/spiraldb/vortex) columnar file format. Uses FFM (
+`MemorySegment`/`Arena`) instead of JNI or `sun.misc.Unsafe`.
+
+
 ## Commands
 
 Build prerequisites: `brew install flatbuffers protobuf` (flatc + protoc must be on PATH).
@@ -35,24 +41,6 @@ Never use `mvn install` or `./mvwn install`.
 # Run specific benchmark method (always use ClassName.methodName filter)
 ./mvnw compile exec:java -pl performance -am -DskipTests -Dexec.args="RustVsJavaReadBenchmark.javaReadVolume"
 ```
-
-## Architecture
-
-Java 25 native implementation of the [Vortex](https://github.com/spiraldb/vortex) columnar file format. Uses FFM (
-`MemorySegment`/`Arena`) instead of JNI or `sun.misc.Unsafe`.
-
-### Module dependency chain
-
-```
-core → reader
-     → writer
-```
-
-| Module   | Responsibility                                                                                                                                                                                       |
-|----------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `core`   | Logical types (`DType`, `PType`), file-structure model (`Layout`, `Footer`, `SegmentSpec`, `CompressionScheme`), encoding layer (`Array`, `Decoder`/`DecoderRegistry`, `ArrayNode`, `DecodeContext`) |
-| `reader` | `VortexFile` (memory-mapped file handle), `PostscriptParser`, `ScanIterator` (chunk-by-chunk reads), `ScanOptions`, `RowFilter` (zone-map predicate tree)                                            |
-| `writer` | `VortexWriter` (encodes and writes chunks), `WriteOptions`                                                                                                                                           |
 
 ### File format
 
@@ -93,10 +81,6 @@ MemorySegment out = ctx.arena().allocate(n * elemBytes);
 If the allocation is in a private static helper that doesn't receive `DecodeContext`, add an `Arena arena` parameter
 and pass `ctx.arena()` from the `decode()` call site.
 
-### Implementation status
-
-Core read/write path is functional. See `TODO.md` for open work and roadmap.
-
 ## Reference implementation
 
 When stuck on encoding/decoding behavior, consult the Rust reference implementation at
@@ -115,7 +99,6 @@ methods in the Rust source to get the exact protobuf schema, then implement from
 
 ## Code style
 
-- Java 25. No Kotlin, no Gradle.
 - Zero SonarQube bugs/smells policy.
 - No `sun.misc.Unsafe` or internal JDK APIs.
 - Prefer explicit over clever. Fail fast on unhandled cases.
