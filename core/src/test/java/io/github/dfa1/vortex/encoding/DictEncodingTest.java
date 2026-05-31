@@ -13,7 +13,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteOrder;
-import java.nio.charset.StandardCharsets;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -107,7 +106,7 @@ class DictEncodingTest {
 			VarBinArray arr = (VarBinArray) result;
 			assertThat(arr.length()).isEqualTo(data.length);
 			for (int i = 0; i < data.length; i++) {
-				String actual = new String(arr.getBytes(i), StandardCharsets.UTF_8);
+				String actual = arr.getString(i);
 				assertThat(actual).as("index %d", i).isEqualTo(data[i]);
 			}
 		}

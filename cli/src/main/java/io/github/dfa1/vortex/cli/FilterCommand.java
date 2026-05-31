@@ -142,7 +142,7 @@ final class FilterCommand {
             case FloatArray fa  -> compareDouble(fa.getFloat(rowIdx), value);
             case BoolArray ba  -> Boolean.compare(ba.getBoolean(rowIdx), (Boolean) value);
             case VarBinArray va -> {
-                String v = new String(va.getBytes(rowIdx), StandardCharsets.UTF_8);
+                String v = va.getString(rowIdx);
                 yield v.compareTo((String) value);
             }
             default -> throw new IllegalArgumentException(

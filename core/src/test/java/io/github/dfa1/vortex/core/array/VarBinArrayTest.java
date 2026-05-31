@@ -47,8 +47,8 @@ class VarBinArrayTest {
 			VarBinArray sut = of("hello", "world");
 
 			// When / Then
-			assertThat(new String(sut.getBytes(0), StandardCharsets.UTF_8)).isEqualTo("hello");
-			assertThat(new String(sut.getBytes(1), StandardCharsets.UTF_8)).isEqualTo("world");
+			assertThat(sut.getString(0)).isEqualTo("hello");
+			assertThat(sut.getString(1)).isEqualTo("world");
 		}
 
 		@Test
@@ -125,9 +125,9 @@ class VarBinArrayTest {
 			VarBinArray sut = ofDict(new String[]{"foo", "bar"}, new int[]{1, 0, 1});
 
 			// When / Then
-			assertThat(new String(sut.getBytes(0), StandardCharsets.UTF_8)).isEqualTo("bar");
-			assertThat(new String(sut.getBytes(1), StandardCharsets.UTF_8)).isEqualTo("foo");
-			assertThat(new String(sut.getBytes(2), StandardCharsets.UTF_8)).isEqualTo("bar");
+			assertThat(sut.getString(0)).isEqualTo("bar");
+			assertThat(sut.getString(1)).isEqualTo("foo");
+			assertThat(sut.getString(2)).isEqualTo("bar");
 		}
 
 		@Test

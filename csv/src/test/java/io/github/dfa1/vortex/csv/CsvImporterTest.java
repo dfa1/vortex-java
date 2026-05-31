@@ -12,7 +12,6 @@ import io.github.dfa1.vortex.scan.ScanResult;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -48,8 +47,8 @@ class CsvImporterTest {
                 assertThat(ids.getLong(0)).isEqualTo(1L);
                 assertThat(ids.getLong(1)).isEqualTo(2L);
                 VarBinArray names = chunk.column("name");
-                assertThat(new String(names.getBytes(0), StandardCharsets.UTF_8)).isEqualTo("Alice");
-                assertThat(new String(names.getBytes(1), StandardCharsets.UTF_8)).isEqualTo("Bob");
+                assertThat(names.getString(0)).isEqualTo("Alice");
+                assertThat(names.getString(1)).isEqualTo("Bob");
             }
         }
     }
@@ -110,7 +109,7 @@ class CsvImporterTest {
                 assertThat(iter.hasNext()).isTrue();
                 ScanResult chunk = iter.next();
                 VarBinArray values = chunk.column("value");
-                assertThat(new String(values.getBytes(0), StandardCharsets.UTF_8)).isEqualTo("42");
+                assertThat(values.getString(0)).isEqualTo("42");
             }
         }
     }

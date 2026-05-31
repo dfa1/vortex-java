@@ -20,7 +20,6 @@ import io.github.dfa1.vortex.scan.ScanResult;
 import java.io.FilterWriter;
 import java.io.IOException;
 import java.io.Writer;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -112,7 +111,7 @@ public final class CsvExporter {
             case DoubleArray da -> Double.toString(da.getDouble(rowIdx));
             case FloatArray fa -> Float.toString(fa.getFloat(rowIdx));
             case BoolArray ba -> Boolean.toString(ba.getBoolean(rowIdx));
-            case VarBinArray va -> new String(va.getBytes(rowIdx), StandardCharsets.UTF_8);
+            case VarBinArray va -> va.getString(rowIdx);
             default -> throw new VortexException(
                     "unsupported array type for CSV export: " + arr.getClass().getSimpleName());
         };

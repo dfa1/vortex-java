@@ -308,9 +308,9 @@ class SparseEncodingTest {
 			VarBinArray varBin = (VarBinArray) result;
 			assertThat(varBin.length()).isEqualTo(5L);
 			assertThat(varBin.getByteLength(0)).isZero();
-			assertThat(new String(varBin.getBytes(1))).isEqualTo("hi");
+			assertThat(varBin.getString(1)).isEqualTo("hi");
 			assertThat(varBin.getByteLength(2)).isZero();
-			assertThat(new String(varBin.getBytes(3))).isEqualTo("bye");
+			assertThat(varBin.getString(3)).isEqualTo("bye");
 			assertThat(varBin.getByteLength(4)).isZero();
 		}
 

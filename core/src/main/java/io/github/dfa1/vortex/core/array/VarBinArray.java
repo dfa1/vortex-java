@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.encoding.PTypeIO;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.nio.charset.StandardCharsets;
 import java.util.function.IntConsumer;
 
 /// Concrete [Array] for variable-length binary / UTF-8 string columns.
@@ -128,6 +129,10 @@ public final class VarBinArray implements Array {
 		byte[] out = new byte[(int) (end - start)];
 		MemorySegment.copy(bytes, start, MemorySegment.ofArray(out), 0, end - start);
 		return out;
+	}
+
+	public String getString(long i) {
+		return new String(getBytes(i), StandardCharsets.UTF_8);
 	}
 
 	public int getByteLength(long i) {
