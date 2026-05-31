@@ -90,7 +90,7 @@ written: /var/folders/dq/w0lpx2tj70g0cgv4ckcyth740000gn/T/junit-7248856963330236
 | `fastlanes.for`              | `FrameOfReferenceEncoding` | ✅       | ✅       | —         | integer PTypes |
 | `vortex.sparse`              | `SparseEncoding`           | ✅       | ✅       | —         | Primitive |
 | `vortex.sequence`            | `SequenceEncoding`         | ✅       | ✅       | —         | Primitive |
-| `vortex.struct`              | `StructEncoding`           | ✅       | ❌ stub  | —         | Struct |
+| `vortex.struct`              | `StructEncoding`           | ✅       | ❌ stub  | medium    | Struct — wire format trivial (no buffers/metadata, children = fields). Blockers: (1) no Java `data` type for structs — need `record StructData(List<Object> fieldArrays)`; (2) `CascadingCompressor` hardcodes primitive arrays (`dataLength`, `sliceSample`). Encoding itself: recurse per field + `remapBufferIndices` (already exists). |
 | `vortex.fsst`                | `FsstEncoding`             | ✅       | ❌ stub  | —         | Utf8, Binary |
 | `vortex.varbinview`          | `VarBinViewEncoding`       | ✅       | ❌ stub  | —         | Utf8, Binary |
 | `vortex.pco`                 | `PcoEncoding` (stub)       | ❌       | ❌       | very hard | ANS + bin tokenization not ported; unblocks `pco.vortex`, tpch/clickbench fixtures |
