@@ -47,7 +47,6 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-antrun-plugin</artifactId>
-				<version>3.1.0</version>
 				<executions>
 					<execution>
 						<id>generate-launcher</id>
@@ -69,7 +68,6 @@ exec java --sun-misc-unsafe-memory-access=allow -jar "$(dirname "$0")/vortex.jar
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-shade-plugin</artifactId>
-				<version>3.6.0</version>
 				<executions>
 					<execution>
 						<phase>package</phase>

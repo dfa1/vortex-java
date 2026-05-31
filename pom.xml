@@ -29,6 +29,10 @@
 		<mockito.version>5.14.2</mockito.version>
 		<jqwik.version>1.9.3</jqwik.version>
 		<fastcsv.version>3.6.0</fastcsv.version>
+		<vortex-jni.version>0.72.0</vortex-jni.version>
+		<arrow.version>19.0.0</arrow.version>
+		<slf4j.version>2.0.18</slf4j.version>
+		<jmh.version>1.37</jmh.version>
 	</properties>
 
 	<dependencyManagement>
@@ -92,6 +96,46 @@
 				<version>${jqwik.version}</version>
 				<scope>test</scope>
 			</dependency>
+			<dependency>
+				<groupId>dev.vortex</groupId>
+				<artifactId>vortex-jni</artifactId>
+				<version>${vortex-jni.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.apache.arrow</groupId>
+				<artifactId>arrow-vector</artifactId>
+				<version>${arrow.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.apache.arrow</groupId>
+				<artifactId>arrow-c-data</artifactId>
+				<version>${arrow.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.apache.arrow</groupId>
+				<artifactId>arrow-memory-unsafe</artifactId>
+				<version>${arrow.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.slf4j</groupId>
+				<artifactId>slf4j-nop</artifactId>
+				<version>${slf4j.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.slf4j</groupId>
+				<artifactId>slf4j-simple</artifactId>
+				<version>${slf4j.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.openjdk.jmh</groupId>
+				<artifactId>jmh-core</artifactId>
+				<version>${jmh.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.openjdk.jmh</groupId>
+				<artifactId>jmh-generator-annprocess</artifactId>
+				<version>${jmh.version}</version>
+			</dependency>
 		</dependencies>
 	</dependencyManagement>
 
@@ -113,6 +157,31 @@
 					<configuration>
 						<argLine>--sun-misc-unsafe-memory-access=allow</argLine>
 					</configuration>
+				</plugin>
+				<plugin>
+					<groupId>org.codehaus.mojo</groupId>
+					<artifactId>exec-maven-plugin</artifactId>
+					<version>3.5.0</version>
+				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-antrun-plugin</artifactId>
+					<version>3.1.0</version>
+				</plugin>
+				<plugin>
+					<groupId>org.codehaus.mojo</groupId>
+					<artifactId>build-helper-maven-plugin</artifactId>
+					<version>3.6.0</version>
+				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-shade-plugin</artifactId>
+					<version>3.6.0</version>
+				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-failsafe-plugin</artifactId>
+					<version>3.5.2</version>
 				</plugin>
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
