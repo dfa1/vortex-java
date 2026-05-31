@@ -1,10 +1,13 @@
 package io.github.dfa1.vortex.encoding;
 
 import com.google.protobuf.InvalidProtocolBufferException;
+import com.google.protobuf.NullValue;
 import io.github.dfa1.vortex.proto.DTypeProtos;
 import io.github.dfa1.vortex.proto.EncodingProtos;
 import io.github.dfa1.vortex.proto.ScalarProtos;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.BoolArray;
+import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
@@ -18,6 +21,7 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -212,6 +216,150 @@ class SparseEncodingTest {
 			assertThat(result.buffer(0).get(layout, 16L)).isEqualTo(777L);
 		}
 
+		// regression: NULL_VALUE fill caused "unexpected scalar kind NULL_VALUE" on nullable cols
+		@Test
+		void decode_nullValueFill_treatedAsZero() {
+			// Given — fill encoded as ScalarValue.NULL_VALUE (as Rust writes for nullable cols)
+			byte[] nullFill = ScalarProtos.ScalarValue.newBuilder()
+					.setNullValue(NullValue.NULL_VALUE).build().toByteArray();
+			byte[] meta = buildSparseMetaBytes(0, 0L, PType.U32);
+			DecodeContext ctx = buildCtx(I64_DTYPE, 4, nullFill, meta, new byte[0], new byte[0],
+					new DType.Primitive(PType.U32, false));
+			SparseEncoding sut = new SparseEncoding();
+
+			// When
+			Array result = sut.decode(ctx);
+
+			// Then
+			var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			for (int i = 0; i < 4; i++) {
+				assertThat(result.buffer(0).get(layout, (long) i * 8)).as("index %d", i).isZero();
+			}
+		}
+
+		// regression: Utf8 dtype caused "expected primitive dtype, got Utf8[nullable=true]"
+		@Test
+		void decode_utf8_noPatches_allEmpty() {
+			// Given — Utf8 sparse, no patches → all positions empty (null fill)
+			DType utf8 = new DType.Utf8(true);
+			byte[] nullFill = ScalarProtos.ScalarValue.newBuilder()
+					.setNullValue(NullValue.NULL_VALUE).build().toByteArray();
+			byte[] meta = buildSparseMetaBytes(0, 0L, PType.U32);
+			DecodeContext ctx = buildCtx(utf8, 3, nullFill, meta, new byte[0], new byte[0],
+					new DType.Primitive(PType.U32, false));
+			SparseEncoding sut = new SparseEncoding();
+
+			// When
+			Array result = sut.decode(ctx);
+
+			// Then
+			assertThat(result.length()).isEqualTo(3L);
+			VarBinArray varBin = (VarBinArray) result;
+			for (int i = 0; i < 3; i++) {
+				assertThat(varBin.getByteLength(i)).as("index %d", i).isZero();
+			}
+		}
+
+		// regression: Utf8 dtype caused "expected primitive dtype, got Utf8[nullable=true]"
+		@Test
+		void decode_utf8_withPatches_writesStringsAtIndices() {
+			// Given — 5 Utf8 elements, patches at [1]="hi" and [3]="bye"
+			DType utf8 = new DType.Utf8(true);
+			byte[] nullFill = ScalarProtos.ScalarValue.newBuilder()
+					.setNullValue(NullValue.NULL_VALUE).build().toByteArray();
+			byte[] meta = buildSparseMetaBytes(2, 0L, PType.U32);
+
+			byte[] idxBuf = toLEBytes(new long[]{1L, 3L}, PType.U32);
+			byte[] strBytes = "hibye".getBytes(StandardCharsets.UTF_8);
+			byte[] offsets = intLEBytes(new int[]{0, 2, 5});
+			byte[] varBinMeta = EncodingProtos.VarBinMetadata.newBuilder()
+					.setOffsetsPtype(DTypeProtos.PType.forNumber(PType.I32.ordinal()))
+					.build().toByteArray();
+
+			ArrayNode offsetsNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
+					new ArrayNode[0], new int[]{3}, ArrayStats.empty());
+			ArrayNode valNode = new ArrayNode(EncodingId.VORTEX_VARBIN,
+					ByteBuffer.wrap(varBinMeta),
+					new ArrayNode[]{offsetsNode}, new int[]{2}, ArrayStats.empty());
+			ArrayNode idxNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
+					new ArrayNode[0], new int[]{1}, ArrayStats.empty());
+			ArrayNode sparseNode = new ArrayNode(EncodingId.VORTEX_SPARSE,
+					ByteBuffer.wrap(meta),
+					new ArrayNode[]{idxNode, valNode}, new int[]{0}, ArrayStats.empty());
+
+			EncodingRegistry registry = EncodingRegistry.empty();
+			registry.register(new SparseEncoding());
+			registry.register(new PrimitiveEncoding());
+			registry.register(new VarBinEncoding());
+
+			MemorySegment[] segments = {
+					MemorySegment.ofArray(nullFill),
+					MemorySegment.ofArray(idxBuf),
+					MemorySegment.ofArray(strBytes),
+					MemorySegment.ofArray(offsets),
+			};
+			DecodeContext ctx = new DecodeContext(sparseNode, utf8, 5, segments, registry, Arena.global());
+			SparseEncoding sut = new SparseEncoding();
+
+			// When
+			Array result = sut.decode(ctx);
+
+			// Then
+			VarBinArray varBin = (VarBinArray) result;
+			assertThat(varBin.length()).isEqualTo(5L);
+			assertThat(varBin.getByteLength(0)).isZero();
+			assertThat(new String(varBin.getBytes(1))).isEqualTo("hi");
+			assertThat(varBin.getByteLength(2)).isZero();
+			assertThat(new String(varBin.getBytes(3))).isEqualTo("bye");
+			assertThat(varBin.getByteLength(4)).isZero();
+		}
+
+		// regression: Bool dtype caused "expected primitive dtype, got Bool[nullable=true]"
+		@Test
+		void decode_bool_withPatches_setsBitsAtIndices() {
+			// Given — 6 Bool elements, patches at [2]=true and [5]=true
+			DType bool = new DType.Bool(true);
+			byte[] nullFill = ScalarProtos.ScalarValue.newBuilder()
+					.setNullValue(NullValue.NULL_VALUE).build().toByteArray();
+			byte[] meta = buildSparseMetaBytes(2, 0L, PType.U32);
+			byte[] idxBuf = toLEBytes(new long[]{2L, 5L}, PType.U32);
+			byte[] boolBits = new byte[]{0b00000011};
+
+			ArrayNode valNode = new ArrayNode(EncodingId.VORTEX_BOOL, null,
+					new ArrayNode[0], new int[]{2}, ArrayStats.empty());
+			ArrayNode idxNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
+					new ArrayNode[0], new int[]{1}, ArrayStats.empty());
+			ArrayNode sparseNode = new ArrayNode(EncodingId.VORTEX_SPARSE,
+					ByteBuffer.wrap(meta),
+					new ArrayNode[]{idxNode, valNode}, new int[]{0}, ArrayStats.empty());
+
+			EncodingRegistry registry = EncodingRegistry.empty();
+			registry.register(new SparseEncoding());
+			registry.register(new PrimitiveEncoding());
+			registry.register(new BoolEncoding());
+
+			MemorySegment[] segments = {
+					MemorySegment.ofArray(nullFill),
+					MemorySegment.ofArray(idxBuf),
+					MemorySegment.ofArray(boolBits),
+			};
+			DecodeContext ctx = new DecodeContext(sparseNode, bool, 6, segments, registry, Arena.global());
+			SparseEncoding sut = new SparseEncoding();
+
+			// When
+			Array result = sut.decode(ctx);
+
+			// Then
+			BoolArray boolArr = (BoolArray) result;
+			assertThat(boolArr.length()).isEqualTo(6L);
+			assertThat(boolArr.getBoolean(0)).isFalse();
+			assertThat(boolArr.getBoolean(1)).isFalse();
+			assertThat(boolArr.getBoolean(2)).isTrue();
+			assertThat(boolArr.getBoolean(3)).isFalse();
+			assertThat(boolArr.getBoolean(4)).isFalse();
+			assertThat(boolArr.getBoolean(5)).isTrue();
+		}
+
 		private static DecodeContext buildSparseCtx(
 				DType dtype, long rowCount, long fillLong, PType idxPtype,
 				long[] patchIndices, long[] patchValues
@@ -312,6 +460,15 @@ class SparseEncodingTest {
 			ByteBuffer bb = ByteBuffer.wrap(buf).order(ByteOrder.LITTLE_ENDIAN);
 			for (double v : values) {
 				bb.putDouble(v);
+			}
+			return buf;
+		}
+
+		private static byte[] intLEBytes(int[] values) {
+			byte[] buf = new byte[values.length * 4];
+			ByteBuffer bb = ByteBuffer.wrap(buf).order(ByteOrder.LITTLE_ENDIAN);
+			for (int v : values) {
+				bb.putInt(v);
 			}
 			return buf;
 		}

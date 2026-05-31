@@ -8,12 +8,14 @@ import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.array.BoolArray;
 import io.github.dfa1.vortex.core.array.ByteArray;
 import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.FloatArray;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
+import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.Arena;
@@ -184,6 +186,16 @@ public final class SparseEncoding implements Encoding {
 			long offset = patches.getOffset();
 			PType indicesPtype = ptypeFromProto(patches.getIndicesPtype());
 
+			long n = ctx.rowCount();
+
+			if (ctx.dtype() instanceof DType.Utf8 || ctx.dtype() instanceof DType.Binary) {
+				return decodeVarBin(ctx, n, numPatches, offset, indicesPtype);
+			}
+
+			if (ctx.dtype() instanceof DType.Bool) {
+				return decodeBool(ctx, n, numPatches, offset, indicesPtype);
+			}
+
 			if (!(ctx.dtype() instanceof DType.Primitive)) {
 				throw new VortexException(EncodingId.VORTEX_SPARSE, "expected primitive dtype, got " + ctx.dtype());
 			}
@@ -197,7 +209,6 @@ public final class SparseEncoding implements Encoding {
 				throw new VortexException(EncodingId.VORTEX_SPARSE, "invalid fill value", e);
 			}
 
-			long n = ctx.rowCount();
 			int elemBytes = valuePtype.byteSize();
 			MemorySegment out = ctx.arena().allocate(n * elemBytes);
 			fillSegment(out, n, valuePtype, fillScalar);
@@ -218,6 +229,89 @@ public final class SparseEncoding implements Encoding {
 				case I16, U16 -> new ShortArray(ctx.dtype(), n, out, ArrayStats.empty());
 				case I8, U8   -> new ByteArray(ctx.dtype(), n, out, ArrayStats.empty());
 				default -> throw new VortexException(EncodingId.VORTEX_SPARSE, "unsupported ptype " + valuePtype);
+			};
+		}
+
+		private static Array decodeBool(
+				DecodeContext ctx, long n, long numPatches, long offset, PType indicesPtype
+		) {
+			long numBytes = (n + 7) >>> 3;
+			MemorySegment out = ctx.arena().allocate(numBytes);
+			if (numPatches > 0) {
+				DType indicesDtype = new DType.Primitive(indicesPtype, false);
+				Array indicesArray = decodeChild(ctx, 0, indicesDtype, numPatches);
+				Array valuesArray = decodeChild(ctx, 1, ctx.dtype(), numPatches);
+				MemorySegment idxSeg = indicesArray.buffer(0);
+				BoolArray bools = (BoolArray) valuesArray;
+				for (long i = 0; i < numPatches; i++) {
+					if (bools.getBoolean(i)) {
+						long pos = readUnsignedIdx(idxSeg, i, indicesPtype) - offset;
+						long byteIdx = pos >>> 3;
+						byte cur = out.get(ValueLayout.JAVA_BYTE, byteIdx);
+						out.set(ValueLayout.JAVA_BYTE, byteIdx, (byte) (cur | (1 << (pos & 7))));
+					}
+				}
+			}
+			return new BoolArray(ctx.dtype(), n, out, ArrayStats.empty());
+		}
+
+		private static Array decodeVarBin(
+				DecodeContext ctx, long n, long numPatches, long offset, PType indicesPtype
+		) {
+			MemorySegment outOffsets = ctx.arena().allocate((n + 1) * 4L, 4);
+			if (numPatches == 0) {
+				MemorySegment outBytes = ctx.arena().allocate(1);
+				DType i32dtype = new DType.Primitive(PType.I32, false);
+				Array offsetArr = new IntArray(i32dtype, n + 1, outOffsets, ArrayStats.empty());
+				return new VarBinArray(ctx.dtype(), n, outBytes, offsetArr, PType.I32, ArrayStats.empty());
+			}
+
+			DType indicesDtype = new DType.Primitive(indicesPtype, false);
+			Array indicesArray = decodeChild(ctx, 0, indicesDtype, numPatches);
+			Array valuesArray = decodeChild(ctx, 1, ctx.dtype(), numPatches);
+
+			MemorySegment idxSeg = indicesArray.buffer(0);
+			VarBinArray varBin = (VarBinArray) valuesArray;
+			MemorySegment valBytes = varBin.buffer(0);
+			MemorySegment valOffsets = varBin.child(0).buffer(0);
+			PType valOffPtype = ((DType.Primitive) varBin.child(0).dtype()).ptype();
+
+			long totalBytes = 0;
+			for (long i = 0; i < numPatches; i++) {
+				totalBytes += readVarBinOffset(valOffsets, i + 1, valOffPtype)
+						- readVarBinOffset(valOffsets, i, valOffPtype);
+			}
+
+			MemorySegment outBytes = ctx.arena().allocate(Math.max(1, totalBytes));
+			long patchCursor = 0;
+			long bytePos = 0;
+			for (long pos = 0; pos < n; pos++) {
+				if (patchCursor < numPatches) {
+					long patchPos = readUnsignedIdx(idxSeg, patchCursor, indicesPtype) - offset;
+					if (patchPos == pos) {
+						long strStart = readVarBinOffset(valOffsets, patchCursor, valOffPtype);
+						long strEnd = readVarBinOffset(valOffsets, patchCursor + 1, valOffPtype);
+						long strLen = strEnd - strStart;
+						if (strLen > 0) {
+							MemorySegment.copy(valBytes, strStart, outBytes, bytePos, strLen);
+							bytePos += strLen;
+						}
+						patchCursor++;
+					}
+				}
+				outOffsets.setAtIndex(PTypeIO.LE_INT, pos + 1, (int) bytePos);
+			}
+
+			DType i32dtype = new DType.Primitive(PType.I32, false);
+			Array offsetArr = new IntArray(i32dtype, n + 1, outOffsets, ArrayStats.empty());
+			return new VarBinArray(ctx.dtype(), n, outBytes, offsetArr, PType.I32, ArrayStats.empty());
+		}
+
+		private static long readVarBinOffset(MemorySegment seg, long i, PType ptype) {
+			return switch (ptype) {
+				case I32, U32 -> Integer.toUnsignedLong(seg.getAtIndex(PTypeIO.LE_INT, i));
+				case I64, U64 -> seg.getAtIndex(PTypeIO.LE_LONG, i);
+				default -> throw new VortexException(EncodingId.VORTEX_SPARSE, "unsupported offset ptype " + ptype);
 			};
 		}
 
@@ -295,7 +389,7 @@ public final class SparseEncoding implements Encoding {
 				case UINT64_VALUE -> scalar.getUint64Value();
 				case F32_VALUE -> Float.floatToRawIntBits(scalar.getF32Value());
 				case F64_VALUE -> Double.doubleToRawLongBits(scalar.getF64Value());
-				case KIND_NOT_SET -> 0L;
+				case NULL_VALUE, KIND_NOT_SET -> 0L;
 				default -> throw new VortexException(EncodingId.VORTEX_SPARSE,
 						"unexpected scalar kind " + scalar.getKindCase());
 			};
