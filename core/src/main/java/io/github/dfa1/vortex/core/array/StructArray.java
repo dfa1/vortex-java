@@ -32,7 +32,6 @@ public final class StructArray implements Array {
 		return dtype;
 	}
 
-	@Override
 	public ArrayStats stats() {
 		return ArrayStats.empty();
 	}

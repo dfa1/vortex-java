@@ -31,7 +31,6 @@ public final class FloatArray implements Array {
 		return length;
 	}
 
-	@Override
 	public ArrayStats stats() {
 		return stats;
 	}

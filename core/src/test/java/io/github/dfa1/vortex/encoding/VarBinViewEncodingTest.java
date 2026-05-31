@@ -108,7 +108,8 @@ class VarBinViewEncodingTest {
 		assertThat(result).isInstanceOf(VarBinArray.class);
 		assertThat(result.length()).isEqualTo(n);
 		for (int i = 0; i < values.length; i++) {
-			String decoded = new String(result.getBytes(i), StandardCharsets.UTF_8);
+			VarBinArray varBinArray = (VarBinArray) result;
+			String decoded = new String(varBinArray.getBytes(i), StandardCharsets.UTF_8);
 			assertThat(decoded).as("index %d", i).isEqualTo(values[i]);
 		}
 	}

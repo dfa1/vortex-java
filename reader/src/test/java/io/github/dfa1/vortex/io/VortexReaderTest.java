@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.io;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.core.array.EmptyArray;
 import io.github.dfa1.vortex.encoding.Encoding;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.EncodingRegistry;
@@ -43,7 +44,7 @@ class VortexReaderTest {
 
 			@Override
 			public Array decode(DecodeContext ctx) {
-				return Array.empty(ctx.dtype());
+				return EmptyArray.of(ctx.dtype());
 			}
 		};
 		for (EncodingId encodingId : EncodingId.values()) {
@@ -60,7 +61,7 @@ class VortexReaderTest {
 
 				@Override
 				public Array decode(DecodeContext ctx) {
-					return Array.empty(ctx.dtype());
+					return EmptyArray.of(ctx.dtype());
 				}
 			});
 		}

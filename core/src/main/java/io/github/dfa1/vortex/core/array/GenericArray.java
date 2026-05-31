@@ -38,7 +38,6 @@ public final class GenericArray implements Array {
 		return length;
 	}
 
-	@Override
 	public ArrayStats stats() {
 		return ArrayStats.empty();
 	}

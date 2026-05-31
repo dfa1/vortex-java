@@ -7,7 +7,9 @@ import java.util.List;
 /// Converts an [EncodeResult] into a [DecodeContext] for roundtrip tests.
 final class EncodeTestHelper {
 
-	private EncodeTestHelper() {}
+	private EncodeTestHelper() {
+		// no instances
+	}
 
 	static DecodeContext toDecodeContext(
 			EncodeResult result, long rowCount, io.github.dfa1.vortex.core.DType dtype,

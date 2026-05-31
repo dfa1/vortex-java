@@ -91,7 +91,6 @@ public final class VarBinArray implements Array {
 		return length;
 	}
 
-	@Override
 	public ArrayStats stats() {
 		return stats;
 	}
@@ -141,8 +140,7 @@ public final class VarBinArray implements Array {
 
 	public void forEachByteLength(IntConsumer c) {
 		if (dictCodesSegs != null) {
-			long n = length;
-			for (long i = 0; i < n; i++) {
+			for (long i = 0; i < length; i++) {
 				long code = dictReadCode(i);
 				c.accept((int) (dictReadOff(code + 1) - dictReadOff(code)));
 			}

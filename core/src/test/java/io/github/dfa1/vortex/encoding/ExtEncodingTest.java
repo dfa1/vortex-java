@@ -70,7 +70,8 @@ class ExtEncodingTest {
 
 			assertThat(decoded).isInstanceOf(LongArray.class);
 			for (int i = 0; i < data.length; i++) {
-				assertThat(decoded.getLong(i)).isEqualTo(data[i]);
+				LongArray longArray = (LongArray) decoded;
+				assertThat(longArray.getLong(i)).isEqualTo(data[i]);
 			}
 		}
 
@@ -122,7 +123,8 @@ class ExtEncodingTest {
 		assertThat(result).isInstanceOf(LongArray.class);
 		assertThat(result.length()).isEqualTo(n);
 		for (int i = 0; i < n; i++) {
-			assertThat(result.getLong(i)).isEqualTo(values[i]);
+			LongArray longArray = (LongArray) result;
+			assertThat(longArray.getLong(i)).isEqualTo(values[i]);
 		}
 	}
 	}

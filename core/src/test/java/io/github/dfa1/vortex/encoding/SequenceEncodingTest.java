@@ -1,5 +1,9 @@
 package io.github.dfa1.vortex.encoding;
 
+import io.github.dfa1.vortex.core.array.DoubleArray;
+import io.github.dfa1.vortex.core.array.FloatArray;
+import io.github.dfa1.vortex.core.array.IntArray;
+import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.proto.EncodingProtos;
 import io.github.dfa1.vortex.proto.ScalarProtos;
 import io.github.dfa1.vortex.core.DType;
@@ -94,7 +98,8 @@ class SequenceEncodingTest {
 		// Then
 		assertThat(result.length()).isEqualTo(expected.length);
 		for (int i = 0; i < expected.length; i++) {
-			assertThat(result.getLong(i)).as("index %d", i).isEqualTo(expected[i]);
+			LongArray longArray = (LongArray) result;
+			assertThat(longArray.getLong(i)).as("index %d", i).isEqualTo(expected[i]);
 		}
 	}
 
@@ -119,7 +124,8 @@ class SequenceEncodingTest {
 		// Then
 		assertThat(result.length()).isEqualTo(expected.length);
 		for (int i = 0; i < expected.length; i++) {
-			assertThat(result.getInt(i)).as("index %d", i).isEqualTo(expected[i]);
+			IntArray longArray = (IntArray) result;
+			assertThat(longArray.getInt(i)).as("index %d", i).isEqualTo(expected[i]);
 		}
 	}
 
@@ -134,10 +140,11 @@ class SequenceEncodingTest {
 
 		// Then
 		assertThat(result.length()).isEqualTo(4);
-		assertThat(result.getDouble(0)).isEqualTo(1.0);
-		assertThat(result.getDouble(1)).isEqualTo(1.5);
-		assertThat(result.getDouble(2)).isEqualTo(2.0);
-		assertThat(result.getDouble(3)).isEqualTo(2.5);
+		DoubleArray doubleArray = (DoubleArray) result;
+		assertThat(doubleArray.getDouble(0)).isEqualTo(1.0);
+		assertThat(doubleArray.getDouble(1)).isEqualTo(1.5);
+		assertThat(doubleArray.getDouble(2)).isEqualTo(2.0);
+		assertThat(doubleArray.getDouble(3)).isEqualTo(2.5);
 	}
 
 	@Test
@@ -151,9 +158,10 @@ class SequenceEncodingTest {
 
 		// Then
 		assertThat(result.length()).isEqualTo(3);
-		assertThat(result.getFloat(0)).isEqualTo(0.0f);
-		assertThat(result.getFloat(1)).isEqualTo(1.0f);
-		assertThat(result.getFloat(2)).isEqualTo(2.0f);
+		FloatArray floatArray = (FloatArray) result;
+		assertThat(floatArray.getFloat(0)).isEqualTo(0.0f);
+		assertThat(floatArray.getFloat(1)).isEqualTo(1.0f);
+		assertThat(floatArray.getFloat(2)).isEqualTo(2.0f);
 	}
 
 	@Test

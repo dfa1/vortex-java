@@ -25,8 +25,8 @@ class AlpEncodingTest {
 	private static DecodeContext buildAlpCtxF64(
 			int expE, int expF,
 			long[] encodedVals,
-			long[] patchIndices, double[] patchValues,
-			long[] chunkOffsets
+			long[] patchIndices,
+			double[] patchValues
 	) {
 		EncodingProtos.ALPMetadata.Builder metaBuilder = EncodingProtos.ALPMetadata.newBuilder()
 				.setExpE(expE).setExpF(expF);
@@ -96,8 +96,7 @@ class AlpEncodingTest {
 
 	private static DecodeContext buildAlpCtxF32(
 			int expE, int expF,
-			int[] encodedVals,
-			int[] patchIndices, float[] patchValues
+			int[] encodedVals
 	) {
 		EncodingProtos.ALPMetadata.Builder metaBuilder = EncodingProtos.ALPMetadata.newBuilder()
 				.setExpE(expE).setExpF(expF);
@@ -136,7 +135,7 @@ class AlpEncodingTest {
 		long[] encoded = {123L, 456L, 789L};
 		double[] expected = {1.23, 4.56, 7.89};
 
-		DecodeContext ctx = buildAlpCtxF64(expE, expF, encoded, null, null, null);
+		DecodeContext ctx = buildAlpCtxF64(expE, expF, encoded, null, null);
 		AlpEncoding sut = new AlpEncoding();
 
 		// When
@@ -160,7 +159,7 @@ class AlpEncodingTest {
 		long[] patchIndices = {1L, 3L};
 		double[] patchValues = {Double.NaN, Double.POSITIVE_INFINITY};
 
-		DecodeContext ctx = buildAlpCtxF64(expE, expF, encoded, patchIndices, patchValues, null);
+		DecodeContext ctx = buildAlpCtxF64(expE, expF, encoded, patchIndices, patchValues);
 		AlpEncoding sut = new AlpEncoding();
 
 		// When
@@ -188,7 +187,7 @@ class AlpEncodingTest {
 		long encVal = Math.round(value * f10[expE] * if10[expF]);
 		long[] encoded = {encVal};
 
-		DecodeContext ctx = buildAlpCtxF64(expE, expF, encoded, null, null, null);
+		DecodeContext ctx = buildAlpCtxF64(expE, expF, encoded, null, null);
 		AlpEncoding sut = new AlpEncoding();
 
 		// When
@@ -207,7 +206,7 @@ class AlpEncodingTest {
 		int[] encoded = {10, 25, 100};
 		float[] expected = {1.0f, 2.5f, 10.0f};
 
-		DecodeContext ctx = buildAlpCtxF32(expE, expF, encoded, null, null);
+		DecodeContext ctx = buildAlpCtxF32(expE, expF, encoded);
 		AlpEncoding sut = new AlpEncoding();
 
 		// When

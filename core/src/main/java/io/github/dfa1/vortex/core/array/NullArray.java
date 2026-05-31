@@ -7,7 +7,6 @@ import io.github.dfa1.vortex.core.DType;
 public record NullArray(DType dtype, long length) implements Array {
 
 
-	@Override
 	public ArrayStats stats() {
 		return ArrayStats.empty();
 	}
