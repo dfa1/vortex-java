@@ -16,6 +16,7 @@ import io.github.dfa1.vortex.core.array.StructArray;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
+import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.List;
@@ -43,12 +44,68 @@ public final class ChunkedEncoding implements Encoding {
 
 	@Override
 	public EncodeResult encode(DType dtype, Object data) {
-		throw new UnsupportedOperationException("encode not yet implemented for " + encodingId());
+		return Encoder.encode(dtype, (ChunkedData) data);
 	}
 
 	@Override
 	public Array decode(DecodeContext ctx) {
 		return Decoder.decode(ctx);
+	}
+
+	private static final class Encoder {
+
+		private static final List<Encoding> FALLBACK = List.of(
+				new PrimitiveEncoding(), new VarBinEncoding(), new BoolEncoding(),
+				new NullEncoding(), new ByteBoolEncoding(), new StructEncoding());
+
+		static EncodeResult encode(DType dtype, ChunkedData data) {
+			List<Object> chunks = data.chunks();
+			long[] chunkLengths = data.chunkLengths();
+			int nchunks = chunks.size();
+			if (nchunks == 0) {
+				throw new VortexException(EncodingId.VORTEX_CHUNKED, "at least one chunk required");
+			}
+
+			// Build cumulative offsets: [0, len0, len0+len1, ...]
+			long[] offsets = new long[nchunks + 1];
+			offsets[0] = 0;
+			for (int i = 0; i < nchunks; i++) {
+				offsets[i + 1] = offsets[i] + chunkLengths[i];
+			}
+
+			// Encode offsets child (U64 primitive)
+			DType u64 = new DType.Primitive(PType.U64, false);
+			EncodeResult offsetsResult = new PrimitiveEncoding().encode(u64, offsets);
+
+			List<MemorySegment> allBuffers = new ArrayList<>(offsetsResult.buffers());
+			EncodeNode[] children = new EncodeNode[nchunks + 1];
+			children[0] = offsetsResult.rootNode();
+
+			// Encode each chunk
+			Encoding inner = findEncoding(dtype);
+			for (int i = 0; i < nchunks; i++) {
+				EncodeResult chunkResult = inner.encode(dtype, chunks.get(i));
+				int bufOffset = allBuffers.size();
+				children[i + 1] = EncodeNode.remapBufferIndices(chunkResult.rootNode(), bufOffset);
+				allBuffers.addAll(chunkResult.buffers());
+			}
+
+			EncodeNode root = new EncodeNode(
+					EncodingId.VORTEX_CHUNKED,
+					ByteBuffer.wrap(new byte[0]),
+					children,
+					new int[]{});
+			return new EncodeResult(root, List.copyOf(allBuffers), null, null);
+		}
+
+		private static Encoding findEncoding(DType dtype) {
+			for (Encoding enc : FALLBACK) {
+				if (enc.accepts(dtype)) {
+					return enc;
+				}
+			}
+			throw new UnsupportedOperationException("no fallback encoding for dtype: " + dtype);
+		}
 	}
 
 	private static final class Decoder {

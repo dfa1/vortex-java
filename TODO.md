@@ -93,7 +93,7 @@
 | `vortex.fsst`                | `FsstEncoding`             | ✅       | ❌ stub  | —         | Utf8, Binary |
 | `vortex.varbinview`          | `VarBinViewEncoding`       | ✅       | ❌ stub  | —         | Utf8, Binary |
 | `vortex.pco`                 | `PcoEncoding` (stub)       | ❌       | ❌       | very hard | ANS + bin tokenization not ported; unblocks `pco.vortex`, tpch/clickbench fixtures |
-| `vortex.chunked`             | `ChunkedEncoding`          | ✅       | ❌ stub  | medium    | decode: primitive + struct concat; encode stub |
+| `vortex.chunked`             | `ChunkedEncoding`          | ✅       | ✅       | medium    | decode: primitive + struct concat; encode via ChunkedData |
 | `fastlanes.rle`              | —                          | ❌       | ❌       | medium    | unblocks `rle.vortex` |
 | `vortex.alprd`               | —                          | ❌       | ❌       | medium    | unblocks `alprd.vortex` |
 | `vortex.decimal`             | `DecimalEncoding`          | ✅       | ✅       | —         | Decimal |
