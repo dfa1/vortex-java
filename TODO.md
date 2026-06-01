@@ -10,13 +10,14 @@
 
 ## Performance
 
-- [ ] **#10c Publish reproducible perf artifacts**
+- [ ] Publish reproducible perf artifacts
     - Capture JMH JSON + JFR profile alongside README table; cite hardware (CPU model), JDK build (`java -version`),
       and benchmark commit SHA so numbers don't rot silently.
+- [ ] performance tests must be peer reviewed
+- [ ] run performance tests on other machines (I have access only to Apple M5)
 
 ## Testing
 
-- [ ] a lot of tests are doing "new String(array.getBytes()", let's add a method there
 - [ ] lots of repetitions like in every test
 ```java
    private static final DType I64 = new DType.Primitive(PType.I64, false);
@@ -26,6 +27,7 @@
 
 ## Build
 
+- [ ] prefix all modules with "vortex-"
 - [ ] add BOM module
 - [ ] deploy to maven central
 - [ ] drop warnings about flatbuffers
@@ -42,23 +44,11 @@
 ## Documentation
 
 - [ ] Format specification: byte-exact diagrams for file layout and each encoding, with annotated examples (Arrow spec style)
+- [ ] how to use the library and the cli
 
 ## Tooling
 
-
-## Large-file support
-
-- [ ] **#12 Test read/write of files > 2 GB**
-    - [ ] Parquet baseline for comparison: same data should fail or require splitting when any
-      column chunk exceeds 2 GB.
-
-## Array API
-
-- [ ] Use domain primitives (`UInt32`, `UInt64`, etc.) as value classes via Project Valhalla instead of raw `long`/`int`
-    - See https://dfa1.github.io/articles/rethink-domain-primitives-with-valhalla
-    - Candidates: `PType` integer kinds, buffer offsets, row indices, byte lengths
-    - Goal: type-safety at zero cost (value class = no heap alloc, no boxing)
-
+- [ ] hardwood to convert parquet files to vortex
 - [ ] Optional `vortex-arrow` bridge module for Arrow ecosystem interop
     - Primary API stays `ArrayLong`/`ArrayDouble` (zero-copy, no deps, no Unsafe)
     - Bridge wraps typed views into Arrow `BigIntVector`, `Float8Vector`, etc. for users who need
@@ -66,6 +56,20 @@
     - Conversion involves a copy (MemorySegment → Arrow off-heap buffer) — cost is explicit and opt-in
     - Arrow JVM uses `sun.misc.Unsafe` / Netty internally; keeping it in a separate module means
       the core library stays Unsafe-free
+
+## Large-file support
+
+- [ ] **Test read/write of files > 2 GB**
+    - [ ] Parquet baseline for comparison: same data should fail or require splitting when any
+      column chunk exceeds 2 GB.
+
+## API
+
+- [ ] Use domain primitives (`UInt32`, `UInt64`, etc.) as value classes via Project Valhalla instead of raw `long`/`int`
+    - See https://dfa1.github.io/articles/rethink-domain-primitives-with-valhalla
+    - Candidates: `PType` integer kinds, buffer offsets, row indices, byte lengths
+    - Goal: type-safety at zero cost (value class = no heap alloc, no boxing)
+
 
 ## Encodings
 
