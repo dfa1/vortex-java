@@ -93,7 +93,7 @@
 | `vortex.fsst`                | `FsstEncoding`             | ✅       | ❌ stub  | —         | Utf8, Binary |
 | `vortex.varbinview`          | `VarBinViewEncoding`       | ✅       | ❌ stub  | —         | Utf8, Binary |
 | `vortex.pco`                 | `PcoEncoding` (stub)       | ❌       | ❌       | very hard | ANS + bin tokenization not ported; unblocks `pco.vortex`, tpch/clickbench fixtures |
-| `vortex.chunked`             | —                          | ❌       | ❌       | medium    | unblocks `chunked.vortex` (segment-level chunked array) |
+| `vortex.chunked`             | `ChunkedEncoding`          | ✅       | ❌ stub  | medium    | decode: primitive + struct concat; encode stub |
 | `fastlanes.rle`              | —                          | ❌       | ❌       | medium    | unblocks `rle.vortex` |
 | `vortex.alprd`               | —                          | ❌       | ❌       | medium    | unblocks `alprd.vortex` |
 | `vortex.decimal`             | `DecimalEncoding`          | ✅       | ✅       | —         | Decimal |
@@ -140,7 +140,7 @@
 | `dict.vortex`                    | ✅     |                               |
 | `sparse.vortex`                  | ✅     |                               |
 | `varbinview.vortex`              | ✅     |                               |
-| `chunked.vortex`                 | ❌     | `vortex.chunked` at segment level |
+| `chunked.vortex`                 | ✅     |                               |
 | `rle.vortex`                     | ❌     | `fastlanes.rle` missing       |
 | `alprd.vortex`                   | ❌     | `vortex.alprd` missing        |
 | `decimal.vortex`                 | ✅     |                               |
