@@ -1,0 +1,83 @@
+package io.github.dfa1.vortex.encoding;
+
+import com.google.protobuf.InvalidProtocolBufferException;
+import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.GenericArray;
+import io.github.dfa1.vortex.proto.EncodingProtos;
+
+import java.lang.foreign.MemorySegment;
+import java.nio.ByteBuffer;
+
+/// Decoder for {@code vortex.decimal} — canonical flat decimal storage.
+///
+/// <p>Wire format (per Rust vtable):
+/// <ul>
+///   <li>Metadata: {@code DecimalMetadata} — {@code values_type int32} (tag 1):
+///       DecimalType I8=0, I16=1, I32=2, I64=3, I128=4, I256=5
+///   <li>Buffers: 1 — little-endian fixed-width integers sized per {@code values_type}
+///   <li>Children: 0 (non-nullable) or 1 (validity)
+/// </ul>
+public final class DecimalEncoding implements Encoding {
+
+	@Override
+	public EncodingId encodingId() {
+		return EncodingId.VORTEX_DECIMAL;
+	}
+
+	@Override
+	public boolean accepts(DType dtype) {
+		return dtype instanceof DType.Decimal;
+	}
+
+	@Override
+	public EncodeResult encode(DType dtype, Object data) {
+		throw new UnsupportedOperationException("encode not yet implemented for " + encodingId());
+	}
+
+	@Override
+	public Array decode(DecodeContext ctx) {
+		return Decoder.decode(ctx);
+	}
+
+	private static final class Decoder {
+
+		private static Array decode(DecodeContext ctx) {
+			ByteBuffer meta = ctx.metadata();
+			if (meta == null || meta.remaining() == 0) {
+				throw new VortexException(EncodingId.VORTEX_DECIMAL, "missing metadata");
+			}
+			EncodingProtos.DecimalMetadata decoded;
+			try {
+				byte[] bytes = new byte[meta.remaining()];
+				meta.duplicate().get(bytes);
+				decoded = EncodingProtos.DecimalMetadata.parseFrom(bytes);
+			} catch (InvalidProtocolBufferException e) {
+				throw new VortexException(EncodingId.VORTEX_DECIMAL, "invalid metadata: " + e.getMessage());
+			}
+			int valuesType = decoded.getValuesType();
+			int byteWidth = decimalTypeByteWidth(valuesType);
+			MemorySegment buffer = ctx.buffer(0);
+			long expected = ctx.rowCount() * byteWidth;
+			if (buffer.byteSize() < expected) {
+				throw new VortexException(EncodingId.VORTEX_DECIMAL,
+						"buffer too small: expected %d bytes, got %d".formatted(expected, buffer.byteSize()));
+			}
+			return new GenericArray(ctx.dtype(), ctx.rowCount(), buffer);
+		}
+
+		private static int decimalTypeByteWidth(int valuesType) {
+			return switch (valuesType) {
+				case 0 -> 1;  // I8
+				case 1 -> 2;  // I16
+				case 2 -> 4;  // I32
+				case 3 -> 8;  // I64
+				case 4 -> 16; // I128
+				case 5 -> 32; // I256
+				default -> throw new VortexException(EncodingId.VORTEX_DECIMAL,
+						"unknown DecimalType value: " + valuesType);
+			};
+		}
+	}
+}

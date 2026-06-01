@@ -72,3 +72,19 @@ message DeltaMetadata {
   uint64 deltas_len = 1;
   uint32 offset = 2;
 }
+
+message DecimalMetadata {
+  // DecimalType: I8=0, I16=1, I32=2, I64=3, I128=4, I256=5
+  int32 values_type = 1;
+}
+
+message DecimalBytePartsMetadata {
+  vortex.dtype.PType zeroth_child_ptype = 1;
+  uint32 lower_part_count = 2;
+}
+
+message DateTimePartsMetadata {
+  vortex.dtype.PType days_ptype = 1;
+  vortex.dtype.PType seconds_ptype = 2;
+  vortex.dtype.PType subseconds_ptype = 3;
+}

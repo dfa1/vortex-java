@@ -93,6 +93,9 @@ class VortexHttpReaderIT {
 			"varbinview.vortex",
 			"dict.vortex",
 			"sparse.vortex",
+			"decimal.vortex",
+			"decimal_byte_parts.vortex",
+			"datetimeparts.vortex",
 	})
 	void scan_fixture_decodesAllRows(String fixture) throws Exception {
 		// Given

@@ -96,9 +96,9 @@
 | `vortex.chunked`             | —                          | ❌       | ❌       | medium    | unblocks `chunked.vortex` (segment-level chunked array) |
 | `fastlanes.rle`              | —                          | ❌       | ❌       | medium    | unblocks `rle.vortex` |
 | `vortex.alprd`               | —                          | ❌       | ❌       | medium    | unblocks `alprd.vortex` |
-| `vortex.decimal`             | —                          | ❌       | ❌       | medium    | unblocks `decimal.vortex` |
-| `vortex.decimal_byte_parts`  | —                          | ❌       | ❌       | medium    | unblocks `decimal_byte_parts.vortex` |
-| `vortex.datetimeparts`       | —                          | ❌       | ❌       | medium    | unblocks `datetimeparts.vortex` |
+| `vortex.decimal`             | `DecimalEncoding`          | ✅       | ❌ stub  | —         | Decimal |
+| `vortex.decimal_byte_parts`  | `DecimalBytePartsEncoding` | ✅       | ❌ stub  | —         | Decimal byte parts |
+| `vortex.datetimeparts`       | `DateTimePartsEncoding`    | ✅       | ❌ stub  | —         | Timestamp parts |
 | `vortex.list`                | —                          | ❌       | ❌       | hard      | needs list array model; unblocks `list.vortex` |
 | `vortex.listview`            | —                          | ❌       | ❌       | hard      | unblocks `listview.vortex` |
 | `vortex.fixed_size_list`     | —                          | ❌       | ❌       | hard      | unblocks `fixed_size_list.vortex` |
@@ -129,9 +129,9 @@
 | `chunked.vortex`                 | ❌     | `vortex.chunked` at segment level |
 | `rle.vortex`                     | ❌     | `fastlanes.rle` missing       |
 | `alprd.vortex`                   | ❌     | `vortex.alprd` missing        |
-| `decimal.vortex`                 | ❌     | `vortex.decimal` missing      |
-| `decimal_byte_parts.vortex`      | ❌     | `vortex.decimal_byte_parts` missing |
-| `datetimeparts.vortex`           | ❌     | `vortex.datetimeparts` missing |
+| `decimal.vortex`                 | ✅     |                               |
+| `decimal_byte_parts.vortex`      | ✅     |                               |
+| `datetimeparts.vortex`           | ✅     |                               |
 | `list.vortex`                    | ❌     | `vortex.list` + list array model |
 | `listview.vortex`                | ❌     | `vortex.listview` missing     |
 | `fixed_size_list.vortex`         | ❌     | `vortex.fixed_size_list` missing |
@@ -144,6 +144,6 @@
 | `clickbench_hits_5k.compact.vortex` | ❌  | `vortex.pco`                  |
 | `clickbench_hits_5k.regular.vortex` | ❌  | `vortex.pco`                  |
 
-**Score: 18/35** (including `for.vortex` scanned separately from `scan_fixture_decodesAllRows`)
+**Score: 22/35** (including `for.vortex` scanned separately from `scan_fixture_decodesAllRows`)
 
 

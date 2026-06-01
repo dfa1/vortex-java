@@ -18,3 +18,6 @@ io.github.dfa1.vortex.encoding.ByteBoolEncoding
 io.github.dfa1.vortex.encoding.ZigZagEncoding
 io.github.dfa1.vortex.encoding.ExtEncoding
 io.github.dfa1.vortex.encoding.VarBinViewEncoding
+io.github.dfa1.vortex.encoding.DecimalEncoding
+io.github.dfa1.vortex.encoding.DecimalBytePartsEncoding
+io.github.dfa1.vortex.encoding.DateTimePartsEncoding
