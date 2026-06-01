@@ -21,3 +21,4 @@ io.github.dfa1.vortex.encoding.VarBinViewEncoding
 io.github.dfa1.vortex.encoding.DecimalEncoding
 io.github.dfa1.vortex.encoding.DecimalBytePartsEncoding
 io.github.dfa1.vortex.encoding.DateTimePartsEncoding
+io.github.dfa1.vortex.encoding.ZstdEncoding

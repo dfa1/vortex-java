@@ -102,7 +102,7 @@
 | `vortex.list`                | —                          | ❌       | ❌       | hard      | needs list array model; unblocks `list.vortex` |
 | `vortex.listview`            | —                          | ❌       | ❌       | hard      | unblocks `listview.vortex` |
 | `vortex.fixed_size_list`     | —                          | ❌       | ❌       | hard      | unblocks `fixed_size_list.vortex` |
-| `vortex.zstd`                | —                          | ❌       | ❌       | hard      | use [airlift/aircompressor](https://github.com/airlift/aircompressor) (pure Java zstd, no native); unblocks `zstd.vortex` |
+| `vortex.zstd`                | `ZstdEncoding`             | ✅       | ❌ stub  | —         | Primitive, Utf8, Binary (no dict, no nullable); uses airlift/aircompressor |
 
 ### S3 Fixture Status (`v0.72.0/arrays/`)
 
@@ -135,7 +135,7 @@
 | `list.vortex`                    | ❌     | `vortex.list` + list array model |
 | `listview.vortex`                | ❌     | `vortex.listview` missing     |
 | `fixed_size_list.vortex`         | ❌     | `vortex.fixed_size_list` missing |
-| `zstd.vortex`                    | ❌     | `vortex.zstd` (use aircompressor) |
+| `zstd.vortex`                    | ✅     |                               |
 | `tpch_lineitem.compact.vortex`   | ❌     | `vortex.pco`                  |
 | `tpch_lineitem.regular.vortex`   | ❌     | `vortex.pco`                  |
 | `tpch_orders.compact.vortex`     | ❌     | `vortex.pco`                  |
@@ -144,6 +144,6 @@
 | `clickbench_hits_5k.compact.vortex` | ❌  | `vortex.pco`                  |
 | `clickbench_hits_5k.regular.vortex` | ❌  | `vortex.pco`                  |
 
-**Score: 22/35** (including `for.vortex` scanned separately from `scan_fixture_decodesAllRows`)
+**Score: 23/35** (including `for.vortex` scanned separately from `scan_fixture_decodesAllRows`)
 
 

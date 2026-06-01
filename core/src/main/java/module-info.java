@@ -1,6 +1,7 @@
 module io.github.dfa1.vortex.core {
     requires com.google.protobuf;
     requires flatbuffers.java;
+    requires aircompressor;
 
     exports io.github.dfa1.vortex.core;
     exports io.github.dfa1.vortex.core.array;
@@ -30,5 +31,6 @@ module io.github.dfa1.vortex.core {
         io.github.dfa1.vortex.encoding.StructEncoding,
         io.github.dfa1.vortex.encoding.VarBinEncoding,
         io.github.dfa1.vortex.encoding.VarBinViewEncoding,
-        io.github.dfa1.vortex.encoding.ZigZagEncoding;
+        io.github.dfa1.vortex.encoding.ZigZagEncoding,
+        io.github.dfa1.vortex.encoding.ZstdEncoding;
 }

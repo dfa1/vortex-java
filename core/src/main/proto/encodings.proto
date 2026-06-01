@@ -88,3 +88,13 @@ message DateTimePartsMetadata {
   vortex.dtype.PType seconds_ptype = 2;
   vortex.dtype.PType subseconds_ptype = 3;
 }
+
+message ZstdFrameMetadata {
+  uint64 uncompressed_size = 1;
+  uint64 n_values = 2;
+}
+
+message ZstdMetadata {
+  uint32 dictionary_size = 1;
+  repeated ZstdFrameMetadata frames = 2;
+}

@@ -20,6 +20,10 @@
 			<groupId>com.google.protobuf</groupId>
 			<artifactId>protobuf-java</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>io.airlift</groupId>
+			<artifactId>aircompressor</artifactId>
+		</dependency>
 		<!-- testing -->
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>
