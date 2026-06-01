@@ -24,19 +24,22 @@ are readable by all others — no vendor lock-in, no format translation at the b
 | Project                                                     | Language | Notes                                                               |
 |-------------------------------------------------------------|----------|---------------------------------------------------------------------|
 | [spiraldb/vortex](https://github.com/spiraldb/vortex)       | Rust     | Reference implementation + JNI bindings                             |
-| [spiraldb/vortex-go](https://github.com/spiraldb/vortex-go) | Go       | Pure-language port                     
+| [spiraldb/vortex-go](https://github.com/spiraldb/vortex-go) | Go       | Pure-language port
 
 The official Vortex ecosystem provides JVM bindings via JNI (bundled native `.so`/`.dylib`).
 JNI bindings are fast but add deployment friction: platform-specific artifacts, native build
-toolchains, and crash-domain coupling between the JVM and native code.
+toolchains, and crash-domain coupling between the JVM and native code. The JAR vortex-jni 0.72 is
+**258MB**..
 
 This library takes a different approach — 100% Java, no JNI, no `sun.misc.Unsafe`.
-It uses the Java FFM API (`MemorySegment` / `Arena`, Java 25+) for zero-copy memory-mapped reads, 
+It uses the Java FFM API (`MemorySegment` / `Arena`, Java 25+) for zero-copy memory-mapped reads,
 making it easier to:
 
 - embed in any JVM project without native-library management
 - build and test on any platform with a standard JDK
 - debug and profile with standard JVM tooling
+
+The JARs in this library are tiny, less than **1MB** in total.
 
 ## Who is this for?
 
@@ -279,7 +282,7 @@ JMH throughput (ops/s = full-file scans per second). Higher is better.
 
 ### Why fewer layers = faster
 
-This is my hypothesis: 
+This is my hypothesis:
 ```
   vortex-jni                              vortex-java
   ──────────────────────────────          ──────────────────────────
@@ -325,12 +328,12 @@ bytecode.
 
 ## Contributing
 
-Forks and contributions are welcome! Please feel free to fork the repository and open a pull request. 
-When submitting a PR, include tests and update documentation where applicable 
+Forks and contributions are welcome! Please feel free to fork the repository and open a pull request.
+When submitting a PR, include tests and update documentation where applicable
 (follow guidelines in CLAUDE.md).
 
-### AI-assisted development 
+### AI-assisted development
 
 This project uses [Claude Code](https://claude.ai/code) heavily for implementation
-work — generating mapping, test generation and documentation. 
+work — generating mapping, test generation and documentation.
 **Architecture, API design, and all decisions are human-driven**.
