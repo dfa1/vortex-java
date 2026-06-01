@@ -10,6 +10,7 @@ import io.github.dfa1.vortex.proto.EncodingProtos;
 
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
+import java.util.List;
 
 /// Decoder for {@code vortex.decimal_byte_parts} — decimal split into MSP + LSP children.
 ///
@@ -35,12 +36,32 @@ public final class DecimalBytePartsEncoding implements Encoding {
 
 	@Override
 	public EncodeResult encode(DType dtype, Object data) {
-		throw new UnsupportedOperationException("encode not yet implemented for " + encodingId());
+		return Encoder.encode((DType.Decimal) dtype, (long[]) data);
 	}
 
 	@Override
 	public Array decode(DecodeContext ctx) {
 		return Decoder.decode(ctx);
+	}
+
+	private static final class Encoder {
+
+		static EncodeResult encode(DType.Decimal dtype, long[] data) {
+			DType mspDtype = new DType.Primitive(PType.I64, dtype.nullable());
+			EncodeResult mspResult = new PrimitiveEncoding().encode(mspDtype, data);
+
+			EncodingProtos.DecimalBytePartsMetadata proto = EncodingProtos.DecimalBytePartsMetadata.newBuilder()
+					.setZerothChildPtype(
+							io.github.dfa1.vortex.proto.DTypeProtos.PType.forNumber(PType.I64.ordinal()))
+					.setLowerPartCount(0)
+					.build();
+			ByteBuffer metaBuf = ByteBuffer.wrap(proto.toByteArray());
+
+			EncodeNode mspNode = EncodeNode.remapBufferIndices(mspResult.rootNode(), 0);
+			EncodeNode root = new EncodeNode(
+					EncodingId.VORTEX_DECIMAL_BYTE_PARTS, metaBuf, new EncodeNode[]{mspNode}, new int[]{});
+			return new EncodeResult(root, List.copyOf(mspResult.buffers()), null, null);
+		}
 	}
 
 	private static final class Decoder {

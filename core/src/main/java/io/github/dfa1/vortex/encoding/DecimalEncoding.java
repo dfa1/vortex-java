@@ -9,6 +9,7 @@ import io.github.dfa1.vortex.proto.EncodingProtos;
 
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
+import java.util.List;
 
 /// Decoder for {@code vortex.decimal} — canonical flat decimal storage.
 ///
@@ -33,12 +34,60 @@ public final class DecimalEncoding implements Encoding {
 
 	@Override
 	public EncodeResult encode(DType dtype, Object data) {
-		throw new UnsupportedOperationException("encode not yet implemented for " + encodingId());
+		return Encoder.encode((DType.Decimal) dtype, (MemorySegment) data);
 	}
 
 	@Override
 	public Array decode(DecodeContext ctx) {
 		return Decoder.decode(ctx);
+	}
+
+	private static final class Encoder {
+
+		static EncodeResult encode(DType.Decimal dtype, MemorySegment data) {
+			int valuesType = valuesType(dtype.precision());
+			int bw = byteWidth(valuesType);
+			if (data.byteSize() % bw != 0) {
+				throw new VortexException(EncodingId.VORTEX_DECIMAL,
+						"buffer size %d not multiple of byteWidth %d".formatted(data.byteSize(), bw));
+			}
+			ByteBuffer metaBuf = ByteBuffer.wrap(
+					EncodingProtos.DecimalMetadata.newBuilder().setValuesType(valuesType).build().toByteArray());
+			EncodeNode node = new EncodeNode(EncodingId.VORTEX_DECIMAL, metaBuf, new EncodeNode[0], new int[]{0});
+			return new EncodeResult(node, List.of(data), null, null);
+		}
+
+		private static int valuesType(byte precision) {
+			if (precision <= 2) {
+				return 0;
+			}
+			if (precision <= 4) {
+				return 1;
+			}
+			if (precision <= 9) {
+				return 2;
+			}
+			if (precision <= 18) {
+				return 3;
+			}
+			if (precision <= 38) {
+				return 4;
+			}
+			return 5;
+		}
+
+		private static int byteWidth(int valuesType) {
+			return switch (valuesType) {
+				case 0 -> 1;
+				case 1 -> 2;
+				case 2 -> 4;
+				case 3 -> 8;
+				case 4 -> 16;
+				case 5 -> 32;
+				default -> throw new VortexException(EncodingId.VORTEX_DECIMAL,
+						"unknown valuesType: " + valuesType);
+			};
+		}
 	}
 
 	private static final class Decoder {

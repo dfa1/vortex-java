@@ -96,8 +96,8 @@
 | `vortex.chunked`             | —                          | ❌       | ❌       | medium    | unblocks `chunked.vortex` (segment-level chunked array) |
 | `fastlanes.rle`              | —                          | ❌       | ❌       | medium    | unblocks `rle.vortex` |
 | `vortex.alprd`               | —                          | ❌       | ❌       | medium    | unblocks `alprd.vortex` |
-| `vortex.decimal`             | `DecimalEncoding`          | ✅       | ❌ stub  | —         | Decimal |
-| `vortex.decimal_byte_parts`  | `DecimalBytePartsEncoding` | ✅       | ❌ stub  | —         | Decimal byte parts |
+| `vortex.decimal`             | `DecimalEncoding`          | ✅       | ✅       | —         | Decimal |
+| `vortex.decimal_byte_parts`  | `DecimalBytePartsEncoding` | ✅       | ✅       | —         | Decimal byte parts |
 | `vortex.datetimeparts`       | `DateTimePartsEncoding`    | ✅       | ❌ stub  | —         | Timestamp parts |
 | `vortex.list`                | —                          | ❌       | ❌       | hard      | needs list array model; unblocks `list.vortex` |
 | `vortex.listview`            | —                          | ❌       | ❌       | hard      | unblocks `listview.vortex` |
