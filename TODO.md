@@ -95,13 +95,13 @@
 | `vortex.pco`                 | `PcoEncoding` (stub)       | ❌       | ❌       | very hard | ANS + bin tokenization not ported; unblocks `pco.vortex`, tpch/clickbench fixtures |
 | `vortex.chunked`             | `ChunkedEncoding`          | ✅       | ✅       | medium    | decode: primitive + struct concat; encode via ChunkedData |
 | `fastlanes.rle`              | —                          | ❌       | ❌       | medium    | unblocks `rle.vortex` |
-| `vortex.alprd`               | —                          | ❌       | ❌       | medium    | unblocks `alprd.vortex` |
+| `vortex.alprd`               | —                          | ❌       | ❌       | hard      | ALP-RD: splits float bit pattern into left (dict-compressed, ≤8 entries, 3-bit indices) + right (bitpacked residuals); split point per-array in metadata; two separately-encoded children; harder than ALP; unblocks `alprd.vortex` |
 | `vortex.decimal`             | `DecimalEncoding`          | ✅       | ✅       | —         | Decimal |
 | `vortex.decimal_byte_parts`  | `DecimalBytePartsEncoding` | ✅       | ✅       | —         | Decimal byte parts |
 | `vortex.datetimeparts`       | `DateTimePartsEncoding`    | ✅       | ❌ stub  | —         | Timestamp parts |
-| `vortex.list`                | —                          | ❌       | ❌       | hard      | needs list array model; unblocks `list.vortex` |
+| `vortex.list`                | —                          | ❌       | ❌       | hard      | two children: offsets (i32/i64, len N+1) + values; needs `ListArray`; offsets are cascadable (use `decodeChildAs`); chunked requires offset re-basing; unblocks `list.vortex` |
 | `vortex.listview`            | —                          | ❌       | ❌       | hard      | unblocks `listview.vortex` |
-| `vortex.fixed_size_list`     | —                          | ❌       | ❌       | hard      | unblocks `fixed_size_list.vortex` |
+| `vortex.fixed_size_list`     | —                          | ❌       | ❌       | medium    | one child: values only, len = N*fixedSize; no offsets, no re-basing; needs `FixedSizeListArray` + child dispatch; easier than `vortex.list`; unblocks `fixed_size_list.vortex` |
 | `vortex.zstd`                | `ZstdEncoding`             | ✅       | ✅       | —         | Primitive, Utf8, Binary (no dict, no nullable); uses airlift/aircompressor |
 
 ### `vortex.zstd` known limitations
