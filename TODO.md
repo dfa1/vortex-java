@@ -101,7 +101,7 @@
 | `vortex.datetimeparts`       | `DateTimePartsEncoding`    | ✅       | ❌ stub  | —         | Timestamp parts |
 | `vortex.list`                | —                          | ❌       | ❌       | hard      | two children: offsets (i32/i64, len N+1) + values; needs `ListArray`; offsets are cascadable (use `decodeChildAs`); chunked requires offset re-basing; unblocks `list.vortex` |
 | `vortex.listview`            | —                          | ❌       | ❌       | hard      | unblocks `listview.vortex` |
-| `vortex.fixed_size_list`     | —                          | ❌       | ❌       | medium    | one child: values only, len = N*fixedSize; no offsets, no re-basing; needs `FixedSizeListArray` + child dispatch; easier than `vortex.list`; unblocks `fixed_size_list.vortex` |
+| `vortex.fixed_size_list`     | `FixedSizeListEncoding`    | ✅       | ✅       | —         | one child: flat elements; no offsets |
 | `vortex.zstd`                | `ZstdEncoding`             | ✅       | ✅       | —         | Primitive, Utf8, Binary (no dict, no nullable); uses airlift/aircompressor |
 
 ### `vortex.zstd` known limitations
@@ -148,7 +148,7 @@
 | `datetimeparts.vortex`           | ✅     |                               |
 | `list.vortex`                    | ❌     | `vortex.list` + list array model |
 | `listview.vortex`                | ❌     | `vortex.listview` missing     |
-| `fixed_size_list.vortex`         | ❌     | `vortex.fixed_size_list` missing |
+| `fixed_size_list.vortex`         | ✅     |                               |
 | `zstd.vortex`                    | ✅     |                               |
 | `tpch_lineitem.compact.vortex`   | ❌     | `vortex.pco`                  |
 | `tpch_lineitem.regular.vortex`   | ❌     | `vortex.pco`                  |

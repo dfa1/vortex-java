@@ -11,8 +11,8 @@ import java.lang.foreign.MemorySegment;
 /// Buffers are `MemorySegment` slices backed by the memory-mapped file; lifetime
 /// is tied to the `VortexFile`'s Arena.
 public sealed interface Array
-        permits BoolArray, ByteArray, DoubleArray, EmptyArray, Float16Array, FloatArray,
-                GenericArray, IntArray, LongArray, NullArray, ShortArray, StructArray,
+        permits BoolArray, ByteArray, DoubleArray, EmptyArray, FixedSizeListArray, Float16Array,
+                FloatArray, GenericArray, IntArray, LongArray, NullArray, ShortArray, StructArray,
                 VarBinArray {
 
 	long length();

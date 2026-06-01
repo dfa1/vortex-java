@@ -40,7 +40,8 @@ public enum EncodingId {
 	VORTEX_DECIMAL("vortex.decimal"),
 	VORTEX_DECIMAL_BYTE_PARTS("vortex.decimal_byte_parts"),
 	VORTEX_DATETIMEPARTS("vortex.datetimeparts"),
-	VORTEX_ZSTD("vortex.zstd");
+	VORTEX_ZSTD("vortex.zstd"),
+	VORTEX_FIXED_SIZE_LIST("vortex.fixed_size_list");
 
 	// O(1) access to EncodingId by its string representation
 	private static final Map<String, EncodingId> LOOKUP = Stream.of(EncodingId.values())
