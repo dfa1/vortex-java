@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.core.array.StructArray;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
 
+import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -30,13 +31,54 @@ public final class StructEncoding implements Encoding {
 	}
 
 	@Override
+	public boolean accepts(DType dtype) {
+		return dtype instanceof DType.Struct;
+	}
+
+	@Override
 	public EncodeResult encode(DType dtype, Object data) {
-		throw new UnsupportedOperationException("encode not supported by " + encodingId());
+		return Encoder.encode((DType.Struct) dtype, (StructData) data);
 	}
 
 	@Override
 	public Array decode(DecodeContext ctx) {
 		return Decoder.decode(ctx);
+	}
+
+	private static final class Encoder {
+
+		private static final List<Encoding> FALLBACK = List.of(
+				new PrimitiveEncoding(), new VarBinEncoding(), new BoolEncoding(),
+				new NullEncoding(), new ByteBoolEncoding());
+
+		static EncodeResult encode(DType.Struct dtype, StructData data) {
+			List<Object> fields = data.fieldArrays();
+			List<DType> fieldTypes = dtype.fieldTypes();
+			if (fields.size() != fieldTypes.size()) {
+				throw new VortexException(EncodingId.VORTEX_STRUCT,
+						"fieldArrays length %d != fieldTypes length %d".formatted(fields.size(), fieldTypes.size()));
+			}
+			List<MemorySegment> allBuffers = new ArrayList<>();
+			EncodeNode[] children = new EncodeNode[fields.size()];
+			for (int i = 0; i < fields.size(); i++) {
+				DType fieldDtype = fieldTypes.get(i);
+				EncodeResult fieldResult = findEncoding(fieldDtype).encode(fieldDtype, fields.get(i));
+				int bufOffset = allBuffers.size();
+				children[i] = EncodeNode.remapBufferIndices(fieldResult.rootNode(), bufOffset);
+				allBuffers.addAll(fieldResult.buffers());
+			}
+			EncodeNode root = new EncodeNode(EncodingId.VORTEX_STRUCT, null, children, new int[0]);
+			return new EncodeResult(root, List.copyOf(allBuffers), null, null);
+		}
+
+		private static Encoding findEncoding(DType dtype) {
+			for (Encoding enc : FALLBACK) {
+				if (enc.accepts(dtype)) {
+					return enc;
+				}
+			}
+			throw new UnsupportedOperationException("no fallback encoding for dtype: " + dtype);
+		}
 	}
 
 	private static final class Decoder {

@@ -30,6 +30,9 @@ public final class CascadingCompressor {
 	}
 
 	private EncodeResult encodeWithCtx(DType dtype, Object data, CompressorContext ctx) {
+		if (dtype instanceof DType.Struct structDtype) {
+			return encodeStruct(structDtype, (StructData) data, ctx);
+		}
 		// Cascading only targets primitives (integers + floats); other types use first-match.
 		if (!(dtype instanceof DType.Primitive)) {
 			return findPrimitiveEncoding(dtype).encode(dtype, data);
@@ -119,7 +122,7 @@ public final class CascadingCompressor {
 			EncodeResult childResult = encodeWithCtx(slot.childDtype(), slot.childData(), childCtx);
 
 			int bufOffset = allBuffers.size();
-			children[slot.parentChildIdx()] = remapBufferIndices(childResult.rootNode(), bufOffset);
+			children[slot.parentChildIdx()] = EncodeNode.remapBufferIndices(childResult.rootNode(), bufOffset);
 			allBuffers.addAll(childResult.buffers());
 		}
 
@@ -131,29 +134,28 @@ public final class CascadingCompressor {
 		return new EncodeResult(root, List.copyOf(allBuffers), step.statsMin(), step.statsMax());
 	}
 
-	// ── Buffer index remapping ────────────────────────────────────────────────
+	// ── Struct encoding ───────────────────────────────────────────────────────
 
-	private static EncodeNode remapBufferIndices(EncodeNode node, int offset) {
-		if (offset == 0) {
-			return node;
+	private EncodeResult encodeStruct(DType.Struct dtype, StructData data, CompressorContext ctx) {
+		List<Object> fields = data.fieldArrays();
+		List<DType> fieldTypes = dtype.fieldTypes();
+		List<MemorySegment> allBuffers = new ArrayList<>();
+		EncodeNode[] children = new EncodeNode[fields.size()];
+		for (int i = 0; i < fields.size(); i++) {
+			EncodeResult fieldResult = encodeWithCtx(fieldTypes.get(i), fields.get(i), ctx);
+			int bufOffset = allBuffers.size();
+			children[i] = EncodeNode.remapBufferIndices(fieldResult.rootNode(), bufOffset);
+			allBuffers.addAll(fieldResult.buffers());
 		}
-		int[] oldIdx = node.bufferIndices();
-		int[] newIdx = new int[oldIdx.length];
-		for (int i = 0; i < oldIdx.length; i++) {
-			newIdx[i] = oldIdx[i] + offset;
-		}
-		EncodeNode[] oldChildren = node.children();
-		EncodeNode[] newChildren = new EncodeNode[oldChildren.length];
-		for (int i = 0; i < oldChildren.length; i++) {
-			newChildren[i] = remapBufferIndices(oldChildren[i], offset);
-		}
-		return new EncodeNode(node.encodingId(), node.metadata(), newChildren, newIdx);
+		EncodeNode root = new EncodeNode(EncodingId.VORTEX_STRUCT, null, children, new int[0]);
+		return new EncodeResult(root, List.copyOf(allBuffers), null, null);
 	}
 
 	// ── Helpers ───────────────────────────────────────────────────────────────
 
 	private static int dataLength(Object data) {
 		return switch (data) {
+			case StructData sd -> sd.fieldArrays().isEmpty() ? 0 : dataLength(sd.fieldArrays().getFirst());
 			case byte[] a -> a.length;
 			case short[] a -> a.length;
 			case int[] a -> a.length;
@@ -166,6 +168,10 @@ public final class CascadingCompressor {
 
 	private static Object sliceSample(Object data, int n) {
 		return switch (data) {
+			case StructData sd -> {
+				List<Object> sliced = sd.fieldArrays().stream().map(f -> sliceSample(f, n)).toList();
+				yield new StructData(sliced);
+			}
 			case byte[] a -> Arrays.copyOf(a, n);
 			case short[] a -> Arrays.copyOf(a, n);
 			case int[] a -> Arrays.copyOf(a, n);

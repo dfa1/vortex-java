@@ -107,6 +107,20 @@ class CliIT {
         assertThat(output.strip()).isEqualTo("struct<id: I64, name: utf8>");
     }
 
+    @Test
+    void importReportsLargerWhenVortexExceedsCsv(@TempDir Path tmp) throws Exception {
+        // Given — tiny CSV produces vortex overhead > input size
+        Path csvIn = tmp.resolve("data.csv");
+        Files.writeString(csvIn, "id,name\n1,Alice\n2,Bob\n");
+
+        // When
+        String output = captureStdout(
+                () -> ImportCommand.run(new String[]{"import", csvIn.toString()}));
+
+        // Then — must say "larger", never a negative "smaller"
+        assertThat(output).contains("larger").doesNotContain("smaller");
+    }
+
     private static String captureStdout(IntSupplier action) {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         PrintStream saved = System.out;
