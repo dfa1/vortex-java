@@ -31,13 +31,82 @@ class ZstdEncodingTest {
     class Encode {
 
         @Test
-        void encode_throwsUnsupportedOperationException() {
+        void encode_i32_roundTrips() {
+            // Given
+            var sut = new ZstdEncoding();
+            int[] data = {10, 20, 30, 40};
+
+            // When
+            EncodeResult result = sut.encode(I32, data);
+            DecodeContext ctx = EncodeTestHelper.toDecodeContext(result, data.length, I32, EncodingRegistry.empty());
+            IntArray decoded = (IntArray) sut.decode(ctx);
+
+            // Then
+            assertThat(decoded.length()).isEqualTo(data.length);
+            for (int i = 0; i < data.length; i++) {
+                assertThat(decoded.getInt(i)).as("index %d", i).isEqualTo(data[i]);
+            }
+        }
+
+        @Test
+        void encode_i64_roundTrips() {
+            // Given
+            var sut = new ZstdEncoding();
+            long[] data = {100L, 200L, 300L};
+
+            // When
+            EncodeResult result = sut.encode(I64, data);
+            DecodeContext ctx = EncodeTestHelper.toDecodeContext(result, data.length, I64, EncodingRegistry.empty());
+            LongArray decoded = (LongArray) sut.decode(ctx);
+
+            // Then
+            assertThat(decoded.length()).isEqualTo(data.length);
+            for (int i = 0; i < data.length; i++) {
+                assertThat(decoded.getLong(i)).as("index %d", i).isEqualTo(data[i]);
+            }
+        }
+
+        @Test
+        void encode_utf8_roundTrips() {
+            // Given
+            var sut = new ZstdEncoding();
+            String[] data = {"hello", "world", "zstd"};
+
+            // When
+            EncodeResult result = sut.encode(UTF8, data);
+            DecodeContext ctx = EncodeTestHelper.toDecodeContext(result, data.length, UTF8, EncodingRegistry.empty());
+            VarBinArray decoded = (VarBinArray) sut.decode(ctx);
+
+            // Then
+            assertThat(decoded.length()).isEqualTo(data.length);
+            for (int i = 0; i < data.length; i++) {
+                assertThat(decoded.getString(i)).as("index %d", i).isEqualTo(data[i]);
+            }
+        }
+
+        @Test
+        void encode_emptyArray_roundTrips() {
+            // Given
+            var sut = new ZstdEncoding();
+            int[] data = {};
+
+            // When
+            EncodeResult result = sut.encode(I32, data);
+            DecodeContext ctx = EncodeTestHelper.toDecodeContext(result, data.length, I32, EncodingRegistry.empty());
+            IntArray decoded = (IntArray) sut.decode(ctx);
+
+            // Then
+            assertThat(decoded.length()).isZero();
+        }
+
+        @Test
+        void encode_unsupportedDtype_throwsVortexException() {
             // Given
             var sut = new ZstdEncoding();
 
             // When / Then
-            assertThatThrownBy(() -> sut.encode(I32, new int[]{1, 2, 3}))
-                    .isInstanceOf(UnsupportedOperationException.class);
+            assertThatThrownBy(() -> sut.encode(new DType.Null(false), null))
+                    .isInstanceOf(VortexException.class);
         }
     }
 
