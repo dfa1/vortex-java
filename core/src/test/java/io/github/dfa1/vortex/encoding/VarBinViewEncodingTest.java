@@ -1,8 +1,10 @@
 package io.github.dfa1.vortex.encoding;
 
 import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.VarBinArray;
 import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -22,12 +24,70 @@ class VarBinViewEncodingTest {
 
 	private static final ValueLayout.OfInt LE_INT = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 	private static final DType UTF8 = new DType.Utf8(false);
+	private static final DType BINARY = new DType.Binary(false);
+	private static final DType I32 = new DType.Primitive(PType.I32, false);
+
+	@Nested
+	class Encode {
+
+		@Test
+		void accepts_utf8_true() {
+			// Given
+			var sut = new VarBinViewEncoding();
+
+			// When / Then
+			assertThat(sut.accepts(UTF8)).isTrue();
+		}
+
+		@Test
+		void accepts_binary_true() {
+			// Given
+			var sut = new VarBinViewEncoding();
+
+			// When / Then
+			assertThat(sut.accepts(BINARY)).isTrue();
+		}
+
+		@Test
+		void accepts_primitive_false() {
+			// Given
+			var sut = new VarBinViewEncoding();
+
+			// When / Then
+			assertThat(sut.accepts(I32)).isFalse();
+		}
+
+		@ParameterizedTest(name = "{0}")
+		@MethodSource("io.github.dfa1.vortex.encoding.VarBinViewEncodingTest$Decode#stringArrays")
+		void encode_thenDecode_roundtripsAllStrings(String name, String[] values) {
+			// Given
+			var sut = new VarBinViewEncoding();
+			Arena arena = Arena.ofAuto();
+
+			// When
+			EncodeResult result = sut.encode(UTF8, values);
+			MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
+			ArrayNode node = new ArrayNode(
+					EncodingId.VORTEX_VARBINVIEW, null, new ArrayNode[0],
+					result.rootNode().bufferIndices(), null);
+			EncodingRegistry registry = EncodingRegistry.empty();
+			registry.register(sut);
+			DecodeContext ctx = new DecodeContext(node, UTF8, values.length, bufs, registry, arena);
+			var decoded = (VarBinArray) sut.decode(ctx);
+
+			// Then
+			assertThat(decoded.length()).isEqualTo(values.length);
+			for (int i = 0; i < values.length; i++) {
+				assertThat(decoded.getString(i)).as("index %d", i).isEqualTo(values[i]);
+			}
+		}
+	}
 
 	@Nested
 	class Decode {
 
 		@ParameterizedTest(name = "{0}")
-		@MethodSource("stringArrays")
+		@MethodSource("io.github.dfa1.vortex.encoding.VarBinViewEncodingTest$Decode#stringArrays")
 		void decode_roundtrip_returnsAllStrings(String name, String[] values) {
 			// Given
 			Arena arena = Arena.ofAuto();
@@ -118,4 +178,5 @@ class VarBinViewEncodingTest {
 			return arr;
 		}
 	}
+
 }

@@ -8,7 +8,10 @@ import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
 
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 /// Decoder for {@code vortex.varbinview} — Apache Arrow StringView/BinaryView format.
 ///
@@ -30,13 +33,71 @@ public final class VarBinViewEncoding implements Encoding {
 	}
 
 	@Override
+	public boolean accepts(DType dtype) {
+		return dtype instanceof DType.Utf8 || dtype instanceof DType.Binary;
+	}
+
+	@Override
 	public EncodeResult encode(DType dtype, Object data) {
-		throw new UnsupportedOperationException("encode not supported by " + encodingId());
+		return Encoder.encode((String[]) data);
 	}
 
 	@Override
 	public Array decode(DecodeContext ctx) {
 		return Decoder.decode(ctx);
+	}
+
+	private static final class Encoder {
+
+		private static final int MAX_INLINED_SIZE = 12;
+		private static final int VIEW_SIZE = 16;
+
+		static EncodeResult encode(String[] strings) {
+			int n = strings.length;
+
+			byte[][] bytes = new byte[n][];
+			int totalDataBytes = 0;
+			for (int i = 0; i < n; i++) {
+				bytes[i] = strings[i].getBytes(StandardCharsets.UTF_8);
+				if (bytes[i].length > MAX_INLINED_SIZE) {
+					totalDataBytes += bytes[i].length;
+				}
+			}
+
+			Arena arena = Arena.ofAuto();
+			boolean hasDataBuf = totalDataBytes > 0;
+			MemorySegment dataBuf = arena.allocate(hasDataBuf ? totalDataBytes : 1);
+			MemorySegment viewsBuf = arena.allocate(n > 0 ? (long) n * VIEW_SIZE : 1);
+
+			int dataOffset = 0;
+			for (int i = 0; i < n; i++) {
+				byte[] b = bytes[i];
+				long viewOff = (long) i * VIEW_SIZE;
+				viewsBuf.set(PTypeIO.LE_INT, viewOff, b.length);
+				if (b.length <= MAX_INLINED_SIZE) {
+					MemorySegment.copy(MemorySegment.ofArray(b), 0, viewsBuf, viewOff + 4, b.length);
+				} else {
+					MemorySegment.copy(MemorySegment.ofArray(b), 0, viewsBuf, viewOff + 4, 4);
+					viewsBuf.set(PTypeIO.LE_INT, viewOff + 8, 0);
+					viewsBuf.set(PTypeIO.LE_INT, viewOff + 12, dataOffset);
+					MemorySegment.copy(MemorySegment.ofArray(b), 0, dataBuf, dataOffset, b.length);
+					dataOffset += b.length;
+				}
+			}
+
+			int[] bufIndices;
+			List<MemorySegment> buffers;
+			if (hasDataBuf) {
+				bufIndices = new int[]{0, 1};
+				buffers = List.of(dataBuf, viewsBuf);
+			} else {
+				bufIndices = new int[]{0};
+				buffers = List.of(viewsBuf);
+			}
+
+			EncodeNode root = new EncodeNode(EncodingId.VORTEX_VARBINVIEW, null, new EncodeNode[0], bufIndices);
+			return new EncodeResult(root, buffers, null, null);
+		}
 	}
 
 	private static final class Decoder {

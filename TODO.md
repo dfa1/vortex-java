@@ -120,7 +120,7 @@
 | `vortex.sequence`            | `SequenceEncoding`         | ✅       | ✅       | —         | Primitive |
 | `vortex.struct`              | `StructEncoding`           | ✅       | ✅       | —         | Struct |
 | `vortex.fsst`                | `FsstEncoding`             | ✅       | ❌ stub  | —         | Utf8, Binary |
-| `vortex.varbinview`          | `VarBinViewEncoding`       | ✅       | ❌ stub  | —         | Utf8, Binary |
+| `vortex.varbinview`          | `VarBinViewEncoding`       | ✅       | ✅       | —         | Utf8, Binary |
 | `vortex.pco`                 | `PcoEncoding` (stub)       | ❌       | ❌       | very hard | pure-Java port feasible (tANS = table lookup, modes = scalar arith, no SIMD/Unsafe needed); see plan below. Unblocks `pco.vortex`, tpch/clickbench fixtures |
 | `vortex.chunked`             | `ChunkedEncoding`          | ✅       | ✅       | medium    | decode: primitive + struct concat; encode via ChunkedData |
 | `fastlanes.rle`              | `RleEncoding`              | ✅       | ✅       | —         | chunk-based RLE; offset always < 1024 |
