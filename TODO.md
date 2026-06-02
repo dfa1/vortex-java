@@ -20,6 +20,10 @@
 - [ ] performance tests must be peer reviewed
 - [ ] run performance tests on other machines (I have access only to Apple M5)
 - [ ] minimize `ctx.arena().allocate(...)` calls — prefer in-place decode when child buffer is writable (already done in ALP); audit all decoders for unnecessary off-heap allocs
+- [ ] **Evaluate Vector API (JEP 469+) for hot decode loops** — candidates: FastLanes bitpacked unpack,
+  FrameOfReference add-base, ZigZag decode, ALP F64 reconstruction, future pco offset+base loop. Measure
+  vs scalar baseline with JMH; only adopt where speedup is material and code stays readable. Pin against
+  a specific JDK build since Vector API is incubating until Valhalla lands.
 
 ## Testing
 
@@ -122,7 +126,7 @@
 | `vortex.struct`              | `StructEncoding`           | ✅       | ✅       | —         | Struct |
 | `vortex.fsst`                | `FsstEncoding`             | ✅       | ❌ stub  | —         | Utf8, Binary |
 | `vortex.varbinview`          | `VarBinViewEncoding`       | ✅       | ❌ stub  | —         | Utf8, Binary |
-| `vortex.pco`                 | `PcoEncoding` (stub)       | ❌       | ❌       | very hard | ANS + bin tokenization not ported; unblocks `pco.vortex`, tpch/clickbench fixtures |
+| `vortex.pco`                 | `PcoEncoding` (stub)       | ❌       | ❌       | very hard | pure-Java port feasible (tANS = table lookup, modes = scalar arith, no SIMD/Unsafe needed); see plan below. Unblocks `pco.vortex`, tpch/clickbench fixtures |
 | `vortex.chunked`             | `ChunkedEncoding`          | ✅       | ✅       | medium    | decode: primitive + struct concat; encode via ChunkedData |
 | `fastlanes.rle`              | `RleEncoding`              | ✅       | ✅       | —         | chunk-based RLE; offset always < 1024 |
 | `vortex.alprd`               | `AlpRdEncoding`            | ✅       | ✅       | —         | F64, F32; left ≤16 bits dict-coded (≤8 entries), right bitpacked; exceptions as patches |
@@ -147,6 +151,60 @@
 
 - [ ] **Nullable arrays (encode)** — `ZstdEncoding.Encoder` has no null handling.
   Fix: accept nullable input (e.g. `Integer[]` or a validity mask alongside the data array). Strip null positions before compression. Encode the validity bitmap as a Bool child (child[0]) in the `EncodeNode`. Mirrors what Rust does: only valid values go into the compressed payload.
+
+### `vortex.pco` implementation plan
+
+Pure-Java decode port. No JNI. Skip encode (no consumer needs it).
+
+**Refs**: [pcodec format.md](https://github.com/pcodec/pcodec/blob/main/docs/format.md),
+[Rust vortex-pco](https://github.com/vortex-data/vortex/tree/develop/encodings/pco/src),
+[pcodec repo](https://github.com/pcodec/pcodec), [paper](https://arxiv.org/html/2502.06112v1).
+
+**Wire format** (Vortex layer):
+- Metadata proto: `PcoMetadata { bytes header=1; repeated PcoChunkInfo chunks=2; }`,
+  `PcoChunkInfo { repeated PcoPageInfo pages=1; }`, `PcoPageInfo { uint32 n_values=1; }`.
+- Buffers: `chunk_metas[0..N]` then `pages[0..M]`. Optional child[0] = validity.
+- Pco encodes only valid values; scatter back into full-length output on decode.
+
+**Wire format** (pcodec layer):
+- Header: 2 bytes (major.minor format version).
+- Chunk meta: mode (4b) + extra mode bits + delta encoding (4b) + extra delta bits +
+  per latent: `ans_size_log` (4b) + bin count (15b) + per bin `{weight-1, lower_bound, offset_bits}`.
+- Page: initial latent state (delta `state_n` + 4 tANS state indices) → byte align →
+  per 256-batch: tANS-decoded bin indices + offset bits.
+- All bit packing little-endian.
+- Modes: Classic, IntMult, FloatMult, FloatQuant, Dict.
+- Deltas: None, Consecutive, Lookback, Conv1.
+
+**Phases**:
+- [ ] **Phase 0 — scoping**. Inspect `pco.vortex`, `tpch_lineitem.compact.vortex`,
+  `tpch_orders.compact.vortex`, `clickbench_hits_5k.compact.vortex` via VortexInspector.
+  Dump mode/delta/ptype per chunk. Drives prioritization.
+- [ ] **Phase 1 — bit reader + header + proto**. New `encoding/pco/` pkg. `LeBitReader` over
+  `MemorySegment`. Add `PcoMetadata`/`PcoChunkInfo`/`PcoPageInfo` to `encoding.proto`.
+  `PcoEncoding.Decoder` skeleton.
+- [ ] **Phase 2 — Classic mode, no delta, single chunk/page, non-null, I64**. `ChunkMetaReader`,
+  tANS table builder (port from `pcodec/src/ans/`), `PageDecoder`, scalar reconstruct
+  `value = bin.lower + offset`. Allocate output via `ctx.arena()`.
+- [ ] **Phase 3 — all ptypes**. I16/I32/U16/U32/U64/F16/F32/F64.
+- [ ] **Phase 4 — delta Consecutive**. Initial state read + cumulative sum.
+- [ ] **Phase 5 — other modes per Phase 0 findings**. Likely FloatMult, IntMult, FloatQuant.
+  Defer Dict/Lookback/Conv1 until fixture demands; fail fast with named mode in `VortexException`.
+- [ ] **Phase 6 — multi-chunk, multi-page, nullable**. Iterate chunks; per-chunk decompressor;
+  validity child decode via registry; scatter valid values into output.
+- [ ] **Phase 7 — integration tests**. Add 4 blocked fixtures to `RustWritesJavaReadsIntegrationTest`
+  with value-level assertions, not just `rowCount > 0`. Property test via pcodec CLI fixture-gen
+  with `tries` low.
+- [ ] **Phase 8 — close out**. Drop pco row from blocker list; update score 31/35 → 35/35;
+  document supported modes/deltas + version range in `PcoEncoding` javadoc.
+
+**Risks**:
+- tANS state machine: subtle. Port table-build line-by-line from Rust; test byte-exact on toy inputs.
+- Format version drift (pcodec pre-1.0). Pin to fixture-declared version; reject others explicitly.
+- Mode coverage unknown until Phase 0. Dict would jump scope.
+
+**Estimate**: ~12 working days full; ~6 days for Classic+Consecutive only (likely insufficient
+for float fixtures).
 
 ### S3 Fixture Status (`v0.72.0/arrays/`)
 
