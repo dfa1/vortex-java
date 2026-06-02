@@ -19,6 +19,7 @@
       and benchmark commit SHA so numbers don't rot silently.
 - [ ] performance tests must be peer reviewed
 - [ ] run performance tests on other machines (I have access only to Apple M5)
+- [ ] minimize `ctx.arena().allocate(...)` calls — prefer in-place decode when child buffer is writable (already done in ALP); audit all decoders for unnecessary off-heap allocs
 
 ## Testing
 

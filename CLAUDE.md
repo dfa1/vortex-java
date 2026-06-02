@@ -62,6 +62,11 @@ Struct → Zoned(Stats) → Chunked → [Flat, Flat, ...]
 Encoding IDs are strings (e.g. `"vortex.flat"`, `"fastlanes.bitpacked"`). `DecoderRegistry` maps IDs → `Decoder` impls
 via `ServiceLoader`; register custom decoders with `registry.register(decoder)`.
 
+**Adding a new encoding:** three touch-points, always all three:
+1. `EncodingId.java` — add enum constant `VORTEX_FOO("vortex.foo")`
+2. `AlpRdEncoding.java` (or `FooEncoding.java`) — implement `Encoding`
+3. `core/src/main/resources/META-INF/services/io.github.dfa1.vortex.encoding.Encoding` — add the fully-qualified class name
+
 ### Memory model
 
 `VortexFile` memory-maps the entire file into one `MemorySegment` (confined `Arena`). All `Array` buffers returned
