@@ -1,7 +1,7 @@
 module io.github.dfa1.vortex.core {
     requires com.google.protobuf;
     requires flatbuffers.java;
-    requires aircompressor;
+    requires aircompressor.v3;
 
     exports io.github.dfa1.vortex.core;
     exports io.github.dfa1.vortex.core.array;

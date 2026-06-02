@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.encoding;
 
-import io.airlift.compress.zstd.ZstdCompressor;
+import io.airlift.compress.v3.zstd.ZstdJavaCompressor;
+import io.airlift.compress.v3.zstd.ZstdCompressor;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -288,7 +289,7 @@ class ZstdEncodingTest {
         }
 
         private static byte[] compress(byte[] input) {
-            ZstdCompressor compressor = new ZstdCompressor();
+            ZstdCompressor compressor = new ZstdJavaCompressor();
             byte[] out = new byte[compressor.maxCompressedLength(input.length)];
             int len = compressor.compress(input, 0, input.length, out, 0, out.length);
             return Arrays.copyOf(out, len);

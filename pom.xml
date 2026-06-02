@@ -23,7 +23,7 @@
 		<maven.compiler.release>25</maven.compiler.release>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<!-- production -->
-		<aircompressor.version>0.27</aircompressor.version>
+		<aircompressor.version>3.6</aircompressor.version>
 		<flatbuffers.version>25.2.10</flatbuffers.version>
 		<protobuf.version>4.35.0</protobuf.version>
 		<fastcsv.version>3.6.0</fastcsv.version>
@@ -67,7 +67,7 @@
 			</dependency>
 			<dependency>
 				<groupId>io.airlift</groupId>
-				<artifactId>aircompressor</artifactId>
+				<artifactId>aircompressor-v3</artifactId>
 				<version>${aircompressor.version}</version>
 			</dependency>
 			<dependency>
