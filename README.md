@@ -24,7 +24,7 @@ are readable by all others — no vendor lock-in, no format translation at the b
 | Project                                                     | Language | Notes                                                               |
 |-------------------------------------------------------------|----------|---------------------------------------------------------------------|
 | [spiraldb/vortex](https://github.com/spiraldb/vortex)       | Rust     | Reference implementation + JNI bindings                             |
-| [spiraldb/vortex-go](https://github.com/spiraldb/vortex-go) | Go       | Pure-language port
+| [LaurieRhodes/vortex-go](https://github.com/LaurieRhodes/vortex-go) | Go       | Pure-language port
 
 The official Vortex ecosystem provides JVM bindings via JNI (bundled native `.so`/`.dylib`).
 JNI bindings are fast but add deployment friction: platform-specific artifacts, native build
