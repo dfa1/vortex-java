@@ -17,17 +17,25 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PcoEncodingTest {
 
-	private static DecodeContext ctxWithMeta(ByteBuffer meta) {
-		DType dtype = new DType.Primitive(PType.I64, false);
-		ArrayNode node = new ArrayNode(EncodingId.VORTEX_PCO, meta, new ArrayNode[0], new int[0], null);
-		return new DecodeContext(node, dtype, 3, new MemorySegment[0], EncodingRegistry.empty(), Arena.ofAuto());
-	}
-
 	private static ByteBuffer validMetaBuffer() {
 		EncodingProtos.PcoMetadata meta = EncodingProtos.PcoMetadata.newBuilder()
 				.setHeader(ByteString.copyFrom(new byte[]{PcoEncoding.PCO_FORMAT_MAJOR, PcoEncoding.PCO_FORMAT_MINOR}))
 				.build();
 		return ByteBuffer.wrap(meta.toByteArray());
+	}
+
+	private static DecodeContext ctxWith(ByteBuffer meta, DType dtype, long rowCount, MemorySegment[] buffers) {
+		ArrayNode node = new ArrayNode(EncodingId.VORTEX_PCO, meta, new ArrayNode[0],
+				bufferIndices(buffers.length), null);
+		return new DecodeContext(node, dtype, rowCount, buffers, EncodingRegistry.empty(), Arena.ofAuto());
+	}
+
+	private static int[] bufferIndices(int n) {
+		int[] idx = new int[n];
+		for (int i = 0; i < n; i++) {
+			idx[i] = i;
+		}
+		return idx;
 	}
 
 	@Nested
@@ -63,7 +71,7 @@ class PcoEncodingTest {
 		void decode_nullMetadata_throwsMissingMeta() {
 			// Given
 			var sut = new PcoEncoding();
-			DecodeContext ctx = ctxWithMeta(null);
+			DecodeContext ctx = ctxWith(null, new DType.Primitive(PType.I64, false), 0, new MemorySegment[0]);
 
 			// When / Then
 			assertThatThrownBy(() -> sut.decode(ctx))
@@ -78,7 +86,8 @@ class PcoEncodingTest {
 			EncodingProtos.PcoMetadata meta = EncodingProtos.PcoMetadata.newBuilder()
 					.setHeader(ByteString.copyFrom(new byte[]{0x03, 0x00}))
 					.build();
-			DecodeContext ctx = ctxWithMeta(ByteBuffer.wrap(meta.toByteArray()));
+			DecodeContext ctx = ctxWith(ByteBuffer.wrap(meta.toByteArray()),
+					new DType.Primitive(PType.I64, false), 0, new MemorySegment[0]);
 
 			// When / Then
 			assertThatThrownBy(() -> sut.decode(ctx))
@@ -87,15 +96,42 @@ class PcoEncodingTest {
 		}
 
 		@Test
-		void decode_validHeader_throwsPhase2Pending() {
+		void decode_nonPrimitiveDtype_throws() {
 			// Given
 			var sut = new PcoEncoding();
-			DecodeContext ctx = ctxWithMeta(validMetaBuffer());
+			DecodeContext ctx = ctxWith(validMetaBuffer(), new DType.Utf8(false), 0, new MemorySegment[0]);
 
-			// When / Then — Phase 1: skeleton parses meta + header, defers actual decode
+			// When / Then
 			assertThatThrownBy(() -> sut.decode(ctx))
 					.isInstanceOf(VortexException.class)
-					.hasMessageContaining("Phase 2 pending");
+					.hasMessageContaining("Primitive dtype");
+		}
+
+		@Test
+		void decode_unsupportedPtype_throwsPhase2Message() {
+			// Given — F64 not yet supported in Phase 2
+			var sut = new PcoEncoding();
+			DecodeContext ctx = ctxWith(validMetaBuffer(), new DType.Primitive(PType.F64, false), 0,
+					new MemorySegment[0]);
+
+			// When / Then
+			assertThatThrownBy(() -> sut.decode(ctx))
+					.isInstanceOf(VortexException.class)
+					.hasMessageContaining("Phase 2");
+		}
+
+		@Test
+		void decode_zeroChunks_returnsEmptyArray() {
+			// Given — valid metadata with 0 chunks, 0 rows
+			var sut = new PcoEncoding();
+			DecodeContext ctx = ctxWith(validMetaBuffer(), new DType.Primitive(PType.I64, false), 0,
+					new MemorySegment[0]);
+
+			// When
+			var result = sut.decode(ctx);
+
+			// Then
+			assertThat(result.length()).isZero();
 		}
 	}
 }
