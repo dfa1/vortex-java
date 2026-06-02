@@ -10,9 +10,13 @@ import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.core.VortexException;
 
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.List;
 
 /// Decoder for {@code vortex.fsst} — Fast Static Symbol Table string compression.
 ///
@@ -34,13 +38,151 @@ public final class FsstEncoding implements Encoding {
 	}
 
 	@Override
+	public boolean accepts(DType dtype) {
+		return dtype instanceof DType.Utf8 || dtype instanceof DType.Binary;
+	}
+
+	@Override
 	public EncodeResult encode(DType dtype, Object data) {
-		throw new UnsupportedOperationException("encode not supported by " + encodingId());
+		return Encoder.encode((String[]) data);
 	}
 
 	@Override
 	public Array decode(DecodeContext ctx) {
 		return Decoder.decode(ctx);
+	}
+
+	private static final class Encoder {
+
+		private static final int MAX_SYMBOLS = 255;
+		private static final int BIGRAM_COUNT = 65536;
+
+		static EncodeResult encode(String[] strings) {
+			int n = strings.length;
+
+			byte[][] byteArrays = new byte[n][];
+			for (int i = 0; i < n; i++) {
+				byteArrays[i] = strings[i].getBytes(StandardCharsets.UTF_8);
+			}
+
+			// Count bigram frequencies; pack freq+index into long for sort-free top-K
+			int[] freq = new int[BIGRAM_COUNT];
+			for (byte[] b : byteArrays) {
+				for (int i = 0; i + 1 < b.length; i++) {
+					freq[(Byte.toUnsignedInt(b[i]) << 8) | Byte.toUnsignedInt(b[i + 1])]++;
+				}
+			}
+			long[] ranked = new long[BIGRAM_COUNT];
+			for (int i = 0; i < BIGRAM_COUNT; i++) {
+				ranked[i] = ((long) freq[i] << 16) | i;
+			}
+			Arrays.sort(ranked);
+
+			// Build symbol table (top-255 bigrams, descending freq from end of sorted array)
+			int numSymbols = 0;
+			int[] codeForBigram = new int[BIGRAM_COUNT];
+			Arrays.fill(codeForBigram, -1);
+			long[] symbolValues = new long[MAX_SYMBOLS];
+			for (int rank = BIGRAM_COUNT - 1; rank >= 0 && numSymbols < MAX_SYMBOLS; rank--) {
+				int bg = (int) (ranked[rank] & 0xFFFF);
+				if (freq[bg] == 0) {
+					break;
+				}
+				codeForBigram[bg] = numSymbols;
+				int hi = bg >>> 8;
+				int lo = bg & 0xFF;
+				symbolValues[numSymbols] = hi | ((long) lo << 8);
+				numSymbols++;
+			}
+
+			// Compress each string
+			byte[][] compressed = new byte[n][];
+			for (int i = 0; i < n; i++) {
+				compressed[i] = compressString(byteArrays[i], codeForBigram);
+			}
+
+			Arena arena = Arena.ofAuto();
+
+			// Buffer 0: symbol table (8 bytes per symbol, LE u64)
+			MemorySegment symBuf = arena.allocate(Math.max(numSymbols * 8L, 1), 8);
+			for (int i = 0; i < numSymbols; i++) {
+				symBuf.setAtIndex(PTypeIO.LE_LONG, i, symbolValues[i]);
+			}
+
+			// Buffer 1: symbol lengths (all 2 = bigram)
+			MemorySegment symLenBuf = arena.allocate(Math.max(numSymbols, 1));
+			for (int i = 0; i < numSymbols; i++) {
+				symLenBuf.set(ValueLayout.JAVA_BYTE, i, (byte) 2);
+			}
+
+			// Buffer 2: compressed bytes (all strings concatenated)
+			int totalCompressed = 0;
+			for (byte[] c : compressed) {
+				totalCompressed += c.length;
+			}
+			MemorySegment compBuf = arena.allocate(Math.max(totalCompressed, 1));
+			long pos = 0;
+			for (byte[] c : compressed) {
+				MemorySegment.copy(MemorySegment.ofArray(c), 0, compBuf, pos, c.length);
+				pos += c.length;
+			}
+
+			// Buffer 3: uncompressed lengths (I32, n elements)
+			MemorySegment uncompLenBuf = arena.allocate(Math.max(n * 4L, 1), 4);
+			for (int i = 0; i < n; i++) {
+				uncompLenBuf.setAtIndex(PTypeIO.LE_INT, i, byteArrays[i].length);
+			}
+
+			// Buffer 4: codes offsets (I32, n+1 elements)
+			MemorySegment codesOffBuf = arena.allocate((long) (n + 1) * 4, 4);
+			long off = 0;
+			codesOffBuf.setAtIndex(PTypeIO.LE_INT, 0, 0);
+			for (int i = 0; i < n; i++) {
+				off += compressed[i].length;
+				codesOffBuf.setAtIndex(PTypeIO.LE_INT, i + 1, (int) off);
+			}
+
+			byte[] metaBytes = EncodingProtos.FSSTMetadata.newBuilder()
+					.setUncompressedLengthsPtype(
+							io.github.dfa1.vortex.proto.DTypeProtos.PType.forNumber(PType.I32.ordinal()))
+					.setCodesOffsetsPtype(
+							io.github.dfa1.vortex.proto.DTypeProtos.PType.forNumber(PType.I32.ordinal()))
+					.build()
+					.toByteArray();
+
+			EncodeNode uncompLensNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 3);
+			EncodeNode codesOffNode   = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 4);
+			EncodeNode root = new EncodeNode(
+					EncodingId.VORTEX_FSST,
+					ByteBuffer.wrap(metaBytes),
+					new EncodeNode[]{uncompLensNode, codesOffNode},
+					new int[]{0, 1, 2});
+
+			return new EncodeResult(root,
+					List.of(symBuf, symLenBuf, compBuf, uncompLenBuf, codesOffBuf),
+					null, null);
+		}
+
+		private static byte[] compressString(byte[] input, int[] codeForBigram) {
+			byte[] out = new byte[input.length * 2];
+			int outLen = 0;
+			int i = 0;
+			while (i < input.length) {
+				if (i + 1 < input.length) {
+					int bg = (Byte.toUnsignedInt(input[i]) << 8) | Byte.toUnsignedInt(input[i + 1]);
+					int code = codeForBigram[bg];
+					if (code >= 0) {
+						out[outLen++] = (byte) code;
+						i += 2;
+						continue;
+					}
+				}
+				out[outLen++] = (byte) 0xFF;
+				out[outLen++] = input[i];
+				i++;
+			}
+			return Arrays.copyOf(out, outLen);
+		}
 	}
 
 	private static final class Decoder {

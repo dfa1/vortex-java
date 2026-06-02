@@ -119,7 +119,7 @@
 | `vortex.sparse`              | `SparseEncoding`           | ✅       | ✅       | —         | Primitive |
 | `vortex.sequence`            | `SequenceEncoding`         | ✅       | ✅       | —         | Primitive |
 | `vortex.struct`              | `StructEncoding`           | ✅       | ✅       | —         | Struct |
-| `vortex.fsst`                | `FsstEncoding`             | ✅       | ❌ stub  | —         | Utf8, Binary |
+| `vortex.fsst`                | `FsstEncoding`             | ✅       | ✅       | —         | Utf8, Binary (bigram symbol table) |
 | `vortex.varbinview`          | `VarBinViewEncoding`       | ✅       | ✅       | —         | Utf8, Binary |
 | `vortex.pco`                 | `PcoEncoding` (stub)       | ❌       | ❌       | very hard | pure-Java port feasible (tANS = table lookup, modes = scalar arith, no SIMD/Unsafe needed); see plan below. Unblocks `pco.vortex`, tpch/clickbench fixtures |
 | `vortex.chunked`             | `ChunkedEncoding`          | ✅       | ✅       | medium    | decode: primitive + struct concat; encode via ChunkedData |

@@ -8,12 +8,16 @@ import io.github.dfa1.vortex.proto.DTypeProtos;
 import io.github.dfa1.vortex.proto.EncodingProtos;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -21,18 +25,89 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class FsstEncodingTest {
 
 	private static final DType UTF8 = new DType.Utf8(false);
+	private static final DType BINARY = new DType.Binary(false);
+	private static final DType I32 = new DType.Primitive(PType.I32, false);
 
 	@Nested
 	class Encode {
 
 		@Test
-		void encode_throwsUnsupportedOperationException() {
+		void accepts_utf8_true() {
 			// Given
 			var sut = new FsstEncoding();
 
 			// When / Then
-			assertThatThrownBy(() -> sut.encode(UTF8, new String[]{"hello"}))
-					.isInstanceOf(UnsupportedOperationException.class);
+			assertThat(sut.accepts(UTF8)).isTrue();
+		}
+
+		@Test
+		void accepts_binary_true() {
+			// Given
+			var sut = new FsstEncoding();
+
+			// When / Then
+			assertThat(sut.accepts(BINARY)).isTrue();
+		}
+
+		@Test
+		void accepts_primitive_false() {
+			// Given
+			var sut = new FsstEncoding();
+
+			// When / Then
+			assertThat(sut.accepts(I32)).isFalse();
+		}
+
+		@ParameterizedTest(name = "{0}")
+		@MethodSource("io.github.dfa1.vortex.encoding.FsstEncodingTest$Encode#stringArrays")
+		void encode_thenDecode_roundtripsAllStrings(String name, String[] values) {
+			// Given
+			var sut = new FsstEncoding();
+			Arena arena = Arena.ofAuto();
+
+			// When
+			EncodeResult result = sut.encode(UTF8, values);
+			MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
+			ArrayNode node = toArrayNode(result.rootNode());
+			EncodingRegistry registry = EncodingRegistry.empty();
+			registry.register(new PrimitiveEncoding());
+			registry.register(sut);
+			DecodeContext ctx = new DecodeContext(node, UTF8, values.length, bufs, registry, arena);
+			var decoded = (VarBinArray) sut.decode(ctx);
+
+			// Then
+			assertThat(decoded.length()).isEqualTo(values.length);
+			for (int i = 0; i < values.length; i++) {
+				assertThat(decoded.getString(i)).as("index %d", i).isEqualTo(values[i]);
+			}
+		}
+
+		private static ArrayNode toArrayNode(EncodeNode node) {
+			ArrayNode[] children = new ArrayNode[node.children().length];
+			for (int i = 0; i < children.length; i++) {
+				children[i] = toArrayNode(node.children()[i]);
+			}
+			return new ArrayNode(node.encodingId(), node.metadata(), children, node.bufferIndices(), null);
+		}
+
+		static Stream<Arguments> stringArrays() {
+			return Stream.of(
+					Arguments.of("empty-array",         new String[0]),
+					Arguments.of("single-empty-string", new String[]{""}),
+					Arguments.of("short-strings",        new String[]{"hi", "ok", "no"}),
+					Arguments.of("repeated-bigram",      new String[]{"aaaa", "aaaa", "aaaa"}),
+					Arguments.of("long-strings",         new String[]{"the quick brown fox jumps over the lazy dog"}),
+					Arguments.of("mixed-lengths",        new String[]{"a", "hello", "this is a longer string than twelve"}),
+					Arguments.of("repeated-short",       repeat("ab", 50)),
+					Arguments.of("all-empty",            new String[]{"", "", "", ""}),
+					Arguments.of("unicode",              new String[]{"héllo", "wörld", "こんにちは"})
+			);
+		}
+
+		private static String[] repeat(String s, int n) {
+			String[] arr = new String[n];
+			java.util.Arrays.fill(arr, s);
+			return arr;
 		}
 	}
 
