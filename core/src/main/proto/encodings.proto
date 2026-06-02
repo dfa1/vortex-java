@@ -107,3 +107,8 @@ message RLEMetadata {
   vortex.dtype.PType values_idx_offsets_ptype = 5;
   uint64 offset = 6;
 }
+
+message ListMetadata {
+  uint64 elements_len = 1;
+  vortex.dtype.PType offset_ptype = 2;
+}

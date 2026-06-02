@@ -99,6 +99,8 @@ class VortexHttpReaderIT {
 			"zstd.vortex",
 			"chunked.vortex",
 			"rle.vortex",
+			"list.vortex",
+			"fixed_size_list.vortex",
 	})
 	void scan_fixture_decodesAllRows(String fixture) throws Exception {
 		// Given

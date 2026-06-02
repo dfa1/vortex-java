@@ -109,7 +109,7 @@
 | `vortex.decimal`             | `DecimalEncoding`          | ✅       | ✅       | —         | Decimal |
 | `vortex.decimal_byte_parts`  | `DecimalBytePartsEncoding` | ✅       | ✅       | —         | Decimal byte parts |
 | `vortex.datetimeparts`       | `DateTimePartsEncoding`    | ✅       | ❌ stub  | —         | Timestamp parts |
-| `vortex.list`                | —                          | ❌       | ❌       | hard      | two children: offsets (i32/i64, len N+1) + values; needs `ListArray`; offsets are cascadable (use `decodeChildAs`); chunked requires offset re-basing; unblocks `list.vortex` |
+| `vortex.list`                | `ListEncoding`             | ✅       | ✅       | —         | two children: elements + offsets (I64); `ListArray`; cascadable offsets via `decodeChildAs` |
 | `vortex.listview`            | —                          | ❌       | ❌       | hard      | unblocks `listview.vortex` |
 | `vortex.fixed_size_list`     | `FixedSizeListEncoding`    | ✅       | ✅       | —         | one child: flat elements; no offsets |
 | `vortex.zstd`                | `ZstdEncoding`             | ✅       | ✅       | —         | Primitive, Utf8, Binary (no dict, no nullable); uses airlift/aircompressor |
@@ -156,7 +156,7 @@
 | `decimal.vortex`                 | ✅     |                               |
 | `decimal_byte_parts.vortex`      | ✅     |                               |
 | `datetimeparts.vortex`           | ✅     |                               |
-| `list.vortex`                    | ❌     | `vortex.list` + list array model |
+| `list.vortex`                    | ✅     |                               |
 | `listview.vortex`                | ❌     | `vortex.listview` missing     |
 | `fixed_size_list.vortex`         | ✅     |                               |
 | `zstd.vortex`                    | ✅     |                               |
