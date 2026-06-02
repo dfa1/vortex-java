@@ -102,6 +102,7 @@ class VortexHttpReaderIT {
 			"list.vortex",
 			"listview.vortex",
 			"fixed_size_list.vortex",
+			"alprd.vortex",
 	})
 	void scan_fixture_decodesAllRows(String fixture) throws Exception {
 		// Given

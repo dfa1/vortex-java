@@ -27,3 +27,4 @@ io.github.dfa1.vortex.encoding.FixedSizeListEncoding
 io.github.dfa1.vortex.encoding.ListEncoding
 io.github.dfa1.vortex.encoding.ListViewEncoding
 io.github.dfa1.vortex.encoding.RleEncoding
+io.github.dfa1.vortex.encoding.AlpRdEncoding

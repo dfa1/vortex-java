@@ -125,7 +125,7 @@
 | `vortex.pco`                 | `PcoEncoding` (stub)       | ❌       | ❌       | very hard | ANS + bin tokenization not ported; unblocks `pco.vortex`, tpch/clickbench fixtures |
 | `vortex.chunked`             | `ChunkedEncoding`          | ✅       | ✅       | medium    | decode: primitive + struct concat; encode via ChunkedData |
 | `fastlanes.rle`              | `RleEncoding`              | ✅       | ✅       | —         | chunk-based RLE; offset always < 1024 |
-| `vortex.alprd`               | —                          | ❌       | ❌       | hard      | ALP-RD: splits float bit pattern into left (dict-compressed, ≤8 entries, 3-bit indices) + right (bitpacked residuals); split point per-array in metadata; two separately-encoded children; harder than ALP; unblocks `alprd.vortex` |
+| `vortex.alprd`               | `AlpRdEncoding`            | ✅       | ✅       | —         | F64, F32; left ≤16 bits dict-coded (≤8 entries), right bitpacked; exceptions as patches |
 | `vortex.decimal`             | `DecimalEncoding`          | ✅       | ✅       | —         | Decimal |
 | `vortex.decimal_byte_parts`  | `DecimalBytePartsEncoding` | ✅       | ✅       | —         | Decimal byte parts |
 | `vortex.datetimeparts`       | `DateTimePartsEncoding`    | ✅       | ✅       | —         | Timestamp parts |
@@ -172,7 +172,7 @@
 | `varbinview.vortex`              | ✅     |                               |
 | `chunked.vortex`                 | ✅     |                               |
 | `rle.vortex`                     | ✅     |                               |
-| `alprd.vortex`                   | ❌     | `vortex.alprd` missing        |
+| `alprd.vortex`                   | ✅     |                               |
 | `decimal.vortex`                 | ✅     |                               |
 | `decimal_byte_parts.vortex`      | ✅     |                               |
 | `datetimeparts.vortex`           | ✅     |                               |
@@ -188,6 +188,6 @@
 | `clickbench_hits_5k.compact.vortex` | ❌  | `vortex.pco`                  |
 | `clickbench_hits_5k.regular.vortex` | ✅  |                               |
 
-**Score: 23/35** (including `for.vortex` scanned separately from `scan_fixture_decodesAllRows`)
+**Score: 24/35** (including `for.vortex` scanned separately from `scan_fixture_decodesAllRows`)
 
 

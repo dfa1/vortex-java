@@ -118,3 +118,11 @@ message ListViewMetadata {
   vortex.dtype.PType offset_ptype = 2;
   vortex.dtype.PType size_ptype = 3;
 }
+
+message ALPRDMetadata {
+  uint32 right_bit_width = 1;
+  uint32 dict_len = 2;
+  repeated uint32 dict = 3;
+  vortex.dtype.PType left_parts_ptype = 4;
+  optional PatchesMetadata patches = 5;
+}
