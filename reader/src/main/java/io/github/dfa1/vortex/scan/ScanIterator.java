@@ -52,7 +52,6 @@ public final class ScanIterator implements AutoCloseable {
 	private Arena chunkArena;
 
 	private List<ChunkSpec> chunks;
-	private Map<String, DType> columnDtypes;
 	private List<String> projectedNames;
 	private List<DType> projectedDtypes;
 	private int chunkIndex;
@@ -166,7 +165,7 @@ public final class ScanIterator implements AutoCloseable {
 		DType rootDtype = file.dtype();
 
 		var columnFlats = new LinkedHashMap<String, List<Layout>>();
-		columnDtypes = new LinkedHashMap<>();
+		Map<String, DType> columnDtypes = new LinkedHashMap<>();
 
 		if (rootLayout.isStruct() && rootDtype instanceof DType.Struct structDtype) {
 			List<String> projection = options.columns();
@@ -303,7 +302,6 @@ public final class ScanIterator implements AutoCloseable {
 		// child[0] = values layout; child[1] = codes layout
 		Layout valuesLayout = dictLayout.children().get(0);
 		Layout codesLayout  = dictLayout.children().get(1);
-		long valuesLen = valuesLayout.rowCount();
 		long n         = codesLayout.rowCount();
 
 		Array values = decodeLayout(valuesLayout, dtype, arena);
