@@ -12,6 +12,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.encoding.FsstEncoding;
 import io.github.dfa1.vortex.encoding.VarBinEncoding;
+import io.github.dfa1.vortex.encoding.VarBinViewEncoding;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import net.jqwik.api.Arbitraries;
@@ -370,6 +371,76 @@ class JavaWritesRustReadsIntegrationTest {
 	}
 
 	@Test
+	void javaWriter_jniReader_varBinViewUtf8Column_inlined(@TempDir Path tmp) throws IOException {
+		// Given — VarBinView, all strings ≤12 bytes: inlined path (no data buffer)
+		Path file = tmp.resolve("java_varbinview_inlined.vtx");
+		String[] data = {"hi", "yo", "ok", "abc", "short", "exactly12ok!"};
+		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+		     var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults(),
+				     List.of(new VarBinViewEncoding()))) {
+			// When
+			sut.writeChunk(Map.of("s", data));
+		}
+
+		// Then
+		String[] decoded = readStringColumn(file, "s");
+		assertThat(decoded).containsExactly(data);
+	}
+
+	@Test
+	void javaWriter_jniReader_varBinViewUtf8Column_referenced(@TempDir Path tmp) throws IOException {
+		// Given — VarBinView, all strings >12 bytes: reference path (data buffer present)
+		Path file = tmp.resolve("java_varbinview_referenced.vtx");
+		String[] data = {"this is long text", "another long string", "yet another long one", "thirteenchars!"};
+		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+		     var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults(),
+				     List.of(new VarBinViewEncoding()))) {
+			// When
+			sut.writeChunk(Map.of("s", data));
+		}
+
+		// Then
+		String[] decoded = readStringColumn(file, "s");
+		assertThat(decoded).containsExactly(data);
+	}
+
+	@Test
+	void javaWriter_jniReader_varBinViewUtf8Column_mixed(@TempDir Path tmp) throws IOException {
+		// Given — VarBinView, mix of inlined (≤12) and referenced (>12) strings
+		Path file = tmp.resolve("java_varbinview_mixed.vtx");
+		String[] data = {"short", "this is a longer string", "hi", "medium length ok", "x", "another longer string here"};
+		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+		     var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults(),
+				     List.of(new VarBinViewEncoding()))) {
+			// When
+			sut.writeChunk(Map.of("s", data));
+		}
+
+		// Then
+		String[] decoded = readStringColumn(file, "s");
+		assertThat(decoded).containsExactly(data);
+	}
+
+	/// VarBinView utf8 with arbitrary strings — exercises both inlined and referenced views.
+	@Property(tries = 20)
+	void prop_varBinView_utf8_roundTripsViaRust(
+			@ForAll("varBinViewStringArrays") String[] data) throws IOException {
+		Path tmp = Files.createTempDirectory("vortex-pbt-varbinview");
+		try {
+			Path file = tmp.resolve("pbt_varbinview_utf8.vtx");
+			try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+			     var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults(),
+					     List.of(new VarBinViewEncoding()))) {
+				sut.writeChunk(Map.of("s", data));
+			}
+			String[] decoded = readStringColumn(file, "s");
+			assertThat(decoded).containsExactly(data);
+		} finally {
+			deleteDir(tmp);
+		}
+	}
+
+	@Test
 	void javaWriter_jniReader_dictEncodedUtf8Column(@TempDir Path tmp) throws IOException {
 		// Given — DictEncoding (DictLayoutMetadata proto + children[0]=codes, children[1]=VarBin values)
 		Path file = tmp.resolve("java_dict_utf8.vtx");
@@ -522,6 +593,15 @@ class JavaWritesRustReadsIntegrationTest {
 		} finally {
 			deleteDir(tmp);
 		}
+	}
+
+	@Provide
+	Arbitrary<String[]> varBinViewStringArrays() {
+		// Strings 0–30 chars: spans both inlined (≤12 bytes) and referenced (>12 bytes) paths
+		Arbitrary<String> strings = Arbitraries.strings()
+				.alpha()
+				.ofMinLength(0).ofMaxLength(30);
+		return strings.array(String[].class).ofMinSize(0).ofMaxSize(1_000);
 	}
 
 	@Provide
