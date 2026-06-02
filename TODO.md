@@ -18,6 +18,11 @@
 
 ## Testing
 
+- [ ] **Verify proto compatibility with upstream** — `dtype.proto` and `scalar.proto` exist in
+  `spiraldb/vortex/vortex-proto/proto/` and should be kept in sync with our copies. Encoding
+  metadata (e.g. `RLEMetadata`, `RunEndMetadata`) has no upstream `.proto`; tag mismatches
+  silently produce zero/default values in proto3. Add value-level assertions (not just
+  `rowCount > 0`) to integration tests to catch silent corruption.
 - [ ] lots of repetitions like in every test
 ```java
    private static final DType I64 = new DType.Primitive(PType.I64, false);
@@ -43,6 +48,7 @@
 
 ## Documentation
 
+- [ ] Use Diátaxis (https://diataxis.fr/) to structure docs: tutorials, how-to guides, reference, explanation
 - [ ] Format specification: byte-exact diagrams for file layout and each encoding, with annotated examples (Arrow spec style)
 - [ ] how to use the library and the cli
 
