@@ -14,7 +14,6 @@ import java.net.URI;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /// Integration test: reads real Vortex files from the public S3 compatibility bucket
 /// via HTTP Range requests and validates structure + data.
@@ -23,17 +22,16 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 @Tag("integration")
 class VortexHttpReaderIT {
 
-	private static final String BASE = "https://vortex-compat-fixtures.s3.amazonaws.com/v0.72.0/arrays/";
+	private static final URI BASE = URI.create("https://vortex-compat-fixtures.s3.amazonaws.com/v0.72.0/arrays/");
 
-	private static final URI TPCH_LINEITEM = URI.create(BASE + "tpch_lineitem.compact.vortex");
+	private static final URI TPCH_LINEITEM = BASE.resolve("tpch_lineitem.compact.vortex");
 
 	// for.vortex — frame-of-reference encoding, 10 columns in one flat segment
-	private static final URI FOR_ARRAY = URI.create(BASE + "for.vortex");
+	private static final URI FOR_ARRAY = BASE.resolve("for.vortex");
 
 	@Test
 	void open_remoteFile_parsesMetadata() throws Exception {
 		// Given
-		assumeNetworkAvailable();
 
 		// When
 		try (var sut = VortexHttpReader.open(TPCH_LINEITEM)) {
@@ -50,7 +48,6 @@ class VortexHttpReaderIT {
 	@Test
 	void open_remoteFile_layoutRowCountIsPositive() throws Exception {
 		// Given
-		assumeNetworkAvailable();
 
 		// When — row count comes from the layout (no data decoding required)
 		try (var sut = VortexHttpReader.open(FOR_ARRAY)) {
@@ -64,10 +61,9 @@ class VortexHttpReaderIT {
 	@Test
 	void scan_forVortex_decodesAllRows() throws Exception {
 		// Given
-		assumeNetworkAvailable();
+		long totalRows = 0;
 
 		// When
-		long totalRows = 0;
 		try (var sut = VortexHttpReader.open(FOR_ARRAY);
 		     var iter = sut.scan(ScanOptions.all())) {
 			while (iter.hasNext()) {
@@ -111,8 +107,7 @@ class VortexHttpReaderIT {
 	})
 	void scan_fixture_decodesAllRows(String fixture) throws Exception {
 		// Given
-		assumeNetworkAvailable();
-		URI uri = URI.create(BASE + fixture);
+		URI uri = BASE.resolve(fixture);
 
 		// When
 		long totalRows = 0;
@@ -130,8 +125,7 @@ class VortexHttpReaderIT {
 	@Test
 	void scan_listVortex_decodesListArrayWithCorrectShape() throws Exception {
 		// Given
-		assumeNetworkAvailable();
-		URI uri = URI.create(BASE + "list.vortex");
+		URI uri = BASE.resolve("list.vortex");
 
 		// When
 		try (var sut = VortexHttpReader.open(uri)) {
@@ -169,8 +163,7 @@ class VortexHttpReaderIT {
 	@Test
 	void scan_listviewVortex_decodesListViewArrayWithCorrectShape() throws Exception {
 		// Given
-		assumeNetworkAvailable();
-		URI uri = URI.create(BASE + "listview.vortex");
+		URI uri = BASE.resolve("listview.vortex");
 
 		// When
 		try (var sut = VortexHttpReader.open(uri)) {
@@ -208,14 +201,6 @@ class VortexHttpReaderIT {
 						.as("sizes length must equal rowCount")
 						.isEqualTo(chunk.rowCount());
 			}
-		}
-	}
-
-	private static void assumeNetworkAvailable() {
-		try {
-			URI.create("https://vortex-compat-fixtures.s3.amazonaws.com").toURL().openStream().close();
-		} catch (Exception e) {
-			assumeTrue(false, "network unavailable: " + e.getMessage());
 		}
 	}
 }
