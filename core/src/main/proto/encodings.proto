@@ -112,3 +112,9 @@ message ListMetadata {
   uint64 elements_len = 1;
   vortex.dtype.PType offset_ptype = 2;
 }
+
+message ListViewMetadata {
+  uint64 elements_len = 1;
+  vortex.dtype.PType offset_ptype = 2;
+  vortex.dtype.PType size_ptype = 3;
+}

@@ -43,7 +43,8 @@ public enum EncodingId {
 	VORTEX_DATETIMEPARTS("vortex.datetimeparts"),
 	VORTEX_ZSTD("vortex.zstd"),
 	VORTEX_FIXED_SIZE_LIST("vortex.fixed_size_list"),
-	VORTEX_LIST("vortex.list");
+	VORTEX_LIST("vortex.list"),
+	VORTEX_LISTVIEW("vortex.listview");
 
 	// O(1) access to EncodingId by its string representation
 	private static final Map<String, EncodingId> LOOKUP = Stream.of(EncodingId.values())

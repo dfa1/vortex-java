@@ -1,0 +1,10 @@
+package io.github.dfa1.vortex.encoding;
+
+/// Input data for encoding a {@code vortex.listview} column.
+///
+/// <p>{@code elements} is the flat array of all inner values (may be non-contiguous on disk).
+/// {@code offsets[i]} is the start index of list {@code i} in elements.
+/// {@code sizes[i]} is the number of elements in list {@code i}.
+/// Both {@code offsets} and {@code sizes} have length {@code outerLen}.
+public record ListViewData(Object elements, int[] offsets, int[] sizes, long outerLen) {
+}

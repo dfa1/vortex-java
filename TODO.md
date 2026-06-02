@@ -2,6 +2,10 @@
 
 ## Project
 
+- [ ] **[by 2026-06-06] Ask SpiralDB for feedback** — open GitHub discussion in `spiraldb/vortex`
+  linking the Java impl (24/35 fixtures), asking: interest in an official Java reader? plans to
+  stabilize encoding metadata proto? undocumented invariants? any JVM plans of their own?
+  Check their Discord too. Decision gate: invest further only if signal is positive.
 - [ ] Move project to a dedicated organization
 - [ ] Create website
 - [ ] Publish benchmarks
@@ -18,11 +22,26 @@
 
 ## Testing
 
+- [ ] **Security review + adversarial tests** — the reader parses untrusted binary input (file
+  trailer, FlatBuffers, Protobuf, per-segment data). Attack surface:
+    - Malformed trailer: wrong magic, negative lengths, offsets past EOF
+    - FlatBuffer bombs: deeply nested layout trees, circular references, huge vectors
+    - Proto bombs: enormous `values_len`/`indices_len` in metadata triggering OOM allocations
+    - Integer overflows in offset arithmetic (`offset + length` wraps to negative)
+    - Out-of-bounds buffer reads via crafted `bufferIndices` arrays
+    - Zip-bomb style: tiny file that claims huge row counts
+  Add a fuzz corpus of malformed `.vortex` files; all must throw `VortexException`, never
+  `ArrayIndexOutOfBoundsException`, `NegativeArraySizeException`, or `OutOfMemoryError`.
 - [ ] **Verify proto compatibility with upstream** — `dtype.proto` and `scalar.proto` exist in
   `spiraldb/vortex/vortex-proto/proto/` and should be kept in sync with our copies. Encoding
   metadata (e.g. `RLEMetadata`, `RunEndMetadata`) has no upstream `.proto`; tag mismatches
   silently produce zero/default values in proto3. Add value-level assertions (not just
   `rowCount > 0`) to integration tests to catch silent corruption.
+- [ ] **Verify ListEncoding and ListViewEncoding metadata fields** — integration tests currently
+  only assert `rowCount > 0`. Add assertions that verify the decoded proto fields match
+  the fixture: `elements_len` equals actual element count, `offset_ptype` / `size_ptype` match
+  the PType used by the offsets/sizes child arrays. Catches silent proto tag mismatches
+  (proto3 defaults to 0, which maps to `PType.U8` — wrong type decodes silently instead of failing).
 - [ ] lots of repetitions like in every test
 ```java
    private static final DType I64 = new DType.Primitive(PType.I64, false);
