@@ -10,6 +10,7 @@ import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.encoding.FsstEncoding;
 import io.github.dfa1.vortex.encoding.VarBinEncoding;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
@@ -342,6 +343,23 @@ class JavaWritesRustReadsIntegrationTest {
 		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
 		     var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults(),
 					 List.of(new VarBinEncoding()))) {
+			// When
+			sut.writeChunk(Map.of("s", data));
+		}
+
+		// Then
+		String[] decoded = readStringColumn(file, "s");
+		assertThat(decoded).containsExactly(data);
+	}
+
+	@Test
+	void javaWriter_jniReader_fsstUtf8Column(@TempDir Path tmp) throws IOException {
+		// Given — FSST encoding: bigram symbol table, escape fallback for unmatched bytes
+		Path file = tmp.resolve("java_fsst_utf8.vtx");
+		String[] data = {"apple", "banana", "cherry", "apricot", "avocado", "almond"};
+		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+		     var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults(),
+				     List.of(new FsstEncoding()))) {
 			// When
 			sut.writeChunk(Map.of("s", data));
 		}
