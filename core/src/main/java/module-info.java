@@ -32,5 +32,6 @@ module io.github.dfa1.vortex.core {
         io.github.dfa1.vortex.encoding.VarBinEncoding,
         io.github.dfa1.vortex.encoding.VarBinViewEncoding,
         io.github.dfa1.vortex.encoding.ZigZagEncoding,
-        io.github.dfa1.vortex.encoding.ZstdEncoding;
+        io.github.dfa1.vortex.encoding.ZstdEncoding,
+        io.github.dfa1.vortex.encoding.RleEncoding;
 }

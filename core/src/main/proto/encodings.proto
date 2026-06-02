@@ -98,3 +98,12 @@ message ZstdMetadata {
   uint32 dictionary_size = 1;
   repeated ZstdFrameMetadata frames = 2;
 }
+
+message RLEMetadata {
+  uint64 values_len = 1;
+  uint64 indices_len = 2;
+  vortex.dtype.PType indices_ptype = 3;
+  uint64 values_idx_offsets_len = 4;
+  vortex.dtype.PType values_idx_offsets_ptype = 5;
+  uint64 offset = 6;
+}

@@ -36,6 +36,7 @@ public enum EncodingId {
 	FASTLANES_BITPACKED("fastlanes.bitpacked"),
 	FASTLANES_FOR("fastlanes.for"),
 	FASTLANES_DELTA("fastlanes.delta"),
+	FASTLANES_RLE("fastlanes.rle"),
 
 	VORTEX_DECIMAL("vortex.decimal"),
 	VORTEX_DECIMAL_BYTE_PARTS("vortex.decimal_byte_parts"),

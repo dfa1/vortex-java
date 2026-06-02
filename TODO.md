@@ -98,7 +98,7 @@
 | `vortex.varbinview`          | `VarBinViewEncoding`       | ✅       | ❌ stub  | —         | Utf8, Binary |
 | `vortex.pco`                 | `PcoEncoding` (stub)       | ❌       | ❌       | very hard | ANS + bin tokenization not ported; unblocks `pco.vortex`, tpch/clickbench fixtures |
 | `vortex.chunked`             | `ChunkedEncoding`          | ✅       | ✅       | medium    | decode: primitive + struct concat; encode via ChunkedData |
-| `fastlanes.rle`              | —                          | ❌       | ❌       | medium    | unblocks `rle.vortex` |
+| `fastlanes.rle`              | `RleEncoding`              | ✅       | ✅       | —         | chunk-based RLE; offset always < 1024 |
 | `vortex.alprd`               | —                          | ❌       | ❌       | hard      | ALP-RD: splits float bit pattern into left (dict-compressed, ≤8 entries, 3-bit indices) + right (bitpacked residuals); split point per-array in metadata; two separately-encoded children; harder than ALP; unblocks `alprd.vortex` |
 | `vortex.decimal`             | `DecimalEncoding`          | ✅       | ✅       | —         | Decimal |
 | `vortex.decimal_byte_parts`  | `DecimalBytePartsEncoding` | ✅       | ✅       | —         | Decimal byte parts |
@@ -145,7 +145,7 @@
 | `sparse.vortex`                  | ✅     |                               |
 | `varbinview.vortex`              | ✅     |                               |
 | `chunked.vortex`                 | ✅     |                               |
-| `rle.vortex`                     | ❌     | `fastlanes.rle` missing       |
+| `rle.vortex`                     | ✅     |                               |
 | `alprd.vortex`                   | ❌     | `vortex.alprd` missing        |
 | `decimal.vortex`                 | ✅     |                               |
 | `decimal_byte_parts.vortex`      | ✅     |                               |
