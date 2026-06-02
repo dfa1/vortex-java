@@ -188,6 +188,6 @@
 | `clickbench_hits_5k.compact.vortex` | ❌  | `vortex.pco`                  |
 | `clickbench_hits_5k.regular.vortex` | ✅  |                               |
 
-**Score: 24/35** (including `for.vortex` scanned separately from `scan_fixture_decodesAllRows`)
+**Score: 31/35** (including `for.vortex` scanned separately from `scan_fixture_decodesAllRows`)
 
 
