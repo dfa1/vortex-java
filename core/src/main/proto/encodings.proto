@@ -126,3 +126,16 @@ message ALPRDMetadata {
   vortex.dtype.PType left_parts_ptype = 4;
   optional PatchesMetadata patches = 5;
 }
+
+message PcoPageInfo {
+  uint32 n_values = 1;
+}
+
+message PcoChunkInfo {
+  repeated PcoPageInfo pages = 1;
+}
+
+message PcoMetadata {
+  bytes header = 1;
+  repeated PcoChunkInfo chunks = 2;
+}
