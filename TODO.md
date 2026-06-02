@@ -42,11 +42,6 @@
   metadata (e.g. `RLEMetadata`, `RunEndMetadata`) has no upstream `.proto`; tag mismatches
   silently produce zero/default values in proto3. Add value-level assertions (not just
   `rowCount > 0`) to integration tests to catch silent corruption.
-- [ ] **Verify ListEncoding and ListViewEncoding metadata fields** — integration tests currently
-  only assert `rowCount > 0`. Add assertions that verify the decoded proto fields match
-  the fixture: `elements_len` equals actual element count, `offset_ptype` / `size_ptype` match
-  the PType used by the offsets/sizes child arrays. Catches silent proto tag mismatches
-  (proto3 defaults to 0, which maps to `PType.U8` — wrong type decodes silently instead of failing).
 - [ ] lots of repetitions like in every test
 ```java
    private static final DType I64 = new DType.Primitive(PType.I64, false);
@@ -205,6 +200,80 @@ Pure-Java decode port. No JNI. Skip encode (no consumer needs it).
 
 **Estimate**: ~12 working days full; ~6 days for Classic+Consecutive only (likely insufficient
 for float fixtures).
+
+### `vortex.pco` encode plan
+
+Pure-Java encode. Only after decode is stable + a Java consumer asks for write. Not gated
+on any S3 fixture (all fixtures are Rust-produced; decode unblocks them).
+
+**Refs**: [pco/src/wrapped/chunk_compressor.rs](https://github.com/pcodec/pcodec/blob/main/pco/src/wrapped/chunk_compressor.rs),
+[pco/src/bin_optimization.rs](https://github.com/pcodec/pcodec/blob/main/pco/src/bin_optimization.rs),
+[pco/src/histograms.rs](https://github.com/pcodec/pcodec/blob/main/pco/src/histograms.rs),
+[pco/src/ans/](https://github.com/pcodec/pcodec/tree/main/pco/src/ans),
+[pco/src/sampling.rs](https://github.com/pcodec/pcodec/blob/main/pco/src/sampling.rs).
+
+**Why harder than decode**:
+- Encode chooses mode + bin layout + tANS weights; decode just executes a fixed program.
+- Bin optimization is dynamic programming over partitions of a histogram (`bin_cost`).
+- tANS encoding table differs from decode table (weight quantization → symbol table).
+- Mode selection samples input, trial-compresses against candidates (Classic, FloatMult,
+  IntMult, FloatQuant), picks best ratio. See `sampling.rs`.
+- No oracle: encode is non-deterministic. Validation = round-trip Java→Java decode AND
+  Java→Rust decode (existing `JavaWritesRustReadsIntegrationTest` harness).
+
+**Reuse from decode**:
+- `LeBitReader` (decode) ↔ `LeBitWriter` (encode, new). Same bit layout, opposite direction.
+- tANS table structure (decode-built) ↔ tANS encode table (`ans/encoding.rs`).
+- Mode constants, delta constants, proto types — shared.
+- Bit-exact wire format already validated by decode tests; encode just emits same bytes.
+
+**Phases**:
+- [ ] **Phase E0 — gate**. Is there a consumer (CLI write path, vortex-arrow bridge)? If no,
+  stop. Decode is enough.
+- [ ] **Phase E1 — bit writer**. `LeBitWriter` over `Arena`-backed `MemorySegment`. Mirrors
+  `pco/src/bit_writer.rs`. Property test: random bit sequences round-trip via `LeBitReader`.
+- [ ] **Phase E2 — Classic mode, no delta, fixed bins, no optimization**. Hardcoded bin layout
+  + uniform tANS weights. Emits a valid (suboptimal) pco stream. Validates: header write,
+  chunk meta write, page write, byte alignment. Round-trip via Java decode.
+- [ ] **Phase E3 — histogram + bin optimization**. Port `histograms.rs` (sort + bucket by
+  latent prefix) and `bin_optimization.rs` (DP partitioning, `bin_cost`, `log2_approx`).
+  Replace fixed bins with optimized layout. Compression ratio benchmark vs Rust on same
+  input — accept if Java within 5% of Rust ratio.
+- [ ] **Phase E4 — tANS weight quantization + encoding table**. Port `ans/spec.rs` weight
+  quantizer and `ans/encoding.rs` symbol-table builder. Critical: ANS state values must
+  match what Rust decoder expects.
+- [ ] **Phase E5 — delta Consecutive encoder**. Compute consecutive differences; store
+  initial state at page head. Mirrors Phase 4 of decode.
+- [ ] **Phase E6 — mode selection**. Port `sampling.rs`: take stratified sample, trial-encode
+  with each candidate mode, pick lowest bit count. Add FloatMult, IntMult (likely), FloatQuant.
+  Skip Dict + Lookback + Conv1 unless requested.
+- [ ] **Phase E7 — multi-chunk, multi-page, nullable**. Match decode: split into chunks of
+  `DEFAULT_MAX_PAGE_N`, pages per `ChunkConfig.paging_spec`. For nullable input, strip
+  nulls before encode, emit validity as child[0].
+- [ ] **Phase E8 — integration tests**. `JavaWritesRustReadsIntegrationTest`: produce a
+  `.vortex` with pco-encoded column, validate the Rust reference reader decodes it
+  byte-identical to input. Property test with `tries` low.
+- [ ] **Phase E9 — `EncodeResult` glue**. `PcoEncoding.Encoder.encode(dtype, data)` returns
+  `EncodeNode(VORTEX_PCO, metadata, no children OR validity child, bufferIndices)` with
+  `chunk_metas` then `pages` as separate buffer indices.
+
+**Risks**:
+- Bin optimization DP: bug → catastrophic ratio loss but still valid output. Symptom is
+  silent — only benchmarks catch it. Test ratio against Rust on known inputs.
+- tANS weight quantization: bug → Rust decoder rejects with checksum mismatch. Caught fast
+  by Java→Rust integration test.
+- Mode selection: wrong mode = valid output but poor ratio. Same silent failure as bin DP.
+- `log2_approx` is a fast-math hack. Java port can use `Math.log` (slower but exact);
+  measure JMH cost before chasing parity.
+- Encode unit test oracle problem: easier to assert bit-exact against a recorded Rust output
+  for fixed inputs than to assert "optimal encoding" — record golden encodings per ptype.
+
+**Estimate**: ~20 working days full encode. ~8 days for Classic+Consecutive+I64-only "valid
+but suboptimal" encoder (Phase E1+E2+E5+E8 partial). Decode is the prerequisite —
+don't start before decode lands.
+
+**Decision**: keep `Encoder` stub until a real write consumer materializes. Reassess
+post-decode + post-`vortex-arrow` bridge.
 
 ### S3 Fixture Status (`v0.72.0/arrays/`)
 
