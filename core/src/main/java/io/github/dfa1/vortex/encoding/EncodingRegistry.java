@@ -26,14 +26,18 @@ public final class EncodingRegistry {
 	/// Load all [Encoding]s registered via `ServiceLoader`.
 	public static EncodingRegistry loadAll() {
 		var registry = new EncodingRegistry();
-		for (Encoding c : ServiceLoader.load(Encoding.class)) {
-			registry.register(c);
+		for (Encoding encoding : ServiceLoader.load(Encoding.class)) {
+			registry.register(encoding);
 		}
 		return registry;
 	}
 
 	public static EncodingRegistry empty() {
 		return new EncodingRegistry();
+	}
+
+	public boolean hasEncoding(EncodingId encodingId) {
+		return encodings.containsKey(encodingId);
 	}
 
 	private static ArrayNode convertArrayNode(
@@ -60,7 +64,10 @@ public final class EncodingRegistry {
 	}
 
 	public void register(Encoding encoding) {
-		encodings.put(encoding.encodingId(), encoding);
+		Encoding old = encodings.put(encoding.encodingId(), encoding);
+		if (old != null) {
+			throw new VortexException("encoding %s already registered".formatted(encoding.encodingId()));
+		}
 	}
 
 	/// Decode a flat segment from the file's memory-mapped region.
@@ -95,6 +102,7 @@ public final class EncodingRegistry {
 		EncodingId id = ctx.node().encodingId();
 		Encoding c = encodings.get(id);
 		if (c == null) {
+			System.out.println(encodings);
 			throw new VortexException(id, "no encoding registered");
 		}
 		return c.decode(ctx);

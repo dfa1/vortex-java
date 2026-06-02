@@ -26,6 +26,14 @@ public enum EncodingId {
 	VORTEX_EXT("vortex.ext"),
 	VORTEX_VARBINVIEW("vortex.varbinview"),
 	VORTEX_PCO("vortex.pco"),
+	VORTEX_DECIMAL("vortex.decimal"),
+	VORTEX_DECIMAL_BYTE_PARTS("vortex.decimal_byte_parts"),
+	VORTEX_DATETIMEPARTS("vortex.datetimeparts"),
+	VORTEX_ZSTD("vortex.zstd"),
+	VORTEX_FIXED_SIZE_LIST("vortex.fixed_size_list"),
+	VORTEX_LIST("vortex.list"),
+	VORTEX_LISTVIEW("vortex.listview"),
+	VORTEX_ALPRD("vortex.alprd"),
 
 	// Layout encoding IDs included so parser/registry can represent them safely
 	VORTEX_FLAT("vortex.flat"),
@@ -37,15 +45,7 @@ public enum EncodingId {
 	FASTLANES_FOR("fastlanes.for"),
 	FASTLANES_DELTA("fastlanes.delta"),
 	FASTLANES_RLE("fastlanes.rle"),
-
-	VORTEX_DECIMAL("vortex.decimal"),
-	VORTEX_DECIMAL_BYTE_PARTS("vortex.decimal_byte_parts"),
-	VORTEX_DATETIMEPARTS("vortex.datetimeparts"),
-	VORTEX_ZSTD("vortex.zstd"),
-	VORTEX_FIXED_SIZE_LIST("vortex.fixed_size_list"),
-	VORTEX_LIST("vortex.list"),
-	VORTEX_LISTVIEW("vortex.listview"),
-	VORTEX_ALPRD("vortex.alprd");
+;
 
 	// O(1) access to EncodingId by its string representation
 	private static final Map<String, EncodingId> LOOKUP = Stream.of(EncodingId.values())
