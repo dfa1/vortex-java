@@ -189,35 +189,93 @@ Pure-Java decode port. No JNI. Skip encode (no consumer needs it).
 - Modes: Classic, IntMult, FloatMult, FloatQuant, Dict.
 - Deltas: None, Consecutive, Lookback, Conv1.
 
+**Phase 0 results (2026-06-02)** — inspection of all 4 blocked fixtures via
+`PcoFixtureInspectionIntegrationTest`:
+
+| Fixture                              | pco arrays | mode    | delta              | ptypes seen (via storage)     | header  |
+|--------------------------------------|-----------:|---------|--------------------|-------------------------------|---------|
+| `pco.vortex`                         |          8 | Classic | None, Consecutive  | I64, F64, U32, F32, I32, U16, I16 | `04 01` |
+| `tpch_lineitem.compact.vortex`       |         18 | Classic | None, Consecutive  | I64, I32, Decimal-I64, date-I32 | `04 01` |
+| `tpch_orders.compact.vortex`         |          6 | Classic | None, Consecutive  | I64, I32, Decimal-I64, date-I32 | `04 01` |
+| `clickbench_hits_5k.compact.vortex`  |         99 | Classic | None, Consecutive  | I16, I32, I64, ts-I64           | `04 01` |
+
+**Goal stays: decode ANY valid `vortex.pco` file** — all modes (Classic, IntMult,
+FloatMult, FloatQuant, Dict), all deltas (None, Consecutive, Lookback, Conv1),
+all pcodec format versions in use. Sample findings drive **priority order**, not scope.
+
+**Observations from Phase 0** (drives MVP-first ordering, NOT a feature cap):
+- All 4 blocked fixtures use **Classic + (None | Consecutive)** only — so a
+  Classic-first implementation lights up all S3 fixtures (35/35) on the shortest
+  path. Other modes/deltas still required for full goal but can ship later.
+- **Ptypes**: I16, I32, I64 cover real-world; F32/F64/U16/U32 cover synthetic.
+  All pcodec-supported NumberTypes (F16/F32/F64/I16/I32/I64/U16/U32/U64) must
+  ultimately work — we are not a fixture-only reader.
+- **Header version**: every sampled file uses `04 01` (pco format 4.1). Need to
+  research what other versions exist and accept them; reject unknown explicitly.
+- **Multi-page**: common (up to 8 pages/chunk). Multi-chunk: not seen in samples,
+  but pcodec format allows it — implement for completeness.
+- **Pco runs on integer storage of Utf8/Extension/Decimal columns** (offsets,
+  date-i32, timestamp-i64, Decimal-i64). Decoder dispatches on storage PType from
+  the immediate child layout, not the surface column DType.
+
 **Phases**:
-- [ ] **Phase 0 — scoping**. Inspect `pco.vortex`, `tpch_lineitem.compact.vortex`,
-  `tpch_orders.compact.vortex`, `clickbench_hits_5k.compact.vortex` via VortexInspector.
-  Dump mode/delta/ptype per chunk. Drives prioritization.
+- [x] **Phase 0 — scoping** (DONE 2026-06-02). See findings above.
 - [ ] **Phase 1 — bit reader + header + proto**. New `encoding/pco/` pkg. `LeBitReader` over
-  `MemorySegment`. Add `PcoMetadata`/`PcoChunkInfo`/`PcoPageInfo` to `encoding.proto`.
-  `PcoEncoding.Decoder` skeleton.
-- [ ] **Phase 2 — Classic mode, no delta, single chunk/page, non-null, I64**. `ChunkMetaReader`,
-  tANS table builder (port from `pcodec/src/ans/`), `PageDecoder`, scalar reconstruct
-  `value = bin.lower + offset`. Allocate output via `ctx.arena()`.
-- [ ] **Phase 3 — all ptypes**. I16/I32/U16/U32/U64/F16/F32/F64.
-- [ ] **Phase 4 — delta Consecutive**. Initial state read + cumulative sum.
-- [ ] **Phase 5 — other modes per Phase 0 findings**. Likely FloatMult, IntMult, FloatQuant.
-  Defer Dict/Lookback/Conv1 until fixture demands; fail fast with named mode in `VortexException`.
-- [ ] **Phase 6 — multi-chunk, multi-page, nullable**. Iterate chunks; per-chunk decompressor;
-  validity child decode via registry; scatter valid values into output.
-- [ ] **Phase 7 — integration tests**. Add 4 blocked fixtures to `RustWritesJavaReadsIntegrationTest`
-  with value-level assertions, not just `rowCount > 0`. Property test via pcodec CLI fixture-gen
-  with `tries` low.
-- [ ] **Phase 8 — close out**. Drop pco row from blocker list; update score 31/35 → 35/35;
-  document supported modes/deltas + version range in `PcoEncoding` javadoc.
+  `MemorySegment`. Add `PcoMetadata`/`PcoChunkInfo`/`PcoPageInfo` to `encodings.proto`
+  (currently hand-parsed by inspection test — generate real stubs). `PcoEncoding.Decoder`
+  skeleton dispatching by storage PType.
+- [ ] **Phase 2 — Classic mode, no delta, single chunk, single page, non-null, I64**.
+  `ChunkMetaReader` (mode 4b → assert Classic; delta 4b → assert None for this phase;
+  per-latent: ans_size_log 4b, bin_count 15b, per-bin {weight-1, lower, offset_bits}).
+  tANS decode table builder (port from `pcodec/src/ans/decoding.rs` + `spec.rs`).
+  `PageDecoder` (4 tANS state indices + per-256-batch bin indices + offsets).
+  Scalar reconstruct `value = bin.lower + offset`. Output via `ctx.arena()`.
+- [ ] **Phase 3 — all required ptypes**. I16/I32/U16/U32/F32/F64 generic over byte width.
+- [ ] **Phase 4 — delta Consecutive**. Read `state_n` initial values; cumulative sum.
+  This covers ~half of real-world arrays (delta nibble = 1).
+- [ ] **Phase 5 — multi-page + multi-chunk**. Iterate `metadata.chunks[]`; per-chunk
+  decompressor; iterate pages per chunk. Reset page state per page; track value
+  offset across pages.
+- [ ] **Phase 6 — nullable**. Read validity child via registry; scatter valid values
+  into full-length output, leaving null slots zeroed.
+- [ ] **Phase 7 — MVP integration tests** (closes S3 fixture parity). Add 4 blocked
+  fixtures to `RustWritesJavaReadsIntegrationTest` with value-level assertions, not
+  just `rowCount > 0`. Cross-check against vortex-rs reader output on same files.
+  After this: pitch story is "35/35 fixtures + reading every pco file in the wild
+  we've tested".
+
+**Full-coverage phases (post-MVP; not blocking S3 fixtures but required for the
+"read any pco file" goal):**
+- [ ] **Phase 8 — IntMult mode**. `value = bin.lower + offset * base`. Read extra
+  mode bits (base value).
+- [ ] **Phase 9 — FloatMult mode**. `value = (bin.lower + offset) * mult`. Floats
+  via bit-reinterpret per pcodec spec.
+- [ ] **Phase 10 — FloatQuant mode**. Bit-quantized floats; read extra mode bits.
+- [ ] **Phase 11 — Dict mode**. Bin lookups into a stored dictionary.
+- [ ] **Phase 12 — delta Lookback**. Small ring buffer lookback predictor.
+- [ ] **Phase 13 — delta Conv1**. Single-tap convolution predictor.
+- [ ] **Phase 14 — adversarial coverage**. Build fuzz corpus of valid + malformed
+  pco buffers (via pcodec CLI in fixture-gen step). All malformed input must throw
+  `VortexException`, never `AIOOBE`/`NASE`/`OOM`. Property test with `tries` low.
+- [ ] **Phase 15 — close out**. Drop pco row from blocker list; update fixture
+  score 31/35 → 35/35; document supported modes/deltas/versions in `PcoEncoding`
+  javadoc.
 
 **Risks**:
-- tANS state machine: subtle. Port table-build line-by-line from Rust; test byte-exact on toy inputs.
-- Format version drift (pcodec pre-1.0). Pin to fixture-declared version; reject others explicitly.
-- Mode coverage unknown until Phase 0. Dict would jump scope.
+- tANS state machine: subtle. Port table-build line-by-line from Rust; test
+  byte-exact on toy inputs.
+- Decimal-I64 storage: Phase 0 saw Decimal columns use pco. Verify
+  `DecimalEncoding`'s child layout exposes the I64 latent correctly to the pco
+  decoder.
+- Format version drift: only `04 01` observed; pcodec is pre-1.0. Accept exact
+  observed version, reject others with explicit error until tested.
+- Mode/delta partial-coverage trap: an MVP-only decoder that throws on uncovered
+  modes/deltas must do so with a clear "X not yet implemented" error, not silent
+  corruption.
 
-**Estimate**: ~12 working days full; ~6 days for Classic+Consecutive only (likely insufficient
-for float fixtures).
+**Revised estimate**:
+- **MVP (Phases 1-7, closes S3 fixtures 35/35)**: ~6-8 working days.
+- **Full goal (Phases 8-15, all modes/deltas/fuzz)**: +~8 days. Total ~14-16 days.
 
 ### `vortex.pco` encode plan
 
