@@ -100,11 +100,10 @@ public final class EncodingRegistry {
 
 	Array decode(DecodeContext ctx) {
 		EncodingId id = ctx.node().encodingId();
-		Encoding c = encodings.get(id);
-		if (c == null) {
-			System.out.println(encodings);
+		Encoding encoding = encodings.get(id);
+		if (encoding == null) {
 			throw new VortexException(id, "no encoding registered");
 		}
-		return c.decode(ctx);
+		return encoding.decode(ctx);
 	}
 }

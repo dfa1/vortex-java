@@ -32,10 +32,7 @@ class EncodingRegistryTest {
 
 		// When
 		for (EncodingId encodingId : EncodingId.values()) {
-			if (!sut.hasEncoding(encodingId)) {
-				System.out.println(encodingId);
-			}
-			//assertThat(sut.hasEncoding(encodingId)).describedAs("%s".formatted(encodingId)).isTrue();
+			assertThat(sut.hasEncoding(encodingId)).describedAs("%s".formatted(encodingId)).isTrue();
 		}
 	}
 }

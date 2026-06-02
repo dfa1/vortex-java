@@ -17,7 +17,6 @@ public enum EncodingId {
 	VORTEX_RUNEND("vortex.runend"),
 	VORTEX_CONSTANT("vortex.constant"),
 	VORTEX_ALP("vortex.alp"),
-	VORTEX_BITPACKED("vortex.bitpacked"),
 	VORTEX_VARBIN("vortex.varbin"),
 	VORTEX_FSST("vortex.fsst"),
 	VORTEX_NULL("vortex.null"),
@@ -36,10 +35,8 @@ public enum EncodingId {
 	VORTEX_ALPRD("vortex.alprd"),
 
 	// Layout encoding IDs included so parser/registry can represent them safely
-	VORTEX_FLAT("vortex.flat"),
 	VORTEX_CHUNKED("vortex.chunked"),
 	VORTEX_STRUCT("vortex.struct"),
-	VORTEX_STATS("vortex.stats"),
 
 	FASTLANES_BITPACKED("fastlanes.bitpacked"),
 	FASTLANES_FOR("fastlanes.for"),

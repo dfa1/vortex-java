@@ -77,6 +77,7 @@
 - [ ] prefix all modules with "vortex-"
 - [ ] add BOM module
 - [ ] deploy to maven central
+- [ ] switch back to module-path, but keep in mind these 2 blockers
 - [ ] drop warnings about flatbuffers
 ```shell
 [WARNING] ****************************************************************************************************************************************************

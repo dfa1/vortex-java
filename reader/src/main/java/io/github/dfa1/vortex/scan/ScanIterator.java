@@ -278,7 +278,7 @@ public final class ScanIterator implements AutoCloseable {
 
 	private Array decodeFlat(Layout flat, DType dtype, SegmentAllocator arena) {
 		if (flat.segments().isEmpty()) {
-			throw new VortexException(EncodingId.VORTEX_FLAT, "no segments");
+			throw new VortexException("no segments");
 		}
 		int segIdx = flat.segments().getFirst();
 		SegmentSpec spec = file.footer().segmentSpecs().get(segIdx);
