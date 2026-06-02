@@ -2,7 +2,7 @@
 
 ## Project
 
-- [ ] **[by 2026-06-06] Ask SpiralDB for feedback** — open GitHub discussion in `spiraldb/vortex`
+- [ ] **[by 2026-06-03 evening] Ask SpiralDB for feedback** — open GitHub discussion in `spiraldb/vortex`
   linking the Java impl (24/35 fixtures), asking: interest in an official Java reader? plans to
   stabilize encoding metadata proto? undocumented invariants? any JVM plans of their own?
   Check their Discord too. Decision gate: invest further only if signal is positive.
@@ -176,16 +176,16 @@
 | `decimal_byte_parts.vortex`      | ✅     |                               |
 | `datetimeparts.vortex`           | ✅     |                               |
 | `list.vortex`                    | ✅     |                               |
-| `listview.vortex`                | ❌     | `vortex.listview` missing     |
+| `listview.vortex`                | ✅     |                               |
 | `fixed_size_list.vortex`         | ✅     |                               |
 | `zstd.vortex`                    | ✅     |                               |
 | `tpch_lineitem.compact.vortex`   | ❌     | `vortex.pco`                  |
-| `tpch_lineitem.regular.vortex`   | ❌     | `vortex.pco`                  |
+| `tpch_lineitem.regular.vortex`   | ✅     |                               |
 | `tpch_orders.compact.vortex`     | ❌     | `vortex.pco`                  |
-| `tpch_orders.regular.vortex`     | ❌     | `vortex.pco`                  |
+| `tpch_orders.regular.vortex`     | ✅     |                               |
 | `pco.vortex`                     | ❌     | `vortex.pco`                  |
 | `clickbench_hits_5k.compact.vortex` | ❌  | `vortex.pco`                  |
-| `clickbench_hits_5k.regular.vortex` | ❌  | `vortex.pco`                  |
+| `clickbench_hits_5k.regular.vortex` | ✅  |                               |
 
 **Score: 23/35** (including `for.vortex` scanned separately from `scan_fixture_decodesAllRows`)
 
