@@ -315,7 +315,36 @@ public final class ScanIterator implements AutoCloseable {
 			return VarBinArray.ofDict(dtype, n, values.buffer(0), valOffsets, valOffPType,
 					codes.buffer(0), codesPType, ArrayStats.empty());
 		}
+		if (dtype instanceof DType.Primitive pDtype) {
+			return expandDictPrimitive(values, codes, codesPType, pDtype, n, arena);
+		}
 		return expandDictStrings(values, codes, codesPType, dtype, n, arena);
+	}
+
+	private static Array expandDictPrimitive(
+			Array values, Array codes,
+			PType codesPType, DType.Primitive dtype,
+			long n, SegmentAllocator arena
+	) {
+		PType ptype = dtype.ptype();
+		int elemBytes = ptype.byteSize();
+		MemorySegment valBuf = values.buffer(0);
+		MemorySegment codesBuf = codes.buffer(0);
+		MemorySegment out = arena.allocate(n * elemBytes, elemBytes);
+		for (long i = 0; i < n; i++) {
+			long code = readUnsigned(codesBuf, i, codesPType);
+			MemorySegment.copy(valBuf, code * elemBytes, out, i * elemBytes, elemBytes);
+		}
+		return switch (ptype) {
+			case I32, U32 -> new IntArray(dtype, n, out.asReadOnly(), ArrayStats.empty());
+			case I64, U64 -> new LongArray(dtype, n, out.asReadOnly(), ArrayStats.empty());
+			case F64      -> new DoubleArray(dtype, n, out.asReadOnly(), ArrayStats.empty());
+			case F32      -> new FloatArray(dtype, n, out.asReadOnly(), ArrayStats.empty());
+			case I16, U16 -> new ShortArray(dtype, n, out.asReadOnly(), ArrayStats.empty());
+			case I8, U8   -> new ByteArray(dtype, n, out.asReadOnly(), ArrayStats.empty());
+			default -> throw new VortexException(EncodingId.VORTEX_DICT,
+					"layout: unsupported ptype for dict expansion: " + ptype);
+		};
 	}
 
 	private static Array expandDictStrings(
