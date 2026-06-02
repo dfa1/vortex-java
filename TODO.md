@@ -128,7 +128,7 @@
 | `vortex.alprd`               | —                          | ❌       | ❌       | hard      | ALP-RD: splits float bit pattern into left (dict-compressed, ≤8 entries, 3-bit indices) + right (bitpacked residuals); split point per-array in metadata; two separately-encoded children; harder than ALP; unblocks `alprd.vortex` |
 | `vortex.decimal`             | `DecimalEncoding`          | ✅       | ✅       | —         | Decimal |
 | `vortex.decimal_byte_parts`  | `DecimalBytePartsEncoding` | ✅       | ✅       | —         | Decimal byte parts |
-| `vortex.datetimeparts`       | `DateTimePartsEncoding`    | ✅       | ❌ stub  | —         | Timestamp parts |
+| `vortex.datetimeparts`       | `DateTimePartsEncoding`    | ✅       | ✅       | —         | Timestamp parts |
 | `vortex.list`                | `ListEncoding`             | ✅       | ✅       | —         | two children: elements + offsets (I64); `ListArray`; cascadable offsets via `decodeChildAs` |
 | `vortex.listview`            | `ListViewEncoding`         | ✅       | ✅       | —         | three children: elements + offsets (len N) + sizes (len N); fixture uses U16 for both |
 | `vortex.fixed_size_list`     | `FixedSizeListEncoding`    | ✅       | ✅       | —         | one child: flat elements; no offsets |
