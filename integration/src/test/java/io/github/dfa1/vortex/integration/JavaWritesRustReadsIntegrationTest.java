@@ -42,6 +42,7 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
@@ -661,20 +662,20 @@ class JavaWritesRustReadsIntegrationTest {
 		}
 	}
 
-	static Stream<String[]> varBinViewStringArrayProvider() {
-		return RandomArrays.varBinViewStringArrays(20);
+	static Stream<Arguments> varBinViewStringArrayProvider() {
+		return RandomArrays.varBinViewStringArrays(20).map(arr -> Arguments.of((Object) arr));
 	}
 
-	static Stream<String[]> asciiStringArrayProvider() {
-		return RandomArrays.asciiStringArrays(20);
+	static Stream<Arguments> asciiStringArrayProvider() {
+		return RandomArrays.asciiStringArrays(20).map(arr -> Arguments.of((Object) arr));
 	}
 
-	static Stream<String[]> u16DictStringArrayProvider() {
-		return RandomArrays.u16DictStringArrays(10);
+	static Stream<Arguments> u16DictStringArrayProvider() {
+		return RandomArrays.u16DictStringArrays(10).map(arr -> Arguments.of((Object) arr));
 	}
 
-	static Stream<String[]> unicodeStringArrayProvider() {
-		return RandomArrays.unicodeStringArrays(20);
+	static Stream<Arguments> unicodeStringArrayProvider() {
+		return RandomArrays.unicodeStringArrays(20).map(arr -> Arguments.of((Object) arr));
 	}
 
 	static Stream<long[]> i64ArrayProvider() {
