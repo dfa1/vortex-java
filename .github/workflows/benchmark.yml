@@ -37,18 +37,8 @@ jobs:
           unzip -j flatc.zip flatc
           sudo install -m 755 flatc /usr/local/bin/flatc
 
-      - name: Build
-        run: ./mvnw package -DskipTests
-
       - name: Run benchmarks
-        run: |
-          java \
-            --add-opens java.base/java.nio=ALL-UNNAMED \
-            --enable-native-access=ALL-UNNAMED \
-            --sun-misc-unsafe-memory-access=allow \
-            -jar performance/target/benchmarks.jar \
-            -rf json \
-            -rff performance/target/benchmark-result.json
+        run: ./bench
 
       - name: Store benchmark results
         uses: benchmark-action/github-action-benchmark@v1

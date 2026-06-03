@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-./mvnw package -pl performance -am -DskipTests -q
+./mvnw package -DskipTests
 java \
   --add-opens java.base/java.nio=ALL-UNNAMED \
   --enable-native-access=ALL-UNNAMED \

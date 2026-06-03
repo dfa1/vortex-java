@@ -49,10 +49,8 @@ Never use `mvn install` or `./mvwn install`.
 # Run all benchmarks
 ./bench
 
-# Run specific benchmark class
+# Run specific benchmark class or method (always use ClassName.methodName filter)
 ./bench RustVsJavaReadBenchmark
-
-# Run specific benchmark method (always use ClassName.methodName filter)
 ./bench RustVsJavaReadBenchmark.javaReadVolume
 ```
 
