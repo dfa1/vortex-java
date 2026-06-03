@@ -41,7 +41,7 @@ jobs:
         run: ./mvnw compile -pl performance -am -DskipTests -q
 
       - name: Run benchmarks
-        run: ./mvnw exec:exec -pl performance -DskipTests
+        run: ./mvnw exec:exec -pl performance -am -DskipTests
 
       - name: Store benchmark results
         uses: benchmark-action/github-action-benchmark@v1
