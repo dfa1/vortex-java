@@ -765,6 +765,10 @@ public final class PcoEncoding implements Encoding {
                 secondaryUsesDelta = r.readBits(1) != 0;
             } else if (deltaVariant == 2) {
                 windowNLog = 1 + (int) r.readBits(5); // BITS_TO_ENCODE_DELTA_LOOKBACK_WINDOW_N_LOG
+                if (windowNLog > 24) {
+                    throw new VortexException(EncodingId.VORTEX_PCO,
+                            "pco lookback windowNLog " + windowNLog + " exceeds max 24");
+                }
                 stateNLog = (int) r.readBits(4);       // BITS_TO_ENCODE_DELTA_LOOKBACK_STATE_N_LOG
                 secondaryUsesDelta = r.readBits(1) != 0;
             } else if (deltaVariant == 3) {

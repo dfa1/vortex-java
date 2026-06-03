@@ -574,6 +574,32 @@ class PcoEncodingTest {
 	}
 
 	@Nested
+	class DecodeLookbackWindowNLog {
+
+		@Test
+		void lookback_windowNLogExceedsMax_throwsVortexException() {
+			// Given — mode=0 (Classic), delta=2 (Lookback), windowNLog=25 > max 24.
+			// Bit layout (LSB-first after byte0):
+			//   byte0: mode=0[3:0], delta=2[7:4] → 0x20
+			//   byte1: windowNLog-1(5b)=24=0b11000 → 0x18; stateNLog bits start at bit5
+			//   bytes2-6: all 0x00
+			var sut = new PcoEncoding();
+			MemorySegment chunkMeta = segmentOf(
+					(byte) 0x20, (byte) 0x18, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00);
+			DecodeContext ctx = ctxWith(
+					metaWithOneChunk(1),
+					new DType.Primitive(PType.U64, false),
+					1,
+					new MemorySegment[]{chunkMeta, segmentOf((byte) 0x00)});
+
+			// When / Then
+			assertThatThrownBy(() -> sut.decode(ctx))
+					.isInstanceOf(VortexException.class)
+					.hasMessageContaining("windowNLog");
+		}
+	}
+
+	@Nested
 	class DecodeDict {
 
 		@Test
