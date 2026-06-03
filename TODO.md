@@ -60,6 +60,7 @@
     - **`fastlanes.rle`** — RLE encoding
   Pattern: `VortexWriter.create(ch, SCHEMA, WriteOptions.defaults(), List.of(new XxxEncoding()))`
   then `readStringColumn` / `readLongColumn` via JNI. Run with `./mvnw verify -pl integration -am`.
+- [ ] **Normalize test naming conventions** — mixed: some say "jni" (`jni_vs_javaReader_*`, `VortexHttpReaderJniComparisonIntegrationTest`), others say "rust" (`RustWritesJavaReadsIntegrationTest`, `JavaWritesRustReadsIntegrationTest`). Pick one term and apply consistently across all test class/method names.
 - [ ] lots of repetitions like in every test
 ```java
    private static final DType I64 = new DType.Primitive(PType.I64, false);
