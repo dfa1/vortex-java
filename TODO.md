@@ -256,10 +256,11 @@ all pcodec format versions in use. Sample findings drive **priority order**, not
 - [x] **Phase 8 — IntMult mode** (DONE 2026-06-03). Two latent vars (mult, adj); `num = base * mult + adj`.
   Read base (`dtypeSize` bits) after mode nibble; read secondary latent var meta (ansSizeLog+bins) after
   primary; page body interleaved per 256-batch: [primary ANS+offsets][secondary ANS+offsets]; combine with
-  `(mult * base + adj) & mask`. `s3_pcoVortex_javaDecodeMatchesJni` still disabled — blocked on Phase 9
-  (pco.vortex has FloatMult float columns; struct decoder decodes all fields).
-- [ ] **Phase 9 — FloatMult mode**. `num = from_latent_ordered(mult * base_latent + adj)`. Floats
-  via bit-reinterpret per pcodec spec. Unblocks `s3_pcoVortex_javaDecodeMatchesJni`.
+  `(mult * base + adj) & mask`.
+- [x] **Phase 9 — FloatMult mode** (DONE 2026-06-03). Wire format identical to IntMult; combine differs:
+  `rawLatents[i] = toLatentOrdered(intFloatFromLatent(mult) * baseFloat) + adj`.
+  `intFloatFromLatentF32/F64` inverts pcodec `int_float_to_latent`; `toLatentOrderedF32/F64` inverts
+  `fromLatentOrdered`. Unblocked and passing: `s3_pcoVortex_javaDecodeMatchesJni`.
 - [ ] **Phase 10 — FloatQuant mode**. Bit-quantized floats; read extra mode bits.
 - [ ] **Phase 11 — Dict mode**. Bin lookups into a stored dictionary.
 - [ ] **Phase 12 — delta Lookback**. Small ring buffer lookback predictor.
