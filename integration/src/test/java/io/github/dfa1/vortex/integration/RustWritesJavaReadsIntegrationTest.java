@@ -1,9 +1,17 @@
 package io.github.dfa1.vortex.integration;
 
+import dev.vortex.api.DataSource;
+import dev.vortex.api.Expression;
+import dev.vortex.api.Partition;
+import dev.vortex.api.Scan;
+import dev.vortex.api.ScanOptions;
 import dev.vortex.api.Session;
 import dev.vortex.api.VortexWriter;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
+import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.encoding.EncodingRegistry;
 import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.ScanResult;
@@ -14,25 +22,34 @@ import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.Float8Vector;
 import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.arrow.vector.types.FloatingPointPrecision;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.Schema;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.lang.foreign.ValueLayout;
+import java.net.URI;
 import java.nio.ByteOrder;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /// Cross-compatibility: Rust (JNI) writer → Java reader.
 class RustWritesJavaReadsIntegrationTest {
+
+	private static final String S3_BASE = "https://vortex-compat-fixtures.s3.amazonaws.com/v0.72.0/arrays/";
 
 	private static final Session SESSION = Session.create();
 	private static final BufferAllocator ALLOCATOR = ArrowAllocation.rootAllocator();
@@ -195,6 +212,150 @@ class RustWritesJavaReadsIntegrationTest {
 			}
 			// 10_000 rows: 3333 full cycles of [1.1,2.2,3.3] (=6.6 each) + one 1.1 remainder
 			assertThat(sum).isCloseTo(21_998.9, org.assertj.core.data.Offset.offset(0.1));
+		}
+	}
+
+	// ── S3 fixture round-trip: Rust-written pco → Java reader ────────────────
+
+	@Disabled("pco.vortex has IntMult columns (mode=1) — blocked on Phase 8")
+	@Test
+	void s3_pcoVortex_javaDecodeMatchesJni(@TempDir Path tmp) throws Exception {
+		// Given — pco.vortex: synthetic file with all pco ptypes; Classic+Consecutive mode
+		assumeNetworkAvailable();
+		Path file = downloadIfMissing(tmp, "pco.vortex");
+		String col = firstI64Column(file);
+
+		// When
+		long[] jni = readJniLongColumn(file, col);
+		long[] java = readJavaLongColumn(file, col);
+
+		// Then — same values (order may differ across chunks)
+		Arrays.sort(jni);
+		Arrays.sort(java);
+		assertThat(java).containsExactly(jni);
+	}
+
+	@Test
+	void s3_tpchLineitem_javaDecodeMatchesJni(@TempDir Path tmp) throws Exception {
+		// Given — tpch_lineitem.compact.vortex: I64/I32/Decimal/date columns, Classic+Consecutive
+		assumeNetworkAvailable();
+		Path file = downloadIfMissing(tmp, "tpch_lineitem.compact.vortex");
+		String col = firstI64Column(file);
+
+		// When
+		long[] jni = readJniLongColumn(file, col);
+		long[] java = readJavaLongColumn(file, col);
+
+		// Then
+		Arrays.sort(jni);
+		Arrays.sort(java);
+		assertThat(java).containsExactly(jni);
+	}
+
+	@Test
+	void s3_tpchOrders_javaDecodeMatchesJni(@TempDir Path tmp) throws Exception {
+		// Given — tpch_orders.compact.vortex: I64/I32/Decimal/date columns, Classic+Consecutive
+		assumeNetworkAvailable();
+		Path file = downloadIfMissing(tmp, "tpch_orders.compact.vortex");
+		String col = firstI64Column(file);
+
+		// When
+		long[] jni = readJniLongColumn(file, col);
+		long[] java = readJavaLongColumn(file, col);
+
+		// Then
+		Arrays.sort(jni);
+		Arrays.sort(java);
+		assertThat(java).containsExactly(jni);
+	}
+
+	@Test
+	void s3_clickbenchHits5k_javaDecodeMatchesJni(@TempDir Path tmp) throws Exception {
+		// Given — clickbench_hits_5k.compact.vortex: I16/I32/I64/ts-I64 columns, Classic+Consecutive
+		assumeNetworkAvailable();
+		Path file = downloadIfMissing(tmp, "clickbench_hits_5k.compact.vortex");
+		String col = firstI64Column(file);
+
+		// When
+		long[] jni = readJniLongColumn(file, col);
+		long[] java = readJavaLongColumn(file, col);
+
+		// Then
+		Arrays.sort(jni);
+		Arrays.sort(java);
+		assertThat(java).containsExactly(jni);
+	}
+
+	// ── S3 helpers ────────────────────────────────────────────────────────────
+
+	private static String firstI64Column(Path file) throws IOException {
+		try (var vf = VortexReader.open(file, EncodingRegistry.empty())) {
+			if (vf.dtype() instanceof DType.Struct struct) {
+				for (int i = 0; i < struct.fieldNames().size(); i++) {
+					if (struct.fieldTypes().get(i) instanceof DType.Primitive(PType pt, boolean _) && pt == PType.I64) {
+						return struct.fieldNames().get(i);
+					}
+				}
+			}
+			throw new AssertionError("no I64 column found in " + file.getFileName());
+		}
+	}
+
+	private static long[] readJniLongColumn(Path file, String column) throws IOException {
+		String uri = file.toAbsolutePath().toUri().toString();
+		ScanOptions opts = ScanOptions.builder()
+				.projection(Expression.select(new String[]{column}, Expression.root()))
+				.build();
+		var longs = new ArrayList<Long>();
+		DataSource ds = DataSource.open(SESSION, uri);
+		Scan scan = ds.scan(opts);
+		while (scan.hasNext()) {
+			Partition partition = scan.next();
+			try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
+				while (reader.loadNextBatch()) {
+					VectorSchemaRoot root = reader.getVectorSchemaRoot();
+					BigIntVector vec = (BigIntVector) root.getVector(column);
+					for (int i = 0; i < root.getRowCount(); i++) {
+						longs.add(vec.get(i));
+					}
+				}
+			}
+		}
+		return longs.stream().mapToLong(Long::longValue).toArray();
+	}
+
+	private static long[] readJavaLongColumn(Path file, String column) throws IOException {
+		try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
+			var longs = new ArrayList<Long>();
+			var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns(column));
+			while (iter.hasNext()) {
+				ScanResult r = iter.next();
+				LongArray arr = (LongArray) r.columns().get(column);
+				for (long i = 0; i < arr.length(); i++) {
+					longs.add(arr.getLong(i));
+				}
+			}
+			return longs.stream().mapToLong(Long::longValue).toArray();
+		}
+	}
+
+	private static Path downloadIfMissing(Path tmp, String name) throws Exception {
+		Path cached = Path.of("/tmp/pco-fixtures", name);
+		if (Files.exists(cached)) {
+			return cached;
+		}
+		Path dest = tmp.resolve(name);
+		try (var in = URI.create(S3_BASE + name).toURL().openStream()) {
+			Files.copy(in, dest, StandardCopyOption.REPLACE_EXISTING);
+		}
+		return dest;
+	}
+
+	private static void assumeNetworkAvailable() {
+		try {
+			URI.create("https://vortex-compat-fixtures.s3.amazonaws.com").toURL().openStream().close();
+		} catch (Exception e) {
+			assumeTrue(false, "no network");
 		}
 	}
 }

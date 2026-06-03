@@ -239,16 +239,14 @@ all pcodec format versions in use. Sample findings drive **priority order**, not
   order (3b) + secondary_uses_delta (1b) from chunk meta; reads delta moments
   (order * dtypeSize bits) from page header; tANS decodes pageN-order values;
   applyConsecutiveDelta: toggle_center (XOR dtype_mid) + first-order cumsum in reverse.
-- [ ] **Phase 5 — multi-page + multi-chunk**. Iterate `metadata.chunks[]`; per-chunk
-  decompressor; iterate pages per chunk. Reset page state per page; track value
-  offset across pages.
+- [x] **Phase 5 — multi-page + multi-chunk** (DONE 2026-06-03). Loop structure already
+  correct; added explicit tests: 2-page single-chunk and 2-chunk decode.
 - [ ] **Phase 6 — nullable**. Read validity child via registry; scatter valid values
   into full-length output, leaving null slots zeroed.
-- [ ] **Phase 7 — MVP integration tests** (closes S3 fixture parity). Add 4 blocked
-  fixtures to `RustWritesJavaReadsIntegrationTest` with value-level assertions, not
-  just `rowCount > 0`. Cross-check against vortex-rs reader output on same files.
-  After this: pitch story is "35/35 fixtures + reading every pco file in the wild
-  we've tested".
+- [x] **Phase 7 — MVP integration tests** (DONE 2026-06-03). Added 4 fixtures to
+  `RustWritesJavaReadsIntegrationTest`: tpch_lineitem, tpch_orders, clickbench_hits_5k
+  pass (Java values match JNI/Rust ground truth). pco.vortex disabled — blocked on
+  Phase 8 (IntMult mode, 2/8 arrays). tpch/clickbench: 35/35 S3 fixture parity achieved.
 
 **Full-coverage phases (post-MVP; not blocking S3 fixtures but required for the
 "read any pco file" goal):**

@@ -222,5 +222,63 @@ class PcoEncodingTest {
 			assertThat(((LongArray) result).getLong(0)).isEqualTo(10L);
 			assertThat(((LongArray) result).getLong(1)).isEqualTo(17L);
 		}
+
+		@Test
+		void decode_multiPage_singleChunk_decodes() {
+			// Given — 1 chunk, 2 pages each containing 1 value (Consecutive order=1).
+			// buffers: [chunkMeta, page0, page1]; page0 moment=10→value 10, page1 moment=20→value 20.
+			var sut = new PcoEncoding();
+			EncodingProtos.PcoMetadata meta = EncodingProtos.PcoMetadata.newBuilder()
+					.setHeader(ByteString.copyFrom(new byte[]{PcoEncoding.PCO_FORMAT_MAJOR, PcoEncoding.PCO_FORMAT_MINOR}))
+					.addChunks(EncodingProtos.PcoChunkInfo.newBuilder()
+							.addPages(EncodingProtos.PcoPageInfo.newBuilder().setNValues(1).build())
+							.addPages(EncodingProtos.PcoPageInfo.newBuilder().setNValues(1).build())
+							.build())
+					.build();
+			DecodeContext ctx = ctxWith(
+					ByteBuffer.wrap(meta.toByteArray()),
+					new DType.Primitive(PType.U64, false),
+					2,
+					new MemorySegment[]{chunkMetaConsecutive(1), pageWithMoments(10L), pageWithMoments(20L)});
+
+			// When
+			var result = sut.decode(ctx);
+
+			// Then
+			assertThat(result.length()).isEqualTo(2);
+			assertThat(((LongArray) result).getLong(0)).isEqualTo(10L);
+			assertThat(((LongArray) result).getLong(1)).isEqualTo(20L);
+		}
+
+		@Test
+		void decode_multiChunk_decodes() {
+			// Given — 2 chunks each with 1 page containing 1 value (Consecutive order=1).
+			// buffers: [chunkMeta0, page0, chunkMeta1, page1]; values=[100, 200].
+			var sut = new PcoEncoding();
+			EncodingProtos.PcoMetadata meta = EncodingProtos.PcoMetadata.newBuilder()
+					.setHeader(ByteString.copyFrom(new byte[]{PcoEncoding.PCO_FORMAT_MAJOR, PcoEncoding.PCO_FORMAT_MINOR}))
+					.addChunks(EncodingProtos.PcoChunkInfo.newBuilder()
+							.addPages(EncodingProtos.PcoPageInfo.newBuilder().setNValues(1).build())
+							.build())
+					.addChunks(EncodingProtos.PcoChunkInfo.newBuilder()
+							.addPages(EncodingProtos.PcoPageInfo.newBuilder().setNValues(1).build())
+							.build())
+					.build();
+			DecodeContext ctx = ctxWith(
+					ByteBuffer.wrap(meta.toByteArray()),
+					new DType.Primitive(PType.U64, false),
+					2,
+					new MemorySegment[]{
+							chunkMetaConsecutive(1), pageWithMoments(100L),
+							chunkMetaConsecutive(1), pageWithMoments(200L)});
+
+			// When
+			var result = sut.decode(ctx);
+
+			// Then
+			assertThat(result.length()).isEqualTo(2);
+			assertThat(((LongArray) result).getLong(0)).isEqualTo(100L);
+			assertThat(((LongArray) result).getLong(1)).isEqualTo(200L);
+		}
 	}
 }
