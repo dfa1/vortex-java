@@ -10,6 +10,7 @@ import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.ByteArray;
 import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.FloatArray;
 import io.github.dfa1.vortex.core.array.IntArray;
@@ -26,6 +27,8 @@ import org.apache.arrow.vector.Float4Vector;
 import org.apache.arrow.vector.Float8Vector;
 import org.apache.arrow.vector.IntVector;
 import org.apache.arrow.vector.SmallIntVector;
+import org.apache.arrow.vector.TinyIntVector;
+import org.apache.arrow.vector.UInt1Vector;
 import org.apache.arrow.vector.UInt2Vector;
 import org.apache.arrow.vector.UInt4Vector;
 import org.apache.arrow.vector.UInt8Vector;
@@ -191,6 +194,24 @@ class RustJavaReaderComparisonIntegrationTest {
 								}
 								numSums.merge(field.getName(), (double) s, Double::sum);
 							}
+							case TinyIntVector v -> {
+								long s = 0;
+								for (int i = 0; i < root.getRowCount(); i++) {
+									if (!v.isNull(i)) {
+										s += v.get(i);
+									}
+								}
+								numSums.merge(field.getName(), (double) s, Double::sum);
+							}
+							case UInt1Vector v -> {
+								long s = 0;
+								for (int i = 0; i < root.getRowCount(); i++) {
+									if (!v.isNull(i)) {
+										s += v.getValueAsLong(i);
+									}
+								}
+								numSums.merge(field.getName(), (double) s, Double::sum);
+							}
 							case Float8Vector v -> {
 								double s = 0;
 								for (int i = 0; i < root.getRowCount(); i++) {
@@ -336,6 +357,16 @@ class RustJavaReaderComparisonIntegrationTest {
 					}
 					yield (double) s;
 				}
+				case ByteArray v -> {
+					long s = 0;
+					boolean u8 = v.dtype() instanceof DType.Primitive p && p.ptype() == PType.U8;
+					for (long i = 0; i < v.length(); i++) {
+						if (m.isValid(i)) {
+							s += u8 ? Byte.toUnsignedLong(v.getByte(i)) : v.getByte(i);
+						}
+					}
+					yield (double) s;
+				}
 				default -> null;
 			};
 		}
@@ -364,6 +395,14 @@ class RustJavaReaderComparisonIntegrationTest {
 					yield (double) s;
 				}
 				yield (double) v.fold(0L, Long::sum);
+			}
+			case ByteArray v -> {
+				boolean u8 = v.dtype() instanceof DType.Primitive p && p.ptype() == PType.U8;
+				long s = 0;
+				for (long i = 0; i < v.length(); i++) {
+					s += u8 ? Byte.toUnsignedLong(v.getByte(i)) : v.getByte(i);
+				}
+				yield (double) s;
 			}
 			default -> null;
 		};
