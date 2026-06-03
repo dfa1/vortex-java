@@ -1,8 +1,10 @@
 package io.github.dfa1.vortex.encoding;
 
+import io.github.dfa1.vortex.core.VortexException;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class EncodingRegistryTest {
 
@@ -23,6 +25,18 @@ class EncodingRegistryTest {
 
 		// Then
 		assertThat(result2).isTrue();
+	}
+
+	@Test
+	void duplicateIdThrows() {
+		// Given
+		EncodingRegistry sut = EncodingRegistry.empty();
+		sut.register(new DecimalEncoding());
+
+		// When / Then
+		assertThatThrownBy(() -> sut.register(new DecimalEncoding()))
+				.isInstanceOf(VortexException.class)
+				.hasMessageContaining("already registered");
 	}
 
 	@Test
