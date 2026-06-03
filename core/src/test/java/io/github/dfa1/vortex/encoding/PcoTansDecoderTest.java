@@ -131,6 +131,40 @@ class PcoTansDecoderTest {
         }
 
         @Test
+        void nonDegenerate_ansSizeLog1_twoBins_stateTransitionsStayInBounds() {
+            // Given — ansSizeLog=1 (tableSize=2), 2 bins weight=1 each.
+            // bitsToRead > 0 for each state → real ANS state transitions occur.
+            // All-zero page bytes → ansVal=0 each step → states stay at 0.
+            // Confirms bounds check doesn't false-positive on valid decode.
+            PcoBin[] bins = {new PcoBin(1, 5L, 0), new PcoBin(1, 100L, 0)};
+            PcoTansDecoder sut = PcoTansDecoder.build(1, bins);
+
+            // Page: 2 ANS-state bits (ansSizeLog=1, 4×1b=4 bits) + offset bits; use 8 all-zero bytes.
+            MemorySegment pageBuf = Arena.ofAuto().allocate(8);
+            LeBitReader reader = new LeBitReader(pageBuf);
+            // Initial states read from page header: readBits(1) × 4 = [0, 0, 0, 0]
+            int[] stateIdxs = {0, 0, 0, 0};
+            for (int i = 0; i < PcoTansDecoder.ANS_INTERLEAVING; i++) {
+                stateIdxs[i] = (int) reader.readBits(1);
+            }
+            reader.alignToByte();
+
+            int n = 8;
+            MemorySegment out = Arena.ofAuto().allocate((long) n * Long.BYTES);
+
+            // When
+            sut.decodeBatch(reader, stateIdxs, n,
+                    new long[n], new int[n], out, 0L);
+
+            // Then — all states started at 0 → sym=0 → lower=5 for every value
+            for (int i = 0; i < n; i++) {
+                assertThat(out.get(LE_LONG, (long) i * Long.BYTES))
+                        .as("latent[%d]", i)
+                        .isEqualTo(5L);
+            }
+        }
+
+        @Test
         void moreThanOneBatch_decodesCorrectly() {
             // Given — 1 bin, lower=7, n=300 (> BATCH_N=256 → two batches)
             PcoBin[] bins = {new PcoBin(1, 7L, 0)};

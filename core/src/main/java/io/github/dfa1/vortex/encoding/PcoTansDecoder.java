@@ -1,5 +1,7 @@
 package io.github.dfa1.vortex.encoding;
 
+import io.github.dfa1.vortex.core.VortexException;
+
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteOrder;
@@ -115,12 +117,18 @@ final class PcoTansDecoder {
     void decodeBatch(LeBitReader reader, int[] ansStateIdxs, int batchN,
                      long[] batchLowers, int[] batchOffsetBits,
                      MemorySegment out, long outByteOffset) {
+        int tableSize = nextStateIdxBase.length;
         for (int i = 0; i < batchN; i++) {
             int si = ansStateIdxs[i % ANS_INTERLEAVING];
             batchLowers[i] = stateLowers[si];
             batchOffsetBits[i] = nodeOffsetBits[si];
             long ansVal = reader.readBits(bitsToRead[si]);
-            ansStateIdxs[i % ANS_INTERLEAVING] = nextStateIdxBase[si] + (int) ansVal;
+            int nextSi = nextStateIdxBase[si] + (int) ansVal;
+            if (nextSi < 0 || nextSi >= tableSize) {
+                throw new VortexException(EncodingId.VORTEX_PCO,
+                        "corrupt pco ANS state " + nextSi + " out of range [0, " + tableSize + ")");
+            }
+            ansStateIdxs[i % ANS_INTERLEAVING] = nextSi;
         }
         long pos = outByteOffset;
         for (int i = 0; i < batchN; i++) {
