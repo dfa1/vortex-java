@@ -25,7 +25,7 @@ Never use `mvn install` or `./mvwn install`.
 # Build without tests
 ./mvnw verify -DskipTests
 
-# Run all tests
+# Run all tests (unit only — excludes *IntegrationTest)
 ./mvnw test
 
 # Run tests in one module
@@ -36,6 +36,15 @@ Never use `mvn install` or `./mvwn install`.
 
 # Run a single test method
 ./mvnw test -pl reader -Dtest=MyTest#myMethod
+
+# Run integration tests (use verify + failsafe, NOT test + surefire)
+./mvnw verify -pl integration -am
+
+# Run a single integration test class
+./mvnw verify -pl integration -am -Dit.test=RustWritesJavaReadsIntegrationTest
+
+# Run a single integration test method
+./mvnw verify -pl integration -am -Dit.test="RustWritesJavaReadsIntegrationTest#s3_pcoVortex_javaDecodeMatchesJni"
 
 # Run all benchmarks
 ./mvnw compile exec:java -pl performance -am -DskipTests
