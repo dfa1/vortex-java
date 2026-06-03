@@ -128,7 +128,7 @@
 | `vortex.struct`              | `StructEncoding`           | ✅       | ✅       | —         | Struct |
 | `vortex.fsst`                | `FsstEncoding`             | ✅       | ✅       | —         | Utf8, Binary (bigram symbol table) |
 | `vortex.varbinview`          | `VarBinViewEncoding`       | ✅       | ✅       | —         | Utf8, Binary |
-| `vortex.pco`                 | `PcoEncoding` (stub)       | ❌       | ❌       | very hard | pure-Java port feasible (tANS = table lookup, modes = scalar arith, no SIMD/Unsafe needed); see plan below. Unblocks `pco.vortex`, tpch/clickbench fixtures |
+| `vortex.pco`                 | `PcoEncoding`              | ✅       | ❌       | very hard | Classic, IntMult, FloatMult, FloatQuant, Dict; None+Consecutive+Lookback delta; nullable pending (Phase 6) |
 | `vortex.chunked`             | `ChunkedEncoding`          | ✅       | ✅       | medium    | decode: primitive + struct concat; encode via ChunkedData |
 | `fastlanes.rle`              | `RleEncoding`              | ✅       | ✅       | —         | chunk-based RLE; offset always < 1024 |
 | `vortex.alprd`               | `AlpRdEncoding`            | ✅       | ✅       | —         | F64, F32; left ≤16 bits dict-coded (≤8 entries), right bitpacked; exceptions as patches |
@@ -213,9 +213,6 @@ all pcodec format versions in use. Sample findings drive **priority order**, not
 **Phases**:
 - [ ] **Phase 6 — nullable**. Read validity child via registry; scatter valid values
   into full-length output, leaving null slots zeroed.
-- [ ] **Phase 10 — FloatQuant mode**. Bit-quantized floats; read extra mode bits.
-- [ ] **Phase 11 — Dict mode**. Bin lookups into a stored dictionary.
-- [ ] **Phase 12 — delta Lookback**. Small ring buffer lookback predictor.
 - [ ] **Phase 13 — delta Conv1**. Single-tap convolution predictor.
 - [ ] **Phase 14 — adversarial coverage**. Build fuzz corpus of valid + malformed
   pco buffers (via pcodec CLI in fixture-gen step). All malformed input must throw
@@ -346,18 +343,18 @@ post-decode + post-`vortex-arrow` bridge.
 | `listview.vortex`                | ✅     |                               |
 | `fixed_size_list.vortex`         | ✅     |                               |
 | `zstd.vortex`                    | ✅     |                               |
-| `tpch_lineitem.compact.vortex`   | ❌     | `vortex.pco`                  |
+| `tpch_lineitem.compact.vortex`   | ✅     |                               |
 | `tpch_lineitem.regular.vortex`   | ✅     |                               |
-| `tpch_orders.compact.vortex`     | ❌     | `vortex.pco`                  |
+| `tpch_orders.compact.vortex`     | ✅     |                               |
 | `tpch_orders.regular.vortex`     | ✅     |                               |
-| `pco.vortex`                     | ❌     | `vortex.pco`                  |
-| `clickbench_hits_5k.compact.vortex` | ❌  | `vortex.pco`                  |
+| `pco.vortex`                     | ✅     |                               |
+| `clickbench_hits_5k.compact.vortex` | ✅  |                               |
 | `clickbench_hits_5k.regular.vortex` | ✅  |                               |
 
 | `masked.vortex`                     | ❓     | no fixture in v0.72.0; `vortex.masked` ID registered |
 | `patched.vortex`                    | ❓     | no fixture in v0.72.0; `vortex.patched` ID registered |
 | `variant.vortex`                    | ❓     | no fixture in v0.72.0; `vortex.variant` ID registered |
 
-**Score: 31/35** (including `for.vortex` scanned separately from `scan_fixture_decodesAllRows`)
+**Score: 35/35**
 
 
