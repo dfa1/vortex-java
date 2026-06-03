@@ -47,13 +47,13 @@ Never use `mvn install` or `./mvwn install`.
 ./mvnw verify -pl integration -am -Dit.test="RustWritesJavaReadsIntegrationTest#s3_pcoVortex_javaDecodeMatchesJni"
 
 # Run all benchmarks
-./mvnw compile -pl performance -am -DskipTests -q && ./mvnw exec:exec -pl performance -DskipTests
+./bench
 
 # Run specific benchmark class
-./mvnw compile -pl performance -am -DskipTests -q && ./mvnw exec:exec -pl performance -DskipTests -Dbenchmark=RustVsJavaReadBenchmark
+./bench RustVsJavaReadBenchmark
 
 # Run specific benchmark method (always use ClassName.methodName filter)
-./mvnw compile -pl performance -am -DskipTests -q && ./mvnw exec:exec -pl performance -DskipTests -Dbenchmark=RustVsJavaReadBenchmark.javaReadVolume
+./bench RustVsJavaReadBenchmark.javaReadVolume
 ```
 
 ### File format

@@ -37,11 +37,8 @@ jobs:
           unzip -j flatc.zip flatc
           sudo install -m 755 flatc /usr/local/bin/flatc
 
-      - name: Build
-        run: ./mvnw compile -pl performance -am -DskipTests -q
-
       - name: Run benchmarks
-        run: ./mvnw exec:exec -pl performance -am -DskipTests
+        run: ./bench
 
       - name: Store benchmark results
         uses: benchmark-action/github-action-benchmark@v1
