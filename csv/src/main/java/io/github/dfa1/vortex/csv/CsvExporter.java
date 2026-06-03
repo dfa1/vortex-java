@@ -41,13 +41,13 @@ public final class CsvExporter {
              CsvWriter csvWriter = CsvWriter.builder()
                      .fieldSeparator(options.delimiter())
                      .build(csvPath)) {
-            export(reader, csvWriter, options, ScanOptions.all(), (chunk, rowIdx) -> true);
+            export(reader, csvWriter, options, ScanOptions.all(), RowPredicate.all());
         }
     }
 
     /// Export to a caller-owned [Writer]; the writer is flushed but not closed.
     public static void exportCsv(Path vortexPath, Writer out, ExportOptions options) throws IOException {
-        exportCsvFiltered(vortexPath, out, options, ScanOptions.all(), (chunk, rowIdx) -> true);
+        exportCsvFiltered(vortexPath, out, options, ScanOptions.all(), RowPredicate.all());
     }
 
     /// Like [#exportCsv(Path, Writer, ExportOptions)] but with zone-map chunk pruning
@@ -69,7 +69,7 @@ public final class CsvExporter {
     }
 
     private static void export(VortexReader reader, CsvWriter csvWriter, ExportOptions options,
-                                ScanOptions scanOptions, RowPredicate predicate) throws IOException {
+                                ScanOptions scanOptions, RowPredicate predicate) {
         if (!(reader.dtype() instanceof DType.Struct schema)) {
             throw new VortexException("only struct root dtype supported for CSV export");
         }

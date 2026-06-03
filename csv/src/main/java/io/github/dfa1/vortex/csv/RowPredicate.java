@@ -8,4 +8,8 @@ import io.github.dfa1.vortex.scan.ScanResult;
 @FunctionalInterface
 public interface RowPredicate {
     boolean test(ScanResult chunk, long rowIndex);
+
+    static RowPredicate all() {
+        return (_, _) -> true;
+    }
 }

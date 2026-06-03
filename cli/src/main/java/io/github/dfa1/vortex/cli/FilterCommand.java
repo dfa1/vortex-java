@@ -131,7 +131,6 @@ final class FilterCommand {
         };
     }
 
-    @SuppressWarnings("unchecked")
     private static int compareValue(Array arr, long rowIdx, Comparable<?> value) {
         return switch (arr) {
             case LongArray la  -> compareNumeric(la.getLong(rowIdx), value);
