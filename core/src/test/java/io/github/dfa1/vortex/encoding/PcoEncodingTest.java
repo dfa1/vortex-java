@@ -401,6 +401,63 @@ class PcoEncodingTest {
 		}
 	}
 
+	/// Build chunk meta for Classic mode + Conv1 delta by packing bits LSB-first.
+	///
+	/// Layout: mode(4b)=0, delta(4b)=3, quantization(5b), bias_latent(64b),
+	/// order-1(5b), weights[order×32b], ansSizeLog(4b)=0, nBins(15b)=0, align.
+	/// bias_latent = bias ^ Long.MIN_VALUE; each weight_latent = weight ^ 0x80000000L.
+	private static MemorySegment chunkMetaConv1(int quantization, long biasLatent,
+			int order, long[] weightLatents) {
+		java.util.BitSet bits = new java.util.BitSet();
+		int pos = 0;
+		// mode nibble = 0 (Classic)
+		pos += 4;
+		// delta nibble = 3 (Conv1): bits = 0b0011
+		bits.set(pos); bits.set(pos + 1); pos += 4;
+		// quantization (5 bits)
+		for (int i = 0; i < 5; i++) {
+			if (((quantization >> i) & 1) != 0) {
+				bits.set(pos);
+			}
+			pos++;
+		}
+		// bias latent (64 bits, LSB first)
+		for (int i = 0; i < 64; i++) {
+			if (((biasLatent >> i) & 1L) != 0L) {
+				bits.set(pos);
+			}
+			pos++;
+		}
+		// order-1 (5 bits)
+		for (int i = 0; i < 5; i++) {
+			if ((((order - 1) >> i) & 1) != 0) {
+				bits.set(pos);
+			}
+			pos++;
+		}
+		// weight latents (order × 32 bits)
+		for (long wl : weightLatents) {
+			for (int i = 0; i < 32; i++) {
+				if (((wl >> i) & 1L) != 0L) {
+					bits.set(pos);
+				}
+				pos++;
+			}
+		}
+		// ansSizeLog (4 bits) = 0
+		pos += 4;
+		// nBins (15 bits) = 0
+		pos += 15;
+		int byteLen = (pos + 7) / 8;
+		byte[] buf = new byte[byteLen];
+		for (int i = 0; i < pos; i++) {
+			if (bits.get(i)) {
+				buf[i / 8] |= (byte) (1 << (i % 8));
+			}
+		}
+		return segmentOf(buf);
+	}
+
 	/// Chunk-meta bytes for Classic mode + Lookback delta with windowNLog=1 (windowN=2), stateNLog=0 (stateN=1),
 	/// deltaAnsSizeLog=0, primaryAnsSizeLog=0, no bins.
 	///
@@ -419,6 +476,38 @@ class PcoEncodingTest {
 		byte[] buf = new byte[Long.BYTES];
 		java.nio.ByteBuffer.wrap(buf).order(java.nio.ByteOrder.LITTLE_ENDIAN).putLong(initialState);
 		return segmentOf(buf);
+	}
+
+	@Nested
+	class DecodeConv1 {
+
+		@Test
+		void decode_conv1_order1_zeroPrediction_statePassedThrough() {
+			// Given — I32, pageN=2, order=1, bias=0, weight=0 → prediction always 0.
+			// State raw = value ^ 0x80000000: for value=5, state_raw=0x80000005.
+			// Residual from degenerate tANS=0 → decoded = 0 ^ mid_i32(0x80000000) = 0x80000000
+			//   → fromLatentOrdered(0x80000000, I32) = 0x80000000 ^ 0x80000000 = 0.
+			// Expected output: [5, 0].
+			var sut = new PcoEncoding();
+			long biasLatent = Long.MIN_VALUE;    // encodes bias=0: raw ^ MIN_VALUE = 0
+			long weightLatent = 0x80000000L;     // encodes weight=0: (int)(raw ^ 0x80000000) = 0
+			MemorySegment chunkMeta = chunkMetaConv1(0, biasLatent, 1, new long[]{weightLatent});
+			// Page: 1 × 32-bit state = 0x80000005 (encodes value 5), no residual bits.
+			MemorySegment page = segmentOf((byte) 0x05, (byte) 0x00, (byte) 0x00, (byte) 0x80);
+			DecodeContext ctx = ctxWith(
+					metaWithOneChunk(2),
+					new DType.Primitive(PType.I32, false),
+					2,
+					new MemorySegment[]{chunkMeta, page});
+
+			// When
+			var result = sut.decode(ctx);
+
+			// Then
+			assertThat(result.length()).isEqualTo(2);
+			assertThat(((io.github.dfa1.vortex.core.array.IntArray) result).getInt(0)).isEqualTo(5);
+			assertThat(((io.github.dfa1.vortex.core.array.IntArray) result).getInt(1)).isZero();
+		}
 	}
 
 	@Nested

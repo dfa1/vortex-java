@@ -153,7 +153,7 @@ public final class PcoEncoding implements Encoding {
                                 chunkMeta.conv1Quantization(), chunkMeta.conv1Bias(),
                                 chunkMeta.conv1Weights(),
                                 dtypeSize, pageBuf, pageN,
-                                rawLatents, rawByteOffset, ctx.arena());
+                                rawLatents, rawByteOffset);
                     }
                 } else if (deltaVariant == 2) {
                     // Lookback delta: currently only Classic mode supported.
@@ -447,8 +447,7 @@ public final class PcoEncoding implements Encoding {
                 PcoTansDecoder tans, int ansSizeLog,
                 int order, int quantization, long bias, long[] weights,
                 int dtypeSize, MemorySegment pageBuf, int pageN,
-                MemorySegment rawLatents, long latentsOffset,
-                SegmentAllocator arena) {
+                MemorySegment rawLatents, long latentsOffset) {
             LeBitReader pageReader = new LeBitReader(pageBuf);
 
             long[] state = new long[order];
@@ -465,47 +464,49 @@ public final class PcoEncoding implements Encoding {
             long mid = typeMid(dtypeSize);
             long mask = typeMask(dtypeSize);
 
-            // Decode tANS residuals into a scratch segment.
-            MemorySegment rawResiduals = arena.allocate((long) decodeN * Long.BYTES);
-            tans.decodePage(pageReader, stateIdxs, decodeN, rawResiduals, 0);
-
-            // Build buf[0..order] = state, buf[order..pageN] = toggle-centered residuals.
-            long[] buf = new long[pageN];
-            System.arraycopy(state, 0, buf, 0, order);
-            for (int i = 0; i < decodeN; i++) {
-                long res = rawResiduals.get(LE_LONG, (long) i * Long.BYTES);
-                buf[order + i] = (res ^ mid) & mask;
+            // Write initial state directly into rawLatents.
+            for (int i = 0; i < order; i++) {
+                rawLatents.set(LE_LONG, latentsOffset + (long) i * Long.BYTES, state[i]);
             }
 
-            // Reconstruct: buf[i] += predict(buf[i-order..i]).
+            // Decode residuals directly into rawLatents[latentsOffset + order*8..].
+            tans.decodePage(pageReader, stateIdxs, decodeN, rawLatents,
+                    latentsOffset + (long) order * Long.BYTES);
+
+            // Toggle-center decoded residuals in-place.
             for (int i = order; i < pageN; i++) {
-                long pred = predictConv1(buf, i, order, weights, bias, quantization, dtypeSize);
-                buf[i] = (buf[i] + pred) & mask;
+                long off = latentsOffset + (long) i * Long.BYTES;
+                rawLatents.set(LE_LONG, off, (rawLatents.get(LE_LONG, off) ^ mid) & mask);
             }
 
-            for (int i = 0; i < pageN; i++) {
-                rawLatents.set(LE_LONG, latentsOffset + (long) i * Long.BYTES, buf[i]);
+            // Reconstruct in-place: rawLatents[i] += predict(rawLatents[i-order..i]).
+            for (int i = order; i < pageN; i++) {
+                long pred = predictConv1(rawLatents, latentsOffset, i, order,
+                        weights, bias, quantization, mask, dtypeSize);
+                long off = latentsOffset + (long) i * Long.BYTES;
+                rawLatents.set(LE_LONG, off, (rawLatents.get(LE_LONG, off) + pred) & mask);
             }
+
             return latentsOffset + (long) pageN * Long.BYTES;
         }
 
-        /// Compute Conv1 prediction for position {@code pos} in {@code buf}.
+        /// Compute Conv1 prediction for position {@code pos} in {@code seg[baseOff..]}.
         ///
         /// Accumulator is i64 for dtypeSize=32, or i32 (bias/weights truncated) for dtypeSize=16.
-        /// {@code to_conv} is zero-extension; {@code from_conv} is truncation to dtypeSize bits.
-        private static long predictConv1(long[] buf, int pos, int order,
-                long[] weights, long bias, int quantization, int dtypeSize) {
+        /// {@code mask} is pre-computed by the caller to avoid a switch per call.
+        private static long predictConv1(MemorySegment seg, long baseOff, int pos, int order,
+                long[] weights, long bias, int quantization, long mask, int dtypeSize) {
             // For dtypeSize=16, accumulator is i32 (truncate bias/weights from i64).
             long s = (dtypeSize == 16) ? (int) bias : bias;
             for (int k = 0; k < order; k++) {
                 long w = (dtypeSize == 16) ? (int) weights[k] : weights[k];
-                long l = buf[pos - order + k]; // already masked to dtypeSize bits — zero-extends naturally
+                long l = seg.get(LE_LONG, baseOff + (long) (pos - order + k) * Long.BYTES);
                 s += w * l;
             }
             if (s < 0) {
                 s = 0;
             }
-            return (s >> quantization) & typeMask(dtypeSize);
+            return (s >> quantization) & mask;
         }
 
         /// Inverse of pcodec {@code to_latent_ordered}: maps raw U-latent back to typed bits.
