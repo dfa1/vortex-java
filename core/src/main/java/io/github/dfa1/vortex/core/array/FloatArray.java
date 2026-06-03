@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 
 import java.lang.foreign.MemorySegment;
+import java.util.function.DoubleBinaryOperator;
 
 /// Concrete [Array] for F32 primitive columns.
 public final class FloatArray implements Array {
@@ -45,5 +46,15 @@ public final class FloatArray implements Array {
 
 	public float getFloat(long i) {
 		return buffer.getAtIndex(PTypeIO.LE_FLOAT, i);
+	}
+
+	public double fold(double identity, DoubleBinaryOperator op) {
+		MemorySegment buf = buffer;
+		long n = length;
+		double result = identity;
+		for (long i = 0; i < n; i++) {
+			result = op.applyAsDouble(result, buf.getAtIndex(PTypeIO.LE_FLOAT, i));
+		}
+		return result;
 	}
 }

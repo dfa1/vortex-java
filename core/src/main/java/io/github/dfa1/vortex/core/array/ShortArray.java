@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 
 import java.lang.foreign.MemorySegment;
+import java.util.function.LongBinaryOperator;
 
 /// Concrete [Array] for I16/U16 primitive columns.
 public final class ShortArray implements Array {
@@ -52,5 +53,15 @@ public final class ShortArray implements Array {
 		short raw = buffer.getAtIndex(PTypeIO.LE_SHORT, i);
 		boolean unsigned = dtype instanceof DType.Primitive p && p.ptype() == PType.U16;
 		return unsigned ? Short.toUnsignedInt(raw) : raw;
+	}
+
+	public long fold(long identity, LongBinaryOperator op) {
+		MemorySegment buf = buffer;
+		long n = length;
+		long result = identity;
+		for (long i = 0; i < n; i++) {
+			result = op.applyAsLong(result, buf.getAtIndex(PTypeIO.LE_SHORT, i));
+		}
+		return result;
 	}
 }

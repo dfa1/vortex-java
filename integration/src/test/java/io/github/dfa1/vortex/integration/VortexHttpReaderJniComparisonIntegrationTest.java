@@ -339,27 +339,9 @@ class VortexHttpReaderJniComparisonIntegrationTest {
 		return switch (arr) {
 			case LongArray v -> (double) v.fold(0L, Long::sum);
 			case DoubleArray v -> v.fold(0.0, Double::sum);
-			case IntArray v -> {
-				long s = 0;
-				for (long i = 0; i < v.length(); i++) {
-					s += v.getInt(i);
-				}
-				yield (double) s;
-			}
-			case FloatArray v -> {
-				double s = 0;
-				for (long i = 0; i < v.length(); i++) {
-					s += v.getFloat(i);
-				}
-				yield s;
-			}
-			case ShortArray v -> {
-				long s = 0;
-				for (long i = 0; i < v.length(); i++) {
-					s += v.getShort(i);
-				}
-				yield (double) s;
-			}
+			case IntArray v -> (double) v.fold(0, Integer::sum);
+			case FloatArray v -> v.fold(0.0, Double::sum);
+			case ShortArray v -> (double) v.fold(0L, Long::sum);
 			default -> null;
 		};
 	}

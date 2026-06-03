@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.PType;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.util.function.LongBinaryOperator;
 
 /// Concrete [Array] for I8/U8 primitive columns.
 public final class ByteArray implements Array {
@@ -52,5 +53,15 @@ public final class ByteArray implements Array {
 		byte raw = buffer.get(ValueLayout.JAVA_BYTE, i);
 		boolean unsigned = dtype instanceof DType.Primitive p && p.ptype() == PType.U8;
 		return unsigned ? Byte.toUnsignedInt(raw) : raw;
+	}
+
+	public long fold(long identity, LongBinaryOperator op) {
+		MemorySegment buf = buffer;
+		long n = length;
+		long result = identity;
+		for (long i = 0; i < n; i++) {
+			result = op.applyAsLong(result, buf.get(ValueLayout.JAVA_BYTE, i));
+		}
+		return result;
 	}
 }

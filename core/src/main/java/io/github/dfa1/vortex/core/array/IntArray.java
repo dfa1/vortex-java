@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import java.lang.foreign.MemorySegment;
+import java.util.function.IntBinaryOperator;
 import java.util.function.IntConsumer;
 
 /// Concrete [Array] for I32/U32 primitive columns.
@@ -53,5 +54,15 @@ public final class IntArray implements Array {
 		for (long i = 0; i < n; i++) {
 			c.accept(buf.getAtIndex(PTypeIO.LE_INT, i));
 		}
+	}
+
+	public int fold(int identity, IntBinaryOperator op) {
+		MemorySegment buf = buffer;
+		long n = length;
+		int result = identity;
+		for (long i = 0; i < n; i++) {
+			result = op.applyAsInt(result, buf.getAtIndex(PTypeIO.LE_INT, i));
+		}
+		return result;
 	}
 }
