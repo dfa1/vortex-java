@@ -2,7 +2,7 @@
 
 ## Project
 
-- [ ] **[by 2026-06-03 evening] Ask SpiralDB for feedback** — open GitHub discussion in `spiraldb/vortex`
+- [ ] **[by 2026-06-07 evening] Ask SpiralDB for feedback** — open GitHub discussion in `spiraldb/vortex`
   linking the Java impl (24/35 fixtures), asking: interest in an official Java reader? plans to
   stabilize encoding metadata proto? undocumented invariants? any JVM plans of their own?
   Check their Discord too. Decision gate: invest further only if signal is positive.
@@ -69,6 +69,7 @@
 
 ## Build
 
+- [ ] add other JDK version in the build matrix (at least JDK 26 and maybe 22, 23, 24): build is fast
 - [ ] **Merge `core`/`reader`/`writer` into a single library jar** — the three modules are tightly
   coupled (every `Encoding` class has both encode + decode; format constants are shared). A single
   `vortex-java` artifact simplifies client dependency management and removes artificial module
@@ -114,6 +115,7 @@
 
 ## API
 
+- [ ] add fold to all numeric array types (see integration test sumArray)
 - [ ] Use domain primitives (`UInt32`, `UInt64`, etc.) as value classes via Project Valhalla instead of raw `long`/`int`
     - See https://dfa1.github.io/articles/rethink-domain-primitives-with-valhalla
     - Candidates: `PType` integer kinds, buffer offsets, row indices, byte lengths
