@@ -211,7 +211,6 @@ all pcodec format versions in use. Sample findings drive **priority order**, not
   the immediate child layout, not the surface column DType.
 
 **Phases**:
-- [ ] **Phase 13 — delta Conv1**. Single-tap convolution predictor.
 - [ ] **Phase 14 — adversarial coverage**. Build fuzz corpus of valid + malformed
   pco buffers (via pcodec CLI in fixture-gen step). All malformed input must throw
   `VortexException`, never `AIOOBE`/`NASE`/`OOM`. Property test with `tries` low.

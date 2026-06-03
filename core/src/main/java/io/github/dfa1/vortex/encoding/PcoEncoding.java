@@ -46,8 +46,8 @@ import java.nio.ByteOrder;
 /// </ul>
 ///
 /// <p>Supported: Classic, IntMult, FloatMult, FloatQuant, Dict modes;
-/// None+Consecutive+Lookback delta; nullable (validity child[0]); all integer/float ptypes except F16.
-/// Other modes (Conv1 delta) throw "not implemented".
+/// None+Consecutive+Lookback+Conv1 delta; nullable (validity child[0]);
+/// all integer/float ptypes except F16 (Conv1 additionally excludes 64-bit dtypes).
 public final class PcoEncoding implements Encoding {
 
     static final byte PCO_FORMAT_MAJOR = 0x04;
@@ -140,7 +140,26 @@ public final class PcoEncoding implements Encoding {
                     chunkN += chunkInfo.getPages(p).getNValues();
                 }
 
-                if (deltaVariant == 2) {
+                if (deltaVariant == 3) {
+                    // Conv1 delta: polynomial convolution predictor; 64-bit dtypes unsupported.
+                    if (dtypeSize == 64) {
+                        throw new VortexException(EncodingId.VORTEX_PCO,
+                                "pco Conv1 delta not supported for 64-bit dtypes (I64/U64/F64)");
+                    }
+                    PcoTansDecoder primaryTans = PcoTansDecoder.build(
+                            chunkMeta.ansSizeLog(), chunkMeta.bins());
+                    for (int p = 0; p < chunkInfo.getPagesCount(); p++) {
+                        int pageN = chunkInfo.getPages(p).getNValues();
+                        MemorySegment pageBuf = ctx.buffer(bufIdx++);
+                        rawByteOffset = decodeConv1Page(
+                                primaryTans, chunkMeta.ansSizeLog(),
+                                chunkMeta.conv1Weights().length,
+                                chunkMeta.conv1Quantization(), chunkMeta.conv1Bias(),
+                                chunkMeta.conv1Weights(),
+                                dtypeSize, pageBuf, pageN,
+                                rawLatents, rawByteOffset, ctx.arena());
+                    }
+                } else if (deltaVariant == 2) {
                     // Lookback delta: currently only Classic mode supported.
                     if (mode != 0) {
                         throw new VortexException(EncodingId.VORTEX_PCO,
@@ -421,6 +440,77 @@ public final class PcoEncoding implements Encoding {
             return latentsOffset + (long) pageN * Long.BYTES;
         }
 
+        /// Decode one Conv1-delta page into rawLatents and return the updated byte offset.
+        ///
+        /// Page layout: [order×dtypeSize initial state][4×ansSizeLog ANS states][0–7b align]
+        /// [per 256-batch: ANS bits + offset bits for (pageN-order) residuals]
+        ///
+        /// Port of {@code conv1::decode_in_place} from pcodec.
+        private static long decodeConv1Page(
+                PcoTansDecoder tans, int ansSizeLog,
+                int order, int quantization, long bias, long[] weights,
+                int dtypeSize, MemorySegment pageBuf, int pageN,
+                MemorySegment rawLatents, long latentsOffset,
+                SegmentAllocator arena) {
+            LeBitReader pageReader = new LeBitReader(pageBuf);
+
+            long[] state = new long[order];
+            for (int i = 0; i < order; i++) {
+                state[i] = pageReader.readBits(dtypeSize);
+            }
+            int[] stateIdxs = new int[PcoTansDecoder.ANS_INTERLEAVING];
+            for (int i = 0; i < PcoTansDecoder.ANS_INTERLEAVING; i++) {
+                stateIdxs[i] = (int) pageReader.readBits(ansSizeLog);
+            }
+            pageReader.alignToByte();
+
+            int decodeN = pageN - order;
+            long mid = typeMid(dtypeSize);
+            long mask = typeMask(dtypeSize);
+
+            // Decode tANS residuals into a scratch segment.
+            MemorySegment rawResiduals = arena.allocate((long) decodeN * Long.BYTES);
+            tans.decodePage(pageReader, stateIdxs, decodeN, rawResiduals, 0);
+
+            // Build buf[0..order] = state, buf[order..pageN] = toggle-centered residuals.
+            long[] buf = new long[pageN];
+            System.arraycopy(state, 0, buf, 0, order);
+            for (int i = 0; i < decodeN; i++) {
+                long res = rawResiduals.get(LE_LONG, (long) i * Long.BYTES);
+                buf[order + i] = (res ^ mid) & mask;
+            }
+
+            // Reconstruct: buf[i] += predict(buf[i-order..i]).
+            for (int i = order; i < pageN; i++) {
+                long pred = predictConv1(buf, i, order, weights, bias, quantization, dtypeSize);
+                buf[i] = (buf[i] + pred) & mask;
+            }
+
+            for (int i = 0; i < pageN; i++) {
+                rawLatents.set(LE_LONG, latentsOffset + (long) i * Long.BYTES, buf[i]);
+            }
+            return latentsOffset + (long) pageN * Long.BYTES;
+        }
+
+        /// Compute Conv1 prediction for position {@code pos} in {@code buf}.
+        ///
+        /// Accumulator is i64 for dtypeSize=32, or i32 (bias/weights truncated) for dtypeSize=16.
+        /// {@code to_conv} is zero-extension; {@code from_conv} is truncation to dtypeSize bits.
+        private static long predictConv1(long[] buf, int pos, int order,
+                long[] weights, long bias, int quantization, int dtypeSize) {
+            // For dtypeSize=16, accumulator is i32 (truncate bias/weights from i64).
+            long s = (dtypeSize == 16) ? (int) bias : bias;
+            for (int k = 0; k < order; k++) {
+                long w = (dtypeSize == 16) ? (int) weights[k] : weights[k];
+                long l = buf[pos - order + k]; // already masked to dtypeSize bits — zero-extends naturally
+                s += w * l;
+            }
+            if (s < 0) {
+                s = 0;
+            }
+            return (s >> quantization) & typeMask(dtypeSize);
+        }
+
         /// Inverse of pcodec {@code to_latent_ordered}: maps raw U-latent back to typed bits.
         private static long fromLatentOrdered(long latent, PType ptype) {
             return switch (ptype) {
@@ -659,6 +749,9 @@ public final class PcoEncoding implements Encoding {
             boolean secondaryUsesDelta = false;
             int windowNLog = 0;
             int stateNLog = 0;
+            int conv1Quantization = 0;
+            long conv1Bias = 0L;
+            long[] conv1Weights = new long[0];
             if (deltaVariant == 0) {
                 // NoOp
             } else if (deltaVariant == 1) {
@@ -668,10 +761,20 @@ public final class PcoEncoding implements Encoding {
                 windowNLog = 1 + (int) r.readBits(5); // BITS_TO_ENCODE_DELTA_LOOKBACK_WINDOW_N_LOG
                 stateNLog = (int) r.readBits(4);       // BITS_TO_ENCODE_DELTA_LOOKBACK_STATE_N_LOG
                 secondaryUsesDelta = r.readBits(1) != 0;
+            } else if (deltaVariant == 3) {
+                // Conv1: quantization(5b) + bias(64b latent-ordered i64) + (order-1)(5b) + weights(order×32b)
+                conv1Quantization = (int) r.readBits(5);
+                conv1Bias = r.readBits(64) ^ Long.MIN_VALUE; // from_latent_ordered for i64
+                int conv1Order = 1 + (int) r.readBits(5);
+                conv1Weights = new long[conv1Order];
+                for (int i = 0; i < conv1Order; i++) {
+                    // from_latent_ordered for i32: XOR with 0x80000000, then sign-extend to i64
+                    conv1Weights[i] = (int) (r.readBits(32) ^ 0x80000000L);
+                }
             } else {
                 throw new VortexException(EncodingId.VORTEX_PCO,
                         "pco delta variant " + deltaVariant + " not yet implemented "
-                        + "(NoOp=0, Consecutive=1, Lookback=2 supported)");
+                        + "(NoOp=0, Consecutive=1, Lookback=2, Conv1=3 supported)");
             }
 
             // Delta latent var (U32 lookback indices) — only present for Lookback delta.
@@ -702,6 +805,7 @@ public final class PcoEncoding implements Encoding {
             return new PcoChunkMeta(modeNibble, base, quantizeK, dict,
                     deltaVariant, deltaOrder, secondaryUsesDelta,
                     windowNLog, stateNLog, deltaAnsSizeLog, deltaBins,
+                    conv1Quantization, conv1Bias, conv1Weights,
                     ansSizeLog, bins, secondaryAnsSizeLog, secondaryBins);
         }
 
@@ -748,6 +852,7 @@ public final class PcoEncoding implements Encoding {
     private record PcoChunkMeta(int mode, long base, int quantizeK, long[] dict,
                                  int deltaVariant, int deltaOrder, boolean secondaryUsesDelta,
                                  int windowNLog, int stateNLog, int deltaAnsSizeLog, PcoBin[] deltaBins,
+                                 int conv1Quantization, long conv1Bias, long[] conv1Weights,
                                  int ansSizeLog, PcoBin[] bins,
                                  int secondaryAnsSizeLog, PcoBin[] secondaryBins) {
     }
