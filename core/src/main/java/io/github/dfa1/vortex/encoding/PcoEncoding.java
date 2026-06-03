@@ -734,6 +734,10 @@ public final class PcoEncoding implements Encoding {
                 quantizeK = (int) r.readBits(8); // BITS_TO_ENCODE_QUANTIZE_K
             } else if (modeNibble == 4) {
                 int nUnique = (int) r.readBits(25); // BITS_TO_ENCODE_DICT_LEN
+                if (nUnique > 1 << 16) {
+                    throw new VortexException(EncodingId.VORTEX_PCO,
+                            "pco dict nUnique " + nUnique + " exceeds max 65536");
+                }
                 r.alignToByte();
                 dict = new long[nUnique];
                 for (int i = 0; i < nUnique; i++) {

@@ -573,6 +573,31 @@ class PcoEncodingTest {
 		}
 	}
 
+	@Nested
+	class DecodeDict {
+
+		@Test
+		void dict_nUniqueExceedsMax_throwsVortexException() {
+			// Given — mode=4 (Dict), nUnique=65537 > max 65536.
+			// Bit layout (LSB-first): mode[3:0]=4, nUnique[28:4]=65537
+			//   combined = 4 | (65537 << 4) = 0x100014
+			//   bytes: 0x14, 0x00, 0x10, 0x00, 0x00
+			var sut = new PcoEncoding();
+			MemorySegment chunkMeta = segmentOf(
+					(byte) 0x14, (byte) 0x00, (byte) 0x10, (byte) 0x00, (byte) 0x00);
+			DecodeContext ctx = ctxWith(
+					metaWithOneChunk(1),
+					new DType.Primitive(PType.U64, false),
+					1,
+					new MemorySegment[]{chunkMeta, segmentOf((byte) 0x00)});
+
+			// When / Then
+			assertThatThrownBy(() -> sut.decode(ctx))
+					.isInstanceOf(VortexException.class)
+					.hasMessageContaining("nUnique");
+		}
+	}
+
 	/// Adversarial coverage: malformed inputs must throw VortexException — never AIOOBE, NPE, or OOM.
 	@Nested
 	class Adversarial {
