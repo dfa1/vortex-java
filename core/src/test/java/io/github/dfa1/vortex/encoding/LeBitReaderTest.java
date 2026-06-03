@@ -9,7 +9,10 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 
+import io.github.dfa1.vortex.core.VortexException;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class LeBitReaderTest {
 
@@ -116,6 +119,18 @@ class LeBitReaderTest {
 
             // Then
             assertThat(result).isEqualTo(expected);
+        }
+
+        @Test
+        void readPastEnd_throwsVortexException() {
+            // Given — 1-byte buffer
+            var sut = readerOf((byte) 0xFF);
+            sut.readBits(8); // consume all 8 bits
+
+            // When / Then — reading 1 more bit must throw VortexException, not IOOBE
+            assertThatThrownBy(() -> sut.readBits(1))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("truncated");
         }
 
         @Test

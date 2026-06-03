@@ -1,5 +1,7 @@
 package io.github.dfa1.vortex.encoding;
 
+import io.github.dfa1.vortex.core.VortexException;
+
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 
@@ -32,7 +34,12 @@ final class LeBitReader {
             int bitInByte = (int) (bitPos & 7);
             int available = 8 - bitInByte;
             int take = Math.min(remaining, available);
-            int b = data.get(BYTE, byteIndex) & 0xFF;
+            int b;
+            try {
+                b = data.get(BYTE, byteIndex) & 0xFF;
+            } catch (IndexOutOfBoundsException e) {
+                throw new VortexException("pco: truncated data at bit " + bitPos, e);
+            }
             result |= (long) ((b >>> bitInByte) & ((1 << take) - 1)) << shift;
             shift += take;
             remaining -= take;
