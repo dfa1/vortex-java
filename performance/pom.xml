@@ -11,6 +11,13 @@
 
 	<artifactId>performance</artifactId>
 
+	<properties>
+		<!-- Override with -Dbenchmark="ClassName.methodName" to run a specific benchmark -->
+		<benchmark>.*</benchmark>
+		<!-- JMH output: override with -Djmh.outputFile=/dev/null to suppress -->
+		<jmh.outputFile>${project.build.directory}/benchmark-result.json</jmh.outputFile>
+	</properties>
+
 	<dependencies>
 		<dependency>
 			<groupId>io.github.dfa1.vortex</groupId>
@@ -74,12 +81,26 @@
 					</annotationProcessorPaths>
 				</configuration>
 			</plugin>
-			<!-- Run benchmarks: ./mvnw compile exec:java -pl performance -am -DskipTests -Dexec.args="ClassName.method" -->
+			<!-- Run benchmarks: ./mvnw compile -pl performance -am -DskipTests -q && ./mvnw exec:exec -pl performance -DskipTests [-Dexec.args="ClassName.methodName"] -->
 			<plugin>
 				<groupId>org.codehaus.mojo</groupId>
 				<artifactId>exec-maven-plugin</artifactId>
 				<configuration>
-					<mainClass>org.openjdk.jmh.Main</mainClass>
+					<executable>java</executable>
+					<arguments>
+						<argument>--add-opens</argument>
+						<argument>java.base/java.nio=ALL-UNNAMED</argument>
+						<argument>--enable-native-access=ALL-UNNAMED</argument>
+						<argument>--sun-misc-unsafe-memory-access=allow</argument>
+						<argument>-classpath</argument>
+						<classpath/>
+						<argument>org.openjdk.jmh.Main</argument>
+					<argument>${benchmark}</argument>
+					<argument>-rf</argument>
+					<argument>json</argument>
+					<argument>-rff</argument>
+					<argument>${jmh.outputFile}</argument>
+					</arguments>
 				</configuration>
 			</plugin>
 		</plugins>
