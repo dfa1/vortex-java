@@ -7,10 +7,14 @@ import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.MaskedArray;
 import io.github.dfa1.vortex.proto.EncodingProtos;
+import net.jqwik.api.ForAll;
+import net.jqwik.api.Property;
+import net.jqwik.api.constraints.Size;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -394,6 +398,124 @@ class PcoEncodingTest {
 			assertThat(masked.isValid(1)).isTrue();
 			assertThat(((LongArray) masked.child(0)).getLong(0)).isEqualTo(10L);
 			assertThat(((LongArray) masked.child(0)).getLong(1)).isEqualTo(20L);
+		}
+	}
+
+	/// Adversarial coverage: malformed inputs must throw VortexException — never AIOOBE, NPE, or OOM.
+	@Nested
+	class Adversarial {
+
+		/// Random chunk-meta bytes — any exception must be a VortexException, not a JVM crash exception.
+		@Property(tries = 50)
+		void randomChunkMetaBytes_neverThrowsJvmException(
+				@ForAll @Size(min = 1, max = 64) byte[] chunkMetaBytes) {
+			// Given — valid pco header + 1 chunk with 1 page of 1 value; garbage chunk-meta bytes.
+			var sut = new PcoEncoding();
+			DecodeContext ctx = ctxWith(
+					metaWithOneChunk(1),
+					new DType.Primitive(PType.U64, false),
+					1,
+					new MemorySegment[]{segmentOf(chunkMetaBytes), segmentOf((byte) 0x00)});
+
+			// When / Then — either succeeds or throws VortexException; never AIOOBE/NPE/OOM
+			try {
+				sut.decode(ctx);
+			} catch (VortexException ignored) {
+				// expected — malformed input
+			}
+		}
+
+		/// Random page bytes after a valid Classic-mode chunk meta — must not crash the JVM.
+		@Property(tries = 50)
+		void randomPageBytes_classicMode_neverThrowsJvmException(
+				@ForAll @Size(min = 4, max = 128) byte[] pageBytes) {
+			// Given — Classic mode, delta=NoOp, ansSizeLog=0, nBins=0 chunk meta.
+			var sut = new PcoEncoding();
+			// byte0: mode=0 (bits3:0), deltaVariant=0 (bits7:4) → 0x00
+			// byte1: ansSizeLog=0 (bits3:0), nBins low bits = 0
+			// bytes 2-3: nBins high bits = 0
+			DecodeContext ctx = ctxWith(
+					metaWithOneChunk(1),
+					new DType.Primitive(PType.U64, false),
+					1,
+					new MemorySegment[]{segmentOf((byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00),
+							segmentOf(pageBytes)});
+
+			// When / Then
+			try {
+				sut.decode(ctx);
+			} catch (VortexException ignored) {
+				// expected — malformed page data
+			}
+		}
+
+		/// Invalid mode nibbles (5–15) must produce a VortexException naming the mode number.
+		@ParameterizedTest
+		@ValueSource(ints = {5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15})
+		void invalidModeNibble_throwsVortexException(int modeNibble) {
+			// Given — chunk meta with unsupported mode nibble in bits[3:0].
+			var sut = new PcoEncoding();
+			// bits[3:0] = modeNibble, delta nibble doesn't matter (won't be reached)
+			byte modeByte = (byte) (modeNibble & 0x0F);
+			DecodeContext ctx = ctxWith(
+					metaWithOneChunk(1),
+					new DType.Primitive(PType.U64, false),
+					1,
+					new MemorySegment[]{
+							segmentOf(modeByte, (byte) 0x00, (byte) 0x00, (byte) 0x00),
+							segmentOf((byte) 0x00)});
+
+			// When / Then
+			assertThatThrownBy(() -> sut.decode(ctx))
+					.isInstanceOf(VortexException.class)
+					.hasMessageContaining("pco mode " + modeNibble);
+		}
+
+		/// Invalid delta variants (4–15) must produce a VortexException naming the variant number.
+		@ParameterizedTest
+		@ValueSource(ints = {4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15})
+		void invalidDeltaVariant_throwsVortexException(int deltaVariant) {
+			// Given — Classic mode (nibble=0) + invalid delta nibble in bits[7:4].
+			var sut = new PcoEncoding();
+			// byte0: bits[3:0]=mode=0, bits[7:4]=deltaVariant
+			byte modeDeltaByte = (byte) ((deltaVariant & 0x0F) << 4);
+			DecodeContext ctx = ctxWith(
+					metaWithOneChunk(1),
+					new DType.Primitive(PType.U64, false),
+					1,
+					new MemorySegment[]{
+							segmentOf(modeDeltaByte, (byte) 0x00, (byte) 0x00, (byte) 0x00),
+							segmentOf((byte) 0x00)});
+
+			// When / Then
+			assertThatThrownBy(() -> sut.decode(ctx))
+					.isInstanceOf(VortexException.class)
+					.hasMessageContaining("delta variant " + deltaVariant);
+		}
+
+		/// Conv1 delta with 64-bit dtype must throw VortexException; pcodec only supports 16/32-bit Conv1.
+		@ParameterizedTest
+		@EnumSource(value = PType.class, names = {"I64", "U64", "F64"})
+		void conv1Delta_with64BitDtype_throwsVortexException(PType ptype) {
+			// Given — Conv1 delta variant (nibble=3 in bits[7:4]), Classic mode (nibble=0 in bits[3:0]).
+			// byte0: bits[3:0]=0 (Classic), bits[7:4]=3 (Conv1) → 0x30
+			// Remaining bytes: conv1 bit fields (don't matter — error fires before parsing them).
+			var sut = new PcoEncoding();
+			DecodeContext ctx = ctxWith(
+					metaWithOneChunk(1),
+					new DType.Primitive(ptype, false),
+					1,
+					new MemorySegment[]{
+							segmentOf((byte) 0x30, (byte) 0x00, (byte) 0x00, (byte) 0x00,
+									(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
+									(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
+									(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00),
+							segmentOf((byte) 0x00)});
+
+			// When / Then
+			assertThatThrownBy(() -> sut.decode(ctx))
+					.isInstanceOf(VortexException.class)
+					.hasMessageContaining("Conv1");
 		}
 	}
 }

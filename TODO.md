@@ -211,9 +211,6 @@ all pcodec format versions in use. Sample findings drive **priority order**, not
   the immediate child layout, not the surface column DType.
 
 **Phases**:
-- [ ] **Phase 14 — adversarial coverage**. Build fuzz corpus of valid + malformed
-  pco buffers (via pcodec CLI in fixture-gen step). All malformed input must throw
-  `VortexException`, never `AIOOBE`/`NASE`/`OOM`. Property test with `tries` low.
 - [ ] **Phase 15 — close out**. Drop pco row from blocker list; update fixture
   score 31/35 → 35/35; document supported modes/deltas/versions in `PcoEncoding`
   javadoc.

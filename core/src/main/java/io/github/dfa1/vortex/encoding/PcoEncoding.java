@@ -141,11 +141,7 @@ public final class PcoEncoding implements Encoding {
                 }
 
                 if (deltaVariant == 3) {
-                    // Conv1 delta: polynomial convolution predictor; 64-bit dtypes unsupported.
-                    if (dtypeSize == 64) {
-                        throw new VortexException(EncodingId.VORTEX_PCO,
-                                "pco Conv1 delta not supported for 64-bit dtypes (I64/U64/F64)");
-                    }
+                    // Conv1 delta: 64-bit check is in readChunkMeta; 64-bit case never reaches here.
                     PcoTansDecoder primaryTans = PcoTansDecoder.build(
                             chunkMeta.ansSizeLog(), chunkMeta.bins());
                     for (int p = 0; p < chunkInfo.getPagesCount(); p++) {
@@ -762,6 +758,11 @@ public final class PcoEncoding implements Encoding {
                 stateNLog = (int) r.readBits(4);       // BITS_TO_ENCODE_DELTA_LOOKBACK_STATE_N_LOG
                 secondaryUsesDelta = r.readBits(1) != 0;
             } else if (deltaVariant == 3) {
+                // Conv1: 64-bit dtypes unsupported — fail before reading Conv1 fields.
+                if (dtypeSize == 64) {
+                    throw new VortexException(EncodingId.VORTEX_PCO,
+                            "pco Conv1 delta not supported for 64-bit dtypes (I64/U64/F64)");
+                }
                 // Conv1: quantization(5b) + bias(64b latent-ordered i64) + (order-1)(5b) + weights(order×32b)
                 conv1Quantization = (int) r.readBits(5);
                 conv1Bias = r.readBits(64) ^ Long.MIN_VALUE; // from_latent_ordered for i64
