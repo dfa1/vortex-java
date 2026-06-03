@@ -10,9 +10,22 @@ import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.encoding.BoolEncoding;
+import io.github.dfa1.vortex.encoding.ByteBoolEncoding;
+import io.github.dfa1.vortex.encoding.ConstantEncoding;
 import io.github.dfa1.vortex.encoding.FsstEncoding;
+import io.github.dfa1.vortex.encoding.ListData;
+import io.github.dfa1.vortex.encoding.ListEncoding;
+import io.github.dfa1.vortex.encoding.ListViewData;
+import io.github.dfa1.vortex.encoding.ListViewEncoding;
+import io.github.dfa1.vortex.encoding.NullEncoding;
+import io.github.dfa1.vortex.encoding.RleEncoding;
+import io.github.dfa1.vortex.encoding.RunEndEncoding;
+import io.github.dfa1.vortex.encoding.SparseEncoding;
 import io.github.dfa1.vortex.encoding.VarBinEncoding;
 import io.github.dfa1.vortex.encoding.VarBinViewEncoding;
+import io.github.dfa1.vortex.encoding.ZigZagEncoding;
+import io.github.dfa1.vortex.encoding.ZstdEncoding;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import net.jqwik.api.Arbitraries;
@@ -22,11 +35,13 @@ import net.jqwik.api.Property;
 import net.jqwik.api.Provide;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
+import org.apache.arrow.vector.BitVector;
 import org.apache.arrow.vector.Float2Vector;
 import org.apache.arrow.vector.Float8Vector;
 import org.apache.arrow.vector.IntVector;
 import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.arrow.vector.complex.ListVector;
 import org.apache.arrow.vector.ipc.ArrowReader;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -85,6 +100,21 @@ class JavaWritesRustReadsIntegrationTest {
 	private static final DType.Struct F16_SCHEMA = new DType.Struct(
 			List.of("v"),
 			List.of(new DType.Primitive(PType.F16, false)),
+			false);
+
+	private static final DType.Struct BOOL_SCHEMA = new DType.Struct(
+			List.of("b"),
+			List.of(new DType.Bool(false)),
+			false);
+
+	private static final DType.Struct NULL_SCHEMA = new DType.Struct(
+			List.of("n"),
+			List.of(new DType.Null(false)),
+			false);
+
+	private static final DType.Struct LIST_I64_SCHEMA = new DType.Struct(
+			List.of("items"),
+			List.of(new DType.List(new DType.Primitive(PType.I64, false), false)),
 			false);
 
 	private static final DType.Struct OHLC_SCHEMA = new DType.Struct(
@@ -740,6 +770,339 @@ class JavaWritesRustReadsIntegrationTest {
 		// Then
 		short[] decoded = readHalfColumn(file, "v");
 		assertThat(decoded).containsExactly(data);
+	}
+
+	@Test
+	void javaWriter_rustReader_zigzag_i32(@TempDir Path tmp) throws IOException {
+		// Given — ZigZag: signed integers with negatives exercise both encode paths
+		Path file = tmp.resolve("java_zigzag_i32.vtx");
+		int[] data = {-1000, -1, 0, 1, 127, -127, Integer.MIN_VALUE / 2, Integer.MAX_VALUE / 2};
+		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+		     var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults(),
+				     List.of(new ZigZagEncoding()))) {
+			// When
+			sut.writeChunk(Map.of("v", data));
+		}
+
+		// Then
+		int[] decoded = readIntColumn(file, "v");
+		assertThat(decoded).containsExactly(data);
+	}
+
+	@Test
+	void javaWriter_rustReader_zigzag_i64(@TempDir Path tmp) throws IOException {
+		// Given
+		Path file = tmp.resolve("java_zigzag_i64.vtx");
+		long[] data = {Long.MIN_VALUE / 2, -1L, 0L, 1L, Long.MAX_VALUE / 2};
+		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+		     var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.defaults(),
+				     List.of(new ZigZagEncoding()))) {
+			// When
+			sut.writeChunk(Map.of("ts", data));
+		}
+
+		// Then
+		long[] decoded = readLongColumn(file, "ts");
+		assertThat(decoded).containsExactly(data);
+	}
+
+	@Test
+	void javaWriter_rustReader_runEnd_i32(@TempDir Path tmp) throws IOException {
+		// Given — RunEnd: runs of same value exercise the run-length proto serialisation
+		Path file = tmp.resolve("java_runend_i32.vtx");
+		int[] data = {10, 10, 10, 20, 20, 30, 30, 30, 30};
+		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+		     var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults(),
+				     List.of(new RunEndEncoding()))) {
+			// When
+			sut.writeChunk(Map.of("v", data));
+		}
+
+		// Then
+		int[] decoded = readIntColumn(file, "v");
+		assertThat(decoded).containsExactly(data);
+	}
+
+	@Test
+	void javaWriter_rustReader_runEnd_i64(@TempDir Path tmp) throws IOException {
+		// Given
+		Path file = tmp.resolve("java_runend_i64.vtx");
+		long[] data = {100L, 100L, 200L, 200L, 200L, 300L};
+		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+		     var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.defaults(),
+				     List.of(new RunEndEncoding()))) {
+			// When
+			sut.writeChunk(Map.of("ts", data));
+		}
+
+		// Then
+		long[] decoded = readLongColumn(file, "ts");
+		assertThat(decoded).containsExactly(data);
+	}
+
+	@Test
+	void javaWriter_rustReader_rle_i32(@TempDir Path tmp) throws IOException {
+		// Given — FastLanes RLE: chunk-based RLE with offset; exercises chunk boundary proto fields
+		Path file = tmp.resolve("java_rle_i32.vtx");
+		int[] data = {5, 5, 5, 7, 7, 5, 5, 5, 5, 9};
+		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+		     var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults(),
+				     List.of(new RleEncoding()))) {
+			// When
+			sut.writeChunk(Map.of("v", data));
+		}
+
+		// Then
+		int[] decoded = readIntColumn(file, "v");
+		assertThat(decoded).containsExactly(data);
+	}
+
+	@Test
+	void javaWriter_rustReader_rle_i64(@TempDir Path tmp) throws IOException {
+		// Given
+		Path file = tmp.resolve("java_rle_i64.vtx");
+		long[] data = {1L, 1L, 1L, 2L, 2L, 2L, 3L, 3L};
+		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+		     var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.defaults(),
+				     List.of(new RleEncoding()))) {
+			// When
+			sut.writeChunk(Map.of("ts", data));
+		}
+
+		// Then
+		long[] decoded = readLongColumn(file, "ts");
+		assertThat(decoded).containsExactly(data);
+	}
+
+	@Test
+	void javaWriter_rustReader_constant_i32(@TempDir Path tmp) throws IOException {
+		// Given — Constant: scalar proto serialisation and row count metadata
+		Path file = tmp.resolve("java_constant_i32.vtx");
+		int[] data = {42, 42, 42, 42, 42};
+		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+		     var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults(),
+				     List.of(new ConstantEncoding()))) {
+			// When
+			sut.writeChunk(Map.of("v", data));
+		}
+
+		// Then
+		int[] decoded = readIntColumn(file, "v");
+		assertThat(decoded).containsExactly(data);
+	}
+
+	@Test
+	void javaWriter_rustReader_sparse_i32(@TempDir Path tmp) throws IOException {
+		// Given — Sparse: mostly-zero data; exercises patch indices + endianness of offset field
+		Path file = tmp.resolve("java_sparse_i32.vtx");
+		int[] data = {0, 0, 7, 0, 0, 0, 13, 0, 0, 0};
+		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+		     var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults(),
+				     List.of(new SparseEncoding()))) {
+			// When
+			sut.writeChunk(Map.of("v", data));
+		}
+
+		// Then
+		int[] decoded = readIntColumn(file, "v");
+		assertThat(decoded).containsExactly(data);
+	}
+
+	@Test
+	void javaWriter_rustReader_bool_boolEncoding(@TempDir Path tmp) throws IOException {
+		// Given — BoolEncoding: bit-packed boolean column
+		Path file = tmp.resolve("java_bool.vtx");
+		boolean[] data = {true, false, true, true, false, false, true};
+		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+		     var sut = VortexWriter.create(ch, BOOL_SCHEMA, WriteOptions.defaults(),
+				     List.of(new BoolEncoding()))) {
+			// When
+			sut.writeChunk(Map.of("b", data));
+		}
+
+		// Then
+		boolean[] decoded = readBoolColumn(file, "b");
+		assertThat(decoded).containsExactly(data[0], data[1], data[2], data[3], data[4], data[5], data[6]);
+	}
+
+	@Test
+	void javaWriter_rustReader_bool_byteBoolEncoding(@TempDir Path tmp) throws IOException {
+		// Given — ByteBoolEncoding: one byte per bool (uncompressed), exercises different wire format
+		Path file = tmp.resolve("java_bytebool.vtx");
+		boolean[] data = {false, true, false, true, true};
+		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+		     var sut = VortexWriter.create(ch, BOOL_SCHEMA, WriteOptions.defaults(),
+				     List.of(new ByteBoolEncoding()))) {
+			// When
+			sut.writeChunk(Map.of("b", data));
+		}
+
+		// Then
+		boolean[] decoded = readBoolColumn(file, "b");
+		assertThat(decoded).containsExactly(data[0], data[1], data[2], data[3], data[4]);
+	}
+
+	@Test
+	void javaWriter_rustReader_nullColumn(@TempDir Path tmp) throws IOException {
+		// Given — NullEncoding: entire column is null; exercises Null DType + empty EncodeNode
+		Path file = tmp.resolve("java_null.vtx");
+		long rowCount = 7L;
+		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+		     var sut = VortexWriter.create(ch, NULL_SCHEMA, WriteOptions.defaults(),
+				     List.of(new NullEncoding()))) {
+			// When — data is ignored by NullEncoding; pass long[] to satisfy arrayLength
+			sut.writeChunk(Map.of("n", new long[(int) rowCount]));
+		}
+
+		// Then
+		long count = readRowCount(file);
+		assertThat(count).isEqualTo(rowCount);
+	}
+
+	@Test
+	void javaWriter_rustReader_zstd_i64(@TempDir Path tmp) throws IOException {
+		// Given — ZstdEncoding: compressed primitive; exercises zstd frame magic + frame header
+		Path file = tmp.resolve("java_zstd_i64.vtx");
+		long[] data = {1L, 2L, 3L, 4L, 1000L, 9999L, Long.MAX_VALUE};
+		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+		     var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.defaults(),
+				     List.of(new ZstdEncoding()))) {
+			// When
+			sut.writeChunk(Map.of("ts", data));
+		}
+
+		// Then
+		long[] decoded = readLongColumn(file, "ts");
+		assertThat(decoded).containsExactly(data);
+	}
+
+	@Test
+	void javaWriter_rustReader_zstd_utf8(@TempDir Path tmp) throws IOException {
+		// Given — ZstdEncoding: compressed Utf8; exercises length-prefix framing + zstd magic
+		Path file = tmp.resolve("java_zstd_utf8.vtx");
+		String[] data = {"hello", "world", "from", "zstd"};
+		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+		     var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults(),
+				     List.of(new ZstdEncoding()))) {
+			// When
+			sut.writeChunk(Map.of("s", data));
+		}
+
+		// Then
+		String[] decoded = readStringColumn(file, "s");
+		assertThat(decoded).containsExactly(data);
+	}
+
+	@Test
+	void javaWriter_rustReader_list_i64(@TempDir Path tmp) throws IOException {
+		// Given — ListEncoding: exercises elements_len + offset_ptype proto fields (byte-order risk)
+		Path file = tmp.resolve("java_list_i64.vtx");
+		long[] elements = {10L, 20L, 30L, 40L, 50L, 60L};
+		long[] offsets = {0L, 2L, 2L, 5L, 6L};  // lists: [10,20], [], [30,40,50], [60]
+		ListData data = new ListData(elements, offsets, 4L);
+		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+		     var sut = VortexWriter.create(ch, LIST_I64_SCHEMA, WriteOptions.defaults(),
+				     List.of(new ListEncoding()))) {
+			// When
+			sut.writeChunk(Map.of("items", data));
+		}
+
+		// Then
+		long[] flatElements = readListLongColumn(file, "items");
+		assertThat(flatElements).containsExactly(elements);
+	}
+
+	@Test
+	void javaWriter_rustReader_listView_i64(@TempDir Path tmp) throws IOException {
+		// Given — ListViewEncoding: offset+size pairs in proto; exercises U16 vs U32 ptype risk
+		Path file = tmp.resolve("java_listview_i64.vtx");
+		long[] elements = {1L, 2L, 3L, 4L, 5L};
+		int[] offsets = {0, 2, 2, 4};    // lists start at these positions
+		int[] sizes = {2, 0, 2, 1};       // list lengths: [1,2], [], [3,4], [5]
+		ListViewData data = new ListViewData(elements, offsets, sizes, 4L);
+		try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+		     var sut = VortexWriter.create(ch, LIST_I64_SCHEMA, WriteOptions.defaults(),
+				     List.of(new ListViewEncoding()))) {
+			// When
+			sut.writeChunk(Map.of("items", data));
+		}
+
+		// Then — Rust normalises ListView to List on read; verify flattened elements
+		long[] flatElements = readListLongColumn(file, "items");
+		assertThat(flatElements).containsExactly(elements);
+	}
+
+	// ── new reader helpers ────────────────────────────────────────────────────
+
+	private static boolean[] readBoolColumn(Path file, String column) throws IOException {
+		String uri = file.toAbsolutePath().toUri().toString();
+		ScanOptions opts = ScanOptions.builder()
+				.projection(Expression.select(new String[]{column}, Expression.root()))
+				.build();
+		var bools = new ArrayList<Boolean>();
+		DataSource ds = DataSource.open(SESSION, uri);
+		Scan scan = ds.scan(opts);
+		while (scan.hasNext()) {
+			Partition partition = scan.next();
+			try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
+				while (reader.loadNextBatch()) {
+					VectorSchemaRoot root = reader.getVectorSchemaRoot();
+					BitVector vec = (BitVector) root.getVector(column);
+					for (int i = 0; i < root.getRowCount(); i++) {
+						bools.add(!vec.isNull(i) && vec.get(i) == 1);
+					}
+				}
+			}
+		}
+		boolean[] result = new boolean[bools.size()];
+		for (int i = 0; i < result.length; i++) {
+			result[i] = bools.get(i);
+		}
+		return result;
+	}
+
+	private static long readRowCount(Path file) throws IOException {
+		String uri = file.toAbsolutePath().toUri().toString();
+		long count = 0;
+		DataSource ds = DataSource.open(SESSION, uri);
+		Scan scan = ds.scan(ScanOptions.of());
+		while (scan.hasNext()) {
+			Partition partition = scan.next();
+			try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
+				while (reader.loadNextBatch()) {
+					count += reader.getVectorSchemaRoot().getRowCount();
+				}
+			}
+		}
+		return count;
+	}
+
+	private static long[] readListLongColumn(Path file, String column) throws IOException {
+		String uri = file.toAbsolutePath().toUri().toString();
+		ScanOptions opts = ScanOptions.builder()
+				.projection(Expression.select(new String[]{column}, Expression.root()))
+				.build();
+		var elements = new ArrayList<Long>();
+		DataSource ds = DataSource.open(SESSION, uri);
+		Scan scan = ds.scan(opts);
+		while (scan.hasNext()) {
+			Partition partition = scan.next();
+			try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
+				while (reader.loadNextBatch()) {
+					VectorSchemaRoot root = reader.getVectorSchemaRoot();
+					ListVector vec = (ListVector) root.getVector(column);
+					BigIntVector child = (BigIntVector) vec.getDataVector();
+					for (int i = 0; i < root.getRowCount(); i++) {
+						int start = vec.getOffsetBuffer().getInt((long) i * ListVector.OFFSET_WIDTH);
+						int end = vec.getOffsetBuffer().getInt((long) (i + 1) * ListVector.OFFSET_WIDTH);
+						for (int j = start; j < end; j++) {
+							elements.add(child.get(j));
+						}
+					}
+				}
+			}
+		}
+		return elements.stream().mapToLong(Long::longValue).toArray();
 	}
 
 	private static void assertBitwiseEqualsF64(double[] actual, double[] expected) {

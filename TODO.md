@@ -42,24 +42,6 @@
   metadata (e.g. `RLEMetadata`, `RunEndMetadata`) has no upstream `.proto`; tag mismatches
   silently produce zero/default values in proto3. Add value-level assertions (not just
   `rowCount > 0`) to integration tests to catch silent corruption.
-- [ ] **Add missing Java-writes→Rust-reads interop tests** — `JavaWritesRustReadsIntegrationTest`
-  currently covers: `vortex.primitive` (I32/I64/F32/F64/F16), `vortex.varbin`, `vortex.dict`,
-  `vortex.fsst`, `fastlanes.*`/`vortex.alp`/`vortex.alprd` (via cascading OHLC).
-  Missing encodings (prioritised by byte-ordering / proto risk):
-    - **`vortex.varbinview`** — 16-byte view struct has inlined data + prefix field; byte-order bug
-      would survive Java-only round-trip but break Rust read
-    - **`vortex.list` / `vortex.listview`** — proto tag mismatch already found once (U32 not U16);
-      write path exercises `elements_len` + `offset_ptype` serialisation
-    - **`vortex.zstd`** — frame format + optional dict; Rust strict about frame magic
-    - **`vortex.sparse`** — patches offset encoding has endianness assumptions
-    - **`vortex.zigzag`** — signed int codec, simple but untested end-to-end
-    - **`vortex.runend`** — RLE with varying ptypes
-    - **`vortex.bool` / `vortex.bytebool`** — boolean columns
-    - **`vortex.constant`** — constant-value arrays
-    - **`vortex.null`** — null columns
-    - **`fastlanes.rle`** — RLE encoding
-  Pattern: `VortexWriter.create(ch, SCHEMA, WriteOptions.defaults(), List.of(new XxxEncoding()))`
-  then `readStringColumn` / `readLongColumn` via JNI. Run with `./mvnw verify -pl integration -am`.
 - [ ] lots of repetitions like in every test
 ```java
    private static final DType I64 = new DType.Primitive(PType.I64, false);

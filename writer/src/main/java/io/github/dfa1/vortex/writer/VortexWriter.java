@@ -10,6 +10,8 @@ import io.github.dfa1.vortex.encoding.CompressorContext;
 import io.github.dfa1.vortex.encoding.DictEncoding;
 import io.github.dfa1.vortex.encoding.Encoding;
 import io.github.dfa1.vortex.encoding.FrameOfReferenceEncoding;
+import io.github.dfa1.vortex.encoding.ListData;
+import io.github.dfa1.vortex.encoding.ListViewData;
 import io.github.dfa1.vortex.encoding.VarBinEncoding;
 import io.github.dfa1.vortex.encoding.EncodeNode;
 import io.github.dfa1.vortex.encoding.EncodeResult;
@@ -109,6 +111,8 @@ public final class VortexWriter implements Closeable {
 			case double[] a -> a.length;
 			case boolean[] a -> a.length;
 			case String[] a -> a.length;
+			case ListData d -> d.outerLen();
+			case ListViewData d -> d.outerLen();
 			default -> throw new UnsupportedOperationException(
 					"unsupported data type: " + data.getClass());
 		};
@@ -156,6 +160,11 @@ public final class VortexWriter implements Closeable {
 			case DType.Utf8 u -> {
 				int inner = io.github.dfa1.vortex.fbs.Utf8.createUtf8(fbb, u.nullable());
 				yield io.github.dfa1.vortex.fbs.DType.createDType(fbb, Type.Utf8, inner);
+			}
+			case DType.List l -> {
+				int elemTypeOff = serializeDType(fbb, l.elementType());
+				int inner = io.github.dfa1.vortex.fbs.List.createList(fbb, elemTypeOff, l.nullable());
+				yield io.github.dfa1.vortex.fbs.DType.createDType(fbb, Type.List, inner);
 			}
 			default -> throw new UnsupportedOperationException("unsupported DType: " + dtype);
 		};

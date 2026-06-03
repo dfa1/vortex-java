@@ -8,6 +8,7 @@ import dev.vortex.api.Session;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.FloatArray;
@@ -212,7 +213,7 @@ class RustJavaReaderComparisonIntegrationTest {
 								long s = 0;
 								for (int i = 0; i < root.getRowCount(); i++) {
 									if (!v.isNull(i)) {
-										s += (short) v.get(i);
+										s += v.getValueAsLong(i);
 									}
 								}
 								numSums.merge(field.getName(), (double) s, Double::sum);
@@ -221,7 +222,7 @@ class RustJavaReaderComparisonIntegrationTest {
 								long s = 0;
 								for (int i = 0; i < root.getRowCount(); i++) {
 									if (!v.isNull(i)) {
-										s += v.get(i);
+										s += v.getValueAsLong(i);
 									}
 								}
 								numSums.merge(field.getName(), (double) s, Double::sum);
@@ -230,7 +231,7 @@ class RustJavaReaderComparisonIntegrationTest {
 								long s = 0;
 								for (int i = 0; i < root.getRowCount(); i++) {
 									if (!v.isNull(i)) {
-										s += v.get(i);
+										s += v.getValueAsLong(i);
 									}
 								}
 								numSums.merge(field.getName(), (double) s, Double::sum);
@@ -308,9 +309,10 @@ class RustJavaReaderComparisonIntegrationTest {
 				}
 				case IntArray v -> {
 					long s = 0;
+					boolean u32 = v.dtype() instanceof DType.Primitive p && p.ptype() == PType.U32;
 					for (long i = 0; i < v.length(); i++) {
 						if (m.isValid(i)) {
-							s += v.getInt(i);
+							s += u32 ? Integer.toUnsignedLong(v.getInt(i)) : v.getInt(i);
 						}
 					}
 					yield (double) s;
@@ -326,9 +328,10 @@ class RustJavaReaderComparisonIntegrationTest {
 				}
 				case ShortArray v -> {
 					long s = 0;
+					boolean u16 = v.dtype() instanceof DType.Primitive p && p.ptype() == PType.U16;
 					for (long i = 0; i < v.length(); i++) {
 						if (m.isValid(i)) {
-							s += v.getShort(i);
+							s += u16 ? Short.toUnsignedLong(v.getShort(i)) : v.getShort(i);
 						}
 					}
 					yield (double) s;
@@ -339,9 +342,29 @@ class RustJavaReaderComparisonIntegrationTest {
 		return switch (arr) {
 			case LongArray v -> (double) v.fold(0L, Long::sum);
 			case DoubleArray v -> v.fold(0.0, Double::sum);
-			case IntArray v -> (double) v.fold(0, Integer::sum);
+			case IntArray v -> {
+				boolean u32 = v.dtype() instanceof DType.Primitive p && p.ptype() == PType.U32;
+				if (u32) {
+					long s = 0;
+					for (long i = 0; i < v.length(); i++) {
+						s += Integer.toUnsignedLong(v.getInt(i));
+					}
+					yield (double) s;
+				}
+				yield (double) v.fold(0, Integer::sum);
+			}
 			case FloatArray v -> v.fold(0.0, Double::sum);
-			case ShortArray v -> (double) v.fold(0L, Long::sum);
+			case ShortArray v -> {
+				boolean u16 = v.dtype() instanceof DType.Primitive p && p.ptype() == PType.U16;
+				if (u16) {
+					long s = 0;
+					for (long i = 0; i < v.length(); i++) {
+						s += Short.toUnsignedLong(v.getShort(i));
+					}
+					yield (double) s;
+				}
+				yield (double) v.fold(0L, Long::sum);
+			}
 			default -> null;
 		};
 	}
