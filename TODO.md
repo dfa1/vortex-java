@@ -229,19 +229,16 @@ all pcodec format versions in use. Sample findings drive **priority order**, not
 
 **Phases**:
 - [x] **Phase 0 — scoping** (DONE 2026-06-02). See findings above.
-- [ ] **Phase 1 — bit reader + header + proto**. New `encoding/pco/` pkg. `LeBitReader` over
-  `MemorySegment`. Add `PcoMetadata`/`PcoChunkInfo`/`PcoPageInfo` to `encodings.proto`
-  (currently hand-parsed by inspection test — generate real stubs). `PcoEncoding.Decoder`
-  skeleton dispatching by storage PType.
-- [ ] **Phase 2 — Classic mode, no delta, single chunk, single page, non-null, I64**.
-  `ChunkMetaReader` (mode 4b → assert Classic; delta 4b → assert None for this phase;
-  per-latent: ans_size_log 4b, bin_count 15b, per-bin {weight-1, lower, offset_bits}).
-  tANS decode table builder (port from `pcodec/src/ans/decoding.rs` + `spec.rs`).
-  `PageDecoder` (4 tANS state indices + per-256-batch bin indices + offsets).
-  Scalar reconstruct `value = bin.lower + offset`. Output via `ctx.arena()`.
-- [ ] **Phase 3 — all required ptypes**. I16/I32/U16/U32/F32/F64 generic over byte width.
-- [ ] **Phase 4 — delta Consecutive**. Read `state_n` initial values; cumulative sum.
-  This covers ~half of real-world arrays (delta nibble = 1).
+- [x] **Phase 1 — bit reader + header + proto**. `LeBitReader` over `MemorySegment`.
+  `PcoMetadata`/`PcoChunkInfo`/`PcoPageInfo` in `encodings.proto`. `PcoEncoding` skeleton.
+- [x] **Phase 2 — Classic mode, no delta, single chunk, single page, non-null, I64**.
+  tANS decode (spread + node table), page decode, I64 latent reconstruction.
+- [x] **Phase 3 — all required ptypes** (DONE 2026-06-03). I16/I32/U16/U32/F32/F64/U64.
+  Float latent: sign-bit check, XOR sign mask for positive; bitwise NOT for negative.
+- [x] **Phase 4 — delta Consecutive** (DONE 2026-06-03). delta_variant=1: reads
+  order (3b) + secondary_uses_delta (1b) from chunk meta; reads delta moments
+  (order * dtypeSize bits) from page header; tANS decodes pageN-order values;
+  applyConsecutiveDelta: toggle_center (XOR dtype_mid) + first-order cumsum in reverse.
 - [ ] **Phase 5 — multi-page + multi-chunk**. Iterate `metadata.chunks[]`; per-chunk
   decompressor; iterate pages per chunk. Reset page state per page; track value
   offset across pages.
