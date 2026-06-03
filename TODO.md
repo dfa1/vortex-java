@@ -139,7 +139,7 @@
 | `vortex.listview`            | `ListViewEncoding`         | ✅       | ✅       | —         | three children: elements + offsets (len N) + sizes (len N); fixture uses U16 for both |
 | `vortex.fixed_size_list`     | `FixedSizeListEncoding`    | ✅       | ✅       | —         | one child: flat elements; no offsets |
 | `vortex.zstd`                | `ZstdEncoding`             | ✅       | ✅       | —         | Primitive, Utf8, Binary (no dict, no nullable); uses airlift/aircompressor |
-| `vortex.masked`              | —                          | ❌       | ❌       | unknown   | ID registered; no decoder yet; no S3 fixture in v0.72.0 |
+| `vortex.masked`              | `MaskedEncoding`           | ✅       | ❌       | —         | child[0]=payload (non-nullable), child[1]=validity Bool (optional); no S3 fixture in v0.72.0 |
 | `vortex.patched`             | —                          | ❌       | ❌       | unknown   | ID registered; no decoder yet; no S3 fixture in v0.72.0 |
 | `vortex.variant`             | —                          | ❌       | ❌       | unknown   | ID registered; no decoder yet; no S3 fixture in v0.72.0 |
 

@@ -7,19 +7,19 @@ import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.MaskedArray;
 import io.github.dfa1.vortex.proto.EncodingProtos;
-import net.jqwik.api.ForAll;
-import net.jqwik.api.Property;
-import net.jqwik.api.constraints.Size;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
+import java.util.Random;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -679,10 +679,28 @@ class PcoEncodingTest {
 	@Nested
 	class Adversarial {
 
+		static Stream<byte[]> chunkMetaBytesProvider() {
+			Random rng = new Random(0xDEADBEEFL);
+			return Stream.generate(() -> {
+				byte[] b = new byte[1 + rng.nextInt(64)];
+				rng.nextBytes(b);
+				return b;
+			}).limit(50);
+		}
+
+		static Stream<byte[]> pageBytesProvider() {
+			Random rng = new Random(0xCAFEBABEL);
+			return Stream.generate(() -> {
+				byte[] b = new byte[4 + rng.nextInt(125)];
+				rng.nextBytes(b);
+				return b;
+			}).limit(50);
+		}
+
 		/// Random chunk-meta bytes — any exception must be a VortexException, not a JVM crash exception.
-		@Property(tries = 50)
-		void randomChunkMetaBytes_neverThrowsJvmException(
-				@ForAll @Size(min = 1, max = 64) byte[] chunkMetaBytes) {
+		@ParameterizedTest
+		@MethodSource("chunkMetaBytesProvider")
+		void randomChunkMetaBytes_neverThrowsJvmException(byte[] chunkMetaBytes) {
 			// Given — valid pco header + 1 chunk with 1 page of 1 value; garbage chunk-meta bytes.
 			var sut = new PcoEncoding();
 			DecodeContext ctx = ctxWith(
@@ -700,9 +718,9 @@ class PcoEncodingTest {
 		}
 
 		/// Random page bytes after a valid Classic-mode chunk meta — must not crash the JVM.
-		@Property(tries = 50)
-		void randomPageBytes_classicMode_neverThrowsJvmException(
-				@ForAll @Size(min = 4, max = 128) byte[] pageBytes) {
+		@ParameterizedTest
+		@MethodSource("pageBytesProvider")
+		void randomPageBytes_classicMode_neverThrowsJvmException(byte[] pageBytes) {
 			// Given — Classic mode, delta=NoOp, ansSizeLog=0, nBins=0 chunk meta.
 			var sut = new PcoEncoding();
 			// byte0: mode=0 (bits3:0), deltaVariant=0 (bits7:4) → 0x00
