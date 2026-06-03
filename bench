@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
-./mvnw compile -pl performance -am -DskipTests -q
-./mvnw exec:exec -pl performance -am -DskipTests ${1:+-Dbenchmark="$1"}
+./mvnw package -pl performance -am -DskipTests -q
+java \
+  --add-opens java.base/java.nio=ALL-UNNAMED \
+  --enable-native-access=ALL-UNNAMED \
+  --sun-misc-unsafe-memory-access=allow \
+  -jar performance/target/benchmarks.jar \
+  "${1:-.*}" \
+  -rf json \
+  -rff performance/target/benchmark-result.json
