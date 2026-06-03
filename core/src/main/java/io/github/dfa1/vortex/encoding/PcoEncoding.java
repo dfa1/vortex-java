@@ -6,7 +6,11 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.DoubleArray;
+import io.github.dfa1.vortex.core.array.FloatArray;
+import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
+import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.proto.EncodingProtos;
 
 import java.lang.foreign.MemorySegment;
@@ -33,8 +37,8 @@ import java.nio.ByteOrder;
 ///   <li>All bit packing little-endian (LSB first)</li>
 /// </ul>
 ///
-/// <p>Supported (Phase 2): Classic mode, None delta, non-null, I64.
-/// Other modes/deltas/ptypes throw with a clear "not yet implemented" message.
+/// <p>Supported (Phase 4): Classic mode, None+Consecutive delta (order ≤ 7), non-null, all
+/// integer/float ptypes except F16.  Other modes (IntMult, FloatMult, …) throw "not implemented".
 public final class PcoEncoding implements Encoding {
 
     static final byte PCO_FORMAT_MAJOR = 0x04;
@@ -83,52 +87,172 @@ public final class PcoEncoding implements Encoding {
                         "pco decode requires Primitive dtype, got: " + dtype);
             }
             PType ptype = dt.ptype();
-            if (ptype != PType.I64) {
-                throw new VortexException(EncodingId.VORTEX_PCO,
-                        "pco decode Phase 2: only I64 supported, got: " + ptype);
-            }
+            int dtypeSize = dtypeSize(ptype);
 
             long n = ctx.rowCount();
-            MemorySegment out = ctx.arena().allocate(n * Long.BYTES);
+
+            // decodePage always writes U64 latents (8 bytes per element).
+            MemorySegment rawLatents = ctx.arena().allocate(n * Long.BYTES);
 
             int nChunks = meta.getChunksCount();
             int bufIdx = 0;
-            long outByteOffset = 0L;
+            long rawByteOffset = 0L;
 
             for (int c = 0; c < nChunks; c++) {
                 EncodingProtos.PcoChunkInfo chunkInfo = meta.getChunks(c);
                 MemorySegment chunkMetaBuf = ctx.buffer(bufIdx++);
 
-                PcoChunkMeta chunkMeta = readChunkMeta(chunkMetaBuf);
+                PcoChunkMeta chunkMeta = readChunkMeta(chunkMetaBuf, dtypeSize);
                 PcoTansDecoder tans = PcoTansDecoder.build(chunkMeta.ansSizeLog(), chunkMeta.bins());
 
+                int deltaOrder = chunkMeta.deltaOrder();
                 int nPages = chunkInfo.getPagesCount();
                 for (int p = 0; p < nPages; p++) {
                     int pageN = chunkInfo.getPages(p).getNValues();
                     MemorySegment pageBuf = ctx.buffer(bufIdx++);
 
                     LeBitReader pageReader = new LeBitReader(pageBuf);
+
+                    // Delta moments come before ANS states in page header.
+                    long[] moments = new long[deltaOrder];
+                    for (int m = 0; m < deltaOrder; m++) {
+                        moments[m] = pageReader.readBits(dtypeSize);
+                    }
+
                     int[] stateIdxs = new int[PcoTansDecoder.ANS_INTERLEAVING];
                     for (int i = 0; i < PcoTansDecoder.ANS_INTERLEAVING; i++) {
                         stateIdxs[i] = (int) pageReader.readBits(chunkMeta.ansSizeLog());
                     }
                     pageReader.alignToByte();
 
-                    tans.decodePage(pageReader, stateIdxs, pageN, out, outByteOffset);
-                    outByteOffset += (long) pageN * Long.BYTES;
+                    int decodedN = pageN - deltaOrder;
+                    tans.decodePage(pageReader, stateIdxs, decodedN, rawLatents, rawByteOffset);
+
+                    if (deltaOrder > 0) {
+                        applyConsecutiveDelta(rawLatents, rawByteOffset, pageN, moments, dtypeSize);
+                    }
+
+                    rawByteOffset += (long) pageN * Long.BYTES;
                 }
             }
 
-            // Convert U64 latents → I64: flip sign bit (from_latent_ordered for signed types)
+            // Convert raw U-latents → typed values; resize from 8-byte slots to elemBytes.
+            int elemBytes = ptype.byteSize();
+            MemorySegment out = ctx.arena().allocate(n * elemBytes);
             for (long i = 0; i < n; i++) {
-                long byteOff = i * Long.BYTES;
-                out.set(LE_LONG, byteOff, out.get(LE_LONG, byteOff) ^ Long.MIN_VALUE);
+                long latent = rawLatents.get(LE_LONG, i * Long.BYTES);
+                PTypeIO.set(out, i * elemBytes, ptype, fromLatentOrdered(latent, ptype));
             }
 
-            return new LongArray(dtype, n, out, ArrayStats.empty());
+            return toArray(dtype, n, out);
         }
 
-        private static PcoChunkMeta readChunkMeta(MemorySegment buf) {
+        /// Inverse of pcodec {@code to_latent_ordered}: maps raw U-latent back to typed bits.
+        ///
+        /// <ul>
+        ///   <li>Unsigned ints (U16/U32/U64): identity — already correct bit pattern.</li>
+        ///   <li>Signed ints (I16/I32/I64): XOR with the type's MIN_VALUE (flip sign bit).</li>
+        ///   <li>Floats: if sign bit of latent is set → was positive, XOR sign-bit mask;
+        ///       else → was negative, bitwise NOT (= XOR all-ones mask).</li>
+        /// </ul>
+        private static long fromLatentOrdered(long latent, PType ptype) {
+            return switch (ptype) {
+                case I16 -> latent ^ 0x8000L;
+                case I32 -> latent ^ 0x80000000L;
+                case I64 -> latent ^ Long.MIN_VALUE;
+                case F32 -> {
+                    long l32 = latent & 0xFFFFFFFFL;
+                    yield (l32 & 0x80000000L) != 0 ? l32 ^ 0x80000000L : l32 ^ 0xFFFFFFFFL;
+                }
+                case F64 -> (latent & Long.MIN_VALUE) != 0 ? latent ^ Long.MIN_VALUE : ~latent;
+                default -> latent; // U16, U32, U64: identity
+            };
+        }
+
+        /// Undo pcodec consecutive delta encoding for one page.
+        ///
+        /// <p>Pcodec encodes deltas with a sign-centering XOR (toggle_center = XOR dtype_mid),
+        /// then removes it on decode.  After toggle_center, the cumulative sum restores the
+        /// original U-latents.  The {@code rawLatents} buffer beyond the {@code decodedN}
+        /// positions is zero (arena-initialized); toggle_center(0) = dtype_mid, which is
+        /// treated as junk and harmlessly overwritten during the reconstruction pass.
+        private static void applyConsecutiveDelta(MemorySegment rawLatents, long offset,
+                int pageN, long[] moments, int dtypeSize) {
+            long mid = typeMid(dtypeSize);
+            long mask = typeMask(dtypeSize);
+
+            // toggle_center on all pageN slots (decodedN real + junk zeros at end).
+            for (int i = 0; i < pageN; i++) {
+                long byteOff = offset + (long) i * Long.BYTES;
+                rawLatents.set(LE_LONG, byteOff, (rawLatents.get(LE_LONG, byteOff) ^ mid) & mask);
+            }
+
+            // Apply first-order cumulative-sum for each delta moment, last moment first.
+            for (int m = moments.length - 1; m >= 0; m--) {
+                long moment = moments[m] & mask;
+                for (int i = 0; i < pageN; i++) {
+                    long byteOff = offset + (long) i * Long.BYTES;
+                    long tmp = rawLatents.get(LE_LONG, byteOff);
+                    rawLatents.set(LE_LONG, byteOff, moment);
+                    moment = (moment + tmp) & mask;
+                }
+            }
+        }
+
+        private static long typeMid(int dtypeSize) {
+            return switch (dtypeSize) {
+                case 64 -> Long.MIN_VALUE;   // 1L << 63
+                case 32 -> 0x80000000L;
+                case 16 -> 0x8000L;
+                default -> throw new VortexException(EncodingId.VORTEX_PCO,
+                        "pco: invalid dtypeSize " + dtypeSize);
+            };
+        }
+
+        private static long typeMask(int dtypeSize) {
+            return switch (dtypeSize) {
+                case 64 -> -1L;
+                case 32 -> 0xFFFFFFFFL;
+                case 16 -> 0xFFFFL;
+                default -> throw new VortexException(EncodingId.VORTEX_PCO,
+                        "pco: invalid dtypeSize " + dtypeSize);
+            };
+        }
+
+        private static int dtypeSize(PType ptype) {
+            return switch (ptype) {
+                case I16, U16 -> 16;
+                case I32, U32, F32 -> 32;
+                case I64, U64, F64 -> 64;
+                default -> throw new VortexException(EncodingId.VORTEX_PCO,
+                        "pco: unsupported ptype " + ptype);
+            };
+        }
+
+        private static int bitsToEncodeOffsetBits(int dtypeSize) {
+            return switch (dtypeSize) {
+                case 64 -> BITS_TO_ENCODE_OFFSET_BITS_64;
+                case 32 -> BITS_TO_ENCODE_OFFSET_BITS_32;
+                case 16 -> BITS_TO_ENCODE_OFFSET_BITS_16;
+                default -> throw new VortexException(EncodingId.VORTEX_PCO,
+                        "pco: invalid dtypeSize " + dtypeSize);
+            };
+        }
+
+        private static Array toArray(DType dtype, long n, MemorySegment out) {
+            PType ptype = ((DType.Primitive) dtype).ptype();
+            return switch (ptype) {
+                case I16, U16 -> new ShortArray(dtype, n, out, ArrayStats.empty());
+                case I32, U32 -> new IntArray(dtype, n, out, ArrayStats.empty());
+                case F32 -> new FloatArray(dtype, n, out, ArrayStats.empty());
+                case I64, U64 -> new LongArray(dtype, n, out, ArrayStats.empty());
+                case F64 -> new DoubleArray(dtype, n, out, ArrayStats.empty());
+                default -> throw new VortexException(EncodingId.VORTEX_PCO,
+                        "pco: unsupported ptype " + ptype);
+            };
+        }
+
+        private static PcoChunkMeta readChunkMeta(MemorySegment buf, int dtypeSize) {
             LeBitReader r = new LeBitReader(buf);
 
             int modeNibble = (int) r.readBits(4);
@@ -136,26 +260,35 @@ public final class PcoEncoding implements Encoding {
                 throw new VortexException(EncodingId.VORTEX_PCO,
                         "pco mode " + modeNibble + " not yet implemented (only Classic=0)");
             }
-            int deltaNibble = (int) r.readBits(4);
-            if (deltaNibble != 0) {
+
+            // delta_encoding_variant: 4 bits. 0=NoOp, 1=Consecutive (3b order + 1b secondary_uses_delta).
+            int deltaVariant = (int) r.readBits(4);
+            int deltaOrder = 0;
+            if (deltaVariant == 0) {
+                // NoOp — no extra bits.
+            } else if (deltaVariant == 1) {
+                deltaOrder = (int) r.readBits(3); // BITS_TO_ENCODE_DELTA_ENCODING_ORDER
+                r.readBits(1);                    // secondary_uses_delta (not needed for Classic mode)
+            } else {
                 throw new VortexException(EncodingId.VORTEX_PCO,
-                        "pco delta " + deltaNibble + " not yet implemented (only None=0)");
+                        "pco delta variant " + deltaVariant + " not yet implemented");
             }
 
-            // One primary latent variable for Classic + None delta.
+            // One primary latent variable for Classic mode.
             int ansSizeLog = (int) r.readBits(4);
             int nBins = (int) r.readBits(15);
 
             PcoBin[] bins = new PcoBin[nBins];
+            int offsetBitsWidth = bitsToEncodeOffsetBits(dtypeSize);
             for (int b = 0; b < nBins; b++) {
                 int weight = (int) r.readBits(ansSizeLog) + 1;
-                long lower = r.readBits(64);  // dtype_size = 64 for I64/U64
-                int offsetBits = (int) r.readBits(BITS_TO_ENCODE_OFFSET_BITS_64);
+                long lower = r.readBits(dtypeSize);
+                int offsetBits = (int) r.readBits(offsetBitsWidth);
                 bins[b] = new PcoBin(weight, lower, offsetBits);
             }
-            r.alignToByte(); // drain padding at end of chunk meta
+            r.alignToByte();
 
-            return new PcoChunkMeta(ansSizeLog, bins);
+            return new PcoChunkMeta(ansSizeLog, deltaOrder, bins);
         }
 
         private static EncodingProtos.PcoMetadata parseMeta(DecodeContext ctx) {
@@ -186,6 +319,6 @@ public final class PcoEncoding implements Encoding {
         }
     }
 
-    private record PcoChunkMeta(int ansSizeLog, PcoBin[] bins) {
+    private record PcoChunkMeta(int ansSizeLog, int deltaOrder, PcoBin[] bins) {
     }
 }

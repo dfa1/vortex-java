@@ -150,10 +150,9 @@ public final class RleEncoding implements Encoding {
         // Returns the number of unique run entries written to chunkValues.
         private static int rleEncode(long[] input, long[] chunkValues, short[] chunkIndices) {
             short posVal = 0;
-            int valIdx = 0;
+            int valIdx = 1;
             long prev = input[0];
             chunkValues[0] = prev;
-            valIdx = 1;
             chunkIndices[0] = 0;
 
             for (int i = 1; i < FL_CHUNK_SIZE; i++) {
