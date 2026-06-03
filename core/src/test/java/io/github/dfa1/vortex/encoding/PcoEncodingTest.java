@@ -574,6 +574,28 @@ class PcoEncodingTest {
 	}
 
 	@Nested
+	class DecodeLookbackDecodeN {
+
+		@Test
+		void lookback_decodeNExceedsMax_throwsVortexException() {
+			// Given — stateN=1, pageN=(1<<23)+2 → decodeN=(1<<23)+1 > cap 1<<23.
+			// Check fires before arena.allocate; page only needs 8 bytes (1×64-bit initial state).
+			var sut = new PcoEncoding();
+			int pageN = (1 << 23) + 2;
+			DecodeContext ctx = ctxWith(
+					metaWithOneChunk(pageN),
+					new DType.Primitive(PType.U64, false),
+					pageN,
+					new MemorySegment[]{chunkMetaLookback(), segmentOf(new byte[8])});
+
+			// When / Then
+			assertThatThrownBy(() -> sut.decode(ctx))
+					.isInstanceOf(VortexException.class)
+					.hasMessageContaining("decodeN");
+		}
+	}
+
+	@Nested
 	class DecodeLookbackStateNWindow {
 
 		@Test

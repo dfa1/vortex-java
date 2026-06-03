@@ -389,6 +389,10 @@ public final class PcoEncoding implements Encoding {
             pageReader.alignToByte();
 
             int decodeN = pageN - stateN;
+            if (decodeN > 1 << 23) {
+                throw new VortexException(EncodingId.VORTEX_PCO,
+                        "pco corrupt lookback page: decodeN " + decodeN + " exceeds max 8388608");
+            }
             MemorySegment rawLookbacks = arena.allocate((long) decodeN * Long.BYTES);
             MemorySegment rawResiduals = arena.allocate((long) decodeN * Long.BYTES);
 
