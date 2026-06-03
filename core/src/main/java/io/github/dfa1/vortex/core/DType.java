@@ -64,4 +64,19 @@ public sealed interface DType
 			boolean nullable
 	) implements DType {
 	}
+
+	default DType withNullable(boolean nullable) {
+		return switch (this) {
+			case Null _ -> new Null(nullable);
+			case Bool _ -> new Bool(nullable);
+			case Primitive(var pt, _) -> new Primitive(pt, nullable);
+			case Decimal(var p, var s, _) -> new Decimal(p, s, nullable);
+			case Utf8 _ -> new Utf8(nullable);
+			case Binary _ -> new Binary(nullable);
+			case Struct(var names, var types, _) -> new Struct(names, types, nullable);
+			case List(var elem, _) -> new List(elem, nullable);
+			case FixedSizeList(var elem, var size, _) -> new FixedSizeList(elem, size, nullable);
+			case Extension(var id, var storage, var meta, _) -> new Extension(id, storage, meta, nullable);
+		};
+	}
 }

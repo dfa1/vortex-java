@@ -57,6 +57,9 @@ class RustWritesJavaReadsIntegrationTest {
 			Field.notNullable("id", new ArrowType.Int(64, true)),
 			Field.notNullable("value", new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE))
 	));
+	private static final Schema NULLABLE_SCHEMA = new Schema(List.of(
+			Field.nullable("id", new ArrowType.Int(64, true))
+	));
 
 	static {
 		NativeLoader.loadJni();
@@ -212,6 +215,45 @@ class RustWritesJavaReadsIntegrationTest {
 			}
 			// 10_000 rows: 3333 full cycles of [1.1,2.2,3.3] (=6.6 each) + one 1.1 remainder
 			assertThat(sum).isCloseTo(21_998.9, org.assertj.core.data.Offset.offset(0.1));
+		}
+	}
+
+	@Test
+	void jniWriter_nullableColumn_decodesWithoutError(@TempDir Path tmp) throws IOException {
+		// Given — nullable I64 column; the JNI compressor encodes this as fastlanes.bitpacked
+		// (not vortex.masked) since the compressor folds validity into the encoding.
+		// This test verifies end-to-end decoding of nullable schemas does not throw.
+		Path file = tmp.resolve("nullable.vtx");
+		String uri = file.toAbsolutePath().toUri().toString();
+		int n = 10_000;
+		try (VortexWriter writer = VortexWriter.create(SESSION, uri, NULLABLE_SCHEMA, new HashMap<>(), ALLOCATOR)) {
+			try (VectorSchemaRoot root = VectorSchemaRoot.create(NULLABLE_SCHEMA, ALLOCATOR)) {
+				BigIntVector idVec = (BigIntVector) root.getVector("id");
+				idVec.allocateNew(n);
+				for (int i = 0; i < n; i++) {
+					if (i % 5 == 0) {
+						idVec.setNull(i);
+					} else {
+						idVec.setSafe(i, (long) i);
+					}
+				}
+				root.setRowCount(n);
+				try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
+				     ArrowSchema schema = ArrowSchema.allocateNew(ALLOCATOR)) {
+					Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, schema);
+					writer.writeBatch(arr.memoryAddress(), schema.memoryAddress());
+				}
+			}
+		}
+
+		// When / Then — decodes without error, correct row count
+		try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
+			List<ScanResult> results = scanAll(vf);
+			long totalRows = results.stream().mapToLong(ScanResult::rowCount).sum();
+			assertThat(totalRows).isEqualTo(n);
+			assertThat(vf.dtype()).isInstanceOf(DType.Struct.class);
+			DType colDtype = ((DType.Struct) vf.dtype()).field("id");
+			assertThat(colDtype.nullable()).isTrue();
 		}
 	}
 
