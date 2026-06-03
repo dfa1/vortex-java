@@ -17,7 +17,7 @@
 - [ ] Publish reproducible perf artifacts
     - Capture JMH JSON + JFR profile alongside README table; cite hardware (CPU model), JDK build (`java -version`),
       and benchmark commit SHA so numbers don't rot silently.
-- [ ] performance tests must be peer reviewed
+- [ ] performance tests must be peer reviewed
 - [ ] run performance tests on other machines (I have access only to Apple M5)
 - [ ] minimize `ctx.arena().allocate(...)` calls — prefer in-place decode when child buffer is writable (already done in ALP); audit all decoders for unnecessary off-heap allocs
 - [ ] **Evaluate Vector API (JEP 469+) for hot decode loops** — candidates: FastLanes bitpacked unpack,
@@ -116,7 +116,6 @@
 
 ## API
 
-- [ ] add fold to all numeric array types (see integration test sumArray)
 - [ ] Use domain primitives (`UInt32`, `UInt64`, etc.) as value classes via Project Valhalla instead of raw `long`/`int`
     - See https://dfa1.github.io/articles/rethink-domain-primitives-with-valhalla
     - Candidates: `PType` integer kinds, buffer offsets, row indices, byte lengths
