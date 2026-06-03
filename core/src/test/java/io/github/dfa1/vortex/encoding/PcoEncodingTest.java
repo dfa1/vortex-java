@@ -401,6 +401,66 @@ class PcoEncodingTest {
 		}
 	}
 
+	/// Chunk-meta bytes for Classic mode + Lookback delta with windowNLog=1 (windowN=2), stateNLog=0 (stateN=1),
+	/// deltaAnsSizeLog=0, primaryAnsSizeLog=0, no bins.
+	///
+	/// Bit layout:
+	/// byte0: mode=0[3:0], delta=2[7:4] → 0x20
+	/// bytes 1-6: windowNLog-1(5b)=0, stateNLog(4b)=0, secondary(1b)=0,
+	///            deltaAnsSizeLog(4b)=0, nDeltaBins(15b)=0,
+	///            primaryAnsSizeLog(4b)=0, nBins(15b)=0, align → all 0x00
+	private static MemorySegment chunkMetaLookback() {
+		return segmentOf((byte) 0x20, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00);
+	}
+
+	/// Page bytes for Lookback with stateN=1, U64, deltaAnsSizeLog=0, primaryAnsSizeLog=0.
+	/// Format: 8 bytes (one 64-bit initial state). No ANS state bits (sizeLog=0). No decoded bits.
+	private static MemorySegment lookbackPage(long initialState) {
+		byte[] buf = new byte[Long.BYTES];
+		java.nio.ByteBuffer.wrap(buf).order(java.nio.ByteOrder.LITTLE_ENDIAN).putLong(initialState);
+		return segmentOf(buf);
+	}
+
+	@Nested
+	class DecodeLookback {
+
+		@Test
+		void decode_lookback_corruptIndexZero_throwsVortexException() {
+			// Given — Classic+Lookback, windowN=2, stateN=1, degenerate ANS (0 bins).
+			// Degenerate tANS always outputs lower=0; lb=0 is out of [1, windowN=2].
+			// pageN=2: stateN=1 initial value + 1 decoded value with lb=0.
+			var sut = new PcoEncoding();
+			DecodeContext ctx = ctxWith(
+					metaWithOneChunk(2),
+					new DType.Primitive(PType.U64, false),
+					2,
+					new MemorySegment[]{chunkMetaLookback(), lookbackPage(0L)});
+
+			// When / Then
+			assertThatThrownBy(() -> sut.decode(ctx))
+					.isInstanceOf(VortexException.class)
+					.hasMessageContaining("corrupt lookback index 0");
+		}
+
+		@Test
+		void decode_lookback_singleInitialValue_returnsIt() {
+			// Given — pageN=1, stateN=1, decodeN=0: only the initial state value; no decoded values.
+			var sut = new PcoEncoding();
+			DecodeContext ctx = ctxWith(
+					metaWithOneChunk(1),
+					new DType.Primitive(PType.U64, false),
+					1,
+					new MemorySegment[]{chunkMetaLookback(), lookbackPage(42L)});
+
+			// When
+			var result = sut.decode(ctx);
+
+			// Then
+			assertThat(result.length()).isEqualTo(1);
+			assertThat(((LongArray) result).getLong(0)).isEqualTo(42L);
+		}
+	}
+
 	/// Adversarial coverage: malformed inputs must throw VortexException — never AIOOBE, NPE, or OOM.
 	@Nested
 	class Adversarial {

@@ -426,7 +426,8 @@ public final class PcoEncoding implements Encoding {
             for (int i = 0; i < decodeN; i++) {
                 int lb = (int) rawLookbacks.get(LE_LONG, (long) i * Long.BYTES);
                 if (lb < 1 || lb > windowN) {
-                    lb = 1; // clamp corrupt lookback index
+                    throw new VortexException(EncodingId.VORTEX_PCO,
+                            "pco corrupt lookback index " + lb + " not in [1, " + windowN + "]");
                 }
                 long decoded = (rawResiduals.get(LE_LONG, (long) i * Long.BYTES) + window[windowN + i - lb]) & mask;
                 window[windowN + i] = decoded;
