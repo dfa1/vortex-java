@@ -128,7 +128,7 @@
 | `vortex.struct`              | `StructEncoding`           | ✅       | ✅       | —         | Struct |
 | `vortex.fsst`                | `FsstEncoding`             | ✅       | ✅       | —         | Utf8, Binary (bigram symbol table) |
 | `vortex.varbinview`          | `VarBinViewEncoding`       | ✅       | ✅       | —         | Utf8, Binary |
-| `vortex.pco`                 | `PcoEncoding`              | ✅       | ❌       | very hard | Classic, IntMult, FloatMult, FloatQuant, Dict; None+Consecutive+Lookback delta; nullable pending (Phase 6) |
+| `vortex.pco`                 | `PcoEncoding`              | ✅       | ❌       | very hard | Classic, IntMult, FloatMult, FloatQuant, Dict; None+Consecutive+Lookback+Conv1 delta; nullable |
 | `vortex.chunked`             | `ChunkedEncoding`          | ✅       | ✅       | medium    | decode: primitive + struct concat; encode via ChunkedData |
 | `fastlanes.rle`              | `RleEncoding`              | ✅       | ✅       | —         | chunk-based RLE; offset always < 1024 |
 | `vortex.alprd`               | `AlpRdEncoding`            | ✅       | ✅       | —         | F64, F32; left ≤16 bits dict-coded (≤8 entries), right bitpacked; exceptions as patches |
