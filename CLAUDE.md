@@ -8,6 +8,11 @@ Java 25 native implementation of the [Vortex](https://github.com/spiraldb/vortex
 `MemorySegment`/`Arena`) instead of JNI or `sun.misc.Unsafe`.
 
 
+## Branching strategy
+
+Trunk-based development. PRs are fine but always squash or rebase — no merge commits.
+Keep commits small and `main` always green.
+
 ## Commands
 
 Build prerequisites: `brew install flatbuffers protobuf` (flatc + protoc must be on PATH).
