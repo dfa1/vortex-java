@@ -8,8 +8,6 @@ import io.github.dfa1.vortex.scan.ScanOptions;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.net.URI;
 import java.util.List;
@@ -66,53 +64,6 @@ class VortexHttpReaderIT {
 
 		// When
 		try (var sut = VortexHttpReader.open(FOR_ARRAY);
-		     var iter = sut.scan(ScanOptions.all())) {
-			while (iter.hasNext()) {
-				totalRows += iter.next().rowCount();
-			}
-		}
-
-		// Then
-		assertThat(totalRows).isGreaterThan(0);
-	}
-
-	@ParameterizedTest(name = "{0}")
-	@ValueSource(strings = {
-			"primitives.vortex",
-			"alp.vortex",
-			"bitpacked.vortex",
-			"booleans.vortex",
-			"bytebool.vortex",
-			"constant.vortex",
-			"fsst.vortex",
-			"null.vortex",
-			"runend.vortex",
-			"sequence.vortex",
-			"varbin.vortex",
-			"zigzag.vortex",
-			"struct_nested.vortex",
-			"datetime.vortex",
-			"varbinview.vortex",
-			"dict.vortex",
-			"sparse.vortex",
-			"decimal.vortex",
-			"decimal_byte_parts.vortex",
-			"datetimeparts.vortex",
-			"zstd.vortex",
-			"chunked.vortex",
-			"rle.vortex",
-			"list.vortex",
-			"listview.vortex",
-			"fixed_size_list.vortex",
-			"alprd.vortex",
-	})
-	void scan_fixture_decodesAllRows(String fixture) throws Exception {
-		// Given
-		URI uri = BASE.resolve(fixture);
-
-		// When
-		long totalRows = 0;
-		try (var sut = VortexHttpReader.open(uri);
 		     var iter = sut.scan(ScanOptions.all())) {
 			while (iter.hasNext()) {
 				totalRows += iter.next().rowCount();

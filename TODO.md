@@ -231,36 +231,8 @@ all pcodec format versions in use. Sample findings drive **priority order**, not
   the immediate child layout, not the surface column DType.
 
 **Phases**:
-- [x] **Phase 0 — scoping** (DONE 2026-06-02). See findings above.
-- [x] **Phase 1 — bit reader + header + proto**. `LeBitReader` over `MemorySegment`.
-  `PcoMetadata`/`PcoChunkInfo`/`PcoPageInfo` in `encodings.proto`. `PcoEncoding` skeleton.
-- [x] **Phase 2 — Classic mode, no delta, single chunk, single page, non-null, I64**.
-  tANS decode (spread + node table), page decode, I64 latent reconstruction.
-- [x] **Phase 3 — all required ptypes** (DONE 2026-06-03). I16/I32/U16/U32/F32/F64/U64.
-  Float latent: sign-bit check, XOR sign mask for positive; bitwise NOT for negative.
-- [x] **Phase 4 — delta Consecutive** (DONE 2026-06-03). delta_variant=1: reads
-  order (3b) + secondary_uses_delta (1b) from chunk meta; reads delta moments
-  (order * dtypeSize bits) from page header; tANS decodes pageN-order values;
-  applyConsecutiveDelta: toggle_center (XOR dtype_mid) + first-order cumsum in reverse.
-- [x] **Phase 5 — multi-page + multi-chunk** (DONE 2026-06-03). Loop structure already
-  correct; added explicit tests: 2-page single-chunk and 2-chunk decode.
 - [ ] **Phase 6 — nullable**. Read validity child via registry; scatter valid values
   into full-length output, leaving null slots zeroed.
-- [x] **Phase 7 — MVP integration tests** (DONE 2026-06-03). Added 4 fixtures to
-  `RustWritesJavaReadsIntegrationTest`: tpch_lineitem, tpch_orders, clickbench_hits_5k
-  pass (Java values match JNI/Rust ground truth). pco.vortex disabled — blocked on
-  Phase 8 (IntMult mode, 2/8 arrays). tpch/clickbench: 35/35 S3 fixture parity achieved.
-
-**Full-coverage phases (post-MVP; not blocking S3 fixtures but required for the
-"read any pco file" goal):**
-- [x] **Phase 8 — IntMult mode** (DONE 2026-06-03). Two latent vars (mult, adj); `num = base * mult + adj`.
-  Read base (`dtypeSize` bits) after mode nibble; read secondary latent var meta (ansSizeLog+bins) after
-  primary; page body interleaved per 256-batch: [primary ANS+offsets][secondary ANS+offsets]; combine with
-  `(mult * base + adj) & mask`.
-- [x] **Phase 9 — FloatMult mode** (DONE 2026-06-03). Wire format identical to IntMult; combine differs:
-  `rawLatents[i] = toLatentOrdered(intFloatFromLatent(mult) * baseFloat) + adj`.
-  `intFloatFromLatentF32/F64` inverts pcodec `int_float_to_latent`; `toLatentOrderedF32/F64` inverts
-  `fromLatentOrdered`. Unblocked and passing: `s3_pcoVortex_javaDecodeMatchesJni`.
 - [ ] **Phase 10 — FloatQuant mode**. Bit-quantized floats; read extra mode bits.
 - [ ] **Phase 11 — Dict mode**. Bin lookups into a stored dictionary.
 - [ ] **Phase 12 — delta Lookback**. Small ring buffer lookback predictor.
