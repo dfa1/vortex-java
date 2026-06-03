@@ -27,7 +27,6 @@ import org.apache.arrow.vector.types.FloatingPointPrecision;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.Schema;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -259,7 +258,6 @@ class RustWritesJavaReadsIntegrationTest {
 
 	// ── S3 fixture round-trip: Rust-written pco → Java reader ────────────────
 
-	@Disabled("pco.vortex has FloatMult columns (mode=2) — blocked on Phase 9")
 	@Test
 	void s3_pcoVortex_javaDecodeMatchesJni(@TempDir Path tmp) throws Exception {
 		// Given — pco.vortex: synthetic file with all pco ptypes; Classic+Consecutive+IntMult+FloatMult modes

@@ -34,14 +34,13 @@ import java.nio.ByteOrder;
 ///       [0–7b alignment]</li>
 ///   <li>Classic page: [primary: deltaOrder×dtypeSize b moments, 4×ansSizeLog b ANS states]
 ///       [0–7b alignment] [per 256-batch: ANS bits, offset bits]</li>
-///   <li>IntMult page: [primary header][secondary header][0–7b alignment]
+///   <li>IntMult/FloatMult page: [primary header][secondary header][0–7b alignment]
 ///       [per 256-batch: primary ANS+offsets, secondary ANS+offsets]</li>
 ///   <li>All bit packing little-endian (LSB first)</li>
 /// </ul>
 ///
-/// <p>Supported: Classic and IntMult modes, None+Consecutive delta (order ≤ 7), non-null,
-/// all integer/float ptypes except F16.  Other modes (FloatMult, FloatQuant, Dict) throw
-/// "not implemented".
+/// <p>Supported: Classic, IntMult, FloatMult modes, None+Consecutive delta (order ≤ 7), non-null,
+/// all integer/float ptypes except F16.  Other modes (FloatQuant, Dict) throw "not implemented".
 public final class PcoEncoding implements Encoding {
 
     static final byte PCO_FORMAT_MAJOR = 0x04;
@@ -120,7 +119,7 @@ public final class PcoEncoding implements Encoding {
                                 pageBuf, pageN, rawLatents, rawByteOffset);
                     }
                 } else {
-                    // IntMult mode: two latent variables (mult, adj); num = base * mult + adj.
+                    // IntMult (1) / FloatMult (2): two latent variables; page decode is identical.
                     long base = chunkMeta.base();
                     int primaryAnsSizeLog = chunkMeta.ansSizeLog();
                     int secondaryAnsSizeLog = chunkMeta.secondaryAnsSizeLog();
@@ -151,13 +150,17 @@ public final class PcoEncoding implements Encoding {
                         adjByteOffset += (long) pageN * Long.BYTES;
                     }
 
-                    // Combine: rawLatents[i] = (mult[i] * base + adj[i]) & mask
-                    long mask = typeMask(dtypeSize);
-                    for (int i = 0; i < chunkN; i++) {
-                        long off = chunkMultsOffset + (long) i * Long.BYTES;
-                        long mult = rawLatents.get(LE_LONG, off);
-                        long adj = rawAdjs.get(LE_LONG, (long) i * Long.BYTES);
-                        rawLatents.set(LE_LONG, off, (mult * base + adj) & mask);
+                    // Combine — mode 1 = IntMult, mode 2 = FloatMult.
+                    if (chunkMeta.mode() == 1) {
+                        long mask = typeMask(dtypeSize);
+                        for (int i = 0; i < chunkN; i++) {
+                            long off = chunkMultsOffset + (long) i * Long.BYTES;
+                            long mult = rawLatents.get(LE_LONG, off);
+                            long adj = rawAdjs.get(LE_LONG, (long) i * Long.BYTES);
+                            rawLatents.set(LE_LONG, off, (mult * base + adj) & mask);
+                        }
+                    } else {
+                        combineFloatMult(ptype, base, chunkN, rawLatents, chunkMultsOffset, rawAdjs);
                     }
                 }
             }
@@ -372,17 +375,89 @@ public final class PcoEncoding implements Encoding {
             };
         }
 
+        /// Int-float latent → integer-valued float for F32.
+        ///
+        /// mid = 2^31; negative when l &lt; mid; GPI = 2^24 (f32 mantissa bits).
+        /// Inverse of pcodec {@code int_float_to_latent}.
+        private static float intFloatFromLatentF32(long l) {
+            long mid = 0x80000000L;
+            boolean negative = (l < mid);
+            long absInt = negative ? (0x7FFFFFFFL - l) : (l ^ 0x80000000L);
+            long gpi = 1L << 24;
+            float absFloat = (absInt < gpi) ? (float) absInt
+                    : Float.intBitsToFloat(0x4B800000 + (int) (absInt - gpi));
+            return negative ? -absFloat : absFloat;
+        }
+
+        /// Int-float latent → integer-valued float for F64.
+        ///
+        /// mid = 2^63; l &lt; 2^63 (unsigned, i.e. l ≥ 0 signed) → negative float; GPI = 2^53.
+        /// Inverse of pcodec {@code int_float_to_latent}.
+        private static double intFloatFromLatentF64(long l) {
+            // l >= 0 signed ↔ l < 2^63 unsigned → original float was negative
+            boolean negative = (l >= 0);
+            long absInt = negative ? (Long.MAX_VALUE - l) : (l ^ Long.MIN_VALUE);
+            long gpi = 1L << 53;
+            double absFloat = (absInt < gpi) ? (double) absInt
+                    : Double.longBitsToDouble(0x4340000000000000L + (absInt - gpi));
+            return negative ? -absFloat : absFloat;
+        }
+
+        /// Inverse of {@link #fromLatentOrdered} for F32: float → ordered latent.
+        private static long toLatentOrderedF32(float f) {
+            int bits = Float.floatToRawIntBits(f);
+            if ((bits & 0x80000000) != 0) {
+                return (~bits) & 0xFFFFFFFFL;
+            } else {
+                return (bits ^ 0x80000000) & 0xFFFFFFFFL;
+            }
+        }
+
+        /// Inverse of {@link #fromLatentOrdered} for F64: float → ordered latent.
+        private static long toLatentOrderedF64(double d) {
+            long bits = Double.doubleToRawLongBits(d);
+            if ((bits & Long.MIN_VALUE) != 0) {
+                return ~bits;
+            } else {
+                return bits ^ Long.MIN_VALUE;
+            }
+        }
+
+        /// FloatMult combine: rawLatents[i] = toLatentOrdered(intFloatFromLatent(mult) * baseFloat) + adj.
+        private static void combineFloatMult(PType ptype, long baseLatent, int chunkN,
+                MemorySegment rawLatents, long multsOffset, MemorySegment rawAdjs) {
+            if (ptype == PType.F32) {
+                float baseFloat = Float.intBitsToFloat((int) fromLatentOrdered(baseLatent, PType.F32));
+                for (int i = 0; i < chunkN; i++) {
+                    long off = multsOffset + (long) i * Long.BYTES;
+                    long mult = rawLatents.get(LE_LONG, off);
+                    long adj = rawAdjs.get(LE_LONG, (long) i * Long.BYTES);
+                    long unadjusted = toLatentOrderedF32(intFloatFromLatentF32(mult) * baseFloat);
+                    rawLatents.set(LE_LONG, off, (unadjusted + adj) & 0xFFFFFFFFL);
+                }
+            } else {
+                double baseDouble = Double.longBitsToDouble(fromLatentOrdered(baseLatent, PType.F64));
+                for (int i = 0; i < chunkN; i++) {
+                    long off = multsOffset + (long) i * Long.BYTES;
+                    long mult = rawLatents.get(LE_LONG, off);
+                    long adj = rawAdjs.get(LE_LONG, (long) i * Long.BYTES);
+                    long unadjusted = toLatentOrderedF64(intFloatFromLatentF64(mult) * baseDouble);
+                    rawLatents.set(LE_LONG, off, unadjusted + adj);
+                }
+            }
+        }
+
         private static PcoChunkMeta readChunkMeta(MemorySegment buf, int dtypeSize) {
             LeBitReader r = new LeBitReader(buf);
 
             int modeNibble = (int) r.readBits(4);
             long base = 0L;
-            if (modeNibble == 1) {
-                // IntMult: read base value (dtypeSize bits, uncompressed).
+            if (modeNibble == 1 || modeNibble == 2) {
+                // IntMult / FloatMult: read base value (dtypeSize bits, uncompressed latent).
                 base = r.readBits(dtypeSize);
             } else if (modeNibble != 0) {
                 throw new VortexException(EncodingId.VORTEX_PCO,
-                        "pco mode " + modeNibble + " not yet implemented (Classic=0, IntMult=1 supported)");
+                        "pco mode " + modeNibble + " not yet implemented (Classic=0, IntMult=1, FloatMult=2 supported)");
             }
 
             // delta_encoding_variant: 4 bits. 0=NoOp, 1=Consecutive (3b order + 1b secondary_uses_delta).
@@ -404,10 +479,10 @@ public final class PcoEncoding implements Encoding {
             int nBins = (int) r.readBits(15);
             PcoBin[] bins = readBins(r, nBins, ansSizeLog, dtypeSize);
 
-            // Secondary latent variable (IntMult only).
+            // Secondary latent variable (IntMult and FloatMult).
             int secondaryAnsSizeLog = 0;
             PcoBin[] secondaryBins = new PcoBin[0];
-            if (modeNibble == 1) {
+            if (modeNibble == 1 || modeNibble == 2) {
                 secondaryAnsSizeLog = (int) r.readBits(4);
                 int nSecondaryBins = (int) r.readBits(15);
                 secondaryBins = readBins(r, nSecondaryBins, secondaryAnsSizeLog, dtypeSize);
