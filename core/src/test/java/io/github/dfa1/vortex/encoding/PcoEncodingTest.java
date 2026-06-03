@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.LongArray;
+import io.github.dfa1.vortex.core.array.MaskedArray;
 import io.github.dfa1.vortex.proto.EncodingProtos;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -32,6 +33,29 @@ class PcoEncodingTest {
 		ArrayNode node = new ArrayNode(EncodingId.VORTEX_PCO, meta, new ArrayNode[0],
 				bufferIndices(buffers.length), null);
 		return new DecodeContext(node, dtype, rowCount, buffers, EncodingRegistry.empty(), Arena.ofAuto());
+	}
+
+	/// Build a nullable DecodeContext: validity buffer at index 0, pco buffers at indices 1..N.
+	/// Validity is a bit-packed Bool array (LSB-first, 1=valid).
+	private static DecodeContext ctxWithValidity(ByteBuffer meta, DType dtype, long rowCount,
+			MemorySegment validityBuf, MemorySegment[] pcoBuffers) {
+		MemorySegment[] allBuffers = new MemorySegment[1 + pcoBuffers.length];
+		allBuffers[0] = validityBuf;
+		System.arraycopy(pcoBuffers, 0, allBuffers, 1, pcoBuffers.length);
+
+		ArrayNode validityNode = new ArrayNode(EncodingId.VORTEX_BOOL, null, new ArrayNode[0],
+				new int[]{0}, null);
+
+		int[] pcoBufferIndices = new int[pcoBuffers.length];
+		for (int i = 0; i < pcoBuffers.length; i++) {
+			pcoBufferIndices[i] = i + 1;
+		}
+		ArrayNode pcoNode = new ArrayNode(EncodingId.VORTEX_PCO, meta, new ArrayNode[]{validityNode},
+				pcoBufferIndices, null);
+
+		EncodingRegistry registry = EncodingRegistry.empty();
+		registry.register(new BoolEncoding());
+		return new DecodeContext(pcoNode, dtype, rowCount, allBuffers, registry, Arena.ofAuto());
 	}
 
 	private static int[] bufferIndices(int n) {
@@ -279,6 +303,97 @@ class PcoEncodingTest {
 			assertThat(result.length()).isEqualTo(2);
 			assertThat(((LongArray) result).getLong(0)).isEqualTo(100L);
 			assertThat(((LongArray) result).getLong(1)).isEqualTo(200L);
+		}
+	}
+
+	@Nested
+	class DecodeNullable {
+
+		@Test
+		void decode_nullable_someNulls_scattersCorrectly() {
+			// Given — U64 sequence: 3 total rows, validity=[true,false,true], valid values=[100,200].
+			// Validity bits LSB-first: bit0=1, bit1=0, bit2=1 → byte 0x05.
+			// Pco encodes only valid values: 1 chunk, 2 pages of nValues=1 (Consecutive order=1).
+			var sut = new PcoEncoding();
+			EncodingProtos.PcoMetadata meta = EncodingProtos.PcoMetadata.newBuilder()
+					.setHeader(ByteString.copyFrom(new byte[]{PcoEncoding.PCO_FORMAT_MAJOR, PcoEncoding.PCO_FORMAT_MINOR}))
+					.addChunks(EncodingProtos.PcoChunkInfo.newBuilder()
+							.addPages(EncodingProtos.PcoPageInfo.newBuilder().setNValues(1).build())
+							.addPages(EncodingProtos.PcoPageInfo.newBuilder().setNValues(1).build())
+							.build())
+					.build();
+			MemorySegment validityBuf = segmentOf((byte) 0x05); // bits: 1,0,1
+			DecodeContext ctx = ctxWithValidity(
+					ByteBuffer.wrap(meta.toByteArray()),
+					new DType.Primitive(PType.U64, true),
+					3,
+					validityBuf,
+					new MemorySegment[]{chunkMetaConsecutive(1), pageWithMoments(100L), pageWithMoments(200L)});
+
+			// When
+			var result = sut.decode(ctx);
+
+			// Then — MaskedArray with 3 slots; positions 0 and 2 valid, position 1 null
+			assertThat(result).isInstanceOf(MaskedArray.class);
+			assertThat(result.length()).isEqualTo(3);
+			MaskedArray masked = (MaskedArray) result;
+			assertThat(masked.isValid(0)).isTrue();
+			assertThat(masked.isValid(1)).isFalse();
+			assertThat(masked.isValid(2)).isTrue();
+			assertThat(((LongArray) masked.child(0)).getLong(0)).isEqualTo(100L);
+			assertThat(((LongArray) masked.child(0)).getLong(2)).isEqualTo(200L);
+		}
+
+		@Test
+		void decode_nullable_allNull_returnsAllZeroed() {
+			// Given — 2 total rows, validity=[false,false], validCount=0. Pco has 0 chunks.
+			// Validity bits LSB-first: 0x00.
+			var sut = new PcoEncoding();
+			MemorySegment validityBuf = segmentOf((byte) 0x00);
+			DecodeContext ctx = ctxWithValidity(
+					validMetaBuffer(),
+					new DType.Primitive(PType.U64, true),
+					2,
+					validityBuf,
+					new MemorySegment[0]);
+
+			// When
+			var result = sut.decode(ctx);
+
+			// Then — MaskedArray, length 2, both null, values zeroed
+			assertThat(result).isInstanceOf(MaskedArray.class);
+			assertThat(result.length()).isEqualTo(2);
+			MaskedArray masked = (MaskedArray) result;
+			assertThat(masked.isValid(0)).isFalse();
+			assertThat(masked.isValid(1)).isFalse();
+			assertThat(((LongArray) masked.child(0)).getLong(0)).isZero();
+			assertThat(((LongArray) masked.child(0)).getLong(1)).isZero();
+		}
+
+		@Test
+		void decode_nullable_allValid_returnsMaskedWithAllValues() {
+			// Given — 2 total rows, validity=[true,true], valid values=[10,20].
+			// Validity bits: 0x03.
+			var sut = new PcoEncoding();
+			MemorySegment validityBuf = segmentOf((byte) 0x03); // bits: 1,1
+			DecodeContext ctx = ctxWithValidity(
+					metaWithOneChunk(2),
+					new DType.Primitive(PType.U64, true),
+					2,
+					validityBuf,
+					new MemorySegment[]{chunkMetaConsecutive(2), pageWithMoments(10L, 10L)});
+
+			// When
+			var result = sut.decode(ctx);
+
+			// Then — MaskedArray, all valid, values [10, 20]
+			assertThat(result).isInstanceOf(MaskedArray.class);
+			assertThat(result.length()).isEqualTo(2);
+			MaskedArray masked = (MaskedArray) result;
+			assertThat(masked.isValid(0)).isTrue();
+			assertThat(masked.isValid(1)).isTrue();
+			assertThat(((LongArray) masked.child(0)).getLong(0)).isEqualTo(10L);
+			assertThat(((LongArray) masked.child(0)).getLong(1)).isEqualTo(20L);
 		}
 	}
 }

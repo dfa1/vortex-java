@@ -211,8 +211,6 @@ all pcodec format versions in use. Sample findings drive **priority order**, not
   the immediate child layout, not the surface column DType.
 
 **Phases**:
-- [ ] **Phase 6 — nullable**. Read validity child via registry; scatter valid values
-  into full-length output, leaving null slots zeroed.
 - [ ] **Phase 13 — delta Conv1**. Single-tap convolution predictor.
 - [ ] **Phase 14 — adversarial coverage**. Build fuzz corpus of valid + malformed
   pco buffers (via pcodec CLI in fixture-gen step). All malformed input must throw

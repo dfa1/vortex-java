@@ -6,10 +6,12 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.BoolArray;
 import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.FloatArray;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
+import io.github.dfa1.vortex.core.array.MaskedArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.proto.EncodingProtos;
 
@@ -44,7 +46,7 @@ import java.nio.ByteOrder;
 /// </ul>
 ///
 /// <p>Supported: Classic, IntMult, FloatMult, FloatQuant, Dict modes;
-/// None+Consecutive+Lookback delta; non-null; all integer/float ptypes except F16.
+/// None+Consecutive+Lookback delta; nullable (validity child[0]); all integer/float ptypes except F16.
 /// Other modes (Conv1 delta) throw "not implemented".
 public final class PcoEncoding implements Encoding {
 
@@ -98,8 +100,26 @@ public final class PcoEncoding implements Encoding {
 
             long n = ctx.rowCount();
 
+            // Nullable: child[0] is a validity bitmap; pco encodes only valid values.
+            BoolArray validity = null;
+            long validCount = n;
+            if (ctx.node().children().length > 0) {
+                Array validityArr = decodeChild(ctx, 0, new DType.Bool(false), n);
+                if (!(validityArr instanceof BoolArray ba)) {
+                    throw new VortexException(EncodingId.VORTEX_PCO,
+                            "pco validity child must be Bool, got: " + validityArr.getClass().getSimpleName());
+                }
+                validity = ba;
+                validCount = 0;
+                for (long i = 0; i < n; i++) {
+                    if (validity.getBoolean(i)) {
+                        validCount++;
+                    }
+                }
+            }
+
             // decodePage always writes U64 latents (8 bytes per element).
-            MemorySegment rawLatents = ctx.arena().allocate(n * Long.BYTES);
+            MemorySegment rawLatents = ctx.arena().allocate(validCount * Long.BYTES);
 
             int nChunks = meta.getChunksCount();
             int bufIdx = 0;
@@ -200,13 +220,34 @@ public final class PcoEncoding implements Encoding {
 
             // Convert raw U-latents → typed values; resize from 8-byte slots to elemBytes.
             int elemBytes = ptype.byteSize();
-            MemorySegment out = ctx.arena().allocate(n * elemBytes);
-            for (long i = 0; i < n; i++) {
+            MemorySegment compactOut = ctx.arena().allocate(validCount * elemBytes);
+            for (long i = 0; i < validCount; i++) {
                 long latent = rawLatents.get(LE_LONG, i * Long.BYTES);
-                PTypeIO.set(out, i * elemBytes, ptype, fromLatentOrdered(latent, ptype));
+                PTypeIO.set(compactOut, i * elemBytes, ptype, fromLatentOrdered(latent, ptype));
             }
 
-            return toArray(dtype, n, out);
+            if (validity == null) {
+                return toArray(dtype, n, compactOut);
+            }
+
+            // Scatter validCount compact values into full-length output; null slots stay zeroed.
+            MemorySegment fullOut = ctx.arena().allocate(n * elemBytes);
+            long srcOff = 0;
+            for (long i = 0; i < n; i++) {
+                if (validity.getBoolean(i)) {
+                    MemorySegment.copy(compactOut, srcOff, fullOut, i * elemBytes, elemBytes);
+                    srcOff += elemBytes;
+                }
+            }
+            DType nonNullDtype = new DType.Primitive(ptype, false);
+            return new MaskedArray(toArray(nonNullDtype, n, fullOut), validity);
+        }
+
+        private static Array decodeChild(DecodeContext parent, int idx, DType dtype, long rowCount) {
+            ArrayNode childNode = parent.node().children()[idx];
+            DecodeContext childCtx = new DecodeContext(
+                    childNode, dtype, rowCount, parent.segmentBuffers(), parent.registry(), parent.arena());
+            return parent.registry().decode(childCtx);
         }
 
         /// Decode one Classic-mode page into rawLatents and return the updated byte offset.
