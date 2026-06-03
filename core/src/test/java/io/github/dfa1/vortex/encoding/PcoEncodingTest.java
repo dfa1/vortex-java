@@ -532,6 +532,29 @@ class PcoEncodingTest {
 		}
 
 		@Test
+		void decode_lookback_stateNExceedsPageN_throwsVortexException() {
+			// Given — stateN=2 (stateNLog=1) but pageN=1 → decodeN = 1-2 = -1 → corrupt.
+			// chunkMeta bit layout (all LE, LSB-first):
+			//   byte0: mode=0[3:0], delta=2[7:4] → 0x20
+			//   byte1: windowNLog-1(5b)=0, stateNLog[0](1b)=1 → 0x20
+			//   byte2: stateNLog[1..3](3b)=0, secondary(1b)=0, deltaAnsSizeLog(4b)=0 → 0x00
+			//   bytes3-6: nDeltaBins(15b)=0, primaryAnsSizeLog(4b)=0, nBins(15b)=0 → 0x00
+			var sut = new PcoEncoding();
+			MemorySegment chunkMeta = segmentOf(
+					(byte) 0x20, (byte) 0x20, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00);
+			DecodeContext ctx = ctxWith(
+					metaWithOneChunk(1),
+					new DType.Primitive(PType.U64, false),
+					1,
+					new MemorySegment[]{chunkMeta, segmentOf((byte) 0x00)});
+
+			// When / Then
+			assertThatThrownBy(() -> sut.decode(ctx))
+					.isInstanceOf(VortexException.class)
+					.hasMessageContaining("stateN");
+		}
+
+		@Test
 		void decode_lookback_singleInitialValue_returnsIt() {
 			// Given — pageN=1, stateN=1, decodeN=0: only the initial state value; no decoded values.
 			var sut = new PcoEncoding();

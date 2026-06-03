@@ -365,6 +365,10 @@ public final class PcoEncoding implements Encoding {
                 int dtypeSize, MemorySegment pageBuf, int pageN,
                 MemorySegment rawLatents, long latentsOffset,
                 SegmentAllocator arena) {
+            if (pageN < stateN) {
+                throw new VortexException(EncodingId.VORTEX_PCO,
+                        "pco corrupt lookback page: stateN " + stateN + " exceeds pageN " + pageN);
+            }
             LeBitReader pageReader = new LeBitReader(pageBuf);
 
             // Delta page header: 0 moments (NoOp delta-of-delta) + 4 × deltaAnsSizeLog ANS states.
