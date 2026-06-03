@@ -237,7 +237,7 @@ another implementation cannot decode.
 
 The `integration` module addresses this by using the Rust JNI reader as a **test oracle**:
 Java writes a file, the Rust reader decodes it, and the values are compared exactly.
-[Property-based testing](https://jqwik.net/) (jqwik) generates large, diverse inputs automatically,
+Seeded random parameterized tests generate large, diverse inputs automatically,
 covering edge cases no hand-written test would anticipate.
 
 This combination caught two real bugs in ALP floating-point encoding:

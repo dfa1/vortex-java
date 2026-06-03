@@ -31,7 +31,6 @@
 		<junit.version>5.11.4</junit.version>
 		<assertj.version>3.27.7</assertj.version>
 		<mockito.version>5.14.2</mockito.version>
-		<jqwik.version>1.9.3</jqwik.version>
 		<vortex-jni.version>0.72.0</vortex-jni.version>
 		<arrow.version>19.0.0</arrow.version>
 		<slf4j.version>2.0.18</slf4j.version>
@@ -96,12 +95,6 @@
 				<groupId>org.mockito</groupId>
 				<artifactId>mockito-junit-jupiter</artifactId>
 				<version>${mockito.version}</version>
-				<scope>test</scope>
-			</dependency>
-			<dependency>
-				<groupId>net.jqwik</groupId>
-				<artifactId>jqwik</artifactId>
-				<version>${jqwik.version}</version>
 				<scope>test</scope>
 			</dependency>
 			<dependency>

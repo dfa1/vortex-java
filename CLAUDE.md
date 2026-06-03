@@ -163,7 +163,7 @@ The decoder reads back via `ctx.metadata()`, not `ctx.buffer(n)`.
   `given` and `then` — not `willReturn`/`willThrow`.
 - Prefer `@ParameterizedTest` over copy-pasting tests. Use `@ValueSource` when possible; `@ArgumentsSource` when more
   structure needed (test case must have a name).
-- Use property-based tests (`@Property`) for encoding/decoding logic where input space is large — they find corner cases that example tests miss.
+- Use `@ParameterizedTest` with seeded random generators for encoding/decoding logic where input space is large — they find corner cases that example tests miss.
 - Acceptance tests run the built jar end-to-end with hosh scripts.
 - Use `@Nested` to group related tests by scenario or feature within a test class:
   ```java
@@ -175,10 +175,17 @@ The decoder reads back via `ctx.metadata()`, not `ctx.buffer(n)`.
   `@BeforeEach` inside a `@Nested` class applies only to that group. Private helpers go
   at the end of the class they serve, after all `@Test` methods.
 
-## Property-Based Testing (jqwik)
+## Random-data parameterized tests
 
-jqwik 1.9.3 works with JUnit Jupiter 5.11.x (JUnit Platform 1.x). Use `@Property` + `@ForAll` for parameters,
-`@Provide` for custom arbitraries, `Assume.that(...)` for preconditions.
+Use `@ParameterizedTest` + `@MethodSource` for random-input coverage. Put generators in `RandomArrays` (integration module)
+or a similar utility class. Static provider methods in the test class delegate to the generator:
 
-Keep `tries` low (10–20) for integration tests that involve file I/O or JNI; unit-level properties can use the
-default (100).
+```java
+static Stream<long[]> i64ArrayProvider() { return RandomArrays.i64Arrays(30); }
+
+@ParameterizedTest
+@MethodSource("i64ArrayProvider")
+void roundTrips(long[] data) { ... }
+```
+
+Keep counts low (10–30) for integration tests that involve file I/O or JNI.

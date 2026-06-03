@@ -28,11 +28,6 @@ import io.github.dfa1.vortex.encoding.ZigZagEncoding;
 import io.github.dfa1.vortex.encoding.ZstdEncoding;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
-import net.jqwik.api.Arbitraries;
-import net.jqwik.api.Arbitrary;
-import net.jqwik.api.ForAll;
-import net.jqwik.api.Property;
-import net.jqwik.api.Provide;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.BitVector;
@@ -46,6 +41,8 @@ import org.apache.arrow.vector.ipc.ArrowReader;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -58,6 +55,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -452,9 +450,9 @@ class JavaWritesRustReadsIntegrationTest {
 	}
 
 	/// VarBinView utf8 with arbitrary strings — exercises both inlined and referenced views.
-	@Property(tries = 20)
-	void prop_varBinView_utf8_roundTripsViaRust(
-			@ForAll("varBinViewStringArrays") String[] data) throws IOException {
+	@ParameterizedTest
+	@MethodSource("varBinViewStringArrayProvider")
+	void prop_varBinView_utf8_roundTripsViaRust(String[] data) throws IOException {
 		Path tmp = Files.createTempDirectory("vortex-pbt-varbinview");
 		try {
 			Path file = tmp.resolve("pbt_varbinview_utf8.vtx");
@@ -551,13 +549,13 @@ class JavaWritesRustReadsIntegrationTest {
 		assertThat(volumes).containsExactlyInAnyOrder(expected);
 	}
 
-	// ── Property-based tests ──────────────────────────────────────────────────
+	// ── Parameterized random-data tests ─────────────────────────────────────
 
 	/// Dict utf8 with arbitrary strings (small dict → U8 codes).
 	/// Validates that random string data survives Java dict-encode → Rust JNI read.
-	@Property(tries = 20)
-	void prop_dictUtf8_ascii_roundTripsViaRust(
-			@ForAll("asciiStringArrays") String[] data) throws IOException {
+	@ParameterizedTest
+	@MethodSource("asciiStringArrayProvider")
+	void prop_dictUtf8_ascii_roundTripsViaRust(String[] data) throws IOException {
 		Path tmp = Files.createTempDirectory("vortex-pbt-ascii");
 		try {
 			Path file = tmp.resolve("pbt_dict_utf8_ascii.vtx");
@@ -573,9 +571,9 @@ class JavaWritesRustReadsIntegrationTest {
 	}
 
 	/// Dict utf8 with 257+ unique strings → forces U16 codes (crosses U8→U16 boundary at 256).
-	@Property(tries = 10)
-	void prop_dictUtf8_u16Codes_roundTripsViaRust(
-			@ForAll("u16DictStringArrays") String[] data) throws IOException {
+	@ParameterizedTest
+	@MethodSource("u16DictStringArrayProvider")
+	void prop_dictUtf8_u16Codes_roundTripsViaRust(String[] data) throws IOException {
 		Path tmp = Files.createTempDirectory("vortex-pbt-u16");
 		try {
 			Path file = tmp.resolve("pbt_dict_utf8_u16.vtx");
@@ -590,10 +588,10 @@ class JavaWritesRustReadsIntegrationTest {
 		}
 	}
 
-	/// Dict utf8 with unicode strings (multi-byte UTF-8, emoji, CJK).
-	@Property(tries = 20)
-	void prop_dictUtf8_unicode_roundTripsViaRust(
-			@ForAll("unicodeStringArrays") String[] data) throws IOException {
+	/// Dict utf8 with unicode strings (multi-byte UTF-8, CJK).
+	@ParameterizedTest
+	@MethodSource("unicodeStringArrayProvider")
+	void prop_dictUtf8_unicode_roundTripsViaRust(String[] data) throws IOException {
 		Path tmp = Files.createTempDirectory("vortex-pbt-unicode");
 		try {
 			Path file = tmp.resolve("pbt_dict_utf8_unicode.vtx");
@@ -609,8 +607,9 @@ class JavaWritesRustReadsIntegrationTest {
 	}
 
 	/// I64 column: full Long range (MIN_VALUE, MAX_VALUE, negatives), empty and large arrays.
-	@Property(tries = 30)
-	void prop_i64_roundTripsViaRust(@ForAll("i64Arrays") long[] data) throws IOException {
+	@ParameterizedTest
+	@MethodSource("i64ArrayProvider")
+	void prop_i64_roundTripsViaRust(long[] data) throws IOException {
 		Path tmp = Files.createTempDirectory("vortex-pbt-i64");
 		try {
 			Path file = tmp.resolve("pbt_i64.vtx");
@@ -625,52 +624,11 @@ class JavaWritesRustReadsIntegrationTest {
 		}
 	}
 
-	@Provide
-	Arbitrary<String[]> varBinViewStringArrays() {
-		// Strings 0–30 chars: spans both inlined (≤12 bytes) and referenced (>12 bytes) paths
-		Arbitrary<String> strings = Arbitraries.strings()
-				.alpha()
-				.ofMinLength(0).ofMaxLength(30);
-		return strings.array(String[].class).ofMinSize(0).ofMaxSize(1_000);
-	}
-
-	@Provide
-	Arbitrary<String[]> asciiStringArrays() {
-		Arbitrary<String> strings = Arbitraries.strings()
-				.alpha()
-				.ofMinLength(0).ofMaxLength(100);
-		return strings.array(String[].class).ofMinSize(0).ofMaxSize(5_000);
-	}
-
-	@Provide
-	Arbitrary<String[]> u16DictStringArrays() {
-		// 257–5000 unique strings → U16 codes territory
-		Arbitrary<String> strings = Arbitraries.strings()
-				.alpha()
-				.ofMinLength(3).ofMaxLength(20);
-		return strings.list().ofMinSize(257).ofMaxSize(5_000)
-				.map(list -> list.stream().distinct().toArray(String[]::new))
-				.filter(arr -> arr.length >= 257);
-	}
-
-	@Provide
-	Arbitrary<String[]> unicodeStringArrays() {
-		Arbitrary<String> strings = Arbitraries.strings()
-				.withCharRange('\u4E00', '\uD7FF')
-				.ofMinLength(0).ofMaxLength(50);
-		return strings.array(String[].class).ofMinSize(0).ofMaxSize(1_000);
-	}
-
-	@Provide
-	Arbitrary<long[]> i64Arrays() {
-		return Arbitraries.longs()
-				.array(long[].class)
-				.ofMinSize(0).ofMaxSize(10_000);
-	}
 
 	/// F64 column: finite doubles (ALP encoding), empty and large arrays.
-	@Property(tries = 30)
-	void prop_f64_roundTripsViaRust(@ForAll("f64Arrays") double[] data) throws IOException {
+	@ParameterizedTest
+	@MethodSource("f64ArrayProvider")
+	void prop_f64_roundTripsViaRust(double[] data) throws IOException {
 		Path tmp = Files.createTempDirectory("vortex-pbt-f64");
 		try {
 			Path file = tmp.resolve("pbt_f64.vtx");
@@ -686,8 +644,9 @@ class JavaWritesRustReadsIntegrationTest {
 	}
 
 	/// F32 column: finite floats, empty and large arrays.
-	@Property(tries = 30)
-	void prop_f32_roundTripsViaRust(@ForAll("f32Arrays") float[] data) throws IOException {
+	@ParameterizedTest
+	@MethodSource("f32ArrayProvider")
+	void prop_f32_roundTripsViaRust(float[] data) throws IOException {
 		Path tmp = Files.createTempDirectory("vortex-pbt-f32");
 		try {
 			Path file = tmp.resolve("pbt_f32.vtx");
@@ -702,20 +661,32 @@ class JavaWritesRustReadsIntegrationTest {
 		}
 	}
 
-	@Provide
-	Arbitrary<double[]> f64Arrays() {
-		return Arbitraries.doubles()
-				.filter(Double::isFinite)
-				.array(double[].class)
-				.ofMinSize(0).ofMaxSize(5_000);
+	static Stream<String[]> varBinViewStringArrayProvider() {
+		return RandomArrays.varBinViewStringArrays(20);
 	}
 
-	@Provide
-	Arbitrary<float[]> f32Arrays() {
-		return Arbitraries.floats()
-				.filter(Float::isFinite)
-				.array(float[].class)
-				.ofMinSize(0).ofMaxSize(5_000);
+	static Stream<String[]> asciiStringArrayProvider() {
+		return RandomArrays.asciiStringArrays(20);
+	}
+
+	static Stream<String[]> u16DictStringArrayProvider() {
+		return RandomArrays.u16DictStringArrays(10);
+	}
+
+	static Stream<String[]> unicodeStringArrayProvider() {
+		return RandomArrays.unicodeStringArrays(20);
+	}
+
+	static Stream<long[]> i64ArrayProvider() {
+		return RandomArrays.i64Arrays(30);
+	}
+
+	static Stream<double[]> f64ArrayProvider() {
+		return RandomArrays.f64Arrays(30);
+	}
+
+	static Stream<float[]> f32ArrayProvider() {
+		return RandomArrays.f32Arrays(30);
 	}
 
 	/// F64: NaN and Inf go to ALP patches (raw bits). containsExactly fails for NaN — use bitwise comparison.
