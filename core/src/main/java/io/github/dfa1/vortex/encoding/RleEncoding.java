@@ -6,12 +6,14 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.BoolArray;
 import io.github.dfa1.vortex.core.array.ByteArray;
 import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.Float16Array;
 import io.github.dfa1.vortex.core.array.FloatArray;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
+import io.github.dfa1.vortex.core.array.MaskedArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.proto.DTypeProtos;
 import io.github.dfa1.vortex.proto.EncodingProtos;
@@ -329,8 +331,16 @@ public final class RleEncoding implements Encoding {
             DType offsetsDtype = new DType.Primitive(offsetsPtype, false);
 
             Array valuesArr = decodeChildAs(ctx, 0, valuesDtype, valuesLen);
-            Array indicesArr = decodeChildAs(ctx, 1, indicesDtype, indicesLen);
+            Array indicesRaw = decodeChildAs(ctx, 1, indicesDtype, indicesLen);
             Array offsetsArr = decodeChildAs(ctx, 2, offsetsDtype, offsetsLen);
+
+            // Indices may carry a validity bitmap when the output column is nullable.
+            BoolArray indicesValidity = null;
+            Array indicesArr = indicesRaw;
+            if (indicesRaw instanceof MaskedArray masked) {
+                indicesArr = masked.child(0);
+                indicesValidity = (BoolArray) masked.child(1);
+            }
 
             long[] values = readLongs(valuesArr.buffer(0), (int) valuesLen, ptype);
             int[] indices = readIndices(indicesArr.buffer(0), (int) indicesLen, indicesPtype);
@@ -370,7 +380,22 @@ public final class RleEncoding implements Encoding {
             }
 
             MemorySegment seg = fromLongs(decoded, offset, (int) rowCount, ptype, ctx.arena());
-            return toArray(ctx.dtype(), rowCount, seg, ptype);
+            Array result = toArray(ctx.dtype(), rowCount, seg, ptype);
+            if (indicesValidity == null) {
+                return result;
+            }
+            // Propagate indices validity to output: output[j] is null iff indices[offset+j] is null.
+            int validityBytes = (int) ((rowCount + 7) / 8);
+            MemorySegment validityBuf = ctx.arena().allocate(validityBytes);
+            for (long j = 0; j < rowCount; j++) {
+                if (indicesValidity.getBoolean(offset + j)) {
+                    int byteIdx = (int) (j >>> 3);
+                    byte current = validityBuf.get(ValueLayout.JAVA_BYTE, (long) byteIdx);
+                    validityBuf.set(ValueLayout.JAVA_BYTE, (long) byteIdx, (byte) (current | (1 << (j & 7))));
+                }
+            }
+            BoolArray outputValidity = new BoolArray(new DType.Bool(false), rowCount, validityBuf, ArrayStats.empty());
+            return new MaskedArray(result, outputValidity);
         }
 
         private static Array emptyArray(DecodeContext ctx) {

@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.array.MaskedArray;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -105,6 +106,53 @@ class FrameOfReferenceEncodingTest {
 			var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 			long got = result.buffer(0).get(layout, 0L);
 			assertThat(got).isEqualTo(residuals[0] + reference);
+		}
+
+		@Test
+		void decode_nullableResiduals_returnsMaskedArrayWithCorrectValues() {
+			// Given — 4 I32 residuals; positions 1 and 3 are null (validity: 0b00000101 = 0x05)
+			// Residuals: [0, 0, 5, 0], reference: 100 → valid outputs: [100, ?, 105, ?]
+			long reference = 100L;
+			long[] residuals = {0, 0, 5, 0};
+			MemorySegment validitySeg = MemorySegment.ofArray(new byte[]{0x05}); // bits 0,2
+
+			byte[] residualBytes = new byte[residuals.length * 4];
+			ByteBuffer bb = ByteBuffer.wrap(residualBytes).order(ByteOrder.LITTLE_ENDIAN);
+			for (long v : residuals) {
+				bb.putInt((int) v);
+			}
+
+			ArrayNode validityNode = new ArrayNode(
+					EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{1}, ArrayStats.empty());
+			ArrayNode primNode = new ArrayNode(
+					EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[]{validityNode}, new int[]{0}, ArrayStats.empty());
+			byte[] metaBytes = ScalarProtos.ScalarValue.newBuilder().setInt64Value(reference).build().toByteArray();
+			ArrayNode forNode = new ArrayNode(
+					EncodingId.FASTLANES_FOR, ByteBuffer.wrap(metaBytes), new ArrayNode[]{primNode}, new int[0], ArrayStats.empty());
+
+			EncodingRegistry registry = EncodingRegistry.empty();
+			registry.register(new FrameOfReferenceEncoding());
+			registry.register(new PrimitiveEncoding());
+			registry.register(new BoolEncoding());
+
+			MemorySegment[] segments = {MemorySegment.ofArray(residualBytes), validitySeg};
+			DecodeContext ctx = new DecodeContext(
+					forNode, I32_DTYPE, residuals.length, segments, registry, java.lang.foreign.Arena.global());
+			FrameOfReferenceEncoding sut = new FrameOfReferenceEncoding();
+
+			// When
+			Array result = sut.decode(ctx);
+
+			// Then — MaskedArray; reference added to valid positions only
+			assertThat(result).isInstanceOf(MaskedArray.class);
+			MaskedArray masked = (MaskedArray) result;
+			assertThat(masked.isValid(0)).isTrue();
+			assertThat(masked.isValid(1)).isFalse();
+			assertThat(masked.isValid(2)).isTrue();
+			assertThat(masked.isValid(3)).isFalse();
+			var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			assertThat(masked.child(0).buffer(0).get(layout, 0L)).isEqualTo(100);
+			assertThat(masked.child(0).buffer(0).get(layout, 8L)).isEqualTo(105);
 		}
 
 		private static DecodeContext buildForContext(

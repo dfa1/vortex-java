@@ -1,15 +1,22 @@
 package io.github.dfa1.vortex.encoding;
 
+import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.IntArray;
+import io.github.dfa1.vortex.core.array.MaskedArray;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteOrder;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -23,6 +30,14 @@ class RleEncodingTest {
 		r.register(new RleEncoding());
 		r.register(new PrimitiveEncoding());
 		return r;
+	}
+
+	private static ArrayNode toArrayNode(EncodeNode enc) {
+		ArrayNode[] children = new ArrayNode[enc.children().length];
+		for (int i = 0; i < children.length; i++) {
+			children[i] = toArrayNode(enc.children()[i]);
+		}
+		return new ArrayNode(enc.encodingId(), enc.metadata(), children, enc.bufferIndices(), ArrayStats.empty());
 	}
 
 	@Nested
@@ -255,6 +270,58 @@ class RleEncodingTest {
 				assertThat(result.buffer(0).get(LE_INT, (long) i * 4))
 						.as("index %d", i).isEqualTo(i / 100);
 			}
+		}
+
+		@Test
+		void decode_nullableIndices_returnsMaskedArrayWithCorrectValidity() {
+			// Given — encode [10, 10, 20, 20]; then inject a validity bitmap into the indices node
+			// so positions 1 and 3 are null. Valid outputs: [10, null, 20, null].
+			var sut = new RleEncoding();
+			DType dtype = new DType.Primitive(PType.I32, false);
+			int[] data = {10, 10, 20, 20};
+			EncodeResult encoded = sut.encode(dtype, data);
+
+			// Original buffers: [values_buf, indices_buf, offsets_buf]
+			List<MemorySegment> originalBufs = new ArrayList<>(encoded.buffers());
+			// Validity bitmap: bits 0 and 2 set → 0b00000101 = 0x05 → positions 0,2 valid
+			MemorySegment validityBuf = MemorySegment.ofArray(new byte[]{0x05});
+			originalBufs.add(validityBuf); // index 3
+			MemorySegment[] segments = originalBufs.toArray(new MemorySegment[0]);
+
+			// Rebuild the ArrayNode tree from the encode result
+			ArrayNode origRoot = toArrayNode(encoded.rootNode());
+			// RLE root children: [values(0), indices(1), offsets(2)]
+			ArrayNode origIndices = origRoot.children()[1];
+			// Wrap indices with a validity child pointing to buffer 3
+			ArrayNode validityNode = new ArrayNode(
+					EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{3}, ArrayStats.empty());
+			ArrayNode nullableIndices = new ArrayNode(
+					origIndices.encodingId(), origIndices.metadata(),
+					new ArrayNode[]{validityNode}, origIndices.bufferIndices(), ArrayStats.empty());
+			ArrayNode root = new ArrayNode(
+					origRoot.encodingId(), origRoot.metadata(),
+					new ArrayNode[]{origRoot.children()[0], nullableIndices, origRoot.children()[2]},
+					origRoot.bufferIndices(), ArrayStats.empty());
+
+			EncodingRegistry reg = EncodingRegistry.empty();
+			reg.register(sut);
+			reg.register(new PrimitiveEncoding());
+			reg.register(new BoolEncoding());
+			DecodeContext ctx = new DecodeContext(root, dtype, data.length, segments, reg, Arena.ofAuto());
+
+			// When
+			Array result = sut.decode(ctx);
+
+			// Then — MaskedArray; valid at positions 0 and 2
+			assertThat(result).isInstanceOf(MaskedArray.class);
+			MaskedArray masked = (MaskedArray) result;
+			assertThat(masked.isValid(0)).isTrue();
+			assertThat(masked.isValid(1)).isFalse();
+			assertThat(masked.isValid(2)).isTrue();
+			assertThat(masked.isValid(3)).isFalse();
+			IntArray values = (IntArray) masked.child(0);
+			assertThat(values.getInt(0)).isEqualTo(10);
+			assertThat(values.getInt(2)).isEqualTo(20);
 		}
 
 		@Test

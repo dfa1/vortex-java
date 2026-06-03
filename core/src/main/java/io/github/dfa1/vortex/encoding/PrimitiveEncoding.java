@@ -4,12 +4,15 @@ import io.github.dfa1.vortex.proto.ScalarProtos;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.core.array.BoolArray;
 import io.github.dfa1.vortex.core.array.ByteArray;
 import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.Float16Array;
 import io.github.dfa1.vortex.core.array.FloatArray;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
+import io.github.dfa1.vortex.core.array.MaskedArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -309,7 +312,7 @@ public final class PrimitiveEncoding implements Encoding {
 			DType dt = ctx.dtype();
 			PType ptype = ((DType.Primitive) dt).ptype();
 			var stats = ctx.node().stats();
-			return switch (ptype) {
+			Array values = switch (ptype) {
 				case I64, U64 -> new LongArray(dt, n, buf, stats);
 				case I32, U32 -> new IntArray(dt, n, buf, stats);
 				case F64 -> new DoubleArray(dt, n, buf, stats);
@@ -318,6 +321,19 @@ public final class PrimitiveEncoding implements Encoding {
 				case I8, U8 -> new ByteArray(dt, n, buf, stats);
 				case F16 -> new Float16Array(dt, n, buf, stats);
 			};
+			if (ctx.node().children().length == 1) {
+				ArrayNode validityNode = ctx.node().children()[0];
+				var validityCtx = new DecodeContext(
+						validityNode, new DType.Bool(false), n,
+						ctx.segmentBuffers(), ctx.registry(), ctx.arena());
+				Array va = ctx.registry().decode(validityCtx);
+				if (!(va instanceof BoolArray validity)) {
+					throw new VortexException(EncodingId.VORTEX_PRIMITIVE,
+							"validity child decoded to unexpected type: " + va.getClass().getSimpleName());
+				}
+				return new MaskedArray(values, validity);
+			}
+			return values;
 		}
 	}
 }

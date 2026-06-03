@@ -1,13 +1,20 @@
 package io.github.dfa1.vortex.encoding;
 
+import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.IntArray;
+import io.github.dfa1.vortex.core.array.MaskedArray;
 import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.stream.Stream;
 
@@ -128,6 +135,87 @@ class PrimitiveEncodingTest {
 					new double[]{-1.5, 0.0, 1.5, 3.14159, -2.71828},
 					new double[]{1e10, -1e10, 1e-10}
 			);
+		}
+	}
+
+	@Nested
+	class Decode {
+
+		@Test
+		void decode_withValidityChild_returnsMaskedArray() {
+			// Given — 4 I32 values; positions 1 and 3 are null (validity bitmap: 0b00000101 = 0x05)
+			int[] raw = {10, 0, 20, 0};   // garbage at null positions
+			byte[] valueBytes = new byte[raw.length * 4];
+			ByteBuffer bb = ByteBuffer.wrap(valueBytes).order(ByteOrder.LITTLE_ENDIAN);
+			for (int v : raw) {
+				bb.putInt(v);
+			}
+			MemorySegment valuesSeg = MemorySegment.ofArray(valueBytes);
+			MemorySegment validitySeg = MemorySegment.ofArray(new byte[]{0x05}); // bits 0,2 set
+
+			ArrayNode validityNode = new ArrayNode(
+					EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{1}, ArrayStats.empty());
+			ArrayNode primNode = new ArrayNode(
+					EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[]{validityNode}, new int[]{0}, ArrayStats.empty());
+
+			EncodingRegistry registry = EncodingRegistry.empty();
+			registry.register(new PrimitiveEncoding());
+			registry.register(new BoolEncoding());
+
+			DType dtype = new DType.Primitive(PType.I32, false);
+			DecodeContext ctx = new DecodeContext(
+					primNode, dtype, raw.length,
+					new MemorySegment[]{valuesSeg, validitySeg},
+					registry, Arena.global());
+
+			PrimitiveEncoding sut = new PrimitiveEncoding();
+
+			// When
+			Array result = sut.decode(ctx);
+
+			// Then — returns MaskedArray; only valid positions are usable
+			assertThat(result).isInstanceOf(MaskedArray.class);
+			MaskedArray masked = (MaskedArray) result;
+			assertThat(masked.child(0)).isInstanceOf(IntArray.class);
+			assertThat(masked.isValid(0)).isTrue();
+			assertThat(masked.isValid(1)).isFalse();
+			assertThat(masked.isValid(2)).isTrue();
+			assertThat(masked.isValid(3)).isFalse();
+			IntArray values = (IntArray) masked.child(0);
+			assertThat(values.getInt(0)).isEqualTo(10);
+			assertThat(values.getInt(2)).isEqualTo(20);
+		}
+
+		@Test
+		void decode_noValidityChild_returnsPlainArray() {
+			// Given — 3 I32 values; no validity child
+			int[] raw = {1, 2, 3};
+			byte[] valueBytes = new byte[raw.length * 4];
+			ByteBuffer bb = ByteBuffer.wrap(valueBytes).order(ByteOrder.LITTLE_ENDIAN);
+			for (int v : raw) {
+				bb.putInt(v);
+			}
+			MemorySegment valuesSeg = MemorySegment.ofArray(valueBytes);
+
+			ArrayNode primNode = new ArrayNode(
+					EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0}, ArrayStats.empty());
+
+			EncodingRegistry registry = EncodingRegistry.empty();
+			registry.register(new PrimitiveEncoding());
+
+			DType dtype = new DType.Primitive(PType.I32, false);
+			DecodeContext ctx = new DecodeContext(
+					primNode, dtype, raw.length,
+					new MemorySegment[]{valuesSeg},
+					registry, Arena.global());
+
+			PrimitiveEncoding sut = new PrimitiveEncoding();
+
+			// When
+			Array result = sut.decode(ctx);
+
+			// Then — plain array, not MaskedArray
+			assertThat(result).isInstanceOf(IntArray.class);
 		}
 	}
 }

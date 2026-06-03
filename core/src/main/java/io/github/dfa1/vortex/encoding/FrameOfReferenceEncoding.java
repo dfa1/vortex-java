@@ -6,10 +6,12 @@ import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.array.BoolArray;
 import io.github.dfa1.vortex.core.array.ByteArray;
 import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
+import io.github.dfa1.vortex.core.array.MaskedArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.core.VortexException;
 
@@ -199,19 +201,27 @@ public final class FrameOfReferenceEncoding implements Encoding {
 
 			Array encoded = ctx.decodeChild(0);
 
+			// Nullable primitive: child decodes as MaskedArray; extract values and propagate validity.
+			BoolArray validity = null;
+			Array rawEncoded = encoded;
+			if (encoded instanceof MaskedArray masked) {
+				rawEncoded = masked.child(0);
+				validity = (BoolArray) masked.child(1);
+			}
+
 			if (!(ctx.dtype() instanceof DType.Primitive p)) {
 				throw new VortexException(EncodingId.FASTLANES_FOR, "expected primitive dtype, got " + ctx.dtype());
 			}
 
 			long ref = referenceValue(scalar);
 			if (ref == 0L) {
-				return encoded;
+				return validity != null ? new MaskedArray(rawEncoded, validity) : rawEncoded;
 			}
 
-			MemorySegment src = encoded.buffer(0);
+			MemorySegment src = rawEncoded.buffer(0);
 			long n = ctx.rowCount();
 			MemorySegment dst = applyReference(src, n, p.ptype(), ref, ctx.arena());
-			return switch (p.ptype()) {
+			Array result = switch (p.ptype()) {
 				case I64, U64 -> new LongArray(ctx.dtype(), n, dst, ArrayStats.empty());
 				case I32, U32 -> new IntArray(ctx.dtype(), n, dst, ArrayStats.empty());
 				case F64 -> new DoubleArray(ctx.dtype(), n, dst, ArrayStats.empty());
@@ -219,6 +229,7 @@ public final class FrameOfReferenceEncoding implements Encoding {
 				case I8, U8   -> new ByteArray(ctx.dtype(), n, dst, ArrayStats.empty());
 				default -> throw new VortexException(EncodingId.FASTLANES_FOR, "unsupported ptype " + p.ptype());
 			};
+			return validity != null ? new MaskedArray(result, validity) : result;
 		}
 
 		private static long referenceValue(ScalarProtos.ScalarValue scalar) {
