@@ -574,6 +574,35 @@ class PcoEncodingTest {
 	}
 
 	@Nested
+	class DecodeLookbackStateNWindow {
+
+		@Test
+		void lookback_stateNExceedsWindowN_throwsVortexException() {
+			// Given — windowNLog=1 (windowN=2), stateNLog=2 (stateN=4) → stateN > windowN.
+			// pageN=4 (≥ stateN=4 passes the pageN<stateN guard); page has 4×8=32 zero bytes.
+			// Bit layout:
+			//   byte0: mode=0[3:0], delta=2[7:4] → 0x20
+			//   byte1: windowNLog-1(5b)=0, stateNLog[0..2](3b)=0b010 → 0x40
+			//   byte2: stateNLog[3](1b)=0, secondary(1b)=0, ... → 0x00
+			//   bytes3-6: 0x00
+			var sut = new PcoEncoding();
+			MemorySegment chunkMeta = segmentOf(
+					(byte) 0x20, (byte) 0x40, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00);
+			MemorySegment page = segmentOf(new byte[32]);
+			DecodeContext ctx = ctxWith(
+					metaWithOneChunk(4),
+					new DType.Primitive(PType.U64, false),
+					4,
+					new MemorySegment[]{chunkMeta, page});
+
+			// When / Then
+			assertThatThrownBy(() -> sut.decode(ctx))
+					.isInstanceOf(VortexException.class)
+					.hasMessageContaining("stateN");
+		}
+	}
+
+	@Nested
 	class DecodeLookbackWindowNLog {
 
 		@Test

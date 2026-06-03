@@ -422,6 +422,10 @@ public final class PcoEncoding implements Encoding {
                 rawLatents.set(LE_LONG, latentsOffset + (long) i * Long.BYTES, initialState[i] & mask);
             }
 
+            if (stateN > windowN) {
+                throw new VortexException(EncodingId.VORTEX_PCO,
+                        "pco corrupt lookback: stateN " + stateN + " exceeds windowN " + windowN);
+            }
             // Lookback reconstruction: window[0..windowN] seeded from initialState.
             long[] window = new long[windowN + decodeN];
             for (int i = 0; i < stateN; i++) {
