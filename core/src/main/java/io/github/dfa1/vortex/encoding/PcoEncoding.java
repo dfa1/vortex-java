@@ -32,13 +32,16 @@ import java.nio.ByteOrder;
 ///   <li>Chunk meta: [4b mode][extra mode bits][4b delta][extra delta bits]
 ///       [per-latent: 4b ans_size_log, 15b n_bins, per-bin {weight-1, lower, offset_bits}]
 ///       [0–7b alignment]</li>
-///   <li>Page: [4 × ans_size_log b initial states][0–7b alignment]
-///       [per 256-batch: ANS bits for all k, then offset bits for all k]</li>
+///   <li>Classic page: [primary: deltaOrder×dtypeSize b moments, 4×ansSizeLog b ANS states]
+///       [0–7b alignment] [per 256-batch: ANS bits, offset bits]</li>
+///   <li>IntMult page: [primary header][secondary header][0–7b alignment]
+///       [per 256-batch: primary ANS+offsets, secondary ANS+offsets]</li>
 ///   <li>All bit packing little-endian (LSB first)</li>
 /// </ul>
 ///
-/// <p>Supported (Phase 4): Classic mode, None+Consecutive delta (order ≤ 7), non-null, all
-/// integer/float ptypes except F16.  Other modes (IntMult, FloatMult, …) throw "not implemented".
+/// <p>Supported: Classic and IntMult modes, None+Consecutive delta (order ≤ 7), non-null,
+/// all integer/float ptypes except F16.  Other modes (FloatMult, FloatQuant, Dict) throw
+/// "not implemented".
 public final class PcoEncoding implements Encoding {
 
     static final byte PCO_FORMAT_MAJOR = 0x04;
@@ -103,36 +106,59 @@ public final class PcoEncoding implements Encoding {
                 MemorySegment chunkMetaBuf = ctx.buffer(bufIdx++);
 
                 PcoChunkMeta chunkMeta = readChunkMeta(chunkMetaBuf, dtypeSize);
-                PcoTansDecoder tans = PcoTansDecoder.build(chunkMeta.ansSizeLog(), chunkMeta.bins());
 
-                int deltaOrder = chunkMeta.deltaOrder();
-                int nPages = chunkInfo.getPagesCount();
-                for (int p = 0; p < nPages; p++) {
-                    int pageN = chunkInfo.getPages(p).getNValues();
-                    MemorySegment pageBuf = ctx.buffer(bufIdx++);
+                if (chunkMeta.mode() == 0) {
+                    // Classic mode: one latent variable, decode directly into rawLatents.
+                    PcoTansDecoder tans = PcoTansDecoder.build(chunkMeta.ansSizeLog(), chunkMeta.bins());
+                    int deltaOrder = chunkMeta.deltaOrder();
+                    int ansSizeLog = chunkMeta.ansSizeLog();
+                    int nPages = chunkInfo.getPagesCount();
+                    for (int p = 0; p < nPages; p++) {
+                        int pageN = chunkInfo.getPages(p).getNValues();
+                        MemorySegment pageBuf = ctx.buffer(bufIdx++);
+                        rawByteOffset = decodeClassicPage(tans, ansSizeLog, deltaOrder, dtypeSize,
+                                pageBuf, pageN, rawLatents, rawByteOffset);
+                    }
+                } else {
+                    // IntMult mode: two latent variables (mult, adj); num = base * mult + adj.
+                    long base = chunkMeta.base();
+                    int primaryAnsSizeLog = chunkMeta.ansSizeLog();
+                    int secondaryAnsSizeLog = chunkMeta.secondaryAnsSizeLog();
+                    PcoTansDecoder primaryTans = PcoTansDecoder.build(primaryAnsSizeLog, chunkMeta.bins());
+                    PcoTansDecoder secondaryTans = PcoTansDecoder.build(secondaryAnsSizeLog, chunkMeta.secondaryBins());
+                    int deltaOrder = chunkMeta.deltaOrder();
+                    int secondaryDeltaOrder = chunkMeta.secondaryUsesDelta() ? deltaOrder : 0;
 
-                    LeBitReader pageReader = new LeBitReader(pageBuf);
+                    // Compute total values in this chunk to allocate adj buffer.
+                    int chunkN = 0;
+                    for (int p = 0; p < chunkInfo.getPagesCount(); p++) {
+                        chunkN += chunkInfo.getPages(p).getNValues();
+                    }
+                    MemorySegment rawAdjs = ctx.arena().allocate((long) chunkN * Long.BYTES);
 
-                    // Delta moments come before ANS states in page header.
-                    long[] moments = new long[deltaOrder];
-                    for (int m = 0; m < deltaOrder; m++) {
-                        moments[m] = pageReader.readBits(dtypeSize);
+                    long chunkMultsOffset = rawByteOffset;
+                    long adjByteOffset = 0L;
+                    int nPages = chunkInfo.getPagesCount();
+                    for (int p = 0; p < nPages; p++) {
+                        int pageN = chunkInfo.getPages(p).getNValues();
+                        MemorySegment pageBuf = ctx.buffer(bufIdx++);
+                        decodeIntMultPage(primaryTans, primaryAnsSizeLog, deltaOrder,
+                                secondaryTans, secondaryAnsSizeLog, secondaryDeltaOrder,
+                                dtypeSize, pageBuf, pageN,
+                                rawLatents, rawByteOffset,
+                                rawAdjs, adjByteOffset);
+                        rawByteOffset += (long) pageN * Long.BYTES;
+                        adjByteOffset += (long) pageN * Long.BYTES;
                     }
 
-                    int[] stateIdxs = new int[PcoTansDecoder.ANS_INTERLEAVING];
-                    for (int i = 0; i < PcoTansDecoder.ANS_INTERLEAVING; i++) {
-                        stateIdxs[i] = (int) pageReader.readBits(chunkMeta.ansSizeLog());
+                    // Combine: rawLatents[i] = (mult[i] * base + adj[i]) & mask
+                    long mask = typeMask(dtypeSize);
+                    for (int i = 0; i < chunkN; i++) {
+                        long off = chunkMultsOffset + (long) i * Long.BYTES;
+                        long mult = rawLatents.get(LE_LONG, off);
+                        long adj = rawAdjs.get(LE_LONG, (long) i * Long.BYTES);
+                        rawLatents.set(LE_LONG, off, (mult * base + adj) & mask);
                     }
-                    pageReader.alignToByte();
-
-                    int decodedN = pageN - deltaOrder;
-                    tans.decodePage(pageReader, stateIdxs, decodedN, rawLatents, rawByteOffset);
-
-                    if (deltaOrder > 0) {
-                        applyConsecutiveDelta(rawLatents, rawByteOffset, pageN, moments, dtypeSize);
-                    }
-
-                    rawByteOffset += (long) pageN * Long.BYTES;
                 }
             }
 
@@ -145,6 +171,100 @@ public final class PcoEncoding implements Encoding {
             }
 
             return toArray(dtype, n, out);
+        }
+
+        /// Decode one Classic-mode page into rawLatents and return the updated byte offset.
+        private static long decodeClassicPage(PcoTansDecoder tans, int ansSizeLog, int deltaOrder,
+                int dtypeSize, MemorySegment pageBuf, int pageN,
+                MemorySegment rawLatents, long rawByteOffset) {
+            LeBitReader pageReader = new LeBitReader(pageBuf);
+
+            long[] moments = new long[deltaOrder];
+            for (int m = 0; m < deltaOrder; m++) {
+                moments[m] = pageReader.readBits(dtypeSize);
+            }
+
+            int[] stateIdxs = new int[PcoTansDecoder.ANS_INTERLEAVING];
+            for (int i = 0; i < PcoTansDecoder.ANS_INTERLEAVING; i++) {
+                stateIdxs[i] = (int) pageReader.readBits(ansSizeLog);
+            }
+            pageReader.alignToByte();
+
+            int decodedN = pageN - deltaOrder;
+            tans.decodePage(pageReader, stateIdxs, decodedN, rawLatents, rawByteOffset);
+
+            if (deltaOrder > 0) {
+                applyConsecutiveDelta(rawLatents, rawByteOffset, pageN, moments, dtypeSize);
+            }
+
+            return rawByteOffset + (long) pageN * Long.BYTES;
+        }
+
+        /// Decode one IntMult-mode page: primary latents into rawMults, secondary into rawAdjs.
+        ///
+        /// Page body is interleaved per 256-value batch:
+        /// [primary ANS+offsets for preDeltaN] [secondary ANS+offsets for secondaryPreDeltaN] …
+        private static void decodeIntMultPage(
+                PcoTansDecoder primaryTans, int primaryAnsSizeLog, int deltaOrder,
+                PcoTansDecoder secondaryTans, int secondaryAnsSizeLog, int secondaryDeltaOrder,
+                int dtypeSize, MemorySegment pageBuf, int pageN,
+                MemorySegment rawMults, long multsOffset,
+                MemorySegment rawAdjs, long adjsOffset) {
+            LeBitReader pageReader = new LeBitReader(pageBuf);
+
+            // Primary page header: moments + ANS states.
+            long[] primaryMoments = new long[deltaOrder];
+            for (int m = 0; m < deltaOrder; m++) {
+                primaryMoments[m] = pageReader.readBits(dtypeSize);
+            }
+            int[] primaryStateIdxs = new int[PcoTansDecoder.ANS_INTERLEAVING];
+            for (int i = 0; i < PcoTansDecoder.ANS_INTERLEAVING; i++) {
+                primaryStateIdxs[i] = (int) pageReader.readBits(primaryAnsSizeLog);
+            }
+
+            // Secondary page header: moments + ANS states.
+            long[] secondaryMoments = new long[secondaryDeltaOrder];
+            for (int m = 0; m < secondaryDeltaOrder; m++) {
+                secondaryMoments[m] = pageReader.readBits(dtypeSize);
+            }
+            int[] secondaryStateIdxs = new int[PcoTansDecoder.ANS_INTERLEAVING];
+            for (int i = 0; i < PcoTansDecoder.ANS_INTERLEAVING; i++) {
+                secondaryStateIdxs[i] = (int) pageReader.readBits(secondaryAnsSizeLog);
+            }
+
+            pageReader.alignToByte();
+
+            long[] batchLowersP = new long[PcoTansDecoder.BATCH_N];
+            int[] batchOffsetBitsP = new int[PcoTansDecoder.BATCH_N];
+            long[] batchLowersS = new long[PcoTansDecoder.BATCH_N];
+            int[] batchOffsetBitsS = new int[PcoTansDecoder.BATCH_N];
+
+            int nRemaining = pageN;
+            long primaryPos = multsOffset;
+            long secondaryPos = adjsOffset;
+
+            while (nRemaining > 0) {
+                int batchN = Math.min(nRemaining, PcoTansDecoder.BATCH_N);
+                // pre_delta_len = min(batchN, max(0, nRemaining - deltaOrder))
+                int primaryPreDeltaN = Math.min(batchN, Math.max(0, nRemaining - deltaOrder));
+                int secondaryPreDeltaN = Math.min(batchN, Math.max(0, nRemaining - secondaryDeltaOrder));
+
+                primaryTans.decodeBatch(pageReader, primaryStateIdxs, primaryPreDeltaN,
+                        batchLowersP, batchOffsetBitsP, rawMults, primaryPos);
+                secondaryTans.decodeBatch(pageReader, secondaryStateIdxs, secondaryPreDeltaN,
+                        batchLowersS, batchOffsetBitsS, rawAdjs, secondaryPos);
+
+                primaryPos += (long) batchN * Long.BYTES;
+                secondaryPos += (long) batchN * Long.BYTES;
+                nRemaining -= batchN;
+            }
+
+            if (deltaOrder > 0) {
+                applyConsecutiveDelta(rawMults, multsOffset, pageN, primaryMoments, dtypeSize);
+            }
+            if (secondaryDeltaOrder > 0) {
+                applyConsecutiveDelta(rawAdjs, adjsOffset, pageN, secondaryMoments, dtypeSize);
+            }
         }
 
         /// Inverse of pcodec {@code to_latent_ordered}: maps raw U-latent back to typed bits.
@@ -173,9 +293,9 @@ public final class PcoEncoding implements Encoding {
         ///
         /// <p>Pcodec encodes deltas with a sign-centering XOR (toggle_center = XOR dtype_mid),
         /// then removes it on decode.  After toggle_center, the cumulative sum restores the
-        /// original U-latents.  The {@code rawLatents} buffer beyond the {@code decodedN}
-        /// positions is zero (arena-initialized); toggle_center(0) = dtype_mid, which is
-        /// treated as junk and harmlessly overwritten during the reconstruction pass.
+        /// original U-latents.  The buffer beyond the {@code decodedN} positions is zero
+        /// (arena-initialized); toggle_center(0) = dtype_mid, which is treated as junk and
+        /// harmlessly overwritten during the reconstruction pass.
         private static void applyConsecutiveDelta(MemorySegment rawLatents, long offset,
                 int pageN, long[] moments, int dtypeSize) {
             long mid = typeMid(dtypeSize);
@@ -256,28 +376,49 @@ public final class PcoEncoding implements Encoding {
             LeBitReader r = new LeBitReader(buf);
 
             int modeNibble = (int) r.readBits(4);
-            if (modeNibble != 0) {
+            long base = 0L;
+            if (modeNibble == 1) {
+                // IntMult: read base value (dtypeSize bits, uncompressed).
+                base = r.readBits(dtypeSize);
+            } else if (modeNibble != 0) {
                 throw new VortexException(EncodingId.VORTEX_PCO,
-                        "pco mode " + modeNibble + " not yet implemented (only Classic=0)");
+                        "pco mode " + modeNibble + " not yet implemented (Classic=0, IntMult=1 supported)");
             }
 
             // delta_encoding_variant: 4 bits. 0=NoOp, 1=Consecutive (3b order + 1b secondary_uses_delta).
             int deltaVariant = (int) r.readBits(4);
             int deltaOrder = 0;
+            boolean secondaryUsesDelta = false;
             if (deltaVariant == 0) {
                 // NoOp — no extra bits.
             } else if (deltaVariant == 1) {
                 deltaOrder = (int) r.readBits(3); // BITS_TO_ENCODE_DELTA_ENCODING_ORDER
-                r.readBits(1);                    // secondary_uses_delta (not needed for Classic mode)
+                secondaryUsesDelta = r.readBits(1) != 0;
             } else {
                 throw new VortexException(EncodingId.VORTEX_PCO,
                         "pco delta variant " + deltaVariant + " not yet implemented");
             }
 
-            // One primary latent variable for Classic mode.
+            // Primary latent variable.
             int ansSizeLog = (int) r.readBits(4);
             int nBins = (int) r.readBits(15);
+            PcoBin[] bins = readBins(r, nBins, ansSizeLog, dtypeSize);
 
+            // Secondary latent variable (IntMult only).
+            int secondaryAnsSizeLog = 0;
+            PcoBin[] secondaryBins = new PcoBin[0];
+            if (modeNibble == 1) {
+                secondaryAnsSizeLog = (int) r.readBits(4);
+                int nSecondaryBins = (int) r.readBits(15);
+                secondaryBins = readBins(r, nSecondaryBins, secondaryAnsSizeLog, dtypeSize);
+            }
+            r.alignToByte();
+
+            return new PcoChunkMeta(modeNibble, base, ansSizeLog, deltaOrder, bins,
+                    secondaryUsesDelta, secondaryAnsSizeLog, secondaryBins);
+        }
+
+        private static PcoBin[] readBins(LeBitReader r, int nBins, int ansSizeLog, int dtypeSize) {
             PcoBin[] bins = new PcoBin[nBins];
             int offsetBitsWidth = bitsToEncodeOffsetBits(dtypeSize);
             for (int b = 0; b < nBins; b++) {
@@ -286,9 +427,7 @@ public final class PcoEncoding implements Encoding {
                 int offsetBits = (int) r.readBits(offsetBitsWidth);
                 bins[b] = new PcoBin(weight, lower, offsetBits);
             }
-            r.alignToByte();
-
-            return new PcoChunkMeta(ansSizeLog, deltaOrder, bins);
+            return bins;
         }
 
         private static EncodingProtos.PcoMetadata parseMeta(DecodeContext ctx) {
@@ -319,6 +458,8 @@ public final class PcoEncoding implements Encoding {
         }
     }
 
-    private record PcoChunkMeta(int ansSizeLog, int deltaOrder, PcoBin[] bins) {
+    private record PcoChunkMeta(int mode, long base,
+                                 int ansSizeLog, int deltaOrder, PcoBin[] bins,
+                                 boolean secondaryUsesDelta, int secondaryAnsSizeLog, PcoBin[] secondaryBins) {
     }
 }

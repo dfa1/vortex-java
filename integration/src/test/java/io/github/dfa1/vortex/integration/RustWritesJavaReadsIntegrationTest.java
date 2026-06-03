@@ -217,10 +217,10 @@ class RustWritesJavaReadsIntegrationTest {
 
 	// ── S3 fixture round-trip: Rust-written pco → Java reader ────────────────
 
-	@Disabled("pco.vortex has IntMult columns (mode=1) — blocked on Phase 8")
+	@Disabled("pco.vortex has FloatMult columns (mode=2) — blocked on Phase 9")
 	@Test
 	void s3_pcoVortex_javaDecodeMatchesJni(@TempDir Path tmp) throws Exception {
-		// Given — pco.vortex: synthetic file with all pco ptypes; Classic+Consecutive mode
+		// Given — pco.vortex: synthetic file with all pco ptypes; Classic+Consecutive+IntMult+FloatMult modes
 		assumeNetworkAvailable();
 		Path file = downloadIfMissing(tmp, "pco.vortex");
 		String col = firstI64Column(file);

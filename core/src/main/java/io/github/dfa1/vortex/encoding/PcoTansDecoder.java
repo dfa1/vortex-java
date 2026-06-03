@@ -95,31 +95,38 @@ final class PcoTansDecoder {
     /// {@code ansStateIdxs} is modified in place and not valid after return.
     void decodePage(LeBitReader reader, int[] ansStateIdxs, int n,
                     MemorySegment out, long outByteOffset) {
-        int remaining = n;
-        long pos = outByteOffset;
         long[] batchLowers = new long[BATCH_N];
         int[] batchOffsetBits = new int[BATCH_N];
-
+        int remaining = n;
+        long pos = outByteOffset;
         while (remaining > 0) {
             int batchN = Math.min(remaining, BATCH_N);
-
-            // Phase 1 — read all ANS bin indices for this batch (sequential bit stream).
-            for (int i = 0; i < batchN; i++) {
-                int si = ansStateIdxs[i % ANS_INTERLEAVING];
-                batchLowers[i] = stateLowers[si];
-                batchOffsetBits[i] = nodeOffsetBits[si];
-                long ansVal = reader.readBits(bitsToRead[si]);
-                ansStateIdxs[i % ANS_INTERLEAVING] = nextStateIdxBase[si] + (int) ansVal;
-            }
-
-            // Phase 2 — read all offsets and reconstruct latents.
-            for (int i = 0; i < batchN; i++) {
-                long offset = reader.readBits(batchOffsetBits[i]);
-                out.set(LE_LONG, pos, batchLowers[i] + offset);
-                pos += Long.BYTES;
-            }
-
+            decodeBatch(reader, ansStateIdxs, batchN, batchLowers, batchOffsetBits, out, pos);
+            pos += (long) batchN * Long.BYTES;
             remaining -= batchN;
+        }
+    }
+
+    /// Decode exactly {@code batchN} latent values into {@code out[outByteOffset..]} and advance
+    /// the ANS states.
+    ///
+    /// {@code batchLowers} and {@code batchOffsetBits} are caller-provided scratch arrays of
+    /// length ≥ {@code batchN}; they are fully overwritten before use.
+    void decodeBatch(LeBitReader reader, int[] ansStateIdxs, int batchN,
+                     long[] batchLowers, int[] batchOffsetBits,
+                     MemorySegment out, long outByteOffset) {
+        for (int i = 0; i < batchN; i++) {
+            int si = ansStateIdxs[i % ANS_INTERLEAVING];
+            batchLowers[i] = stateLowers[si];
+            batchOffsetBits[i] = nodeOffsetBits[si];
+            long ansVal = reader.readBits(bitsToRead[si]);
+            ansStateIdxs[i % ANS_INTERLEAVING] = nextStateIdxBase[si] + (int) ansVal;
+        }
+        long pos = outByteOffset;
+        for (int i = 0; i < batchN; i++) {
+            long offset = reader.readBits(batchOffsetBits[i]);
+            out.set(LE_LONG, pos, batchLowers[i] + offset);
+            pos += Long.BYTES;
         }
     }
 }
