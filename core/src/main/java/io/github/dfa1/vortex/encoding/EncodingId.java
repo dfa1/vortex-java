@@ -42,6 +42,11 @@ public enum EncodingId {
 	FASTLANES_FOR("fastlanes.for"),
 	FASTLANES_DELTA("fastlanes.delta"),
 	FASTLANES_RLE("fastlanes.rle"),
+
+	// Known in Rust but not yet implemented; registered so EncodingId.from() doesn't throw
+	VORTEX_MASKED("vortex.masked"),
+	VORTEX_PATCHED("vortex.patched"),
+	VORTEX_VARIANT("vortex.variant"),
 ;
 
 	// O(1) access to EncodingId by its string representation

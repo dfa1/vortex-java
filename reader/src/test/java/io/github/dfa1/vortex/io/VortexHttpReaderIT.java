@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.ListArray;
 import io.github.dfa1.vortex.core.array.ListViewArray;
 import io.github.dfa1.vortex.scan.ScanOptions;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -108,6 +109,66 @@ class VortexHttpReaderIT {
 	void scan_fixture_decodesAllRows(String fixture) throws Exception {
 		// Given
 		URI uri = BASE.resolve(fixture);
+
+		// When
+		long totalRows = 0;
+		try (var sut = VortexHttpReader.open(uri);
+		     var iter = sut.scan(ScanOptions.all())) {
+			while (iter.hasNext()) {
+				totalRows += iter.next().rowCount();
+			}
+		}
+
+		// Then
+		assertThat(totalRows).isGreaterThan(0);
+	}
+
+	// vortex.masked / vortex.patched / vortex.variant: IDs known, decoders not yet implemented.
+	// No S3 fixture exists in v0.72.0 — enable these tests once fixtures are published.
+
+	@Disabled("no S3 fixture in v0.72.0")
+	@Test
+	void scan_maskedVortex_decodesAllRows() throws Exception {
+		// Given
+		URI uri = BASE.resolve("masked.vortex");
+
+		// When
+		long totalRows = 0;
+		try (var sut = VortexHttpReader.open(uri);
+		     var iter = sut.scan(ScanOptions.all())) {
+			while (iter.hasNext()) {
+				totalRows += iter.next().rowCount();
+			}
+		}
+
+		// Then
+		assertThat(totalRows).isGreaterThan(0);
+	}
+
+	@Disabled("no S3 fixture in v0.72.0")
+	@Test
+	void scan_patchedVortex_decodesAllRows() throws Exception {
+		// Given
+		URI uri = BASE.resolve("patched.vortex");
+
+		// When
+		long totalRows = 0;
+		try (var sut = VortexHttpReader.open(uri);
+		     var iter = sut.scan(ScanOptions.all())) {
+			while (iter.hasNext()) {
+				totalRows += iter.next().rowCount();
+			}
+		}
+
+		// Then
+		assertThat(totalRows).isGreaterThan(0);
+	}
+
+	@Disabled("no S3 fixture in v0.72.0")
+	@Test
+	void scan_variantVortex_decodesAllRows() throws Exception {
+		// Given
+		URI uri = BASE.resolve("variant.vortex");
 
 		// When
 		long totalRows = 0;
