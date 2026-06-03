@@ -46,12 +46,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.data.Percentage.withPercentage;
 
 /// Cross-decoder correctness: downloads each S3 fixture once, then compares row counts,
-/// numeric column sums, and string byte-length sums from the Rust JNI reader and the
+/// numeric column sums, and string byte-length sums from the Rust reader and the
 /// Java {@link VortexReader}.
 ///
 /// Both readers decode the same local bytes — no auth, no network dependency during
 /// decode. A mismatch in any column value points to a decoding bug in the Java reader.
-class VortexHttpReaderJniComparisonIntegrationTest {
+class RustJavaReaderComparisonIntegrationTest {
 
 	private static final URI BASE =
 			URI.create("https://vortex-compat-fixtures.s3.amazonaws.com/v0.72.0/arrays/");
@@ -95,37 +95,37 @@ class VortexHttpReaderJniComparisonIntegrationTest {
 			"zigzag.vortex",
 			// zstd.vortex excluded: ZstdEncoding dictionary mode not yet implemented
 	})
-	void jni_vs_javaReader_statsMatch(String fixture, @TempDir Path tmp) throws Exception {
+	void rust_vs_javaReader_statsMatch(String fixture, @TempDir Path tmp) throws Exception {
 		// Given
 		Path local = download(BASE.resolve(fixture), tmp);
 
 		// When
-		Stats jniStats = jniStats(local);
+		Stats rustStats = rustStats(local);
 		Stats javaStats = javaStats(local);
 
 		// Then — row counts match
 		assertThat(javaStats.rowCount())
 				.as("row count in %s", fixture)
-				.isEqualTo(jniStats.rowCount());
+				.isEqualTo(rustStats.rowCount());
 
-		// Then — numeric column sums match (skip if no numeric cols in JNI output)
-		if (!jniStats.numSums().isEmpty()) {
+		// Then — numeric column sums match (skip if no numeric cols in Rust output)
+		if (!rustStats.numSums().isEmpty()) {
 			assertThat(javaStats.numSums().keySet())
 					.as("numeric column names in %s", fixture)
-					.containsExactlyInAnyOrderElementsOf(jniStats.numSums().keySet());
-			for (Map.Entry<String, Double> entry : jniStats.numSums().entrySet()) {
+					.containsExactlyInAnyOrderElementsOf(rustStats.numSums().keySet());
+			for (Map.Entry<String, Double> entry : rustStats.numSums().entrySet()) {
 				assertThat(javaStats.numSums().get(entry.getKey()))
 						.describedAs("numeric column '%s' sum in %s", entry.getKey(), fixture)
 						.isCloseTo(entry.getValue(), withPercentage(0.001));
 			}
 		}
 
-		// Then — string byte-length sums match for cols JNI tracks (JNI may miss LargeVarChar etc.)
-		if (!jniStats.strLenSums().isEmpty()) {
+		// Then — string byte-length sums match for cols Rust tracks (Rust may miss LargeVarChar etc.)
+		if (!rustStats.strLenSums().isEmpty()) {
 			assertThat(javaStats.strLenSums().keySet())
 					.as("string column names in %s", fixture)
-					.containsAll(jniStats.strLenSums().keySet());
-			for (Map.Entry<String, Long> entry : jniStats.strLenSums().entrySet()) {
+					.containsAll(rustStats.strLenSums().keySet());
+			for (Map.Entry<String, Long> entry : rustStats.strLenSums().entrySet()) {
 				assertThat(javaStats.strLenSums().get(entry.getKey()))
 						.describedAs("string column '%s' byte-length sum in %s", entry.getKey(), fixture)
 						.isEqualTo(entry.getValue());
@@ -145,9 +145,9 @@ class VortexHttpReaderJniComparisonIntegrationTest {
 		return file;
 	}
 
-	// ── JNI (Rust) side ───────────────────────────────────────────────────────
+	// ── Rust side ────────────────────────────────────────────────────────────
 
-	private static Stats jniStats(Path file) throws Exception {
+	private static Stats rustStats(Path file) throws Exception {
 		Map<String, Double> numSums = new LinkedHashMap<>();
 		Map<String, Long> strLenSums = new LinkedHashMap<>();
 		long rowCount = 0;
@@ -351,7 +351,7 @@ class VortexHttpReaderJniComparisonIntegrationTest {
 			return null;
 		}
 		if (!(v.dtype() instanceof DType.Utf8)) {
-			return null; // JNI only reports VarChar (UTF-8), skip Binary columns
+			return null; // Rust only reports VarChar (UTF-8), skip Binary columns
 		}
 		long[] total = {0L};
 		v.forEachByteLength(len -> total[0] += len);
