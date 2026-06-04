@@ -6208,692 +6208,6 @@ public final class EncodingProtos extends com.google.protobuf.GeneratedFile {
 
   }
 
-  public interface DictLayoutMetadataOrBuilder extends
-      // @@protoc_insertion_point(interface_extends:vortex.encodings.DictLayoutMetadata)
-      com.google.protobuf.MessageOrBuilder {
-
-    /**
-     * <code>.vortex.dtype.PType codes_ptype = 1;</code>
-     * @return The enum numeric value on the wire for codesPtype.
-     */
-    int getCodesPtypeValue();
-    /**
-     * <code>.vortex.dtype.PType codes_ptype = 1;</code>
-     * @return The codesPtype.
-     */
-    io.github.dfa1.vortex.proto.DTypeProtos.PType getCodesPtype();
-
-    /**
-     * <code>optional bool is_nullable_codes = 2;</code>
-     * @return Whether the isNullableCodes field is set.
-     */
-    boolean hasIsNullableCodes();
-    /**
-     * <code>optional bool is_nullable_codes = 2;</code>
-     * @return The isNullableCodes.
-     */
-    boolean getIsNullableCodes();
-
-    /**
-     * <code>optional bool all_values_referenced = 3;</code>
-     * @return Whether the allValuesReferenced field is set.
-     */
-    boolean hasAllValuesReferenced();
-    /**
-     * <code>optional bool all_values_referenced = 3;</code>
-     * @return The allValuesReferenced.
-     */
-    boolean getAllValuesReferenced();
-  }
-  /**
-   * <pre>
-   * Layout-level dict metadata (different field ordering from codec DictMetadata).
-   * </pre>
-   *
-   * Protobuf type {@code vortex.encodings.DictLayoutMetadata}
-   */
-  public static final class DictLayoutMetadata extends
-      com.google.protobuf.GeneratedMessage implements
-      // @@protoc_insertion_point(message_implements:vortex.encodings.DictLayoutMetadata)
-      DictLayoutMetadataOrBuilder {
-  private static final long serialVersionUID = 0L;
-    static {
-      com.google.protobuf.RuntimeVersion.validateProtobufGencodeVersion(
-        com.google.protobuf.RuntimeVersion.RuntimeDomain.PUBLIC,
-        /* major= */ 4,
-        /* minor= */ 35,
-        /* patch= */ 0,
-        /* suffix= */ "",
-        "DictLayoutMetadata");
-    }
-    // Use DictLayoutMetadata.newBuilder() to construct.
-    private DictLayoutMetadata(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
-      super(builder);
-    }
-    private DictLayoutMetadata() {
-      codesPtype_ = 0;
-    }
-
-    public static final com.google.protobuf.Descriptors.Descriptor
-        getDescriptor() {
-      return io.github.dfa1.vortex.proto.EncodingProtos.internal_static_vortex_encodings_DictLayoutMetadata_descriptor;
-    }
-
-    @java.lang.Override
-    public com.google.protobuf.Descriptors.Descriptor getDescriptorForType() {
-      return io.github.dfa1.vortex.proto.EncodingProtos.internal_static_vortex_encodings_DictLayoutMetadata_descriptor;
-    }
-
-    @java.lang.Override
-    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
-        internalGetFieldAccessorTable() {
-      return io.github.dfa1.vortex.proto.EncodingProtos.internal_static_vortex_encodings_DictLayoutMetadata_fieldAccessorTable
-          .ensureFieldAccessorsInitialized(
-              io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata.class, io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata.Builder.class);
-    }
-
-    private int bitField0_;
-    public static final int CODES_PTYPE_FIELD_NUMBER = 1;
-    private int codesPtype_ = 0;
-    /**
-     * <code>.vortex.dtype.PType codes_ptype = 1;</code>
-     * @return The enum numeric value on the wire for codesPtype.
-     */
-    @java.lang.Override public int getCodesPtypeValue() {
-      return codesPtype_;
-    }
-    /**
-     * <code>.vortex.dtype.PType codes_ptype = 1;</code>
-     * @return The codesPtype.
-     */
-    @java.lang.Override public io.github.dfa1.vortex.proto.DTypeProtos.PType getCodesPtype() {
-      io.github.dfa1.vortex.proto.DTypeProtos.PType result = io.github.dfa1.vortex.proto.DTypeProtos.PType.forNumber(codesPtype_);
-      return result == null ? io.github.dfa1.vortex.proto.DTypeProtos.PType.UNRECOGNIZED : result;
-    }
-
-    public static final int IS_NULLABLE_CODES_FIELD_NUMBER = 2;
-    private boolean isNullableCodes_ = false;
-    /**
-     * <code>optional bool is_nullable_codes = 2;</code>
-     * @return Whether the isNullableCodes field is set.
-     */
-    @java.lang.Override
-    public boolean hasIsNullableCodes() {
-      return ((bitField0_ & 0x00000001) != 0);
-    }
-    /**
-     * <code>optional bool is_nullable_codes = 2;</code>
-     * @return The isNullableCodes.
-     */
-    @java.lang.Override
-    public boolean getIsNullableCodes() {
-      return isNullableCodes_;
-    }
-
-    public static final int ALL_VALUES_REFERENCED_FIELD_NUMBER = 3;
-    private boolean allValuesReferenced_ = false;
-    /**
-     * <code>optional bool all_values_referenced = 3;</code>
-     * @return Whether the allValuesReferenced field is set.
-     */
-    @java.lang.Override
-    public boolean hasAllValuesReferenced() {
-      return ((bitField0_ & 0x00000002) != 0);
-    }
-    /**
-     * <code>optional bool all_values_referenced = 3;</code>
-     * @return The allValuesReferenced.
-     */
-    @java.lang.Override
-    public boolean getAllValuesReferenced() {
-      return allValuesReferenced_;
-    }
-
-    private byte memoizedIsInitialized = -1;
-    @java.lang.Override
-    public final boolean isInitialized() {
-      byte isInitialized = memoizedIsInitialized;
-      if (isInitialized == 1) return true;
-      if (isInitialized == 0) return false;
-
-      memoizedIsInitialized = 1;
-      return true;
-    }
-
-    @java.lang.Override
-    public void writeTo(com.google.protobuf.CodedOutputStream output)
-                        throws java.io.IOException {
-      if (codesPtype_ != io.github.dfa1.vortex.proto.DTypeProtos.PType.U8.getNumber()) {
-        output.writeEnum(1, codesPtype_);
-      }
-      if (((bitField0_ & 0x00000001) != 0)) {
-        output.writeBool(2, isNullableCodes_);
-      }
-      if (((bitField0_ & 0x00000002) != 0)) {
-        output.writeBool(3, allValuesReferenced_);
-      }
-      getUnknownFields().writeTo(output);
-    }
-    private int computeSerializedSize_0() {
-      int size = 0;
-      if (codesPtype_ != io.github.dfa1.vortex.proto.DTypeProtos.PType.U8.getNumber()) {
-        size += com.google.protobuf.CodedOutputStream
-          .computeEnumSize(1, codesPtype_);
-      }
-      if (((bitField0_ & 0x00000001) != 0)) {
-        size += com.google.protobuf.CodedOutputStream
-          .computeBoolSize(2, isNullableCodes_);
-      }
-      if (((bitField0_ & 0x00000002) != 0)) {
-        size += com.google.protobuf.CodedOutputStream
-          .computeBoolSize(3, allValuesReferenced_);
-      }
-      return size;
-    }
-    @java.lang.Override
-    public int getSerializedSize() {
-      int size = memoizedSize;
-      if (size != -1) return size;
-
-      size = 0;
-      size += computeSerializedSize_0();
-      size += getUnknownFields().getSerializedSize();
-      memoizedSize = size;
-      return size;
-    }
-
-    @java.lang.Override
-    public boolean equals(final java.lang.Object obj) {
-      if (obj == this) {
-       return true;
-      }
-      if (!(obj instanceof io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata)) {
-        return super.equals(obj);
-      }
-      io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata other = (io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata) obj;
-
-      if (codesPtype_ != other.codesPtype_) return false;
-      if (hasIsNullableCodes() != other.hasIsNullableCodes()) return false;
-      if (hasIsNullableCodes()) {
-        if (getIsNullableCodes()
-            != other.getIsNullableCodes()) return false;
-      }
-      if (hasAllValuesReferenced() != other.hasAllValuesReferenced()) return false;
-      if (hasAllValuesReferenced()) {
-        if (getAllValuesReferenced()
-            != other.getAllValuesReferenced()) return false;
-      }
-      if (!getUnknownFields().equals(other.getUnknownFields())) return false;
-      return true;
-    }
-
-    @java.lang.Override
-    public int hashCode() {
-      if (memoizedHashCode != 0) {
-        return memoizedHashCode;
-      }
-      int hash = 41;
-      hash = (19 * hash) + getDescriptor().hashCode();
-      hash = (37 * hash) + CODES_PTYPE_FIELD_NUMBER;
-      hash = (53 * hash) + codesPtype_;
-      if (hasIsNullableCodes()) {
-        hash = (37 * hash) + IS_NULLABLE_CODES_FIELD_NUMBER;
-        hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
-            getIsNullableCodes());
-      }
-      if (hasAllValuesReferenced()) {
-        hash = (37 * hash) + ALL_VALUES_REFERENCED_FIELD_NUMBER;
-        hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
-            getAllValuesReferenced());
-      }
-      hash = (29 * hash) + getUnknownFields().hashCode();
-      memoizedHashCode = hash;
-      return hash;
-    }
-
-    public static io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata parseFrom(
-        java.nio.ByteBuffer data)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data);
-    }
-    public static io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata parseFrom(
-        java.nio.ByteBuffer data,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data, extensionRegistry);
-    }
-    public static io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata parseFrom(
-        com.google.protobuf.ByteString data)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data);
-    }
-    public static io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata parseFrom(
-        com.google.protobuf.ByteString data,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data, extensionRegistry);
-    }
-    public static io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata parseFrom(byte[] data)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data);
-    }
-    public static io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata parseFrom(
-        byte[] data,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws com.google.protobuf.InvalidProtocolBufferException {
-      return PARSER.parseFrom(data, extensionRegistry);
-    }
-    public static io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata parseFrom(java.io.InputStream input)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
-          .parseWithIOException(PARSER, input);
-    }
-    public static io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata parseFrom(
-        java.io.InputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
-          .parseWithIOException(PARSER, input, extensionRegistry);
-    }
-
-    public static io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata parseDelimitedFrom(java.io.InputStream input)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
-          .parseDelimitedWithIOException(PARSER, input);
-    }
-
-    public static io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata parseDelimitedFrom(
-        java.io.InputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
-          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
-    }
-    public static io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata parseFrom(
-        com.google.protobuf.CodedInputStream input)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
-          .parseWithIOException(PARSER, input);
-    }
-    public static io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata parseFrom(
-        com.google.protobuf.CodedInputStream input,
-        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-        throws java.io.IOException {
-      return com.google.protobuf.GeneratedMessage
-          .parseWithIOException(PARSER, input, extensionRegistry);
-    }
-
-    @java.lang.Override
-    public Builder newBuilderForType() { return newBuilder(); }
-    public static Builder newBuilder() {
-      return DEFAULT_INSTANCE.toBuilder();
-    }
-    public static Builder newBuilder(io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata prototype) {
-      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
-    }
-    @java.lang.Override
-    public Builder toBuilder() {
-      return this == DEFAULT_INSTANCE
-          ? new Builder() : new Builder().mergeFrom(this);
-    }
-
-    @java.lang.Override
-    protected Builder newBuilderForType(
-        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
-      Builder builder = new Builder(parent);
-      return builder;
-    }
-    /**
-     * <pre>
-     * Layout-level dict metadata (different field ordering from codec DictMetadata).
-     * </pre>
-     *
-     * Protobuf type {@code vortex.encodings.DictLayoutMetadata}
-     */
-    public static final class Builder extends
-        com.google.protobuf.GeneratedMessage.Builder<Builder> implements
-        // @@protoc_insertion_point(builder_implements:vortex.encodings.DictLayoutMetadata)
-        io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadataOrBuilder {
-      public static final com.google.protobuf.Descriptors.Descriptor
-          getDescriptor() {
-        return io.github.dfa1.vortex.proto.EncodingProtos.internal_static_vortex_encodings_DictLayoutMetadata_descriptor;
-      }
-
-      @java.lang.Override
-      protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
-          internalGetFieldAccessorTable() {
-        return io.github.dfa1.vortex.proto.EncodingProtos.internal_static_vortex_encodings_DictLayoutMetadata_fieldAccessorTable
-            .ensureFieldAccessorsInitialized(
-                io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata.class, io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata.Builder.class);
-      }
-
-      // Construct using io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata.newBuilder()
-      private Builder() {
-
-      }
-
-      private Builder(
-          com.google.protobuf.GeneratedMessage.BuilderParent parent) {
-        super(parent);
-
-      }
-      @java.lang.Override
-      public Builder clear() {
-        super.clear();
-        bitField0_ = 0;
-        codesPtype_ = 0;
-        isNullableCodes_ = false;
-        allValuesReferenced_ = false;
-        return this;
-      }
-
-      @java.lang.Override
-      public com.google.protobuf.Descriptors.Descriptor
-          getDescriptorForType() {
-        return io.github.dfa1.vortex.proto.EncodingProtos.internal_static_vortex_encodings_DictLayoutMetadata_descriptor;
-      }
-
-      @java.lang.Override
-      public io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata getDefaultInstanceForType() {
-        return io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata.getDefaultInstance();
-      }
-
-      @java.lang.Override
-      public io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata build() {
-        io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata result = buildPartial();
-        if (!result.isInitialized()) {
-          throw newUninitializedMessageException(result);
-        }
-        return result;
-      }
-
-      @java.lang.Override
-      public io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata buildPartial() {
-        io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata result = new io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata(this);
-        if (bitField0_ != 0) { buildPartial0(result); }
-        onBuilt();
-        return result;
-      }
-
-      private void buildPartial0(io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata result) {
-        int from_bitField0_ = bitField0_;
-        if (((from_bitField0_ & 0x00000001) != 0)) {
-          result.codesPtype_ = codesPtype_;
-        }
-        int to_bitField0_ = 0;
-        if (((from_bitField0_ & 0x00000002) != 0)) {
-          result.isNullableCodes_ = isNullableCodes_;
-          to_bitField0_ |= 0x00000001;
-        }
-        if (((from_bitField0_ & 0x00000004) != 0)) {
-          result.allValuesReferenced_ = allValuesReferenced_;
-          to_bitField0_ |= 0x00000002;
-        }
-        result.bitField0_ |= to_bitField0_;
-      }
-
-      @java.lang.Override
-      public Builder mergeFrom(com.google.protobuf.Message other) {
-        if (other instanceof io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata) {
-          return mergeFrom((io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata)other);
-        } else {
-          super.mergeFrom(other);
-          return this;
-        }
-      }
-
-      public Builder mergeFrom(io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata other) {
-        if (other == io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata.getDefaultInstance()) return this;
-        if (other.codesPtype_ != 0) {
-          setCodesPtypeValue(other.getCodesPtypeValue());
-        }
-        if (other.hasIsNullableCodes()) {
-          setIsNullableCodes(other.getIsNullableCodes());
-        }
-        if (other.hasAllValuesReferenced()) {
-          setAllValuesReferenced(other.getAllValuesReferenced());
-        }
-        this.mergeUnknownFields(other.getUnknownFields());
-        onChanged();
-        return this;
-      }
-
-      @java.lang.Override
-      public final boolean isInitialized() {
-        return true;
-      }
-
-      @java.lang.Override
-      public Builder mergeFrom(
-          com.google.protobuf.CodedInputStream input,
-          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-          throws java.io.IOException {
-        if (extensionRegistry == null) {
-          throw new java.lang.NullPointerException();
-        }
-        try {
-          boolean done = false;
-          while (!done) {
-            int tag = input.readTag();
-            switch (tag) {
-              case 0:
-                done = true;
-                break;
-              case 8: {
-                codesPtype_ = input.readEnum();
-                bitField0_ |= 0x00000001;
-                break;
-              } // case 8
-              case 16: {
-                isNullableCodes_ = input.readBool();
-                bitField0_ |= 0x00000002;
-                break;
-              } // case 16
-              case 24: {
-                allValuesReferenced_ = input.readBool();
-                bitField0_ |= 0x00000004;
-                break;
-              } // case 24
-              default: {
-                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
-                  done = true; // was an endgroup tag
-                }
-                break;
-              } // default:
-            } // switch (tag)
-          } // while (!done)
-        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          throw e.unwrapIOException();
-        } finally {
-          onChanged();
-        } // finally
-        return this;
-      }
-      private int bitField0_;
-
-      private int codesPtype_ = 0;
-      /**
-       * <code>.vortex.dtype.PType codes_ptype = 1;</code>
-       * @return The enum numeric value on the wire for codesPtype.
-       */
-      @java.lang.Override public int getCodesPtypeValue() {
-        return codesPtype_;
-      }
-      /**
-       * <code>.vortex.dtype.PType codes_ptype = 1;</code>
-       * @param value The enum numeric value on the wire for codesPtype to set.
-       * @return This builder for chaining.
-       */
-      public Builder setCodesPtypeValue(int value) {
-        codesPtype_ = value;
-        bitField0_ |= 0x00000001;
-        onChanged();
-        return this;
-      }
-      /**
-       * <code>.vortex.dtype.PType codes_ptype = 1;</code>
-       * @return The codesPtype.
-       */
-      @java.lang.Override
-      public io.github.dfa1.vortex.proto.DTypeProtos.PType getCodesPtype() {
-        io.github.dfa1.vortex.proto.DTypeProtos.PType result = io.github.dfa1.vortex.proto.DTypeProtos.PType.forNumber(codesPtype_);
-        return result == null ? io.github.dfa1.vortex.proto.DTypeProtos.PType.UNRECOGNIZED : result;
-      }
-      /**
-       * <code>.vortex.dtype.PType codes_ptype = 1;</code>
-       * @param value The codesPtype to set.
-       * @throws IllegalArgumentException if UNRECOGNIZED is provided.
-       * @return This builder for chaining.
-       */
-      public Builder setCodesPtype(io.github.dfa1.vortex.proto.DTypeProtos.PType value) {
-        if (value == null) { throw new NullPointerException(); }
-        bitField0_ |= 0x00000001;
-        codesPtype_ = value.getNumber();
-        onChanged();
-        return this;
-      }
-      /**
-       * <code>.vortex.dtype.PType codes_ptype = 1;</code>
-       * @return This builder for chaining.
-       */
-      public Builder clearCodesPtype() {
-        bitField0_ = (bitField0_ & ~0x00000001);
-        codesPtype_ = 0;
-        onChanged();
-        return this;
-      }
-
-      private boolean isNullableCodes_ ;
-      /**
-       * <code>optional bool is_nullable_codes = 2;</code>
-       * @return Whether the isNullableCodes field is set.
-       */
-      @java.lang.Override
-      public boolean hasIsNullableCodes() {
-        return ((bitField0_ & 0x00000002) != 0);
-      }
-      /**
-       * <code>optional bool is_nullable_codes = 2;</code>
-       * @return The isNullableCodes.
-       */
-      @java.lang.Override
-      public boolean getIsNullableCodes() {
-        return isNullableCodes_;
-      }
-      /**
-       * <code>optional bool is_nullable_codes = 2;</code>
-       * @param value The isNullableCodes to set.
-       * @return This builder for chaining.
-       */
-      public Builder setIsNullableCodes(boolean value) {
-
-        isNullableCodes_ = value;
-        bitField0_ |= 0x00000002;
-        onChanged();
-        return this;
-      }
-      /**
-       * <code>optional bool is_nullable_codes = 2;</code>
-       * @return This builder for chaining.
-       */
-      public Builder clearIsNullableCodes() {
-        bitField0_ = (bitField0_ & ~0x00000002);
-        isNullableCodes_ = false;
-        onChanged();
-        return this;
-      }
-
-      private boolean allValuesReferenced_ ;
-      /**
-       * <code>optional bool all_values_referenced = 3;</code>
-       * @return Whether the allValuesReferenced field is set.
-       */
-      @java.lang.Override
-      public boolean hasAllValuesReferenced() {
-        return ((bitField0_ & 0x00000004) != 0);
-      }
-      /**
-       * <code>optional bool all_values_referenced = 3;</code>
-       * @return The allValuesReferenced.
-       */
-      @java.lang.Override
-      public boolean getAllValuesReferenced() {
-        return allValuesReferenced_;
-      }
-      /**
-       * <code>optional bool all_values_referenced = 3;</code>
-       * @param value The allValuesReferenced to set.
-       * @return This builder for chaining.
-       */
-      public Builder setAllValuesReferenced(boolean value) {
-
-        allValuesReferenced_ = value;
-        bitField0_ |= 0x00000004;
-        onChanged();
-        return this;
-      }
-      /**
-       * <code>optional bool all_values_referenced = 3;</code>
-       * @return This builder for chaining.
-       */
-      public Builder clearAllValuesReferenced() {
-        bitField0_ = (bitField0_ & ~0x00000004);
-        allValuesReferenced_ = false;
-        onChanged();
-        return this;
-      }
-
-      // @@protoc_insertion_point(builder_scope:vortex.encodings.DictLayoutMetadata)
-    }
-
-    // @@protoc_insertion_point(class_scope:vortex.encodings.DictLayoutMetadata)
-    private static final io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata DEFAULT_INSTANCE;
-    static {
-      DEFAULT_INSTANCE = new io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata();
-    }
-
-    public static io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata getDefaultInstance() {
-      return DEFAULT_INSTANCE;
-    }
-
-    private static final com.google.protobuf.Parser<DictLayoutMetadata>
-        PARSER = new com.google.protobuf.AbstractParser<DictLayoutMetadata>() {
-      @java.lang.Override
-      public DictLayoutMetadata parsePartialFrom(
-          com.google.protobuf.CodedInputStream input,
-          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
-          throws com.google.protobuf.InvalidProtocolBufferException {
-        Builder builder = newBuilder();
-        try {
-          builder.mergeFrom(input, extensionRegistry);
-        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-          throw e.setUnfinishedMessage(builder.buildPartial());
-        } catch (com.google.protobuf.UninitializedMessageException e) {
-          throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
-        } catch (java.io.IOException e) {
-          throw new com.google.protobuf.InvalidProtocolBufferException(e)
-              .setUnfinishedMessage(builder.buildPartial());
-        }
-        return builder.buildPartial();
-      }
-    };
-
-    public static com.google.protobuf.Parser<DictLayoutMetadata> parser() {
-      return PARSER;
-    }
-
-    @java.lang.Override
-    public com.google.protobuf.Parser<DictLayoutMetadata> getParserForType() {
-      return PARSER;
-    }
-
-    @java.lang.Override
-    public io.github.dfa1.vortex.proto.EncodingProtos.DictLayoutMetadata getDefaultInstanceForType() {
-      return DEFAULT_INSTANCE;
-    }
-
-  }
-
   public interface DeltaMetadataOrBuilder extends
       // @@protoc_insertion_point(interface_extends:vortex.encodings.DeltaMetadata)
       com.google.protobuf.MessageOrBuilder {
@@ -15606,11 +14920,6 @@ public final class EncodingProtos extends com.google.protobuf.GeneratedFile {
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_vortex_encodings_FSSTMetadata_fieldAccessorTable;
   private static final com.google.protobuf.Descriptors.Descriptor
-    internal_static_vortex_encodings_DictLayoutMetadata_descriptor;
-  private static final 
-    com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_vortex_encodings_DictLayoutMetadata_fieldAccessorTable;
-  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_vortex_encodings_DeltaMetadata_descriptor;
   private static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
@@ -15714,46 +15023,41 @@ public final class EncodingProtos extends com.google.protobuf.GeneratedFile {
       "ts_ptype\030\001 \001(\0162\023.vortex.dtype.PType\"y\n\014F" +
       "SSTMetadata\0227\n\032uncompressed_lengths_ptyp" +
       "e\030\001 \001(\0162\023.vortex.dtype.PType\0220\n\023codes_of" +
-      "fsets_ptype\030\002 \001(\0162\023.vortex.dtype.PType\"\262" +
-      "\001\n\022DictLayoutMetadata\022(\n\013codes_ptype\030\001 \001" +
-      "(\0162\023.vortex.dtype.PType\022\036\n\021is_nullable_c" +
-      "odes\030\002 \001(\010H\000\210\001\001\022\"\n\025all_values_referenced" +
-      "\030\003 \001(\010H\001\210\001\001B\024\n\022_is_nullable_codesB\030\n\026_al" +
-      "l_values_referenced\"3\n\rDeltaMetadata\022\022\n\n" +
-      "deltas_len\030\001 \001(\004\022\016\n\006offset\030\002 \001(\r\"&\n\017Deci" +
-      "malMetadata\022\023\n\013values_type\030\001 \001(\005\"e\n\030Deci" +
-      "malBytePartsMetadata\022/\n\022zeroth_child_pty" +
-      "pe\030\001 \001(\0162\023.vortex.dtype.PType\022\030\n\020lower_p" +
-      "art_count\030\002 \001(\r\"\233\001\n\025DateTimePartsMetadat" +
-      "a\022\'\n\ndays_ptype\030\001 \001(\0162\023.vortex.dtype.PTy" +
-      "pe\022*\n\rseconds_ptype\030\002 \001(\0162\023.vortex.dtype" +
-      ".PType\022-\n\020subseconds_ptype\030\003 \001(\0162\023.vorte" +
-      "x.dtype.PType\"@\n\021ZstdFrameMetadata\022\031\n\021un" +
-      "compressed_size\030\001 \001(\004\022\020\n\010n_values\030\002 \001(\004\"" +
-      "\\\n\014ZstdMetadata\022\027\n\017dictionary_size\030\001 \001(\r" +
-      "\0223\n\006frames\030\002 \003(\0132#.vortex.encodings.Zstd" +
-      "FrameMetadata\"\311\001\n\013RLEMetadata\022\022\n\nvalues_" +
-      "len\030\001 \001(\004\022\023\n\013indices_len\030\002 \001(\004\022*\n\rindice" +
-      "s_ptype\030\003 \001(\0162\023.vortex.dtype.PType\022\036\n\026va" +
-      "lues_idx_offsets_len\030\004 \001(\004\0225\n\030values_idx" +
-      "_offsets_ptype\030\005 \001(\0162\023.vortex.dtype.PTyp" +
-      "e\022\016\n\006offset\030\006 \001(\004\"O\n\014ListMetadata\022\024\n\014ele" +
-      "ments_len\030\001 \001(\004\022)\n\014offset_ptype\030\002 \001(\0162\023." +
-      "vortex.dtype.PType\"|\n\020ListViewMetadata\022\024" +
-      "\n\014elements_len\030\001 \001(\004\022)\n\014offset_ptype\030\002 \001" +
-      "(\0162\023.vortex.dtype.PType\022\'\n\nsize_ptype\030\003 " +
-      "\001(\0162\023.vortex.dtype.PType\"\274\001\n\rALPRDMetada" +
-      "ta\022\027\n\017right_bit_width\030\001 \001(\r\022\020\n\010dict_len\030" +
-      "\002 \001(\r\022\014\n\004dict\030\003 \003(\r\022-\n\020left_parts_ptype\030" +
-      "\004 \001(\0162\023.vortex.dtype.PType\0227\n\007patches\030\005 " +
-      "\001(\0132!.vortex.encodings.PatchesMetadataH\000" +
-      "\210\001\001B\n\n\010_patches\"\037\n\013PcoPageInfo\022\020\n\010n_valu" +
-      "es\030\001 \001(\r\"<\n\014PcoChunkInfo\022,\n\005pages\030\001 \003(\0132" +
-      "\035.vortex.encodings.PcoPageInfo\"M\n\013PcoMet" +
-      "adata\022\016\n\006header\030\001 \001(\014\022.\n\006chunks\030\002 \003(\0132\036." +
-      "vortex.encodings.PcoChunkInfoB-\n\033io.gith" +
-      "ub.dfa1.vortex.protoB\016EncodingProtosb\006pr" +
-      "oto3"
+      "fsets_ptype\030\002 \001(\0162\023.vortex.dtype.PType\"3" +
+      "\n\rDeltaMetadata\022\022\n\ndeltas_len\030\001 \001(\004\022\016\n\006o" +
+      "ffset\030\002 \001(\r\"&\n\017DecimalMetadata\022\023\n\013values" +
+      "_type\030\001 \001(\005\"e\n\030DecimalBytePartsMetadata\022" +
+      "/\n\022zeroth_child_ptype\030\001 \001(\0162\023.vortex.dty" +
+      "pe.PType\022\030\n\020lower_part_count\030\002 \001(\r\"\233\001\n\025D" +
+      "ateTimePartsMetadata\022\'\n\ndays_ptype\030\001 \001(\016" +
+      "2\023.vortex.dtype.PType\022*\n\rseconds_ptype\030\002" +
+      " \001(\0162\023.vortex.dtype.PType\022-\n\020subseconds_" +
+      "ptype\030\003 \001(\0162\023.vortex.dtype.PType\"@\n\021Zstd" +
+      "FrameMetadata\022\031\n\021uncompressed_size\030\001 \001(\004" +
+      "\022\020\n\010n_values\030\002 \001(\004\"\\\n\014ZstdMetadata\022\027\n\017di" +
+      "ctionary_size\030\001 \001(\r\0223\n\006frames\030\002 \003(\0132#.vo" +
+      "rtex.encodings.ZstdFrameMetadata\"\311\001\n\013RLE" +
+      "Metadata\022\022\n\nvalues_len\030\001 \001(\004\022\023\n\013indices_" +
+      "len\030\002 \001(\004\022*\n\rindices_ptype\030\003 \001(\0162\023.vorte" +
+      "x.dtype.PType\022\036\n\026values_idx_offsets_len\030" +
+      "\004 \001(\004\0225\n\030values_idx_offsets_ptype\030\005 \001(\0162" +
+      "\023.vortex.dtype.PType\022\016\n\006offset\030\006 \001(\004\"O\n\014" +
+      "ListMetadata\022\024\n\014elements_len\030\001 \001(\004\022)\n\014of" +
+      "fset_ptype\030\002 \001(\0162\023.vortex.dtype.PType\"|\n" +
+      "\020ListViewMetadata\022\024\n\014elements_len\030\001 \001(\004\022" +
+      ")\n\014offset_ptype\030\002 \001(\0162\023.vortex.dtype.PTy" +
+      "pe\022\'\n\nsize_ptype\030\003 \001(\0162\023.vortex.dtype.PT" +
+      "ype\"\274\001\n\rALPRDMetadata\022\027\n\017right_bit_width" +
+      "\030\001 \001(\r\022\020\n\010dict_len\030\002 \001(\r\022\014\n\004dict\030\003 \003(\r\022-" +
+      "\n\020left_parts_ptype\030\004 \001(\0162\023.vortex.dtype." +
+      "PType\0227\n\007patches\030\005 \001(\0132!.vortex.encoding" +
+      "s.PatchesMetadataH\000\210\001\001B\n\n\010_patches\"\037\n\013Pc" +
+      "oPageInfo\022\020\n\010n_values\030\001 \001(\r\"<\n\014PcoChunkI" +
+      "nfo\022,\n\005pages\030\001 \003(\0132\035.vortex.encodings.Pc" +
+      "oPageInfo\"M\n\013PcoMetadata\022\016\n\006header\030\001 \001(\014" +
+      "\022.\n\006chunks\030\002 \003(\0132\036.vortex.encodings.PcoC" +
+      "hunkInfoB-\n\033io.github.dfa1.vortex.protoB" +
+      "\016EncodingProtosb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -15815,86 +15119,80 @@ public final class EncodingProtos extends com.google.protobuf.GeneratedFile {
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_vortex_encodings_FSSTMetadata_descriptor,
         new java.lang.String[] { "UncompressedLengthsPtype", "CodesOffsetsPtype", });
-    internal_static_vortex_encodings_DictLayoutMetadata_descriptor =
-      getDescriptor().getMessageType(9);
-    internal_static_vortex_encodings_DictLayoutMetadata_fieldAccessorTable = new
-      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_vortex_encodings_DictLayoutMetadata_descriptor,
-        new java.lang.String[] { "CodesPtype", "IsNullableCodes", "AllValuesReferenced", });
     internal_static_vortex_encodings_DeltaMetadata_descriptor =
-      getDescriptor().getMessageType(10);
+      getDescriptor().getMessageType(9);
     internal_static_vortex_encodings_DeltaMetadata_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_vortex_encodings_DeltaMetadata_descriptor,
         new java.lang.String[] { "DeltasLen", "Offset", });
     internal_static_vortex_encodings_DecimalMetadata_descriptor =
-      getDescriptor().getMessageType(11);
+      getDescriptor().getMessageType(10);
     internal_static_vortex_encodings_DecimalMetadata_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_vortex_encodings_DecimalMetadata_descriptor,
         new java.lang.String[] { "ValuesType", });
     internal_static_vortex_encodings_DecimalBytePartsMetadata_descriptor =
-      getDescriptor().getMessageType(12);
+      getDescriptor().getMessageType(11);
     internal_static_vortex_encodings_DecimalBytePartsMetadata_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_vortex_encodings_DecimalBytePartsMetadata_descriptor,
         new java.lang.String[] { "ZerothChildPtype", "LowerPartCount", });
     internal_static_vortex_encodings_DateTimePartsMetadata_descriptor =
-      getDescriptor().getMessageType(13);
+      getDescriptor().getMessageType(12);
     internal_static_vortex_encodings_DateTimePartsMetadata_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_vortex_encodings_DateTimePartsMetadata_descriptor,
         new java.lang.String[] { "DaysPtype", "SecondsPtype", "SubsecondsPtype", });
     internal_static_vortex_encodings_ZstdFrameMetadata_descriptor =
-      getDescriptor().getMessageType(14);
+      getDescriptor().getMessageType(13);
     internal_static_vortex_encodings_ZstdFrameMetadata_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_vortex_encodings_ZstdFrameMetadata_descriptor,
         new java.lang.String[] { "UncompressedSize", "NValues", });
     internal_static_vortex_encodings_ZstdMetadata_descriptor =
-      getDescriptor().getMessageType(15);
+      getDescriptor().getMessageType(14);
     internal_static_vortex_encodings_ZstdMetadata_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_vortex_encodings_ZstdMetadata_descriptor,
         new java.lang.String[] { "DictionarySize", "Frames", });
     internal_static_vortex_encodings_RLEMetadata_descriptor =
-      getDescriptor().getMessageType(16);
+      getDescriptor().getMessageType(15);
     internal_static_vortex_encodings_RLEMetadata_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_vortex_encodings_RLEMetadata_descriptor,
         new java.lang.String[] { "ValuesLen", "IndicesLen", "IndicesPtype", "ValuesIdxOffsetsLen", "ValuesIdxOffsetsPtype", "Offset", });
     internal_static_vortex_encodings_ListMetadata_descriptor =
-      getDescriptor().getMessageType(17);
+      getDescriptor().getMessageType(16);
     internal_static_vortex_encodings_ListMetadata_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_vortex_encodings_ListMetadata_descriptor,
         new java.lang.String[] { "ElementsLen", "OffsetPtype", });
     internal_static_vortex_encodings_ListViewMetadata_descriptor =
-      getDescriptor().getMessageType(18);
+      getDescriptor().getMessageType(17);
     internal_static_vortex_encodings_ListViewMetadata_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_vortex_encodings_ListViewMetadata_descriptor,
         new java.lang.String[] { "ElementsLen", "OffsetPtype", "SizePtype", });
     internal_static_vortex_encodings_ALPRDMetadata_descriptor =
-      getDescriptor().getMessageType(19);
+      getDescriptor().getMessageType(18);
     internal_static_vortex_encodings_ALPRDMetadata_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_vortex_encodings_ALPRDMetadata_descriptor,
         new java.lang.String[] { "RightBitWidth", "DictLen", "Dict", "LeftPartsPtype", "Patches", });
     internal_static_vortex_encodings_PcoPageInfo_descriptor =
-      getDescriptor().getMessageType(20);
+      getDescriptor().getMessageType(19);
     internal_static_vortex_encodings_PcoPageInfo_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_vortex_encodings_PcoPageInfo_descriptor,
         new java.lang.String[] { "NValues", });
     internal_static_vortex_encodings_PcoChunkInfo_descriptor =
-      getDescriptor().getMessageType(21);
+      getDescriptor().getMessageType(20);
     internal_static_vortex_encodings_PcoChunkInfo_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_vortex_encodings_PcoChunkInfo_descriptor,
         new java.lang.String[] { "Pages", });
     internal_static_vortex_encodings_PcoMetadata_descriptor =
-      getDescriptor().getMessageType(22);
+      getDescriptor().getMessageType(21);
     internal_static_vortex_encodings_PcoMetadata_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_vortex_encodings_PcoMetadata_descriptor,
