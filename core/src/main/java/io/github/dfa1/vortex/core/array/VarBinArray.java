@@ -188,4 +188,24 @@ public final class VarBinArray implements Array {
 		}
 		return dictValOffsets.getAtIndex(PTypeIO.LE_LONG, i);
 	}
+
+	/// Returns a new VarBinArray containing only the first {@code rows} elements.
+	public VarBinArray truncate(long rows) {
+		if (rows >= length) {
+			return this;
+		}
+		if (dictCodesSegs != null) {
+			int codeBytes = dictCodesPType.byteSize();
+			return VarBinArray.ofDict(dtype, rows, bytes, dictValOffsets, dictValOffPType,
+					dictCodesSegs.asSlice(0, rows * codeBytes), dictCodesPType, ArrayStats.empty());
+		}
+		long byteEnd = readOffset(rows);
+		int offBytes = (offsetsPtype == PType.I32 || offsetsPtype == PType.U32) ? Integer.BYTES : Long.BYTES;
+		MemorySegment newOffsetsSeg = offsetsSeg.asSlice(0, (rows + 1) * offBytes);
+		DType offDtype = new DType.Primitive(offsetsPtype, false);
+		Array newOffsetsArr = (offBytes == Integer.BYTES)
+				? new IntArray(offDtype, rows + 1, newOffsetsSeg, ArrayStats.empty())
+				: new LongArray(offDtype, rows + 1, newOffsetsSeg, ArrayStats.empty());
+		return new VarBinArray(dtype, rows, bytes.asSlice(0, byteEnd > 0 ? byteEnd : 0), newOffsetsArr, offsetsPtype, ArrayStats.empty());
+	}
 }

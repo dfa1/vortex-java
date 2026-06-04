@@ -51,6 +51,11 @@ public final class MaskedArray implements Array {
 		};
 	}
 
+	/// Returns the validity bitmap, or {@code null} if all positions are valid.
+	public BoolArray validity() {
+		return validity;
+	}
+
 	public boolean isValid(long i) {
 		return validity == null || validity.getBoolean(i);
 	}

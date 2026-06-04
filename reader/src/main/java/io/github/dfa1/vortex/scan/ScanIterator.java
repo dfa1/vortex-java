@@ -9,7 +9,11 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.Layout;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.SegmentSpec;
+import io.github.dfa1.vortex.core.array.BoolArray;
+import io.github.dfa1.vortex.core.array.MaskedArray;
 import io.github.dfa1.vortex.core.array.ByteArray;
+import io.github.dfa1.vortex.core.array.EmptyArray;
+import io.github.dfa1.vortex.core.array.NullArray;
 import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.FloatArray;
 import io.github.dfa1.vortex.core.array.IntArray;
@@ -132,8 +136,15 @@ public final class ScanIterator implements AutoCloseable {
 				chunkArena.close();
 			}
 			chunkArena = Arena.ofConfined();
-			current = new ScanResult(chunk.rowCount(), buildColumnMap(chunk));
-			rowsReturned += chunk.rowCount();
+
+			long remaining = options.limit() - rowsReturned;
+			long chunkRows = Math.min(chunk.rowCount(), remaining);
+			Map<String, Array> columns = buildColumnMap(chunk);
+			if (chunkRows < chunk.rowCount()) {
+				columns = truncateColumns(columns, chunkRows);
+			}
+			current = new ScanResult(chunkRows, columns);
+			rowsReturned += chunkRows;
 			return true;
 		}
 		// Do not close here — the last chunk's arena stays open until close() is called.
@@ -394,6 +405,41 @@ public final class ScanIterator implements AutoCloseable {
 			case I32 -> seg.getAtIndex(LE_INT, idx);
 			case I64, U64 -> seg.getAtIndex(LE_LONG, idx);
 			default  -> throw new VortexException(EncodingId.VORTEX_DICT, "layout: unsupported ptype " + ptype);
+		};
+	}
+
+	// ── Limit truncation ─────────────────────────────────────────────────────
+
+	private static Map<String, Array> truncateColumns(Map<String, Array> columns, long rows) {
+		var result = new LinkedHashMap<String, Array>(columns.size());
+		for (var entry : columns.entrySet()) {
+			result.put(entry.getKey(), truncateArray(entry.getValue(), rows));
+		}
+		return Map.copyOf(result);
+	}
+
+	private static Array truncateArray(Array arr, long rows) {
+		if (arr.length() <= rows) {
+			return arr;
+		}
+		return switch (arr) {
+			case LongArray   a -> new LongArray(a.dtype(), rows, a.buffer(0).asSlice(0, rows * Long.BYTES), ArrayStats.empty());
+			case IntArray    a -> new IntArray(a.dtype(), rows, a.buffer(0).asSlice(0, rows * Integer.BYTES), ArrayStats.empty());
+			case DoubleArray a -> new DoubleArray(a.dtype(), rows, a.buffer(0).asSlice(0, rows * Double.BYTES), ArrayStats.empty());
+			case FloatArray  a -> new FloatArray(a.dtype(), rows, a.buffer(0).asSlice(0, rows * Float.BYTES), ArrayStats.empty());
+			case ShortArray  a -> new ShortArray(a.dtype(), rows, a.buffer(0).asSlice(0, rows * Short.BYTES), ArrayStats.empty());
+			case ByteArray   a -> new ByteArray(a.dtype(), rows, a.buffer(0).asSlice(0, rows), ArrayStats.empty());
+			case BoolArray   a -> new BoolArray(a.dtype(), rows, a.buffer(0).asSlice(0, (rows + 7) / 8), ArrayStats.empty());
+			case NullArray   a -> new NullArray(a.dtype(), rows);
+			case VarBinArray a -> a.truncate(rows);
+			case MaskedArray a -> {
+				Array truncChild = truncateArray((Array) a.child(0), rows);
+				BoolArray v = a.validity();
+				BoolArray truncValidity = (v != null) ? (BoolArray) truncateArray(v, rows) : null;
+				yield new MaskedArray(truncChild, truncValidity);
+			}
+			case EmptyArray  a -> a;
+			default -> throw new VortexException("limit: truncation not supported for " + arr.getClass().getSimpleName());
 		};
 	}
 

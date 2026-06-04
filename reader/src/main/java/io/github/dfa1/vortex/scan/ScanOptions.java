@@ -21,6 +21,10 @@ public record ScanOptions(
 		return new ScanOptions(List.of(names), null, NO_LIMIT);
 	}
 
+	public static ScanOptions limit(long limit) {
+		return new ScanOptions(List.of(), null, limit);
+	}
+
 	public boolean hasProjection() {
 		return !columns.isEmpty();
 	}

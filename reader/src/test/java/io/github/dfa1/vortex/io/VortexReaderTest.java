@@ -265,6 +265,73 @@ class VortexReaderTest {
 		assertThat(chunkCount).isEqualTo(1);
 	}
 
+	@Test
+	void scan_withLimit_returnsExactlyNRows() throws URISyntaxException, IOException {
+		// Given — primitives.vortex has 3 rows; limit=2 forces truncation of the single chunk
+		Path path = fixtureFile("primitives.vortex");
+		long limit = 2;
+
+		// When
+		long totalRows = 0;
+		try (var sut = VortexReader.open(path);
+		     var iter = sut.scan(ScanOptions.limit(limit))) {
+			while (iter.hasNext()) {
+				ScanResult chunk = iter.next();
+				totalRows += chunk.rowCount();
+				for (Array col : chunk.columns().values()) {
+					assertThat(col.length()).isLessThanOrEqualTo(limit);
+				}
+			}
+		}
+
+		// Then
+		assertThat(totalRows).isEqualTo(limit);
+	}
+
+	@Test
+	void scan_withLimitExceedingTotal_returnsAllRows() throws URISyntaxException, IOException {
+		// Given
+		Path path = fixtureFile("primitives.vortex");
+		long totalWithoutLimit;
+		try (var sut = VortexReader.open(path);
+		     var iter = sut.scan(ScanOptions.all())) {
+			totalWithoutLimit = 0;
+			while (iter.hasNext()) {
+				totalWithoutLimit += iter.next().rowCount();
+			}
+		}
+
+		// When
+		long totalWithLimit = 0;
+		try (var sut = VortexReader.open(path);
+		     var iter = sut.scan(ScanOptions.limit(Long.MAX_VALUE))) {
+			while (iter.hasNext()) {
+				totalWithLimit += iter.next().rowCount();
+			}
+		}
+
+		// Then
+		assertThat(totalWithLimit).isEqualTo(totalWithoutLimit);
+	}
+
+	@Test
+	void scan_withLimitZero_returnsNoRows() throws URISyntaxException, IOException {
+		// Given
+		Path path = fixtureFile("primitives.vortex");
+
+		// When
+		long totalRows = 0;
+		try (var sut = VortexReader.open(path);
+		     var iter = sut.scan(ScanOptions.limit(0))) {
+			while (iter.hasNext()) {
+				totalRows += iter.next().rowCount();
+			}
+		}
+
+		// Then
+		assertThat(totalRows).isZero();
+	}
+
 	// --- helpers ---
 
 	private Path fixtureFile(String name) throws URISyntaxException {
