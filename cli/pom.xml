@@ -18,6 +18,10 @@
 		</dependency>
 		<dependency>
 			<groupId>io.github.dfa1.vortex</groupId>
+			<artifactId>parquet</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>io.github.dfa1.vortex</groupId>
 			<artifactId>reader</artifactId>
 		</dependency>
 		<!-- testing -->

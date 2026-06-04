@@ -8,6 +8,7 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Objects;
 import java.util.function.IntSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -119,6 +120,29 @@ class CliIT {
 
         // Then — must say "larger", never a negative "smaller"
         assertThat(output).contains("larger").doesNotContain("smaller");
+    }
+
+    @Test
+    void importParquetPipeline(@TempDir Path tmp) throws Exception {
+        // Given — test.parquet: id (int64), name (string), 3 rows
+        Path parquetIn = tmp.resolve("test.parquet");
+        Files.copy(
+                Objects.requireNonNull(CliIT.class.getResourceAsStream("/test.parquet")),
+                parquetIn);
+
+        // When
+        assertThat(ImportCommand.run(new String[]{"import", parquetIn.toString()})).isZero();
+        Path vortex = tmp.resolve("test.vortex");
+        assertThat(vortex).exists();
+
+        // Then — schema and row count correct
+        String schema = captureStdout(
+                () -> SchemaCommand.run(new String[]{"schema", vortex.toString()}));
+        assertThat(schema.strip()).isEqualTo("struct<id: I64, name: utf8>");
+
+        String count = captureStdout(
+                () -> CountCommand.run(new String[]{"count", vortex.toString()}));
+        assertThat(count.strip()).isEqualTo("3");
     }
 
     private static String captureStdout(IntSupplier action) {

@@ -37,7 +37,7 @@ public final class VortexCli {
         out.println("Usage: java -jar vortex.jar <subcommand> [args]");
         out.println("  inspect <file.vortex>               print file structure");
         out.println("  export  <file.vortex>               write CSV to stdout");
-        out.println("  import  <file.csv> [out.vortex]     convert CSV to Vortex");
+        out.println("  import  <file.csv|file.parquet> [out.vortex]  convert CSV or Parquet to Vortex");
         out.println("  schema  <file.vortex>               print dtype (machine-readable)");
         out.println("  count   <file.vortex>               print row count");
         out.println("  select  <file.vortex> <col> [...]   project columns to CSV on stdout");
