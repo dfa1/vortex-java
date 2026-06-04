@@ -8,7 +8,7 @@
   Check their Discord too. Decision gate: invest further only if signal is positive.
 - [ ] Move project to a dedicated organization
 - [ ] Create website
-- [ ] Publish benchmarks
+- [ ] Publish benchmarks — run `./bench` locally, push JMH JSON to gh-pages via `bench-publish` script, view at `https://jmh.morethan.io/?source=https://dfa1.github.io/vortex-java/benchmark-result.json`; dated files for history comparison via `?source=url1,url2`; then drop `.github/workflows/benchmark.yml`
 - [ ] Build something like hardwood.dev but for vortex files
 - [ ] Publish to Maven Central (OSSRH/SONATYPE setup, GPG signing, coordinates, CI release pipeline)
 
