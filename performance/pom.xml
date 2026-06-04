@@ -19,6 +19,16 @@
 		</dependency>
 		<dependency>
 			<groupId>io.github.dfa1.vortex</groupId>
+			<artifactId>parquet</artifactId>
+			<scope>compile</scope>
+		</dependency>
+		<dependency>
+			<groupId>dev.hardwood</groupId>
+			<artifactId>hardwood-core</artifactId>
+			<scope>compile</scope>
+		</dependency>
+		<dependency>
+			<groupId>io.github.dfa1.vortex</groupId>
 			<artifactId>reader</artifactId>
 			<scope>compile</scope>
 		</dependency>

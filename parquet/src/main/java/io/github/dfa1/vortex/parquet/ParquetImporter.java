@@ -5,6 +5,7 @@ import dev.hardwood.metadata.LogicalType;
 import dev.hardwood.metadata.RepetitionType;
 import dev.hardwood.reader.ParquetFileReader;
 import dev.hardwood.reader.RowReader;
+import dev.hardwood.schema.ColumnProjection;
 import dev.hardwood.schema.ColumnSchema;
 import dev.hardwood.schema.FileSchema;
 import io.github.dfa1.vortex.core.DType;
@@ -56,7 +57,10 @@ public final class ParquetImporter {
                         "nested Parquet schemas not yet supported; schema: " + fileSchema);
             }
 
-            List<ColumnSchema> columns = fileSchema.getColumns();
+            List<ColumnSchema> allColumns = fileSchema.getColumns();
+            List<ColumnSchema> columns = options.hasProjection()
+                    ? filterColumns(allColumns, options.columns())
+                    : allColumns;
             int colCount = columns.size();
 
             List<String> names = new ArrayList<>(colCount);
@@ -68,11 +72,15 @@ public final class ParquetImporter {
             DType.Struct schema = new DType.Struct(names, types, false);
             long totalRows = parquet.getFileMetaData().numRows();
 
+            ColumnProjection projection = options.hasProjection()
+                    ? ColumnProjection.columns(options.columns().toArray(String[]::new))
+                    : ColumnProjection.all();
+
             try (FileChannel channel = FileChannel.open(
                     vortexPath,
                     StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
                  VortexWriter writer = VortexWriter.create(channel, schema, options.writeOptions());
-                 RowReader rowReader = parquet.rowReader()) {
+                 RowReader rowReader = parquet.buildRowReader().projection(projection).build()) {
 
                 int chunkSize = options.chunkSize();
                 Object[] buffers = allocateBuffers(columns, chunkSize);
@@ -204,6 +212,24 @@ public final class ParquetImporter {
             chunk.put(columns.get(c).name(), trimBuffer(buffers[c], size));
         }
         return chunk;
+    }
+
+    private static List<ColumnSchema> filterColumns(List<ColumnSchema> all, List<String> names) {
+        List<ColumnSchema> result = new ArrayList<>(names.size());
+        for (String name : names) {
+            boolean found = false;
+            for (ColumnSchema col : all) {
+                if (col.name().equals(name)) {
+                    result.add(col);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                throw new IllegalArgumentException("column not found in Parquet schema: " + name);
+            }
+        }
+        return result;
     }
 
     private static Object trimBuffer(Object buffer, int size) {
