@@ -23,6 +23,7 @@
 		<dependency>
 			<groupId>io.airlift</groupId>
 			<artifactId>aircompressor-v3</artifactId>
+			<version>${aircompressor.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>com.github.luben</groupId>
