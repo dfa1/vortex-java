@@ -2,10 +2,6 @@
 
 ## Project
 
-- [ ] **[by 2026-06-07 evening] Ask SpiralDB for feedback** — open GitHub discussion in `spiraldb/vortex`
-  linking the Java impl (35/35 fixtures), asking: interest in an official Java reader? plans to
-  stabilize encoding metadata proto? undocumented invariants? any JVM plans of their own?
-  Check their Discord too. Decision gate: invest further only if signal is positive.
 - [ ] Move project to a dedicated organization
 - [ ] Create website
 - [ ] Publish benchmarks — run `./bench` locally, push JMH JSON to gh-pages via `bench-publish` script, view at `https://jmh.morethan.io/?source=https://dfa1.github.io/vortex-java/benchmark-result.json`; dated files for history comparison via `?source=url1,url2`; then drop `.github/workflows/benchmark.yml`
@@ -61,16 +57,6 @@
 - [ ] add BOM module
 - [ ] deploy to maven central
 - [ ] switch back to module-path, but keep in mind these 2 blockers
-- [ ] drop warnings about flatbuffers
-```shell
-[WARNING] ****************************************************************************************************************************************************
-[WARNING] * Required filename-based automodules detected: [flatbuffers-java-25.2.10.jar]. Please don't publish this project to a public artifact repository! *
-[WARNING] ****************************************************************************************************************************************************
-```
-- [ ] warnings about using dfa1 as module name
-```
-[WARNING] /Users/dfa/projects/vortex-java/csv/src/main/java/module-info.java:[1,17] module name component dfa1 should avoid terminal digits
-```
 
 ## Documentation
 
