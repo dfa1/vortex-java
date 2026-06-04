@@ -141,6 +141,8 @@ public final class DeltaEncoding implements Encoding {
             long[] deltasAll = new long[(int) paddedLen];
             long[] chunkBuf = new long[FL_CHUNK_SIZE];
             long[] transposed = new long[FL_CHUNK_SIZE];
+            long[] chunkBases = new long[lanes];
+            long[] chunkDelta = new long[FL_CHUNK_SIZE];
 
             for (int chunk = 0; chunk < numChunks; chunk++) {
                 int start = chunk * FL_CHUNK_SIZE;
@@ -156,9 +158,8 @@ public final class DeltaEncoding implements Encoding {
                 }
                 int basesOff = chunk * lanes;
                 System.arraycopy(transposed, 0, basesAll, basesOff, lanes);
-                long[] chunkBases = new long[lanes];
                 System.arraycopy(basesAll, basesOff, chunkBases, 0, lanes);
-                long[] chunkDelta = deltaChunk(transposed, chunkBases, lanes, typeBits, mask);
+                deltaChunk(transposed, chunkBases, lanes, typeBits, mask, chunkDelta);
                 System.arraycopy(chunkDelta, 0, deltasAll, chunk * FL_CHUNK_SIZE, FL_CHUNK_SIZE);
             }
 
@@ -181,8 +182,7 @@ public final class DeltaEncoding implements Encoding {
             return new EncodeResult(root, List.of(basesSeg, deltasSeg), statsMin, statsMax);
         }
 
-        private static long[] deltaChunk(long[] transposed, long[] bases, int lanes, int typeBits, long mask) {
-            long[] out = new long[FL_CHUNK_SIZE];
+        private static void deltaChunk(long[] transposed, long[] bases, int lanes, int typeBits, long mask, long[] out) {
             for (int lane = 0; lane < lanes; lane++) {
                 long prev = bases[lane] & mask;
                 for (int row = 0; row < typeBits; row++) {
@@ -192,7 +192,6 @@ public final class DeltaEncoding implements Encoding {
                     prev = next;
                 }
             }
-            return out;
         }
 
         private static long[] toLongs(Object data, PType ptype) {
@@ -312,17 +311,18 @@ public final class DeltaEncoding implements Encoding {
             int numChunks = (int) (deltasLen / FL_CHUNK_SIZE);
             long[] decoded = new long[(int) deltasLen];
             long[] untransposedChunk = new long[FL_CHUNK_SIZE];
+            long[] chunkBases = new long[lanes];
+            long[] chunkDeltas = new long[FL_CHUNK_SIZE];
+            long[] chunkUndelta = new long[FL_CHUNK_SIZE];
 
             for (int chunk = 0; chunk < numChunks; chunk++) {
                 int basesOff = chunk * lanes;
                 int deltaOff = chunk * FL_CHUNK_SIZE;
 
-                long[] chunkBases = new long[lanes];
                 System.arraycopy(basesAll, basesOff, chunkBases, 0, lanes);
-                long[] chunkDeltas = new long[FL_CHUNK_SIZE];
                 System.arraycopy(deltasAll, deltaOff, chunkDeltas, 0, FL_CHUNK_SIZE);
 
-                long[] chunkUndelta = undeltaChunk(chunkDeltas, chunkBases, lanes, typeBits, mask);
+                undeltaChunk(chunkDeltas, chunkBases, lanes, typeBits, mask, chunkUndelta);
 
                 for (int i = 0; i < FL_CHUNK_SIZE; i++) {
                     untransposedChunk[transposeIndex(i)] = chunkUndelta[i];
@@ -343,8 +343,7 @@ public final class DeltaEncoding implements Encoding {
             };
         }
 
-        private static long[] undeltaChunk(long[] deltas, long[] bases, int lanes, int typeBits, long mask) {
-            long[] out = new long[FL_CHUNK_SIZE];
+        private static void undeltaChunk(long[] deltas, long[] bases, int lanes, int typeBits, long mask, long[] out) {
             for (int lane = 0; lane < lanes; lane++) {
                 long prev = bases[lane] & mask;
                 for (int row = 0; row < typeBits; row++) {
@@ -354,7 +353,6 @@ public final class DeltaEncoding implements Encoding {
                     prev = next;
                 }
             }
-            return out;
         }
 
         private static long[] readLongs(MemorySegment buf, int count, PType ptype) {
