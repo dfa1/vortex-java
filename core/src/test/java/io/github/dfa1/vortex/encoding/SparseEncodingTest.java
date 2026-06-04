@@ -28,8 +28,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class SparseEncodingTest {
 
-	private static final DType I64_DTYPE = new DType.Primitive(PType.I64, false);
-	private static final DType F64_DTYPE = new DType.Primitive(PType.F64, false);
 
 	@Nested
 	class Encode {
@@ -41,7 +39,7 @@ class SparseEncodingTest {
 			SparseEncoding sut = new SparseEncoding();
 
 			// When
-			EncodeResult result = sut.encode(I64_DTYPE, data);
+			EncodeResult result = sut.encode(DTypes.I64, data);
 
 			// Then
 			EncodingProtos.SparseMetadata meta = EncodingProtos.SparseMetadata.parseFrom(
@@ -56,7 +54,7 @@ class SparseEncodingTest {
 			SparseEncoding sut = new SparseEncoding();
 
 			// When
-			EncodeResult result = sut.encode(I64_DTYPE, data);
+			EncodeResult result = sut.encode(DTypes.I64, data);
 
 			// Then
 			EncodingProtos.SparseMetadata meta = EncodingProtos.SparseMetadata.parseFrom(
@@ -71,8 +69,8 @@ class SparseEncodingTest {
 			SparseEncoding sut = new SparseEncoding();
 
 			// When
-			EncodeResult encoded = sut.encode(I64_DTYPE, data);
-			Array decoded = decodeResult(encoded, I64_DTYPE, data.length);
+			EncodeResult encoded = sut.encode(DTypes.I64, data);
+			Array decoded = decodeResult(encoded, DTypes.I64, data.length);
 
 			// Then
 			var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
@@ -89,8 +87,8 @@ class SparseEncodingTest {
 			SparseEncoding sut = new SparseEncoding();
 
 			// When
-			EncodeResult encoded = sut.encode(F64_DTYPE, data);
-			Array decoded = decodeResult(encoded, F64_DTYPE, data.length);
+			EncodeResult encoded = sut.encode(DTypes.F64, data);
+			Array decoded = decodeResult(encoded, DTypes.F64, data.length);
 
 			// Then
 			var layout = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
@@ -108,7 +106,7 @@ class SparseEncodingTest {
 			SparseEncoding sut = new SparseEncoding();
 
 			// When
-			EncodeResult result = sut.encode(I64_DTYPE, data);
+			EncodeResult result = sut.encode(DTypes.I64, data);
 
 			// Then
 			EncodingProtos.SparseMetadata meta = EncodingProtos.SparseMetadata.parseFrom(
@@ -145,7 +143,7 @@ class SparseEncodingTest {
 		void decode_noPatches_returnsFillValue() {
 			// Given — 5 elements, fill=99, no patches
 			long fill = 99L;
-			DecodeContext ctx = buildSparseCtx(I64_DTYPE, 5, fill, PType.U32, new long[0], new long[0]);
+			DecodeContext ctx = buildSparseCtx(DTypes.I64, 5, fill, PType.U32, new long[0], new long[0]);
 			SparseEncoding sut = new SparseEncoding();
 
 			// When
@@ -166,7 +164,7 @@ class SparseEncodingTest {
 			long fill = 0L;
 			long[] patchIndices = {1L, 5L};
 			long[] patchValues = {10L, 50L};
-			DecodeContext ctx = buildSparseCtx(I64_DTYPE, 8, fill, PType.U32, patchIndices, patchValues);
+			DecodeContext ctx = buildSparseCtx(DTypes.I64, 8, fill, PType.U32, patchIndices, patchValues);
 			SparseEncoding sut = new SparseEncoding();
 
 			// When
@@ -186,7 +184,7 @@ class SparseEncodingTest {
 			// Given — 4 F64 elements, fill=NaN bits, patch at index 2 with value 3.14
 			double fillVal = Double.NaN;
 			double patchVal = 3.14;
-			DecodeContext ctx = buildSparseCtxF64(F64_DTYPE, 4, fillVal, new long[]{2L}, new double[]{patchVal});
+			DecodeContext ctx = buildSparseCtxF64(DTypes.F64, 4, fillVal, new long[]{2L}, new double[]{patchVal});
 			SparseEncoding sut = new SparseEncoding();
 
 			// When
@@ -205,7 +203,7 @@ class SparseEncodingTest {
 			// Given — offset=10, patch index=12 → absolute position = 12 - 10 = 2
 			long[] patchIndices = {12L};
 			long[] patchValues = {777L};
-			DecodeContext ctx = buildSparseCtxWithOffset(I64_DTYPE, 5, 0L, PType.U32, patchIndices, patchValues, 10L);
+			DecodeContext ctx = buildSparseCtxWithOffset(DTypes.I64, 5, 0L, PType.U32, patchIndices, patchValues, 10L);
 			SparseEncoding sut = new SparseEncoding();
 
 			// When
@@ -223,7 +221,7 @@ class SparseEncodingTest {
 			byte[] nullFill = ScalarProtos.ScalarValue.newBuilder()
 					.setNullValue(NullValue.NULL_VALUE).build().toByteArray();
 			byte[] meta = buildSparseMetaBytes(0, 0L, PType.U32);
-			DecodeContext ctx = buildCtx(I64_DTYPE, 4, nullFill, meta, new byte[0], new byte[0],
+			DecodeContext ctx = buildCtx(DTypes.I64, 4, nullFill, meta, new byte[0], new byte[0],
 					new DType.Primitive(PType.U32, false));
 			SparseEncoding sut = new SparseEncoding();
 

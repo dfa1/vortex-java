@@ -1,8 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
 import io.github.dfa1.vortex.core.ArrayStats;
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.ListArray;
 import io.github.dfa1.vortex.core.array.LongArray;
@@ -17,8 +15,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ListEncodingTest {
 
-	private static final DType I32 = new DType.Primitive(PType.I32, false);
-	private static final DType LIST_I32 = new DType.List(I32, false);
 
 	private static ArrayNode toArrayNode(EncodeNode node) {
 		ArrayNode[] children = new ArrayNode[node.children().length];
@@ -44,7 +40,7 @@ class ListEncodingTest {
 			ListEncoding sut = new ListEncoding();
 
 			// When / Then
-			assertThat(sut.accepts(LIST_I32)).isTrue();
+			assertThat(sut.accepts(DTypes.LIST_I32)).isTrue();
 		}
 
 		@Test
@@ -53,7 +49,7 @@ class ListEncodingTest {
 			ListEncoding sut = new ListEncoding();
 
 			// When / Then
-			assertThat(sut.accepts(I32)).isFalse();
+			assertThat(sut.accepts(DTypes.I32)).isFalse();
 		}
 
 		@Test
@@ -65,7 +61,7 @@ class ListEncodingTest {
 			ListEncoding sut = new ListEncoding();
 
 			// When
-			EncodeResult result = sut.encode(LIST_I32, data);
+			EncodeResult result = sut.encode(DTypes.LIST_I32, data);
 
 			// Then
 			assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_LIST);
@@ -86,10 +82,10 @@ class ListEncodingTest {
 			ListEncoding sut = new ListEncoding();
 
 			// When
-			EncodeResult result = sut.encode(LIST_I32, data);
+			EncodeResult result = sut.encode(DTypes.LIST_I32, data);
 			MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
 			DecodeContext ctx = new DecodeContext(
-					toArrayNode(result.rootNode()), LIST_I32, 3, bufs, registry(), Arena.global());
+					toArrayNode(result.rootNode()), DTypes.LIST_I32, 3, bufs, registry(), Arena.global());
 			ListArray decoded = (ListArray) sut.decode(ctx);
 
 			// Then
@@ -115,10 +111,10 @@ class ListEncodingTest {
 			ListEncoding sut = new ListEncoding();
 
 			// When
-			EncodeResult result = sut.encode(LIST_I32, data);
+			EncodeResult result = sut.encode(DTypes.LIST_I32, data);
 			MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
 			DecodeContext ctx = new DecodeContext(
-					toArrayNode(result.rootNode()), LIST_I32, 2, bufs, registry(), Arena.global());
+					toArrayNode(result.rootNode()), DTypes.LIST_I32, 2, bufs, registry(), Arena.global());
 			ListArray decoded = (ListArray) sut.decode(ctx);
 
 			// Then
@@ -136,10 +132,10 @@ class ListEncodingTest {
 			ListEncoding sut = new ListEncoding();
 
 			// When
-			EncodeResult result = sut.encode(LIST_I32, data);
+			EncodeResult result = sut.encode(DTypes.LIST_I32, data);
 			MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
 			DecodeContext ctx = new DecodeContext(
-					toArrayNode(result.rootNode()), LIST_I32, 1, bufs, registry(), Arena.global());
+					toArrayNode(result.rootNode()), DTypes.LIST_I32, 1, bufs, registry(), Arena.global());
 			ListArray decoded = (ListArray) sut.decode(ctx);
 
 			// Then
@@ -157,7 +153,7 @@ class ListEncodingTest {
 			ListEncoding sut = new ListEncoding();
 			ArrayNode node = new ArrayNode(EncodingId.VORTEX_LIST, null,
 					new ArrayNode[0], new int[0], ArrayStats.empty());
-			DecodeContext ctx = new DecodeContext(node, I32, 0, new MemorySegment[0], registry(), Arena.global());
+			DecodeContext ctx = new DecodeContext(node, DTypes.I32, 0, new MemorySegment[0], registry(), Arena.global());
 
 			// When / Then
 			assertThatThrownBy(() -> sut.decode(ctx))
@@ -173,7 +169,7 @@ class ListEncodingTest {
 			ArrayNode node = new ArrayNode(EncodingId.VORTEX_LIST,
 					java.nio.ByteBuffer.wrap(new byte[0]),
 					new ArrayNode[]{child}, new int[0], ArrayStats.empty());
-			DecodeContext ctx = new DecodeContext(node, LIST_I32, 0, new MemorySegment[0], registry(), Arena.global());
+			DecodeContext ctx = new DecodeContext(node, DTypes.LIST_I32, 0, new MemorySegment[0], registry(), Arena.global());
 
 			// When / Then
 			assertThatThrownBy(() -> sut.decode(ctx))

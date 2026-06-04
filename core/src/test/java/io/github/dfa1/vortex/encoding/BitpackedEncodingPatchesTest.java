@@ -4,8 +4,6 @@ import io.github.dfa1.vortex.proto.DTypeProtos;
 import io.github.dfa1.vortex.proto.EncodingProtos;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -19,7 +17,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class BitpackedEncodingPatchesTest {
 
-	private static final DType I32_DTYPE = new DType.Primitive(PType.I32, false);
 	private static final ValueLayout.OfInt LE_INT = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
 	@Nested
@@ -31,7 +28,7 @@ class BitpackedEncodingPatchesTest {
 			// then attach synthetic patches metadata that rewrites indices [1, 3] with [777, 999].
 			int[] base = {10, 20, 30, 40, 50};
 			BitpackedEncoding sut = new BitpackedEncoding();
-			EncodeResult packed = sut.encode(I32_DTYPE, base);
+			EncodeResult packed = sut.encode(DTypes.I32, base);
 
 			MemorySegment packedSeg = packed.buffers().getFirst();
 			byte[] packedBytes = packedSeg.toArray(java.lang.foreign.ValueLayout.JAVA_BYTE);
@@ -75,7 +72,7 @@ class BitpackedEncodingPatchesTest {
 			registry.register(new PrimitiveEncoding());
 
 			DecodeContext ctx = new DecodeContext(
-					bpNode, I32_DTYPE, base.length, segments, registry, Arena.global());
+					bpNode, DTypes.I32, base.length, segments, registry, Arena.global());
 
 			// When
 			Array result = sut.decode(ctx);

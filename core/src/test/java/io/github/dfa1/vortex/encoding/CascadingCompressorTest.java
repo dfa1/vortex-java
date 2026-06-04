@@ -1,7 +1,5 @@
 package io.github.dfa1.vortex.encoding;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import org.junit.jupiter.api.Nested;
@@ -15,9 +13,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class CascadingCompressorTest {
 
-	private static final DType F64 = new DType.Primitive(PType.F64, false);
-	private static final DType I64 = new DType.Primitive(PType.I64, false);
-	private static final DType I32 = new DType.Primitive(PType.I32, false);
 
 	private static final List<Encoding> ALL_CODECS = List.of(
 			new AlpEncoding(), new FrameOfReferenceEncoding(), new DictEncoding(),
@@ -37,7 +32,7 @@ class CascadingCompressorTest {
 			CascadingCompressor sut = new CascadingCompressor(ALL_CODECS, ctx);
 
 			// When
-			EncodeResult result = sut.encode(F64, values);
+			EncodeResult result = sut.encode(DTypes.F64, values);
 
 			// Then - result should be a valid non-null encode result
 			assertThat(result).isNotNull();
@@ -56,7 +51,7 @@ class CascadingCompressorTest {
 			CascadingCompressor sut = new CascadingCompressor(ALL_CODECS, ctx);
 
 			// When
-			EncodeResult result = sut.encode(F64, values);
+			EncodeResult result = sut.encode(DTypes.F64, values);
 
 			// Then - cascaded result should be smaller than raw primitive (4096 * 8 = 32768 bytes)
 			long totalBytes = result.buffers().stream().mapToLong(MemorySegment::byteSize).sum();
@@ -65,7 +60,7 @@ class CascadingCompressorTest {
 
 		@Test
 		void excludedEncodings_areSkipped() {
-			// Given: exclude AlpEncoding — should not be selected for F64
+			// Given: exclude AlpEncoding — should not be selected for DTypes.F64
 			double[] values = new double[512];
 			for (int i = 0; i < values.length; i++) {
 				values[i] = i * 1.5;
@@ -74,7 +69,7 @@ class CascadingCompressorTest {
 			CascadingCompressor sut = new CascadingCompressor(ALL_CODECS, ctx);
 
 			// When
-			EncodeResult result = sut.encode(F64, values);
+			EncodeResult result = sut.encode(DTypes.F64, values);
 
 			// Then - ALP node should not appear in the tree
 			assertThat(containsEncoding(result.rootNode(), EncodingId.VORTEX_ALP)).isFalse();
@@ -107,10 +102,10 @@ class CascadingCompressorTest {
 			CascadingCompressor sut = new CascadingCompressor(ALL_CODECS, ctx);
 
 			// When
-			EncodeResult result = sut.encode(F64, values);
+			EncodeResult result = sut.encode(DTypes.F64, values);
 			EncodingRegistry registry = EncodingRegistry.empty();
 			ALL_CODECS.forEach(registry::register);
-			DecodeContext decodeCtx = EncodeTestHelper.toDecodeContext(result, values.length, F64, registry);
+			DecodeContext decodeCtx = EncodeTestHelper.toDecodeContext(result, values.length, DTypes.F64, registry);
 			DoubleArray decoded = (DoubleArray) registry.decode(decodeCtx);
 
 			// Then
@@ -130,10 +125,10 @@ class CascadingCompressorTest {
 			CascadingCompressor sut = new CascadingCompressor(ALL_CODECS, ctx);
 
 			// When
-			EncodeResult result = sut.encode(I64, values);
+			EncodeResult result = sut.encode(DTypes.I64, values);
 			EncodingRegistry registry = EncodingRegistry.empty();
 			ALL_CODECS.forEach(registry::register);
-			DecodeContext decodeCtx = EncodeTestHelper.toDecodeContext(result, values.length, I64, registry);
+			DecodeContext decodeCtx = EncodeTestHelper.toDecodeContext(result, values.length, DTypes.I64, registry);
 			LongArray decoded = (LongArray) registry.decode(decodeCtx);
 
 			// Then
@@ -153,10 +148,10 @@ class CascadingCompressorTest {
 			CascadingCompressor sut = new CascadingCompressor(ALL_CODECS, ctx);
 
 			// When
-			EncodeResult result = sut.encode(I32, values);
+			EncodeResult result = sut.encode(DTypes.I32, values);
 			EncodingRegistry registry = EncodingRegistry.empty();
 			ALL_CODECS.forEach(registry::register);
-			DecodeContext decodeCtx = EncodeTestHelper.toDecodeContext(result, values.length, I32, registry);
+			DecodeContext decodeCtx = EncodeTestHelper.toDecodeContext(result, values.length, DTypes.I32, registry);
 			io.github.dfa1.vortex.core.array.IntArray decoded =
 					(io.github.dfa1.vortex.core.array.IntArray) registry.decode(decodeCtx);
 

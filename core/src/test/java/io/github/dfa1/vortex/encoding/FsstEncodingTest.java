@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.encoding;
 
-import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.VarBinArray;
@@ -24,9 +23,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class FsstEncodingTest {
 
-	private static final DType UTF8 = new DType.Utf8(false);
-	private static final DType BINARY = new DType.Binary(false);
-	private static final DType I32 = new DType.Primitive(PType.I32, false);
 
 	@Nested
 	class Encode {
@@ -37,7 +33,7 @@ class FsstEncodingTest {
 			var sut = new FsstEncoding();
 
 			// When / Then
-			assertThat(sut.accepts(UTF8)).isTrue();
+			assertThat(sut.accepts(DTypes.UTF8)).isTrue();
 		}
 
 		@Test
@@ -46,7 +42,7 @@ class FsstEncodingTest {
 			var sut = new FsstEncoding();
 
 			// When / Then
-			assertThat(sut.accepts(BINARY)).isTrue();
+			assertThat(sut.accepts(DTypes.BINARY)).isTrue();
 		}
 
 		@Test
@@ -55,7 +51,7 @@ class FsstEncodingTest {
 			var sut = new FsstEncoding();
 
 			// When / Then
-			assertThat(sut.accepts(I32)).isFalse();
+			assertThat(sut.accepts(DTypes.I32)).isFalse();
 		}
 
 		@ParameterizedTest(name = "{0}")
@@ -66,13 +62,13 @@ class FsstEncodingTest {
 			Arena arena = Arena.ofAuto();
 
 			// When
-			EncodeResult result = sut.encode(UTF8, values);
+			EncodeResult result = sut.encode(DTypes.UTF8, values);
 			MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
 			ArrayNode node = toArrayNode(result.rootNode());
 			EncodingRegistry registry = EncodingRegistry.empty();
 			registry.register(new PrimitiveEncoding());
 			registry.register(sut);
-			DecodeContext ctx = new DecodeContext(node, UTF8, values.length, bufs, registry, arena);
+			DecodeContext ctx = new DecodeContext(node, DTypes.UTF8, values.length, bufs, registry, arena);
 			var decoded = (VarBinArray) sut.decode(ctx);
 
 			// Then
@@ -214,7 +210,7 @@ class FsstEncodingTest {
 			// Given
 			var sut = new FsstEncoding();
 			ArrayNode node = new ArrayNode(EncodingId.VORTEX_FSST, null, new ArrayNode[0], new int[0], null);
-			DecodeContext ctx = new DecodeContext(node, UTF8, 0, new MemorySegment[0],
+			DecodeContext ctx = new DecodeContext(node, DTypes.UTF8, 0, new MemorySegment[0],
 					buildRegistry(), Arena.ofAuto());
 
 			// When / Then
@@ -273,7 +269,7 @@ class FsstEncodingTest {
 					EncodingId.VORTEX_FSST, ByteBuffer.wrap(metaBytes),
 					new ArrayNode[]{uncompLensNode, codesOffNode}, new int[]{0, 1, 2}, null);
 
-			return new DecodeContext(root, UTF8, n, segs, buildRegistry(), arena);
+			return new DecodeContext(root, DTypes.UTF8, n, segs, buildRegistry(), arena);
 		}
 
 		private static EncodingRegistry buildRegistry() {

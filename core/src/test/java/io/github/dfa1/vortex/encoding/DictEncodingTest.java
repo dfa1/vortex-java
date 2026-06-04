@@ -1,7 +1,5 @@
 package io.github.dfa1.vortex.encoding;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.VarBinArray;
 import org.junit.jupiter.api.Nested;
@@ -20,9 +18,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// Property: encode then decode is lossless; low-cardinality data compresses smaller than raw.
 class DictEncodingTest {
 
-	private static final DType I32_DTYPE = new DType.Primitive(PType.I32, false);
-	private static final DType I64_DTYPE = new DType.Primitive(PType.I64, false);
-	private static final DType UTF8_DTYPE = new DType.Utf8(false);
 
 	@Nested
 	class Encode {
@@ -37,8 +32,8 @@ class DictEncodingTest {
 			registry.register(new PrimitiveEncoding());
 
 			// When
-			EncodeResult encoded = sut.encode(I32_DTYPE, data);
-			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, I32_DTYPE, registry);
+			EncodeResult encoded = sut.encode(DTypes.I32, data);
+			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, DTypes.I32, registry);
 			Array result = sut.decode(ctx);
 
 			// Then
@@ -59,8 +54,8 @@ class DictEncodingTest {
 			registry.register(new PrimitiveEncoding());
 
 			// When
-			EncodeResult encoded = sut.encode(I64_DTYPE, data);
-			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, I64_DTYPE, registry);
+			EncodeResult encoded = sut.encode(DTypes.I64, data);
+			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, DTypes.I64, registry);
 			Array result = sut.decode(ctx);
 
 			// Then
@@ -78,7 +73,7 @@ class DictEncodingTest {
 			var sut = new DictEncoding();
 
 			// When
-			EncodeResult encoded = sut.encode(I32_DTYPE, data);
+			EncodeResult encoded = sut.encode(DTypes.I32, data);
 
 			// Then — dict-encoded size < raw size (n * 4 bytes)
 			long encodedBytes = encoded.buffers().stream().mapToLong(MemorySegment::byteSize).sum();
@@ -97,8 +92,8 @@ class DictEncodingTest {
 			registry.register(new VarBinEncoding());
 
 			// When
-			EncodeResult encoded = sut.encode(UTF8_DTYPE, data);
-			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, UTF8_DTYPE, registry);
+			EncodeResult encoded = sut.encode(DTypes.UTF8, data);
+			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, DTypes.UTF8, registry);
 			Array result = sut.decode(ctx);
 
 			// Then
@@ -119,7 +114,7 @@ class DictEncodingTest {
 			String[] data = repeat(symbols, 1000);  // 3 000 rows, 3 unique ~4-byte symbols
 
 			// When
-			EncodeResult encoded = sut.encode(UTF8_DTYPE, data);
+			EncodeResult encoded = sut.encode(DTypes.UTF8, data);
 
 			// Then — dict overhead << repeating every string verbatim
 			long encodedBytes = encoded.buffers().stream().mapToLong(MemorySegment::byteSize).sum();

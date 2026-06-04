@@ -1,7 +1,5 @@
 package io.github.dfa1.vortex.encoding;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.IntArray;
 import org.junit.jupiter.api.Nested;
@@ -21,8 +19,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class ZigZagEncodingTest {
 
-	private static final DType I32_DTYPE = new DType.Primitive(PType.I32, false);
-	private static final DType I64_DTYPE = new DType.Primitive(PType.I64, false);
 
 	@Nested
 	class Decode {
@@ -84,7 +80,7 @@ class ZigZagEncodingTest {
 			EncodingRegistry registry = EncodingRegistry.empty();
 			registry.register(new ZigZagEncoding());
 			registry.register(new PrimitiveEncoding());
-			return new DecodeContext(zigzagNode, I32_DTYPE, encodedUnsigned.length,
+			return new DecodeContext(zigzagNode, DTypes.I32, encodedUnsigned.length,
 					new MemorySegment[]{seg}, registry, Arena.ofAuto());
 		}
 	}
@@ -103,8 +99,8 @@ class ZigZagEncodingTest {
 			var le = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
 			// When
-			EncodeResult encoded = sut.encode(I32_DTYPE, data);
-			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, I32_DTYPE, registry);
+			EncodeResult encoded = sut.encode(DTypes.I32, data);
+			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, DTypes.I32, registry);
 			Array result = sut.decode(ctx);
 
 			// Then
@@ -125,8 +121,8 @@ class ZigZagEncodingTest {
 			var le = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
 			// When
-			EncodeResult encoded = sut.encode(I64_DTYPE, data);
-			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, I64_DTYPE, registry);
+			EncodeResult encoded = sut.encode(DTypes.I64, data);
+			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, DTypes.I64, registry);
 			Array result = sut.decode(ctx);
 
 			// Then

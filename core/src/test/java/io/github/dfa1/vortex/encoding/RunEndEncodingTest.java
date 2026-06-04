@@ -21,8 +21,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class RunEndEncodingTest {
 
-	private static final DType I64_DTYPE = new DType.Primitive(PType.I64, false);
-
 	@Nested
 	class Decode {
 
@@ -31,7 +29,7 @@ class RunEndEncodingTest {
 			// Given — 1 run: ends=[5], values=[42]; output = [42, 42, 42, 42, 42]
 			long[] ends = {5L};
 			long[] values = {42L};
-			DecodeContext ctx = buildCtx(I64_DTYPE, 5, ends, values, PType.U32, 0L);
+			DecodeContext ctx = buildCtx(DTypes.I64, 5, ends, values, PType.U32, 0L);
 			RunEndEncoding sut = new RunEndEncoding();
 
 			// When
@@ -51,7 +49,7 @@ class RunEndEncodingTest {
 			// ends=[2,5,7], values=[10,20,30]
 			long[] ends = {2L, 5L, 7L};
 			long[] values = {10L, 20L, 30L};
-			DecodeContext ctx = buildCtx(I64_DTYPE, 7, ends, values, PType.U32, 0L);
+			DecodeContext ctx = buildCtx(DTypes.I64, 7, ends, values, PType.U32, 0L);
 			RunEndEncoding sut = new RunEndEncoding();
 
 			// When
@@ -72,7 +70,7 @@ class RunEndEncodingTest {
 			// output elements [2..5): [10, 20, 20]
 			long[] ends = {3L, 6L};
 			long[] values = {10L, 20L};
-			DecodeContext ctx = buildCtx(I64_DTYPE, 3, ends, values, PType.U32, 2L);
+			DecodeContext ctx = buildCtx(DTypes.I64, 3, ends, values, PType.U32, 2L);
 			RunEndEncoding sut = new RunEndEncoding();
 
 			// When
@@ -153,8 +151,8 @@ class RunEndEncodingTest {
 			var le = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
 			// When
-			EncodeResult encoded = sut.encode(I64_DTYPE, data);
-			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, I64_DTYPE, registry);
+			EncodeResult encoded = sut.encode(DTypes.I64, data);
+			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, DTypes.I64, registry);
 			Array result = sut.decode(ctx);
 
 			// Then

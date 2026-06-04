@@ -1,7 +1,5 @@
 package io.github.dfa1.vortex.encoding;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.Array;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -17,9 +15,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// Property: encode then decode is lossless; monotonic sequences compress smaller than raw.
 class DeltaEncodingTest {
 
-	private static final DType I64_DTYPE = new DType.Primitive(PType.I64, false);
-	private static final DType I32_DTYPE = new DType.Primitive(PType.I32, false);
-
 	@Nested
 	class Encode {
 
@@ -33,8 +28,8 @@ class DeltaEncodingTest {
 			registry.register(new PrimitiveEncoding());
 
 			// When
-			EncodeResult encoded = sut.encode(I64_DTYPE, data);
-			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, I64_DTYPE, registry);
+			EncodeResult encoded = sut.encode(DTypes.I64, data);
+			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, DTypes.I64, registry);
 			Array result = sut.decode(ctx);
 
 			// Then
@@ -55,8 +50,8 @@ class DeltaEncodingTest {
 			registry.register(new PrimitiveEncoding());
 
 			// When
-			EncodeResult encoded = sut.encode(I32_DTYPE, data);
-			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, I32_DTYPE, registry);
+			EncodeResult encoded = sut.encode(DTypes.I32, data);
+			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, DTypes.I32, registry);
 			Array result = sut.decode(ctx);
 
 			// Then
@@ -77,8 +72,8 @@ class DeltaEncodingTest {
 			registry.register(new PrimitiveEncoding());
 
 			// When
-			EncodeResult encoded = sut.encode(I64_DTYPE, data);
-			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, I64_DTYPE, registry);
+			EncodeResult encoded = sut.encode(DTypes.I64, data);
+			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, DTypes.I64, registry);
 			Array result = sut.decode(ctx);
 
 			// Then

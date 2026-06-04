@@ -1,7 +1,5 @@
 package io.github.dfa1.vortex.encoding;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.Array;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -17,8 +15,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// Property: encode then decode is lossless for unsigned integer types.
 class BitpackedEncodingTest {
 
-	private static final DType U32_DTYPE = new DType.Primitive(PType.U32, false);
-	private static final DType U64_DTYPE = new DType.Primitive(PType.U64, false);
 
 	@Nested
 	class Encode {
@@ -32,8 +28,8 @@ class BitpackedEncodingTest {
 			registry.register(sut);
 
 			// When
-			EncodeResult encoded = sut.encode(U32_DTYPE, data);
-			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, U32_DTYPE, registry);
+			EncodeResult encoded = sut.encode(DTypes.U32, data);
+			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, DTypes.U32, registry);
 			Array result = sut.decode(ctx);
 
 			// Then
@@ -53,8 +49,8 @@ class BitpackedEncodingTest {
 			registry.register(sut);
 
 			// When
-			EncodeResult encoded = sut.encode(U64_DTYPE, data);
-			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, U64_DTYPE, registry);
+			EncodeResult encoded = sut.encode(DTypes.U64, data);
+			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, DTypes.U64, registry);
 			Array result = sut.decode(ctx);
 
 			// Then

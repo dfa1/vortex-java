@@ -1,7 +1,5 @@
 package io.github.dfa1.vortex.encoding;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.VarBinArray;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -23,9 +21,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 class VarBinViewEncodingTest {
 
 	private static final ValueLayout.OfInt LE_INT = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-	private static final DType UTF8 = new DType.Utf8(false);
-	private static final DType BINARY = new DType.Binary(false);
-	private static final DType I32 = new DType.Primitive(PType.I32, false);
 
 	@Nested
 	class Encode {
@@ -36,7 +31,7 @@ class VarBinViewEncodingTest {
 			var sut = new VarBinViewEncoding();
 
 			// When / Then
-			assertThat(sut.accepts(UTF8)).isTrue();
+			assertThat(sut.accepts(DTypes.UTF8)).isTrue();
 		}
 
 		@Test
@@ -45,7 +40,7 @@ class VarBinViewEncodingTest {
 			var sut = new VarBinViewEncoding();
 
 			// When / Then
-			assertThat(sut.accepts(BINARY)).isTrue();
+			assertThat(sut.accepts(DTypes.BINARY)).isTrue();
 		}
 
 		@Test
@@ -54,7 +49,7 @@ class VarBinViewEncodingTest {
 			var sut = new VarBinViewEncoding();
 
 			// When / Then
-			assertThat(sut.accepts(I32)).isFalse();
+			assertThat(sut.accepts(DTypes.I32)).isFalse();
 		}
 
 		@ParameterizedTest(name = "{0}")
@@ -65,14 +60,14 @@ class VarBinViewEncodingTest {
 			Arena arena = Arena.ofAuto();
 
 			// When
-			EncodeResult result = sut.encode(UTF8, values);
+			EncodeResult result = sut.encode(DTypes.UTF8, values);
 			MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
 			ArrayNode node = new ArrayNode(
 					EncodingId.VORTEX_VARBINVIEW, null, new ArrayNode[0],
 					result.rootNode().bufferIndices(), null);
 			EncodingRegistry registry = EncodingRegistry.empty();
 			registry.register(sut);
-			DecodeContext ctx = new DecodeContext(node, UTF8, values.length, bufs, registry, arena);
+			DecodeContext ctx = new DecodeContext(node, DTypes.UTF8, values.length, bufs, registry, arena);
 			var decoded = (VarBinArray) sut.decode(ctx);
 
 			// Then
@@ -140,7 +135,7 @@ class VarBinViewEncodingTest {
 			EncodingRegistry registry = EncodingRegistry.empty();
 			registry.register(new VarBinViewEncoding());
 
-			DecodeContext ctx = new DecodeContext(node, UTF8, n, segBufs, registry, arena);
+			DecodeContext ctx = new DecodeContext(node, DTypes.UTF8, n, segBufs, registry, arena);
 			var sut = new VarBinViewEncoding();
 
 			// When

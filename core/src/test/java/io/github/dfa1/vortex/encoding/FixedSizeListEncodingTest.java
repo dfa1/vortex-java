@@ -2,7 +2,6 @@ package io.github.dfa1.vortex.encoding;
 
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.FixedSizeListArray;
 import io.github.dfa1.vortex.core.array.IntArray;
 import org.junit.jupiter.api.Nested;
@@ -16,7 +15,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class FixedSizeListEncodingTest {
 
-	private static final DType I32 = new DType.Primitive(PType.I32, false);
 
 	private static ArrayNode toArrayNode(EncodeNode node) {
 		ArrayNode[] children = new ArrayNode[node.children().length];
@@ -40,7 +38,7 @@ class FixedSizeListEncodingTest {
 		void accepts_fixedSizeListDtype_true() {
 			// Given
 			FixedSizeListEncoding sut = new FixedSizeListEncoding();
-			DType.FixedSizeList dtype = new DType.FixedSizeList(I32, 3, false);
+			DType.FixedSizeList dtype = new DType.FixedSizeList(DTypes.I32, 3, false);
 
 			// When / Then
 			assertThat(sut.accepts(dtype)).isTrue();
@@ -52,13 +50,13 @@ class FixedSizeListEncodingTest {
 			FixedSizeListEncoding sut = new FixedSizeListEncoding();
 
 			// When / Then
-			assertThat(sut.accepts(I32)).isFalse();
+			assertThat(sut.accepts(DTypes.I32)).isFalse();
 		}
 
 		@Test
 		void encode_producesOneChild_noBuffers() {
 			// Given
-			DType.FixedSizeList dtype = new DType.FixedSizeList(I32, 2, false);
+			DType.FixedSizeList dtype = new DType.FixedSizeList(DTypes.I32, 2, false);
 			int[] elements = {1, 2, 3, 4};
 			FixedSizeListData data = new FixedSizeListData(elements, 2);
 			FixedSizeListEncoding sut = new FixedSizeListEncoding();
@@ -79,7 +77,7 @@ class FixedSizeListEncodingTest {
 		@Test
 		void roundTrip_i32Elements_preservesValues() {
 			// Given
-			DType.FixedSizeList dtype = new DType.FixedSizeList(I32, 3, false);
+			DType.FixedSizeList dtype = new DType.FixedSizeList(DTypes.I32, 3, false);
 			int[] elements = {10, 20, 30, 40, 50, 60};
 			FixedSizeListData data = new FixedSizeListData(elements, 2);
 			FixedSizeListEncoding sut = new FixedSizeListEncoding();
@@ -104,7 +102,7 @@ class FixedSizeListEncodingTest {
 		@Test
 		void roundTrip_fixedSizeOne_preservesValues() {
 			// Given
-			DType.FixedSizeList dtype = new DType.FixedSizeList(I32, 1, false);
+			DType.FixedSizeList dtype = new DType.FixedSizeList(DTypes.I32, 1, false);
 			int[] elements = {7, 8, 9};
 			FixedSizeListData data = new FixedSizeListData(elements, 3);
 			FixedSizeListEncoding sut = new FixedSizeListEncoding();
@@ -131,7 +129,7 @@ class FixedSizeListEncodingTest {
 			FixedSizeListEncoding sut = new FixedSizeListEncoding();
 			ArrayNode node = new ArrayNode(EncodingId.VORTEX_FIXED_SIZE_LIST, null,
 					new ArrayNode[0], new int[0], ArrayStats.empty());
-			DecodeContext ctx = new DecodeContext(node, I32, 0, new MemorySegment[0], registry(), Arena.global());
+			DecodeContext ctx = new DecodeContext(node, DTypes.I32, 0, new MemorySegment[0], registry(), Arena.global());
 
 			// When / Then
 			assertThatThrownBy(() -> sut.decode(ctx))

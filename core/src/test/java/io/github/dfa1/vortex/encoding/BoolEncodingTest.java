@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.encoding;
 
-import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.BoolArray;
 import org.junit.jupiter.api.Nested;
@@ -15,8 +14,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// Property: encode then decode is lossless for boolean arrays of all lengths (including non-multiples of 8).
 class BoolEncodingTest {
 
-	private static final DType BOOL_DTYPE = new DType.Bool(false);
-
 	@Nested
 	class Encode {
 
@@ -29,8 +26,8 @@ class BoolEncodingTest {
 			registry.register(sut);
 
 			// When
-			EncodeResult encoded = sut.encode(BOOL_DTYPE, data);
-			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, BOOL_DTYPE, registry);
+			EncodeResult encoded = sut.encode(DTypes.BOOL, data);
+			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, DTypes.BOOL, registry);
 			Array result = sut.decode(ctx);
 
 			// Then
@@ -50,7 +47,7 @@ class BoolEncodingTest {
 			var sut = new BoolEncoding();
 
 			// When
-			EncodeResult encoded = sut.encode(BOOL_DTYPE, data);
+			EncodeResult encoded = sut.encode(DTypes.BOOL, data);
 
 			// Then — bit-packed: ceiling(n/8) bytes, always ≤ n bytes raw
 			long totalBytes = encoded.buffers().stream().mapToLong(java.lang.foreign.MemorySegment::byteSize).sum();

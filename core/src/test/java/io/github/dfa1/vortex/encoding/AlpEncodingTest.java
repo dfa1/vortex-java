@@ -3,8 +3,6 @@ package io.github.dfa1.vortex.encoding;
 import io.github.dfa1.vortex.proto.EncodingProtos;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.ArrayStats;
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -20,8 +18,6 @@ import static org.assertj.core.api.Assertions.within;
 
 class AlpEncodingTest {
 
-	private static final DType F64_DTYPE = new DType.Primitive(PType.F64, false);
-	private static final DType F32_DTYPE = new DType.Primitive(PType.F32, false);
 
 	@Nested
 	class Decode {
@@ -188,7 +184,7 @@ class AlpEncodingTest {
 			registry.register(new AlpEncoding());
 			registry.register(new PrimitiveEncoding());
 
-			return new DecodeContext(alpNode, F64_DTYPE, encodedVals.length, segments, registry, java.lang.foreign.Arena.global());
+			return new DecodeContext(alpNode, DTypes.F64, encodedVals.length, segments, registry, java.lang.foreign.Arena.global());
 		}
 
 		private static DecodeContext buildAlpCtxF32(
@@ -218,7 +214,7 @@ class AlpEncodingTest {
 			registry.register(new AlpEncoding());
 			registry.register(new PrimitiveEncoding());
 
-			return new DecodeContext(alpNode, F32_DTYPE, encodedVals.length, segments, registry, java.lang.foreign.Arena.global());
+			return new DecodeContext(alpNode, DTypes.F32, encodedVals.length, segments, registry, java.lang.foreign.Arena.global());
 		}
 	}
 
@@ -236,8 +232,8 @@ class AlpEncodingTest {
 			registry.register(new PrimitiveEncoding());
 
 			// When
-			EncodeResult encoded = sut.encode(F32_DTYPE, values);
-			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, values.length, F32_DTYPE, registry);
+			EncodeResult encoded = sut.encode(DTypes.F32, values);
+			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, values.length, DTypes.F32, registry);
 			Array result = sut.decode(ctx);
 
 			// Then
@@ -259,8 +255,8 @@ class AlpEncodingTest {
 			registry.register(new PrimitiveEncoding());
 
 			// When
-			EncodeResult encoded = sut.encode(F32_DTYPE, values);
-			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, values.length, F32_DTYPE, registry);
+			EncodeResult encoded = sut.encode(DTypes.F32, values);
+			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, values.length, DTypes.F32, registry);
 			Array result = sut.decode(ctx);
 
 			// Then
@@ -283,8 +279,8 @@ class AlpEncodingTest {
 			registry.register(new PrimitiveEncoding());
 
 			// When
-			EncodeResult encoded = sut.encode(F64_DTYPE, values);
-			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, values.length, F64_DTYPE, registry);
+			EncodeResult encoded = sut.encode(DTypes.F64, values);
+			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, values.length, DTypes.F64, registry);
 			Array result = sut.decode(ctx);
 
 			// Then

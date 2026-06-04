@@ -23,7 +23,6 @@ class DateTimePartsEncodingTest {
     private static final DType EXT_TIMESTAMP_MS = timestampDType(TimeUnit.Milliseconds, false);
     private static final DType EXT_TIMESTAMP_NS = timestampDType(TimeUnit.Nanoseconds, false);
     private static final DType EXT_TIMESTAMP_S = timestampDType(TimeUnit.Seconds, false);
-    private static final DType I64 = new DType.Primitive(PType.I64, false);
 
     private static DType timestampDType(TimeUnit unit, boolean nullable) {
         // Rust hand-rolled: byte[0]=unit tag, bytes[1-2]=tz_len u16 LE (0 = no tz)
@@ -68,7 +67,7 @@ class DateTimePartsEncodingTest {
             DateTimePartsEncoding sut = new DateTimePartsEncoding();
 
             // When / Then
-            assertThat(sut.accepts(I64)).isFalse();
+            assertThat(sut.accepts(DTypes.I64)).isFalse();
         }
 
         @Test

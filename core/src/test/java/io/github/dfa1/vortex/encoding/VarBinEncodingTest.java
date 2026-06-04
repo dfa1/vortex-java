@@ -16,8 +16,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class VarBinEncodingTest {
 
-	private static final DType UTF8 = new DType.Utf8(false);
-	private static final DType BINARY = new DType.Binary(false);
 
 	@Nested
 	class Encode {
@@ -31,13 +29,13 @@ class VarBinEncodingTest {
 		@Test
 		void accepts_utf8Dtype_returnsTrue() {
 			// Given / When / Then
-			assertThat(new VarBinEncoding().accepts(UTF8)).isTrue();
+			assertThat(new VarBinEncoding().accepts(DTypes.UTF8)).isTrue();
 		}
 
 		@Test
 		void accepts_binaryDtype_returnsTrue() {
 			// Given / When / Then
-			assertThat(new VarBinEncoding().accepts(BINARY)).isTrue();
+			assertThat(new VarBinEncoding().accepts(DTypes.BINARY)).isTrue();
 		}
 
 		@Test
@@ -53,8 +51,8 @@ class VarBinEncodingTest {
 			String[] data = {"hello"};
 
 			// When
-			EncodeResult result = sut.encode(UTF8, data);
-			DecodeContext ctx = EncodeTestHelper.toDecodeContext(result, data.length, UTF8, buildRegistry());
+			EncodeResult result = sut.encode(DTypes.UTF8, data);
+			DecodeContext ctx = EncodeTestHelper.toDecodeContext(result, data.length, DTypes.UTF8, buildRegistry());
 			VarBinArray decoded = (VarBinArray) sut.decode(ctx);
 
 			// Then
@@ -69,8 +67,8 @@ class VarBinEncodingTest {
 			String[] data = {"foo", "bar", "baz"};
 
 			// When
-			EncodeResult result = sut.encode(UTF8, data);
-			DecodeContext ctx = EncodeTestHelper.toDecodeContext(result, data.length, UTF8, buildRegistry());
+			EncodeResult result = sut.encode(DTypes.UTF8, data);
+			DecodeContext ctx = EncodeTestHelper.toDecodeContext(result, data.length, DTypes.UTF8, buildRegistry());
 			VarBinArray decoded = (VarBinArray) sut.decode(ctx);
 
 			// Then
@@ -87,8 +85,8 @@ class VarBinEncodingTest {
 			String[] data = {"héllo", "wörld", "日本語"};
 
 			// When
-			EncodeResult result = sut.encode(UTF8, data);
-			DecodeContext ctx = EncodeTestHelper.toDecodeContext(result, data.length, UTF8, buildRegistry());
+			EncodeResult result = sut.encode(DTypes.UTF8, data);
+			DecodeContext ctx = EncodeTestHelper.toDecodeContext(result, data.length, DTypes.UTF8, buildRegistry());
 			VarBinArray decoded = (VarBinArray) sut.decode(ctx);
 
 			// Then
@@ -105,8 +103,8 @@ class VarBinEncodingTest {
 			String[] data = {"a", "", "b"};
 
 			// When
-			EncodeResult result = sut.encode(UTF8, data);
-			DecodeContext ctx = EncodeTestHelper.toDecodeContext(result, data.length, UTF8, buildRegistry());
+			EncodeResult result = sut.encode(DTypes.UTF8, data);
+			DecodeContext ctx = EncodeTestHelper.toDecodeContext(result, data.length, DTypes.UTF8, buildRegistry());
 			VarBinArray decoded = (VarBinArray) sut.decode(ctx);
 
 			// Then
@@ -123,8 +121,8 @@ class VarBinEncodingTest {
 			String[] data = {};
 
 			// When
-			EncodeResult result = sut.encode(UTF8, data);
-			DecodeContext ctx = EncodeTestHelper.toDecodeContext(result, data.length, UTF8, buildRegistry());
+			EncodeResult result = sut.encode(DTypes.UTF8, data);
+			DecodeContext ctx = EncodeTestHelper.toDecodeContext(result, data.length, DTypes.UTF8, buildRegistry());
 			VarBinArray decoded = (VarBinArray) sut.decode(ctx);
 
 			// Then
@@ -147,7 +145,7 @@ class VarBinEncodingTest {
 			// Given
 			var sut = new VarBinEncoding();
 			ArrayNode node = new ArrayNode(EncodingId.VORTEX_VARBIN, null, new ArrayNode[0], new int[0], null);
-			DecodeContext ctx = new DecodeContext(node, UTF8, 3, new MemorySegment[0],
+			DecodeContext ctx = new DecodeContext(node, DTypes.UTF8, 3, new MemorySegment[0],
 					EncodingRegistry.empty(), Arena.ofAuto());
 
 			// When / Then

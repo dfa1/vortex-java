@@ -22,8 +22,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class FrameOfReferenceEncodingTest {
 
-	private static final DType I64_DTYPE = new DType.Primitive(PType.I64, false);
-	private static final DType I32_DTYPE = new DType.Primitive(PType.I32, false);
 
 	@Nested
 	class Decode {
@@ -35,7 +33,7 @@ class FrameOfReferenceEncodingTest {
 			long[] residuals = {0, 1, 2, 3, 4};
 			long[] expected = {1000, 1001, 1002, 1003, 1004};
 
-			DecodeContext ctx = buildForContext(I64_DTYPE, reference, residuals, PType.I64);
+			DecodeContext ctx = buildForContext(DTypes.I64, reference, residuals, PType.I64);
 			FrameOfReferenceEncoding sut = new FrameOfReferenceEncoding();
 
 			// When
@@ -58,7 +56,7 @@ class FrameOfReferenceEncodingTest {
 			long[] residuals = {0, 5, 10, 15};
 			int[] expected = {-100, -95, -90, -85};
 
-			DecodeContext ctx = buildForContext(I32_DTYPE, reference, residuals, PType.I32);
+			DecodeContext ctx = buildForContext(DTypes.I32, reference, residuals, PType.I32);
 			FrameOfReferenceEncoding sut = new FrameOfReferenceEncoding();
 
 			// When
@@ -78,7 +76,7 @@ class FrameOfReferenceEncodingTest {
 		void decode_zeroReference_returnsChildUnchanged() {
 			// Given — reference == 0, should skip the add entirely
 			long[] residuals = {7, 8, 9};
-			DecodeContext ctx = buildForContext(I64_DTYPE, 0L, residuals, PType.I64);
+			DecodeContext ctx = buildForContext(DTypes.I64, 0L, residuals, PType.I64);
 			FrameOfReferenceEncoding sut = new FrameOfReferenceEncoding();
 
 			// When
@@ -96,7 +94,7 @@ class FrameOfReferenceEncodingTest {
 		void decode_wrappingAdd_i64(long reference) {
 			// Given — wrapping arithmetic: MAX + 1 wraps to MIN
 			long[] residuals = {1L};
-			DecodeContext ctx = buildForContext(I64_DTYPE, reference, residuals, PType.I64);
+			DecodeContext ctx = buildForContext(DTypes.I64, reference, residuals, PType.I64);
 			FrameOfReferenceEncoding sut = new FrameOfReferenceEncoding();
 
 			// When
@@ -137,7 +135,7 @@ class FrameOfReferenceEncodingTest {
 
 			MemorySegment[] segments = {MemorySegment.ofArray(residualBytes), validitySeg};
 			DecodeContext ctx = new DecodeContext(
-					forNode, I32_DTYPE, residuals.length, segments, registry, java.lang.foreign.Arena.global());
+					forNode, DTypes.I32, residuals.length, segments, registry, java.lang.foreign.Arena.global());
 			FrameOfReferenceEncoding sut = new FrameOfReferenceEncoding();
 
 			// When
@@ -214,8 +212,8 @@ class FrameOfReferenceEncodingTest {
 			var le = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
 			// When
-			EncodeResult encoded = sut.encode(I64_DTYPE, data);
-			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, I64_DTYPE, registry);
+			EncodeResult encoded = sut.encode(DTypes.I64, data);
+			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, DTypes.I64, registry);
 			Array result = sut.decode(ctx);
 
 			// Then
@@ -236,8 +234,8 @@ class FrameOfReferenceEncodingTest {
 			var le = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
 			// When
-			EncodeResult encoded = sut.encode(I32_DTYPE, data);
-			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, I32_DTYPE, registry);
+			EncodeResult encoded = sut.encode(DTypes.I32, data);
+			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, DTypes.I32, registry);
 			Array result = sut.decode(ctx);
 
 			// Then
