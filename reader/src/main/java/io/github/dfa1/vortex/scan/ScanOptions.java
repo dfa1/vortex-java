@@ -25,6 +25,18 @@ public record ScanOptions(
 		return new ScanOptions(List.of(), null, limit);
 	}
 
+	public ScanOptions withColumns(String... names) {
+		return new ScanOptions(List.of(names), rowFilter, limit);
+	}
+
+	public ScanOptions withLimit(long limit) {
+		return new ScanOptions(columns, rowFilter, limit);
+	}
+
+	public ScanOptions withFilter(RowFilter filter) {
+		return new ScanOptions(columns, filter, limit);
+	}
+
 	public boolean hasProjection() {
 		return !columns.isEmpty();
 	}
