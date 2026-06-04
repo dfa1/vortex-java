@@ -243,12 +243,16 @@ public final class RunEndEncoding implements Encoding {
 		private static void expandLong(MemorySegment endsSeg, MemorySegment valuesSeg,
 		                               PType endsPtype, long numRuns, long offset, long n, MemorySegment out) {
 			long logicalPos = 0L, outPos = 0L;
+			long limit = offset + n;
 			for (long run = 0; run < numRuns && outPos < n; run++) {
 				long runEnd = readUnsigned(endsSeg, run, endsPtype);
 				long rawValue = valuesSeg.get(PTypeIO.LE_LONG, run * 8);
-				long writeEnd = Math.min(runEnd, offset + n);
-				for (long lp = Math.max(logicalPos, offset); lp < writeEnd; lp++, outPos++) {
-					out.set(PTypeIO.LE_LONG, outPos * 8, rawValue);
+				long fillCount = Math.min(runEnd, limit) - Math.max(logicalPos, offset);
+				if (fillCount > 0) {
+					for (long k = 0; k < fillCount; k++) {
+						out.setAtIndex(PTypeIO.LE_LONG, outPos + k, rawValue);
+					}
+					outPos += fillCount;
 				}
 				logicalPos = runEnd;
 			}
