@@ -59,7 +59,7 @@
 
 ## Tooling
 
-- [ ] hardwood to convert parquet files to vortex
+
 - [ ] Optional `vortex-arrow` bridge module for Arrow ecosystem interop
     - Primary API stays `ArrayLong`/`ArrayDouble` (zero-copy, no deps, no Unsafe)
     - Bridge wraps typed views into Arrow `BigIntVector`, `Float8Vector`, etc. for users who need

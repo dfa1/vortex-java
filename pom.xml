@@ -14,6 +14,7 @@
 		<module>reader</module>
 		<module>writer</module>
 		<module>csv</module>
+		<module>parquet</module>
 		<module>cli</module>
 		<module>integration</module>
 		<module>performance</module>
@@ -28,6 +29,7 @@
 		<flatbuffers.version>25.2.10</flatbuffers.version>
 		<protobuf.version>4.35.0</protobuf.version>
 		<fastcsv.version>3.6.0</fastcsv.version>
+		<hardwood.version>1.0.0.CR1</hardwood.version>
 		<!-- testing -->
 		<junit.version>5.11.4</junit.version>
 		<assertj.version>3.27.7</assertj.version>
@@ -61,9 +63,19 @@
 				<version>${project.version}</version>
 			</dependency>
 			<dependency>
+				<groupId>io.github.dfa1.vortex</groupId>
+				<artifactId>parquet</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
 				<groupId>de.siegmar</groupId>
 				<artifactId>fastcsv</artifactId>
 				<version>${fastcsv.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>dev.hardwood</groupId>
+				<artifactId>hardwood-core</artifactId>
+				<version>${hardwood.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>io.airlift</groupId>
