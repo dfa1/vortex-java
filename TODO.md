@@ -41,7 +41,6 @@
 
 ## Build
 
-- [ ] add other JDK version in the build matrix (at least JDK 26 and maybe 22, 23, 24): build is fast
 - [ ] **Merge `core`/`reader`/`writer` into a single library jar** — the three modules are tightly
   coupled (every `Encoding` class has both encode + decode; format constants are shared). A single
   `vortex-java` artifact simplifies client dependency management and removes artificial module
