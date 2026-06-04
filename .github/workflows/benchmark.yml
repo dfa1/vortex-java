@@ -38,7 +38,7 @@ jobs:
           sudo install -m 755 flatc /usr/local/bin/flatc
 
       - name: Run benchmarks
-        run: ./bench
+        run: ./bench "RustVsJava" -wi 1 -i 3 -f 1
 
       - name: Store benchmark results
         uses: benchmark-action/github-action-benchmark@v1
