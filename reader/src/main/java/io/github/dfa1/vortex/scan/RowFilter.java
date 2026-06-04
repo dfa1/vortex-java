@@ -11,6 +11,10 @@ public sealed interface RowFilter
 		return new And(List.of(filters));
 	}
 
+	default RowFilter and(RowFilter other) {
+		return new And(List.of(this, other));
+	}
+
 	static RowFilter gte(String col, Comparable<?> val) {
 		return new Gte(col, val);
 	}
