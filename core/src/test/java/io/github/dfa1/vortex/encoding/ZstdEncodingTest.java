@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
+import com.github.luben.zstd.ZstdCompressCtx;
 import io.airlift.compress.v3.zstd.ZstdJavaCompressor;
 import io.airlift.compress.v3.zstd.ZstdCompressor;
 import io.github.dfa1.vortex.core.DType;
@@ -223,18 +224,89 @@ class ZstdEncodingTest {
         }
 
         @Test
-        void decode_withDictionary_throwsVortexException() {
+        void decode_withDictionary_primitive_roundTrips() {
             // Given
             var sut = new ZstdEncoding();
+            int[] values = {10, 20, 30, 40};
+            byte[] raw = toLeBytes(values);
+            byte[] dictBytes = makeDictFor(raw);
+            byte[] compressed = compressWithDict(raw, dictBytes);
             byte[] meta = EncodingProtos.ZstdMetadata.newBuilder()
-                    .setDictionarySize(42)
+                    .setDictionarySize(dictBytes.length)
+                    .addFrames(EncodingProtos.ZstdFrameMetadata.newBuilder()
+                            .setUncompressedSize(raw.length)
+                            .setNValues(values.length))
                     .build().toByteArray();
-            DecodeContext ctx = makeCtx(meta, I32, 0);
+            // buffer[0]=dict, buffer[1]=frame
+            DecodeContext ctx = makeDictCtx(meta, I32, values.length, dictBytes, compressed);
 
-            // When / Then
-            assertThatThrownBy(() -> sut.decode(ctx))
-                    .isInstanceOf(VortexException.class)
-                    .hasMessageContaining("dictionary not supported");
+            // When
+            IntArray result = (IntArray) sut.decode(ctx);
+
+            // Then
+            assertThat(result.length()).isEqualTo(values.length);
+            for (int i = 0; i < values.length; i++) {
+                assertThat(result.getInt(i)).as("index %d", i).isEqualTo(values[i]);
+            }
+        }
+
+        @Test
+        void decode_withDictionary_utf8_roundTrips() {
+            // Given
+            var sut = new ZstdEncoding();
+            String[] strings = {"hello", "world", "zstd"};
+            byte[] raw = toLengthPrefixed(strings);
+            byte[] dictBytes = makeDictFor(raw);
+            byte[] compressed = compressWithDict(raw, dictBytes);
+            byte[] meta = EncodingProtos.ZstdMetadata.newBuilder()
+                    .setDictionarySize(dictBytes.length)
+                    .addFrames(EncodingProtos.ZstdFrameMetadata.newBuilder()
+                            .setUncompressedSize(raw.length)
+                            .setNValues(strings.length))
+                    .build().toByteArray();
+            DecodeContext ctx = makeDictCtx(meta, UTF8, strings.length, dictBytes, compressed);
+
+            // When
+            VarBinArray result = (VarBinArray) sut.decode(ctx);
+
+            // Then
+            assertThat(result.length()).isEqualTo(strings.length);
+            for (int i = 0; i < strings.length; i++) {
+                assertThat(result.getString(i)).as("index %d", i).isEqualTo(strings[i]);
+            }
+        }
+
+        @Test
+        void decode_withDictionary_multipleFrames_roundTrips() {
+            // Given
+            var sut = new ZstdEncoding();
+            int[] frame0 = {1, 2, 3};
+            int[] frame1 = {4, 5};
+            byte[] raw0 = toLeBytes(frame0);
+            byte[] raw1 = toLeBytes(frame1);
+            byte[] dictBytes = makeDictFor(raw0, raw1);
+            byte[] comp0 = compressWithDict(raw0, dictBytes);
+            byte[] comp1 = compressWithDict(raw1, dictBytes);
+            byte[] meta = EncodingProtos.ZstdMetadata.newBuilder()
+                    .setDictionarySize(dictBytes.length)
+                    .addFrames(EncodingProtos.ZstdFrameMetadata.newBuilder()
+                            .setUncompressedSize(raw0.length).setNValues(frame0.length))
+                    .addFrames(EncodingProtos.ZstdFrameMetadata.newBuilder()
+                            .setUncompressedSize(raw1.length).setNValues(frame1.length))
+                    .build().toByteArray();
+            DecodeContext ctx = makeDictCtx(meta, I32, 5, dictBytes, comp0, comp1);
+
+            // When
+            IntArray result = (IntArray) sut.decode(ctx);
+
+            // Then
+            assertThat(result.length()).isEqualTo(5);
+            for (int i = 0; i < 3; i++) {
+                assertThat(result.getInt(i)).isEqualTo(frame0[i]);
+            }
+            for (int i = 0; i < 2; i++) {
+                assertThat(result.getInt(3 + i)).isEqualTo(frame1[i]);
+            }
         }
 
         @Test
@@ -327,6 +399,48 @@ class ZstdEncodingTest {
             assertThatThrownBy(() -> sut.decode(ctx))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("missing metadata");
+        }
+
+        private static DecodeContext makeDictCtx(
+                byte[] meta, DType dtype, long n, byte[] dictBytes, byte[]... compressedFrames
+        ) {
+            // buffer[0] = dict, buffer[1..] = frames
+            MemorySegment[] segments = new MemorySegment[1 + compressedFrames.length];
+            segments[0] = MemorySegment.ofArray(dictBytes);
+            int[] bufIndices = new int[1 + compressedFrames.length];
+            bufIndices[0] = 0;
+            for (int i = 0; i < compressedFrames.length; i++) {
+                segments[i + 1] = MemorySegment.ofArray(compressedFrames[i]);
+                bufIndices[i + 1] = i + 1;
+            }
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_ZSTD, ByteBuffer.wrap(meta),
+                    new ArrayNode[0], bufIndices, null);
+            return new DecodeContext(node, dtype, n, segments, EncodingRegistry.empty(), Arena.ofAuto());
+        }
+
+        private static byte[] makeDictFor(byte[]... samples) {
+            // Repeat samples to meet zstd's minimum training data requirement (~1 KB)
+            int total = 0;
+            for (byte[] s : samples) {
+                total += s.length;
+            }
+            int repeats = Math.max(1, 1024 / Math.max(total, 1));
+            byte[][] expanded = new byte[samples.length * repeats][];
+            for (int r = 0; r < repeats; r++) {
+                System.arraycopy(samples, 0, expanded, r * samples.length, samples.length);
+            }
+            byte[] dict = new byte[256];
+            com.github.luben.zstd.Zstd.trainFromBuffer(expanded, dict);
+            return dict;
+        }
+
+        private static byte[] compressWithDict(byte[] data, byte[] dictBytes) {
+            try (ZstdCompressCtx ctx = new ZstdCompressCtx()) {
+                ctx.loadDict(dictBytes);
+                return ctx.compress(data);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
         }
 
         private static DecodeContext makeNullableCtx(

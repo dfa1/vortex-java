@@ -24,6 +24,7 @@
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<!-- production -->
 		<aircompressor.version>3.6</aircompressor.version>
+		<zstd-jni.version>1.5.7-6</zstd-jni.version>
 		<flatbuffers.version>25.2.10</flatbuffers.version>
 		<protobuf.version>4.35.0</protobuf.version>
 		<fastcsv.version>3.6.0</fastcsv.version>
@@ -68,6 +69,11 @@
 				<groupId>io.airlift</groupId>
 				<artifactId>aircompressor-v3</artifactId>
 				<version>${aircompressor.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.github.luben</groupId>
+				<artifactId>zstd-jni</artifactId>
+				<version>${zstd-jni.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>com.google.flatbuffers</groupId>
@@ -162,7 +168,7 @@
 					<artifactId>maven-surefire-plugin</artifactId>
 					<version>3.5.2</version>
 					<configuration>
-						<argLine>--sun-misc-unsafe-memory-access=allow</argLine>
+						<argLine>--sun-misc-unsafe-memory-access=allow --enable-native-access=ALL-UNNAMED</argLine>
 					</configuration>
 				</plugin>
 				<plugin>
