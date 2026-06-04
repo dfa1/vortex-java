@@ -112,9 +112,7 @@ class RunEndEncodingTest {
 					MemorySegment.ofArray(valBuf)
 			};
 
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(new RunEndEncoding());
-			registry.register(new PrimitiveEncoding());
+			EncodingRegistry registry = TestRegistry.of(new RunEndEncoding(), new PrimitiveEncoding());
 
 			return new DecodeContext(reNode, dtype, rowCount, segments, registry, java.lang.foreign.Arena.global());
 		}
@@ -144,9 +142,7 @@ class RunEndEncodingTest {
 		void encodeDecode_i64_isLossless(long[] data) {
 			// Given
 			var sut = new RunEndEncoding();
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(sut);
-			registry.register(new PrimitiveEncoding());
+			EncodingRegistry registry = TestRegistry.withPrimitive(sut);
 			var le = PTypeIO.LE_LONG;
 
 			// When

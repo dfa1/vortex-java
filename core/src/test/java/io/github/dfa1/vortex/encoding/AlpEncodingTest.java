@@ -179,9 +179,7 @@ class AlpEncodingTest {
 			ArrayNode alpNode = new ArrayNode(EncodingId.VORTEX_ALP,
 					ByteBuffer.wrap(metaBytes), children, new int[0], ArrayStats.empty());
 
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(new AlpEncoding());
-			registry.register(new PrimitiveEncoding());
+			EncodingRegistry registry = TestRegistry.of(new AlpEncoding(), new PrimitiveEncoding());
 
 			return new DecodeContext(alpNode, DTypes.F64, encodedVals.length, segments, registry, java.lang.foreign.Arena.global());
 		}
@@ -209,9 +207,7 @@ class AlpEncodingTest {
 
 			MemorySegment[] segments = {MemorySegment.ofArray(encBuf)};
 
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(new AlpEncoding());
-			registry.register(new PrimitiveEncoding());
+			EncodingRegistry registry = TestRegistry.of(new AlpEncoding(), new PrimitiveEncoding());
 
 			return new DecodeContext(alpNode, DTypes.F32, encodedVals.length, segments, registry, java.lang.foreign.Arena.global());
 		}
@@ -226,9 +222,7 @@ class AlpEncodingTest {
 			float[] values = {1.0f, 2.5f, 3.75f, 10.0f, 0.1f};
 			AlpEncoding sut = new AlpEncoding();
 
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(sut);
-			registry.register(new PrimitiveEncoding());
+			EncodingRegistry registry = TestRegistry.withPrimitive(sut);
 
 			// When
 			EncodeResult encoded = sut.encode(DTypes.F32, values);
@@ -249,9 +243,7 @@ class AlpEncodingTest {
 			float[] values = {1.0f, Float.NaN, 2.5f, Float.POSITIVE_INFINITY, 3.0f};
 			AlpEncoding sut = new AlpEncoding();
 
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(sut);
-			registry.register(new PrimitiveEncoding());
+			EncodingRegistry registry = TestRegistry.withPrimitive(sut);
 
 			// When
 			EncodeResult encoded = sut.encode(DTypes.F32, values);
@@ -273,9 +265,7 @@ class AlpEncodingTest {
 			double[] values = {1.23, 4.56, 7.89, 0.001, 100.0};
 			AlpEncoding sut = new AlpEncoding();
 
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(sut);
-			registry.register(new PrimitiveEncoding());
+			EncodingRegistry registry = TestRegistry.withPrimitive(sut);
 
 			// When
 			EncodeResult encoded = sut.encode(DTypes.F64, values);

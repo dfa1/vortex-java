@@ -127,10 +127,7 @@ class FrameOfReferenceEncodingTest {
 			ArrayNode forNode = new ArrayNode(
 					EncodingId.FASTLANES_FOR, ByteBuffer.wrap(metaBytes), new ArrayNode[]{primNode}, new int[0], ArrayStats.empty());
 
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(new FrameOfReferenceEncoding());
-			registry.register(new PrimitiveEncoding());
-			registry.register(new BoolEncoding());
+			EncodingRegistry registry = TestRegistry.of(new FrameOfReferenceEncoding(), new PrimitiveEncoding(), new BoolEncoding());
 
 			MemorySegment[] segments = {MemorySegment.ofArray(residualBytes), validitySeg};
 			DecodeContext ctx = new DecodeContext(
@@ -189,9 +186,7 @@ class FrameOfReferenceEncodingTest {
 
 			MemorySegment[] segments = {MemorySegment.ofArray(childBytes)};
 
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(new FrameOfReferenceEncoding());
-			registry.register(new PrimitiveEncoding());
+			EncodingRegistry registry = TestRegistry.of(new FrameOfReferenceEncoding(), new PrimitiveEncoding());
 
 			return new DecodeContext(forNode, dtype, residuals.length, segments, registry, java.lang.foreign.Arena.global());
 		}
@@ -205,9 +200,7 @@ class FrameOfReferenceEncodingTest {
 		void encodeDecode_i64_isLossless(long[] data) {
 			// Given
 			var sut = new FrameOfReferenceEncoding();
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(sut);
-			registry.register(new PrimitiveEncoding());
+			EncodingRegistry registry = TestRegistry.withPrimitive(sut);
 			var le = PTypeIO.LE_LONG;
 
 			// When
@@ -227,9 +220,7 @@ class FrameOfReferenceEncodingTest {
 		void encodeDecode_i32_isLossless(int[] data) {
 			// Given
 			var sut = new FrameOfReferenceEncoding();
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(sut);
-			registry.register(new PrimitiveEncoding());
+			EncodingRegistry registry = TestRegistry.withPrimitive(sut);
 			var le = PTypeIO.LE_INT;
 
 			// When

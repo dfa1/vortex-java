@@ -20,9 +20,7 @@ class DecimalBytePartsEncodingTest {
 			long[] values = {1L, -2L, 3L};
 			DType dtype = new DType.Decimal((byte) 18, (byte) 0, false);
 			var sut = new DecimalBytePartsEncoding();
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(sut);
-			registry.register(new PrimitiveEncoding());
+			EncodingRegistry registry = TestRegistry.withPrimitive(sut);
 
 			// When
 			EncodeResult encoded = sut.encode(dtype, values);

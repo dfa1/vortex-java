@@ -21,8 +21,7 @@ class ConstantEncodingTest {
 		void encodeDecode_i32_isLossless(int[] data) {
 			// Given
 			var sut = new ConstantEncoding();
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(sut);
+			EncodingRegistry registry = TestRegistry.of(sut);
 			var le = PTypeIO.LE_INT;
 
 			// When
@@ -42,8 +41,7 @@ class ConstantEncodingTest {
 		void encodeDecode_i64_isLossless(long[] data) {
 			// Given
 			var sut = new ConstantEncoding();
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(sut);
+			EncodingRegistry registry = TestRegistry.of(sut);
 			var le = PTypeIO.LE_LONG;
 
 			// When

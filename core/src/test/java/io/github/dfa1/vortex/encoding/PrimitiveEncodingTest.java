@@ -29,8 +29,7 @@ class PrimitiveEncodingTest {
 			// Given
 			DType dtype = new DType.Primitive(PType.I64, false);
 			var sut = new PrimitiveEncoding();
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(sut);
+			EncodingRegistry registry = TestRegistry.of(sut);
 
 			// When
 			EncodeResult encoded = sut.encode(dtype, data);
@@ -51,8 +50,7 @@ class PrimitiveEncodingTest {
 			// Given
 			DType dtype = new DType.Primitive(PType.I32, false);
 			var sut = new PrimitiveEncoding();
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(sut);
+			EncodingRegistry registry = TestRegistry.of(sut);
 
 			// When
 			EncodeResult encoded = sut.encode(dtype, data);
@@ -73,8 +71,7 @@ class PrimitiveEncodingTest {
 			// Given
 			DType dtype = new DType.Primitive(PType.F64, false);
 			var sut = new PrimitiveEncoding();
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(sut);
+			EncodingRegistry registry = TestRegistry.of(sut);
 
 			// When
 			EncodeResult encoded = sut.encode(dtype, data);
@@ -150,9 +147,7 @@ class PrimitiveEncodingTest {
 			ArrayNode primNode = new ArrayNode(
 					EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[]{validityNode}, new int[]{0}, ArrayStats.empty());
 
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(new PrimitiveEncoding());
-			registry.register(new BoolEncoding());
+			EncodingRegistry registry = TestRegistry.of(new PrimitiveEncoding(), new BoolEncoding());
 
 			DType dtype = new DType.Primitive(PType.I32, false);
 			DecodeContext ctx = new DecodeContext(
@@ -187,8 +182,7 @@ class PrimitiveEncodingTest {
 			ArrayNode primNode = new ArrayNode(
 					EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0}, ArrayStats.empty());
 
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(new PrimitiveEncoding());
+			EncodingRegistry registry = TestRegistry.of(new PrimitiveEncoding());
 
 			DType dtype = new DType.Primitive(PType.I32, false);
 			DecodeContext ctx = new DecodeContext(

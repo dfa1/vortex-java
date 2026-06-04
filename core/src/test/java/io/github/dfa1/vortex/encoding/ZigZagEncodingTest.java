@@ -76,9 +76,7 @@ class ZigZagEncodingTest {
 			ArrayNode primitiveNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0}, null);
 			ArrayNode zigzagNode = new ArrayNode(EncodingId.VORTEX_ZIGZAG, null, new ArrayNode[]{primitiveNode}, new int[0], null);
 
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(new ZigZagEncoding());
-			registry.register(new PrimitiveEncoding());
+			EncodingRegistry registry = TestRegistry.of(new ZigZagEncoding(), new PrimitiveEncoding());
 			return new DecodeContext(zigzagNode, DTypes.I32, encodedUnsigned.length,
 					new MemorySegment[]{seg}, registry, Arena.ofAuto());
 		}
@@ -92,9 +90,7 @@ class ZigZagEncodingTest {
 		void encodeDecode_i32_isLossless(int[] data) {
 			// Given
 			var sut = new ZigZagEncoding();
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(sut);
-			registry.register(new PrimitiveEncoding());
+			EncodingRegistry registry = TestRegistry.withPrimitive(sut);
 			var le = PTypeIO.LE_INT;
 
 			// When
@@ -114,9 +110,7 @@ class ZigZagEncodingTest {
 		void encodeDecode_i64_isLossless(long[] data) {
 			// Given
 			var sut = new ZigZagEncoding();
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(sut);
-			registry.register(new PrimitiveEncoding());
+			EncodingRegistry registry = TestRegistry.withPrimitive(sut);
 			var le = PTypeIO.LE_LONG;
 
 			// When

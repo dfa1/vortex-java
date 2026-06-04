@@ -55,9 +55,7 @@ class StructEncodingTest {
 
 			// Then — decode round-trip
 			MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(new StructEncoding());
-			registry.register(new PrimitiveEncoding());
+			EncodingRegistry registry = TestRegistry.of(new StructEncoding(), new PrimitiveEncoding());
 			DecodeContext ctx = new DecodeContext(
 					toArrayNode(result.rootNode()), dtype, ids.length, bufs, registry, Arena.global());
 			StructArray decoded = (StructArray) sut.decode(ctx);
@@ -140,10 +138,7 @@ class StructEncodingTest {
 			ArrayNode structNode = new ArrayNode(EncodingId.VORTEX_STRUCT, null,
 					new ArrayNode[]{validityNode, valuesNode}, new int[0], ArrayStats.empty());
 
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(new StructEncoding());
-			registry.register(new PrimitiveEncoding());
-			registry.register(new BoolEncoding());
+			EncodingRegistry registry = TestRegistry.of(new StructEncoding(), new PrimitiveEncoding(), new BoolEncoding());
 			DecodeContext ctx = new DecodeContext(
 					structNode, DTypes.I64, data.length,
 					new MemorySegment[]{validitySeg, valuesSeg},
@@ -176,9 +171,7 @@ class StructEncodingTest {
 		}
 
 		private static DecodeContext buildStructCtx(ArrayNode structNode, MemorySegment[] segs, long rowCount) {
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(new StructEncoding());
-			registry.register(new PrimitiveEncoding());
+			EncodingRegistry registry = TestRegistry.of(new StructEncoding(), new PrimitiveEncoding());
 			return new DecodeContext(structNode, DTypes.I64, rowCount, segs, registry, Arena.global());
 		}
 	}

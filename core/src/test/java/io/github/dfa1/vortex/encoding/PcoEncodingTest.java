@@ -57,8 +57,7 @@ class PcoEncodingTest {
 		ArrayNode pcoNode = new ArrayNode(EncodingId.VORTEX_PCO, meta, new ArrayNode[]{validityNode},
 				pcoBufferIndices, null);
 
-		EncodingRegistry registry = EncodingRegistry.empty();
-		registry.register(new BoolEncoding());
+		EncodingRegistry registry = TestRegistry.of(new BoolEncoding());
 		return new DecodeContext(pcoNode, dtype, rowCount, allBuffers, registry, Arena.ofAuto());
 	}
 

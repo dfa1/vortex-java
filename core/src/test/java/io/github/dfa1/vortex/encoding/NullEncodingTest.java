@@ -68,8 +68,7 @@ class NullEncodingTest {
 
 		private static DecodeContext buildNullCtx(long rowCount) {
 			ArrayNode node = new ArrayNode(EncodingId.VORTEX_NULL, null, new ArrayNode[0], new int[0], null);
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(new NullEncoding());
+			EncodingRegistry registry = TestRegistry.of(new NullEncoding());
 			return new DecodeContext(node, DTypes.NULL, rowCount, new MemorySegment[0], registry, Arena.ofAuto());
 		}
 	}

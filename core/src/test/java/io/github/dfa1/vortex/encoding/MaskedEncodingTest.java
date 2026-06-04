@@ -164,10 +164,7 @@ class MaskedEncodingTest {
 	// ── helpers ───────────────────────────────────────────────────────────────
 
 	private static EncodingRegistry buildRegistry() {
-		EncodingRegistry registry = EncodingRegistry.empty();
-		registry.register(new MaskedEncoding());
-		registry.register(new PrimitiveEncoding());
-		registry.register(new BoolEncoding());
+		EncodingRegistry registry = TestRegistry.of(new MaskedEncoding(), new PrimitiveEncoding(), new BoolEncoding());
 		return registry;
 	}
 

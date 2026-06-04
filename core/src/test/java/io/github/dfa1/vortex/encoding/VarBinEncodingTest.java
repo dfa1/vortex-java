@@ -130,9 +130,7 @@ class VarBinEncodingTest {
 		}
 
 		private static EncodingRegistry buildRegistry() {
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(new VarBinEncoding());
-			registry.register(new PrimitiveEncoding());
+			EncodingRegistry registry = TestRegistry.of(new VarBinEncoding(), new PrimitiveEncoding());
 			return registry;
 		}
 	}

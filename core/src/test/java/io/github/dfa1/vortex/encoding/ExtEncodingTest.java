@@ -53,9 +53,7 @@ class ExtEncodingTest {
 			assertThat(result.rootNode().children()[0].encodingId()).isEqualTo(EncodingId.VORTEX_PRIMITIVE);
 
 			// Decode back
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(new PrimitiveEncoding());
-			registry.register(new ExtEncoding());
+			EncodingRegistry registry = TestRegistry.of(new PrimitiveEncoding(), new ExtEncoding());
 			ArrayNode rootNode = encodeNodeToArrayNode(result.rootNode());
 			DecodeContext ctx = new DecodeContext(
 					rootNode, extDType, data.length,
@@ -96,9 +94,7 @@ class ExtEncodingTest {
 			// parent node: vortex.ext, no buffers, one child
 			ArrayNode extNode = new ArrayNode(EncodingId.VORTEX_EXT, null, new ArrayNode[]{primitiveNode}, new int[0], null);
 
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(new PrimitiveEncoding());
-			registry.register(new ExtEncoding());
+			EncodingRegistry registry = TestRegistry.of(new PrimitiveEncoding(), new ExtEncoding());
 
 			DecodeContext ctx = new DecodeContext(
 					extNode, extDType, values.length, new MemorySegment[]{buf}, registry, Arena.ofAuto());

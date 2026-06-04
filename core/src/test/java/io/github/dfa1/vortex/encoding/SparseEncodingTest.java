@@ -126,9 +126,7 @@ class SparseEncodingTest {
 			ArrayNode sparseNode = new ArrayNode(root.encodingId(), root.metadata(),
 					new ArrayNode[]{idxNode, valNode}, root.bufferIndices(), ArrayStats.empty());
 
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(new SparseEncoding());
-			registry.register(new PrimitiveEncoding());
+			EncodingRegistry registry = TestRegistry.of(new SparseEncoding(), new PrimitiveEncoding());
 
 			DecodeContext ctx = new DecodeContext(sparseNode, dtype, n, segments, registry, Arena.global());
 			return new SparseEncoding().decode(ctx);
@@ -284,10 +282,7 @@ class SparseEncodingTest {
 					ByteBuffer.wrap(meta),
 					new ArrayNode[]{idxNode, valNode}, new int[]{0}, ArrayStats.empty());
 
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(new SparseEncoding());
-			registry.register(new PrimitiveEncoding());
-			registry.register(new VarBinEncoding());
+			EncodingRegistry registry = TestRegistry.of(new SparseEncoding(), new PrimitiveEncoding(), new VarBinEncoding());
 
 			MemorySegment[] segments = {
 					MemorySegment.ofArray(nullFill),
@@ -330,10 +325,7 @@ class SparseEncodingTest {
 					ByteBuffer.wrap(meta),
 					new ArrayNode[]{idxNode, valNode}, new int[]{0}, ArrayStats.empty());
 
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(new SparseEncoding());
-			registry.register(new PrimitiveEncoding());
-			registry.register(new BoolEncoding());
+			EncodingRegistry registry = TestRegistry.of(new SparseEncoding(), new PrimitiveEncoding(), new BoolEncoding());
 
 			MemorySegment[] segments = {
 					MemorySegment.ofArray(nullFill),
@@ -417,9 +409,7 @@ class SparseEncodingTest {
 					MemorySegment.ofArray(valBuf)
 			};
 
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(new SparseEncoding());
-			registry.register(new PrimitiveEncoding());
+			EncodingRegistry registry = TestRegistry.of(new SparseEncoding(), new PrimitiveEncoding());
 
 			return new DecodeContext(sparseNode, dtype, rowCount, segments, registry, java.lang.foreign.Arena.global());
 		}
