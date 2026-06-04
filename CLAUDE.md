@@ -15,8 +15,17 @@ Keep commits small and `main` always green.
 
 ## Commands
 
-Build prerequisites: `brew install flatbuffers protobuf` (flatc + protoc must be on PATH).
 Never use `mvn install` or `./mvwn install`.
+
+Generated sources (`fbs`/`proto` → Java) are committed under `core/src/main/java`.
+Normal builds need no external tools.
+To regenerate after editing `.fbs` or `.proto` schemas:
+```bash
+brew install flatbuffers protobuf
+./mvnw generate-sources -pl core -P regenerate-sources
+# then commit the updated files
+```
+Any `flatc` version works — the profile strips the version guard automatically.
 
 ```bash
 # Build all modules

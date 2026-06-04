@@ -46,120 +46,121 @@
 		</dependency>
 	</dependencies>
 
-	<build>
-		<plugins>
+	<!--
+	  Generated sources (src/main/java/…/fbs and …/proto) are committed to the repo.
+	  Normal builds need no external tools.
 
-			<!-- 1. Generate Java from FlatBuffer schemas -->
-			<plugin>
-				<groupId>org.codehaus.mojo</groupId>
-				<artifactId>exec-maven-plugin</artifactId>
-				<executions>
-					<execution>
-						<id>flatc-generate</id>
-						<phase>generate-sources</phase>
-						<goals>
-							<goal>exec</goal>
-						</goals>
-						<configuration>
-							<executable>flatc</executable>
-							<workingDirectory>${project.basedir}/src/main/flatbuffers</workingDirectory>
-							<arguments>
-								<argument>--java</argument>
-								<argument>-I</argument>
-								<argument>.</argument>
-								<argument>-o</argument>
-								<argument>${project.build.directory}/generated-sources/flatbuffers</argument>
-								<argument>vortex-file/footer.fbs</argument>
-								<argument>vortex-layout/layout.fbs</argument>
-								<argument>vortex-array/array.fbs</argument>
-								<argument>vortex-dtype/dtype.fbs</argument>
-							</arguments>
-						</configuration>
-					</execution>
-					<!-- 2. Generate Java from Protobuf schemas -->
-					<execution>
-						<id>protoc-mkdir</id>
-						<phase>generate-sources</phase>
-						<goals>
-							<goal>exec</goal>
-						</goals>
-						<configuration>
-							<executable>mkdir</executable>
-							<arguments>
-								<argument>-p</argument>
-								<argument>${project.build.directory}/generated-sources/protobuf</argument>
-							</arguments>
-						</configuration>
-					</execution>
-					<execution>
-						<id>protoc-generate</id>
-						<phase>generate-sources</phase>
-						<goals>
-							<goal>exec</goal>
-						</goals>
-						<configuration>
-							<executable>protoc</executable>
-							<arguments>
-								<argument>--java_out=${project.build.directory}/generated-sources/protobuf</argument>
-								<argument>--proto_path=${project.basedir}/src/main/proto</argument>
-								<argument>${project.basedir}/src/main/proto/dtype.proto</argument>
-								<argument>${project.basedir}/src/main/proto/scalar.proto</argument>
-								<argument>${project.basedir}/src/main/proto/encodings.proto</argument>
-							</arguments>
-						</configuration>
-					</execution>
-				</executions>
-			</plugin>
+	  To regenerate after editing .fbs or .proto schemas:
+	    brew install flatbuffers protobuf
+	    ./mvnw generate-sources -pl core -P regenerate-sources
+	  Then commit the updated files.
+	  Any flatc version works — the profile strips the version guard automatically.
+	-->
+	<profiles>
+		<profile>
+			<id>regenerate-sources</id>
+			<build>
+				<plugins>
+					<!-- 1. Generate Java from FlatBuffer schemas -->
+					<plugin>
+						<groupId>org.codehaus.mojo</groupId>
+						<artifactId>exec-maven-plugin</artifactId>
+						<executions>
+							<execution>
+								<id>flatc-generate</id>
+								<phase>generate-sources</phase>
+								<goals>
+									<goal>exec</goal>
+								</goals>
+								<configuration>
+									<executable>flatc</executable>
+									<workingDirectory>${project.basedir}/src/main/flatbuffers</workingDirectory>
+									<arguments>
+										<argument>--java</argument>
+										<argument>-I</argument>
+										<argument>.</argument>
+										<argument>-o</argument>
+										<argument>${project.basedir}/src/main/java</argument>
+										<argument>vortex-file/footer.fbs</argument>
+										<argument>vortex-layout/layout.fbs</argument>
+										<argument>vortex-array/array.fbs</argument>
+										<argument>vortex-dtype/dtype.fbs</argument>
+									</arguments>
+								</configuration>
+							</execution>
+							<!-- 2. Generate Java from Protobuf schemas -->
+							<execution>
+								<id>protoc-generate</id>
+								<phase>generate-sources</phase>
+								<goals>
+									<goal>exec</goal>
+								</goals>
+								<configuration>
+									<executable>protoc</executable>
+									<arguments>
+										<argument>--java_out=${project.basedir}/src/main/java</argument>
+										<argument>--proto_path=${project.basedir}/src/main/proto</argument>
+										<argument>${project.basedir}/src/main/proto/dtype.proto</argument>
+										<argument>${project.basedir}/src/main/proto/scalar.proto</argument>
+										<argument>${project.basedir}/src/main/proto/encodings.proto</argument>
+									</arguments>
+								</configuration>
+							</execution>
+						</executions>
+					</plugin>
 
-			<!-- 2b. Strip ValidateVersion() — flatc ties it to the exact release,
-					 but Maven Central lags so the constant won't exist in flatbuffers-java. -->
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-antrun-plugin</artifactId>
-				<executions>
-					<execution>
-						<id>flatc-strip-version-guard</id>
-						<phase>generate-sources</phase>
-						<goals>
-							<goal>run</goal>
-						</goals>
-						<configuration>
-							<target>
-								<replaceregexp
-										match="  public static void ValidateVersion\(\) \{ Constants\.[^}]+\}&#10;"
-										replace=""
-										flags="g">
-									<fileset
-											dir="${project.build.directory}/generated-sources/flatbuffers/io/github/dfa1/vortex/fbs"
-											includes="*.java"/>
-								</replaceregexp>
-							</target>
-						</configuration>
-					</execution>
-				</executions>
-			</plugin>
+					<!--
+					  Why we strip ValidateVersion():
+					  flatc injects a `public static void ValidateVersion()` into every generated
+					  class that calls `Constants.FLATBUFFERS_25_X_Y()` — a method that only exists
+					  in the flatbuffers-java jar built from the *same* flatc release. This is a
+					  developer-experience guard: it prevents accidentally pairing a stale generated
+					  file with a newer runtime jar.
 
-			<!-- 3. Register generated-sources dirs for compilation -->
-			<plugin>
-				<groupId>org.codehaus.mojo</groupId>
-				<artifactId>build-helper-maven-plugin</artifactId>
-				<executions>
-					<execution>
-						<id>add-generated-sources</id>
-						<phase>generate-sources</phase>
-						<goals>
-							<goal>add-source</goal>
-						</goals>
-						<configuration>
-							<sources>
-								<source>${project.build.directory}/generated-sources/flatbuffers</source>
-								<source>${project.build.directory}/generated-sources/protobuf</source>
-							</sources>
-						</configuration>
-					</execution>
-				</executions>
-			</plugin>
+					  The problem: flatbuffers-java on Maven Central lags the flatc CLI by months.
+					  As of 2026-06, Maven Central tops out at 25.2.10 while `brew install flatbuffers`
+					  installs 25.12.19. Any attempt to compile freshly generated code against the
+					  Maven Central jar fails with "cannot find symbol: Constants.FLATBUFFERS_25_12_19".
 
-		</plugins>
-	</build>
+					  The strip is safe because:
+					  - The FlatBuffers binary wire format is stable across releases; 25.2.10 can
+					    read bytes written by code generated with any 25.x flatc.
+					  - We commit the stripped files, so the check is irrelevant at compile time for
+					    normal builds (no flatc involved).
+					  - The strip only runs inside the `regenerate-sources` profile, not during
+					    normal `./mvnw verify` builds.
+
+					  Re-evaluate if flatbuffers-java is ever published to Maven Central in lock-step
+					  with flatc releases — at that point the antrun step can be removed.
+					-->
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-antrun-plugin</artifactId>
+						<executions>
+							<execution>
+								<id>flatc-strip-version-guard</id>
+								<phase>generate-sources</phase>
+								<goals>
+									<goal>run</goal>
+								</goals>
+								<configuration>
+									<target>
+										<replaceregexp
+												match="  public static void ValidateVersion\(\) \{ Constants\.[^}]+\}&#10;"
+												replace=""
+												flags="g">
+											<fileset
+													dir="${project.basedir}/src/main/java/io/github/dfa1/vortex/fbs"
+													includes="*.java"/>
+										</replaceregexp>
+									</target>
+								</configuration>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
+
 </project>

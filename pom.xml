@@ -214,7 +214,7 @@
 									<sourceDirectory>src/main/java</sourceDirectory>
 									<sourceDirectory>src/test/java</sourceDirectory>
 								</sourceDirectories>
-								<excludes>**/module-info.java</excludes>
+								<excludes>**/module-info.java,**/fbs/*.java,**/proto/*.java</excludes>
 							</configuration>
 						</execution>
 					</executions>

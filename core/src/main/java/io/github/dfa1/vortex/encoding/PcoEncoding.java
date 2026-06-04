@@ -85,10 +85,6 @@ public final class PcoEncoding implements Encoding {
 
         private static final ValueLayout.OfLong LE_LONG =
                 ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-        private static final ValueLayout.OfInt LE_INT = PTypeIO.LE_INT;
-        private static final ValueLayout.OfShort LE_SHORT = PTypeIO.LE_SHORT;
-        private static final ValueLayout.OfFloat LE_FLOAT = PTypeIO.LE_FLOAT;
-        private static final ValueLayout.OfDouble LE_DOUBLE = PTypeIO.LE_DOUBLE;
 
         static Array decode(DecodeContext ctx) {
             EncodingProtos.PcoMetadata meta = parseMeta(ctx);
@@ -248,16 +244,12 @@ public final class PcoEncoding implements Encoding {
                 }
             }
 
-            // Convert raw U-latents → typed values.
-            // I64/U64: element size == 8 bytes == rawLatents slot size; convert in-place.
+            // Convert raw U-latents → typed values; resize from 8-byte slots to elemBytes.
             int elemBytes = ptype.byteSize();
-            MemorySegment compactOut;
-            if (ptype == PType.I64 || ptype == PType.U64) {
-                convertLatentsToCompact(rawLatents, validCount, ptype, rawLatents);
-                compactOut = rawLatents;
-            } else {
-                compactOut = ctx.arena().allocate(validCount * elemBytes);
-                convertLatentsToCompact(rawLatents, validCount, ptype, compactOut);
+            MemorySegment compactOut = ctx.arena().allocate(validCount * elemBytes);
+            for (long i = 0; i < validCount; i++) {
+                long latent = rawLatents.get(LE_LONG, i * Long.BYTES);
+                PTypeIO.set(compactOut, i * elemBytes, ptype, fromLatentOrdered(latent, ptype));
             }
 
             if (validity == null) {
@@ -536,67 +528,6 @@ public final class PcoEncoding implements Encoding {
                 s = 0;
             }
             return (s >> quantization) & mask;
-        }
-
-        /// Convert rawLatents (U64 per slot, 8 bytes each) → typed compactOut (elemBytes per slot).
-        ///
-        /// Ptype switch is hoisted outside the loop so each case is a tight, JIT-friendly loop
-        /// with direct FFM reads/writes and no MethodHandle dispatch per element.
-        private static void convertLatentsToCompact(
-                MemorySegment rawLatents, long n, PType ptype, MemorySegment compactOut) {
-            switch (ptype) {
-                case I64 -> {
-                    for (long i = 0; i < n; i++) {
-                        compactOut.setAtIndex(LE_LONG, i,
-                                rawLatents.getAtIndex(LE_LONG, i) ^ Long.MIN_VALUE);
-                    }
-                }
-                case U64 -> {
-                    for (long i = 0; i < n; i++) {
-                        compactOut.setAtIndex(LE_LONG, i, rawLatents.getAtIndex(LE_LONG, i));
-                    }
-                }
-                case I32 -> {
-                    for (long i = 0; i < n; i++) {
-                        compactOut.setAtIndex(LE_INT, i,
-                                (int) (rawLatents.getAtIndex(LE_LONG, i) ^ 0x80000000L));
-                    }
-                }
-                case U32 -> {
-                    for (long i = 0; i < n; i++) {
-                        compactOut.setAtIndex(LE_INT, i,
-                                (int) rawLatents.getAtIndex(LE_LONG, i));
-                    }
-                }
-                case I16 -> {
-                    for (long i = 0; i < n; i++) {
-                        compactOut.setAtIndex(LE_SHORT, i,
-                                (short) (rawLatents.getAtIndex(LE_LONG, i) ^ 0x8000L));
-                    }
-                }
-                case U16 -> {
-                    for (long i = 0; i < n; i++) {
-                        compactOut.setAtIndex(LE_SHORT, i,
-                                (short) rawLatents.getAtIndex(LE_LONG, i));
-                    }
-                }
-                case F32 -> {
-                    for (long i = 0; i < n; i++) {
-                        long l32 = rawLatents.getAtIndex(LE_LONG, i) & 0xFFFFFFFFL;
-                        int bits = (int) ((l32 & 0x80000000L) != 0 ? l32 ^ 0x80000000L : l32 ^ 0xFFFFFFFFL);
-                        compactOut.setAtIndex(LE_FLOAT, i, Float.intBitsToFloat(bits));
-                    }
-                }
-                case F64 -> {
-                    for (long i = 0; i < n; i++) {
-                        long latent = rawLatents.getAtIndex(LE_LONG, i);
-                        long bits = (latent & Long.MIN_VALUE) != 0 ? latent ^ Long.MIN_VALUE : ~latent;
-                        compactOut.setAtIndex(LE_DOUBLE, i, Double.longBitsToDouble(bits));
-                    }
-                }
-                default -> throw new VortexException(EncodingId.VORTEX_PCO,
-                        "pco: unsupported ptype in convertLatentsToCompact: " + ptype);
-            }
         }
 
         /// Inverse of pcodec {@code to_latent_ordered}: maps raw U-latent back to typed bits.

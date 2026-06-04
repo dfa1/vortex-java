@@ -188,7 +188,10 @@ java -jar cli/target/vortex.jar import data/trades.csv
 ## Requirements
 
 - Java 25+
-- `flatc` and `protoc` on `PATH` (build-time only: `brew install flatbuffers protobuf`)
+
+`flatc` and `protoc` are **not** required for normal builds — generated sources are committed.
+To regenerate after editing `.fbs`/`.proto` schemas: `brew install flatbuffers protobuf && ./mvnw generate-sources -pl core -P regenerate-sources`
+(any `flatc` version works — the profile strips the version guard automatically).
 
 Java 25 is the minimum because the FFM API (`MemorySegment`, `Arena`) was finalized as a
 standard API in JDK 22 (JEP 454) — it was preview/incubator in JDK 19–21 and required
