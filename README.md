@@ -283,11 +283,12 @@ JMH throughput (ops/s = full-file scans per second). Higher is better.
 Source: 47.6 MB Parquet → 12.0 MB Vortex (4× compression). Both sides scalar decode
 (Hardwood disables SIMD on JDK 25; Vortex Java uses FFM scalar reads throughout).
 
-| Benchmark | ops/s | vs Parquet |
-|---|---|---|
-| `parquetRead` — Hardwood, single col (`trip_distance`) | 66.96 ± 1.99 | baseline |
-| `vortexRead` — single col (`trip_distance`) | 201.61 ± 1.63 | **3.0×** |
-| `vortexReadMultiColumn` — two cols (`fare_amount` + `PULocationID`) | 140.31 ± 5.42 | **2.1×** |
+| Benchmark | ops/s | ms/scan | vs Parquet |
+|---|---|---|---|
+| `parquetRead` — Hardwood, 1 col (`trip_distance`) | 66.96 ± 1.99 | 14.9 ms | baseline |
+| `vortexRead` — 1 col (`trip_distance`) | 201.61 ± 1.63 | 4.96 ms | **3.0×** |
+| `parquetReadMultiColumn` — 2 cols (`fare_amount`, `PULocationID`) | 53.07 ± 1.25 | 18.8 ms | baseline |
+| `vortexReadMultiColumn` — 2 cols (`fare_amount`, `PULocationID`) | 140.31 ± 5.42 | 7.13 ms | **2.6×** |
 
 ### Why fewer layers = faster
 

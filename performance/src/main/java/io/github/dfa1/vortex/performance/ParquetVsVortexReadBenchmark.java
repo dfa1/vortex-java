@@ -111,11 +111,11 @@ public class ParquetVsVortexReadBenchmark {
         }
     }
 
-    /// Hardwood: scan all rows, sum trip_distance.
+    /// Hardwood: scan all rows, sum trip_distance (single column).
     @Benchmark
     public double parquetRead() throws IOException {
         double sum = 0.0;
-        ColumnProjection projection = ColumnProjection.columns("trip_distance", "fare_amount", "PULocationID");
+        ColumnProjection projection = ColumnProjection.columns("trip_distance");
         try (ParquetFileReader reader = ParquetFileReader.open(InputFile.of(parquetFile));
              RowReader rows = reader.buildRowReader().projection(projection).build()) {
             while (rows.hasNext()) {
@@ -124,6 +124,23 @@ public class ParquetVsVortexReadBenchmark {
             }
         }
         return sum;
+    }
+
+    /// Hardwood: scan all rows, sum fare_amount + PULocationID (two columns).
+    @Benchmark
+    public double parquetReadMultiColumn() throws IOException {
+        double fareSum = 0.0;
+        long idSum = 0L;
+        ColumnProjection projection = ColumnProjection.columns("fare_amount", "PULocationID");
+        try (ParquetFileReader reader = ParquetFileReader.open(InputFile.of(parquetFile));
+             RowReader rows = reader.buildRowReader().projection(projection).build()) {
+            while (rows.hasNext()) {
+                rows.next();
+                fareSum += rows.getDouble("fare_amount");
+                idSum += rows.getInt("PULocationID");
+            }
+        }
+        return fareSum + idSum;
     }
 
     /// Vortex: scan all rows, sum trip_distance via fold.
