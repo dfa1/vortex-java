@@ -3,7 +3,7 @@
 ## Project
 
 - [ ] **[by 2026-06-07 evening] Ask SpiralDB for feedback** — open GitHub discussion in `spiraldb/vortex`
-  linking the Java impl (24/35 fixtures), asking: interest in an official Java reader? plans to
+  linking the Java impl (35/35 fixtures), asking: interest in an official Java reader? plans to
   stabilize encoding metadata proto? undocumented invariants? any JVM plans of their own?
   Check their Discord too. Decision gate: invest further only if signal is positive.
 - [ ] Move project to a dedicated organization

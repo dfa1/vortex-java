@@ -7,7 +7,7 @@
 
 Pure-Java reader/writer for the [Vortex](https://github.com/spiraldb/vortex) columnar file format.
 
-From (https://vortex.dev/blog/btrblocks-compressor):
+From the [Vortex blog](https://vortex.dev/blog/btrblocks-compressor):
 > We've written about individual compression codecs in Vortex before: FastLanes for bit-packing integers, FSST for strings, and ALP for floating point. But we've never explained how Vortex decides which codec to use for a given column, or how it layers multiple codecs on top of each other.
 
 > On TPC-H at scale factor 10, Vortex files are 38% smaller and decompress 10–25x faster than Parquet with ZSTD, without using any general-purpose compression. The difference comes down to how the codecs are selected and composed, a framework inspired by the BtrBlocks paper from TU Munich.
@@ -29,7 +29,7 @@ are readable by all others — no vendor lock-in, no format translation at the b
 The official Vortex ecosystem provides JVM bindings via JNI (bundled native `.so`/`.dylib`).
 JNI bindings are fast but add deployment friction: platform-specific artifacts, native build
 toolchains, and crash-domain coupling between the JVM and native code. The JAR vortex-jni 0.72 is
-**258MB**..
+**258MB**.
 
 This library takes a different approach — 100% Java, no JNI, no `sun.misc.Unsafe`.
 It uses the Java FFM API (`MemorySegment` / `Arena`, Java 25+) for zero-copy memory-mapped reads,
@@ -203,18 +203,16 @@ requiring it means no preview flags, no upgrade risk, and a supported LTS for us
 
 ## Running benchmarks
 
+Use the `./bench` script (always pass `ClassName.methodName` as the filter):
+
 ```bash
-# Fast iteration — compile only (~2 s, no shade step)
-./mvnw compile -pl performance -am -DskipTests
-./mvnw exec:java -pl performance -Dexec.args="RustVsJavaReadBenchmark.javaReadVolume"
-
-# Full fat jar — use for final/published numbers (~20 s)
-./mvnw package -pl performance -am -DskipTests
-java -jar performance/target/benchmarks.jar RustVsJavaReadBenchmark.javaReadVolume
-java -jar performance/target/benchmarks.jar RustVsJavaWriteBenchmark.javaWrite
-
 # Run all benchmarks
-java -jar performance/target/benchmarks.jar
+./bench
+
+# Run a specific benchmark class or method
+./bench RustVsJavaReadBenchmark
+./bench RustVsJavaReadBenchmark.javaReadVolume
+./bench RustVsJavaWriteBenchmark.javaWrite
 ```
 
 ## Design principles
@@ -226,7 +224,7 @@ java -jar performance/target/benchmarks.jar
 - Make the JIT happy (constant layouts, predictable strides, no virtual dispatch in hot loops)
 - Prepare for the Vector API / Valhalla
 - Rigorous testing: unit tests + property-based testing + cross-language integration tests
-- Target Vector API as soon it is available https://openjdk.org/jeps/338
+- Target Vector API once finalized (tracking [JEP 469](https://openjdk.org/jeps/469) and successors)
 
 ### Testing strategy
 
@@ -248,9 +246,6 @@ This combination caught two real bugs in ALP floating-point encoding:
 
 Both bugs were invisible to pure-Java tests and would have shipped undetected without the
 cross-language oracle.
-
-## Reference
-                             |
 
 ## Benchmarks
 
