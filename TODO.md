@@ -257,7 +257,6 @@ post-decode + post-`vortex-arrow` bridge.
 | `pco.vortex`                     | ✅     |                               |
 | `clickbench_hits_5k.compact.vortex` | ✅  |                               |
 | `clickbench_hits_5k.regular.vortex` | ✅  |                               |
-
 | `masked.vortex`                     | ❓     | no fixture in v0.72.0; `vortex.masked` ID registered |
 | `patched.vortex`                    | ❓     | no fixture in v0.72.0; `vortex.patched` ID registered |
 | `variant.vortex`                    | ❓     | no fixture in v0.72.0; `vortex.variant` ID registered |
