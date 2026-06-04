@@ -58,7 +58,7 @@ class VarBinViewEncodingTest {
 			// When
 			EncodeResult result = sut.encode(DTypes.UTF8, values);
 			MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
-			ArrayNode node = new ArrayNode(
+			ArrayNode node = ArrayNode.of(
 					EncodingId.VORTEX_VARBINVIEW, null, new ArrayNode[0],
 					result.rootNode().bufferIndices(), null);
 			EncodingRegistry registry = TestRegistry.of(sut);
@@ -124,7 +124,7 @@ class VarBinViewEncodingTest {
 				segBufs    = new MemorySegment[]{views};
 			}
 
-			ArrayNode node = new ArrayNode(EncodingId.VORTEX_VARBINVIEW, null,
+			ArrayNode node = ArrayNode.of(EncodingId.VORTEX_VARBINVIEW, null,
 					new ArrayNode[0], bufIndices, null);
 
 			EncodingRegistry registry = TestRegistry.of(new VarBinViewEncoding());

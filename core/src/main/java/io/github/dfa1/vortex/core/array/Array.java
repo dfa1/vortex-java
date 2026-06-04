@@ -12,8 +12,8 @@ import java.lang.foreign.MemorySegment;
 /// is tied to the `VortexFile`'s Arena.
 public sealed interface Array
         permits BoolArray, ByteArray, DoubleArray, EmptyArray, FixedSizeListArray, Float16Array,
-                FloatArray, GenericArray, IntArray, ListArray, ListViewArray, LongArray, MaskedArray,
-                NullArray, ShortArray, StructArray, VarBinArray {
+                FloatArray, GenericArray, IntArray, ListArray, ListViewArray, LongArray,
+                MaskedArray, NullArray, ShortArray, StructArray, UnknownArray, VarBinArray {
 
 	long length();
 

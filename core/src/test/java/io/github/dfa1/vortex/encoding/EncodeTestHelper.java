@@ -26,6 +26,6 @@ final class EncodeTestHelper {
 		for (int i = 0; i < children.length; i++) {
 			children[i] = toArrayNode(enc.children()[i]);
 		}
-		return new ArrayNode(enc.encodingId(), enc.metadata(), children, enc.bufferIndices(), null);
+		return ArrayNode.of(enc.encodingId(), enc.metadata(), children, enc.bufferIndices(), null);
 	}
 }

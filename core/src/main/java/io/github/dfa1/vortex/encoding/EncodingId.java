@@ -66,6 +66,12 @@ public enum EncodingId {
 		return result;
 	}
 
+	/// Non-throwing lookup: returns the matching constant or `null` for ids not in this enum.
+	/// Used by [EncodingRegistry] to discriminate [KnownArrayNode] from [UnknownArrayNode].
+	public static EncodingId tryFrom(String id) {
+		return LOOKUP.get(id);
+	}
+
 	public String id() {
 		return id;
 	}

@@ -20,7 +20,7 @@ class ListViewEncodingTest {
 		for (int i = 0; i < children.length; i++) {
 			children[i] = toArrayNode(node.children()[i]);
 		}
-		return new ArrayNode(node.encodingId(), node.metadata(), children, node.bufferIndices(), ArrayStats.empty());
+		return ArrayNode.of(node.encodingId(), node.metadata(), children, node.bufferIndices(), ArrayStats.empty());
 	}
 
 	private static EncodingRegistry registry() {
@@ -151,7 +151,7 @@ class ListViewEncodingTest {
 		void decode_wrongDtype_throws() {
 			// Given
 			ListViewEncoding sut = new ListViewEncoding();
-			ArrayNode node = new ArrayNode(EncodingId.VORTEX_LISTVIEW, null,
+			ArrayNode node = ArrayNode.of(EncodingId.VORTEX_LISTVIEW, null,
 					new ArrayNode[0], new int[0], ArrayStats.empty());
 			DecodeContext ctx = TestDecodeContexts.of(node, DTypes.I32).registry(registry()).build();
 
@@ -164,9 +164,9 @@ class ListViewEncodingTest {
 		void decode_wrongChildCount_throws() {
 			// Given
 			ListViewEncoding sut = new ListViewEncoding();
-			ArrayNode child = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
+			ArrayNode child = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
 					new ArrayNode[0], new int[0], ArrayStats.empty());
-			ArrayNode node = new ArrayNode(EncodingId.VORTEX_LISTVIEW,
+			ArrayNode node = ArrayNode.of(EncodingId.VORTEX_LISTVIEW,
 					java.nio.ByteBuffer.wrap(new byte[0]),
 					new ArrayNode[]{child}, new int[0], ArrayStats.empty());
 			DecodeContext ctx = TestDecodeContexts.of(node, DTypes.LIST_I32).registry(registry()).build();

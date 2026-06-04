@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
+import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.array.NullArray;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -11,6 +12,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class NullEncodingTest {
 
+	private static final DType NULL_DTYPE = new DType.Null(true);
+
 	@Nested
 	class Encode {
 
@@ -20,7 +23,7 @@ class NullEncodingTest {
 			var sut = new NullEncoding();
 
 			// When
-			EncodeResult result = sut.encode(DTypes.NULL, null);
+			EncodeResult result = sut.encode(NULL_DTYPE, null);
 
 			// Then
 			assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_NULL);
@@ -35,9 +38,9 @@ class NullEncodingTest {
 			var sut = new NullEncoding();
 
 			// When
-			EncodeResult encoded = sut.encode(DTypes.NULL, null);
-			ArrayNode node = new ArrayNode(encoded.rootNode().encodingId(), null, new ArrayNode[0], new int[0], null);
-			DecodeContext ctx = new DecodeContext(node, DTypes.NULL, rowCount, new MemorySegment[0],
+			EncodeResult encoded = sut.encode(NULL_DTYPE, null);
+			ArrayNode node = ArrayNode.of(encoded.rootNode().encodingId(), null, new ArrayNode[0], new int[0], null);
+			DecodeContext ctx = new DecodeContext(node, NULL_DTYPE, rowCount, new MemorySegment[0],
 					EncodingRegistry.empty(), Arena.ofAuto());
 
 			// Then
@@ -63,13 +66,14 @@ class NullEncodingTest {
 			// Then
 			assertThat(result).isInstanceOf(NullArray.class);
 			assertThat(result.length()).isEqualTo(rowCount);
-			assertThat(result.dtype()).isEqualTo(DTypes.NULL);
+			assertThat(result.dtype()).isEqualTo(NULL_DTYPE);
 		}
 
 		private static DecodeContext buildNullCtx(long rowCount) {
-			ArrayNode node = new ArrayNode(EncodingId.VORTEX_NULL, null, new ArrayNode[0], new int[0], null);
-			EncodingRegistry registry = TestRegistry.of(new NullEncoding());
-			return new DecodeContext(node, DTypes.NULL, rowCount, new MemorySegment[0], registry, Arena.ofAuto());
+			ArrayNode node = ArrayNode.of(EncodingId.VORTEX_NULL, null, new ArrayNode[0], new int[0], null);
+			EncodingRegistry registry = EncodingRegistry.empty();
+			registry.register(new NullEncoding());
+			return new DecodeContext(node, NULL_DTYPE, rowCount, new MemorySegment[0], registry, Arena.ofAuto());
 		}
 	}
 }

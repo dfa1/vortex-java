@@ -9,12 +9,17 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import java.nio.ByteOrder;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ChunkedEncodingTest {
+
+	private static final ValueLayout.OfLong LE_LONG =
+			ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
 	@Nested
 	class Encode {
@@ -26,7 +31,9 @@ class ChunkedEncodingTest {
 			long[] chunk1 = {40L, 50L};
 			DType i64 = new DType.Primitive(PType.I64, false);
 			var sut = new ChunkedEncoding();
-			EncodingRegistry registry = TestRegistry.withPrimitive(sut);
+			EncodingRegistry registry = EncodingRegistry.empty();
+			registry.register(sut);
+			registry.register(new PrimitiveEncoding());
 			ChunkedData data = new ChunkedData(List.of(chunk0, chunk1), new long[]{3, 2});
 
 			// When
@@ -36,11 +43,11 @@ class ChunkedEncodingTest {
 
 			// Then
 			assertThat(result.length()).isEqualTo(5);
-			assertThat(result.buffer(0).get(PTypeIO.LE_LONG, 0L)).isEqualTo(10L);
-			assertThat(result.buffer(0).get(PTypeIO.LE_LONG, 8L)).isEqualTo(20L);
-			assertThat(result.buffer(0).get(PTypeIO.LE_LONG, 16L)).isEqualTo(30L);
-			assertThat(result.buffer(0).get(PTypeIO.LE_LONG, 24L)).isEqualTo(40L);
-			assertThat(result.buffer(0).get(PTypeIO.LE_LONG, 32L)).isEqualTo(50L);
+			assertThat(result.buffer(0).get(LE_LONG, 0L)).isEqualTo(10L);
+			assertThat(result.buffer(0).get(LE_LONG, 8L)).isEqualTo(20L);
+			assertThat(result.buffer(0).get(LE_LONG, 16L)).isEqualTo(30L);
+			assertThat(result.buffer(0).get(LE_LONG, 24L)).isEqualTo(40L);
+			assertThat(result.buffer(0).get(LE_LONG, 32L)).isEqualTo(50L);
 		}
 
 		@Test
@@ -83,8 +90,10 @@ class ChunkedEncodingTest {
 			DType i64 = new DType.Primitive(PType.I64, false);
 			DType u64 = new DType.Primitive(PType.U64, false);
 
+			EncodingRegistry registry = EncodingRegistry.empty();
 			var sut = new ChunkedEncoding();
-			EncodingRegistry registry = TestRegistry.withPrimitive(sut);
+			registry.register(sut);
+			registry.register(new PrimitiveEncoding());
 
 			// Build chunk_offsets segment: [0, 3, 5] as U64 LE
 			EncodeResult offsetsResult = new PrimitiveEncoding().encode(u64, new long[]{0L, 3L, 5L});
@@ -108,7 +117,7 @@ class ChunkedEncodingTest {
 			ArrayNode offsetsNode = toArrayNode(offsetsResult.rootNode());
 			ArrayNode chunk0Node = toArrayNode(remapped(chunk0Result.rootNode(), 1));
 			ArrayNode chunk1Node = toArrayNode(remapped(chunk1Result.rootNode(), 2));
-			ArrayNode root = new ArrayNode(
+			ArrayNode root = ArrayNode.of(
 					EncodingId.VORTEX_CHUNKED, null,
 					new ArrayNode[]{offsetsNode, chunk0Node, chunk1Node},
 					new int[]{}, null);
@@ -120,11 +129,11 @@ class ChunkedEncodingTest {
 
 			// Then
 			assertThat(result.length()).isEqualTo(5);
-			assertThat(result.buffer(0).get(PTypeIO.LE_LONG, 0L)).isEqualTo(10L);
-			assertThat(result.buffer(0).get(PTypeIO.LE_LONG, 8L)).isEqualTo(20L);
-			assertThat(result.buffer(0).get(PTypeIO.LE_LONG, 16L)).isEqualTo(30L);
-			assertThat(result.buffer(0).get(PTypeIO.LE_LONG, 24L)).isEqualTo(40L);
-			assertThat(result.buffer(0).get(PTypeIO.LE_LONG, 32L)).isEqualTo(50L);
+			assertThat(result.buffer(0).get(LE_LONG, 0L)).isEqualTo(10L);
+			assertThat(result.buffer(0).get(LE_LONG, 8L)).isEqualTo(20L);
+			assertThat(result.buffer(0).get(LE_LONG, 16L)).isEqualTo(30L);
+			assertThat(result.buffer(0).get(LE_LONG, 24L)).isEqualTo(40L);
+			assertThat(result.buffer(0).get(LE_LONG, 32L)).isEqualTo(50L);
 		}
 
 		@Test
@@ -134,7 +143,9 @@ class ChunkedEncodingTest {
 			DType i64 = new DType.Primitive(PType.I64, false);
 			DType u64 = new DType.Primitive(PType.U64, false);
 
-			EncodingRegistry registry = TestRegistry.of(new ChunkedEncoding(), new PrimitiveEncoding());
+			EncodingRegistry registry = EncodingRegistry.empty();
+			registry.register(new ChunkedEncoding());
+			registry.register(new PrimitiveEncoding());
 
 			EncodeResult offsetsResult = new PrimitiveEncoding().encode(u64, new long[]{0L, 3L});
 			EncodeResult chunkResult = new PrimitiveEncoding().encode(i64, data);
@@ -144,7 +155,7 @@ class ChunkedEncodingTest {
 					chunkResult.buffers().getFirst()
 			};
 
-			ArrayNode root = new ArrayNode(
+			ArrayNode root = ArrayNode.of(
 					EncodingId.VORTEX_CHUNKED, null,
 					new ArrayNode[]{toArrayNode(offsetsResult.rootNode()), toArrayNode(remapped(chunkResult.rootNode(), 1))},
 					new int[]{}, null);
@@ -157,7 +168,7 @@ class ChunkedEncodingTest {
 			// Then
 			assertThat(result.length()).isEqualTo(3);
 			for (int i = 0; i < 3; i++) {
-				assertThat(result.buffer(0).get(PTypeIO.LE_LONG, (long) i * 8)).isEqualTo(data[i]);
+				assertThat(result.buffer(0).get(LE_LONG, (long) i * 8)).isEqualTo(data[i]);
 			}
 		}
 
@@ -165,8 +176,9 @@ class ChunkedEncodingTest {
 		void noChildren_throws() {
 			// Given
 			DType i64 = new DType.Primitive(PType.I64, false);
-			EncodingRegistry registry = TestRegistry.of(new ChunkedEncoding());
-			ArrayNode root = new ArrayNode(EncodingId.VORTEX_CHUNKED, null, new ArrayNode[]{}, new int[]{}, null);
+			EncodingRegistry registry = EncodingRegistry.empty();
+			registry.register(new ChunkedEncoding());
+			ArrayNode root = ArrayNode.of(EncodingId.VORTEX_CHUNKED, null, new ArrayNode[]{}, new int[]{}, null);
 			DecodeContext ctx = new DecodeContext(root, i64, 0L, new MemorySegment[]{}, registry, Arena.ofAuto());
 
 			// When / Then
@@ -181,7 +193,7 @@ class ChunkedEncodingTest {
 		for (int i = 0; i < children.length; i++) {
 			children[i] = toArrayNode(enc.children()[i]);
 		}
-		return new ArrayNode(enc.encodingId(), enc.metadata(), children, enc.bufferIndices(), null);
+		return ArrayNode.of(enc.encodingId(), enc.metadata(), children, enc.bufferIndices(), null);
 	}
 
 	private static EncodeNode remapped(EncodeNode node, int offset) {

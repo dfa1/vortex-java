@@ -27,12 +27,12 @@ class RleEncodingTest {
 		return r;
 	}
 
-	private static ArrayNode toArrayNode(EncodeNode enc) {
+	private static KnownArrayNode toArrayNode(EncodeNode enc) {
 		ArrayNode[] children = new ArrayNode[enc.children().length];
 		for (int i = 0; i < children.length; i++) {
 			children[i] = toArrayNode(enc.children()[i]);
 		}
-		return new ArrayNode(enc.encodingId(), enc.metadata(), children, enc.bufferIndices(), ArrayStats.empty());
+		return new KnownArrayNode(enc.encodingId(), enc.metadata(), children, enc.bufferIndices(), ArrayStats.empty());
 	}
 
 	@Nested
@@ -284,16 +284,16 @@ class RleEncodingTest {
 			MemorySegment[] segments = originalBufs.toArray(new MemorySegment[0]);
 
 			// Rebuild the ArrayNode tree from the encode result
-			ArrayNode origRoot = toArrayNode(encoded.rootNode());
+			KnownArrayNode origRoot = toArrayNode(encoded.rootNode());
 			// RLE root children: [values(0), indices(1), offsets(2)]
-			ArrayNode origIndices = origRoot.children()[1];
+			KnownArrayNode origIndices = (KnownArrayNode) origRoot.children()[1];
 			// Wrap indices with a validity child pointing to buffer 3
-			ArrayNode validityNode = new ArrayNode(
+			ArrayNode validityNode = ArrayNode.of(
 					EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{3}, ArrayStats.empty());
-			ArrayNode nullableIndices = new ArrayNode(
+			ArrayNode nullableIndices = ArrayNode.of(
 					origIndices.encodingId(), origIndices.metadata(),
 					new ArrayNode[]{validityNode}, origIndices.bufferIndices(), ArrayStats.empty());
-			ArrayNode root = new ArrayNode(
+			ArrayNode root = ArrayNode.of(
 					origRoot.encodingId(), origRoot.metadata(),
 					new ArrayNode[]{origRoot.children()[0], nullableIndices, origRoot.children()[2]},
 					origRoot.bufferIndices(), ArrayStats.empty());

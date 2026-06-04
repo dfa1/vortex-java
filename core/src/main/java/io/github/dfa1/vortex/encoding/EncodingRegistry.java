@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.encoding;
 
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.UnknownArray;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -19,8 +20,23 @@ import java.util.ServiceLoader;
 public final class EncodingRegistry {
 
 	private final Map<EncodingId, Encoding> encodings = new HashMap<>();
+	private boolean allowUnknown;
 
 	private EncodingRegistry() {
+	}
+
+	/// Enable passthrough decode for unknown encoding ids.
+	///
+	/// Default is strict: unknown ids throw [VortexException]. When enabled, unknown nodes
+	/// (and all their children, recursively) are wrapped as [UnknownArray] preserving raw
+	/// metadata + buffers + stats. Mirrors Rust `VortexSession::allow_unknown()`.
+	public EncodingRegistry allowUnknown() {
+		this.allowUnknown = true;
+		return this;
+	}
+
+	public boolean isAllowUnknown() {
+		return allowUnknown;
 	}
 
 	/// Load all [Encoding]s registered via `ServiceLoader`.
@@ -44,8 +60,7 @@ public final class EncodingRegistry {
 			io.github.dfa1.vortex.fbs.ArrayNode fbs,
 			List<String> encodingSpecs
 	) {
-		String encodingId = encodingSpecs.get(fbs.encoding());
-		EncodingId encId = EncodingId.from(encodingId);
+		String rawEncodingId = encodingSpecs.get(fbs.encoding());
 
 		ArrayNode[] children = new ArrayNode[fbs.childrenLength()];
 		for (int i = 0; i < children.length; i++) {
@@ -60,7 +75,12 @@ public final class EncodingRegistry {
 		// metadataAsByteBuffer() returns duplicate with position=vectorStart; slice to normalize to 0
 		ByteBuffer rawMeta = fbs.metadataAsByteBuffer();
 		ByteBuffer meta = (rawMeta != null) ? rawMeta.slice() : null;
-		return new ArrayNode(encId, meta, children, bufferIndices, ArrayStats.fromFbs(fbs.stats()));
+		ArrayStats stats = ArrayStats.fromFbs(fbs.stats());
+		EncodingId known = EncodingId.tryFrom(rawEncodingId);
+		if (known != null) {
+			return new KnownArrayNode(known, meta, children, bufferIndices, stats);
+		}
+		return new UnknownArrayNode(rawEncodingId, meta, children, bufferIndices, stats);
 	}
 
 	public void register(Encoding encoding) {
@@ -99,11 +119,46 @@ public final class EncodingRegistry {
 	}
 
 	Array decode(DecodeContext ctx) {
-		EncodingId id = ctx.node().encodingId();
-		Encoding encoding = encodings.get(id);
-		if (encoding == null) {
-			throw new VortexException(id, "no encoding registered");
+		ArrayNode node = ctx.node();
+		Encoding encoding = switch (node) {
+			case KnownArrayNode k -> encodings.get(k.encodingId());
+			case UnknownArrayNode u -> null;
+		};
+		if (encoding != null) {
+			return encoding.decode(ctx);
 		}
-		return encoding.decode(ctx);
+		if (allowUnknown) {
+			return decodeUnknown(ctx, node);
+		}
+		String id = switch (node) {
+			case KnownArrayNode k -> k.encodingId().id();
+			case UnknownArrayNode u -> u.rawEncodingId();
+		};
+		throw new VortexException("no encoding registered for " + id);
+	}
+
+	/// Recursively wrap a node and its children as [UnknownArray]. Children of an unknown
+	/// parent are always wrapped unknown regardless of whether their own id is recognised —
+	/// matches Rust `decode_foreign` in `vortex-array/src/serde.rs`.
+	private static UnknownArray decodeUnknown(DecodeContext ctx, ArrayNode node) {
+		String rawId = switch (node) {
+			case KnownArrayNode k -> k.encodingId().id();
+			case UnknownArrayNode u -> u.rawEncodingId();
+		};
+		MemorySegment[] bufs = new MemorySegment[node.bufferIndices().length];
+		for (int i = 0; i < bufs.length; i++) {
+			bufs[i] = ctx.buffer(i);
+		}
+		Array[] children = new Array[node.children().length];
+		for (int i = 0; i < children.length; i++) {
+			ArrayNode childNode = node.children()[i];
+			DecodeContext childCtx = new DecodeContext(
+					childNode, ctx.dtype(), ctx.rowCount(),
+					ctx.segmentBuffers(), ctx.registry(), ctx.arena());
+			children[i] = decodeUnknown(childCtx, childNode);
+		}
+		return new UnknownArray(
+				rawId, ctx.dtype(), ctx.rowCount(),
+				node.metadata(), bufs, children, node.stats());
 	}
 }

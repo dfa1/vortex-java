@@ -34,6 +34,26 @@ class EncodingIdTest {
 	}
 
 	@Nested
+	class TryFrom {
+
+		@ParameterizedTest
+		@EnumSource(EncodingId.class)
+		void tryFrom_knownId_returnsMatchingConstant(EncodingId id) {
+			// Given / When
+			EncodingId result = EncodingId.tryFrom(id.id());
+
+			// Then
+			assertThat(result).isSameAs(id);
+		}
+
+		@Test
+		void tryFrom_unknownId_returnsNull() {
+			// Given / When / Then
+			assertThat(EncodingId.tryFrom("supermario")).isNull();
+		}
+	}
+
+	@Nested
 	class Properties {
 
 		@ParameterizedTest

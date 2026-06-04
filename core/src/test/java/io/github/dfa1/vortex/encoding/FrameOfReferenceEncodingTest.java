@@ -119,12 +119,12 @@ class FrameOfReferenceEncodingTest {
 				bb.putInt((int) v);
 			}
 
-			ArrayNode validityNode = new ArrayNode(
+			ArrayNode validityNode = ArrayNode.of(
 					EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{1}, ArrayStats.empty());
-			ArrayNode primNode = new ArrayNode(
+			ArrayNode primNode = ArrayNode.of(
 					EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[]{validityNode}, new int[]{0}, ArrayStats.empty());
 			byte[] metaBytes = ScalarProtos.ScalarValue.newBuilder().setInt64Value(reference).build().toByteArray();
-			ArrayNode forNode = new ArrayNode(
+			ArrayNode forNode = ArrayNode.of(
 					EncodingId.FASTLANES_FOR, ByteBuffer.wrap(metaBytes), new ArrayNode[]{primNode}, new int[0], ArrayStats.empty());
 
 			EncodingRegistry registry = TestRegistry.of(new FrameOfReferenceEncoding(), new PrimitiveEncoding(), new BoolEncoding());
@@ -168,7 +168,7 @@ class FrameOfReferenceEncodingTest {
 				}
 			}
 
-			ArrayNode childNode = new ArrayNode(
+			ArrayNode childNode = ArrayNode.of(
 					EncodingId.VORTEX_PRIMITIVE,
 					null,
 					new ArrayNode[0],
@@ -176,7 +176,7 @@ class FrameOfReferenceEncodingTest {
 					ArrayStats.empty()
 			);
 
-			ArrayNode forNode = new ArrayNode(
+			ArrayNode forNode = ArrayNode.of(
 					EncodingId.FASTLANES_FOR,
 					ByteBuffer.wrap(metaBytes),
 					new ArrayNode[]{childNode},

@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.EmptyArray;
+import io.github.dfa1.vortex.core.array.UnknownArray;
 import io.github.dfa1.vortex.encoding.Encoding;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.EncodingRegistry;
@@ -186,6 +187,36 @@ class VortexReaderTest {
 			assertThatThrownBy(iter::hasNext)
 					.isInstanceOf(VortexException.class)
 					.hasMessageContaining("no encoding registered");
+		}
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = {
+			"primitives.vortex",
+			"booleans.vortex",
+			"null.vortex",
+			"varbin.vortex",
+			"chunked.vortex"
+	})
+	void scan_withNoDecoders_allowUnknown_returnsUnknownArray(String name) throws URISyntaxException, IOException {
+		// Given — empty registry + allowUnknown: every leaf decodes to a passthrough UnknownArray
+		Path path = fixtureFile(name);
+		var registry = EncodingRegistry.empty().allowUnknown();
+
+		// When
+		try (var sut = VortexReader.open(path, registry);
+		     var iter = sut.scan(ScanOptions.all())) {
+
+			// Then
+			assertThat(iter.hasNext()).isTrue();
+			ScanResult chunk = iter.next();
+			assertThat(chunk.rowCount()).isGreaterThan(0);
+			assertThat(chunk.columns()).isNotEmpty();
+			for (Array column : chunk.columns().values()) {
+				assertThat(column).isInstanceOf(UnknownArray.class);
+				UnknownArray foreign = (UnknownArray) column;
+				assertThat(foreign.encodingId()).startsWith("vortex.").describedAs(name);
+			}
 		}
 	}
 

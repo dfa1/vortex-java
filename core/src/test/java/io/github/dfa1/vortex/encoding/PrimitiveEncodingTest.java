@@ -142,9 +142,9 @@ class PrimitiveEncodingTest {
 			MemorySegment valuesSeg = TestSegments.leInts(raw);
 			MemorySegment validitySeg = MemorySegment.ofArray(new byte[]{0x05}); // bits 0,2 set
 
-			ArrayNode validityNode = new ArrayNode(
+			ArrayNode validityNode = ArrayNode.of(
 					EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{1}, ArrayStats.empty());
-			ArrayNode primNode = new ArrayNode(
+			ArrayNode primNode = ArrayNode.of(
 					EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[]{validityNode}, new int[]{0}, ArrayStats.empty());
 
 			EncodingRegistry registry = TestRegistry.of(new PrimitiveEncoding(), new BoolEncoding());
@@ -179,7 +179,7 @@ class PrimitiveEncodingTest {
 			int[] raw = {1, 2, 3};
 			MemorySegment valuesSeg = TestSegments.leInts(raw);
 
-			ArrayNode primNode = new ArrayNode(
+			ArrayNode primNode = ArrayNode.of(
 					EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0}, ArrayStats.empty());
 
 			EncodingRegistry registry = TestRegistry.of(new PrimitiveEncoding());

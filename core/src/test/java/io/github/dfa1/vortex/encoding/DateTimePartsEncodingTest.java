@@ -39,7 +39,7 @@ class DateTimePartsEncodingTest {
         for (int i = 0; i < children.length; i++) {
             children[i] = toArrayNode(node.children()[i]);
         }
-        return new ArrayNode(node.encodingId(), node.metadata(), children, node.bufferIndices(), ArrayStats.empty());
+        return ArrayNode.of(node.encodingId(), node.metadata(), children, node.bufferIndices(), ArrayStats.empty());
     }
 
     private static EncodingRegistry registry() {

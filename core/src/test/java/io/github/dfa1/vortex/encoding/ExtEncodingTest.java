@@ -73,7 +73,7 @@ class ExtEncodingTest {
 			for (int i = 0; i < children.length; i++) {
 				children[i] = encodeNodeToArrayNode(n.children()[i]);
 			}
-			return new ArrayNode(n.encodingId(), n.metadata(), children, n.bufferIndices(), null);
+			return ArrayNode.of(n.encodingId(), n.metadata(), children, n.bufferIndices(), null);
 		}
 	}
 
@@ -90,9 +90,9 @@ class ExtEncodingTest {
 			DType extDType = new DType.Extension("vortex.timestamp", storageDType, null, false);
 
 			// child node: vortex.primitive with buffer index 0
-			ArrayNode primitiveNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0}, null);
+			ArrayNode primitiveNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0}, null);
 			// parent node: vortex.ext, no buffers, one child
-			ArrayNode extNode = new ArrayNode(EncodingId.VORTEX_EXT, null, new ArrayNode[]{primitiveNode}, new int[0], null);
+			ArrayNode extNode = ArrayNode.of(EncodingId.VORTEX_EXT, null, new ArrayNode[]{primitiveNode}, new int[0], null);
 
 			EncodingRegistry registry = TestRegistry.of(new PrimitiveEncoding(), new ExtEncoding());
 

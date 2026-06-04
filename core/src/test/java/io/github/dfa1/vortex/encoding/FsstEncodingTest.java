@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
+import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.VarBinArray;
@@ -23,6 +24,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class FsstEncodingTest {
 
+	private static final DType UTF8 = new DType.Utf8(false);
+	private static final DType BINARY = new DType.Binary(false);
+	private static final DType I32 = new DType.Primitive(PType.I32, false);
 
 	@Nested
 	class Encode {
@@ -33,7 +37,7 @@ class FsstEncodingTest {
 			var sut = new FsstEncoding();
 
 			// When / Then
-			assertThat(sut.accepts(DTypes.UTF8)).isTrue();
+			assertThat(sut.accepts(UTF8)).isTrue();
 		}
 
 		@Test
@@ -42,7 +46,7 @@ class FsstEncodingTest {
 			var sut = new FsstEncoding();
 
 			// When / Then
-			assertThat(sut.accepts(DTypes.BINARY)).isTrue();
+			assertThat(sut.accepts(BINARY)).isTrue();
 		}
 
 		@Test
@@ -51,7 +55,7 @@ class FsstEncodingTest {
 			var sut = new FsstEncoding();
 
 			// When / Then
-			assertThat(sut.accepts(DTypes.I32)).isFalse();
+			assertThat(sut.accepts(I32)).isFalse();
 		}
 
 		@ParameterizedTest(name = "{0}")
@@ -62,11 +66,13 @@ class FsstEncodingTest {
 			Arena arena = Arena.ofAuto();
 
 			// When
-			EncodeResult result = sut.encode(DTypes.UTF8, values);
+			EncodeResult result = sut.encode(UTF8, values);
 			MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
 			ArrayNode node = toArrayNode(result.rootNode());
-			EncodingRegistry registry = TestRegistry.of(new PrimitiveEncoding(), sut);
-			DecodeContext ctx = new DecodeContext(node, DTypes.UTF8, values.length, bufs, registry, arena);
+			EncodingRegistry registry = EncodingRegistry.empty();
+			registry.register(new PrimitiveEncoding());
+			registry.register(sut);
+			DecodeContext ctx = new DecodeContext(node, UTF8, values.length, bufs, registry, arena);
 			var decoded = (VarBinArray) sut.decode(ctx);
 
 			// Then
@@ -81,7 +87,7 @@ class FsstEncodingTest {
 			for (int i = 0; i < children.length; i++) {
 				children[i] = toArrayNode(node.children()[i]);
 			}
-			return new ArrayNode(node.encodingId(), node.metadata(), children, node.bufferIndices(), null);
+			return ArrayNode.of(node.encodingId(), node.metadata(), children, node.bufferIndices(), null);
 		}
 
 		static Stream<Arguments> stringArrays() {
@@ -207,8 +213,8 @@ class FsstEncodingTest {
 		void decode_missingMetadata_throwsVortexException() {
 			// Given
 			var sut = new FsstEncoding();
-			ArrayNode node = new ArrayNode(EncodingId.VORTEX_FSST, null, new ArrayNode[0], new int[0], null);
-			DecodeContext ctx = new DecodeContext(node, DTypes.UTF8, 0, new MemorySegment[0],
+			ArrayNode node = ArrayNode.of(EncodingId.VORTEX_FSST, null, new ArrayNode[0], new int[0], null);
+			DecodeContext ctx = new DecodeContext(node, UTF8, 0, new MemorySegment[0],
 					buildRegistry(), Arena.ofAuto());
 
 			// When / Then
@@ -259,19 +265,20 @@ class FsstEncodingTest {
 					.setCodesOffsetsPtype(DTypeProtos.PType.forNumber(PType.I32.ordinal()))
 					.build().toByteArray();
 
-			ArrayNode uncompLensNode = new ArrayNode(
+			ArrayNode uncompLensNode = ArrayNode.of(
 					EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{3}, null);
-			ArrayNode codesOffNode = new ArrayNode(
+			ArrayNode codesOffNode = ArrayNode.of(
 					EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{4}, null);
-			ArrayNode root = new ArrayNode(
+			ArrayNode root = ArrayNode.of(
 					EncodingId.VORTEX_FSST, ByteBuffer.wrap(metaBytes),
 					new ArrayNode[]{uncompLensNode, codesOffNode}, new int[]{0, 1, 2}, null);
 
-			return new DecodeContext(root, DTypes.UTF8, n, segs, buildRegistry(), arena);
+			return new DecodeContext(root, UTF8, n, segs, buildRegistry(), arena);
 		}
 
 		private static EncodingRegistry buildRegistry() {
-			EncodingRegistry registry = TestRegistry.of(new PrimitiveEncoding());
+			EncodingRegistry registry = EncodingRegistry.empty();
+			registry.register(new PrimitiveEncoding());
 			return registry;
 		}
 	}

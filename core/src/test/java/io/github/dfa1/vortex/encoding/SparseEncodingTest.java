@@ -119,11 +119,11 @@ class SparseEncodingTest {
 
 			MemorySegment[] segments = bufs.toArray(new MemorySegment[0]);
 
-			ArrayNode idxNode = new ArrayNode(root.children()[0].encodingId(), null,
+			ArrayNode idxNode = ArrayNode.of(root.children()[0].encodingId(), null,
 					new ArrayNode[0], root.children()[0].bufferIndices(), ArrayStats.empty());
-			ArrayNode valNode = new ArrayNode(root.children()[1].encodingId(), null,
+			ArrayNode valNode = ArrayNode.of(root.children()[1].encodingId(), null,
 					new ArrayNode[0], root.children()[1].bufferIndices(), ArrayStats.empty());
-			ArrayNode sparseNode = new ArrayNode(root.encodingId(), root.metadata(),
+			ArrayNode sparseNode = ArrayNode.of(root.encodingId(), root.metadata(),
 					new ArrayNode[]{idxNode, valNode}, root.bufferIndices(), ArrayStats.empty());
 
 			EncodingRegistry registry = TestRegistry.of(new SparseEncoding(), new PrimitiveEncoding());
@@ -271,14 +271,14 @@ class SparseEncodingTest {
 					.setOffsetsPtype(DTypeProtos.PType.forNumber(PType.I32.ordinal()))
 					.build().toByteArray();
 
-			ArrayNode offsetsNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
+			ArrayNode offsetsNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
 					new ArrayNode[0], new int[]{3}, ArrayStats.empty());
-			ArrayNode valNode = new ArrayNode(EncodingId.VORTEX_VARBIN,
+			ArrayNode valNode = ArrayNode.of(EncodingId.VORTEX_VARBIN,
 					ByteBuffer.wrap(varBinMeta),
 					new ArrayNode[]{offsetsNode}, new int[]{2}, ArrayStats.empty());
-			ArrayNode idxNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
+			ArrayNode idxNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
 					new ArrayNode[0], new int[]{1}, ArrayStats.empty());
-			ArrayNode sparseNode = new ArrayNode(EncodingId.VORTEX_SPARSE,
+			ArrayNode sparseNode = ArrayNode.of(EncodingId.VORTEX_SPARSE,
 					ByteBuffer.wrap(meta),
 					new ArrayNode[]{idxNode, valNode}, new int[]{0}, ArrayStats.empty());
 
@@ -317,11 +317,11 @@ class SparseEncodingTest {
 			byte[] idxBuf = toLEBytes(new long[]{2L, 5L}, PType.U32);
 			byte[] boolBits = new byte[]{0b00000011};
 
-			ArrayNode valNode = new ArrayNode(EncodingId.VORTEX_BOOL, null,
+			ArrayNode valNode = ArrayNode.of(EncodingId.VORTEX_BOOL, null,
 					new ArrayNode[0], new int[]{2}, ArrayStats.empty());
-			ArrayNode idxNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
+			ArrayNode idxNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
 					new ArrayNode[0], new int[]{1}, ArrayStats.empty());
-			ArrayNode sparseNode = new ArrayNode(EncodingId.VORTEX_SPARSE,
+			ArrayNode sparseNode = ArrayNode.of(EncodingId.VORTEX_SPARSE,
 					ByteBuffer.wrap(meta),
 					new ArrayNode[]{idxNode, valNode}, new int[]{0}, ArrayStats.empty());
 
@@ -393,11 +393,11 @@ class SparseEncodingTest {
 				byte[] idxBuf, byte[] valBuf,
 				DType idxDtype
 		) {
-			ArrayNode idxNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
+			ArrayNode idxNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
 					new ArrayNode[0], new int[]{1}, ArrayStats.empty());
-			ArrayNode valNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
+			ArrayNode valNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
 					new ArrayNode[0], new int[]{2}, ArrayStats.empty());
-			ArrayNode sparseNode = new ArrayNode(EncodingId.VORTEX_SPARSE,
+			ArrayNode sparseNode = ArrayNode.of(EncodingId.VORTEX_SPARSE,
 					ByteBuffer.wrap(metaBytes),
 					new ArrayNode[]{idxNode, valNode},
 					new int[]{0},

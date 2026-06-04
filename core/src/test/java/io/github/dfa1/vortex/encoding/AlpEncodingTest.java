@@ -141,7 +141,7 @@ class AlpEncodingTest {
 				bb.putLong(v);
 			}
 
-			ArrayNode encNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
+			ArrayNode encNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
 					new ArrayNode[0], new int[]{0}, ArrayStats.empty());
 
 			MemorySegment[] segments;
@@ -160,9 +160,9 @@ class AlpEncodingTest {
 					vb.putDouble(v);
 				}
 
-				ArrayNode idxNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
+				ArrayNode idxNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
 						new ArrayNode[0], new int[]{1}, ArrayStats.empty());
-				ArrayNode valNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
+				ArrayNode valNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
 						new ArrayNode[0], new int[]{2}, ArrayStats.empty());
 
 				children = new ArrayNode[]{encNode, idxNode, valNode};
@@ -176,7 +176,7 @@ class AlpEncodingTest {
 				segments = new MemorySegment[]{MemorySegment.ofArray(encBuf)};
 			}
 
-			ArrayNode alpNode = new ArrayNode(EncodingId.VORTEX_ALP,
+			ArrayNode alpNode = ArrayNode.of(EncodingId.VORTEX_ALP,
 					ByteBuffer.wrap(metaBytes), children, new int[0], ArrayStats.empty());
 
 			EncodingRegistry registry = TestRegistry.of(new AlpEncoding(), new PrimitiveEncoding());
@@ -199,10 +199,10 @@ class AlpEncodingTest {
 				bb.putInt(v);
 			}
 
-			ArrayNode encNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
+			ArrayNode encNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
 					new ArrayNode[0], new int[]{0}, ArrayStats.empty());
 
-			ArrayNode alpNode = new ArrayNode(EncodingId.VORTEX_ALP,
+			ArrayNode alpNode = ArrayNode.of(EncodingId.VORTEX_ALP,
 					ByteBuffer.wrap(metaBytes), new ArrayNode[]{encNode}, new int[0], ArrayStats.empty());
 
 			MemorySegment[] segments = {MemorySegment.ofArray(encBuf)};

@@ -22,7 +22,7 @@ class StructEncodingTest {
 		for (int i = 0; i < children.length; i++) {
 			children[i] = toArrayNode(node.children()[i]);
 		}
-		return new ArrayNode(node.encodingId(), node.metadata(), children, node.bufferIndices(), ArrayStats.empty());
+		return ArrayNode.of(node.encodingId(), node.metadata(), children, node.bufferIndices(), ArrayStats.empty());
 	}
 
 	@Nested
@@ -110,7 +110,7 @@ class StructEncodingTest {
 			long[] data = {10L, 20L, 30L};
 			MemorySegment seg = TestSegments.leLongs(data);
 			ArrayNode valuesNode = primitiveNode(0);
-			ArrayNode structNode = new ArrayNode(EncodingId.VORTEX_STRUCT, null,
+			ArrayNode structNode = ArrayNode.of(EncodingId.VORTEX_STRUCT, null,
 					new ArrayNode[]{valuesNode}, new int[0], ArrayStats.empty());
 
 			DecodeContext ctx = buildStructCtx(structNode, new MemorySegment[]{seg}, data.length);
@@ -135,7 +135,7 @@ class StructEncodingTest {
 
 			ArrayNode validityNode = boolNode(0);    // slot 0 = validity bitmap
 			ArrayNode valuesNode = primitiveNode(1); // slot 1 = actual values
-			ArrayNode structNode = new ArrayNode(EncodingId.VORTEX_STRUCT, null,
+			ArrayNode structNode = ArrayNode.of(EncodingId.VORTEX_STRUCT, null,
 					new ArrayNode[]{validityNode, valuesNode}, new int[0], ArrayStats.empty());
 
 			EncodingRegistry registry = TestRegistry.of(new StructEncoding(), new PrimitiveEncoding(), new BoolEncoding());
@@ -161,12 +161,12 @@ class StructEncodingTest {
 		}
 
 		private static ArrayNode primitiveNode(int bufferIdx) {
-			return new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0],
+			return ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0],
 					new int[]{bufferIdx}, ArrayStats.empty());
 		}
 
 		private static ArrayNode boolNode(int bufferIdx) {
-			return new ArrayNode(EncodingId.VORTEX_BOOL, null, new ArrayNode[0],
+			return ArrayNode.of(EncodingId.VORTEX_BOOL, null, new ArrayNode[0],
 					new int[]{bufferIdx}, ArrayStats.empty());
 		}
 

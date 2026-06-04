@@ -48,11 +48,11 @@ class BitpackedEncodingPatchesTest {
 			byte[] valBuf = new byte[2 * 4];
 			ByteBuffer.wrap(valBuf).order(ByteOrder.LITTLE_ENDIAN).putInt(777).putInt(999);
 
-			ArrayNode idxNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
+			ArrayNode idxNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
 					new ArrayNode[0], new int[]{1}, ArrayStats.empty());
-			ArrayNode valNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
+			ArrayNode valNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
 					new ArrayNode[0], new int[]{2}, ArrayStats.empty());
-			ArrayNode bpNode = new ArrayNode(EncodingId.FASTLANES_BITPACKED,
+			ArrayNode bpNode = ArrayNode.of(EncodingId.FASTLANES_BITPACKED,
 					ByteBuffer.wrap(metaBytes),
 					new ArrayNode[]{idxNode, valNode},
 					new int[]{0},
