@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
+import io.github.dfa1.vortex.core.array.MaskedArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.proto.EncodingProtos;
 import org.junit.jupiter.api.Nested;
@@ -17,7 +18,9 @@ import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -235,20 +238,81 @@ class ZstdEncodingTest {
         }
 
         @Test
-        void decode_withValidityChild_throwsVortexException() {
+        void decode_nullable_primitive_scattersValuesCorrectly() {
             // Given
             var sut = new ZstdEncoding();
-            byte[] meta = metaNoDict(new long[0], new long[0]);
-            ArrayNode validityChild = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[0], null);
-            ArrayNode node = new ArrayNode(EncodingId.VORTEX_ZSTD, ByteBuffer.wrap(meta),
-                    new ArrayNode[]{validityChild}, new int[0], null);
-            DecodeContext ctx = new DecodeContext(node, I32, 0, new MemorySegment[0],
-                    EncodingRegistry.empty(), Arena.ofAuto());
+            // validity: [true, false, true, false] — positions 0,2 are valid
+            boolean[] validityBits = {true, false, true, false};
+            // only valid values compressed: 10, 30
+            byte[] raw = toLeBytes(new int[]{10, 30});
+            byte[] compressed = compress(raw);
+            DType i32Nullable = new DType.Primitive(PType.I32, true);
+            DecodeContext ctx = makeNullableCtx(
+                    metaNoDict(new long[]{raw.length}, new long[]{2}),
+                    i32Nullable, 4, validityBits, compressed);
 
-            // When / Then
-            assertThatThrownBy(() -> sut.decode(ctx))
-                    .isInstanceOf(VortexException.class)
-                    .hasMessageContaining("nullable arrays not supported");
+            // When
+            MaskedArray result = (MaskedArray) sut.decode(ctx);
+
+            // Then
+            assertThat(result.length()).isEqualTo(4);
+            assertThat(result.isValid(0)).isTrue();
+            assertThat(result.isValid(1)).isFalse();
+            assertThat(result.isValid(2)).isTrue();
+            assertThat(result.isValid(3)).isFalse();
+            IntArray child = (IntArray) result.child(0);
+            assertThat(child.getInt(0)).isEqualTo(10);
+            assertThat(child.getInt(2)).isEqualTo(30);
+        }
+
+        @Test
+        void decode_nullable_utf8_scattersValuesCorrectly() {
+            // Given
+            var sut = new ZstdEncoding();
+            // validity: [true, false, true] — positions 0,2 are valid
+            boolean[] validityBits = {true, false, true};
+            // only valid strings compressed
+            byte[] raw = toLengthPrefixed(new String[]{"hello", "world"});
+            byte[] compressed = compress(raw);
+            DType utf8Nullable = new DType.Utf8(true);
+            DecodeContext ctx = makeNullableCtx(
+                    metaNoDict(new long[]{raw.length}, new long[]{2}),
+                    utf8Nullable, 3, validityBits, compressed);
+
+            // When
+            MaskedArray result = (MaskedArray) sut.decode(ctx);
+
+            // Then
+            assertThat(result.length()).isEqualTo(3);
+            assertThat(result.isValid(0)).isTrue();
+            assertThat(result.isValid(1)).isFalse();
+            assertThat(result.isValid(2)).isTrue();
+            VarBinArray child = (VarBinArray) result.child(0);
+            assertThat(child.getString(0)).isEqualTo("hello");
+            assertThat(child.getString(2)).isEqualTo("world");
+        }
+
+        @Test
+        void decode_allNull_returnsEmptyMaskedArray() {
+            // Given
+            var sut = new ZstdEncoding();
+            boolean[] validityBits = {false, false, false};
+            // no valid values — zero-length compressed buffer
+            byte[] raw = new byte[0];
+            byte[] compressed = compress(raw);
+            DType i32Nullable = new DType.Primitive(PType.I32, true);
+            DecodeContext ctx = makeNullableCtx(
+                    metaNoDict(new long[]{raw.length}, new long[]{0}),
+                    i32Nullable, 3, validityBits, compressed);
+
+            // When
+            MaskedArray result = (MaskedArray) sut.decode(ctx);
+
+            // Then
+            assertThat(result.length()).isEqualTo(3);
+            assertThat(result.isValid(0)).isFalse();
+            assertThat(result.isValid(1)).isFalse();
+            assertThat(result.isValid(2)).isFalse();
         }
 
         @Test
@@ -263,6 +327,41 @@ class ZstdEncodingTest {
             assertThatThrownBy(() -> sut.decode(ctx))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("missing metadata");
+        }
+
+        private static DecodeContext makeNullableCtx(
+                byte[] meta, DType dtype, long n, boolean[] validityBits, byte[]... compressedFrames
+        ) {
+            BoolEncoding boolEncoding = new BoolEncoding();
+            EncodeResult validityResult = boolEncoding.encode(new DType.Bool(false), validityBits);
+            EncodeNode remappedValidity = EncodeNode.remapBufferIndices(
+                    validityResult.rootNode(), compressedFrames.length);
+
+            List<MemorySegment> allSegments = new ArrayList<>();
+            int[] bufIndices = new int[compressedFrames.length];
+            for (int i = 0; i < compressedFrames.length; i++) {
+                allSegments.add(MemorySegment.ofArray(compressedFrames[i]));
+                bufIndices[i] = i;
+            }
+            allSegments.addAll(validityResult.buffers());
+
+            ArrayNode validityNode = toArrayNode(remappedValidity);
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_ZSTD, ByteBuffer.wrap(meta),
+                    new ArrayNode[]{validityNode}, bufIndices, null);
+
+            EncodingRegistry registry = EncodingRegistry.empty();
+            registry.register(new BoolEncoding());
+
+            return new DecodeContext(node, dtype, n, allSegments.toArray(new MemorySegment[0]),
+                    registry, Arena.ofAuto());
+        }
+
+        private static ArrayNode toArrayNode(EncodeNode enc) {
+            ArrayNode[] children = new ArrayNode[enc.children().length];
+            for (int i = 0; i < children.length; i++) {
+                children[i] = toArrayNode(enc.children()[i]);
+            }
+            return new ArrayNode(enc.encodingId(), enc.metadata(), children, enc.bufferIndices(), null);
         }
 
         private static byte[] metaNoDict(long[] uncompressedSizes, long[] nValues) {

@@ -145,9 +145,6 @@
 
 ### `vortex.zstd` known limitations
 
-- [ ] **Nullable arrays (decode)** — `ZstdEncoding.Decoder` throws when `node.children().length > 0` (validity child present).
-  Fix: if child[0] exists, decode it as a validity bitmap (Bool array). Zstd stores only the _valid_ values compactly — after decompressing, scatter them back into a full-length array using the validity positions. For strings, reconstruct null slots as zero-length entries or handle at the `VarBinArray` level.
-
 - [ ] **Dictionary support (decode)** — `ZstdEncoding.Decoder` throws when `metadata.dictionary_size != 0`.
   Fix: when `dictionary_size > 0`, buffer[0] is the dictionary bytes and frames start at buffer[1]. Pass dict bytes to `new ZstdDecompressor()` — check if aircompressor supports dictionary-mode decompression; if not, switch to `com.github.luben:zstd-jni` for this path only (native, dictionary-trained zstd is hard to replicate in pure Java).
 

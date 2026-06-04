@@ -10,12 +10,14 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.BoolArray;
 import io.github.dfa1.vortex.core.array.ByteArray;
 import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.Float16Array;
 import io.github.dfa1.vortex.core.array.FloatArray;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
+import io.github.dfa1.vortex.core.array.MaskedArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.proto.EncodingProtos;
@@ -40,7 +42,8 @@ import java.util.List;
 /// <p>Primitive dtype: raw LE values compressed into a single frame.
 /// <p>Utf8/Binary dtype: {@code [u32-LE length][data]} per string, compressed into a single frame.
 ///
-/// <p>No dictionary, no nullable (validity child not supported).
+/// <p>No dictionary support. Nullable arrays (validity child present) are decoded by scattering
+/// valid values back into a full-length array wrapped in {@link MaskedArray}.
 public final class ZstdEncoding implements Encoding {
 
     @Override
@@ -199,8 +202,19 @@ public final class ZstdEncoding implements Encoding {
             if (meta.getDictionarySize() != 0) {
                 throw new VortexException(EncodingId.VORTEX_ZSTD, "dictionary not supported");
             }
+
+            BoolArray validity = null;
             if (ctx.node().children().length > 0) {
-                throw new VortexException(EncodingId.VORTEX_ZSTD, "nullable arrays not supported");
+                ArrayNode childNode = ctx.node().children()[0];
+                DecodeContext childCtx = new DecodeContext(
+                        childNode, new DType.Bool(false), ctx.rowCount(),
+                        ctx.segmentBuffers(), ctx.registry(), ctx.arena());
+                Array validityArray = ctx.registry().decode(childCtx);
+                if (!(validityArray instanceof BoolArray ba)) {
+                    throw new VortexException(EncodingId.VORTEX_ZSTD,
+                            "validity child decoded to unexpected type: " + validityArray.getClass().getSimpleName());
+                }
+                validity = ba;
             }
 
             int frameCount = meta.getFramesCount();
@@ -210,7 +224,78 @@ public final class ZstdEncoding implements Encoding {
             }
 
             MemorySegment decompressed = decompressFrames(ctx, meta, frameCount, totalUncompressed);
-            return buildArray(ctx.dtype(), ctx.rowCount(), decompressed, ctx);
+
+            if (validity == null) {
+                return buildArray(ctx.dtype(), ctx.rowCount(), decompressed, ctx);
+            } else {
+                return buildNullableArray(ctx.dtype(), ctx.rowCount(), decompressed, validity, ctx);
+            }
+        }
+
+        private static Array buildNullableArray(
+                DType dtype, long rowCount, MemorySegment validValues, BoolArray validity, DecodeContext ctx
+        ) {
+            Array child;
+            if (dtype instanceof DType.Primitive dt) {
+                child = buildScatteredPrimitive(dt, rowCount, validValues, validity, ctx);
+            } else if (dtype instanceof DType.Utf8 || dtype instanceof DType.Binary) {
+                child = buildScatteredVarBin(dtype, rowCount, validValues, validity, ctx);
+            } else {
+                throw new VortexException(EncodingId.VORTEX_ZSTD, "unsupported nullable dtype: " + dtype);
+            }
+            return new MaskedArray(child, validity);
+        }
+
+        private static Array buildScatteredPrimitive(
+                DType.Primitive dt, long rowCount, MemorySegment validValues, BoolArray validity, DecodeContext ctx
+        ) {
+            int byteSize = dt.ptype().byteSize();
+            MemorySegment out = ctx.arena().allocate(rowCount * byteSize);
+            long readPos = 0;
+            for (long i = 0; i < rowCount; i++) {
+                if (validity.getBoolean(i)) {
+                    MemorySegment.copy(validValues, readPos, out, i * byteSize, byteSize);
+                    readPos += byteSize;
+                }
+            }
+            DType.Primitive nonNull = new DType.Primitive(dt.ptype(), false);
+            return buildPrimitive(nonNull, rowCount, out);
+        }
+
+        private static VarBinArray buildScatteredVarBin(
+                DType dtype, long rowCount, MemorySegment validValues, BoolArray validity, DecodeContext ctx
+        ) {
+            // First pass: total data bytes across valid positions only
+            long totalDataBytes = 0;
+            long scanPos = 0;
+            for (long i = 0; i < rowCount; i++) {
+                if (validity.getBoolean(i)) {
+                    int len = validValues.get(PTypeIO.LE_INT, scanPos);
+                    scanPos += 4L + len;
+                    totalDataBytes += len;
+                }
+            }
+
+            MemorySegment values = ctx.arena().allocate(totalDataBytes > 0 ? totalDataBytes : 1);
+            MemorySegment offsets = ctx.arena().allocate((rowCount + 1) * 4L, 4);
+            offsets.setAtIndex(PTypeIO.LE_INT, 0, 0);
+
+            long readPos = 0;
+            long dataPos = 0;
+            for (long i = 0; i < rowCount; i++) {
+                if (validity.getBoolean(i)) {
+                    int len = validValues.get(PTypeIO.LE_INT, readPos);
+                    readPos += 4;
+                    MemorySegment.copy(validValues, readPos, values, dataPos, len);
+                    readPos += len;
+                    dataPos += len;
+                }
+                offsets.setAtIndex(PTypeIO.LE_INT, i + 1, (int) dataPos);
+            }
+
+            DType i32 = new DType.Primitive(PType.I32, false);
+            IntArray offsetsArr = new IntArray(i32, rowCount + 1, offsets, ArrayStats.empty());
+            return new VarBinArray(dtype.withNullable(false), rowCount, values, offsetsArr, PType.I32, ArrayStats.empty());
         }
 
         private static MemorySegment decompressFrames(
