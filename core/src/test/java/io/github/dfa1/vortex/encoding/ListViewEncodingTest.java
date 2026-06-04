@@ -24,10 +24,7 @@ class ListViewEncodingTest {
 	}
 
 	private static EncodingRegistry registry() {
-		EncodingRegistry r = EncodingRegistry.empty();
-		r.register(new ListViewEncoding());
-		r.register(new PrimitiveEncoding());
-		return r;
+		return TestRegistry.of(new ListViewEncoding(), new PrimitiveEncoding());
 	}
 
 	@Nested
@@ -156,7 +153,7 @@ class ListViewEncodingTest {
 			ListViewEncoding sut = new ListViewEncoding();
 			ArrayNode node = new ArrayNode(EncodingId.VORTEX_LISTVIEW, null,
 					new ArrayNode[0], new int[0], ArrayStats.empty());
-			DecodeContext ctx = new DecodeContext(node, DTypes.I32, 0, new MemorySegment[0], registry(), Arena.global());
+			DecodeContext ctx = TestDecodeContexts.of(node, DTypes.I32).registry(registry()).build();
 
 			// When / Then
 			assertThatThrownBy(() -> sut.decode(ctx))
@@ -172,7 +169,7 @@ class ListViewEncodingTest {
 			ArrayNode node = new ArrayNode(EncodingId.VORTEX_LISTVIEW,
 					java.nio.ByteBuffer.wrap(new byte[0]),
 					new ArrayNode[]{child}, new int[0], ArrayStats.empty());
-			DecodeContext ctx = new DecodeContext(node, DTypes.LIST_I32, 0, new MemorySegment[0], registry(), Arena.global());
+			DecodeContext ctx = TestDecodeContexts.of(node, DTypes.LIST_I32).registry(registry()).build();
 
 			// When / Then
 			assertThatThrownBy(() -> sut.decode(ctx))

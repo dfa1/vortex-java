@@ -388,8 +388,7 @@ class ZstdEncodingTest {
             // Given
             var sut = new ZstdEncoding();
             ArrayNode node = new ArrayNode(EncodingId.VORTEX_ZSTD, null, new ArrayNode[0], new int[0], null);
-            DecodeContext ctx = new DecodeContext(node, DTypes.I32, 0, new MemorySegment[0],
-                    EncodingRegistry.empty(), Arena.ofAuto());
+            DecodeContext ctx = TestDecodeContexts.of(node, DTypes.I32).arena(Arena.ofAuto()).build();
 
             // When / Then
             assertThatThrownBy(() -> sut.decode(ctx))
@@ -411,7 +410,7 @@ class ZstdEncodingTest {
             }
             ArrayNode node = new ArrayNode(EncodingId.VORTEX_ZSTD, ByteBuffer.wrap(meta),
                     new ArrayNode[0], bufIndices, null);
-            return new DecodeContext(node, dtype, n, segments, EncodingRegistry.empty(), Arena.ofAuto());
+            return TestDecodeContexts.of(node, dtype).rowCount(n).segments(segments).arena(Arena.ofAuto()).build();
         }
 
         private static byte[] makeDictFor(byte[]... samples) {
@@ -461,8 +460,8 @@ class ZstdEncodingTest {
 
             EncodingRegistry registry = TestRegistry.of(new BoolEncoding());
 
-            return new DecodeContext(node, dtype, n, allSegments.toArray(new MemorySegment[0]),
-                    registry, Arena.ofAuto());
+            return TestDecodeContexts.of(node, dtype).rowCount(n)
+                    .segments(allSegments.toArray(new MemorySegment[0])).registry(registry).arena(Arena.ofAuto()).build();
         }
 
         private static ArrayNode toArrayNode(EncodeNode enc) {
@@ -493,7 +492,7 @@ class ZstdEncodingTest {
             }
             ArrayNode node = new ArrayNode(EncodingId.VORTEX_ZSTD, ByteBuffer.wrap(meta),
                     new ArrayNode[0], bufIndices, null);
-            return new DecodeContext(node, dtype, n, segments, EncodingRegistry.empty(), Arena.ofAuto());
+            return TestDecodeContexts.of(node, dtype).rowCount(n).segments(segments).arena(Arena.ofAuto()).build();
         }
 
         private static byte[] compress(byte[] input) {
