@@ -291,9 +291,9 @@ public final class ScanIterator implements AutoCloseable {
 		if (rawMeta == null) {
 			throw new VortexException(EncodingId.VORTEX_DICT, "layout: missing metadata");
 		}
-		EncodingProtos.DictLayoutMetadata meta;
+		EncodingProtos.DictMetadata meta;
 		try {
-			meta = EncodingProtos.DictLayoutMetadata.parseFrom(rawMeta.duplicate());
+			meta = EncodingProtos.DictMetadata.parseFrom(rawMeta.duplicate());
 		} catch (InvalidProtocolBufferException e) {
 			throw new VortexException(EncodingId.VORTEX_DICT, "layout: invalid metadata", e);
 		}
