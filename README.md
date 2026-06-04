@@ -138,7 +138,7 @@ java -jar cli/target/vortex.jar <subcommand> [args]
 | `export` | `export <file.vortex>` | Write all columns to CSV on stdout |
 | `select` | `select <file.vortex> <col> [col2 ...]` | Project specific columns to CSV on stdout |
 | `filter` | `filter <file.vortex> <expr>` | Filter rows to CSV (e.g. `"price >= 100"`) |
-| `import` | `import <file.csv> [out.vortex]` | Convert CSV to Vortex (output defaults to `<input>.vortex`) |
+| `import` | `import <file.csv\|file.parquet> [out.vortex]` | Convert CSV or Parquet to Vortex (output defaults to `<input>.vortex`) |
 
 Filter operators: `>`, `>=`, `<`, `<=`, `=`, `==`. Values are parsed as integer, double, boolean, or string.
 
@@ -277,6 +277,17 @@ JMH throughput (ops/s = full-file scans per second). Higher is better.
 | Benchmark | Java (ops/s) | JNI/Rust (ops/s) | Java speedup |
 |-----------|--------------|------------------|--------------|
 | scan      | 20.4 ± 0.9   | 5.7 ± 0.6        | **3.6×**     |
+
+### Parquet vs Vortex read — NYC Yellow Taxi 2024-01, 3M rows, 3 columns
+
+Source: 47.6 MB Parquet → 12.0 MB Vortex (4× compression). Both sides scalar decode
+(Hardwood disables SIMD on JDK 25; Vortex Java uses FFM scalar reads throughout).
+
+| Benchmark | ops/s | vs Parquet |
+|---|---|---|
+| `parquetRead` — Hardwood, single col (`trip_distance`) | 66.96 ± 1.99 | baseline |
+| `vortexRead` — single col (`trip_distance`) | 201.61 ± 1.63 | **3.0×** |
+| `vortexReadMultiColumn` — two cols (`fare_amount` + `PULocationID`) | 140.31 ± 5.42 | **2.1×** |
 
 ### Why fewer layers = faster
 
