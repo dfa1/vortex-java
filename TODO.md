@@ -183,6 +183,17 @@
     - Candidates: `PType` integer kinds, buffer offsets, row indices, byte lengths
     - Goal: type-safety at zero cost (value class = no heap alloc, no boxing)
 
+- [ ] **Audit runtime pluggability vs Rust impl** — maintainer (2026-06-04) flagged that Rust supports
+  runtime registration for: Encodings, DTypes, Compute, Layouts. Java status:
+    - Encodings: ✅ `ServiceLoader` + `EncodingRegistry.register()`
+    - DTypes: ❌ sealed hierarchy — no user-extensible type. If a downstream consumer needs a custom
+      logical type (e.g. UUID, IP address) they can't register one. Decide: keep sealed (simpler) or
+      open via SPI mirroring `EncodingRegistry`.
+    - Layouts: ❌ fixed set (Flat/Chunked/Zoned/Struct). Same trade-off as DTypes.
+    - Compute: ❌ no compute layer yet. Out of scope until reader feature-complete.
+  Action: short design note weighing sealed-vs-pluggable for DType + Layout; revisit when Java impl
+  has a real downstream consumer asking for it. Don't pre-open these without a use case.
+
 
 ## Encodings
 
