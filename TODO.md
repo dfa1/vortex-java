@@ -38,12 +38,107 @@
   metadata (e.g. `RLEMetadata`, `RunEndMetadata`) has no upstream `.proto`; tag mismatches
   silently produce zero/default values in proto3. Add value-level assertions (not just
   `rowCount > 0`) to integration tests to catch silent corruption.
-- [ ] lots of repetitions like in every test
-```java
-   private static final DType I64 = new DType.Primitive(PType.I64, false);
-	private static final ValueLayout.OfLong LE_LONG =
-			ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-```
+- [ ] **Common test code — kill duplication in unit tests**
+
+  Detailed plan for Sonnet:
+
+  **Scope**: `core/src/test/java/io/github/dfa1/vortex/encoding/**` and `core/src/test/java/io/github/dfa1/vortex/core/array/**`.
+  Do NOT touch integration/, reader/, writer/, csv/, cli/ in this pass — keep diff focused. Do NOT touch worktrees.
+
+  **Goal**: extract shared test fixtures into one or two helper classes under
+  `core/src/test/java/io/github/dfa1/vortex/encoding/` (same package — keeps helpers package-private).
+  No new module. No `src/testFixtures`. Plain test sources.
+
+  **What to extract** (each one is its own commit so review/revert is easy):
+
+  1. **`DTypes` constants holder** — package-private final class in
+     `io.github.dfa1.vortex.encoding`. Public static finals:
+     ```
+     I8, I16, I32, I64, U8, U16, U32, U64, F32, F64       // non-nullable primitive
+     I32_N, I64_N, F64_N                                   // nullable variants used by tests
+     BOOL, BOOL_N, UTF8, UTF8_N, BINARY, BINARY_N, NULL
+     LIST_I32 = new DType.List(I32, false)                 // only the list dtype reused across ListEncodingTest / ListViewEncodingTest
+     ```
+     Skip anything used by only one test. Naming: short — `I64`, not `I64_DTYPE`.
+     Replace local `private static final DType X = ...` declarations with `import static ... DTypes.X` (or
+     plain qualified ref). Keep test files self-explanatory; don't import a wildcard.
+
+  2. **Reuse `PTypeIO.LE_LONG / LE_INT / LE_SHORT / LE_FLOAT / LE_DOUBLE`** — already public.
+     Replace every local `ValueLayout.OfX LE_X = ValueLayout.JAVA_X_UNALIGNED.withOrder(LITTLE_ENDIAN)` and
+     inline `withOrder(LITTLE_ENDIAN)` in test files with `PTypeIO.LE_X`. No new code needed; this is pure
+     deletion + reference swap. Watch out: a couple of tests use `ByteBuffer.wrap(...).order(LITTLE_ENDIAN)` —
+     leave those alone (different API surface).
+
+  3. **`TestSegments` helpers** — package-private final class with static factories:
+     ```
+     static MemorySegment leLongs(long... values)
+     static MemorySegment leInts(int... values)
+     static MemorySegment leShorts(short... values)
+     static MemorySegment leDoubles(double... values)
+     static MemorySegment leFloats(float... values)
+     static MemorySegment leBytes(byte... values)            // trivial — included only if used >2 places
+     ```
+     All allocate via `Arena.ofAuto()` (test lifetime; matches `EncodeTestHelper`). Replaces patterns like:
+     ```java
+     MemorySegment buf = Arena.ofAuto().allocate(values.length * 8L);
+     for (int i = 0; i < values.length; i++) buf.setAtIndex(LE_LONG, i, values[i]);
+     ```
+     Apply to tests that currently inline this loop: `RunEndEncodingTest`, `FrameOfReferenceEncodingTest`,
+     `DeltaEncodingTest`, `DecimalEncodingTest`, `DecimalBytePartsEncodingTest`, `PrimitiveEncodingTest`,
+     `RleEncodingTest`, `LongArrayTest`, plus any `buildCtx`/`makeCtx` internals.
+
+  4. **`TestRegistry` factory** — collapses
+     ```
+     EncodingRegistry r = EncodingRegistry.empty();
+     r.register(sut);
+     r.register(new PrimitiveEncoding());
+     ```
+     into:
+     ```java
+     static EncodingRegistry of(Encoding... encodings) { ... }            // empty + register each
+     static EncodingRegistry withPrimitive(Encoding sut) { ... }          // common 2-encoding combo
+     ```
+     Most affected: `RunEndEncodingTest`, `DeltaEncodingTest`, `ByteBoolEncodingTest`,
+     `DecimalBytePartsEncodingTest`, `ListViewEncodingTest`, `DictEncodingTest`, etc.
+     Do NOT change `EncodeTestHelper` — it already takes a registry parameter and is correct.
+
+  5. **`TestDecodeContexts` builder** — replaces the ad-hoc `buildCtx`/`makeCtx` local helpers in
+     `ByteBoolEncodingTest`, `RunEndEncodingTest`, `ListViewEncodingTest`, `ZstdEncodingTest` with a
+     thin builder:
+     ```java
+     TestDecodeContexts.of(node, dtype)
+         .rowCount(n)
+         .registry(reg)
+         .segments(seg0, seg1)
+         .build();   // defaults: registry = empty, arena = Arena.global()
+     ```
+     Keep it small — only ship methods that have ≥2 callers after migration. Resist adding "might be
+     useful" knobs. If only one test ends up using a knob, leave that test with its own helper.
+
+  **Order of work** (each step is one commit, `./mvnw test -pl core` must stay green between commits):
+  1. Add `DTypes`, migrate all encoding tests. ~25 files touched, mostly mechanical.
+  2. Delete local `LE_X` constants, point at `PTypeIO.LE_X`. ~10 files.
+  3. Add `TestSegments`, migrate inline `setAtIndex` loops. ~8 files.
+  4. Add `TestRegistry`, migrate `EncodingRegistry.empty() + register` sequences. ~15 files.
+  5. Add `TestDecodeContexts`, migrate `buildCtx`/`makeCtx`. ~4 files.
+
+  **Rules**:
+  - Helpers live in `io.github.dfa1.vortex.encoding` (test sources). Package-private classes,
+    public static methods/fields. No `public` classes — keeps surface area minimal.
+  - One commit per step. Each commit message: `test: extract <thing>` body lists files migrated.
+  - Don't add JavaDoc paragraphs to trivial helpers; a one-line `///` comment max.
+  - Don't migrate a test if the local constant is used exactly once and reads clearer inline
+    (judgement call — err on side of dedup, but bail on weird edge cases).
+  - Don't introduce `@BeforeEach` to set up these helpers — they're static, callers stay explicit.
+  - If a migration makes a `@Nested` class private helper unused, delete it in the same commit.
+  - Verify with `./mvnw test -pl core` after each step. Don't batch.
+
+  **Out of scope** (do NOT do in this task):
+  - Moving helpers to a shared `testFixtures` Maven config.
+  - Touching integration tests (they have their own `RandomArrays` already).
+  - Refactoring `EncodeTestHelper` itself.
+  - Renaming `sut` or changing BDD structure.
+  - Adding new test coverage. This is pure refactor.
 
 ## Build
 
