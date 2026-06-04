@@ -18,7 +18,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
@@ -73,7 +72,7 @@ class SparseEncodingTest {
 			Array decoded = decodeResult(encoded, DTypes.I64, data.length);
 
 			// Then
-			var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var layout = PTypeIO.LE_LONG;
 			for (int i = 0; i < data.length; i++) {
 				assertThat(decoded.buffer(0).get(layout, (long) i * 8))
 						.as("index %d", i).isEqualTo(data[i]);
@@ -91,7 +90,7 @@ class SparseEncodingTest {
 			Array decoded = decodeResult(encoded, DTypes.F64, data.length);
 
 			// Then
-			var layout = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var layout = PTypeIO.LE_DOUBLE;
 			for (int i = 0; i < data.length; i++) {
 				assertThat(decoded.buffer(0).get(layout, (long) i * 8))
 						.as("index %d", i).isEqualTo(data[i]);
@@ -151,7 +150,7 @@ class SparseEncodingTest {
 
 			// Then
 			assertThat(result.length()).isEqualTo(5L);
-			var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var layout = PTypeIO.LE_LONG;
 			for (int i = 0; i < 5; i++) {
 				assertThat(result.buffer(0).get(layout, (long) i * 8))
 						.as("index %d", i).isEqualTo(fill);
@@ -171,7 +170,7 @@ class SparseEncodingTest {
 			Array result = sut.decode(ctx);
 
 			// Then
-			var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var layout = PTypeIO.LE_LONG;
 			long[] expected = {0, 10, 0, 0, 0, 50, 0, 0};
 			for (int i = 0; i < expected.length; i++) {
 				assertThat(result.buffer(0).get(layout, (long) i * 8))
@@ -191,7 +190,7 @@ class SparseEncodingTest {
 			Array result = sut.decode(ctx);
 
 			// Then
-			var layout = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var layout = PTypeIO.LE_DOUBLE;
 			assertThat(result.buffer(0).get(layout, 0L)).isNaN();
 			assertThat(result.buffer(0).get(layout, 8L)).isNaN();
 			assertThat(result.buffer(0).get(layout, 16L)).isEqualTo(3.14);
@@ -210,7 +209,7 @@ class SparseEncodingTest {
 			Array result = sut.decode(ctx);
 
 			// Then
-			var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var layout = PTypeIO.LE_LONG;
 			assertThat(result.buffer(0).get(layout, 16L)).isEqualTo(777L);
 		}
 
@@ -229,7 +228,7 @@ class SparseEncodingTest {
 			Array result = sut.decode(ctx);
 
 			// Then
-			var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var layout = PTypeIO.LE_LONG;
 			for (int i = 0; i < 4; i++) {
 				assertThat(result.buffer(0).get(layout, (long) i * 8)).as("index %d", i).isZero();
 			}

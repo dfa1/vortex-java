@@ -12,7 +12,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.stream.Stream;
@@ -37,7 +36,7 @@ class RunEndEncodingTest {
 
 			// Then
 			assertThat(result.length()).isEqualTo(5L);
-			var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var layout = PTypeIO.LE_LONG;
 			for (int i = 0; i < 5; i++) {
 				assertThat(result.buffer(0).get(layout, (long) i * 8)).isEqualTo(42L);
 			}
@@ -57,7 +56,7 @@ class RunEndEncodingTest {
 
 			// Then
 			long[] expected = {10, 10, 20, 20, 20, 30, 30};
-			var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var layout = PTypeIO.LE_LONG;
 			for (int i = 0; i < expected.length; i++) {
 				assertThat(result.buffer(0).get(layout, (long) i * 8))
 						.as("index %d", i).isEqualTo(expected[i]);
@@ -78,7 +77,7 @@ class RunEndEncodingTest {
 
 			// Then
 			long[] expected = {10L, 20L, 20L};
-			var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var layout = PTypeIO.LE_LONG;
 			for (int i = 0; i < expected.length; i++) {
 				assertThat(result.buffer(0).get(layout, (long) i * 8))
 						.as("index %d", i).isEqualTo(expected[i]);
@@ -148,7 +147,7 @@ class RunEndEncodingTest {
 			EncodingRegistry registry = EncodingRegistry.empty();
 			registry.register(sut);
 			registry.register(new PrimitiveEncoding());
-			var le = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var le = PTypeIO.LE_LONG;
 
 			// When
 			EncodeResult encoded = sut.encode(DTypes.I64, data);

@@ -13,7 +13,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.stream.Stream;
@@ -41,7 +40,7 @@ class FrameOfReferenceEncodingTest {
 
 			// Then
 			assertThat(result.length()).isEqualTo(residuals.length);
-			var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var layout = PTypeIO.LE_LONG;
 			for (int i = 0; i < expected.length; i++) {
 				assertThat(result.buffer(0).get(layout, (long) i * 8))
 						.as("index %d", i)
@@ -64,7 +63,7 @@ class FrameOfReferenceEncodingTest {
 
 			// Then
 			assertThat(result.length()).isEqualTo(residuals.length);
-			var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var layout = PTypeIO.LE_INT;
 			for (int i = 0; i < expected.length; i++) {
 				assertThat(result.buffer(0).get(layout, (long) i * 4))
 						.as("index %d", i)
@@ -83,7 +82,7 @@ class FrameOfReferenceEncodingTest {
 			Array result = sut.decode(ctx);
 
 			// Then — values unchanged
-			var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var layout = PTypeIO.LE_LONG;
 			for (int i = 0; i < residuals.length; i++) {
 				assertThat(result.buffer(0).get(layout, (long) i * 8)).isEqualTo(residuals[i]);
 			}
@@ -101,7 +100,7 @@ class FrameOfReferenceEncodingTest {
 			Array result = sut.decode(ctx);
 
 			// Then
-			var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var layout = PTypeIO.LE_LONG;
 			long got = result.buffer(0).get(layout, 0L);
 			assertThat(got).isEqualTo(residuals[0] + reference);
 		}
@@ -148,7 +147,7 @@ class FrameOfReferenceEncodingTest {
 			assertThat(masked.isValid(1)).isFalse();
 			assertThat(masked.isValid(2)).isTrue();
 			assertThat(masked.isValid(3)).isFalse();
-			var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var layout = PTypeIO.LE_INT;
 			assertThat(masked.child(0).buffer(0).get(layout, 0L)).isEqualTo(100);
 			assertThat(masked.child(0).buffer(0).get(layout, 8L)).isEqualTo(105);
 		}
@@ -209,7 +208,7 @@ class FrameOfReferenceEncodingTest {
 			EncodingRegistry registry = EncodingRegistry.empty();
 			registry.register(sut);
 			registry.register(new PrimitiveEncoding());
-			var le = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var le = PTypeIO.LE_LONG;
 
 			// When
 			EncodeResult encoded = sut.encode(DTypes.I64, data);
@@ -231,7 +230,7 @@ class FrameOfReferenceEncodingTest {
 			EncodingRegistry registry = EncodingRegistry.empty();
 			registry.register(sut);
 			registry.register(new PrimitiveEncoding());
-			var le = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var le = PTypeIO.LE_INT;
 
 			// When
 			EncodeResult encoded = sut.encode(DTypes.I32, data);

@@ -11,7 +11,6 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.List;
@@ -19,9 +18,6 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class StructEncodingTest {
-
-	private static final ValueLayout.OfLong LE_LONG =
-			ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
 	private static ArrayNode toArrayNode(EncodeNode node) {
 		ArrayNode[] children = new ArrayNode[node.children().length];
@@ -130,7 +126,7 @@ class StructEncodingTest {
 			// Then
 			assertThat(result.length()).isEqualTo(data.length);
 			for (int i = 0; i < data.length; i++) {
-				assertThat(result.buffer(0).get(LE_LONG, (long) i * 8)).isEqualTo(data[i]);
+				assertThat(result.buffer(0).get(PTypeIO.LE_LONG, (long) i * 8)).isEqualTo(data[i]);
 			}
 		}
 

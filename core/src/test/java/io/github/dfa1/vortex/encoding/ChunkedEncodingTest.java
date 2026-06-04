@@ -9,17 +9,12 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ChunkedEncodingTest {
-
-	private static final ValueLayout.OfLong LE_LONG =
-			ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
 	@Nested
 	class Encode {
@@ -43,11 +38,11 @@ class ChunkedEncodingTest {
 
 			// Then
 			assertThat(result.length()).isEqualTo(5);
-			assertThat(result.buffer(0).get(LE_LONG, 0L)).isEqualTo(10L);
-			assertThat(result.buffer(0).get(LE_LONG, 8L)).isEqualTo(20L);
-			assertThat(result.buffer(0).get(LE_LONG, 16L)).isEqualTo(30L);
-			assertThat(result.buffer(0).get(LE_LONG, 24L)).isEqualTo(40L);
-			assertThat(result.buffer(0).get(LE_LONG, 32L)).isEqualTo(50L);
+			assertThat(result.buffer(0).get(PTypeIO.LE_LONG, 0L)).isEqualTo(10L);
+			assertThat(result.buffer(0).get(PTypeIO.LE_LONG, 8L)).isEqualTo(20L);
+			assertThat(result.buffer(0).get(PTypeIO.LE_LONG, 16L)).isEqualTo(30L);
+			assertThat(result.buffer(0).get(PTypeIO.LE_LONG, 24L)).isEqualTo(40L);
+			assertThat(result.buffer(0).get(PTypeIO.LE_LONG, 32L)).isEqualTo(50L);
 		}
 
 		@Test
@@ -129,11 +124,11 @@ class ChunkedEncodingTest {
 
 			// Then
 			assertThat(result.length()).isEqualTo(5);
-			assertThat(result.buffer(0).get(LE_LONG, 0L)).isEqualTo(10L);
-			assertThat(result.buffer(0).get(LE_LONG, 8L)).isEqualTo(20L);
-			assertThat(result.buffer(0).get(LE_LONG, 16L)).isEqualTo(30L);
-			assertThat(result.buffer(0).get(LE_LONG, 24L)).isEqualTo(40L);
-			assertThat(result.buffer(0).get(LE_LONG, 32L)).isEqualTo(50L);
+			assertThat(result.buffer(0).get(PTypeIO.LE_LONG, 0L)).isEqualTo(10L);
+			assertThat(result.buffer(0).get(PTypeIO.LE_LONG, 8L)).isEqualTo(20L);
+			assertThat(result.buffer(0).get(PTypeIO.LE_LONG, 16L)).isEqualTo(30L);
+			assertThat(result.buffer(0).get(PTypeIO.LE_LONG, 24L)).isEqualTo(40L);
+			assertThat(result.buffer(0).get(PTypeIO.LE_LONG, 32L)).isEqualTo(50L);
 		}
 
 		@Test
@@ -168,7 +163,7 @@ class ChunkedEncodingTest {
 			// Then
 			assertThat(result.length()).isEqualTo(3);
 			for (int i = 0; i < 3; i++) {
-				assertThat(result.buffer(0).get(LE_LONG, (long) i * 8)).isEqualTo(data[i]);
+				assertThat(result.buffer(0).get(PTypeIO.LE_LONG, (long) i * 8)).isEqualTo(data[i]);
 			}
 		}
 

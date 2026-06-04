@@ -9,8 +9,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -38,7 +36,7 @@ class DictEncodingTest {
 
 			// Then
 			assertThat(result.length()).isEqualTo(data.length);
-			var le = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var le = PTypeIO.LE_INT;
 			for (int i = 0; i < data.length; i++) {
 				assertThat(result.buffer(0).get(le, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
 			}
@@ -60,7 +58,7 @@ class DictEncodingTest {
 
 			// Then
 			assertThat(result.length()).isEqualTo(data.length);
-			var le = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var le = PTypeIO.LE_LONG;
 			for (int i = 0; i < data.length; i++) {
 				assertThat(result.buffer(0).get(le, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
 			}

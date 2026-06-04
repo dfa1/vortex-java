@@ -8,15 +8,10 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class ExtEncodingTest {
-
-	private static final ValueLayout.OfLong LE_LONG =
-			ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
 	@Nested
 	class Encode {
@@ -96,7 +91,7 @@ class ExtEncodingTest {
 			// Build a raw I64 buffer
 			MemorySegment buf = Arena.ofAuto().allocate(n * Long.BYTES, 8);
 			for (int i = 0; i < n; i++) {
-				buf.setAtIndex(LE_LONG, i, values[i]);
+				buf.setAtIndex(PTypeIO.LE_LONG, i, values[i]);
 			}
 
 			DType storageDType = new DType.Primitive(PType.I64, false);

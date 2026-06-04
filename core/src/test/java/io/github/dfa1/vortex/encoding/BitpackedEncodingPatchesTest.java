@@ -9,15 +9,12 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class BitpackedEncodingPatchesTest {
-
-	private static final ValueLayout.OfInt LE_INT = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
 	@Nested
 	class Decode {
@@ -79,11 +76,11 @@ class BitpackedEncodingPatchesTest {
 
 			// Then
 			assertThat(result.length()).isEqualTo(base.length);
-			assertThat(result.buffer(0).get(LE_INT, 0L)).isEqualTo(10);
-			assertThat(result.buffer(0).get(LE_INT, 4L)).isEqualTo(777);
-			assertThat(result.buffer(0).get(LE_INT, 8L)).isEqualTo(30);
-			assertThat(result.buffer(0).get(LE_INT, 12L)).isEqualTo(999);
-			assertThat(result.buffer(0).get(LE_INT, 16L)).isEqualTo(50);
+			assertThat(result.buffer(0).get(PTypeIO.LE_INT, 0L)).isEqualTo(10);
+			assertThat(result.buffer(0).get(PTypeIO.LE_INT, 4L)).isEqualTo(777);
+			assertThat(result.buffer(0).get(PTypeIO.LE_INT, 8L)).isEqualTo(30);
+			assertThat(result.buffer(0).get(PTypeIO.LE_INT, 12L)).isEqualTo(999);
+			assertThat(result.buffer(0).get(PTypeIO.LE_INT, 16L)).isEqualTo(50);
 		}
 	}
 }

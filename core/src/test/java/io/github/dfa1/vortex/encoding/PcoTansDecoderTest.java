@@ -5,15 +5,10 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class PcoTansDecoderTest {
-
-    private static final ValueLayout.OfLong LE_LONG =
-            ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     @Nested
     class Spread {
@@ -79,7 +74,7 @@ class PcoTansDecoderTest {
 
             // Then — all raw latent values = 42
             for (int i = 0; i < n; i++) {
-                assertThat(out.get(LE_LONG, (long) i * Long.BYTES))
+                assertThat(out.get(PTypeIO.LE_LONG, (long) i * Long.BYTES))
                         .as("latent[%d]", i)
                         .isEqualTo(42L);
             }
@@ -105,7 +100,7 @@ class PcoTansDecoderTest {
 
             // Then — offsets all zero → all values = lower + 0 = 10
             for (int i = 0; i < n; i++) {
-                assertThat(out.get(LE_LONG, (long) i * Long.BYTES))
+                assertThat(out.get(PTypeIO.LE_LONG, (long) i * Long.BYTES))
                         .as("latent[%d]", i)
                         .isEqualTo(10L);
             }
@@ -129,7 +124,7 @@ class PcoTansDecoderTest {
 
             // Then — all zero
             for (int i = 0; i < n; i++) {
-                assertThat(out.get(LE_LONG, (long) i * Long.BYTES)).isZero();
+                assertThat(out.get(PTypeIO.LE_LONG, (long) i * Long.BYTES)).isZero();
             }
         }
 
@@ -161,7 +156,7 @@ class PcoTansDecoderTest {
 
             // Then — all states started at 0 → sym=0 → lower=5 for every value
             for (int i = 0; i < n; i++) {
-                assertThat(out.get(LE_LONG, (long) i * Long.BYTES))
+                assertThat(out.get(PTypeIO.LE_LONG, (long) i * Long.BYTES))
                         .as("latent[%d]", i)
                         .isEqualTo(5L);
             }
@@ -186,7 +181,7 @@ class PcoTansDecoderTest {
 
             // Then — all values = 7
             for (int i = 0; i < n; i++) {
-                assertThat(out.get(LE_LONG, (long) i * Long.BYTES))
+                assertThat(out.get(PTypeIO.LE_LONG, (long) i * Long.BYTES))
                         .as("latent[%d]", i)
                         .isEqualTo(7L);
             }

@@ -13,7 +13,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.stream.Stream;
@@ -42,7 +41,7 @@ class PrimitiveEncodingTest {
 
 			// Then — roundtrip lossless
 			assertThat(result.length()).isEqualTo(data.length);
-			var le = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var le = PTypeIO.LE_LONG;
 			for (int i = 0; i < data.length; i++) {
 				assertThat(result.buffer(0).get(le, (long) i * 8)).isEqualTo(data[i]);
 			}
@@ -64,7 +63,7 @@ class PrimitiveEncodingTest {
 
 			// Then — roundtrip lossless
 			assertThat(result.length()).isEqualTo(data.length);
-			var le = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var le = PTypeIO.LE_INT;
 			for (int i = 0; i < data.length; i++) {
 				assertThat(result.buffer(0).get(le, (long) i * 4)).isEqualTo(data[i]);
 			}
@@ -86,7 +85,7 @@ class PrimitiveEncodingTest {
 
 			// Then — roundtrip lossless
 			assertThat(result.length()).isEqualTo(data.length);
-			var le = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var le = PTypeIO.LE_DOUBLE;
 			for (int i = 0; i < data.length; i++) {
 				assertThat(result.buffer(0).get(le, (long) i * 8)).isEqualTo(data[i]);
 			}

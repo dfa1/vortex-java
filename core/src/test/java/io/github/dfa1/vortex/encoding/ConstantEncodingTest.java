@@ -6,8 +6,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -25,7 +23,7 @@ class ConstantEncodingTest {
 			var sut = new ConstantEncoding();
 			EncodingRegistry registry = EncodingRegistry.empty();
 			registry.register(sut);
-			var le = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var le = PTypeIO.LE_INT;
 
 			// When
 			EncodeResult encoded = sut.encode(DTypes.I32, data);
@@ -46,7 +44,7 @@ class ConstantEncodingTest {
 			var sut = new ConstantEncoding();
 			EncodingRegistry registry = EncodingRegistry.empty();
 			registry.register(sut);
-			var le = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var le = PTypeIO.LE_LONG;
 
 			// When
 			EncodeResult encoded = sut.encode(DTypes.I64, data);

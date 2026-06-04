@@ -13,17 +13,12 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class RleEncodingTest {
-
-	private static final ValueLayout.OfLong LE_LONG = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-	private static final ValueLayout.OfInt  LE_INT  = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
 	private static EncodingRegistry registry() {
 		EncodingRegistry r = EncodingRegistry.empty();
@@ -72,7 +67,7 @@ class RleEncodingTest {
 
 			// Then
 			assertThat(result.length()).isEqualTo(1);
-			assertThat(result.buffer(0).get(LE_INT, 0)).isEqualTo(42);
+			assertThat(result.buffer(0).get(PTypeIO.LE_INT, 0)).isEqualTo(42);
 		}
 
 		@Test
@@ -94,7 +89,7 @@ class RleEncodingTest {
 			// Then
 			assertThat(result.length()).isEqualTo(n);
 			for (int i = 0; i < n; i++) {
-				assertThat(result.buffer(0).get(LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(99);
+				assertThat(result.buffer(0).get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(99);
 			}
 		}
 
@@ -114,7 +109,7 @@ class RleEncodingTest {
 			assertThat(result.length()).isEqualTo(data.length);
 			int[] expected = {1, 1, 1, 2, 2, 3};
 			for (int i = 0; i < expected.length; i++) {
-				assertThat(result.buffer(0).get(LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(expected[i]);
+				assertThat(result.buffer(0).get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(expected[i]);
 			}
 		}
 
@@ -137,7 +132,7 @@ class RleEncodingTest {
 			// Then
 			assertThat(result.length()).isEqualTo(n);
 			for (int i = 0; i < n; i++) {
-				assertThat(result.buffer(0).get(LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(i / 100);
+				assertThat(result.buffer(0).get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(i / 100);
 			}
 		}
 
@@ -156,7 +151,7 @@ class RleEncodingTest {
 			// Then
 			assertThat(result.length()).isEqualTo(data.length);
 			for (int i = 0; i < data.length; i++) {
-				assertThat(result.buffer(0).get(LE_LONG, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
+				assertThat(result.buffer(0).get(PTypeIO.LE_LONG, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
 			}
 		}
 
@@ -179,7 +174,7 @@ class RleEncodingTest {
 			// Then
 			assertThat(result.length()).isEqualTo(n);
 			for (int i = 0; i < n; i++) {
-				assertThat(result.buffer(0).get(LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(i / 50);
+				assertThat(result.buffer(0).get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(i / 50);
 			}
 		}
 
@@ -200,7 +195,7 @@ class RleEncodingTest {
 
 			// Then
 			assertThat(result.length()).isEqualTo(data.length);
-			var le = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var le = PTypeIO.LE_SHORT;
 			for (int i = 0; i < data.length; i++) {
 				assertThat(Short.toUnsignedInt(result.buffer(0).get(le, (long) i * 2)))
 						.as("index %d", i).isEqualTo(i);
@@ -222,7 +217,7 @@ class RleEncodingTest {
 			// Then
 			assertThat(result.length()).isEqualTo(data.length);
 			for (int i = 0; i < data.length; i++) {
-				assertThat(result.buffer(0).get(LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
+				assertThat(result.buffer(0).get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
 			}
 		}
 	}
@@ -267,7 +262,7 @@ class RleEncodingTest {
 
 			// Then — verify values near the chunk boundary
 			for (int i = 1000; i < 1048; i++) {
-				assertThat(result.buffer(0).get(LE_INT, (long) i * 4))
+				assertThat(result.buffer(0).get(PTypeIO.LE_INT, (long) i * 4))
 						.as("index %d", i).isEqualTo(i / 100);
 			}
 		}
@@ -343,7 +338,7 @@ class RleEncodingTest {
 			// Then
 			assertThat(result.length()).isEqualTo(n);
 			for (int i = 0; i < n; i++) {
-				assertThat(result.buffer(0).get(LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(i / 100);
+				assertThat(result.buffer(0).get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(i / 100);
 			}
 		}
 	}

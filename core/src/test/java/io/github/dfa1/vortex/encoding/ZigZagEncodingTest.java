@@ -10,7 +10,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.stream.Stream;
@@ -38,7 +37,7 @@ class ZigZagEncodingTest {
 			assertThat(result.length()).isEqualTo(expected.length);
 			MemorySegment seg = result.buffer(0);
 			for (int i = 0; i < expected.length; i++) {
-				assertThat(seg.get(ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), (long) i * 4))
+				assertThat(seg.get(PTypeIO.LE_INT, (long) i * 4))
 						.as("index %d", i).isEqualTo(expected[i]);
 			}
 		}
@@ -96,7 +95,7 @@ class ZigZagEncodingTest {
 			EncodingRegistry registry = EncodingRegistry.empty();
 			registry.register(sut);
 			registry.register(new PrimitiveEncoding());
-			var le = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var le = PTypeIO.LE_INT;
 
 			// When
 			EncodeResult encoded = sut.encode(DTypes.I32, data);
@@ -118,7 +117,7 @@ class ZigZagEncodingTest {
 			EncodingRegistry registry = EncodingRegistry.empty();
 			registry.register(sut);
 			registry.register(new PrimitiveEncoding());
-			var le = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var le = PTypeIO.LE_LONG;
 
 			// When
 			EncodeResult encoded = sut.encode(DTypes.I64, data);

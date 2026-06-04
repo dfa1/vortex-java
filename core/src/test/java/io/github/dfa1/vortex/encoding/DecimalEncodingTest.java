@@ -12,8 +12,6 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -27,7 +25,7 @@ class DecimalEncodingTest {
 		void roundTrip_i64Precision_preservesBuffer() throws Exception {
 			// Given
 			long[] values = {100L, -200L, 300L};
-			var le = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var le = PTypeIO.LE_LONG;
 			MemorySegment input = Arena.ofAuto().allocate((long) values.length * 8, 8);
 			for (int i = 0; i < values.length; i++) {
 				input.setAtIndex(le, i, values[i]);

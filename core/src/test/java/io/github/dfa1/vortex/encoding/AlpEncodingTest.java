@@ -9,7 +9,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
@@ -41,7 +40,7 @@ class AlpEncodingTest {
 
 			// Then
 			assertThat(result.length()).isEqualTo(encoded.length);
-			var layout = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var layout = PTypeIO.LE_DOUBLE;
 			for (int i = 0; i < expected.length; i++) {
 				assertThat(result.buffer(0).get(layout, (long) i * 8))
 						.as("index %d", i).isCloseTo(expected[i], within(1e-9));
@@ -64,7 +63,7 @@ class AlpEncodingTest {
 			Array result = sut.decode(ctx);
 
 			// Then
-			var layout = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var layout = PTypeIO.LE_DOUBLE;
 			assertThat(result.buffer(0).get(layout, 0L)).isCloseTo(1.0, within(1e-9));
 			assertThat(result.buffer(0).get(layout, 8L)).isNaN();
 			assertThat(result.buffer(0).get(layout, 16L)).isCloseTo(2.0, within(1e-9));
@@ -90,7 +89,7 @@ class AlpEncodingTest {
 			Array result = sut.decode(ctx);
 
 			// Then
-			var layout = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var layout = PTypeIO.LE_DOUBLE;
 			double decoded = result.buffer(0).get(layout, 0L);
 			assertThat(decoded).isCloseTo(value, within(1e-6));
 		}
@@ -109,7 +108,7 @@ class AlpEncodingTest {
 			Array result = sut.decode(ctx);
 
 			// Then
-			var layout = ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var layout = PTypeIO.LE_FLOAT;
 			for (int i = 0; i < expected.length; i++) {
 				assertThat(result.buffer(0).get(layout, (long) i * 4))
 						.as("index %d", i).isCloseTo(expected[i], within(1e-6f));
@@ -237,7 +236,7 @@ class AlpEncodingTest {
 			Array result = sut.decode(ctx);
 
 			// Then
-			var layout = ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var layout = PTypeIO.LE_FLOAT;
 			for (int i = 0; i < values.length; i++) {
 				assertThat(result.buffer(0).get(layout, (long) i * 4))
 						.as("index %d", i).isCloseTo(values[i], within(1e-6f));
@@ -260,7 +259,7 @@ class AlpEncodingTest {
 			Array result = sut.decode(ctx);
 
 			// Then
-			var layout = ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var layout = PTypeIO.LE_FLOAT;
 			assertThat(result.buffer(0).get(layout, 0L)).isCloseTo(1.0f, within(1e-6f));
 			assertThat(result.buffer(0).get(layout, 4L)).isNaN();
 			assertThat(result.buffer(0).get(layout, 8L)).isCloseTo(2.5f, within(1e-6f));
@@ -284,7 +283,7 @@ class AlpEncodingTest {
 			Array result = sut.decode(ctx);
 
 			// Then
-			var layout = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var layout = PTypeIO.LE_DOUBLE;
 			for (int i = 0; i < values.length; i++) {
 				assertThat(result.buffer(0).get(layout, (long) i * 8))
 						.as("index %d", i).isCloseTo(values[i], within(1e-9));

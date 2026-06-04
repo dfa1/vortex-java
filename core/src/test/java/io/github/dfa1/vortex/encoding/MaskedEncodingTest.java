@@ -10,8 +10,6 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -19,9 +17,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class MaskedEncodingTest {
-
-	private static final ValueLayout.OfInt LE_INT =
-			ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
 	@Nested
 	class Decode {
@@ -96,9 +91,9 @@ class MaskedEncodingTest {
 			Array result = sut.decode(EncodeTestHelper.toDecodeContext(ctx, 3L, i32Nullable, registry));
 
 			// Then — buffer(0) works and contains child values
-			assertThat(result.buffer(0).get(LE_INT, 0L)).isEqualTo(7);
-			assertThat(result.buffer(0).get(LE_INT, 4L)).isEqualTo(8);
-			assertThat(result.buffer(0).get(LE_INT, 8L)).isEqualTo(9);
+			assertThat(result.buffer(0).get(PTypeIO.LE_INT, 0L)).isEqualTo(7);
+			assertThat(result.buffer(0).get(PTypeIO.LE_INT, 4L)).isEqualTo(8);
+			assertThat(result.buffer(0).get(PTypeIO.LE_INT, 8L)).isEqualTo(9);
 		}
 
 		@Test

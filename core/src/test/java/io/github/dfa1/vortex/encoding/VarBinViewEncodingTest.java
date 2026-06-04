@@ -9,8 +9,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.stream.Stream;
 
@@ -19,8 +17,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// Property: decode reconstructs every string value exactly,
 /// regardless of inlined vs reference layout.
 class VarBinViewEncodingTest {
-
-	private static final ValueLayout.OfInt LE_INT = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
 	@Nested
 	class Encode {
@@ -105,14 +101,14 @@ class VarBinViewEncodingTest {
 			for (int i = 0; i < values.length; i++) {
 				byte[] b = bytesArr[i];
 				long viewOff = (long) i * 16;
-				views.set(LE_INT, viewOff, b.length);
+				views.set(PTypeIO.LE_INT, viewOff, b.length);
 				if (b.length <= 12) {
 					// inlined: data at viewOff+4
 					MemorySegment.copy(MemorySegment.ofArray(b), 0, views, viewOff + 4, b.length);
 				} else {
 					// reference: buffer_index=0, offset=dataOffset
-					views.set(LE_INT, viewOff + 8,  0);           // buffer_index
-					views.set(LE_INT, viewOff + 12, dataOffset);  // offset
+					views.set(PTypeIO.LE_INT, viewOff + 8,  0);           // buffer_index
+					views.set(PTypeIO.LE_INT, viewOff + 12, dataOffset);  // offset
 					MemorySegment.copy(MemorySegment.ofArray(b), 0, dataBuf, dataOffset, b.length);
 					dataOffset += b.length;
 				}

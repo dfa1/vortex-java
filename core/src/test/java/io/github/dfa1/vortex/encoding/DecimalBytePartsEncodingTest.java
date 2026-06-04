@@ -6,8 +6,6 @@ import io.github.dfa1.vortex.proto.EncodingProtos;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -35,7 +33,7 @@ class DecimalBytePartsEncodingTest {
 			assertThat(result.length()).isEqualTo(values.length);
 			Array msp = result.child(0);
 			assertThat(msp.length()).isEqualTo(values.length);
-			var le = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+			var le = PTypeIO.LE_LONG;
 			for (int i = 0; i < values.length; i++) {
 				assertThat(msp.buffer(0).get(le, (long) i * 8)).isEqualTo(values[i]);
 			}
