@@ -25,11 +25,7 @@ class DecimalEncodingTest {
 		void roundTrip_i64Precision_preservesBuffer() throws Exception {
 			// Given
 			long[] values = {100L, -200L, 300L};
-			var le = PTypeIO.LE_LONG;
-			MemorySegment input = Arena.ofAuto().allocate((long) values.length * 8, 8);
-			for (int i = 0; i < values.length; i++) {
-				input.setAtIndex(le, i, values[i]);
-			}
+			MemorySegment input = TestSegments.leLongs(values);
 			DType dtype = new DType.Decimal((byte) 18, (byte) 2, false);
 			var sut = new DecimalEncoding();
 			EncodingRegistry registry = EncodingRegistry.empty();
@@ -43,7 +39,7 @@ class DecimalEncodingTest {
 			// Then
 			assertThat(result.length()).isEqualTo(values.length);
 			for (int i = 0; i < values.length; i++) {
-				assertThat(result.buffer(0).get(le, (long) i * 8)).isEqualTo(values[i]);
+				assertThat(result.buffer(0).get(PTypeIO.LE_LONG, (long) i * 8)).isEqualTo(values[i]);
 			}
 		}
 

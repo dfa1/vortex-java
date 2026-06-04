@@ -11,8 +11,6 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -112,7 +110,7 @@ class StructEncodingTest {
 		void decode_nonNullableWrapper_oneChild_returnsValues() {
 			// Given — struct{values: DTypes.I64} (non-nullable, 1 child)
 			long[] data = {10L, 20L, 30L};
-			MemorySegment seg = longSegment(data);
+			MemorySegment seg = TestSegments.leLongs(data);
 			ArrayNode valuesNode = primitiveNode(0);
 			ArrayNode structNode = new ArrayNode(EncodingId.VORTEX_STRUCT, null,
 					new ArrayNode[]{valuesNode}, new int[0], ArrayStats.empty());
@@ -135,7 +133,7 @@ class StructEncodingTest {
 			// Given — struct{validity: Bool, values: DTypes.I64} (nullable, 2 children)
 			long[] data = {7L, 14L, 21L};
 			MemorySegment validitySeg = MemorySegment.ofArray(new byte[]{(byte) 0xFF}); // all valid
-			MemorySegment valuesSeg = longSegment(data);
+			MemorySegment valuesSeg = TestSegments.leLongs(data);
 
 			ArrayNode validityNode = boolNode(0);    // slot 0 = validity bitmap
 			ArrayNode valuesNode = primitiveNode(1); // slot 1 = actual values
@@ -165,15 +163,6 @@ class StructEncodingTest {
 				assertThat(masked.isValid(i)).isTrue();
 				assertThat(values.getLong(i)).isEqualTo(data[i]);
 			}
-		}
-
-		private static MemorySegment longSegment(long... values) {
-			byte[] bytes = new byte[values.length * 8];
-			ByteBuffer bb = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
-			for (long v : values) {
-				bb.putLong(v);
-			}
-			return MemorySegment.ofArray(bytes);
 		}
 
 		private static ArrayNode primitiveNode(int bufferIdx) {

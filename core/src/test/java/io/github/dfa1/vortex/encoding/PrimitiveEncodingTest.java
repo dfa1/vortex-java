@@ -13,8 +13,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -144,12 +142,7 @@ class PrimitiveEncodingTest {
 		void decode_withValidityChild_returnsMaskedArray() {
 			// Given — 4 I32 values; positions 1 and 3 are null (validity bitmap: 0b00000101 = 0x05)
 			int[] raw = {10, 0, 20, 0};   // garbage at null positions
-			byte[] valueBytes = new byte[raw.length * 4];
-			ByteBuffer bb = ByteBuffer.wrap(valueBytes).order(ByteOrder.LITTLE_ENDIAN);
-			for (int v : raw) {
-				bb.putInt(v);
-			}
-			MemorySegment valuesSeg = MemorySegment.ofArray(valueBytes);
+			MemorySegment valuesSeg = TestSegments.leInts(raw);
 			MemorySegment validitySeg = MemorySegment.ofArray(new byte[]{0x05}); // bits 0,2 set
 
 			ArrayNode validityNode = new ArrayNode(
@@ -189,12 +182,7 @@ class PrimitiveEncodingTest {
 		void decode_noValidityChild_returnsPlainArray() {
 			// Given — 3 I32 values; no validity child
 			int[] raw = {1, 2, 3};
-			byte[] valueBytes = new byte[raw.length * 4];
-			ByteBuffer bb = ByteBuffer.wrap(valueBytes).order(ByteOrder.LITTLE_ENDIAN);
-			for (int v : raw) {
-				bb.putInt(v);
-			}
-			MemorySegment valuesSeg = MemorySegment.ofArray(valueBytes);
+			MemorySegment valuesSeg = TestSegments.leInts(raw);
 
 			ArrayNode primNode = new ArrayNode(
 					EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0}, ArrayStats.empty());
