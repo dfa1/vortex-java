@@ -83,7 +83,7 @@
 
 - [ ] **Audit runtime pluggability vs Rust impl** — maintainer (2026-06-04) flagged that Rust supports
   runtime registration for: Encodings, DTypes, Compute, Layouts. Java status:
-    - Encodings: ✅ `ServiceLoader` + `EncodingRegistry.register()`
+    - Encodings: ✅ `ServiceLoader` + `EncodingRegistry.register()`; ✅ `allowUnknown()` passthrough for unregistered encodings (mirrors `VortexSession::allow_unknown()`)
     - DTypes: ❌ sealed hierarchy — no user-extensible type. If a downstream consumer needs a custom
       logical type (e.g. UUID, IP address) they can't register one. Decide: keep sealed (simpler) or
       open via SPI mirroring `EncodingRegistry`.
@@ -130,8 +130,8 @@
 | `vortex.fixed_size_list`     | `FixedSizeListEncoding`    | ✅       | ✅       | —         | one child: flat elements; no offsets |
 | `vortex.zstd`                | `ZstdEncoding`             | ✅       | ✅       | —         | Primitive, Utf8, Binary (no dict, no nullable); uses airlift/aircompressor |
 | `vortex.masked`              | `MaskedEncoding`           | ✅       | ❌       | —         | child[0]=payload (non-nullable), child[1]=validity Bool (optional); no S3 fixture in v0.72.0 |
-| `vortex.patched`             | —                          | ❌       | ❌       | unknown   | ID registered; no decoder yet; no S3 fixture in v0.72.0 |
-| `vortex.variant`             | —                          | ❌       | ❌       | unknown   | ID registered; no decoder yet; no S3 fixture in v0.72.0 |
+| `vortex.patched`             | —                          | ❌       | ❌       | unknown   | ID registered; no decoder yet; no S3 fixture in v0.72.0; passthrough via `allowUnknown()` |
+| `vortex.variant`             | —                          | ❌       | ❌       | unknown   | ID registered; no decoder yet; no S3 fixture in v0.72.0; passthrough via `allowUnknown()` |
 
 ### `vortex.zstd` known limitations
 
@@ -257,8 +257,8 @@ post-decode + post-`vortex-arrow` bridge.
 | `clickbench_hits_5k.compact.vortex` | ✅  |                               |
 | `clickbench_hits_5k.regular.vortex` | ✅  |                               |
 | `masked.vortex`                     | ❓     | no fixture in v0.72.0; `vortex.masked` ID registered |
-| `patched.vortex`                    | ❓     | no fixture in v0.72.0; `vortex.patched` ID registered |
-| `variant.vortex`                    | ❓     | no fixture in v0.72.0; `vortex.variant` ID registered |
+| `patched.vortex`                    | ❓     | no fixture in v0.72.0; `vortex.patched` ID registered; passthrough via `allowUnknown()` |
+| `variant.vortex`                    | ❓     | no fixture in v0.72.0; `vortex.variant` ID registered; passthrough via `allowUnknown()` |
 
 **Score: 35/35**
 
