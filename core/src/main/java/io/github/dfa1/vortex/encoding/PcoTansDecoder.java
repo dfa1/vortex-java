@@ -95,10 +95,11 @@ final class PcoTansDecoder {
     /// Caller must have already read 4 initial ANS state indices and called
     /// {@link LeBitReader#alignToByte()} before this call.
     /// {@code ansStateIdxs} is modified in place and not valid after return.
+    /// {@code batchLowers} and {@code batchOffsetBits} are caller-provided scratch arrays of
+    /// length ≥ {@link #BATCH_N}; they are fully overwritten before use.
     void decodePage(LeBitReader reader, int[] ansStateIdxs, int n,
-                    MemorySegment out, long outByteOffset) {
-        long[] batchLowers = new long[BATCH_N];
-        int[] batchOffsetBits = new int[BATCH_N];
+                    MemorySegment out, long outByteOffset,
+                    long[] batchLowers, int[] batchOffsetBits) {
         int remaining = n;
         long pos = outByteOffset;
         while (remaining > 0) {

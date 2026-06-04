@@ -125,6 +125,11 @@ public final class PcoEncoding implements Encoding {
             int bufIdx = 0;
             long rawByteOffset = 0L;
 
+            long[] batchLowers1 = new long[PcoTansDecoder.BATCH_N];
+            int[] batchOffsetBits1 = new int[PcoTansDecoder.BATCH_N];
+            long[] batchLowers2 = new long[PcoTansDecoder.BATCH_N];
+            int[] batchOffsetBits2 = new int[PcoTansDecoder.BATCH_N];
+
             for (int c = 0; c < nChunks; c++) {
                 EncodingProtos.PcoChunkInfo chunkInfo = meta.getChunks(c);
                 MemorySegment chunkMetaBuf = ctx.buffer(bufIdx++);
@@ -153,7 +158,8 @@ public final class PcoEncoding implements Encoding {
                                 chunkMeta.conv1Quantization(), chunkMeta.conv1Bias(),
                                 chunkMeta.conv1Weights(),
                                 dtypeSize, pageBuf, pageN,
-                                rawLatents, rawByteOffset);
+                                rawLatents, rawByteOffset,
+                                batchLowers1, batchOffsetBits1);
                     }
                 } else if (deltaVariant == 2) {
                     // Lookback delta: currently only Classic mode supported.
@@ -177,7 +183,9 @@ public final class PcoEncoding implements Encoding {
                                 primaryTans, chunkMeta.ansSizeLog(),
                                 stateN, windowN, mid, mask,
                                 dtypeSize, pageBuf, pageN,
-                                rawLatents, rawByteOffset, ctx.arena());
+                                rawLatents, rawByteOffset, ctx.arena(),
+                                batchLowers1, batchOffsetBits1,
+                                batchLowers2, batchOffsetBits2);
                     }
                 } else if (mode == 0 || mode == 4) {
                     // Single-latent var: Classic or Dict.
@@ -188,7 +196,8 @@ public final class PcoEncoding implements Encoding {
                         MemorySegment pageBuf = ctx.buffer(bufIdx++);
                         rawByteOffset = decodeClassicPage(tans, chunkMeta.ansSizeLog(),
                                 chunkMeta.deltaOrder(), primaryDtypeSize,
-                                pageBuf, pageN, rawLatents, rawByteOffset);
+                                pageBuf, pageN, rawLatents, rawByteOffset,
+                                batchLowers1, batchOffsetBits1);
                     }
                     if (mode == 4) {
                         combineDict(chunkMeta.dict(), chunkN, rawLatents, chunkStartOffset);
@@ -212,7 +221,9 @@ public final class PcoEncoding implements Encoding {
                                 secondaryTans, secondaryAnsSizeLog, secondaryDeltaOrder,
                                 dtypeSize, pageBuf, pageN,
                                 rawLatents, rawByteOffset,
-                                rawAdjs, adjByteOffset);
+                                rawAdjs, adjByteOffset,
+                                batchLowers1, batchOffsetBits1,
+                                batchLowers2, batchOffsetBits2);
                         rawByteOffset += (long) pageN * Long.BYTES;
                         adjByteOffset += (long) pageN * Long.BYTES;
                     }
@@ -268,7 +279,8 @@ public final class PcoEncoding implements Encoding {
         /// Decode one Classic-mode page into rawLatents and return the updated byte offset.
         private static long decodeClassicPage(PcoTansDecoder tans, int ansSizeLog, int deltaOrder,
                 int primaryDtypeSize, MemorySegment pageBuf, int pageN,
-                MemorySegment rawLatents, long rawByteOffset) {
+                MemorySegment rawLatents, long rawByteOffset,
+                long[] batchLowers, int[] batchOffsetBits) {
             LeBitReader pageReader = new LeBitReader(pageBuf);
 
             long[] moments = new long[deltaOrder];
@@ -283,7 +295,8 @@ public final class PcoEncoding implements Encoding {
             pageReader.alignToByte();
 
             int decodedN = pageN - deltaOrder;
-            tans.decodePage(pageReader, stateIdxs, decodedN, rawLatents, rawByteOffset);
+            tans.decodePage(pageReader, stateIdxs, decodedN, rawLatents, rawByteOffset,
+                    batchLowers, batchOffsetBits);
 
             if (deltaOrder > 0) {
                 applyConsecutiveDelta(rawLatents, rawByteOffset, pageN, moments, primaryDtypeSize);
@@ -299,7 +312,9 @@ public final class PcoEncoding implements Encoding {
                 PcoTansDecoder secondaryTans, int secondaryAnsSizeLog, int secondaryDeltaOrder,
                 int dtypeSize, MemorySegment pageBuf, int pageN,
                 MemorySegment rawMults, long multsOffset,
-                MemorySegment rawAdjs, long adjsOffset) {
+                MemorySegment rawAdjs, long adjsOffset,
+                long[] batchLowersP, int[] batchOffsetBitsP,
+                long[] batchLowersS, int[] batchOffsetBitsS) {
             LeBitReader pageReader = new LeBitReader(pageBuf);
 
             long[] primaryMoments = new long[deltaOrder];
@@ -321,11 +336,6 @@ public final class PcoEncoding implements Encoding {
             }
 
             pageReader.alignToByte();
-
-            long[] batchLowersP = new long[PcoTansDecoder.BATCH_N];
-            int[] batchOffsetBitsP = new int[PcoTansDecoder.BATCH_N];
-            long[] batchLowersS = new long[PcoTansDecoder.BATCH_N];
-            int[] batchOffsetBitsS = new int[PcoTansDecoder.BATCH_N];
 
             int nRemaining = pageN;
             long primaryPos = multsOffset;
@@ -364,7 +374,9 @@ public final class PcoEncoding implements Encoding {
                 int stateN, int windowN, long mid, long mask,
                 int dtypeSize, MemorySegment pageBuf, int pageN,
                 MemorySegment rawLatents, long latentsOffset,
-                SegmentAllocator arena) {
+                SegmentAllocator arena,
+                long[] batchLowersD, int[] batchOffsetBitsD,
+                long[] batchLowersP, int[] batchOffsetBitsP) {
             if (pageN < stateN) {
                 throw new VortexException(EncodingId.VORTEX_PCO,
                         "pco corrupt lookback page: stateN " + stateN + " exceeds pageN " + pageN);
@@ -395,11 +407,6 @@ public final class PcoEncoding implements Encoding {
             }
             MemorySegment rawLookbacks = arena.allocate((long) decodeN * Long.BYTES);
             MemorySegment rawResiduals = arena.allocate((long) decodeN * Long.BYTES);
-
-            long[] batchLowersD = new long[PcoTansDecoder.BATCH_N];
-            int[] batchOffsetBitsD = new int[PcoTansDecoder.BATCH_N];
-            long[] batchLowersP = new long[PcoTansDecoder.BATCH_N];
-            int[] batchOffsetBitsP = new int[PcoTansDecoder.BATCH_N];
 
             int remaining = decodeN;
             long dPos = 0L;
@@ -459,7 +466,8 @@ public final class PcoEncoding implements Encoding {
                 PcoTansDecoder tans, int ansSizeLog,
                 int order, int quantization, long bias, long[] weights,
                 int dtypeSize, MemorySegment pageBuf, int pageN,
-                MemorySegment rawLatents, long latentsOffset) {
+                MemorySegment rawLatents, long latentsOffset,
+                long[] batchLowers, int[] batchOffsetBits) {
             LeBitReader pageReader = new LeBitReader(pageBuf);
 
             long[] state = new long[order];
@@ -483,7 +491,8 @@ public final class PcoEncoding implements Encoding {
 
             // Decode residuals directly into rawLatents[latentsOffset + order*8..].
             tans.decodePage(pageReader, stateIdxs, decodeN, rawLatents,
-                    latentsOffset + (long) order * Long.BYTES);
+                    latentsOffset + (long) order * Long.BYTES,
+                    batchLowers, batchOffsetBits);
 
             // Toggle-center decoded residuals in-place.
             for (int i = order; i < pageN; i++) {

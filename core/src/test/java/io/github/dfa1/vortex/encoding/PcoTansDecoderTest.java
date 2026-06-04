@@ -74,7 +74,8 @@ class PcoTansDecoderTest {
             MemorySegment out = Arena.ofAuto().allocate((long) n * Long.BYTES);
 
             // When
-            sut.decodePage(reader, stateIdxs, n, out, 0L);
+            sut.decodePage(reader, stateIdxs, n, out, 0L,
+                    new long[PcoTansDecoder.BATCH_N], new int[PcoTansDecoder.BATCH_N]);
 
             // Then — all raw latent values = 42
             for (int i = 0; i < n; i++) {
@@ -99,7 +100,8 @@ class PcoTansDecoderTest {
             MemorySegment out = Arena.ofAuto().allocate((long) n * Long.BYTES);
 
             // When
-            sut.decodePage(reader, stateIdxs, n, out, 0L);
+            sut.decodePage(reader, stateIdxs, n, out, 0L,
+                    new long[PcoTansDecoder.BATCH_N], new int[PcoTansDecoder.BATCH_N]);
 
             // Then — offsets all zero → all values = lower + 0 = 10
             for (int i = 0; i < n; i++) {
@@ -122,7 +124,8 @@ class PcoTansDecoderTest {
             MemorySegment out = Arena.ofAuto().allocate((long) n * Long.BYTES);
 
             // When
-            sut.decodePage(reader, stateIdxs, n, out, 0L);
+            sut.decodePage(reader, stateIdxs, n, out, 0L,
+                    new long[PcoTansDecoder.BATCH_N], new int[PcoTansDecoder.BATCH_N]);
 
             // Then — all zero
             for (int i = 0; i < n; i++) {
@@ -178,7 +181,8 @@ class PcoTansDecoderTest {
             MemorySegment out = Arena.ofAuto().allocate((long) n * Long.BYTES);
 
             // When
-            sut.decodePage(reader, stateIdxs, n, out, 0L);
+            sut.decodePage(reader, stateIdxs, n, out, 0L,
+                    new long[PcoTansDecoder.BATCH_N], new int[PcoTansDecoder.BATCH_N]);
 
             // Then — all values = 7
             for (int i = 0; i < n; i++) {
