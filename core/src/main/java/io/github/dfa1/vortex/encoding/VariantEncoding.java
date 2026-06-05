@@ -7,6 +7,10 @@ import io.github.dfa1.vortex.core.array.Array;
 /// Stub for {@code vortex.variant} — not yet implemented.
 public final class VariantEncoding implements Encoding {
 
+	/// Creates a new {@code VariantEncoding} instance; use via {@link EncodingRegistry}.
+	public VariantEncoding() {
+	}
+
 	@Override
 	public EncodingId encodingId() {
 		return EncodingId.VORTEX_VARIANT;

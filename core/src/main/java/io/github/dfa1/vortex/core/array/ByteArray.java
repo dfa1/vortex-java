@@ -16,6 +16,12 @@ public final class ByteArray implements Array {
 	private final MemorySegment buffer;
 	private final ArrayStats stats;
 
+	/// Constructs a {@code ByteArray} backed by the given buffer.
+	///
+	/// @param dtype  logical type, must be a {@link io.github.dfa1.vortex.core.DType.Primitive} with ptype I8 or U8
+	/// @param length number of logical elements
+	/// @param buffer raw byte data (one byte per element, little-endian)
+	/// @param stats  per-array statistics, or {@link ArrayStats#empty()} if unknown
 	public ByteArray(DType dtype, long length, MemorySegment buffer, ArrayStats stats) {
 		this.dtype = dtype;
 		this.length = length;
@@ -33,6 +39,9 @@ public final class ByteArray implements Array {
 		return length;
 	}
 
+	/// Returns the per-array statistics for this array.
+	///
+	/// @return the {@link ArrayStats} associated with this array
 	public ArrayStats stats() {
 		return stats;
 	}
@@ -45,16 +54,29 @@ public final class ByteArray implements Array {
 		return buffer;
 	}
 
+	/// Returns the raw byte value at the given logical index.
+	///
+	/// @param i zero-based logical index (must be in {@code [0, length)})
+	/// @return the raw signed byte value at position {@code i}
 	public byte getByte(long i) {
 		return buffer.get(ValueLayout.JAVA_BYTE, i);
 	}
 
+	/// Returns the int value at the given logical index, applying unsigned widening for U8 columns.
+	///
+	/// @param i zero-based logical index (must be in {@code [0, length)})
+	/// @return the value at position {@code i} as a signed int (U8 values are zero-extended)
 	public int getInt(long i) {
 		byte raw = buffer.get(ValueLayout.JAVA_BYTE, i);
 		boolean unsigned = dtype instanceof DType.Primitive p && p.ptype() == PType.U8;
 		return unsigned ? Byte.toUnsignedInt(raw) : raw;
 	}
 
+	/// Reduces all elements to a single long using the supplied operator.
+	///
+	/// @param identity initial accumulator value
+	/// @param op       binary operator applied to accumulator and each element in order
+	/// @return the final accumulated value
 	public long fold(long identity, LongBinaryOperator op) {
 		MemorySegment buf = buffer;
 		long n = length;

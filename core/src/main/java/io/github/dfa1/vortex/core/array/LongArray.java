@@ -16,6 +16,12 @@ public final class LongArray implements Array {
 	private final MemorySegment buffer;
 	private final ArrayStats stats;
 
+	/// Creates a new {@code LongArray} backed by the given memory segment.
+	///
+	/// @param dtype  logical type, must be I64 or U64
+	/// @param length number of elements
+	/// @param buffer little-endian long data (8 bytes per element)
+	/// @param stats  per-array statistics, or {@link io.github.dfa1.vortex.core.ArrayStats#empty()} if unknown
 	public LongArray(DType dtype, long length, MemorySegment buffer, ArrayStats stats) {
 		this.dtype = dtype;
 		this.length = length;
@@ -33,6 +39,9 @@ public final class LongArray implements Array {
 		return length;
 	}
 
+	/// Returns per-array statistics.
+	///
+	/// @return array statistics
 	public ArrayStats stats() {
 		return stats;
 	}
@@ -45,10 +54,17 @@ public final class LongArray implements Array {
 		return buffer;
 	}
 
+	/// Returns the long value at the given index.
+	///
+	/// @param i zero-based index (must be in {@code [0, length)})
+	/// @return the long value at position {@code i}
 	public long getLong(long i) {
 		return buffer.getAtIndex(PTypeIO.LE_LONG, i);
 	}
 
+	/// Passes each element to the given consumer in order.
+	///
+	/// @param c consumer that receives each long element
 	public void forEachLong(LongConsumer c) {
 		MemorySegment buf = buffer;
 		long n = length;
@@ -57,6 +73,11 @@ public final class LongArray implements Array {
 		}
 	}
 
+	/// Folds all elements using the given binary operator and identity value.
+	///
+	/// @param identity initial accumulator value
+	/// @param op       binary operator applied to the accumulator and each long element
+	/// @return the final accumulated result
 	public long fold(long identity, LongBinaryOperator op) {
 		MemorySegment buf = buffer;
 		long n = length;

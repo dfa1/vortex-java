@@ -7,6 +7,10 @@ import io.github.dfa1.vortex.core.array.Array;
 /// Stub for {@code vortex.patched} — not yet implemented.
 public final class PatchedEncoding implements Encoding {
 
+	/// Creates a new {@code PatchedEncoding} instance; use via {@link EncodingRegistry}.
+	public PatchedEncoding() {
+	}
+
 	@Override
 	public EncodingId encodingId() {
 		return EncodingId.VORTEX_PATCHED;

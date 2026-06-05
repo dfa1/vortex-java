@@ -32,6 +32,10 @@ import java.nio.charset.StandardCharsets;
 /// <p>Decode: fill an output buffer of {@code rowCount} elements with the constant value.
 public final class ConstantEncoding implements Encoding {
 
+	/// Creates a new {@code ConstantEncoding} instance.
+	public ConstantEncoding() {
+	}
+
 	@Override
 	public EncodingId encodingId() {
 		return EncodingId.VORTEX_CONSTANT;

@@ -32,6 +32,10 @@ import java.util.List;
 /// list {@code i} covers {@code elements[offsets[i]..offsets[i]+sizes[i]]}.
 public final class ListViewEncoding implements Encoding {
 
+	/// Creates a new {@code ListViewEncoding} instance; use via {@link EncodingRegistry}.
+	public ListViewEncoding() {
+	}
+
 	@Override
 	public EncodingId encodingId() {
 		return EncodingId.VORTEX_LISTVIEW;

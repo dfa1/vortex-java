@@ -14,6 +14,14 @@ import java.nio.ByteBuffer;
 ///
 /// Constructed by `EncodingRegistry` when `allowUnknown()` is set and an encoding id is not
 /// in the registry. Data access beyond `buffer(i)` and `child(i)` is not supported.
+///
+/// @param encodingId the unrecognised encoding id string
+/// @param dtype      logical type of the array
+/// @param length     number of logical rows
+/// @param metadata   raw encoding metadata bytes, or {@code null}
+/// @param buffers    raw data buffers owned by this node
+/// @param children   decoded child arrays (also wrapped as unknown)
+/// @param stats      per-array statistics
 public record UnknownArray(
 		String encodingId,
 		DType dtype,

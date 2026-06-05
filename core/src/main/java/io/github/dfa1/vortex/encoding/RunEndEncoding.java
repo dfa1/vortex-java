@@ -35,6 +35,10 @@ import java.util.List;
 /// {@code [ends[i-1], ends[i])} in the output, skipping the first {@code offset} logical elements.
 public final class RunEndEncoding implements Encoding {
 
+	/// Creates a new {@code RunEndEncoding} instance; use via {@link EncodingRegistry}.
+	public RunEndEncoding() {
+	}
+
 	@Override
 	public EncodingId encodingId() {
 		return EncodingId.VORTEX_RUNEND;

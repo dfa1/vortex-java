@@ -29,6 +29,10 @@ import java.util.List;
 /// Decode: {@code output[i] = encoded[i] + reference} (wrapping arithmetic).
 public final class FrameOfReferenceEncoding implements Encoding {
 
+	/// Creates a new {@code FrameOfReferenceEncoding} instance; use via {@link EncodingRegistry}.
+	public FrameOfReferenceEncoding() {
+	}
+
 	@Override
 	public EncodingId encodingId() {
 		return EncodingId.FASTLANES_FOR;

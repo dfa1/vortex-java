@@ -17,6 +17,12 @@ public final class GenericArray implements Array {
 	private final MemorySegment[] buffers;
 	private final Array[] children;
 
+	/// Creates a new {@code GenericArray} with the given buffers and children.
+	///
+	/// @param dtype    logical type of this array
+	/// @param length   number of logical elements
+	/// @param buffers  raw memory segments backing this array's data
+	/// @param children child arrays (e.g. offsets, validity)
 	public GenericArray(DType dtype, long length, MemorySegment[] buffers, Array[] children) {
 		this.dtype = dtype;
 		this.length = length;
@@ -24,6 +30,11 @@ public final class GenericArray implements Array {
 		this.children = children;
 	}
 
+	/// Creates a new {@code GenericArray} with a single buffer and no children.
+	///
+	/// @param dtype   logical type of this array
+	/// @param length  number of logical elements
+	/// @param buffer  single raw memory segment backing this array's data
 	public GenericArray(DType dtype, long length, MemorySegment buffer) {
 		this(dtype, length, new MemorySegment[]{buffer}, new Array[0]);
 	}
@@ -38,6 +49,9 @@ public final class GenericArray implements Array {
 		return length;
 	}
 
+	/// Returns per-array statistics (always empty for generic arrays).
+	///
+	/// @return empty array statistics
 	public ArrayStats stats() {
 		return ArrayStats.empty();
 	}

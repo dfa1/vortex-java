@@ -19,12 +19,20 @@ public final class CascadingCompressor {
 	private final List<Encoding> encodings;
 	private final CompressorContext rootCtx;
 
+	/// Constructs a {@code CascadingCompressor} with the given encodings and root context.
+	///
+	/// @param encodings candidate encodings evaluated during compression
+	/// @param rootCtx   root compressor context controlling cascade depth and sampling
 	public CascadingCompressor(List<Encoding> encodings, CompressorContext rootCtx) {
 		this.encodings = List.copyOf(encodings);
 		this.rootCtx = rootCtx;
 	}
 
 	/// Entry point: encode {@code data} using the best cascading strategy.
+	///
+	/// @param dtype logical type of the data to encode
+	/// @param data  input data in the format expected by the candidate encodings
+	/// @return the {@link EncodeResult} produced by the winning encoding
 	public EncodeResult encode(DType dtype, Object data) {
 		return encodeWithCtx(dtype, data, rootCtx);
 	}

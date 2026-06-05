@@ -24,6 +24,10 @@ import java.util.List;
 /// <p>Decode: {@code signed = (unsigned >>> 1) ^ -(unsigned & 1)} applied element-wise.
 public final class ZigZagEncoding implements Encoding {
 
+	/// Creates a new {@code ZigZagEncoding} instance; use via {@link EncodingRegistry}.
+	public ZigZagEncoding() {
+	}
+
 	@Override
 	public EncodingId encodingId() {
 		return EncodingId.VORTEX_ZIGZAG;

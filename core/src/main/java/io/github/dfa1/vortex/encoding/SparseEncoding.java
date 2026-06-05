@@ -38,6 +38,10 @@ import java.util.List;
 /// {@code output[indices[i] - offset] = values[i]} for each patch.
 public final class SparseEncoding implements Encoding {
 
+	/// Creates a new {@code SparseEncoding} instance; use via {@link EncodingRegistry}.
+	public SparseEncoding() {
+	}
+
 	@Override
 	public EncodingId encodingId() {
 		return EncodingId.VORTEX_SPARSE;

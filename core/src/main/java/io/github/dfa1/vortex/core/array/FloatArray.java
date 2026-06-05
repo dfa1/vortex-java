@@ -15,6 +15,12 @@ public final class FloatArray implements Array {
 	private final MemorySegment buffer;
 	private final ArrayStats stats;
 
+	/// Creates a new {@code FloatArray} backed by the given memory segment.
+	///
+	/// @param dtype  logical type, must be F32
+	/// @param length number of elements
+	/// @param buffer little-endian float data (4 bytes per element)
+	/// @param stats  per-array statistics, or {@link io.github.dfa1.vortex.core.ArrayStats#empty()} if unknown
 	public FloatArray(DType dtype, long length, MemorySegment buffer, ArrayStats stats) {
 		this.dtype = dtype;
 		this.length = length;
@@ -32,6 +38,9 @@ public final class FloatArray implements Array {
 		return length;
 	}
 
+	/// Returns per-array statistics.
+	///
+	/// @return array statistics
 	public ArrayStats stats() {
 		return stats;
 	}
@@ -44,10 +53,19 @@ public final class FloatArray implements Array {
 		return buffer;
 	}
 
+	/// Returns the float value at the given index.
+	///
+	/// @param i zero-based index (must be in {@code [0, length)})
+	/// @return the float value at position {@code i}
 	public float getFloat(long i) {
 		return buffer.getAtIndex(PTypeIO.LE_FLOAT, i);
 	}
 
+	/// Folds all elements using the given binary operator and identity value.
+	///
+	/// @param identity initial accumulator value
+	/// @param op       binary operator applied to the accumulator and each float element (widened to double)
+	/// @return the final accumulated result
 	public double fold(double identity, DoubleBinaryOperator op) {
 		MemorySegment buf = buffer;
 		long n = length;

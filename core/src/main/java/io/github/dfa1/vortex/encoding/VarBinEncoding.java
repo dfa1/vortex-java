@@ -32,6 +32,10 @@ import java.util.List;
 /// </ul>
 public final class VarBinEncoding implements Encoding {
 
+	/// Creates a new {@code VarBinEncoding} instance; use via {@link EncodingRegistry}.
+	public VarBinEncoding() {
+	}
+
 	@Override
 	public EncodingId encodingId() {
 		return EncodingId.VORTEX_VARBIN;

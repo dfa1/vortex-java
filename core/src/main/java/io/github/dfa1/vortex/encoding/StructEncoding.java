@@ -27,6 +27,10 @@ import java.util.List;
 /// and {@code nfields == 1}.
 public final class StructEncoding implements Encoding {
 
+	/// Creates a new {@code StructEncoding} instance; use via {@link EncodingRegistry}.
+	public StructEncoding() {
+	}
+
 	@Override
 	public EncodingId encodingId() {
 		return EncodingId.VORTEX_STRUCT;

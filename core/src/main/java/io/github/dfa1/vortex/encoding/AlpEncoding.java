@@ -33,6 +33,10 @@ import java.util.List;
 /// then overwrite {@code decoded[indices[j] - offset] = values[j]} for each patch.
 public final class AlpEncoding implements Encoding {
 
+	/// Creates a new {@code AlpEncoding} instance; use via {@link EncodingRegistry}.
+	public AlpEncoding() {
+	}
+
 	// Powers of 10 for F64 — shared by encode (exponent search) and decode (reconstruction).
 	static final double[] F10_F64 = {
 			1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9,

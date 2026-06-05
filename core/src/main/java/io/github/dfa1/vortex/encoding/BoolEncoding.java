@@ -13,6 +13,10 @@ import java.lang.foreign.ValueLayout;
 /// Encoding for `vortex.bool` — bit-packed boolean arrays (LSB first).
 public final class BoolEncoding implements Encoding {
 
+	/// Creates a new {@code BoolEncoding} instance.
+	public BoolEncoding() {
+	}
+
 	private static MemorySegment encodeBool(boolean[] data) {
 		long packedBytes = (data.length + 7L) / 8;
 		if (packedBytes == 0) {

@@ -30,16 +30,23 @@ public final class EncodingRegistry {
 	/// Default is strict: unknown ids throw [VortexException]. When enabled, unknown nodes
 	/// (and all their children, recursively) are wrapped as [UnknownArray] preserving raw
 	/// metadata + buffers + stats. Mirrors Rust `VortexSession::allow_unknown()`.
+	///
+	/// @return this registry, for chaining
 	public EncodingRegistry allowUnknown() {
 		this.allowUnknown = true;
 		return this;
 	}
 
+	/// Returns whether passthrough decode for unknown encoding ids is enabled.
+	///
+	/// @return {@code true} if unknown encodings are silently wrapped as {@link io.github.dfa1.vortex.core.array.UnknownArray}
 	public boolean isAllowUnknown() {
 		return allowUnknown;
 	}
 
 	/// Load all [Encoding]s registered via `ServiceLoader`.
+	///
+	/// @return a new {@link EncodingRegistry} populated with all service-loaded encodings
 	public static EncodingRegistry loadAll() {
 		var registry = new EncodingRegistry();
 		for (Encoding encoding : ServiceLoader.load(Encoding.class)) {
@@ -48,10 +55,17 @@ public final class EncodingRegistry {
 		return registry;
 	}
 
+	/// Creates an empty registry with no encodings registered.
+	///
+	/// @return a new empty {@link EncodingRegistry}
 	public static EncodingRegistry empty() {
 		return new EncodingRegistry();
 	}
 
+	/// Returns {@code true} if an encoding is registered for the given id.
+	///
+	/// @param encodingId the encoding id to query
+	/// @return {@code true} if an {@link Encoding} is registered for {@code encodingId}
 	public boolean hasEncoding(EncodingId encodingId) {
 		return encodings.containsKey(encodingId);
 	}
@@ -83,6 +97,10 @@ public final class EncodingRegistry {
 		return new UnknownArrayNode(rawEncodingId, meta, children, bufferIndices, stats);
 	}
 
+	/// Registers an encoding implementation in this registry.
+	///
+	/// @param encoding the {@link Encoding} to register
+	/// @throws io.github.dfa1.vortex.core.VortexException if an encoding with the same id is already registered
 	public void register(Encoding encoding) {
 		Encoding old = encodings.put(encoding.encodingId(), encoding);
 		if (old != null) {
@@ -92,7 +110,14 @@ public final class EncodingRegistry {
 
 	/// Decode a flat segment from the file's memory-mapped region.
 	///
-	/// Segment format: [bufferdata...] [FlatBufferArray] [4-byteLEu32=FlatBuffersize].
+	/// Segment format: {@code buffer_data... | FlatBuffer(Array) | u32 LE = FlatBuffer size}.
+	///
+	/// @param seg           memory-mapped region for the flat segment
+	/// @param encodingSpecs ordered list of encoding id strings from the file's encoding table
+	/// @param dtype         expected logical type for the decoded array
+	/// @param rowCount      number of logical rows in this segment
+	/// @param arena         allocator for decode output; lifetime matches the current chunk epoch
+	/// @return the decoded {@link Array} for this segment
 	public Array decodeSegment(MemorySegment seg, List<String> encodingSpecs,
 	                           DType dtype, long rowCount, SegmentAllocator arena) {
 		int segLen = (int) seg.byteSize();

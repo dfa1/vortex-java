@@ -16,6 +16,13 @@ public final class ListViewArray implements Array {
 	private final Array offsets;
 	private final Array sizes;
 
+	/// Creates a new {@code ListViewArray}.
+	///
+	/// @param dtype    logical list type
+	/// @param outerLen number of outer list elements
+	/// @param elements flat elements array
+	/// @param offsets  per-row start offsets into {@code elements} (length {@code outerLen})
+	/// @param sizes    per-row element counts (length {@code outerLen})
 	public ListViewArray(DType.List dtype, long outerLen, Array elements, Array offsets, Array sizes) {
 		this.dtype = dtype;
 		this.outerLen = outerLen;
@@ -34,14 +41,23 @@ public final class ListViewArray implements Array {
 		return dtype;
 	}
 
+	/// Returns the flat elements array.
+	///
+	/// @return the elements array
 	public Array elements() {
 		return elements;
 	}
 
+	/// Returns the per-row start offsets array (length {@code outerLen}).
+	///
+	/// @return the offsets array
 	public Array offsets() {
 		return offsets;
 	}
 
+	/// Returns the per-row element count array (length {@code outerLen}).
+	///
+	/// @return the sizes array
 	public Array sizes() {
 		return sizes;
 	}

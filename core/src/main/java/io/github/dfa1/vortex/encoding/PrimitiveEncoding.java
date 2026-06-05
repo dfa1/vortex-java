@@ -21,6 +21,10 @@ import java.lang.foreign.MemorySegment;
 /// Encodes all [DType.Primitive] types; embeds min/max stats as Protobuf ScalarValue bytes.
 public final class PrimitiveEncoding implements Encoding {
 
+	/// Creates a new {@code PrimitiveEncoding} instance; use via {@link EncodingRegistry}.
+	public PrimitiveEncoding() {
+	}
+
 	@Override
 	public EncodingId encodingId() {
 		return EncodingId.VORTEX_PRIMITIVE;

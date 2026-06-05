@@ -11,6 +11,10 @@ import java.util.List;
 /// No buffers, no children, empty metadata. Decode returns a [NullArray] of the requested length.
 public final class NullEncoding implements Encoding {
 
+	/// Creates a new {@code NullEncoding} instance; use via {@link EncodingRegistry}.
+	public NullEncoding() {
+	}
+
 	@Override
 	public EncodingId encodingId() {
 		return EncodingId.VORTEX_NULL;

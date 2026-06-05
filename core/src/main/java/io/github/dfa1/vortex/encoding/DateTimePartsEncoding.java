@@ -33,6 +33,10 @@ import java.util.List;
 /// {@code byte[0]=TimeUnit tag, bytes[1-2]=tz_len (u16 LE), bytes[3+]=tz UTF-8}
 public final class DateTimePartsEncoding implements Encoding {
 
+    /// Creates a new {@code DateTimePartsEncoding} instance.
+    public DateTimePartsEncoding() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_DATETIMEPARTS;

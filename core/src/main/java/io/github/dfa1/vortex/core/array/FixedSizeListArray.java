@@ -12,6 +12,11 @@ public final class FixedSizeListArray implements Array {
 	private final long outerLen;
 	private final Array elements;
 
+	/// Constructs a {@code FixedSizeListArray} from a flat elements array.
+	///
+	/// @param dtype    logical fixed-size list type (provides element type and fixed size)
+	/// @param outerLen number of outer list elements
+	/// @param elements flat array of {@code outerLen * fixedSize} element values
 	public FixedSizeListArray(DType.FixedSizeList dtype, long outerLen, Array elements) {
 		this.dtype = dtype;
 		this.outerLen = outerLen;
@@ -28,14 +33,23 @@ public final class FixedSizeListArray implements Array {
 		return dtype;
 	}
 
+	/// Returns per-array statistics (always empty for fixed-size list arrays).
+	///
+	/// @return empty array statistics
 	public ArrayStats stats() {
 		return ArrayStats.empty();
 	}
 
+	/// Returns the flat elements array containing {@code outerLen * fixedSize} values.
+	///
+	/// @return the flat elements array
 	public Array elements() {
 		return elements;
 	}
 
+	/// Returns the fixed number of elements per outer list entry.
+	///
+	/// @return the fixed size from the dtype
 	public int fixedSize() {
 		return dtype.fixedSize();
 	}

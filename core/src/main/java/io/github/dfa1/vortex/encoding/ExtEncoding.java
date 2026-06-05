@@ -13,6 +13,10 @@ import io.github.dfa1.vortex.core.array.Array;
 /// Decode: unwraps the single child and returns it directly.
 public final class ExtEncoding implements Encoding {
 
+	/// Creates a new {@code ExtEncoding} instance.
+	public ExtEncoding() {
+	}
+
 	@Override
 	public EncodingId encodingId() {
 		return EncodingId.VORTEX_EXT;

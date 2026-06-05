@@ -32,6 +32,10 @@ import java.util.List;
 /// </ul>
 public final class ChunkedEncoding implements Encoding {
 
+	/// Creates a new {@code ChunkedEncoding} instance.
+	public ChunkedEncoding() {
+	}
+
 	@Override
 	public EncodingId encodingId() {
 		return EncodingId.VORTEX_CHUNKED;

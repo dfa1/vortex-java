@@ -38,6 +38,10 @@ import java.util.Map;
 /// </ul>
 public final class AlpRdEncoding implements Encoding {
 
+    /// Creates a new {@code AlpRdEncoding} instance; use via {@link EncodingRegistry}.
+    public AlpRdEncoding() {
+    }
+
     private static final DType U16_DTYPE = new DType.Primitive(PType.U16, false);
     private static final DType U32_DTYPE = new DType.Primitive(PType.U32, false);
     private static final DType U64_DTYPE = new DType.Primitive(PType.U64, false);

@@ -28,6 +28,10 @@ import java.util.List;
 /// Output is allocated on the heap; not backed by the file's mapped region.
 public final class SequenceEncoding implements Encoding {
 
+	/// Creates a new {@code SequenceEncoding} instance; use via {@link EncodingRegistry}.
+	public SequenceEncoding() {
+	}
+
 	@Override
 	public EncodingId encodingId() {
 		return EncodingId.VORTEX_SEQUENCE;

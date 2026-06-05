@@ -22,6 +22,10 @@ import java.util.List;
 /// </ul>
 public final class DecimalEncoding implements Encoding {
 
+	/// Creates a new {@code DecimalEncoding} instance.
+	public DecimalEncoding() {
+	}
+
 	@Override
 	public EncodingId encodingId() {
 		return EncodingId.VORTEX_DECIMAL;

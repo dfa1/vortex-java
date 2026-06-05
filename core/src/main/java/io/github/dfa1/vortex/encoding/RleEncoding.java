@@ -52,6 +52,10 @@ public final class RleEncoding implements Encoding {
 
     static final int FL_CHUNK_SIZE = 1024;
 
+    /// Creates a new {@code RleEncoding} instance; use via {@link EncodingRegistry}.
+    public RleEncoding() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.FASTLANES_RLE;

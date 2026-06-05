@@ -6,5 +6,10 @@ package io.github.dfa1.vortex.encoding;
 /// {@code offsets[i]} is the start index of list {@code i} in elements.
 /// {@code sizes[i]} is the number of elements in list {@code i}.
 /// Both {@code offsets} and {@code sizes} have length {@code outerLen}.
+///
+/// @param elements  flat array of all inner values (may be non-contiguous)
+/// @param offsets   start index of each list in {@code elements}; length must equal {@code outerLen}
+/// @param sizes     element count for each list; length must equal {@code outerLen}
+/// @param outerLen  number of outer list elements
 public record ListViewData(Object elements, int[] offsets, int[] sizes, long outerLen) {
 }

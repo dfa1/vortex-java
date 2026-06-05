@@ -30,6 +30,8 @@ public enum PType {
 	F64;
 
 	/// Number of bytes per element on the wire (1, 2, 4, or 8).
+	///
+	/// @return the byte size of this physical type
 	public int byteSize() {
 		return switch (this) {
 			case U8, I8 -> 1;
@@ -40,11 +42,15 @@ public enum PType {
 	}
 
 	/// Returns {@code true} for {@code F16}, {@code F32}, and {@code F64}.
+	///
+	/// @return {@code true} if this ptype is a floating-point type
 	public boolean isFloating() {
 		return this == F16 || this == F32 || this == F64;
 	}
 
 	/// Returns {@code true} for signed integers ({@code I8}–{@code I64}) and all floating-point types.
+	///
+	/// @return {@code true} if this ptype is signed
 	public boolean isSigned() {
 		return this == I8 || this == I16 || this == I32 || this == I64
 				|| this == F16 || this == F32 || this == F64;

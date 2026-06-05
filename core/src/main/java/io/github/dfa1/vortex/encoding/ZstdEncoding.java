@@ -56,6 +56,10 @@ import java.util.List;
 /// full-length array wrapped in {@link MaskedArray}.
 public final class ZstdEncoding implements Encoding {
 
+    /// Creates a new {@code ZstdEncoding} instance; use via {@link EncodingRegistry}.
+    public ZstdEncoding() {
+    }
+
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_ZSTD;

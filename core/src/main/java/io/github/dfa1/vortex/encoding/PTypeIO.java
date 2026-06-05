@@ -22,10 +22,15 @@ import java.lang.invoke.VarHandle;
 /// without duplicating the `withOrder(LITTLE_ENDIAN)` boilerplate.
 public final class PTypeIO {
 
+	/// Unaligned little-endian layout for 16-bit shorts.
 	public static final ValueLayout.OfShort  LE_SHORT  = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+	/// Unaligned little-endian layout for 32-bit ints.
 	public static final ValueLayout.OfInt    LE_INT    = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+	/// Unaligned little-endian layout for 64-bit longs.
 	public static final ValueLayout.OfLong   LE_LONG   = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+	/// Unaligned little-endian layout for 32-bit floats.
 	public static final ValueLayout.OfFloat  LE_FLOAT  = ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+	/// Unaligned little-endian layout for 64-bit doubles.
 	public static final ValueLayout.OfDouble LE_DOUBLE = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
 	private static final MethodHandle[] SETTERS = buildSetters();

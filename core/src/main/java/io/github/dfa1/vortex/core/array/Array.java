@@ -15,16 +15,28 @@ public sealed interface Array
                 FloatArray, GenericArray, IntArray, ListArray, ListViewArray, LongArray,
                 MaskedArray, NullArray, ShortArray, StructArray, UnknownArray, VarBinArray {
 
+	/// Returns the number of elements in this array.
+	///
+	/// @return element count
 	long length();
 
+	/// Returns the logical type of elements in this array.
+	///
+	/// @return dtype
 	DType dtype();
 
-	/// Optional method to access the internals (used by some {@link io.github.dfa1.vortex.encoding.Encoding})
+	/// Returns the raw buffer at position {@code i} (used by some {@link io.github.dfa1.vortex.encoding.Encoding}).
+	///
+	/// @param i buffer index
+	/// @return memory segment for buffer {@code i}
 	default MemorySegment buffer(int i) {
 		throw new VortexException(getClass().getSimpleName() + " has no raw buffers");
 	}
 
-	/// Optional method to access any children array (used by some {@link io.github.dfa1.vortex.encoding.Encoding})
+	/// Returns the child array at position {@code i} (used by some {@link io.github.dfa1.vortex.encoding.Encoding}).
+	///
+	/// @param i child index
+	/// @return child array at index {@code i}
 	default Array child(int i) {
 		throw new VortexException(getClass().getSimpleName() + " has no children");
 	}

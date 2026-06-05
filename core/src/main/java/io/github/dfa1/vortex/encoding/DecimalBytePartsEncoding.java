@@ -24,6 +24,10 @@ import java.util.List;
 /// </ul>
 public final class DecimalBytePartsEncoding implements Encoding {
 
+	/// Creates a new {@code DecimalBytePartsEncoding} instance.
+	public DecimalBytePartsEncoding() {
+	}
+
 	@Override
 	public EncodingId encodingId() {
 		return EncodingId.VORTEX_DECIMAL_BYTE_PARTS;

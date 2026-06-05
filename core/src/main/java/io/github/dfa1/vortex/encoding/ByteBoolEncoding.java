@@ -18,6 +18,10 @@ import java.lang.foreign.ValueLayout;
 /// matching the layout of {@code vortex.bool}.
 public final class ByteBoolEncoding implements Encoding {
 
+	/// Creates a new {@code ByteBoolEncoding} instance.
+	public ByteBoolEncoding() {
+	}
+
 	@Override
 	public EncodingId encodingId() {
 		return EncodingId.VORTEX_BYTEBOOL;

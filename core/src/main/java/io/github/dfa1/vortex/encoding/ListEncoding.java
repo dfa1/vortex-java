@@ -27,6 +27,10 @@ import java.util.List;
 /// </ul>
 public final class ListEncoding implements Encoding {
 
+	/// Creates a new {@code ListEncoding} instance; use via {@link EncodingRegistry}.
+	public ListEncoding() {
+	}
+
 	@Override
 	public EncodingId encodingId() {
 		return EncodingId.VORTEX_LIST;

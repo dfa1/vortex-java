@@ -6,22 +6,39 @@ import io.github.dfa1.vortex.core.DType;
 /// Combines encode and decode for one encoding type.
 /// Register via [EncodingRegistry] — implementations are discoverable via ServiceLoader.
 public interface Encoding {
-	/// Return the encoding id for this encoding.
+	/// Returns the encoding id for this encoding.
+	///
+	/// @return encoding id
 	EncodingId encodingId();
 
-	/// Decode an array node from the file using the provided context.
+	/// Decodes an array node from the file using the provided context.
+	///
+	/// @param ctx decoding context containing buffers, dtype, row count, and child registry
+	/// @return decoded array
 	Array decode(DecodeContext ctx);
 
-	/// Returns true if this encoding can encode the given dtype.
+	/// Returns {@code true} if this encoding can encode the given dtype.
+	///
+	/// @param dtype the dtype to test
+	/// @return {@code true} if this encoding accepts {@code dtype}
 	default boolean accepts(DType dtype) {
 		return false;
 	}
 
-	/// Encodes `data` to bytes, including per-chunk min/max stats when available.
+	/// Encodes {@code data} to bytes, including per-chunk min/max stats when available.
+	///
+	/// @param dtype logical type of the data
+	/// @param data  the data to encode (type depends on encoding; typically a primitive array)
+	/// @return encode result containing the root node, buffers, and optional stats
 	EncodeResult encode(DType dtype, Object data);
 
 	/// Cascade-aware encode: returns a partial step with open child slots.
 	/// Default wraps the terminal {@link #encode} result; override to expose children.
+	///
+	/// @param dtype the logical type of the data
+	/// @param data  the data to encode
+	/// @param ctx   cascade compressor context controlling recursion depth and exclusions
+	/// @return cascade step with optional open child slots
 	default CascadeStep encodeCascade(DType dtype, Object data, CompressorContext ctx) {
 		return CascadeStep.terminal(encode(dtype, data));
 	}

@@ -50,6 +50,10 @@ import java.nio.ByteOrder;
 /// all integer/float ptypes except F16 (Conv1 additionally excludes 64-bit dtypes).
 public final class PcoEncoding implements Encoding {
 
+    /// Creates a new {@code PcoEncoding} instance; use via {@link EncodingRegistry}.
+    public PcoEncoding() {
+    }
+
     static final byte PCO_FORMAT_MAJOR = 0x04;
     static final byte PCO_FORMAT_MINOR = 0x01;
 

@@ -34,6 +34,10 @@ import java.util.List;
 /// {@code LANES = 1024 / typeBits}, where {@code typeBits = byteSize * 8}.
 public final class DeltaEncoding implements Encoding {
 
+    /// Creates a new {@code DeltaEncoding} instance.
+    public DeltaEncoding() {
+    }
+
     static final int FL_CHUNK_SIZE = 1024;
     static final int[] FL_ORDER = {0, 4, 2, 6, 1, 5, 3, 7};
 

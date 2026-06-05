@@ -40,6 +40,14 @@ public final class VarBinArray implements Array {
 	private final MemorySegment dictCodesSegs;
 	private final PType dictCodesPType;
 
+	/// Creates a new {@code VarBinArray} in offset mode.
+	///
+	/// @param dtype        logical type (Utf8 or Binary)
+	/// @param length       number of variable-length elements
+	/// @param bytes        concatenated raw byte data for all elements
+	/// @param offsetsArr   offsets array of length {@code length + 1}; {@code offsets[i]..offsets[i+1]} is element {@code i}
+	/// @param offsetsPtype physical type of the offsets values (I32/U32 or I64/U64)
+	/// @param stats        per-array statistics, or {@link io.github.dfa1.vortex.core.ArrayStats#empty()} if unknown
 	public VarBinArray(DType dtype, long length, MemorySegment bytes,
 	                   Array offsetsArr, PType offsetsPtype, ArrayStats stats) {
 		this.dtype = dtype;
@@ -73,6 +81,16 @@ public final class VarBinArray implements Array {
 
 	/// Creates a dict-mode VarBinArray. Lengths and bytes are resolved via the
 	/// dictionary on each access; no string materialization occurs at construction time.
+	///
+	/// @param dtype          logical type (Utf8 or Binary)
+	/// @param n              number of logical elements (rows)
+	/// @param dictValBytes   concatenated raw bytes for all dictionary values
+	/// @param dictValOffsets offsets into {@code dictValBytes} for each dictionary entry (length = dictSize + 1)
+	/// @param dictValOffPType physical type of the dictionary value offsets
+	/// @param dictCodesSegs  per-row dictionary code indices (length = n)
+	/// @param dictCodesPType physical type of the dictionary codes
+	/// @param stats          per-array statistics, or {@link io.github.dfa1.vortex.core.ArrayStats#empty()} if unknown
+	/// @return a new dict-mode {@code VarBinArray}
 	public static VarBinArray ofDict(DType dtype, long n,
 	                                 MemorySegment dictValBytes,
 	                                 MemorySegment dictValOffsets, PType dictValOffPType,
@@ -92,6 +110,9 @@ public final class VarBinArray implements Array {
 		return length;
 	}
 
+	/// Returns per-array statistics.
+	///
+	/// @return array statistics
 	public ArrayStats stats() {
 		return stats;
 	}
@@ -115,6 +136,10 @@ public final class VarBinArray implements Array {
 		return offsetsArr;
 	}
 
+	/// Returns a copy of the raw bytes for element {@code i}.
+	///
+	/// @param i zero-based logical index (must be in {@code [0, length)})
+	/// @return a newly allocated byte array containing the raw bytes of element {@code i}
 	public byte[] getBytes(long i) {
 		if (dictCodesSegs != null) {
 			long code = dictReadCode(i);
@@ -131,10 +156,18 @@ public final class VarBinArray implements Array {
 		return out;
 	}
 
+	/// Returns the UTF-8 decoded string for element {@code i}.
+	///
+	/// @param i zero-based logical index (must be in {@code [0, length)})
+	/// @return the UTF-8 string at position {@code i}
 	public String getString(long i) {
 		return new String(getBytes(i), StandardCharsets.UTF_8);
 	}
 
+	/// Returns the byte length of element {@code i} without copying the data.
+	///
+	/// @param i zero-based logical index (must be in {@code [0, length)})
+	/// @return the number of bytes in element {@code i}
 	public int getByteLength(long i) {
 		if (dictCodesSegs != null) {
 			long code = dictReadCode(i);
@@ -143,6 +176,9 @@ public final class VarBinArray implements Array {
 		return (int) (readOffset(i + 1) - readOffset(i));
 	}
 
+	/// Passes the byte length of each element to the given consumer in row order.
+	///
+	/// @param c consumer that receives the byte length of each element
 	public void forEachByteLength(IntConsumer c) {
 		if (dictCodesSegs != null) {
 			for (long i = 0; i < length; i++) {
@@ -190,6 +226,9 @@ public final class VarBinArray implements Array {
 	}
 
 	/// Returns a new VarBinArray containing only the first {@code rows} elements.
+	///
+	/// @param rows number of rows to retain; if {@code rows >= length} returns this array unchanged
+	/// @return a {@code VarBinArray} containing the first {@code rows} elements
 	public VarBinArray truncate(long rows) {
 		if (rows >= length) {
 			return this;

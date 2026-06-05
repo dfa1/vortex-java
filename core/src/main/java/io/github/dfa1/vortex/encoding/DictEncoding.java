@@ -26,13 +26,17 @@ import java.util.List;
 
 /// Encoding for `vortex.dict` — dictionary encoding for low-cardinality columns.
 ///
-/// Primitive: [valuesbuffer(uniquevalues)] [codesbuffer]. Metadata (1 byte): code PType ordinal.
+/// Primitive: `values_buffer(unique_values)` + `codes_buffer`. Metadata (1 byte): code PType ordinal.
 /// Node tree: DictNode{ children=[ValuesNode{buf=0},CodesNode{buf=1}] }.
 ///
 /// Utf8: buf 0 = dict bytes, buf 1 = dict offsets (I64 LE, n_unique+1), buf 2 = codes.
-/// Metadata (2 bytes): [codePType ordinal, I64 ordinal]. Flat node (no children), bufferIndices=[0,1,2].
-/// Decoded as a {@link VarBinArray} in dict mode — no string materialization at decode time.
+/// Metadata (2 bytes): codePType ordinal, I64 ordinal. Flat node (no children), bufferIndices=[0,1,2].
+/// Decoded as a {@link io.github.dfa1.vortex.core.array.VarBinArray} in dict mode — no string materialization at decode time.
 public final class DictEncoding implements Encoding {
+
+	/// Creates a new {@code DictEncoding} instance.
+	public DictEncoding() {
+	}
 
 	@Override
 	public EncodingId encodingId() {

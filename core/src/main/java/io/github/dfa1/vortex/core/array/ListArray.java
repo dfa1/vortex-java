@@ -14,6 +14,12 @@ public final class ListArray implements Array {
 	private final Array elements;
 	private final Array offsets;
 
+	/// Creates a new {@code ListArray}.
+	///
+	/// @param dtype     logical list type
+	/// @param outerLen  number of outer list elements
+	/// @param elements  flat elements array (length = total element count)
+	/// @param offsets   offsets array of length {@code outerLen + 1}
 	public ListArray(DType.List dtype, long outerLen, Array elements, Array offsets) {
 		this.dtype = dtype;
 		this.outerLen = outerLen;
@@ -31,10 +37,16 @@ public final class ListArray implements Array {
 		return dtype;
 	}
 
+	/// Returns the flat elements array.
+	///
+	/// @return the elements array
 	public Array elements() {
 		return elements;
 	}
 
+	/// Returns the offsets array (length {@code outerLen + 1}).
+	///
+	/// @return the offsets array
 	public Array offsets() {
 		return offsets;
 	}
