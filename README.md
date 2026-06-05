@@ -31,7 +31,7 @@ for zero-copy memory-mapped reads.
 </dependency>
 ```
 
-### Read a Vortex file
+### Minimal read example
 
 ```java
 try (VortexReader vf = VortexReader.open(Path.of("data/example.vortex"));
@@ -47,82 +47,22 @@ try (VortexReader vf = VortexReader.open(Path.of("data/example.vortex"));
 ```
 
 > **Note:** `iter.hasNext()` closes the previous chunk's arena. Access all column data
-> before calling `hasNext()` again.
+> before calling `hasNext()` again. See [docs/explanation.md#memory-model](docs/explanation.md#memory-model).
 
-### Write a Vortex file
-
-```java
-var schema = new DType.Struct(
-    List.of("timestamp", "value"),
-    List.of(new DType.Primitive(PType.I64, false),
-            new DType.Primitive(PType.F64, false)),
-    false);
-
-try (var ch = FileChannel.open(Path.of("out.vortex"), CREATE, WRITE);
-     var writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
-    writer.writeChunk(Map.of(
-        "timestamp", new long[]  {1_700_000_000L, 1_700_000_001L},
-        "value",     new double[] {1.23, 4.56}
-    ));
-}
-```
-
-### Scan with options
-
-```java
-// project columns + limit rows
-ScanOptions opts = ScanOptions.all()
-    .withColumns("timestamp", "value")
-    .withLimit(1_000);
-
-// add a row filter
-ScanOptions filtered = ScanOptions.all()
-    .withFilter(new RowFilter.Gte("price", 100))
-    .withLimit(50);
-```
-
-### Handle unknown encodings
-
-Files containing unrecognised encoding IDs throw `VortexException` by default.
-Opt in to passthrough mode to read such files without failing:
-
-```java
-EncodingRegistry registry = EncodingRegistry.loadAll().allowUnknown();
-try (VortexReader vf = VortexReader.open(path, registry)) {
-    // columns with unknown encodings are returned as UnknownArray
-}
-```
-
-## CLI
-
-The `cli` module ships a fat jar with subcommands for inspecting and querying Vortex files.
-
-```bash
-./mvnw package -pl cli -am -DskipTests
-java -jar cli/target/vortex.jar <subcommand> [args]
-```
-
-| Subcommand | Syntax | Description |
-|---|---|---|
-| `inspect` | `inspect <file.vortex>` | Print file structure (layout tree, encodings, row counts) |
-| `schema`  | `schema <file.vortex>`  | Print column types |
-| `count`   | `count <file.vortex>`   | Print total row count |
-| `stats`   | `stats <file.vortex>`   | Print per-column min/max statistics |
-| `export`  | `export <file.vortex>`  | Write all columns to CSV on stdout |
-| `select`  | `select <file.vortex> <col> [col2 ...]` | Project specific columns to CSV |
-| `filter`  | `filter <file.vortex> <expr>` | Filter rows to CSV (e.g. `"price >= 100"`) |
-| `import`  | `import <file.csv\|file.parquet> [out.vortex]` | Convert CSV or Parquet to Vortex |
+For more examples — writing, projection, filtering, custom encodings, and the CLI —
+see the documentation below.
 
 ## Documentation
 
-Docs follow the [Diátaxis](https://diataxis.fr/) framework (tutorial, how-to, reference, explanation).
+Docs follow the [Diátaxis](https://diataxis.fr/) framework.
 
-| Document | Contents |
-|---|---|
-| [docs/tutorial.md](docs/tutorial.md) | Step-by-step: write and read your first Vortex file |
-| [docs/how-to.md](docs/how-to.md) | Recipes: count rows, convert Parquet, filter, project, custom encodings |
-| [docs/compatibility.md](docs/compatibility.md) | Encoding support table, S3 fixture status |
-| [docs/explanation.md](docs/explanation.md) | Design rationale, memory model, testing strategy, benchmarks |
+| Document | Mode | Contents |
+|---|---|---|
+| [docs/tutorial.md](docs/tutorial.md) | Tutorial | Step-by-step: write and read your first Vortex file |
+| [docs/how-to.md](docs/how-to.md) | How-to | Recipes: count rows, convert Parquet, filter, project, custom encodings |
+| [docs/reference.md](docs/reference.md) | Reference | API surface, CLI subcommands, operator tables, file-format trailer |
+| [docs/compatibility.md](docs/compatibility.md) | Reference | Encoding support table, S3 fixture status |
+| [docs/explanation.md](docs/explanation.md) | Explanation | Design rationale, memory model, testing strategy, benchmarks |
 
 ## Development
 

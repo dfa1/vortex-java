@@ -27,12 +27,14 @@ no upgrade risk, and a supported LTS for users.
 
 ## Memory model
 
-`VortexFile` memory-maps the entire file into one `MemorySegment` (confined `Arena`).
+`VortexReader` memory-maps the entire file into one `MemorySegment` (confined `Arena`).
 All `Array` buffers returned during a scan are zero-copy slices of that segment — their
-lifetime is tied to the `VortexFile`. Close the file to release the mapped region.
+lifetime is tied to the `VortexReader`. Close the reader to release the mapped region.
 
 The iterator-based scan API is load-bearing: `iter.hasNext()` closes the previous chunk's
 arena. Access all column data before calling `hasNext()` again.
+
+For the reader / scan method signatures, see [reference.md#reader-api](reference.md#reader-api).
 
 ## Testing strategy
 

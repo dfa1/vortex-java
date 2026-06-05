@@ -1,6 +1,21 @@
 # How-to guides
 
 Task-oriented recipes. Each section solves one concrete goal.
+For API details (classes, methods, operator tables), see [reference.md](reference.md).
+For the design rationale behind the iterator lifecycle, see [explanation.md#memory-model](explanation.md#memory-model).
+
+---
+
+## Build the CLI
+
+Build the fat jar once; reuse it for every CLI recipe below:
+
+```bash
+./mvnw package -pl cli -am -DskipTests
+java -jar cli/target/vortex.jar <subcommand> [args]
+```
+
+For the full subcommand list, see [reference.md#cli](reference.md#cli).
 
 ---
 
@@ -101,15 +116,15 @@ RowFilter filter = new RowFilter.Gte("volume", 1_000_000)
     .and(new RowFilter.Lte("price", 200.0));
 ```
 
-Supported operators: `Eq`, `Neq`, `Lt`, `Lte`, `Gt`, `Gte`.
+For the supported predicate set and CLI operator syntax, see
+[reference.md#rowfilter](reference.md#rowfilter-iogithubdfa1vortexscanrowfilter)
+and [reference.md#filter-expression-syntax](reference.md#filter-expression-syntax).
 
 **CLI:**
 
 ```bash
 java -jar cli/target/vortex.jar filter trades.vortex "volume >= 1000000"
 ```
-
-Filter operators: `>`, `>=`, `<`, `<=`, `=`, `==`. Values parsed as integer, double, boolean, or string.
 
 ---
 

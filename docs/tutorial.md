@@ -53,7 +53,7 @@ DType.Struct schema = new DType.Struct(
     List.of("timestamp", "symbol", "price", "volume"),
     List.of(
         new DType.Primitive(PType.I64, false),   // unix epoch millis, non-nullable
-        DType.UTF8,                               // ticker symbol
+        new DType.Utf8(false),                    // ticker symbol
         new DType.Primitive(PType.F64, false),   // trade price
         new DType.Primitive(PType.I64, false)    // shares traded
     ),
@@ -61,8 +61,8 @@ DType.Struct schema = new DType.Struct(
 );
 ```
 
-`PType` mirrors Arrow's physical types: `I8`, `I16`, `I32`, `I64`, `U8`…`U64`, `F32`, `F64`.
-Passing `true` as the second argument to `Primitive` makes the column nullable.
+Passing `true` as the trailing argument makes the column nullable.
+See [reference.md#core-types](reference.md#core-types) for the full `DType` / `PType` list.
 
 ---
 
@@ -126,6 +126,7 @@ try (VortexReader vf = VortexReader.open(outPath);
 
 **Important:** every chunk lives in an off-heap `Arena`. Calling `iter.hasNext()` closes
 that arena and releases the memory. Read all values before advancing the iterator.
+See [explanation.md#memory-model](explanation.md#memory-model) for why the lifetime works this way.
 
 Expected output:
 
@@ -159,33 +160,11 @@ try (VortexReader vf = VortexReader.open(outPath);
 
 ---
 
-## 6. Inspect with the CLI
-
-Build the CLI fat jar once:
-
-```bash
-./mvnw package -pl cli -am -DskipTests
-```
-
-Then use it on any file without writing code:
-
-```bash
-# what columns and types does the file have?
-java -jar cli/target/vortex.jar schema trades.vortex
-# → struct<timestamp: I64, symbol: utf8, price: F64, volume: I64>
-
-# how many rows?
-java -jar cli/target/vortex.jar count trades.vortex
-# → 3
-
-# dump to CSV
-java -jar cli/target/vortex.jar export trades.vortex
-```
-
----
-
 ## What's next
 
-- [docs/compatibility.md](compatibility.md) — which encodings are supported
-- [docs/explanation.md](explanation.md) — memory model, testing strategy, benchmarks
-- The `ScanOptions` API supports row filters: `new RowFilter.Gte("volume", 200)` — only rows where volume ≥ 200
+You now have a working write-then-read flow. From here:
+
+- [how-to.md](how-to.md) — task recipes: filter rows, project columns, convert Parquet, use the CLI
+- [reference.md](reference.md) — API surface, CLI subcommands, operator tables
+- [compatibility.md](compatibility.md) — which encodings are supported
+- [explanation.md](explanation.md) — memory model, testing strategy, benchmarks
