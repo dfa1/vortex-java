@@ -120,14 +120,13 @@ Sealed predicate used for zone-map pruning (per-chunk min/max). Chunks that cann
 
 | Record | Static factory | Builder |
 |---|---|---|
+| `RowFilter.Gt(column, value)`  | `RowFilter.gt(col, val)`  | — |
 | `RowFilter.Gte(column, value)` | `RowFilter.gte(col, val)` | — |
+| `RowFilter.Lt(column, value)`  | `RowFilter.lt(col, val)`  | — |
 | `RowFilter.Lte(column, value)` | `RowFilter.lte(col, val)` | — |
 | `RowFilter.Eq(column, value)`  | `RowFilter.eq(col, val)`  | — |
+| `RowFilter.Neq(column, value)` | `RowFilter.neq(col, val)` | — |
 | `RowFilter.And(filters)`       | `RowFilter.and(f1, f2, …)` | `f1.and(f2)` |
-
-**Supported operators (Java API):** `Gte`, `Lte`, `Eq`, `And`.
-`Gt`, `Lt`, `Neq` are not exposed in the Java API. The CLI `filter` subcommand accepts `>`, `<`, `!=` syntactically
-but lowers them onto the supported predicates.
 
 ### `ScanIterator` (`io.github.dfa1.vortex.scan.ScanIterator`)
 
@@ -225,6 +224,7 @@ java -jar cli/target/vortex.jar <subcommand> [args]
 | `>`, `>=` | Greater than, greater-or-equal |
 | `<`, `<=` | Less than, less-or-equal |
 | `=`, `==` | Equal |
+| `!=`      | Not equal |
 
 Values are parsed as integer, double, boolean, or string (in that order).
 

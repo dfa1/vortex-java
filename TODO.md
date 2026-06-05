@@ -97,8 +97,6 @@ Remaining 8.5 MB gap — biggest to smallest:
 
 ## API
 
-- [ ] Add `RowFilter.Neq`, `RowFilter.Gt`, `RowFilter.Lt` to the Java API. Currently only `Gte`, `Lte`, `Eq`, `And` are exposed; the CLI lowers `>`, `<`, `!=` onto the supported set.
-
 - [ ] Use domain primitives (`UInt32`, `UInt64`, etc.) as value classes via Project Valhalla instead of raw `long`/`int`
     - See https://dfa1.github.io/articles/rethink-domain-primitives-with-valhalla
     - Candidates: `PType` integer kinds, buffer offsets, row indices, byte lengths

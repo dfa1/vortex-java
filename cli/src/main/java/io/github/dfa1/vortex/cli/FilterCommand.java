@@ -31,12 +31,8 @@ final class FilterCommand {
     private FilterCommand() {
     }
 
-    private enum Op { GT, GTE, LT, LTE, EQ }
-
-    private record ParsedFilter(String column, Op op, Comparable<?> value) {}
-
     private static final Pattern EXPR = Pattern.compile(
-            "^(\\w[\\w.]*?)\\s*(>=|<=|==|>|<|=)\\s*(.+)$");
+            "^(\\w[\\w.]*?)\\s*(!=|>=|<=|==|>|<|=)\\s*(.+)$");
 
     static int run(String[] args) {
         if (args.length < 3) {
@@ -49,15 +45,15 @@ final class FilterCommand {
             return ExitStatus.FILE_NOT_FOUND;
         }
         String expr = String.join(" ", Arrays.asList(args).subList(2, args.length));
-        ParsedFilter pf;
+        RowFilter filter;
         try {
-            pf = parseFilter(expr);
+            filter = parseFilter(expr);
         } catch (IllegalArgumentException e) {
             System.err.println("error: " + e.getMessage());
             return ExitStatus.USAGE_ERROR;
         }
-        ScanOptions scanOptions = new ScanOptions(List.of(), toRowFilter(pf), ScanOptions.NO_LIMIT);
-        RowPredicate rowPred = toRowPredicate(pf);
+        ScanOptions scanOptions = new ScanOptions(List.of(), filter, ScanOptions.NO_LIMIT);
+        RowPredicate rowPred = toRowPredicate(filter);
         try {
             Writer stdout = new OutputStreamWriter(System.out, StandardCharsets.UTF_8);
             CsvExporter.exportCsvFiltered(path, stdout, ExportOptions.defaults(), scanOptions, rowPred);
@@ -69,23 +65,23 @@ final class FilterCommand {
         }
     }
 
-    private static ParsedFilter parseFilter(String expr) {
+    private static RowFilter parseFilter(String expr) {
         Matcher m = EXPR.matcher(expr.trim());
         if (!m.matches()) {
             throw new IllegalArgumentException("invalid filter expression: \"" + expr
-                    + "\"  expected: col op value  (op: >, >=, <, <=, =, ==)");
+                    + "\"  expected: col op value  (op: >, >=, <, <=, =, ==, !=)");
         }
         String col = m.group(1);
-        Op op = switch (m.group(2)) {
-            case ">"  -> Op.GT;
-            case ">=" -> Op.GTE;
-            case "<"  -> Op.LT;
-            case "<=" -> Op.LTE;
-            case "=", "==" -> Op.EQ;
+        Comparable<?> value = parseValue(m.group(3).trim());
+        return switch (m.group(2)) {
+            case ">"        -> RowFilter.gt(col, value);
+            case ">="       -> RowFilter.gte(col, value);
+            case "<"        -> RowFilter.lt(col, value);
+            case "<="       -> RowFilter.lte(col, value);
+            case "=", "=="  -> RowFilter.eq(col, value);
+            case "!="       -> RowFilter.neq(col, value);
             default -> throw new IllegalArgumentException("unknown operator: " + m.group(2));
         };
-        Comparable<?> value = parseValue(m.group(3).trim());
-        return new ParsedFilter(col, op, value);
     }
 
     private static Comparable<?> parseValue(String raw) {
@@ -106,28 +102,25 @@ final class FilterCommand {
         return raw;
     }
 
-    /// Zone-map RowFilter for chunk pruning. Conservative for strict ops (> / <):
-    /// uses Gte/Lte which may keep one extra chunk at the boundary, but row-level
-    /// predicate corrects that.
-    private static RowFilter toRowFilter(ParsedFilter pf) {
-        return switch (pf.op()) {
-            case GT, GTE -> RowFilter.gte(pf.column(), pf.value());
-            case LT, LTE -> RowFilter.lte(pf.column(), pf.value());
-            case EQ      -> RowFilter.eq(pf.column(), pf.value());
-        };
-    }
-
-    private static RowPredicate toRowPredicate(ParsedFilter pf) {
-        return (chunk, rowIdx) -> {
-            Array arr = chunk.column(pf.column());
-            int cmp = compareValue(arr, rowIdx, pf.value());
-            return switch (pf.op()) {
-                case GT  -> cmp > 0;
-                case GTE -> cmp >= 0;
-                case LT  -> cmp < 0;
-                case LTE -> cmp <= 0;
-                case EQ  -> cmp == 0;
-            };
+    private static RowPredicate toRowPredicate(RowFilter filter) {
+        return switch (filter) {
+            case RowFilter.Gt(var col, var val)  -> (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, val) > 0;
+            case RowFilter.Gte(var col, var val) -> (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, val) >= 0;
+            case RowFilter.Lt(var col, var val)  -> (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, val) < 0;
+            case RowFilter.Lte(var col, var val) -> (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, val) <= 0;
+            case RowFilter.Eq(var col, var val)  -> (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, (Comparable<?>) val) == 0;
+            case RowFilter.Neq(var col, var val) -> (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, (Comparable<?>) val) != 0;
+            case RowFilter.And(var filters) -> {
+                RowPredicate[] preds = filters.stream().map(FilterCommand::toRowPredicate).toArray(RowPredicate[]::new);
+                yield (chunk, rowIdx) -> {
+                    for (RowPredicate p : preds) {
+                        if (!p.test(chunk, rowIdx)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                };
+            }
         };
     }
 

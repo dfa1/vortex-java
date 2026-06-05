@@ -453,6 +453,14 @@ public final class ScanIterator implements AutoCloseable {
 				}
 				yield false;
 			}
+			case RowFilter.Gt(var col, var val) -> {
+				Layout flat = chunk.layoutFor(col);
+				if (flat == null) {
+					yield false;
+				}
+				Object max = readFlatStats(flat).max();
+				yield max != null && compareValues(max, val) <= 0;
+			}
 			case RowFilter.Gte(var col, var val) -> {
 				Layout flat = chunk.layoutFor(col);
 				if (flat == null) {
@@ -460,6 +468,14 @@ public final class ScanIterator implements AutoCloseable {
 				}
 				Object max = readFlatStats(flat).max();
 				yield max != null && compareValues(max, val) < 0;
+			}
+			case RowFilter.Lt(var col, var val) -> {
+				Layout flat = chunk.layoutFor(col);
+				if (flat == null) {
+					yield false;
+				}
+				Object min = readFlatStats(flat).min();
+				yield min != null && compareValues(min, val) >= 0;
 			}
 			case RowFilter.Lte(var col, var val) -> {
 				Layout flat = chunk.layoutFor(col);
@@ -484,6 +500,25 @@ public final class ScanIterator implements AutoCloseable {
 					@SuppressWarnings("unchecked")
 					Comparable<Object> cv = (Comparable<Object>) val;
 					yield cv.compareTo(min) < 0 || cv.compareTo(max) > 0;
+				} catch (ClassCastException e) {
+					yield false;
+				}
+			}
+			case RowFilter.Neq(var col, var val) -> {
+				Layout flat = chunk.layoutFor(col);
+				if (flat == null) {
+					yield false;
+				}
+				ArrayStats stats = readFlatStats(flat);
+				Object min = stats.min();
+				Object max = stats.max();
+				if (min == null || max == null) {
+					yield false;
+				}
+				try {
+					@SuppressWarnings("unchecked")
+					Comparable<Object> cv = (Comparable<Object>) val;
+					yield cv.compareTo(min) == 0 && cv.compareTo(max) == 0;
 				} catch (ClassCastException e) {
 					yield false;
 				}
