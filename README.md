@@ -115,6 +115,8 @@ java -jar cli/target/vortex.jar <subcommand> [args]
 
 ## Documentation
 
+Docs follow the [Diátaxis](https://diataxis.fr/) framework (tutorial, how-to, reference, explanation).
+
 | Document | Contents |
 |---|---|
 | [docs/tutorial.md](docs/tutorial.md) | Step-by-step: write and read your first Vortex file |

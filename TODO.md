@@ -53,7 +53,6 @@
 
 ## Documentation
 
-- [ ] Use Diátaxis (https://diataxis.fr/) to structure docs: tutorials, how-to guides, reference, explanation
 - [ ] Format specification: byte-exact diagrams for file layout and each encoding, with annotated examples (Arrow spec style)
 - [ ] how to use the library and the cli
 
