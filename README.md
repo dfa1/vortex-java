@@ -6,51 +6,21 @@
 > **Alpha** — not production-ready. APIs will change without notice.
 
 Pure-Java reader/writer for the [Vortex](https://github.com/spiraldb/vortex) columnar file format.
+100% Java, no JNI, no `sun.misc.Unsafe`. Uses the FFM API (`MemorySegment`/`Arena`, Java 25+)
+for zero-copy memory-mapped reads.
 
-From the [Vortex blog](https://vortex.dev/blog/btrblocks-compressor):
-> We've written about individual compression codecs in Vortex before: FastLanes for bit-packing integers, FSST for strings, and ALP for floating point. But we've never explained how Vortex decides which codec to use for a given column, or how it layers multiple codecs on top of each other.
+| Project | Language | Notes |
+|---|---|---|
+| [spiraldb/vortex](https://github.com/spiraldb/vortex) | Rust | Reference implementation + JNI bindings |
+| [LaurieRhodes/vortex-go](https://github.com/LaurieRhodes/vortex-go) | Go | Pure-language port |
+| **dfa1/vortex-java** | **Java** | **This library** |
 
-> On TPC-H at scale factor 10, Vortex files are 38% smaller and decompress 10–25x faster than Parquet with ZSTD, without using any general-purpose compression. The difference comes down to how the codecs are selected and composed, a framework inspired by the BtrBlocks paper from TU Munich.
+## Who is this for
 
-🎓 Maximilian Kuschewski, David Sauerwein, Adnan Alhomssi, and Viktor Leis. 2023. BtrBlocks: Efficient Columnar Compression for Data Lakes. Proc. ACM Manag. Data 1, 2, Article 118 (June 2023). > https://doi.org/10.1145/3589263
-
-> The core idea: don't pick one codec. Try them all, and let the data decide.
-
-## Motivation
-
-This is a third-party implementation with the idea that files written by any implementation
-are readable by all others — no vendor lock-in, no format translation at the boundary.
-
-| Project                                                     | Language | Notes                                                               |
-|-------------------------------------------------------------|----------|---------------------------------------------------------------------|
-| [spiraldb/vortex](https://github.com/spiraldb/vortex)       | Rust     | Reference implementation + JNI bindings                             |
-| [LaurieRhodes/vortex-go](https://github.com/LaurieRhodes/vortex-go) | Go       | Pure-language port
-
-The official Vortex ecosystem provides JVM bindings via JNI (bundled native `.so`/`.dylib`).
-JNI bindings are fast but add deployment friction: platform-specific artifacts, native build
-toolchains, and crash-domain coupling between the JVM and native code. The JAR vortex-jni 0.72 is
-**258MB**.
-
-This library takes a different approach — 100% Java, no JNI, no `sun.misc.Unsafe`.
-It uses the Java FFM API (`MemorySegment` / `Arena`, Java 25+) for zero-copy memory-mapped reads,
-making it easier to:
-
-- embed in any JVM project without native-library management
-- build and test on any platform with a standard JDK
-- debug and profile with standard JVM tooling
-
-The JARs in this library are tiny, less than **1MB** in total.
-
-## Who is this for?
-
-- JVM analytics engines
-- JVM-based OLAP systems
-- Anyone who wants mmap‑backed, zero‑copy columnar reads without first decompressing
-  the whole file (or row chunk)
+- JVM analytics engines and OLAP systems
+- Anyone who wants mmap-backed, zero-copy columnar reads without native-library management
 
 ## Quickstart
-
-Add the library to your build (example, Maven):
 
 ```xml
 <!-- TODO: replace with released coordinates once published to Maven Central -->
@@ -64,22 +34,14 @@ Add the library to your build (example, Maven):
 ### Read a Vortex file
 
 ```java
-import io.github.dfa1.vortex.io.VortexReader;
-import io.github.dfa1.vortex.scan.ScanOptions;
-import io.github.dfa1.vortex.core.array.LongArray;
-
 try (VortexReader vf = VortexReader.open(Path.of("data/example.vortex"));
      var iter = vf.scan(ScanOptions.all())) {
     while (iter.hasNext()) {
         var chunk = iter.next();
-        // access a typed column
         LongArray ts = chunk.column("timestamp");
         for (long i = 0; i < ts.length(); i++) {
             System.out.println(ts.getLong(i));
         }
-        // or get all columns as a map
-        chunk.columns().forEach((name, arr) ->
-            System.out.printf("%s: %d rows%n", name, arr.length()));
     }
 }
 ```
@@ -90,295 +52,102 @@ try (VortexReader vf = VortexReader.open(Path.of("data/example.vortex"));
 ### Write a Vortex file
 
 ```java
-import io.github.dfa1.vortex.writer.VortexWriter;
-import io.github.dfa1.vortex.writer.WriteOptions;
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
-
 var schema = new DType.Struct(
     List.of("timestamp", "value"),
     List.of(new DType.Primitive(PType.I64, false),
             new DType.Primitive(PType.F64, false)),
     false);
 
-long[]   timestamps = {1_700_000_000L, 1_700_000_001L, 1_700_000_002L};
-double[] values     = {1.23, 4.56, 7.89};
-
 try (var ch = FileChannel.open(Path.of("out.vortex"), CREATE, WRITE);
      var writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
-    writer.writeChunk(Map.of("timestamp", timestamps, "value", values));
+    writer.writeChunk(Map.of(
+        "timestamp", new long[]  {1_700_000_000L, 1_700_000_001L},
+        "value",     new double[] {1.23, 4.56}
+    ));
+}
+```
+
+### Scan with options
+
+```java
+// project columns + limit rows
+ScanOptions opts = ScanOptions.all()
+    .withColumns("timestamp", "value")
+    .withLimit(1_000);
+
+// add a row filter
+ScanOptions filtered = ScanOptions.all()
+    .withFilter(new RowFilter.Gte("price", 100))
+    .withLimit(50);
+```
+
+### Handle unknown encodings
+
+Files containing unrecognised encoding IDs throw `VortexException` by default.
+Opt in to passthrough mode to read such files without failing:
+
+```java
+EncodingRegistry registry = EncodingRegistry.loadAll().allowUnknown();
+try (VortexReader vf = VortexReader.open(path, registry)) {
+    // columns with unknown encodings are returned as UnknownArray
 }
 ```
 
 ## CLI
 
-The `cli` module ships a fat jar with subcommands for inspecting, converting, and querying Vortex files without writing any code.
-
-**Build:**
+The `cli` module ships a fat jar with subcommands for inspecting and querying Vortex files.
 
 ```bash
 ./mvnw package -pl cli -am -DskipTests
-# produces cli/target/vortex.jar
-```
-
-**Run:**
-
-```bash
 java -jar cli/target/vortex.jar <subcommand> [args]
 ```
-
-### Subcommands
 
 | Subcommand | Syntax | Description |
 |---|---|---|
 | `inspect` | `inspect <file.vortex>` | Print file structure (layout tree, encodings, row counts) |
-| `schema` | `schema <file.vortex>` | Print column types in machine-readable form |
-| `count` | `count <file.vortex>` | Print total row count |
-| `stats` | `stats <file.vortex>` | Print per-column min/max statistics |
-| `export` | `export <file.vortex>` | Write all columns to CSV on stdout |
-| `select` | `select <file.vortex> <col> [col2 ...]` | Project specific columns to CSV on stdout |
-| `filter` | `filter <file.vortex> <expr>` | Filter rows to CSV (e.g. `"price >= 100"`) |
-| `import` | `import <file.csv\|file.parquet> [out.vortex]` | Convert CSV or Parquet to Vortex (output defaults to `<input>.vortex`) |
+| `schema`  | `schema <file.vortex>`  | Print column types |
+| `count`   | `count <file.vortex>`   | Print total row count |
+| `stats`   | `stats <file.vortex>`   | Print per-column min/max statistics |
+| `export`  | `export <file.vortex>`  | Write all columns to CSV on stdout |
+| `select`  | `select <file.vortex> <col> [col2 ...]` | Project specific columns to CSV |
+| `filter`  | `filter <file.vortex> <expr>` | Filter rows to CSV (e.g. `"price >= 100"`) |
+| `import`  | `import <file.csv\|file.parquet> [out.vortex]` | Convert CSV or Parquet to Vortex |
 
-Filter operators: `>`, `>=`, `<`, `<=`, `=`, `==`. Values are parsed as integer, double, boolean, or string.
+## Documentation
 
-### Exit codes
-
-| Code | Meaning |
+| Document | Contents |
 |---|---|
-| 0 | Success |
-| 1 | Usage error |
-| 2 | File not found |
-| 3 | Decode / I/O error |
+| [COMPATIBILITY.md](COMPATIBILITY.md) | Encoding support table, S3 fixture status |
+| [docs/explanation.md](docs/explanation.md) | Design rationale, memory model, testing strategy, benchmarks |
 
-### Examples
+## Development
 
-```bash
-# inspect encoding layout
-java -jar cli/target/vortex.jar inspect data/ohlc.vortex
+**Requirements:** Java 25+
 
-# print schema
-java -jar cli/target/vortex.jar schema data/ohlc.vortex
-# → struct<symbol: utf8, open: F64, close: F64, volume: I64>
-
-# row count
-java -jar cli/target/vortex.jar count data/ohlc.vortex
-# → 10000000
-
-# per-column stats
-java -jar cli/target/vortex.jar stats data/ohlc.vortex
-
-# export to CSV
-java -jar cli/target/vortex.jar export data/ohlc.vortex > out.csv
-
-# project two columns
-java -jar cli/target/vortex.jar select data/ohlc.vortex symbol close > prices.csv
-
-# filter rows
-java -jar cli/target/vortex.jar filter data/ohlc.vortex "volume >= 1000000" > large_trades.csv
-
-# convert CSV to Vortex
-java -jar cli/target/vortex.jar import data/trades.csv
-# writes data/trades.vortex, prints size savings
-```
-
-
-# Development
-
-## Requirements
-
-- Java 25+
-
-`flatc` and `protoc` are **not** required for normal builds — generated sources are committed.
-To regenerate after editing `.fbs`/`.proto` schemas: `brew install flatbuffers protobuf && ./mvnw generate-sources -pl core -P regenerate-sources`
-(any `flatc` version works — the profile strips the version guard automatically).
-
-Java 25 is the minimum because the FFM API (`MemorySegment`, `Arena`) was finalized as a
-standard API in JDK 22 (JEP 454) — it was preview/incubator in JDK 19–21 and required
-`--enable-preview` flags. Java 25 is the first LTS release to ship FFM as stable, so
-requiring it means no preview flags, no upgrade risk, and a supported LTS for users.
-
-## Build
+Generated sources (`fbs`/`proto` → Java) are committed. Normal builds need no external tools.
 
 ```bash
-./mvnw verify
-```
+./mvnw verify          # build + tests
+./mvnw verify -DskipTests
 
-## Running benchmarks
+# run integration tests
+./mvnw verify -pl integration -am
 
-Use the `./bench` script (always pass `ClassName.methodName` as the filter):
-
-```bash
-# Run all benchmarks
-./bench
-
-# Run a specific benchmark class or method
-./bench RustVsJavaReadBenchmark
+# benchmarks (always pass ClassName.methodName filter)
 ./bench RustVsJavaReadBenchmark.javaReadVolume
-./bench RustVsJavaWriteBenchmark.javaWrite
 ```
 
-## Design principles
+To regenerate schemas after editing `.fbs`/`.proto`:
 
-- Zero-copy everywhere
-- No JNI
-- No Unsafe -- [FFM vs Unsafe](https://inside.java/2025/06/12/ffm-vs-unsafe/) — Maurizio Cimadamore's deep-dive on why FFM (`MemorySegment`/`Arena`) supersedes `sun.misc.Unsafe`: safety, performance, and the JVM's path forward
-- Align with vortex-rust and Vortex-go semantics
-- Make the JIT happy (constant layouts, predictable strides, no virtual dispatch in hot loops)
-- Prepare for the Vector API / Valhalla
-- Rigorous testing: unit tests + property-based testing + cross-language integration tests
-- Target Vector API once finalized (tracking [JEP 469](https://openjdk.org/jeps/469) and successors)
-
-### Testing strategy
-
-Unit tests verify internal correctness (encoding round-trips, edge cases), but the format has no
-formal specification — the Rust implementation is the ground truth. Unit tests alone miss
-cross-language wire-format bugs: Java can round-trip a value internally while writing bytes that
-another implementation cannot decode.
-
-The `integration` module addresses this by using the Rust JNI reader as a **test oracle**:
-Java writes a file, the Rust reader decodes it, and the values are compared exactly.
-Seeded random parameterized tests generate large, diverse inputs automatically,
-covering edge cases no hand-written test would anticipate.
-
-This combination caught two real bugs in ALP floating-point encoding:
-- Java selected exponents outside the range Rust's decoder accepts (silent data corruption)
-- Java's encode round-trip check used a different floating-point associativity than Rust's decode
-  (`encoded * (F10[f] * IF10[e])` vs `(encoded * F10[f]) * IF10[e]`), passing values that Rust
-  decoded differently
-
-Both bugs were invisible to pure-Java tests and would have shipped undetected without the
-cross-language oracle.
-
-## Benchmarks
-
-JMH throughput (ops/s = full-file scans per second). Higher is better.
-
-**Environment:** Apple M5, OpenJDK 25, 3 warmup × 3 s, 5 measurement × 5 s, fork 1.
-
-### OHLC read — 10 M rows, 58.9 MB (Rust-written file, single-column projection)
-
-| Benchmark      | Java (ops/s)     | JNI/Rust (ops/s) | Java speedup |
-|----------------|------------------|------------------|--------------|
-| close (F64/ALP)| 76.7 ± 0.3       | 50.4 ± 2.8       | **1.5×**     |
-| volume (I64)   | 127.9 ± 2.3      | 52.9 ± 0.6       | **2.4×**     |
-| symbol (varbin)| 110.4 ± 0.4      | 9.6 ± 0.9        | **11.5×**    |
-
-### OHLC write — 10 M rows
-
-| Benchmark | Java (ops/s) | JNI/Rust (ops/s) | Java speedup |
-|-----------|--------------|------------------|--------------|
-| write     | 4.4 ± 1.1    | 0.7 ± 0.1        | **6.4×**     |
-
-* the Java part is faster but also produces bigger files (there much more work there)
-
-### Big-file scan — 100 M rows × 4 I64 columns, ~3 GB (Rust-written file, all columns)
-
-| Benchmark | Java (ops/s) | JNI/Rust (ops/s) | Java speedup |
-|-----------|--------------|------------------|--------------|
-| scan      | 20.4 ± 0.9   | 5.7 ± 0.6        | **3.6×**     |
-
-### Parquet vs Vortex read — NYC Yellow Taxi 2024-01, 3M rows, 3 columns
-
-Source: 47.6 MB Parquet → 12.0 MB Vortex (4× compression). Both sides scalar decode
-(Hardwood disables SIMD on JDK 25; Vortex Java uses FFM scalar reads throughout).
-
-| Benchmark | ops/s | ms/scan | vs Parquet |
-|---|---|---|---|
-| `parquetRead` — Hardwood, 1 col (`trip_distance`) | 66.96 ± 1.99 | 14.9 ms | baseline |
-| `vortexRead` — 1 col (`trip_distance`) | 201.61 ± 1.63 | 4.96 ms | **3.0×** |
-| `parquetReadMultiColumn` — 2 cols (`fare_amount`, `PULocationID`) | 53.07 ± 1.25 | 18.8 ms | baseline |
-| `vortexReadMultiColumn` — 2 cols (`fare_amount`, `PULocationID`) | 140.31 ± 5.42 | 7.13 ms | **2.6×** |
-
-#### Why Vortex is faster than Parquet here
-
-Three compounding factors:
-
-**1. Smaller file = less I/O bandwidth**
-ALP encodes taxi floats very compactly (fare amounts cluster around small integers, trip
-distances are short floats). Parquet uses PLAIN or BYTE_STREAM_SPLIT for doubles — 8 raw
-bytes per value. 47.6 MB → 12.0 MB means 4× less memory to read even when the file is
-hot in the OS page cache.
-
-**2. Batch columnar API vs row-by-row cursor**
-Hardwood's `RowReader` requires `rows.next()` + `rows.getDouble("trip_distance")` per row
-— 2 virtual calls × 3 M rows = 6 M calls, plus a string-keyed column lookup on every
-access. `DoubleArray.fold()` is a tight loop over a flat `MemorySegment`; the JIT sees a
-scalar reduction over contiguous memory with no dispatch overhead.
-
-**3. mmap zero-copy**
-Vortex reads directly from the mmap'd `MemorySegment` — the file bytes _are_ the decode
-input, no intermediate copies. Hardwood reads into internal page buffers and then
-materialises values into a row cursor (one extra copy per page).
-
-Parquet also pays per-page overhead absent in Vortex: RLE-encoded definition/repetition
-levels for every page (even for non-null columns), page header parsing, and optional
-dictionary decode. Vortex's layout is a flat array of encoded values with no per-row
-framing.
-
+```bash
+brew install flatbuffers protobuf
+./mvnw generate-sources -pl core -P regenerate-sources
 ```
-Hardwood parquetRead (per 3 M rows)       Vortex vortexRead (per 3 M rows)
-────────────────────────────────────      ──────────────────────────────────
-47.6 MB read                              12.0 MB read  (4× less bandwidth)
-+ page header parse × N pages             + ALP decode (branch-free ×/+)
-+ definition-level RLE decode × 3 M rows  + fold() tight loop, no dispatch
-+ getDouble("col") × 3 M virtual calls
-```
-
-### Why fewer layers = faster
-
-This is my hypothesis:
-```
-  vortex-jni                              vortex-java
-  ──────────────────────────────          ──────────────────────────
-  ┌──────────────────────────┐            ┌──────────────────────┐
-  │  Java App                │            │  Java App            │
-  │  (BigIntVector.get(i))   │            │  (buffer.getAtIndex) │
-  └────────────┬─────────────┘            └──────────┬───────────┘
-               │ Arrow Java API                      │ FFM API
-  ┌────────────▼─────────────┐                       │ (MemorySegment,
-  │  Apache Arrow (Java)     │                       │  zero-copy slice)
-  │  VectorSchemaRoot,       │                       │
-  │  BigIntVector, …         │                       │
-  └────────────┬─────────────┘            ┌──────────▼───────────┐
-               │ Arrow C Data Interface   │  OS mmap region      │
-               │ (ArrowArray/ArrowSchema) │  (file on disk)      │
-               │ + JNI boundary crossing  └──────────────────────┘
-  ┌────────────▼─────────────┐
-  │  Native lib              │
-  │  (.so / .dylib)          │
-  │  Rust decode             │
-  └────────────┬─────────────┘
-               │ mmap / read
-  ┌────────────▼─────────────┐
-  │  OS mmap region          │
-  │  (file on disk)          │
-  └──────────────────────────┘
-
-  4 layers, 1 JNI crossing,              2 layers, 0 boundary crossings,
-  Arrow C Data Interface overhead         no intermediate format
-```
-
-The JNI path pays three costs per batch: (1) a JNI boundary crossing to call into native
-code, (2) the Arrow C Data Interface handshake to pass decoded buffers back to the JVM as
-`ArrowArray`/`ArrowSchema` structs, and (3) materialising the result into Apache Arrow
-`VectorSchemaRoot` objects before the application can read a single value. The JIT cannot
-inline or optimise across the JNI boundary.
-
-`vortex-java` eliminates all of that. The FFM API (`MemorySegment`) gives Java code a
-typed, bounds-checked view directly into the OS mmap region — the same physical memory the
-file occupies. Decoding reads bytes directly from that view with no copies, no intermediate
-Arrow format, and no boundary crossings. The JIT sees the full decode path as ordinary Java
-bytecode.
 
 ## Contributing
 
-Forks and contributions are welcome! Please feel free to fork the repository and open a pull request.
-When submitting a PR, include tests and update documentation where applicable
-(follow guidelines in CLAUDE.md).
+Forks and contributions welcome. Include tests and update documentation where applicable
+(see CLAUDE.md for guidelines).
 
-### AI-assisted development
-
-This project uses [Claude Code](https://claude.ai/code) heavily for implementation
-work — generating mapping, test generation and documentation.
-**Architecture, API design, and all decisions are human-driven**.
+This project uses [Claude Code](https://claude.ai/code) for implementation work.
+Architecture, API design, and all decisions are human-driven.
