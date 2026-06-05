@@ -117,7 +117,7 @@ java -jar cli/target/vortex.jar <subcommand> [args]
 
 | Document | Contents |
 |---|---|
-| [COMPATIBILITY.md](COMPATIBILITY.md) | Encoding support table, S3 fixture status |
+| [docs/compatibility.md](docs/compatibility.md) | Encoding support table, S3 fixture status |
 | [docs/explanation.md](docs/explanation.md) | Design rationale, memory model, testing strategy, benchmarks |
 
 ## Development
