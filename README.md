@@ -118,6 +118,7 @@ java -jar cli/target/vortex.jar <subcommand> [args]
 | Document | Contents |
 |---|---|
 | [docs/tutorial.md](docs/tutorial.md) | Step-by-step: write and read your first Vortex file |
+| [docs/how-to.md](docs/how-to.md) | Recipes: count rows, convert Parquet, filter, project, custom encodings |
 | [docs/compatibility.md](docs/compatibility.md) | Encoding support table, S3 fixture status |
 | [docs/explanation.md](docs/explanation.md) | Design rationale, memory model, testing strategy, benchmarks |
 
