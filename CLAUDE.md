@@ -63,6 +63,30 @@ Any `flatc` version works — the profile strips the version guard automatically
 ./bench RustVsJavaReadBenchmark.javaReadVolume
 ```
 
+### Javadoc
+
+Every public method must have complete Javadoc. The build enforces this via
+`failOnError=true` + `failOnWarnings=true` in the `maven-javadoc-plugin`.
+
+Rules:
+- Every public method needs a main description, `@param` for each parameter, and `@return` (unless `void`).
+- Every public record needs `@param` entries on the class-level doc (one per component).
+- Cross-references use `[ClassName#method(ParamType)]` — verify the target exists before writing it. Wrong references are **errors**, not warnings.
+- `@see`-only Javadoc counts as "no main description" — always add a prose sentence.
+
+**Check:** `./mvnw javadoc:javadoc -pl core` — must produce zero output.
+
+### Releasing
+
+```bash
+./mvnw --batch-mode release:clean release:prepare \
+    -DreleaseVersion=<version> \
+    -DdevelopmentVersion=<next>-SNAPSHOT
+git push && git push --tags
+```
+
+GitHub Actions picks up the tag and deploys to Maven Central.
+
 ### File format
 
 8-byte trailer at EOF: `version(u16 LE) | postscriptLen(u16 LE) | magic(VTXF)`. The postscript is a FlatBuffer blob
