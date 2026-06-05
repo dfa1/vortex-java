@@ -12,7 +12,7 @@ public record ImportOptions(
         WriteOptions writeOptions
 ) {
     public static ImportOptions defaults() {
-        return new ImportOptions(65_536, List.of(), null, WriteOptions.cascading(3));
+        return new ImportOptions(131_072, List.of(), null, WriteOptions.cascading(3));
     }
 
     /// Restrict import to specific columns. Empty list = all columns.
