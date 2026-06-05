@@ -6,7 +6,6 @@
 - [ ] Create website
 - [ ] Publish benchmarks — run `./bench` locally, push JMH JSON to gh-pages via `bench-publish` script, view at `https://jmh.morethan.io/?source=https://dfa1.github.io/vortex-java/benchmark-result.json`; dated files for history comparison via `?source=url1,url2`; then drop `.github/workflows/benchmark.yml`
 - [ ] Build something like hardwood.dev but for vortex files
-- [ ] Publish to Maven Central (OSSRH/SONATYPE setup, GPG signing, coordinates, CI release pipeline)
 
 ## Compression ratio gaps vs Rust (NYC taxi 2024-01: Java 43.1 MB, Rust 42.8 MB, Parquet 47.6 MB)
 
@@ -62,7 +61,6 @@ Remaining 0.3 MB gap — biggest to smallest:
   boundaries. Keep `integration`, `performance`, and `cli` as separate modules. Package structure
   (`encoding`, `io`, `writer`) already enforces internal boundaries without Maven.
 - [ ] prefix all modules with "vortex-"
-- [ ] deploy to maven central
 - [ ] switch back to module-path, but keep in mind these 2 blockers
 
 ## Documentation
