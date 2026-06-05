@@ -7,6 +7,8 @@ import io.github.dfa1.vortex.encoding.BitpackedEncoding;
 import io.github.dfa1.vortex.encoding.BoolEncoding;
 import io.github.dfa1.vortex.encoding.CascadingCompressor;
 import io.github.dfa1.vortex.encoding.CompressorContext;
+import io.github.dfa1.vortex.encoding.DateTimePartsData;
+import io.github.dfa1.vortex.encoding.DateTimePartsEncoding;
 import io.github.dfa1.vortex.encoding.DictEncoding;
 import io.github.dfa1.vortex.encoding.Encoding;
 import io.github.dfa1.vortex.encoding.FrameOfReferenceEncoding;
@@ -18,6 +20,7 @@ import io.github.dfa1.vortex.encoding.EncodeResult;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PrimitiveEncoding;
 import io.github.dfa1.vortex.fbs.ArraySpec;
+import io.github.dfa1.vortex.fbs.Extension;
 import io.github.dfa1.vortex.fbs.Footer;
 import io.github.dfa1.vortex.fbs.Layout;
 import io.github.dfa1.vortex.fbs.LayoutSpec;
@@ -65,6 +68,7 @@ public final class VortexWriter implements Closeable {
 			new AlpEncoding(), new PrimitiveEncoding(), new BoolEncoding(), new DictEncoding(), new VarBinEncoding());
 
 	private static final List<Encoding> CASCADE_CODECS = List.of(
+			new DateTimePartsEncoding(),
 			new AlpEncoding(), new FrameOfReferenceEncoding(), new DictEncoding(),
 			new BitpackedEncoding(), new VarBinEncoding(), new PrimitiveEncoding(), new BoolEncoding());
 
@@ -113,6 +117,7 @@ public final class VortexWriter implements Closeable {
 			case String[] a -> a.length;
 			case ListData d -> d.outerLen();
 			case ListViewData d -> d.outerLen();
+			case DateTimePartsData d -> d.timestamps().length;
 			default -> throw new UnsupportedOperationException(
 					"unsupported data type: " + data.getClass());
 		};
@@ -165,6 +170,18 @@ public final class VortexWriter implements Closeable {
 				int elemTypeOff = serializeDType(fbb, l.elementType());
 				int inner = io.github.dfa1.vortex.fbs.List.createList(fbb, elemTypeOff, l.nullable());
 				yield io.github.dfa1.vortex.fbs.DType.createDType(fbb, Type.List, inner);
+			}
+			case DType.Extension e -> {
+				int idOff = fbb.createString(e.extensionId());
+				int storageDtypeOff = serializeDType(fbb, e.storageDType());
+				int metaOff = 0;
+				if (e.metadata() != null && e.metadata().remaining() > 0) {
+					byte[] metaBytes = new byte[e.metadata().remaining()];
+					e.metadata().duplicate().get(metaBytes);
+					metaOff = Extension.createMetadataVector(fbb, metaBytes);
+				}
+				int inner = Extension.createExtension(fbb, idOff, storageDtypeOff, metaOff);
+				yield io.github.dfa1.vortex.fbs.DType.createDType(fbb, Type.Extension, inner);
 			}
 			default -> throw new UnsupportedOperationException("unsupported DType: " + dtype);
 		};

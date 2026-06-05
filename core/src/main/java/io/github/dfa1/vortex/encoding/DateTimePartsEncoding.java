@@ -49,6 +49,11 @@ public final class DateTimePartsEncoding implements Encoding {
     }
 
     @Override
+    public CascadeStep encodeCascade(DType dtype, Object data, CompressorContext ctx) {
+        return Encoder.encodeCascade((DType.Extension) dtype, (DateTimePartsData) data);
+    }
+
+    @Override
     public Array decode(DecodeContext ctx) {
         return Decoder.decode(ctx);
     }
@@ -124,6 +129,53 @@ public final class DateTimePartsEncoding implements Encoding {
                     new EncodeNode[]{daysNode, secondsNode, subsecondsNode},
                     new int[]{});
             return new EncodeResult(root, List.copyOf(allBuffers), null, null);
+        }
+
+        static CascadeStep encodeCascade(DType.Extension dtype, DateTimePartsData data) {
+            ByteBuffer extMeta = dtype.metadata();
+            byte[] extBytes = new byte[extMeta.remaining()];
+            extMeta.duplicate().get(extBytes);
+            TimeUnit unit = TimeUnit.fromTag(extBytes[0]);
+
+            long divisor = unit.divisor();
+            long ticksPerDay = SECONDS_PER_DAY * divisor;
+            int n = data.timestamps().length;
+
+            long[] days = new long[n];
+            long[] seconds = new long[n];
+            long[] subseconds = new long[n];
+
+            for (int i = 0; i < n; i++) {
+                long ts = data.timestamps()[i];
+                long d = ts / ticksPerDay;
+                long rem = ts % ticksPerDay;
+                if (rem < 0) {
+                    rem += ticksPerDay;
+                    d--;
+                }
+                days[i] = d;
+                seconds[i] = rem / divisor;
+                subseconds[i] = rem % divisor;
+            }
+
+            byte[] metaBytes = EncodingProtos.DateTimePartsMetadata.newBuilder()
+                    .setDaysPtype(I64_PROTO).setSecondsPtype(I64_PROTO).setSubsecondsPtype(I64_PROTO)
+                    .build().toByteArray();
+
+            // 3 null slots filled by the cascading compressor (days, seconds, subseconds)
+            EncodeNode partialRoot = new EncodeNode(
+                    EncodingId.VORTEX_DATETIMEPARTS,
+                    ByteBuffer.wrap(metaBytes),
+                    new EncodeNode[3],
+                    new int[0]);
+
+            DType daysDtype = data.nullable() ? I64_NULLABLE : I64;
+            List<ChildSlot> children = List.of(
+                    new ChildSlot(daysDtype, days, 0),
+                    new ChildSlot(I64, seconds, 1),
+                    new ChildSlot(I64, subseconds, 2));
+
+            return new CascadeStep(partialRoot, List.of(), children, null, null);
         }
     }
 

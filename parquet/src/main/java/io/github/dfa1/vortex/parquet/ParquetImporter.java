@@ -10,9 +10,13 @@ import dev.hardwood.schema.ColumnSchema;
 import dev.hardwood.schema.FileSchema;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.encoding.DateTimePartsData;
+import io.github.dfa1.vortex.encoding.TimeUnit;
 import io.github.dfa1.vortex.writer.VortexWriter;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -94,7 +98,7 @@ public final class ParquetImporter {
                     rowsDone++;
 
                     if (chunkPos == chunkSize) {
-                        writer.writeChunk(buildChunk(columns, buffers, chunkPos));
+                        writer.writeChunk(buildChunk(columns, types, buffers, chunkPos));
                         buffers = allocateBuffers(columns, chunkSize);
                         chunkPos = 0;
                         if (options.progressListener() != null) {
@@ -104,7 +108,7 @@ public final class ParquetImporter {
                 }
 
                 if (chunkPos > 0) {
-                    writer.writeChunk(buildChunk(columns, buffers, chunkPos));
+                    writer.writeChunk(buildChunk(columns, types, buffers, chunkPos));
                     if (options.progressListener() != null) {
                         options.progressListener().onProgress(rowsDone, totalRows);
                     }
@@ -143,7 +147,24 @@ public final class ParquetImporter {
         if (logical instanceof LogicalType.IntType it) {
             return new DType.Primitive(it.isSigned() ? PType.I64 : PType.U64, nullable);
         }
+        if (logical instanceof LogicalType.TimestampType ts) {
+            return timestampExtension(ts.unit(), nullable);
+        }
         return new DType.Primitive(PType.I64, nullable);
+    }
+
+    private static DType.Extension timestampExtension(LogicalType.TimeUnit parquetUnit, boolean nullable) {
+        TimeUnit unit = switch (parquetUnit) {
+            case MILLIS -> TimeUnit.Milliseconds;
+            case MICROS -> TimeUnit.Microseconds;
+            case NANOS -> TimeUnit.Nanoseconds;
+        };
+        // Extension metadata: byte[0]=unit tag, bytes[1-2]=tz_len u16 LE (0 = no tz)
+        ByteBuffer meta = ByteBuffer.allocate(3).order(ByteOrder.LITTLE_ENDIAN);
+        meta.put((byte) unit.ordinal());
+        meta.putShort((short) 0);
+        meta.flip();
+        return new DType.Extension("vortex.timestamp", new DType.Primitive(PType.I64, nullable), meta, nullable);
     }
 
     private static DType mapByteArray(LogicalType logical, boolean nullable, String colName) {
@@ -181,7 +202,7 @@ public final class ParquetImporter {
                 }
                 yield new int[chunkSize];
             }
-            case INT64 -> new long[chunkSize];
+            case INT64 -> new long[chunkSize]; // covers plain I64 and timestamps
             default -> throw new UnsupportedOperationException("unsupported type: " + col.type());
         };
     }
@@ -206,10 +227,16 @@ public final class ParquetImporter {
         }
     }
 
-    private static Map<String, Object> buildChunk(List<ColumnSchema> columns, Object[] buffers, int size) {
+    private static Map<String, Object> buildChunk(List<ColumnSchema> columns, List<DType> types,
+                                                   Object[] buffers, int size) {
         Map<String, Object> chunk = new LinkedHashMap<>();
         for (int c = 0; c < columns.size(); c++) {
-            chunk.put(columns.get(c).name(), trimBuffer(buffers[c], size));
+            Object buf = trimBuffer(buffers[c], size);
+            if (types.get(c) instanceof DType.Extension) {
+                boolean nullable = types.get(c).nullable();
+                buf = new DateTimePartsData((long[]) buf, nullable);
+            }
+            chunk.put(columns.get(c).name(), buf);
         }
         return chunk;
     }

@@ -33,9 +33,11 @@ public final class CascadingCompressor {
 		if (dtype instanceof DType.Struct structDtype) {
 			return encodeStruct(structDtype, (StructData) data, ctx);
 		}
-		// Cascading only targets primitives (integers + floats); other types use first-match.
+		// Non-primitives (extension types): find the accepting encoding and splice
+		// through it so its cascaded children (e.g. datetimeparts → days/seconds/subseconds)
+		// are recursively compressed rather than stored as raw primitives.
 		if (!(dtype instanceof DType.Primitive)) {
-			return findPrimitiveEncoding(dtype).encode(dtype, data);
+			return spliceResult(findPrimitiveEncoding(dtype), dtype, data, ctx);
 		}
 		int n = dataLength(data);
 
