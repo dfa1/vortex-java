@@ -95,43 +95,7 @@
 
 ## Encodings
 
-### All Encodings
-
-| Encoding ID                  | Class                      | Decode   | Encode   | Effort    | Dtypes / Notes |
-|------------------------------|----------------------------|----------|----------|-----------|----------------|
-| `vortex.primitive`           | `PrimitiveEncoding`        | ✅       | ✅       | —         | all `PType` (I8–I64, U8–U64, F32, F64) |
-| `vortex.bool`                | `BoolEncoding`             | ✅       | ✅       | —         | Bool (bit-packed) |
-| `vortex.null`                | `NullEncoding`             | ✅       | ✅       | —         | Null |
-| `vortex.bytebool`            | `ByteBoolEncoding`         | ✅       | ✅       | —         | Bool |
-| `vortex.zigzag`              | `ZigZagEncoding`           | ✅       | ✅       | —         | signed integer PTypes |
-| `vortex.constant`            | `ConstantEncoding`         | ✅       | ✅       | —         | Primitive, Utf8, Binary, Bool, Null, Decimal, Extension |
-| `vortex.ext`                 | `ExtEncoding`              | ✅       | ✅       | —         | Extension |
-| `vortex.runend`              | `RunEndEncoding`           | ✅       | ✅       | —         | Primitive, Utf8/Binary, Bool |
-| `vortex.varbin`              | `VarBinEncoding`           | ✅       | ✅       | —         | Utf8, Binary |
-| `vortex.alp`                 | `AlpEncoding`              | ✅       | ✅       | —         | F64, F32 |
-| `vortex.dict`                | `DictEncoding`             | ✅       | ✅       | —         | Primitive (VarBin via dict.vortex blocked by VarBinView) |
-| `fastlanes.delta`            | `DeltaEncoding`            | ✅       | ✅       | —         | integer PTypes |
-| `fastlanes.bitpacked`        | `BitpackedEncoding`        | ✅       | ✅       | —         | unsigned integer PTypes |
-| `fastlanes.for`              | `FrameOfReferenceEncoding` | ✅       | ✅       | —         | integer PTypes |
-| `vortex.sparse`              | `SparseEncoding`           | ✅       | ✅       | —         | Primitive |
-| `vortex.sequence`            | `SequenceEncoding`         | ✅       | ✅       | —         | Primitive |
-| `vortex.struct`              | `StructEncoding`           | ✅       | ✅       | —         | Struct |
-| `vortex.fsst`                | `FsstEncoding`             | ✅       | ✅       | —         | Utf8, Binary (bigram symbol table) |
-| `vortex.varbinview`          | `VarBinViewEncoding`       | ✅       | ✅       | —         | Utf8, Binary |
-| `vortex.pco`                 | `PcoEncoding`              | ✅       | ❌       | very hard | Classic, IntMult, FloatMult, FloatQuant, Dict; None+Consecutive+Lookback+Conv1 delta; nullable |
-| `vortex.chunked`             | `ChunkedEncoding`          | ✅       | ✅       | medium    | decode: primitive + struct concat; encode via ChunkedData |
-| `fastlanes.rle`              | `RleEncoding`              | ✅       | ✅       | —         | chunk-based RLE; offset always < 1024 |
-| `vortex.alprd`               | `AlpRdEncoding`            | ✅       | ✅       | —         | F64, F32; left ≤16 bits dict-coded (≤8 entries), right bitpacked; exceptions as patches |
-| `vortex.decimal`             | `DecimalEncoding`          | ✅       | ✅       | —         | Decimal |
-| `vortex.decimal_byte_parts`  | `DecimalBytePartsEncoding` | ✅       | ✅       | —         | Decimal byte parts |
-| `vortex.datetimeparts`       | `DateTimePartsEncoding`    | ✅       | ✅       | —         | Timestamp parts |
-| `vortex.list`                | `ListEncoding`             | ✅       | ✅       | —         | two children: elements + offsets (I64); `ListArray`; cascadable offsets via `decodeChildAs` |
-| `vortex.listview`            | `ListViewEncoding`         | ✅       | ✅       | —         | three children: elements + offsets (len N) + sizes (len N); fixture uses U16 for both |
-| `vortex.fixed_size_list`     | `FixedSizeListEncoding`    | ✅       | ✅       | —         | one child: flat elements; no offsets |
-| `vortex.zstd`                | `ZstdEncoding`             | ✅       | ✅       | —         | Primitive, Utf8, Binary (no dict, no nullable); uses airlift/aircompressor |
-| `vortex.masked`              | `MaskedEncoding`           | ✅       | ❌       | —         | child[0]=payload (non-nullable), child[1]=validity Bool (optional); no S3 fixture in v0.72.0 |
-| `vortex.patched`             | —                          | ❌       | ❌       | unknown   | ID registered; no decoder yet; no S3 fixture in v0.72.0; passthrough via `allowUnknown()` |
-| `vortex.variant`             | —                          | ❌       | ❌       | unknown   | ID registered; no decoder yet; no S3 fixture in v0.72.0; passthrough via `allowUnknown()` |
+See [docs/compatibility.md](docs/compatibility.md) for the full encoding support table and S3 fixture status.
 
 ### `vortex.zstd` known limitations
 
@@ -216,50 +180,5 @@ don't start before decode lands.
 
 **Decision**: keep `Encoder` stub until a real write consumer materializes. Reassess
 post-decode + post-`vortex-arrow` bridge.
-
-### S3 Fixture Status (`v0.72.0/arrays/`)
-
-| Fixture                          | Status | Blocker                       |
-|----------------------------------|--------|-------------------------------|
-| `primitives.vortex`              | ✅     |                               |
-| `alp.vortex`                     | ✅     |                               |
-| `bitpacked.vortex`               | ✅     |                               |
-| `booleans.vortex`                | ✅     |                               |
-| `constant.vortex`                | ✅     |                               |
-| `for.vortex`                     | ✅     |                               |
-| `fsst.vortex`                    | ✅     |                               |
-| `runend.vortex`                  | ✅     |                               |
-| `sequence.vortex`                | ✅     |                               |
-| `varbin.vortex`                  | ✅     |                               |
-| `struct_nested.vortex`           | ✅     |                               |
-| `null.vortex`                    | ✅     |                               |
-| `bytebool.vortex`                | ✅     |                               |
-| `zigzag.vortex`                  | ✅     |                               |
-| `datetime.vortex`                | ✅     |                               |
-| `dict.vortex`                    | ✅     |                               |
-| `sparse.vortex`                  | ✅     |                               |
-| `varbinview.vortex`              | ✅     |                               |
-| `chunked.vortex`                 | ✅     |                               |
-| `rle.vortex`                     | ✅     |                               |
-| `alprd.vortex`                   | ✅     |                               |
-| `decimal.vortex`                 | ✅     |                               |
-| `decimal_byte_parts.vortex`      | ✅     |                               |
-| `datetimeparts.vortex`           | ✅     |                               |
-| `list.vortex`                    | ✅     |                               |
-| `listview.vortex`                | ✅     |                               |
-| `fixed_size_list.vortex`         | ✅     |                               |
-| `zstd.vortex`                    | ✅     |                               |
-| `tpch_lineitem.compact.vortex`   | ✅     |                               |
-| `tpch_lineitem.regular.vortex`   | ✅     |                               |
-| `tpch_orders.compact.vortex`     | ✅     |                               |
-| `tpch_orders.regular.vortex`     | ✅     |                               |
-| `pco.vortex`                     | ✅     |                               |
-| `clickbench_hits_5k.compact.vortex` | ✅  |                               |
-| `clickbench_hits_5k.regular.vortex` | ✅  |                               |
-| `masked.vortex`                     | ❓     | no fixture in v0.72.0; `vortex.masked` ID registered |
-| `patched.vortex`                    | ❓     | no fixture in v0.72.0; `vortex.patched` ID registered; passthrough via `allowUnknown()` |
-| `variant.vortex`                    | ❓     | no fixture in v0.72.0; `vortex.variant` ID registered; passthrough via `allowUnknown()` |
-
-**Score: 35/35**
 
 
