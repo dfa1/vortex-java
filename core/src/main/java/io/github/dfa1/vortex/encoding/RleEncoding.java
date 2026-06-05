@@ -59,7 +59,7 @@ public final class RleEncoding implements Encoding {
 
     @Override
     public boolean accepts(DType dtype) {
-        return dtype instanceof DType.Primitive;
+        return dtype instanceof DType.Primitive p && !p.ptype().isFloating();
     }
 
     @Override

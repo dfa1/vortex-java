@@ -35,6 +35,11 @@ public final class FrameOfReferenceEncoding implements Encoding {
 	}
 
 	@Override
+	public boolean accepts(DType dtype) {
+		return dtype instanceof DType.Primitive p && !p.ptype().isFloating();
+	}
+
+	@Override
 	public EncodeResult encode(DType dtype, Object data) {
 		return Encoder.encode(dtype, data);
 	}

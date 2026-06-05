@@ -16,7 +16,7 @@ public record CompressorContext(
 		double sampleFraction
 ) {
 	public static CompressorContext ofDepth(int depth) {
-		return new CompressorContext(depth, Set.of(), 42L, 1024, 0.01);
+		return new CompressorContext(depth, Set.of(), 42L, 4096, 0.05);
 	}
 
 	public CompressorContext withDecrementedDepth() {
