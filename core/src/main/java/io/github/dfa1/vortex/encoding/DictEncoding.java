@@ -103,7 +103,7 @@ public final class DictEncoding implements Encoding {
 
 			DType codesDtype = new DType.Primitive(codePType, false);
 			ChildSlot slot = new ChildSlot(codesDtype, d.codesArr(), 1);
-			return new CascadeStep(partialRoot, List.of(d.valuesBuf()), List.of(slot), null, null);
+			return new CascadeStep(partialRoot, List.of(d.valuesBuf()), List.of(slot), null, null, true);
 		}
 
 		private static EncodeResult encodeUtf8(String[] strings, DType dtype) {
@@ -491,9 +491,37 @@ public final class DictEncoding implements Encoding {
 				MemorySegment codes, MemorySegment values, MemorySegment out,
 				long rowCount, int elemSize
 		) {
-			for (long i = 0, outOff = 0; i < rowCount; i++, outOff += elemSize) {
-				long code = Byte.toUnsignedLong(codes.get(ValueLayout.JAVA_BYTE, i));
-				MemorySegment.copy(values, code * elemSize, out, outOff, elemSize);
+			switch (elemSize) {
+				case 8 -> {
+					for (long i = 0; i < rowCount; i++) {
+						long code = Byte.toUnsignedLong(codes.get(ValueLayout.JAVA_BYTE, i));
+						out.setAtIndex(PTypeIO.LE_LONG, i, values.getAtIndex(PTypeIO.LE_LONG, code));
+					}
+				}
+				case 4 -> {
+					for (long i = 0; i < rowCount; i++) {
+						long code = Byte.toUnsignedLong(codes.get(ValueLayout.JAVA_BYTE, i));
+						out.setAtIndex(PTypeIO.LE_INT, i, values.getAtIndex(PTypeIO.LE_INT, code));
+					}
+				}
+				case 2 -> {
+					for (long i = 0; i < rowCount; i++) {
+						long code = Byte.toUnsignedLong(codes.get(ValueLayout.JAVA_BYTE, i));
+						out.setAtIndex(PTypeIO.LE_SHORT, i, values.getAtIndex(PTypeIO.LE_SHORT, code));
+					}
+				}
+				case 1 -> {
+					for (long i = 0; i < rowCount; i++) {
+						long code = Byte.toUnsignedLong(codes.get(ValueLayout.JAVA_BYTE, i));
+						out.set(ValueLayout.JAVA_BYTE, i, values.get(ValueLayout.JAVA_BYTE, code));
+					}
+				}
+				default -> {
+					for (long i = 0, outOff = 0; i < rowCount; i++, outOff += elemSize) {
+						long code = Byte.toUnsignedLong(codes.get(ValueLayout.JAVA_BYTE, i));
+						MemorySegment.copy(values, code * elemSize, out, outOff, elemSize);
+					}
+				}
 			}
 		}
 
@@ -501,9 +529,37 @@ public final class DictEncoding implements Encoding {
 				MemorySegment codes, MemorySegment values, MemorySegment out,
 				long rowCount, int elemSize
 		) {
-			for (long i = 0, outOff = 0; i < rowCount; i++, outOff += elemSize) {
-				long code = Short.toUnsignedLong(codes.get(PTypeIO.LE_SHORT, i * 2));
-				MemorySegment.copy(values, code * elemSize, out, outOff, elemSize);
+			switch (elemSize) {
+				case 8 -> {
+					for (long i = 0; i < rowCount; i++) {
+						long code = Short.toUnsignedLong(codes.get(PTypeIO.LE_SHORT, i * 2));
+						out.setAtIndex(PTypeIO.LE_LONG, i, values.getAtIndex(PTypeIO.LE_LONG, code));
+					}
+				}
+				case 4 -> {
+					for (long i = 0; i < rowCount; i++) {
+						long code = Short.toUnsignedLong(codes.get(PTypeIO.LE_SHORT, i * 2));
+						out.setAtIndex(PTypeIO.LE_INT, i, values.getAtIndex(PTypeIO.LE_INT, code));
+					}
+				}
+				case 2 -> {
+					for (long i = 0; i < rowCount; i++) {
+						long code = Short.toUnsignedLong(codes.get(PTypeIO.LE_SHORT, i * 2));
+						out.setAtIndex(PTypeIO.LE_SHORT, i, values.getAtIndex(PTypeIO.LE_SHORT, code));
+					}
+				}
+				case 1 -> {
+					for (long i = 0; i < rowCount; i++) {
+						long code = Short.toUnsignedLong(codes.get(PTypeIO.LE_SHORT, i * 2));
+						out.set(ValueLayout.JAVA_BYTE, i, values.get(ValueLayout.JAVA_BYTE, code));
+					}
+				}
+				default -> {
+					for (long i = 0, outOff = 0; i < rowCount; i++, outOff += elemSize) {
+						long code = Short.toUnsignedLong(codes.get(PTypeIO.LE_SHORT, i * 2));
+						MemorySegment.copy(values, code * elemSize, out, outOff, elemSize);
+					}
+				}
 			}
 		}
 
@@ -511,9 +567,37 @@ public final class DictEncoding implements Encoding {
 				MemorySegment codes, MemorySegment values, MemorySegment out,
 				long rowCount, int elemSize
 		) {
-			for (long i = 0, outOff = 0; i < rowCount; i++, outOff += elemSize) {
-				long code = Integer.toUnsignedLong(codes.get(PTypeIO.LE_INT, i * 4));
-				MemorySegment.copy(values, code * elemSize, out, outOff, elemSize);
+			switch (elemSize) {
+				case 8 -> {
+					for (long i = 0; i < rowCount; i++) {
+						long code = Integer.toUnsignedLong(codes.get(PTypeIO.LE_INT, i * 4));
+						out.setAtIndex(PTypeIO.LE_LONG, i, values.getAtIndex(PTypeIO.LE_LONG, code));
+					}
+				}
+				case 4 -> {
+					for (long i = 0; i < rowCount; i++) {
+						long code = Integer.toUnsignedLong(codes.get(PTypeIO.LE_INT, i * 4));
+						out.setAtIndex(PTypeIO.LE_INT, i, values.getAtIndex(PTypeIO.LE_INT, code));
+					}
+				}
+				case 2 -> {
+					for (long i = 0; i < rowCount; i++) {
+						long code = Integer.toUnsignedLong(codes.get(PTypeIO.LE_INT, i * 4));
+						out.setAtIndex(PTypeIO.LE_SHORT, i, values.getAtIndex(PTypeIO.LE_SHORT, code));
+					}
+				}
+				case 1 -> {
+					for (long i = 0; i < rowCount; i++) {
+						long code = Integer.toUnsignedLong(codes.get(PTypeIO.LE_INT, i * 4));
+						out.set(ValueLayout.JAVA_BYTE, i, values.get(ValueLayout.JAVA_BYTE, code));
+					}
+				}
+				default -> {
+					for (long i = 0, outOff = 0; i < rowCount; i++, outOff += elemSize) {
+						long code = Integer.toUnsignedLong(codes.get(PTypeIO.LE_INT, i * 4));
+						MemorySegment.copy(values, code * elemSize, out, outOff, elemSize);
+					}
+				}
 			}
 		}
 

@@ -175,7 +175,7 @@ public final class DateTimePartsEncoding implements Encoding {
                     new ChildSlot(I64, seconds, 1),
                     new ChildSlot(I64, subseconds, 2));
 
-            return new CascadeStep(partialRoot, List.of(), children, null, null);
+            return new CascadeStep(partialRoot, List.of(), children, null, null, true);
         }
     }
 

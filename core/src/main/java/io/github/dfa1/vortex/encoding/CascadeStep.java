@@ -11,16 +11,26 @@ import java.util.List;
 /// <p>Buffer layout: {@code ownedBuffers} holds buffers belonging to the partial root
 /// (e.g. patch index/value buffers for ALP). Child recursion results are appended after these;
 /// child {@code bufferIndices} are remapped by {@code +ownedBuffers.size()}.
+///
+/// <p>When {@code applicable} is false the encoding cannot handle this data; {@link #ownedBytes()}
+/// returns {@link Long#MAX_VALUE}/2 so the step never wins in size-based selection.
 public record CascadeStep(
 		EncodeNode partialRoot,
 		List<MemorySegment> ownedBuffers,
 		List<ChildSlot> openChildren,
 		byte[] statsMin,
-		byte[] statsMax
+		byte[] statsMax,
+		boolean applicable
 ) {
 	/// Convenience: terminal step — no open children, result is final.
 	public static CascadeStep terminal(EncodeResult result) {
-		return new CascadeStep(result.rootNode(), result.buffers(), List.of(), result.statsMin(), result.statsMax());
+		return new CascadeStep(result.rootNode(), result.buffers(), List.of(),
+				result.statsMin(), result.statsMax(), true);
+	}
+
+	/// Sentinel: encoding cannot handle this data — never wins in size selection.
+	public static CascadeStep notApplicable() {
+		return new CascadeStep(null, List.of(), List.of(), null, null, false);
 	}
 
 	public boolean isTerminal() {
@@ -28,7 +38,11 @@ public record CascadeStep(
 	}
 
 	/// Total byte size of owned buffers (used for size-based winner selection on samples).
+	/// Returns {@link Long#MAX_VALUE}/2 for non-applicable steps.
 	public long ownedBytes() {
+		if (!applicable) {
+			return Long.MAX_VALUE / 2;
+		}
 		long total = 0;
 		for (MemorySegment seg : ownedBuffers) {
 			total += seg.byteSize();

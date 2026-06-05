@@ -48,6 +48,14 @@ public final class ConstantEncoding implements Encoding {
 	}
 
 	@Override
+	public CascadeStep encodeCascade(DType dtype, Object data, CompressorContext ctx) {
+		if (!Encoder.isConstant(data, ((DType.Primitive) dtype).ptype())) {
+			return CascadeStep.notApplicable();
+		}
+		return CascadeStep.terminal(Encoder.encode(dtype, data));
+	}
+
+	@Override
 	public Array decode(DecodeContext ctx) {
 		return Decoder.decode(ctx);
 	}
@@ -59,9 +67,10 @@ public final class ConstantEncoding implements Encoding {
 				throw new VortexException(EncodingId.VORTEX_CONSTANT, "encode only supports Primitive dtype, got " + dtype);
 			}
 			PType ptype = p.ptype();
+			if (!isConstant(data, ptype)) {
+				throw new VortexException(EncodingId.VORTEX_CONSTANT, "not a constant array");
+			}
 			long firstRaw = readFirstRaw(data, ptype);
-			assertAllEqual(data, ptype, firstRaw);
-
 			ScalarProtos.ScalarValue scalar = buildScalar(ptype, firstRaw);
 			return EncodeResult.simple(EncodingId.VORTEX_CONSTANT, MemorySegment.ofArray(scalar.toByteArray()));
 		}
@@ -78,7 +87,8 @@ public final class ConstantEncoding implements Encoding {
 			};
 		}
 
-		private static void assertAllEqual(Object data, PType ptype, long firstRaw) {
+		static boolean isConstant(Object data, PType ptype) {
+			long firstRaw = readFirstRaw(data, ptype);
 			int len = switch (ptype) {
 				case I8, U8 -> ((byte[]) data).length;
 				case I16, U16 -> ((short[]) data).length;
@@ -99,9 +109,10 @@ public final class ConstantEncoding implements Encoding {
 					default -> throw new VortexException(EncodingId.VORTEX_CONSTANT, "unsupported ptype: " + ptype);
 				};
 				if (raw != firstRaw) {
-					throw new VortexException(EncodingId.VORTEX_CONSTANT, "not a constant array: element " + i + " differs");
+					return false;
 				}
 			}
+			return true;
 		}
 
 		private static ScalarProtos.ScalarValue buildScalar(PType ptype, long rawBits) {

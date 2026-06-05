@@ -8,28 +8,20 @@
 - [ ] Build something like hardwood.dev but for vortex files
 - [ ] Publish to Maven Central (OSSRH/SONATYPE setup, GPG signing, coordinates, CI release pipeline)
 
-## Compression ratio gaps vs Rust (NYC taxi 2024-01: Java 51.3 MB, Rust 42.8 MB)
+## Compression ratio gaps vs Rust (NYC taxi 2024-01: Java 43.1 MB, Rust 42.8 MB, Parquet 47.6 MB)
 
-Progress: raw I64 → datetimeparts (76→53 MB), fix FOR/RLE/RunEnd accepts + sample size (53→51 MB).
+Progress: raw I64 → datetimeparts (76→53 MB), fix FOR/RLE/RunEnd accepts + sample size (53→51 MB),
+fix ConstantEncoding encodeCascade + add ZstdEncoding to CASCADE_CODECS (51→43.1 MB). Java now beats
+Parquet and is within 0.3 MB of Rust.
 
-Remaining 8.5 MB gap — biggest to smallest:
+Remaining 0.3 MB gap — biggest to smallest:
 
 - [ ] **Global dict encoding** — Rust applies `vortex.dict` across the ENTIRE column before chunking; produces one
-  tiny dict buffer + one globally-bitpacked codes array. Java applies dict per 65 536-row chunk. Low-cardinality
+  tiny dict buffer + one globally-bitpacked codes array. Java applies dict per 131 072-row chunk. Low-cardinality
   columns affected: `mta_tax` (8 unique F64), `Airport_fee` (4), `extra` (48), `PULocationID` (260), `DOLocationID` (261),
   `payment_type` (5), `store_and_fwd_flag` (3), `congestion_surcharge` (few), `tolls_amount` (1127).
   Requires a two-pass write pipeline: first pass collects all values and builds the global dict; second pass emits
-  coded chunks. Biggest single win — estimated 5–7 MB.
-
-- [ ] **`vortex.constant` in CASCADE_CODECS** — Rust uses `vortex.constant` for chunks where all values are identical
-  (e.g. all-null `passenger_count` rows, constant-value `mta_tax` chunks). `ConstantEncoding` exists but `encode`
-  throws when data is not constant, crashing the compressor. Fix: override `encodeCascade` to pre-check `isConstant`
-  and return a sentinel "not applicable" step (huge owned-bytes) if false, so it never wins on non-constant data.
-
-- [ ] **`fastlanes.rle` for run-dominated columns** — Rust uses `fastlanes.rle` for `congestion_surcharge`
-  (values 0.0/2.5 in long consecutive runs). Java uses ALP+Bitpack. `RleEncoding` is now in CASCADE_CODECS
-  but never wins — needs to be tried on ALP's I64 child slot (currently ALP+Bitpack with 0-1 bits wins). The
-  RleEncoding.accepts fix already landed; investigate whether it fires via the cascade chain.
+  coded chunks. Estimated remaining gain ~0.3 MB (most gains already captured by ZstdEncoding on per-chunk dicts).
 
 ## Performance
 

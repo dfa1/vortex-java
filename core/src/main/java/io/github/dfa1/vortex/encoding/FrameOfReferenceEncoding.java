@@ -87,7 +87,7 @@ public final class FrameOfReferenceEncoding implements Encoding {
 			// residuals are the open child slot — compressor will bitpack them
 			EncodeNode partialRoot = new EncodeNode(EncodingId.FASTLANES_FOR, meta, new EncodeNode[1], new int[0]);
 			ChildSlot slot = new ChildSlot(dtype, residualsAsNativeArray(longs, ref, ptype), 0);
-			return new CascadeStep(partialRoot, List.of(), List.of(slot), null, null);
+			return new CascadeStep(partialRoot, List.of(), List.of(slot), null, null, true);
 		}
 
 		private static long computeRef(long[] longs, int n) {

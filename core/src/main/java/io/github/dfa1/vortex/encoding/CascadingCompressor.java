@@ -112,6 +112,12 @@ public final class CascadingCompressor {
 	private EncodeResult spliceResult(Encoding winner, DType dtype, Object data, CompressorContext ctx) {
 		CascadeStep step = winner.encodeCascade(dtype, data, ctx);
 
+		if (!step.applicable()) {
+			// Winner was selected on a sample that looked applicable (e.g. all-constant prefix),
+			// but full data is not. Re-run without this encoding.
+			return encodeWithCtx(dtype, data, ctx.withExcluded(winner.encodingId()));
+		}
+
 		if (step.isTerminal()) {
 			return new EncodeResult(step.partialRoot(), step.ownedBuffers(), step.statsMin(), step.statsMax());
 		}

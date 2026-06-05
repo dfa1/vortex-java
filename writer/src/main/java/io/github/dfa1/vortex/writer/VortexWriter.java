@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.encoding.BitpackedEncoding;
 import io.github.dfa1.vortex.encoding.BoolEncoding;
 import io.github.dfa1.vortex.encoding.CascadingCompressor;
 import io.github.dfa1.vortex.encoding.CompressorContext;
+import io.github.dfa1.vortex.encoding.ConstantEncoding;
 import io.github.dfa1.vortex.encoding.DateTimePartsData;
 import io.github.dfa1.vortex.encoding.DateTimePartsEncoding;
 import io.github.dfa1.vortex.encoding.DictEncoding;
@@ -71,9 +72,10 @@ public final class VortexWriter implements Closeable {
 
 	private static final List<Encoding> CASCADE_CODECS = List.of(
 			new DateTimePartsEncoding(),
+			new ConstantEncoding(),
 			new AlpEncoding(), new FrameOfReferenceEncoding(), new RunEndEncoding(), new RleEncoding(),
-			new DictEncoding(), new BitpackedEncoding(), new VarBinEncoding(), new PrimitiveEncoding(),
-			new BoolEncoding());
+			new DictEncoding(), new BitpackedEncoding(),
+			new VarBinEncoding(), new PrimitiveEncoding(), new BoolEncoding());
 
 	private final WritableByteChannel channel;
 	private final DType.Struct schema;

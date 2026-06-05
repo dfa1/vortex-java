@@ -236,7 +236,7 @@ public final class AlpEncoding implements Encoding {
 				EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_ALP,
 						ByteBuffer.wrap(metaBytes), new EncodeNode[1], new int[0]);
 				ChildSlot slot = new ChildSlot(I64_DTYPE, d.encodedArr(), 0);
-				return new CascadeStep(partialRoot, List.of(), List.of(slot), d.statsMin(), d.statsMax());
+				return new CascadeStep(partialRoot, List.of(), List.of(slot), d.statsMin(), d.statsMax(), true);
 			}
 
 			int numPatches = d.patchIndices().size();
@@ -257,7 +257,7 @@ public final class AlpEncoding implements Encoding {
 			EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_ALP,
 					ByteBuffer.wrap(metaBytes), new EncodeNode[]{null, idxNode, valNode}, new int[0]);
 			ChildSlot slot = new ChildSlot(I64_DTYPE, d.encodedArr(), 0);
-			return new CascadeStep(partialRoot, List.of(idxBuf, valBuf), List.of(slot), d.statsMin(), d.statsMax());
+			return new CascadeStep(partialRoot, List.of(idxBuf, valBuf), List.of(slot), d.statsMin(), d.statsMax(), true);
 		}
 
 		private static int[] findExponentsF32(float[] values) {
