@@ -43,6 +43,7 @@
 		<module>writer</module>
 		<module>csv</module>
 		<module>parquet</module>
+		<module>bom</module>
 		<module>cli</module>
 		<module>integration</module>
 		<module>performance</module>

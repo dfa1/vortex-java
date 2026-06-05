@@ -62,7 +62,6 @@ Remaining 0.3 MB gap — biggest to smallest:
   boundaries. Keep `integration`, `performance`, and `cli` as separate modules. Package structure
   (`encoding`, `io`, `writer`) already enforces internal boundaries without Maven.
 - [ ] prefix all modules with "vortex-"
-- [ ] add BOM module
 - [ ] deploy to maven central
 - [ ] switch back to module-path, but keep in mind these 2 blockers
 
