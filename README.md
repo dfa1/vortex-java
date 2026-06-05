@@ -290,6 +290,41 @@ Source: 47.6 MB Parquet → 12.0 MB Vortex (4× compression). Both sides scalar 
 | `parquetReadMultiColumn` — 2 cols (`fare_amount`, `PULocationID`) | 53.07 ± 1.25 | 18.8 ms | baseline |
 | `vortexReadMultiColumn` — 2 cols (`fare_amount`, `PULocationID`) | 140.31 ± 5.42 | 7.13 ms | **2.6×** |
 
+#### Why Vortex is faster than Parquet here
+
+Three compounding factors:
+
+**1. Smaller file = less I/O bandwidth**
+ALP encodes taxi floats very compactly (fare amounts cluster around small integers, trip
+distances are short floats). Parquet uses PLAIN or BYTE_STREAM_SPLIT for doubles — 8 raw
+bytes per value. 47.6 MB → 12.0 MB means 4× less memory to read even when the file is
+hot in the OS page cache.
+
+**2. Batch columnar API vs row-by-row cursor**
+Hardwood's `RowReader` requires `rows.next()` + `rows.getDouble("trip_distance")` per row
+— 2 virtual calls × 3 M rows = 6 M calls, plus a string-keyed column lookup on every
+access. `DoubleArray.fold()` is a tight loop over a flat `MemorySegment`; the JIT sees a
+scalar reduction over contiguous memory with no dispatch overhead.
+
+**3. mmap zero-copy**
+Vortex reads directly from the mmap'd `MemorySegment` — the file bytes _are_ the decode
+input, no intermediate copies. Hardwood reads into internal page buffers and then
+materialises values into a row cursor (one extra copy per page).
+
+Parquet also pays per-page overhead absent in Vortex: RLE-encoded definition/repetition
+levels for every page (even for non-null columns), page header parsing, and optional
+dictionary decode. Vortex's layout is a flat array of encoded values with no per-row
+framing.
+
+```
+Hardwood parquetRead (per 3 M rows)       Vortex vortexRead (per 3 M rows)
+────────────────────────────────────      ──────────────────────────────────
+47.6 MB read                              12.0 MB read  (4× less bandwidth)
++ page header parse × N pages             + ALP decode (branch-free ×/+)
++ definition-level RLE decode × 3 M rows  + fold() tight loop, no dispatch
++ getDouble("col") × 3 M virtual calls
+```
+
 ### Why fewer layers = faster
 
 This is my hypothesis:
