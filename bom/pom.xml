@@ -42,6 +42,11 @@
 				<artifactId>parquet</artifactId>
 				<version>${project.version}</version>
 			</dependency>
+			<dependency>
+				<groupId>io.github.dfa1.vortex</groupId>
+				<artifactId>jdbc</artifactId>
+				<version>${project.version}</version>
+			</dependency>
 		</dependencies>
 	</dependencyManagement>
 </project>
