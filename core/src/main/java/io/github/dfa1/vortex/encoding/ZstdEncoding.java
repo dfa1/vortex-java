@@ -33,6 +33,13 @@ import java.util.List;
 
 /// Encoder/decoder for {@code vortex.zstd} — Zstandard-compressed columnar array.
 ///
+/// <p><b>When to use in the cascade:</b> good for low-entropy strings and binary columns.
+/// Do NOT add to the numeric cascade alongside ALP/bitpack — on the NYC Taxi dataset,
+/// Zstd wins compression for F64 columns (50 MB → 43 MB) but decode throughput collapses
+/// 6× (240 → 40 ops/s single-column), because ZSTD decompression is much slower than
+/// ALP reconstruction or bitpack unpack. Use it only for {@link io.github.dfa1.vortex.core.DType.Utf8}
+/// and {@link io.github.dfa1.vortex.core.DType.Binary} where there is no faster structural alternative.
+///
 /// <p>Wire format:
 /// <ul>
 ///   <li>Metadata: {@code ZstdMetadata} — {@code dictionary_size} (0 = no dict) + repeated {@code ZstdFrameMetadata}</li>

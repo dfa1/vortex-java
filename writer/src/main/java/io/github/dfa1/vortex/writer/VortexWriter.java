@@ -70,6 +70,11 @@ public final class VortexWriter implements Closeable {
 	private static final List<Encoding> DEFAULT_CODECS = List.of(
 			new AlpEncoding(), new PrimitiveEncoding(), new BoolEncoding(), new DictEncoding(), new VarBinEncoding());
 
+	// ZstdEncoding is intentionally absent from this list.
+	// On NYC Taxi 2024-01: Zstd wins compression for F64 columns (50 MB → 43 MB) but beats
+	// ALP and kills decode throughput by 6× (240 → 40 ops/s). ZSTD decompression cannot
+	// compete with ALP reconstruction or bitpack unpack for numeric columns.
+	// Use ZstdEncoding only for Utf8/Binary where no faster structural encoding exists.
 	private static final List<Encoding> CASCADE_CODECS = List.of(
 			new DateTimePartsEncoding(),
 			new ConstantEncoding(),
