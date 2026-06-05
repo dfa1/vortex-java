@@ -1,6 +1,7 @@
 # vortex-java
 
 [![CI](https://github.com/dfa1/vortex-java/actions/workflows/ci.yml/badge.svg)](https://github.com/dfa1/vortex-java/actions)
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.dfa1.vortex/reader.svg)](https://central.sonatype.com/artifact/io.github.dfa1.vortex/reader)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/license/Apache-2.0)
 
 > **Alpha** — not production-ready. APIs will change without notice.
@@ -23,11 +24,10 @@ for zero-copy memory-mapped reads.
 ## Quickstart
 
 ```xml
-<!-- TODO: replace with released coordinates once published to Maven Central -->
 <dependency>
-  <groupId>io.github.dfa1</groupId>
-  <artifactId>vortex-java</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <groupId>io.github.dfa1.vortex</groupId>
+  <artifactId>reader</artifactId>
+  <version>0.2.0</version>
 </dependency>
 ```
 
