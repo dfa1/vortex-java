@@ -11,6 +11,10 @@
 
 	<artifactId>performance</artifactId>
 
+	<properties>
+		<maven.deploy.skip>true</maven.deploy.skip>
+	</properties>
+
 	<dependencies>
 		<dependency>
 			<groupId>io.github.dfa1.vortex</groupId>

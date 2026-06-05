@@ -9,6 +9,34 @@
 	<version>0.1.0-SNAPSHOT</version>
 	<packaging>pom</packaging>
 
+	<name>vortex-java</name>
+	<description>Pure-Java reader/writer for the Vortex columnar file format. Zero-copy memory-mapped reads via the Java FFM API (Java 25+), no JNI, no sun.misc.Unsafe.</description>
+	<url>https://github.com/dfa1/vortex-java</url>
+
+	<licenses>
+		<license>
+			<name>Apache License, Version 2.0</name>
+			<url>https://www.apache.org/licenses/LICENSE-2.0</url>
+			<distribution>repo</distribution>
+		</license>
+	</licenses>
+
+	<developers>
+		<developer>
+			<id>dfa1</id>
+			<name>Davide Angelocola</name>
+			<email>davide.angelocola@gmail.com</email>
+			<url>https://github.com/dfa1</url>
+		</developer>
+	</developers>
+
+	<scm>
+		<connection>scm:git:https://github.com/dfa1/vortex-java.git</connection>
+		<developerConnection>scm:git:git@github.com:dfa1/vortex-java.git</developerConnection>
+		<url>https://github.com/dfa1/vortex-java</url>
+		<tag>HEAD</tag>
+	</scm>
+
 	<modules>
 		<module>core</module>
 		<module>reader</module>
@@ -38,6 +66,11 @@
 		<arrow.version>19.0.0</arrow.version>
 		<slf4j.version>2.0.18</slf4j.version>
 		<jmh.version>1.37</jmh.version>
+		<!-- release plugins -->
+		<central-publishing-plugin.version>0.7.0</central-publishing-plugin.version>
+		<maven-gpg-plugin.version>3.2.7</maven-gpg-plugin.version>
+		<maven-source-plugin.version>3.3.1</maven-source-plugin.version>
+		<maven-javadoc-plugin.version>3.11.2</maven-javadoc-plugin.version>
 	</properties>
 
 	<dependencyManagement>
@@ -247,4 +280,87 @@
 			</plugin>
 		</plugins>
 	</build>
+
+	<profiles>
+		<profile>
+			<!-- Activated during release: ./mvnw deploy -P release -->
+			<!-- Prerequisites:
+			     1. Register namespace io.github.dfa1 at central.sonatype.com (GitHub auto-validates).
+			     2. Generate a user token at central.sonatype.com → Account → User Tokens.
+			     3. Add to ~/.m2/settings.xml:
+			          <servers>
+			            <server>
+			              <id>central</id>
+			              <username>TOKEN_USERNAME</username>
+			              <password>TOKEN_PASSWORD</password>
+			            </server>
+			          </servers>
+			     4. GPG key must be published: gpg -\-send-keys <KEYID>
+			-->
+			<id>release</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-source-plugin</artifactId>
+						<version>${maven-source-plugin.version}</version>
+						<executions>
+							<execution>
+								<id>attach-sources</id>
+								<goals>
+									<goal>jar-no-fork</goal>
+								</goals>
+							</execution>
+						</executions>
+					</plugin>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-javadoc-plugin</artifactId>
+						<version>${maven-javadoc-plugin.version}</version>
+						<executions>
+							<execution>
+								<id>attach-javadocs</id>
+								<goals>
+									<goal>jar</goal>
+								</goals>
+							</execution>
+						</executions>
+						<configuration>
+							<doclint>none</doclint>
+						</configuration>
+					</plugin>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-gpg-plugin</artifactId>
+						<version>${maven-gpg-plugin.version}</version>
+						<executions>
+							<execution>
+								<id>sign-artifacts</id>
+								<phase>verify</phase>
+								<goals>
+									<goal>sign</goal>
+								</goals>
+								<configuration>
+									<gpgArguments>
+										<arg>--pinentry-mode</arg>
+										<arg>loopback</arg>
+									</gpgArguments>
+								</configuration>
+							</execution>
+						</executions>
+					</plugin>
+					<plugin>
+						<groupId>org.sonatype.central</groupId>
+						<artifactId>central-publishing-maven-plugin</artifactId>
+						<version>${central-publishing-plugin.version}</version>
+						<extensions>true</extensions>
+						<configuration>
+							<publishingServerId>central</publishingServerId>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
+
 </project>
