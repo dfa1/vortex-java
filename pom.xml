@@ -42,6 +42,7 @@
 		<module>reader</module>
 		<module>writer</module>
 		<module>csv</module>
+		<module>jdbc</module>
 		<module>parquet</module>
 		<module>bom</module>
 		<module>cli</module>
@@ -59,6 +60,7 @@
 		<protobuf.version>4.35.0</protobuf.version>
 		<fastcsv.version>3.6.0</fastcsv.version>
 		<hardwood.version>1.0.0.CR1</hardwood.version>
+		<h2.version>2.3.232</h2.version>
 		<!-- testing -->
 		<junit.version>5.11.4</junit.version>
 		<assertj.version>3.27.7</assertj.version>
@@ -95,6 +97,17 @@
 				<groupId>io.github.dfa1.vortex</groupId>
 				<artifactId>csv</artifactId>
 				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>io.github.dfa1.vortex</groupId>
+				<artifactId>jdbc</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.h2database</groupId>
+				<artifactId>h2</artifactId>
+				<version>${h2.version}</version>
+				<scope>test</scope>
 			</dependency>
 			<dependency>
 				<groupId>io.github.dfa1.vortex</groupId>
