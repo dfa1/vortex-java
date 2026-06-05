@@ -8,7 +8,6 @@ import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.encoding.EncodingRegistry;
 import io.github.dfa1.vortex.io.VortexReader;
-import io.github.dfa1.vortex.parquet.ImportOptions;
 import io.github.dfa1.vortex.parquet.ParquetImporter;
 import io.github.dfa1.vortex.scan.ScanResult;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -32,7 +31,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /// Benchmark: Hardwood Parquet read vs Java Vortex read on the same real-world dataset.
@@ -62,8 +60,6 @@ public class ParquetVsVortexReadBenchmark {
             "https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2024-01.parquet";
     private static final Path CACHE_PATH =
             Path.of(System.getProperty("java.io.tmpdir"), "yellow_tripdata_2024-01.parquet");
-    private static final List<String> COLUMNS = List.of("trip_distance", "fare_amount", "PULocationID");
-
     private static final Object SETUP_LOCK = new Object();
     private static Path sharedParquetFile;
     private static Path sharedVortexFile;
@@ -88,9 +84,8 @@ public class ParquetVsVortexReadBenchmark {
                             sharedParquetFile, Files.size(sharedParquetFile) / 1_048_576.0);
                 }
                 sharedVortexFile = Files.createTempFile("taxi-bench", ".vortex");
-                System.out.print("[ParquetVsVortexReadBenchmark] converting to vortex...");
-                ImportOptions opts = ImportOptions.defaults().withColumns(COLUMNS);
-                ParquetImporter.importParquet(sharedParquetFile, sharedVortexFile, opts);
+                System.out.print("[ParquetVsVortexReadBenchmark] converting to vortex (all columns)...");
+                ParquetImporter.importParquet(sharedParquetFile, sharedVortexFile);
                 System.out.printf(" done (%.1f MB)%n", Files.size(sharedVortexFile) / 1_048_576.0);
             }
             refCount++;

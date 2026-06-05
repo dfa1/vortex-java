@@ -124,52 +124,50 @@ The Java write is faster but also produces bigger files (more optimization work 
 |-----------|--------------|------------------|--------------|
 | scan      | 20.4 ± 0.9   | 5.7 ± 0.6        | **3.6×**     |
 
-### Parquet vs Vortex read — NYC Yellow Taxi 2024-01, 3 M rows, 3 columns
+### Parquet vs Vortex read — NYC Yellow Taxi 2024-01, 3 M rows, 19 columns
 
-Source: 47.6 MB Parquet → 12.0 MB Vortex (4× compression). Both sides scalar decode
+Both formats store all 19 columns; projection happens at read time. Both sides scalar decode
 (Hardwood disables SIMD on JDK 25; Vortex Java uses FFM scalar reads throughout).
+File sizes: Parquet 47.6 MB, Vortex 76.0 MB (Vortex is larger here — cascading compressor
+does not yet beat Parquet's ZSTD on this mixed dataset).
 
 | Benchmark | ops/s | ms/scan | vs Parquet |
 |---|---|---|---|
-| `parquetRead` — Hardwood, 1 col (`trip_distance`) | 66.96 ± 1.99 | 14.9 ms | baseline |
-| `vortexRead` — 1 col (`trip_distance`) | 201.61 ± 1.63 | 4.96 ms | **3.0×** |
-| `parquetReadMultiColumn` — 2 cols (`fare_amount`, `PULocationID`) | 53.07 ± 1.25 | 18.8 ms | baseline |
-| `vortexReadMultiColumn` — 2 cols (`fare_amount`, `PULocationID`) | 140.31 ± 5.42 | 7.13 ms | **2.6×** |
+| `parquetRead` — Hardwood, 1 col (`trip_distance`) | 81.26 ± 0.76 | 12.3 ms | baseline |
+| `vortexRead` — 1 col (`trip_distance`) | 151.96 ± 0.84 | 6.58 ms | **1.9×** |
+| `parquetReadMultiColumn` — 2 cols (`fare_amount`, `PULocationID`) | 46.80 ± 0.90 | 21.4 ms | baseline |
+| `vortexReadMultiColumn` — 2 cols (`fare_amount`, `PULocationID`) | 57.65 ± 0.58 | 17.4 ms | **1.2×** |
 
-#### Why Vortex is faster than Parquet here
+#### Why Vortex is faster despite being a larger file
 
-Three compounding factors:
+The file size advantage is gone on this dataset — Vortex is 60% larger than the source Parquet.
+The speedup comes from two other factors:
 
-**1. Smaller file = less I/O bandwidth.**
-ALP encodes taxi floats very compactly (fare amounts cluster around small integers, trip
-distances are short floats). Parquet uses PLAIN or BYTE_STREAM_SPLIT for doubles — 8 raw
-bytes per value. 47.6 MB → 12.0 MB means 4× less memory to read even when the file is
-hot in the OS page cache.
-
-**2. Batch columnar API vs row-by-row cursor.**
+**1. Batch columnar API vs row-by-row cursor.**
 Hardwood's `RowReader` requires `rows.next()` + `rows.getDouble("trip_distance")` per row
 — 2 virtual calls × 3 M rows = 6 M calls, plus a string-keyed column lookup on every
 access. `DoubleArray.fold()` is a tight loop over a flat `MemorySegment`; the JIT sees a
 scalar reduction over contiguous memory with no dispatch overhead.
 
-**3. mmap zero-copy.**
+**2. mmap zero-copy.**
 Vortex reads directly from the mmap'd `MemorySegment` — the file bytes _are_ the decode
-input, no intermediate copies. Hardwood reads into internal page buffers and then
-materialises values into a row cursor (one extra copy per page).
-
-Parquet also pays per-page overhead absent in Vortex: RLE-encoded definition/repetition
-levels for every page (even for non-null columns), page header parsing, and optional
-dictionary decode. Vortex's layout is a flat array of encoded values with no per-row
-framing.
+input, no intermediate copies. Hardwood reads into internal page buffers and materialises
+values into a row cursor (one extra copy per page). Parquet also pays per-page framing
+overhead: RLE-encoded definition/repetition levels, page header parsing, optional dictionary
+decode. Vortex's layout is a flat array of encoded values with no per-row framing.
 
 ```
 Hardwood parquetRead (per 3 M rows)       Vortex vortexRead (per 3 M rows)
 ────────────────────────────────────      ──────────────────────────────────
-47.6 MB read                              12.0 MB read  (4× less bandwidth)
+47.6 MB on disk (smaller file)            76.0 MB on disk (larger file)
 + page header parse × N pages             + ALP decode (branch-free ×/+)
 + definition-level RLE decode × 3 M rows  + fold() tight loop, no dispatch
 + getDouble("col") × 3 M virtual calls
 ```
+
+The multi-column gap narrows to 1.2× because projecting 2 of 19 columns forces Vortex
+to skip more data per scan; Parquet's column-chunk layout already isolates each column
+on disk, so its per-column I/O is better amortised when reading multiple columns.
 
 ## Design principles
 
