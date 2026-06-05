@@ -134,33 +134,40 @@ File sizes: Parquet 47.6 MB, Vortex Java 50 MB.
 
 **Environment:** Apple M5, OpenJDK 25, 5 warmup × 3 s, 5 measurement × 5 s, fork 2.
 
-| Benchmark | ops/s | ms/scan | vs Parquet |
-|---|---|---|---|
-| `parquetRead` — Hardwood, 1 col (`trip_distance`) | 73.9 ± 1.5 | 13.5 ms | baseline |
-| `vortexRead` — 1 col (`trip_distance`) | 240.3 ± 3.8 | 4.2 ms | **3.3×** |
-| `parquetReadMultiColumn` — 2 cols (`fare_amount`, `PULocationID`) | 45.2 ± 1.2 | 22.1 ms | baseline |
-| `vortexReadMultiColumn` — 2 cols (`fare_amount`, `PULocationID`) | 129.1 ± 2.3 | 7.7 ms | **2.9×** |
+Two Parquet variants are measured to isolate format cost from API overhead:
+- **batch**: `ColumnReader.nextBatch()` + loop over `getDoubles()`/`getInts()` arrays — apples-to-apples with Vortex's batch fold
+- **row-by-row**: `RowReader.next()` + `getDouble("col")` per row — measures the full row-cursor overhead on top of format decode
 
-#### Why Vortex is faster
+| Benchmark | ops/s | vs Parquet batch |
+|---|---|---|
+| `parquetRead` — batch, 1 col (`trip_distance`) | 166.5 ± 4.0 | baseline |
+| `parquetReadRowByRow` — row cursor, 1 col | 67.6 ± 4.4 | 0.41× (2.5× API penalty) |
+| `vortexRead` — 1 col (`trip_distance`) | 235.1 ± 6.9 | **1.41×** |
+| `parquetReadMultiColumn` — batch, 2 cols (`fare_amount`, `PULocationID`) | 133.0 ± 18.3 | baseline |
+| `parquetReadMultiColumnRowByRow` — row cursor, 2 cols | 44.0 ± 2.2 | 0.33× (3× API penalty) |
+| `vortexReadMultiColumn` — 2 cols | 122.6 ± 3.3 | 0.92× |
 
-**1. Batch columnar API vs row-by-row cursor.**
-Hardwood's `RowReader` requires `rows.next()` + `rows.getDouble("trip_distance")` per row
-— 2 virtual calls × 3 M rows = 6 M calls, plus a string-keyed column lookup on every
-access. `DoubleArray.fold()` is a tight loop over a flat `MemorySegment`; the JIT sees a
-scalar reduction over contiguous memory with no dispatch overhead.
+Single-column: Vortex 1.4× faster than Parquet batch — format advantage is real (mmap
+zero-copy + ALP vs Parquet RLE/ZSTD page decode).
 
-**2. mmap zero-copy.**
+Multi-column: Vortex (122.6) slightly behind Parquet batch (133.0). Known gap: Rust uses a
+global dict per column (one tiny dict for all 3 M rows); Java applies dict per 131 K-row
+chunk, increasing per-chunk overhead for low-cardinality columns like `PULocationID` (260
+unique values).
+
+#### Why Vortex is faster on single-column reads
+
+**1. mmap zero-copy.**
 Vortex reads directly from the mmap'd `MemorySegment` — the file bytes _are_ the decode
 input, no intermediate copies. Hardwood reads into internal page buffers and materialises
-values into a row cursor (one extra copy per page). Parquet also pays per-page framing
-overhead: RLE-encoded definition/repetition levels, page header parsing, optional dictionary
-decode. Vortex's layout is a flat array of encoded values with no per-row framing.
+values before batch hand-off. Parquet also pays per-page framing overhead: RLE-encoded
+definition/repetition levels, page header parsing, optional dictionary decode. Vortex's
+layout is a flat array of encoded values with no per-row framing.
 
-**3. Typed scatter instead of per-element copy.**
+**2. Typed scatter instead of per-element copy.**
 `DictEncoding` expansion uses `getAtIndex`/`setAtIndex` with loop-unswitched elemSize —
-a single typed load + store per row. Prior to this fix, each element was expanded via
-`MemorySegment.copy(8 bytes)`, which carries per-call bounds-check overhead and dominated
-60% of JFR execution samples on multi-column scans.
+a single typed load + store per row. The prior `MemorySegment.copy(8 bytes)` per element
+dominated 60% of JFR execution samples on multi-column scans before it was fixed.
 
 ```
 Hardwood parquetRead (per 3 M rows)       Vortex vortexRead (per 3 M rows)
@@ -168,7 +175,6 @@ Hardwood parquetRead (per 3 M rows)       Vortex vortexRead (per 3 M rows)
 47.6 MB on disk                           50 MB on disk
 + page header parse × N pages             + ALP decode (branch-free ×/+)
 + definition-level RLE decode × 3 M rows  + fold() tight loop, no dispatch
-+ getDouble("col") × 3 M virtual calls
 ```
 
 #### Why ZstdEncoding is excluded from the numeric cascade
@@ -176,7 +182,7 @@ Hardwood parquetRead (per 3 M rows)       Vortex vortexRead (per 3 M rows)
 Adding `ZstdEncoding` to `CASCADE_CODECS` improves file size (50 MB → 43 MB) because
 Zstd out-compresses ALP on some F64 columns. But ZSTD decompression is an order of
 magnitude slower than ALP reconstruction or bitpack unpack: single-column read throughput
-collapses from 240 to 40 ops/s (6×), falling below Parquet's 73.9 ops/s baseline.
+collapses from 235 to 40 ops/s (6×), falling below Parquet batch (166.5 ops/s).
 
 The smaller file is not worth the read regression. `ZstdEncoding` is retained in the
 codec registry for `Utf8`/`Binary` columns where no faster structural alternative exists,

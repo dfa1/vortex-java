@@ -1,6 +1,8 @@
 package io.github.dfa1.vortex.performance;
 
 import dev.hardwood.InputFile;
+import dev.hardwood.reader.ColumnReader;
+import dev.hardwood.reader.ColumnReaders;
 import dev.hardwood.reader.ParquetFileReader;
 import dev.hardwood.reader.RowReader;
 import dev.hardwood.schema.ColumnProjection;
@@ -35,15 +37,20 @@ import java.util.concurrent.TimeUnit;
 
 /// Benchmark: Hardwood Parquet read vs Java Vortex read on the same real-world dataset.
 ///
-/// Dataset: NYC Yellow Taxi 2024-01 (~3M rows), three columns:
-///   trip_distance (DOUBLE), fare_amount (DOUBLE), PULocationID (INT32)
+/// Dataset: NYC Yellow Taxi 2024-01 (~3M rows).
+/// Columns: trip_distance (DOUBLE), fare_amount (DOUBLE), PULocationID (INT32).
 ///
-/// Setup downloads the Parquet file once per trial (cached in /tmp), converts it to
-/// Vortex with column projection, then both benchmarks scan and sum trip_distance.
+/// Two Parquet variants:
+///   - {@code parquetRead} / {@code parquetReadMultiColumn}: batch column API
+///     ({@link ColumnReader#nextBatch()} + {@link ColumnReader#getDoubles()}) —
+///     apples-to-apples comparison with Vortex's batch fold.
+///   - {@code parquetReadRowByRow} / {@code parquetReadMultiColumnRowByRow}:
+///     Hardwood row cursor ({@link RowReader}) — measures row-oriented API overhead
+///     on top of format decode cost.
 ///
-/// Override the Parquet source with: -Dbench.parquet=/path/to/file.parquet
+/// Override the Parquet source with: {@code -Dbench.parquet=/path/to/file.parquet}
 ///
-/// Run: java -jar performance/target/benchmarks.jar ParquetVsVortexReadBenchmark
+/// Run: {@code java -jar performance/target/benchmarks.jar ParquetVsVortexReadBenchmark}
 @State(Scope.Benchmark)
 @BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.SECONDS)
@@ -106,9 +113,50 @@ public class ParquetVsVortexReadBenchmark {
         }
     }
 
-    /// Hardwood: scan all rows, sum trip_distance (single column).
+    // ── Batch API (apples-to-apples with Vortex) ─────────────────────────────
+
+    /// Hardwood batch: decode trip_distance column in chunks, sum all values.
     @Benchmark
     public double parquetRead() throws IOException {
+        double sum = 0.0;
+        try (ParquetFileReader reader = ParquetFileReader.open(InputFile.of(parquetFile));
+             ColumnReader cr = reader.columnReader("trip_distance")) {
+            while (cr.nextBatch()) {
+                double[] vals = cr.getDoubles();
+                int n = cr.getRecordCount();
+                for (int i = 0; i < n; i++) {
+                    sum += vals[i];
+                }
+            }
+        }
+        return sum;
+    }
+
+    /// Hardwood batch: decode fare_amount + PULocationID in chunks, sum both.
+    @Benchmark
+    public double parquetReadMultiColumn() throws IOException {
+        double fareSum = 0.0;
+        long idSum = 0L;
+        try (ParquetFileReader reader = ParquetFileReader.open(InputFile.of(parquetFile));
+             ColumnReaders crs = reader.columnReaders(ColumnProjection.columns("fare_amount", "PULocationID"))) {
+            while (crs.nextBatch()) {
+                int n = crs.getRecordCount();
+                double[] fares = crs.getColumnReader("fare_amount").getDoubles();
+                int[] locs = crs.getColumnReader("PULocationID").getInts();
+                for (int i = 0; i < n; i++) {
+                    fareSum += fares[i];
+                    idSum += locs[i];
+                }
+            }
+        }
+        return fareSum + idSum;
+    }
+
+    // ── Row cursor API (measures row-oriented overhead on top of decode) ──────
+
+    /// Hardwood row cursor: sum trip_distance, one virtual call per row.
+    @Benchmark
+    public double parquetReadRowByRow() throws IOException {
         double sum = 0.0;
         ColumnProjection projection = ColumnProjection.columns("trip_distance");
         try (ParquetFileReader reader = ParquetFileReader.open(InputFile.of(parquetFile));
@@ -121,9 +169,9 @@ public class ParquetVsVortexReadBenchmark {
         return sum;
     }
 
-    /// Hardwood: scan all rows, sum fare_amount + PULocationID (two columns).
+    /// Hardwood row cursor: sum fare_amount + PULocationID, two virtual calls per row.
     @Benchmark
-    public double parquetReadMultiColumn() throws IOException {
+    public double parquetReadMultiColumnRowByRow() throws IOException {
         double fareSum = 0.0;
         long idSum = 0L;
         ColumnProjection projection = ColumnProjection.columns("fare_amount", "PULocationID");
@@ -138,7 +186,9 @@ public class ParquetVsVortexReadBenchmark {
         return fareSum + idSum;
     }
 
-    /// Vortex: scan all rows, sum trip_distance via fold.
+    // ── Vortex ────────────────────────────────────────────────────────────────
+
+    /// Vortex: decode trip_distance in chunks, sum via batch fold.
     @Benchmark
     public double vortexRead() throws IOException {
         double sum = 0.0;
@@ -153,7 +203,7 @@ public class ParquetVsVortexReadBenchmark {
         return sum;
     }
 
-    /// Vortex: scan fare_amount + PULocationID, sum both (exercises multi-column projection).
+    /// Vortex: decode fare_amount + PULocationID in chunks, sum both via batch fold.
     @Benchmark
     public double vortexReadMultiColumn() throws IOException {
         double fareSum = 0.0;
@@ -170,6 +220,8 @@ public class ParquetVsVortexReadBenchmark {
         }
         return fareSum + idSum;
     }
+
+    // ── Setup helper ──────────────────────────────────────────────────────────
 
     private static Path downloadIfAbsent(Path dest, String url) throws Exception {
         if (Files.exists(dest)) {
