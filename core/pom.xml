@@ -15,6 +15,7 @@
 	</description>
 
 	<dependencies>
+		<!-- production -->
 		<dependency>
 			<groupId>com.google.flatbuffers</groupId>
 			<artifactId>flatbuffers-java</artifactId>

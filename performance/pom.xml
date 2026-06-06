@@ -18,6 +18,7 @@
 	</properties>
 
 	<dependencies>
+		<!-- production -->
 		<dependency>
 			<groupId>io.github.dfa1.vortex</groupId>
 			<artifactId>vortex-writer</artifactId>

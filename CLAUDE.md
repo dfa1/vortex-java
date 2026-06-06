@@ -154,6 +154,20 @@ Key paths:
 Never reverse-engineer wire formats by probing byte patterns. Read the vtable `serialize`/`deserialize`
 methods in the Rust source to get the exact protobuf schema, then implement from spec.
 
+## POM dependency ordering
+
+In every module `pom.xml`, dependencies are grouped with comments:
+
+```xml
+<!-- production -->
+<!-- compile/runtime/provided scope deps -->
+
+<!-- testing -->
+<!-- test scope deps -->
+```
+
+Omit a section if empty (e.g. integration module has no production deps; performance has no test deps).
+
 ## Code style
 
 - indents are 4 spaces, enforced by checkstyle

@@ -17,6 +17,7 @@
 	</properties>
 
 	<dependencies>
+		<!-- testing -->
 		<dependency>
 			<groupId>io.github.dfa1.vortex</groupId>
 			<artifactId>vortex-writer</artifactId>

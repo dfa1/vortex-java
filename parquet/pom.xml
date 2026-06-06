@@ -13,6 +13,7 @@
 	<description>Parquet conversion support for the Vortex columnar file format.</description>
 
 	<dependencies>
+		<!-- production -->
 		<dependency>
 			<groupId>io.github.dfa1.vortex</groupId>
 			<artifactId>vortex-reader</artifactId>

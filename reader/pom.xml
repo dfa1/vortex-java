@@ -15,6 +15,7 @@
 	</description>
 
 	<dependencies>
+		<!-- production -->
 		<dependency>
 			<groupId>io.github.dfa1.vortex</groupId>
 			<artifactId>vortex-core</artifactId>
@@ -27,6 +28,7 @@
 			<groupId>com.google.protobuf</groupId>
 			<artifactId>protobuf-java</artifactId>
 		</dependency>
+		<!-- testing -->
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>
 			<artifactId>junit-jupiter</artifactId>
