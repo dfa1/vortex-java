@@ -15,6 +15,7 @@
 	<properties>
 		<maven.deploy.skip>true</maven.deploy.skip>
 		<skipPublishing>true</skipPublishing>
+		<skipShade>true</skipShade>
 	</properties>
 
 	<dependencies>
@@ -101,6 +102,7 @@
 							<goal>shade</goal>
 						</goals>
 						<configuration>
+							<skip>${skipShade}</skip>
 							<finalName>benchmarks</finalName>
 							<transformers>
 								<transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
