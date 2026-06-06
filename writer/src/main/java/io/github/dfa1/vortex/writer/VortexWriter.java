@@ -71,7 +71,8 @@ public final class VortexWriter implements Closeable {
     private static final int LAYOUT_DICT = 3;
 
     // Columns with global cardinality below this threshold are dict-encoded across all chunks.
-    private static final int GLOBAL_DICT_MAX_CARDINALITY = 65_536;
+    // Kept low: global dict hurts high-cardinality F64 columns (ALP codes beat U16 dict codes).
+    private static final int GLOBAL_DICT_MAX_CARDINALITY = 2_048;
     // Fraction of distinct values in first chunk below which a column is a dict candidate.
     private static final double GLOBAL_DICT_RATIO_THRESHOLD = 0.5;
 
@@ -303,11 +304,6 @@ public final class VortexWriter implements Closeable {
     }
 
     private int writeSegment(DType dtype, Object data) throws IOException {
-        return writeSegment(dtype, data, this.encodings, this.defaultRegistry);
-    }
-
-    private int writeSegment(DType dtype, Object data, List<Encoding> encodings, EncodingRegistry registry)
-            throws IOException {
         try (Arena arena = Arena.ofConfined()) {
             EncodeResult result;
             if (options.allowedCascading() > 0) {
@@ -315,8 +311,8 @@ public final class VortexWriter implements Closeable {
                 CascadingCompressor compressor = new CascadingCompressor(CASCADE_CODECS);
                 result = compressor.encode(dtype, data, encodeCtx);
             } else {
-                Encoding encoding = findEncoding(dtype, encodings);
-                EncodeContext encodeCtx = EncodeContext.of(arena, registry);
+                Encoding encoding = findEncoding(dtype);
+                EncodeContext encodeCtx = EncodeContext.of(arena, this.defaultRegistry);
                 result = encoding.encode(dtype, data, encodeCtx);
             }
             // Register all encoding IDs found in the node tree
@@ -357,10 +353,6 @@ public final class VortexWriter implements Closeable {
     }
 
     private Encoding findEncoding(DType dtype) {
-        return findEncoding(dtype, this.encodings);
-    }
-
-    private static Encoding findEncoding(DType dtype, List<Encoding> encodings) {
         for (Encoding c : encodings) {
             if (c.accepts(dtype)) {
                 return c;
@@ -608,10 +600,12 @@ public final class VortexWriter implements Closeable {
 
         PType codePType = codePTypeForSize(dictSize);
 
-        // Write values segment — always use DEFAULT_CODECS regardless of user encoding list
-        EncodingRegistry dictRegistry = EncodingRegistry.of(DEFAULT_CODECS);
+        // Write values segment using the same codec path as regular segments so
+        // codes benefit from bitpacking/FOR when cascading is enabled.
+        // Safe: global dict is disabled for custom-encoding writers (withGlobalDict(false)),
+        // so this.encodings == DEFAULT_CODECS here and the two-arg form is always valid.
         Object uniqueArr = buildTypedUniqueArray(ptype, valueMap.keySet(), dictSize);
-        int valuesSegIdx = writeSegment(dtype, uniqueArr, DEFAULT_CODECS, dictRegistry);
+        int valuesSegIdx = writeSegment(dtype, uniqueArr);
 
         // Write one codes segment per original chunk
         DType codesDtype = new DType.Primitive(codePType, false);
@@ -620,7 +614,7 @@ public final class VortexWriter implements Closeable {
         for (Object chunk : chunks) {
             int len = primitiveArrayLen(chunk, ptype);
             Object codesArr = buildCodesArray(chunk, ptype, valueMap, codePType, len);
-            codesSegIdxes.add(writeSegment(codesDtype, codesArr, DEFAULT_CODECS, dictRegistry));
+            codesSegIdxes.add(writeSegment(codesDtype, codesArr));
             chunkRowCounts.add((long) len);
         }
 
@@ -628,11 +622,17 @@ public final class VortexWriter implements Closeable {
     }
 
     private static boolean isDictCandidate(PType ptype, Object data) {
-        int n = (int) Math.min(primitiveArrayLen(data, ptype), 4096);
+        // Float types: ALP/RLE compress repeated F64 values far better than dict codes.
+        // E.g. a near-constant congestion_surcharge column costs ~0 bytes with RLE,
+        // but ~1 MB with global dict U8 codes even after bitpacking.
+        if (ptype == PType.F16 || ptype == PType.F32 || ptype == PType.F64) {
+            return false;
+        }
+        int n = primitiveArrayLen(data, ptype);
         if (n == 0) {
             return false;
         }
-        var seen = new java.util.HashSet<Object>(n);
+        var seen = new java.util.HashSet<Object>(GLOBAL_DICT_MAX_CARDINALITY + 1);
         for (int i = 0; i < n; i++) {
             seen.add(readPrimitiveElement(data, ptype, i));
             if (seen.size() > GLOBAL_DICT_MAX_CARDINALITY) {
