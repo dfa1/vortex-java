@@ -99,6 +99,99 @@ typed, bounds-checked view directly into the OS mmap region. Decoding reads byte
 from that view with no copies, no intermediate Arrow format, and no boundary crossings.
 The JIT sees the full decode path as ordinary Java bytecode.
 
+## Internal architecture
+
+### Module dependency graph
+
+```
+         ┌──────────────────────────────────────────┐
+         │                  core                    │
+         │  DType · Encoding · EncodingRegistry      │
+         │  proto/fbs generated sources              │
+         └──────────┬─────────────────┬─────────────┘
+                    │                 │
+          ┌─────────▼──────┐  ┌───────▼────────────┐
+          │     reader     │  │       writer        │
+          │  VortexReader  │  │    VortexWriter      │
+          │  ScanIterator  │  │  CascadingCompressor│
+          └──┬─────────────┘  └───────┬─────────────┘
+             │    ┌───────────────────┘
+             │    │
+     ┌───────▼────▼──┐   ┌──────────┐   ┌───────────────┐
+     │  integration  │   │ parquet  │   │      csv      │
+     │  (Rust oracle │   │          │   │               │
+     │   for tests)  │   └────┬─────┘   └───────┬───────┘
+     └───────────────┘        │                 │
+                              └────────┬────────┘
+                                       ▼
+                               ┌───────────────┐
+                               │      cli      │
+                               │  fat jar      │
+                               └───────────────┘
+```
+
+`performance` depends on `reader` + `writer` but is omitted for clarity.
+
+### Read path
+
+```
+VortexReader.open(path)
+  ├─ mmap entire file → MemorySegment (confined Arena)
+  ├─ parse 8-byte trailer at EOF  →  version · postscriptLen · magic (VTXF)
+  ├─ parse Postscript (FlatBuffer) → offsets to Footer / DType / Layout blobs
+  ├─ parse Footer    (FlatBuffer) → SegmentSpec[] (offset+length per buffer)
+  ├─ parse DType     (Protobuf)   → column names + types
+  └─ parse Layout    (FlatBuffer) → tree of Flat/Chunked/Zoned/Struct nodes
+
+vortexReader.scan(opts) → ScanIterator
+  └─ pre-index Flat nodes into ChunkSpec[] — one entry per row group per column
+
+ScanIterator.next() → ScanResult (per row-group)
+  └─ decodeLayout(layout, dtype, chunkArena)
+       ├─ Flat   → slice MemorySegment from mmap region
+       │           └─ EncodingRegistry.decodeSegment(seg, …)
+       │                └─ Encoding.decode(DecodeContext)  →  Array (zero-copy)
+       ├─ Chunked → collect Flat children, decode each, concatenate buffers
+       ├─ Zoned   → skip zone-map metadata, recurse into child layout
+       └─ Dict    → decode values layout + codes layout separately, then expand
+```
+
+All `Array` buffers are zero-copy slices of the mmap'd `MemorySegment`.
+Advancing the iterator (`hasNext()`) closes the chunk's `Arena` and releases them.
+
+### Write path
+
+```
+VortexWriter.create(channel, schema, opts)
+
+writer.writeChunk(Map<String, data[]>)
+  └─ per column:
+       CascadingCompressor.compress(dtype, values)
+         ├─ try structural encodings in order: Dict → RunEnd → RLE → Constant → …
+         │   each may wrap a child (Dict codes → BitPacked, Dict values → FSST, …)
+         └─ apply codec layer: ALP / BitPacked / FOR / Pco / Zstd / …
+       → EncodeResult (EncodeNode tree + buffer list)
+  └─ write buffers to FileChannel, record SegmentSpec (offset + length)
+  └─ record Layout node (encoding ID + rowCount + segment index)
+
+writer.close()
+  └─ write DType blob  (Protobuf)
+  └─ write Footer blob (FlatBuffer) → SegmentSpec[] + ArraySpec[]
+  └─ write Layout blob (FlatBuffer) → Struct → Zoned(Stats) → Chunked → [Flat …]
+  └─ write Postscript  (FlatBuffer) → blob offsets + lengths
+  └─ write 8-byte trailer           → version · postscriptLen · magic (VTXF)
+```
+
+### How `EncodingRegistry` resolves encodings
+
+`EncodingRegistry.loadAll()` uses `ServiceLoader` to discover all `Encoding`
+implementations on the classpath. Each encoding declares its ID via `encodingId()`.
+At decode time the registry maps the ID string from the Layout node to the right
+`Encoding` instance and calls `decode(DecodeContext)`.
+
+Custom encodings can be added at runtime: `registry.register(myEncoding)`.
+Files with unrecognised IDs throw `VortexException` unless `allowUnknown()` is set.
+
 ## Benchmarks
 
 JMH throughput (ops/s = full-file scans per second). Higher is better.
