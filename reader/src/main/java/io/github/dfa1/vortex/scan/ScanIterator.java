@@ -429,6 +429,17 @@ public final class ScanIterator implements AutoCloseable {
         Array values = decodeLayout(valuesLayout, dtype, arena);
         Array codes = decodeLayout(codesLayout, new DType.Primitive(codesPType, false), arena);
 
+        // Zip-bomb guard: for direct-mapped encodings (e.g. vortex.primitive), the codes
+        // buffer is mmap-bounded and can be much smaller than the claimed rowCount. Reject
+        // before any O(n) allocation so an inflated layout row_count cannot trigger OOM.
+        // Full-decode encodings (e.g. bitpacked) write n * elemBytes to the arena during
+        // decodeLayout above, so their buffer will already match n — check passes for them.
+        long bufferCodes = codes.buffer(0).byteSize() / (long) codesPType.byteSize();
+        if (bufferCodes < n) {
+            throw new VortexException(EncodingId.VORTEX_DICT,
+                    "dict codes: layout row_count=" + n + " exceeds buffer capacity=" + bufferCodes);
+        }
+
         if (values instanceof VarBinArray) {
             MemorySegment valOffsets = values.child(0).buffer(0);
             PType valOffPType = ((DType.Primitive) values.child(0).dtype()).ptype();

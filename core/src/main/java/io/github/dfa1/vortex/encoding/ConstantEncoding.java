@@ -123,8 +123,7 @@ public final class ConstantEncoding implements Encoding {
             return switch (ptype) {
                 case U8, U16, U32, U64 -> ScalarProtos.ScalarValue.newBuilder().setUint64Value(rawBits).build();
                 case I8, I16, I32, I64 -> ScalarProtos.ScalarValue.newBuilder().setInt64Value(rawBits).build();
-                case F32 ->
-                        ScalarProtos.ScalarValue.newBuilder().setF32Value(Float.intBitsToFloat((int) rawBits)).build();
+                case F32 -> ScalarProtos.ScalarValue.newBuilder().setF32Value(Float.intBitsToFloat((int) rawBits)).build();
                 case F64 -> ScalarProtos.ScalarValue.newBuilder().setF64Value(Double.longBitsToDouble(rawBits)).build();
                 default -> throw new VortexException(EncodingId.VORTEX_CONSTANT, "unsupported ptype: " + ptype);
             };
@@ -163,7 +162,7 @@ public final class ConstantEncoding implements Encoding {
             if (ctx.dtype() instanceof DType.Extension ext) {
                 // Decode using the storage dtype, re-wrap with the extension dtype
                 var storageCtx = new DecodeContext(ctx.node(), ext.storageDType(), ctx.rowCount(),
-                        ctx.segmentBuffers(), ctx.registry(), ctx.arena());
+                    ctx.segmentBuffers(), ctx.registry(), ctx.arena());
                 Array storage = decode(storageCtx);
                 return new GenericArray(ctx.dtype(), n, storage.buffer(0));
             }
@@ -176,11 +175,13 @@ public final class ConstantEncoding implements Encoding {
             int elemBytes = ptype.byteSize();
             long rawBits = scalarToRawBits(scalar, ptype);
 
-            MemorySegment outSeg = ctx.arena().allocate(n * elemBytes);
+            // Store one element only. The array reports length=n but the buffer holds
+            // a single copy of the constant — callers that need all n values must
+            // replicate from index 0. This keeps allocation O(1) regardless of rowCount,
+            // which also eliminates the zip-bomb vector via inflated row_count.
+            MemorySegment outSeg = ctx.arena().allocate(elemBytes);
             ByteBuffer out = outSeg.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
-            for (long i = 0; i < n; i++) {
-                writeRaw(out, ptype, rawBits);
-            }
+            writeRaw(out, ptype, rawBits);
 
             MemorySegment ro = outSeg.asReadOnly();
             return switch (ptype) {
@@ -220,8 +221,8 @@ public final class ConstantEncoding implements Encoding {
 
         private static Array decodeString(DecodeContext ctx, ScalarProtos.ScalarValue scalar, long n) {
             byte[] strBytes = scalar.hasStringValue()
-                                      ? scalar.getStringValue().getBytes(StandardCharsets.UTF_8)
-                                      : scalar.getBytesValue().toByteArray();
+                                  ? scalar.getStringValue().getBytes(StandardCharsets.UTF_8)
+                                  : scalar.getBytesValue().toByteArray();
 
             int strLen = strBytes.length;
 
@@ -248,7 +249,7 @@ public final class ConstantEncoding implements Encoding {
                 case F64_VALUE -> Double.doubleToRawLongBits(scalar.getF64Value());
                 case KIND_NOT_SET -> 0L;
                 default -> throw new VortexException(EncodingId.VORTEX_CONSTANT,
-                        "unexpected scalar kind " + scalar.getKindCase());
+                    "unexpected scalar kind " + scalar.getKindCase());
             };
         }
 
