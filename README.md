@@ -27,7 +27,7 @@ for zero-copy memory-mapped reads.
 <dependency>
   <groupId>io.github.dfa1.vortex</groupId>
   <artifactId>vortex-reader</artifactId>
-  <version>0.3.0</version>
+  <version>0.3.2</version>
 </dependency>
 ```
 
