@@ -78,6 +78,7 @@
 
 	<dependencyManagement>
 		<dependencies>
+			<!-- production -->
 			<dependency>
 				<groupId>io.github.dfa1.vortex</groupId>
 				<artifactId>vortex-core</artifactId>
@@ -102,12 +103,6 @@
 				<groupId>io.github.dfa1.vortex</groupId>
 				<artifactId>vortex-jdbc</artifactId>
 				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>com.h2database</groupId>
-				<artifactId>h2</artifactId>
-				<version>${h2.version}</version>
-				<scope>test</scope>
 			</dependency>
 			<dependency>
 				<groupId>io.github.dfa1.vortex</groupId>
@@ -143,6 +138,23 @@
 				<groupId>com.google.protobuf</groupId>
 				<artifactId>protobuf-java</artifactId>
 				<version>${protobuf.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.openjdk.jmh</groupId>
+				<artifactId>jmh-core</artifactId>
+				<version>${jmh.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.openjdk.jmh</groupId>
+				<artifactId>jmh-generator-annprocess</artifactId>
+				<version>${jmh.version}</version>
+			</dependency>
+			<!-- testing -->
+			<dependency>
+				<groupId>com.h2database</groupId>
+				<artifactId>h2</artifactId>
+				<version>${h2.version}</version>
+				<scope>test</scope>
 			</dependency>
 			<dependency>
 				<groupId>org.junit.jupiter</groupId>
@@ -197,16 +209,6 @@
 				<artifactId>slf4j-simple</artifactId>
 				<version>${slf4j.version}</version>
 				<scope>test</scope>
-			</dependency>
-			<dependency>
-				<groupId>org.openjdk.jmh</groupId>
-				<artifactId>jmh-core</artifactId>
-				<version>${jmh.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>org.openjdk.jmh</groupId>
-				<artifactId>jmh-generator-annprocess</artifactId>
-				<version>${jmh.version}</version>
 			</dependency>
 		</dependencies>
 	</dependencyManagement>

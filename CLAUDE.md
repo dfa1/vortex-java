@@ -160,10 +160,10 @@ In every module `pom.xml`, dependencies are grouped with comments:
 
 ```xml
 <!-- production -->
-<!-- compile/runtime/provided scope deps -->
+<!-- project-internal deps (io.github.dfa1.vortex:*) first, then external -->
 
 <!-- testing -->
-<!-- test scope deps -->
+<!-- project-internal test deps first, then external -->
 ```
 
 Omit a section if empty (e.g. integration module has no production deps; performance has no test deps).
