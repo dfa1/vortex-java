@@ -40,6 +40,11 @@ class VortexReaderTest {
 			}
 
 			@Override
+			public boolean accepts(DType dtype) {
+				return false;
+			}
+
+			@Override
 			public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
 				throw new UnsupportedOperationException();
 			}
@@ -54,6 +59,11 @@ class VortexReaderTest {
 				@Override
 				public EncodingId encodingId() {
 					return encodingId;
+				}
+
+				@Override
+				public boolean accepts(DType dtype) {
+					return false;
 				}
 
 				@Override
