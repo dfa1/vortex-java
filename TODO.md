@@ -9,47 +9,20 @@
   comparison via `?source=url1,url2`; then drop `.github/workflows/benchmark.yml`
 - [ ] Build something like hardwood.dev but for vortex files
 
-## Compression ratio gaps vs Rust (NYC taxi 2024-01: Rust 42.8 MB, Parquet 47.6 MB)
-
-Progress: raw I64 → datetimeparts (76→53 MB), fix FOR/RLE/RunEnd accepts + sample size (53→51 MB),
-fix ConstantEncoding encodeCascade (51→43.1 MB with Zstd; 49.7 MB without Zstd).
-Global dict encoding for low-cardinality integer columns (VendorID, PULocationID, etc.) — completed.
-`WriteOptions.withZstd(true)` — completed: adds ZstdEncoding to cascade, recovers the 43 MB level.
-
-Without Zstd (default, good read throughput): Java 49.7 MB — 6.5 MB above Rust.
-With Zstd (`WriteOptions.cascading(3).withZstd(true)`): Java ~43 MB — on par with Rust.
-Trade-off documented in `WriteOptions` Javadoc (6× slower Zstd decompression vs ALP+bitpack).
-
-Remaining gap (no-Zstd mode) — biggest to smallest:
-
-- [ ] **Nullable column handling** — `ParquetImporter` maps nulls to 0.0/0L (type defaults) for the 9 nullable F64
-  columns in the taxi dataset (`fare_amount`, `extra`, `mta_tax`, `tip_amount`, `tolls_amount`,
-  `improvement_surcharge`, `total_amount`, `congestion_surcharge`, `Airport_fee`). Rust uses `vortex.sparse`
-  or `vortex.masked` to store only valid values, then ALP on clean data. Java passes zero-polluted arrays to ALP.
-  Fix: add a `NullableData(double[] values, boolean[] validity)` wrapper; writer detects it, compacts valid values,
-  encodes validity as a Bool child. Requires API change to `VortexWriter.writeChunk` and corresponding
-  `ParquetImporter` changes.
-
-- [ ] **Global dict for F64 low-cardinality** — excluded from `isDictCandidate` because ALP/RLE were expected to
-  win; but for columns like `mta_tax` (8 unique F64 values) and `Airport_fee` (4 unique), dict codes are
-  ~same size as ALP+bitpack while Rust uses dict. Measure actual gain before implementing.
-
-- [ ] **FSST in CASCADE_CODECS** — `FsstEncoding` exists but not in the cascade; Rust uses FSST for
-  `store_and_fwd_flag`. Small gain on taxi (~0.1 MB).
-
 ## Performance
 
 - [ ] Publish reproducible perf artifacts
     - Capture JMH JSON + JFR profile alongside README table; cite hardware (CPU model), JDK build (`java -version`),
       and benchmark commit SHA so numbers don't rot silently.
-- [ ] performance tests must be peer reviewed
-- [ ] run performance tests on other machines (I have access only to Apple M5)
-- [ ] minimize `ctx.arena().allocate(...)` calls — prefer in-place decode when child buffer is writable (already done in
+- [ ] Performance tests must be peer reviewed
+- [ ] Run performance tests on other machines (I have access only to Apple M5)
+- [ ] Minimize `ctx.arena().allocate(...)` calls — prefer in-place decode when child buffer is writable (already done in
   ALP); audit all decoders for unnecessary off-heap allocs
 - [ ] **Evaluate Vector API (JEP 469+) for hot decode loops** — candidates: FastLanes bitpacked unpack,
   FrameOfReference add-base, ZigZag decode, ALP F64 reconstruction, future pco offset+base loop. Measure
   vs scalar baseline with JMH; only adopt where speedup is material and code stays readable. Pin against
   a specific JDK build since Vector API is incubating until Valhalla lands.
+- [ ] Review zero-copy
 
 ## Testing
 
@@ -76,12 +49,15 @@ Remaining gap (no-Zstd mode) — biggest to smallest:
   `vortex-java` artifact simplifies client dependency management and removes artificial module
   boundaries. Keep `integration`, `performance`, and `cli` as separate modules. Package structure
   (`encoding`, `io`, `writer`) already enforces internal boundaries without Maven.
-- [ ] switch back to module-path, but keep in mind these 2 blockers
+- [ ] switch back to module-path, but keep in mind these 2 blockers:
+-    [ ] 'dfa1' in package name is rejected by maven central
+-    [ ] automatic module names for flatbuffers is rejected by maven central
 
 ## Documentation
 
 - [ ] Format specification: byte-exact diagrams for file layout and each encoding, with annotated examples (Arrow spec
   style)
+- [ ] Review documentation for new joiners
 
 ## Tooling
 
@@ -92,12 +68,6 @@ Remaining gap (no-Zstd mode) — biggest to smallest:
     - Conversion involves a copy (MemorySegment → Arrow off-heap buffer) — cost is explicit and opt-in
     - Arrow JVM uses `sun.misc.Unsafe` / Netty internally; keeping it in a separate module means
       the core library stays Unsafe-free
-
-## Large-file support
-
-- [ ] **Test read/write of files > 2 GB**
-    - [ ] Parquet baseline for comparison: same data should fail or require splitting when any
-      column chunk exceeds 2 GB.
 
 ## API
 
@@ -121,6 +91,22 @@ Remaining gap (no-Zstd mode) — biggest to smallest:
 ## Encodings
 
 See [docs/compatibility.md](docs/compatibility.md) for the full encoding support table and S3 fixture status.
+
+### Remaining gap (no-Zstd mode) — biggest to smallest:
+- [ ] **Nullable column handling** — `ParquetImporter` maps nulls to 0.0/0L (type defaults) for the 9 nullable F64
+  columns in the taxi dataset (`fare_amount`, `extra`, `mta_tax`, `tip_amount`, `tolls_amount`,
+  `improvement_surcharge`, `total_amount`, `congestion_surcharge`, `Airport_fee`). Rust uses `vortex.sparse`
+  or `vortex.masked` to store only valid values, then ALP on clean data. Java passes zero-polluted arrays to ALP.
+  Fix: add a `NullableData(double[] values, boolean[] validity)` wrapper; writer detects it, compacts valid values,
+  encodes validity as a Bool child. Requires API change to `VortexWriter.writeChunk` and corresponding
+  `ParquetImporter` changes.
+
+- [ ] **Global dict for F64 low-cardinality** — excluded from `isDictCandidate` because ALP/RLE were expected to
+  win; but for columns like `mta_tax` (8 unique F64 values) and `Airport_fee` (4 unique), dict codes are
+  ~same size as ALP+bitpack while Rust uses dict. Measure actual gain before implementing.
+
+- [ ] **FSST in CASCADE_CODECS** — `FsstEncoding` exists but not in the cascade; Rust uses FSST for
+  `store_and_fwd_flag`. Small gain on taxi (~0.1 MB).
 
 ### `vortex.zstd` known limitations
 
