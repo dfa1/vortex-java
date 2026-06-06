@@ -294,6 +294,58 @@ The smaller file is not worth the read regression. `ZstdEncoding` is retained in
 codec registry for `Utf8`/`Binary` columns where no faster structural alternative exists,
 but it is not a candidate in the numeric cascade.
 
+## Vortex vs Parquet
+
+Both are columnar formats for analytics workloads. The right choice depends on your
+constraints.
+
+### Format model
+
+| Aspect | Parquet | Vortex |
+|---|---|---|
+| Encoding model | Fixed set: RLE, delta, dictionary, bit-packing | Pluggable tree — any encoding wraps any other |
+| Layout unit | Row group → column chunk → page | Struct → Zoned(Stats) → Chunked → Flat |
+| Random access | Must decode the entire page containing row N | O(1) for fixed-width encodings (ALP, BitPacked) |
+| Statistics | Row-group min/max stored in footer | Per-chunk zone maps as a first-class layout node (Zoned) |
+| Schema format | Thrift | FlatBuffer + Protobuf |
+| Nullability | Definition levels (RLE-encoded per row) | Validity bitmap as a child encoding |
+| Nested types | Repetition + definition levels | Recursive DType tree |
+
+### Performance (read)
+
+See the [benchmark tables](#benchmarks) for numbers. Summary:
+
+- **Single-column scan**: Vortex 1.4× faster than Parquet batch. ALP + mmap zero-copy
+  beats Parquet's RLE definition-level decode + page framing overhead.
+- **Multi-column scan**: roughly even today. Gap caused by per-chunk dict encoding in Java
+  vs Rust's global dict — closes when global dict is implemented.
+- **Filtered scan (zone-map pruning)**: Vortex skips entire chunks when the Zoned
+  min/max rules out a predicate. Parquet does the same at row-group granularity, but
+  Vortex chunks are smaller (131 072 rows vs Parquet's typical 1 M row groups), so
+  pruning is finer-grained.
+
+### Ecosystem maturity
+
+| | Parquet | Vortex |
+|---|---|---|
+| Tooling | Ubiquitous: Spark, DuckDB, pandas, Arrow, Hive, … | Early-stage — fewer readers outside the Rust impl |
+| Spec | [Apache Parquet format spec](https://parquet.apache.org/docs/file-format/) | Rust reference implementation is the ground truth |
+| Write maturity | Stable, battle-tested | Alpha — APIs will change |
+| JVM library size | Parquet-mr: ~10 MB + transitive deps | vortex-java: < 1 MB, zero native deps |
+
+### When to choose Vortex
+
+- You control both writer and reader (no third-party tooling needed)
+- You need sub-page random access or finer-grained zone-map pruning
+- You want a zero-JNI, zero-Unsafe JVM library with no native artifacts to manage
+- You are building an analytics engine and want a pluggable encoding layer
+
+### When to stick with Parquet
+
+- You need interoperability with Spark, DuckDB, pandas, or other ecosystem tools
+- You cannot use an alpha-stability API
+- Your workload is write-heavy and file-size efficiency is more important than read speed
+
 ## Design principles
 
 - Zero-copy everywhere via FFM `MemorySegment`
