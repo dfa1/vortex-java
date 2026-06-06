@@ -90,8 +90,6 @@ Remaining 0.3 MB gap — biggest to smallest:
     - Candidates: `PType` integer kinds, buffer offsets, row indices, byte lengths
     - Goal: type-safety at zero cost (value class = no heap alloc, no boxing)
 
-- [ ] **Replace intentional `IndexOutOfBoundsException` throws with `VortexException`** — `IndexOutOfBoundsException` is for programming bugs; when bad file data causes an out-of-bounds condition (crafted `bufferIndices`, invalid child index, malformed offset array) the reader should throw `VortexException` so callers can distinguish file corruption from bugs. Audit `buffer(int i)` and `child(int i)` impls in all `Array` subclasses and replace file-triggered throws.
-
 - [ ] **Audit runtime pluggability vs Rust impl** — maintainer (2026-06-04) flagged that Rust supports
   runtime registration for: Encodings, DTypes, Compute, Layouts. Java status:
     - Encodings: ✅ `ServiceLoader` + `EncodingRegistry.register()`; ✅ `allowUnknown()` passthrough for unregistered encodings (mirrors `VortexSession::allow_unknown()`)
