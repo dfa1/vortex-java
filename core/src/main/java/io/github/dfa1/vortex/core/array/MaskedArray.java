@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.core.array;
 
 import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.MemorySegment;
 
@@ -47,7 +48,7 @@ public final class MaskedArray implements Array {
 			case 0 -> child;
 			case 1 -> {
 				if (validity == null) {
-					throw new IndexOutOfBoundsException("no validity child (AllValid)");
+					throw new VortexException("no validity child: masked array was encoded as AllValid");
 				}
 				yield validity;
 			}
