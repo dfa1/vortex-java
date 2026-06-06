@@ -11,7 +11,9 @@ import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.encoding.EncodingRegistry;
 import io.github.dfa1.vortex.io.VortexInspector;
 import io.github.dfa1.vortex.io.VortexReader;
+import io.github.dfa1.vortex.parquet.ImportOptions;
 import io.github.dfa1.vortex.parquet.ParquetImporter;
+import io.github.dfa1.vortex.writer.WriteOptions;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
@@ -99,6 +101,7 @@ public final class TaxiLayoutInspector {
 
         Path jniVortex = Files.createTempFile("taxi-jni", ".vortex");
         Path javaVortex = Files.createTempFile("taxi-java", ".vortex");
+        Path javaZstdVortex = Files.createTempFile("taxi-java-zstd", ".vortex");
 
         try {
             System.out.print("Writing JNI Vortex (Rust encoder)...");
@@ -109,18 +112,30 @@ public final class TaxiLayoutInspector {
             ParquetImporter.importParquet(parquetFile, javaVortex);
             System.out.printf(" %6.1f MB%n", mb(javaVortex));
 
+            System.out.print("Writing Java Vortex (cascading depth 3 + Zstd)...");
+            ImportOptions zstdOpts = ImportOptions.defaults()
+                    .withWriteOptions(WriteOptions.cascading(3).withZstd(true));
+            ParquetImporter.importParquet(parquetFile, javaZstdVortex, zstdOpts);
+            System.out.printf(" %6.1f MB%n", mb(javaZstdVortex));
+
             System.out.println("\n══════════════════════════════════════════════════════");
             System.out.println("  JNI / Rust writer");
             System.out.println("══════════════════════════════════════════════════════");
             inspect(jniVortex);
 
             System.out.println("\n══════════════════════════════════════════════════════");
-            System.out.println("  Java writer");
+            System.out.println("  Java writer (no Zstd)");
             System.out.println("══════════════════════════════════════════════════════");
             inspect(javaVortex);
+
+            System.out.println("\n══════════════════════════════════════════════════════");
+            System.out.println("  Java writer (with Zstd)");
+            System.out.println("══════════════════════════════════════════════════════");
+            inspect(javaZstdVortex);
         } finally {
             Files.deleteIfExists(jniVortex);
             Files.deleteIfExists(javaVortex);
+            Files.deleteIfExists(javaZstdVortex);
         }
     }
 

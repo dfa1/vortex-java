@@ -1107,6 +1107,26 @@ class JavaWritesRustReadsIntegrationTest {
     }
 
     @Test
+    void javaWriter_rustReader_cascading_withZstd_f64(@TempDir Path tmp) throws IOException {
+        // Given — Zstd wins the cascade for high-cardinality F64; Rust must decode vortex.zstd
+        Path file = tmp.resolve("java_zstd_cascade_f64.vtx");
+        int n = 2_000;
+        double[] data = new double[n];
+        for (int i = 0; i < n; i++) {
+            data[i] = i * 1.37 + 3.14;
+        }
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, F64_SCHEMA, WriteOptions.cascading(3).withZstd(true))) {
+            // When
+            sut.writeChunk(Map.of("v", data));
+        }
+
+        // Then — Rust reader must decode the file (whether via ALP or Zstd, value-equal)
+        double[] decoded = readDoubleColumn(file, "v");
+        assertBitwiseEqualsF64(decoded, data);
+    }
+
+    @Test
     void javaWriter_rustReader_globalDict_i64(@TempDir Path tmp) throws IOException {
         // Given — low-cardinality I64 column triggers global dict across two chunks
         Path file = tmp.resolve("java_globaldict_i64.vtx");

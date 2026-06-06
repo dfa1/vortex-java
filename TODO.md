@@ -9,21 +9,33 @@
   comparison via `?source=url1,url2`; then drop `.github/workflows/benchmark.yml`
 - [ ] Build something like hardwood.dev but for vortex files
 
-## Compression ratio gaps vs Rust (NYC taxi 2024-01: Java 43.1 MB, Rust 42.8 MB, Parquet 47.6 MB)
+## Compression ratio gaps vs Rust (NYC taxi 2024-01: Rust 42.8 MB, Parquet 47.6 MB)
 
 Progress: raw I64 → datetimeparts (76→53 MB), fix FOR/RLE/RunEnd accepts + sample size (53→51 MB),
-fix ConstantEncoding encodeCascade + add ZstdEncoding to CASCADE_CODECS (51→43.1 MB). Java now beats
-Parquet and is within 0.3 MB of Rust.
+fix ConstantEncoding encodeCascade (51→43.1 MB with Zstd; 49.7 MB without Zstd).
+Global dict encoding for low-cardinality integer columns (VendorID, PULocationID, etc.) — completed.
+`WriteOptions.withZstd(true)` — completed: adds ZstdEncoding to cascade, recovers the 43 MB level.
 
-Remaining 0.3 MB gap — biggest to smallest:
+Without Zstd (default, good read throughput): Java 49.7 MB — 6.5 MB above Rust.
+With Zstd (`WriteOptions.cascading(3).withZstd(true)`): Java ~43 MB — on par with Rust.
+Trade-off documented in `WriteOptions` Javadoc (6× slower Zstd decompression vs ALP+bitpack).
 
-- [ ] **Global dict encoding** — Rust applies `vortex.dict` across the ENTIRE column before chunking; produces one
-  tiny dict buffer + one globally-bitpacked codes array. Java applies dict per 131 072-row chunk. Low-cardinality
-  columns affected: `mta_tax` (8 unique F64), `Airport_fee` (4), `extra` (48), `PULocationID` (260), `DOLocationID` (
-  261),
-  `payment_type` (5), `store_and_fwd_flag` (3), `congestion_surcharge` (few), `tolls_amount` (1127).
-  Requires a two-pass write pipeline: first pass collects all values and builds the global dict; second pass emits
-  coded chunks. Estimated remaining gain ~0.3 MB (most gains already captured by ZstdEncoding on per-chunk dicts).
+Remaining gap (no-Zstd mode) — biggest to smallest:
+
+- [ ] **Nullable column handling** — `ParquetImporter` maps nulls to 0.0/0L (type defaults) for the 9 nullable F64
+  columns in the taxi dataset (`fare_amount`, `extra`, `mta_tax`, `tip_amount`, `tolls_amount`,
+  `improvement_surcharge`, `total_amount`, `congestion_surcharge`, `Airport_fee`). Rust uses `vortex.sparse`
+  or `vortex.masked` to store only valid values, then ALP on clean data. Java passes zero-polluted arrays to ALP.
+  Fix: add a `NullableData(double[] values, boolean[] validity)` wrapper; writer detects it, compacts valid values,
+  encodes validity as a Bool child. Requires API change to `VortexWriter.writeChunk` and corresponding
+  `ParquetImporter` changes.
+
+- [ ] **Global dict for F64 low-cardinality** — excluded from `isDictCandidate` because ALP/RLE were expected to
+  win; but for columns like `mta_tax` (8 unique F64 values) and `Airport_fee` (4 unique), dict codes are
+  ~same size as ALP+bitpack while Rust uses dict. Measure actual gain before implementing.
+
+- [ ] **FSST in CASCADE_CODECS** — `FsstEncoding` exists but not in the cascade; Rust uses FSST for
+  `store_and_fwd_flag`. Small gain on taxi (~0.1 MB).
 
 ## Performance
 
@@ -153,8 +165,8 @@ on any S3 fixture (all fixtures are Rust-produced; decode unblocks them).
 
 **Phases**:
 
-- [ ] **Phase E0 — gate**. Is there a consumer (CLI write path, vortex-arrow bridge)? If no,
-  stop. Decode is enough.
+- [x] **Phase E0 — gate**. Consumer = `VortexWriter` cascade (`WriteOptions.cascading(3)`) — closes
+  the NYC taxi compression gap vs Rust without the 6× Zstd read penalty. Gate cleared.
 - [ ] **Phase E1 — bit writer**. `LeBitWriter` over `Arena`-backed `MemorySegment`. Mirrors
   `pco/src/bit_writer.rs`. Property test: random bit sequences round-trip via `LeBitReader`.
 - [ ] **Phase E2 — Classic mode, no delta, fixed bins, no optimization**. Hardcoded bin layout
@@ -198,7 +210,8 @@ on any S3 fixture (all fixtures are Rust-produced; decode unblocks them).
 but suboptimal" encoder (Phase E1+E2+E5+E8 partial). Decode is the prerequisite —
 don't start before decode lands.
 
-**Decision**: keep `Encoder` stub until a real write consumer materializes. Reassess
-post-decode + post-`vortex-arrow` bridge.
+**Decision**: E0 gate cleared — start E1 (LeBitWriter). Suboptimal path E1+E2+E9 (~5 days)
+gives Rust-compatible wire format first; E3+E4 add ratio parity (~+5 days); E5+E6 add delta +
+mode selection (~+5 days). Tackle E1 next.
 
 

@@ -24,6 +24,7 @@ import io.github.dfa1.vortex.encoding.PrimitiveEncoding;
 import io.github.dfa1.vortex.encoding.RleEncoding;
 import io.github.dfa1.vortex.encoding.RunEndEncoding;
 import io.github.dfa1.vortex.encoding.VarBinEncoding;
+import io.github.dfa1.vortex.encoding.ZstdEncoding;
 import io.github.dfa1.vortex.fbs.ArraySpec;
 import io.github.dfa1.vortex.fbs.Extension;
 import io.github.dfa1.vortex.fbs.Footer;
@@ -82,25 +83,16 @@ public final class VortexWriter implements Closeable {
     private static final List<Encoding> DEFAULT_CODECS = List.of(
             new AlpEncoding(), new PrimitiveEncoding(), new BoolEncoding(), new DictEncoding(), new VarBinEncoding());
 
-    // ZstdEncoding is intentionally absent from this list.
-    // On NYC Taxi 2024-01: Zstd wins compression for F64 columns (50 MB → 43 MB) but beats
-    // ALP and kills decode throughput by 6× (240 → 40 ops/s). ZSTD decompression cannot
-    // compete with ALP reconstruction or bitpack unpack for numeric columns.
-    // Use ZstdEncoding only for Utf8/Binary where no faster structural encoding exists.
-    private static final List<Encoding> CASCADE_CODECS = List.of(
-            new DateTimePartsEncoding(),
-            new ConstantEncoding(),
-            new AlpEncoding(), new FrameOfReferenceEncoding(), new RunEndEncoding(), new RleEncoding(),
-            new DictEncoding(), new BitpackedEncoding(),
-            new VarBinEncoding(), new PrimitiveEncoding(), new BoolEncoding());
-
-    private static final EncodingRegistry CASCADE_REGISTRY = EncodingRegistry.of(CASCADE_CODECS);
+    // Base cascade codec list — no Zstd. Zstd is appended (before PrimitiveEncoding) when
+    // WriteOptions.enableZstd() is true. See WriteOptions.withZstd(boolean) for the tradeoff.
 
     private final WritableByteChannel channel;
     private final DType.Struct schema;
     private final WriteOptions options;
     private final List<Encoding> encodings;
     private final EncodingRegistry defaultRegistry;
+    private final List<Encoding> cascadeCodecs;
+    private final EncodingRegistry cascadeRegistry;
     private final List<SegRef> segs = new ArrayList<>();
     private final Map<String, List<ChunkRef>> colChunks = new LinkedHashMap<>();
     private final Map<EncodingId, Integer> encodingIdx = new LinkedHashMap<>();
@@ -121,9 +113,26 @@ public final class VortexWriter implements Closeable {
         this.options = options;
         this.encodings = encodings;
         this.defaultRegistry = EncodingRegistry.of(encodings);
+        this.cascadeCodecs = buildCascadeCodecs(options);
+        this.cascadeRegistry = EncodingRegistry.of(this.cascadeCodecs);
         for (String name : schema.fieldNames()) {
             colChunks.put(name, new ArrayList<>());
         }
+    }
+
+    private static List<Encoding> buildCascadeCodecs(WriteOptions options) {
+        List<Encoding> codecs = new ArrayList<>(List.of(
+                new DateTimePartsEncoding(),
+                new ConstantEncoding(),
+                new AlpEncoding(), new FrameOfReferenceEncoding(), new RunEndEncoding(), new RleEncoding(),
+                new DictEncoding(), new BitpackedEncoding(),
+                new VarBinEncoding()));
+        if (options.enableZstd()) {
+            codecs.add(new ZstdEncoding());
+        }
+        codecs.add(new PrimitiveEncoding());
+        codecs.add(new BoolEncoding());
+        return List.copyOf(codecs);
     }
 
     public static VortexWriter create(
@@ -307,8 +316,8 @@ public final class VortexWriter implements Closeable {
         try (Arena arena = Arena.ofConfined()) {
             EncodeResult result;
             if (options.allowedCascading() > 0) {
-                EncodeContext encodeCtx = EncodeContext.ofDepth(options.allowedCascading(), arena, CASCADE_REGISTRY);
-                CascadingCompressor compressor = new CascadingCompressor(CASCADE_CODECS);
+                EncodeContext encodeCtx = EncodeContext.ofDepth(options.allowedCascading(), arena, cascadeRegistry);
+                CascadingCompressor compressor = new CascadingCompressor(cascadeCodecs);
                 result = compressor.encode(dtype, data, encodeCtx);
             } else {
                 Encoding encoding = findEncoding(dtype);
