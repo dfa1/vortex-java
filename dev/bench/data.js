@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1780695328852,
+  "lastUpdate": 1780779507522,
   "repoUrl": "https://github.com/dfa1/vortex-java",
   "entries": {
     "Benchmark": [
@@ -232,6 +232,82 @@ window.BENCHMARK_DATA = {
           {
             "name": "io.github.dfa1.vortex.performance.RustVsJavaWriteBenchmark.jniWrite",
             "value": 0.012840988644632963,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Davide Angelocola",
+            "username": "dfa1",
+            "email": "davide.angelocola@gmail.com"
+          },
+          "committer": {
+            "name": "Davide Angelocola",
+            "username": "dfa1",
+            "email": "davide.angelocola@gmail.com"
+          },
+          "id": "10a7776e5cdc842806377bc31071aa1d18b4ccb3",
+          "message": "fix(security): protect against zip-bomb attacks via inflated row_count\n\nTwo independent OOM vectors, both exploitable with files under 200 bytes\nclaiming 10⁹ rows:\n\n1. ConstantEncoding.Decoder stored n copies of the constant value.\n   A ~130-byte file triggers an 8 GB allocation in decode() before\n   touching any actual data.\n   Fix: store one element only; array reports length=n with O(1) buffer.\n   Callers that need all n values replicate from index 0.\n\n2. ScanIterator.expandDictPrimitive pre-allocated n × elemBytes from\n   the attacker-controlled codesLayout.rowCount() before reading a\n   single code byte. PrimitiveEncoding wraps the mmap'd segment without\n   allocating, making the rowCount inflation invisible at decode time.\n   Fix: validate bufferCodes >= n in decodeDictLayout before expansion;\n   the mmap-bounded buffer makes inflation detectable for direct-mapped\n   encodings, and full-decode encodings (bitpacked etc.) already fill\n   their buffer to n × elemBytes during decode.\n\nRegression tests in ZipBombTest use row counts safe for CI: 10M for\nattack 1 (fails with AssertionError if reverted, not OOM) and 100 for\nattack 2 (wrong exception type → clean failure if check is removed).\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>",
+          "timestamp": "2026-06-06T20:06:28Z",
+          "url": "https://github.com/dfa1/vortex-java/commit/10a7776e5cdc842806377bc31071aa1d18b4ccb3"
+        },
+        "date": 1780779507164,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.javaReadCascading",
+            "value": 31.66280988605688,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.javaReadSymbol",
+            "value": 22.925515267200524,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.javaReadVolume",
+            "value": 39.74299151265897,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.jniReadClose",
+            "value": 24.37365981525212,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.jniReadSymbol",
+            "value": 4.62324597463762,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.jniReadVolume",
+            "value": 25.70404600814548,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaWriteBenchmark.javaWrite",
+            "value": 0.5982789953346004,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaWriteBenchmark.javaWriteCascading",
+            "value": 0.23862717264647415,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaWriteBenchmark.jniWrite",
+            "value": 0.3253265982372833,
             "unit": "ops/s",
             "extra": "iterations: 3\nforks: 1\nthreads: 1"
           }
