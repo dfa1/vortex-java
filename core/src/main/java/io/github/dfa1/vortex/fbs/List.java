@@ -3,54 +3,84 @@
 package io.github.dfa1.vortex.fbs;
 
 import com.google.flatbuffers.BaseVector;
-import com.google.flatbuffers.BooleanVector;
-import com.google.flatbuffers.ByteVector;
-import com.google.flatbuffers.Constants;
-import com.google.flatbuffers.DoubleVector;
 import com.google.flatbuffers.FlatBufferBuilder;
-import com.google.flatbuffers.FloatVector;
-import com.google.flatbuffers.IntVector;
-import com.google.flatbuffers.LongVector;
-import com.google.flatbuffers.ShortVector;
-import com.google.flatbuffers.StringVector;
-import com.google.flatbuffers.Struct;
-import com.google.flatbuffers.UnionVector;
+
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 @SuppressWarnings("unused")
 public final class List extends com.google.flatbuffers.Table {
-  public static List getRootAsList(ByteBuffer _bb) { return getRootAsList(_bb, new List()); }
-  public static List getRootAsList(ByteBuffer _bb, List obj) { _bb.order(ByteOrder.LITTLE_ENDIAN); return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb)); }
-  public void __init(int _i, ByteBuffer _bb) { __reset(_i, _bb); }
-  public List __assign(int _i, ByteBuffer _bb) { __init(_i, _bb); return this; }
+    public static List getRootAsList(ByteBuffer _bb) {
+        return getRootAsList(_bb, new List());
+    }
 
-  public io.github.dfa1.vortex.fbs.DType elementType() { return elementType(new io.github.dfa1.vortex.fbs.DType()); }
-  public io.github.dfa1.vortex.fbs.DType elementType(io.github.dfa1.vortex.fbs.DType obj) { int o = __offset(4); return o != 0 ? obj.__assign(__indirect(o + bb_pos), bb) : null; }
-  public boolean nullable() { int o = __offset(6); return o != 0 ? 0!=bb.get(o + bb_pos) : false; }
+    public static List getRootAsList(ByteBuffer _bb, List obj) {
+        _bb.order(ByteOrder.LITTLE_ENDIAN);
+        return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb));
+    }
 
-  public static int createList(FlatBufferBuilder builder,
-      int elementTypeOffset,
-      boolean nullable) {
-    builder.startTable(2);
-    List.addElementType(builder, elementTypeOffset);
-    List.addNullable(builder, nullable);
-    return List.endList(builder);
-  }
+    public static int createList(FlatBufferBuilder builder,
+            int elementTypeOffset,
+            boolean nullable) {
+        builder.startTable(2);
+        List.addElementType(builder, elementTypeOffset);
+        List.addNullable(builder, nullable);
+        return List.endList(builder);
+    }
 
-  public static void startList(FlatBufferBuilder builder) { builder.startTable(2); }
-  public static void addElementType(FlatBufferBuilder builder, int elementTypeOffset) { builder.addOffset(0, elementTypeOffset, 0); }
-  public static void addNullable(FlatBufferBuilder builder, boolean nullable) { builder.addBoolean(1, nullable, false); }
-  public static int endList(FlatBufferBuilder builder) {
-    int o = builder.endTable();
-    return o;
-  }
+    public static void startList(FlatBufferBuilder builder) {
+        builder.startTable(2);
+    }
 
-  public static final class Vector extends BaseVector {
-    public Vector __assign(int _vector, int _element_size, ByteBuffer _bb) { __reset(_vector, _element_size, _bb); return this; }
+    public static void addElementType(FlatBufferBuilder builder, int elementTypeOffset) {
+        builder.addOffset(0, elementTypeOffset, 0);
+    }
 
-    public List get(int j) { return get(new List(), j); }
-    public List get(List obj, int j) {  return obj.__assign(__indirect(__element(j), bb), bb); }
-  }
+    public static void addNullable(FlatBufferBuilder builder, boolean nullable) {
+        builder.addBoolean(1, nullable, false);
+    }
+
+    public static int endList(FlatBufferBuilder builder) {
+        int o = builder.endTable();
+        return o;
+    }
+
+    public void __init(int _i, ByteBuffer _bb) {
+        __reset(_i, _bb);
+    }
+
+    public List __assign(int _i, ByteBuffer _bb) {
+        __init(_i, _bb);
+        return this;
+    }
+
+    public io.github.dfa1.vortex.fbs.DType elementType() {
+        return elementType(new io.github.dfa1.vortex.fbs.DType());
+    }
+
+    public io.github.dfa1.vortex.fbs.DType elementType(io.github.dfa1.vortex.fbs.DType obj) {
+        int o = __offset(4);
+        return o != 0 ? obj.__assign(__indirect(o + bb_pos), bb) : null;
+    }
+
+    public boolean nullable() {
+        int o = __offset(6);
+        return o != 0 ? 0 != bb.get(o + bb_pos) : false;
+    }
+
+    public static final class Vector extends BaseVector {
+        public Vector __assign(int _vector, int _element_size, ByteBuffer _bb) {
+            __reset(_vector, _element_size, _bb);
+            return this;
+        }
+
+        public List get(int j) {
+            return get(new List(), j);
+        }
+
+        public List get(List obj, int j) {
+            return obj.__assign(__indirect(__element(j), bb), bb);
+        }
+    }
 }
 

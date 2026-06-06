@@ -15,6 +15,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class CliIT {
 
+    private static String captureStdout(IntSupplier action) {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        PrintStream saved = System.out;
+        System.setOut(new PrintStream(baos, true, StandardCharsets.UTF_8));
+        try {
+            action.getAsInt();
+        } finally {
+            System.setOut(saved);
+        }
+        return baos.toString(StandardCharsets.UTF_8);
+    }
+
     @Test
     void fullPipeline(@TempDir Path tmp) throws Exception {
         // Given
@@ -143,17 +155,5 @@ class CliIT {
         String count = captureStdout(
                 () -> CountCommand.run(new String[]{"count", vortex.toString()}));
         assertThat(count.strip()).isEqualTo("3");
-    }
-
-    private static String captureStdout(IntSupplier action) {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        PrintStream saved = System.out;
-        System.setOut(new PrintStream(baos, true, StandardCharsets.UTF_8));
-        try {
-            action.getAsInt();
-        } finally {
-            System.setOut(saved);
-        }
-        return baos.toString(StandardCharsets.UTF_8);
     }
 }

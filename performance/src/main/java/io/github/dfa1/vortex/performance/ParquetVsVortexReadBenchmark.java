@@ -76,6 +76,24 @@ public class ParquetVsVortexReadBenchmark {
     private Path vortexFile;
     private EncodingRegistry registry;
 
+    private static Path downloadIfAbsent(Path dest, String url) throws Exception {
+        if (Files.exists(dest)) {
+            System.out.printf("[ParquetVsVortexReadBenchmark] cache hit: %s%n", dest);
+            return dest;
+        }
+        System.out.printf("[ParquetVsVortexReadBenchmark] downloading %s...%n", url);
+        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
+        HttpRequest request = HttpRequest.newBuilder().uri(URI.create(url)).build();
+        HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+        if (response.statusCode() != 200) {
+            throw new IOException("HTTP " + response.statusCode() + " for " + url);
+        }
+        try (InputStream in = response.body()) {
+            Files.copy(in, dest);
+        }
+        return dest;
+    }
+
     @Setup(Level.Trial)
     public void setup() throws Exception {
         registry = EncodingRegistry.loadAll();
@@ -101,6 +119,8 @@ public class ParquetVsVortexReadBenchmark {
         }
     }
 
+    // ── Batch API (apples-to-apples with Vortex) ─────────────────────────────
+
     @TearDown(Level.Trial)
     public void tearDown() throws IOException {
         synchronized (SETUP_LOCK) {
@@ -112,8 +132,6 @@ public class ParquetVsVortexReadBenchmark {
             }
         }
     }
-
-    // ── Batch API (apples-to-apples with Vortex) ─────────────────────────────
 
     /// Hardwood batch: decode trip_distance column in chunks, sum all values.
     @Benchmark
@@ -131,6 +149,8 @@ public class ParquetVsVortexReadBenchmark {
         }
         return sum;
     }
+
+    // ── Row cursor API (measures row-oriented overhead on top of decode) ──────
 
     /// Hardwood batch: decode fare_amount + PULocationID in chunks, sum both.
     @Benchmark
@@ -152,8 +172,6 @@ public class ParquetVsVortexReadBenchmark {
         return fareSum + idSum;
     }
 
-    // ── Row cursor API (measures row-oriented overhead on top of decode) ──────
-
     /// Hardwood row cursor: sum trip_distance, one virtual call per row.
     @Benchmark
     public double parquetReadRowByRow() throws IOException {
@@ -168,6 +186,8 @@ public class ParquetVsVortexReadBenchmark {
         }
         return sum;
     }
+
+    // ── Vortex ────────────────────────────────────────────────────────────────
 
     /// Hardwood row cursor: sum fare_amount + PULocationID, two virtual calls per row.
     @Benchmark
@@ -186,8 +206,6 @@ public class ParquetVsVortexReadBenchmark {
         return fareSum + idSum;
     }
 
-    // ── Vortex ────────────────────────────────────────────────────────────────
-
     /// Vortex: decode trip_distance in chunks, sum via batch fold.
     @Benchmark
     public double vortexRead() throws IOException {
@@ -202,6 +220,8 @@ public class ParquetVsVortexReadBenchmark {
         }
         return sum;
     }
+
+    // ── Setup helper ──────────────────────────────────────────────────────────
 
     /// Vortex: decode fare_amount + PULocationID in chunks, sum both via batch fold.
     @Benchmark
@@ -219,25 +239,5 @@ public class ParquetVsVortexReadBenchmark {
             }
         }
         return fareSum + idSum;
-    }
-
-    // ── Setup helper ──────────────────────────────────────────────────────────
-
-    private static Path downloadIfAbsent(Path dest, String url) throws Exception {
-        if (Files.exists(dest)) {
-            System.out.printf("[ParquetVsVortexReadBenchmark] cache hit: %s%n", dest);
-            return dest;
-        }
-        System.out.printf("[ParquetVsVortexReadBenchmark] downloading %s...%n", url);
-        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
-        HttpRequest request = HttpRequest.newBuilder().uri(URI.create(url)).build();
-        HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
-        if (response.statusCode() != 200) {
-            throw new IOException("HTTP " + response.statusCode() + " for " + url);
-        }
-        try (InputStream in = response.body()) {
-            Files.copy(in, dest);
-        }
-        return dest;
     }
 }

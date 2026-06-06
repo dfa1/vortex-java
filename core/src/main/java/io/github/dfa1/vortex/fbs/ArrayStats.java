@@ -3,122 +3,309 @@
 package io.github.dfa1.vortex.fbs;
 
 import com.google.flatbuffers.BaseVector;
-import com.google.flatbuffers.BooleanVector;
 import com.google.flatbuffers.ByteVector;
-import com.google.flatbuffers.Constants;
-import com.google.flatbuffers.DoubleVector;
 import com.google.flatbuffers.FlatBufferBuilder;
-import com.google.flatbuffers.FloatVector;
-import com.google.flatbuffers.IntVector;
-import com.google.flatbuffers.LongVector;
-import com.google.flatbuffers.ShortVector;
-import com.google.flatbuffers.StringVector;
-import com.google.flatbuffers.Struct;
-import com.google.flatbuffers.UnionVector;
+
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 @SuppressWarnings("unused")
 public final class ArrayStats extends com.google.flatbuffers.Table {
-  public static ArrayStats getRootAsArrayStats(ByteBuffer _bb) { return getRootAsArrayStats(_bb, new ArrayStats()); }
-  public static ArrayStats getRootAsArrayStats(ByteBuffer _bb, ArrayStats obj) { _bb.order(ByteOrder.LITTLE_ENDIAN); return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb)); }
-  public void __init(int _i, ByteBuffer _bb) { __reset(_i, _bb); }
-  public ArrayStats __assign(int _i, ByteBuffer _bb) { __init(_i, _bb); return this; }
+    public static ArrayStats getRootAsArrayStats(ByteBuffer _bb) {
+        return getRootAsArrayStats(_bb, new ArrayStats());
+    }
 
-  /**
-   * Protobuf serialized ScalarValue
-   */
-  public int min(int j) { int o = __offset(4); return o != 0 ? bb.get(__vector(o) + j * 1) & 0xFF : 0; }
-  public int minLength() { int o = __offset(4); return o != 0 ? __vector_len(o) : 0; }
-  public ByteVector minVector() { return minVector(new ByteVector()); }
-  public ByteVector minVector(ByteVector obj) { int o = __offset(4); return o != 0 ? obj.__assign(__vector(o), bb) : null; }
-  public ByteBuffer minAsByteBuffer() { return __vector_as_bytebuffer(4, 1); }
-  public ByteBuffer minInByteBuffer(ByteBuffer _bb) { return __vector_in_bytebuffer(_bb, 4, 1); }
-  public int minPrecision() { int o = __offset(6); return o != 0 ? bb.get(o + bb_pos) & 0xFF : 0; }
-  public int max(int j) { int o = __offset(8); return o != 0 ? bb.get(__vector(o) + j * 1) & 0xFF : 0; }
-  public int maxLength() { int o = __offset(8); return o != 0 ? __vector_len(o) : 0; }
-  public ByteVector maxVector() { return maxVector(new ByteVector()); }
-  public ByteVector maxVector(ByteVector obj) { int o = __offset(8); return o != 0 ? obj.__assign(__vector(o), bb) : null; }
-  public ByteBuffer maxAsByteBuffer() { return __vector_as_bytebuffer(8, 1); }
-  public ByteBuffer maxInByteBuffer(ByteBuffer _bb) { return __vector_in_bytebuffer(_bb, 8, 1); }
-  public int maxPrecision() { int o = __offset(10); return o != 0 ? bb.get(o + bb_pos) & 0xFF : 0; }
-  public int sum(int j) { int o = __offset(12); return o != 0 ? bb.get(__vector(o) + j * 1) & 0xFF : 0; }
-  public int sumLength() { int o = __offset(12); return o != 0 ? __vector_len(o) : 0; }
-  public ByteVector sumVector() { return sumVector(new ByteVector()); }
-  public ByteVector sumVector(ByteVector obj) { int o = __offset(12); return o != 0 ? obj.__assign(__vector(o), bb) : null; }
-  public ByteBuffer sumAsByteBuffer() { return __vector_as_bytebuffer(12, 1); }
-  public ByteBuffer sumInByteBuffer(ByteBuffer _bb) { return __vector_in_bytebuffer(_bb, 12, 1); }
-  public boolean hasIsSorted() { return 0 != __offset(14); }
-  public boolean isSorted() { int o = __offset(14); return o != 0 ? 0!=bb.get(o + bb_pos) : false; }
-  public boolean hasIsStrictSorted() { return 0 != __offset(16); }
-  public boolean isStrictSorted() { int o = __offset(16); return o != 0 ? 0!=bb.get(o + bb_pos) : false; }
-  public boolean hasIsConstant() { return 0 != __offset(18); }
-  public boolean isConstant() { int o = __offset(18); return o != 0 ? 0!=bb.get(o + bb_pos) : false; }
-  public boolean hasNullCount() { return 0 != __offset(20); }
-  public long nullCount() { int o = __offset(20); return o != 0 ? bb.getLong(o + bb_pos) : 0L; }
-  public boolean hasUncompressedSizeInBytes() { return 0 != __offset(22); }
-  public long uncompressedSizeInBytes() { int o = __offset(22); return o != 0 ? bb.getLong(o + bb_pos) : 0L; }
-  public boolean hasNanCount() { return 0 != __offset(24); }
-  public long nanCount() { int o = __offset(24); return o != 0 ? bb.getLong(o + bb_pos) : 0L; }
+    public static ArrayStats getRootAsArrayStats(ByteBuffer _bb, ArrayStats obj) {
+        _bb.order(ByteOrder.LITTLE_ENDIAN);
+        return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb));
+    }
 
-  public static int createArrayStats(FlatBufferBuilder builder,
-      int minOffset,
-      int minPrecision,
-      int maxOffset,
-      int maxPrecision,
-      int sumOffset,
-      boolean isSorted,
-      boolean isStrictSorted,
-      boolean isConstant,
-      long nullCount,
-      long uncompressedSizeInBytes,
-      long nanCount) {
-    builder.startTable(11);
-    ArrayStats.addNanCount(builder, nanCount);
-    ArrayStats.addUncompressedSizeInBytes(builder, uncompressedSizeInBytes);
-    ArrayStats.addNullCount(builder, nullCount);
-    ArrayStats.addSum(builder, sumOffset);
-    ArrayStats.addMax(builder, maxOffset);
-    ArrayStats.addMin(builder, minOffset);
-    ArrayStats.addIsConstant(builder, isConstant);
-    ArrayStats.addIsStrictSorted(builder, isStrictSorted);
-    ArrayStats.addIsSorted(builder, isSorted);
-    ArrayStats.addMaxPrecision(builder, maxPrecision);
-    ArrayStats.addMinPrecision(builder, minPrecision);
-    return ArrayStats.endArrayStats(builder);
-  }
+    public static int createArrayStats(FlatBufferBuilder builder,
+            int minOffset,
+            int minPrecision,
+            int maxOffset,
+            int maxPrecision,
+            int sumOffset,
+            boolean isSorted,
+            boolean isStrictSorted,
+            boolean isConstant,
+            long nullCount,
+            long uncompressedSizeInBytes,
+            long nanCount) {
+        builder.startTable(11);
+        ArrayStats.addNanCount(builder, nanCount);
+        ArrayStats.addUncompressedSizeInBytes(builder, uncompressedSizeInBytes);
+        ArrayStats.addNullCount(builder, nullCount);
+        ArrayStats.addSum(builder, sumOffset);
+        ArrayStats.addMax(builder, maxOffset);
+        ArrayStats.addMin(builder, minOffset);
+        ArrayStats.addIsConstant(builder, isConstant);
+        ArrayStats.addIsStrictSorted(builder, isStrictSorted);
+        ArrayStats.addIsSorted(builder, isSorted);
+        ArrayStats.addMaxPrecision(builder, maxPrecision);
+        ArrayStats.addMinPrecision(builder, minPrecision);
+        return ArrayStats.endArrayStats(builder);
+    }
 
-  public static void startArrayStats(FlatBufferBuilder builder) { builder.startTable(11); }
-  public static void addMin(FlatBufferBuilder builder, int minOffset) { builder.addOffset(0, minOffset, 0); }
-  public static int createMinVector(FlatBufferBuilder builder, byte[] data) { return builder.createByteVector(data); }
-  public static int createMinVector(FlatBufferBuilder builder, ByteBuffer data) { return builder.createByteVector(data); }
-  public static void startMinVector(FlatBufferBuilder builder, int numElems) { builder.startVector(1, numElems, 1); }
-  public static void addMinPrecision(FlatBufferBuilder builder, int minPrecision) { builder.addByte(1, (byte) minPrecision, (byte) 0); }
-  public static void addMax(FlatBufferBuilder builder, int maxOffset) { builder.addOffset(2, maxOffset, 0); }
-  public static int createMaxVector(FlatBufferBuilder builder, byte[] data) { return builder.createByteVector(data); }
-  public static int createMaxVector(FlatBufferBuilder builder, ByteBuffer data) { return builder.createByteVector(data); }
-  public static void startMaxVector(FlatBufferBuilder builder, int numElems) { builder.startVector(1, numElems, 1); }
-  public static void addMaxPrecision(FlatBufferBuilder builder, int maxPrecision) { builder.addByte(3, (byte) maxPrecision, (byte) 0); }
-  public static void addSum(FlatBufferBuilder builder, int sumOffset) { builder.addOffset(4, sumOffset, 0); }
-  public static int createSumVector(FlatBufferBuilder builder, byte[] data) { return builder.createByteVector(data); }
-  public static int createSumVector(FlatBufferBuilder builder, ByteBuffer data) { return builder.createByteVector(data); }
-  public static void startSumVector(FlatBufferBuilder builder, int numElems) { builder.startVector(1, numElems, 1); }
-  public static void addIsSorted(FlatBufferBuilder builder, boolean isSorted) { builder.addBoolean(5, isSorted, false); }
-  public static void addIsStrictSorted(FlatBufferBuilder builder, boolean isStrictSorted) { builder.addBoolean(6, isStrictSorted, false); }
-  public static void addIsConstant(FlatBufferBuilder builder, boolean isConstant) { builder.addBoolean(7, isConstant, false); }
-  public static void addNullCount(FlatBufferBuilder builder, long nullCount) { builder.addLong(8, nullCount, 0L); }
-  public static void addUncompressedSizeInBytes(FlatBufferBuilder builder, long uncompressedSizeInBytes) { builder.addLong(9, uncompressedSizeInBytes, 0L); }
-  public static void addNanCount(FlatBufferBuilder builder, long nanCount) { builder.addLong(10, nanCount, 0L); }
-  public static int endArrayStats(FlatBufferBuilder builder) {
-    int o = builder.endTable();
-    return o;
-  }
+    public static void startArrayStats(FlatBufferBuilder builder) {
+        builder.startTable(11);
+    }
 
-  public static final class Vector extends BaseVector {
-    public Vector __assign(int _vector, int _element_size, ByteBuffer _bb) { __reset(_vector, _element_size, _bb); return this; }
+    public static void addMin(FlatBufferBuilder builder, int minOffset) {
+        builder.addOffset(0, minOffset, 0);
+    }
 
-    public ArrayStats get(int j) { return get(new ArrayStats(), j); }
-    public ArrayStats get(ArrayStats obj, int j) {  return obj.__assign(__indirect(__element(j), bb), bb); }
-  }
+    public static int createMinVector(FlatBufferBuilder builder, byte[] data) {
+        return builder.createByteVector(data);
+    }
+
+    public static int createMinVector(FlatBufferBuilder builder, ByteBuffer data) {
+        return builder.createByteVector(data);
+    }
+
+    public static void startMinVector(FlatBufferBuilder builder, int numElems) {
+        builder.startVector(1, numElems, 1);
+    }
+
+    public static void addMinPrecision(FlatBufferBuilder builder, int minPrecision) {
+        builder.addByte(1, (byte) minPrecision, (byte) 0);
+    }
+
+    public static void addMax(FlatBufferBuilder builder, int maxOffset) {
+        builder.addOffset(2, maxOffset, 0);
+    }
+
+    public static int createMaxVector(FlatBufferBuilder builder, byte[] data) {
+        return builder.createByteVector(data);
+    }
+
+    public static int createMaxVector(FlatBufferBuilder builder, ByteBuffer data) {
+        return builder.createByteVector(data);
+    }
+
+    public static void startMaxVector(FlatBufferBuilder builder, int numElems) {
+        builder.startVector(1, numElems, 1);
+    }
+
+    public static void addMaxPrecision(FlatBufferBuilder builder, int maxPrecision) {
+        builder.addByte(3, (byte) maxPrecision, (byte) 0);
+    }
+
+    public static void addSum(FlatBufferBuilder builder, int sumOffset) {
+        builder.addOffset(4, sumOffset, 0);
+    }
+
+    public static int createSumVector(FlatBufferBuilder builder, byte[] data) {
+        return builder.createByteVector(data);
+    }
+
+    public static int createSumVector(FlatBufferBuilder builder, ByteBuffer data) {
+        return builder.createByteVector(data);
+    }
+
+    public static void startSumVector(FlatBufferBuilder builder, int numElems) {
+        builder.startVector(1, numElems, 1);
+    }
+
+    public static void addIsSorted(FlatBufferBuilder builder, boolean isSorted) {
+        builder.addBoolean(5, isSorted, false);
+    }
+
+    public static void addIsStrictSorted(FlatBufferBuilder builder, boolean isStrictSorted) {
+        builder.addBoolean(6, isStrictSorted, false);
+    }
+
+    public static void addIsConstant(FlatBufferBuilder builder, boolean isConstant) {
+        builder.addBoolean(7, isConstant, false);
+    }
+
+    public static void addNullCount(FlatBufferBuilder builder, long nullCount) {
+        builder.addLong(8, nullCount, 0L);
+    }
+
+    public static void addUncompressedSizeInBytes(FlatBufferBuilder builder, long uncompressedSizeInBytes) {
+        builder.addLong(9, uncompressedSizeInBytes, 0L);
+    }
+
+    public static void addNanCount(FlatBufferBuilder builder, long nanCount) {
+        builder.addLong(10, nanCount, 0L);
+    }
+
+    public static int endArrayStats(FlatBufferBuilder builder) {
+        int o = builder.endTable();
+        return o;
+    }
+
+    public void __init(int _i, ByteBuffer _bb) {
+        __reset(_i, _bb);
+    }
+
+    public ArrayStats __assign(int _i, ByteBuffer _bb) {
+        __init(_i, _bb);
+        return this;
+    }
+
+    /**
+     * Protobuf serialized ScalarValue
+     */
+    public int min(int j) {
+        int o = __offset(4);
+        return o != 0 ? bb.get(__vector(o) + j * 1) & 0xFF : 0;
+    }
+
+    public int minLength() {
+        int o = __offset(4);
+        return o != 0 ? __vector_len(o) : 0;
+    }
+
+    public ByteVector minVector() {
+        return minVector(new ByteVector());
+    }
+
+    public ByteVector minVector(ByteVector obj) {
+        int o = __offset(4);
+        return o != 0 ? obj.__assign(__vector(o), bb) : null;
+    }
+
+    public ByteBuffer minAsByteBuffer() {
+        return __vector_as_bytebuffer(4, 1);
+    }
+
+    public ByteBuffer minInByteBuffer(ByteBuffer _bb) {
+        return __vector_in_bytebuffer(_bb, 4, 1);
+    }
+
+    public int minPrecision() {
+        int o = __offset(6);
+        return o != 0 ? bb.get(o + bb_pos) & 0xFF : 0;
+    }
+
+    public int max(int j) {
+        int o = __offset(8);
+        return o != 0 ? bb.get(__vector(o) + j * 1) & 0xFF : 0;
+    }
+
+    public int maxLength() {
+        int o = __offset(8);
+        return o != 0 ? __vector_len(o) : 0;
+    }
+
+    public ByteVector maxVector() {
+        return maxVector(new ByteVector());
+    }
+
+    public ByteVector maxVector(ByteVector obj) {
+        int o = __offset(8);
+        return o != 0 ? obj.__assign(__vector(o), bb) : null;
+    }
+
+    public ByteBuffer maxAsByteBuffer() {
+        return __vector_as_bytebuffer(8, 1);
+    }
+
+    public ByteBuffer maxInByteBuffer(ByteBuffer _bb) {
+        return __vector_in_bytebuffer(_bb, 8, 1);
+    }
+
+    public int maxPrecision() {
+        int o = __offset(10);
+        return o != 0 ? bb.get(o + bb_pos) & 0xFF : 0;
+    }
+
+    public int sum(int j) {
+        int o = __offset(12);
+        return o != 0 ? bb.get(__vector(o) + j * 1) & 0xFF : 0;
+    }
+
+    public int sumLength() {
+        int o = __offset(12);
+        return o != 0 ? __vector_len(o) : 0;
+    }
+
+    public ByteVector sumVector() {
+        return sumVector(new ByteVector());
+    }
+
+    public ByteVector sumVector(ByteVector obj) {
+        int o = __offset(12);
+        return o != 0 ? obj.__assign(__vector(o), bb) : null;
+    }
+
+    public ByteBuffer sumAsByteBuffer() {
+        return __vector_as_bytebuffer(12, 1);
+    }
+
+    public ByteBuffer sumInByteBuffer(ByteBuffer _bb) {
+        return __vector_in_bytebuffer(_bb, 12, 1);
+    }
+
+    public boolean hasIsSorted() {
+        return 0 != __offset(14);
+    }
+
+    public boolean isSorted() {
+        int o = __offset(14);
+        return o != 0 ? 0 != bb.get(o + bb_pos) : false;
+    }
+
+    public boolean hasIsStrictSorted() {
+        return 0 != __offset(16);
+    }
+
+    public boolean isStrictSorted() {
+        int o = __offset(16);
+        return o != 0 ? 0 != bb.get(o + bb_pos) : false;
+    }
+
+    public boolean hasIsConstant() {
+        return 0 != __offset(18);
+    }
+
+    public boolean isConstant() {
+        int o = __offset(18);
+        return o != 0 ? 0 != bb.get(o + bb_pos) : false;
+    }
+
+    public boolean hasNullCount() {
+        return 0 != __offset(20);
+    }
+
+    public long nullCount() {
+        int o = __offset(20);
+        return o != 0 ? bb.getLong(o + bb_pos) : 0L;
+    }
+
+    public boolean hasUncompressedSizeInBytes() {
+        return 0 != __offset(22);
+    }
+
+    public long uncompressedSizeInBytes() {
+        int o = __offset(22);
+        return o != 0 ? bb.getLong(o + bb_pos) : 0L;
+    }
+
+    public boolean hasNanCount() {
+        return 0 != __offset(24);
+    }
+
+    public long nanCount() {
+        int o = __offset(24);
+        return o != 0 ? bb.getLong(o + bb_pos) : 0L;
+    }
+
+    public static final class Vector extends BaseVector {
+        public Vector __assign(int _vector, int _element_size, ByteBuffer _bb) {
+            __reset(_vector, _element_size, _bb);
+            return this;
+        }
+
+        public ArrayStats get(int j) {
+            return get(new ArrayStats(), j);
+        }
+
+        public ArrayStats get(ArrayStats obj, int j) {
+            return obj.__assign(__indirect(__element(j), bb), bb);
+        }
+    }
 }
 

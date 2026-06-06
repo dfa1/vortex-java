@@ -1,8 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import io.github.dfa1.vortex.proto.EncodingProtos;
-import io.github.dfa1.vortex.proto.ScalarProtos;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
@@ -12,6 +10,8 @@ import io.github.dfa1.vortex.core.array.ByteArray;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
+import io.github.dfa1.vortex.proto.EncodingProtos;
+import io.github.dfa1.vortex.proto.ScalarProtos;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
@@ -33,12 +33,56 @@ import java.util.List;
 /// {@code LANES = 1024 / typeBits}, where {@code typeBits = byteSize * 8}.
 public final class DeltaEncoding implements Encoding {
 
+    static final int FL_CHUNK_SIZE = 1024;
+    static final int[] FL_ORDER = {0, 4, 2, 6, 1, 5, 3, 7};
+
     /// Creates a new {@code DeltaEncoding} instance.
     public DeltaEncoding() {
     }
 
-    static final int FL_CHUNK_SIZE = 1024;
-    static final int[] FL_ORDER = {0, 4, 2, 6, 1, 5, 3, 7};
+    static int transposeIndex(int idx) {
+        int lane = idx % 16;
+        int order = (idx / 16) % 8;
+        int row = idx / 128;
+        return lane * 64 + FL_ORDER[order] * 8 + row;
+    }
+
+    static int iterateIndex(int row, int lane) {
+        int o = row / 8;
+        int s = row % 8;
+        return FL_ORDER[o] * 16 + s * 128 + lane;
+    }
+
+    static int lanes(PType ptype) {
+        return FL_CHUNK_SIZE / (ptype.byteSize() * 8);
+    }
+
+    static int typeBits(PType ptype) {
+        return ptype.byteSize() * 8;
+    }
+
+    // ── Shared helpers (FastLanes index + type math + buffer I/O) ────────────
+
+    static long typeMask(PType ptype) {
+        int bits = ptype.byteSize() * 8;
+        return bits == 64 ? -1L : (1L << bits) - 1;
+    }
+
+    static MemorySegment fromLongs(long[] longs, PType ptype, SegmentAllocator arena) {
+        if (ptype == PType.I64 || ptype == PType.U64) {
+            MemorySegment dst = arena.allocate((long) longs.length * 8);
+            MemorySegment.copy(MemorySegment.ofArray(longs), ValueLayout.JAVA_LONG, 0L,
+                    dst, PTypeIO.LE_LONG, 0L, longs.length);
+            return dst;
+        }
+        int n = longs.length;
+        long elemSize = ptype.byteSize();
+        MemorySegment seg = arena.allocate(n * elemSize);
+        for (int i = 0; i < n; i++) {
+            PTypeIO.set(seg, i * elemSize, ptype, longs[i]);
+        }
+        return seg;
+    }
 
     @Override
     public EncodingId encodingId() {
@@ -64,50 +108,6 @@ public final class DeltaEncoding implements Encoding {
     @Override
     public Array decode(DecodeContext ctx) {
         return Decoder.decode(ctx);
-    }
-
-    // ── Shared helpers (FastLanes index + type math + buffer I/O) ────────────
-
-    static int transposeIndex(int idx) {
-        int lane = idx % 16;
-        int order = (idx / 16) % 8;
-        int row = idx / 128;
-        return lane * 64 + FL_ORDER[order] * 8 + row;
-    }
-
-    static int iterateIndex(int row, int lane) {
-        int o = row / 8;
-        int s = row % 8;
-        return FL_ORDER[o] * 16 + s * 128 + lane;
-    }
-
-    static int lanes(PType ptype) {
-        return FL_CHUNK_SIZE / (ptype.byteSize() * 8);
-    }
-
-    static int typeBits(PType ptype) {
-        return ptype.byteSize() * 8;
-    }
-
-    static long typeMask(PType ptype) {
-        int bits = ptype.byteSize() * 8;
-        return bits == 64 ? -1L : (1L << bits) - 1;
-    }
-
-    static MemorySegment fromLongs(long[] longs, PType ptype, SegmentAllocator arena) {
-        if (ptype == PType.I64 || ptype == PType.U64) {
-            MemorySegment dst = arena.allocate((long) longs.length * 8);
-            MemorySegment.copy(MemorySegment.ofArray(longs), ValueLayout.JAVA_LONG, 0L,
-                    dst, PTypeIO.LE_LONG, 0L, longs.length);
-            return dst;
-        }
-        int n = longs.length;
-        long elemSize = ptype.byteSize();
-        MemorySegment seg = arena.allocate(n * elemSize);
-        for (int i = 0; i < n; i++) {
-            PTypeIO.set(seg, i * elemSize, ptype, longs[i]);
-        }
-        return seg;
     }
 
     private static final class Encoder {
@@ -170,10 +170,10 @@ public final class DeltaEncoding implements Encoding {
             MemorySegment deltasSeg = fromLongs(deltasAll, ptype, ctx.arena());
 
             byte[] metaBytes = EncodingProtos.DeltaMetadata.newBuilder()
-                    .setDeltasLen(paddedLen)
-                    .setOffset(0)
-                    .build()
-                    .toByteArray();
+                                       .setDeltasLen(paddedLen)
+                                       .setOffset(0)
+                                       .build()
+                                       .toByteArray();
 
             byte[] statsMin = n > 0 ? statsBytes(ptype, minVal) : null;
             byte[] statsMax = n > 0 ? statsBytes(ptype, maxVal) : null;
@@ -297,7 +297,7 @@ public final class DeltaEncoding implements Encoding {
                     case I64, U64 -> new LongArray(ctx.dtype(), 0L, empty, ArrayStats.empty());
                     case I32, U32 -> new IntArray(ctx.dtype(), 0L, empty, ArrayStats.empty());
                     case I16, U16 -> new ShortArray(ctx.dtype(), 0L, empty, ArrayStats.empty());
-                    case I8, U8   -> new ByteArray(ctx.dtype(), 0L, empty, ArrayStats.empty());
+                    case I8, U8 -> new ByteArray(ctx.dtype(), 0L, empty, ArrayStats.empty());
                     default -> throw new VortexException(EncodingId.FASTLANES_DELTA, "unsupported ptype: " + ptype);
                 };
             }
@@ -341,7 +341,7 @@ public final class DeltaEncoding implements Encoding {
                 case I64, U64 -> new LongArray(ctx.dtype(), rowCount, seg, ArrayStats.empty());
                 case I32, U32 -> new IntArray(ctx.dtype(), rowCount, seg, ArrayStats.empty());
                 case I16, U16 -> new ShortArray(ctx.dtype(), rowCount, seg, ArrayStats.empty());
-                case I8, U8   -> new ByteArray(ctx.dtype(), rowCount, seg, ArrayStats.empty());
+                case I8, U8 -> new ByteArray(ctx.dtype(), rowCount, seg, ArrayStats.empty());
                 default -> throw new VortexException(EncodingId.FASTLANES_DELTA, "unsupported ptype: " + ptype);
             };
         }
@@ -364,8 +364,8 @@ public final class DeltaEncoding implements Encoding {
             for (int i = 0; i < count; i++) {
                 long off = (long) i * elemSize;
                 out[i] = switch (ptype) {
-                    case I8  -> buf.get(ValueLayout.JAVA_BYTE, off);
-                    case U8  -> Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, off));
+                    case I8 -> buf.get(ValueLayout.JAVA_BYTE, off);
+                    case U8 -> Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, off));
                     case I16 -> buf.get(PTypeIO.LE_SHORT, off);
                     case U16 -> Short.toUnsignedLong(buf.get(PTypeIO.LE_SHORT, off));
                     case I32 -> buf.get(PTypeIO.LE_INT, off);

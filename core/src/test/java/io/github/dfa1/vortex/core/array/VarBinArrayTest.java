@@ -18,193 +18,193 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class VarBinArrayTest {
 
-	private static final DType UTF8 = new DType.Utf8(false);
+    private static final DType UTF8 = new DType.Utf8(false);
 
-	@Nested
-	class Regular {
+    private static VarBinArray of(String... values) {
+        byte[] allBytes = String.join("", values).getBytes(StandardCharsets.UTF_8);
+        MemorySegment bytes = MemorySegment.ofArray(allBytes);
 
-		@Test
-		void length_returnsElementCount() {
-			// Given
-			VarBinArray sut = of("a", "bb", "ccc");
+        int[] offs = new int[values.length + 1];
+        for (int i = 0; i < values.length; i++) {
+            offs[i + 1] = offs[i] + values[i].getBytes(StandardCharsets.UTF_8).length;
+        }
+        ByteBuffer bb = ByteBuffer.allocate(offs.length * 4).order(ByteOrder.LITTLE_ENDIAN);
+        for (int o : offs) {
+            bb.putInt(o);
+        }
+        MemorySegment offsetsSeg = MemorySegment.ofArray(bb.array());
+        DType i32 = new DType.Primitive(PType.I32, false);
+        IntArray offsetsArr = new IntArray(i32, offs.length, offsetsSeg, ArrayStats.empty());
+        return new VarBinArray(UTF8, values.length, bytes, offsetsArr, PType.I32, ArrayStats.empty());
+    }
 
-			// When / Then
-			assertThat(sut.length()).isEqualTo(3L);
-		}
+    @Nested
+    class Regular {
 
-		@Test
-		void dtype_returnsConstructedDtype() {
-			// Given
-			VarBinArray sut = of("x");
+        @Test
+        void length_returnsElementCount() {
+            // Given
+            VarBinArray sut = of("a", "bb", "ccc");
 
-			// When / Then
-			assertThat(sut.dtype()).isEqualTo(UTF8);
-		}
+            // When / Then
+            assertThat(sut.length()).isEqualTo(3L);
+        }
 
-		@Test
-		void getBytes_returnsCorrectBytes() {
-			// Given
-			VarBinArray sut = of("hello", "world");
+        @Test
+        void dtype_returnsConstructedDtype() {
+            // Given
+            VarBinArray sut = of("x");
 
-			// When / Then
-			assertThat(sut.getString(0)).isEqualTo("hello");
-			assertThat(sut.getString(1)).isEqualTo("world");
-		}
+            // When / Then
+            assertThat(sut.dtype()).isEqualTo(UTF8);
+        }
 
-		@Test
-		void getByteLength_returnsCorrectLengths() {
-			// Given
-			VarBinArray sut = of("hi", "there", "!");
+        @Test
+        void getBytes_returnsCorrectBytes() {
+            // Given
+            VarBinArray sut = of("hello", "world");
 
-			// When / Then
-			assertThat(sut.getByteLength(0)).isEqualTo(2);
-			assertThat(sut.getByteLength(1)).isEqualTo(5);
-			assertThat(sut.getByteLength(2)).isEqualTo(1);
-		}
+            // When / Then
+            assertThat(sut.getString(0)).isEqualTo("hello");
+            assertThat(sut.getString(1)).isEqualTo("world");
+        }
 
-		@Test
-		void forEachByteLength_visitsAllLengths() {
-			// Given
-			VarBinArray sut = of("ab", "c", "def");
-			List<Integer> lengths = new ArrayList<>();
+        @Test
+        void getByteLength_returnsCorrectLengths() {
+            // Given
+            VarBinArray sut = of("hi", "there", "!");
 
-			// When
-			sut.forEachByteLength(lengths::add);
+            // When / Then
+            assertThat(sut.getByteLength(0)).isEqualTo(2);
+            assertThat(sut.getByteLength(1)).isEqualTo(5);
+            assertThat(sut.getByteLength(2)).isEqualTo(1);
+        }
 
-			// Then
-			assertThat(lengths).containsExactly(2, 1, 3);
-		}
+        @Test
+        void forEachByteLength_visitsAllLengths() {
+            // Given
+            VarBinArray sut = of("ab", "c", "def");
+            List<Integer> lengths = new ArrayList<>();
 
-		@Test
-		void getBytes_emptyString_returnsEmptyArray() {
-			// Given
-			VarBinArray sut = of("", "x", "");
+            // When
+            sut.forEachByteLength(lengths::add);
 
-			// When / Then
-			assertThat(sut.getBytes(0)).isEmpty();
-			assertThat(sut.getByteLength(0)).isZero();
-			assertThat(sut.getByteLength(2)).isZero();
-		}
+            // Then
+            assertThat(lengths).containsExactly(2, 1, 3);
+        }
 
-		@Test
-		void empty_zeroElements() {
-			// Given
-			VarBinArray sut = of();
+        @Test
+        void getBytes_emptyString_returnsEmptyArray() {
+            // Given
+            VarBinArray sut = of("", "x", "");
 
-			// When / Then
-			assertThat(sut.length()).isZero();
-		}
+            // When / Then
+            assertThat(sut.getBytes(0)).isEmpty();
+            assertThat(sut.getByteLength(0)).isZero();
+            assertThat(sut.getByteLength(2)).isZero();
+        }
 
-		@Test
-		void buffer_invalidIndex_throws() {
-			// Given
-			VarBinArray sut = of("a");
+        @Test
+        void empty_zeroElements() {
+            // Given
+            VarBinArray sut = of();
 
-			// When / Then
-			assertThatThrownBy(() -> sut.buffer(1))
-					.isInstanceOf(IndexOutOfBoundsException.class);
-		}
+            // When / Then
+            assertThat(sut.length()).isZero();
+        }
 
-		@Test
-		void child_invalidIndex_throws() {
-			// Given
-			VarBinArray sut = of("a");
+        @Test
+        void buffer_invalidIndex_throws() {
+            // Given
+            VarBinArray sut = of("a");
 
-			// When / Then
-			assertThatThrownBy(() -> sut.child(1))
-					.isInstanceOf(IndexOutOfBoundsException.class);
-		}
-	}
+            // When / Then
+            assertThatThrownBy(() -> sut.buffer(1))
+                    .isInstanceOf(IndexOutOfBoundsException.class);
+        }
 
-	@Nested
-	class Dict {
+        @Test
+        void child_invalidIndex_throws() {
+            // Given
+            VarBinArray sut = of("a");
 
-		@Test
-		void getBytes_resolvesViaDict() {
-			// Given — dict=["foo","bar"], codes=[1,0,1]
-			VarBinArray sut = ofDict(new String[]{"foo", "bar"}, new int[]{1, 0, 1});
+            // When / Then
+            assertThatThrownBy(() -> sut.child(1))
+                    .isInstanceOf(IndexOutOfBoundsException.class);
+        }
+    }
 
-			// When / Then
-			assertThat(sut.getString(0)).isEqualTo("bar");
-			assertThat(sut.getString(1)).isEqualTo("foo");
-			assertThat(sut.getString(2)).isEqualTo("bar");
-		}
+    @Nested
+    class Dict {
 
-		@Test
-		void getByteLength_resolvesViaDict() {
-			// Given — dict=["hi","there"], codes=[0,1,0]
-			VarBinArray sut = ofDict(new String[]{"hi", "there"}, new int[]{0, 1, 0});
+        private static VarBinArray ofDict(String[] dictValues, int[] codes) {
+            byte[] allBytes = String.join("", dictValues).getBytes(StandardCharsets.UTF_8);
+            MemorySegment dictValBytes = MemorySegment.ofArray(allBytes);
 
-			// When / Then
-			assertThat(sut.getByteLength(0)).isEqualTo(2);
-			assertThat(sut.getByteLength(1)).isEqualTo(5);
-			assertThat(sut.getByteLength(2)).isEqualTo(2);
-		}
+            int[] offs = new int[dictValues.length + 1];
+            for (int i = 0; i < dictValues.length; i++) {
+                offs[i + 1] = offs[i] + dictValues[i].getBytes(StandardCharsets.UTF_8).length;
+            }
+            MemorySegment dictValOffsets = leInts(offs);
 
-		@Test
-		void forEachByteLength_resolvesViaDict() {
-			// Given
-			VarBinArray sut = ofDict(new String[]{"a", "bbb"}, new int[]{1, 0, 1});
-			List<Integer> lengths = new ArrayList<>();
+            MemorySegment dictCodes = leInts(codes);
 
-			// When
-			sut.forEachByteLength(lengths::add);
+            return VarBinArray.ofDict(UTF8, codes.length,
+                    dictValBytes, dictValOffsets, PType.I32,
+                    dictCodes, PType.I32, ArrayStats.empty());
+        }
 
-			// Then
-			assertThat(lengths).containsExactly(3, 1, 3);
-		}
+        private static MemorySegment leInts(int[] values) {
+            ByteBuffer bb = ByteBuffer.allocate(values.length * 4).order(ByteOrder.LITTLE_ENDIAN);
+            for (int v : values) {
+                bb.putInt(v);
+            }
+            return MemorySegment.ofArray(bb.array());
+        }
 
-		@Test
-		void child_inDictMode_throws() {
-			// Given
-			VarBinArray sut = ofDict(new String[]{"x"}, new int[]{0});
+        @Test
+        void getBytes_resolvesViaDict() {
+            // Given — dict=["foo","bar"], codes=[1,0,1]
+            VarBinArray sut = ofDict(new String[]{"foo", "bar"}, new int[]{1, 0, 1});
 
-			// When / Then
-			assertThatThrownBy(() -> sut.child(0))
-					.isInstanceOf(IllegalStateException.class);
-		}
+            // When / Then
+            assertThat(sut.getString(0)).isEqualTo("bar");
+            assertThat(sut.getString(1)).isEqualTo("foo");
+            assertThat(sut.getString(2)).isEqualTo("bar");
+        }
 
-		private static VarBinArray ofDict(String[] dictValues, int[] codes) {
-			byte[] allBytes = String.join("", dictValues).getBytes(StandardCharsets.UTF_8);
-			MemorySegment dictValBytes = MemorySegment.ofArray(allBytes);
+        @Test
+        void getByteLength_resolvesViaDict() {
+            // Given — dict=["hi","there"], codes=[0,1,0]
+            VarBinArray sut = ofDict(new String[]{"hi", "there"}, new int[]{0, 1, 0});
 
-			int[] offs = new int[dictValues.length + 1];
-			for (int i = 0; i < dictValues.length; i++) {
-				offs[i + 1] = offs[i] + dictValues[i].getBytes(StandardCharsets.UTF_8).length;
-			}
-			MemorySegment dictValOffsets = leInts(offs);
+            // When / Then
+            assertThat(sut.getByteLength(0)).isEqualTo(2);
+            assertThat(sut.getByteLength(1)).isEqualTo(5);
+            assertThat(sut.getByteLength(2)).isEqualTo(2);
+        }
 
-			MemorySegment dictCodes = leInts(codes);
+        @Test
+        void forEachByteLength_resolvesViaDict() {
+            // Given
+            VarBinArray sut = ofDict(new String[]{"a", "bbb"}, new int[]{1, 0, 1});
+            List<Integer> lengths = new ArrayList<>();
 
-			return VarBinArray.ofDict(UTF8, codes.length,
-					dictValBytes, dictValOffsets, PType.I32,
-					dictCodes, PType.I32, ArrayStats.empty());
-		}
+            // When
+            sut.forEachByteLength(lengths::add);
 
-		private static MemorySegment leInts(int[] values) {
-			ByteBuffer bb = ByteBuffer.allocate(values.length * 4).order(ByteOrder.LITTLE_ENDIAN);
-			for (int v : values) {
-				bb.putInt(v);
-			}
-			return MemorySegment.ofArray(bb.array());
-		}
-	}
+            // Then
+            assertThat(lengths).containsExactly(3, 1, 3);
+        }
 
-	private static VarBinArray of(String... values) {
-		byte[] allBytes = String.join("", values).getBytes(StandardCharsets.UTF_8);
-		MemorySegment bytes = MemorySegment.ofArray(allBytes);
+        @Test
+        void child_inDictMode_throws() {
+            // Given
+            VarBinArray sut = ofDict(new String[]{"x"}, new int[]{0});
 
-		int[] offs = new int[values.length + 1];
-		for (int i = 0; i < values.length; i++) {
-			offs[i + 1] = offs[i] + values[i].getBytes(StandardCharsets.UTF_8).length;
-		}
-		ByteBuffer bb = ByteBuffer.allocate(offs.length * 4).order(ByteOrder.LITTLE_ENDIAN);
-		for (int o : offs) {
-			bb.putInt(o);
-		}
-		MemorySegment offsetsSeg = MemorySegment.ofArray(bb.array());
-		DType i32 = new DType.Primitive(PType.I32, false);
-		IntArray offsetsArr = new IntArray(i32, offs.length, offsetsSeg, ArrayStats.empty());
-		return new VarBinArray(UTF8, values.length, bytes, offsetsArr, PType.I32, ArrayStats.empty());
-	}
+            // When / Then
+            assertThatThrownBy(() -> sut.child(0))
+                    .isInstanceOf(IllegalStateException.class);
+        }
+    }
 }

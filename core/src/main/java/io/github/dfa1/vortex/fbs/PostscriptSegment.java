@@ -3,18 +3,8 @@
 package io.github.dfa1.vortex.fbs;
 
 import com.google.flatbuffers.BaseVector;
-import com.google.flatbuffers.BooleanVector;
-import com.google.flatbuffers.ByteVector;
-import com.google.flatbuffers.Constants;
-import com.google.flatbuffers.DoubleVector;
 import com.google.flatbuffers.FlatBufferBuilder;
-import com.google.flatbuffers.FloatVector;
-import com.google.flatbuffers.IntVector;
-import com.google.flatbuffers.LongVector;
-import com.google.flatbuffers.ShortVector;
-import com.google.flatbuffers.StringVector;
-import com.google.flatbuffers.Struct;
-import com.google.flatbuffers.UnionVector;
+
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
@@ -24,50 +14,114 @@ import java.nio.ByteOrder;
  */
 @SuppressWarnings("unused")
 public final class PostscriptSegment extends com.google.flatbuffers.Table {
-  public static PostscriptSegment getRootAsPostscriptSegment(ByteBuffer _bb) { return getRootAsPostscriptSegment(_bb, new PostscriptSegment()); }
-  public static PostscriptSegment getRootAsPostscriptSegment(ByteBuffer _bb, PostscriptSegment obj) { _bb.order(ByteOrder.LITTLE_ENDIAN); return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb)); }
-  public void __init(int _i, ByteBuffer _bb) { __reset(_i, _bb); }
-  public PostscriptSegment __assign(int _i, ByteBuffer _bb) { __init(_i, _bb); return this; }
+    public static PostscriptSegment getRootAsPostscriptSegment(ByteBuffer _bb) {
+        return getRootAsPostscriptSegment(_bb, new PostscriptSegment());
+    }
 
-  public long offset() { int o = __offset(4); return o != 0 ? bb.getLong(o + bb_pos) : 0L; }
-  public long length() { int o = __offset(6); return o != 0 ? (long)bb.getInt(o + bb_pos) & 0xFFFFFFFFL : 0L; }
-  public int alignmentExponent() { int o = __offset(8); return o != 0 ? bb.get(o + bb_pos) & 0xFF : 0; }
-  public io.github.dfa1.vortex.fbs.CompressionSpec _Compression() { return _Compression(new io.github.dfa1.vortex.fbs.CompressionSpec()); }
-  public io.github.dfa1.vortex.fbs.CompressionSpec _Compression(io.github.dfa1.vortex.fbs.CompressionSpec obj) { int o = __offset(10); return o != 0 ? obj.__assign(__indirect(o + bb_pos), bb) : null; }
-  public io.github.dfa1.vortex.fbs.EncryptionSpec _Encryption() { return _Encryption(new io.github.dfa1.vortex.fbs.EncryptionSpec()); }
-  public io.github.dfa1.vortex.fbs.EncryptionSpec _Encryption(io.github.dfa1.vortex.fbs.EncryptionSpec obj) { int o = __offset(12); return o != 0 ? obj.__assign(__indirect(o + bb_pos), bb) : null; }
+    public static PostscriptSegment getRootAsPostscriptSegment(ByteBuffer _bb, PostscriptSegment obj) {
+        _bb.order(ByteOrder.LITTLE_ENDIAN);
+        return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb));
+    }
 
-  public static int createPostscriptSegment(FlatBufferBuilder builder,
-      long offset,
-      long length,
-      int alignmentExponent,
-      int _CompressionOffset,
-      int _EncryptionOffset) {
-    builder.startTable(5);
-    PostscriptSegment.addOffset(builder, offset);
-    PostscriptSegment.add_encryption(builder, _EncryptionOffset);
-    PostscriptSegment.add_compression(builder, _CompressionOffset);
-    PostscriptSegment.addLength(builder, length);
-    PostscriptSegment.addAlignmentExponent(builder, alignmentExponent);
-    return PostscriptSegment.endPostscriptSegment(builder);
-  }
+    public static int createPostscriptSegment(FlatBufferBuilder builder,
+            long offset,
+            long length,
+            int alignmentExponent,
+            int _CompressionOffset,
+            int _EncryptionOffset) {
+        builder.startTable(5);
+        PostscriptSegment.addOffset(builder, offset);
+        PostscriptSegment.add_encryption(builder, _EncryptionOffset);
+        PostscriptSegment.add_compression(builder, _CompressionOffset);
+        PostscriptSegment.addLength(builder, length);
+        PostscriptSegment.addAlignmentExponent(builder, alignmentExponent);
+        return PostscriptSegment.endPostscriptSegment(builder);
+    }
 
-  public static void startPostscriptSegment(FlatBufferBuilder builder) { builder.startTable(5); }
-  public static void addOffset(FlatBufferBuilder builder, long offset) { builder.addLong(0, offset, 0L); }
-  public static void addLength(FlatBufferBuilder builder, long length) { builder.addInt(1, (int) length, (int) 0L); }
-  public static void addAlignmentExponent(FlatBufferBuilder builder, int alignmentExponent) { builder.addByte(2, (byte) alignmentExponent, (byte) 0); }
-  public static void add_compression(FlatBufferBuilder builder, int _CompressionOffset) { builder.addOffset(3, _CompressionOffset, 0); }
-  public static void add_encryption(FlatBufferBuilder builder, int _EncryptionOffset) { builder.addOffset(4, _EncryptionOffset, 0); }
-  public static int endPostscriptSegment(FlatBufferBuilder builder) {
-    int o = builder.endTable();
-    return o;
-  }
+    public static void startPostscriptSegment(FlatBufferBuilder builder) {
+        builder.startTable(5);
+    }
 
-  public static final class Vector extends BaseVector {
-    public Vector __assign(int _vector, int _element_size, ByteBuffer _bb) { __reset(_vector, _element_size, _bb); return this; }
+    public static void addOffset(FlatBufferBuilder builder, long offset) {
+        builder.addLong(0, offset, 0L);
+    }
 
-    public PostscriptSegment get(int j) { return get(new PostscriptSegment(), j); }
-    public PostscriptSegment get(PostscriptSegment obj, int j) {  return obj.__assign(__indirect(__element(j), bb), bb); }
-  }
+    public static void addLength(FlatBufferBuilder builder, long length) {
+        builder.addInt(1, (int) length, (int) 0L);
+    }
+
+    public static void addAlignmentExponent(FlatBufferBuilder builder, int alignmentExponent) {
+        builder.addByte(2, (byte) alignmentExponent, (byte) 0);
+    }
+
+    public static void add_compression(FlatBufferBuilder builder, int _CompressionOffset) {
+        builder.addOffset(3, _CompressionOffset, 0);
+    }
+
+    public static void add_encryption(FlatBufferBuilder builder, int _EncryptionOffset) {
+        builder.addOffset(4, _EncryptionOffset, 0);
+    }
+
+    public static int endPostscriptSegment(FlatBufferBuilder builder) {
+        int o = builder.endTable();
+        return o;
+    }
+
+    public void __init(int _i, ByteBuffer _bb) {
+        __reset(_i, _bb);
+    }
+
+    public PostscriptSegment __assign(int _i, ByteBuffer _bb) {
+        __init(_i, _bb);
+        return this;
+    }
+
+    public long offset() {
+        int o = __offset(4);
+        return o != 0 ? bb.getLong(o + bb_pos) : 0L;
+    }
+
+    public long length() {
+        int o = __offset(6);
+        return o != 0 ? (long) bb.getInt(o + bb_pos) & 0xFFFFFFFFL : 0L;
+    }
+
+    public int alignmentExponent() {
+        int o = __offset(8);
+        return o != 0 ? bb.get(o + bb_pos) & 0xFF : 0;
+    }
+
+    public io.github.dfa1.vortex.fbs.CompressionSpec _Compression() {
+        return _Compression(new io.github.dfa1.vortex.fbs.CompressionSpec());
+    }
+
+    public io.github.dfa1.vortex.fbs.CompressionSpec _Compression(io.github.dfa1.vortex.fbs.CompressionSpec obj) {
+        int o = __offset(10);
+        return o != 0 ? obj.__assign(__indirect(o + bb_pos), bb) : null;
+    }
+
+    public io.github.dfa1.vortex.fbs.EncryptionSpec _Encryption() {
+        return _Encryption(new io.github.dfa1.vortex.fbs.EncryptionSpec());
+    }
+
+    public io.github.dfa1.vortex.fbs.EncryptionSpec _Encryption(io.github.dfa1.vortex.fbs.EncryptionSpec obj) {
+        int o = __offset(12);
+        return o != 0 ? obj.__assign(__indirect(o + bb_pos), bb) : null;
+    }
+
+    public static final class Vector extends BaseVector {
+        public Vector __assign(int _vector, int _element_size, ByteBuffer _bb) {
+            __reset(_vector, _element_size, _bb);
+            return this;
+        }
+
+        public PostscriptSegment get(int j) {
+            return get(new PostscriptSegment(), j);
+        }
+
+        public PostscriptSegment get(PostscriptSegment obj, int j) {
+            return obj.__assign(__indirect(__element(j), bb), bb);
+        }
+    }
 }
 

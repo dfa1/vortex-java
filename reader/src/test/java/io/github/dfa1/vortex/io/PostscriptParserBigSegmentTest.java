@@ -13,48 +13,48 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class PostscriptParserBigSegmentTest {
 
-	@Test
-	void convertFooter_preservesSegmentLengthAbove2GB() {
-		// Given — a FlatBuffer Footer whose only segment_spec advertises a uint32 length
-		// of 0xC000_0000 (3,221,225,472 bytes ≈ 3 GB). This value is negative when
-		// interpreted as a signed int — the old code path truncated it silently.
-		long bigLength = 0xC000_0000L;
-		long bigOffset = 0x1_0000_0000L; // 4 GB into the file
-		ByteBuffer fbsFooterBytes = buildMinimalFooter(bigOffset, bigLength);
-		io.github.dfa1.vortex.fbs.Footer fbsFooter =
-				io.github.dfa1.vortex.fbs.Footer.getRootAsFooter(fbsFooterBytes);
+    private static ByteBuffer buildMinimalFooter(long segOffset, long segLength) {
+        var fbb = new FlatBufferBuilder(256);
 
-		// When
-		Footer footer = PostscriptParser.convertFooter(fbsFooter);
+        // Empty array_specs + layout_specs vectors (required tables, no entries).
+        int asv = io.github.dfa1.vortex.fbs.Footer.createArraySpecsVector(fbb, new int[]{
+                ArraySpec.createArraySpec(fbb, fbb.createString("vortex.flat"))
+        });
+        int lsv = io.github.dfa1.vortex.fbs.Footer.createLayoutSpecsVector(fbb, new int[]{
+                LayoutSpec.createLayoutSpec(fbb, fbb.createString("vortex.flat"))
+        });
 
-		// Then
-		assertThat(footer.segmentSpecs()).hasSize(1);
-		SegmentSpec spec = footer.segmentSpecs().getFirst();
-		assertThat(spec.offset()).isEqualTo(bigOffset);
-		assertThat(spec.length())
-				.as("u32 segment length above Integer.MAX_VALUE must not be truncated")
-				.isEqualTo(bigLength);
-		assertThat(spec.length()).isGreaterThan(Integer.MAX_VALUE);
-	}
+        // One segment_spec with the big length.
+        io.github.dfa1.vortex.fbs.Footer.startSegmentSpecsVector(fbb, 1);
+        io.github.dfa1.vortex.fbs.SegmentSpec.createSegmentSpec(fbb, segOffset, segLength, 6, 0, 0);
+        int ssv = fbb.endVector();
 
-	private static ByteBuffer buildMinimalFooter(long segOffset, long segLength) {
-		var fbb = new FlatBufferBuilder(256);
+        int off = io.github.dfa1.vortex.fbs.Footer.createFooter(fbb, asv, lsv, ssv, 0, 0);
+        fbb.finish(off);
+        return fbb.dataBuffer();
+    }
 
-		// Empty array_specs + layout_specs vectors (required tables, no entries).
-		int asv = io.github.dfa1.vortex.fbs.Footer.createArraySpecsVector(fbb, new int[]{
-				ArraySpec.createArraySpec(fbb, fbb.createString("vortex.flat"))
-		});
-		int lsv = io.github.dfa1.vortex.fbs.Footer.createLayoutSpecsVector(fbb, new int[]{
-				LayoutSpec.createLayoutSpec(fbb, fbb.createString("vortex.flat"))
-		});
+    @Test
+    void convertFooter_preservesSegmentLengthAbove2GB() {
+        // Given — a FlatBuffer Footer whose only segment_spec advertises a uint32 length
+        // of 0xC000_0000 (3,221,225,472 bytes ≈ 3 GB). This value is negative when
+        // interpreted as a signed int — the old code path truncated it silently.
+        long bigLength = 0xC000_0000L;
+        long bigOffset = 0x1_0000_0000L; // 4 GB into the file
+        ByteBuffer fbsFooterBytes = buildMinimalFooter(bigOffset, bigLength);
+        io.github.dfa1.vortex.fbs.Footer fbsFooter =
+                io.github.dfa1.vortex.fbs.Footer.getRootAsFooter(fbsFooterBytes);
 
-		// One segment_spec with the big length.
-		io.github.dfa1.vortex.fbs.Footer.startSegmentSpecsVector(fbb, 1);
-		io.github.dfa1.vortex.fbs.SegmentSpec.createSegmentSpec(fbb, segOffset, segLength, 6, 0, 0);
-		int ssv = fbb.endVector();
+        // When
+        Footer footer = PostscriptParser.convertFooter(fbsFooter);
 
-		int off = io.github.dfa1.vortex.fbs.Footer.createFooter(fbb, asv, lsv, ssv, 0, 0);
-		fbb.finish(off);
-		return fbb.dataBuffer();
-	}
+        // Then
+        assertThat(footer.segmentSpecs()).hasSize(1);
+        SegmentSpec spec = footer.segmentSpecs().getFirst();
+        assertThat(spec.offset()).isEqualTo(bigOffset);
+        assertThat(spec.length())
+                .as("u32 segment length above Integer.MAX_VALUE must not be truncated")
+                .isEqualTo(bigLength);
+        assertThat(spec.length()).isGreaterThan(Integer.MAX_VALUE);
+    }
 }

@@ -3,57 +3,91 @@
 package io.github.dfa1.vortex.fbs;
 
 import com.google.flatbuffers.BaseVector;
-import com.google.flatbuffers.BooleanVector;
-import com.google.flatbuffers.ByteVector;
-import com.google.flatbuffers.Constants;
-import com.google.flatbuffers.DoubleVector;
 import com.google.flatbuffers.FlatBufferBuilder;
-import com.google.flatbuffers.FloatVector;
-import com.google.flatbuffers.IntVector;
-import com.google.flatbuffers.LongVector;
-import com.google.flatbuffers.ShortVector;
-import com.google.flatbuffers.StringVector;
-import com.google.flatbuffers.Struct;
-import com.google.flatbuffers.UnionVector;
+
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 @SuppressWarnings("unused")
 public final class Decimal extends com.google.flatbuffers.Table {
-  public static Decimal getRootAsDecimal(ByteBuffer _bb) { return getRootAsDecimal(_bb, new Decimal()); }
-  public static Decimal getRootAsDecimal(ByteBuffer _bb, Decimal obj) { _bb.order(ByteOrder.LITTLE_ENDIAN); return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb)); }
-  public void __init(int _i, ByteBuffer _bb) { __reset(_i, _bb); }
-  public Decimal __assign(int _i, ByteBuffer _bb) { __init(_i, _bb); return this; }
+    public static Decimal getRootAsDecimal(ByteBuffer _bb) {
+        return getRootAsDecimal(_bb, new Decimal());
+    }
 
-  public int precision() { int o = __offset(4); return o != 0 ? bb.get(o + bb_pos) & 0xFF : 0; }
-  public byte scale() { int o = __offset(6); return o != 0 ? bb.get(o + bb_pos) : 0; }
-  public boolean nullable() { int o = __offset(8); return o != 0 ? 0!=bb.get(o + bb_pos) : false; }
+    public static Decimal getRootAsDecimal(ByteBuffer _bb, Decimal obj) {
+        _bb.order(ByteOrder.LITTLE_ENDIAN);
+        return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb));
+    }
 
-  public static int createDecimal(FlatBufferBuilder builder,
-      int precision,
-      byte scale,
-      boolean nullable) {
-    builder.startTable(3);
-    Decimal.addNullable(builder, nullable);
-    Decimal.addScale(builder, scale);
-    Decimal.addPrecision(builder, precision);
-    return Decimal.endDecimal(builder);
-  }
+    public static int createDecimal(FlatBufferBuilder builder,
+            int precision,
+            byte scale,
+            boolean nullable) {
+        builder.startTable(3);
+        Decimal.addNullable(builder, nullable);
+        Decimal.addScale(builder, scale);
+        Decimal.addPrecision(builder, precision);
+        return Decimal.endDecimal(builder);
+    }
 
-  public static void startDecimal(FlatBufferBuilder builder) { builder.startTable(3); }
-  public static void addPrecision(FlatBufferBuilder builder, int precision) { builder.addByte(0, (byte) precision, (byte) 0); }
-  public static void addScale(FlatBufferBuilder builder, byte scale) { builder.addByte(1, scale, 0); }
-  public static void addNullable(FlatBufferBuilder builder, boolean nullable) { builder.addBoolean(2, nullable, false); }
-  public static int endDecimal(FlatBufferBuilder builder) {
-    int o = builder.endTable();
-    return o;
-  }
+    public static void startDecimal(FlatBufferBuilder builder) {
+        builder.startTable(3);
+    }
 
-  public static final class Vector extends BaseVector {
-    public Vector __assign(int _vector, int _element_size, ByteBuffer _bb) { __reset(_vector, _element_size, _bb); return this; }
+    public static void addPrecision(FlatBufferBuilder builder, int precision) {
+        builder.addByte(0, (byte) precision, (byte) 0);
+    }
 
-    public Decimal get(int j) { return get(new Decimal(), j); }
-    public Decimal get(Decimal obj, int j) {  return obj.__assign(__indirect(__element(j), bb), bb); }
-  }
+    public static void addScale(FlatBufferBuilder builder, byte scale) {
+        builder.addByte(1, scale, 0);
+    }
+
+    public static void addNullable(FlatBufferBuilder builder, boolean nullable) {
+        builder.addBoolean(2, nullable, false);
+    }
+
+    public static int endDecimal(FlatBufferBuilder builder) {
+        int o = builder.endTable();
+        return o;
+    }
+
+    public void __init(int _i, ByteBuffer _bb) {
+        __reset(_i, _bb);
+    }
+
+    public Decimal __assign(int _i, ByteBuffer _bb) {
+        __init(_i, _bb);
+        return this;
+    }
+
+    public int precision() {
+        int o = __offset(4);
+        return o != 0 ? bb.get(o + bb_pos) & 0xFF : 0;
+    }
+
+    public byte scale() {
+        int o = __offset(6);
+        return o != 0 ? bb.get(o + bb_pos) : 0;
+    }
+
+    public boolean nullable() {
+        int o = __offset(8);
+        return o != 0 ? 0 != bb.get(o + bb_pos) : false;
+    }
+
+    public static final class Vector extends BaseVector {
+        public Vector __assign(int _vector, int _element_size, ByteBuffer _bb) {
+            __reset(_vector, _element_size, _bb);
+            return this;
+        }
+
+        public Decimal get(int j) {
+            return get(new Decimal(), j);
+        }
+
+        public Decimal get(Decimal obj, int j) {
+            return obj.__assign(__indirect(__element(j), bb), bb);
+        }
+    }
 }
 

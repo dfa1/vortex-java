@@ -3,104 +3,233 @@
 package io.github.dfa1.vortex.fbs;
 
 import com.google.flatbuffers.BaseVector;
-import com.google.flatbuffers.BooleanVector;
 import com.google.flatbuffers.ByteVector;
-import com.google.flatbuffers.Constants;
-import com.google.flatbuffers.DoubleVector;
 import com.google.flatbuffers.FlatBufferBuilder;
-import com.google.flatbuffers.FloatVector;
 import com.google.flatbuffers.IntVector;
-import com.google.flatbuffers.LongVector;
-import com.google.flatbuffers.ShortVector;
-import com.google.flatbuffers.StringVector;
-import com.google.flatbuffers.Struct;
-import com.google.flatbuffers.UnionVector;
+
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 @SuppressWarnings("unused")
 public final class Layout extends com.google.flatbuffers.Table {
-  public static Layout getRootAsLayout(ByteBuffer _bb) { return getRootAsLayout(_bb, new Layout()); }
-  public static Layout getRootAsLayout(ByteBuffer _bb, Layout obj) { _bb.order(ByteOrder.LITTLE_ENDIAN); return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb)); }
-  public void __init(int _i, ByteBuffer _bb) { __reset(_i, _bb); }
-  public Layout __assign(int _i, ByteBuffer _bb) { __init(_i, _bb); return this; }
+    public static Layout getRootAsLayout(ByteBuffer _bb) {
+        return getRootAsLayout(_bb, new Layout());
+    }
 
-  /**
-   * The ID of the encoding used for this Layout.
-   */
-  public int encoding() { int o = __offset(4); return o != 0 ? bb.getShort(o + bb_pos) & 0xFFFF : 0; }
-  /**
-   * The number of rows of data represented by this Layout.
-   */
-  public long rowCount() { int o = __offset(6); return o != 0 ? bb.getLong(o + bb_pos) : 0L; }
-  /**
-   * Any additional metadata this layout needs to interpret its children.
-   * This does not include data-specific metadata, which the layout should store in a segment.
-   */
-  public int metadata(int j) { int o = __offset(8); return o != 0 ? bb.get(__vector(o) + j * 1) & 0xFF : 0; }
-  public int metadataLength() { int o = __offset(8); return o != 0 ? __vector_len(o) : 0; }
-  public ByteVector metadataVector() { return metadataVector(new ByteVector()); }
-  public ByteVector metadataVector(ByteVector obj) { int o = __offset(8); return o != 0 ? obj.__assign(__vector(o), bb) : null; }
-  public ByteBuffer metadataAsByteBuffer() { return __vector_as_bytebuffer(8, 1); }
-  public ByteBuffer metadataInByteBuffer(ByteBuffer _bb) { return __vector_in_bytebuffer(_bb, 8, 1); }
-  /**
-   * The children of this Layout.
-   */
-  public io.github.dfa1.vortex.fbs.Layout children(int j) { return children(new io.github.dfa1.vortex.fbs.Layout(), j); }
-  public io.github.dfa1.vortex.fbs.Layout children(io.github.dfa1.vortex.fbs.Layout obj, int j) { int o = __offset(10); return o != 0 ? obj.__assign(__indirect(__vector(o) + j * 4), bb) : null; }
-  public int childrenLength() { int o = __offset(10); return o != 0 ? __vector_len(o) : 0; }
-  public io.github.dfa1.vortex.fbs.Layout.Vector childrenVector() { return childrenVector(new io.github.dfa1.vortex.fbs.Layout.Vector()); }
-  public io.github.dfa1.vortex.fbs.Layout.Vector childrenVector(io.github.dfa1.vortex.fbs.Layout.Vector obj) { int o = __offset(10); return o != 0 ? obj.__assign(__vector(o), 4, bb) : null; }
-  /**
-   * Identifiers for each `SegmentSpec` of data required by this layout.
-   */
-  public long segments(int j) { int o = __offset(12); return o != 0 ? (long)bb.getInt(__vector(o) + j * 4) & 0xFFFFFFFFL : 0; }
-  public int segmentsLength() { int o = __offset(12); return o != 0 ? __vector_len(o) : 0; }
-  public IntVector segmentsVector() { return segmentsVector(new IntVector()); }
-  public IntVector segmentsVector(IntVector obj) { int o = __offset(12); return o != 0 ? obj.__assign(__vector(o), bb) : null; }
-  public ByteBuffer segmentsAsByteBuffer() { return __vector_as_bytebuffer(12, 4); }
-  public ByteBuffer segmentsInByteBuffer(ByteBuffer _bb) { return __vector_in_bytebuffer(_bb, 12, 4); }
+    public static Layout getRootAsLayout(ByteBuffer _bb, Layout obj) {
+        _bb.order(ByteOrder.LITTLE_ENDIAN);
+        return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb));
+    }
 
-  public static int createLayout(FlatBufferBuilder builder,
-      int encoding,
-      long rowCount,
-      int metadataOffset,
-      int childrenOffset,
-      int segmentsOffset) {
-    builder.startTable(5);
-    Layout.addRowCount(builder, rowCount);
-    Layout.addSegments(builder, segmentsOffset);
-    Layout.addChildren(builder, childrenOffset);
-    Layout.addMetadata(builder, metadataOffset);
-    Layout.addEncoding(builder, encoding);
-    return Layout.endLayout(builder);
-  }
+    public static int createLayout(FlatBufferBuilder builder,
+            int encoding,
+            long rowCount,
+            int metadataOffset,
+            int childrenOffset,
+            int segmentsOffset) {
+        builder.startTable(5);
+        Layout.addRowCount(builder, rowCount);
+        Layout.addSegments(builder, segmentsOffset);
+        Layout.addChildren(builder, childrenOffset);
+        Layout.addMetadata(builder, metadataOffset);
+        Layout.addEncoding(builder, encoding);
+        return Layout.endLayout(builder);
+    }
 
-  public static void startLayout(FlatBufferBuilder builder) { builder.startTable(5); }
-  public static void addEncoding(FlatBufferBuilder builder, int encoding) { builder.addShort(0, (short) encoding, (short) 0); }
-  public static void addRowCount(FlatBufferBuilder builder, long rowCount) { builder.addLong(1, rowCount, 0L); }
-  public static void addMetadata(FlatBufferBuilder builder, int metadataOffset) { builder.addOffset(2, metadataOffset, 0); }
-  public static int createMetadataVector(FlatBufferBuilder builder, byte[] data) { return builder.createByteVector(data); }
-  public static int createMetadataVector(FlatBufferBuilder builder, ByteBuffer data) { return builder.createByteVector(data); }
-  public static void startMetadataVector(FlatBufferBuilder builder, int numElems) { builder.startVector(1, numElems, 1); }
-  public static void addChildren(FlatBufferBuilder builder, int childrenOffset) { builder.addOffset(3, childrenOffset, 0); }
-  public static int createChildrenVector(FlatBufferBuilder builder, int[] data) { builder.startVector(4, data.length, 4); for (int i = data.length - 1; i >= 0; i--) builder.addOffset(data[i]); return builder.endVector(); }
-  public static void startChildrenVector(FlatBufferBuilder builder, int numElems) { builder.startVector(4, numElems, 4); }
-  public static void addSegments(FlatBufferBuilder builder, int segmentsOffset) { builder.addOffset(4, segmentsOffset, 0); }
-  public static int createSegmentsVector(FlatBufferBuilder builder, long[] data) { builder.startVector(4, data.length, 4); for (int i = data.length - 1; i >= 0; i--) builder.addInt((int) data[i]); return builder.endVector(); }
-  public static void startSegmentsVector(FlatBufferBuilder builder, int numElems) { builder.startVector(4, numElems, 4); }
-  public static int endLayout(FlatBufferBuilder builder) {
-    int o = builder.endTable();
-    return o;
-  }
-  public static void finishLayoutBuffer(FlatBufferBuilder builder, int offset) { builder.finish(offset); }
-  public static void finishSizePrefixedLayoutBuffer(FlatBufferBuilder builder, int offset) { builder.finishSizePrefixed(offset); }
+    public static void startLayout(FlatBufferBuilder builder) {
+        builder.startTable(5);
+    }
 
-  public static final class Vector extends BaseVector {
-    public Vector __assign(int _vector, int _element_size, ByteBuffer _bb) { __reset(_vector, _element_size, _bb); return this; }
+    public static void addEncoding(FlatBufferBuilder builder, int encoding) {
+        builder.addShort(0, (short) encoding, (short) 0);
+    }
 
-    public Layout get(int j) { return get(new Layout(), j); }
-    public Layout get(Layout obj, int j) {  return obj.__assign(__indirect(__element(j), bb), bb); }
-  }
+    public static void addRowCount(FlatBufferBuilder builder, long rowCount) {
+        builder.addLong(1, rowCount, 0L);
+    }
+
+    public static void addMetadata(FlatBufferBuilder builder, int metadataOffset) {
+        builder.addOffset(2, metadataOffset, 0);
+    }
+
+    public static int createMetadataVector(FlatBufferBuilder builder, byte[] data) {
+        return builder.createByteVector(data);
+    }
+
+    public static int createMetadataVector(FlatBufferBuilder builder, ByteBuffer data) {
+        return builder.createByteVector(data);
+    }
+
+    public static void startMetadataVector(FlatBufferBuilder builder, int numElems) {
+        builder.startVector(1, numElems, 1);
+    }
+
+    public static void addChildren(FlatBufferBuilder builder, int childrenOffset) {
+        builder.addOffset(3, childrenOffset, 0);
+    }
+
+    public static int createChildrenVector(FlatBufferBuilder builder, int[] data) {
+        builder.startVector(4, data.length, 4);
+        for (int i = data.length - 1; i >= 0; i--) builder.addOffset(data[i]);
+        return builder.endVector();
+    }
+
+    public static void startChildrenVector(FlatBufferBuilder builder, int numElems) {
+        builder.startVector(4, numElems, 4);
+    }
+
+    public static void addSegments(FlatBufferBuilder builder, int segmentsOffset) {
+        builder.addOffset(4, segmentsOffset, 0);
+    }
+
+    public static int createSegmentsVector(FlatBufferBuilder builder, long[] data) {
+        builder.startVector(4, data.length, 4);
+        for (int i = data.length - 1; i >= 0; i--) builder.addInt((int) data[i]);
+        return builder.endVector();
+    }
+
+    public static void startSegmentsVector(FlatBufferBuilder builder, int numElems) {
+        builder.startVector(4, numElems, 4);
+    }
+
+    public static int endLayout(FlatBufferBuilder builder) {
+        int o = builder.endTable();
+        return o;
+    }
+
+    public static void finishLayoutBuffer(FlatBufferBuilder builder, int offset) {
+        builder.finish(offset);
+    }
+
+    public static void finishSizePrefixedLayoutBuffer(FlatBufferBuilder builder, int offset) {
+        builder.finishSizePrefixed(offset);
+    }
+
+    public void __init(int _i, ByteBuffer _bb) {
+        __reset(_i, _bb);
+    }
+
+    public Layout __assign(int _i, ByteBuffer _bb) {
+        __init(_i, _bb);
+        return this;
+    }
+
+    /**
+     * The ID of the encoding used for this Layout.
+     */
+    public int encoding() {
+        int o = __offset(4);
+        return o != 0 ? bb.getShort(o + bb_pos) & 0xFFFF : 0;
+    }
+
+    /**
+     * The number of rows of data represented by this Layout.
+     */
+    public long rowCount() {
+        int o = __offset(6);
+        return o != 0 ? bb.getLong(o + bb_pos) : 0L;
+    }
+
+    /**
+     * Any additional metadata this layout needs to interpret its children.
+     * This does not include data-specific metadata, which the layout should store in a segment.
+     */
+    public int metadata(int j) {
+        int o = __offset(8);
+        return o != 0 ? bb.get(__vector(o) + j * 1) & 0xFF : 0;
+    }
+
+    public int metadataLength() {
+        int o = __offset(8);
+        return o != 0 ? __vector_len(o) : 0;
+    }
+
+    public ByteVector metadataVector() {
+        return metadataVector(new ByteVector());
+    }
+
+    public ByteVector metadataVector(ByteVector obj) {
+        int o = __offset(8);
+        return o != 0 ? obj.__assign(__vector(o), bb) : null;
+    }
+
+    public ByteBuffer metadataAsByteBuffer() {
+        return __vector_as_bytebuffer(8, 1);
+    }
+
+    public ByteBuffer metadataInByteBuffer(ByteBuffer _bb) {
+        return __vector_in_bytebuffer(_bb, 8, 1);
+    }
+
+    /**
+     * The children of this Layout.
+     */
+    public io.github.dfa1.vortex.fbs.Layout children(int j) {
+        return children(new io.github.dfa1.vortex.fbs.Layout(), j);
+    }
+
+    public io.github.dfa1.vortex.fbs.Layout children(io.github.dfa1.vortex.fbs.Layout obj, int j) {
+        int o = __offset(10);
+        return o != 0 ? obj.__assign(__indirect(__vector(o) + j * 4), bb) : null;
+    }
+
+    public int childrenLength() {
+        int o = __offset(10);
+        return o != 0 ? __vector_len(o) : 0;
+    }
+
+    public io.github.dfa1.vortex.fbs.Layout.Vector childrenVector() {
+        return childrenVector(new io.github.dfa1.vortex.fbs.Layout.Vector());
+    }
+
+    public io.github.dfa1.vortex.fbs.Layout.Vector childrenVector(io.github.dfa1.vortex.fbs.Layout.Vector obj) {
+        int o = __offset(10);
+        return o != 0 ? obj.__assign(__vector(o), 4, bb) : null;
+    }
+
+    /**
+     * Identifiers for each `SegmentSpec` of data required by this layout.
+     */
+    public long segments(int j) {
+        int o = __offset(12);
+        return o != 0 ? (long) bb.getInt(__vector(o) + j * 4) & 0xFFFFFFFFL : 0;
+    }
+
+    public int segmentsLength() {
+        int o = __offset(12);
+        return o != 0 ? __vector_len(o) : 0;
+    }
+
+    public IntVector segmentsVector() {
+        return segmentsVector(new IntVector());
+    }
+
+    public IntVector segmentsVector(IntVector obj) {
+        int o = __offset(12);
+        return o != 0 ? obj.__assign(__vector(o), bb) : null;
+    }
+
+    public ByteBuffer segmentsAsByteBuffer() {
+        return __vector_as_bytebuffer(12, 4);
+    }
+
+    public ByteBuffer segmentsInByteBuffer(ByteBuffer _bb) {
+        return __vector_in_bytebuffer(_bb, 12, 4);
+    }
+
+    public static final class Vector extends BaseVector {
+        public Vector __assign(int _vector, int _element_size, ByteBuffer _bb) {
+            __reset(_vector, _element_size, _bb);
+            return this;
+        }
+
+        public Layout get(int j) {
+            return get(new Layout(), j);
+        }
+
+        public Layout get(Layout obj, int j) {
+            return obj.__assign(__indirect(__element(j), bb), bb);
+        }
+    }
 }
 

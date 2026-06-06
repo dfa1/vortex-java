@@ -6,10 +6,10 @@ import java.nio.ByteBuffer;
 
 /// Array node whose encoding id is well-known to this build (an [EncodingId] enum constant).
 record KnownArrayNode(
-		EncodingId encodingId,
-		ByteBuffer metadata,
-		ArrayNode[] children,
-		int[] bufferIndices,
-		ArrayStats stats
+        EncodingId encodingId,
+        ByteBuffer metadata,
+        ArrayNode[] children,
+        int[] bufferIndices,
+        ArrayStats stats
 ) implements ArrayNode {
 }

@@ -15,23 +15,23 @@ import java.lang.foreign.MemorySegment;
 /// Implementations: [VortexReader] (memory-mapped local file), [VortexHttpReader] (HTTP Range reads).
 public interface VortexHandle extends Closeable {
 
-	DType dtype();
+    DType dtype();
 
-	Layout layout();
+    Layout layout();
 
-	Footer footer();
+    Footer footer();
 
-	int version();
+    int version();
 
-	long fileSize();
+    long fileSize();
 
-	EncodingRegistry registry();
+    EncodingRegistry registry();
 
-	/// Returns a view of bytes `[offset, offset+length)` within the file.
-	MemorySegment slice(long offset, long length);
+    /// Returns a view of bytes `[offset, offset+length)` within the file.
+    MemorySegment slice(long offset, long length);
 
-	ScanIterator scan(ScanOptions options);
+    ScanIterator scan(ScanOptions options);
 
-	@Override
-	void close();
+    @Override
+    void close();
 }

@@ -3,40 +3,53 @@
 package io.github.dfa1.vortex.fbs;
 
 import com.google.flatbuffers.BaseVector;
-import com.google.flatbuffers.BooleanVector;
-import com.google.flatbuffers.ByteVector;
-import com.google.flatbuffers.Constants;
-import com.google.flatbuffers.DoubleVector;
 import com.google.flatbuffers.FlatBufferBuilder;
-import com.google.flatbuffers.FloatVector;
-import com.google.flatbuffers.IntVector;
-import com.google.flatbuffers.LongVector;
-import com.google.flatbuffers.ShortVector;
-import com.google.flatbuffers.StringVector;
-import com.google.flatbuffers.Struct;
-import com.google.flatbuffers.UnionVector;
+
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 @SuppressWarnings("unused")
 public final class EncryptionSpec extends com.google.flatbuffers.Table {
-  public static EncryptionSpec getRootAsEncryptionSpec(ByteBuffer _bb) { return getRootAsEncryptionSpec(_bb, new EncryptionSpec()); }
-  public static EncryptionSpec getRootAsEncryptionSpec(ByteBuffer _bb, EncryptionSpec obj) { _bb.order(ByteOrder.LITTLE_ENDIAN); return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb)); }
-  public void __init(int _i, ByteBuffer _bb) { __reset(_i, _bb); }
-  public EncryptionSpec __assign(int _i, ByteBuffer _bb) { __init(_i, _bb); return this; }
+    public static EncryptionSpec getRootAsEncryptionSpec(ByteBuffer _bb) {
+        return getRootAsEncryptionSpec(_bb, new EncryptionSpec());
+    }
 
+    public static EncryptionSpec getRootAsEncryptionSpec(ByteBuffer _bb, EncryptionSpec obj) {
+        _bb.order(ByteOrder.LITTLE_ENDIAN);
+        return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb));
+    }
 
-  public static void startEncryptionSpec(FlatBufferBuilder builder) { builder.startTable(0); }
-  public static int endEncryptionSpec(FlatBufferBuilder builder) {
-    int o = builder.endTable();
-    return o;
-  }
+    public static void startEncryptionSpec(FlatBufferBuilder builder) {
+        builder.startTable(0);
+    }
 
-  public static final class Vector extends BaseVector {
-    public Vector __assign(int _vector, int _element_size, ByteBuffer _bb) { __reset(_vector, _element_size, _bb); return this; }
+    public static int endEncryptionSpec(FlatBufferBuilder builder) {
+        int o = builder.endTable();
+        return o;
+    }
 
-    public EncryptionSpec get(int j) { return get(new EncryptionSpec(), j); }
-    public EncryptionSpec get(EncryptionSpec obj, int j) {  return obj.__assign(__indirect(__element(j), bb), bb); }
-  }
+    public void __init(int _i, ByteBuffer _bb) {
+        __reset(_i, _bb);
+    }
+
+    public EncryptionSpec __assign(int _i, ByteBuffer _bb) {
+        __init(_i, _bb);
+        return this;
+    }
+
+    public static final class Vector extends BaseVector {
+        public Vector __assign(int _vector, int _element_size, ByteBuffer _bb) {
+            __reset(_vector, _element_size, _bb);
+            return this;
+        }
+
+        public EncryptionSpec get(int j) {
+            return get(new EncryptionSpec(), j);
+        }
+
+        public EncryptionSpec get(EncryptionSpec obj, int j) {
+            return obj.__assign(__indirect(__element(j), bb), bb);
+        }
+    }
 }
 

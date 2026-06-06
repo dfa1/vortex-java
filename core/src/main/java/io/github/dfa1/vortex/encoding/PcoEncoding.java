@@ -32,16 +32,16 @@ import java.nio.ByteOrder;
 ///
 /// <p>Wire format (pcodec layer, per chunk/page):
 /// <ul>
-///   <li>Chunk meta: [4b mode][extra mode bits][4b delta][extra delta bits]
-///       [optional delta latent var (U32) for Lookback]
-///       [per-latent: 4b ans_size_log, 15b n_bins, per-bin {weight-1, lower, offset_bits}]
-///       [0–7b alignment]</li>
-///   <li>Classic/Dict page: [deltaOrder×dtypeSize b moments, 4×ansSizeLog b ANS states]
-///       [0–7b alignment] [per 256-batch: ANS bits, offset bits]</li>
-///   <li>IntMult/FloatMult/FloatQuant page: [primary header][secondary header][0–7b alignment]
-///       [per 256-batch: primary ANS+offsets, secondary ANS+offsets]</li>
-///   <li>Lookback page: [delta ANS states][stateN×dtypeSize moments][primary ANS states]
-///       [0–7b alignment] [per 256-batch: delta ANS+offsets, primary ANS+offsets]</li>
+///   <li>Chunk meta: [4b mode][extramodebits][4b delta][extradeltabits]
+///       [optionaldeltalatentvar(U32)forLookback]
+///       [per-latent:4bans_size_log,15bn_bins,per-bin{weight-1,lower,offset_bits}]
+///       [0–7balignment]</li>
+///   <li>Classic/Dict page: [deltaOrder×dtypeSizebmoments,4×ansSizeLogbANSstates]
+///       [0–7balignment] [per256-batch:ANSbits,offsetbits]</li>
+///   <li>IntMult/FloatMult/FloatQuant page: [primary header][secondaryheader][0–7balignment]
+///       [per256-batch:primaryANS+offsets,secondaryANS+offsets]</li>
+///   <li>Lookback page: [delta ANS states][stateN×dtypeSizemoments][primaryANSstates]
+///       [0–7balignment] [per256-batch:deltaANS+offsets,primaryANS+offsets]</li>
 ///   <li>All bit packing little-endian (LSB first)</li>
 /// </ul>
 ///
@@ -50,17 +50,16 @@ import java.nio.ByteOrder;
 /// all integer/float ptypes except F16 (Conv1 additionally excludes 64-bit dtypes).
 public final class PcoEncoding implements Encoding {
 
-    /// Creates a new {@code PcoEncoding} instance; use via {@link EncodingRegistry}.
-    public PcoEncoding() {
-    }
-
     static final byte PCO_FORMAT_MAJOR = 0x04;
     static final byte PCO_FORMAT_MINOR = 0x01;
-
     // bits needed to encode offset_bits field per latent type
     static final int BITS_TO_ENCODE_OFFSET_BITS_64 = 7; // log2(64) + 1
     static final int BITS_TO_ENCODE_OFFSET_BITS_32 = 6; // log2(32) + 1
     static final int BITS_TO_ENCODE_OFFSET_BITS_16 = 5; // log2(16) + 1
+
+    /// Creates a new {@code PcoEncoding} instance; use via {@link EncodingRegistry}.
+    public PcoEncoding() {
+    }
 
     @Override
     public EncodingId encodingId() {
@@ -375,8 +374,8 @@ public final class PcoEncoding implements Encoding {
 
         /// Decode one Lookback-delta page into rawLatents. Per-page window seeded from page header.
         ///
-        /// Page layout: [delta ANS states (U32)][stateN×dtypeSize initial values][primary ANS states]
-        /// [0–7b align] [per 256-batch: delta ANS+offsets (lookback idx), primary ANS+offsets (residuals)]
+        /// Page layout: [delta ANS states (U32)][stateN×dtypeSizeinitialvalues][primaryANSstates]
+        /// [0–7balign] [per256-batch:deltaANS+offsets(lookbackidx),primaryANS+offsets(residuals)]
         private static long decodeLookbackPage(
                 PcoTansDecoder deltaTans, int deltaAnsSizeLog,
                 PcoTansDecoder primaryTans, int primaryAnsSizeLog,
@@ -467,8 +466,8 @@ public final class PcoEncoding implements Encoding {
 
         /// Decode one Conv1-delta page into rawLatents and return the updated byte offset.
         ///
-        /// Page layout: [order×dtypeSize initial state][4×ansSizeLog ANS states][0–7b align]
-        /// [per 256-batch: ANS bits + offset bits for (pageN-order) residuals]
+        /// Page layout: [order×dtypeSize initial state][4×ansSizeLogANSstates][0–7balign]
+        /// [per256-batch:ANSbits+offsetbitsfor(pageN-order)residuals]
         ///
         /// Port of {@code conv1::decode_in_place} from pcodec.
         private static long decodeConv1Page(
@@ -640,7 +639,7 @@ public final class PcoEncoding implements Encoding {
             long absInt = negative ? (0x7FFFFFFFL - l) : (l ^ 0x80000000L);
             long gpi = 1L << 24;
             float absFloat = (absInt < gpi) ? (float) absInt
-                    : Float.intBitsToFloat(0x4B800000 + (int) (absInt - gpi));
+                                     : Float.intBitsToFloat(0x4B800000 + (int) (absInt - gpi));
             return negative ? -absFloat : absFloat;
         }
 
@@ -652,7 +651,7 @@ public final class PcoEncoding implements Encoding {
             long absInt = negative ? (Long.MAX_VALUE - l) : (l ^ Long.MIN_VALUE);
             long gpi = 1L << 53;
             double absFloat = (absInt < gpi) ? (double) absInt
-                    : Double.longBitsToDouble(0x4340000000000000L + (absInt - gpi));
+                                      : Double.longBitsToDouble(0x4340000000000000L + (absInt - gpi));
             return negative ? -absFloat : absFloat;
         }
 
@@ -772,7 +771,7 @@ public final class PcoEncoding implements Encoding {
             } else if (modeNibble != 0) {
                 throw new VortexException(EncodingId.VORTEX_PCO,
                         "pco mode " + modeNibble + " not yet implemented "
-                        + "(Classic=0, IntMult=1, FloatMult=2, FloatQuant=3, Dict=4 supported)");
+                                + "(Classic=0, IntMult=1, FloatMult=2, FloatQuant=3, Dict=4 supported)");
             }
 
             // Delta encoding variant + extra bits.
@@ -815,7 +814,7 @@ public final class PcoEncoding implements Encoding {
             } else {
                 throw new VortexException(EncodingId.VORTEX_PCO,
                         "pco delta variant " + deltaVariant + " not yet implemented "
-                        + "(NoOp=0, Consecutive=1, Lookback=2, Conv1=3 supported)");
+                                + "(NoOp=0, Consecutive=1, Lookback=2, Conv1=3 supported)");
             }
 
             // Delta latent var (U32 lookback indices) — only present for Lookback delta.
@@ -891,10 +890,10 @@ public final class PcoEncoding implements Encoding {
     }
 
     private record PcoChunkMeta(int mode, long base, int quantizeK, long[] dict,
-                                 int deltaVariant, int deltaOrder, boolean secondaryUsesDelta,
-                                 int windowNLog, int stateNLog, int deltaAnsSizeLog, PcoBin[] deltaBins,
-                                 int conv1Quantization, long conv1Bias, long[] conv1Weights,
-                                 int ansSizeLog, PcoBin[] bins,
-                                 int secondaryAnsSizeLog, PcoBin[] secondaryBins) {
+                                int deltaVariant, int deltaOrder, boolean secondaryUsesDelta,
+                                int windowNLog, int stateNLog, int deltaAnsSizeLog, PcoBin[] deltaBins,
+                                int conv1Quantization, long conv1Bias, long[] conv1Weights,
+                                int ansSizeLog, PcoBin[] bins,
+                                int secondaryAnsSizeLog, PcoBin[] secondaryBins) {
     }
 }

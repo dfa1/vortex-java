@@ -3,18 +3,8 @@
 package io.github.dfa1.vortex.fbs;
 
 import com.google.flatbuffers.BaseVector;
-import com.google.flatbuffers.BooleanVector;
-import com.google.flatbuffers.ByteVector;
-import com.google.flatbuffers.Constants;
-import com.google.flatbuffers.DoubleVector;
 import com.google.flatbuffers.FlatBufferBuilder;
-import com.google.flatbuffers.FloatVector;
-import com.google.flatbuffers.IntVector;
-import com.google.flatbuffers.LongVector;
-import com.google.flatbuffers.ShortVector;
-import com.google.flatbuffers.StringVector;
-import com.google.flatbuffers.Struct;
-import com.google.flatbuffers.UnionVector;
+
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
@@ -22,77 +12,146 @@ import java.nio.ByteOrder;
  * The `Postscript` is guaranteed by the file format to never exceed
  * 65528 bytes (i.e., u16::MAX - 8 bytes) in length, and is immediately
  * followed by an 8-byte `EndOfFile` struct.
- *
+ * <p>
  * An initial read of a Vortex file defaults to at least 64KB (u16::MAX bytes) and therefore
  * is guaranteed to cover at least the Postscript.
- *
+ * <p>
  * The reason for a postscript at all is to ensure minimal but all necessary footer information
  * can be read in two round trips. Since the DType is optional and possibly large, it lives in
  * its own segment. If the footer were arbitrary size, with a pointer to the DType segment, then
  * in the worst case we would need one round trip to read the footer length, one to read the full
  * footer and parse the DType offset, and a third to fetch the DType segment.
- *
+ * <p>
  * The segments pointed to by the postscript have inline compression and encryption specs to avoid
  * the need to fetch encryption schemes up-front.
  */
 @SuppressWarnings("unused")
 public final class Postscript extends com.google.flatbuffers.Table {
-  public static Postscript getRootAsPostscript(ByteBuffer _bb) { return getRootAsPostscript(_bb, new Postscript()); }
-  public static Postscript getRootAsPostscript(ByteBuffer _bb, Postscript obj) { _bb.order(ByteOrder.LITTLE_ENDIAN); return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb)); }
-  public void __init(int _i, ByteBuffer _bb) { __reset(_i, _bb); }
-  public Postscript __assign(int _i, ByteBuffer _bb) { __init(_i, _bb); return this; }
+    public static Postscript getRootAsPostscript(ByteBuffer _bb) {
+        return getRootAsPostscript(_bb, new Postscript());
+    }
 
-  /**
-   * Segment containing the root `DType` flatbuffer.
-   */
-  public io.github.dfa1.vortex.fbs.PostscriptSegment dtype() { return dtype(new io.github.dfa1.vortex.fbs.PostscriptSegment()); }
-  public io.github.dfa1.vortex.fbs.PostscriptSegment dtype(io.github.dfa1.vortex.fbs.PostscriptSegment obj) { int o = __offset(4); return o != 0 ? obj.__assign(__indirect(o + bb_pos), bb) : null; }
-  /**
-   * Segment containing the root `Layout` flatbuffer (required).
-   */
-  public io.github.dfa1.vortex.fbs.PostscriptSegment layout() { return layout(new io.github.dfa1.vortex.fbs.PostscriptSegment()); }
-  public io.github.dfa1.vortex.fbs.PostscriptSegment layout(io.github.dfa1.vortex.fbs.PostscriptSegment obj) { int o = __offset(6); return o != 0 ? obj.__assign(__indirect(o + bb_pos), bb) : null; }
-  /**
-   * Segment containing the file-level `Statistics` flatbuffer.
-   */
-  public io.github.dfa1.vortex.fbs.PostscriptSegment statistics() { return statistics(new io.github.dfa1.vortex.fbs.PostscriptSegment()); }
-  public io.github.dfa1.vortex.fbs.PostscriptSegment statistics(io.github.dfa1.vortex.fbs.PostscriptSegment obj) { int o = __offset(8); return o != 0 ? obj.__assign(__indirect(o + bb_pos), bb) : null; }
-  /**
-   * Segment containing the 'Footer' flatbuffer (required)
-   */
-  public io.github.dfa1.vortex.fbs.PostscriptSegment footer() { return footer(new io.github.dfa1.vortex.fbs.PostscriptSegment()); }
-  public io.github.dfa1.vortex.fbs.PostscriptSegment footer(io.github.dfa1.vortex.fbs.PostscriptSegment obj) { int o = __offset(10); return o != 0 ? obj.__assign(__indirect(o + bb_pos), bb) : null; }
+    public static Postscript getRootAsPostscript(ByteBuffer _bb, Postscript obj) {
+        _bb.order(ByteOrder.LITTLE_ENDIAN);
+        return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb));
+    }
 
-  public static int createPostscript(FlatBufferBuilder builder,
-      int dtypeOffset,
-      int layoutOffset,
-      int statisticsOffset,
-      int footerOffset) {
-    builder.startTable(4);
-    Postscript.addFooter(builder, footerOffset);
-    Postscript.addStatistics(builder, statisticsOffset);
-    Postscript.addLayout(builder, layoutOffset);
-    Postscript.addDtype(builder, dtypeOffset);
-    return Postscript.endPostscript(builder);
-  }
+    public static int createPostscript(FlatBufferBuilder builder,
+            int dtypeOffset,
+            int layoutOffset,
+            int statisticsOffset,
+            int footerOffset) {
+        builder.startTable(4);
+        Postscript.addFooter(builder, footerOffset);
+        Postscript.addStatistics(builder, statisticsOffset);
+        Postscript.addLayout(builder, layoutOffset);
+        Postscript.addDtype(builder, dtypeOffset);
+        return Postscript.endPostscript(builder);
+    }
 
-  public static void startPostscript(FlatBufferBuilder builder) { builder.startTable(4); }
-  public static void addDtype(FlatBufferBuilder builder, int dtypeOffset) { builder.addOffset(0, dtypeOffset, 0); }
-  public static void addLayout(FlatBufferBuilder builder, int layoutOffset) { builder.addOffset(1, layoutOffset, 0); }
-  public static void addStatistics(FlatBufferBuilder builder, int statisticsOffset) { builder.addOffset(2, statisticsOffset, 0); }
-  public static void addFooter(FlatBufferBuilder builder, int footerOffset) { builder.addOffset(3, footerOffset, 0); }
-  public static int endPostscript(FlatBufferBuilder builder) {
-    int o = builder.endTable();
-    return o;
-  }
-  public static void finishPostscriptBuffer(FlatBufferBuilder builder, int offset) { builder.finish(offset); }
-  public static void finishSizePrefixedPostscriptBuffer(FlatBufferBuilder builder, int offset) { builder.finishSizePrefixed(offset); }
+    public static void startPostscript(FlatBufferBuilder builder) {
+        builder.startTable(4);
+    }
 
-  public static final class Vector extends BaseVector {
-    public Vector __assign(int _vector, int _element_size, ByteBuffer _bb) { __reset(_vector, _element_size, _bb); return this; }
+    public static void addDtype(FlatBufferBuilder builder, int dtypeOffset) {
+        builder.addOffset(0, dtypeOffset, 0);
+    }
 
-    public Postscript get(int j) { return get(new Postscript(), j); }
-    public Postscript get(Postscript obj, int j) {  return obj.__assign(__indirect(__element(j), bb), bb); }
-  }
+    public static void addLayout(FlatBufferBuilder builder, int layoutOffset) {
+        builder.addOffset(1, layoutOffset, 0);
+    }
+
+    public static void addStatistics(FlatBufferBuilder builder, int statisticsOffset) {
+        builder.addOffset(2, statisticsOffset, 0);
+    }
+
+    public static void addFooter(FlatBufferBuilder builder, int footerOffset) {
+        builder.addOffset(3, footerOffset, 0);
+    }
+
+    public static int endPostscript(FlatBufferBuilder builder) {
+        int o = builder.endTable();
+        return o;
+    }
+
+    public static void finishPostscriptBuffer(FlatBufferBuilder builder, int offset) {
+        builder.finish(offset);
+    }
+
+    public static void finishSizePrefixedPostscriptBuffer(FlatBufferBuilder builder, int offset) {
+        builder.finishSizePrefixed(offset);
+    }
+
+    public void __init(int _i, ByteBuffer _bb) {
+        __reset(_i, _bb);
+    }
+
+    public Postscript __assign(int _i, ByteBuffer _bb) {
+        __init(_i, _bb);
+        return this;
+    }
+
+    /**
+     * Segment containing the root `DType` flatbuffer.
+     */
+    public io.github.dfa1.vortex.fbs.PostscriptSegment dtype() {
+        return dtype(new io.github.dfa1.vortex.fbs.PostscriptSegment());
+    }
+
+    public io.github.dfa1.vortex.fbs.PostscriptSegment dtype(io.github.dfa1.vortex.fbs.PostscriptSegment obj) {
+        int o = __offset(4);
+        return o != 0 ? obj.__assign(__indirect(o + bb_pos), bb) : null;
+    }
+
+    /**
+     * Segment containing the root `Layout` flatbuffer (required).
+     */
+    public io.github.dfa1.vortex.fbs.PostscriptSegment layout() {
+        return layout(new io.github.dfa1.vortex.fbs.PostscriptSegment());
+    }
+
+    public io.github.dfa1.vortex.fbs.PostscriptSegment layout(io.github.dfa1.vortex.fbs.PostscriptSegment obj) {
+        int o = __offset(6);
+        return o != 0 ? obj.__assign(__indirect(o + bb_pos), bb) : null;
+    }
+
+    /**
+     * Segment containing the file-level `Statistics` flatbuffer.
+     */
+    public io.github.dfa1.vortex.fbs.PostscriptSegment statistics() {
+        return statistics(new io.github.dfa1.vortex.fbs.PostscriptSegment());
+    }
+
+    public io.github.dfa1.vortex.fbs.PostscriptSegment statistics(io.github.dfa1.vortex.fbs.PostscriptSegment obj) {
+        int o = __offset(8);
+        return o != 0 ? obj.__assign(__indirect(o + bb_pos), bb) : null;
+    }
+
+    /**
+     * Segment containing the 'Footer' flatbuffer (required)
+     */
+    public io.github.dfa1.vortex.fbs.PostscriptSegment footer() {
+        return footer(new io.github.dfa1.vortex.fbs.PostscriptSegment());
+    }
+
+    public io.github.dfa1.vortex.fbs.PostscriptSegment footer(io.github.dfa1.vortex.fbs.PostscriptSegment obj) {
+        int o = __offset(10);
+        return o != 0 ? obj.__assign(__indirect(o + bb_pos), bb) : null;
+    }
+
+    public static final class Vector extends BaseVector {
+        public Vector __assign(int _vector, int _element_size, ByteBuffer _bb) {
+            __reset(_vector, _element_size, _bb);
+            return this;
+        }
+
+        public Postscript get(int j) {
+            return get(new Postscript(), j);
+        }
+
+        public Postscript get(Postscript obj, int j) {
+            return obj.__assign(__indirect(__element(j), bb), bb);
+        }
+    }
 }
 

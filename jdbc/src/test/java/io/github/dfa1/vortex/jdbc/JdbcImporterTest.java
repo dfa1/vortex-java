@@ -3,7 +3,6 @@ package io.github.dfa1.vortex.jdbc;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.BoolArray;
-import io.github.dfa1.vortex.writer.WriteOptions;
 import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
@@ -11,6 +10,7 @@ import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.ScanIterator;
 import io.github.dfa1.vortex.scan.ScanOptions;
 import io.github.dfa1.vortex.scan.ScanResult;
+import io.github.dfa1.vortex.writer.WriteOptions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -104,8 +104,8 @@ class JdbcImporterTest {
             }
             Path vortex = tmp.resolve("nums.vortex");
             JdbcImportOptions options = JdbcImportOptions.defaults()
-                    .withChunkSize(2)
-                    .withWriteOptions(WriteOptions.defaults());
+                                                .withChunkSize(2)
+                                                .withWriteOptions(WriteOptions.defaults());
 
             // When
             JdbcImporter.importQuery(conn, "SELECT * FROM nums ORDER BY n", vortex, options);
@@ -184,8 +184,8 @@ class JdbcImporterTest {
             Path vortex = tmp.resolve("progress.vortex");
             List<Long> checkpoints = new ArrayList<>();
             JdbcImportOptions options = JdbcImportOptions.defaults()
-                    .withChunkSize(3)
-                    .withProgressListener((done, total) -> checkpoints.add(done));
+                                                .withChunkSize(3)
+                                                .withProgressListener((done, total) -> checkpoints.add(done));
 
             // When
             JdbcImporter.importQuery(conn, "SELECT * FROM progress_test", vortex, options);

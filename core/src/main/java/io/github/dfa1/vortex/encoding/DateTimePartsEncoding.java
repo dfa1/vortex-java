@@ -121,11 +121,11 @@ public final class DateTimePartsEncoding implements Encoding {
             EncodeNode subsecondsNode = EncodeNode.remapBufferIndices(subsecondsResult.rootNode(), off2);
 
             byte[] metaBytes = EncodingProtos.DateTimePartsMetadata.newBuilder()
-                    .setDaysPtype(I64_PROTO)
-                    .setSecondsPtype(I64_PROTO)
-                    .setSubsecondsPtype(I64_PROTO)
-                    .build()
-                    .toByteArray();
+                                       .setDaysPtype(I64_PROTO)
+                                       .setSecondsPtype(I64_PROTO)
+                                       .setSubsecondsPtype(I64_PROTO)
+                                       .build()
+                                       .toByteArray();
 
             EncodeNode root = new EncodeNode(
                     EncodingId.VORTEX_DATETIMEPARTS,
@@ -163,8 +163,8 @@ public final class DateTimePartsEncoding implements Encoding {
             }
 
             byte[] metaBytes = EncodingProtos.DateTimePartsMetadata.newBuilder()
-                    .setDaysPtype(I64_PROTO).setSecondsPtype(I64_PROTO).setSubsecondsPtype(I64_PROTO)
-                    .build().toByteArray();
+                                       .setDaysPtype(I64_PROTO).setSecondsPtype(I64_PROTO).setSubsecondsPtype(I64_PROTO)
+                                       .build().toByteArray();
 
             // 3 null slots filled by the cascading compressor (days, seconds, subseconds)
             EncodeNode partialRoot = new EncodeNode(

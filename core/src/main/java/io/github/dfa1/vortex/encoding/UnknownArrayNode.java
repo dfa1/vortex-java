@@ -9,10 +9,10 @@ import java.nio.ByteBuffer;
 /// [io.github.dfa1.vortex.core.array.UnknownArray] when
 /// [EncodingRegistry#allowUnknown()] is set; otherwise the decode call throws.
 record UnknownArrayNode(
-		String rawEncodingId,
-		ByteBuffer metadata,
-		ArrayNode[] children,
-		int[] bufferIndices,
-		ArrayStats stats
+        String rawEncodingId,
+        ByteBuffer metadata,
+        ArrayNode[] children,
+        int[] bufferIndices,
+        ArrayStats stats
 ) implements ArrayNode {
 }

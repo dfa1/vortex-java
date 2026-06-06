@@ -6,6 +6,9 @@ import java.lang.foreign.MemorySegment;
 /// Static factories for LE-encoded MemorySegments used in encoding tests.
 final class TestSegments {
 
+    private TestSegments() {
+    }
+
     static MemorySegment leLongs(long... values) {
         MemorySegment seg = Arena.ofAuto().allocate((long) values.length * Long.BYTES);
         for (int i = 0; i < values.length; i++) {
@@ -45,6 +48,4 @@ final class TestSegments {
         }
         return seg;
     }
-
-    private TestSegments() {}
 }

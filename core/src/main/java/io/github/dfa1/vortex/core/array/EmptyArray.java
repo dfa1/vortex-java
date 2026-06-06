@@ -8,23 +8,23 @@ import io.github.dfa1.vortex.core.DType;
 /// @param dtype the logical type of this empty array
 public record EmptyArray(DType dtype) implements Array {
 
-	@Override
-	public long length() {
-		return 0;
-	}
+    /// Creates an empty array with the given logical type.
+    ///
+    /// @param dtype logical type for the returned empty array
+    /// @return a zero-length {@link Array} with the specified dtype
+    public static Array of(DType dtype) {
+        return new EmptyArray(dtype);
+    }
 
-	/// Returns empty statistics — an array with zero elements has no meaningful stats.
-	///
-	/// @return an empty {@link ArrayStats} instance
-	public ArrayStats stats() {
-		return ArrayStats.empty();
-	}
+    @Override
+    public long length() {
+        return 0;
+    }
 
-	/// Creates an empty array with the given logical type.
-	///
-	/// @param dtype logical type for the returned empty array
-	/// @return a zero-length {@link Array} with the specified dtype
-	public static Array of(DType dtype) {
-		return new EmptyArray(dtype);
-	}
+    /// Returns empty statistics — an array with zero elements has no meaningful stats.
+    ///
+    /// @return an empty {@link ArrayStats} instance
+    public ArrayStats stats() {
+        return ArrayStats.empty();
+    }
 }

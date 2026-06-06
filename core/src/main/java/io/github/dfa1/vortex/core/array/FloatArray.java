@@ -10,69 +10,69 @@ import java.util.function.DoubleBinaryOperator;
 /// Concrete [Array] for F32 primitive columns.
 public final class FloatArray implements Array {
 
-	private final DType dtype;
-	private final long length;
-	private final MemorySegment buffer;
-	private final ArrayStats stats;
+    private final DType dtype;
+    private final long length;
+    private final MemorySegment buffer;
+    private final ArrayStats stats;
 
-	/// Creates a new {@code FloatArray} backed by the given memory segment.
-	///
-	/// @param dtype  logical type, must be F32
-	/// @param length number of elements
-	/// @param buffer little-endian float data (4 bytes per element)
-	/// @param stats  per-array statistics, or {@link io.github.dfa1.vortex.core.ArrayStats#empty()} if unknown
-	public FloatArray(DType dtype, long length, MemorySegment buffer, ArrayStats stats) {
-		this.dtype = dtype;
-		this.length = length;
-		this.buffer = buffer;
-		this.stats = stats;
-	}
+    /// Creates a new {@code FloatArray} backed by the given memory segment.
+    ///
+    /// @param dtype  logical type, must be F32
+    /// @param length number of elements
+    /// @param buffer little-endian float data (4 bytes per element)
+    /// @param stats  per-array statistics, or {@link io.github.dfa1.vortex.core.ArrayStats#empty()} if unknown
+    public FloatArray(DType dtype, long length, MemorySegment buffer, ArrayStats stats) {
+        this.dtype = dtype;
+        this.length = length;
+        this.buffer = buffer;
+        this.stats = stats;
+    }
 
-	@Override
-	public DType dtype() {
-		return dtype;
-	}
+    @Override
+    public DType dtype() {
+        return dtype;
+    }
 
-	@Override
-	public long length() {
-		return length;
-	}
+    @Override
+    public long length() {
+        return length;
+    }
 
-	/// Returns per-array statistics.
-	///
-	/// @return array statistics
-	public ArrayStats stats() {
-		return stats;
-	}
+    /// Returns per-array statistics.
+    ///
+    /// @return array statistics
+    public ArrayStats stats() {
+        return stats;
+    }
 
-	@Override
-	public MemorySegment buffer(int i) {
-		if (i != 0) {
-			throw new IndexOutOfBoundsException(i);
-		}
-		return buffer;
-	}
+    @Override
+    public MemorySegment buffer(int i) {
+        if (i != 0) {
+            throw new IndexOutOfBoundsException(i);
+        }
+        return buffer;
+    }
 
-	/// Returns the float value at the given index.
-	///
-	/// @param i zero-based index (must be in {@code [0, length)})
-	/// @return the float value at position {@code i}
-	public float getFloat(long i) {
-		return buffer.getAtIndex(PTypeIO.LE_FLOAT, i);
-	}
+    /// Returns the float value at the given index.
+    ///
+    /// @param i zero-based index (must be in {@code [0, length)})
+    /// @return the float value at position {@code i}
+    public float getFloat(long i) {
+        return buffer.getAtIndex(PTypeIO.LE_FLOAT, i);
+    }
 
-	/// Folds all elements using the given binary operator and identity value.
-	///
-	/// @param identity initial accumulator value
-	/// @param op       binary operator applied to the accumulator and each float element (widened to double)
-	/// @return the final accumulated result
-	public double fold(double identity, DoubleBinaryOperator op) {
-		MemorySegment buf = buffer;
-		long n = length;
-		double result = identity;
-		for (long i = 0; i < n; i++) {
-			result = op.applyAsDouble(result, buf.getAtIndex(PTypeIO.LE_FLOAT, i));
-		}
-		return result;
-	}
+    /// Folds all elements using the given binary operator and identity value.
+    ///
+    /// @param identity initial accumulator value
+    /// @param op       binary operator applied to the accumulator and each float element (widened to double)
+    /// @return the final accumulated result
+    public double fold(double identity, DoubleBinaryOperator op) {
+        MemorySegment buf = buffer;
+        long n = length;
+        double result = identity;
+        for (long i = 0; i < n; i++) {
+            result = op.applyAsDouble(result, buf.getAtIndex(PTypeIO.LE_FLOAT, i));
+        }
+        return result;
+    }
 }

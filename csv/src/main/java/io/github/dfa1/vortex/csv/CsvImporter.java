@@ -74,8 +74,8 @@ public final class CsvImporter {
     private static List<String[]> readAllRows(Path path, ImportOptions options) throws IOException {
         List<String[]> rows = new ArrayList<>();
         try (CsvReader<CsvRecord> reader = CsvReader.builder()
-                .fieldSeparator(options.delimiter())
-                .ofCsvRecord(path)) {
+                                                   .fieldSeparator(options.delimiter())
+                                                   .ofCsvRecord(path)) {
             for (CsvRecord record : reader) {
                 rows.add(record.getFields().toArray(String[]::new));
             }

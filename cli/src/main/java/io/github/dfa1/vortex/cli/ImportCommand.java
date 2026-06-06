@@ -40,7 +40,7 @@ final class ImportCommand {
 
     private static int runCsv(Path csvPath, Path vortexPath) throws IOException {
         ImportOptions options = ImportOptions.defaults()
-                .withProgressListener(ImportCommand::renderProgress);
+                                        .withProgressListener(ImportCommand::renderProgress);
         CsvImporter.importCsv(csvPath, vortexPath, options);
         clearProgress();
         printResult(csvPath, vortexPath, options.writeOptions().allowedCascading());
@@ -62,11 +62,11 @@ final class ImportCommand {
         long vortexBytes = Files.size(vortexPath);
         double ratio = (double) vortexBytes / inputBytes;
         String sizeChange = ratio <= 1.0
-                ? String.format("%.1f%% smaller", (1.0 - ratio) * 100)
-                : String.format("%.1f%% larger", (ratio - 1.0) * 100);
+                                    ? String.format("%.1f%% smaller", (1.0 - ratio) * 100)
+                                    : String.format("%.1f%% larger", (ratio - 1.0) * 100);
         String cascadingInfo = cascadingDepth > 0
-                ? String.format(", cascading depth %d", cascadingDepth)
-                : "";
+                                       ? String.format(", cascading depth %d", cascadingDepth)
+                                       : "";
         System.out.printf("written: %s  (%s → %s, %s%s)%n",
                 vortexPath, formatBytes(inputBytes), formatBytes(vortexBytes),
                 sizeChange, cascadingInfo);

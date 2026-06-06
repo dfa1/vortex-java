@@ -4,10 +4,10 @@ import io.github.dfa1.vortex.writer.WriteOptions;
 
 /// Options controlling JDBC → Vortex import.
 ///
-/// @param fetchSize         number of rows the JDBC driver fetches per round-trip
-/// @param chunkSize         number of rows per Vortex chunk written to disk
-/// @param writeOptions      encoding and compression settings passed to {@link io.github.dfa1.vortex.writer.VortexWriter}
-/// @param progressListener  optional callback invoked after each full chunk is written; {@code null} disables progress reporting
+/// @param fetchSize        number of rows the JDBC driver fetches per round-trip
+/// @param chunkSize        number of rows per Vortex chunk written to disk
+/// @param writeOptions     encoding and compression settings passed to {@link io.github.dfa1.vortex.writer.VortexWriter}
+/// @param progressListener optional callback invoked after each full chunk is written; {@code null} disables progress reporting
 public record JdbcImportOptions(
         int fetchSize,
         int chunkSize,

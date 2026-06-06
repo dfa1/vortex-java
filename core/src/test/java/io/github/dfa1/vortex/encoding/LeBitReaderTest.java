@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
+import io.github.dfa1.vortex.core.VortexException;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -8,8 +9,6 @@ import org.junit.jupiter.params.provider.CsvSource;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-
-import io.github.dfa1.vortex.core.VortexException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

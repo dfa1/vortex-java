@@ -15,80 +15,80 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class ByteBoolEncodingTest {
 
-	@Nested
-	class Encode {
+    @Nested
+    class Encode {
 
-		@ParameterizedTest
-		@MethodSource("boolArrays")
-		void encodeDecode_isLossless(boolean[] data) {
-			// Given
-			var sut = new ByteBoolEncoding();
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(sut);
+        static Stream<boolean[]> boolArrays() {
+            return Stream.of(
+                    new boolean[]{},
+                    new boolean[]{false},
+                    new boolean[]{true},
+                    new boolean[]{true, false, true, false, true},
+                    new boolean[]{false, false, false, false},
+                    new boolean[]{true, true, true, true, true, true, true, true, true}
+            );
+        }
 
-			// When
-			EncodeResult encoded = sut.encode(DTypes.BOOL, data, EncodeTestHelper.testCtx());
-			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, DTypes.BOOL, registry);
-			Array result = sut.decode(ctx);
+        @ParameterizedTest
+        @MethodSource("boolArrays")
+        void encodeDecode_isLossless(boolean[] data) {
+            // Given
+            var sut = new ByteBoolEncoding();
+            EncodingRegistry registry = EncodingRegistry.empty();
+            registry.register(sut);
 
-			// Then
-			assertThat(result.length()).isEqualTo(data.length);
-			BoolArray boolArr = (BoolArray) result;
-			for (int i = 0; i < data.length; i++) {
-				assertThat(boolArr.getBoolean(i)).as("index %d", i).isEqualTo(data[i]);
-			}
-		}
+            // When
+            EncodeResult encoded = sut.encode(DTypes.BOOL, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, DTypes.BOOL, registry);
+            Array result = sut.decode(ctx);
 
-		static Stream<boolean[]> boolArrays() {
-			return Stream.of(
-					new boolean[]{},
-					new boolean[]{false},
-					new boolean[]{true},
-					new boolean[]{true, false, true, false, true},
-					new boolean[]{false, false, false, false},
-					new boolean[]{true, true, true, true, true, true, true, true, true}
-			);
-		}
-	}
+            // Then
+            assertThat(result.length()).isEqualTo(data.length);
+            BoolArray boolArr = (BoolArray) result;
+            for (int i = 0; i < data.length; i++) {
+                assertThat(boolArr.getBoolean(i)).as("index %d", i).isEqualTo(data[i]);
+            }
+        }
+    }
 
-	@Nested
-	class Decode {
+    @Nested
+    class Decode {
 
-		@ParameterizedTest(name = "{0}")
-		@MethodSource("cases")
-		void decode_byteBool_packsToBitArray(String name, byte[] input, boolean[] expected) {
-			// Given
-			DecodeContext ctx = buildCtx(input);
-			var sut = new ByteBoolEncoding();
+        static Stream<Arguments> cases() {
+            return Stream.of(
+                    Arguments.of("all false", new byte[]{0, 0, 0}, new boolean[]{false, false, false}),
+                    Arguments.of("all true", new byte[]{1, 42, (byte) 0xFF}, new boolean[]{true, true, true}),
+                    Arguments.of("mixed", new byte[]{0, 1, 0, 1}, new boolean[]{false, true, false, true}),
+                    Arguments.of("empty", new byte[]{}, new boolean[]{})
+            );
+        }
 
-			// When
-			var result = sut.decode(ctx);
+        private static DecodeContext buildCtx(byte[] byteValues) {
+            MemorySegment buf = MemorySegment.ofArray(byteValues);
+            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_BYTEBOOL, null, new ArrayNode[0], new int[]{0}, null);
+            EncodingRegistry registry = EncodingRegistry.empty();
+            registry.register(new ByteBoolEncoding());
+            return new DecodeContext(node, DTypes.BOOL, byteValues.length, new MemorySegment[]{buf}, registry,
+                    Arena.ofAuto());
+        }
 
-			// Then
-			assertThat(result).isInstanceOf(BoolArray.class);
-			assertThat(result.length()).isEqualTo(expected.length);
-			BoolArray boolArr = (BoolArray) result;
-			for (int i = 0; i < expected.length; i++) {
-				assertThat(boolArr.getBoolean(i)).as("index %d", i).isEqualTo(expected[i]);
-			}
-		}
+        @ParameterizedTest(name = "{0}")
+        @MethodSource("cases")
+        void decode_byteBool_packsToBitArray(String name, byte[] input, boolean[] expected) {
+            // Given
+            DecodeContext ctx = buildCtx(input);
+            var sut = new ByteBoolEncoding();
 
-		static Stream<Arguments> cases() {
-			return Stream.of(
-					Arguments.of("all false", new byte[]{0, 0, 0}, new boolean[]{false, false, false}),
-					Arguments.of("all true", new byte[]{1, 42, (byte) 0xFF}, new boolean[]{true, true, true}),
-					Arguments.of("mixed", new byte[]{0, 1, 0, 1}, new boolean[]{false, true, false, true}),
-					Arguments.of("empty", new byte[]{}, new boolean[]{})
-			);
-		}
+            // When
+            var result = sut.decode(ctx);
 
-		private static DecodeContext buildCtx(byte[] byteValues) {
-			MemorySegment buf = MemorySegment.ofArray(byteValues);
-			ArrayNode node = ArrayNode.of(EncodingId.VORTEX_BYTEBOOL, null, new ArrayNode[0], new int[]{0}, null);
-			EncodingRegistry registry = EncodingRegistry.empty();
-			registry.register(new ByteBoolEncoding());
-			return new DecodeContext(node, DTypes.BOOL, byteValues.length, new MemorySegment[]{buf}, registry,
-					Arena.ofAuto());
-		}
-	}
+            // Then
+            assertThat(result).isInstanceOf(BoolArray.class);
+            assertThat(result.length()).isEqualTo(expected.length);
+            BoolArray boolArr = (BoolArray) result;
+            for (int i = 0; i < expected.length; i++) {
+                assertThat(boolArr.getBoolean(i)).as("index %d", i).isEqualTo(expected[i]);
+            }
+        }
+    }
 }

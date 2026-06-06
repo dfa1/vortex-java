@@ -49,6 +49,7 @@ Seeded random parameterized tests generate large, diverse inputs automatically,
 covering edge cases no hand-written test would anticipate.
 
 This combination caught two real bugs in ALP floating-point encoding:
+
 - Java selected exponents outside the range Rust's decoder accepts (silent data corruption)
 - Java's encode round-trip check used a different floating-point associativity than Rust's
   decode (`encoded * (F10[f] * IF10[e])` vs `(encoded * F10[f]) * IF10[e]`), passing values
@@ -135,17 +136,20 @@ File sizes: Parquet 47.6 MB, Vortex Java 50 MB.
 **Environment:** Apple M5, OpenJDK 25, 5 warmup × 3 s, 5 measurement × 5 s, fork 2.
 
 Two Parquet variants are measured to isolate format cost from API overhead:
-- **batch**: `ColumnReader.nextBatch()` + loop over `getDoubles()`/`getInts()` arrays — apples-to-apples with Vortex's batch fold
-- **row-by-row**: `RowReader.next()` + `getDouble("col")` per row — measures the full row-cursor overhead on top of format decode
 
-| Benchmark | ops/s | vs Parquet batch |
-|---|---|---|
-| `parquetRead` — batch, 1 col (`trip_distance`) | 166.5 ± 4.0 | baseline |
-| `parquetReadRowByRow` — row cursor, 1 col | 67.6 ± 4.4 | 0.41× (2.5× API penalty) |
-| `vortexRead` — 1 col (`trip_distance`) | 235.1 ± 6.9 | **1.41×** |
-| `parquetReadMultiColumn` — batch, 2 cols (`fare_amount`, `PULocationID`) | 133.0 ± 18.3 | baseline |
-| `parquetReadMultiColumnRowByRow` — row cursor, 2 cols | 44.0 ± 2.2 | 0.33× (3× API penalty) |
-| `vortexReadMultiColumn` — 2 cols | 122.6 ± 3.3 | 0.92× |
+- **batch**: `ColumnReader.nextBatch()` + loop over `getDoubles()`/`getInts()` arrays — apples-to-apples with Vortex's
+  batch fold
+- **row-by-row**: `RowReader.next()` + `getDouble("col")` per row — measures the full row-cursor overhead on top of
+  format decode
+
+| Benchmark                                                                | ops/s        | vs Parquet batch         |
+|--------------------------------------------------------------------------|--------------|--------------------------|
+| `parquetRead` — batch, 1 col (`trip_distance`)                           | 166.5 ± 4.0  | baseline                 |
+| `parquetReadRowByRow` — row cursor, 1 col                                | 67.6 ± 4.4   | 0.41× (2.5× API penalty) |
+| `vortexRead` — 1 col (`trip_distance`)                                   | 235.1 ± 6.9  | **1.41×**                |
+| `parquetReadMultiColumn` — batch, 2 cols (`fare_amount`, `PULocationID`) | 133.0 ± 18.3 | baseline                 |
+| `parquetReadMultiColumnRowByRow` — row cursor, 2 cols                    | 44.0 ± 2.2   | 0.33× (3× API penalty)   |
+| `vortexReadMultiColumn` — 2 cols                                         | 122.6 ± 3.3  | 0.92×                    |
 
 Single-column: Vortex 1.4× faster than Parquet batch — format advantage is real (mmap
 zero-copy + ALP vs Parquet RLE/ZSTD page decode).

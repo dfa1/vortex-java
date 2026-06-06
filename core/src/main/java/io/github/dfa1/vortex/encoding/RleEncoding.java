@@ -131,14 +131,14 @@ public final class RleEncoding implements Encoding {
             PType offsetsPtype = PType.U64;
 
             byte[] metaBytes = EncodingProtos.RLEMetadata.newBuilder()
-                    .setValuesLen(globalValuesCount)
-                    .setIndicesLen(paddedLen)
-                    .setIndicesPtype(DTypeProtos.PType.forNumber(indicesPtype.ordinal()))
-                    .setValuesIdxOffsetsLen(numChunks)
-                    .setValuesIdxOffsetsPtype(DTypeProtos.PType.forNumber(offsetsPtype.ordinal()))
-                    .setOffset(0)
-                    .build()
-                    .toByteArray();
+                                       .setValuesLen(globalValuesCount)
+                                       .setIndicesLen(paddedLen)
+                                       .setIndicesPtype(DTypeProtos.PType.forNumber(indicesPtype.ordinal()))
+                                       .setValuesIdxOffsetsLen(numChunks)
+                                       .setValuesIdxOffsetsPtype(DTypeProtos.PType.forNumber(offsetsPtype.ordinal()))
+                                       .setOffset(0)
+                                       .build()
+                                       .toByteArray();
 
             EncodeNode valuesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
             EncodeNode indicesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
@@ -178,14 +178,14 @@ public final class RleEncoding implements Encoding {
             PType indicesPtype = PType.U16;
             PType offsetsPtype = PType.U64;
             byte[] metaBytes = EncodingProtos.RLEMetadata.newBuilder()
-                    .setValuesLen(0)
-                    .setIndicesLen(0)
-                    .setIndicesPtype(DTypeProtos.PType.forNumber(indicesPtype.ordinal()))
-                    .setValuesIdxOffsetsLen(0)
-                    .setValuesIdxOffsetsPtype(DTypeProtos.PType.forNumber(offsetsPtype.ordinal()))
-                    .setOffset(0)
-                    .build()
-                    .toByteArray();
+                                       .setValuesLen(0)
+                                       .setIndicesLen(0)
+                                       .setIndicesPtype(DTypeProtos.PType.forNumber(indicesPtype.ordinal()))
+                                       .setValuesIdxOffsetsLen(0)
+                                       .setValuesIdxOffsetsPtype(DTypeProtos.PType.forNumber(offsetsPtype.ordinal()))
+                                       .setOffset(0)
+                                       .build()
+                                       .toByteArray();
             EncodeNode valuesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
             EncodeNode indicesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
             EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
@@ -360,8 +360,8 @@ public final class RleEncoding implements Encoding {
             for (int chunkIdx = 0; chunkIdx < chunkEnd; chunkIdx++) {
                 long valueIdxOffset = valuesIdxOffsets[chunkIdx] - firstOffset;
                 long nextValueIdxOffset = (chunkIdx + 1 < numChunks)
-                        ? (valuesIdxOffsets[chunkIdx + 1] - firstOffset)
-                        : valuesLen;
+                                                  ? (valuesIdxOffsets[chunkIdx + 1] - firstOffset)
+                                                  : valuesLen;
                 int numChunkValues = (int) (nextValueIdxOffset - valueIdxOffset);
 
                 int chunkBase = chunkIdx * FL_CHUNK_SIZE;
@@ -413,7 +413,7 @@ public final class RleEncoding implements Encoding {
                 case I64, U64 -> new LongArray(dtype, n, seg, ArrayStats.empty());
                 case I32, U32 -> new IntArray(dtype, n, seg, ArrayStats.empty());
                 case I16, U16 -> new ShortArray(dtype, n, seg, ArrayStats.empty());
-                case I8, U8   -> new ByteArray(dtype, n, seg, ArrayStats.empty());
+                case I8, U8 -> new ByteArray(dtype, n, seg, ArrayStats.empty());
                 case F64 -> new DoubleArray(dtype, n, seg, ArrayStats.empty());
                 case F32 -> new FloatArray(dtype, n, seg, ArrayStats.empty());
                 case F16 -> new Float16Array(dtype, n, seg, ArrayStats.empty());
@@ -426,8 +426,8 @@ public final class RleEncoding implements Encoding {
             for (int i = 0; i < count; i++) {
                 long off = (long) i * elemSize;
                 out[i] = switch (ptype) {
-                    case I8  -> buf.get(ValueLayout.JAVA_BYTE, off);
-                    case U8  -> Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, off));
+                    case I8 -> buf.get(ValueLayout.JAVA_BYTE, off);
+                    case U8 -> Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, off));
                     case I16 -> buf.get(PTypeIO.LE_SHORT, off);
                     case U16, F16 -> Short.toUnsignedLong(buf.get(PTypeIO.LE_SHORT, off));
                     case I32 -> buf.get(PTypeIO.LE_INT, off);
@@ -453,7 +453,8 @@ public final class RleEncoding implements Encoding {
                         out[i] = Short.toUnsignedInt(buf.get(PTypeIO.LE_SHORT, (long) i * 2));
                     }
                 }
-                default -> throw new VortexException(EncodingId.FASTLANES_RLE, "unsupported indices ptype: " + indicesPtype);
+                default ->
+                        throw new VortexException(EncodingId.FASTLANES_RLE, "unsupported indices ptype: " + indicesPtype);
             }
             return out;
         }
@@ -464,11 +465,12 @@ public final class RleEncoding implements Encoding {
             for (int i = 0; i < count; i++) {
                 long off = (long) i * elemSize;
                 out[i] = switch (ptype) {
-                    case U8  -> Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, off));
+                    case U8 -> Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, off));
                     case U16 -> Short.toUnsignedLong(buf.get(PTypeIO.LE_SHORT, off));
                     case U32 -> Integer.toUnsignedLong(buf.get(PTypeIO.LE_INT, off));
                     case U64 -> buf.get(PTypeIO.LE_LONG, off);
-                    default -> throw new VortexException(EncodingId.FASTLANES_RLE, "unsupported offsets ptype: " + ptype);
+                    default ->
+                            throw new VortexException(EncodingId.FASTLANES_RLE, "unsupported offsets ptype: " + ptype);
                 };
             }
             return out;

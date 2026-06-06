@@ -36,6 +36,59 @@ class ParquetImportIntegrationTest {
 
     private static final int EXPECTED_ROWS = 100;
 
+    private static long countRows(VortexReader reader) {
+        long total = 0;
+        try (ScanIterator iter = reader.scan(ScanOptions.all())) {
+            while (iter.hasNext()) {
+                total += iter.next().rowCount();
+            }
+        }
+        return total;
+    }
+
+    private static long countParquetRows(Path path) throws Exception {
+        long total = 0;
+        try (ParquetFileReader parquet = ParquetFileReader.open(InputFile.of(path));
+             RowReader rowReader = parquet.rowReader()) {
+            while (rowReader.hasNext()) {
+                rowReader.next();
+                total++;
+            }
+        }
+        return total;
+    }
+
+    private static List<String> parquetColumnNames(Path path) throws Exception {
+        try (ParquetFileReader parquet = ParquetFileReader.open(InputFile.of(path))) {
+            List<String> names = new ArrayList<>();
+            parquet.getFileSchema().getColumns()
+                    .forEach(col -> names.add(col.name()));
+            return names;
+        }
+    }
+
+    private static Path download(Path tmp, String name) throws Exception {
+        Path cached = Path.of("/tmp/parquet-fixtures", name);
+        if (Files.exists(cached)) {
+            return cached;
+        }
+        Path dest = tmp.resolve(name);
+        try (var in = URI.create(FIXTURE_URL).toURL().openStream()) {
+            Files.copy(in, dest, StandardCopyOption.REPLACE_EXISTING);
+        }
+        return dest;
+    }
+
+    // ── helpers ──────────────────────────────────────────────────────────────
+
+    private static void assumeNetworkAvailable() {
+        try {
+            URI.create("https://raw.githubusercontent.com").toURL().openStream().close();
+        } catch (Exception e) {
+            assumeTrue(false, "no network");
+        }
+    }
+
     @Test
     void rowCountAndColumnNamesMatch(@TempDir Path tmp) throws Exception {
         // Given
@@ -119,58 +172,5 @@ class ParquetImportIntegrationTest {
             vortexRows = countRows(reader);
         }
         assertThat(vortexRows).isEqualTo(parquetRows);
-    }
-
-    // ── helpers ──────────────────────────────────────────────────────────────
-
-    private static long countRows(VortexReader reader) {
-        long total = 0;
-        try (ScanIterator iter = reader.scan(ScanOptions.all())) {
-            while (iter.hasNext()) {
-                total += iter.next().rowCount();
-            }
-        }
-        return total;
-    }
-
-    private static long countParquetRows(Path path) throws Exception {
-        long total = 0;
-        try (ParquetFileReader parquet = ParquetFileReader.open(InputFile.of(path));
-             RowReader rowReader = parquet.rowReader()) {
-            while (rowReader.hasNext()) {
-                rowReader.next();
-                total++;
-            }
-        }
-        return total;
-    }
-
-    private static List<String> parquetColumnNames(Path path) throws Exception {
-        try (ParquetFileReader parquet = ParquetFileReader.open(InputFile.of(path))) {
-            List<String> names = new ArrayList<>();
-            parquet.getFileSchema().getColumns()
-                    .forEach(col -> names.add(col.name()));
-            return names;
-        }
-    }
-
-    private static Path download(Path tmp, String name) throws Exception {
-        Path cached = Path.of("/tmp/parquet-fixtures", name);
-        if (Files.exists(cached)) {
-            return cached;
-        }
-        Path dest = tmp.resolve(name);
-        try (var in = URI.create(FIXTURE_URL).toURL().openStream()) {
-            Files.copy(in, dest, StandardCopyOption.REPLACE_EXISTING);
-        }
-        return dest;
-    }
-
-    private static void assumeNetworkAvailable() {
-        try {
-            URI.create("https://raw.githubusercontent.com").toURL().openStream().close();
-        } catch (Exception e) {
-            assumeTrue(false, "no network");
-        }
     }
 }

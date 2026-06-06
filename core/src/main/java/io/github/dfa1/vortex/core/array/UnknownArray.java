@@ -23,22 +23,22 @@ import java.nio.ByteBuffer;
 /// @param children   decoded child arrays (also wrapped as unknown)
 /// @param stats      per-array statistics
 public record UnknownArray(
-		String encodingId,
-		DType dtype,
-		long length,
-		ByteBuffer metadata,
-		MemorySegment[] buffers,
-		Array[] children,
-		ArrayStats stats
+        String encodingId,
+        DType dtype,
+        long length,
+        ByteBuffer metadata,
+        MemorySegment[] buffers,
+        Array[] children,
+        ArrayStats stats
 ) implements Array {
 
-	@Override
-	public MemorySegment buffer(int i) {
-		return buffers[i];
-	}
+    @Override
+    public MemorySegment buffer(int i) {
+        return buffers[i];
+    }
 
-	@Override
-	public Array child(int i) {
-		return children[i];
-	}
+    @Override
+    public Array child(int i) {
+        return children[i];
+    }
 }

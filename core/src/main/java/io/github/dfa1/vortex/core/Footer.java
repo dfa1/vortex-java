@@ -12,9 +12,9 @@ import java.util.List;
 /// @param segmentSpecs     segment byte ranges indexed by segment index
 /// @param compressionSpecs compression schemes indexed by compression spec index
 public record Footer(
-		List<String> arraySpecs,
-		List<String> layoutSpecs,
-		List<SegmentSpec> segmentSpecs,
-		List<CompressionScheme> compressionSpecs
+        List<String> arraySpecs,
+        List<String> layoutSpecs,
+        List<SegmentSpec> segmentSpecs,
+        List<CompressionScheme> compressionSpecs
 ) {
 }

@@ -3,49 +3,69 @@
 package io.github.dfa1.vortex.fbs;
 
 import com.google.flatbuffers.BaseVector;
-import com.google.flatbuffers.BooleanVector;
-import com.google.flatbuffers.ByteVector;
-import com.google.flatbuffers.Constants;
-import com.google.flatbuffers.DoubleVector;
 import com.google.flatbuffers.FlatBufferBuilder;
-import com.google.flatbuffers.FloatVector;
-import com.google.flatbuffers.IntVector;
-import com.google.flatbuffers.LongVector;
-import com.google.flatbuffers.ShortVector;
-import com.google.flatbuffers.StringVector;
-import com.google.flatbuffers.Struct;
-import com.google.flatbuffers.UnionVector;
+
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 @SuppressWarnings("unused")
 public final class Utf8 extends com.google.flatbuffers.Table {
-  public static Utf8 getRootAsUtf8(ByteBuffer _bb) { return getRootAsUtf8(_bb, new Utf8()); }
-  public static Utf8 getRootAsUtf8(ByteBuffer _bb, Utf8 obj) { _bb.order(ByteOrder.LITTLE_ENDIAN); return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb)); }
-  public void __init(int _i, ByteBuffer _bb) { __reset(_i, _bb); }
-  public Utf8 __assign(int _i, ByteBuffer _bb) { __init(_i, _bb); return this; }
+    public static Utf8 getRootAsUtf8(ByteBuffer _bb) {
+        return getRootAsUtf8(_bb, new Utf8());
+    }
 
-  public boolean nullable() { int o = __offset(4); return o != 0 ? 0!=bb.get(o + bb_pos) : false; }
+    public static Utf8 getRootAsUtf8(ByteBuffer _bb, Utf8 obj) {
+        _bb.order(ByteOrder.LITTLE_ENDIAN);
+        return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb));
+    }
 
-  public static int createUtf8(FlatBufferBuilder builder,
-      boolean nullable) {
-    builder.startTable(1);
-    Utf8.addNullable(builder, nullable);
-    return Utf8.endUtf8(builder);
-  }
+    public static int createUtf8(FlatBufferBuilder builder,
+            boolean nullable) {
+        builder.startTable(1);
+        Utf8.addNullable(builder, nullable);
+        return Utf8.endUtf8(builder);
+    }
 
-  public static void startUtf8(FlatBufferBuilder builder) { builder.startTable(1); }
-  public static void addNullable(FlatBufferBuilder builder, boolean nullable) { builder.addBoolean(0, nullable, false); }
-  public static int endUtf8(FlatBufferBuilder builder) {
-    int o = builder.endTable();
-    return o;
-  }
+    public static void startUtf8(FlatBufferBuilder builder) {
+        builder.startTable(1);
+    }
 
-  public static final class Vector extends BaseVector {
-    public Vector __assign(int _vector, int _element_size, ByteBuffer _bb) { __reset(_vector, _element_size, _bb); return this; }
+    public static void addNullable(FlatBufferBuilder builder, boolean nullable) {
+        builder.addBoolean(0, nullable, false);
+    }
 
-    public Utf8 get(int j) { return get(new Utf8(), j); }
-    public Utf8 get(Utf8 obj, int j) {  return obj.__assign(__indirect(__element(j), bb), bb); }
-  }
+    public static int endUtf8(FlatBufferBuilder builder) {
+        int o = builder.endTable();
+        return o;
+    }
+
+    public void __init(int _i, ByteBuffer _bb) {
+        __reset(_i, _bb);
+    }
+
+    public Utf8 __assign(int _i, ByteBuffer _bb) {
+        __init(_i, _bb);
+        return this;
+    }
+
+    public boolean nullable() {
+        int o = __offset(4);
+        return o != 0 ? 0 != bb.get(o + bb_pos) : false;
+    }
+
+    public static final class Vector extends BaseVector {
+        public Vector __assign(int _vector, int _element_size, ByteBuffer _bb) {
+            __reset(_vector, _element_size, _bb);
+            return this;
+        }
+
+        public Utf8 get(int j) {
+            return get(new Utf8(), j);
+        }
+
+        public Utf8 get(Utf8 obj, int j) {
+            return obj.__assign(__indirect(__element(j), bb), bb);
+        }
+    }
 }
 

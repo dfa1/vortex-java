@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.encoding;
 
-import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.array.Array;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
@@ -21,35 +21,35 @@ import java.nio.ByteBuffer;
 /// @param registry       encoding registry used for recursive child decoding
 /// @param arena          allocator for decode output; lifetime matches the current chunk epoch
 public record DecodeContext(
-		ArrayNode node,
-		DType dtype,
-		long rowCount,
-		MemorySegment[] segmentBuffers,
-		EncodingRegistry registry,
-		SegmentAllocator arena
+        ArrayNode node,
+        DType dtype,
+        long rowCount,
+        MemorySegment[] segmentBuffers,
+        EncodingRegistry registry,
+        SegmentAllocator arena
 ) {
-	/// Recursively decode child `i` using the same segment buffers, registry and arena.
-	///
-	/// @param i zero-based child index within this node's children array
-	/// @return the decoded {@link Array} for child {@code i}
-	public Array decodeChild(int i) {
-		ArrayNode child = node.children()[i];
-		var childCtx = new DecodeContext(child, dtype, rowCount, segmentBuffers, registry, arena);
-		return registry.decode(childCtx);
-	}
+    /// Recursively decode child `i` using the same segment buffers, registry and arena.
+    ///
+    /// @param i zero-based child index within this node's children array
+    /// @return the decoded {@link Array} for child {@code i}
+    public Array decodeChild(int i) {
+        ArrayNode child = node.children()[i];
+        var childCtx = new DecodeContext(child, dtype, rowCount, segmentBuffers, registry, arena);
+        return registry.decode(childCtx);
+    }
 
-	/// Return the buffer at position `i` in this node's bufferIndices.
-	///
-	/// @param i zero-based index into this node's {@code bufferIndices} array
-	/// @return the {@link MemorySegment} for the referenced segment buffer
-	public MemorySegment buffer(int i) {
-		return segmentBuffers[node.bufferIndices()[i]];
-	}
+    /// Return the buffer at position `i` in this node's bufferIndices.
+    ///
+    /// @param i zero-based index into this node's {@code bufferIndices} array
+    /// @return the {@link MemorySegment} for the referenced segment buffer
+    public MemorySegment buffer(int i) {
+        return segmentBuffers[node.bufferIndices()[i]];
+    }
 
-	/// Returns the encoding-specific metadata bytes for this node, or {@code null} if absent.
-	///
-	/// @return the metadata {@link java.nio.ByteBuffer}, or {@code null}
-	public ByteBuffer metadata() {
-		return node.metadata();
-	}
+    /// Returns the encoding-specific metadata bytes for this node, or {@code null} if absent.
+    ///
+    /// @return the metadata {@link java.nio.ByteBuffer}, or {@code null}
+    public ByteBuffer metadata() {
+        return node.metadata();
+    }
 }

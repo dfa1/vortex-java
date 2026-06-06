@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.encoding;
 
-import com.google.protobuf.InvalidProtocolBufferException;
 import com.github.luben.zstd.ZstdDecompressCtx;
+import com.google.protobuf.InvalidProtocolBufferException;
 import io.airlift.compress.v3.zstd.ZstdCompressor;
 import io.airlift.compress.v3.zstd.ZstdDecompressor;
 import io.airlift.compress.v3.zstd.ZstdJavaCompressor;
@@ -107,11 +107,11 @@ public final class ZstdEncoding implements Encoding {
         private static EncodeResult buildResult(byte[] raw, long n) {
             byte[] compressed = compress(raw);
             byte[] meta = EncodingProtos.ZstdMetadata.newBuilder()
-                    .setDictionarySize(0)
-                    .addFrames(EncodingProtos.ZstdFrameMetadata.newBuilder()
-                            .setUncompressedSize(raw.length)
-                            .setNValues(n))
-                    .build().toByteArray();
+                                  .setDictionarySize(0)
+                                  .addFrames(EncodingProtos.ZstdFrameMetadata.newBuilder()
+                                                     .setUncompressedSize(raw.length)
+                                                     .setNValues(n))
+                                  .build().toByteArray();
             EncodeNode root = new EncodeNode(EncodingId.VORTEX_ZSTD, ByteBuffer.wrap(meta),
                     new EncodeNode[0], new int[]{0});
             return new EncodeResult(root, List.of(MemorySegment.ofArray(compressed)), null, null);
@@ -238,8 +238,8 @@ public final class ZstdEncoding implements Encoding {
             }
 
             MemorySegment decompressed = hasDictionary
-                    ? decompressFramesWithDict(ctx, meta, frameCount, totalUncompressed)
-                    : decompressFrames(ctx, meta, frameCount, totalUncompressed);
+                                                 ? decompressFramesWithDict(ctx, meta, frameCount, totalUncompressed)
+                                                 : decompressFrames(ctx, meta, frameCount, totalUncompressed);
 
             if (validity == null) {
                 return buildArray(ctx.dtype(), ctx.rowCount(), decompressed, ctx);

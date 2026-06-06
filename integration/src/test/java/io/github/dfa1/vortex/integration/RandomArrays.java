@@ -10,6 +10,9 @@ final class RandomArrays {
 
     private static final long SEED = 0xCAFEBABEL;
 
+    private RandomArrays() {
+    }
+
     static Stream<long[]> i64Arrays(int count) {
         Random rng = new Random(SEED);
         return IntStream.range(0, count).mapToObj(i -> {
@@ -120,6 +123,4 @@ final class RandomArrays {
         }
         return sb.toString();
     }
-
-    private RandomArrays() {}
 }

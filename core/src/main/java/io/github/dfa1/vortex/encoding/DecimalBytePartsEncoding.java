@@ -24,82 +24,82 @@ import java.util.List;
 /// </ul>
 public final class DecimalBytePartsEncoding implements Encoding {
 
-	/// Creates a new {@code DecimalBytePartsEncoding} instance.
-	public DecimalBytePartsEncoding() {
-	}
+    /// Creates a new {@code DecimalBytePartsEncoding} instance.
+    public DecimalBytePartsEncoding() {
+    }
 
-	@Override
-	public EncodingId encodingId() {
-		return EncodingId.VORTEX_DECIMAL_BYTE_PARTS;
-	}
+    @Override
+    public EncodingId encodingId() {
+        return EncodingId.VORTEX_DECIMAL_BYTE_PARTS;
+    }
 
-	@Override
-	public boolean accepts(DType dtype) {
-		return dtype instanceof DType.Decimal;
-	}
+    @Override
+    public boolean accepts(DType dtype) {
+        return dtype instanceof DType.Decimal;
+    }
 
-	@Override
-	public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
-		return Encoder.encode((DType.Decimal) dtype, (long[]) data, ctx);
-	}
+    @Override
+    public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+        return Encoder.encode((DType.Decimal) dtype, (long[]) data, ctx);
+    }
 
-	@Override
-	public Array decode(DecodeContext ctx) {
-		return Decoder.decode(ctx);
-	}
+    @Override
+    public Array decode(DecodeContext ctx) {
+        return Decoder.decode(ctx);
+    }
 
-	private static final class Encoder {
+    private static final class Encoder {
 
-		static EncodeResult encode(DType.Decimal dtype, long[] data, EncodeContext ctx) {
-			DType mspDtype = new DType.Primitive(PType.I64, dtype.nullable());
-			EncodeResult mspResult = ctx.lookupEncoding(EncodingId.VORTEX_PRIMITIVE).encode(mspDtype, data, ctx);
+        static EncodeResult encode(DType.Decimal dtype, long[] data, EncodeContext ctx) {
+            DType mspDtype = new DType.Primitive(PType.I64, dtype.nullable());
+            EncodeResult mspResult = ctx.lookupEncoding(EncodingId.VORTEX_PRIMITIVE).encode(mspDtype, data, ctx);
 
-			EncodingProtos.DecimalBytePartsMetadata proto = EncodingProtos.DecimalBytePartsMetadata.newBuilder()
-					.setZerothChildPtype(
-							io.github.dfa1.vortex.proto.DTypeProtos.PType.forNumber(PType.I64.ordinal()))
-					.setLowerPartCount(0)
-					.build();
-			ByteBuffer metaBuf = ByteBuffer.wrap(proto.toByteArray());
+            EncodingProtos.DecimalBytePartsMetadata proto = EncodingProtos.DecimalBytePartsMetadata.newBuilder()
+                                                                    .setZerothChildPtype(
+                                                                            io.github.dfa1.vortex.proto.DTypeProtos.PType.forNumber(PType.I64.ordinal()))
+                                                                    .setLowerPartCount(0)
+                                                                    .build();
+            ByteBuffer metaBuf = ByteBuffer.wrap(proto.toByteArray());
 
-			EncodeNode mspNode = EncodeNode.remapBufferIndices(mspResult.rootNode(), 0);
-			EncodeNode root = new EncodeNode(
-					EncodingId.VORTEX_DECIMAL_BYTE_PARTS, metaBuf, new EncodeNode[]{mspNode}, new int[]{});
-			return new EncodeResult(root, List.copyOf(mspResult.buffers()), null, null);
-		}
-	}
+            EncodeNode mspNode = EncodeNode.remapBufferIndices(mspResult.rootNode(), 0);
+            EncodeNode root = new EncodeNode(
+                    EncodingId.VORTEX_DECIMAL_BYTE_PARTS, metaBuf, new EncodeNode[]{mspNode}, new int[]{});
+            return new EncodeResult(root, List.copyOf(mspResult.buffers()), null, null);
+        }
+    }
 
-	private static final class Decoder {
+    private static final class Decoder {
 
-		private static Array decode(DecodeContext ctx) {
-			ByteBuffer meta = ctx.metadata();
-			if (meta == null || meta.remaining() == 0) {
-				throw new VortexException(EncodingId.VORTEX_DECIMAL_BYTE_PARTS, "missing metadata");
-			}
-			EncodingProtos.DecimalBytePartsMetadata decoded;
-			try {
-				byte[] bytes = new byte[meta.remaining()];
-				meta.duplicate().get(bytes);
-				decoded = EncodingProtos.DecimalBytePartsMetadata.parseFrom(bytes);
-			} catch (InvalidProtocolBufferException e) {
-				throw new VortexException(EncodingId.VORTEX_DECIMAL_BYTE_PARTS, "invalid metadata: " + e.getMessage());
-			}
+        private static Array decode(DecodeContext ctx) {
+            ByteBuffer meta = ctx.metadata();
+            if (meta == null || meta.remaining() == 0) {
+                throw new VortexException(EncodingId.VORTEX_DECIMAL_BYTE_PARTS, "missing metadata");
+            }
+            EncodingProtos.DecimalBytePartsMetadata decoded;
+            try {
+                byte[] bytes = new byte[meta.remaining()];
+                meta.duplicate().get(bytes);
+                decoded = EncodingProtos.DecimalBytePartsMetadata.parseFrom(bytes);
+            } catch (InvalidProtocolBufferException e) {
+                throw new VortexException(EncodingId.VORTEX_DECIMAL_BYTE_PARTS, "invalid metadata: " + e.getMessage());
+            }
 
-			int lowerPartCount = decoded.getLowerPartCount();
-			if (lowerPartCount != 0) {
-				throw new VortexException(EncodingId.VORTEX_DECIMAL_BYTE_PARTS,
-						"lower_part_count > 0 not supported, got " + lowerPartCount);
-			}
+            int lowerPartCount = decoded.getLowerPartCount();
+            if (lowerPartCount != 0) {
+                throw new VortexException(EncodingId.VORTEX_DECIMAL_BYTE_PARTS,
+                        "lower_part_count > 0 not supported, got " + lowerPartCount);
+            }
 
-			PType mspPtype = PType.values()[decoded.getZerothChildPtypeValue()];
-			boolean nullable = ctx.dtype().nullable();
-			DType mspDtype = new DType.Primitive(mspPtype, nullable);
-			ArrayNode mspNode = ctx.node().children()[0];
-			DecodeContext mspCtx = new DecodeContext(
-					mspNode, mspDtype, ctx.rowCount(),
-					ctx.segmentBuffers(), ctx.registry(), ctx.arena());
-			Array mspArray = ctx.registry().decode(mspCtx);
-			return new GenericArray(ctx.dtype(), ctx.rowCount(), new MemorySegment[0],
-					new Array[]{mspArray});
-		}
-	}
+            PType mspPtype = PType.values()[decoded.getZerothChildPtypeValue()];
+            boolean nullable = ctx.dtype().nullable();
+            DType mspDtype = new DType.Primitive(mspPtype, nullable);
+            ArrayNode mspNode = ctx.node().children()[0];
+            DecodeContext mspCtx = new DecodeContext(
+                    mspNode, mspDtype, ctx.rowCount(),
+                    ctx.segmentBuffers(), ctx.registry(), ctx.arena());
+            Array mspArray = ctx.registry().decode(mspCtx);
+            return new GenericArray(ctx.dtype(), ctx.rowCount(), new MemorySegment[0],
+                    new Array[]{mspArray});
+        }
+    }
 }

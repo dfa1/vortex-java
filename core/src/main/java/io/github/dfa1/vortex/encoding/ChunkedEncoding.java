@@ -32,176 +32,176 @@ import java.util.List;
 /// </ul>
 public final class ChunkedEncoding implements Encoding {
 
-	/// Creates a new {@code ChunkedEncoding} instance.
-	public ChunkedEncoding() {
-	}
+    /// Creates a new {@code ChunkedEncoding} instance.
+    public ChunkedEncoding() {
+    }
 
-	@Override
-	public EncodingId encodingId() {
-		return EncodingId.VORTEX_CHUNKED;
-	}
+    @Override
+    public EncodingId encodingId() {
+        return EncodingId.VORTEX_CHUNKED;
+    }
 
-	@Override
-	public boolean accepts(DType dtype) {
-		return dtype instanceof DType.Primitive || dtype instanceof DType.Struct;
-	}
+    @Override
+    public boolean accepts(DType dtype) {
+        return dtype instanceof DType.Primitive || dtype instanceof DType.Struct;
+    }
 
-	@Override
-	public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
-		return Encoder.encode(dtype, (ChunkedData) data, ctx);
-	}
+    @Override
+    public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+        return Encoder.encode(dtype, (ChunkedData) data, ctx);
+    }
 
-	@Override
-	public Array decode(DecodeContext ctx) {
-		return Decoder.decode(ctx);
-	}
+    @Override
+    public Array decode(DecodeContext ctx) {
+        return Decoder.decode(ctx);
+    }
 
-	private static final class Encoder {
+    private static final class Encoder {
 
-		private static final List<Encoding> FALLBACK = List.of(
-				new PrimitiveEncoding(), new VarBinEncoding(), new BoolEncoding(),
-				new NullEncoding(), new ByteBoolEncoding(), new StructEncoding());
+        private static final List<Encoding> FALLBACK = List.of(
+                new PrimitiveEncoding(), new VarBinEncoding(), new BoolEncoding(),
+                new NullEncoding(), new ByteBoolEncoding(), new StructEncoding());
 
-		static EncodeResult encode(DType dtype, ChunkedData data, EncodeContext ctx) {
-			List<Object> chunks = data.chunks();
-			long[] chunkLengths = data.chunkLengths();
-			int nchunks = chunks.size();
-			if (nchunks == 0) {
-				throw new VortexException(EncodingId.VORTEX_CHUNKED, "at least one chunk required");
-			}
+        static EncodeResult encode(DType dtype, ChunkedData data, EncodeContext ctx) {
+            List<Object> chunks = data.chunks();
+            long[] chunkLengths = data.chunkLengths();
+            int nchunks = chunks.size();
+            if (nchunks == 0) {
+                throw new VortexException(EncodingId.VORTEX_CHUNKED, "at least one chunk required");
+            }
 
-			// Build cumulative offsets: [0, len0, len0+len1, ...]
-			long[] offsets = new long[nchunks + 1];
-			offsets[0] = 0;
-			for (int i = 0; i < nchunks; i++) {
-				offsets[i + 1] = offsets[i] + chunkLengths[i];
-			}
+            // Build cumulative offsets: [0, len0, len0+len1, ...]
+            long[] offsets = new long[nchunks + 1];
+            offsets[0] = 0;
+            for (int i = 0; i < nchunks; i++) {
+                offsets[i + 1] = offsets[i] + chunkLengths[i];
+            }
 
-			// Encode offsets child (U64 primitive)
-			DType u64 = new DType.Primitive(PType.U64, false);
-			EncodeResult offsetsResult = ctx.lookupEncoding(EncodingId.VORTEX_PRIMITIVE).encode(u64, offsets, ctx);
+            // Encode offsets child (U64 primitive)
+            DType u64 = new DType.Primitive(PType.U64, false);
+            EncodeResult offsetsResult = ctx.lookupEncoding(EncodingId.VORTEX_PRIMITIVE).encode(u64, offsets, ctx);
 
-			List<MemorySegment> allBuffers = new ArrayList<>(offsetsResult.buffers());
-			EncodeNode[] children = new EncodeNode[nchunks + 1];
-			children[0] = offsetsResult.rootNode();
+            List<MemorySegment> allBuffers = new ArrayList<>(offsetsResult.buffers());
+            EncodeNode[] children = new EncodeNode[nchunks + 1];
+            children[0] = offsetsResult.rootNode();
 
-			// Encode each chunk
-			Encoding inner = findEncoding(dtype);
-			for (int i = 0; i < nchunks; i++) {
-				EncodeResult chunkResult = inner.encode(dtype, chunks.get(i), ctx);
-				int bufOffset = allBuffers.size();
-				children[i + 1] = EncodeNode.remapBufferIndices(chunkResult.rootNode(), bufOffset);
-				allBuffers.addAll(chunkResult.buffers());
-			}
+            // Encode each chunk
+            Encoding inner = findEncoding(dtype);
+            for (int i = 0; i < nchunks; i++) {
+                EncodeResult chunkResult = inner.encode(dtype, chunks.get(i), ctx);
+                int bufOffset = allBuffers.size();
+                children[i + 1] = EncodeNode.remapBufferIndices(chunkResult.rootNode(), bufOffset);
+                allBuffers.addAll(chunkResult.buffers());
+            }
 
-			EncodeNode root = new EncodeNode(
-					EncodingId.VORTEX_CHUNKED,
-					ByteBuffer.wrap(new byte[0]),
-					children,
-					new int[]{});
-			return new EncodeResult(root, List.copyOf(allBuffers), null, null);
-		}
+            EncodeNode root = new EncodeNode(
+                    EncodingId.VORTEX_CHUNKED,
+                    ByteBuffer.wrap(new byte[0]),
+                    children,
+                    new int[]{});
+            return new EncodeResult(root, List.copyOf(allBuffers), null, null);
+        }
 
-		private static Encoding findEncoding(DType dtype) {
-			for (Encoding enc : FALLBACK) {
-				if (enc.accepts(dtype)) {
-					return enc;
-				}
-			}
-			throw new UnsupportedOperationException("no fallback encoding for dtype: " + dtype);
-		}
-	}
+        private static Encoding findEncoding(DType dtype) {
+            for (Encoding enc : FALLBACK) {
+                if (enc.accepts(dtype)) {
+                    return enc;
+                }
+            }
+            throw new UnsupportedOperationException("no fallback encoding for dtype: " + dtype);
+        }
+    }
 
-	private static final class Decoder {
+    private static final class Decoder {
 
-		private static final ValueLayout.OfLong LE_LONG =
-				ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+        private static final ValueLayout.OfLong LE_LONG =
+                ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
-		static Array decode(DecodeContext ctx) {
-			int nchildren = ctx.node().children().length;
-			if (nchildren < 1) {
-				throw new VortexException(EncodingId.VORTEX_CHUNKED,
-						"needs at least one child (chunk offsets)");
-			}
-			int nchunks = nchildren - 1;
-			long[] offsets = readOffsets(ctx, nchunks);
+        static Array decode(DecodeContext ctx) {
+            int nchildren = ctx.node().children().length;
+            if (nchildren < 1) {
+                throw new VortexException(EncodingId.VORTEX_CHUNKED,
+                        "needs at least one child (chunk offsets)");
+            }
+            int nchunks = nchildren - 1;
+            long[] offsets = readOffsets(ctx, nchunks);
 
-			DType dtype = ctx.dtype();
-			List<Array> chunks = new ArrayList<>(nchunks);
-			for (int i = 0; i < nchunks; i++) {
-				long chunkLen = offsets[i + 1] - offsets[i];
-				ArrayNode chunkNode = ctx.node().children()[i + 1];
-				var chunkCtx = new DecodeContext(
-						chunkNode, dtype, chunkLen, ctx.segmentBuffers(), ctx.registry(), ctx.arena());
-				chunks.add(ctx.registry().decode(chunkCtx));
-			}
+            DType dtype = ctx.dtype();
+            List<Array> chunks = new ArrayList<>(nchunks);
+            for (int i = 0; i < nchunks; i++) {
+                long chunkLen = offsets[i + 1] - offsets[i];
+                ArrayNode chunkNode = ctx.node().children()[i + 1];
+                var chunkCtx = new DecodeContext(
+                        chunkNode, dtype, chunkLen, ctx.segmentBuffers(), ctx.registry(), ctx.arena());
+                chunks.add(ctx.registry().decode(chunkCtx));
+            }
 
-			return concat(chunks, dtype, ctx.rowCount(), ctx.arena());
-		}
+            return concat(chunks, dtype, ctx.rowCount(), ctx.arena());
+        }
 
-		private static long[] readOffsets(DecodeContext ctx, int nchunks) {
-			ArrayNode offsetsNode = ctx.node().children()[0];
-			DType u64 = new DType.Primitive(PType.U64, false);
-			var offsetsCtx = new DecodeContext(
-					offsetsNode, u64, nchunks + 1L, ctx.segmentBuffers(), ctx.registry(), ctx.arena());
-			Array offsetsArray = ctx.registry().decode(offsetsCtx);
-			MemorySegment offsetsBuf = offsetsArray.buffer(0);
-			long[] offsets = new long[nchunks + 1];
-			for (int i = 0; i <= nchunks; i++) {
-				offsets[i] = offsetsBuf.get(LE_LONG, (long) i * 8);
-			}
-			return offsets;
-		}
+        private static long[] readOffsets(DecodeContext ctx, int nchunks) {
+            ArrayNode offsetsNode = ctx.node().children()[0];
+            DType u64 = new DType.Primitive(PType.U64, false);
+            var offsetsCtx = new DecodeContext(
+                    offsetsNode, u64, nchunks + 1L, ctx.segmentBuffers(), ctx.registry(), ctx.arena());
+            Array offsetsArray = ctx.registry().decode(offsetsCtx);
+            MemorySegment offsetsBuf = offsetsArray.buffer(0);
+            long[] offsets = new long[nchunks + 1];
+            for (int i = 0; i <= nchunks; i++) {
+                offsets[i] = offsetsBuf.get(LE_LONG, (long) i * 8);
+            }
+            return offsets;
+        }
 
-		private static Array concat(List<Array> chunks, DType dtype, long totalRows, SegmentAllocator arena) {
-			if (dtype instanceof DType.Primitive pt) {
-				return concatPrimitive(chunks, pt, dtype, totalRows, arena);
-			}
-			if (dtype instanceof DType.Struct struct) {
-				return concatStruct(chunks, struct, totalRows, arena);
-			}
-			throw new VortexException(EncodingId.VORTEX_CHUNKED,
-					"concat not supported for dtype: " + dtype);
-		}
+        private static Array concat(List<Array> chunks, DType dtype, long totalRows, SegmentAllocator arena) {
+            if (dtype instanceof DType.Primitive pt) {
+                return concatPrimitive(chunks, pt, dtype, totalRows, arena);
+            }
+            if (dtype instanceof DType.Struct struct) {
+                return concatStruct(chunks, struct, totalRows, arena);
+            }
+            throw new VortexException(EncodingId.VORTEX_CHUNKED,
+                    "concat not supported for dtype: " + dtype);
+        }
 
-		private static Array concatPrimitive(
-				List<Array> chunks, DType.Primitive pt, DType dtype, long totalRows, SegmentAllocator arena
-		) {
-			PType ptype = pt.ptype();
-			MemorySegment combined = arena.allocate(totalRows * ptype.byteSize());
-			long byteOffset = 0;
-			for (Array chunk : chunks) {
-				MemorySegment src = chunk.buffer(0);
-				MemorySegment.copy(src, 0, combined, byteOffset, src.byteSize());
-				byteOffset += src.byteSize();
-			}
-			MemorySegment ro = combined.asReadOnly();
-			return switch (ptype) {
-				case I64, U64 -> new LongArray(dtype, totalRows, ro, ArrayStats.empty());
-				case I32, U32 -> new IntArray(dtype, totalRows, ro, ArrayStats.empty());
-				case F64 -> new DoubleArray(dtype, totalRows, ro, ArrayStats.empty());
-				case F32 -> new FloatArray(dtype, totalRows, ro, ArrayStats.empty());
-				case I16, U16 -> new ShortArray(dtype, totalRows, ro, ArrayStats.empty());
-				case I8, U8 -> new ByteArray(dtype, totalRows, ro, ArrayStats.empty());
-				default -> throw new VortexException(EncodingId.VORTEX_CHUNKED,
-						"unsupported ptype for concat: " + ptype);
-			};
-		}
+        private static Array concatPrimitive(
+                List<Array> chunks, DType.Primitive pt, DType dtype, long totalRows, SegmentAllocator arena
+        ) {
+            PType ptype = pt.ptype();
+            MemorySegment combined = arena.allocate(totalRows * ptype.byteSize());
+            long byteOffset = 0;
+            for (Array chunk : chunks) {
+                MemorySegment src = chunk.buffer(0);
+                MemorySegment.copy(src, 0, combined, byteOffset, src.byteSize());
+                byteOffset += src.byteSize();
+            }
+            MemorySegment ro = combined.asReadOnly();
+            return switch (ptype) {
+                case I64, U64 -> new LongArray(dtype, totalRows, ro, ArrayStats.empty());
+                case I32, U32 -> new IntArray(dtype, totalRows, ro, ArrayStats.empty());
+                case F64 -> new DoubleArray(dtype, totalRows, ro, ArrayStats.empty());
+                case F32 -> new FloatArray(dtype, totalRows, ro, ArrayStats.empty());
+                case I16, U16 -> new ShortArray(dtype, totalRows, ro, ArrayStats.empty());
+                case I8, U8 -> new ByteArray(dtype, totalRows, ro, ArrayStats.empty());
+                default -> throw new VortexException(EncodingId.VORTEX_CHUNKED,
+                        "unsupported ptype for concat: " + ptype);
+            };
+        }
 
-		private static StructArray concatStruct(
-				List<Array> chunks, DType.Struct struct, long totalRows, SegmentAllocator arena
-		) {
-			int nfields = struct.fieldTypes().size();
-			List<Array> concatFields = new ArrayList<>(nfields);
-			for (int f = 0; f < nfields; f++) {
-				DType fieldDtype = struct.fieldTypes().get(f);
-				List<Array> fieldChunks = new ArrayList<>(chunks.size());
-				for (Array chunk : chunks) {
-					fieldChunks.add(((StructArray) chunk).field(f));
-				}
-				concatFields.add(concat(fieldChunks, fieldDtype, totalRows, arena));
-			}
-			return new StructArray(struct, totalRows, concatFields);
-		}
-	}
+        private static StructArray concatStruct(
+                List<Array> chunks, DType.Struct struct, long totalRows, SegmentAllocator arena
+        ) {
+            int nfields = struct.fieldTypes().size();
+            List<Array> concatFields = new ArrayList<>(nfields);
+            for (int f = 0; f < nfields; f++) {
+                DType fieldDtype = struct.fieldTypes().get(f);
+                List<Array> fieldChunks = new ArrayList<>(chunks.size());
+                for (Array chunk : chunks) {
+                    fieldChunks.add(((StructArray) chunk).field(f));
+                }
+                concatFields.add(concat(fieldChunks, fieldDtype, totalRows, arena));
+            }
+            return new StructArray(struct, totalRows, concatFields);
+        }
+    }
 }

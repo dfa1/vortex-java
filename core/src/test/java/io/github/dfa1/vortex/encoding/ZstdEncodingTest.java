@@ -1,8 +1,8 @@
 package io.github.dfa1.vortex.encoding;
 
 import com.github.luben.zstd.ZstdCompressCtx;
-import io.airlift.compress.v3.zstd.ZstdJavaCompressor;
 import io.airlift.compress.v3.zstd.ZstdCompressor;
+import io.airlift.compress.v3.zstd.ZstdJavaCompressor;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -28,7 +28,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ZstdEncodingTest {
 
-	@Nested
+    @Nested
     class Encode {
 
         @Test
@@ -114,6 +114,143 @@ class ZstdEncodingTest {
     @Nested
     class Decode {
 
+        private static DecodeContext makeDictCtx(
+                byte[] meta, DType dtype, long n, byte[] dictBytes, byte[]... compressedFrames
+        ) {
+            // buffer[0] = dict, buffer[1..] = frames
+            MemorySegment[] segments = new MemorySegment[1 + compressedFrames.length];
+            segments[0] = MemorySegment.ofArray(dictBytes);
+            int[] bufIndices = new int[1 + compressedFrames.length];
+            bufIndices[0] = 0;
+            for (int i = 0; i < compressedFrames.length; i++) {
+                segments[i + 1] = MemorySegment.ofArray(compressedFrames[i]);
+                bufIndices[i + 1] = i + 1;
+            }
+            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ZSTD, ByteBuffer.wrap(meta),
+                    new ArrayNode[0], bufIndices, null);
+            return new DecodeContext(node, dtype, n, segments, EncodingRegistry.empty(), Arena.ofAuto());
+        }
+
+        private static byte[] makeDictFor(byte[]... samples) {
+            // Repeat samples to meet zstd's minimum training data requirement (~1 KB)
+            int total = 0;
+            for (byte[] s : samples) {
+                total += s.length;
+            }
+            int repeats = Math.max(1, 1024 / Math.max(total, 1));
+            byte[][] expanded = new byte[samples.length * repeats][];
+            for (int r = 0; r < repeats; r++) {
+                System.arraycopy(samples, 0, expanded, r * samples.length, samples.length);
+            }
+            byte[] dict = new byte[256];
+            com.github.luben.zstd.Zstd.trainFromBuffer(expanded, dict);
+            return dict;
+        }
+
+        private static byte[] compressWithDict(byte[] data, byte[] dictBytes) {
+            try (ZstdCompressCtx ctx = new ZstdCompressCtx()) {
+                ctx.loadDict(dictBytes);
+                return ctx.compress(data);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        private static DecodeContext makeNullableCtx(
+                byte[] meta, DType dtype, long n, boolean[] validityBits, byte[]... compressedFrames
+        ) {
+            BoolEncoding boolEncoding = new BoolEncoding();
+            EncodeResult validityResult = boolEncoding.encode(new DType.Bool(false), validityBits, EncodeTestHelper.testCtx());
+            EncodeNode remappedValidity = EncodeNode.remapBufferIndices(
+                    validityResult.rootNode(), compressedFrames.length);
+
+            List<MemorySegment> allSegments = new ArrayList<>();
+            int[] bufIndices = new int[compressedFrames.length];
+            for (int i = 0; i < compressedFrames.length; i++) {
+                allSegments.add(MemorySegment.ofArray(compressedFrames[i]));
+                bufIndices[i] = i;
+            }
+            allSegments.addAll(validityResult.buffers());
+
+            ArrayNode validityNode = toArrayNode(remappedValidity);
+            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ZSTD, ByteBuffer.wrap(meta),
+                    new ArrayNode[]{validityNode}, bufIndices, null);
+
+            EncodingRegistry registry = EncodingRegistry.empty();
+            registry.register(new BoolEncoding());
+
+            return new DecodeContext(node, dtype, n, allSegments.toArray(new MemorySegment[0]),
+                    registry, Arena.ofAuto());
+        }
+
+        private static ArrayNode toArrayNode(EncodeNode enc) {
+            ArrayNode[] children = new ArrayNode[enc.children().length];
+            for (int i = 0; i < children.length; i++) {
+                children[i] = toArrayNode(enc.children()[i]);
+            }
+            return ArrayNode.of(enc.encodingId(), enc.metadata(), children, enc.bufferIndices(), null);
+        }
+
+        private static byte[] metaNoDict(long[] uncompressedSizes, long[] nValues) {
+            EncodingProtos.ZstdMetadata.Builder builder = EncodingProtos.ZstdMetadata.newBuilder()
+                                                                  .setDictionarySize(0);
+            for (int i = 0; i < uncompressedSizes.length; i++) {
+                builder.addFrames(EncodingProtos.ZstdFrameMetadata.newBuilder()
+                                          .setUncompressedSize(uncompressedSizes[i])
+                                          .setNValues(nValues[i]));
+            }
+            return builder.build().toByteArray();
+        }
+
+        private static DecodeContext makeCtx(byte[] meta, DType dtype, long n, byte[]... compressedFrames) {
+            MemorySegment[] segments = new MemorySegment[compressedFrames.length];
+            int[] bufIndices = new int[compressedFrames.length];
+            for (int i = 0; i < compressedFrames.length; i++) {
+                segments[i] = MemorySegment.ofArray(compressedFrames[i]);
+                bufIndices[i] = i;
+            }
+            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ZSTD, ByteBuffer.wrap(meta),
+                    new ArrayNode[0], bufIndices, null);
+            return new DecodeContext(node, dtype, n, segments, EncodingRegistry.empty(), Arena.ofAuto());
+        }
+
+        private static byte[] compress(byte[] input) {
+            ZstdCompressor compressor = new ZstdJavaCompressor();
+            byte[] out = new byte[compressor.maxCompressedLength(input.length)];
+            int len = compressor.compress(input, 0, input.length, out, 0, out.length);
+            return Arrays.copyOf(out, len);
+        }
+
+        private static byte[] toLeBytes(int[] values) {
+            ByteBuffer buf = ByteBuffer.allocate(values.length * 4).order(ByteOrder.LITTLE_ENDIAN);
+            for (int v : values) {
+                buf.putInt(v);
+            }
+            return buf.array();
+        }
+
+        private static byte[] toLeBytes(long[] values) {
+            ByteBuffer buf = ByteBuffer.allocate(values.length * 8).order(ByteOrder.LITTLE_ENDIAN);
+            for (long v : values) {
+                buf.putLong(v);
+            }
+            return buf.array();
+        }
+
+        private static byte[] toLengthPrefixed(String[] strings) {
+            int total = 0;
+            for (String s : strings) {
+                total += 4 + s.getBytes(StandardCharsets.UTF_8).length;
+            }
+            ByteBuffer buf = ByteBuffer.allocate(total).order(ByteOrder.LITTLE_ENDIAN);
+            for (String s : strings) {
+                byte[] bytes = s.getBytes(StandardCharsets.UTF_8);
+                buf.putInt(bytes.length);
+                buf.put(bytes);
+            }
+            return buf.array();
+        }
+
         @Test
         void decode_primitiveI32_singleFrame_roundTrips() {
             // Given
@@ -123,7 +260,7 @@ class ZstdEncodingTest {
             byte[] compressed = compress(raw);
             DecodeContext ctx = makeCtx(
                     metaNoDict(new long[]{raw.length}, new long[]{values.length}),
-					DTypes.I32, values.length, compressed
+                    DTypes.I32, values.length, compressed
             );
 
             // When
@@ -145,7 +282,7 @@ class ZstdEncodingTest {
             byte[] compressed = compress(raw);
             DecodeContext ctx = makeCtx(
                     metaNoDict(new long[]{raw.length}, new long[]{values.length}),
-					DTypes.I64, values.length, compressed
+                    DTypes.I64, values.length, compressed
             );
 
             // When
@@ -167,7 +304,7 @@ class ZstdEncodingTest {
             byte[] compressed = compress(raw);
             DecodeContext ctx = makeCtx(
                     metaNoDict(new long[]{raw.length}, new long[]{strings.length}),
-					DTypes.UTF8, strings.length, compressed
+                    DTypes.UTF8, strings.length, compressed
             );
 
             // When
@@ -228,11 +365,11 @@ class ZstdEncodingTest {
             byte[] dictBytes = makeDictFor(raw);
             byte[] compressed = compressWithDict(raw, dictBytes);
             byte[] meta = EncodingProtos.ZstdMetadata.newBuilder()
-                    .setDictionarySize(dictBytes.length)
-                    .addFrames(EncodingProtos.ZstdFrameMetadata.newBuilder()
-                            .setUncompressedSize(raw.length)
-                            .setNValues(values.length))
-                    .build().toByteArray();
+                                  .setDictionarySize(dictBytes.length)
+                                  .addFrames(EncodingProtos.ZstdFrameMetadata.newBuilder()
+                                                     .setUncompressedSize(raw.length)
+                                                     .setNValues(values.length))
+                                  .build().toByteArray();
             // buffer[0]=dict, buffer[1]=frame
             DecodeContext ctx = makeDictCtx(meta, DTypes.I32, values.length, dictBytes, compressed);
 
@@ -255,11 +392,11 @@ class ZstdEncodingTest {
             byte[] dictBytes = makeDictFor(raw);
             byte[] compressed = compressWithDict(raw, dictBytes);
             byte[] meta = EncodingProtos.ZstdMetadata.newBuilder()
-                    .setDictionarySize(dictBytes.length)
-                    .addFrames(EncodingProtos.ZstdFrameMetadata.newBuilder()
-                            .setUncompressedSize(raw.length)
-                            .setNValues(strings.length))
-                    .build().toByteArray();
+                                  .setDictionarySize(dictBytes.length)
+                                  .addFrames(EncodingProtos.ZstdFrameMetadata.newBuilder()
+                                                     .setUncompressedSize(raw.length)
+                                                     .setNValues(strings.length))
+                                  .build().toByteArray();
             DecodeContext ctx = makeDictCtx(meta, DTypes.UTF8, strings.length, dictBytes, compressed);
 
             // When
@@ -284,12 +421,12 @@ class ZstdEncodingTest {
             byte[] comp0 = compressWithDict(raw0, dictBytes);
             byte[] comp1 = compressWithDict(raw1, dictBytes);
             byte[] meta = EncodingProtos.ZstdMetadata.newBuilder()
-                    .setDictionarySize(dictBytes.length)
-                    .addFrames(EncodingProtos.ZstdFrameMetadata.newBuilder()
-                            .setUncompressedSize(raw0.length).setNValues(frame0.length))
-                    .addFrames(EncodingProtos.ZstdFrameMetadata.newBuilder()
-                            .setUncompressedSize(raw1.length).setNValues(frame1.length))
-                    .build().toByteArray();
+                                  .setDictionarySize(dictBytes.length)
+                                  .addFrames(EncodingProtos.ZstdFrameMetadata.newBuilder()
+                                                     .setUncompressedSize(raw0.length).setNValues(frame0.length))
+                                  .addFrames(EncodingProtos.ZstdFrameMetadata.newBuilder()
+                                                     .setUncompressedSize(raw1.length).setNValues(frame1.length))
+                                  .build().toByteArray();
             DecodeContext ctx = makeDictCtx(meta, DTypes.I32, 5, dictBytes, comp0, comp1);
 
             // When
@@ -395,143 +532,6 @@ class ZstdEncodingTest {
             assertThatThrownBy(() -> sut.decode(ctx))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("missing metadata");
-        }
-
-        private static DecodeContext makeDictCtx(
-                byte[] meta, DType dtype, long n, byte[] dictBytes, byte[]... compressedFrames
-        ) {
-            // buffer[0] = dict, buffer[1..] = frames
-            MemorySegment[] segments = new MemorySegment[1 + compressedFrames.length];
-            segments[0] = MemorySegment.ofArray(dictBytes);
-            int[] bufIndices = new int[1 + compressedFrames.length];
-            bufIndices[0] = 0;
-            for (int i = 0; i < compressedFrames.length; i++) {
-                segments[i + 1] = MemorySegment.ofArray(compressedFrames[i]);
-                bufIndices[i + 1] = i + 1;
-            }
-            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ZSTD, ByteBuffer.wrap(meta),
-                    new ArrayNode[0], bufIndices, null);
-            return new DecodeContext(node, dtype, n, segments, EncodingRegistry.empty(), Arena.ofAuto());
-        }
-
-        private static byte[] makeDictFor(byte[]... samples) {
-            // Repeat samples to meet zstd's minimum training data requirement (~1 KB)
-            int total = 0;
-            for (byte[] s : samples) {
-                total += s.length;
-            }
-            int repeats = Math.max(1, 1024 / Math.max(total, 1));
-            byte[][] expanded = new byte[samples.length * repeats][];
-            for (int r = 0; r < repeats; r++) {
-                System.arraycopy(samples, 0, expanded, r * samples.length, samples.length);
-            }
-            byte[] dict = new byte[256];
-            com.github.luben.zstd.Zstd.trainFromBuffer(expanded, dict);
-            return dict;
-        }
-
-        private static byte[] compressWithDict(byte[] data, byte[] dictBytes) {
-            try (ZstdCompressCtx ctx = new ZstdCompressCtx()) {
-                ctx.loadDict(dictBytes);
-                return ctx.compress(data);
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        }
-
-        private static DecodeContext makeNullableCtx(
-                byte[] meta, DType dtype, long n, boolean[] validityBits, byte[]... compressedFrames
-        ) {
-            BoolEncoding boolEncoding = new BoolEncoding();
-            EncodeResult validityResult = boolEncoding.encode(new DType.Bool(false), validityBits, EncodeTestHelper.testCtx());
-            EncodeNode remappedValidity = EncodeNode.remapBufferIndices(
-                    validityResult.rootNode(), compressedFrames.length);
-
-            List<MemorySegment> allSegments = new ArrayList<>();
-            int[] bufIndices = new int[compressedFrames.length];
-            for (int i = 0; i < compressedFrames.length; i++) {
-                allSegments.add(MemorySegment.ofArray(compressedFrames[i]));
-                bufIndices[i] = i;
-            }
-            allSegments.addAll(validityResult.buffers());
-
-            ArrayNode validityNode = toArrayNode(remappedValidity);
-            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ZSTD, ByteBuffer.wrap(meta),
-                    new ArrayNode[]{validityNode}, bufIndices, null);
-
-            EncodingRegistry registry = EncodingRegistry.empty();
-            registry.register(new BoolEncoding());
-
-            return new DecodeContext(node, dtype, n, allSegments.toArray(new MemorySegment[0]),
-                    registry, Arena.ofAuto());
-        }
-
-        private static ArrayNode toArrayNode(EncodeNode enc) {
-            ArrayNode[] children = new ArrayNode[enc.children().length];
-            for (int i = 0; i < children.length; i++) {
-                children[i] = toArrayNode(enc.children()[i]);
-            }
-            return ArrayNode.of(enc.encodingId(), enc.metadata(), children, enc.bufferIndices(), null);
-        }
-
-        private static byte[] metaNoDict(long[] uncompressedSizes, long[] nValues) {
-            EncodingProtos.ZstdMetadata.Builder builder = EncodingProtos.ZstdMetadata.newBuilder()
-                    .setDictionarySize(0);
-            for (int i = 0; i < uncompressedSizes.length; i++) {
-                builder.addFrames(EncodingProtos.ZstdFrameMetadata.newBuilder()
-                        .setUncompressedSize(uncompressedSizes[i])
-                        .setNValues(nValues[i]));
-            }
-            return builder.build().toByteArray();
-        }
-
-        private static DecodeContext makeCtx(byte[] meta, DType dtype, long n, byte[]... compressedFrames) {
-            MemorySegment[] segments = new MemorySegment[compressedFrames.length];
-            int[] bufIndices = new int[compressedFrames.length];
-            for (int i = 0; i < compressedFrames.length; i++) {
-                segments[i] = MemorySegment.ofArray(compressedFrames[i]);
-                bufIndices[i] = i;
-            }
-            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ZSTD, ByteBuffer.wrap(meta),
-                    new ArrayNode[0], bufIndices, null);
-            return new DecodeContext(node, dtype, n, segments, EncodingRegistry.empty(), Arena.ofAuto());
-        }
-
-        private static byte[] compress(byte[] input) {
-            ZstdCompressor compressor = new ZstdJavaCompressor();
-            byte[] out = new byte[compressor.maxCompressedLength(input.length)];
-            int len = compressor.compress(input, 0, input.length, out, 0, out.length);
-            return Arrays.copyOf(out, len);
-        }
-
-        private static byte[] toLeBytes(int[] values) {
-            ByteBuffer buf = ByteBuffer.allocate(values.length * 4).order(ByteOrder.LITTLE_ENDIAN);
-            for (int v : values) {
-                buf.putInt(v);
-            }
-            return buf.array();
-        }
-
-        private static byte[] toLeBytes(long[] values) {
-            ByteBuffer buf = ByteBuffer.allocate(values.length * 8).order(ByteOrder.LITTLE_ENDIAN);
-            for (long v : values) {
-                buf.putLong(v);
-            }
-            return buf.array();
-        }
-
-        private static byte[] toLengthPrefixed(String[] strings) {
-            int total = 0;
-            for (String s : strings) {
-                total += 4 + s.getBytes(StandardCharsets.UTF_8).length;
-            }
-            ByteBuffer buf = ByteBuffer.allocate(total).order(ByteOrder.LITTLE_ENDIAN);
-            for (String s : strings) {
-                byte[] bytes = s.getBytes(StandardCharsets.UTF_8);
-                buf.putInt(bytes.length);
-                buf.put(bytes);
-            }
-            return buf.array();
         }
     }
 }

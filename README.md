@@ -10,11 +10,11 @@ Pure-Java reader/writer for the [Vortex](https://github.com/spiraldb/vortex) col
 100% Java, no JNI, no `sun.misc.Unsafe`. Uses the FFM API (`MemorySegment`/`Arena`, Java 25+)
 for zero-copy memory-mapped reads.
 
-| Project | Language | Notes |
-|---|---|---|
-| [spiraldb/vortex](https://github.com/spiraldb/vortex) | Rust | Reference implementation + JNI bindings |
-| [LaurieRhodes/vortex-go](https://github.com/LaurieRhodes/vortex-go) | Go | Pure-language port |
-| **dfa1/vortex-java** | **Java** | **This library** |
+| Project                                                             | Language | Notes                                   |
+|---------------------------------------------------------------------|----------|-----------------------------------------|
+| [spiraldb/vortex](https://github.com/spiraldb/vortex)               | Rust     | Reference implementation + JNI bindings |
+| [LaurieRhodes/vortex-go](https://github.com/LaurieRhodes/vortex-go) | Go       | Pure-language port                      |
+| **dfa1/vortex-java**                                                | **Java** | **This library**                        |
 
 ## Who is this for
 
@@ -56,13 +56,13 @@ see the documentation below.
 
 Docs follow the [Diátaxis](https://diataxis.fr/) framework.
 
-| Document | Mode | Contents |
-|---|---|---|
-| [docs/tutorial.md](docs/tutorial.md) | Tutorial | Step-by-step: write and read your first Vortex file |
-| [docs/how-to.md](docs/how-to.md) | How-to | Recipes: count rows, convert Parquet, filter, project, custom encodings |
-| [docs/reference.md](docs/reference.md) | Reference | API surface, CLI subcommands, operator tables, file-format trailer |
-| [docs/compatibility.md](docs/compatibility.md) | Reference | Encoding support table, S3 fixture status |
-| [docs/explanation.md](docs/explanation.md) | Explanation | Design rationale, memory model, testing strategy, benchmarks |
+| Document                                       | Mode        | Contents                                                                |
+|------------------------------------------------|-------------|-------------------------------------------------------------------------|
+| [docs/tutorial.md](docs/tutorial.md)           | Tutorial    | Step-by-step: write and read your first Vortex file                     |
+| [docs/how-to.md](docs/how-to.md)               | How-to      | Recipes: count rows, convert Parquet, filter, project, custom encodings |
+| [docs/reference.md](docs/reference.md)         | Reference   | API surface, CLI subcommands, operator tables, file-format trailer      |
+| [docs/compatibility.md](docs/compatibility.md) | Reference   | Encoding support table, S3 fixture status                               |
+| [docs/explanation.md](docs/explanation.md)     | Explanation | Design rationale, memory model, testing strategy, benchmarks            |
 
 ## Development
 

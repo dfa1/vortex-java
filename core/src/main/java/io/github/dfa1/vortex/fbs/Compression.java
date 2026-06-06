@@ -7,12 +7,15 @@ package io.github.dfa1.vortex.fbs;
  */
 @SuppressWarnings("unused")
 public final class Compression {
-  private Compression() { }
-  public static final int None = 0;
-  public static final int LZ4 = 1;
+    public static final int None = 0;
+    public static final int LZ4 = 1;
+    public static final String[] names = {"None", "LZ4",};
 
-  public static final String[] names = { "None", "LZ4", };
+    private Compression() {
+    }
 
-  public static String name(int e) { return names[e]; }
+    public static String name(int e) {
+        return names[e];
+    }
 }
 

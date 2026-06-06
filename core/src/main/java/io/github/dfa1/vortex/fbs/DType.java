@@ -3,55 +3,88 @@
 package io.github.dfa1.vortex.fbs;
 
 import com.google.flatbuffers.BaseVector;
-import com.google.flatbuffers.BooleanVector;
-import com.google.flatbuffers.ByteVector;
-import com.google.flatbuffers.Constants;
-import com.google.flatbuffers.DoubleVector;
 import com.google.flatbuffers.FlatBufferBuilder;
-import com.google.flatbuffers.FloatVector;
-import com.google.flatbuffers.IntVector;
-import com.google.flatbuffers.LongVector;
-import com.google.flatbuffers.ShortVector;
-import com.google.flatbuffers.StringVector;
-import com.google.flatbuffers.Struct;
-import com.google.flatbuffers.UnionVector;
+
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 @SuppressWarnings("unused")
 public final class DType extends com.google.flatbuffers.Table {
-  public static DType getRootAsDType(ByteBuffer _bb) { return getRootAsDType(_bb, new DType()); }
-  public static DType getRootAsDType(ByteBuffer _bb, DType obj) { _bb.order(ByteOrder.LITTLE_ENDIAN); return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb)); }
-  public void __init(int _i, ByteBuffer _bb) { __reset(_i, _bb); }
-  public DType __assign(int _i, ByteBuffer _bb) { __init(_i, _bb); return this; }
+    public static DType getRootAsDType(ByteBuffer _bb) {
+        return getRootAsDType(_bb, new DType());
+    }
 
-  public byte typeType() { int o = __offset(4); return o != 0 ? bb.get(o + bb_pos) : 0; }
-  public com.google.flatbuffers.Table type(com.google.flatbuffers.Table obj) { int o = __offset(6); return o != 0 ? __union(obj, o + bb_pos) : null; }
+    public static DType getRootAsDType(ByteBuffer _bb, DType obj) {
+        _bb.order(ByteOrder.LITTLE_ENDIAN);
+        return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb));
+    }
 
-  public static int createDType(FlatBufferBuilder builder,
-      byte typeType,
-      int typeOffset) {
-    builder.startTable(2);
-    DType.addType(builder, typeOffset);
-    DType.addTypeType(builder, typeType);
-    return DType.endDType(builder);
-  }
+    public static int createDType(FlatBufferBuilder builder,
+            byte typeType,
+            int typeOffset) {
+        builder.startTable(2);
+        DType.addType(builder, typeOffset);
+        DType.addTypeType(builder, typeType);
+        return DType.endDType(builder);
+    }
 
-  public static void startDType(FlatBufferBuilder builder) { builder.startTable(2); }
-  public static void addTypeType(FlatBufferBuilder builder, byte typeType) { builder.addByte(0, typeType, 0); }
-  public static void addType(FlatBufferBuilder builder, int typeOffset) { builder.addOffset(1, typeOffset, 0); }
-  public static int endDType(FlatBufferBuilder builder) {
-    int o = builder.endTable();
-    return o;
-  }
-  public static void finishDTypeBuffer(FlatBufferBuilder builder, int offset) { builder.finish(offset); }
-  public static void finishSizePrefixedDTypeBuffer(FlatBufferBuilder builder, int offset) { builder.finishSizePrefixed(offset); }
+    public static void startDType(FlatBufferBuilder builder) {
+        builder.startTable(2);
+    }
 
-  public static final class Vector extends BaseVector {
-    public Vector __assign(int _vector, int _element_size, ByteBuffer _bb) { __reset(_vector, _element_size, _bb); return this; }
+    public static void addTypeType(FlatBufferBuilder builder, byte typeType) {
+        builder.addByte(0, typeType, 0);
+    }
 
-    public DType get(int j) { return get(new DType(), j); }
-    public DType get(DType obj, int j) {  return obj.__assign(__indirect(__element(j), bb), bb); }
-  }
+    public static void addType(FlatBufferBuilder builder, int typeOffset) {
+        builder.addOffset(1, typeOffset, 0);
+    }
+
+    public static int endDType(FlatBufferBuilder builder) {
+        int o = builder.endTable();
+        return o;
+    }
+
+    public static void finishDTypeBuffer(FlatBufferBuilder builder, int offset) {
+        builder.finish(offset);
+    }
+
+    public static void finishSizePrefixedDTypeBuffer(FlatBufferBuilder builder, int offset) {
+        builder.finishSizePrefixed(offset);
+    }
+
+    public void __init(int _i, ByteBuffer _bb) {
+        __reset(_i, _bb);
+    }
+
+    public DType __assign(int _i, ByteBuffer _bb) {
+        __init(_i, _bb);
+        return this;
+    }
+
+    public byte typeType() {
+        int o = __offset(4);
+        return o != 0 ? bb.get(o + bb_pos) : 0;
+    }
+
+    public com.google.flatbuffers.Table type(com.google.flatbuffers.Table obj) {
+        int o = __offset(6);
+        return o != 0 ? __union(obj, o + bb_pos) : null;
+    }
+
+    public static final class Vector extends BaseVector {
+        public Vector __assign(int _vector, int _element_size, ByteBuffer _bb) {
+            __reset(_vector, _element_size, _bb);
+            return this;
+        }
+
+        public DType get(int j) {
+            return get(new DType(), j);
+        }
+
+        public DType get(DType obj, int j) {
+            return obj.__assign(__indirect(__element(j), bb), bb);
+        }
+    }
 }
 

@@ -4,7 +4,9 @@
 
 - [ ] Move project to a dedicated organization
 - [ ] Create website
-- [ ] Publish benchmarks — run `./bench` locally, push JMH JSON to gh-pages via `bench-publish` script, view at `https://jmh.morethan.io/?source=https://dfa1.github.io/vortex-java/benchmark-result.json`; dated files for history comparison via `?source=url1,url2`; then drop `.github/workflows/benchmark.yml`
+- [ ] Publish benchmarks — run `./bench` locally, push JMH JSON to gh-pages via `bench-publish` script, view at
+  `https://jmh.morethan.io/?source=https://dfa1.github.io/vortex-java/benchmark-result.json`; dated files for history
+  comparison via `?source=url1,url2`; then drop `.github/workflows/benchmark.yml`
 - [ ] Build something like hardwood.dev but for vortex files
 
 ## Compression ratio gaps vs Rust (NYC taxi 2024-01: Java 43.1 MB, Rust 42.8 MB, Parquet 47.6 MB)
@@ -17,7 +19,8 @@ Remaining 0.3 MB gap — biggest to smallest:
 
 - [ ] **Global dict encoding** — Rust applies `vortex.dict` across the ENTIRE column before chunking; produces one
   tiny dict buffer + one globally-bitpacked codes array. Java applies dict per 131 072-row chunk. Low-cardinality
-  columns affected: `mta_tax` (8 unique F64), `Airport_fee` (4), `extra` (48), `PULocationID` (260), `DOLocationID` (261),
+  columns affected: `mta_tax` (8 unique F64), `Airport_fee` (4), `extra` (48), `PULocationID` (260), `DOLocationID` (
+  261),
   `payment_type` (5), `store_and_fwd_flag` (3), `congestion_surcharge` (few), `tolls_amount` (1127).
   Requires a two-pass write pipeline: first pass collects all values and builds the global dict; second pass emits
   coded chunks. Estimated remaining gain ~0.3 MB (most gains already captured by ZstdEncoding on per-chunk dicts).
@@ -29,7 +32,8 @@ Remaining 0.3 MB gap — biggest to smallest:
       and benchmark commit SHA so numbers don't rot silently.
 - [ ] performance tests must be peer reviewed
 - [ ] run performance tests on other machines (I have access only to Apple M5)
-- [ ] minimize `ctx.arena().allocate(...)` calls — prefer in-place decode when child buffer is writable (already done in ALP); audit all decoders for unnecessary off-heap allocs
+- [ ] minimize `ctx.arena().allocate(...)` calls — prefer in-place decode when child buffer is writable (already done in
+  ALP); audit all decoders for unnecessary off-heap allocs
 - [ ] **Evaluate Vector API (JEP 469+) for hot decode loops** — candidates: FastLanes bitpacked unpack,
   FrameOfReference add-base, ZigZag decode, ALP F64 reconstruction, future pco offset+base loop. Measure
   vs scalar baseline with JMH; only adopt where speedup is material and code stays readable. Pin against
@@ -45,8 +49,8 @@ Remaining 0.3 MB gap — biggest to smallest:
     - Integer overflows in offset arithmetic (`offset + length` wraps to negative)
     - Out-of-bounds buffer reads via crafted `bufferIndices` arrays
     - Zip-bomb style: tiny file that claims huge row counts
-  Add a fuzz corpus of malformed `.vortex` files; all must throw `VortexException`, never
-  `ArrayIndexOutOfBoundsException`, `NegativeArraySizeException`, or `OutOfMemoryError`.
+      Add a fuzz corpus of malformed `.vortex` files; all must throw `VortexException`, never
+      `ArrayIndexOutOfBoundsException`, `NegativeArraySizeException`, or `OutOfMemoryError`.
 - [ ] **Verify proto compatibility with upstream** — `dtype.proto` and `scalar.proto` exist in
   `spiraldb/vortex/vortex-proto/proto/` and should be kept in sync with our copies. Encoding
   metadata (e.g. `RLEMetadata`, `RunEndMetadata`) has no upstream `.proto`; tag mismatches
@@ -64,10 +68,10 @@ Remaining 0.3 MB gap — biggest to smallest:
 
 ## Documentation
 
-- [ ] Format specification: byte-exact diagrams for file layout and each encoding, with annotated examples (Arrow spec style)
+- [ ] Format specification: byte-exact diagrams for file layout and each encoding, with annotated examples (Arrow spec
+  style)
 
 ## Tooling
-
 
 - [ ] Optional `vortex-arrow` bridge module for Arrow ecosystem interop
     - Primary API stays `ArrayLong`/`ArrayDouble` (zero-copy, no deps, no Unsafe)
@@ -92,15 +96,15 @@ Remaining 0.3 MB gap — biggest to smallest:
 
 - [ ] **Audit runtime pluggability vs Rust impl** — maintainer (2026-06-04) flagged that Rust supports
   runtime registration for: Encodings, DTypes, Compute, Layouts. Java status:
-    - Encodings: ✅ `ServiceLoader` + `EncodingRegistry.register()`; ✅ `allowUnknown()` passthrough for unregistered encodings (mirrors `VortexSession::allow_unknown()`)
+    - Encodings: ✅ `ServiceLoader` + `EncodingRegistry.register()`; ✅ `allowUnknown()` passthrough for unregistered
+      encodings (mirrors `VortexSession::allow_unknown()`)
     - DTypes: ❌ sealed hierarchy — no user-extensible type. If a downstream consumer needs a custom
       logical type (e.g. UUID, IP address) they can't register one. Decide: keep sealed (simpler) or
       open via SPI mirroring `EncodingRegistry`.
     - Layouts: ❌ fixed set (Flat/Chunked/Zoned/Struct). Same trade-off as DTypes.
     - Compute: ❌ no compute layer yet. Out of scope until reader feature-complete.
-  Action: short design note weighing sealed-vs-pluggable for DType + Layout; revisit when Java impl
-  has a real downstream consumer asking for it. Don't pre-open these without a use case.
-
+      Action: short design note weighing sealed-vs-pluggable for DType + Layout; revisit when Java impl
+      has a real downstream consumer asking for it. Don't pre-open these without a use case.
 
 ## Encodings
 
@@ -108,26 +112,30 @@ See [docs/compatibility.md](docs/compatibility.md) for the full encoding support
 
 ### `vortex.zstd` known limitations
 
-
 - [ ] **Multi-frame encode** — `ZstdEncoding.Encoder` always produces a single frame for the whole array.
-  Fix: accept a `valuesPerFrame` parameter (default: all values in one frame). Split the raw byte buffer at frame boundaries (`valuesPerFrame * byteWidth`), compress each slice independently, emit one `ZstdFrameMetadata` per frame. Enables partial decompression during slice scans.
+  Fix: accept a `valuesPerFrame` parameter (default: all values in one frame). Split the raw byte buffer at frame
+  boundaries (`valuesPerFrame * byteWidth`), compress each slice independently, emit one `ZstdFrameMetadata` per frame.
+  Enables partial decompression during slice scans.
 
 - [ ] **Nullable arrays (encode)** — `ZstdEncoding.Encoder` has no null handling.
-  Fix: accept nullable input (e.g. `Integer[]` or a validity mask alongside the data array). Strip null positions before compression. Encode the validity bitmap as a Bool child (child[0]) in the `EncodeNode`. Mirrors what Rust does: only valid values go into the compressed payload.
-
+  Fix: accept nullable input (e.g. `Integer[]` or a validity mask alongside the data array). Strip null positions before
+  compression. Encode the validity bitmap as a Bool child (child[0]) in the `EncodeNode`. Mirrors what Rust does: only
+  valid values go into the compressed payload.
 
 ### `vortex.pco` encode plan
 
 Pure-Java encode. Only after decode is stable + a Java consumer asks for write. Not gated
 on any S3 fixture (all fixtures are Rust-produced; decode unblocks them).
 
-**Refs**: [pco/src/wrapped/chunk_compressor.rs](https://github.com/pcodec/pcodec/blob/main/pco/src/wrapped/chunk_compressor.rs),
+**Refs
+**: [pco/src/wrapped/chunk_compressor.rs](https://github.com/pcodec/pcodec/blob/main/pco/src/wrapped/chunk_compressor.rs),
 [pco/src/bin_optimization.rs](https://github.com/pcodec/pcodec/blob/main/pco/src/bin_optimization.rs),
 [pco/src/histograms.rs](https://github.com/pcodec/pcodec/blob/main/pco/src/histograms.rs),
 [pco/src/ans/](https://github.com/pcodec/pcodec/tree/main/pco/src/ans),
 [pco/src/sampling.rs](https://github.com/pcodec/pcodec/blob/main/pco/src/sampling.rs).
 
 **Why harder than decode**:
+
 - Encode chooses mode + bin layout + tANS weights; decode just executes a fixed program.
 - Bin optimization is dynamic programming over partitions of a histogram (`bin_cost`).
 - tANS encoding table differs from decode table (weight quantization → symbol table).
@@ -137,19 +145,21 @@ on any S3 fixture (all fixtures are Rust-produced; decode unblocks them).
   Java→Rust decode (existing `JavaWritesRustReadsIntegrationTest` harness).
 
 **Reuse from decode**:
+
 - `LeBitReader` (decode) ↔ `LeBitWriter` (encode, new). Same bit layout, opposite direction.
 - tANS table structure (decode-built) ↔ tANS encode table (`ans/encoding.rs`).
 - Mode constants, delta constants, proto types — shared.
 - Bit-exact wire format already validated by decode tests; encode just emits same bytes.
 
 **Phases**:
+
 - [ ] **Phase E0 — gate**. Is there a consumer (CLI write path, vortex-arrow bridge)? If no,
   stop. Decode is enough.
 - [ ] **Phase E1 — bit writer**. `LeBitWriter` over `Arena`-backed `MemorySegment`. Mirrors
   `pco/src/bit_writer.rs`. Property test: random bit sequences round-trip via `LeBitReader`.
 - [ ] **Phase E2 — Classic mode, no delta, fixed bins, no optimization**. Hardcoded bin layout
-  + uniform tANS weights. Emits a valid (suboptimal) pco stream. Validates: header write,
-  chunk meta write, page write, byte alignment. Round-trip via Java decode.
+    + uniform tANS weights. Emits a valid (suboptimal) pco stream. Validates: header write,
+      chunk meta write, page write, byte alignment. Round-trip via Java decode.
 - [ ] **Phase E3 — histogram + bin optimization**. Port `histograms.rs` (sort + bucket by
   latent prefix) and `bin_optimization.rs` (DP partitioning, `bin_cost`, `log2_approx`).
   Replace fixed bins with optimized layout. Compression ratio benchmark vs Rust on same
@@ -173,6 +183,7 @@ on any S3 fixture (all fixtures are Rust-produced; decode unblocks them).
   `chunk_metas` then `pages` as separate buffer indices.
 
 **Risks**:
+
 - Bin optimization DP: bug → catastrophic ratio loss but still valid output. Symptom is
   silent — only benchmarks catch it. Test ratio against Rust on known inputs.
 - tANS weight quantization: bug → Rust decoder rejects with checksum mismatch. Caught fast

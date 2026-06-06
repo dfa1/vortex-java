@@ -63,11 +63,6 @@ public final class TaxiLayoutInspector {
     private static final ArrowType I64 = new ArrowType.Int(64, true);
     private static final ArrowType TS_MICROS =
             new ArrowType.Timestamp(TimeUnit.MICROSECOND, null);
-
-    static {
-        NativeLoader.loadJni();
-    }
-
     // Arrow schema matching all 19 nullable taxi columns
     private static final Schema ARROW_SCHEMA = new Schema(List.of(
             Field.nullable("VendorID", I32),
@@ -90,6 +85,10 @@ public final class TaxiLayoutInspector {
             Field.nullable("congestion_surcharge", F64),
             Field.nullable("Airport_fee", F64)
     ));
+
+    static {
+        NativeLoader.loadJni();
+    }
 
     private TaxiLayoutInspector() {
     }
@@ -177,7 +176,7 @@ public final class TaxiLayoutInspector {
     }
 
     private static void fillRow(RowReader rows, VectorSchemaRoot root,
-                                String[] names, boolean[] optional, int pos) {
+            String[] names, boolean[] optional, int pos) {
         for (int c = 0; c < names.length; c++) {
             String name = names[c];
             boolean isNull = optional[c] && rows.isNull(name);
@@ -225,8 +224,8 @@ public final class TaxiLayoutInspector {
     }
 
     private static void flushBatch(dev.vortex.api.VortexWriter writer,
-                                   BufferAllocator allocator,
-                                   VectorSchemaRoot root, int rowCount) throws IOException {
+            BufferAllocator allocator,
+            VectorSchemaRoot root, int rowCount) throws IOException {
         root.setRowCount(rowCount);
         try (ArrowArray arr = ArrowArray.allocateNew(allocator);
              ArrowSchema schema = ArrowSchema.allocateNew(allocator)) {

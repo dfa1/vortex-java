@@ -18,36 +18,36 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 @Tag("integration")
 class RealWorldDataIT {
 
-	private static final String FIXTURES_DIR = System.getProperty("vortex.fixtures.dir");
+    private static final String FIXTURES_DIR = System.getProperty("vortex.fixtures.dir");
 
-	@ParameterizedTest(name = "{0}")
-	@ValueSource(strings = {
-			"clickbench_hits_5k.regular.vortex",
-			"clickbench_hits_5k.compact.vortex",
-			"tpch_lineitem.regular.vortex",
-			"tpch_lineitem.compact.vortex",
-			"tpch_orders.regular.vortex",
-			"tpch_orders.compact.vortex",
-	})
-	void scan_realWorldFile_decodesAllRows(String filename) throws Exception {
-		// Given
-		assumeTrue(FIXTURES_DIR != null, "set -Dvortex.fixtures.dir to enable");
-		Path file = Path.of(FIXTURES_DIR, filename);
-		assumeTrue(file.toFile().exists(), "fixture not found: " + file);
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {
+            "clickbench_hits_5k.regular.vortex",
+            "clickbench_hits_5k.compact.vortex",
+            "tpch_lineitem.regular.vortex",
+            "tpch_lineitem.compact.vortex",
+            "tpch_orders.regular.vortex",
+            "tpch_orders.compact.vortex",
+    })
+    void scan_realWorldFile_decodesAllRows(String filename) throws Exception {
+        // Given
+        assumeTrue(FIXTURES_DIR != null, "set -Dvortex.fixtures.dir to enable");
+        Path file = Path.of(FIXTURES_DIR, filename);
+        assumeTrue(file.toFile().exists(), "fixture not found: " + file);
 
-		// When
-		long totalRows = 0;
-		int chunks = 0;
-		try (var sut = VortexReader.open(file);
-		     var iter = sut.scan(ScanOptions.all())) {
-			while (iter.hasNext()) {
-				totalRows += iter.next().rowCount();
-				chunks++;
-			}
-		}
+        // When
+        long totalRows = 0;
+        int chunks = 0;
+        try (var sut = VortexReader.open(file);
+             var iter = sut.scan(ScanOptions.all())) {
+            while (iter.hasNext()) {
+                totalRows += iter.next().rowCount();
+                chunks++;
+            }
+        }
 
-		// Then
-		assertThat(totalRows).as("rowCount for %s", filename).isGreaterThan(0);
-		assertThat(chunks).as("chunkCount for %s", filename).isGreaterThan(0);
-	}
+        // Then
+        assertThat(totalRows).as("rowCount for %s", filename).isGreaterThan(0);
+        assertThat(chunks).as("chunkCount for %s", filename).isGreaterThan(0);
+    }
 }

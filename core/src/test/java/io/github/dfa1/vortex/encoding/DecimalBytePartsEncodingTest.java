@@ -11,65 +11,65 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class DecimalBytePartsEncodingTest {
 
-	@Nested
-	class Encode {
+    @Nested
+    class Encode {
 
-		@Test
-		void roundTrip_longArray_preservesMspValues() {
-			// Given
-			long[] values = {1L, -2L, 3L};
-			DType dtype = new DType.Decimal((byte) 18, (byte) 0, false);
-			var sut = new DecimalBytePartsEncoding();
-			EncodingRegistry registry = TestRegistry.withPrimitive(sut);
+        @Test
+        void roundTrip_longArray_preservesMspValues() {
+            // Given
+            long[] values = {1L, -2L, 3L};
+            DType dtype = new DType.Decimal((byte) 18, (byte) 0, false);
+            var sut = new DecimalBytePartsEncoding();
+            EncodingRegistry registry = TestRegistry.withPrimitive(sut);
 
-			// When
-			EncodeResult encoded = sut.encode(dtype, values, EncodeTestHelper.testCtx());
-			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, values.length, dtype, registry);
-			Array result = sut.decode(ctx);
+            // When
+            EncodeResult encoded = sut.encode(dtype, values, EncodeTestHelper.testCtx());
+            DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, values.length, dtype, registry);
+            Array result = sut.decode(ctx);
 
-			// Then
-			assertThat(result.length()).isEqualTo(values.length);
-			Array msp = result.child(0);
-			assertThat(msp.length()).isEqualTo(values.length);
-			var le = PTypeIO.LE_LONG;
-			for (int i = 0; i < values.length; i++) {
-				assertThat(msp.buffer(0).get(le, (long) i * 8)).isEqualTo(values[i]);
-			}
-		}
+            // Then
+            assertThat(result.length()).isEqualTo(values.length);
+            Array msp = result.child(0);
+            assertThat(msp.length()).isEqualTo(values.length);
+            var le = PTypeIO.LE_LONG;
+            for (int i = 0; i < values.length; i++) {
+                assertThat(msp.buffer(0).get(le, (long) i * 8)).isEqualTo(values[i]);
+            }
+        }
 
-		@Test
-		void encodeNode_hasNoBuffers_andOneMspChild() {
-			// Given
-			long[] values = {10L, 20L};
-			DType dtype = new DType.Decimal((byte) 18, (byte) 0, false);
-			var sut = new DecimalBytePartsEncoding();
+        @Test
+        void encodeNode_hasNoBuffers_andOneMspChild() {
+            // Given
+            long[] values = {10L, 20L};
+            DType dtype = new DType.Decimal((byte) 18, (byte) 0, false);
+            var sut = new DecimalBytePartsEncoding();
 
-			// When
-			EncodeResult result = sut.encode(dtype, values, EncodeTestHelper.testCtx());
+            // When
+            EncodeResult result = sut.encode(dtype, values, EncodeTestHelper.testCtx());
 
-			// Then
-			assertThat(result.rootNode().bufferIndices()).isEmpty();
-			assertThat(result.rootNode().children()).hasSize(1);
-			assertThat(result.buffers()).hasSize(1);
-		}
+            // Then
+            assertThat(result.rootNode().bufferIndices()).isEmpty();
+            assertThat(result.rootNode().children()).hasSize(1);
+            assertThat(result.buffers()).hasSize(1);
+        }
 
-		@Test
-		void metadata_zerothChildPtype_isI64_lowerPartCountIsZero() throws Exception {
-			// Given
-			long[] values = {42L};
-			DType dtype = new DType.Decimal((byte) 18, (byte) 0, false);
-			var sut = new DecimalBytePartsEncoding();
+        @Test
+        void metadata_zerothChildPtype_isI64_lowerPartCountIsZero() throws Exception {
+            // Given
+            long[] values = {42L};
+            DType dtype = new DType.Decimal((byte) 18, (byte) 0, false);
+            var sut = new DecimalBytePartsEncoding();
 
-			// When
-			EncodeResult result = sut.encode(dtype, values, EncodeTestHelper.testCtx());
+            // When
+            EncodeResult result = sut.encode(dtype, values, EncodeTestHelper.testCtx());
 
-			// Then
-			byte[] metaBytes = new byte[result.rootNode().metadata().remaining()];
-			result.rootNode().metadata().duplicate().get(metaBytes);
-			EncodingProtos.DecimalBytePartsMetadata meta =
-					EncodingProtos.DecimalBytePartsMetadata.parseFrom(metaBytes);
-			assertThat(meta.getZerothChildPtypeValue()).isEqualTo(7); // I64 ordinal
-			assertThat(meta.getLowerPartCount()).isEqualTo(0);
-		}
-	}
+            // Then
+            byte[] metaBytes = new byte[result.rootNode().metadata().remaining()];
+            result.rootNode().metadata().duplicate().get(metaBytes);
+            EncodingProtos.DecimalBytePartsMetadata meta =
+                    EncodingProtos.DecimalBytePartsMetadata.parseFrom(metaBytes);
+            assertThat(meta.getZerothChildPtypeValue()).isEqualTo(7); // I64 ordinal
+            assertThat(meta.getLowerPartCount()).isEqualTo(0);
+        }
+    }
 }

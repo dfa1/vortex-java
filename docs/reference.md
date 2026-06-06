@@ -20,12 +20,12 @@ For task-oriented usage see [how-to.md](how-to.md); for design rationale see [ex
 
 Physical primitive type — wire-level numeric kind for a column.
 
-| Constant | Bytes | Notes |
-|---|---|---|
-| `U8`, `U16`, `U32`, `U64` | 1 / 2 / 4 / 8 | Unsigned integers |
-| `I8`, `I16`, `I32`, `I64` | 1 / 2 / 4 / 8 | Signed integers |
-| `F16` | 2 | IEEE 754 half — decode not yet supported |
-| `F32`, `F64` | 4 / 8 | IEEE 754 single / double |
+| Constant                  | Bytes         | Notes                                    |
+|---------------------------|---------------|------------------------------------------|
+| `U8`, `U16`, `U32`, `U64` | 1 / 2 / 4 / 8 | Unsigned integers                        |
+| `I8`, `I16`, `I32`, `I64` | 1 / 2 / 4 / 8 | Signed integers                          |
+| `F16`                     | 2             | IEEE 754 half — decode not yet supported |
+| `F32`, `F64`              | 4 / 8         | IEEE 754 single / double                 |
 
 Methods: `byteSize()`, `isFloating()`, `isSigned()`.
 
@@ -33,18 +33,18 @@ Methods: `byteSize()`, `isFloating()`, `isSigned()`.
 
 Sealed logical type. All variants take a trailing `boolean nullable`.
 
-| Record | Constructor |
-|---|---|
-| `DType.Null` | `new DType.Null(nullable)` |
-| `DType.Bool` | `new DType.Bool(nullable)` |
-| `DType.Primitive` | `new DType.Primitive(PType, nullable)` |
-| `DType.Decimal` | `new DType.Decimal(precision, scale, nullable)` |
-| `DType.Utf8` | `new DType.Utf8(nullable)` |
-| `DType.Binary` | `new DType.Binary(nullable)` |
-| `DType.Struct` | `new DType.Struct(fieldNames, fieldTypes, nullable)` |
-| `DType.List` | `new DType.List(elementType, nullable)` |
+| Record                | Constructor                                                 |
+|-----------------------|-------------------------------------------------------------|
+| `DType.Null`          | `new DType.Null(nullable)`                                  |
+| `DType.Bool`          | `new DType.Bool(nullable)`                                  |
+| `DType.Primitive`     | `new DType.Primitive(PType, nullable)`                      |
+| `DType.Decimal`       | `new DType.Decimal(precision, scale, nullable)`             |
+| `DType.Utf8`          | `new DType.Utf8(nullable)`                                  |
+| `DType.Binary`        | `new DType.Binary(nullable)`                                |
+| `DType.Struct`        | `new DType.Struct(fieldNames, fieldTypes, nullable)`        |
+| `DType.List`          | `new DType.List(elementType, nullable)`                     |
 | `DType.FixedSizeList` | `new DType.FixedSizeList(elementType, fixedSize, nullable)` |
-| `DType.Extension` | `new DType.Extension(id, storageDType, metadata, nullable)` |
+| `DType.Extension`     | `new DType.Extension(id, storageDType, metadata, nullable)` |
 
 Helpers: `nullable()`, `withNullable(boolean)`, `DType.Struct.field(name)`.
 
@@ -57,20 +57,20 @@ Helpers: `nullable()`, `withNullable(boolean)`, `DType.Struct.field(name)`.
 Memory-mapped handle to a Vortex file. Implements `AutoCloseable`. Closing releases the mmap region;
 all `Array` buffers obtained during scans become invalid.
 
-| Method | Returns | Notes |
-|---|---|---|
-| `static open(Path)` | `VortexReader` | Uses `EncodingRegistry.loadAll()` |
-| `static open(Path, EncodingRegistry)` | `VortexReader` | Custom registry (e.g. `allowUnknown()`) |
-| `dtype()` | `DType` | Schema (typically `DType.Struct`) |
-| `layout()` | `Layout` | Layout tree (Struct → Zoned → Chunked → Flat) |
-| `footer()` | `Footer` | Segment specs, encoding specs |
-| `version()` | `int` | File format version |
-| `fileSize()` | `long` | File size in bytes |
-| `registry()` | `EncodingRegistry` | Registry in use |
-| `scan(ScanOptions)` | `ScanIterator` | Open a scan |
-| `columnStats()` | `Map<String, ArrayStats>` | Aggregated min/max per column |
-| `slice(offset, length)` | `MemorySegment` | Zero-copy slice of mmap region |
-| `close()` | — | Releases mmap |
+| Method                                | Returns                   | Notes                                         |
+|---------------------------------------|---------------------------|-----------------------------------------------|
+| `static open(Path)`                   | `VortexReader`            | Uses `EncodingRegistry.loadAll()`             |
+| `static open(Path, EncodingRegistry)` | `VortexReader`            | Custom registry (e.g. `allowUnknown()`)       |
+| `dtype()`                             | `DType`                   | Schema (typically `DType.Struct`)             |
+| `layout()`                            | `Layout`                  | Layout tree (Struct → Zoned → Chunked → Flat) |
+| `footer()`                            | `Footer`                  | Segment specs, encoding specs                 |
+| `version()`                           | `int`                     | File format version                           |
+| `fileSize()`                          | `long`                    | File size in bytes                            |
+| `registry()`                          | `EncodingRegistry`        | Registry in use                               |
+| `scan(ScanOptions)`                   | `ScanIterator`            | Open a scan                                   |
+| `columnStats()`                       | `Map<String, ArrayStats>` | Aggregated min/max per column                 |
+| `slice(offset, length)`               | `MemorySegment`           | Zero-copy slice of mmap region                |
+| `close()`                             | —                         | Releases mmap                                 |
 
 ---
 
@@ -80,21 +80,21 @@ all `Array` buffers obtained during scans become invalid.
 
 Writes a Vortex file. Implements `Closeable`. The file is complete and readable as soon as `close()` returns.
 
-| Method | Notes |
-|---|---|
-| `static create(WritableByteChannel, DType.Struct, WriteOptions)` | Default codec set |
-| `static create(WritableByteChannel, DType.Struct, WriteOptions, List<Encoding>)` | Custom codec set |
-| `writeChunk(Map<String, Object>)` | One batch of rows; each value = `long[]`, `double[]`, `String[]`, `boolean[]`, etc., matching the column `DType` |
-| `close()` | Finalizes file (footer, postscript, trailer) |
+| Method                                                                           | Notes                                                                                                            |
+|----------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------|
+| `static create(WritableByteChannel, DType.Struct, WriteOptions)`                 | Default codec set                                                                                                |
+| `static create(WritableByteChannel, DType.Struct, WriteOptions, List<Encoding>)` | Custom codec set                                                                                                 |
+| `writeChunk(Map<String, Object>)`                                                | One batch of rows; each value = `long[]`, `double[]`, `String[]`, `boolean[]`, etc., matching the column `DType` |
+| `close()`                                                                        | Finalizes file (footer, postscript, trailer)                                                                     |
 
 ### `WriteOptions` (`io.github.dfa1.vortex.writer.WriteOptions`)
 
 Record: `(int chunkSize, boolean enableZoneMaps, double compressionRatioThreshold, int allowedCascading)`.
 
-| Factory | Defaults |
-|---|---|
-| `WriteOptions.defaults()` | `chunkSize=65_536`, `enableZoneMaps=true`, `compressionRatioThreshold=0.90`, `allowedCascading=0` |
-| `WriteOptions.cascading(depth)` | Same defaults, `allowedCascading=depth` |
+| Factory                         | Defaults                                                                                          |
+|---------------------------------|---------------------------------------------------------------------------------------------------|
+| `WriteOptions.defaults()`       | `chunkSize=65_536`, `enableZoneMaps=true`, `compressionRatioThreshold=0.90`, `allowedCascading=0` |
+| `WriteOptions.cascading(depth)` | Same defaults, `allowedCascading=depth`                                                           |
 
 ---
 
@@ -102,50 +102,51 @@ Record: `(int chunkSize, boolean enableZoneMaps, double compressionRatioThreshol
 
 ### `ScanOptions` (`io.github.dfa1.vortex.scan.ScanOptions`)
 
-Record: `(List<String> columns, RowFilter rowFilter, long limit)`. Empty `columns` = read all. `NO_LIMIT` = `Long.MAX_VALUE`.
+Record: `(List<String> columns, RowFilter rowFilter, long limit)`. Empty `columns` = read all. `NO_LIMIT` =
+`Long.MAX_VALUE`.
 
-| Factory / builder | Effect |
-|---|---|
-| `ScanOptions.all()` | All columns, no filter, no limit |
-| `ScanOptions.columns(String... names)` | Project columns |
-| `ScanOptions.limit(long n)` | Limit rows |
-| `.withColumns(String... names)` | Project columns (builder) |
-| `.withFilter(RowFilter)` | Add zone-map filter |
-| `.withLimit(long n)` | Cap rows |
-| `.hasProjection()` / `.hasFilter()` / `.hasLimit()` | Predicates |
+| Factory / builder                                   | Effect                           |
+|-----------------------------------------------------|----------------------------------|
+| `ScanOptions.all()`                                 | All columns, no filter, no limit |
+| `ScanOptions.columns(String... names)`              | Project columns                  |
+| `ScanOptions.limit(long n)`                         | Limit rows                       |
+| `.withColumns(String... names)`                     | Project columns (builder)        |
+| `.withFilter(RowFilter)`                            | Add zone-map filter              |
+| `.withLimit(long n)`                                | Cap rows                         |
+| `.hasProjection()` / `.hasFilter()` / `.hasLimit()` | Predicates                       |
 
 ### `RowFilter` (`io.github.dfa1.vortex.scan.RowFilter`)
 
 Sealed predicate used for zone-map pruning (per-chunk min/max). Chunks that cannot match are skipped entirely.
 
-| Record | Static factory | Builder |
-|---|---|---|
-| `RowFilter.Gt(column, value)`  | `RowFilter.gt(col, val)`  | — |
-| `RowFilter.Gte(column, value)` | `RowFilter.gte(col, val)` | — |
-| `RowFilter.Lt(column, value)`  | `RowFilter.lt(col, val)`  | — |
-| `RowFilter.Lte(column, value)` | `RowFilter.lte(col, val)` | — |
-| `RowFilter.Eq(column, value)`  | `RowFilter.eq(col, val)`  | — |
-| `RowFilter.Neq(column, value)` | `RowFilter.neq(col, val)` | — |
+| Record                         | Static factory             | Builder      |
+|--------------------------------|----------------------------|--------------|
+| `RowFilter.Gt(column, value)`  | `RowFilter.gt(col, val)`   | —            |
+| `RowFilter.Gte(column, value)` | `RowFilter.gte(col, val)`  | —            |
+| `RowFilter.Lt(column, value)`  | `RowFilter.lt(col, val)`   | —            |
+| `RowFilter.Lte(column, value)` | `RowFilter.lte(col, val)`  | —            |
+| `RowFilter.Eq(column, value)`  | `RowFilter.eq(col, val)`   | —            |
+| `RowFilter.Neq(column, value)` | `RowFilter.neq(col, val)`  | —            |
 | `RowFilter.And(filters)`       | `RowFilter.and(f1, f2, …)` | `f1.and(f2)` |
 
 ### `ScanIterator` (`io.github.dfa1.vortex.scan.ScanIterator`)
 
 Implements `AutoCloseable`. Drives one scan.
 
-| Method | Notes |
-|---|---|
+| Method      | Notes                                                                |
+|-------------|----------------------------------------------------------------------|
 | `hasNext()` | **Closes the previous chunk's arena.** Access all column data first. |
-| `next()` | Returns `ScanResult` |
-| `close()` | Releases iterator state |
+| `next()`    | Returns `ScanResult`                                                 |
+| `close()`   | Releases iterator state                                              |
 
 ### `ScanResult` (`io.github.dfa1.vortex.scan.ScanResult`)
 
 Record: `(long rowCount, Map<String, Array> columns)`.
 
-| Method | Notes |
-|---|---|
-| `rowCount()` | Rows in this chunk |
-| `columns()` | All columns in this chunk |
+| Method                                  | Notes                                                    |
+|-----------------------------------------|----------------------------------------------------------|
+| `rowCount()`                            | Rows in this chunk                                       |
+| `columns()`                             | All columns in this chunk                                |
 | `<T extends Array> column(String name)` | Typed column lookup; throws `VortexException` if unknown |
 
 ---
@@ -154,14 +155,14 @@ Record: `(long rowCount, Map<String, Array> columns)`.
 
 ### `EncodingRegistry` (`io.github.dfa1.vortex.encoding`)
 
-| Method | Notes |
-|---|---|
-| `static loadAll()` | Loads every `Encoding` via `ServiceLoader` |
-| `static empty()` | Empty registry |
-| `register(Encoding)` | Add a custom encoding; throws if already registered |
-| `hasEncoding(EncodingId)` | Lookup |
-| `allowUnknown()` | Switch to passthrough mode — unknown nodes (and their children) decode as `UnknownArray` |
-| `isAllowUnknown()` | Predicate |
+| Method                    | Notes                                                                                    |
+|---------------------------|------------------------------------------------------------------------------------------|
+| `static loadAll()`        | Loads every `Encoding` via `ServiceLoader`                                               |
+| `static empty()`          | Empty registry                                                                           |
+| `register(Encoding)`      | Add a custom encoding; throws if already registered                                      |
+| `hasEncoding(EncodingId)` | Lookup                                                                                   |
+| `allowUnknown()`          | Switch to passthrough mode — unknown nodes (and their children) decode as `UnknownArray` |
+| `isAllowUnknown()`        | Predicate                                                                                |
 
 To register a custom encoding via `ServiceLoader`, add the fully qualified class name to
 `META-INF/services/io.github.dfa1.vortex.encoding.Encoding`.
@@ -172,22 +173,22 @@ To register a custom encoding via `ServiceLoader`, add the fully qualified class
 
 ### `ParquetImporter` (`io.github.dfa1.vortex.parquet.ParquetImporter`)
 
-| Method | Notes |
-|---|---|
-| `importParquet(Path in, Path out)` | Defaults |
-| `importParquet(Path in, Path out, ImportOptions)` | Tuned |
+| Method                                            | Notes    |
+|---------------------------------------------------|----------|
+| `importParquet(Path in, Path out)`                | Defaults |
+| `importParquet(Path in, Path out, ImportOptions)` | Tuned    |
 
 ### `ImportOptions` (`io.github.dfa1.vortex.parquet.ImportOptions`)
 
 Record: `(int chunkSize, List<String> columns, ProgressListener progressListener, WriteOptions writeOptions)`.
 
-| Factory / builder | Notes |
-|---|---|
-| `ImportOptions.defaults()` | `chunkSize=65_536`, no projection, `WriteOptions.cascading(3)` |
-| `.withColumns(List<String>)` | Project columns during import |
-| `.withProgressListener(listener)` | Progress callbacks |
-| `.withWriteOptions(WriteOptions)` | Override write options |
-| `.withChunkSize(int)` | Override chunk size |
+| Factory / builder                 | Notes                                                          |
+|-----------------------------------|----------------------------------------------------------------|
+| `ImportOptions.defaults()`        | `chunkSize=65_536`, no projection, `WriteOptions.cascading(3)` |
+| `.withColumns(List<String>)`      | Project columns during import                                  |
+| `.withProgressListener(listener)` | Progress callbacks                                             |
+| `.withWriteOptions(WriteOptions)` | Override write options                                         |
+| `.withChunkSize(int)`             | Override chunk size                                            |
 
 CSV import is CLI-only — types are inferred from the data.
 
@@ -202,16 +203,16 @@ The `cli` module ships a fat jar with subcommands for inspecting and querying Vo
 java -jar cli/target/vortex.jar <subcommand> [args]
 ```
 
-| Subcommand | Syntax | Description |
-|---|---|---|
-| `inspect` | `inspect <file.vortex>` | Layout tree, encodings, row counts, buffer sizes |
-| `schema`  | `schema <file.vortex>`  | Column names and types |
-| `count`   | `count <file.vortex>`   | Total row count |
-| `stats`   | `stats <file.vortex>`   | Per-column min/max |
-| `export`  | `export <file.vortex>`  | All columns to CSV on stdout |
-| `select`  | `select <file.vortex> <col> [col2 ...]` | Project columns to CSV |
-| `filter`  | `filter <file.vortex> "<expr>"` | Filter rows to CSV |
-| `import`  | `import <file.csv\|file.parquet> [out.vortex]` | Convert CSV or Parquet to Vortex |
+| Subcommand | Syntax                                         | Description                                      |
+|------------|------------------------------------------------|--------------------------------------------------|
+| `inspect`  | `inspect <file.vortex>`                        | Layout tree, encodings, row counts, buffer sizes |
+| `schema`   | `schema <file.vortex>`                         | Column names and types                           |
+| `count`    | `count <file.vortex>`                          | Total row count                                  |
+| `stats`    | `stats <file.vortex>`                          | Per-column min/max                               |
+| `export`   | `export <file.vortex>`                         | All columns to CSV on stdout                     |
+| `select`   | `select <file.vortex> <col> [col2 ...]`        | Project columns to CSV                           |
+| `filter`   | `filter <file.vortex> "<expr>"`                | Filter rows to CSV                               |
+| `import`   | `import <file.csv\|file.parquet> [out.vortex]` | Convert CSV or Parquet to Vortex                 |
 
 ### `filter` expression syntax
 
@@ -219,12 +220,12 @@ java -jar cli/target/vortex.jar <subcommand> [args]
 <column> <op> <value>
 ```
 
-| Operator | Meaning |
-|---|---|
+| Operator  | Meaning                        |
+|-----------|--------------------------------|
 | `>`, `>=` | Greater than, greater-or-equal |
-| `<`, `<=` | Less than, less-or-equal |
-| `=`, `==` | Equal |
-| `!=`      | Not equal |
+| `<`, `<=` | Less than, less-or-equal       |
+| `=`, `==` | Equal                          |
+| `!=`      | Not equal                      |
 
 Values are parsed as integer, double, boolean, or string (in that order).
 

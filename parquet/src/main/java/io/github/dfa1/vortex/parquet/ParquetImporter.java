@@ -63,8 +63,8 @@ public final class ParquetImporter {
 
             List<ColumnSchema> allColumns = fileSchema.getColumns();
             List<ColumnSchema> columns = options.hasProjection()
-                    ? filterColumns(allColumns, options.columns())
-                    : allColumns;
+                                                 ? filterColumns(allColumns, options.columns())
+                                                 : allColumns;
             int colCount = columns.size();
 
             List<String> names = new ArrayList<>(colCount);
@@ -77,8 +77,8 @@ public final class ParquetImporter {
             long totalRows = parquet.getFileMetaData().numRows();
 
             ColumnProjection projection = options.hasProjection()
-                    ? ColumnProjection.columns(options.columns().toArray(String[]::new))
-                    : ColumnProjection.all();
+                                                  ? ColumnProjection.columns(options.columns().toArray(String[]::new))
+                                                  : ColumnProjection.all();
 
             try (FileChannel channel = FileChannel.open(
                     vortexPath,
@@ -169,8 +169,8 @@ public final class ParquetImporter {
 
     private static DType mapByteArray(LogicalType logical, boolean nullable, String colName) {
         if (logical instanceof LogicalType.StringType
-                || logical instanceof LogicalType.EnumType
-                || logical instanceof LogicalType.JsonType) {
+                    || logical instanceof LogicalType.EnumType
+                    || logical instanceof LogicalType.JsonType) {
             return new DType.Utf8(nullable);
         }
         throw new UnsupportedOperationException(
@@ -228,7 +228,7 @@ public final class ParquetImporter {
     }
 
     private static Map<String, Object> buildChunk(List<ColumnSchema> columns, List<DType> types,
-                                                   Object[] buffers, int size) {
+            Object[] buffers, int size) {
         Map<String, Object> chunk = new LinkedHashMap<>();
         for (int c = 0; c < columns.size(); c++) {
             Object buf = trimBuffer(buffers[c], size);

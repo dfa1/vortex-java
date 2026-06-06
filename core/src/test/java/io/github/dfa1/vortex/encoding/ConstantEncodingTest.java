@@ -13,66 +13,66 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// Property: encode then decode is lossless for constant (all-equal) arrays.
 class ConstantEncodingTest {
 
-	@Nested
-	class Encode {
+    @Nested
+    class Encode {
 
-		@ParameterizedTest
-		@MethodSource("i32ConstantArrays")
-		void encodeDecode_i32_isLossless(int[] data) {
-			// Given
-			var sut = new ConstantEncoding();
-			EncodingRegistry registry = TestRegistry.of(sut);
-			var le = PTypeIO.LE_INT;
+        static Stream<Arguments> i32ConstantArrays() {
+            return Stream.of(
+                    Arguments.of((Object) new int[]{0}),
+                    Arguments.of((Object) new int[]{42, 42, 42}),
+                    Arguments.of((Object) new int[]{Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE}),
+                    Arguments.of((Object) new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE}),
+                    Arguments.of((Object) new int[]{-1, -1, -1, -1, -1})
+            );
+        }
 
-			// When
-			EncodeResult encoded = sut.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
-			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, DTypes.I32, registry);
-			Array result = sut.decode(ctx);
+        static Stream<Arguments> i64ConstantArrays() {
+            return Stream.of(
+                    Arguments.of((Object) new long[]{0L}),
+                    Arguments.of((Object) new long[]{100L, 100L, 100L}),
+                    Arguments.of((Object) new long[]{Long.MIN_VALUE, Long.MIN_VALUE}),
+                    Arguments.of((Object) new long[]{Long.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE})
+            );
+        }
 
-			// Then
-			assertThat(result.length()).isEqualTo(data.length);
-			for (int i = 0; i < data.length; i++) {
-				assertThat(result.buffer(0).get(le, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
-			}
-		}
+        @ParameterizedTest
+        @MethodSource("i32ConstantArrays")
+        void encodeDecode_i32_isLossless(int[] data) {
+            // Given
+            var sut = new ConstantEncoding();
+            EncodingRegistry registry = TestRegistry.of(sut);
+            var le = PTypeIO.LE_INT;
 
-		@ParameterizedTest
-		@MethodSource("i64ConstantArrays")
-		void encodeDecode_i64_isLossless(long[] data) {
-			// Given
-			var sut = new ConstantEncoding();
-			EncodingRegistry registry = TestRegistry.of(sut);
-			var le = PTypeIO.LE_LONG;
+            // When
+            EncodeResult encoded = sut.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, DTypes.I32, registry);
+            Array result = sut.decode(ctx);
 
-			// When
-			EncodeResult encoded = sut.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
-			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, DTypes.I64, registry);
-			Array result = sut.decode(ctx);
+            // Then
+            assertThat(result.length()).isEqualTo(data.length);
+            for (int i = 0; i < data.length; i++) {
+                assertThat(result.buffer(0).get(le, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
+            }
+        }
 
-			// Then
-			assertThat(result.length()).isEqualTo(data.length);
-			for (int i = 0; i < data.length; i++) {
-				assertThat(result.buffer(0).get(le, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
-			}
-		}
+        @ParameterizedTest
+        @MethodSource("i64ConstantArrays")
+        void encodeDecode_i64_isLossless(long[] data) {
+            // Given
+            var sut = new ConstantEncoding();
+            EncodingRegistry registry = TestRegistry.of(sut);
+            var le = PTypeIO.LE_LONG;
 
-		static Stream<Arguments> i32ConstantArrays() {
-			return Stream.of(
-					Arguments.of((Object) new int[]{0}),
-					Arguments.of((Object) new int[]{42, 42, 42}),
-					Arguments.of((Object) new int[]{Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE}),
-					Arguments.of((Object) new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE}),
-					Arguments.of((Object) new int[]{-1, -1, -1, -1, -1})
-			);
-		}
+            // When
+            EncodeResult encoded = sut.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, DTypes.I64, registry);
+            Array result = sut.decode(ctx);
 
-		static Stream<Arguments> i64ConstantArrays() {
-			return Stream.of(
-					Arguments.of((Object) new long[]{0L}),
-					Arguments.of((Object) new long[]{100L, 100L, 100L}),
-					Arguments.of((Object) new long[]{Long.MIN_VALUE, Long.MIN_VALUE}),
-					Arguments.of((Object) new long[]{Long.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE})
-			);
-		}
-	}
+            // Then
+            assertThat(result.length()).isEqualTo(data.length);
+            for (int i = 0; i < data.length; i++) {
+                assertThat(result.buffer(0).get(le, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
+            }
+        }
+    }
 }

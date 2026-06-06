@@ -3,58 +3,95 @@
 package io.github.dfa1.vortex.fbs;
 
 import com.google.flatbuffers.BaseVector;
-import com.google.flatbuffers.BooleanVector;
-import com.google.flatbuffers.ByteVector;
-import com.google.flatbuffers.Constants;
-import com.google.flatbuffers.DoubleVector;
 import com.google.flatbuffers.FlatBufferBuilder;
-import com.google.flatbuffers.FloatVector;
-import com.google.flatbuffers.IntVector;
-import com.google.flatbuffers.LongVector;
-import com.google.flatbuffers.ShortVector;
-import com.google.flatbuffers.StringVector;
-import com.google.flatbuffers.Struct;
-import com.google.flatbuffers.UnionVector;
+
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 @SuppressWarnings("unused")
 public final class FixedSizeList extends com.google.flatbuffers.Table {
-  public static FixedSizeList getRootAsFixedSizeList(ByteBuffer _bb) { return getRootAsFixedSizeList(_bb, new FixedSizeList()); }
-  public static FixedSizeList getRootAsFixedSizeList(ByteBuffer _bb, FixedSizeList obj) { _bb.order(ByteOrder.LITTLE_ENDIAN); return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb)); }
-  public void __init(int _i, ByteBuffer _bb) { __reset(_i, _bb); }
-  public FixedSizeList __assign(int _i, ByteBuffer _bb) { __init(_i, _bb); return this; }
+    public static FixedSizeList getRootAsFixedSizeList(ByteBuffer _bb) {
+        return getRootAsFixedSizeList(_bb, new FixedSizeList());
+    }
 
-  public io.github.dfa1.vortex.fbs.DType elementType() { return elementType(new io.github.dfa1.vortex.fbs.DType()); }
-  public io.github.dfa1.vortex.fbs.DType elementType(io.github.dfa1.vortex.fbs.DType obj) { int o = __offset(4); return o != 0 ? obj.__assign(__indirect(o + bb_pos), bb) : null; }
-  public long size() { int o = __offset(6); return o != 0 ? (long)bb.getInt(o + bb_pos) & 0xFFFFFFFFL : 0L; }
-  public boolean nullable() { int o = __offset(8); return o != 0 ? 0!=bb.get(o + bb_pos) : false; }
+    public static FixedSizeList getRootAsFixedSizeList(ByteBuffer _bb, FixedSizeList obj) {
+        _bb.order(ByteOrder.LITTLE_ENDIAN);
+        return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb));
+    }
 
-  public static int createFixedSizeList(FlatBufferBuilder builder,
-      int elementTypeOffset,
-      long size,
-      boolean nullable) {
-    builder.startTable(3);
-    FixedSizeList.addSize(builder, size);
-    FixedSizeList.addElementType(builder, elementTypeOffset);
-    FixedSizeList.addNullable(builder, nullable);
-    return FixedSizeList.endFixedSizeList(builder);
-  }
+    public static int createFixedSizeList(FlatBufferBuilder builder,
+            int elementTypeOffset,
+            long size,
+            boolean nullable) {
+        builder.startTable(3);
+        FixedSizeList.addSize(builder, size);
+        FixedSizeList.addElementType(builder, elementTypeOffset);
+        FixedSizeList.addNullable(builder, nullable);
+        return FixedSizeList.endFixedSizeList(builder);
+    }
 
-  public static void startFixedSizeList(FlatBufferBuilder builder) { builder.startTable(3); }
-  public static void addElementType(FlatBufferBuilder builder, int elementTypeOffset) { builder.addOffset(0, elementTypeOffset, 0); }
-  public static void addSize(FlatBufferBuilder builder, long size) { builder.addInt(1, (int) size, (int) 0L); }
-  public static void addNullable(FlatBufferBuilder builder, boolean nullable) { builder.addBoolean(2, nullable, false); }
-  public static int endFixedSizeList(FlatBufferBuilder builder) {
-    int o = builder.endTable();
-    return o;
-  }
+    public static void startFixedSizeList(FlatBufferBuilder builder) {
+        builder.startTable(3);
+    }
 
-  public static final class Vector extends BaseVector {
-    public Vector __assign(int _vector, int _element_size, ByteBuffer _bb) { __reset(_vector, _element_size, _bb); return this; }
+    public static void addElementType(FlatBufferBuilder builder, int elementTypeOffset) {
+        builder.addOffset(0, elementTypeOffset, 0);
+    }
 
-    public FixedSizeList get(int j) { return get(new FixedSizeList(), j); }
-    public FixedSizeList get(FixedSizeList obj, int j) {  return obj.__assign(__indirect(__element(j), bb), bb); }
-  }
+    public static void addSize(FlatBufferBuilder builder, long size) {
+        builder.addInt(1, (int) size, (int) 0L);
+    }
+
+    public static void addNullable(FlatBufferBuilder builder, boolean nullable) {
+        builder.addBoolean(2, nullable, false);
+    }
+
+    public static int endFixedSizeList(FlatBufferBuilder builder) {
+        int o = builder.endTable();
+        return o;
+    }
+
+    public void __init(int _i, ByteBuffer _bb) {
+        __reset(_i, _bb);
+    }
+
+    public FixedSizeList __assign(int _i, ByteBuffer _bb) {
+        __init(_i, _bb);
+        return this;
+    }
+
+    public io.github.dfa1.vortex.fbs.DType elementType() {
+        return elementType(new io.github.dfa1.vortex.fbs.DType());
+    }
+
+    public io.github.dfa1.vortex.fbs.DType elementType(io.github.dfa1.vortex.fbs.DType obj) {
+        int o = __offset(4);
+        return o != 0 ? obj.__assign(__indirect(o + bb_pos), bb) : null;
+    }
+
+    public long size() {
+        int o = __offset(6);
+        return o != 0 ? (long) bb.getInt(o + bb_pos) & 0xFFFFFFFFL : 0L;
+    }
+
+    public boolean nullable() {
+        int o = __offset(8);
+        return o != 0 ? 0 != bb.get(o + bb_pos) : false;
+    }
+
+    public static final class Vector extends BaseVector {
+        public Vector __assign(int _vector, int _element_size, ByteBuffer _bb) {
+            __reset(_vector, _element_size, _bb);
+            return this;
+        }
+
+        public FixedSizeList get(int j) {
+            return get(new FixedSizeList(), j);
+        }
+
+        public FixedSizeList get(FixedSizeList obj, int j) {
+            return obj.__assign(__indirect(__element(j), bb), bb);
+        }
+    }
 }
 

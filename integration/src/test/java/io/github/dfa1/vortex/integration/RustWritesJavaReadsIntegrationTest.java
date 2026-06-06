@@ -48,354 +48,354 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 /// Cross-compatibility: Rust (JNI) writer → Java reader.
 class RustWritesJavaReadsIntegrationTest {
 
-	private static final String S3_BASE = "https://vortex-compat-fixtures.s3.amazonaws.com/v0.72.0/arrays/";
+    private static final String S3_BASE = "https://vortex-compat-fixtures.s3.amazonaws.com/v0.72.0/arrays/";
 
-	private static final Session SESSION = Session.create();
-	private static final BufferAllocator ALLOCATOR = ArrowAllocation.rootAllocator();
-	private static final Schema JNI_SCHEMA = new Schema(List.of(
-			Field.notNullable("id", new ArrowType.Int(64, true)),
-			Field.notNullable("value", new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE))
-	));
-	private static final Schema NULLABLE_SCHEMA = new Schema(List.of(
-			Field.nullable("id", new ArrowType.Int(64, true))
-	));
+    private static final Session SESSION = Session.create();
+    private static final BufferAllocator ALLOCATOR = ArrowAllocation.rootAllocator();
+    private static final Schema JNI_SCHEMA = new Schema(List.of(
+            Field.notNullable("id", new ArrowType.Int(64, true)),
+            Field.notNullable("value", new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE))
+    ));
+    private static final Schema NULLABLE_SCHEMA = new Schema(List.of(
+            Field.nullable("id", new ArrowType.Int(64, true))
+    ));
 
-	static {
-		NativeLoader.loadJni();
-	}
+    static {
+        NativeLoader.loadJni();
+    }
 
-	private static void writeJni(Path file, long[] ids, double[] vals) throws IOException {
-		String uri = file.toAbsolutePath().toUri().toString();
-		try (VortexWriter writer = VortexWriter.create(SESSION, uri, JNI_SCHEMA, new HashMap<>(), ALLOCATOR)) {
-			flushBatch(writer, ids, vals);
-		}
-	}
+    private static void writeJni(Path file, long[] ids, double[] vals) throws IOException {
+        String uri = file.toAbsolutePath().toUri().toString();
+        try (VortexWriter writer = VortexWriter.create(SESSION, uri, JNI_SCHEMA, new HashMap<>(), ALLOCATOR)) {
+            flushBatch(writer, ids, vals);
+        }
+    }
 
-	private static void flushBatch(VortexWriter writer, long[] ids, double[] vals) throws IOException {
-		int n = ids.length;
-		try (VectorSchemaRoot root = VectorSchemaRoot.create(JNI_SCHEMA, ALLOCATOR)) {
-			BigIntVector idVec = (BigIntVector) root.getVector("id");
-			Float8Vector valVec = (Float8Vector) root.getVector("value");
-			idVec.allocateNew(n);
-			valVec.allocateNew(n);
-			for (int i = 0; i < n; i++) {
-				idVec.setSafe(i, ids[i]);
-				valVec.setSafe(i, vals[i]);
-			}
-			root.setRowCount(n);
-			try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
-			     ArrowSchema schema = ArrowSchema.allocateNew(ALLOCATOR)) {
-				Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, schema);
-				writer.writeBatch(arr.memoryAddress(), schema.memoryAddress());
-			}
-		}
-	}
+    private static void flushBatch(VortexWriter writer, long[] ids, double[] vals) throws IOException {
+        int n = ids.length;
+        try (VectorSchemaRoot root = VectorSchemaRoot.create(JNI_SCHEMA, ALLOCATOR)) {
+            BigIntVector idVec = (BigIntVector) root.getVector("id");
+            Float8Vector valVec = (Float8Vector) root.getVector("value");
+            idVec.allocateNew(n);
+            valVec.allocateNew(n);
+            for (int i = 0; i < n; i++) {
+                idVec.setSafe(i, ids[i]);
+                valVec.setSafe(i, vals[i]);
+            }
+            root.setRowCount(n);
+            try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
+                 ArrowSchema schema = ArrowSchema.allocateNew(ALLOCATOR)) {
+                Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, schema);
+                writer.writeBatch(arr.memoryAddress(), schema.memoryAddress());
+            }
+        }
+    }
 
-	private static List<ScanResult> scanAll(VortexReader vf) {
-		return scanAll(vf, io.github.dfa1.vortex.scan.ScanOptions.all());
-	}
+    private static List<ScanResult> scanAll(VortexReader vf) {
+        return scanAll(vf, io.github.dfa1.vortex.scan.ScanOptions.all());
+    }
 
-	private static List<ScanResult> scanAll(VortexReader vf,
-	                                        io.github.dfa1.vortex.scan.ScanOptions opts) {
-		var results = new ArrayList<ScanResult>();
-		var iter = vf.scan(opts);
-		while (iter.hasNext()) {
-			results.add(iter.next());
-		}
-		return results;
-	}
+    private static List<ScanResult> scanAll(VortexReader vf,
+            io.github.dfa1.vortex.scan.ScanOptions opts) {
+        var results = new ArrayList<ScanResult>();
+        var iter = vf.scan(opts);
+        while (iter.hasNext()) {
+            results.add(iter.next());
+        }
+        return results;
+    }
 
-	// ── JNI write helpers ─────────────────────────────────────────────────────
+    // ── JNI write helpers ─────────────────────────────────────────────────────
 
-	private static long[] toLongs(ScanResult chunk) {
-		var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-		var arr = chunk.columns().get("id");
-		long[] out = new long[(int) arr.length()];
-		for (int i = 0; i < out.length; i++) {
-			out[i] = arr.buffer(0).get(layout, (long) i * Long.BYTES);
-		}
-		return out;
-	}
+    private static long[] toLongs(ScanResult chunk) {
+        var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+        var arr = chunk.columns().get("id");
+        long[] out = new long[(int) arr.length()];
+        for (int i = 0; i < out.length; i++) {
+            out[i] = arr.buffer(0).get(layout, (long) i * Long.BYTES);
+        }
+        return out;
+    }
 
-	private static double[] toDoubles(ScanResult chunk) {
-		var layout = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-		var arr = chunk.columns().get("value");
-		double[] out = new double[(int) arr.length()];
-		for (int i = 0; i < out.length; i++) {
-			out[i] = arr.buffer(0).get(layout, (long) i * Double.BYTES);
-		}
-		return out;
-	}
+    private static double[] toDoubles(ScanResult chunk) {
+        var layout = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+        var arr = chunk.columns().get("value");
+        double[] out = new double[(int) arr.length()];
+        for (int i = 0; i < out.length; i++) {
+            out[i] = arr.buffer(0).get(layout, (long) i * Double.BYTES);
+        }
+        return out;
+    }
 
-	// ── Java read helpers ─────────────────────────────────────────────────────
+    // ── Java read helpers ─────────────────────────────────────────────────────
 
-	@Test
-	void jniWriter_javaReader_singleChunk(@TempDir Path tmp) throws IOException {
-		// Given
-		Path file = tmp.resolve("jni_single.vtx");
-		long[] ids = {1L, 2L, 3L};
-		double[] vals = {1.1, 2.2, 3.3};
-		writeJni(file, ids, vals);
+    private static String firstI64Column(Path file) throws IOException {
+        try (var vf = VortexReader.open(file, EncodingRegistry.empty())) {
+            if (vf.dtype() instanceof DType.Struct struct) {
+                for (int i = 0; i < struct.fieldNames().size(); i++) {
+                    if (struct.fieldTypes().get(i) instanceof DType.Primitive(PType pt, boolean _) && pt == PType.I64) {
+                        return struct.fieldNames().get(i);
+                    }
+                }
+            }
+            throw new AssertionError("no I64 column found in " + file.getFileName());
+        }
+    }
 
-		// When / Then
-		try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
-			List<ScanResult> results = scanAll(vf);
-			assertThat(results).hasSize(1);
-			assertThat(results.getFirst().rowCount()).isEqualTo(3L);
-			assertThat(toLongs(results.getFirst())).containsExactly(1L, 2L, 3L);
-			assertThat(toDoubles(results.getFirst())).containsExactly(1.1, 2.2, 3.3);
-		}
-	}
+    private static long[] readJniLongColumn(Path file, String column) throws IOException {
+        String uri = file.toAbsolutePath().toUri().toString();
+        ScanOptions opts = ScanOptions.builder()
+                                   .projection(Expression.select(new String[]{column}, Expression.root()))
+                                   .build();
+        var longs = new ArrayList<Long>();
+        DataSource ds = DataSource.open(SESSION, uri);
+        Scan scan = ds.scan(opts);
+        while (scan.hasNext()) {
+            Partition partition = scan.next();
+            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
+                while (reader.loadNextBatch()) {
+                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
+                    BigIntVector vec = (BigIntVector) root.getVector(column);
+                    for (int i = 0; i < root.getRowCount(); i++) {
+                        longs.add(vec.get(i));
+                    }
+                }
+            }
+        }
+        return longs.stream().mapToLong(Long::longValue).toArray();
+    }
 
-	@Test
-	void jniWriter_javaReader_multipleChunks(@TempDir Path tmp) throws IOException {
-		// Given
-		Path file = tmp.resolve("jni_multi.vtx");
-		String uri = file.toAbsolutePath().toUri().toString();
-		try (VortexWriter writer = VortexWriter.create(SESSION, uri, JNI_SCHEMA, new HashMap<>(), ALLOCATOR)) {
-			flushBatch(writer, new long[]{1L, 2L}, new double[]{1.1, 2.2});
-			flushBatch(writer, new long[]{3L, 4L, 5L}, new double[]{3.3, 4.4, 5.5});
-		}
+    private static long[] readJavaLongColumn(Path file, String column) throws IOException {
+        try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
+            var longs = new ArrayList<Long>();
+            var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns(column));
+            while (iter.hasNext()) {
+                ScanResult r = iter.next();
+                LongArray arr = (LongArray) r.columns().get(column);
+                for (long i = 0; i < arr.length(); i++) {
+                    longs.add(arr.getLong(i));
+                }
+            }
+            return longs.stream().mapToLong(Long::longValue).toArray();
+        }
+    }
 
-		// When / Then — JNI may merge small batches; verify total rows and values
-		try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
-			List<ScanResult> results = scanAll(vf);
-			long totalRows = results.stream().mapToLong(ScanResult::rowCount).sum();
-			assertThat(totalRows).isEqualTo(5L);
-			long[] allIds = results.stream()
-					.flatMapToLong(r -> java.util.Arrays.stream(toLongs(r)))
-					.toArray();
-			assertThat(allIds).containsExactly(1L, 2L, 3L, 4L, 5L);
-		}
-	}
+    private static Path downloadIfMissing(Path tmp, String name) throws Exception {
+        Path cached = Path.of("/tmp/pco-fixtures", name);
+        if (Files.exists(cached)) {
+            return cached;
+        }
+        Path dest = tmp.resolve(name);
+        try (var in = URI.create(S3_BASE + name).toURL().openStream()) {
+            Files.copy(in, dest, StandardCopyOption.REPLACE_EXISTING);
+        }
+        return dest;
+    }
 
-	@Test
-	void jniWriter_javaReader_columnProjection(@TempDir Path tmp) throws IOException {
-		// Given
-		Path file = tmp.resolve("jni_proj.vtx");
-		writeJni(file, new long[]{10L, 20L}, new double[]{0.1, 0.2});
+    private static void assumeNetworkAvailable() {
+        try {
+            URI.create("https://vortex-compat-fixtures.s3.amazonaws.com").toURL().openStream().close();
+        } catch (Exception e) {
+            assumeTrue(false, "no network");
+        }
+    }
 
-		// When / Then
-		try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
-			List<ScanResult> results = scanAll(vf, io.github.dfa1.vortex.scan.ScanOptions.columns("id"));
-			assertThat(results).hasSize(1);
-			assertThat(results.getFirst().columns()).containsKey("id");
-			assertThat(results.getFirst().columns()).doesNotContainKey("value");
-			assertThat(toLongs(results.getFirst())).containsExactly(10L, 20L);
-		}
-	}
+    // ── S3 fixture round-trip: Rust-written pco → Java reader ────────────────
 
-	@Test
-	void jniWriter_javaReader_fewUniqueF64Values(@TempDir Path tmp) throws IOException {
-		// Given — 10_000 rows cycling through only 3 unique F64 values to trigger dict encoding
-		int n = 10_000;
-		long[] ids = new long[n];
-		double[] vals = new double[n];
-		double[] unique = {1.1, 2.2, 3.3};
-		for (int i = 0; i < n; i++) {
-			ids[i] = i;
-			vals[i] = unique[i % unique.length];
-		}
-		Path file = tmp.resolve("jni_dict.vtx");
-		writeJni(file, ids, vals);
+    @Test
+    void jniWriter_javaReader_singleChunk(@TempDir Path tmp) throws IOException {
+        // Given
+        Path file = tmp.resolve("jni_single.vtx");
+        long[] ids = {1L, 2L, 3L};
+        double[] vals = {1.1, 2.2, 3.3};
+        writeJni(file, ids, vals);
 
-		// When / Then
-		try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
-			List<ScanResult> results = scanAll(vf, io.github.dfa1.vortex.scan.ScanOptions.columns("value"));
-			long total = results.stream().mapToLong(ScanResult::rowCount).sum();
-			assertThat(total).isEqualTo(n);
-			var layout = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-			double sum = 0;
-			for (ScanResult r : results) {
-				var arr = r.columns().get("value");
-				for (long j = 0; j < arr.length(); j++) {
-					sum += arr.buffer(0).get(layout, j * Double.BYTES);
-				}
-			}
-			// 10_000 rows: 3333 full cycles of [1.1,2.2,3.3] (=6.6 each) + one 1.1 remainder
-			assertThat(sum).isCloseTo(21_998.9, org.assertj.core.data.Offset.offset(0.1));
-		}
-	}
+        // When / Then
+        try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
+            List<ScanResult> results = scanAll(vf);
+            assertThat(results).hasSize(1);
+            assertThat(results.getFirst().rowCount()).isEqualTo(3L);
+            assertThat(toLongs(results.getFirst())).containsExactly(1L, 2L, 3L);
+            assertThat(toDoubles(results.getFirst())).containsExactly(1.1, 2.2, 3.3);
+        }
+    }
 
-	@Test
-	void jniWriter_nullableColumn_decodesWithoutError(@TempDir Path tmp) throws IOException {
-		// Given — nullable I64 column; the JNI compressor encodes this as fastlanes.bitpacked
-		// (not vortex.masked) since the compressor folds validity into the encoding.
-		// This test verifies end-to-end decoding of nullable schemas does not throw.
-		Path file = tmp.resolve("nullable.vtx");
-		String uri = file.toAbsolutePath().toUri().toString();
-		int n = 10_000;
-		try (VortexWriter writer = VortexWriter.create(SESSION, uri, NULLABLE_SCHEMA, new HashMap<>(), ALLOCATOR)) {
-			try (VectorSchemaRoot root = VectorSchemaRoot.create(NULLABLE_SCHEMA, ALLOCATOR)) {
-				BigIntVector idVec = (BigIntVector) root.getVector("id");
-				idVec.allocateNew(n);
-				for (int i = 0; i < n; i++) {
-					if (i % 5 == 0) {
-						idVec.setNull(i);
-					} else {
-						idVec.setSafe(i, (long) i);
-					}
-				}
-				root.setRowCount(n);
-				try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
-				     ArrowSchema schema = ArrowSchema.allocateNew(ALLOCATOR)) {
-					Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, schema);
-					writer.writeBatch(arr.memoryAddress(), schema.memoryAddress());
-				}
-			}
-		}
+    @Test
+    void jniWriter_javaReader_multipleChunks(@TempDir Path tmp) throws IOException {
+        // Given
+        Path file = tmp.resolve("jni_multi.vtx");
+        String uri = file.toAbsolutePath().toUri().toString();
+        try (VortexWriter writer = VortexWriter.create(SESSION, uri, JNI_SCHEMA, new HashMap<>(), ALLOCATOR)) {
+            flushBatch(writer, new long[]{1L, 2L}, new double[]{1.1, 2.2});
+            flushBatch(writer, new long[]{3L, 4L, 5L}, new double[]{3.3, 4.4, 5.5});
+        }
 
-		// When / Then — decodes without error, correct row count
-		try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
-			List<ScanResult> results = scanAll(vf);
-			long totalRows = results.stream().mapToLong(ScanResult::rowCount).sum();
-			assertThat(totalRows).isEqualTo(n);
-			assertThat(vf.dtype()).isInstanceOf(DType.Struct.class);
-			DType colDtype = ((DType.Struct) vf.dtype()).field("id");
-			assertThat(colDtype.nullable()).isTrue();
-		}
-	}
+        // When / Then — JNI may merge small batches; verify total rows and values
+        try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
+            List<ScanResult> results = scanAll(vf);
+            long totalRows = results.stream().mapToLong(ScanResult::rowCount).sum();
+            assertThat(totalRows).isEqualTo(5L);
+            long[] allIds = results.stream()
+                                    .flatMapToLong(r -> java.util.Arrays.stream(toLongs(r)))
+                                    .toArray();
+            assertThat(allIds).containsExactly(1L, 2L, 3L, 4L, 5L);
+        }
+    }
 
-	// ── S3 fixture round-trip: Rust-written pco → Java reader ────────────────
+    @Test
+    void jniWriter_javaReader_columnProjection(@TempDir Path tmp) throws IOException {
+        // Given
+        Path file = tmp.resolve("jni_proj.vtx");
+        writeJni(file, new long[]{10L, 20L}, new double[]{0.1, 0.2});
 
-	@Test
-	void s3_pcoVortex_javaDecodeMatchesJni(@TempDir Path tmp) throws Exception {
-		// Given — pco.vortex: synthetic file with all pco ptypes; Classic+Consecutive+IntMult+FloatMult modes
-		assumeNetworkAvailable();
-		Path file = downloadIfMissing(tmp, "pco.vortex");
-		String col = firstI64Column(file);
+        // When / Then
+        try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
+            List<ScanResult> results = scanAll(vf, io.github.dfa1.vortex.scan.ScanOptions.columns("id"));
+            assertThat(results).hasSize(1);
+            assertThat(results.getFirst().columns()).containsKey("id");
+            assertThat(results.getFirst().columns()).doesNotContainKey("value");
+            assertThat(toLongs(results.getFirst())).containsExactly(10L, 20L);
+        }
+    }
 
-		// When
-		long[] jni = readJniLongColumn(file, col);
-		long[] java = readJavaLongColumn(file, col);
+    @Test
+    void jniWriter_javaReader_fewUniqueF64Values(@TempDir Path tmp) throws IOException {
+        // Given — 10_000 rows cycling through only 3 unique F64 values to trigger dict encoding
+        int n = 10_000;
+        long[] ids = new long[n];
+        double[] vals = new double[n];
+        double[] unique = {1.1, 2.2, 3.3};
+        for (int i = 0; i < n; i++) {
+            ids[i] = i;
+            vals[i] = unique[i % unique.length];
+        }
+        Path file = tmp.resolve("jni_dict.vtx");
+        writeJni(file, ids, vals);
 
-		// Then — same values (order may differ across chunks)
-		Arrays.sort(jni);
-		Arrays.sort(java);
-		assertThat(java).containsExactly(jni);
-	}
+        // When / Then
+        try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
+            List<ScanResult> results = scanAll(vf, io.github.dfa1.vortex.scan.ScanOptions.columns("value"));
+            long total = results.stream().mapToLong(ScanResult::rowCount).sum();
+            assertThat(total).isEqualTo(n);
+            var layout = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+            double sum = 0;
+            for (ScanResult r : results) {
+                var arr = r.columns().get("value");
+                for (long j = 0; j < arr.length(); j++) {
+                    sum += arr.buffer(0).get(layout, j * Double.BYTES);
+                }
+            }
+            // 10_000 rows: 3333 full cycles of [1.1,2.2,3.3] (=6.6 each) + one 1.1 remainder
+            assertThat(sum).isCloseTo(21_998.9, org.assertj.core.data.Offset.offset(0.1));
+        }
+    }
 
-	@Test
-	void s3_tpchLineitem_javaDecodeMatchesJni(@TempDir Path tmp) throws Exception {
-		// Given — tpch_lineitem.compact.vortex: I64/I32/Decimal/date columns, Classic+Consecutive
-		assumeNetworkAvailable();
-		Path file = downloadIfMissing(tmp, "tpch_lineitem.compact.vortex");
-		String col = firstI64Column(file);
+    // ── S3 helpers ────────────────────────────────────────────────────────────
 
-		// When
-		long[] jni = readJniLongColumn(file, col);
-		long[] java = readJavaLongColumn(file, col);
+    @Test
+    void jniWriter_nullableColumn_decodesWithoutError(@TempDir Path tmp) throws IOException {
+        // Given — nullable I64 column; the JNI compressor encodes this as fastlanes.bitpacked
+        // (not vortex.masked) since the compressor folds validity into the encoding.
+        // This test verifies end-to-end decoding of nullable schemas does not throw.
+        Path file = tmp.resolve("nullable.vtx");
+        String uri = file.toAbsolutePath().toUri().toString();
+        int n = 10_000;
+        try (VortexWriter writer = VortexWriter.create(SESSION, uri, NULLABLE_SCHEMA, new HashMap<>(), ALLOCATOR)) {
+            try (VectorSchemaRoot root = VectorSchemaRoot.create(NULLABLE_SCHEMA, ALLOCATOR)) {
+                BigIntVector idVec = (BigIntVector) root.getVector("id");
+                idVec.allocateNew(n);
+                for (int i = 0; i < n; i++) {
+                    if (i % 5 == 0) {
+                        idVec.setNull(i);
+                    } else {
+                        idVec.setSafe(i, (long) i);
+                    }
+                }
+                root.setRowCount(n);
+                try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
+                     ArrowSchema schema = ArrowSchema.allocateNew(ALLOCATOR)) {
+                    Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, schema);
+                    writer.writeBatch(arr.memoryAddress(), schema.memoryAddress());
+                }
+            }
+        }
 
-		// Then
-		Arrays.sort(jni);
-		Arrays.sort(java);
-		assertThat(java).containsExactly(jni);
-	}
+        // When / Then — decodes without error, correct row count
+        try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
+            List<ScanResult> results = scanAll(vf);
+            long totalRows = results.stream().mapToLong(ScanResult::rowCount).sum();
+            assertThat(totalRows).isEqualTo(n);
+            assertThat(vf.dtype()).isInstanceOf(DType.Struct.class);
+            DType colDtype = ((DType.Struct) vf.dtype()).field("id");
+            assertThat(colDtype.nullable()).isTrue();
+        }
+    }
 
-	@Test
-	void s3_tpchOrders_javaDecodeMatchesJni(@TempDir Path tmp) throws Exception {
-		// Given — tpch_orders.compact.vortex: I64/I32/Decimal/date columns, Classic+Consecutive
-		assumeNetworkAvailable();
-		Path file = downloadIfMissing(tmp, "tpch_orders.compact.vortex");
-		String col = firstI64Column(file);
+    @Test
+    void s3_pcoVortex_javaDecodeMatchesJni(@TempDir Path tmp) throws Exception {
+        // Given — pco.vortex: synthetic file with all pco ptypes; Classic+Consecutive+IntMult+FloatMult modes
+        assumeNetworkAvailable();
+        Path file = downloadIfMissing(tmp, "pco.vortex");
+        String col = firstI64Column(file);
 
-		// When
-		long[] jni = readJniLongColumn(file, col);
-		long[] java = readJavaLongColumn(file, col);
+        // When
+        long[] jni = readJniLongColumn(file, col);
+        long[] java = readJavaLongColumn(file, col);
 
-		// Then
-		Arrays.sort(jni);
-		Arrays.sort(java);
-		assertThat(java).containsExactly(jni);
-	}
+        // Then — same values (order may differ across chunks)
+        Arrays.sort(jni);
+        Arrays.sort(java);
+        assertThat(java).containsExactly(jni);
+    }
 
-	@Test
-	void s3_clickbenchHits5k_javaDecodeMatchesJni(@TempDir Path tmp) throws Exception {
-		// Given — clickbench_hits_5k.compact.vortex: I16/I32/I64/ts-I64 columns, Classic+Consecutive
-		assumeNetworkAvailable();
-		Path file = downloadIfMissing(tmp, "clickbench_hits_5k.compact.vortex");
-		String col = firstI64Column(file);
+    @Test
+    void s3_tpchLineitem_javaDecodeMatchesJni(@TempDir Path tmp) throws Exception {
+        // Given — tpch_lineitem.compact.vortex: I64/I32/Decimal/date columns, Classic+Consecutive
+        assumeNetworkAvailable();
+        Path file = downloadIfMissing(tmp, "tpch_lineitem.compact.vortex");
+        String col = firstI64Column(file);
 
-		// When
-		long[] jni = readJniLongColumn(file, col);
-		long[] java = readJavaLongColumn(file, col);
+        // When
+        long[] jni = readJniLongColumn(file, col);
+        long[] java = readJavaLongColumn(file, col);
 
-		// Then
-		Arrays.sort(jni);
-		Arrays.sort(java);
-		assertThat(java).containsExactly(jni);
-	}
+        // Then
+        Arrays.sort(jni);
+        Arrays.sort(java);
+        assertThat(java).containsExactly(jni);
+    }
 
-	// ── S3 helpers ────────────────────────────────────────────────────────────
+    @Test
+    void s3_tpchOrders_javaDecodeMatchesJni(@TempDir Path tmp) throws Exception {
+        // Given — tpch_orders.compact.vortex: I64/I32/Decimal/date columns, Classic+Consecutive
+        assumeNetworkAvailable();
+        Path file = downloadIfMissing(tmp, "tpch_orders.compact.vortex");
+        String col = firstI64Column(file);
 
-	private static String firstI64Column(Path file) throws IOException {
-		try (var vf = VortexReader.open(file, EncodingRegistry.empty())) {
-			if (vf.dtype() instanceof DType.Struct struct) {
-				for (int i = 0; i < struct.fieldNames().size(); i++) {
-					if (struct.fieldTypes().get(i) instanceof DType.Primitive(PType pt, boolean _) && pt == PType.I64) {
-						return struct.fieldNames().get(i);
-					}
-				}
-			}
-			throw new AssertionError("no I64 column found in " + file.getFileName());
-		}
-	}
+        // When
+        long[] jni = readJniLongColumn(file, col);
+        long[] java = readJavaLongColumn(file, col);
 
-	private static long[] readJniLongColumn(Path file, String column) throws IOException {
-		String uri = file.toAbsolutePath().toUri().toString();
-		ScanOptions opts = ScanOptions.builder()
-				.projection(Expression.select(new String[]{column}, Expression.root()))
-				.build();
-		var longs = new ArrayList<Long>();
-		DataSource ds = DataSource.open(SESSION, uri);
-		Scan scan = ds.scan(opts);
-		while (scan.hasNext()) {
-			Partition partition = scan.next();
-			try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-				while (reader.loadNextBatch()) {
-					VectorSchemaRoot root = reader.getVectorSchemaRoot();
-					BigIntVector vec = (BigIntVector) root.getVector(column);
-					for (int i = 0; i < root.getRowCount(); i++) {
-						longs.add(vec.get(i));
-					}
-				}
-			}
-		}
-		return longs.stream().mapToLong(Long::longValue).toArray();
-	}
+        // Then
+        Arrays.sort(jni);
+        Arrays.sort(java);
+        assertThat(java).containsExactly(jni);
+    }
 
-	private static long[] readJavaLongColumn(Path file, String column) throws IOException {
-		try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
-			var longs = new ArrayList<Long>();
-			var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns(column));
-			while (iter.hasNext()) {
-				ScanResult r = iter.next();
-				LongArray arr = (LongArray) r.columns().get(column);
-				for (long i = 0; i < arr.length(); i++) {
-					longs.add(arr.getLong(i));
-				}
-			}
-			return longs.stream().mapToLong(Long::longValue).toArray();
-		}
-	}
+    @Test
+    void s3_clickbenchHits5k_javaDecodeMatchesJni(@TempDir Path tmp) throws Exception {
+        // Given — clickbench_hits_5k.compact.vortex: I16/I32/I64/ts-I64 columns, Classic+Consecutive
+        assumeNetworkAvailable();
+        Path file = downloadIfMissing(tmp, "clickbench_hits_5k.compact.vortex");
+        String col = firstI64Column(file);
 
-	private static Path downloadIfMissing(Path tmp, String name) throws Exception {
-		Path cached = Path.of("/tmp/pco-fixtures", name);
-		if (Files.exists(cached)) {
-			return cached;
-		}
-		Path dest = tmp.resolve(name);
-		try (var in = URI.create(S3_BASE + name).toURL().openStream()) {
-			Files.copy(in, dest, StandardCopyOption.REPLACE_EXISTING);
-		}
-		return dest;
-	}
+        // When
+        long[] jni = readJniLongColumn(file, col);
+        long[] java = readJavaLongColumn(file, col);
 
-	private static void assumeNetworkAvailable() {
-		try {
-			URI.create("https://vortex-compat-fixtures.s3.amazonaws.com").toURL().openStream().close();
-		} catch (Exception e) {
-			assumeTrue(false, "no network");
-		}
-	}
+        // Then
+        Arrays.sort(jni);
+        Arrays.sort(java);
+        assertThat(java).containsExactly(jni);
+    }
 }

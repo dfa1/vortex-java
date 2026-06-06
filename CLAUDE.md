@@ -7,7 +7,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Java 25 native implementation of the [Vortex](https://github.com/spiraldb/vortex) columnar file format. Uses FFM (
 `MemorySegment`/`Arena`) instead of JNI or `sun.misc.Unsafe`.
 
-
 ## Branching strategy
 
 Trunk-based development. PRs are fine but always squash or rebase — no merge commits.
@@ -20,11 +19,13 @@ Never use `mvn install` or `./mvwn install`.
 Generated sources (`fbs`/`proto` → Java) are committed under `core/src/main/java`.
 Normal builds need no external tools.
 To regenerate after editing `.fbs` or `.proto` schemas:
+
 ```bash
 brew install flatbuffers protobuf
 ./mvnw generate-sources -pl core -P regenerate-sources
 # then commit the updated files
 ```
+
 Any `flatc` version works — the profile strips the version guard automatically.
 
 ```bash
@@ -69,9 +70,11 @@ Every public method must have complete Javadoc. The build enforces this via
 `failOnError=true` + `failOnWarnings=true` in the `maven-javadoc-plugin`.
 
 Rules:
+
 - Every public method needs a main description, `@param` for each parameter, and `@return` (unless `void`).
 - Every public record needs `@param` entries on the class-level doc (one per component).
-- Cross-references use `[ClassName#method(ParamType)]` — verify the target exists before writing it. Wrong references are **errors**, not warnings.
+- Cross-references use `[ClassName#method(ParamType)]` — verify the target exists before writing it. Wrong references
+  are **errors**, not warnings.
 - `@see`-only Javadoc counts as "no main description" — always add a prose sentence.
 
 **Check:** `./mvnw javadoc:javadoc -pl core` — must produce zero output.
@@ -108,9 +111,11 @@ Encoding IDs are strings (e.g. `"vortex.flat"`, `"fastlanes.bitpacked"`). `Decod
 via `ServiceLoader`; register custom decoders with `registry.register(decoder)`.
 
 **Adding a new encoding:** three touch-points, always all three:
+
 1. `EncodingId.java` — add enum constant `VORTEX_FOO("vortex.foo")`
 2. `AlpRdEncoding.java` (or `FooEncoding.java`) — implement `Encoding`
-3. `core/src/main/resources/META-INF/services/io.github.dfa1.vortex.encoding.Encoding` — add the fully-qualified class name
+3. `core/src/main/resources/META-INF/services/io.github.dfa1.vortex.encoding.Encoding` — add the fully-qualified class
+   name
 
 ### Memory model
 
@@ -120,6 +125,7 @@ the mapped region.
 
 **Encoding output allocation rule:** never allocate `byte[]` + wrap with `MemorySegment.ofArray()` for decode output.
 Always allocate from `ctx.arena()`:
+
 ```java
 // WRONG — heap allocation, GC pressure, extra copy
 byte[] outBytes = new byte[(int) (n * elemBytes)];
@@ -128,6 +134,7 @@ MemorySegment out = MemorySegment.ofArray(outBytes);
 // CORRECT — off-heap, zero GC, same lifetime as the scan chunk
 MemorySegment out = ctx.arena().allocate(n * elemBytes);
 ```
+
 If the allocation is in a private static helper that doesn't receive `DecodeContext`, add an `Arena arena` parameter
 and pass `ctx.arena()` from the `decode()` call site.
 
@@ -149,6 +156,7 @@ methods in the Rust source to get the exact protobuf schema, then implement from
 
 ## Code style
 
+- indents are 4 spaces, enforced by checkstyle
 - Zero SonarQube bugs/smells policy.
 - No `sun.misc.Unsafe` or internal JDK APIs.
 - Prefer explicit over clever. Fail fast on unhandled cases.
@@ -173,11 +181,23 @@ class if genuinely shared by both.
 ```java
 public final class FooEncoding implements Encoding {
 
-    @Override public EncodeResult encode(DType dtype, Object data) { return Encoder.encode(dtype, data); }
-    @Override public Array decode(DecodeContext ctx) { return Decoder.decode(ctx); }
+    @Override
+    public EncodeResult encode(DType dtype, Object data) {
+        return Encoder.encode(dtype, data);
+    }
 
-    private static final class Encoder { static EncodeResult encode(DType dtype, Object data) { ... } }
-    private static final class Decoder { static Array decode(DecodeContext ctx) { ... } }
+    @Override
+    public Array decode(DecodeContext ctx) {
+        return Decoder.decode(ctx);
+    }
+
+    private static final class Encoder {
+        static EncodeResult encode(DType dtype, Object data) { ...}
+    }
+
+    private static final class Decoder {
+        static Array decode(DecodeContext ctx) { ...}
+    }
 }
 ```
 
@@ -191,16 +211,20 @@ Their `EncodeResult` uses an `EncodeNode` with `metadata` set and an empty `buff
 ```java
 ByteBuffer metaBuf = ByteBuffer.wrap(meta.toByteArray());
 EncodeNode node = new EncodeNode(encodingId, metaBuf, new EncodeNode[0], new int[]{});
-return new EncodeResult(node, List.of(), null, null);
+return new
+
+EncodeResult(node, List.of(), null,null);
 ```
 
 The decoder reads back via `ctx.metadata()`, not `ctx.buffer(n)`.
 
 ## Testing
 
-- Every feature needs unit tests covering: happy path, negative cases (invalid input, error conditions), and corner cases (empty, zero, max values, boundary conditions).
+- Every feature needs unit tests covering: happy path, negative cases (invalid input, error conditions), and corner
+  cases (empty, zero, max values, boundary conditions).
 - Unit tests must be fast — no file I/O, no network, no sleep. Mock or use in-memory data.
-- Integration tests are critical: there is no formal spec, so interoperability with the Rust reference implementation is the ground truth. Write integration tests for every encoding round-trip and file format boundary.
+- Integration tests are critical: there is no formal spec, so interoperability with the Rust reference implementation is
+  the ground truth. Write integration tests for every encoding round-trip and file format boundary.
 - JUnit 5 + Mockito (BDDMockito) + AssertJ.
 - Every test has `// Given` / `// When` / `// Then` sections.
 - Class under test is always named `sut`.
@@ -208,7 +232,8 @@ The decoder reads back via `ctx.metadata()`, not `ctx.buffer(n)`.
   `given` and `then` — not `willReturn`/`willThrow`.
 - Prefer `@ParameterizedTest` over copy-pasting tests. Use `@ValueSource` when possible; `@ArgumentsSource` when more
   structure needed (test case must have a name).
-- Use `@ParameterizedTest` with seeded random generators for encoding/decoding logic where input space is large — they find corner cases that example tests miss.
+- Use `@ParameterizedTest` with seeded random generators for encoding/decoding logic where input space is large — they
+  find corner cases that example tests miss.
 - Acceptance tests run the built jar end-to-end with hosh scripts.
 - Use `@Nested` to group related tests by scenario or feature within a test class:
   ```java
@@ -222,15 +247,18 @@ The decoder reads back via `ctx.metadata()`, not `ctx.buffer(n)`.
 
 ## Random-data parameterized tests
 
-Use `@ParameterizedTest` + `@MethodSource` for random-input coverage. Put generators in `RandomArrays` (integration module)
+Use `@ParameterizedTest` + `@MethodSource` for random-input coverage. Put generators in `RandomArrays` (integration
+module)
 or a similar utility class. Static provider methods in the test class delegate to the generator:
 
 ```java
-static Stream<long[]> i64ArrayProvider() { return RandomArrays.i64Arrays(30); }
+static Stream<long[]> i64ArrayProvider() {
+    return RandomArrays.i64Arrays(30);
+}
 
 @ParameterizedTest
 @MethodSource("i64ArrayProvider")
-void roundTrips(long[] data) { ... }
+void roundTrips(long[] data) { ...}
 ```
 
 Keep counts low (10–30) for integration tests that involve file I/O or JNI.

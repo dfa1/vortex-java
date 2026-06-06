@@ -11,54 +11,54 @@ import java.lang.foreign.MemorySegment;
 /// widens to `float` via [Float#float16ToFloat].
 public final class Float16Array implements Array {
 
-	private final DType dtype;
-	private final long length;
-	private final MemorySegment buffer;
-	private final ArrayStats stats;
+    private final DType dtype;
+    private final long length;
+    private final MemorySegment buffer;
+    private final ArrayStats stats;
 
-	/// Creates a new {@code Float16Array} backed by the given memory segment.
-	///
-	/// @param dtype  logical type, must be F16
-	/// @param length number of elements
-	/// @param buffer little-endian half-precision float data (2 bytes per element)
-	/// @param stats  per-array statistics, or {@link io.github.dfa1.vortex.core.ArrayStats#empty()} if unknown
-	public Float16Array(DType dtype, long length, MemorySegment buffer, ArrayStats stats) {
-		this.dtype = dtype;
-		this.length = length;
-		this.buffer = buffer;
-		this.stats = stats;
-	}
+    /// Creates a new {@code Float16Array} backed by the given memory segment.
+    ///
+    /// @param dtype  logical type, must be F16
+    /// @param length number of elements
+    /// @param buffer little-endian half-precision float data (2 bytes per element)
+    /// @param stats  per-array statistics, or {@link io.github.dfa1.vortex.core.ArrayStats#empty()} if unknown
+    public Float16Array(DType dtype, long length, MemorySegment buffer, ArrayStats stats) {
+        this.dtype = dtype;
+        this.length = length;
+        this.buffer = buffer;
+        this.stats = stats;
+    }
 
-	@Override
-	public DType dtype() {
-		return dtype;
-	}
+    @Override
+    public DType dtype() {
+        return dtype;
+    }
 
-	@Override
-	public long length() {
-		return length;
-	}
+    @Override
+    public long length() {
+        return length;
+    }
 
-	/// Returns per-array statistics.
-	///
-	/// @return array statistics
-	public ArrayStats stats() {
-		return stats;
-	}
+    /// Returns per-array statistics.
+    ///
+    /// @return array statistics
+    public ArrayStats stats() {
+        return stats;
+    }
 
-	@Override
-	public MemorySegment buffer(int i) {
-		if (i != 0) {
-			throw new IndexOutOfBoundsException(i);
-		}
-		return buffer;
-	}
+    @Override
+    public MemorySegment buffer(int i) {
+        if (i != 0) {
+            throw new IndexOutOfBoundsException(i);
+        }
+        return buffer;
+    }
 
-	/// Returns the element at the given index widened to a single-precision float.
-	///
-	/// @param i zero-based index (must be in {@code [0, length)})
-	/// @return the half-precision value at position {@code i} converted to {@code float}
-	public float getFloat(long i) {
-		return Float.float16ToFloat(buffer.getAtIndex(PTypeIO.LE_SHORT, i));
-	}
+    /// Returns the element at the given index widened to a single-precision float.
+    ///
+    /// @param i zero-based index (must be in {@code [0, length)})
+    /// @return the half-precision value at position {@code i} converted to {@code float}
+    public float getFloat(long i) {
+        return Float.float16ToFloat(buffer.getAtIndex(PTypeIO.LE_SHORT, i));
+    }
 }

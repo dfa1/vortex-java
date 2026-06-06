@@ -4,12 +4,15 @@ package io.github.dfa1.vortex.fbs;
 
 @SuppressWarnings("unused")
 public final class Precision {
-  private Precision() { }
-  public static final int Inexact = 0;
-  public static final int Exact = 1;
+    public static final int Inexact = 0;
+    public static final int Exact = 1;
+    public static final String[] names = {"Inexact", "Exact",};
 
-  public static final String[] names = { "Inexact", "Exact", };
+    private Precision() {
+    }
 
-  public static String name(int e) { return names[e]; }
+    public static String name(int e) {
+        return names[e];
+    }
 }
 

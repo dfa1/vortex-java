@@ -17,13 +17,13 @@ public final class VortexCli {
         }
         int exit = switch (args[0]) {
             case "inspect" -> InspectCommand.run(args);
-            case "export"  -> ExportCommand.run(args);
-            case "import"  -> ImportCommand.run(args);
-            case "schema"  -> SchemaCommand.run(args);
-            case "count"   -> CountCommand.run(args);
-            case "select"  -> SelectCommand.run(args);
-            case "stats"   -> StatsCommand.run(args);
-            case "filter"  -> FilterCommand.run(args);
+            case "export" -> ExportCommand.run(args);
+            case "import" -> ImportCommand.run(args);
+            case "schema" -> SchemaCommand.run(args);
+            case "count" -> CountCommand.run(args);
+            case "select" -> SelectCommand.run(args);
+            case "stats" -> StatsCommand.run(args);
+            case "filter" -> FilterCommand.run(args);
             default -> {
                 System.err.println("unknown subcommand: " + args[0]);
                 printUsage(System.err);

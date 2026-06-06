@@ -88,7 +88,7 @@ public final class JdbcImporter {
     }
 
     private static void importRows(ResultSet rs, VortexWriter writer, DType.Struct schema,
-                                   int colCount, JdbcImportOptions options) throws SQLException, IOException {
+            int colCount, JdbcImportOptions options) throws SQLException, IOException {
         int chunkSize = options.chunkSize();
         Object[] buffers = allocateBuffers(schema, colCount, chunkSize);
         int rowsInBuffer = 0;

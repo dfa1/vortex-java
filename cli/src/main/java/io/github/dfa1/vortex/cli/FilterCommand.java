@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.cli;
 
+import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.BoolArray;
 import io.github.dfa1.vortex.core.array.ByteArray;
 import io.github.dfa1.vortex.core.array.DoubleArray;
@@ -8,7 +9,6 @@ import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
-import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.csv.CsvExporter;
 import io.github.dfa1.vortex.csv.ExportOptions;
 import io.github.dfa1.vortex.csv.RowPredicate;
@@ -28,11 +28,11 @@ import java.util.regex.Pattern;
 
 final class FilterCommand {
 
-    private FilterCommand() {
-    }
-
     private static final Pattern EXPR = Pattern.compile(
             "^(\\w[\\w.]*?)\\s*(!=|>=|<=|==|>|<|=)\\s*(.+)$");
+
+    private FilterCommand() {
+    }
 
     static int run(String[] args) {
         if (args.length < 3) {
@@ -69,17 +69,17 @@ final class FilterCommand {
         Matcher m = EXPR.matcher(expr.trim());
         if (!m.matches()) {
             throw new IllegalArgumentException("invalid filter expression: \"" + expr
-                    + "\"  expected: col op value  (op: >, >=, <, <=, =, ==, !=)");
+                                                       + "\"  expected: col op value  (op: >, >=, <, <=, =, ==, !=)");
         }
         String col = m.group(1);
         Comparable<?> value = parseValue(m.group(3).trim());
         return switch (m.group(2)) {
-            case ">"        -> RowFilter.gt(col, value);
-            case ">="       -> RowFilter.gte(col, value);
-            case "<"        -> RowFilter.lt(col, value);
-            case "<="       -> RowFilter.lte(col, value);
-            case "=", "=="  -> RowFilter.eq(col, value);
-            case "!="       -> RowFilter.neq(col, value);
+            case ">" -> RowFilter.gt(col, value);
+            case ">=" -> RowFilter.gte(col, value);
+            case "<" -> RowFilter.lt(col, value);
+            case "<=" -> RowFilter.lte(col, value);
+            case "=", "==" -> RowFilter.eq(col, value);
+            case "!=" -> RowFilter.neq(col, value);
             default -> throw new IllegalArgumentException("unknown operator: " + m.group(2));
         };
     }
@@ -104,12 +104,16 @@ final class FilterCommand {
 
     private static RowPredicate toRowPredicate(RowFilter filter) {
         return switch (filter) {
-            case RowFilter.Gt(var col, var val)  -> (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, val) > 0;
-            case RowFilter.Gte(var col, var val) -> (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, val) >= 0;
-            case RowFilter.Lt(var col, var val)  -> (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, val) < 0;
-            case RowFilter.Lte(var col, var val) -> (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, val) <= 0;
-            case RowFilter.Eq(var col, var val)  -> (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, (Comparable<?>) val) == 0;
-            case RowFilter.Neq(var col, var val) -> (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, (Comparable<?>) val) != 0;
+            case RowFilter.Gt(var col, var val) -> (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, val) > 0;
+            case RowFilter.Gte(var col, var val) ->
+                    (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, val) >= 0;
+            case RowFilter.Lt(var col, var val) -> (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, val) < 0;
+            case RowFilter.Lte(var col, var val) ->
+                    (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, val) <= 0;
+            case RowFilter.Eq(var col, var val) ->
+                    (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, (Comparable<?>) val) == 0;
+            case RowFilter.Neq(var col, var val) ->
+                    (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, (Comparable<?>) val) != 0;
             case RowFilter.And(var filters) -> {
                 RowPredicate[] preds = filters.stream().map(FilterCommand::toRowPredicate).toArray(RowPredicate[]::new);
                 yield (chunk, rowIdx) -> {
@@ -126,13 +130,13 @@ final class FilterCommand {
 
     private static int compareValue(Array arr, long rowIdx, Comparable<?> value) {
         return switch (arr) {
-            case LongArray la  -> compareNumeric(la.getLong(rowIdx), value);
-            case IntArray ia   -> compareNumeric(ia.getInt(rowIdx), value);
+            case LongArray la -> compareNumeric(la.getLong(rowIdx), value);
+            case IntArray ia -> compareNumeric(ia.getInt(rowIdx), value);
             case ShortArray sa -> compareNumeric(sa.getShort(rowIdx), value);
-            case ByteArray ba  -> compareNumeric(ba.getByte(rowIdx), value);
+            case ByteArray ba -> compareNumeric(ba.getByte(rowIdx), value);
             case DoubleArray da -> compareDouble(da.getDouble(rowIdx), value);
-            case FloatArray fa  -> compareDouble(fa.getFloat(rowIdx), value);
-            case BoolArray ba  -> Boolean.compare(ba.getBoolean(rowIdx), (Boolean) value);
+            case FloatArray fa -> compareDouble(fa.getFloat(rowIdx), value);
+            case BoolArray ba -> Boolean.compare(ba.getBoolean(rowIdx), (Boolean) value);
             case VarBinArray va -> {
                 String v = va.getString(rowIdx);
                 yield v.compareTo((String) value);

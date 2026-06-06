@@ -11,19 +11,19 @@ import java.nio.ByteBuffer;
 /// [UnknownArrayNode] (id is an arbitrary string only meaningful for
 /// [EncodingRegistry#allowUnknown()] passthrough decode).
 sealed interface ArrayNode permits KnownArrayNode, UnknownArrayNode {
-	ByteBuffer metadata();
+    /// Short factory for the common case: a node whose encoding id is well-known.
+    /// Mostly used by tests and helper code that converts an [EncodeNode] tree back into
+    /// an [ArrayNode] tree.
+    static ArrayNode of(EncodingId encodingId, ByteBuffer metadata, ArrayNode[] children,
+            int[] bufferIndices, ArrayStats stats) {
+        return new KnownArrayNode(encodingId, metadata, children, bufferIndices, stats);
+    }
 
-	ArrayNode[] children();
+    ByteBuffer metadata();
 
-	int[] bufferIndices();
+    ArrayNode[] children();
 
-	ArrayStats stats();
+    int[] bufferIndices();
 
-	/// Short factory for the common case: a node whose encoding id is well-known.
-	/// Mostly used by tests and helper code that converts an [EncodeNode] tree back into
-	/// an [ArrayNode] tree.
-	static ArrayNode of(EncodingId encodingId, ByteBuffer metadata, ArrayNode[] children,
-	                    int[] bufferIndices, ArrayStats stats) {
-		return new KnownArrayNode(encodingId, metadata, children, bufferIndices, stats);
-	}
+    ArrayStats stats();
 }

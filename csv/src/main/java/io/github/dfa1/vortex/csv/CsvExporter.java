@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.csv;
 import de.siegmar.fastcsv.writer.CsvWriter;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.BoolArray;
 import io.github.dfa1.vortex.core.array.ByteArray;
 import io.github.dfa1.vortex.core.array.DoubleArray;
@@ -11,7 +12,6 @@ import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
-import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.ScanIterator;
 import io.github.dfa1.vortex.scan.ScanOptions;
@@ -39,8 +39,8 @@ public final class CsvExporter {
     public static void exportCsv(Path vortexPath, Path csvPath, ExportOptions options) throws IOException {
         try (VortexReader reader = VortexReader.open(vortexPath);
              CsvWriter csvWriter = CsvWriter.builder()
-                     .fieldSeparator(options.delimiter())
-                     .build(csvPath)) {
+                                           .fieldSeparator(options.delimiter())
+                                           .build(csvPath)) {
             export(reader, csvWriter, options, ScanOptions.all(), RowPredicate.all());
         }
     }
@@ -53,7 +53,7 @@ public final class CsvExporter {
     /// Like [#exportCsv(Path, Writer, ExportOptions)] but with zone-map chunk pruning
     /// ([ScanOptions#rowFilter()]) and a row-level predicate applied after decoding.
     public static void exportCsvFiltered(Path vortexPath, Writer out, ExportOptions options,
-                                         ScanOptions scanOptions, RowPredicate predicate) throws IOException {
+            ScanOptions scanOptions, RowPredicate predicate) throws IOException {
         Writer shielded = new FilterWriter(out) {
             @Override
             public void close() {
@@ -62,14 +62,14 @@ public final class CsvExporter {
         };
         try (VortexReader reader = VortexReader.open(vortexPath);
              CsvWriter csvWriter = CsvWriter.builder()
-                     .fieldSeparator(options.delimiter())
-                     .build(shielded)) {
+                                           .fieldSeparator(options.delimiter())
+                                           .build(shielded)) {
             export(reader, csvWriter, options, scanOptions, predicate);
         }
     }
 
     private static void export(VortexReader reader, CsvWriter csvWriter, ExportOptions options,
-                                ScanOptions scanOptions, RowPredicate predicate) {
+            ScanOptions scanOptions, RowPredicate predicate) {
         if (!(reader.dtype() instanceof DType.Struct schema)) {
             throw new VortexException("only struct root dtype supported for CSV export");
         }
