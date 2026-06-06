@@ -93,7 +93,7 @@ public final class AlpRdEncoding implements Encoding {
         private static EncodeResult encodeF64(double[] values, EncodeContext ctx) {
             int n = values.length;
             if (n == 0) {
-                return emptyResult(U64_DTYPE, U16_DTYPE, ctx);
+                return emptyResult(U64_DTYPE, ctx);
             }
 
             int sampleLen = Math.min(SAMPLE_SIZE, n);
@@ -122,8 +122,8 @@ public final class AlpRdEncoding implements Encoding {
             }
 
             return buildEncodeResult(
-                    best.dict, best.rightBitWidth, leftCodes, rightParts,
-                    U64_DTYPE, excPos, excVals, ctx);
+                best.dict, best.rightBitWidth, leftCodes, rightParts,
+                U64_DTYPE, excPos, excVals, ctx);
         }
 
         private static Dictionary64 findBestDictionaryF64(double[] values, int sampleLen) {
@@ -133,15 +133,14 @@ public final class AlpRdEncoding implements Encoding {
 
             for (int p = 1; p <= MAX_CUT; p++) {
                 int rightBw = 64 - p;
-                long mask = -1L >>> p;
                 Map<Short, Integer> counts = new HashMap<>();
                 for (int i = 0; i < sampleLen; i++) {
                     long bits = Double.doubleToRawLongBits(values[i]);
                     short leftU16 = (short) (bits >>> rightBw);
                     counts.merge(leftU16, 1, Integer::sum);
                 }
-                short[] dict = topKByCount(counts, MAX_DICT_SIZE);
-                int excCount = countExceptions(values, sampleLen, dict, rightBw, mask);
+                short[] dict = topKByCount(counts);
+                int excCount = countExceptions(values, sampleLen, dict, rightBw);
                 int maxCode = dict.length - 1;
                 int leftBw = maxCode == 0 ? 1 : (Integer.SIZE - Integer.numberOfLeadingZeros(maxCode));
                 double estSize = rightBw + leftBw + (double) (excCount * 32) / sampleLen;
@@ -154,7 +153,7 @@ public final class AlpRdEncoding implements Encoding {
             return new Dictionary64(bestDict, bestRightBw);
         }
 
-        private static int countExceptions(double[] values, int sampleLen, short[] dict, int rightBw, long mask) {
+        private static int countExceptions(double[] values, int sampleLen, short[] dict, int rightBw) {
             Map<Short, Boolean> dictSet = new HashMap<>();
             for (short d : dict) {
                 dictSet.put(d, Boolean.TRUE);
@@ -173,7 +172,7 @@ public final class AlpRdEncoding implements Encoding {
         private static EncodeResult encodeF32(float[] values, EncodeContext ctx) {
             int n = values.length;
             if (n == 0) {
-                return emptyResult(U32_DTYPE, U16_DTYPE, ctx);
+                return emptyResult(U32_DTYPE, ctx);
             }
 
             int sampleLen = Math.min(SAMPLE_SIZE, n);
@@ -202,8 +201,8 @@ public final class AlpRdEncoding implements Encoding {
             }
 
             return buildEncodeResult(
-                    best.dict, best.rightBitWidth, leftCodes, rightParts,
-                    U32_DTYPE, excPos, excVals, ctx);
+                best.dict, best.rightBitWidth, leftCodes, rightParts,
+                U32_DTYPE, excPos, excVals, ctx);
         }
 
         // --- F32 ---
@@ -215,15 +214,14 @@ public final class AlpRdEncoding implements Encoding {
 
             for (int p = 1; p <= MAX_CUT; p++) {
                 int rightBw = 32 - p;
-                int mask = -1 >>> p;
                 Map<Short, Integer> counts = new HashMap<>();
                 for (int i = 0; i < sampleLen; i++) {
                     int bits = Float.floatToRawIntBits(values[i]);
                     short leftU16 = (short) (bits >>> rightBw);
                     counts.merge(leftU16, 1, Integer::sum);
                 }
-                short[] dict = topKByCount(counts, MAX_DICT_SIZE);
-                int excCount = countExceptionsF32(values, sampleLen, dict, rightBw, mask);
+                short[] dict = topKByCount(counts);
+                int excCount = countExceptionsF32(values, sampleLen, dict, rightBw);
                 int maxCode = dict.length - 1;
                 int leftBw = maxCode == 0 ? 1 : (Integer.SIZE - Integer.numberOfLeadingZeros(maxCode));
                 double estSize = rightBw + leftBw + (double) (excCount * 32) / sampleLen;
@@ -236,7 +234,7 @@ public final class AlpRdEncoding implements Encoding {
             return new Dictionary32(bestDict, bestRightBw);
         }
 
-        private static int countExceptionsF32(float[] values, int sampleLen, short[] dict, int rightBw, int mask) {
+        private static int countExceptionsF32(float[] values, int sampleLen, short[] dict, int rightBw) {
             Map<Short, Boolean> dictSet = new HashMap<>();
             for (short d : dict) {
                 dictSet.put(d, Boolean.TRUE);
@@ -252,10 +250,10 @@ public final class AlpRdEncoding implements Encoding {
             return count;
         }
 
-        private static short[] topKByCount(Map<Short, Integer> counts, int k) {
+        private static short[] topKByCount(Map<Short, Integer> counts) {
             List<Map.Entry<Short, Integer>> sorted = new ArrayList<>(counts.entrySet());
             sorted.sort((a, b) -> b.getValue() - a.getValue());
-            int dictSize = Math.min(sorted.size(), k);
+            int dictSize = Math.min(sorted.size(), Encoder.MAX_DICT_SIZE);
             short[] dict = new short[dictSize];
             for (int i = 0; i < dictSize; i++) {
                 dict[i] = sorted.get(i).getKey();
@@ -274,9 +272,9 @@ public final class AlpRdEncoding implements Encoding {
         // --- shared helpers ---
 
         private static EncodeResult buildEncodeResult(
-                short[] dict, int rightBitWidth,
-                short[] leftCodes, Object rightPartsData, DType rightDtype,
-                List<Long> excPos, List<Short> excVals, EncodeContext ctx) {
+            short[] dict, int rightBitWidth,
+            short[] leftCodes, Object rightPartsData, DType rightDtype,
+            List<Long> excPos, List<Short> excVals, EncodeContext ctx) {
 
             Encoding bp = ctx.lookupEncoding(EncodingId.FASTLANES_BITPACKED);
             EncodeResult leftResult = bp.encode(U16_DTYPE, leftCodes, ctx);
@@ -285,15 +283,14 @@ public final class AlpRdEncoding implements Encoding {
             List<MemorySegment> allBuffers = new ArrayList<>(leftResult.buffers());
             int leftBufCount = allBuffers.size();
             allBuffers.addAll(rightResult.buffers());
-            int rightBufCount = rightResult.buffers().size();
 
             EncodeNode leftNode = EncodeNode.remapBufferIndices(leftResult.rootNode(), 0);
             EncodeNode rightNode = EncodeNode.remapBufferIndices(rightResult.rootNode(), leftBufCount);
 
             EncodingProtos.ALPRDMetadata.Builder metaBuilder = EncodingProtos.ALPRDMetadata.newBuilder()
-                                                                       .setRightBitWidth(rightBitWidth)
-                                                                       .setDictLen(dict.length)
-                                                                       .setLeftPartsPtype(DTypeProtos.PType.forNumber(PType.U16.ordinal()));
+                                                                   .setRightBitWidth(rightBitWidth)
+                                                                   .setDictLen(dict.length)
+                                                                   .setLeftPartsPtype(DTypeProtos.PType.forNumber(PType.U16.ordinal()));
             for (short d : dict) {
                 metaBuilder.addDict(d & 0xFFFF);
             }
@@ -320,25 +317,25 @@ public final class AlpRdEncoding implements Encoding {
                 EncodeNode valNode = EncodeNode.remapBufferIndices(valResult.rootNode(), idxOffset + idxBufCount);
 
                 EncodingProtos.PatchesMetadata patches = EncodingProtos.PatchesMetadata.newBuilder()
-                                                                 .setLen(excPos.size())
-                                                                 .setOffset(0)
-                                                                 .setIndicesPtype(DTypeProtos.PType.forNumber(PType.U64.ordinal()))
-                                                                 .build();
+                                                             .setLen(excPos.size())
+                                                             .setOffset(0)
+                                                             .setIndicesPtype(DTypeProtos.PType.forNumber(PType.U64.ordinal()))
+                                                             .build();
                 metaBuilder.setPatches(patches);
                 children = new EncodeNode[]{leftNode, rightNode, idxNode, valNode};
             }
 
             byte[] metaBytes = metaBuilder.build().toByteArray();
             EncodeNode root = new EncodeNode(
-                    EncodingId.VORTEX_ALPRD, ByteBuffer.wrap(metaBytes), children, new int[]{});
+                EncodingId.VORTEX_ALPRD, ByteBuffer.wrap(metaBytes), children, new int[]{});
             return new EncodeResult(root, List.copyOf(allBuffers), null, null);
         }
 
-        private static EncodeResult emptyResult(DType rightDtype, DType leftDtype, EncodeContext ctx) {
+        private static EncodeResult emptyResult(DType rightDtype, EncodeContext ctx) {
             Encoding bp = ctx.lookupEncoding(EncodingId.FASTLANES_BITPACKED);
-            EncodeResult leftResult = bp.encode(leftDtype, new short[0], ctx);
+            EncodeResult leftResult = bp.encode(AlpRdEncoding.U16_DTYPE, new short[0], ctx);
             EncodeResult rightResult = bp.encode(rightDtype,
-                    rightDtype.equals(U32_DTYPE) ? new int[0] : new long[0], ctx);
+                rightDtype.equals(U32_DTYPE) ? new int[0] : new long[0], ctx);
 
             List<MemorySegment> allBuffers = new ArrayList<>(leftResult.buffers());
             int leftBufCount = allBuffers.size();
@@ -348,14 +345,14 @@ public final class AlpRdEncoding implements Encoding {
             EncodeNode rightNode = EncodeNode.remapBufferIndices(rightResult.rootNode(), leftBufCount);
 
             byte[] metaBytes = EncodingProtos.ALPRDMetadata.newBuilder()
-                                       .setRightBitWidth(48)
-                                       .setDictLen(0)
-                                       .setLeftPartsPtype(DTypeProtos.PType.forNumber(PType.U16.ordinal()))
-                                       .build().toByteArray();
+                                   .setRightBitWidth(48)
+                                   .setDictLen(0)
+                                   .setLeftPartsPtype(DTypeProtos.PType.forNumber(PType.U16.ordinal()))
+                                   .build().toByteArray();
 
             EncodeNode root = new EncodeNode(
-                    EncodingId.VORTEX_ALPRD, ByteBuffer.wrap(metaBytes),
-                    new EncodeNode[]{leftNode, rightNode}, new int[]{});
+                EncodingId.VORTEX_ALPRD, ByteBuffer.wrap(metaBytes),
+                new EncodeNode[]{leftNode, rightNode}, new int[]{});
             return new EncodeResult(root, List.copyOf(allBuffers), null, null);
         }
 
@@ -377,7 +374,7 @@ public final class AlpRdEncoding implements Encoding {
 
             if (!(ctx.dtype() instanceof DType.Primitive p)) {
                 throw new VortexException(EncodingId.VORTEX_ALPRD,
-                        "expected primitive dtype, got " + ctx.dtype());
+                    "expected primitive dtype, got " + ctx.dtype());
             }
 
             int rightBitWidth = meta.getRightBitWidth();
@@ -394,13 +391,13 @@ public final class AlpRdEncoding implements Encoding {
                 case F64 -> decodeF64(ctx, meta, dict, rightBitWidth, n);
                 case F32 -> decodeF32(ctx, meta, dict, rightBitWidth, n);
                 default -> throw new VortexException(EncodingId.VORTEX_ALPRD,
-                        "unsupported dtype " + ptype);
+                    "unsupported dtype " + ptype);
             };
         }
 
         private static Array decodeF64(DecodeContext ctx,
-                EncodingProtos.ALPRDMetadata meta,
-                short[] dict, int rightBitWidth, long n) {
+            EncodingProtos.ALPRDMetadata meta,
+            short[] dict, int rightBitWidth, long n) {
             Array leftParts = decodeChildAs(ctx, 0, U16_DTYPE, n);
             Array rightParts = decodeChildAs(ctx, 1, U64_DTYPE, n);
 
@@ -416,15 +413,15 @@ public final class AlpRdEncoding implements Encoding {
             }
 
             if (meta.hasPatches()) {
-                applyPatchesF64(ctx, meta.getPatches(), out, rightSeg, dict, rightBitWidth);
+                applyPatchesF64(ctx, meta.getPatches(), out, rightSeg, rightBitWidth);
             }
 
             return new DoubleArray(ctx.dtype(), n, out.asReadOnly(), ArrayStats.empty());
         }
 
         private static Array decodeF32(DecodeContext ctx,
-                EncodingProtos.ALPRDMetadata meta,
-                short[] dict, int rightBitWidth, long n) {
+            EncodingProtos.ALPRDMetadata meta,
+            short[] dict, int rightBitWidth, long n) {
             Array leftParts = decodeChildAs(ctx, 0, U16_DTYPE, n);
             Array rightParts = decodeChildAs(ctx, 1, U32_DTYPE, n);
 
@@ -440,16 +437,15 @@ public final class AlpRdEncoding implements Encoding {
             }
 
             if (meta.hasPatches()) {
-                applyPatchesF32(ctx, meta.getPatches(), out, rightSeg, dict, rightBitWidth);
+                applyPatchesF32(ctx, meta.getPatches(), out, rightSeg, rightBitWidth);
             }
 
             return new FloatArray(ctx.dtype(), n, out.asReadOnly(), ArrayStats.empty());
         }
 
         private static void applyPatchesF64(DecodeContext ctx,
-                EncodingProtos.PatchesMetadata pm,
-                MemorySegment out, MemorySegment rightSeg,
-                short[] dict, int rightBitWidth) {
+            EncodingProtos.PatchesMetadata pm,
+            MemorySegment out, MemorySegment rightSeg, int rightBitWidth) {
             long numPatches = pm.getLen();
             long offset = pm.getOffset();
             PType idxPtype = PType.values()[pm.getIndicesPtype().getNumber()];
@@ -469,10 +465,7 @@ public final class AlpRdEncoding implements Encoding {
             }
         }
 
-        private static void applyPatchesF32(DecodeContext ctx,
-                EncodingProtos.PatchesMetadata pm,
-                MemorySegment out, MemorySegment rightSeg,
-                short[] dict, int rightBitWidth) {
+        private static void applyPatchesF32(DecodeContext ctx, EncodingProtos.PatchesMetadata pm, MemorySegment out, MemorySegment rightSeg, int rightBitWidth) {
             long numPatches = pm.getLen();
             long offset = pm.getOffset();
             PType idxPtype = PType.values()[pm.getIndicesPtype().getNumber()];
@@ -495,7 +488,7 @@ public final class AlpRdEncoding implements Encoding {
         private static Array decodeChildAs(DecodeContext parent, int childIdx, DType dtype, long rowCount) {
             ArrayNode childNode = parent.node().children()[childIdx];
             DecodeContext childCtx = new DecodeContext(
-                    childNode, dtype, rowCount, parent.segmentBuffers(), parent.registry(), parent.arena());
+                childNode, dtype, rowCount, parent.segmentBuffers(), parent.registry(), parent.arena());
             return parent.registry().decode(childCtx);
         }
 
@@ -506,7 +499,7 @@ public final class AlpRdEncoding implements Encoding {
                 case U32 -> Integer.toUnsignedLong(seg.get(PTypeIO.LE_INT, i * 4));
                 case U64 -> seg.get(PTypeIO.LE_LONG, i * 8);
                 default -> throw new VortexException(EncodingId.VORTEX_ALPRD,
-                        "non-unsigned patch index ptype " + ptype);
+                    "non-unsigned patch index ptype " + ptype);
             };
         }
 

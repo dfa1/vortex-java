@@ -335,7 +335,7 @@ public final class SparseEncoding implements Encoding {
         }
 
         private static void fillSegment(MemorySegment out, long n, PType ptype, ScalarProtos.ScalarValue scalar) {
-            long fillLong = scalarToLong(scalar, ptype);
+            long fillLong = scalarToLong(scalar);
             ByteBuffer bb = out.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
             for (long i = 0; i < n; i++) {
                 writeElem(bb, ptype, fillLong);
@@ -391,7 +391,7 @@ public final class SparseEncoding implements Encoding {
             }
         }
 
-        private static long scalarToLong(ScalarProtos.ScalarValue scalar, PType ptype) {
+        private static long scalarToLong(ScalarProtos.ScalarValue scalar) {
             return switch (scalar.getKindCase()) {
                 case INT64_VALUE -> scalar.getInt64Value();
                 case UINT64_VALUE -> scalar.getUint64Value();

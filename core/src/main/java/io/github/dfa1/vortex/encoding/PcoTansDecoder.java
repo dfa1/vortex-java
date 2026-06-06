@@ -45,7 +45,7 @@ final class PcoTansDecoder {
             weights[i] = bins[i].weight();
         }
 
-        int[] stateSymbols = spreadStateSymbols(ansSizeLog, weights, tableSize);
+        int[] stateSymbols = spreadStateSymbols(weights, tableSize);
 
         int[] symbolXs = weights.clone();
         int[] nextStateIdxBase = new int[tableSize];
@@ -71,7 +71,7 @@ final class PcoTansDecoder {
     /// Port of {@code Spec::spread_state_symbols} from pcodec.
     ///
     /// Spreads symbols across the table with a stride of ~3/5 * tableSize (odd).
-    static int[] spreadStateSymbols(int ansSizeLog, int[] weights, int tableSize) {
+    static int[] spreadStateSymbols(int[] weights, int tableSize) {
         int[] stateSymbols = new int[tableSize];
         int stride = (3 * tableSize) / 5;
         if (stride % 2 == 0) {

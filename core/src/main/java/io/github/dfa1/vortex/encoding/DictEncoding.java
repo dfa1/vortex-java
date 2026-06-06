@@ -67,7 +67,7 @@ public final class DictEncoding implements Encoding {
 
         private static EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
             if (dtype instanceof DType.Utf8) {
-                return encodeUtf8((String[]) data, dtype, ctx);
+                return encodeUtf8((String[]) data, ctx);
             }
             DictData d = buildDictData(dtype, data, ctx);
             PType codePType = d.codePType();
@@ -91,7 +91,7 @@ public final class DictEncoding implements Encoding {
 
         private static CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
             if (dtype instanceof DType.Utf8) {
-                return CascadeStep.terminal(encodeUtf8((String[]) data, dtype, ctx));
+                return CascadeStep.terminal(encodeUtf8((String[]) data, ctx));
             }
             DictData d = buildDictData(dtype, data, ctx);
             PType codePType = d.codePType();
@@ -108,12 +108,12 @@ public final class DictEncoding implements Encoding {
             return new CascadeStep(partialRoot, List.of(d.valuesBuf()), List.of(slot), null, null, true);
         }
 
-        private static EncodeResult encodeUtf8(String[] strings, DType dtype, EncodeContext ctx) {
+        private static EncodeResult encodeUtf8(String[] strings, EncodeContext ctx) {
             int n = strings.length;
 
             var valueMap = new LinkedHashMap<String, Integer>();
             for (String s : strings) {
-                valueMap.computeIfAbsent(s, k -> valueMap.size());
+                valueMap.computeIfAbsent(s, _ -> valueMap.size());
             }
 
             int dictSize = valueMap.size();
@@ -184,7 +184,7 @@ public final class DictEncoding implements Encoding {
             int len = arrayLength(data, ptype);
             for (int i = 0; i < len; i++) {
                 Object v = readElement(data, ptype, i);
-                valueMap.computeIfAbsent(v, k -> valueMap.size());
+                valueMap.computeIfAbsent(v, _ -> valueMap.size());
             }
 
             int dictSize = valueMap.size();

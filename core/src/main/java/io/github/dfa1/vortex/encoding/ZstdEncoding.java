@@ -87,7 +87,7 @@ public final class ZstdEncoding implements Encoding {
                 return encodePrimitive(dt, data);
             }
             if (dtype instanceof DType.Utf8 || dtype instanceof DType.Binary) {
-                return encodeVarBin(dtype, (String[]) data);
+                return encodeVarBin((String[]) data);
             }
             throw new VortexException(EncodingId.VORTEX_ZSTD, "unsupported dtype: " + dtype);
         }
@@ -99,7 +99,7 @@ public final class ZstdEncoding implements Encoding {
             return buildResult(rawBytes, n);
         }
 
-        private static EncodeResult encodeVarBin(DType dtype, String[] strings) {
+        private static EncodeResult encodeVarBin(String[] strings) {
             byte[] raw = buildLengthPrefixed(strings);
             return buildResult(raw, strings.length);
         }

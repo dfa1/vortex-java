@@ -289,7 +289,7 @@ public final class DeltaEncoding implements Encoding {
             long mask = typeMask(ptype);
 
             long deltasLen = meta.getDeltasLen();
-            int offset = (int) meta.getOffset();
+            int offset = meta.getOffset();
 
             if (deltasLen == 0L) {
                 MemorySegment empty = ctx.arena().allocate(0);

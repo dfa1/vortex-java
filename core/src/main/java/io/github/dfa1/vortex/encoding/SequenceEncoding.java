@@ -44,7 +44,7 @@ public final class SequenceEncoding implements Encoding {
 
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
-        return Encoder.encode(dtype, data, ctx);
+        return Encoder.encode(dtype, data);
     }
 
     @Override
@@ -54,7 +54,7 @@ public final class SequenceEncoding implements Encoding {
 
     private static final class Encoder {
 
-        private static EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+        private static EncodeResult encode(DType dtype, Object data) {
             if (!(dtype instanceof DType.Primitive p)) {
                 throw new VortexException(EncodingId.VORTEX_SEQUENCE, "encode only supports Primitive dtype, got " + dtype);
             }

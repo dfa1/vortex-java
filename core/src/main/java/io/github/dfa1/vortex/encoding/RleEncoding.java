@@ -86,7 +86,7 @@ public final class RleEncoding implements Encoding {
             int n = longs.length;
 
             if (n == 0) {
-                return encodeEmpty(ptype, dtype, ctx);
+                return encodeEmpty(ctx);
             }
 
             int numChunks = (n + FL_CHUNK_SIZE - 1) / FL_CHUNK_SIZE;
@@ -123,7 +123,7 @@ public final class RleEncoding implements Encoding {
                 System.arraycopy(chunkIndices, 0, globalIndices, chunkStart, FL_CHUNK_SIZE);
             }
 
-            MemorySegment valuesSeg = fromLongs(globalValues, 0, globalValuesCount, ptype, ctx.arena());
+            MemorySegment valuesSeg = fromLongs(globalValues, globalValuesCount, ptype, ctx.arena());
             MemorySegment indicesSeg = toIndicesSeg(globalIndices, paddedLen, ctx.arena());
             MemorySegment offsetsSeg = fromLongsU64(valuesIdxOffsets, numChunks, ctx.arena());
 
@@ -173,7 +173,7 @@ public final class RleEncoding implements Encoding {
             return valIdx;
         }
 
-        private static EncodeResult encodeEmpty(PType ptype, DType dtype, EncodeContext ctx) {
+        private static EncodeResult encodeEmpty(EncodeContext ctx) {
             MemorySegment empty = ctx.arena().allocate(0);
             PType indicesPtype = PType.U16;
             PType offsetsPtype = PType.U64;
@@ -275,11 +275,11 @@ public final class RleEncoding implements Encoding {
             };
         }
 
-        private static MemorySegment fromLongs(long[] values, int start, int count, PType ptype, SegmentAllocator arena) {
+        private static MemorySegment fromLongs(long[] values, int count, PType ptype, SegmentAllocator arena) {
             int elemSize = ptype.byteSize();
             MemorySegment seg = arena.allocate((long) count * elemSize);
             for (int i = 0; i < count; i++) {
-                PTypeIO.set(seg, (long) i * elemSize, ptype, values[start + i]);
+                PTypeIO.set(seg, (long) i * elemSize, ptype, values[i]);
             }
             return seg;
         }
@@ -393,8 +393,8 @@ public final class RleEncoding implements Encoding {
             for (long j = 0; j < rowCount; j++) {
                 if (indicesValidity.getBoolean(offset + j)) {
                     int byteIdx = (int) (j >>> 3);
-                    byte current = validityBuf.get(ValueLayout.JAVA_BYTE, (long) byteIdx);
-                    validityBuf.set(ValueLayout.JAVA_BYTE, (long) byteIdx, (byte) (current | (1 << (j & 7))));
+                    byte current = validityBuf.get(ValueLayout.JAVA_BYTE, byteIdx);
+                    validityBuf.set(ValueLayout.JAVA_BYTE, byteIdx, (byte) (current | (1 << (j & 7))));
                 }
             }
             BoolArray outputValidity = new BoolArray(new DType.Bool(false), rowCount, validityBuf, ArrayStats.empty());

@@ -48,7 +48,7 @@ public final class VarBinEncoding implements Encoding {
 
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
-        return Encoder.encode(dtype, data, ctx);
+        return Encoder.encode(data, ctx);
     }
 
     @Override
@@ -58,7 +58,7 @@ public final class VarBinEncoding implements Encoding {
 
     private static final class Encoder {
 
-        private static EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+        private static EncodeResult encode(Object data, EncodeContext ctx) {
             String[] strings = (String[]) data;
             int n = strings.length;
 

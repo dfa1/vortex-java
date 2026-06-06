@@ -49,7 +49,7 @@ public final class FrameOfReferenceEncoding implements Encoding {
 
     @Override
     public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext encodeCtx) {
-        return Encoder.encodeCascade(dtype, data, encodeCtx);
+        return Encoder.encodeCascade(dtype, data);
     }
 
     @Override
@@ -76,7 +76,7 @@ public final class FrameOfReferenceEncoding implements Encoding {
             return new EncodeResult(root, List.of(residuals), null, null);
         }
 
-        private static CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
+        private static CascadeStep encodeCascade(DType dtype, Object data) {
             if (!(dtype instanceof DType.Primitive p)) {
                 throw new VortexException(EncodingId.FASTLANES_FOR, "expected primitive dtype, got " + dtype);
             }

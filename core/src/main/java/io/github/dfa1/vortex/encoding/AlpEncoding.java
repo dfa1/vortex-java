@@ -34,21 +34,21 @@ public final class AlpEncoding implements Encoding {
 
     // Powers of 10 for F64 — shared by encode (exponent search) and decode (reconstruction).
     static final double[] F10_F64 = {
-            1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9,
-            1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19,
-            1e20, 1e21, 1e22, 1e23
+        1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9,
+        1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19,
+        1e20, 1e21, 1e22, 1e23
     };
     static final double[] IF10_F64 = {
-            1e-0, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8, 1e-9,
-            1e-10, 1e-11, 1e-12, 1e-13, 1e-14, 1e-15, 1e-16, 1e-17, 1e-18, 1e-19,
-            1e-20, 1e-21, 1e-22, 1e-23
+        1e-0, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8, 1e-9,
+        1e-10, 1e-11, 1e-12, 1e-13, 1e-14, 1e-15, 1e-16, 1e-17, 1e-18, 1e-19,
+        1e-20, 1e-21, 1e-22, 1e-23
     };
     // Powers of 10 for F32 — shared by encode (exponent search) and decode (reconstruction).
     static final float[] F10_F32 = {
-            1e0f, 1e1f, 1e2f, 1e3f, 1e4f, 1e5f, 1e6f, 1e7f, 1e8f, 1e9f, 1e10f
+        1e0f, 1e1f, 1e2f, 1e3f, 1e4f, 1e5f, 1e6f, 1e7f, 1e8f, 1e9f, 1e10f
     };
     static final float[] IF10_F32 = {
-            1e-0f, 1e-1f, 1e-2f, 1e-3f, 1e-4f, 1e-5f, 1e-6f, 1e-7f, 1e-8f, 1e-9f, 1e-10f
+        1e-0f, 1e-1f, 1e-2f, 1e-3f, 1e-4f, 1e-5f, 1e-6f, 1e-7f, 1e-8f, 1e-9f, 1e-10f
     };
     static final DType I64_DTYPE = new DType.Primitive(PType.I64, false);
     static final DType I32_DTYPE = new DType.Primitive(PType.I32, false);
@@ -95,8 +95,8 @@ public final class AlpEncoding implements Encoding {
         private static EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
             PType ptype = ((DType.Primitive) dtype).ptype();
             return switch (ptype) {
-                case F64 -> encodeF64((double[]) data, dtype, ctx);
-                case F32 -> encodeF32((float[]) data, dtype, ctx);
+                case F64 -> encodeF64((double[]) data, ctx);
+                case F32 -> encodeF32((float[]) data, ctx);
                 default -> throw new UnsupportedOperationException("ALP encode not supported for " + ptype);
             };
         }
@@ -178,7 +178,7 @@ public final class AlpEncoding implements Encoding {
             return new AlpF64Data(expE, expF, encodedArr, patchIndices, patchValues, statsMin, statsMax);
         }
 
-        private static EncodeResult encodeF64(double[] values, DType dtype, EncodeContext ctx) {
+        private static EncodeResult encodeF64(double[] values, EncodeContext ctx) {
             AlpF64Data d = computeF64(values);
             int n = values.length;
 
@@ -191,9 +191,9 @@ public final class AlpEncoding implements Encoding {
 
             if (d.patchIndices().isEmpty()) {
                 byte[] metaBytes = EncodingProtos.ALPMetadata.newBuilder()
-                                           .setExpE(d.expE()).setExpF(d.expF()).build().toByteArray();
+                                       .setExpE(d.expE()).setExpF(d.expF()).build().toByteArray();
                 EncodeNode root = new EncodeNode(EncodingId.VORTEX_ALP,
-                        ByteBuffer.wrap(metaBytes), new EncodeNode[]{encodedNode}, new int[0]);
+                    ByteBuffer.wrap(metaBytes), new EncodeNode[]{encodedNode}, new int[0]);
                 return new EncodeResult(root, List.of(encodedBuf), d.statsMin(), d.statsMax());
             }
 
@@ -207,14 +207,14 @@ public final class AlpEncoding implements Encoding {
 
             EncodingProtos.PatchesMetadata patches = buildPatchesMeta(numPatches);
             byte[] metaBytes = EncodingProtos.ALPMetadata.newBuilder()
-                                       .setExpE(d.expE()).setExpF(d.expF()).setPatches(patches).build().toByteArray();
+                                   .setExpE(d.expE()).setExpF(d.expF()).setPatches(patches).build().toByteArray();
 
             EncodeNode idxNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
             EncodeNode valNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
             EncodeNode root = new EncodeNode(EncodingId.VORTEX_ALP,
-                    ByteBuffer.wrap(metaBytes),
-                    new EncodeNode[]{encodedNode, idxNode, valNode},
-                    new int[0]);
+                ByteBuffer.wrap(metaBytes),
+                new EncodeNode[]{encodedNode, idxNode, valNode},
+                new int[0]);
             return new EncodeResult(root, List.of(encodedBuf, idxBuf, valBuf), d.statsMin(), d.statsMax());
         }
 
@@ -222,14 +222,12 @@ public final class AlpEncoding implements Encoding {
         /// can bitpack it. Patch idx/val buffers (if any) stay in ownedBuffers.
         private static CascadeStep encodeCascadeF64(double[] values, EncodeContext ctx) {
             AlpF64Data d = computeF64(values);
-            int n = values.length;
-
             if (d.patchIndices().isEmpty()) {
                 byte[] metaBytes = EncodingProtos.ALPMetadata.newBuilder()
-                                           .setExpE(d.expE()).setExpF(d.expF()).build().toByteArray();
+                                       .setExpE(d.expE()).setExpF(d.expF()).build().toByteArray();
                 // children[0] will be filled by the compressor after recursing on the ChildSlot
                 EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_ALP,
-                        ByteBuffer.wrap(metaBytes), new EncodeNode[1], new int[0]);
+                    ByteBuffer.wrap(metaBytes), new EncodeNode[1], new int[0]);
                 ChildSlot slot = new ChildSlot(I64_DTYPE, d.encodedArr(), 0);
                 return new CascadeStep(partialRoot, List.of(), List.of(slot), d.statsMin(), d.statsMax(), true);
             }
@@ -244,13 +242,13 @@ public final class AlpEncoding implements Encoding {
 
             EncodingProtos.PatchesMetadata patches = buildPatchesMeta(numPatches);
             byte[] metaBytes = EncodingProtos.ALPMetadata.newBuilder()
-                                       .setExpE(d.expE()).setExpF(d.expF()).setPatches(patches).build().toByteArray();
+                                   .setExpE(d.expE()).setExpF(d.expF()).setPatches(patches).build().toByteArray();
 
             // ownedBuffers[0]=idxBuf, [1]=valBuf; child I64 will be appended after (starting at idx 2)
             EncodeNode idxNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
             EncodeNode valNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
             EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_ALP,
-                    ByteBuffer.wrap(metaBytes), new EncodeNode[]{null, idxNode, valNode}, new int[0]);
+                ByteBuffer.wrap(metaBytes), new EncodeNode[]{null, idxNode, valNode}, new int[0]);
             ChildSlot slot = new ChildSlot(I64_DTYPE, d.encodedArr(), 0);
             return new CascadeStep(partialRoot, List.of(idxBuf, valBuf), List.of(slot), d.statsMin(), d.statsMax(), true);
         }
@@ -286,7 +284,7 @@ public final class AlpEncoding implements Encoding {
             return new int[]{bestExpE, bestExpF};
         }
 
-        private static EncodeResult encodeF32(float[] values, DType dtype, EncodeContext ctx) {
+        private static EncodeResult encodeF32(float[] values, EncodeContext ctx) {
             int n = values.length;
             int[] exps = findExponentsF32(values);
             int expE = exps[0], expF = exps[1];
@@ -331,9 +329,9 @@ public final class AlpEncoding implements Encoding {
 
             if (patchIndices.isEmpty()) {
                 byte[] metaBytes = EncodingProtos.ALPMetadata.newBuilder()
-                                           .setExpE(expE).setExpF(expF).build().toByteArray();
+                                       .setExpE(expE).setExpF(expF).build().toByteArray();
                 EncodeNode root = new EncodeNode(EncodingId.VORTEX_ALP,
-                        ByteBuffer.wrap(metaBytes), new EncodeNode[]{encodedNode}, new int[0]);
+                    ByteBuffer.wrap(metaBytes), new EncodeNode[]{encodedNode}, new int[0]);
                 return new EncodeResult(root, List.of(encodedBuf), statsMin, statsMax);
             }
 
@@ -346,28 +344,28 @@ public final class AlpEncoding implements Encoding {
             }
 
             EncodingProtos.PatchesMetadata patches = EncodingProtos.PatchesMetadata.newBuilder()
-                                                             .setLen(numPatches)
-                                                             .setOffset(0)
-                                                             .setIndicesPtype(DTypeProtos.PType.forNumber(PType.U32.ordinal()))
-                                                             .build();
+                                                         .setLen(numPatches)
+                                                         .setOffset(0)
+                                                         .setIndicesPtype(DTypeProtos.PType.forNumber(PType.U32.ordinal()))
+                                                         .build();
             byte[] metaBytes = EncodingProtos.ALPMetadata.newBuilder()
-                                       .setExpE(expE).setExpF(expF).setPatches(patches).build().toByteArray();
+                                   .setExpE(expE).setExpF(expF).setPatches(patches).build().toByteArray();
 
             EncodeNode idxNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
             EncodeNode valNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
             EncodeNode root = new EncodeNode(EncodingId.VORTEX_ALP,
-                    ByteBuffer.wrap(metaBytes),
-                    new EncodeNode[]{encodedNode, idxNode, valNode},
-                    new int[0]);
+                ByteBuffer.wrap(metaBytes),
+                new EncodeNode[]{encodedNode, idxNode, valNode},
+                new int[0]);
             return new EncodeResult(root, List.of(encodedBuf, idxBuf, valBuf), statsMin, statsMax);
         }
 
         private static EncodingProtos.PatchesMetadata buildPatchesMeta(int numPatches) {
             return EncodingProtos.PatchesMetadata.newBuilder()
-                           .setLen(numPatches)
-                           .setOffset(0)
-                           .setIndicesPtype(DTypeProtos.PType.forNumber(PType.U32.ordinal()))
-                           .build();
+                       .setLen(numPatches)
+                       .setOffset(0)
+                       .setIndicesPtype(DTypeProtos.PType.forNumber(PType.U32.ordinal()))
+                       .build();
         }
 
         private static byte[] scalarF64(double v) {
@@ -441,7 +439,7 @@ public final class AlpEncoding implements Encoding {
             }
 
             if (meta.hasPatches()) {
-                applyPatches(ctx, meta.getPatches(), buf, PTypeIO.LE_LONG, 8);
+                applyPatches(ctx, meta.getPatches(), buf, 8);
             }
 
             return new DoubleArray(ctx.dtype(), n, buf.asReadOnly(), ArrayStats.empty());
@@ -467,14 +465,14 @@ public final class AlpEncoding implements Encoding {
             }
 
             if (meta.hasPatches()) {
-                applyPatches(ctx, meta.getPatches(), buf32, PTypeIO.LE_INT, 4);
+                applyPatches(ctx, meta.getPatches(), buf32, 4);
             }
 
             return new FloatArray(ctx.dtype(), n, buf32.asReadOnly(), ArrayStats.empty());
         }
 
         private static void applyPatches(DecodeContext ctx, EncodingProtos.PatchesMetadata pm,
-                MemorySegment out, ValueLayout elemLayout, int elemBytes) {
+            MemorySegment out, int elemBytes) {
             long numPatches = pm.getLen();
             long offset = pm.getOffset();
             PType idxPtype = ptypeFromProto(pm.getIndicesPtype());
@@ -494,7 +492,7 @@ public final class AlpEncoding implements Encoding {
         private static Array decodeChildAs(DecodeContext parent, int childIdx, DType dtype, long rowCount) {
             ArrayNode childNode = parent.node().children()[childIdx];
             DecodeContext childCtx = new DecodeContext(
-                    childNode, dtype, rowCount, parent.segmentBuffers(), parent.registry(), parent.arena());
+                childNode, dtype, rowCount, parent.segmentBuffers(), parent.registry(), parent.arena());
             return parent.registry().decode(childCtx);
         }
 

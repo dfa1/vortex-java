@@ -96,8 +96,7 @@ public final class CascadingCompressor {
         sampleSize = Math.min(sampleSize, n);
         Object sample = (sampleSize < n) ? sliceSample(data, sampleSize) : data;
 
-        long primitiveBaseline = primitiveBytes(dtype, sampleSize);
-        long bestSampleSize = primitiveBaseline;
+        long bestSampleSize = primitiveBytes(dtype, sampleSize);
         Encoding winner = null;
 
         for (Encoding enc : encodings) {

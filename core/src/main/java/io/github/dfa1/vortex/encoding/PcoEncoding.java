@@ -35,13 +35,13 @@ import java.nio.ByteOrder;
 ///   <li>Chunk meta: [4b mode][extramodebits][4b delta][extradeltabits]
 ///       [optionaldeltalatentvar(U32)forLookback]
 ///       [per-latent:4bans_size_log,15bn_bins,per-bin{weight-1,lower,offset_bits}]
-///       [0–7balignment]</li>
-///   <li>Classic/Dict page: [deltaOrder×dtypeSizebmoments,4×ansSizeLogbANSstates]
-///       [0–7balignment] [per256-batch:ANSbits,offsetbits]</li>
-///   <li>IntMult/FloatMult/FloatQuant page: [primary header][secondaryheader][0–7balignment]
+///       [0-7balignment]</li>
+///   <li>Classic/Dict page: [deltaOrder*dtypeSizebmoments,4×ansSizeLogbANSstates]
+///       [0-7balignment] [per256-batch:ANSbits,offsetbits]</li>
+///   <li>IntMult/FloatMult/FloatQuant page: [primary header][secondaryheader][0-7balignment]
 ///       [per256-batch:primaryANS+offsets,secondaryANS+offsets]</li>
-///   <li>Lookback page: [delta ANS states][stateN×dtypeSizemoments][primaryANSstates]
-///       [0–7balignment] [per256-batch:deltaANS+offsets,primaryANS+offsets]</li>
+///   <li>Lookback page: [delta ANS states][stateN*dtypeSizemoments][primaryANSstates]
+///       [0-7balignment] [per256-batch:deltaANS+offsets,primaryANS+offsets]</li>
 ///   <li>All bit packing little-endian (LSB first)</li>
 /// </ul>
 ///
@@ -112,7 +112,7 @@ public final class PcoEncoding implements Encoding {
             BoolArray validity = null;
             long validCount = n;
             if (ctx.node().children().length > 0) {
-                Array validityArr = decodeChild(ctx, 0, new DType.Bool(false), n);
+                Array validityArr = decodeChild(ctx, new DType.Bool(false), n);
                 if (!(validityArr instanceof BoolArray ba)) {
                     throw new VortexException(EncodingId.VORTEX_PCO,
                             "pco validity child must be Bool, got: " + validityArr.getClass().getSimpleName());
@@ -277,8 +277,8 @@ public final class PcoEncoding implements Encoding {
             return new MaskedArray(toArray(nonNullDtype, n, fullOut), validity);
         }
 
-        private static Array decodeChild(DecodeContext parent, int idx, DType dtype, long rowCount) {
-            ArrayNode childNode = parent.node().children()[idx];
+        private static Array decodeChild(DecodeContext parent, DType dtype, long rowCount) {
+            ArrayNode childNode = parent.node().children()[0];
             DecodeContext childCtx = new DecodeContext(
                     childNode, dtype, rowCount, parent.segmentBuffers(), parent.registry(), parent.arena());
             return parent.registry().decode(childCtx);
@@ -351,8 +351,8 @@ public final class PcoEncoding implements Encoding {
 
             while (nRemaining > 0) {
                 int batchN = Math.min(nRemaining, PcoTansDecoder.BATCH_N);
-                int primaryPreDeltaN = Math.min(batchN, Math.max(0, nRemaining - deltaOrder));
-                int secondaryPreDeltaN = Math.min(batchN, Math.max(0, nRemaining - secondaryDeltaOrder));
+                int primaryPreDeltaN = Math.clamp(nRemaining - deltaOrder, 0, batchN);
+                int secondaryPreDeltaN = Math.clamp(nRemaining - secondaryDeltaOrder, 0, batchN);
 
                 primaryTans.decodeBatch(pageReader, primaryStateIdxs, primaryPreDeltaN,
                         batchLowersP, batchOffsetBitsP, rawMults, primaryPos);
@@ -374,8 +374,8 @@ public final class PcoEncoding implements Encoding {
 
         /// Decode one Lookback-delta page into rawLatents. Per-page window seeded from page header.
         ///
-        /// Page layout: [delta ANS states (U32)][stateN×dtypeSizeinitialvalues][primaryANSstates]
-        /// [0–7balign] [per256-batch:deltaANS+offsets(lookbackidx),primaryANS+offsets(residuals)]
+        /// Page layout: [delta ANS states (U32)][stateN*dtypeSizeinitialvalues][primaryANSstates]
+        /// [0-7balign] [per256-batch:deltaANS+offsets(lookbackidx),primaryANS+offsets(residuals)]
         private static long decodeLookbackPage(
                 PcoTansDecoder deltaTans, int deltaAnsSizeLog,
                 PcoTansDecoder primaryTans, int primaryAnsSizeLog,
@@ -466,7 +466,7 @@ public final class PcoEncoding implements Encoding {
 
         /// Decode one Conv1-delta page into rawLatents and return the updated byte offset.
         ///
-        /// Page layout: [order×dtypeSize initial state][4×ansSizeLogANSstates][0–7balign]
+        /// Page layout: [order×dtypeSize initial state][4*ansSizeLogANSstates][0-7balign]
         /// [per256-batch:ANSbits+offsetbitsfor(pageN-order)residuals]
         ///
         /// Port of {@code conv1::decode_in_place} from pcodec.
