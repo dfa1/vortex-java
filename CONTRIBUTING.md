@@ -193,7 +193,7 @@ Check: `./mvnw javadoc:javadoc -pl core` must produce zero output.
 
 ## Documentation
 
-Docs follow the [Diataxis](https://diataxis.fr/) framework:
+Update docs alongside code. Each file has a defined scope — touch the right one:
 
 | File                       | When to update                                     |
 |----------------------------|----------------------------------------------------|
