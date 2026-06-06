@@ -42,8 +42,8 @@ public final class StructEncoding implements Encoding {
 	}
 
 	@Override
-	public EncodeResult encode(DType dtype, Object data) {
-		return Encoder.encode((DType.Struct) dtype, (StructData) data);
+	public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+		return Encoder.encode((DType.Struct) dtype, (StructData) data, ctx);
 	}
 
 	@Override
@@ -57,7 +57,7 @@ public final class StructEncoding implements Encoding {
 				new PrimitiveEncoding(), new VarBinEncoding(), new BoolEncoding(),
 				new NullEncoding(), new ByteBoolEncoding());
 
-		static EncodeResult encode(DType.Struct dtype, StructData data) {
+		static EncodeResult encode(DType.Struct dtype, StructData data, EncodeContext ctx) {
 			List<Object> fields = data.fieldArrays();
 			List<DType> fieldTypes = dtype.fieldTypes();
 			if (fields.size() != fieldTypes.size()) {
@@ -68,7 +68,7 @@ public final class StructEncoding implements Encoding {
 			EncodeNode[] children = new EncodeNode[fields.size()];
 			for (int i = 0; i < fields.size(); i++) {
 				DType fieldDtype = fieldTypes.get(i);
-				EncodeResult fieldResult = findEncoding(fieldDtype).encode(fieldDtype, fields.get(i));
+				EncodeResult fieldResult = findEncoding(fieldDtype).encode(fieldDtype, fields.get(i), ctx);
 				int bufOffset = allBuffers.size();
 				children[i] = EncodeNode.remapBufferIndices(fieldResult.rootNode(), bufOffset);
 				allBuffers.addAll(fieldResult.buffers());

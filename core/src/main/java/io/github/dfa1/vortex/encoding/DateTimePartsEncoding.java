@@ -48,12 +48,12 @@ public final class DateTimePartsEncoding implements Encoding {
     }
 
     @Override
-    public EncodeResult encode(DType dtype, Object data) {
-        return Encoder.encode((DType.Extension) dtype, (DateTimePartsData) data);
+    public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+        return Encoder.encode((DType.Extension) dtype, (DateTimePartsData) data, ctx);
     }
 
     @Override
-    public CascadeStep encodeCascade(DType dtype, Object data, CompressorContext ctx) {
+    public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext encodeCtx) {
         return Encoder.encodeCascade((DType.Extension) dtype, (DateTimePartsData) data);
     }
 
@@ -70,7 +70,7 @@ public final class DateTimePartsEncoding implements Encoding {
         private static final DTypeProtos.PType I64_PROTO =
                 DTypeProtos.PType.forNumber(PType.I64.ordinal());
 
-        static EncodeResult encode(DType.Extension dtype, DateTimePartsData data) {
+        static EncodeResult encode(DType.Extension dtype, DateTimePartsData data, EncodeContext ctx) {
             ByteBuffer extMeta = dtype.metadata();
             if (extMeta == null || extMeta.remaining() < 3) {
                 throw new VortexException(EncodingId.VORTEX_DATETIMEPARTS,
@@ -101,12 +101,12 @@ public final class DateTimePartsEncoding implements Encoding {
                 subseconds[i] = rem % divisor;
             }
 
-            PrimitiveEncoding primEnc = new PrimitiveEncoding();
             DType daysDtype = data.nullable() ? I64_NULLABLE : I64;
 
-            EncodeResult daysResult = primEnc.encode(daysDtype, days);
-            EncodeResult secondsResult = primEnc.encode(I64, seconds);
-            EncodeResult subsecondsResult = primEnc.encode(I64, subseconds);
+            Encoding primEnc = ctx.lookupEncoding(EncodingId.VORTEX_PRIMITIVE);
+            EncodeResult daysResult = primEnc.encode(daysDtype, days, ctx);
+            EncodeResult secondsResult = primEnc.encode(I64, seconds, ctx);
+            EncodeResult subsecondsResult = primEnc.encode(I64, subseconds, ctx);
 
             List<MemorySegment> allBuffers = new ArrayList<>();
             allBuffers.addAll(daysResult.buffers());

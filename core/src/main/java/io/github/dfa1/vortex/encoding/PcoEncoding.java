@@ -68,8 +68,8 @@ public final class PcoEncoding implements Encoding {
     }
 
     @Override
-    public EncodeResult encode(DType dtype, Object data) {
-        return Encoder.encode(dtype, data);
+    public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+        return Encoder.encode(dtype, data, ctx);
     }
 
     @Override
@@ -79,7 +79,7 @@ public final class PcoEncoding implements Encoding {
 
     private static final class Encoder {
 
-        static EncodeResult encode(DType dtype, Object data) {
+        static EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
             throw new VortexException(EncodingId.VORTEX_PCO,
                     "encode not implemented — pco encode port pending");
         }

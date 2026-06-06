@@ -47,8 +47,8 @@ public final class ChunkedEncoding implements Encoding {
 	}
 
 	@Override
-	public EncodeResult encode(DType dtype, Object data) {
-		return Encoder.encode(dtype, (ChunkedData) data);
+	public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+		return Encoder.encode(dtype, (ChunkedData) data, ctx);
 	}
 
 	@Override
@@ -62,7 +62,7 @@ public final class ChunkedEncoding implements Encoding {
 				new PrimitiveEncoding(), new VarBinEncoding(), new BoolEncoding(),
 				new NullEncoding(), new ByteBoolEncoding(), new StructEncoding());
 
-		static EncodeResult encode(DType dtype, ChunkedData data) {
+		static EncodeResult encode(DType dtype, ChunkedData data, EncodeContext ctx) {
 			List<Object> chunks = data.chunks();
 			long[] chunkLengths = data.chunkLengths();
 			int nchunks = chunks.size();
@@ -79,7 +79,7 @@ public final class ChunkedEncoding implements Encoding {
 
 			// Encode offsets child (U64 primitive)
 			DType u64 = new DType.Primitive(PType.U64, false);
-			EncodeResult offsetsResult = new PrimitiveEncoding().encode(u64, offsets);
+			EncodeResult offsetsResult = ctx.lookupEncoding(EncodingId.VORTEX_PRIMITIVE).encode(u64, offsets, ctx);
 
 			List<MemorySegment> allBuffers = new ArrayList<>(offsetsResult.buffers());
 			EncodeNode[] children = new EncodeNode[nchunks + 1];
@@ -88,7 +88,7 @@ public final class ChunkedEncoding implements Encoding {
 			// Encode each chunk
 			Encoding inner = findEncoding(dtype);
 			for (int i = 0; i < nchunks; i++) {
-				EncodeResult chunkResult = inner.encode(dtype, chunks.get(i));
+				EncodeResult chunkResult = inner.encode(dtype, chunks.get(i), ctx);
 				int bufOffset = allBuffers.size();
 				children[i + 1] = EncodeNode.remapBufferIndices(chunkResult.rootNode(), bufOffset);
 				allBuffers.addAll(chunkResult.buffers());

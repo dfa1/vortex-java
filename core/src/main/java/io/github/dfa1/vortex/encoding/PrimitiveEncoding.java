@@ -36,8 +36,8 @@ public final class PrimitiveEncoding implements Encoding {
 	}
 
 	@Override
-	public EncodeResult encode(DType dtype, Object data) {
-		return Encoder.encode(dtype, data);
+	public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+		return Encoder.encode(dtype, data, ctx);
 	}
 
 	@Override
@@ -47,9 +47,9 @@ public final class PrimitiveEncoding implements Encoding {
 
 	private static final class Encoder {
 
-		private static EncodeResult encode(DType dtype, Object data) {
+		private static EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
 			PType ptype = ((DType.Primitive) dtype).ptype();
-			MemorySegment seg = encodePrimitive(ptype, data);
+			MemorySegment seg = encodePrimitive(ptype, data, ctx.arena());
 			byte[] min = null;
 			byte[] max = null;
 			byte[][] stats = computeStats(ptype, data);
@@ -60,12 +60,12 @@ public final class PrimitiveEncoding implements Encoding {
 			return EncodeResult.simple(EncodingId.VORTEX_PRIMITIVE, seg, min, max);
 		}
 
-		private static MemorySegment encodePrimitive(PType ptype, Object data) {
+		private static MemorySegment encodePrimitive(PType ptype, Object data, Arena arena) {
 			return switch (ptype) {
 				case I8, U8 -> MemorySegment.ofArray((byte[]) data);
 				case I16, U16, F16 -> {
 					short[] arr = (short[]) data;
-					MemorySegment seg = Arena.ofAuto().allocate((long) arr.length * 2, 2);
+					MemorySegment seg = arena.allocate((long) arr.length * 2, 2);
 					for (int i = 0; i < arr.length; i++) {
 						seg.setAtIndex(PTypeIO.LE_SHORT, i, arr[i]);
 					}
@@ -73,7 +73,7 @@ public final class PrimitiveEncoding implements Encoding {
 				}
 				case I32, U32 -> {
 					int[] arr = (int[]) data;
-					MemorySegment seg = Arena.ofAuto().allocate((long) arr.length * 4, 4);
+					MemorySegment seg = arena.allocate((long) arr.length * 4, 4);
 					for (int i = 0; i < arr.length; i++) {
 						seg.setAtIndex(PTypeIO.LE_INT, i, arr[i]);
 					}
@@ -81,7 +81,7 @@ public final class PrimitiveEncoding implements Encoding {
 				}
 				case I64, U64 -> {
 					long[] arr = (long[]) data;
-					MemorySegment seg = Arena.ofAuto().allocate((long) arr.length * 8, 8);
+					MemorySegment seg = arena.allocate((long) arr.length * 8, 8);
 					for (int i = 0; i < arr.length; i++) {
 						seg.setAtIndex(PTypeIO.LE_LONG, i, arr[i]);
 					}
@@ -89,7 +89,7 @@ public final class PrimitiveEncoding implements Encoding {
 				}
 				case F32 -> {
 					float[] arr = (float[]) data;
-					MemorySegment seg = Arena.ofAuto().allocate((long) arr.length * 4, 4);
+					MemorySegment seg = arena.allocate((long) arr.length * 4, 4);
 					for (int i = 0; i < arr.length; i++) {
 						seg.setAtIndex(PTypeIO.LE_FLOAT, i, arr[i]);
 					}
@@ -97,7 +97,7 @@ public final class PrimitiveEncoding implements Encoding {
 				}
 				case F64 -> {
 					double[] arr = (double[]) data;
-					MemorySegment seg = Arena.ofAuto().allocate((long) arr.length * 8, 8);
+					MemorySegment seg = arena.allocate((long) arr.length * 8, 8);
 					for (int i = 0; i < arr.length; i++) {
 						seg.setAtIndex(PTypeIO.LE_DOUBLE, i, arr[i]);
 					}

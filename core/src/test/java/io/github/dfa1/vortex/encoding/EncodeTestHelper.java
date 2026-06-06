@@ -11,6 +11,13 @@ final class EncodeTestHelper {
 		// no instances
 	}
 
+	/// Creates a non-cascading [EncodeContext] using a GC-managed arena and all service-loaded encodings.
+	///
+	/// @return a test-suitable {@link EncodeContext}
+	static EncodeContext testCtx() {
+		return EncodeContext.of(Arena.ofAuto(), EncodingRegistry.loadAll());
+	}
+
 	static DecodeContext toDecodeContext(
 			EncodeResult result, long rowCount, io.github.dfa1.vortex.core.DType dtype,
 			EncodingRegistry registry

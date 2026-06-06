@@ -71,7 +71,7 @@ public final class ZstdEncoding implements Encoding {
     }
 
     @Override
-    public EncodeResult encode(DType dtype, Object data) {
+    public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
         return Encoder.encode(dtype, data);
     }
 
@@ -93,7 +93,7 @@ public final class ZstdEncoding implements Encoding {
         }
 
         private static EncodeResult encodePrimitive(DType.Primitive dt, Object data) {
-            MemorySegment raw = primitiveToLeBytes(dt.ptype(), data);
+            MemorySegment raw = primitiveToLeBytes(dt.ptype(), data, Arena.ofAuto());
             long n = primitiveLength(dt.ptype(), data);
             byte[] rawBytes = raw.toArray(ValueLayout.JAVA_BYTE);
             return buildResult(rawBytes, n);
@@ -124,12 +124,12 @@ public final class ZstdEncoding implements Encoding {
             return Arrays.copyOf(out, len);
         }
 
-        private static MemorySegment primitiveToLeBytes(PType ptype, Object data) {
+        private static MemorySegment primitiveToLeBytes(PType ptype, Object data, Arena arena) {
             return switch (ptype) {
                 case I8, U8 -> MemorySegment.ofArray((byte[]) data);
                 case I16, U16, F16 -> {
                     short[] arr = (short[]) data;
-                    MemorySegment seg = Arena.ofAuto().allocate((long) arr.length * 2, 2);
+                    MemorySegment seg = arena.allocate((long) arr.length * 2, 2);
                     for (int i = 0; i < arr.length; i++) {
                         seg.setAtIndex(PTypeIO.LE_SHORT, i, arr[i]);
                     }
@@ -137,7 +137,7 @@ public final class ZstdEncoding implements Encoding {
                 }
                 case I32, U32 -> {
                     int[] arr = (int[]) data;
-                    MemorySegment seg = Arena.ofAuto().allocate((long) arr.length * 4, 4);
+                    MemorySegment seg = arena.allocate((long) arr.length * 4, 4);
                     for (int i = 0; i < arr.length; i++) {
                         seg.setAtIndex(PTypeIO.LE_INT, i, arr[i]);
                     }
@@ -145,7 +145,7 @@ public final class ZstdEncoding implements Encoding {
                 }
                 case I64, U64 -> {
                     long[] arr = (long[]) data;
-                    MemorySegment seg = Arena.ofAuto().allocate((long) arr.length * 8, 8);
+                    MemorySegment seg = arena.allocate((long) arr.length * 8, 8);
                     for (int i = 0; i < arr.length; i++) {
                         seg.setAtIndex(PTypeIO.LE_LONG, i, arr[i]);
                     }
@@ -153,7 +153,7 @@ public final class ZstdEncoding implements Encoding {
                 }
                 case F32 -> {
                     float[] arr = (float[]) data;
-                    MemorySegment seg = Arena.ofAuto().allocate((long) arr.length * 4, 4);
+                    MemorySegment seg = arena.allocate((long) arr.length * 4, 4);
                     for (int i = 0; i < arr.length; i++) {
                         seg.setAtIndex(PTypeIO.LE_FLOAT, i, arr[i]);
                     }
@@ -161,7 +161,7 @@ public final class ZstdEncoding implements Encoding {
                 }
                 case F64 -> {
                     double[] arr = (double[]) data;
-                    MemorySegment seg = Arena.ofAuto().allocate((long) arr.length * 8, 8);
+                    MemorySegment seg = arena.allocate((long) arr.length * 8, 8);
                     for (int i = 0; i < arr.length; i++) {
                         seg.setAtIndex(PTypeIO.LE_DOUBLE, i, arr[i]);
                     }
@@ -188,15 +188,17 @@ public final class ZstdEncoding implements Encoding {
                 encoded[i] = strings[i].getBytes(StandardCharsets.UTF_8);
                 total += 4 + encoded[i].length;
             }
-            MemorySegment seg = Arena.ofAuto().allocate(total > 0 ? total : 1);
-            long pos = 0;
-            for (byte[] bytes : encoded) {
-                seg.set(PTypeIO.LE_INT, pos, bytes.length);
-                pos += 4;
-                MemorySegment.copy(MemorySegment.ofArray(bytes), 0, seg, pos, bytes.length);
-                pos += bytes.length;
+            try (Arena scratch = Arena.ofConfined()) {
+                MemorySegment seg = scratch.allocate(total > 0 ? total : 1);
+                long pos = 0;
+                for (byte[] bytes : encoded) {
+                    seg.set(PTypeIO.LE_INT, pos, bytes.length);
+                    pos += 4;
+                    MemorySegment.copy(MemorySegment.ofArray(bytes), 0, seg, pos, bytes.length);
+                    pos += bytes.length;
+                }
+                return seg.asSlice(0, total).toArray(ValueLayout.JAVA_BYTE);
             }
-            return seg.asSlice(0, total).toArray(ValueLayout.JAVA_BYTE);
         }
     }
 

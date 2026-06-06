@@ -37,7 +37,7 @@ public final class DecimalEncoding implements Encoding {
 	}
 
 	@Override
-	public EncodeResult encode(DType dtype, Object data) {
+	public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
 		return Encoder.encode((DType.Decimal) dtype, (MemorySegment) data);
 	}
 

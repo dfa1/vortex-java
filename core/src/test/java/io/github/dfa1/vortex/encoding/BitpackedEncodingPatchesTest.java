@@ -25,7 +25,7 @@ class BitpackedEncodingPatchesTest {
 			// then attach synthetic patches metadata that rewrites indices [1, 3] with [777, 999].
 			int[] base = {10, 20, 30, 40, 50};
 			BitpackedEncoding sut = new BitpackedEncoding();
-			EncodeResult packed = sut.encode(DTypes.I32, base);
+			EncodeResult packed = sut.encode(DTypes.I32, base, EncodeTestHelper.testCtx());
 
 			MemorySegment packedSeg = packed.buffers().getFirst();
 			byte[] packedBytes = packedSeg.toArray(java.lang.foreign.ValueLayout.JAVA_BYTE);

@@ -8,7 +8,6 @@ import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.ListArray;
 import io.github.dfa1.vortex.proto.EncodingProtos;
 
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -42,8 +41,8 @@ public final class ListEncoding implements Encoding {
 	}
 
 	@Override
-	public EncodeResult encode(DType dtype, Object data) {
-		return Encoder.encode((DType.List) dtype, (ListData) data);
+	public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+		return Encoder.encode((DType.List) dtype, (ListData) data, ctx);
 	}
 
 	@Override
@@ -57,18 +56,17 @@ public final class ListEncoding implements Encoding {
 				new PrimitiveEncoding(), new VarBinEncoding(), new BoolEncoding(),
 				new NullEncoding(), new ByteBoolEncoding());
 
-		static EncodeResult encode(DType.List dtype, ListData data) {
+		static EncodeResult encode(DType.List dtype, ListData data, EncodeContext ctx) {
 			DType elementType = dtype.elementType();
 			Encoding elemEncoding = findEncoding(elementType);
-			EncodeResult elemResult = elemEncoding.encode(elementType, data.elements());
+			EncodeResult elemResult = elemEncoding.encode(elementType, data.elements(), ctx);
 
 			List<MemorySegment> allBuffers = new ArrayList<>(elemResult.buffers());
 			int elemBufCount = allBuffers.size();
 			EncodeNode elemNode = EncodeNode.remapBufferIndices(elemResult.rootNode(), 0);
 
 			long nOffsets = data.outerLen() + 1;
-			Arena arena = Arena.ofAuto();
-			MemorySegment offsetsBuf = arena.allocate(nOffsets * Long.BYTES, Long.BYTES);
+			MemorySegment offsetsBuf = ctx.arena().allocate(nOffsets * Long.BYTES, Long.BYTES);
 			for (int i = 0; i < nOffsets; i++) {
 				offsetsBuf.setAtIndex(PTypeIO.LE_LONG, i, data.offsets()[i]);
 			}

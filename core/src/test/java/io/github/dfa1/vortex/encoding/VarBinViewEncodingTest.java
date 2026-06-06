@@ -56,7 +56,7 @@ class VarBinViewEncodingTest {
 			Arena arena = Arena.ofAuto();
 
 			// When
-			EncodeResult result = sut.encode(DTypes.UTF8, values);
+			EncodeResult result = sut.encode(DTypes.UTF8, values, EncodeTestHelper.testCtx());
 			MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
 			ArrayNode node = ArrayNode.of(
 					EncodingId.VORTEX_VARBINVIEW, null, new ArrayNode[0],

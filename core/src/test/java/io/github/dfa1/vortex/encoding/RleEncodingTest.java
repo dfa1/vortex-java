@@ -45,7 +45,7 @@ class RleEncodingTest {
 			DType dtype = new DType.Primitive(PType.I32, false);
 
 			// When
-			EncodeResult encoded = sut.encode(dtype, new int[0]);
+			EncodeResult encoded = sut.encode(dtype, new int[0], EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, 0, dtype, registry());
 			Array result = sut.decode(ctx);
 
@@ -61,7 +61,7 @@ class RleEncodingTest {
 			int[] data = {42};
 
 			// When
-			EncodeResult encoded = sut.encode(dtype, data);
+			EncodeResult encoded = sut.encode(dtype, data, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, dtype, registry());
 			Array result = sut.decode(ctx);
 
@@ -82,7 +82,7 @@ class RleEncodingTest {
 			}
 
 			// When
-			EncodeResult encoded = sut.encode(dtype, data);
+			EncodeResult encoded = sut.encode(dtype, data, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, n, dtype, registry());
 			Array result = sut.decode(ctx);
 
@@ -101,7 +101,7 @@ class RleEncodingTest {
 			int[] data = {1, 1, 1, 2, 2, 3};
 
 			// When
-			EncodeResult encoded = sut.encode(dtype, data);
+			EncodeResult encoded = sut.encode(dtype, data, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, dtype, registry());
 			Array result = sut.decode(ctx);
 
@@ -125,7 +125,7 @@ class RleEncodingTest {
 			}
 
 			// When
-			EncodeResult encoded = sut.encode(dtype, data);
+			EncodeResult encoded = sut.encode(dtype, data, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, n, dtype, registry());
 			Array result = sut.decode(ctx);
 
@@ -144,7 +144,7 @@ class RleEncodingTest {
 			long[] data = {100L, 100L, 200L, 300L, 300L, 300L};
 
 			// When
-			EncodeResult encoded = sut.encode(dtype, data);
+			EncodeResult encoded = sut.encode(dtype, data, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, dtype, registry());
 			Array result = sut.decode(ctx);
 
@@ -167,7 +167,7 @@ class RleEncodingTest {
 			}
 
 			// When
-			EncodeResult encoded = sut.encode(dtype, data);
+			EncodeResult encoded = sut.encode(dtype, data, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, n, dtype, registry());
 			Array result = sut.decode(ctx);
 
@@ -189,7 +189,7 @@ class RleEncodingTest {
 			}
 
 			// When
-			EncodeResult encoded = sut.encode(dtype, data);
+			EncodeResult encoded = sut.encode(dtype, data, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, dtype, registry());
 			Array result = sut.decode(ctx);
 
@@ -210,7 +210,7 @@ class RleEncodingTest {
 			int[] data = {-3, -3, -1, -1, 0, 0, 5};
 
 			// When
-			EncodeResult encoded = sut.encode(dtype, data);
+			EncodeResult encoded = sut.encode(dtype, data, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, dtype, registry());
 			Array result = sut.decode(ctx);
 
@@ -236,7 +236,7 @@ class RleEncodingTest {
 			}
 
 			// When
-			EncodeResult encoded = sut.encode(dtype, data);
+			EncodeResult encoded = sut.encode(dtype, data, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, 1024, dtype, registry());
 			Array result = sut.decode(ctx);
 
@@ -256,7 +256,7 @@ class RleEncodingTest {
 			}
 
 			// When
-			EncodeResult encoded = sut.encode(dtype, data);
+			EncodeResult encoded = sut.encode(dtype, data, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, n, dtype, registry());
 			Array result = sut.decode(ctx);
 
@@ -274,7 +274,7 @@ class RleEncodingTest {
 			var sut = new RleEncoding();
 			DType dtype = new DType.Primitive(PType.I32, false);
 			int[] data = {10, 10, 20, 20};
-			EncodeResult encoded = sut.encode(dtype, data);
+			EncodeResult encoded = sut.encode(dtype, data, EncodeTestHelper.testCtx());
 
 			// Original buffers: [values_buf, indices_buf, offsets_buf]
 			List<MemorySegment> originalBufs = new ArrayList<>(encoded.buffers());
@@ -331,7 +331,7 @@ class RleEncodingTest {
 			}
 
 			// When
-			EncodeResult encoded = sut.encode(dtype, data);
+			EncodeResult encoded = sut.encode(dtype, data, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, n, dtype, registry());
 			Array result = sut.decode(ctx);
 

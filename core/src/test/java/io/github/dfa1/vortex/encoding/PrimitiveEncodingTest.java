@@ -32,7 +32,7 @@ class PrimitiveEncodingTest {
 			EncodingRegistry registry = TestRegistry.of(sut);
 
 			// When
-			EncodeResult encoded = sut.encode(dtype, data);
+			EncodeResult encoded = sut.encode(dtype, data, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, dtype, registry);
 			Array result = sut.decode(ctx);
 
@@ -53,7 +53,7 @@ class PrimitiveEncodingTest {
 			EncodingRegistry registry = TestRegistry.of(sut);
 
 			// When
-			EncodeResult encoded = sut.encode(dtype, data);
+			EncodeResult encoded = sut.encode(dtype, data, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, dtype, registry);
 			Array result = sut.decode(ctx);
 
@@ -74,7 +74,7 @@ class PrimitiveEncodingTest {
 			EncodingRegistry registry = TestRegistry.of(sut);
 
 			// When
-			EncodeResult encoded = sut.encode(dtype, data);
+			EncodeResult encoded = sut.encode(dtype, data, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, dtype, registry);
 			Array result = sut.decode(ctx);
 
@@ -94,7 +94,7 @@ class PrimitiveEncodingTest {
 			var sut = new PrimitiveEncoding();
 
 			// When
-			EncodeResult encoded = sut.encode(dtype, data);
+			EncodeResult encoded = sut.encode(dtype, data, EncodeTestHelper.testCtx());
 
 			// Then — no compression: wire size = n * elemBytes
 			long totalBytes = encoded.buffers().stream().mapToLong(java.lang.foreign.MemorySegment::byteSize).sum();

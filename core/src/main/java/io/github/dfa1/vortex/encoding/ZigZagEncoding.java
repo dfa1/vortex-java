@@ -10,7 +10,6 @@ import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
 
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.util.List;
@@ -43,8 +42,8 @@ public final class ZigZagEncoding implements Encoding {
 	}
 
 	@Override
-	public EncodeResult encode(DType dtype, Object data) {
-		return Encoder.encode(dtype, data);
+	public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+		return Encoder.encode(dtype, data, ctx);
 	}
 
 	@Override
@@ -54,12 +53,12 @@ public final class ZigZagEncoding implements Encoding {
 
 	private static final class Encoder {
 
-		private static EncodeResult encode(DType dtype, Object data) {
+		private static EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
 			PType signed = ((DType.Primitive) dtype).ptype();
 			MemorySegment seg = switch (signed) {
 				case I8 -> {
 					byte[] arr = (byte[]) data;
-					MemorySegment s = Arena.ofAuto().allocate(arr.length);
+					MemorySegment s = ctx.arena().allocate(arr.length);
 					for (int i = 0; i < arr.length; i++) {
 						byte v = arr[i];
 						s.set(ValueLayout.JAVA_BYTE, i, (byte) ((v << 1) ^ (v >> 7)));
@@ -68,7 +67,7 @@ public final class ZigZagEncoding implements Encoding {
 				}
 				case I16 -> {
 					short[] arr = (short[]) data;
-					MemorySegment s = Arena.ofAuto().allocate((long) arr.length * 2, 2);
+					MemorySegment s = ctx.arena().allocate((long) arr.length * 2, 2);
 					for (int i = 0; i < arr.length; i++) {
 						short v = arr[i];
 						s.setAtIndex(PTypeIO.LE_SHORT, i, (short) ((v << 1) ^ (v >> 15)));
@@ -77,7 +76,7 @@ public final class ZigZagEncoding implements Encoding {
 				}
 				case I32 -> {
 					int[] arr = (int[]) data;
-					MemorySegment s = Arena.ofAuto().allocate((long) arr.length * 4, 4);
+					MemorySegment s = ctx.arena().allocate((long) arr.length * 4, 4);
 					for (int i = 0; i < arr.length; i++) {
 						int v = arr[i];
 						s.setAtIndex(PTypeIO.LE_INT, i, (v << 1) ^ (v >> 31));
@@ -86,7 +85,7 @@ public final class ZigZagEncoding implements Encoding {
 				}
 				case I64 -> {
 					long[] arr = (long[]) data;
-					MemorySegment s = Arena.ofAuto().allocate((long) arr.length * 8, 8);
+					MemorySegment s = ctx.arena().allocate((long) arr.length * 8, 8);
 					for (int i = 0; i < arr.length; i++) {
 						long v = arr[i];
 						s.setAtIndex(PTypeIO.LE_LONG, i, (v << 1) ^ (v >> 63));

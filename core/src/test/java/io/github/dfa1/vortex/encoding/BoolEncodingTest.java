@@ -25,7 +25,7 @@ class BoolEncodingTest {
 			EncodingRegistry registry = TestRegistry.of(sut);
 
 			// When
-			EncodeResult encoded = sut.encode(DTypes.BOOL, data);
+			EncodeResult encoded = sut.encode(DTypes.BOOL, data, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, DTypes.BOOL, registry);
 			Array result = sut.decode(ctx);
 
@@ -46,7 +46,7 @@ class BoolEncodingTest {
 			var sut = new BoolEncoding();
 
 			// When
-			EncodeResult encoded = sut.encode(DTypes.BOOL, data);
+			EncodeResult encoded = sut.encode(DTypes.BOOL, data, EncodeTestHelper.testCtx());
 
 			// Then — bit-packed: ceiling(n/8) bytes, always ≤ n bytes raw
 			long totalBytes = encoded.buffers().stream().mapToLong(java.lang.foreign.MemorySegment::byteSize).sum();

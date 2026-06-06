@@ -51,7 +51,7 @@ class StructEncodingTest {
 			StructEncoding sut = new StructEncoding();
 
 			// When
-			EncodeResult result = sut.encode(dtype, data);
+			EncodeResult result = sut.encode(dtype, data, EncodeTestHelper.testCtx());
 
 			// Then — decode round-trip
 			MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
@@ -78,7 +78,7 @@ class StructEncodingTest {
 			StructEncoding sut = new StructEncoding();
 
 			// When
-			EncodeResult result = sut.encode(dtype, new StructData(List.of(data)));
+			EncodeResult result = sut.encode(dtype, new StructData(List.of(data)), EncodeTestHelper.testCtx());
 
 			// Then — struct node wraps one field child with remapped buffers
 			assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_STRUCT);
@@ -97,7 +97,7 @@ class StructEncodingTest {
 			// When / Then
 			org.junit.jupiter.api.Assertions.assertThrows(
 					io.github.dfa1.vortex.core.VortexException.class,
-					() -> sut.encode(dtype, data));
+					() -> sut.encode(dtype, data, EncodeTestHelper.testCtx()));
 		}
 	}
 

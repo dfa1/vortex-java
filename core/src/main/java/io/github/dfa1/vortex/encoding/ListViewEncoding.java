@@ -8,7 +8,6 @@ import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.ListViewArray;
 import io.github.dfa1.vortex.proto.EncodingProtos;
 
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -47,8 +46,8 @@ public final class ListViewEncoding implements Encoding {
 	}
 
 	@Override
-	public EncodeResult encode(DType dtype, Object data) {
-		return Encoder.encode((DType.List) dtype, (ListViewData) data);
+	public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+		return Encoder.encode((DType.List) dtype, (ListViewData) data, ctx);
 	}
 
 	@Override
@@ -62,26 +61,25 @@ public final class ListViewEncoding implements Encoding {
 				new PrimitiveEncoding(), new VarBinEncoding(), new BoolEncoding(),
 				new NullEncoding(), new ByteBoolEncoding());
 
-		static EncodeResult encode(DType.List dtype, ListViewData data) {
+		static EncodeResult encode(DType.List dtype, ListViewData data, EncodeContext ctx) {
 			DType elementType = dtype.elementType();
 			Encoding elemEncoding = findEncoding(elementType);
-			EncodeResult elemResult = elemEncoding.encode(elementType, data.elements());
+			EncodeResult elemResult = elemEncoding.encode(elementType, data.elements(), ctx);
 
 			List<MemorySegment> allBuffers = new ArrayList<>(elemResult.buffers());
 			int elemBufCount = allBuffers.size();
 			EncodeNode elemNode = EncodeNode.remapBufferIndices(elemResult.rootNode(), 0);
 
-			Arena arena = Arena.ofAuto();
 			long n = data.outerLen();
 
-			MemorySegment offsetsBuf = arena.allocate(n * Integer.BYTES, Integer.BYTES);
+			MemorySegment offsetsBuf = ctx.arena().allocate(n * Integer.BYTES, Integer.BYTES);
 			for (int i = 0; i < n; i++) {
 				offsetsBuf.setAtIndex(PTypeIO.LE_INT, i, data.offsets()[i]);
 			}
 			allBuffers.add(offsetsBuf);
 			EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, elemBufCount);
 
-			MemorySegment sizesBuf = arena.allocate(n * Integer.BYTES, Integer.BYTES);
+			MemorySegment sizesBuf = ctx.arena().allocate(n * Integer.BYTES, Integer.BYTES);
 			for (int i = 0; i < n; i++) {
 				sizesBuf.setAtIndex(PTypeIO.LE_INT, i, data.sizes()[i]);
 			}

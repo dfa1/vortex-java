@@ -28,7 +28,7 @@ class DictEncodingTest {
 			EncodingRegistry registry = TestRegistry.withPrimitive(sut);
 
 			// When
-			EncodeResult encoded = sut.encode(DTypes.I32, data);
+			EncodeResult encoded = sut.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, DTypes.I32, registry);
 			Array result = sut.decode(ctx);
 
@@ -48,7 +48,7 @@ class DictEncodingTest {
 			EncodingRegistry registry = TestRegistry.withPrimitive(sut);
 
 			// When
-			EncodeResult encoded = sut.encode(DTypes.I64, data);
+			EncodeResult encoded = sut.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, DTypes.I64, registry);
 			Array result = sut.decode(ctx);
 
@@ -67,7 +67,7 @@ class DictEncodingTest {
 			var sut = new DictEncoding();
 
 			// When
-			EncodeResult encoded = sut.encode(DTypes.I32, data);
+			EncodeResult encoded = sut.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
 
 			// Then — dict-encoded size < raw size (n * 4 bytes)
 			long encodedBytes = encoded.buffers().stream().mapToLong(MemorySegment::byteSize).sum();
@@ -84,7 +84,7 @@ class DictEncodingTest {
 			registry.register(new VarBinEncoding());
 
 			// When
-			EncodeResult encoded = sut.encode(DTypes.UTF8, data);
+			EncodeResult encoded = sut.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, DTypes.UTF8, registry);
 			Array result = sut.decode(ctx);
 
@@ -106,7 +106,7 @@ class DictEncodingTest {
 			String[] data = repeat(symbols, 1000);  // 3 000 rows, 3 unique ~4-byte symbols
 
 			// When
-			EncodeResult encoded = sut.encode(DTypes.UTF8, data);
+			EncodeResult encoded = sut.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
 
 			// Then — dict overhead << repeating every string verbatim
 			long encodedBytes = encoded.buffers().stream().mapToLong(MemorySegment::byteSize).sum();

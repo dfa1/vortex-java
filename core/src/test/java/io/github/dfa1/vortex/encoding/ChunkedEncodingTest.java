@@ -37,7 +37,7 @@ class ChunkedEncodingTest {
 			ChunkedData data = new ChunkedData(List.of(chunk0, chunk1), new long[]{3, 2});
 
 			// When
-			EncodeResult encoded = sut.encode(i64, data);
+			EncodeResult encoded = sut.encode(i64, data, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, 5L, i64, registry);
 			Array result = sut.decode(ctx);
 
@@ -59,7 +59,7 @@ class ChunkedEncodingTest {
 			ChunkedData data = new ChunkedData(List.of(chunk0), new long[]{2});
 
 			// When
-			EncodeResult result = sut.encode(i64, data);
+			EncodeResult result = sut.encode(i64, data, EncodeTestHelper.testCtx());
 
 			// Then
 			assertThat(result.rootNode().bufferIndices()).isEmpty();
@@ -96,11 +96,11 @@ class ChunkedEncodingTest {
 			registry.register(new PrimitiveEncoding());
 
 			// Build chunk_offsets segment: [0, 3, 5] as U64 LE
-			EncodeResult offsetsResult = new PrimitiveEncoding().encode(u64, new long[]{0L, 3L, 5L});
+			EncodeResult offsetsResult = new PrimitiveEncoding().encode(u64, new long[]{0L, 3L, 5L}, EncodeTestHelper.testCtx());
 			// Build chunk0 segment
-			EncodeResult chunk0Result = new PrimitiveEncoding().encode(i64, chunk0);
+			EncodeResult chunk0Result = new PrimitiveEncoding().encode(i64, chunk0, EncodeTestHelper.testCtx());
 			// Build chunk1 segment
-			EncodeResult chunk1Result = new PrimitiveEncoding().encode(i64, chunk1);
+			EncodeResult chunk1Result = new PrimitiveEncoding().encode(i64, chunk1, EncodeTestHelper.testCtx());
 
 			// Collect all buffers: [offsets_buf, chunk0_buf, chunk1_buf]
 			MemorySegment[] allBufs = {
@@ -147,8 +147,8 @@ class ChunkedEncodingTest {
 			registry.register(new ChunkedEncoding());
 			registry.register(new PrimitiveEncoding());
 
-			EncodeResult offsetsResult = new PrimitiveEncoding().encode(u64, new long[]{0L, 3L});
-			EncodeResult chunkResult = new PrimitiveEncoding().encode(i64, data);
+			EncodeResult offsetsResult = new PrimitiveEncoding().encode(u64, new long[]{0L, 3L}, EncodeTestHelper.testCtx());
+			EncodeResult chunkResult = new PrimitiveEncoding().encode(i64, data, EncodeTestHelper.testCtx());
 
 			MemorySegment[] allBufs = {
 					offsetsResult.buffers().getFirst(),

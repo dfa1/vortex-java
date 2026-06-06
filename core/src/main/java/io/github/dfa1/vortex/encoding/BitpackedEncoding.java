@@ -54,8 +54,8 @@ public final class BitpackedEncoding implements Encoding {
 	}
 
 	@Override
-	public EncodeResult encode(DType dtype, Object data) {
-		return Encoder.encode(dtype, data);
+	public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+		return Encoder.encode(dtype, data, ctx);
 	}
 
 	@Override
@@ -65,7 +65,7 @@ public final class BitpackedEncoding implements Encoding {
 
 	private static final class Encoder {
 
-		static EncodeResult encode(DType dtype, Object data) {
+		static EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
 			PType ptype = ((DType.Primitive) dtype).ptype();
 			long[] longs = toLongs(data, ptype);
 			int n = longs.length;
@@ -96,7 +96,7 @@ public final class BitpackedEncoding implements Encoding {
 				bitWidth = maxUnsigned == 0L ? 0 : (Long.SIZE - Long.numberOfLeadingZeros(maxUnsigned));
 			}
 
-			MemorySegment packed = packFastLanes(longs, n, bitWidth, typeBits);
+			MemorySegment packed = packFastLanes(longs, n, bitWidth, typeBits, ctx.arena());
 
 			byte[] metaBytes = EncodingProtos.BitPackedMetadata.newBuilder()
 					.setBitWidth(bitWidth)
@@ -112,7 +112,7 @@ public final class BitpackedEncoding implements Encoding {
 			return new EncodeResult(root, List.of(packed), statsMin, statsMax);
 		}
 
-		private static MemorySegment packFastLanes(long[] values, int n, int bitWidth, int typeBits) {
+		private static MemorySegment packFastLanes(long[] values, int n, int bitWidth, int typeBits, Arena arena) {
 			if (bitWidth == 0 || n == 0) {
 				return MemorySegment.ofArray(new byte[0]);
 			}
@@ -120,7 +120,7 @@ public final class BitpackedEncoding implements Encoding {
 			int wordBytes = typeBits / 8;
 			int blockCount = (n + 1023) / 1024;
 			long typeMask = typeMask(typeBits);
-			MemorySegment seg = Arena.ofAuto().allocate((long) blockCount * 128 * bitWidth);
+			MemorySegment seg = arena.allocate((long) blockCount * 128 * bitWidth);
 
 			for (int block = 0; block < blockCount; block++) {
 				int blockByteOff = block * 128 * bitWidth;
@@ -315,18 +315,17 @@ public final class BitpackedEncoding implements Encoding {
 				int blockLogicStart = block * 1024 - offset;
 				boolean fullBlock = blockLogicStart >= 0 && (long) blockLogicStart + 1023L < rowCount;
 
-				for (int row = 0; row < 8; row++) {
-					int currWord = (row * bitWidth) / 8;
-					int nextWord = ((row + 1) * bitWidth) / 8;
-					int shift = (row * bitWidth) % 8;
-					int remainingBits = (nextWord > currWord) ? ((row + 1) * bitWidth) % 8 : 0;
-					int currentBits = bitWidth - remainingBits;
-					int o = row / 8;
-					int s = row % 8;
-					int baseIdx = blockLogicStart + FL_ORDER[o] * 16 + s * 128;
-					long wordBase = blockByteOff + (long) lanes * currWord;
-
-					if (fullBlock) {
+				if (fullBlock) {
+					for (int row = 0; row < 8; row++) {
+						int currWord = (row * bitWidth) / 8;
+						int nextWord = ((row + 1) * bitWidth) / 8;
+						int shift = (row * bitWidth) % 8;
+						int remainingBits = (nextWord > currWord) ? ((row + 1) * bitWidth) % 8 : 0;
+						int currentBits = bitWidth - remainingBits;
+						int o = row / 8;
+						int s = row % 8;
+						long outBase = blockLogicStart + FL_ORDER[o] * 16 + s * 128;
+						long wordBase = blockByteOff + (long) lanes * currWord;
 						if (remainingBits > 0) {
 							long hiBase = blockByteOff + (long) lanes * nextWord;
 							long loMask = (1L << currentBits) - 1L;
@@ -334,15 +333,26 @@ public final class BitpackedEncoding implements Encoding {
 							for (int lane = 0; lane < lanes; lane++) {
 								long lo = (Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, wordBase + lane)) >>> shift) & loMask;
 								long hi = Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, hiBase + lane)) & hiMask;
-								out.set(ValueLayout.JAVA_BYTE, baseIdx + lane, (byte) (lo | (hi << currentBits)));
+								out.set(ValueLayout.JAVA_BYTE, outBase + lane, (byte) (lo | (hi << currentBits)));
 							}
 						} else {
 							for (int lane = 0; lane < lanes; lane++) {
-								out.set(ValueLayout.JAVA_BYTE, baseIdx + lane,
+								out.set(ValueLayout.JAVA_BYTE, outBase + lane,
 										(byte) ((Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, wordBase + lane)) >>> shift) & bitMask));
 							}
 						}
-					} else {
+					}
+				} else {
+					for (int row = 0; row < 8; row++) {
+						int currWord = (row * bitWidth) / 8;
+						int nextWord = ((row + 1) * bitWidth) / 8;
+						int shift = (row * bitWidth) % 8;
+						int remainingBits = (nextWord > currWord) ? ((row + 1) * bitWidth) % 8 : 0;
+						int currentBits = bitWidth - remainingBits;
+						int o = row / 8;
+						int s = row % 8;
+						int baseIdx = blockLogicStart + FL_ORDER[o] * 16 + s * 128;
+						long wordBase = blockByteOff + (long) lanes * currWord;
 						long hiBase = (remainingBits > 0) ? blockByteOff + (long) lanes * nextWord : 0L;
 						long loMask = (remainingBits > 0) ? (1L << currentBits) - 1L : 0L;
 						long hiMask = (remainingBits > 0) ? (1L << remainingBits) - 1L : 0L;
@@ -379,19 +389,17 @@ public final class BitpackedEncoding implements Encoding {
 				int blockLogicStart = block * 1024 - offset;
 				boolean fullBlock = blockLogicStart >= 0 && (long) blockLogicStart + 1023L < rowCount;
 
-				for (int row = 0; row < 16; row++) {
-					int currWord = (row * bitWidth) / 16;
-					int nextWord = ((row + 1) * bitWidth) / 16;
-					int shift = (row * bitWidth) % 16;
-					int remainingBits = (nextWord > currWord) ? ((row + 1) * bitWidth) % 16 : 0;
-					int currentBits = bitWidth - remainingBits;
-					int o = row / 8;
-					int s = row % 8;
-					int baseIdx = blockLogicStart + FL_ORDER[o] * 16 + s * 128;
-					long wordBase = blockByteOff + (long) lanes * currWord * 2;
-
-					if (fullBlock) {
-						long outBase = (long) baseIdx * 2;
+				if (fullBlock) {
+					for (int row = 0; row < 16; row++) {
+						int currWord = (row * bitWidth) / 16;
+						int nextWord = ((row + 1) * bitWidth) / 16;
+						int shift = (row * bitWidth) % 16;
+						int remainingBits = (nextWord > currWord) ? ((row + 1) * bitWidth) % 16 : 0;
+						int currentBits = bitWidth - remainingBits;
+						int o = row / 8;
+						int s = row % 8;
+						long outBase = (long) (blockLogicStart + FL_ORDER[o] * 16 + s * 128) * 2;
+						long wordBase = blockByteOff + (long) lanes * currWord * 2;
 						if (remainingBits > 0) {
 							long hiBase = blockByteOff + (long) lanes * nextWord * 2;
 							long loMask = (1L << currentBits) - 1L;
@@ -409,7 +417,18 @@ public final class BitpackedEncoding implements Encoding {
 										(short) ((Short.toUnsignedLong(buf.get(PTypeIO.LE_SHORT, wordBase + laneOff)) >>> shift) & bitMask));
 							}
 						}
-					} else {
+					}
+				} else {
+					for (int row = 0; row < 16; row++) {
+						int currWord = (row * bitWidth) / 16;
+						int nextWord = ((row + 1) * bitWidth) / 16;
+						int shift = (row * bitWidth) % 16;
+						int remainingBits = (nextWord > currWord) ? ((row + 1) * bitWidth) % 16 : 0;
+						int currentBits = bitWidth - remainingBits;
+						int o = row / 8;
+						int s = row % 8;
+						int baseIdx = blockLogicStart + FL_ORDER[o] * 16 + s * 128;
+						long wordBase = blockByteOff + (long) lanes * currWord * 2;
 						long hiBase = (remainingBits > 0) ? blockByteOff + (long) lanes * nextWord * 2 : 0L;
 						long loMask = (remainingBits > 0) ? (1L << currentBits) - 1L : 0L;
 						long hiMask = (remainingBits > 0) ? (1L << remainingBits) - 1L : 0L;
@@ -446,19 +465,17 @@ public final class BitpackedEncoding implements Encoding {
 				int blockLogicStart = block * 1024 - offset;
 				boolean fullBlock = blockLogicStart >= 0 && (long) blockLogicStart + 1023L < rowCount;
 
-				for (int row = 0; row < 32; row++) {
-					int currWord = (row * bitWidth) / 32;
-					int nextWord = ((row + 1) * bitWidth) / 32;
-					int shift = (row * bitWidth) % 32;
-					int remainingBits = (nextWord > currWord) ? ((row + 1) * bitWidth) % 32 : 0;
-					int currentBits = bitWidth - remainingBits;
-					int o = row / 8;
-					int s = row % 8;
-					int baseIdx = blockLogicStart + FL_ORDER[o] * 16 + s * 128;
-					long wordBase = blockByteOff + (long) lanes * currWord * 4;
-
-					if (fullBlock) {
-						long outBase = (long) baseIdx * 4;
+				if (fullBlock) {
+					for (int row = 0; row < 32; row++) {
+						int currWord = (row * bitWidth) / 32;
+						int nextWord = ((row + 1) * bitWidth) / 32;
+						int shift = (row * bitWidth) % 32;
+						int remainingBits = (nextWord > currWord) ? ((row + 1) * bitWidth) % 32 : 0;
+						int currentBits = bitWidth - remainingBits;
+						int o = row / 8;
+						int s = row % 8;
+						long outBase = (long) (blockLogicStart + FL_ORDER[o] * 16 + s * 128) * 4;
+						long wordBase = blockByteOff + (long) lanes * currWord * 4;
 						if (remainingBits > 0) {
 							long hiBase = blockByteOff + (long) lanes * nextWord * 4;
 							long loMask = (1L << currentBits) - 1L;
@@ -476,7 +493,18 @@ public final class BitpackedEncoding implements Encoding {
 										(int) ((Integer.toUnsignedLong(buf.get(PTypeIO.LE_INT, wordBase + laneOff)) >>> shift) & bitMask));
 							}
 						}
-					} else {
+					}
+				} else {
+					for (int row = 0; row < 32; row++) {
+						int currWord = (row * bitWidth) / 32;
+						int nextWord = ((row + 1) * bitWidth) / 32;
+						int shift = (row * bitWidth) % 32;
+						int remainingBits = (nextWord > currWord) ? ((row + 1) * bitWidth) % 32 : 0;
+						int currentBits = bitWidth - remainingBits;
+						int o = row / 8;
+						int s = row % 8;
+						int baseIdx = blockLogicStart + FL_ORDER[o] * 16 + s * 128;
+						long wordBase = blockByteOff + (long) lanes * currWord * 4;
 						long hiBase = (remainingBits > 0) ? blockByteOff + (long) lanes * nextWord * 4 : 0L;
 						long loMask = (remainingBits > 0) ? (1L << currentBits) - 1L : 0L;
 						long hiMask = (remainingBits > 0) ? (1L << remainingBits) - 1L : 0L;
@@ -513,19 +541,17 @@ public final class BitpackedEncoding implements Encoding {
 				int blockLogicStart = block * 1024 - offset;
 				boolean fullBlock = blockLogicStart >= 0 && (long) blockLogicStart + 1023L < rowCount;
 
-				for (int row = 0; row < 64; row++) {
-					int currWord = (row * bitWidth) / 64;
-					int nextWord = ((row + 1) * bitWidth) / 64;
-					int shift = (row * bitWidth) % 64;
-					int remainingBits = (nextWord > currWord) ? ((row + 1) * bitWidth) % 64 : 0;
-					int currentBits = bitWidth - remainingBits;
-					int o = row / 8;
-					int s = row % 8;
-					int baseIdx = blockLogicStart + FL_ORDER[o] * 16 + s * 128;
-					long wordBase = blockByteOff + (long) lanes * currWord * 8;
-
-					if (fullBlock) {
-						long outBase = (long) baseIdx * 8;
+				if (fullBlock) {
+					for (int row = 0; row < 64; row++) {
+						int currWord = (row * bitWidth) / 64;
+						int nextWord = ((row + 1) * bitWidth) / 64;
+						int shift = (row * bitWidth) % 64;
+						int remainingBits = (nextWord > currWord) ? ((row + 1) * bitWidth) % 64 : 0;
+						int currentBits = bitWidth - remainingBits;
+						int o = row / 8;
+						int s = row % 8;
+						long outBase = (long) (blockLogicStart + FL_ORDER[o] * 16 + s * 128) * 8;
+						long wordBase = blockByteOff + (long) lanes * currWord * 8;
 						if (remainingBits > 0) {
 							long hiBase = blockByteOff + (long) lanes * nextWord * 8;
 							long loMask = (1L << currentBits) - 1L;
@@ -543,7 +569,18 @@ public final class BitpackedEncoding implements Encoding {
 										(buf.get(PTypeIO.LE_LONG, wordBase + laneOff) >>> shift) & bitMask);
 							}
 						}
-					} else {
+					}
+				} else {
+					for (int row = 0; row < 64; row++) {
+						int currWord = (row * bitWidth) / 64;
+						int nextWord = ((row + 1) * bitWidth) / 64;
+						int shift = (row * bitWidth) % 64;
+						int remainingBits = (nextWord > currWord) ? ((row + 1) * bitWidth) % 64 : 0;
+						int currentBits = bitWidth - remainingBits;
+						int o = row / 8;
+						int s = row % 8;
+						int baseIdx = blockLogicStart + FL_ORDER[o] * 16 + s * 128;
+						long wordBase = blockByteOff + (long) lanes * currWord * 8;
 						long hiBase = (remainingBits > 0) ? blockByteOff + (long) lanes * nextWord * 8 : 0L;
 						long loMask = (remainingBits > 0) ? (1L << currentBits) - 1L : 0L;
 						long hiMask = (remainingBits > 0) ? (1L << remainingBits) - 1L : 0L;

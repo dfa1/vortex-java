@@ -15,7 +15,6 @@ import io.github.dfa1.vortex.core.array.BoolArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.core.VortexException;
 
-import java.lang.foreign.Arena;
 import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -50,8 +49,8 @@ public final class RunEndEncoding implements Encoding {
 	}
 
 	@Override
-	public EncodeResult encode(DType dtype, Object data) {
-		return Encoder.encode(dtype, data);
+	public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+		return Encoder.encode(dtype, data, ctx);
 	}
 
 	@Override
@@ -61,7 +60,7 @@ public final class RunEndEncoding implements Encoding {
 
 	private static final class Encoder {
 
-		private static EncodeResult encode(DType dtype, Object data) {
+		private static EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
 			if (!(dtype instanceof DType.Primitive p)) {
 				throw new VortexException(EncodingId.VORTEX_RUNEND, "encode only supports Primitive dtype, got " + dtype);
 			}
@@ -86,13 +85,13 @@ public final class RunEndEncoding implements Encoding {
 
 			int numRuns = ends.size();
 
-			MemorySegment endsBuf = Arena.ofAuto().allocate((long) numRuns * 4, 4);
+			MemorySegment endsBuf = ctx.arena().allocate((long) numRuns * 4, 4);
 			for (int i = 0; i < numRuns; i++) {
 				endsBuf.setAtIndex(PTypeIO.LE_INT, i, ends.get(i));
 			}
 
 			int elemBytes = ptype.byteSize();
-			MemorySegment valuesBuf = Arena.ofAuto().allocate((long) numRuns * elemBytes, elemBytes);
+			MemorySegment valuesBuf = ctx.arena().allocate((long) numRuns * elemBytes, elemBytes);
 			for (int i = 0; i < numRuns; i++) {
 				PTypeIO.set(valuesBuf, (long) i * elemBytes, ptype, values.get(i));
 			}

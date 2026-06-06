@@ -23,7 +23,7 @@ class DecimalBytePartsEncodingTest {
 			EncodingRegistry registry = TestRegistry.withPrimitive(sut);
 
 			// When
-			EncodeResult encoded = sut.encode(dtype, values);
+			EncodeResult encoded = sut.encode(dtype, values, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, values.length, dtype, registry);
 			Array result = sut.decode(ctx);
 
@@ -45,7 +45,7 @@ class DecimalBytePartsEncodingTest {
 			var sut = new DecimalBytePartsEncoding();
 
 			// When
-			EncodeResult result = sut.encode(dtype, values);
+			EncodeResult result = sut.encode(dtype, values, EncodeTestHelper.testCtx());
 
 			// Then
 			assertThat(result.rootNode().bufferIndices()).isEmpty();
@@ -61,7 +61,7 @@ class DecimalBytePartsEncodingTest {
 			var sut = new DecimalBytePartsEncoding();
 
 			// When
-			EncodeResult result = sut.encode(dtype, values);
+			EncodeResult result = sut.encode(dtype, values, EncodeTestHelper.testCtx());
 
 			// Then
 			byte[] metaBytes = new byte[result.rootNode().metadata().remaining()];

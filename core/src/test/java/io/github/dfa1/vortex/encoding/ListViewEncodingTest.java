@@ -58,7 +58,7 @@ class ListViewEncodingTest {
 			ListViewEncoding sut = new ListViewEncoding();
 
 			// When
-			EncodeResult result = sut.encode(DTypes.LIST_I32, data);
+			EncodeResult result = sut.encode(DTypes.LIST_I32, data, EncodeTestHelper.testCtx());
 
 			// Then
 			assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_LISTVIEW);
@@ -80,7 +80,7 @@ class ListViewEncodingTest {
 			ListViewEncoding sut = new ListViewEncoding();
 
 			// When
-			EncodeResult result = sut.encode(DTypes.LIST_I32, data);
+			EncodeResult result = sut.encode(DTypes.LIST_I32, data, EncodeTestHelper.testCtx());
 			MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
 			DecodeContext ctx = new DecodeContext(
 					toArrayNode(result.rootNode()), DTypes.LIST_I32, 3, bufs, registry(), Arena.global());
@@ -109,7 +109,7 @@ class ListViewEncodingTest {
 			ListViewEncoding sut = new ListViewEncoding();
 
 			// When
-			EncodeResult result = sut.encode(DTypes.LIST_I32, data);
+			EncodeResult result = sut.encode(DTypes.LIST_I32, data, EncodeTestHelper.testCtx());
 			MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
 			DecodeContext ctx = new DecodeContext(
 					toArrayNode(result.rootNode()), DTypes.LIST_I32, 2, bufs, registry(), Arena.global());
@@ -132,7 +132,7 @@ class ListViewEncodingTest {
 			ListViewEncoding sut = new ListViewEncoding();
 
 			// When
-			EncodeResult result = sut.encode(DTypes.LIST_I32, data);
+			EncodeResult result = sut.encode(DTypes.LIST_I32, data, EncodeTestHelper.testCtx());
 			MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
 			DecodeContext ctx = new DecodeContext(
 					toArrayNode(result.rootNode()), DTypes.LIST_I32, 1, bufs, registry(), Arena.global());

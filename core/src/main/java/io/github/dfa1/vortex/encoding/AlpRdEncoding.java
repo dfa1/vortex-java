@@ -60,8 +60,8 @@ public final class AlpRdEncoding implements Encoding {
     }
 
     @Override
-    public EncodeResult encode(DType dtype, Object data) {
-        return Encoder.encode(dtype, data);
+    public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+        return Encoder.encode(dtype, data, ctx);
     }
 
     @Override
@@ -79,21 +79,21 @@ public final class AlpRdEncoding implements Encoding {
         private static final int MAX_CUT = 16;
         private static final int MAX_DICT_SIZE = 8;
 
-        static EncodeResult encode(DType dtype, Object data) {
+        static EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
             PType ptype = ((DType.Primitive) dtype).ptype();
             return switch (ptype) {
-                case F64 -> encodeF64((double[]) data);
-                case F32 -> encodeF32((float[]) data);
+                case F64 -> encodeF64((double[]) data, ctx);
+                case F32 -> encodeF32((float[]) data, ctx);
                 default -> throw new UnsupportedOperationException("ALP-RD encode not supported for " + ptype);
             };
         }
 
         // --- F64 ---
 
-        private static EncodeResult encodeF64(double[] values) {
+        private static EncodeResult encodeF64(double[] values, EncodeContext ctx) {
             int n = values.length;
             if (n == 0) {
-                return emptyResult(U64_DTYPE, U16_DTYPE);
+                return emptyResult(U64_DTYPE, U16_DTYPE, ctx);
             }
 
             int sampleLen = Math.min(SAMPLE_SIZE, n);
@@ -123,7 +123,7 @@ public final class AlpRdEncoding implements Encoding {
 
             return buildEncodeResult(
                     best.dict, best.rightBitWidth, leftCodes, rightParts,
-                    U64_DTYPE, excPos, excVals);
+                    U64_DTYPE, excPos, excVals, ctx);
         }
 
         private record Dictionary64(short[] dict, int rightBitWidth) {}
@@ -174,10 +174,10 @@ public final class AlpRdEncoding implements Encoding {
 
         // --- F32 ---
 
-        private static EncodeResult encodeF32(float[] values) {
+        private static EncodeResult encodeF32(float[] values, EncodeContext ctx) {
             int n = values.length;
             if (n == 0) {
-                return emptyResult(U32_DTYPE, U16_DTYPE);
+                return emptyResult(U32_DTYPE, U16_DTYPE, ctx);
             }
 
             int sampleLen = Math.min(SAMPLE_SIZE, n);
@@ -207,7 +207,7 @@ public final class AlpRdEncoding implements Encoding {
 
             return buildEncodeResult(
                     best.dict, best.rightBitWidth, leftCodes, rightParts,
-                    U32_DTYPE, excPos, excVals);
+                    U32_DTYPE, excPos, excVals, ctx);
         }
 
         private record Dictionary32(short[] dict, int rightBitWidth) {}
@@ -280,11 +280,11 @@ public final class AlpRdEncoding implements Encoding {
         private static EncodeResult buildEncodeResult(
                 short[] dict, int rightBitWidth,
                 short[] leftCodes, Object rightPartsData, DType rightDtype,
-                List<Long> excPos, List<Short> excVals) {
+                List<Long> excPos, List<Short> excVals, EncodeContext ctx) {
 
-            BitpackedEncoding bp = new BitpackedEncoding();
-            EncodeResult leftResult = bp.encode(U16_DTYPE, leftCodes);
-            EncodeResult rightResult = bp.encode(rightDtype, rightPartsData);
+            Encoding bp = ctx.lookupEncoding(EncodingId.FASTLANES_BITPACKED);
+            EncodeResult leftResult = bp.encode(U16_DTYPE, leftCodes, ctx);
+            EncodeResult rightResult = bp.encode(rightDtype, rightPartsData, ctx);
 
             List<MemorySegment> allBuffers = new ArrayList<>(leftResult.buffers());
             int leftBufCount = allBuffers.size();
@@ -312,8 +312,8 @@ public final class AlpRdEncoding implements Encoding {
                     excValsArr[i] = excVals.get(i);
                 }
 
-                EncodeResult idxResult = bp.encode(U64_DTYPE, excPosArr);
-                EncodeResult valResult = bp.encode(U16_DTYPE, excValsArr);
+                EncodeResult idxResult = bp.encode(U64_DTYPE, excPosArr, ctx);
+                EncodeResult valResult = bp.encode(U16_DTYPE, excValsArr, ctx);
 
                 int idxOffset = allBuffers.size();
                 allBuffers.addAll(idxResult.buffers());
@@ -338,11 +338,11 @@ public final class AlpRdEncoding implements Encoding {
             return new EncodeResult(root, List.copyOf(allBuffers), null, null);
         }
 
-        private static EncodeResult emptyResult(DType rightDtype, DType leftDtype) {
-            BitpackedEncoding bp = new BitpackedEncoding();
-            EncodeResult leftResult = bp.encode(leftDtype, new short[0]);
+        private static EncodeResult emptyResult(DType rightDtype, DType leftDtype, EncodeContext ctx) {
+            Encoding bp = ctx.lookupEncoding(EncodingId.FASTLANES_BITPACKED);
+            EncodeResult leftResult = bp.encode(leftDtype, new short[0], ctx);
             EncodeResult rightResult = bp.encode(rightDtype,
-                    rightDtype.equals(U32_DTYPE) ? new int[0] : new long[0]);
+                    rightDtype.equals(U32_DTYPE) ? new int[0] : new long[0], ctx);
 
             List<MemorySegment> allBuffers = new ArrayList<>(leftResult.buffers());
             int leftBufCount = allBuffers.size();

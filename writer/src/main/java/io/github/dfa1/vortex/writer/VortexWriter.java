@@ -6,12 +6,13 @@ import io.github.dfa1.vortex.encoding.AlpEncoding;
 import io.github.dfa1.vortex.encoding.BitpackedEncoding;
 import io.github.dfa1.vortex.encoding.BoolEncoding;
 import io.github.dfa1.vortex.encoding.CascadingCompressor;
-import io.github.dfa1.vortex.encoding.CompressorContext;
 import io.github.dfa1.vortex.encoding.ConstantEncoding;
 import io.github.dfa1.vortex.encoding.DateTimePartsData;
 import io.github.dfa1.vortex.encoding.DateTimePartsEncoding;
 import io.github.dfa1.vortex.encoding.DictEncoding;
+import io.github.dfa1.vortex.encoding.EncodeContext;
 import io.github.dfa1.vortex.encoding.Encoding;
+import io.github.dfa1.vortex.encoding.EncodingRegistry;
 import io.github.dfa1.vortex.encoding.FrameOfReferenceEncoding;
 import io.github.dfa1.vortex.encoding.ListData;
 import io.github.dfa1.vortex.encoding.ListViewData;
@@ -34,6 +35,7 @@ import io.github.dfa1.vortex.fbs.Type;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -82,10 +84,13 @@ public final class VortexWriter implements Closeable {
 			new DictEncoding(), new BitpackedEncoding(),
 			new VarBinEncoding(), new PrimitiveEncoding(), new BoolEncoding());
 
+	private static final EncodingRegistry CASCADE_REGISTRY = EncodingRegistry.of(CASCADE_CODECS);
+
 	private final WritableByteChannel channel;
 	private final DType.Struct schema;
 	private final WriteOptions options;
 	private final List<Encoding> encodings;
+	private final EncodingRegistry defaultRegistry;
 	private final List<SegRef> segs = new ArrayList<>();
 	private final Map<String, List<ChunkRef>> colChunks = new LinkedHashMap<>();
 	private final Map<EncodingId, Integer> encodingIdx = new LinkedHashMap<>();
@@ -98,6 +103,7 @@ public final class VortexWriter implements Closeable {
 		this.schema = schema;
 		this.options = options;
 		this.encodings = encodings;
+		this.defaultRegistry = EncodingRegistry.of(encodings);
 		for (String name : schema.fieldNames()) {
 			colChunks.put(name, new ArrayList<>());
 		}
@@ -263,43 +269,45 @@ public final class VortexWriter implements Closeable {
 	}
 
 	private int writeSegment(DType dtype, Object data) throws IOException {
-		EncodeResult result;
-		if (options.allowedCascading() > 0) {
-			CompressorContext ctx = CompressorContext.ofDepth(options.allowedCascading());
-			CascadingCompressor compressor = new CascadingCompressor(CASCADE_CODECS, ctx);
-			result = compressor.encode(dtype, data);
-		} else {
-			Encoding encoding = findEncoding(dtype);
-			result = encoding.encode(dtype, data);
+		try (Arena arena = Arena.ofConfined()) {
+			EncodeResult result;
+			if (options.allowedCascading() > 0) {
+				EncodeContext encodeCtx = EncodeContext.ofDepth(options.allowedCascading(), arena, CASCADE_REGISTRY);
+				CascadingCompressor compressor = new CascadingCompressor(CASCADE_CODECS);
+				result = compressor.encode(dtype, data, encodeCtx);
+			} else {
+				Encoding encoding = findEncoding(dtype);
+				EncodeContext encodeCtx = EncodeContext.of(arena, defaultRegistry);
+				result = encoding.encode(dtype, data, encodeCtx);
+			}
+			// Register all encoding IDs found in the node tree
+			registerEncodingIds(result.rootNode());
+
+			// Align segment start to 64 bytes so each buffer is Arrow-compatible
+			long prePad = (64 - bytesWritten % 64) % 64;
+			if (prePad > 0) {
+				writePadding((int) prePad);
+			}
+
+			int segIdx = segs.size();
+			long offset = bytesWritten;
+
+			ByteBuffer fbBuf = buildArrayFlatBuffer(result);
+
+			// Segment format: [buffer data...] [FlatBuffer Array bytes] [4-byte LE u32 = fbLen]
+			int fbLen = fbBuf.remaining();
+			for (MemorySegment seg : result.buffers()) {
+				write(seg);
+			}
+			write(fbBuf);
+			var sizeBuf = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(fbLen);
+			sizeBuf.flip();
+			channel.write(sizeBuf);
+			bytesWritten += 4;
+
+			segs.add(new SegRef(offset, bytesWritten - offset));
+			return segIdx;
 		}
-
-		// Register all encoding IDs found in the node tree
-		registerEncodingIds(result.rootNode());
-
-		// Align segment start to 64 bytes so each buffer is Arrow-compatible
-		long prePad = (64 - bytesWritten % 64) % 64;
-		if (prePad > 0) {
-			writePadding((int) prePad);
-		}
-
-		int segIdx = segs.size();
-		long offset = bytesWritten;
-
-		ByteBuffer fbBuf = buildArrayFlatBuffer(result);
-
-		// Segment format: [buffer data...] [FlatBuffer Array bytes] [4-byte LE u32 = fbLen]
-		int fbLen = fbBuf.remaining();
-		for (MemorySegment seg : result.buffers()) {
-			write(seg);
-		}
-		write(fbBuf);
-		var sizeBuf = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(fbLen);
-		sizeBuf.flip();
-		channel.write(sizeBuf);
-		bytesWritten += 4;
-
-		segs.add(new SegRef(offset, bytesWritten - offset));
-		return segIdx;
 	}
 
 	private void registerEncodingIds(EncodeNode node) {

@@ -133,7 +133,7 @@ class PcoEncodingTest {
 			DType dtype = new DType.Primitive(PType.I64, false);
 
 			// When / Then
-			assertThatThrownBy(() -> sut.encode(dtype, new long[]{1L, 2L, 3L}))
+			assertThatThrownBy(() -> sut.encode(dtype, new long[]{1L, 2L, 3L}, EncodeTestHelper.testCtx()))
 					.isInstanceOf(VortexException.class)
 					.hasMessageContaining("not implemented");
 		}

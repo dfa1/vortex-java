@@ -39,8 +39,8 @@ public final class DecimalBytePartsEncoding implements Encoding {
 	}
 
 	@Override
-	public EncodeResult encode(DType dtype, Object data) {
-		return Encoder.encode((DType.Decimal) dtype, (long[]) data);
+	public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+		return Encoder.encode((DType.Decimal) dtype, (long[]) data, ctx);
 	}
 
 	@Override
@@ -50,9 +50,9 @@ public final class DecimalBytePartsEncoding implements Encoding {
 
 	private static final class Encoder {
 
-		static EncodeResult encode(DType.Decimal dtype, long[] data) {
+		static EncodeResult encode(DType.Decimal dtype, long[] data, EncodeContext ctx) {
 			DType mspDtype = new DType.Primitive(PType.I64, dtype.nullable());
-			EncodeResult mspResult = new PrimitiveEncoding().encode(mspDtype, data);
+			EncodeResult mspResult = ctx.lookupEncoding(EncodingId.VORTEX_PRIMITIVE).encode(mspDtype, data, ctx);
 
 			EncodingProtos.DecimalBytePartsMetadata proto = EncodingProtos.DecimalBytePartsMetadata.newBuilder()
 					.setZerothChildPtype(

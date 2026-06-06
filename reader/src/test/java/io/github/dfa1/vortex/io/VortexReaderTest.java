@@ -9,6 +9,7 @@ import io.github.dfa1.vortex.encoding.Encoding;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.EncodingRegistry;
 import io.github.dfa1.vortex.encoding.DecodeContext;
+import io.github.dfa1.vortex.encoding.EncodeContext;
 import io.github.dfa1.vortex.encoding.EncodeResult;
 import io.github.dfa1.vortex.scan.ScanOptions;
 import io.github.dfa1.vortex.scan.ScanResult;
@@ -39,7 +40,7 @@ class VortexReaderTest {
 			}
 
 			@Override
-			public EncodeResult encode(DType dtype, Object data) {
+			public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
 				throw new UnsupportedOperationException();
 			}
 
@@ -56,7 +57,7 @@ class VortexReaderTest {
 				}
 
 				@Override
-				public EncodeResult encode(DType dtype, Object data) {
+				public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
 					throw new UnsupportedOperationException();
 				}
 

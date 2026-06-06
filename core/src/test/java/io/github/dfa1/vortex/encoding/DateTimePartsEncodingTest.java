@@ -78,7 +78,7 @@ class DateTimePartsEncodingTest {
             DateTimePartsEncoding sut = new DateTimePartsEncoding();
 
             // When
-            EncodeResult result = sut.encode(EXT_TIMESTAMP_MS, data);
+            EncodeResult result = sut.encode(EXT_TIMESTAMP_MS, data, EncodeTestHelper.testCtx());
 
             // Then
             assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_DATETIMEPARTS);
@@ -95,7 +95,7 @@ class DateTimePartsEncodingTest {
             DateTimePartsData data = new DateTimePartsData(new long[]{0L}, false);
 
             // When / Then
-            assertThatThrownBy(() -> sut.encode(noMeta, data))
+            assertThatThrownBy(() -> sut.encode(noMeta, data, EncodeTestHelper.testCtx()))
                     .hasMessageContaining("extension metadata missing");
         }
     }
@@ -114,7 +114,7 @@ class DateTimePartsEncodingTest {
             DateTimePartsEncoding sut = new DateTimePartsEncoding();
 
             // When
-            EncodeResult result = sut.encode(EXT_TIMESTAMP_MS, data);
+            EncodeResult result = sut.encode(EXT_TIMESTAMP_MS, data, EncodeTestHelper.testCtx());
             MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
             DecodeContext ctx = new DecodeContext(
                     toArrayNode(result.rootNode()), EXT_TIMESTAMP_MS, 1, bufs, registry(), Arena.global());
@@ -141,7 +141,7 @@ class DateTimePartsEncodingTest {
             DateTimePartsEncoding sut = new DateTimePartsEncoding();
 
             // When
-            EncodeResult result = sut.encode(EXT_TIMESTAMP_NS, data);
+            EncodeResult result = sut.encode(EXT_TIMESTAMP_NS, data, EncodeTestHelper.testCtx());
             MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
             DecodeContext ctx = new DecodeContext(
                     toArrayNode(result.rootNode()), EXT_TIMESTAMP_NS, 1, bufs, registry(), Arena.global());
@@ -164,7 +164,7 @@ class DateTimePartsEncodingTest {
             DateTimePartsEncoding sut = new DateTimePartsEncoding();
 
             // When
-            EncodeResult result = sut.encode(EXT_TIMESTAMP_MS, data);
+            EncodeResult result = sut.encode(EXT_TIMESTAMP_MS, data, EncodeTestHelper.testCtx());
             MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
             DecodeContext ctx = new DecodeContext(
                     toArrayNode(result.rootNode()), EXT_TIMESTAMP_MS, 1, bufs, registry(), Arena.global());
@@ -188,7 +188,7 @@ class DateTimePartsEncodingTest {
             DateTimePartsEncoding sut = new DateTimePartsEncoding();
 
             // When
-            EncodeResult result = sut.encode(EXT_TIMESTAMP_MS, data);
+            EncodeResult result = sut.encode(EXT_TIMESTAMP_MS, data, EncodeTestHelper.testCtx());
             MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
             DecodeContext ctx = new DecodeContext(
                     toArrayNode(result.rootNode()), EXT_TIMESTAMP_MS, 4, bufs, registry(), Arena.global());
@@ -216,7 +216,7 @@ class DateTimePartsEncodingTest {
             DateTimePartsEncoding sut = new DateTimePartsEncoding();
 
             // When
-            EncodeResult result = sut.encode(dtype, data);
+            EncodeResult result = sut.encode(dtype, data, EncodeTestHelper.testCtx());
             MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
             DecodeContext ctx = new DecodeContext(
                     toArrayNode(result.rootNode()), dtype, 1, bufs, registry(), Arena.global());

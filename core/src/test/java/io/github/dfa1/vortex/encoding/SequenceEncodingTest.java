@@ -47,7 +47,7 @@ class SequenceEncodingTest {
 			long[] data = {10L, 12L, 14L, 16L};
 
 			// When
-			EncodeResult result = sut.encode(I64_DTYPE, data);
+			EncodeResult result = sut.encode(I64_DTYPE, data, EncodeTestHelper.testCtx());
 			DecodeContext ctx = encodeResultToCtx(result, I64_DTYPE, data.length);
 			LongArray decoded = (LongArray) sut.decode(ctx);
 
@@ -64,7 +64,7 @@ class SequenceEncodingTest {
 			double[] data = {1.0, 1.5, 2.0, 2.5};
 
 			// When
-			EncodeResult result = sut.encode(F64_DTYPE, data);
+			EncodeResult result = sut.encode(F64_DTYPE, data, EncodeTestHelper.testCtx());
 			DecodeContext ctx = encodeResultToCtx(result, F64_DTYPE, data.length);
 			DoubleArray decoded = (DoubleArray) sut.decode(ctx);
 
@@ -81,7 +81,7 @@ class SequenceEncodingTest {
 			long[] data = {1L, 2L, 4L};
 
 			// When / Then
-			assertThatThrownBy(() -> sut.encode(I64_DTYPE, data))
+			assertThatThrownBy(() -> sut.encode(I64_DTYPE, data, EncodeTestHelper.testCtx()))
 					.isInstanceOf(VortexException.class);
 		}
 
@@ -91,7 +91,7 @@ class SequenceEncodingTest {
 			var sut = new SequenceEncoding();
 
 			// When / Then
-			assertThatThrownBy(() -> sut.encode(new DType.Utf8(false), new long[]{1L}))
+			assertThatThrownBy(() -> sut.encode(new DType.Utf8(false), new long[]{1L}, EncodeTestHelper.testCtx()))
 					.isInstanceOf(VortexException.class);
 		}
 

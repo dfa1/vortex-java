@@ -49,13 +49,13 @@ public final class DictEncoding implements Encoding {
 	}
 
 	@Override
-	public EncodeResult encode(DType dtype, Object data) {
-		return Encoder.encode(dtype, data);
+	public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+		return Encoder.encode(dtype, data, ctx);
 	}
 
 	@Override
-	public CascadeStep encodeCascade(DType dtype, Object data, CompressorContext ctx) {
-		return Encoder.encodeCascade(dtype, data);
+	public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext encodeCtx) {
+		return Encoder.encodeCascade(dtype, data, encodeCtx);
 	}
 
 	@Override
@@ -67,15 +67,15 @@ public final class DictEncoding implements Encoding {
 
 		private record DictData(MemorySegment valuesBuf, Object codesArr, PType codePType, int len) {}
 
-		private static EncodeResult encode(DType dtype, Object data) {
+		private static EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
 			if (dtype instanceof DType.Utf8) {
-				return encodeUtf8((String[]) data, dtype);
+				return encodeUtf8((String[]) data, dtype, ctx);
 			}
-			DictData d = buildDictData(dtype, data);
+			DictData d = buildDictData(dtype, data, ctx);
 			PType codePType = d.codePType();
 			int codeBytes = codePType.byteSize();
 
-			MemorySegment codesBuf = Arena.ofAuto().allocate((long) d.len() * codeBytes);
+			MemorySegment codesBuf = ctx.arena().allocate((long) d.len() * codeBytes);
 			for (int i = 0; i < d.len(); i++) {
 				writeCodeToSeg(codesBuf, codePType, i, readCodeFromArr(d.codesArr(), codePType, i));
 			}
@@ -91,11 +91,11 @@ public final class DictEncoding implements Encoding {
 			return new EncodeResult(rootNode, List.of(d.valuesBuf(), codesBuf), null, null);
 		}
 
-		private static CascadeStep encodeCascade(DType dtype, Object data) {
+		private static CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
 			if (dtype instanceof DType.Utf8) {
-				return CascadeStep.terminal(encodeUtf8((String[]) data, dtype));
+				return CascadeStep.terminal(encodeUtf8((String[]) data, dtype, ctx));
 			}
-			DictData d = buildDictData(dtype, data);
+			DictData d = buildDictData(dtype, data, ctx);
 			PType codePType = d.codePType();
 
 			ByteBuffer meta = ByteBuffer.allocate(1).put(0, (byte) codePType.ordinal());
@@ -110,7 +110,7 @@ public final class DictEncoding implements Encoding {
 			return new CascadeStep(partialRoot, List.of(d.valuesBuf()), List.of(slot), null, null, true);
 		}
 
-		private static EncodeResult encodeUtf8(String[] strings, DType dtype) {
+		private static EncodeResult encodeUtf8(String[] strings, DType dtype, EncodeContext ctx) {
 			int n = strings.length;
 
 			var valueMap = new LinkedHashMap<String, Integer>();
@@ -131,7 +131,7 @@ public final class DictEncoding implements Encoding {
 				j++;
 			}
 
-			Arena arena = Arena.ofAuto();
+			Arena arena = ctx.arena();
 			MemorySegment dictBytesBuf = arena.allocate(totalDictBytes > 0 ? totalDictBytes : 1);
 			MemorySegment dictOffsetsBuf = arena.allocate((long) (dictSize + 1) * Long.BYTES, Long.BYTES);
 
@@ -143,7 +143,7 @@ public final class DictEncoding implements Encoding {
 				dictOffsetsBuf.setAtIndex(PTypeIO.LE_LONG, i + 1, pos);
 			}
 
-			MemorySegment codesBuf = Arena.ofAuto().allocate((long) n * codeBytes);
+			MemorySegment codesBuf = arena.allocate((long) n * codeBytes);
 			for (int i = 0; i < n; i++) {
 				writeCodeToSeg(codesBuf, codePType, i, valueMap.get(strings[i]));
 			}
@@ -180,7 +180,7 @@ public final class DictEncoding implements Encoding {
 			return new EncodeResult(root, List.of(dictBytesBuf, dictOffsetsBuf, codesBuf), statsMin, statsMax);
 		}
 
-		private static DictData buildDictData(DType dtype, Object data) {
+		private static DictData buildDictData(DType dtype, Object data, EncodeContext ctx) {
 			PType ptype = ((DType.Primitive) dtype).ptype();
 			var valueMap = new LinkedHashMap<Object, Integer>();
 			int len = arrayLength(data, ptype);
@@ -196,7 +196,7 @@ public final class DictEncoding implements Encoding {
 			Object uniqueArray = buildUniqueArray(ptype, valueMap.keySet(), dictSize);
 			MemorySegment valuesBuf = PTypeIO.copyArray(ptype, uniqueArray, dictSize);
 
-			MemorySegment codesBuf = Arena.ofAuto().allocate((long) len * codeBytes);
+			MemorySegment codesBuf = ctx.arena().allocate((long) len * codeBytes);
 			for (int i = 0; i < len; i++) {
 				Object v = readElement(data, ptype, i);
 				int code = valueMap.get(v);

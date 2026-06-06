@@ -62,7 +62,7 @@ class FixedSizeListEncodingTest {
 			FixedSizeListEncoding sut = new FixedSizeListEncoding();
 
 			// When
-			EncodeResult result = sut.encode(dtype, data);
+			EncodeResult result = sut.encode(dtype, data, EncodeTestHelper.testCtx());
 
 			// Then
 			assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_FIXED_SIZE_LIST);
@@ -83,7 +83,7 @@ class FixedSizeListEncodingTest {
 			FixedSizeListEncoding sut = new FixedSizeListEncoding();
 
 			// When
-			EncodeResult result = sut.encode(dtype, data);
+			EncodeResult result = sut.encode(dtype, data, EncodeTestHelper.testCtx());
 			MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
 			DecodeContext ctx = new DecodeContext(
 					toArrayNode(result.rootNode()), dtype, 2, bufs, registry(), Arena.global());
@@ -108,7 +108,7 @@ class FixedSizeListEncodingTest {
 			FixedSizeListEncoding sut = new FixedSizeListEncoding();
 
 			// When
-			EncodeResult result = sut.encode(dtype, data);
+			EncodeResult result = sut.encode(dtype, data, EncodeTestHelper.testCtx());
 			MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
 			DecodeContext ctx = new DecodeContext(
 					toArrayNode(result.rootNode()), dtype, 3, bufs, registry(), Arena.global());

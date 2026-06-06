@@ -31,7 +31,7 @@ class DecimalEncodingTest {
 			EncodingRegistry registry = TestRegistry.of(sut);
 
 			// When
-			EncodeResult encoded = sut.encode(dtype, input);
+			EncodeResult encoded = sut.encode(dtype, input, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, values.length, dtype, registry);
 			Array result = sut.decode(ctx);
 
@@ -81,7 +81,7 @@ class DecimalEncodingTest {
 			var sut = new DecimalEncoding();
 
 			// When
-			EncodeResult encoded = sut.encode(dtype, input);
+			EncodeResult encoded = sut.encode(dtype, input, EncodeTestHelper.testCtx());
 
 			// Then
 			byte[] metaBytes = new byte[encoded.rootNode().metadata().remaining()];
@@ -98,7 +98,7 @@ class DecimalEncodingTest {
 			var sut = new DecimalEncoding();
 
 			// When / Then
-			assertThatThrownBy(() -> sut.encode(dtype, input))
+			assertThatThrownBy(() -> sut.encode(dtype, input, EncodeTestHelper.testCtx()))
 					.isInstanceOf(VortexException.class)
 					.hasMessageContaining("not multiple of byteWidth");
 		}

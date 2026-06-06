@@ -47,16 +47,16 @@ public final class ConstantEncoding implements Encoding {
 	}
 
 	@Override
-	public EncodeResult encode(DType dtype, Object data) {
-		return Encoder.encode(dtype, data);
+	public EncodeResult encode(DType dtype, Object data, EncodeContext encodeCtx) {
+		return Encoder.encode(dtype, data, encodeCtx);
 	}
 
 	@Override
-	public CascadeStep encodeCascade(DType dtype, Object data, CompressorContext ctx) {
+	public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext encodeCtx) {
 		if (!Encoder.isConstant(data, ((DType.Primitive) dtype).ptype())) {
 			return CascadeStep.notApplicable();
 		}
-		return CascadeStep.terminal(Encoder.encode(dtype, data));
+		return CascadeStep.terminal(Encoder.encode(dtype, data, encodeCtx));
 	}
 
 	@Override
@@ -66,7 +66,7 @@ public final class ConstantEncoding implements Encoding {
 
 	private static final class Encoder {
 
-		private static EncodeResult encode(DType dtype, Object data) {
+		private static EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
 			if (!(dtype instanceof DType.Primitive p)) {
 				throw new VortexException(EncodingId.VORTEX_CONSTANT, "encode only supports Primitive dtype, got " + dtype);
 			}

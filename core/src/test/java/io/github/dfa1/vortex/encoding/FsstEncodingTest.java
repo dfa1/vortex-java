@@ -66,7 +66,7 @@ class FsstEncodingTest {
 			Arena arena = Arena.ofAuto();
 
 			// When
-			EncodeResult result = sut.encode(UTF8, values);
+			EncodeResult result = sut.encode(UTF8, values, EncodeTestHelper.testCtx());
 			MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
 			ArrayNode node = toArrayNode(result.rootNode());
 			EncodingRegistry registry = EncodingRegistry.empty();

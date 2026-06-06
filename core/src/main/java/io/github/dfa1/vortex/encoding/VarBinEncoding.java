@@ -47,8 +47,8 @@ public final class VarBinEncoding implements Encoding {
 	}
 
 	@Override
-	public EncodeResult encode(DType dtype, Object data) {
-		return Encoder.encode(dtype, data);
+	public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+		return Encoder.encode(dtype, data, ctx);
 	}
 
 	@Override
@@ -58,7 +58,7 @@ public final class VarBinEncoding implements Encoding {
 
 	private static final class Encoder {
 
-		private static EncodeResult encode(DType dtype, Object data) {
+		private static EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
 			String[] strings = (String[]) data;
 			int n = strings.length;
 
@@ -69,7 +69,7 @@ public final class VarBinEncoding implements Encoding {
 				totalBytes += byteArrays[i].length;
 			}
 
-			Arena arena = Arena.ofAuto();
+			Arena arena = ctx.arena();
 			MemorySegment bytesBuf = arena.allocate(totalBytes > 0 ? totalBytes : 1);
 			MemorySegment offsetsBuf = arena.allocate((long) (n + 1) * Long.BYTES, Long.BYTES);
 

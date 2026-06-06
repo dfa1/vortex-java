@@ -23,7 +23,7 @@ class NullEncodingTest {
 			var sut = new NullEncoding();
 
 			// When
-			EncodeResult result = sut.encode(NULL_DTYPE, null);
+			EncodeResult result = sut.encode(NULL_DTYPE, null, EncodeTestHelper.testCtx());
 
 			// Then
 			assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_NULL);
@@ -38,7 +38,7 @@ class NullEncodingTest {
 			var sut = new NullEncoding();
 
 			// When
-			EncodeResult encoded = sut.encode(NULL_DTYPE, null);
+			EncodeResult encoded = sut.encode(NULL_DTYPE, null, EncodeTestHelper.testCtx());
 			ArrayNode node = ArrayNode.of(encoded.rootNode().encodingId(), null, new ArrayNode[0], new int[0], null);
 			DecodeContext ctx = new DecodeContext(node, NULL_DTYPE, rowCount, new MemorySegment[0],
 					EncodingRegistry.empty(), Arena.ofAuto());

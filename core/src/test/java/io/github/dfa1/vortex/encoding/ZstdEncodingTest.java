@@ -42,7 +42,7 @@ class ZstdEncodingTest {
             int[] data = {10, 20, 30, 40};
 
             // When
-            EncodeResult result = sut.encode(I32, data);
+            EncodeResult result = sut.encode(I32, data, EncodeTestHelper.testCtx());
             DecodeContext ctx = EncodeTestHelper.toDecodeContext(result, data.length, I32, EncodingRegistry.empty());
             IntArray decoded = (IntArray) sut.decode(ctx);
 
@@ -60,7 +60,7 @@ class ZstdEncodingTest {
             long[] data = {100L, 200L, 300L};
 
             // When
-            EncodeResult result = sut.encode(I64, data);
+            EncodeResult result = sut.encode(I64, data, EncodeTestHelper.testCtx());
             DecodeContext ctx = EncodeTestHelper.toDecodeContext(result, data.length, I64, EncodingRegistry.empty());
             LongArray decoded = (LongArray) sut.decode(ctx);
 
@@ -78,7 +78,7 @@ class ZstdEncodingTest {
             String[] data = {"hello", "world", "zstd"};
 
             // When
-            EncodeResult result = sut.encode(UTF8, data);
+            EncodeResult result = sut.encode(UTF8, data, EncodeTestHelper.testCtx());
             DecodeContext ctx = EncodeTestHelper.toDecodeContext(result, data.length, UTF8, EncodingRegistry.empty());
             VarBinArray decoded = (VarBinArray) sut.decode(ctx);
 
@@ -96,7 +96,7 @@ class ZstdEncodingTest {
             int[] data = {};
 
             // When
-            EncodeResult result = sut.encode(I32, data);
+            EncodeResult result = sut.encode(I32, data, EncodeTestHelper.testCtx());
             DecodeContext ctx = EncodeTestHelper.toDecodeContext(result, data.length, I32, EncodingRegistry.empty());
             IntArray decoded = (IntArray) sut.decode(ctx);
 
@@ -110,7 +110,7 @@ class ZstdEncodingTest {
             var sut = new ZstdEncoding();
 
             // When / Then
-            assertThatThrownBy(() -> sut.encode(new DType.Null(false), null))
+            assertThatThrownBy(() -> sut.encode(new DType.Null(false), null, EncodeTestHelper.testCtx()))
                     .isInstanceOf(VortexException.class);
         }
     }
@@ -447,7 +447,7 @@ class ZstdEncodingTest {
                 byte[] meta, DType dtype, long n, boolean[] validityBits, byte[]... compressedFrames
         ) {
             BoolEncoding boolEncoding = new BoolEncoding();
-            EncodeResult validityResult = boolEncoding.encode(new DType.Bool(false), validityBits);
+            EncodeResult validityResult = boolEncoding.encode(new DType.Bool(false), validityBits, EncodeTestHelper.testCtx());
             EncodeNode remappedValidity = EncodeNode.remapBufferIndices(
                     validityResult.rootNode(), compressedFrames.length);
 

@@ -15,7 +15,6 @@ import io.github.dfa1.vortex.core.array.MaskedArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.core.VortexException;
 
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
@@ -44,13 +43,13 @@ public final class FrameOfReferenceEncoding implements Encoding {
 	}
 
 	@Override
-	public EncodeResult encode(DType dtype, Object data) {
-		return Encoder.encode(dtype, data);
+	public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+		return Encoder.encode(dtype, data, ctx);
 	}
 
 	@Override
-	public CascadeStep encodeCascade(DType dtype, Object data, CompressorContext ctx) {
-		return Encoder.encodeCascade(dtype, data);
+	public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext encodeCtx) {
+		return Encoder.encodeCascade(dtype, data, encodeCtx);
 	}
 
 	@Override
@@ -60,7 +59,7 @@ public final class FrameOfReferenceEncoding implements Encoding {
 
 	private static final class Encoder {
 
-		private static EncodeResult encode(DType dtype, Object data) {
+		private static EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
 			if (!(dtype instanceof DType.Primitive p)) {
 				throw new VortexException(EncodingId.FASTLANES_FOR, "expected primitive dtype, got " + dtype);
 			}
@@ -69,7 +68,7 @@ public final class FrameOfReferenceEncoding implements Encoding {
 			int n = longs.length;
 
 			long ref = computeRef(longs, n);
-			MemorySegment residuals = toResidualBuffer(longs, ref, ptype);
+			MemorySegment residuals = toResidualBuffer(longs, ref, ptype, ctx);
 			ByteBuffer meta = buildForMeta(ref, ptype);
 
 			EncodeNode child = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
@@ -77,7 +76,7 @@ public final class FrameOfReferenceEncoding implements Encoding {
 			return new EncodeResult(root, List.of(residuals), null, null);
 		}
 
-		private static CascadeStep encodeCascade(DType dtype, Object data) {
+		private static CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
 			if (!(dtype instanceof DType.Primitive p)) {
 				throw new VortexException(EncodingId.FASTLANES_FOR, "expected primitive dtype, got " + dtype);
 			}
@@ -182,10 +181,10 @@ public final class FrameOfReferenceEncoding implements Encoding {
 			};
 		}
 
-		private static MemorySegment toResidualBuffer(long[] longs, long ref, PType ptype) {
+		private static MemorySegment toResidualBuffer(long[] longs, long ref, PType ptype, EncodeContext ctx) {
 			int n = longs.length;
 			int elemBytes = ptype.byteSize();
-			MemorySegment seg = Arena.ofAuto().allocate((long) n * elemBytes, elemBytes);
+			MemorySegment seg = ctx.arena().allocate((long) n * elemBytes, elemBytes);
 			for (int i = 0; i < n; i++) {
 				long r = longs[i] - ref;
 				PTypeIO.set(seg, (long) i * elemBytes, ptype, r);

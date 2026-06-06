@@ -47,8 +47,8 @@ public final class FsstEncoding implements Encoding {
 	}
 
 	@Override
-	public EncodeResult encode(DType dtype, Object data) {
-		return Encoder.encode((String[]) data);
+	public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+		return Encoder.encode((String[]) data, ctx);
 	}
 
 	@Override
@@ -61,7 +61,7 @@ public final class FsstEncoding implements Encoding {
 		private static final int MAX_SYMBOLS = 255;
 		private static final int BIGRAM_COUNT = 65536;
 
-		static EncodeResult encode(String[] strings) {
+		static EncodeResult encode(String[] strings, EncodeContext ctx) {
 			int n = strings.length;
 
 			byte[][] byteArrays = new byte[n][];
@@ -105,7 +105,7 @@ public final class FsstEncoding implements Encoding {
 				compressed[i] = compressString(byteArrays[i], codeForBigram);
 			}
 
-			Arena arena = Arena.ofAuto();
+			Arena arena = ctx.arena();
 
 			// Buffer 0: symbol table (8 bytes per symbol, LE u64)
 			MemorySegment symBuf = arena.allocate(Math.max(numSymbols * 8L, 1), 8);

@@ -33,9 +33,9 @@ public final class ByteBoolEncoding implements Encoding {
 	}
 
 	@Override
-	public EncodeResult encode(DType dtype, Object data) {
+	public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
 		boolean[] bools = (boolean[]) data;
-		MemorySegment seg = java.lang.foreign.Arena.ofAuto().allocate(bools.length);
+		MemorySegment seg = ctx.arena().allocate(bools.length);
 		for (int i = 0; i < bools.length; i++) {
 			seg.set(ValueLayout.JAVA_BYTE, i, bools[i] ? (byte) 1 : (byte) 0);
 		}

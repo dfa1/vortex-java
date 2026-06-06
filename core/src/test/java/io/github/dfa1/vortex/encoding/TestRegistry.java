@@ -12,7 +12,11 @@ final class TestRegistry {
     }
 
     static EncodingRegistry withPrimitive(Encoding sut) {
-        return of(sut, new PrimitiveEncoding());
+        EncodingRegistry r = of(sut);
+        if (!(sut instanceof PrimitiveEncoding)) {
+            r.register(new PrimitiveEncoding());
+        }
+        return r;
     }
 
     private TestRegistry() {}

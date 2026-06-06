@@ -28,11 +28,11 @@ public final class ExtEncoding implements Encoding {
 	}
 
 	@Override
-	public EncodeResult encode(DType dtype, Object data) {
+	public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
 		if (!(dtype instanceof DType.Extension ext)) {
 			throw new VortexException(EncodingId.VORTEX_EXT, "expected extension dtype, got " + dtype);
 		}
-		EncodeResult childResult = new PrimitiveEncoding().encode(ext.storageDType(), data);
+		EncodeResult childResult = ctx.lookupEncoding(EncodingId.VORTEX_PRIMITIVE).encode(ext.storageDType(), data, ctx);
 		EncodeNode root = new EncodeNode(EncodingId.VORTEX_EXT, null, new EncodeNode[]{childResult.rootNode()}, new int[0]);
 		return new EncodeResult(root, childResult.buffers(), childResult.statsMin(), childResult.statsMax());
 	}

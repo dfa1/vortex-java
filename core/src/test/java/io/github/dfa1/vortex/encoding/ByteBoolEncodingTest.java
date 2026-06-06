@@ -30,7 +30,7 @@ class ByteBoolEncodingTest {
 			registry.register(sut);
 
 			// When
-			EncodeResult encoded = sut.encode(BOOL_DTYPE, data);
+			EncodeResult encoded = sut.encode(BOOL_DTYPE, data, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, BOOL_DTYPE, registry);
 			Array result = sut.decode(ctx);
 

@@ -38,7 +38,7 @@ class SparseEncodingTest {
 			SparseEncoding sut = new SparseEncoding();
 
 			// When
-			EncodeResult result = sut.encode(DTypes.I64, data);
+			EncodeResult result = sut.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
 
 			// Then
 			EncodingProtos.SparseMetadata meta = EncodingProtos.SparseMetadata.parseFrom(
@@ -53,7 +53,7 @@ class SparseEncodingTest {
 			SparseEncoding sut = new SparseEncoding();
 
 			// When
-			EncodeResult result = sut.encode(DTypes.I64, data);
+			EncodeResult result = sut.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
 
 			// Then
 			EncodingProtos.SparseMetadata meta = EncodingProtos.SparseMetadata.parseFrom(
@@ -68,7 +68,7 @@ class SparseEncodingTest {
 			SparseEncoding sut = new SparseEncoding();
 
 			// When
-			EncodeResult encoded = sut.encode(DTypes.I64, data);
+			EncodeResult encoded = sut.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
 			Array decoded = decodeResult(encoded, DTypes.I64, data.length);
 
 			// Then
@@ -86,7 +86,7 @@ class SparseEncodingTest {
 			SparseEncoding sut = new SparseEncoding();
 
 			// When
-			EncodeResult encoded = sut.encode(DTypes.F64, data);
+			EncodeResult encoded = sut.encode(DTypes.F64, data, EncodeTestHelper.testCtx());
 			Array decoded = decodeResult(encoded, DTypes.F64, data.length);
 
 			// Then
@@ -105,7 +105,7 @@ class SparseEncodingTest {
 			SparseEncoding sut = new SparseEncoding();
 
 			// When
-			EncodeResult result = sut.encode(DTypes.I64, data);
+			EncodeResult result = sut.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
 
 			// Then
 			EncodingProtos.SparseMetadata meta = EncodingProtos.SparseMetadata.parseFrom(

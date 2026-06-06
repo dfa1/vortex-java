@@ -45,7 +45,7 @@ class ExtEncodingTest {
 			var sut = new ExtEncoding();
 
 			// When
-			EncodeResult result = sut.encode(extDType, data);
+			EncodeResult result = sut.encode(extDType, data, EncodeTestHelper.testCtx());
 
 			// Then — root is ext, child is primitive
 			assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_EXT);

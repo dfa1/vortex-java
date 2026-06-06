@@ -13,7 +13,6 @@ import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
 
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
@@ -58,8 +57,8 @@ public final class DeltaEncoding implements Encoding {
     }
 
     @Override
-    public EncodeResult encode(DType dtype, Object data) {
-        return Encoder.encode(dtype, data);
+    public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+        return Encoder.encode(dtype, data, ctx);
     }
 
     @Override
@@ -113,7 +112,7 @@ public final class DeltaEncoding implements Encoding {
 
     private static final class Encoder {
 
-        static EncodeResult encode(DType dtype, Object data) {
+        static EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
             PType ptype = ((DType.Primitive) dtype).ptype();
             long[] longs = toLongs(data, ptype);
             int n = longs.length;
@@ -167,8 +166,8 @@ public final class DeltaEncoding implements Encoding {
                 System.arraycopy(chunkDelta, 0, deltasAll, chunk * FL_CHUNK_SIZE, FL_CHUNK_SIZE);
             }
 
-            MemorySegment basesSeg = fromLongs(basesAll, ptype, Arena.ofAuto());
-            MemorySegment deltasSeg = fromLongs(deltasAll, ptype, Arena.ofAuto());
+            MemorySegment basesSeg = fromLongs(basesAll, ptype, ctx.arena());
+            MemorySegment deltasSeg = fromLongs(deltasAll, ptype, ctx.arena());
 
             byte[] metaBytes = EncodingProtos.DeltaMetadata.newBuilder()
                     .setDeltasLen(paddedLen)

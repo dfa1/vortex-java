@@ -53,7 +53,7 @@ class VarBinEncodingTest {
 			String[] data = {"hello"};
 
 			// When
-			EncodeResult result = sut.encode(UTF8, data);
+			EncodeResult result = sut.encode(UTF8, data, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(result, data.length, UTF8, buildRegistry());
 			VarBinArray decoded = (VarBinArray) sut.decode(ctx);
 
@@ -69,7 +69,7 @@ class VarBinEncodingTest {
 			String[] data = {"foo", "bar", "baz"};
 
 			// When
-			EncodeResult result = sut.encode(UTF8, data);
+			EncodeResult result = sut.encode(UTF8, data, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(result, data.length, UTF8, buildRegistry());
 			VarBinArray decoded = (VarBinArray) sut.decode(ctx);
 
@@ -87,7 +87,7 @@ class VarBinEncodingTest {
 			String[] data = {"héllo", "wörld", "日本語"};
 
 			// When
-			EncodeResult result = sut.encode(UTF8, data);
+			EncodeResult result = sut.encode(UTF8, data, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(result, data.length, UTF8, buildRegistry());
 			VarBinArray decoded = (VarBinArray) sut.decode(ctx);
 
@@ -105,7 +105,7 @@ class VarBinEncodingTest {
 			String[] data = {"a", "", "b"};
 
 			// When
-			EncodeResult result = sut.encode(UTF8, data);
+			EncodeResult result = sut.encode(UTF8, data, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(result, data.length, UTF8, buildRegistry());
 			VarBinArray decoded = (VarBinArray) sut.decode(ctx);
 
@@ -123,7 +123,7 @@ class VarBinEncodingTest {
 			String[] data = {};
 
 			// When
-			EncodeResult result = sut.encode(UTF8, data);
+			EncodeResult result = sut.encode(UTF8, data, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(result, data.length, UTF8, buildRegistry());
 			VarBinArray decoded = (VarBinArray) sut.decode(ctx);
 

@@ -18,7 +18,6 @@ import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.core.VortexException;
 
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
@@ -53,8 +52,8 @@ public final class SparseEncoding implements Encoding {
 	}
 
 	@Override
-	public EncodeResult encode(DType dtype, Object data) {
-		return Encoder.encode(dtype, data);
+	public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+		return Encoder.encode(dtype, data, ctx);
 	}
 
 	@Override
@@ -64,7 +63,7 @@ public final class SparseEncoding implements Encoding {
 
 	private static final class Encoder {
 
-		private static EncodeResult encode(DType dtype, Object data) {
+		private static EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
 			if (!(dtype instanceof DType.Primitive p)) {
 				throw new VortexException(EncodingId.VORTEX_SPARSE,
 						"encode only supports Primitive dtype, got " + dtype);
@@ -87,11 +86,11 @@ public final class SparseEncoding implements Encoding {
 
 			ScalarProtos.ScalarValue fillScalar = zeroScalar(ptype);
 			byte[] fillBytes = fillScalar.toByteArray();
-			MemorySegment fillBuf = Arena.ofAuto().allocate(fillBytes.length);
+			MemorySegment fillBuf = ctx.arena().allocate(fillBytes.length);
 			MemorySegment.copy(MemorySegment.ofArray(fillBytes), 0, fillBuf, 0, fillBytes.length);
 
-			MemorySegment idxBuf = buildIdxBuf(patchIdx, idxPtype, numPatches);
-			MemorySegment valBuf = buildValBuf(patchBits, ptype, numPatches);
+			MemorySegment idxBuf = buildIdxBuf(patchIdx, idxPtype, numPatches, ctx);
+			MemorySegment valBuf = buildValBuf(patchBits, ptype, numPatches, ctx);
 
 			byte[] metaBytes = EncodingProtos.SparseMetadata.newBuilder()
 					.setPatches(EncodingProtos.PatchesMetadata.newBuilder()
@@ -157,18 +156,18 @@ public final class SparseEncoding implements Encoding {
 			};
 		}
 
-		private static MemorySegment buildIdxBuf(List<Integer> patchIdx, PType idxPtype, int numPatches) {
+		private static MemorySegment buildIdxBuf(List<Integer> patchIdx, PType idxPtype, int numPatches, EncodeContext ctx) {
 			int elemBytes = idxPtype.byteSize();
-			MemorySegment seg = Arena.ofAuto().allocate(Math.max(1L, (long) numPatches * elemBytes), elemBytes);
+			MemorySegment seg = ctx.arena().allocate(Math.max(1L, (long) numPatches * elemBytes), elemBytes);
 			for (int i = 0; i < numPatches; i++) {
 				PTypeIO.set(seg, (long) i * elemBytes, idxPtype, patchIdx.get(i));
 			}
 			return seg;
 		}
 
-		private static MemorySegment buildValBuf(List<Long> patchBits, PType ptype, int numPatches) {
+		private static MemorySegment buildValBuf(List<Long> patchBits, PType ptype, int numPatches, EncodeContext ctx) {
 			int elemBytes = ptype.byteSize();
-			MemorySegment seg = Arena.ofAuto().allocate(Math.max(1L, (long) numPatches * elemBytes), elemBytes);
+			MemorySegment seg = ctx.arena().allocate(Math.max(1L, (long) numPatches * elemBytes), elemBytes);
 			for (int i = 0; i < numPatches; i++) {
 				PTypeIO.set(seg, (long) i * elemBytes, ptype, patchBits.get(i));
 			}

@@ -25,21 +25,22 @@ public interface Encoding {
 		return false;
 	}
 
-	/// Encodes {@code data} to bytes, including per-chunk min/max stats when available.
+	/// Encodes {@code data} to bytes using the provided arena for output buffer allocation.
 	///
 	/// @param dtype logical type of the data
 	/// @param data  the data to encode (type depends on encoding; typically a primitive array)
+	/// @param ctx   encoding context supplying the arena for output buffer allocation
 	/// @return encode result containing the root node, buffers, and optional stats
-	EncodeResult encode(DType dtype, Object data);
+	EncodeResult encode(DType dtype, Object data, EncodeContext ctx);
 
 	/// Cascade-aware encode: returns a partial step with open child slots.
 	/// Default wraps the terminal {@link #encode} result; override to expose children.
 	///
 	/// @param dtype the logical type of the data
 	/// @param data  the data to encode
-	/// @param ctx   cascade compressor context controlling recursion depth and exclusions
+	/// @param ctx   encoding context supplying the arena, registry, and cascade parameters
 	/// @return cascade step with optional open child slots
-	default CascadeStep encodeCascade(DType dtype, Object data, CompressorContext ctx) {
-		return CascadeStep.terminal(encode(dtype, data));
+	default CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
+		return CascadeStep.terminal(encode(dtype, data, ctx));
 	}
 }

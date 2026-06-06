@@ -62,12 +62,32 @@ public final class EncodingRegistry {
 		return new EncodingRegistry();
 	}
 
+	/// Creates a registry populated with the given encodings.
+	///
+	/// @param encodings the encodings to register
+	/// @return a new {@link EncodingRegistry} populated with the given encodings
+	public static EncodingRegistry of(List<Encoding> encodings) {
+		var registry = new EncodingRegistry();
+		for (Encoding encoding : encodings) {
+			registry.register(encoding);
+		}
+		return registry;
+	}
+
 	/// Returns {@code true} if an encoding is registered for the given id.
 	///
 	/// @param encodingId the encoding id to query
 	/// @return {@code true} if an {@link Encoding} is registered for {@code encodingId}
 	public boolean hasEncoding(EncodingId encodingId) {
 		return encodings.containsKey(encodingId);
+	}
+
+	/// Returns the registered encoding for {@code encodingId}, or {@code null} if not registered.
+	///
+	/// @param encodingId the encoding id to look up
+	/// @return the registered {@link Encoding}, or {@code null}
+	public Encoding lookup(EncodingId encodingId) {
+		return encodings.get(encodingId);
 	}
 
 	private static ArrayNode convertArrayNode(

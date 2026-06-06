@@ -204,7 +204,7 @@ class FrameOfReferenceEncodingTest {
 			var le = PTypeIO.LE_LONG;
 
 			// When
-			EncodeResult encoded = sut.encode(DTypes.I64, data);
+			EncodeResult encoded = sut.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, DTypes.I64, registry);
 			Array result = sut.decode(ctx);
 
@@ -224,7 +224,7 @@ class FrameOfReferenceEncodingTest {
 			var le = PTypeIO.LE_INT;
 
 			// When
-			EncodeResult encoded = sut.encode(DTypes.I32, data);
+			EncodeResult encoded = sut.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, DTypes.I32, registry);
 			Array result = sut.decode(ctx);
 

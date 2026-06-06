@@ -145,7 +145,7 @@ class MaskedEncodingTest {
 
 			PrimitiveEncoding primitiveEncoding = new PrimitiveEncoding();
 			DType i32 = new DType.Primitive(PType.I32, false);
-			EncodeResult childResult = primitiveEncoding.encode(i32, new int[]{1});
+			EncodeResult childResult = primitiveEncoding.encode(i32, new int[]{1}, EncodeTestHelper.testCtx());
 			EncodeNode childNode = childResult.rootNode();
 			EncodeNode maskedNode = new EncodeNode(
 					EncodingId.VORTEX_MASKED, null,
@@ -172,7 +172,7 @@ class MaskedEncodingTest {
 	private static EncodeResult maskedResult(int[] values, boolean[] validity) {
 		PrimitiveEncoding primitiveEncoding = new PrimitiveEncoding();
 		DType i32 = new DType.Primitive(PType.I32, false);
-		EncodeResult childResult = primitiveEncoding.encode(i32, values);
+		EncodeResult childResult = primitiveEncoding.encode(i32, values, EncodeTestHelper.testCtx());
 
 		List<MemorySegment> allBuffers = new ArrayList<>(childResult.buffers());
 		EncodeNode[] children;
@@ -182,7 +182,7 @@ class MaskedEncodingTest {
 		} else {
 			BoolEncoding boolEncoding = new BoolEncoding();
 			DType boolDtype = new DType.Bool(false);
-			EncodeResult validityResult = boolEncoding.encode(boolDtype, validity);
+			EncodeResult validityResult = boolEncoding.encode(boolDtype, validity, EncodeTestHelper.testCtx());
 			EncodeNode remapped = EncodeNode.remapBufferIndices(
 					validityResult.rootNode(), childResult.buffers().size());
 			allBuffers.addAll(validityResult.buffers());

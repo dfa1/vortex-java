@@ -225,7 +225,7 @@ class AlpEncodingTest {
 			EncodingRegistry registry = TestRegistry.withPrimitive(sut);
 
 			// When
-			EncodeResult encoded = sut.encode(DTypes.F32, values);
+			EncodeResult encoded = sut.encode(DTypes.F32, values, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, values.length, DTypes.F32, registry);
 			Array result = sut.decode(ctx);
 
@@ -246,7 +246,7 @@ class AlpEncodingTest {
 			EncodingRegistry registry = TestRegistry.withPrimitive(sut);
 
 			// When
-			EncodeResult encoded = sut.encode(DTypes.F32, values);
+			EncodeResult encoded = sut.encode(DTypes.F32, values, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, values.length, DTypes.F32, registry);
 			Array result = sut.decode(ctx);
 
@@ -268,7 +268,7 @@ class AlpEncodingTest {
 			EncodingRegistry registry = TestRegistry.withPrimitive(sut);
 
 			// When
-			EncodeResult encoded = sut.encode(DTypes.F64, values);
+			EncodeResult encoded = sut.encode(DTypes.F64, values, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, values.length, DTypes.F64, registry);
 			Array result = sut.decode(ctx);
 

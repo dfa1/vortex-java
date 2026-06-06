@@ -12,7 +12,6 @@ import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.FloatArray;
 
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
@@ -76,13 +75,13 @@ public final class AlpEncoding implements Encoding {
 	}
 
 	@Override
-	public EncodeResult encode(DType dtype, Object data) {
-		return Encoder.encode(dtype, data);
+	public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+		return Encoder.encode(dtype, data, ctx);
 	}
 
 	@Override
-	public CascadeStep encodeCascade(DType dtype, Object data, CompressorContext ctx) {
-		return Encoder.encodeCascade(dtype, data);
+	public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext encodeCtx) {
+		return Encoder.encodeCascade(dtype, data, encodeCtx);
 	}
 
 	@Override
@@ -101,21 +100,21 @@ public final class AlpEncoding implements Encoding {
 		                          List<Integer> patchIndices, List<Double> patchValues,
 		                          byte[] statsMin, byte[] statsMax) {}
 
-		private static EncodeResult encode(DType dtype, Object data) {
+		private static EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
 			PType ptype = ((DType.Primitive) dtype).ptype();
 			return switch (ptype) {
-				case F64 -> encodeF64((double[]) data, dtype);
-				case F32 -> encodeF32((float[]) data, dtype);
+				case F64 -> encodeF64((double[]) data, dtype, ctx);
+				case F32 -> encodeF32((float[]) data, dtype, ctx);
 				default -> throw new UnsupportedOperationException("ALP encode not supported for " + ptype);
 			};
 		}
 
-		private static CascadeStep encodeCascade(DType dtype, Object data) {
+		private static CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
 			PType ptype = ((DType.Primitive) dtype).ptype();
 			if (ptype == PType.F64) {
-				return encodeCascadeF64((double[]) data);
+				return encodeCascadeF64((double[]) data, ctx);
 			}
-			return CascadeStep.terminal(encode(dtype, data));
+			return CascadeStep.terminal(encode(dtype, data, ctx));
 		}
 
 		private static int[] findExponentsF64(double[] values) {
@@ -187,11 +186,11 @@ public final class AlpEncoding implements Encoding {
 			return new AlpF64Data(expE, expF, encodedArr, patchIndices, patchValues, statsMin, statsMax);
 		}
 
-		private static EncodeResult encodeF64(double[] values, DType dtype) {
+		private static EncodeResult encodeF64(double[] values, DType dtype, EncodeContext ctx) {
 			AlpF64Data d = computeF64(values);
 			int n = values.length;
 
-			MemorySegment encodedBuf = Arena.ofAuto().allocate((long) n * 8, 8);
+			MemorySegment encodedBuf = ctx.arena().allocate((long) n * 8, 8);
 			for (int i = 0; i < n; i++) {
 				encodedBuf.setAtIndex(PTypeIO.LE_LONG, i, d.encodedArr()[i]);
 			}
@@ -207,8 +206,8 @@ public final class AlpEncoding implements Encoding {
 			}
 
 			int numPatches = d.patchIndices().size();
-			MemorySegment idxBuf = Arena.ofAuto().allocate((long) numPatches * 4, 4);
-			MemorySegment valBuf = Arena.ofAuto().allocate((long) numPatches * 8, 8);
+			MemorySegment idxBuf = ctx.arena().allocate((long) numPatches * 4, 4);
+			MemorySegment valBuf = ctx.arena().allocate((long) numPatches * 8, 8);
 			for (int i = 0; i < numPatches; i++) {
 				idxBuf.setAtIndex(PTypeIO.LE_INT, i, d.patchIndices().get(i));
 				valBuf.setAtIndex(PTypeIO.LE_DOUBLE, i, d.patchValues().get(i));
@@ -229,7 +228,7 @@ public final class AlpEncoding implements Encoding {
 
 		/// Cascade-aware F64 encode: I64 child is an open ChildSlot so the compressor
 		/// can bitpack it. Patch idx/val buffers (if any) stay in ownedBuffers.
-		private static CascadeStep encodeCascadeF64(double[] values) {
+		private static CascadeStep encodeCascadeF64(double[] values, EncodeContext ctx) {
 			AlpF64Data d = computeF64(values);
 			int n = values.length;
 
@@ -244,8 +243,8 @@ public final class AlpEncoding implements Encoding {
 			}
 
 			int numPatches = d.patchIndices().size();
-			MemorySegment idxBuf = Arena.ofAuto().allocate((long) numPatches * 4, 4);
-			MemorySegment valBuf = Arena.ofAuto().allocate((long) numPatches * 8, 8);
+			MemorySegment idxBuf = ctx.arena().allocate((long) numPatches * 4, 4);
+			MemorySegment valBuf = ctx.arena().allocate((long) numPatches * 8, 8);
 			for (int i = 0; i < numPatches; i++) {
 				idxBuf.setAtIndex(PTypeIO.LE_INT, i, d.patchIndices().get(i));
 				valBuf.setAtIndex(PTypeIO.LE_DOUBLE, i, d.patchValues().get(i));
@@ -295,7 +294,7 @@ public final class AlpEncoding implements Encoding {
 			return new int[]{bestExpE, bestExpF};
 		}
 
-		private static EncodeResult encodeF32(float[] values, DType dtype) {
+		private static EncodeResult encodeF32(float[] values, DType dtype, EncodeContext ctx) {
 			int n = values.length;
 			int[] exps = findExponentsF32(values);
 			int expE = exps[0], expF = exps[1];
@@ -331,7 +330,7 @@ public final class AlpEncoding implements Encoding {
 			byte[] statsMin = n > 0 ? scalarF32(min) : null;
 			byte[] statsMax = n > 0 ? scalarF32(max) : null;
 
-			MemorySegment encodedBuf = Arena.ofAuto().allocate((long) n * 4, 4);
+			MemorySegment encodedBuf = ctx.arena().allocate((long) n * 4, 4);
 			for (int i = 0; i < n; i++) {
 				encodedBuf.setAtIndex(PTypeIO.LE_INT, i, encodedArr[i]);
 			}
@@ -347,8 +346,8 @@ public final class AlpEncoding implements Encoding {
 			}
 
 			int numPatches = patchIndices.size();
-			MemorySegment idxBuf = Arena.ofAuto().allocate((long) numPatches * 4, 4);
-			MemorySegment valBuf = Arena.ofAuto().allocate((long) numPatches * 4, 4);
+			MemorySegment idxBuf = ctx.arena().allocate((long) numPatches * 4, 4);
+			MemorySegment valBuf = ctx.arena().allocate((long) numPatches * 4, 4);
 			for (int i = 0; i < numPatches; i++) {
 				idxBuf.setAtIndex(PTypeIO.LE_INT, i, patchIndices.get(i));
 				valBuf.setAtIndex(PTypeIO.LE_FLOAT, i, patchValues.get(i));

@@ -17,27 +17,29 @@ import java.util.List;
 public final class CascadingCompressor {
 
 	private final List<Encoding> encodings;
-	private final CompressorContext rootCtx;
 
-	/// Constructs a {@code CascadingCompressor} with the given encodings and root context.
+	/// Constructs a {@code CascadingCompressor} with the given candidate encodings.
 	///
 	/// @param encodings candidate encodings evaluated during compression
-	/// @param rootCtx   root compressor context controlling cascade depth and sampling
-	public CascadingCompressor(List<Encoding> encodings, CompressorContext rootCtx) {
+	public CascadingCompressor(List<Encoding> encodings) {
 		this.encodings = List.copyOf(encodings);
-		this.rootCtx = rootCtx;
 	}
 
 	/// Entry point: encode {@code data} using the best cascading strategy.
 	///
-	/// @param dtype logical type of the data to encode
+	/// <p>Cascade parameters (depth, sampling, exclusions) are taken from {@code ctx}.
+	/// Use {@link EncodeContext#ofDepth(int, java.lang.foreign.Arena, EncodingRegistry)}
+	/// to build a context with cascade depth set.
+	///
+	/// @param dtype the logical type of the data to encode
 	/// @param data  input data in the format expected by the candidate encodings
+	/// @param ctx   encoding context supplying the arena, registry, and cascade parameters
 	/// @return the {@link EncodeResult} produced by the winning encoding
-	public EncodeResult encode(DType dtype, Object data) {
-		return encodeWithCtx(dtype, data, rootCtx);
+	public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+		return encodeWithCtx(dtype, data, ctx);
 	}
 
-	private EncodeResult encodeWithCtx(DType dtype, Object data, CompressorContext ctx) {
+	private EncodeResult encodeWithCtx(DType dtype, Object data, EncodeContext ctx) {
 		if (dtype instanceof DType.Struct structDtype) {
 			return encodeStruct(structDtype, (StructData) data, ctx);
 		}
@@ -78,7 +80,7 @@ public final class CascadingCompressor {
 
 		if (winner == null) {
 			// No encoding beats primitive — fall back
-			return findPrimitiveEncoding(dtype).encode(dtype, data);
+			return findPrimitiveEncoding(dtype).encode(dtype, data, ctx);
 		}
 
 		// Re-run winner on full data
@@ -87,16 +89,16 @@ public final class CascadingCompressor {
 
 	// ── Size measurement (on sample) ──────────────────────────────────────────
 
-	private long measureStep(Encoding enc, CascadeStep step, CompressorContext ctx) {
+	private long measureStep(Encoding enc, CascadeStep step, EncodeContext ctx) {
 		long total = step.ownedBytes();
 		for (ChildSlot slot : step.openChildren()) {
-			CompressorContext childCtx = ctx.withDecrementedDepth().withExcluded(enc.encodingId());
+			EncodeContext childCtx = ctx.withDecrementedDepth().withExcluded(enc.encodingId());
 			total += measureBestChild(slot.childDtype(), slot.childData(), childCtx);
 		}
 		return total;
 	}
 
-	private long measureBestChild(DType dtype, Object data, CompressorContext ctx) {
+	private long measureBestChild(DType dtype, Object data, EncodeContext ctx) {
 		int n = dataLength(data);
 		long best = primitiveBytes(dtype, n);
 		for (Encoding enc : encodings) {
@@ -117,7 +119,7 @@ public final class CascadingCompressor {
 
 	// ── Full-data run + buffer splicing ───────────────────────────────────────
 
-	private EncodeResult spliceResult(Encoding winner, DType dtype, Object data, CompressorContext ctx) {
+	private EncodeResult spliceResult(Encoding winner, DType dtype, Object data, EncodeContext ctx) {
 		CascadeStep step = winner.encodeCascade(dtype, data, ctx);
 
 		if (!step.applicable()) {
@@ -134,7 +136,7 @@ public final class CascadingCompressor {
 		EncodeNode[] children = step.partialRoot().children().clone();
 
 		for (ChildSlot slot : step.openChildren()) {
-			CompressorContext childCtx = ctx.withDecrementedDepth().withExcluded(winner.encodingId());
+			EncodeContext childCtx = ctx.withDecrementedDepth().withExcluded(winner.encodingId());
 			EncodeResult childResult = encodeWithCtx(slot.childDtype(), slot.childData(), childCtx);
 
 			int bufOffset = allBuffers.size();
@@ -152,7 +154,7 @@ public final class CascadingCompressor {
 
 	// ── Struct encoding ───────────────────────────────────────────────────────
 
-	private EncodeResult encodeStruct(DType.Struct dtype, StructData data, CompressorContext ctx) {
+	private EncodeResult encodeStruct(DType.Struct dtype, StructData data, EncodeContext ctx) {
 		List<Object> fields = data.fieldArrays();
 		List<DType> fieldTypes = dtype.fieldTypes();
 		List<MemorySegment> allBuffers = new ArrayList<>();

@@ -26,7 +26,7 @@ public final class NullEncoding implements Encoding {
 	}
 
 	@Override
-	public EncodeResult encode(DType dtype, Object data) {
+	public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
 		EncodeNode root = new EncodeNode(EncodingId.VORTEX_NULL, null, new EncodeNode[0], new int[0]);
 		return new EncodeResult(root, List.of(), null, null);
 	}

@@ -42,8 +42,8 @@ public final class VarBinViewEncoding implements Encoding {
 	}
 
 	@Override
-	public EncodeResult encode(DType dtype, Object data) {
-		return Encoder.encode((String[]) data);
+	public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+		return Encoder.encode((String[]) data, ctx);
 	}
 
 	@Override
@@ -56,7 +56,7 @@ public final class VarBinViewEncoding implements Encoding {
 		private static final int MAX_INLINED_SIZE = 12;
 		private static final int VIEW_SIZE = 16;
 
-		static EncodeResult encode(String[] strings) {
+		static EncodeResult encode(String[] strings, EncodeContext ctx) {
 			int n = strings.length;
 
 			byte[][] bytes = new byte[n][];
@@ -68,7 +68,7 @@ public final class VarBinViewEncoding implements Encoding {
 				}
 			}
 
-			Arena arena = Arena.ofAuto();
+			Arena arena = ctx.arena();
 			boolean hasDataBuf = totalDataBytes > 0;
 			MemorySegment dataBuf = arena.allocate(hasDataBuf ? totalDataBytes : 1);
 			MemorySegment viewsBuf = arena.allocate(n > 0 ? (long) n * VIEW_SIZE : 1);

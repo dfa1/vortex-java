@@ -25,7 +25,7 @@ class BitpackedEncodingTest {
 			EncodingRegistry registry = TestRegistry.of(sut);
 
 			// When
-			EncodeResult encoded = sut.encode(DTypes.U32, data);
+			EncodeResult encoded = sut.encode(DTypes.U32, data, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, DTypes.U32, registry);
 			Array result = sut.decode(ctx);
 
@@ -45,7 +45,7 @@ class BitpackedEncodingTest {
 			EncodingRegistry registry = TestRegistry.of(sut);
 
 			// When
-			EncodeResult encoded = sut.encode(DTypes.U64, data);
+			EncodeResult encoded = sut.encode(DTypes.U64, data, EncodeTestHelper.testCtx());
 			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, DTypes.U64, registry);
 			Array result = sut.decode(ctx);
 

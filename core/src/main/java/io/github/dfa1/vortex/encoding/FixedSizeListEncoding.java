@@ -40,8 +40,8 @@ public final class FixedSizeListEncoding implements Encoding {
 	}
 
 	@Override
-	public EncodeResult encode(DType dtype, Object data) {
-		return Encoder.encode((DType.FixedSizeList) dtype, (FixedSizeListData) data);
+	public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+		return Encoder.encode((DType.FixedSizeList) dtype, (FixedSizeListData) data, ctx);
 	}
 
 	@Override
@@ -55,11 +55,11 @@ public final class FixedSizeListEncoding implements Encoding {
 				new PrimitiveEncoding(), new VarBinEncoding(), new BoolEncoding(),
 				new NullEncoding(), new ByteBoolEncoding());
 
-		static EncodeResult encode(DType.FixedSizeList dtype, FixedSizeListData data) {
+		static EncodeResult encode(DType.FixedSizeList dtype, FixedSizeListData data, EncodeContext ctx) {
 			DType elementType = dtype.elementType();
 			Encoding inner = findEncoding(elementType);
 
-			EncodeResult elemResult = inner.encode(elementType, data.elements());
+			EncodeResult elemResult = inner.encode(elementType, data.elements(), ctx);
 
 			List<MemorySegment> allBuffers = new ArrayList<>(elemResult.buffers());
 			EncodeNode elemNode = EncodeNode.remapBufferIndices(elemResult.rootNode(), 0);

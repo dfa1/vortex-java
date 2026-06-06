@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
+import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.LongArray;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -46,7 +47,7 @@ class RandomAccessTest {
         }
 
         EncodingRegistry registry = TestRegistry.withPrimitive(sut);
-        EncodeResult encoded = sut.encode(dtype, original);
+        EncodeResult encoded = sut.encode(dtype, original, EncodeTestHelper.testCtx());
         DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, N, dtype, registry);
 
         // When
