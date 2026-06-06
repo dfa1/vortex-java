@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 
 /// Shared DType constants for encoding tests.
+@SuppressWarnings("unused")
 final class DTypes {
 
 	static final DType I8    = new DType.Primitive(PType.I8,  false);

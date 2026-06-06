@@ -19,10 +19,12 @@ import java.util.ServiceLoader;
 /// Registry mapping encoding IDs to [Encoding] implementations.
 public final class EncodingRegistry {
 
-	private final Map<EncodingId, Encoding> encodings = new HashMap<>();
+	private final Map<EncodingId, Encoding> encodings;
 	private boolean allowUnknown;
 
 	private EncodingRegistry() {
+		encodings = new HashMap<>();
+		allowUnknown = false;
 	}
 
 	/// Enable passthrough decode for unknown encoding ids.
@@ -167,7 +169,7 @@ public final class EncodingRegistry {
 		ArrayNode node = ctx.node();
 		Encoding encoding = switch (node) {
 			case KnownArrayNode k -> encodings.get(k.encodingId());
-			case UnknownArrayNode u -> null;
+			case UnknownArrayNode _ -> null;
 		};
 		if (encoding != null) {
 			return encoding.decode(ctx);

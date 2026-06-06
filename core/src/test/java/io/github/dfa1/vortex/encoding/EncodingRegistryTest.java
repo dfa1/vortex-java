@@ -1,8 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
 import io.github.dfa1.vortex.core.ArrayStats;
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.UnknownArray;
@@ -16,8 +14,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class EncodingRegistryTest {
-
-	private static final DType I32 = new DType.Primitive(PType.I32, false);
 
 	@Test
 	void empty() {
@@ -67,7 +63,7 @@ class EncodingRegistryTest {
 		EncodingRegistry sut = EncodingRegistry.empty();
 		ArrayNode node = new UnknownArrayNode("some.unknown",
 				ByteBuffer.allocate(0), new ArrayNode[0], new int[0], ArrayStats.empty());
-		DecodeContext ctx = new DecodeContext(node, I32, 0L,
+		DecodeContext ctx = new DecodeContext(node, DTypes.I32, 0L,
 				new MemorySegment[0], sut, Arena.ofAuto());
 
 		// When / Then
@@ -82,7 +78,7 @@ class EncodingRegistryTest {
 		EncodingRegistry sut = EncodingRegistry.empty();
 		ArrayNode node = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE,
 				ByteBuffer.allocate(0), new ArrayNode[0], new int[0], ArrayStats.empty());
-		DecodeContext ctx = new DecodeContext(node, I32, 0L,
+		DecodeContext ctx = new DecodeContext(node, DTypes.I32, 0L,
 				new MemorySegment[0], sut, Arena.ofAuto());
 
 		// When / Then
@@ -97,7 +93,7 @@ class EncodingRegistryTest {
 		EncodingRegistry sut = EncodingRegistry.empty().allowUnknown();
 		ArrayNode node = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE,
 				ByteBuffer.allocate(0), new ArrayNode[0], new int[0], ArrayStats.empty());
-		DecodeContext ctx = new DecodeContext(node, I32, 0L,
+		DecodeContext ctx = new DecodeContext(node, DTypes.I32, 0L,
 				new MemorySegment[0], sut, Arena.ofAuto());
 
 		// When
@@ -117,7 +113,7 @@ class EncodingRegistryTest {
 		buf.set(java.lang.foreign.ValueLayout.JAVA_INT, 0, 42);
 		ArrayNode node = new UnknownArrayNode("some.unknown",
 				metadata, new ArrayNode[0], new int[]{0}, ArrayStats.empty());
-		DecodeContext ctx = new DecodeContext(node, I32, 5L,
+		DecodeContext ctx = new DecodeContext(node, DTypes.I32, 5L,
 				new MemorySegment[]{buf}, sut, Arena.ofAuto());
 
 		// When
@@ -127,7 +123,7 @@ class EncodingRegistryTest {
 		assertThat(result).isInstanceOf(UnknownArray.class);
 		UnknownArray unknown = (UnknownArray) result;
 		assertThat(unknown.encodingId()).isEqualTo("some.unknown");
-		assertThat(unknown.dtype()).isEqualTo(I32);
+		assertThat(unknown.dtype()).isEqualTo(DTypes.I32);
 		assertThat(unknown.length()).isEqualTo(5L);
 		assertThat(unknown.metadata()).isEqualTo(metadata);
 		assertThat(unknown.buffers()).hasSize(1);
@@ -145,7 +141,7 @@ class EncodingRegistryTest {
 				ByteBuffer.allocate(0), new ArrayNode[0], new int[0], ArrayStats.empty());
 		ArrayNode parent = new UnknownArrayNode("some.unknown",
 				ByteBuffer.allocate(0), new ArrayNode[]{child}, new int[0], ArrayStats.empty());
-		DecodeContext ctx = new DecodeContext(parent, I32, 0L,
+		DecodeContext ctx = new DecodeContext(parent, DTypes.I32, 0L,
 				new MemorySegment[0], sut, Arena.ofAuto());
 
 		// When
@@ -156,5 +152,6 @@ class EncodingRegistryTest {
 		assertThat(unknown.children()).hasSize(1);
 		assertThat(unknown.children()[0]).isInstanceOf(UnknownArray.class);
 		assertThat(((UnknownArray) unknown.children()[0]).encodingId()).isEqualTo("vortex.primitive");
+		assertThat(sut.isAllowUnknown()).isTrue();
 	}
 }
