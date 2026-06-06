@@ -17,13 +17,11 @@ public interface Encoding {
 	/// @return decoded array
 	Array decode(DecodeContext ctx);
 
-	/// Returns {@code true} if this encoding can encode the given dtype.
+	/// Returns `true` if this encoding can encode the given dtype.
 	///
 	/// @param dtype the dtype to test
-	/// @return {@code true} if this encoding accepts {@code dtype}
-	default boolean accepts(DType dtype) {
-		return false;
-	}
+	/// @return `true` if this encoding accepts `dtype`
+	boolean accepts(DType dtype);
 
 	/// Encodes {@code data} to bytes using the provided arena for output buffer allocation.
 	///

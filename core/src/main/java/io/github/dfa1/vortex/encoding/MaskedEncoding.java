@@ -27,6 +27,11 @@ public final class MaskedEncoding implements Encoding {
 	}
 
 	@Override
+	public boolean accepts(DType dtype) {
+		return false;
+	}
+
+	@Override
 	public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
 		throw new VortexException(EncodingId.VORTEX_MASKED, "encode not yet implemented");
 	}

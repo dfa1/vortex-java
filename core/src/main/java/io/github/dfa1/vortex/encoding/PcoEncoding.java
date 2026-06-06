@@ -68,6 +68,11 @@ public final class PcoEncoding implements Encoding {
     }
 
     @Override
+    public boolean accepts(DType dtype) {
+        return false;
+    }
+
+    @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
         return Encoder.encode(dtype, data, ctx);
     }

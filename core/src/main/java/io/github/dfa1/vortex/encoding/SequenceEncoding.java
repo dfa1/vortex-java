@@ -38,6 +38,11 @@ public final class SequenceEncoding implements Encoding {
 	}
 
 	@Override
+	public boolean accepts(DType dtype) {
+		return dtype instanceof DType.Primitive;
+	}
+
+	@Override
 	public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
 		return Encoder.encode(dtype, data, ctx);
 	}
