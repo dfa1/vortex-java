@@ -20,18 +20,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class DateTimePartsEncodingTest {
 
-    private static final DType EXT_TIMESTAMP_MS = timestampDType(TimeUnit.Milliseconds, false);
-    private static final DType EXT_TIMESTAMP_NS = timestampDType(TimeUnit.Nanoseconds, false);
-    private static final DType EXT_TIMESTAMP_S = timestampDType(TimeUnit.Seconds, false);
+    private static final DType EXT_TIMESTAMP_MS = timestampDType(TimeUnit.Milliseconds);
+    private static final DType EXT_TIMESTAMP_NS = timestampDType(TimeUnit.Nanoseconds);
 
-    private static DType timestampDType(TimeUnit unit, boolean nullable) {
+    private static DType timestampDType(TimeUnit unit) {
         // Rust hand-rolled: byte[0]=unit tag, bytes[1-2]=tz_len u16 LE (0 = no tz)
         ByteBuffer meta = ByteBuffer.allocate(3).order(ByteOrder.LITTLE_ENDIAN);
         meta.put((byte) unit.ordinal());
         meta.putShort((short) 0); // no timezone
         meta.flip();
         return new DType.Extension("vortex.timestamp",
-                new DType.Primitive(PType.I64, nullable), meta, nullable);
+                new DType.Primitive(PType.I64, false), meta, false);
     }
 
     private static ArrayNode toArrayNode(EncodeNode node) {
@@ -210,7 +209,7 @@ class DateTimePartsEncodingTest {
         @EnumSource(value = TimeUnit.class, names = {"Nanoseconds", "Microseconds", "Milliseconds", "Seconds"})
         void roundTrip_allUnits_epochIsZero(TimeUnit unit) {
             // Given
-            DType dtype = timestampDType(unit, false);
+            DType dtype = timestampDType(unit);
             long[] timestamps = {0L};
             DateTimePartsData data = new DateTimePartsData(timestamps, false);
             DateTimePartsEncoding sut = new DateTimePartsEncoding();

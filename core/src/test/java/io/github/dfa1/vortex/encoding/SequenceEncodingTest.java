@@ -26,11 +26,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class SequenceEncodingTest {
 
-	private static final DType I64_DTYPE = new DType.Primitive(PType.I64, false);
-	private static final DType I32_DTYPE = new DType.Primitive(PType.I32, false);
-	private static final DType F64_DTYPE = new DType.Primitive(PType.F64, false);
-	private static final DType F32_DTYPE = new DType.Primitive(PType.F32, false);
-
 	@Nested
 	class Encode {
 
@@ -47,8 +42,8 @@ class SequenceEncodingTest {
 			long[] data = {10L, 12L, 14L, 16L};
 
 			// When
-			EncodeResult result = sut.encode(I64_DTYPE, data, EncodeTestHelper.testCtx());
-			DecodeContext ctx = encodeResultToCtx(result, I64_DTYPE, data.length);
+			EncodeResult result = sut.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
+			DecodeContext ctx = encodeResultToCtx(result, DTypes.I64, data.length);
 			LongArray decoded = (LongArray) sut.decode(ctx);
 
 			// Then
@@ -64,8 +59,8 @@ class SequenceEncodingTest {
 			double[] data = {1.0, 1.5, 2.0, 2.5};
 
 			// When
-			EncodeResult result = sut.encode(F64_DTYPE, data, EncodeTestHelper.testCtx());
-			DecodeContext ctx = encodeResultToCtx(result, F64_DTYPE, data.length);
+			EncodeResult result = sut.encode(DTypes.F64, data, EncodeTestHelper.testCtx());
+			DecodeContext ctx = encodeResultToCtx(result, DTypes.F64, data.length);
 			DoubleArray decoded = (DoubleArray) sut.decode(ctx);
 
 			// Then
@@ -81,7 +76,7 @@ class SequenceEncodingTest {
 			long[] data = {1L, 2L, 4L};
 
 			// When / Then
-			assertThatThrownBy(() -> sut.encode(I64_DTYPE, data, EncodeTestHelper.testCtx()))
+			assertThatThrownBy(() -> sut.encode(DTypes.I64, data, EncodeTestHelper.testCtx()))
 					.isInstanceOf(VortexException.class);
 		}
 
@@ -110,7 +105,7 @@ class SequenceEncodingTest {
 		void decode_i64_generatesCorrectSequence(long base, long mul, long[] expected) {
 			// Given
 			var sut = new SequenceEncoding();
-			DecodeContext ctx = makeCtx(intMeta(base, mul), I64_DTYPE, expected.length);
+			DecodeContext ctx = makeCtx(intMeta(base, mul), DTypes.I64, expected.length);
 
 			// When
 			Array result = sut.decode(ctx);
@@ -128,7 +123,7 @@ class SequenceEncodingTest {
 		void decode_i32_generatesCorrectSequence(long base, long mul, int[] expected) {
 			// Given
 			var sut = new SequenceEncoding();
-			DecodeContext ctx = makeCtx(intMeta(base, mul), I32_DTYPE, expected.length);
+			DecodeContext ctx = makeCtx(intMeta(base, mul), DTypes.I32, expected.length);
 
 			// When
 			Array result = sut.decode(ctx);
@@ -145,7 +140,7 @@ class SequenceEncodingTest {
 		void decode_f64_generatesCorrectSequence() {
 			// Given
 			var sut = new SequenceEncoding();
-			DecodeContext ctx = makeCtx(f64Meta(1.0, 0.5), F64_DTYPE, 4);
+			DecodeContext ctx = makeCtx(f64Meta(1.0, 0.5), DTypes.F64, 4);
 
 			// When
 			Array result = sut.decode(ctx);
@@ -163,7 +158,7 @@ class SequenceEncodingTest {
 		void decode_f32_generatesCorrectSequence() {
 			// Given
 			var sut = new SequenceEncoding();
-			DecodeContext ctx = makeCtx(f32Meta(0.0f, 1.0f), F32_DTYPE, 3);
+			DecodeContext ctx = makeCtx(f32Meta(0.0f, 1.0f), DTypes.F32, 3);
 
 			// When
 			Array result = sut.decode(ctx);
@@ -180,7 +175,7 @@ class SequenceEncodingTest {
 		void decode_emptySequence_returnsZeroLengthArray() {
 			// Given
 			var sut = new SequenceEncoding();
-			DecodeContext ctx = makeCtx(intMeta(0, 1), I64_DTYPE, 0);
+			DecodeContext ctx = makeCtx(intMeta(0, 1), DTypes.I64, 0);
 
 			// When
 			Array result = sut.decode(ctx);
@@ -194,7 +189,7 @@ class SequenceEncodingTest {
 			// Given
 			var sut = new SequenceEncoding();
 			ArrayNode node = ArrayNode.of(EncodingId.VORTEX_SEQUENCE, null, new ArrayNode[0], new int[0], null);
-			DecodeContext ctx = new DecodeContext(node, I64_DTYPE, 3, new MemorySegment[0], EncodingRegistry.empty(), Arena.ofAuto());
+			DecodeContext ctx = new DecodeContext(node, DTypes.I64, 3, new MemorySegment[0], EncodingRegistry.empty(), Arena.ofAuto());
 
 			// When / Then
 			assertThatThrownBy(() -> sut.decode(ctx))

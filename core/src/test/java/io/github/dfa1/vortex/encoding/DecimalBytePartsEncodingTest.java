@@ -15,7 +15,7 @@ class DecimalBytePartsEncodingTest {
 	class Encode {
 
 		@Test
-		void roundTrip_longArray_preservesMspValues() throws Exception {
+		void roundTrip_longArray_preservesMspValues() {
 			// Given
 			long[] values = {1L, -2L, 3L};
 			DType dtype = new DType.Decimal((byte) 18, (byte) 0, false);

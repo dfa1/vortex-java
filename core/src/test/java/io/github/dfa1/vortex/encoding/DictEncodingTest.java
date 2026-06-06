@@ -162,7 +162,8 @@ class DictEncodingTest {
 			return result;
 		}
 
-		private static String[] repeat(String[] pattern, int times) {
+		@SuppressWarnings("SameParameterValue")
+        private static String[] repeat(String[] pattern, int times) {
 			String[] result = new String[pattern.length * times];
 			for (int i = 0; i < times; i++) {
 				System.arraycopy(pattern, 0, result, i * pattern.length, pattern.length);

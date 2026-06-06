@@ -22,7 +22,7 @@ class DecimalEncodingTest {
 	class Encode {
 
 		@Test
-		void roundTrip_i64Precision_preservesBuffer() throws Exception {
+		void roundTrip_i64Precision_preservesBuffer() {
 			// Given
 			long[] values = {100L, -200L, 300L};
 			MemorySegment input = TestSegments.leLongs(values);

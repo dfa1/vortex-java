@@ -403,7 +403,7 @@ class PcoEncodingTest {
 	/// Build chunk meta for Classic mode + Conv1 delta by packing bits LSB-first.
 	///
 	/// Layout: mode(4b)=0, delta(4b)=3, quantization(5b), bias_latent(64b),
-	/// order-1(5b), weights[order×32b], ansSizeLog(4b)=0, nBins(15b)=0, align.
+	/// order-1(5b), weights[order*32b], ansSizeLog(4b)=0, nBins(15b)=0, align.
 	/// bias_latent = bias ^ Long.MIN_VALUE; each weight_latent = weight ^ 0x80000000L.
 	private static MemorySegment chunkMetaConv1(int quantization, long biasLatent,
 			int order, long[] weightLatents) {

@@ -132,11 +132,11 @@ public final class ParquetImporter {
     }
 
     private static DType mapInt32(LogicalType logical, boolean nullable) {
-        if (logical instanceof LogicalType.IntType it) {
-            PType ptype = switch (it.bitWidth()) {
-                case 8 -> it.isSigned() ? PType.I8 : PType.U8;
-                case 16 -> it.isSigned() ? PType.I16 : PType.U16;
-                default -> it.isSigned() ? PType.I32 : PType.U32;
+        if (logical instanceof LogicalType.IntType(int bitWidth, boolean isSigned)) {
+            PType ptype = switch (bitWidth) {
+                case 8 -> isSigned ? PType.I8 : PType.U8;
+                case 16 -> isSigned ? PType.I16 : PType.U16;
+                default -> isSigned ? PType.I32 : PType.U32;
             };
             return new DType.Primitive(ptype, nullable);
         }

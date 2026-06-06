@@ -106,7 +106,7 @@ class ExtEncodingTest {
 
 			// Then
 			assertThat(result).isInstanceOf(LongArray.class);
-			assertThat(result.length()).isEqualTo((long) values.length);
+			assertThat(result.length()).isEqualTo(values.length);
 			for (int i = 0; i < values.length; i++) {
 				LongArray longArray = (LongArray) result;
 				assertThat(longArray.getLong(i)).isEqualTo(values[i]);

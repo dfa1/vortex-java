@@ -28,11 +28,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ZstdEncodingTest {
 
-    private static final DType I32 = new DType.Primitive(PType.I32, false);
-    private static final DType I64 = new DType.Primitive(PType.I64, false);
-    private static final DType UTF8 = new DType.Utf8(false);
-
-    @Nested
+	@Nested
     class Encode {
 
         @Test
@@ -42,8 +38,8 @@ class ZstdEncodingTest {
             int[] data = {10, 20, 30, 40};
 
             // When
-            EncodeResult result = sut.encode(I32, data, EncodeTestHelper.testCtx());
-            DecodeContext ctx = EncodeTestHelper.toDecodeContext(result, data.length, I32, EncodingRegistry.empty());
+            EncodeResult result = sut.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = EncodeTestHelper.toDecodeContext(result, data.length, DTypes.I32, EncodingRegistry.empty());
             IntArray decoded = (IntArray) sut.decode(ctx);
 
             // Then
@@ -60,8 +56,8 @@ class ZstdEncodingTest {
             long[] data = {100L, 200L, 300L};
 
             // When
-            EncodeResult result = sut.encode(I64, data, EncodeTestHelper.testCtx());
-            DecodeContext ctx = EncodeTestHelper.toDecodeContext(result, data.length, I64, EncodingRegistry.empty());
+            EncodeResult result = sut.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = EncodeTestHelper.toDecodeContext(result, data.length, DTypes.I64, EncodingRegistry.empty());
             LongArray decoded = (LongArray) sut.decode(ctx);
 
             // Then
@@ -78,8 +74,8 @@ class ZstdEncodingTest {
             String[] data = {"hello", "world", "zstd"};
 
             // When
-            EncodeResult result = sut.encode(UTF8, data, EncodeTestHelper.testCtx());
-            DecodeContext ctx = EncodeTestHelper.toDecodeContext(result, data.length, UTF8, EncodingRegistry.empty());
+            EncodeResult result = sut.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = EncodeTestHelper.toDecodeContext(result, data.length, DTypes.UTF8, EncodingRegistry.empty());
             VarBinArray decoded = (VarBinArray) sut.decode(ctx);
 
             // Then
@@ -96,8 +92,8 @@ class ZstdEncodingTest {
             int[] data = {};
 
             // When
-            EncodeResult result = sut.encode(I32, data, EncodeTestHelper.testCtx());
-            DecodeContext ctx = EncodeTestHelper.toDecodeContext(result, data.length, I32, EncodingRegistry.empty());
+            EncodeResult result = sut.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = EncodeTestHelper.toDecodeContext(result, data.length, DTypes.I32, EncodingRegistry.empty());
             IntArray decoded = (IntArray) sut.decode(ctx);
 
             // Then
@@ -127,7 +123,7 @@ class ZstdEncodingTest {
             byte[] compressed = compress(raw);
             DecodeContext ctx = makeCtx(
                     metaNoDict(new long[]{raw.length}, new long[]{values.length}),
-                    I32, values.length, compressed
+					DTypes.I32, values.length, compressed
             );
 
             // When
@@ -149,7 +145,7 @@ class ZstdEncodingTest {
             byte[] compressed = compress(raw);
             DecodeContext ctx = makeCtx(
                     metaNoDict(new long[]{raw.length}, new long[]{values.length}),
-                    I64, values.length, compressed
+					DTypes.I64, values.length, compressed
             );
 
             // When
@@ -171,7 +167,7 @@ class ZstdEncodingTest {
             byte[] compressed = compress(raw);
             DecodeContext ctx = makeCtx(
                     metaNoDict(new long[]{raw.length}, new long[]{strings.length}),
-                    UTF8, strings.length, compressed
+					DTypes.UTF8, strings.length, compressed
             );
 
             // When
@@ -198,7 +194,7 @@ class ZstdEncodingTest {
                     new long[]{raw0.length, raw1.length},
                     new long[]{frame0Values.length, frame1Values.length}
             );
-            DecodeContext ctx = makeCtx(meta, I32, 5, comp0, comp1);
+            DecodeContext ctx = makeCtx(meta, DTypes.I32, 5, comp0, comp1);
 
             // When
             IntArray result = (IntArray) sut.decode(ctx);
@@ -214,7 +210,7 @@ class ZstdEncodingTest {
             // Given
             var sut = new ZstdEncoding();
             byte[] meta = metaNoDict(new long[0], new long[0]);
-            DecodeContext ctx = makeCtx(meta, I32, 0);
+            DecodeContext ctx = makeCtx(meta, DTypes.I32, 0);
 
             // When
             IntArray result = (IntArray) sut.decode(ctx);
@@ -238,7 +234,7 @@ class ZstdEncodingTest {
                             .setNValues(values.length))
                     .build().toByteArray();
             // buffer[0]=dict, buffer[1]=frame
-            DecodeContext ctx = makeDictCtx(meta, I32, values.length, dictBytes, compressed);
+            DecodeContext ctx = makeDictCtx(meta, DTypes.I32, values.length, dictBytes, compressed);
 
             // When
             IntArray result = (IntArray) sut.decode(ctx);
@@ -264,7 +260,7 @@ class ZstdEncodingTest {
                             .setUncompressedSize(raw.length)
                             .setNValues(strings.length))
                     .build().toByteArray();
-            DecodeContext ctx = makeDictCtx(meta, UTF8, strings.length, dictBytes, compressed);
+            DecodeContext ctx = makeDictCtx(meta, DTypes.UTF8, strings.length, dictBytes, compressed);
 
             // When
             VarBinArray result = (VarBinArray) sut.decode(ctx);
@@ -294,7 +290,7 @@ class ZstdEncodingTest {
                     .addFrames(EncodingProtos.ZstdFrameMetadata.newBuilder()
                             .setUncompressedSize(raw1.length).setNValues(frame1.length))
                     .build().toByteArray();
-            DecodeContext ctx = makeDictCtx(meta, I32, 5, dictBytes, comp0, comp1);
+            DecodeContext ctx = makeDictCtx(meta, DTypes.I32, 5, dictBytes, comp0, comp1);
 
             // When
             IntArray result = (IntArray) sut.decode(ctx);
@@ -392,7 +388,7 @@ class ZstdEncodingTest {
             // Given
             var sut = new ZstdEncoding();
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ZSTD, null, new ArrayNode[0], new int[0], null);
-            DecodeContext ctx = new DecodeContext(node, I32, 0, new MemorySegment[0],
+            DecodeContext ctx = new DecodeContext(node, DTypes.I32, 0, new MemorySegment[0],
                     EncodingRegistry.empty(), Arena.ofAuto());
 
             // When / Then

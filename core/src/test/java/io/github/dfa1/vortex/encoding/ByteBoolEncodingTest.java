@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.encoding;
 
-import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.BoolArray;
 import org.junit.jupiter.api.Nested;
@@ -16,8 +15,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class ByteBoolEncodingTest {
 
-	private static final DType BOOL_DTYPE = new DType.Bool(false);
-
 	@Nested
 	class Encode {
 
@@ -30,8 +27,8 @@ class ByteBoolEncodingTest {
 			registry.register(sut);
 
 			// When
-			EncodeResult encoded = sut.encode(BOOL_DTYPE, data, EncodeTestHelper.testCtx());
-			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, BOOL_DTYPE, registry);
+			EncodeResult encoded = sut.encode(DTypes.BOOL, data, EncodeTestHelper.testCtx());
+			DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, data.length, DTypes.BOOL, registry);
 			Array result = sut.decode(ctx);
 
 			// Then
@@ -90,7 +87,7 @@ class ByteBoolEncodingTest {
 			ArrayNode node = ArrayNode.of(EncodingId.VORTEX_BYTEBOOL, null, new ArrayNode[0], new int[]{0}, null);
 			EncodingRegistry registry = EncodingRegistry.empty();
 			registry.register(new ByteBoolEncoding());
-			return new DecodeContext(node, BOOL_DTYPE, byteValues.length, new MemorySegment[]{buf}, registry,
+			return new DecodeContext(node, DTypes.BOOL, byteValues.length, new MemorySegment[]{buf}, registry,
 					Arena.ofAuto());
 		}
 	}

@@ -33,27 +33,6 @@ class VortexReaderTest {
 
 	private static EncodingRegistry buildUniversalStubRegistry() {
 		var registry = EncodingRegistry.empty();
-		Encoding stub = new Encoding() {
-			@Override
-			public EncodingId encodingId() {
-				return EncodingId.VORTEX_PRIMITIVE;
-			}
-
-			@Override
-			public boolean accepts(DType dtype) {
-				return false;
-			}
-
-			@Override
-			public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
-				throw new UnsupportedOperationException();
-			}
-
-			@Override
-			public Array decode(DecodeContext ctx) {
-				return EmptyArray.of(ctx.dtype());
-			}
-		};
 		for (EncodingId encodingId : EncodingId.values()) {
 			registry.register(new Encoding() {
 				@Override
@@ -80,6 +59,7 @@ class VortexReaderTest {
 		return registry;
 	}
 
+	@SuppressWarnings("resource")
 	@Test
 	void open_fileTooSmall_throwsVortexException(@TempDir Path tmpDir) throws IOException {
 		// Given
@@ -93,6 +73,7 @@ class VortexReaderTest {
 
 	// --- real fixtures: full parse ---
 
+	@SuppressWarnings("resource")
 	@Test
 	void open_wrongMagic_throwsVortexException(@TempDir Path tmpDir) throws IOException {
 		// Given
