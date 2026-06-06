@@ -37,7 +37,7 @@ class VortexWriterTest {
 
     // ── writeChunk validation ─────────────────────────────────────────────────
 
-    private static List<ScanResult> scanAll(VortexReader vf, ScanOptions opts) throws IOException {
+    private static List<ScanResult> scanAll(VortexReader vf, ScanOptions opts) {
         var results = new ArrayList<ScanResult>();
         var iter = vf.scan(opts);
         while (iter.hasNext()) {

@@ -31,7 +31,7 @@ class DictEncodingTest {
             List.of(new DType.Primitive(PType.I32, false)),
             false);
 
-    private static List<ScanResult> scanAll(VortexReader vf, ScanOptions opts) throws IOException {
+    private static List<ScanResult> scanAll(VortexReader vf, ScanOptions opts) {
         var results = new ArrayList<ScanResult>();
         var iter = vf.scan(opts);
         while (iter.hasNext()) {

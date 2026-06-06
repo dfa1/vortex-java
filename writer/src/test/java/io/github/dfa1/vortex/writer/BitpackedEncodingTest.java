@@ -32,7 +32,7 @@ class BitpackedEncodingTest {
             List.of(new DType.Primitive(PType.I32, false)),
             false);
 
-    private static List<ScanResult> scanAll(VortexReader vf) throws IOException {
+    private static List<ScanResult> scanAll(VortexReader vf) {
         var results = new ArrayList<ScanResult>();
         var iter = vf.scan(ScanOptions.all());
         while (iter.hasNext()) {
