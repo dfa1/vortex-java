@@ -7,24 +7,28 @@
 		<version>0.3.0-SNAPSHOT</version>
 	</parent>
 
-	<artifactId>cli</artifactId>
+	<artifactId>vortex-cli</artifactId>
+
+	<name>vortex-cli</name>
+	<description>Command-line interface for the Vortex columnar file format.</description>
 
 	<properties>
 		<maven.deploy.skip>true</maven.deploy.skip>
+		<skipPublishing>true</skipPublishing>
 	</properties>
 
 	<dependencies>
 		<dependency>
 			<groupId>io.github.dfa1.vortex</groupId>
-			<artifactId>csv</artifactId>
+			<artifactId>vortex-csv</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>io.github.dfa1.vortex</groupId>
-			<artifactId>parquet</artifactId>
+			<artifactId>vortex-parquet</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>io.github.dfa1.vortex</groupId>
-			<artifactId>reader</artifactId>
+			<artifactId>vortex-reader</artifactId>
 		</dependency>
 		<!-- testing -->
 		<dependency>

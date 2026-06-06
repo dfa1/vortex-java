@@ -60,7 +60,6 @@ Remaining 0.3 MB gap — biggest to smallest:
   `vortex-java` artifact simplifies client dependency management and removes artificial module
   boundaries. Keep `integration`, `performance`, and `cli` as separate modules. Package structure
   (`encoding`, `io`, `writer`) already enforces internal boundaries without Maven.
-- [ ] prefix all modules with "vortex-"
 - [ ] switch back to module-path, but keep in mind these 2 blockers
 
 ## Documentation

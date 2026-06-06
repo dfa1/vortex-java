@@ -7,42 +7,42 @@
 		<version>0.3.0-SNAPSHOT</version>
 	</parent>
 
-	<artifactId>bom</artifactId>
+	<artifactId>vortex-bom</artifactId>
 	<packaging>pom</packaging>
 
-	<name>vortex-java-bom</name>
+	<name>vortex-bom</name>
 	<description>Bill of Materials for vortex-java. Import this POM in dependencyManagement to get consistent versions of all vortex-java modules.</description>
 
 	<dependencyManagement>
 		<dependencies>
 			<dependency>
 				<groupId>io.github.dfa1.vortex</groupId>
-				<artifactId>core</artifactId>
+				<artifactId>vortex-core</artifactId>
 				<version>${project.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>io.github.dfa1.vortex</groupId>
-				<artifactId>reader</artifactId>
+				<artifactId>vortex-reader</artifactId>
 				<version>${project.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>io.github.dfa1.vortex</groupId>
-				<artifactId>writer</artifactId>
+				<artifactId>vortex-writer</artifactId>
 				<version>${project.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>io.github.dfa1.vortex</groupId>
-				<artifactId>csv</artifactId>
+				<artifactId>vortex-csv</artifactId>
 				<version>${project.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>io.github.dfa1.vortex</groupId>
-				<artifactId>parquet</artifactId>
+				<artifactId>vortex-parquet</artifactId>
 				<version>${project.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>io.github.dfa1.vortex</groupId>
-				<artifactId>jdbc</artifactId>
+				<artifactId>vortex-jdbc</artifactId>
 				<version>${project.version}</version>
 			</dependency>
 		</dependencies>

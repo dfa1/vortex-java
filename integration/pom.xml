@@ -7,21 +7,25 @@
 		<version>0.3.0-SNAPSHOT</version>
 	</parent>
 
-	<artifactId>integration</artifactId>
+	<artifactId>vortex-integration</artifactId>
+
+	<name>vortex-integration</name>
+	<description>Integration tests for the Vortex columnar file format Java implementation.</description>
 
 	<properties>
 		<maven.deploy.skip>true</maven.deploy.skip>
+		<skipPublishing>true</skipPublishing>
 	</properties>
 
 	<dependencies>
 		<dependency>
 			<groupId>io.github.dfa1.vortex</groupId>
-			<artifactId>writer</artifactId>
+			<artifactId>vortex-writer</artifactId>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>io.github.dfa1.vortex</groupId>
-			<artifactId>parquet</artifactId>
+			<artifactId>vortex-parquet</artifactId>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
@@ -31,7 +35,7 @@
 		</dependency>
 		<dependency>
 			<groupId>io.github.dfa1.vortex</groupId>
-			<artifactId>reader</artifactId>
+			<artifactId>vortex-reader</artifactId>
 			<scope>test</scope>
 		</dependency>
 		<dependency>

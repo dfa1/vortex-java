@@ -26,7 +26,7 @@ for zero-copy memory-mapped reads.
 ```xml
 <dependency>
   <groupId>io.github.dfa1.vortex</groupId>
-  <artifactId>reader</artifactId>
+  <artifactId>vortex-reader</artifactId>
   <version>0.2.0</version>
 </dependency>
 ```

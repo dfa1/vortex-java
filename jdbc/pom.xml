@@ -7,16 +7,19 @@
 		<version>0.3.0-SNAPSHOT</version>
 	</parent>
 
-	<artifactId>jdbc</artifactId>
+	<artifactId>vortex-jdbc</artifactId>
+
+	<name>vortex-jdbc</name>
+	<description>JDBC import support for the Vortex columnar file format.</description>
 
 	<dependencies>
 		<dependency>
 			<groupId>io.github.dfa1.vortex</groupId>
-			<artifactId>reader</artifactId>
+			<artifactId>vortex-reader</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>io.github.dfa1.vortex</groupId>
-			<artifactId>writer</artifactId>
+			<artifactId>vortex-writer</artifactId>
 		</dependency>
 		<!-- testing -->
 		<dependency>
