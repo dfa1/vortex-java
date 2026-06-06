@@ -24,9 +24,9 @@ Add the dependency to `pom.xml` (inside `<dependencies>`):
 
 ```xml
 <dependency>
-  <groupId>io.github.dfa1</groupId>
-  <artifactId>vortex-java</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <groupId>io.github.dfa1.vortex</groupId>
+  <artifactId>vortex-reader</artifactId>
+  <version>0.3.0</version>
 </dependency>
 ```
 

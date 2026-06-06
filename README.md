@@ -1,7 +1,7 @@
 # vortex-java
 
 [![CI](https://github.com/dfa1/vortex-java/actions/workflows/ci.yml/badge.svg)](https://github.com/dfa1/vortex-java/actions)
-[![Maven Central](https://img.shields.io/maven-central/v/io.github.dfa1.vortex/reader.svg)](https://central.sonatype.com/artifact/io.github.dfa1.vortex/reader)
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.dfa1.vortex/vortex-reader.svg)](https://central.sonatype.com/artifact/io.github.dfa1.vortex/vortex-reader)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/license/Apache-2.0)
 
 > **Alpha** — not production-ready. APIs will change without notice.
@@ -27,7 +27,7 @@ for zero-copy memory-mapped reads.
 <dependency>
   <groupId>io.github.dfa1.vortex</groupId>
   <artifactId>vortex-reader</artifactId>
-  <version>0.2.0</version>
+  <version>0.3.0</version>
 </dependency>
 ```
 
