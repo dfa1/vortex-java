@@ -157,6 +157,15 @@ unique values).
 
 #### Why Vortex is faster on single-column reads
 
+**0. O(1) random access within a column.**
+Fixed-width encodings (ALP, BitPacked) make row N directly addressable:
+`byte_offset = column_base + N * fixed_bits / 8`. Reading row 5 000 000 does not
+require scanning or decompressing rows 0–4 999 999. The OS pages in only the
+memory-mapped region that is actually touched, so filtered scans that skip
+large ranges pay nothing for the skipped bytes. Variable-width encodings (RLE,
+RunEnd) are not O(1), but they encode low-cardinality columns where the run table
+is tiny and the scan is over a handful of entries, not individual rows.
+
 **1. mmap zero-copy.**
 Vortex reads directly from the mmap'd `MemorySegment` — the file bytes _are_ the decode
 input, no intermediate copies. Hardwood reads into internal page buffers and materialises
