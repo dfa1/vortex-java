@@ -1105,4 +1105,54 @@ class JavaWritesRustReadsIntegrationTest {
         long[] flatElements = readListLongColumn(file, "items");
         assertThat(flatElements).containsExactly(elements);
     }
+
+    @Test
+    void javaWriter_rustReader_globalDict_i64(@TempDir Path tmp) throws IOException {
+        // Given — low-cardinality I64 column triggers global dict across two chunks
+        Path file = tmp.resolve("java_globaldict_i64.vtx");
+        DType.Struct schema = new DType.Struct(
+                List.of("v"),
+                List.of(new DType.Primitive(PType.I64, false)),
+                false);
+        long[] chunk1 = {1L, 2L, 3L, 1L, 2L, 3L, 1L, 2L};
+        long[] chunk2 = {3L, 1L, 2L, 3L, 1L, 2L, 3L, 1L};
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            // When
+            sut.writeChunk(Map.of("v", chunk1));
+            sut.writeChunk(Map.of("v", chunk2));
+        }
+
+        // Then — Rust must decode the DictLayout and return original values
+        long[] all = new long[chunk1.length + chunk2.length];
+        System.arraycopy(chunk1, 0, all, 0, chunk1.length);
+        System.arraycopy(chunk2, 0, all, chunk1.length, chunk2.length);
+        long[] decoded = readLongColumn(file, "v");
+        assertThat(decoded).containsExactly(all);
+    }
+
+    @Test
+    void javaWriter_rustReader_globalDict_f64(@TempDir Path tmp) throws IOException {
+        // Given — low-cardinality F64 column (e.g. a status field stored as float) triggers global dict
+        Path file = tmp.resolve("java_globaldict_f64.vtx");
+        DType.Struct schema = new DType.Struct(
+                List.of("v"),
+                List.of(new DType.Primitive(PType.F64, false)),
+                false);
+        double[] chunk1 = {1.0, 2.0, 3.0, 1.0, 2.0, 3.0, 1.0, 2.0};
+        double[] chunk2 = {3.0, 1.0, 2.0, 3.0, 1.0, 2.0, 3.0, 1.0};
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            // When
+            sut.writeChunk(Map.of("v", chunk1));
+            sut.writeChunk(Map.of("v", chunk2));
+        }
+
+        // Then
+        double[] all = new double[chunk1.length + chunk2.length];
+        System.arraycopy(chunk1, 0, all, 0, chunk1.length);
+        System.arraycopy(chunk2, 0, all, chunk1.length, chunk2.length);
+        double[] decoded = readDoubleColumn(file, "v");
+        assertThat(decoded).containsExactly(all);
+    }
 }

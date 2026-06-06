@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.scan;
 
-import com.google.protobuf.InvalidProtocolBufferException;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.Layout;
@@ -22,7 +21,6 @@ import io.github.dfa1.vortex.core.array.StructArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.io.VortexHandle;
-import io.github.dfa1.vortex.proto.EncodingProtos;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -419,16 +417,9 @@ public final class ScanIterator implements AutoCloseable {
 
     private Array decodeDictLayout(Layout dictLayout, DType dtype, SegmentAllocator arena) {
         ByteBuffer rawMeta = dictLayout.metadata();
-        if (rawMeta == null) {
-            throw new VortexException(EncodingId.VORTEX_DICT, "layout: missing metadata");
-        }
-        EncodingProtos.DictMetadata meta;
-        try {
-            meta = EncodingProtos.DictMetadata.parseFrom(rawMeta.duplicate());
-        } catch (InvalidProtocolBufferException e) {
-            throw new VortexException(EncodingId.VORTEX_DICT, "layout: invalid metadata", e);
-        }
-        PType codesPType = PType.values()[meta.getCodesPtype().getNumber()];
+        // DictLayoutMetadata proto (Rust format): field 1 = codes_ptype (PType varint).
+        // Read the varint directly to avoid field-number mismatch with the array-level DictMetadata proto.
+        PType codesPType = readDictLayoutCodesPType(rawMeta);
 
         // child[0] = values layout; child[1] = codes layout
         Layout valuesLayout = dictLayout.children().get(0);
@@ -448,6 +439,25 @@ public final class ScanIterator implements AutoCloseable {
             return expandDictPrimitive(values, codes, codesPType, pDtype, n, arena);
         }
         return expandDictStrings(values, codes, codesPType, dtype, n, arena);
+    }
+
+    private static PType readDictLayoutCodesPType(ByteBuffer rawMeta) {
+        // DictLayoutMetadata (Rust): field 1 = codes_ptype, wire type 0 (varint).
+        // Tag byte = (field_number << 3) | wire_type = (1 << 3) | 0 = 0x08.
+        // Proto3 omits field 1 when it holds the default value (0 = U8), so empty metadata means U8.
+        if (rawMeta == null || !rawMeta.hasRemaining()) {
+            return PType.U8;
+        }
+        ByteBuffer buf = rawMeta.duplicate();
+        byte tag = buf.get();
+        if (tag == 0x08 && buf.hasRemaining()) {
+            int ordinal = buf.get() & 0xFF;
+            PType[] values = PType.values();
+            if (ordinal < values.length) {
+                return values[ordinal];
+            }
+        }
+        return PType.U8;
     }
 
     private boolean canPruneChunk(ChunkSpec chunk, RowFilter filter) {

@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.writer;
 
 import com.google.flatbuffers.FlatBufferBuilder;
 import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.encoding.AlpEncoding;
 import io.github.dfa1.vortex.encoding.BitpackedEncoding;
 import io.github.dfa1.vortex.encoding.BoolEncoding;
@@ -42,8 +43,10 @@ import java.nio.ByteOrder;
 import java.nio.channels.WritableByteChannel;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /// Writes a Vortex file.
 ///
@@ -65,6 +68,12 @@ public final class VortexWriter implements Closeable {
     private static final int LAYOUT_FLAT = 0;
     private static final int LAYOUT_CHUNKED = 1;
     private static final int LAYOUT_STRUCT = 2;
+    private static final int LAYOUT_DICT = 3;
+
+    // Columns with global cardinality below this threshold are dict-encoded across all chunks.
+    private static final int GLOBAL_DICT_MAX_CARDINALITY = 65_536;
+    // Fraction of distinct values in first chunk below which a column is a dict candidate.
+    private static final double GLOBAL_DICT_RATIO_THRESHOLD = 0.5;
 
     private static final ByteBuffer MAGIC = ByteBuffer.wrap(new byte[]{'V', 'T', 'X', 'F'})
                                                     .asReadOnlyBuffer();
@@ -96,6 +105,13 @@ public final class VortexWriter implements Closeable {
     private final Map<EncodingId, Integer> encodingIdx = new LinkedHashMap<>();
     private long bytesWritten = 0;
 
+    // Global dict state: columns detected as low-cardinality on first chunk are buffered
+    // here instead of encoded per-chunk. Flushed in close() as a single Dict layout.
+    private final Set<String> dictCandidates = new LinkedHashSet<>();
+    private final Map<String, List<Object>> dictBuffers = new LinkedHashMap<>();
+    private final Map<String, DictColRef> dictColRefs = new LinkedHashMap<>();
+    private boolean firstChunkSeen = false;
+
     private VortexWriter(
             WritableByteChannel channel, DType.Struct schema, WriteOptions options, List<Encoding> encodings
     ) {
@@ -118,7 +134,9 @@ public final class VortexWriter implements Closeable {
     public static VortexWriter create(
             WritableByteChannel channel, DType.Struct schema, WriteOptions options, List<Encoding> encodings
     ) {
-        return new VortexWriter(channel, schema, options, encodings);
+        // Custom encoding list: disable global dict — using DEFAULT_CODECS for values/codes behind the scenes
+        // would violate the user's expectation that only their encoding list is used.
+        return new VortexWriter(channel, schema, options.withGlobalDict(false), encodings);
     }
 
     private static long arrayLength(Object data) {
@@ -225,6 +243,9 @@ public final class VortexWriter implements Closeable {
     // ── Segment encoding ─────────────────────────────────────────────────────
 
     /// Write one chunk. Each column is encoded by the first registered [Encoding] that accepts its dtype.
+    ///
+    /// @param columns map from column name to typed array data
+    /// @throws IOException if an I/O error occurs writing to the underlying channel
     public void writeChunk(Map<String, Object> columns) throws IOException {
         for (int i = 0; i < schema.fieldNames().size(); i++) {
             String colName = schema.fieldNames().get(i);
@@ -233,14 +254,27 @@ public final class VortexWriter implements Closeable {
             if (data == null) {
                 throw new IllegalArgumentException("missing column: " + colName);
             }
-            long rowCount = arrayLength(data);
-            int segIdx = writeSegment(colDtype, data);
-            colChunks.get(colName).add(new ChunkRef(segIdx, rowCount));
+
+            if (!firstChunkSeen && options.globalDict() && colDtype instanceof DType.Primitive p) {
+                if (isDictCandidate(p.ptype(), data)) {
+                    dictCandidates.add(colName);
+                }
+            }
+
+            if (dictCandidates.contains(colName)) {
+                dictBuffers.computeIfAbsent(colName, k -> new ArrayList<>()).add(data);
+            } else {
+                long rowCount = arrayLength(data);
+                int segIdx = writeSegment(colDtype, data);
+                colChunks.get(colName).add(new ChunkRef(segIdx, rowCount));
+            }
         }
+        firstChunkSeen = true;
     }
 
     @Override
     public void close() throws IOException {
+        flushDictColumns();
         ByteBuffer footerBuf = buildFooter();
         long footerOff = bytesWritten;
         write(footerBuf);
@@ -269,6 +303,11 @@ public final class VortexWriter implements Closeable {
     }
 
     private int writeSegment(DType dtype, Object data) throws IOException {
+        return writeSegment(dtype, data, this.encodings, this.defaultRegistry);
+    }
+
+    private int writeSegment(DType dtype, Object data, List<Encoding> encodings, EncodingRegistry registry)
+            throws IOException {
         try (Arena arena = Arena.ofConfined()) {
             EncodeResult result;
             if (options.allowedCascading() > 0) {
@@ -276,8 +315,8 @@ public final class VortexWriter implements Closeable {
                 CascadingCompressor compressor = new CascadingCompressor(CASCADE_CODECS);
                 result = compressor.encode(dtype, data, encodeCtx);
             } else {
-                Encoding encoding = findEncoding(dtype);
-                EncodeContext encodeCtx = EncodeContext.of(arena, defaultRegistry);
+                Encoding encoding = findEncoding(dtype, encodings);
+                EncodeContext encodeCtx = EncodeContext.of(arena, registry);
                 result = encoding.encode(dtype, data, encodeCtx);
             }
             // Register all encoding IDs found in the node tree
@@ -318,6 +357,10 @@ public final class VortexWriter implements Closeable {
     }
 
     private Encoding findEncoding(DType dtype) {
+        return findEncoding(dtype, this.encodings);
+    }
+
+    private static Encoding findEncoding(DType dtype, List<Encoding> encodings) {
         for (Encoding c : encodings) {
             if (c.accepts(dtype)) {
                 return c;
@@ -426,11 +469,12 @@ public final class VortexWriter implements Closeable {
         }
         int asv = Footer.createArraySpecsVector(fbb, asOffsets);
 
-        // layout_specs: ["vortex.flat", "vortex.chunked", "vortex.struct"]
+        // layout_specs: ["vortex.flat", "vortex.chunked", "vortex.struct", "vortex.dict"]
         int ls0 = LayoutSpec.createLayoutSpec(fbb, fbb.createString("vortex.flat"));
         int ls1 = LayoutSpec.createLayoutSpec(fbb, fbb.createString("vortex.chunked"));
         int ls2 = LayoutSpec.createLayoutSpec(fbb, fbb.createString("vortex.struct"));
-        int lsv = Footer.createLayoutSpecsVector(fbb, new int[]{ls0, ls1, ls2});
+        int ls3 = LayoutSpec.createLayoutSpec(fbb, fbb.createString("vortex.dict"));
+        int lsv = Footer.createLayoutSpecsVector(fbb, new int[]{ls0, ls1, ls2, ls3});
 
         // segment_specs (inline struct vector — write in reverse order)
         Footer.startSegmentSpecsVector(fbb, segs.size());
@@ -449,42 +493,277 @@ public final class VortexWriter implements Closeable {
         var fbb = new FlatBufferBuilder(256);
         int colCount = schema.fieldNames().size();
 
-        // Pass 1: build all Flat layout nodes (children must precede parents in FlatBuffers)
-        int[][] flatsByCol = new int[colCount][];
-        long[] colRowCounts = new long[colCount];
+        int[] colLayouts = new int[colCount];
+        long totalRows = 0;
+
         for (int c = 0; c < colCount; c++) {
             String colName = schema.fieldNames().get(c);
-            List<ChunkRef> chunks = colChunks.get(colName);
-            int[] flats = new int[chunks.size()];
-            long colRows = 0;
-            for (int i = 0; i < chunks.size(); i++) {
-                ChunkRef cr = chunks.get(i);
-                int segV = Layout.createSegmentsVector(fbb, new long[]{cr.segIdx()});
-                flats[i] = Layout.createLayout(fbb, LAYOUT_FLAT, cr.rowCount(), 0, 0, segV);
-                colRows += cr.rowCount();
+            DictColRef ref = dictColRefs.get(colName);
+            if (ref != null) {
+                colLayouts[c] = buildDictColLayout(fbb, ref);
+                if (totalRows == 0) {
+                    totalRows = ref.totalRows();
+                }
+            } else {
+                List<ChunkRef> chunks = colChunks.get(colName);
+                long colRows = 0;
+                int[] flats = new int[chunks.size()];
+                for (int i = 0; i < chunks.size(); i++) {
+                    ChunkRef cr = chunks.get(i);
+                    int segV = Layout.createSegmentsVector(fbb, new long[]{cr.segIdx()});
+                    flats[i] = Layout.createLayout(fbb, LAYOUT_FLAT, cr.rowCount(), 0, 0, segV);
+                    colRows += cr.rowCount();
+                }
+                int childV = Layout.createChildrenVector(fbb, flats);
+                colLayouts[c] = Layout.createLayout(fbb, LAYOUT_CHUNKED, colRows, 0, childV, 0);
+                if (totalRows == 0) {
+                    totalRows = colRows;
+                }
             }
-            flatsByCol[c] = flats;
-            colRowCounts[c] = colRows;
         }
 
-        // Pass 2: build Chunked layout per column
-        int[] colLayouts = new int[colCount];
-        long totalRows = colCount > 0 ? colRowCounts[0] : 0;
-        for (int c = 0; c < colCount; c++) {
-            int childV = Layout.createChildrenVector(fbb, flatsByCol[c]);
-            colLayouts[c] = Layout.createLayout(fbb, LAYOUT_CHUNKED, colRowCounts[c], 0, childV, 0);
-        }
-
-        // Pass 3: Struct root
         int rootChildV = Layout.createChildrenVector(fbb, colLayouts);
         int rootLayout = Layout.createLayout(fbb, LAYOUT_STRUCT, totalRows, 0, rootChildV, 0);
         Layout.finishLayoutBuffer(fbb, rootLayout);
         return fbb.dataBuffer().slice(fbb.dataBuffer().position(), fbb.dataBuffer().remaining());
     }
 
+    private int buildDictColLayout(FlatBufferBuilder fbb, DictColRef ref) {
+        // Build codes Chunked layout: children are one Flat per original chunk
+        int numChunks = ref.codesSegIdxes().size();
+        int[] codesFlats = new int[numChunks];
+        long totalCodesRows = 0;
+        for (int j = 0; j < numChunks; j++) {
+            long rowCount = ref.chunkRowCounts().get(j);
+            int segV = Layout.createSegmentsVector(fbb, new long[]{ref.codesSegIdxes().get(j)});
+            codesFlats[j] = Layout.createLayout(fbb, LAYOUT_FLAT, rowCount, 0, 0, segV);
+            totalCodesRows += rowCount;
+        }
+        int codesChildV = Layout.createChildrenVector(fbb, codesFlats);
+        int codesChunked = Layout.createLayout(fbb, LAYOUT_CHUNKED, totalCodesRows, 0, codesChildV, 0);
+
+        // Build values Flat layout
+        int valSegV = Layout.createSegmentsVector(fbb, new long[]{ref.valuesSegIdx()});
+        int valuesFlat = Layout.createLayout(fbb, LAYOUT_FLAT, ref.valuesLen(), 0, 0, valSegV);
+
+        // DictLayoutMetadata proto (matches Rust): field 1 = codes_ptype (PType varint)
+        PType codePType = codePTypeForSize((int) ref.valuesLen());
+        byte[] metaBytes = buildDictLayoutMetaBytes(codePType);
+        int metaVec = metaBytes.length > 0 ? Layout.createMetadataVector(fbb, metaBytes) : 0;
+
+        // Dict layout: child[0]=values, child[1]=codes (matches Rust DictLayout child order)
+        int[] dictChildren = {valuesFlat, codesChunked};
+        int dictChildV = Layout.createChildrenVector(fbb, dictChildren);
+        return Layout.createLayout(fbb, LAYOUT_DICT, totalCodesRows, metaVec, dictChildV, 0);
+    }
+
+    private static byte[] buildDictLayoutMetaBytes(PType codePType) {
+        int ordinal = codePType.ordinal();
+        if (ordinal == 0) {
+            // Proto3 omits default values; U8 ordinal=0 is the default
+            return new byte[0];
+        }
+        // Field 1, wire type 0 (varint): tag = (1<<3)|0 = 0x08
+        return new byte[]{0x08, (byte) ordinal};
+    }
+
+    // ── Global dict helpers ───────────────────────────────────────────────────
+
+    private void flushDictColumns() throws IOException {
+        for (String colName : dictCandidates) {
+            List<Object> chunks = dictBuffers.getOrDefault(colName, List.of());
+            if (chunks.isEmpty()) {
+                continue;
+            }
+            int colIdx = schema.fieldNames().indexOf(colName);
+            DType colDtype = schema.fieldTypes().get(colIdx);
+            writeGlobalDictColumn(colName, (DType.Primitive) colDtype, chunks);
+        }
+    }
+
+    private void writeGlobalDictColumn(String colName, DType.Primitive dtype, List<Object> chunks)
+            throws IOException {
+        PType ptype = dtype.ptype();
+
+        // Build global value map across all chunks
+        var valueMap = new LinkedHashMap<Object, Integer>();
+        for (Object chunk : chunks) {
+            int len = primitiveArrayLen(chunk, ptype);
+            for (int i = 0; i < len; i++) {
+                Object v = readPrimitiveElement(chunk, ptype, i);
+                valueMap.computeIfAbsent(v, k -> valueMap.size());
+            }
+        }
+
+        int dictSize = valueMap.size();
+        if (dictSize > GLOBAL_DICT_MAX_CARDINALITY) {
+            // Cardinality exceeded threshold after seeing all data — fall back to per-chunk
+            for (Object chunk : chunks) {
+                long rowCount = arrayLength(chunk);
+                int segIdx = writeSegment(dtype, chunk);
+                colChunks.get(colName).add(new ChunkRef(segIdx, rowCount));
+            }
+            return;
+        }
+
+        PType codePType = codePTypeForSize(dictSize);
+
+        // Write values segment — always use DEFAULT_CODECS regardless of user encoding list
+        EncodingRegistry dictRegistry = EncodingRegistry.of(DEFAULT_CODECS);
+        Object uniqueArr = buildTypedUniqueArray(ptype, valueMap.keySet(), dictSize);
+        int valuesSegIdx = writeSegment(dtype, uniqueArr, DEFAULT_CODECS, dictRegistry);
+
+        // Write one codes segment per original chunk
+        DType codesDtype = new DType.Primitive(codePType, false);
+        List<Integer> codesSegIdxes = new ArrayList<>();
+        List<Long> chunkRowCounts = new ArrayList<>();
+        for (Object chunk : chunks) {
+            int len = primitiveArrayLen(chunk, ptype);
+            Object codesArr = buildCodesArray(chunk, ptype, valueMap, codePType, len);
+            codesSegIdxes.add(writeSegment(codesDtype, codesArr, DEFAULT_CODECS, dictRegistry));
+            chunkRowCounts.add((long) len);
+        }
+
+        dictColRefs.put(colName, new DictColRef(valuesSegIdx, dictSize, codesSegIdxes, chunkRowCounts));
+    }
+
+    private static boolean isDictCandidate(PType ptype, Object data) {
+        int n = (int) Math.min(primitiveArrayLen(data, ptype), 4096);
+        if (n == 0) {
+            return false;
+        }
+        var seen = new java.util.HashSet<Object>(n);
+        for (int i = 0; i < n; i++) {
+            seen.add(readPrimitiveElement(data, ptype, i));
+            if (seen.size() > GLOBAL_DICT_MAX_CARDINALITY) {
+                return false;
+            }
+        }
+        return seen.size() * 2 < n;
+    }
+
+    private static int primitiveArrayLen(Object data, PType ptype) {
+        return switch (ptype) {
+            case I8, U8 -> ((byte[]) data).length;
+            case I16, U16, F16 -> ((short[]) data).length;
+            case I32, U32 -> ((int[]) data).length;
+            case I64, U64 -> ((long[]) data).length;
+            case F32 -> ((float[]) data).length;
+            case F64 -> ((double[]) data).length;
+        };
+    }
+
+    private static Object readPrimitiveElement(Object data, PType ptype, int i) {
+        return switch (ptype) {
+            case I8, U8 -> ((byte[]) data)[i];
+            case I16, U16, F16 -> ((short[]) data)[i];
+            case I32, U32 -> ((int[]) data)[i];
+            case I64, U64 -> ((long[]) data)[i];
+            case F32 -> ((float[]) data)[i];
+            case F64 -> ((double[]) data)[i];
+        };
+    }
+
+    private static PType codePTypeForSize(int dictSize) {
+        if (dictSize <= 256) {
+            return PType.U8;
+        }
+        if (dictSize <= 65_536) {
+            return PType.U16;
+        }
+        return PType.U32;
+    }
+
+    private static Object buildTypedUniqueArray(PType ptype, java.util.Set<Object> keys, int size) {
+        return switch (ptype) {
+            case I8, U8 -> {
+                byte[] a = new byte[size];
+                int i = 0;
+                for (Object v : keys) {
+                    a[i++] = (Byte) v;
+                }
+                yield a;
+            }
+            case I16, U16, F16 -> {
+                short[] a = new short[size];
+                int i = 0;
+                for (Object v : keys) {
+                    a[i++] = (Short) v;
+                }
+                yield a;
+            }
+            case I32, U32 -> {
+                int[] a = new int[size];
+                int i = 0;
+                for (Object v : keys) {
+                    a[i++] = (Integer) v;
+                }
+                yield a;
+            }
+            case I64, U64 -> {
+                long[] a = new long[size];
+                int i = 0;
+                for (Object v : keys) {
+                    a[i++] = (Long) v;
+                }
+                yield a;
+            }
+            case F32 -> {
+                float[] a = new float[size];
+                int i = 0;
+                for (Object v : keys) {
+                    a[i++] = (Float) v;
+                }
+                yield a;
+            }
+            case F64 -> {
+                double[] a = new double[size];
+                int i = 0;
+                for (Object v : keys) {
+                    a[i++] = (Double) v;
+                }
+                yield a;
+            }
+        };
+    }
+
+    private static Object buildCodesArray(Object data, PType ptype, Map<Object, Integer> valueMap,
+            PType codePType, int len) {
+        return switch (codePType) {
+            case U8 -> {
+                byte[] codes = new byte[len];
+                for (int i = 0; i < len; i++) {
+                    codes[i] = (byte) (int) valueMap.get(readPrimitiveElement(data, ptype, i));
+                }
+                yield codes;
+            }
+            case U16 -> {
+                short[] codes = new short[len];
+                for (int i = 0; i < len; i++) {
+                    codes[i] = (short) (int) valueMap.get(readPrimitiveElement(data, ptype, i));
+                }
+                yield codes;
+            }
+            default -> {
+                int[] codes = new int[len];
+                for (int i = 0; i < len; i++) {
+                    codes[i] = valueMap.get(readPrimitiveElement(data, ptype, i));
+                }
+                yield codes;
+            }
+        };
+    }
+
     private record SegRef(long offset, long len) {
     }
 
     private record ChunkRef(int segIdx, long rowCount) {
+    }
+
+    private record DictColRef(int valuesSegIdx, long valuesLen, List<Integer> codesSegIdxes,
+            List<Long> chunkRowCounts) {
+        long totalRows() {
+            return chunkRowCounts.stream().mapToLong(Long::longValue).sum();
+        }
     }
 }
