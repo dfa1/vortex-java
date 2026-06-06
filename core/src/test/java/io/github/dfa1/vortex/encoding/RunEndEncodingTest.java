@@ -166,5 +166,21 @@ class RunEndEncodingTest {
                 assertThat(result.buffer(0).get(le, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
             }
         }
+
+        @Test
+        void encode_i64_metadata_numRuns_andEndsPtype() throws Exception {
+            // Given — 3 runs; if tag drifts, num_runs reads as 0 or ends_ptype reads as 0 (U8)
+            long[] data = {1L, 1L, 2L, 2L, 3L};
+            RunEndEncoding sut = new RunEndEncoding();
+
+            // When
+            EncodeResult result = sut.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
+            EncodingProtos.RunEndMetadata meta =
+                    EncodingProtos.RunEndMetadata.parseFrom(result.rootNode().metadata().duplicate());
+
+            // Then
+            assertThat(meta.getNumRuns()).isEqualTo(3);
+            assertThat(meta.getEndsPtypeValue()).isEqualTo(2); // U32
+        }
     }
 }

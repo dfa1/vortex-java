@@ -279,14 +279,23 @@ class RustWritesJavaReadsIntegrationTest {
             assertThat(total).isEqualTo(n);
             var layout = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
             double sum = 0;
+            double[] first9 = new double[9];
+            int spotIdx = 0;
             for (ScanResult r : results) {
                 var arr = r.columns().get("value");
                 for (long j = 0; j < arr.length(); j++) {
-                    sum += arr.buffer(0).get(layout, j * Double.BYTES);
+                    double v = arr.buffer(0).get(layout, j * Double.BYTES);
+                    sum += v;
+                    if (spotIdx < 9) {
+                        first9[spotIdx++] = v;
+                    }
                 }
             }
             // 10_000 rows: 3333 full cycles of [1.1,2.2,3.3] (=6.6 each) + one 1.1 remainder
             assertThat(sum).isCloseTo(21_998.9, org.assertj.core.data.Offset.offset(0.1));
+            // spot-check: first 9 values must cycle [1.1,2.2,3.3] — catches silent value corruption
+            // that leaves sums intact but permutes elements (e.g. proto tag drift on dict encoding)
+            assertThat(first9).containsExactly(1.1, 2.2, 3.3, 1.1, 2.2, 3.3, 1.1, 2.2, 3.3);
         }
     }
 
@@ -320,7 +329,7 @@ class RustWritesJavaReadsIntegrationTest {
             }
         }
 
-        // When / Then — decodes without error, correct row count
+        // When / Then — decodes without error, correct row count, correct values
         try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
             List<ScanResult> results = scanAll(vf);
             long totalRows = results.stream().mapToLong(ScanResult::rowCount).sum();
@@ -328,6 +337,18 @@ class RustWritesJavaReadsIntegrationTest {
             assertThat(vf.dtype()).isInstanceOf(DType.Struct.class);
             DType colDtype = ((DType.Struct) vf.dtype()).field("id");
             assertThat(colDtype.nullable()).isTrue();
+            // null slots store 0 (bitpacked folds validity); non-null slot i stores i
+            // sum(i for i in [0,10000) if i%5!=0) = 49995000 - 5*(0+5+…+9995) = 40000000
+            // if proto tag drifts, all values decode as 0 and sum would be 0
+            var longLayout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+            long sum = 0;
+            for (ScanResult r : results) {
+                var arr = r.columns().get("id");
+                for (long j = 0; j < arr.length(); j++) {
+                    sum += arr.buffer(0).get(longLayout, j * Long.BYTES);
+                }
+            }
+            assertThat(sum).isEqualTo(40_000_000L);
         }
     }
 

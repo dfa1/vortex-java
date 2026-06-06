@@ -267,4 +267,27 @@ class SequenceEncodingTest {
                     .isInstanceOf(VortexException.class);
         }
     }
+
+    @Nested
+    class Metadata {
+
+        @Test
+        void encode_i64_metadata_base_andMultiplier_areSet() throws Exception {
+            // Given — arithmetic sequence {10, 12, 14, 16} → base=10, multiplier=2
+            // if tag drifts, base/multiplier messages are missing (hasBase() == false)
+            long[] data = {10L, 12L, 14L, 16L};
+            SequenceEncoding sut = new SequenceEncoding();
+
+            // When
+            EncodeResult result = sut.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
+            EncodingProtos.SequenceMetadata meta =
+                    EncodingProtos.SequenceMetadata.parseFrom(result.rootNode().metadata().duplicate());
+
+            // Then
+            assertThat(meta.hasBase()).isTrue();
+            assertThat(meta.hasMultiplier()).isTrue();
+            assertThat(meta.getBase().getInt64Value()).isEqualTo(10L);
+            assertThat(meta.getMultiplier().getInt64Value()).isEqualTo(2L);
+        }
+    }
 }

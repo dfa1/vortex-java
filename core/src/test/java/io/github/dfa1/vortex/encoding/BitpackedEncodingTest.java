@@ -1,7 +1,9 @@
 package io.github.dfa1.vortex.encoding;
 
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.proto.EncodingProtos;
 import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -75,6 +77,21 @@ class BitpackedEncodingTest {
             for (int i = 0; i < data.length; i++) {
                 assertThat(result.buffer(0).get(le, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
             }
+        }
+
+        @Test
+        void encode_i32_metadata_bitWidth_isNonZero() throws Exception {
+            // Given — max value 5 needs 3 bits; if tag drifts, bit_width reads as 0 (proto3 default)
+            int[] data = {1, 2, 3, 4, 5};
+            BitpackedEncoding sut = new BitpackedEncoding();
+
+            // When
+            EncodeResult result = sut.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
+            EncodingProtos.BitPackedMetadata meta =
+                    EncodingProtos.BitPackedMetadata.parseFrom(result.rootNode().metadata().duplicate());
+
+            // Then
+            assertThat(meta.getBitWidth()).isGreaterThan(0);
         }
     }
 }

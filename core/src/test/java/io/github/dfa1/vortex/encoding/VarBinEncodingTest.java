@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.VarBinArray;
+import io.github.dfa1.vortex.proto.EncodingProtos;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -151,6 +152,26 @@ class VarBinEncodingTest {
             assertThatThrownBy(() -> sut.decode(ctx))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("missing metadata");
+        }
+    }
+
+    @Nested
+    class Metadata {
+
+        @Test
+        void encode_utf8_metadata_offsetsPtype_isI64() throws Exception {
+            // Given — VarBinEncoding always uses I64 (ordinal=7) for offsets
+            // if tag drifts, offsets_ptype reads as 0 (U8) and decode fails or produces garbage
+            String[] data = {"hello", "world"};
+            var sut = new VarBinEncoding();
+
+            // When
+            EncodeResult result = sut.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
+            EncodingProtos.VarBinMetadata meta =
+                    EncodingProtos.VarBinMetadata.parseFrom(result.rootNode().metadata().duplicate());
+
+            // Then
+            assertThat(meta.getOffsetsPtypeValue()).isEqualTo(7); // I64
         }
     }
 }

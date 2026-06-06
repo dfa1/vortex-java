@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.MaskedArray;
+import io.github.dfa1.vortex.proto.EncodingProtos;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -340,6 +341,23 @@ class RleEncodingTest {
             for (int i = 0; i < n; i++) {
                 assertThat(result.buffer(0).get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(i / 100);
             }
+        }
+
+        @Test
+        void encode_i32_metadata_valuesLen_matchesRunCount() throws Exception {
+            // Given — 2 distinct runs; if tag drifts, values_len reads as 0 (proto3 default)
+            int[] data = {1, 1, 1, 2, 2, 2};
+            RleEncoding sut = new RleEncoding();
+
+            // When
+            EncodeResult result = sut.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
+            EncodingProtos.RLEMetadata meta =
+                    EncodingProtos.RLEMetadata.parseFrom(result.rootNode().metadata().duplicate());
+
+            // Then
+            assertThat(meta.getValuesLen()).isEqualTo(2);
+            assertThat(meta.getIndicesLen()).isGreaterThan(0);
+            assertThat(meta.getIndicesPtypeValue()).isEqualTo(1); // U16
         }
     }
 }

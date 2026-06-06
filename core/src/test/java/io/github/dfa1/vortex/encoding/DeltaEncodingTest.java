@@ -1,7 +1,9 @@
 package io.github.dfa1.vortex.encoding;
 
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.proto.EncodingProtos;
 import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -104,6 +106,21 @@ class DeltaEncodingTest {
             for (int i = 0; i < data.length; i++) {
                 assertThat(result.buffer(0).get(le, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
             }
+        }
+
+        @Test
+        void encode_i64_metadata_deltasLen_isNonZero() throws Exception {
+            // Given — n=5 values produce n-1=4 deltas; if tag drifts, deltas_len reads as 0
+            long[] data = {10L, 20L, 30L, 40L, 50L};
+            DeltaEncoding sut = new DeltaEncoding();
+
+            // When
+            EncodeResult result = sut.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
+            EncodingProtos.DeltaMetadata meta =
+                    EncodingProtos.DeltaMetadata.parseFrom(result.rootNode().metadata().duplicate());
+
+            // Then
+            assertThat(meta.getDeltasLen()).isGreaterThan(0);
         }
     }
 }

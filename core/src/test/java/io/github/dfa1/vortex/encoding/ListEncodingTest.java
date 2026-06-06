@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.ListArray;
 import io.github.dfa1.vortex.core.array.LongArray;
+import io.github.dfa1.vortex.proto.EncodingProtos;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -174,6 +175,28 @@ class ListEncodingTest {
             // When / Then
             assertThatThrownBy(() -> sut.decode(ctx))
                     .hasMessageContaining("expected 2 or 3 children");
+        }
+    }
+
+    @Nested
+    class Metadata {
+
+        @Test
+        void encode_metadata_elementsLen_matchesElementCount() throws Exception {
+            // Given — 5 elements total across 2 outer lists
+            // if tag drifts, elements_len reads as 0 and decode allocates wrong-sized arrays
+            int[] elements = {1, 2, 3, 4, 5};
+            long[] offsets = {0L, 2L, 5L};
+            ListData data = new ListData(elements, offsets, 2);
+            ListEncoding sut = new ListEncoding();
+
+            // When
+            EncodeResult result = sut.encode(DTypes.LIST_I32, data, EncodeTestHelper.testCtx());
+            EncodingProtos.ListMetadata meta =
+                    EncodingProtos.ListMetadata.parseFrom(result.rootNode().metadata().duplicate());
+
+            // Then
+            assertThat(meta.getElementsLen()).isEqualTo(5);
         }
     }
 }

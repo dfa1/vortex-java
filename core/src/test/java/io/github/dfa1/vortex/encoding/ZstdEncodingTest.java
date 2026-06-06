@@ -534,4 +534,27 @@ class ZstdEncodingTest {
                     .hasMessageContaining("missing metadata");
         }
     }
+
+    @Nested
+    class Metadata {
+
+        @Test
+        void encode_i32_metadata_framesCount_isNonZero() throws Exception {
+            // Given — any non-empty encode produces at least one zstd frame
+            // if tag drifts, frames list is empty and decode silently produces no data
+            int[] data = new int[100];
+            for (int i = 0; i < data.length; i++) {
+                data[i] = i;
+            }
+            ZstdEncoding sut = new ZstdEncoding();
+
+            // When
+            EncodeResult result = sut.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
+            EncodingProtos.ZstdMetadata meta =
+                    EncodingProtos.ZstdMetadata.parseFrom(result.rootNode().metadata().duplicate());
+
+            // Then
+            assertThat(meta.getFramesCount()).isGreaterThan(0);
+        }
+    }
 }

@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.GenericArray;
 import io.github.dfa1.vortex.core.array.LongArray;
+import io.github.dfa1.vortex.proto.EncodingProtos;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -228,6 +229,25 @@ class DateTimePartsEncodingTest {
             assertThat(days.getLong(0)).isZero();
             assertThat(seconds.getLong(0)).isZero();
             assertThat(subseconds.getLong(0)).isZero();
+        }
+
+        @Test
+        void encode_metadata_ptypes_areI64() throws Exception {
+            // Given — DateTimeParts always encodes days/seconds/subseconds as I64 (ordinal=7)
+            // if any tag drifts, the corresponding ptype reads as 0 (U8) which is proto3 default
+            long[] timestamps = {0L, 86_400_000L};
+            DateTimePartsData data = new DateTimePartsData(timestamps, false);
+            DateTimePartsEncoding sut = new DateTimePartsEncoding();
+
+            // When
+            EncodeResult result = sut.encode(EXT_TIMESTAMP_MS, data, EncodeTestHelper.testCtx());
+            EncodingProtos.DateTimePartsMetadata meta =
+                    EncodingProtos.DateTimePartsMetadata.parseFrom(result.rootNode().metadata().duplicate());
+
+            // Then
+            assertThat(meta.getDaysPtypeValue()).isEqualTo(7);       // I64
+            assertThat(meta.getSecondsPtypeValue()).isEqualTo(7);    // I64
+            assertThat(meta.getSubsecondsPtypeValue()).isEqualTo(7); // I64
         }
     }
 }

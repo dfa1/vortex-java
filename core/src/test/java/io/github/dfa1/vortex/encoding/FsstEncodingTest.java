@@ -278,4 +278,25 @@ class FsstEncodingTest {
                     .isInstanceOf(VortexException.class);
         }
     }
+
+    @Nested
+    class Metadata {
+
+        @Test
+        void encode_metadata_ptypes_areI32() throws Exception {
+            // Given — FsstEncoding always uses I32 (ordinal=6) for both ptype fields
+            // if either tag drifts, the ptype reads as 0 (U8) which is proto3 default
+            String[] data = {"hello", "world", "hello", "fsst"};
+            var sut = new FsstEncoding();
+
+            // When
+            EncodeResult result = sut.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
+            EncodingProtos.FSSTMetadata meta =
+                    EncodingProtos.FSSTMetadata.parseFrom(result.rootNode().metadata().duplicate());
+
+            // Then
+            assertThat(meta.getUncompressedLengthsPtypeValue()).isEqualTo(6); // I32
+            assertThat(meta.getCodesOffsetsPtypeValue()).isEqualTo(6);        // I32
+        }
+    }
 }

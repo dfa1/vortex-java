@@ -279,5 +279,20 @@ class AlpEncodingTest {
                         .as("index %d", i).isCloseTo(values[i], within(1e-9));
             }
         }
+
+        @Test
+        void encode_f64_metadata_expE_isNonZero() throws Exception {
+            // Given — 2-decimal values force ALP to pick exp_e=2 (×100); if tag drifts, exp_e reads as 0
+            double[] values = {1.23, 4.56, 7.89};
+            AlpEncoding sut = new AlpEncoding();
+
+            // When
+            EncodeResult result = sut.encode(DTypes.F64, values, EncodeTestHelper.testCtx());
+            EncodingProtos.ALPMetadata meta =
+                    EncodingProtos.ALPMetadata.parseFrom(result.rootNode().metadata().duplicate());
+
+            // Then
+            assertThat(meta.getExpE()).isGreaterThan(0);
+        }
     }
 }

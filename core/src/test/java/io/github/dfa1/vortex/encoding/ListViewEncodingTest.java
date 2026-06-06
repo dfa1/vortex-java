@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.encoding;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.ListViewArray;
+import io.github.dfa1.vortex.proto.EncodingProtos;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -174,6 +175,29 @@ class ListViewEncodingTest {
             // When / Then
             assertThatThrownBy(() -> sut.decode(ctx))
                     .hasMessageContaining("expected 3 or 4 children");
+        }
+    }
+
+    @Nested
+    class Metadata {
+
+        @Test
+        void encode_metadata_elementsLen_matchesElementCount() throws Exception {
+            // Given — 5 elements across 2 outer lists
+            // if tag drifts, elements_len reads as 0 and decode allocates wrong-sized arrays
+            int[] elements = {1, 2, 3, 4, 5};
+            int[] offsets = {0, 2};
+            int[] sizes = {2, 3};
+            ListViewData data = new ListViewData(elements, offsets, sizes, 2);
+            ListViewEncoding sut = new ListViewEncoding();
+
+            // When
+            EncodeResult result = sut.encode(DTypes.LIST_I32, data, EncodeTestHelper.testCtx());
+            EncodingProtos.ListViewMetadata meta =
+                    EncodingProtos.ListViewMetadata.parseFrom(result.rootNode().metadata().duplicate());
+
+            // Then
+            assertThat(meta.getElementsLen()).isEqualTo(5);
         }
     }
 }

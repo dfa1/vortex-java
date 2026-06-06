@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.encoding;
 
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.VarBinArray;
+import io.github.dfa1.vortex.proto.EncodingProtos;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -169,6 +170,22 @@ class DictEncodingTest {
             long encodedBytes = encoded.buffers().stream().mapToLong(MemorySegment::byteSize).sum();
             long rawBytes = 3000L * 5;  // avg 5 bytes/symbol (4 chars + 1 for overhead)
             assertThat(encodedBytes).isLessThan(rawBytes);
+        }
+
+        @Test
+        void encode_utf8_metadata_valuesLen_matchesUniqueCount() throws Exception {
+            // Given — 2 unique strings; non-UTF8 dict uses legacy 1-byte metadata, UTF8 uses proto
+            // if tag drifts, values_len reads as 0 (proto3 default) and dict decode produces empty output
+            String[] data = {"apple", "banana", "apple", "banana", "apple"};
+            var sut = new DictEncoding();
+
+            // When
+            EncodeResult result = sut.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
+            EncodingProtos.DictMetadata meta =
+                    EncodingProtos.DictMetadata.parseFrom(result.rootNode().metadata().duplicate());
+
+            // Then
+            assertThat(meta.getValuesLen()).isEqualTo(2);
         }
     }
 }
