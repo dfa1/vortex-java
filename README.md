@@ -90,8 +90,8 @@ brew install flatbuffers protobuf
 
 ## Contributing
 
-Forks and contributions welcome. Include tests and update documentation where applicable
-(see CLAUDE.md for guidelines).
+Forks and contributions welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup,
+coding conventions, and how to add a new encoding.
 
 This project uses [Claude Code](https://claude.ai/code) for implementation work.
 Architecture, API design, and all decisions are human-driven.
