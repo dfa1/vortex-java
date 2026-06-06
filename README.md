@@ -64,33 +64,11 @@ Docs follow the [Diátaxis](https://diataxis.fr/) framework.
 | [docs/compatibility.md](docs/compatibility.md) | Reference   | Encoding support table, S3 fixture status                               |
 | [docs/explanation.md](docs/explanation.md)     | Explanation | Design rationale, memory model, testing strategy, benchmarks            |
 
-## Development
-
-**Requirements:** Java 25+
-
-Generated sources (`fbs`/`proto` → Java) are committed. Normal builds need no external tools.
-
-```bash
-./mvnw verify          # build + tests
-./mvnw verify -DskipTests
-
-# run integration tests
-./mvnw verify -pl integration -am
-
-# benchmarks (always pass ClassName.methodName filter)
-./bench RustVsJavaReadBenchmark.javaReadVolume
-```
-
-To regenerate schemas after editing `.fbs`/`.proto`:
-
-```bash
-brew install flatbuffers protobuf
-./mvnw generate-sources -pl core -P regenerate-sources
-```
-
 ## Contributing
 
-Forks and contributions welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup,
+**Requirements:** Java 25+. Build: `./mvnw verify`.
+
+Forks welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for full build reference,
 coding conventions, and how to add a new encoding.
 
 This project uses [Claude Code](https://claude.ai/code) for implementation work.
