@@ -29,7 +29,7 @@ final class PostscriptParser {
     private PostscriptParser() {
     }
 
-    static ParsedFile parse(ByteBuffer postscriptBuf, MemorySegment fileSegment) {
+    static ParsedFile parse(ByteBuffer postscriptBuf, MemorySegment fileSegment, long fileSize) {
         var ps = Postscript.getRootAsPostscript(postscriptBuf);
 
         var footerSeg = ps.footer();
@@ -42,6 +42,12 @@ final class PostscriptParser {
         }
         var dtypeSeg = ps.dtype();
 
+        checkBlobBounds("footer", footerSeg.offset(), footerSeg.length(), fileSize);
+        checkBlobBounds("layout", layoutSeg.offset(), layoutSeg.length(), fileSize);
+        if (dtypeSeg != null && dtypeSeg.length() > 0) {
+            checkBlobBounds("dtype", dtypeSeg.offset(), dtypeSeg.length(), fileSize);
+        }
+
         ByteBuffer footerBuf = slice(fileSegment, footerSeg.offset(), footerSeg.length());
         ByteBuffer layoutBuf = slice(fileSegment, layoutSeg.offset(), layoutSeg.length());
         ByteBuffer dtypeBuf = (dtypeSeg != null && dtypeSeg.length() > 0)
@@ -51,19 +57,33 @@ final class PostscriptParser {
         return parseBlobs(footerBuf, layoutBuf, dtypeBuf);
     }
 
-    static ParsedFile parseBlobs(ByteBuffer footerBuf, ByteBuffer layoutBuf, ByteBuffer dtypeBuf) {
-        var fbsFooter = io.github.dfa1.vortex.fbs.Footer.getRootAsFooter(footerBuf);
-        var fbsLayout = io.github.dfa1.vortex.fbs.Layout.getRootAsLayout(layoutBuf);
-
-        Footer footer = convertFooter(fbsFooter);
-        Layout layout = convertLayout(fbsLayout, footer.layoutSpecs());
-
-        DType dtype = null;
-        if (dtypeBuf != null && dtypeBuf.hasRemaining()) {
-            dtype = convertDType(io.github.dfa1.vortex.fbs.DType.getRootAsDType(dtypeBuf));
+    private static void checkBlobBounds(String name, long offset, long length, long fileSize) {
+        if (offset < 0 || length < 0 || offset > fileSize || length > fileSize - offset) {
+            throw new VortexException(
+                    "postscript " + name + " blob out of bounds: offset=" + offset
+                            + " length=" + length + " fileSize=" + fileSize);
         }
+    }
 
-        return new ParsedFile(footer, dtype, layout);
+    static ParsedFile parseBlobs(ByteBuffer footerBuf, ByteBuffer layoutBuf, ByteBuffer dtypeBuf) {
+        try {
+            var fbsFooter = io.github.dfa1.vortex.fbs.Footer.getRootAsFooter(footerBuf);
+            var fbsLayout = io.github.dfa1.vortex.fbs.Layout.getRootAsLayout(layoutBuf);
+
+            Footer footer = convertFooter(fbsFooter);
+            Layout layout = convertLayout(fbsLayout, footer.layoutSpecs());
+
+            DType dtype = null;
+            if (dtypeBuf != null && dtypeBuf.hasRemaining()) {
+                dtype = convertDType(io.github.dfa1.vortex.fbs.DType.getRootAsDType(dtypeBuf));
+            }
+
+            return new ParsedFile(footer, dtype, layout);
+        } catch (VortexException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw new VortexException("malformed footer/layout/dtype blob", e);
+        }
     }
 
     private static ByteBuffer slice(MemorySegment seg, long offset, long length) {
@@ -101,7 +121,13 @@ final class PostscriptParser {
     }
 
     private static Layout convertLayout(io.github.dfa1.vortex.fbs.Layout l, List<String> layoutSpecs) {
-        String encodingId = layoutSpecs.get(l.encoding());
+        int encIdx = l.encoding();
+        if (encIdx < 0 || encIdx >= layoutSpecs.size()) {
+            throw new VortexException(
+                    "layout encoding index " + encIdx
+                            + " out of bounds (layoutSpecs.size=" + layoutSpecs.size() + ")");
+        }
+        String encodingId = layoutSpecs.get(encIdx);
 
         ByteBuffer metadata = l.metadataAsByteBuffer();
 

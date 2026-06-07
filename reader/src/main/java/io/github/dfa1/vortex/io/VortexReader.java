@@ -39,6 +39,10 @@ public final class VortexReader implements VortexHandle {
     static final byte[] MAGIC = {'V', 'T', 'X', 'F'};
     static final int TRAILER_SIZE = 8;
 
+    /// File-format version this reader can decode. Files with any other version are rejected
+    /// up front rather than silently mis-parsed against an unknown layout.
+    static final int SUPPORTED_VERSION = 1;
+
     private final Arena arena;
     private final MemorySegment fileSegment;
     private final long fileSize;
@@ -105,11 +109,33 @@ public final class VortexReader implements VortexHandle {
                     "invalid magic bytes [%02x %02x %02x %02x]".formatted(m0, m1, m2, m3));
         }
 
-        long postscriptOffset = size - TRAILER_SIZE - postscriptLen;
+        if (version != SUPPORTED_VERSION) {
+            throw new VortexException(
+                    "unsupported file version=" + version
+                            + " (this reader supports version " + SUPPORTED_VERSION + ")");
+        }
+        if (postscriptLen == 0) {
+            throw new VortexException("invalid postscript: length is zero");
+        }
+        long bodyBytes = size - TRAILER_SIZE;
+        if (postscriptLen > bodyBytes) {
+            throw new VortexException(
+                    "invalid postscript: length=" + postscriptLen
+                            + " exceeds file body size=" + bodyBytes);
+        }
+
+        long postscriptOffset = bodyBytes - postscriptLen;
         var postscriptBuf = seg.asSlice(postscriptOffset, postscriptLen)
                                     .asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
 
-        var parsed = PostscriptParser.parse(postscriptBuf, seg);
+        PostscriptParser.ParsedFile parsed;
+        try {
+            parsed = PostscriptParser.parse(postscriptBuf, seg, size);
+        } catch (VortexException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw new VortexException("malformed postscript", e);
+        }
 
         return new VortexReader(
                 arena, seg, size, version,

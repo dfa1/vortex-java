@@ -83,6 +83,21 @@ public final class VortexHttpReader implements VortexHandle {
             int postscriptLen = Short.toUnsignedInt(tailSeg.get(VortexReader.LE_SHORT, trailerOff + 2));
             checkMagic(tailSeg, trailerOff + 4, uri);
 
+            if (version != VortexReader.SUPPORTED_VERSION) {
+                throw new VortexException(
+                        "unsupported file version=" + version
+                                + " (this reader supports version " + VortexReader.SUPPORTED_VERSION + ")");
+            }
+            if (postscriptLen == 0) {
+                throw new VortexException("invalid postscript: length is zero");
+            }
+            long bodyBytes = fileSize - VortexReader.TRAILER_SIZE;
+            if (postscriptLen > bodyBytes) {
+                throw new VortexException(
+                        "invalid postscript: length=" + postscriptLen
+                                + " exceeds file body size=" + bodyBytes);
+            }
+
             long psOffInTail = trailerOff - postscriptLen;
             if (psOffInTail < 0) {
                 throw new VortexException(

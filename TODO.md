@@ -26,21 +26,109 @@
 
 ## Testing
 
-- [ ] **Security review + adversarial tests** — the reader parses untrusted binary input (file
-  trailer, FlatBuffers, Protobuf, per-segment data). Attack surface:
-    - Malformed trailer: wrong magic, negative lengths, offsets past EOF
-    - FlatBuffer bombs: deeply nested layout trees, circular references, huge vectors
-    - Proto bombs: enormous `values_len`/`indices_len` in metadata triggering OOM allocations
-    - Integer overflows in offset arithmetic (`offset + length` wraps to negative)
-    - Out-of-bounds buffer reads via crafted `bufferIndices` arrays
-    - Zip-bomb style: tiny file that claims huge row counts
-      Add a fuzz corpus of malformed `.vortex` files; all must throw `VortexException`, never
-      `ArrayIndexOutOfBoundsException`, `NegativeArraySizeException`, or `OutOfMemoryError`.
 - [ ] **Verify proto compatibility with upstream** — `dtype.proto` and `scalar.proto` exist in
   `spiraldb/vortex/vortex-proto/proto/` and should be kept in sync with our copies. Encoding
   metadata (e.g. `RLEMetadata`, `RunEndMetadata`) has no upstream `.proto`; tag mismatches
   silently produce zero/default values in proto3. Add value-level assertions (not just
   `rowCount > 0`) to integration tests to catch silent corruption.
+
+## Security
+
+**Contract:** the reader memory-maps and parses untrusted binary input. Every malformed input must
+throw `VortexException`, never `ArrayIndexOutOfBoundsException`, `NegativeArraySizeException`,
+`OutOfMemoryError`, `StackOverflowError`, a raw FlatBuffer runtime exception, or a Protobuf
+parser exception. Each entry below is either a known gap, a contract audit, or supporting infra.
+
+### Parser hardening
+
+- [ ] **Footer segment-spec bounds at parse time** — `PostscriptParser.convertFooter` does
+  not validate `segmentSpec.offset`/`length` against `fileSize`. Negative or overflowing
+  values surface as `IndexOutOfBoundsException` later in `ScanIterator`/`VortexReader.readFlatStats`
+  when `fileSegment.asSlice(offset, length)` is called. Validate once at parse time, fail fast.
+- [ ] **Layout-tree depth limit** — `PostscriptParser.convertLayout` recurses on children with
+  no max depth. Crafted nested layout → `StackOverflowError`. Add a depth cap (e.g. 64) and
+  throw `VortexException` on overrun.
+- [ ] **Layout metadata size limit** — `metadataAsByteBuffer()` returns an unbounded slice;
+  the FlatBuffer runtime doesn't bound it. Cap (e.g. 4 MiB) and reject larger.
+- [ ] **`readFlatStats` `fbLen` validation** — `VortexReader.readFlatStats` reads
+  `fbLen = seg.get(LE_INT, segLen - 4)` with no check that `0 <= fbLen <= segLen - 4`. Negative
+  or oversize → `IndexOutOfBoundsException` from `asSlice`.
+- [ ] **Audit every `MemorySegment.asSlice` call site for bounds wrapping** —
+  `grep -rn 'asSlice' core/src/main reader/src/main`. Each call on untrusted offsets/lengths
+  must throw `VortexException` rather than the JDK's `IndexOutOfBoundsException`. Either wrap
+  per call site, or route through an `IoBounds.slice(seg, off, len)` helper and add a
+  Checkstyle rule rejecting raw `asSlice` in `io`/`scan`/`encoding` packages.
+- [ ] **HTTP-reader malformed-tail cases** — `VortexHttpReader.fetchBlob` does not validate
+  that the HTTP response length matches the requested `Range`. Server-returned short / extra
+  bytes should fail loudly. Add `MalformedHttpResponseTest` (mock `HttpClient`).
+
+### Per-encoding adversarial tests
+
+Each encoding's `decode(DecodeContext)` should be exercised against:
+- `bufferIndices[i] >= ctx.bufferCount()` → centralize check in `DecodeContext.buffer(i)`.
+- Crafted metadata that decodes but disagrees with the buffer payload.
+
+Per-encoding gotchas:
+- [ ] **VarBin**: offsets non-monotonic, negative, past data-buffer length.
+- [ ] **Dict**: `codes[i] >= values.length`; `codes` ptype declared u8 but values count > 256.
+- [ ] **Bitpacked**: `bit_width < 0 || > 64`; `packed_len < n * bit_width / 8`.
+- [ ] **ALP**: `dim < 0`, `f_or_d` byte out of enum range; `exceptions_count > n`.
+- [ ] **Sparse**: indices non-sorted or `indices[i] >= length`; values count
+  mismatches indices count.
+- [ ] **Chunked**: zero children with non-zero `row_count`; child layout self-referencing
+  (already protected by depth limit, but add explicit test).
+- [ ] **Struct**: `fieldNames.size() != children.size()`; field name UTF-8 invalid.
+- [ ] **RLE / RunEnd**: `run_ends` non-monotonic; last `run_end` ≠ `row_count`.
+- [ ] **Constant**: protobuf scalar value missing or type-mismatched against declared `DType`.
+- [ ] **Zoned**: zone-map min > max; zone count ≠ child chunk count.
+- [ ] **Pco**: `bits_per_offset > 64`; `bin_count == 0` with non-empty page; per-page
+  `n` greater than `DEFAULT_MAX_PAGE_N`; ANS state values inconsistent with weight table.
+
+### Proto-level hardening
+
+- [ ] **Decimal field validation** — `convertDType` accepts `Decimal{precision, scale}`
+  without checking `precision <= 38`, `0 <= scale <= precision`.
+- [ ] **Extension DType `metadata`** — unbounded byte buffer copy. Cap.
+- [ ] **`parseFrom` wrap** — every `*.parseFrom(byteBuffer)` site must wrap
+  `InvalidProtocolBufferException` as `VortexException`. Audit `core/` encodings.
+
+### Resource caps
+
+Currently no limits; mmap pressure + decoder allocations are bounded only by file content.
+
+- [ ] Max file size (configurable; reject before `FileChannel.map`).
+- [ ] Max segment count.
+- [ ] Max children count per layout node.
+- [ ] Max row count per layout node (defence in depth on top of the zip-bomb fix).
+- [ ] Pco: max pages per chunk, max bins per page.
+
+Expose via a `ReadOptions.limits(...)` builder with sane defaults; integration tests can
+relax for large fixtures.
+
+### Fuzz infrastructure
+
+- [ ] **Jazzer + JUnit 5** — add `com.code-intelligence:jazzer-junit` test dep. Two modes:
+  regression (`./mvnw test`, replays saved corpus + crashes) and fuzz
+  (`JAZZER_FUZZ=1`, nightly profile). See research notes in branch
+  `worktree-security-fuzz` commit history.
+- [ ] **Seed corpus from integration fixtures** — drop existing `.vortex` test files into
+  `reader/src/test/resources/fuzz-corpus/full-file/`. Per-encoding sub-corpora extracted via
+  a small tool that walks fixtures and dumps each segment to
+  `core/src/test/resources/fuzz-corpus/<encoding>/`.
+- [ ] **Fuzz targets**: `VortexReader.open(byte[])`, `PostscriptParser.parseBlobs`, and one
+  `@FuzzTest` per encoding `Encoding.decode`. Crash oracle: `ignore = {VortexException.class}`.
+- [ ] **Differential fuzz (Java vs Rust)** — round-trip random bytes through Java decode
+  and `vortex-jni`; assert both throw or both return identical row count + values. Reuse
+  `RustWritesJavaReadsIntegrationTest` harness.
+- [ ] **OSS-Fuzz submission** — Jazzer is a first-class OSS-Fuzz engine; submit the project
+  once the corpus + targets stabilise. Free continuous fuzzing.
+
+### Process
+
+- [ ] **`SECURITY.md`** — private disclosure policy, supported versions, contact address.
+- [ ] **GitHub private vulnerability reporting** — enable in repo settings.
+- [ ] **Error messages** — review every `VortexException` message for adversary-controlled
+  byte echo. Hex-escape or length-cap byte fields in messages.
 
 ## Build
 
