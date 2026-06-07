@@ -26,10 +26,10 @@ class ListEncodingTest {
     }
 
     private static EncodingRegistry registry() {
-        EncodingRegistry r = EncodingRegistry.empty();
-        r.register(new ListEncoding());
-        r.register(new PrimitiveEncoding());
-        return r;
+        return EncodingRegistry.builder()
+                .register(new ListEncoding())
+                .register(new PrimitiveEncoding())
+                .build();
     }
 
     @Nested

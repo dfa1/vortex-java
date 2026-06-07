@@ -254,11 +254,6 @@ public final class VortexHttpReader implements VortexHandle {
 
     // ── HTTP helpers ──────────────────────────────────────────────────────────
 
-    @Override
-    public EncodingRegistry registry() {
-        return registry;
-    }
-
     /// Fetches bytes `[offset, offset+length)` via HTTP Range and returns them
     /// as an off-heap [MemorySegment] tied to this reader's [Arena].
     @Override
@@ -277,7 +272,7 @@ public final class VortexHttpReader implements VortexHandle {
 
     @Override
     public ScanIterator scan(ScanOptions options) {
-        return new ScanIterator(this, options);
+        return new ScanIterator(this, registry, options);
     }
 
     @Override

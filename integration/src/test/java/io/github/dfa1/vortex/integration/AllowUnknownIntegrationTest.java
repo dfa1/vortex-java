@@ -89,7 +89,7 @@ class AllowUnknownIntegrationTest {
 
         // When
         List<ScanResult> results;
-        try (VortexReader vf = VortexReader.open(file, EncodingRegistry.empty().allowUnknown())) {
+        try (VortexReader vf = VortexReader.open(file, EncodingRegistry.builder().allowUnknown().build())) {
             results = scanAll(vf);
         }
 
@@ -128,7 +128,7 @@ class AllowUnknownIntegrationTest {
 
         // When
         List<ScanResult> results;
-        try (VortexReader vf = VortexReader.open(file, EncodingRegistry.loadAll().allowUnknown())) {
+        try (VortexReader vf = VortexReader.open(file, EncodingRegistry.builder().registerServiceLoaded().allowUnknown().build())) {
             results = scanAll(vf);
         }
 

@@ -33,9 +33,9 @@ class VortexReaderTest {
     // --- trailer / magic validation ---
 
     private static EncodingRegistry buildUniversalStubRegistry() {
-        var registry = EncodingRegistry.empty();
+        var b = EncodingRegistry.builder();
         for (EncodingId encodingId : EncodingId.values()) {
-            registry.register(new Encoding() {
+            b.register(new Encoding() {
                 @Override
                 public EncodingId encodingId() {
                     return encodingId;
@@ -57,7 +57,7 @@ class VortexReaderTest {
                 }
             });
         }
-        return registry;
+        return b.build();
     }
 
     @SuppressWarnings("resource")
@@ -194,7 +194,7 @@ class VortexReaderTest {
     void scan_withNoDecoders_allowUnknown_returnsUnknownArray(String name) throws URISyntaxException, IOException {
         // Given — empty registry + allowUnknown: every leaf decodes to a passthrough UnknownArray
         Path path = fixtureFile(name);
-        var registry = EncodingRegistry.empty().allowUnknown();
+        var registry = EncodingRegistry.builder().allowUnknown().build();
 
         // When
         try (var sut = VortexReader.open(path, registry);

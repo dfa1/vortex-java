@@ -139,8 +139,11 @@ class DictEncodingTest {
         void encodeDecode_utf8_isLossless(String name, String[] data) {
             // Given
             var sut = new DictEncoding();
-            EncodingRegistry registry = TestRegistry.withPrimitive(sut);
-            registry.register(new VarBinEncoding());
+            EncodingRegistry registry = EncodingRegistry.builder()
+                    .register(sut)
+                    .register(new PrimitiveEncoding())
+                    .register(new VarBinEncoding())
+                    .build();
 
             // When
             EncodeResult encoded = sut.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());

@@ -23,10 +23,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 class RleEncodingTest {
 
     private static EncodingRegistry registry() {
-        EncodingRegistry r = EncodingRegistry.empty();
-        r.register(new RleEncoding());
-        r.register(new PrimitiveEncoding());
-        return r;
+        return EncodingRegistry.builder()
+                .register(new RleEncoding())
+                .register(new PrimitiveEncoding())
+                .build();
     }
 
     private static KnownArrayNode toArrayNode(EncodeNode enc) {
@@ -300,10 +300,11 @@ class RleEncodingTest {
                     new ArrayNode[]{origRoot.children()[0], nullableIndices, origRoot.children()[2]},
                     origRoot.bufferIndices(), ArrayStats.empty());
 
-            EncodingRegistry reg = EncodingRegistry.empty();
-            reg.register(sut);
-            reg.register(new PrimitiveEncoding());
-            reg.register(new BoolEncoding());
+            EncodingRegistry reg = EncodingRegistry.builder()
+                    .register(sut)
+                    .register(new PrimitiveEncoding())
+                    .register(new BoolEncoding())
+                    .build();
             DecodeContext ctx = new DecodeContext(root, dtype, data.length, segments, reg, Arena.ofAuto());
 
             // When

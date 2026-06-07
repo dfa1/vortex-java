@@ -42,10 +42,10 @@ class DictEncodingTest {
     }
 
     private static EncodingRegistry dictRegistry() {
-        var registry = EncodingRegistry.empty();
-        registry.register(new DictEncoding());
-        registry.register(new PrimitiveEncoding());
-        return registry;
+        return EncodingRegistry.builder()
+                .register(new DictEncoding())
+                .register(new PrimitiveEncoding())
+                .build();
     }
 
     @Test

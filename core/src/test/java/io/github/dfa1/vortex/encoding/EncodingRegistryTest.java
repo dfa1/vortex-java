@@ -18,16 +18,16 @@ class EncodingRegistryTest {
     @Test
     void empty() {
         // Given
-        EncodingRegistry sut = EncodingRegistry.empty();
+        EncodingRegistry emptySut = EncodingRegistry.empty();
 
         // When
-        boolean result1 = sut.hasEncoding(EncodingId.VORTEX_DECIMAL);
+        boolean result1 = emptySut.hasEncoding(EncodingId.VORTEX_DECIMAL);
 
         // Then
         assertThat(result1).isFalse();
 
         // When
-        sut.register(new DecimalEncoding());
+        EncodingRegistry sut = EncodingRegistry.builder().register(new DecimalEncoding()).build();
         boolean result2 = sut.hasEncoding(EncodingId.VORTEX_DECIMAL);
 
         // Then
@@ -37,8 +37,7 @@ class EncodingRegistryTest {
     @Test
     void duplicateIdThrows() {
         // Given
-        EncodingRegistry sut = EncodingRegistry.empty();
-        sut.register(new DecimalEncoding());
+        EncodingRegistry.Builder sut = EncodingRegistry.builder().register(new DecimalEncoding());
 
         // When / Then
         assertThatThrownBy(() -> sut.register(new DecimalEncoding()))
@@ -90,7 +89,7 @@ class EncodingRegistryTest {
     @Test
     void decodeKnownEncodingWithoutDecoderReturnsUnknownArrayWhenAllowed() {
         // Given — EncodingId is known but no Encoding registered; allowUnknown covers this too
-        EncodingRegistry sut = EncodingRegistry.empty().allowUnknown();
+        EncodingRegistry sut = EncodingRegistry.builder().allowUnknown().build();
         ArrayNode node = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE,
                 ByteBuffer.allocate(0), new ArrayNode[0], new int[0], ArrayStats.empty());
         DecodeContext ctx = new DecodeContext(node, DTypes.I32, 0L,
@@ -107,7 +106,7 @@ class EncodingRegistryTest {
     @Test
     void decodeUnknownEncodingReturnsUnknownArrayWhenAllowed() {
         // Given
-        EncodingRegistry sut = EncodingRegistry.empty().allowUnknown();
+        EncodingRegistry sut = EncodingRegistry.builder().allowUnknown().build();
         ByteBuffer metadata = ByteBuffer.wrap(new byte[]{1, 2, 3});
         MemorySegment buf = Arena.ofAuto().allocate(4);
         buf.set(java.lang.foreign.ValueLayout.JAVA_INT, 0, 42);
@@ -134,7 +133,7 @@ class EncodingRegistryTest {
     @Test
     void decodeUnknownEncodingWrapsChildrenAsUnknown() {
         // Given
-        EncodingRegistry sut = EncodingRegistry.empty().allowUnknown();
+        EncodingRegistry sut = EncodingRegistry.builder().allowUnknown().build();
         // Child uses a known id (vortex.primitive); allow-unknown still wraps it unknown because
         // its parent is unknown — mirrors Rust decode_foreign in vortex-array/src/serde.rs:380.
         ArrayNode child = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE,

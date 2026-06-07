@@ -227,7 +227,10 @@ returned as `UnknownArray` (opaque, not decodable, but the rest of the file is r
 import io.github.dfa1.vortex.encoding.EncodingRegistry;
 import io.github.dfa1.vortex.core.array.UnknownArray;
 
-EncodingRegistry registry = EncodingRegistry.loadAll().allowUnknown();
+EncodingRegistry registry = EncodingRegistry.builder()
+        .registerServiceLoaded()
+        .allowUnknown()
+        .build();
 
 try (VortexReader vf = VortexReader.open(Path.of("future.vortex"), registry);
      var iter = vf.scan(ScanOptions.all())) {

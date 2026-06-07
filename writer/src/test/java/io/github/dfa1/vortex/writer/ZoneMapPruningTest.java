@@ -63,9 +63,7 @@ class ZoneMapPruningTest {
     }
 
     private static EncodingRegistry primitiveRegistry() {
-        var registry = EncodingRegistry.empty();
-        registry.register(new PrimitiveEncoding());
-        return registry;
+        return EncodingRegistry.builder().register(new PrimitiveEncoding()).build();
     }
 
     @Test

@@ -57,8 +57,7 @@ class ZipBombSecurityTest {
         // Given — 10M rows: 80 MB if fix reverted (clean AssertionError, not JVM crash)
         long claimedRows = 10_000_000L;
         Path bomb = buildConstantBomb(tmp, claimedRows);
-        var registry = EncodingRegistry.empty();
-        registry.register(new ConstantEncoding());
+        var registry = EncodingRegistry.builder().register(new ConstantEncoding()).build();
 
         // When
         try (var reader = VortexReader.open(bomb, registry);
@@ -86,8 +85,7 @@ class ZipBombSecurityTest {
         // Given — 100 rows: no OOM risk even if fix reverted; loop hits OOB on index 1
         // → IndexOutOfBoundsException (not VortexException) → clean assertion failure
         Path bomb = buildDictBomb(tmp, 100L);
-        var registry = EncodingRegistry.empty();
-        registry.register(new PrimitiveEncoding());
+        var registry = EncodingRegistry.builder().register(new PrimitiveEncoding()).build();
 
         // When / Then — VortexException before any O(n) allocation
         assertThatThrownBy(() -> {

@@ -43,10 +43,10 @@ class DeltaEncodingTest {
     }
 
     private static EncodingRegistry deltaRegistry() {
-        var registry = EncodingRegistry.empty();
-        registry.register(new DeltaEncoding());
-        registry.register(new io.github.dfa1.vortex.encoding.PrimitiveEncoding());
-        return registry;
+        return EncodingRegistry.builder()
+                .register(new DeltaEncoding())
+                .register(new io.github.dfa1.vortex.encoding.PrimitiveEncoding())
+                .build();
     }
 
     @Test

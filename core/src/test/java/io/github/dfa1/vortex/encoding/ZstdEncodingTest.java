@@ -176,8 +176,7 @@ class ZstdEncodingTest {
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ZSTD, ByteBuffer.wrap(meta),
                     new ArrayNode[]{validityNode}, bufIndices, null);
 
-            EncodingRegistry registry = EncodingRegistry.empty();
-            registry.register(new BoolEncoding());
+            EncodingRegistry registry = EncodingRegistry.builder().register(new BoolEncoding()).build();
 
             return new DecodeContext(node, dtype, n, allSegments.toArray(new MemorySegment[0]),
                     registry, Arena.ofAuto());

@@ -218,8 +218,9 @@ relax for large fixtures.
 
 - [ ] **Audit runtime pluggability vs Rust impl** — maintainer (2026-06-04) flagged that Rust supports
   runtime registration for: Encodings, DTypes, Compute, Layouts. Java status:
-    - Encodings: ✅ `ServiceLoader` + `EncodingRegistry.register()`; ✅ `allowUnknown()` passthrough for unregistered
-      encodings (mirrors `VortexSession::allow_unknown()`)
+    - Encodings: ✅ `ServiceLoader` + `EncodingRegistry.Builder.register()`; ✅ `allowUnknown()` passthrough for
+      unregistered encodings (mirrors `VortexSession::allow_unknown()`). Runtime registration is build-time on a
+      fresh builder — the registry itself is immutable after `build()`.
     - DTypes: ❌ sealed hierarchy — no user-extensible type. If a downstream consumer needs a custom
       logical type (e.g. UUID, IP address) they can't register one. Decide: keep sealed (simpler) or
       open via SPI mirroring `EncodingRegistry`.

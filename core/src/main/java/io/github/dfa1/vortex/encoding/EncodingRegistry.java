@@ -12,44 +12,50 @@ import java.util.Map;
 import java.util.ServiceLoader;
 
 /// Registry mapping encoding IDs to [Encoding] implementations.
+///
+/// Instances are immutable after construction. Build one via [#builder()] or via the
+/// [#loadAll()], [#empty()], [#of(List)] convenience factories.
 public final class EncodingRegistry {
 
     private final Map<EncodingId, Encoding> encodings;
-    private boolean allowUnknown;
+    private final boolean allowUnknown;
 
-    private EncodingRegistry() {
-        encodings = new HashMap<>();
-        allowUnknown = false;
+    private EncodingRegistry(Map<EncodingId, Encoding> encodings, boolean allowUnknown) {
+        this.encodings = Map.copyOf(encodings);
+        this.allowUnknown = allowUnknown;
+    }
+
+    /// Returns a new {@link Builder}.
+    ///
+    /// @return a fresh builder
+    public static Builder builder() {
+        return new Builder();
     }
 
     /// Load all [Encoding]s registered via `ServiceLoader`.
     ///
-    /// @return a new {@link EncodingRegistry} populated with all service-loaded encodings
+    /// @return an immutable {@link EncodingRegistry} populated with all service-loaded encodings
     public static EncodingRegistry loadAll() {
-        var registry = new EncodingRegistry();
-        for (Encoding encoding : ServiceLoader.load(Encoding.class)) {
-            registry.register(encoding);
-        }
-        return registry;
+        return builder().registerServiceLoaded().build();
     }
 
     /// Creates an empty registry with no encodings registered.
     ///
-    /// @return a new empty {@link EncodingRegistry}
+    /// @return a new empty immutable {@link EncodingRegistry}
     public static EncodingRegistry empty() {
-        return new EncodingRegistry();
+        return builder().build();
     }
 
     /// Creates a registry populated with the given encodings.
     ///
     /// @param encodings the encodings to register
-    /// @return a new {@link EncodingRegistry} populated with the given encodings
+    /// @return an immutable {@link EncodingRegistry} populated with the given encodings
     public static EncodingRegistry of(List<Encoding> encodings) {
-        var registry = new EncodingRegistry();
-        for (Encoding encoding : encodings) {
-            registry.register(encoding);
+        var b = builder();
+        for (Encoding e : encodings) {
+            b.register(e);
         }
-        return registry;
+        return b.build();
     }
 
     /// Recursively wrap a node and its children as [UnknownArray]. Children of an unknown
@@ -77,18 +83,6 @@ public final class EncodingRegistry {
                 node.metadata(), bufs, children);
     }
 
-    /// Enable passthrough decode for unknown encoding ids.
-    ///
-    /// Default is strict: unknown ids throw [VortexException]. When enabled, unknown nodes
-    /// (and all their children, recursively) are wrapped as [UnknownArray] preserving raw
-    /// metadata + buffers + stats. Mirrors Rust `VortexSession::allow_unknown()`.
-    ///
-    /// @return this registry, for chaining
-    public EncodingRegistry allowUnknown() {
-        this.allowUnknown = true;
-        return this;
-    }
-
     /// Returns whether passthrough decode for unknown encoding ids is enabled.
     ///
     /// @return {@code true} if unknown encodings are silently wrapped as {@link io.github.dfa1.vortex.core.array.UnknownArray}
@@ -110,17 +104,6 @@ public final class EncodingRegistry {
     /// @return the registered {@link Encoding}, or {@code null}
     public Encoding lookup(EncodingId encodingId) {
         return encodings.get(encodingId);
-    }
-
-    /// Registers an encoding implementation in this registry.
-    ///
-    /// @param encoding the {@link Encoding} to register
-    /// @throws io.github.dfa1.vortex.core.VortexException if an encoding with the same id is already registered
-    public void register(Encoding encoding) {
-        Encoding old = encodings.put(encoding.encodingId(), encoding);
-        if (old != null) {
-            throw new VortexException("encoding %s already registered".formatted(encoding.encodingId()));
-        }
     }
 
     MemorySegment decodeAsSegment(DecodeContext ctx) {
@@ -156,5 +139,60 @@ public final class EncodingRegistry {
             case UnknownArrayNode u -> u.rawEncodingId();
         };
         throw new VortexException("no encoding registered for " + id);
+    }
+
+    /// Builder for [EncodingRegistry].
+    ///
+    /// Not thread-safe. Build once, use everywhere — the produced [EncodingRegistry] is immutable.
+    public static final class Builder {
+
+        private final Map<EncodingId, Encoding> encodings = new HashMap<>();
+        private boolean allowUnknown = false;
+
+        private Builder() {
+        }
+
+        /// Registers an encoding implementation.
+        ///
+        /// @param encoding the {@link Encoding} to register
+        /// @return this builder, for chaining
+        /// @throws VortexException if an encoding with the same id is already registered
+        public Builder register(Encoding encoding) {
+            Encoding old = encodings.put(encoding.encodingId(), encoding);
+            if (old != null) {
+                throw new VortexException("encoding %s already registered".formatted(encoding.encodingId()));
+            }
+            return this;
+        }
+
+        /// Registers every [Encoding] discovered via `ServiceLoader`.
+        ///
+        /// @return this builder, for chaining
+        /// @throws VortexException if a service-loaded encoding collides with one already registered
+        public Builder registerServiceLoaded() {
+            for (Encoding encoding : ServiceLoader.load(Encoding.class)) {
+                register(encoding);
+            }
+            return this;
+        }
+
+        /// Enable passthrough decode for unknown encoding ids.
+        ///
+        /// Default is strict: unknown ids throw [VortexException]. When enabled, unknown nodes
+        /// (and all their children, recursively) are wrapped as [UnknownArray] preserving raw
+        /// metadata + buffers + stats. Mirrors Rust `VortexSession::allow_unknown()`.
+        ///
+        /// @return this builder, for chaining
+        public Builder allowUnknown() {
+            this.allowUnknown = true;
+            return this;
+        }
+
+        /// Builds an immutable [EncodingRegistry].
+        ///
+        /// @return the immutable registry
+        public EncodingRegistry build() {
+            return new EncodingRegistry(encodings, allowUnknown);
+        }
     }
 }

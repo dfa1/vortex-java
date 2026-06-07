@@ -7,18 +7,18 @@ final class TestRegistry {
     }
 
     static EncodingRegistry of(Encoding... encodings) {
-        EncodingRegistry r = EncodingRegistry.empty();
+        var b = EncodingRegistry.builder();
         for (Encoding e : encodings) {
-            r.register(e);
+            b.register(e);
         }
-        return r;
+        return b.build();
     }
 
     static EncodingRegistry withPrimitive(Encoding sut) {
-        EncodingRegistry r = of(sut);
+        var b = EncodingRegistry.builder().register(sut);
         if (!(sut instanceof PrimitiveEncoding)) {
-            r.register(new PrimitiveEncoding());
+            b.register(new PrimitiveEncoding());
         }
-        return r;
+        return b.build();
     }
 }

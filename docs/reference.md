@@ -66,7 +66,6 @@ all `Array` buffers obtained during scans become invalid.
 | `footer()`                            | `Footer`                  | Segment specs, encoding specs                 |
 | `version()`                           | `int`                     | File format version                           |
 | `fileSize()`                          | `long`                    | File size in bytes                            |
-| `registry()`                          | `EncodingRegistry`        | Registry in use                               |
 | `scan(ScanOptions)`                   | `ScanIterator`            | Open a scan                                   |
 | `columnStats()`                       | `Map<String, ArrayStats>` | Aggregated min/max per column                 |
 | `slice(offset, length)`               | `MemorySegment`           | Zero-copy slice of mmap region                |
@@ -155,14 +154,26 @@ Record: `(long rowCount, Map<String, Array> columns)`.
 
 ### `EncodingRegistry` (`io.github.dfa1.vortex.encoding`)
 
-| Method                    | Notes                                                                                    |
-|---------------------------|------------------------------------------------------------------------------------------|
-| `static loadAll()`        | Loads every `Encoding` via `ServiceLoader`                                               |
-| `static empty()`          | Empty registry                                                                           |
-| `register(Encoding)`      | Add a custom encoding; throws if already registered                                      |
-| `hasEncoding(EncodingId)` | Lookup                                                                                   |
-| `allowUnknown()`          | Switch to passthrough mode — unknown nodes (and their children) decode as `UnknownArray` |
-| `isAllowUnknown()`        | Predicate                                                                                |
+Immutable after construction. Build via `EncodingRegistry.builder()` or the static convenience factories.
+
+| Method                    | Notes                                                                          |
+|---------------------------|--------------------------------------------------------------------------------|
+| `static builder()`        | Returns a fresh `Builder`                                                      |
+| `static loadAll()`        | Immutable registry populated via `ServiceLoader`                               |
+| `static empty()`          | Immutable empty registry (strict mode)                                         |
+| `static of(List<Encoding>)` | Immutable registry populated with the given encodings                        |
+| `hasEncoding(EncodingId)` | Lookup                                                                         |
+| `lookup(EncodingId)`      | Returns the registered `Encoding` or `null`                                    |
+| `isAllowUnknown()`        | Predicate                                                                      |
+
+### `EncodingRegistry.Builder`
+
+| Method                       | Notes                                                                                    |
+|------------------------------|------------------------------------------------------------------------------------------|
+| `register(Encoding)`         | Add a custom encoding; throws if already registered                                      |
+| `registerServiceLoaded()`    | Add every `Encoding` discovered via `ServiceLoader`                                      |
+| `allowUnknown()`             | Switch to passthrough mode — unknown nodes (and their children) decode as `UnknownArray` |
+| `build()`                    | Produce the immutable `EncodingRegistry`                                                 |
 
 To register a custom encoding via `ServiceLoader`, add the fully qualified class name to
 `META-INF/services/io.github.dfa1.vortex.encoding.Encoding`.

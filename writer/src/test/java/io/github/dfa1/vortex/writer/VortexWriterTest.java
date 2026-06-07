@@ -50,10 +50,10 @@ class VortexWriterTest {
     // ── Round-trip: write then read ───────────────────────────────────────────
 
     private static EncodingRegistry primitiveRegistry() {
-        var registry = EncodingRegistry.empty();
-        registry.register(new AlpEncoding());
-        registry.register(new PrimitiveEncoding());
-        return registry;
+        return EncodingRegistry.builder()
+                .register(new AlpEncoding())
+                .register(new PrimitiveEncoding())
+                .build();
     }
 
     @Test

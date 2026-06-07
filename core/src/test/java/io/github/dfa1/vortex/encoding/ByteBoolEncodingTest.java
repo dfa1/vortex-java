@@ -34,8 +34,7 @@ class ByteBoolEncodingTest {
         void encodeDecode_isLossless(boolean[] data) {
             // Given
             var sut = new ByteBoolEncoding();
-            EncodingRegistry registry = EncodingRegistry.empty();
-            registry.register(sut);
+            EncodingRegistry registry = EncodingRegistry.builder().register(sut).build();
 
             // When
             EncodeResult encoded = sut.encode(DTypes.BOOL, data, EncodeTestHelper.testCtx());
@@ -66,8 +65,7 @@ class ByteBoolEncodingTest {
         private static DecodeContext buildCtx(byte[] byteValues) {
             MemorySegment buf = MemorySegment.ofArray(byteValues);
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_BYTEBOOL, null, new ArrayNode[0], new int[]{0}, null);
-            EncodingRegistry registry = EncodingRegistry.empty();
-            registry.register(new ByteBoolEncoding());
+            EncodingRegistry registry = EncodingRegistry.builder().register(new ByteBoolEncoding()).build();
             return new DecodeContext(node, DTypes.BOOL, byteValues.length, new MemorySegment[]{buf}, registry,
                     Arena.ofAuto());
         }

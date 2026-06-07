@@ -47,7 +47,10 @@ Files containing unrecognised encoding IDs throw `VortexException` by default. O
 passthrough mode to read such files without failing:
 
 ```java
-EncodingRegistry registry = EncodingRegistry.loadAll().allowUnknown();
+EncodingRegistry registry = EncodingRegistry.builder()
+        .registerServiceLoaded()
+        .allowUnknown()
+        .build();
 try (VortexReader vf = VortexReader.open(path, registry)) {
     // columns with unknown encodings are returned as UnknownArray
 }

@@ -44,9 +44,10 @@ class ChunkedEncodingTest {
             long[] chunk1 = {40L, 50L};
             DType i64 = new DType.Primitive(PType.I64, false);
             var sut = new ChunkedEncoding();
-            EncodingRegistry registry = EncodingRegistry.empty();
-            registry.register(sut);
-            registry.register(new PrimitiveEncoding());
+            EncodingRegistry registry = EncodingRegistry.builder()
+                    .register(sut)
+                    .register(new PrimitiveEncoding())
+                    .build();
             ChunkedData data = new ChunkedData(List.of(chunk0, chunk1), new long[]{3, 2});
 
             // When
@@ -103,10 +104,11 @@ class ChunkedEncodingTest {
             DType i64 = new DType.Primitive(PType.I64, false);
             DType u64 = new DType.Primitive(PType.U64, false);
 
-            EncodingRegistry registry = EncodingRegistry.empty();
             var sut = new ChunkedEncoding();
-            registry.register(sut);
-            registry.register(new PrimitiveEncoding());
+            EncodingRegistry registry = EncodingRegistry.builder()
+                    .register(sut)
+                    .register(new PrimitiveEncoding())
+                    .build();
 
             // Build chunk_offsets segment: [0, 3, 5] as U64 LE
             EncodeResult offsetsResult = new PrimitiveEncoding().encode(u64, new long[]{0L, 3L, 5L}, EncodeTestHelper.testCtx());
@@ -156,9 +158,10 @@ class ChunkedEncodingTest {
             DType i64 = new DType.Primitive(PType.I64, false);
             DType u64 = new DType.Primitive(PType.U64, false);
 
-            EncodingRegistry registry = EncodingRegistry.empty();
-            registry.register(new ChunkedEncoding());
-            registry.register(new PrimitiveEncoding());
+            EncodingRegistry registry = EncodingRegistry.builder()
+                    .register(new ChunkedEncoding())
+                    .register(new PrimitiveEncoding())
+                    .build();
 
             EncodeResult offsetsResult = new PrimitiveEncoding().encode(u64, new long[]{0L, 3L}, EncodeTestHelper.testCtx());
             EncodeResult chunkResult = new PrimitiveEncoding().encode(i64, data, EncodeTestHelper.testCtx());
@@ -189,8 +192,9 @@ class ChunkedEncodingTest {
         void noChildren_throws() {
             // Given
             DType i64 = new DType.Primitive(PType.I64, false);
-            EncodingRegistry registry = EncodingRegistry.empty();
-            registry.register(new ChunkedEncoding());
+            EncodingRegistry registry = EncodingRegistry.builder()
+                    .register(new ChunkedEncoding())
+                    .build();
             ArrayNode root = ArrayNode.of(EncodingId.VORTEX_CHUNKED, null, new ArrayNode[]{}, new int[]{}, null);
             DecodeContext ctx = new DecodeContext(root, i64, 0L, new MemorySegment[]{}, registry, Arena.ofAuto());
 

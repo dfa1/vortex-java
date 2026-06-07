@@ -25,10 +25,10 @@ class FixedSizeListEncodingTest {
     }
 
     private static EncodingRegistry registry() {
-        EncodingRegistry r = EncodingRegistry.empty();
-        r.register(new FixedSizeListEncoding());
-        r.register(new PrimitiveEncoding());
-        return r;
+        return EncodingRegistry.builder()
+                .register(new FixedSizeListEncoding())
+                .register(new PrimitiveEncoding())
+                .build();
     }
 
     @Nested

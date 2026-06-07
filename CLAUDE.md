@@ -107,8 +107,9 @@ Struct → Zoned(Stats) → Chunked → [Flat, Flat, ...]
 - **Zoned** (`vortex.stats`): wraps a child with per-chunk min/max statistics used for zone-map pruning
 - **Struct**: one child per column
 
-Encoding IDs are strings (e.g. `"vortex.flat"`, `"fastlanes.bitpacked"`). `DecoderRegistry` maps IDs → `Decoder` impls
-via `ServiceLoader`; register custom decoders with `registry.register(decoder)`.
+Encoding IDs are strings (e.g. `"vortex.flat"`, `"fastlanes.bitpacked"`). `EncodingRegistry` maps IDs → `Encoding` impls
+via `ServiceLoader`. The registry is immutable after construction — register custom encodings on the builder:
+`EncodingRegistry.builder().registerServiceLoaded().register(myEncoding).build()`.
 
 **Adding a new encoding:** three touch-points, always all three:
 

@@ -42,10 +42,8 @@ class BitpackedEncodingTest {
         return results;
     }
 
-    private static EncodingRegistry bpRegistry() {
-        var registry = EncodingRegistry.empty();
-        registry.register(new BitpackedEncoding());
-        return registry;
+    private static EncodingRegistry bitpackedRegistry() {
+        return EncodingRegistry.builder().register(new BitpackedEncoding()).build();
     }
 
     @Test
@@ -62,7 +60,7 @@ class BitpackedEncodingTest {
         }
 
         // Then
-        try (var vf = VortexReader.open(file, bpRegistry())) {
+        try (var vf = VortexReader.open(file, bitpackedRegistry())) {
             List<ScanResult> results = scanAll(vf);
             assertThat(results).hasSize(1);
             Array arr = results.getFirst().columns().get("value");
@@ -88,7 +86,7 @@ class BitpackedEncodingTest {
         }
 
         // Then
-        try (var vf = VortexReader.open(file, bpRegistry())) {
+        try (var vf = VortexReader.open(file, bitpackedRegistry())) {
             List<ScanResult> results = scanAll(vf);
             assertThat(results).hasSize(1);
             Array arr = results.getFirst().columns().get("value");
@@ -113,7 +111,7 @@ class BitpackedEncodingTest {
         }
 
         // Then
-        try (var vf = VortexReader.open(file, bpRegistry())) {
+        try (var vf = VortexReader.open(file, bitpackedRegistry())) {
             List<ScanResult> results = scanAll(vf);
             assertThat(results).hasSize(1);
             Array arr = results.getFirst().columns().get("value");
@@ -142,7 +140,7 @@ class BitpackedEncodingTest {
         }
 
         // Then — process each chunk before advancing; hasNext() closes the previous chunk's arena
-        try (var vf = VortexReader.open(file, bpRegistry());
+        try (var vf = VortexReader.open(file, bitpackedRegistry());
              var iter = vf.scan(ScanOptions.all())) {
             var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
@@ -182,7 +180,7 @@ class BitpackedEncodingTest {
         }
 
         // Then
-        try (var vf = VortexReader.open(file, bpRegistry())) {
+        try (var vf = VortexReader.open(file, bitpackedRegistry())) {
             List<ScanResult> results = scanAll(vf);
             assertThat(results).hasSize(1);
             Array arr = results.getFirst().columns().get("value");

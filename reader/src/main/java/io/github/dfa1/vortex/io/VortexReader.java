@@ -188,13 +188,8 @@ public final class VortexReader implements VortexHandle {
     }
 
     @Override
-    public EncodingRegistry registry() {
-        return registry;
-    }
-
-    @Override
     public ScanIterator scan(ScanOptions options) {
-        return new ScanIterator(this, options);
+        return new ScanIterator(this, registry, options);
     }
 
     /// Aggregated per-column statistics (global min/max across all chunks).

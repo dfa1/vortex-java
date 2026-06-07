@@ -21,10 +21,10 @@ class VarBinEncodingTest {
     class Encode {
 
         private static EncodingRegistry buildRegistry() {
-            EncodingRegistry registry = EncodingRegistry.empty();
-            registry.register(new VarBinEncoding());
-            registry.register(new PrimitiveEncoding());
-            return registry;
+            return EncodingRegistry.builder()
+                    .register(new VarBinEncoding())
+                    .register(new PrimitiveEncoding())
+                    .build();
         }
 
         @Test

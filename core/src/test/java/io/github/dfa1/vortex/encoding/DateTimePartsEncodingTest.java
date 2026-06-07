@@ -43,10 +43,10 @@ class DateTimePartsEncodingTest {
     }
 
     private static EncodingRegistry registry() {
-        EncodingRegistry r = EncodingRegistry.empty();
-        r.register(new DateTimePartsEncoding());
-        r.register(new PrimitiveEncoding());
-        return r;
+        return EncodingRegistry.builder()
+                .register(new DateTimePartsEncoding())
+                .register(new PrimitiveEncoding())
+                .build();
     }
 
     @Nested

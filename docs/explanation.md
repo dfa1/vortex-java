@@ -189,8 +189,8 @@ implementations on the classpath. Each encoding declares its ID via `encodingId(
 At decode time the registry maps the ID string from the Layout node to the right
 `Encoding` instance and calls `decode(DecodeContext)`.
 
-Custom encodings can be added at runtime: `registry.register(myEncoding)`.
-Files with unrecognised IDs throw `VortexException` unless `allowUnknown()` is set.
+Custom encodings can be added at build time: `EncodingRegistry.builder().register(myEncoding).build()`.
+Files with unrecognised IDs throw `VortexException` unless the builder enabled `allowUnknown()`.
 
 ## Benchmarks
 
