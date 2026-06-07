@@ -222,10 +222,10 @@ public final class SparseEncoding implements Encoding {
 
             if (numPatches > 0) {
                 DType indicesDtype = new DType.Primitive(indicesPtype, false);
-                Array indicesArray = ctx.decodeChild(0, indicesDtype, numPatches);
-                Array valuesArray = ctx.decodeChild(1, ctx.dtype(), numPatches);
                 applyPatches(out, n, valuePtype,
-                        indicesArray.segment(), valuesArray.segment(), indicesPtype, numPatches, offset);
+                        ctx.decodeChildSegment(0, indicesDtype, numPatches),
+                        ctx.decodeChildSegment(1, ctx.dtype(), numPatches),
+                        indicesPtype, numPatches, offset);
             }
 
             return switch (valuePtype) {
@@ -246,10 +246,8 @@ public final class SparseEncoding implements Encoding {
             MemorySegment out = ctx.arena().allocate(numBytes);
             if (numPatches > 0) {
                 DType indicesDtype = new DType.Primitive(indicesPtype, false);
-                Array indicesArray = ctx.decodeChild(0, indicesDtype, numPatches);
-                Array valuesArray = ctx.decodeChild(1, ctx.dtype(), numPatches);
-                MemorySegment idxSeg = indicesArray.segment();
-                BoolArray bools = (BoolArray) valuesArray;
+                MemorySegment idxSeg = ctx.decodeChildSegment(0, indicesDtype, numPatches);
+                BoolArray bools = (BoolArray) ctx.decodeChild(1, ctx.dtype(), numPatches);
                 for (long i = 0; i < numPatches; i++) {
                     if (bools.getBoolean(i)) {
                         long pos = readUnsignedIdx(idxSeg, i, indicesPtype) - offset;
@@ -274,11 +272,8 @@ public final class SparseEncoding implements Encoding {
             }
 
             DType indicesDtype = new DType.Primitive(indicesPtype, false);
-            Array indicesArray = ctx.decodeChild(0, indicesDtype, numPatches);
-            Array valuesArray = ctx.decodeChild(1, ctx.dtype(), numPatches);
-
-            MemorySegment idxSeg = indicesArray.segment();
-            VarBinArray varBin = (VarBinArray) valuesArray;
+            MemorySegment idxSeg = ctx.decodeChildSegment(0, indicesDtype, numPatches);
+            VarBinArray varBin = (VarBinArray) ctx.decodeChild(1, ctx.dtype(), numPatches);
             MemorySegment valBytes = varBin.bytesSegment();
             MemorySegment valOffsets = varBin.offsetsSegment();
             PType valOffPtype = varBin.offsetsPtype();

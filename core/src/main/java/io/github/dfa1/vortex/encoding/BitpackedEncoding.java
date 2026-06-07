@@ -616,11 +616,8 @@ public final class BitpackedEncoding implements Encoding {
             long offset = pm.getOffset();
             PType idxPtype = ptypeFromProto(pm.getIndicesPtype());
 
-            Array idxArr = ctx.decodeChild(0, new DType.Primitive(idxPtype, false), numPatches);
-            Array valArr = ctx.decodeChild(1, ctx.dtype(), numPatches);
-
-            MemorySegment idxSeg = idxArr.segment();
-            MemorySegment valSeg = valArr.segment();
+            MemorySegment idxSeg = ctx.decodeChildSegment(0, new DType.Primitive(idxPtype, false), numPatches);
+            MemorySegment valSeg = ctx.decodeChildSegment(1, ctx.dtype(), numPatches);
 
             long n = ctx.rowCount();
             for (long i = 0; i < numPatches; i++) {

@@ -190,6 +190,22 @@ public final class EncodingRegistry {
         return decode(ctx);
     }
 
+    MemorySegment decodeAsSegment(DecodeContext ctx) {
+        ArrayNode node = ctx.node();
+        Encoding encoding = switch (node) {
+            case KnownArrayNode k -> encodings.get(k.encodingId());
+            case UnknownArrayNode _ -> null;
+        };
+        if (encoding != null) {
+            return encoding.decodeSegment(ctx);
+        }
+        String id = switch (node) {
+            case KnownArrayNode k -> k.encodingId().id();
+            case UnknownArrayNode u -> u.rawEncodingId();
+        };
+        throw new VortexException("no encoding registered for " + id + " (or encoding has no primary segment)");
+    }
+
     Array decode(DecodeContext ctx) {
         ArrayNode node = ctx.node();
         Encoding encoding = switch (node) {

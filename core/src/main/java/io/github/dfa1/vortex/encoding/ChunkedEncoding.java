@@ -137,8 +137,7 @@ public final class ChunkedEncoding implements Encoding {
 
         private static long[] readOffsets(DecodeContext ctx, int nchunks) {
             DType u64 = new DType.Primitive(PType.U64, false);
-            Array offsetsArray = ctx.decodeChild(0, u64, nchunks + 1L);
-            MemorySegment offsetsBuf = offsetsArray.segment();
+            MemorySegment offsetsBuf = ctx.decodeChildSegment(0, u64, nchunks + 1L);
             long[] offsets = new long[nchunks + 1];
             for (int i = 0; i <= nchunks; i++) {
                 offsets[i] = offsetsBuf.get(LE_LONG, (long) i * 8);
@@ -164,7 +163,7 @@ public final class ChunkedEncoding implements Encoding {
             MemorySegment combined = arena.allocate(totalRows * ptype.byteSize());
             long byteOffset = 0;
             for (Array chunk : chunks) {
-                MemorySegment src = chunk.segment();
+                MemorySegment src = ArraySegments.of(chunk);
                 MemorySegment.copy(src, 0, combined, byteOffset, src.byteSize());
                 byteOffset += src.byteSize();
             }

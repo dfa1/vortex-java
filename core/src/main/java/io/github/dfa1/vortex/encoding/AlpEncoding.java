@@ -415,15 +415,13 @@ public final class AlpEncoding implements Encoding {
         }
 
         private static Array decodeF64(DecodeContext ctx, EncodingProtos.ALPMetadata meta, int expE, int expF, long n) {
-            Array encoded = ctx.decodeChild(0, I64_DTYPE, n);
-
             // Two separate lookups match Rust's left-to-right: (encoded * F10[f]) * IF10[e].
             // Precomputing a single factor = F10[f] * IF10[e] then encoded * factor uses different
             // associativity and can produce different IEEE 754 results for some (expE, expF) pairs.
             double df = F10_F64[expF];
             double de = IF10_F64[expE];
 
-            MemorySegment src = encoded.segment();
+            MemorySegment src = ctx.decodeChildSegment(0, I64_DTYPE, n);
             // In-place when the child returned a writable arena buffer (e.g. BitpackedEncoding, DeltaEncoding).
             // Fall back to a new allocation when the source is a read-only mmap slice (PrimitiveEncoding).
             MemorySegment buf = src.isReadOnly() ? ctx.arena().allocate(n * 8, 8) : src;
@@ -445,13 +443,11 @@ public final class AlpEncoding implements Encoding {
         }
 
         private static Array decodeF32(DecodeContext ctx, EncodingProtos.ALPMetadata meta, int expE, int expF, long n) {
-            Array encoded = ctx.decodeChild(0, I32_DTYPE, n);
-
             // Two separate lookups match Rust's left-to-right: (encoded * F10[f]) * IF10[e].
             float df = F10_F32[expF];
             float de = IF10_F32[expE];
 
-            MemorySegment src32 = encoded.segment();
+            MemorySegment src32 = ctx.decodeChildSegment(0, I32_DTYPE, n);
             MemorySegment buf32 = src32.isReadOnly() ? ctx.arena().allocate(n * 4, 4) : src32;
             if (src32.isReadOnly()) {
                 for (long i = 0; i < n; i++) {
@@ -476,11 +472,8 @@ public final class AlpEncoding implements Encoding {
             long offset = pm.getOffset();
             PType idxPtype = ptypeFromProto(pm.getIndicesPtype());
 
-            Array idxArr = ctx.decodeChild(1, new DType.Primitive(idxPtype, false), numPatches);
-            Array valArr = ctx.decodeChild(2, ctx.dtype(), numPatches);
-
-            MemorySegment idxSeg = idxArr.segment();
-            MemorySegment valSeg = valArr.segment();
+            MemorySegment idxSeg = ctx.decodeChildSegment(1, new DType.Primitive(idxPtype, false), numPatches);
+            MemorySegment valSeg = ctx.decodeChildSegment(2, ctx.dtype(), numPatches);
 
             for (long i = 0; i < numPatches; i++) {
                 long absIdx = readUnsigned(idxSeg, i, idxPtype) - offset;

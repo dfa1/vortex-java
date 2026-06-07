@@ -332,9 +332,7 @@ public final class RleEncoding implements Encoding {
             DType indicesDtype = new DType.Primitive(indicesPtype, false);
             DType offsetsDtype = new DType.Primitive(offsetsPtype, false);
 
-            Array valuesArr = ctx.decodeChild(0, valuesDtype, valuesLen);
             Array indicesRaw = ctx.decodeChild(1, indicesDtype, indicesLen);
-            Array offsetsArr = ctx.decodeChild(2, offsetsDtype, offsetsLen);
 
             // Indices may carry a validity bitmap when the output column is nullable.
             BoolArray indicesValidity = null;
@@ -344,9 +342,9 @@ public final class RleEncoding implements Encoding {
                 indicesValidity = masked.validity();
             }
 
-            long[] values = readLongs(valuesArr.segment(), (int) valuesLen, ptype);
-            int[] indices = readIndices(indicesArr.segment(), (int) indicesLen, indicesPtype);
-            long[] valuesIdxOffsets = readUnsignedLongs(offsetsArr.segment(), (int) offsetsLen, offsetsPtype);
+            long[] values = readLongs(ctx.decodeChildSegment(0, valuesDtype, valuesLen), (int) valuesLen, ptype);
+            int[] indices = readIndices(ArraySegments.of(indicesArr), (int) indicesLen, indicesPtype);
+            long[] valuesIdxOffsets = readUnsignedLongs(ctx.decodeChildSegment(2, offsetsDtype, offsetsLen), (int) offsetsLen, offsetsPtype);
 
             // offset < FL_CHUNK_SIZE so chunk_start = 0 always.
             int numChunks = (int) (indicesLen / FL_CHUNK_SIZE);

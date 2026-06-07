@@ -53,6 +53,36 @@ public record DecodeContext(
         return registry.decode(childCtx);
     }
 
+    /// Recursively decode child {@code i} and return its primary backing segment.
+    ///
+    /// <p>Equivalent to {@code decodeChild(i).segment()} but routes through
+    /// {@link Encoding#decodeSegment(DecodeContext)} to avoid the deprecated
+    /// {@link io.github.dfa1.vortex.core.array.Array#segment()} interface method.
+    ///
+    /// @param i zero-based child index within this node's children array
+    /// @return the primary {@link MemorySegment} of the decoded child
+    public MemorySegment decodeChildSegment(int i) {
+        ArrayNode child = node.children()[i];
+        var childCtx = new DecodeContext(child, dtype, rowCount, segmentBuffers, registry, arena);
+        return registry.decodeAsSegment(childCtx);
+    }
+
+    /// Recursively decode child {@code i} with an explicit dtype and row count, returning its primary segment.
+    ///
+    /// <p>Equivalent to {@code decodeChild(i, dtype, rowCount).segment()} but routes through
+    /// {@link Encoding#decodeSegment(DecodeContext)} to avoid the deprecated
+    /// {@link io.github.dfa1.vortex.core.array.Array#segment()} interface method.
+    ///
+    /// @param i        zero-based child index within this node's children array
+    /// @param dtype    logical type to assign to the child context
+    /// @param rowCount number of logical rows for the child
+    /// @return the primary {@link MemorySegment} of the decoded child
+    public MemorySegment decodeChildSegment(int i, DType dtype, long rowCount) {
+        ArrayNode child = node.children()[i];
+        var childCtx = new DecodeContext(child, dtype, rowCount, segmentBuffers, registry, arena);
+        return registry.decodeAsSegment(childCtx);
+    }
+
     /// Return the buffer at position `i` in this node's bufferIndices.
     ///
     /// @param i zero-based index into this node's {@code bufferIndices} array

@@ -304,11 +304,8 @@ public final class DeltaEncoding implements Encoding {
             long basesLen = (deltasLen / FL_CHUNK_SIZE) * lanes;
             DType dtype = ctx.dtype();
 
-            Array basesArr = ctx.decodeChild(0, dtype, basesLen);
-            Array deltasArr = ctx.decodeChild(1, dtype, deltasLen);
-
-            long[] basesAll = readLongs(basesArr.segment(), (int) basesLen, ptype);
-            long[] deltasAll = readLongs(deltasArr.segment(), (int) deltasLen, ptype);
+            long[] basesAll = readLongs(ctx.decodeChildSegment(0, dtype, basesLen), (int) basesLen, ptype);
+            long[] deltasAll = readLongs(ctx.decodeChildSegment(1, dtype, deltasLen), (int) deltasLen, ptype);
 
             int numChunks = (int) (deltasLen / FL_CHUNK_SIZE);
             long[] decoded = new long[(int) deltasLen];

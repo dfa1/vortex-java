@@ -163,7 +163,7 @@ public final class ConstantEncoding implements Encoding {
                 var storageCtx = new DecodeContext(ctx.node(), ext.storageDType(), ctx.rowCount(),
                     ctx.segmentBuffers(), ctx.registry(), ctx.arena());
                 Array storage = decode(storageCtx);
-                return new GenericArray(ctx.dtype(), n, storage.segment());
+                return new GenericArray(ctx.dtype(), n, ArraySegments.of(storage));
             }
 
             if (!(ctx.dtype() instanceof DType.Primitive p)) {
