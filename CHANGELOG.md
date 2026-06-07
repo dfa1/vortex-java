@@ -108,17 +108,4 @@ FlatBuffer/Protobuf runtime exceptions). Regression suite lives under
   with a consistent project-internal-first ordering.
 - Checkstyle scope tightened to exclude generated `fbs`/`proto` packages.
 
-### Notes for upgraders
-
-If you have downstream code that calls `Array.buffer(int)`, `Array.child(int)`, or
-`Array.segment()`, switch to one of:
-
-- The typed accessor on the concrete subtype: `((LongArray) arr).segment()`,
-  `((VarBinArray) arr).offsetsSegment()`, etc.
-- `ArraySegments.of(arr)` for a type-agnostic `MemorySegment` view.
-- `((MaskedArray) arr).inner()` and `.validity()` instead of `buffer(int)` / `child(int)`.
-
-Custom encodings that previously implemented `Encoding.decodeSegment(...)` should migrate
-their child-decode paths to `DecodeContext.decodeChild(int, DType, long)`.
-
 [0.4.0]: https://github.com/dfa1/vortex-java/compare/v0.3.2...main
