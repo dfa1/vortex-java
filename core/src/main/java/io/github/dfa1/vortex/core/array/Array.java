@@ -32,6 +32,10 @@ public sealed interface Array
     ///
     /// @return the primary backing {@link MemorySegment}
     /// @throws VortexException if this array type has no single primary segment
+    /// @deprecated Decoder-internal plumbing leaking into the consumer API. Will be removed once
+    ///     {@code Encoding.decodeSegment(DecodeContext)} is implemented: each encoding returns its
+    ///     output buffer directly, and callers use {@code DecodeContext.decodeChildSegment(int, DType, long)}.
+    @Deprecated(forRemoval = true)
     default MemorySegment segment() {
         throw new VortexException(getClass().getSimpleName() + " has no primary segment");
     }

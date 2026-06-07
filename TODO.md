@@ -78,6 +78,29 @@
   `MaskedArray` drops both; callers use `inner()` and `validity()`.
   Added `VarBinArray.offsetsPtype()` to replace all `.child(0).dtype()` patterns.
 
+- [ ] **Extract flat-segment parsing out of `EncodingRegistry`** — `EncodingRegistry.decodeSegment(MemorySegment, ...)`
+  contains file-format logic (FlatBuffer parse, buffer offset arithmetic, `asByteBuffer()`) that belongs in
+  a dedicated `FlatSegmentDecoder` class called by the scan layer. Registry becomes pure dispatch:
+  `register()`, `decode(DecodeContext)`. Also eliminates the name collision with the planned
+  `DecodeContext.decodeChildSegment(int, DType, long)` → `MemorySegment` (same word, opposite semantics).
+
+- [ ] **Remove `segment()` from `Array` interface** — marked `@Deprecated(forRemoval=true)`.
+  Plan: add `Encoding.decodeSegment(DecodeContext)` (default throws); each encoding that produces a
+  segment-backed result overrides it directly. Add `DecodeContext.decodeChildSegment(int, DType, long)`
+  routing through the registry. Replace all `decodeChild(...); arr.segment()` pairs with
+  `decodeChildSegment(...)`.
+  Three non-trivial call sites:
+  - `VarBinArray` constructor: `offsetsArr` field is dead weight — only used to call `.segment()` once.
+    Fix: change constructor to accept `MemorySegment offsetsSeg` directly; remove the `Array offsetsArr`
+    field. Callers (`ZstdEncoding`, `VarBinViewEncoding`) already hold concrete types and can pass
+    `.segment()` at the call site.
+  - `ConstantEncoding:166`: `storage = decode(storageCtx)` is a recursive self-call; `ConstantEncoding`
+    always returns `GenericArray`. Fix: cast `((GenericArray) storage).segment()`.
+  - `FrameOfReferenceEncoding:228`: `rawEncoded` is either `ctx.decodeChild(0)` or `masked.inner()`,
+    always a primitive array. `ptype` is known at that point. Fix: sealed switch on `rawEncoded` by
+    ptype, or pattern-match `switch (rawEncoded)` over concrete primitive array types.
+  Once all call sites gone, delete the default method.
+
 - [ ] Use domain primitives (`UInt32`, `UInt64`, etc.) as value classes via Project Valhalla instead of raw `long`/`int`
     - See https://dfa1.github.io/articles/rethink-domain-primitives-with-valhalla
     - Candidates: `PType` integer kinds, buffer offsets, row indices, byte lengths
