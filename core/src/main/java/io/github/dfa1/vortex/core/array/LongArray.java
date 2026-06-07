@@ -12,7 +12,7 @@ public final class LongArray implements Array {
 
     private final DType dtype;
     private final long length;
-    final MemorySegment buffer;
+    private final MemorySegment buffer;
 
     /// Creates a new {@code LongArray} backed by the given memory segment.
     ///
@@ -35,6 +35,10 @@ public final class LongArray implements Array {
         return length;
     }
 
+
+    MemorySegment buffer() {
+        return buffer;
+    }
 
     /// Returns the long value at the given index.
     ///

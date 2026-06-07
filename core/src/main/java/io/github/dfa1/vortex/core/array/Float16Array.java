@@ -12,7 +12,7 @@ public final class Float16Array implements Array {
 
     private final DType dtype;
     private final long length;
-    final MemorySegment buffer;
+    private final MemorySegment buffer;
 
     /// Creates a new {@code Float16Array} backed by the given memory segment.
     ///
@@ -35,6 +35,10 @@ public final class Float16Array implements Array {
         return length;
     }
 
+
+    MemorySegment buffer() {
+        return buffer;
+    }
 
     /// Returns the element at the given index widened to a single-precision float.
     ///

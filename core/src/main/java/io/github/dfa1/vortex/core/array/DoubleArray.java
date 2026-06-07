@@ -12,7 +12,7 @@ public final class DoubleArray implements Array {
 
     private final DType dtype;
     private final long length;
-    final MemorySegment buffer;
+    private final MemorySegment buffer;
 
     /// Constructs a {@code DoubleArray} backed by the given buffer.
     ///
@@ -35,6 +35,10 @@ public final class DoubleArray implements Array {
         return length;
     }
 
+
+    MemorySegment buffer() {
+        return buffer;
+    }
 
     /// Returns the double value at the given logical index.
     ///

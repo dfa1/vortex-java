@@ -10,7 +10,7 @@ public final class BoolArray implements Array {
 
     private final DType dtype;
     private final long length;
-    final MemorySegment buffer;
+    private final MemorySegment buffer;
 
     /// Constructs a {@code BoolArray} backed by the given bit-packed buffer.
     ///
@@ -33,6 +33,10 @@ public final class BoolArray implements Array {
         return length;
     }
 
+
+    MemorySegment buffer() {
+        return buffer;
+    }
 
     /// Returns the boolean value at the given logical index.
     ///

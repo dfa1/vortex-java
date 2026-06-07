@@ -12,7 +12,7 @@ public final class ShortArray implements Array {
 
     private final DType dtype;
     private final long length;
-    final MemorySegment buffer;
+    private final MemorySegment buffer;
 
     /// Creates a new {@code ShortArray} backed by the given memory segment.
     ///
@@ -35,6 +35,10 @@ public final class ShortArray implements Array {
         return length;
     }
 
+
+    MemorySegment buffer() {
+        return buffer;
+    }
 
     /// Returns the raw signed short value at the given index.
     ///

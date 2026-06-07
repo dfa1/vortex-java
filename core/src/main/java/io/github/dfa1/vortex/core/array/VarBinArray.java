@@ -23,7 +23,7 @@ public final class VarBinArray implements Array {
 
     private final DType dtype;
     private final long length;
-    final MemorySegment bytes;
+    private final MemorySegment bytes;
     private final MemorySegment offsetsSeg;
     private final PType offsetsPtype;
 
@@ -93,6 +93,10 @@ public final class VarBinArray implements Array {
     @Override
     public long length() {
         return length;
+    }
+
+    MemorySegment buffer() {
+        return bytes;
     }
 
     /// Returns the concatenated raw bytes segment backing all elements.
