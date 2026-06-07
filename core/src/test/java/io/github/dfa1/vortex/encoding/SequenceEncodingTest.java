@@ -1,10 +1,10 @@
 package io.github.dfa1.vortex.encoding;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.DoubleArray;
+import io.github.dfa1.vortex.core.array.Float16Array;
 import io.github.dfa1.vortex.core.array.FloatArray;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
@@ -72,6 +72,23 @@ class SequenceEncodingTest {
             // Then
             for (int i = 0; i < data.length; i++) {
                 assertThat(decoded.getDouble(i)).as("index %d", i).isEqualTo(data[i]);
+            }
+        }
+
+        @Test
+        void encode_f16_roundTrips() {
+            // Given — 0.0, 1.0, 2.0 as F16 bit patterns
+            var sut = new SequenceEncoding();
+            short[] data = {Float.floatToFloat16(0.0f), Float.floatToFloat16(1.0f), Float.floatToFloat16(2.0f)};
+
+            // When
+            EncodeResult result = sut.encode(DTypes.F16, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = encodeResultToCtx(result, DTypes.F16, data.length);
+            Float16Array decoded = (Float16Array) sut.decode(ctx);
+
+            // Then
+            for (int i = 0; i < data.length; i++) {
+                assertThat(decoded.getFloat(i)).as("index %d", i).isEqualTo(Float.float16ToFloat(data[i]));
             }
         }
 
@@ -144,6 +161,13 @@ class SequenceEncodingTest {
             return EncodingProtos.SequenceMetadata.newBuilder()
                            .setBase(ScalarProtos.ScalarValue.newBuilder().setF32Value(base))
                            .setMultiplier(ScalarProtos.ScalarValue.newBuilder().setF32Value(mul))
+                           .build().toByteArray();
+        }
+
+        private static byte[] f16Meta(short baseShort, short mulShort) {
+            return EncodingProtos.SequenceMetadata.newBuilder()
+                           .setBase(ScalarProtos.ScalarValue.newBuilder().setF16Value(Short.toUnsignedLong(baseShort)))
+                           .setMultiplier(ScalarProtos.ScalarValue.newBuilder().setF16Value(Short.toUnsignedLong(mulShort)))
                            .build().toByteArray();
         }
 
@@ -244,15 +268,23 @@ class SequenceEncodingTest {
         }
 
         @Test
-        void decode_f16_throwsVortexException() {
-            // Given
+        void decode_f16_generatesCorrectSequence() {
+            // Given — 0.0, 1.0, 2.0 as F16 bit patterns via the direct-metadata path
             var sut = new SequenceEncoding();
-            DType f16 = new DType.Primitive(PType.F16, false);
-            DecodeContext ctx = makeCtx(intMeta(0, 1), f16, 3);
+            short baseShort = Float.floatToFloat16(0.0f);
+            short mulShort = Float.floatToFloat16(1.0f);
+            byte[] meta = f16Meta(baseShort, mulShort);
+            DecodeContext ctx = makeCtx(meta, DTypes.F16, 3);
 
-            // When / Then
-            assertThatThrownBy(() -> sut.decode(ctx))
-                    .isInstanceOf(VortexException.class);
+            // When
+            Array result = sut.decode(ctx);
+
+            // Then
+            assertThat(result.length()).isEqualTo(3);
+            Float16Array f16Array = (Float16Array) result;
+            assertThat(f16Array.getFloat(0)).isEqualTo(0.0f);
+            assertThat(f16Array.getFloat(1)).isEqualTo(1.0f);
+            assertThat(f16Array.getFloat(2)).isEqualTo(2.0f);
         }
 
         @Test

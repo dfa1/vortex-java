@@ -11,6 +11,7 @@ import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.array.Float16Array;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.encoding.EncodingRegistry;
 import io.github.dfa1.vortex.io.VortexReader;
@@ -20,6 +21,7 @@ import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
+import org.apache.arrow.vector.Float2Vector;
 import org.apache.arrow.vector.Float8Vector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.ipc.ArrowReader;
@@ -58,6 +60,9 @@ class RustWritesJavaReadsIntegrationTest {
     ));
     private static final Schema NULLABLE_SCHEMA = new Schema(List.of(
             Field.nullable("id", new ArrowType.Int(64, true))
+    ));
+    private static final Schema F16_SCHEMA = new Schema(List.of(
+            Field.notNullable("v", new ArrowType.FloatingPoint(FloatingPointPrecision.HALF))
     ));
 
     static {
@@ -418,5 +423,50 @@ class RustWritesJavaReadsIntegrationTest {
         Arrays.sort(jni);
         Arrays.sort(java);
         assertThat(java).containsExactly(jni);
+    }
+
+    @Test
+    void jniWriter_javaReader_f16_primitiveRoundTrip(@TempDir Path tmp) throws IOException {
+        // Given — four F16 values; JNI Rust compressor encodes as vortex.flat/PrimitiveEncoding
+        // This is the cross-compatibility check: Rust writes F16, Java reads it back bit-exact
+        Path file = tmp.resolve("f16_roundtrip.vtx");
+        short[] f16bits = {
+            Float.floatToFloat16(0.0f),
+            Float.floatToFloat16(1.0f),
+            Float.floatToFloat16(2.0f),
+            Float.floatToFloat16(3.0f),
+        };
+        String uri = file.toAbsolutePath().toUri().toString();
+        try (VortexWriter writer = VortexWriter.create(SESSION, uri, F16_SCHEMA, new HashMap<>(), ALLOCATOR)) {
+            try (VectorSchemaRoot root = VectorSchemaRoot.create(F16_SCHEMA, ALLOCATOR)) {
+                Float2Vector vec = (Float2Vector) root.getVector("v");
+                vec.allocateNew(f16bits.length);
+                for (int i = 0; i < f16bits.length; i++) {
+                    vec.setSafe(i, f16bits[i]);
+                }
+                root.setRowCount(f16bits.length);
+                try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
+                     ArrowSchema schema = ArrowSchema.allocateNew(ALLOCATOR)) {
+                    Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, schema);
+                    writer.writeBatch(arr.memoryAddress(), schema.memoryAddress());
+                }
+            }
+        }
+
+        // When
+        try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
+            List<ScanResult> results = scanAll(vf);
+
+            // Then — correct dtype, correct values
+            assertThat(vf.dtype()).isInstanceOf(DType.Struct.class);
+            assertThat(((DType.Struct) vf.dtype()).field("v"))
+                    .isEqualTo(new DType.Primitive(PType.F16, false));
+            assertThat(results).hasSize(1);
+            Float16Array arr = (Float16Array) results.getFirst().columns().get("v");
+            assertThat(arr.length()).isEqualTo(f16bits.length);
+            for (int i = 0; i < f16bits.length; i++) {
+                assertThat(arr.getFloat(i)).as("index %d", i).isEqualTo(Float.float16ToFloat(f16bits[i]));
+            }
+        }
     }
 }

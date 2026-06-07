@@ -15,6 +15,7 @@ final class DTypes {
     static final DType U16 = new DType.Primitive(PType.U16, false);
     static final DType U32 = new DType.Primitive(PType.U32, false);
     static final DType U64 = new DType.Primitive(PType.U64, false);
+    static final DType F16 = new DType.Primitive(PType.F16, false);
     static final DType F32 = new DType.Primitive(PType.F32, false);
     static final DType F64 = new DType.Primitive(PType.F64, false);
 

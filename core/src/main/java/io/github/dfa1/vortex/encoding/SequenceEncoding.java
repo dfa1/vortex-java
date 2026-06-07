@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.ByteArray;
 import io.github.dfa1.vortex.core.array.DoubleArray;
+import io.github.dfa1.vortex.core.array.Float16Array;
 import io.github.dfa1.vortex.core.array.FloatArray;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
@@ -63,7 +64,7 @@ public final class SequenceEncoding implements Encoding {
                 case I8, I16, I32, I64, U8, U16, U32, U64 -> encodeInteger(pt, data);
                 case F32 -> encodeF32((float[]) data);
                 case F64 -> encodeF64((double[]) data);
-                case F16 -> throw new VortexException(EncodingId.VORTEX_SEQUENCE, "F16 not supported");
+                case F16 -> encodeF16((short[]) data);
             };
         }
 
@@ -109,6 +110,24 @@ public final class SequenceEncoding implements Encoding {
             }
             ScalarProtos.ScalarValue baseScalar = ScalarProtos.ScalarValue.newBuilder().setF64Value(base).build();
             ScalarProtos.ScalarValue mulScalar = ScalarProtos.ScalarValue.newBuilder().setF64Value(mul).build();
+            return buildResult(baseScalar, mulScalar);
+        }
+
+        private static EncodeResult encodeF16(short[] data) {
+            short baseShort = data.length > 0 ? data[0] : 0;
+            float baseF = Float.float16ToFloat(baseShort);
+            float mulF = data.length > 1 ? Float.float16ToFloat(data[1]) - baseF : 0f;
+            short mulShort = Float.floatToFloat16(mulF);
+            for (int i = 2; i < data.length; i++) {
+                short expected = Float.floatToFloat16(baseF + (float) i * mulF);
+                if (data[i] != expected) {
+                    throw new VortexException(EncodingId.VORTEX_SEQUENCE, "not an arithmetic sequence at index " + i);
+                }
+            }
+            ScalarProtos.ScalarValue baseScalar = ScalarProtos.ScalarValue.newBuilder()
+                                                          .setF16Value(Short.toUnsignedLong(baseShort)).build();
+            ScalarProtos.ScalarValue mulScalar = ScalarProtos.ScalarValue.newBuilder()
+                                                        .setF16Value(Short.toUnsignedLong(mulShort)).build();
             return buildResult(baseScalar, mulScalar);
         }
 
@@ -174,7 +193,7 @@ public final class SequenceEncoding implements Encoding {
                 case I8, I16, I32, I64, U8, U16, U32, U64 -> decodeInteger(meta, pt, n, ctx.dtype(), ctx.arena());
                 case F32 -> decodeF32(meta, n, ctx.dtype(), ctx.arena());
                 case F64 -> decodeF64(meta, n, ctx.dtype(), ctx.arena());
-                case F16 -> throw new VortexException(EncodingId.VORTEX_SEQUENCE, "F16 not supported");
+                case F16 -> decodeF16(meta, n, ctx.dtype(), ctx.arena());
             };
         }
 
@@ -222,6 +241,18 @@ public final class SequenceEncoding implements Encoding {
                 seg.setAtIndex(PTypeIO.LE_DOUBLE, i, base + i * mul);
             }
             return new DoubleArray(dtype, n, seg, ArrayStats.empty());
+        }
+
+        private static Array decodeF16(EncodingProtos.SequenceMetadata meta, long n, DType dtype, SegmentAllocator arena) {
+            short baseShort = (short) meta.getBase().getF16Value();
+            short mulShort = (short) meta.getMultiplier().getF16Value();
+            float base = Float.float16ToFloat(baseShort);
+            float mul = Float.float16ToFloat(mulShort);
+            MemorySegment seg = arena.allocate(n * 2L);
+            for (long i = 0; i < n; i++) {
+                seg.setAtIndex(PTypeIO.LE_SHORT, i, Float.floatToFloat16(base + i * mul));
+            }
+            return new Float16Array(dtype, n, seg, ArrayStats.empty());
         }
 
         private static long signedValue(io.github.dfa1.vortex.proto.ScalarProtos.ScalarValue sv) {

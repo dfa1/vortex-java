@@ -22,7 +22,7 @@ public enum PType {
     I32,
     /// Signed 64-bit integer.
     I64,
-    /// IEEE 754 half-precision float (16-bit). Decoding not yet supported.
+    /// IEEE 754 half-precision float (16-bit).
     F16,
     /// IEEE 754 single-precision float (32-bit).
     F32,
