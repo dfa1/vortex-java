@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.Footer;
 import io.github.dfa1.vortex.core.Layout;
 import io.github.dfa1.vortex.core.SegmentSpec;
 import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.core.VortexFormat;
 import io.github.dfa1.vortex.encoding.EncodingRegistry;
 import io.github.dfa1.vortex.scan.ScanIterator;
 import io.github.dfa1.vortex.scan.ScanOptions;
@@ -35,13 +36,6 @@ public final class VortexReader implements VortexHandle {
             ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
     static final ValueLayout.OfLong LE_LONG =
             ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-
-    static final byte[] MAGIC = {'V', 'T', 'X', 'F'};
-    static final int TRAILER_SIZE = 8;
-
-    /// File-format version this reader can decode. Files with any other version are rejected
-    /// up front rather than silently mis-parsed against an unknown layout.
-    static final int SUPPORTED_VERSION = 1;
 
     private final Arena arena;
     private final MemorySegment fileSegment;
@@ -77,7 +71,7 @@ public final class VortexReader implements VortexHandle {
         Arena arena = Arena.ofConfined();
         try (var channel = FileChannel.open(path, StandardOpenOption.READ)) {
             long size = channel.size();
-            if (size < TRAILER_SIZE) {
+            if (size < VortexFormat.TRAILER_SIZE) {
                 throw new VortexException("file too small (" + size + " bytes)");
             }
             // The channel is no longer needed after map(): the Arena owns the mapping's
@@ -95,29 +89,30 @@ public final class VortexReader implements VortexHandle {
             MemorySegment seg, long size, Arena arena, EncodingRegistry registry
     ) {
         // 8-byte trailer: version(u16 LE) | postscriptLen(u16 LE) | magic(4)
-        var trailer = seg.asSlice(size - TRAILER_SIZE, TRAILER_SIZE);
+        var trailer = seg.asSlice(size - VortexFormat.TRAILER_SIZE, VortexFormat.TRAILER_SIZE);
 
         int version = Short.toUnsignedInt(trailer.get(LE_SHORT, 0));
         int postscriptLen = Short.toUnsignedInt(trailer.get(LE_SHORT, 2));
 
-        byte m0 = trailer.get(ValueLayout.JAVA_BYTE, 4);
-        byte m1 = trailer.get(ValueLayout.JAVA_BYTE, 5);
-        byte m2 = trailer.get(ValueLayout.JAVA_BYTE, 6);
-        byte m3 = trailer.get(ValueLayout.JAVA_BYTE, 7);
-        if (m0 != MAGIC[0] || m1 != MAGIC[1] || m2 != MAGIC[2] || m3 != MAGIC[3]) {
+        MemorySegment magicSlice = trailer.asSlice(4, VortexFormat.MAGIC_SIZE);
+        if (magicSlice.mismatch(VortexFormat.MAGIC) != -1) {
             throw new VortexException(
-                    "invalid magic bytes [%02x %02x %02x %02x]".formatted(m0, m1, m2, m3));
+                    "invalid magic bytes [%02x %02x %02x %02x]".formatted(
+                            magicSlice.get(ValueLayout.JAVA_BYTE, 0),
+                            magicSlice.get(ValueLayout.JAVA_BYTE, 1),
+                            magicSlice.get(ValueLayout.JAVA_BYTE, 2),
+                            magicSlice.get(ValueLayout.JAVA_BYTE, 3)));
         }
 
-        if (version != SUPPORTED_VERSION) {
+        if (version != VortexFormat.VERSION) {
             throw new VortexException(
                     "unsupported file version=" + version
-                            + " (this reader supports version " + SUPPORTED_VERSION + ")");
+                            + " (this reader supports version " + VortexFormat.VERSION + ")");
         }
         if (postscriptLen == 0) {
             throw new VortexException("invalid postscript: length is zero");
         }
-        long bodyBytes = size - TRAILER_SIZE;
+        long bodyBytes = size - VortexFormat.TRAILER_SIZE;
         if (postscriptLen > bodyBytes) {
             throw new VortexException(
                     "invalid postscript: length=" + postscriptLen

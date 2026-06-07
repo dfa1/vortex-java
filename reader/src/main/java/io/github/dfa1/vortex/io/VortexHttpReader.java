@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.Footer;
 import io.github.dfa1.vortex.core.Layout;
 import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.core.VortexFormat;
 import io.github.dfa1.vortex.encoding.EncodingRegistry;
 import io.github.dfa1.vortex.fbs.Postscript;
 import io.github.dfa1.vortex.scan.ScanIterator;
@@ -77,21 +78,21 @@ public final class VortexHttpReader implements VortexHandle {
             long tailLen = tail.length;
 
             MemorySegment tailSeg = MemorySegment.ofArray(tail);
-            long trailerOff = tailLen - VortexReader.TRAILER_SIZE;
+            long trailerOff = tailLen - VortexFormat.TRAILER_SIZE;
 
             int version = Short.toUnsignedInt(tailSeg.get(VortexReader.LE_SHORT, trailerOff));
             int postscriptLen = Short.toUnsignedInt(tailSeg.get(VortexReader.LE_SHORT, trailerOff + 2));
             checkMagic(tailSeg, trailerOff + 4, uri);
 
-            if (version != VortexReader.SUPPORTED_VERSION) {
+            if (version != VortexFormat.VERSION) {
                 throw new VortexException(
                         "unsupported file version=" + version
-                                + " (this reader supports version " + VortexReader.SUPPORTED_VERSION + ")");
+                                + " (this reader supports version " + VortexFormat.VERSION + ")");
             }
             if (postscriptLen == 0) {
                 throw new VortexException("invalid postscript: length is zero");
             }
-            long bodyBytes = fileSize - VortexReader.TRAILER_SIZE;
+            long bodyBytes = fileSize - VortexFormat.TRAILER_SIZE;
             if (postscriptLen > bodyBytes) {
                 throw new VortexException(
                         "invalid postscript: length=" + postscriptLen
@@ -198,14 +199,14 @@ public final class VortexHttpReader implements VortexHandle {
     }
 
     private static void checkMagic(MemorySegment seg, long offset, URI uri) {
-        byte m0 = seg.get(ValueLayout.JAVA_BYTE, offset);
-        byte m1 = seg.get(ValueLayout.JAVA_BYTE, offset + 1);
-        byte m2 = seg.get(ValueLayout.JAVA_BYTE, offset + 2);
-        byte m3 = seg.get(ValueLayout.JAVA_BYTE, offset + 3);
-        byte[] magic = VortexReader.MAGIC;
-        if (m0 != magic[0] || m1 != magic[1] || m2 != magic[2] || m3 != magic[3]) {
+        MemorySegment magicSlice = seg.asSlice(offset, VortexFormat.MAGIC_SIZE);
+        if (magicSlice.mismatch(VortexFormat.MAGIC) != -1) {
             throw new VortexException(
-                    "invalid magic bytes [%02x %02x %02x %02x] from %s".formatted(m0, m1, m2, m3, uri));
+                    "invalid magic bytes [%02x %02x %02x %02x] from %s".formatted(
+                            magicSlice.get(ValueLayout.JAVA_BYTE, 0),
+                            magicSlice.get(ValueLayout.JAVA_BYTE, 1),
+                            magicSlice.get(ValueLayout.JAVA_BYTE, 2),
+                            magicSlice.get(ValueLayout.JAVA_BYTE, 3), uri));
         }
     }
 

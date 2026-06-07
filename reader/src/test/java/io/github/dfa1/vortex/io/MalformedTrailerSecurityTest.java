@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.io;
 
 import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.core.VortexFormat;
 import io.github.dfa1.vortex.encoding.EncodingRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -30,7 +31,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class MalformedTrailerSecurityTest {
 
-    private static final byte[] MAGIC = {'V', 'T', 'X', 'F'};
     private static final EncodingRegistry REGISTRY = EncodingRegistry.empty();
 
     @Test
@@ -93,7 +93,7 @@ class MalformedTrailerSecurityTest {
         buf.put(new byte[8]);                     // file body stand-in
         buf.putShort((short) 1);                  // version
         buf.putShort((short) 0xFFFF);             // postscriptLen — far past file body
-        buf.put(MAGIC);
+        buf.put(VortexFormat.MAGIC.asByteBuffer());
         Files.write(file, buf.array());
 
         // When / Then
@@ -114,7 +114,7 @@ class MalformedTrailerSecurityTest {
         ByteBuffer buf = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN);
         buf.putShort((short) 1);                  // version
         buf.putShort((short) 0);                  // postscriptLen = 0
-        buf.put(MAGIC);
+        buf.put(VortexFormat.MAGIC.asByteBuffer());
         Files.write(file, buf.array());
 
         // When / Then
@@ -134,7 +134,7 @@ class MalformedTrailerSecurityTest {
         ByteBuffer buf = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN);
         buf.putShort((short) 0xBEEF);             // version — not 1
         buf.putShort((short) 0);                  // postscriptLen
-        buf.put(MAGIC);
+        buf.put(VortexFormat.MAGIC.asByteBuffer());
         Files.write(file, buf.array());
 
         // When / Then
@@ -157,7 +157,7 @@ class MalformedTrailerSecurityTest {
             ByteBuffer t = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN);
             t.putShort((short) 1);
             t.putShort((short) 8);
-            t.put(MAGIC);
+            t.put(VortexFormat.MAGIC.asByteBuffer());
             out.write(t.array());
         }
 

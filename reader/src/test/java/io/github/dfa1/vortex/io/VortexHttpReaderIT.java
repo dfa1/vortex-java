@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.io;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.VortexFormat;
 import io.github.dfa1.vortex.core.array.ListArray;
 import io.github.dfa1.vortex.core.array.ListViewArray;
 import io.github.dfa1.vortex.scan.ScanOptions;
@@ -37,7 +38,7 @@ class VortexHttpReaderIT {
 
             // Then
             assertThat(sut.version()).isEqualTo(1);
-            assertThat(sut.fileSize()).isGreaterThan(VortexReader.TRAILER_SIZE);
+            assertThat(sut.fileSize()).isGreaterThan(VortexFormat.TRAILER_SIZE);
             assertThat(sut.layout()).isNotNull();
             assertThat(sut.footer()).isNotNull();
             assertThat(sut.dtype()).isNotNull();

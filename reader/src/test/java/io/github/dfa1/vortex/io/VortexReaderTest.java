@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.io;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.core.VortexFormat;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.EmptyArray;
 import io.github.dfa1.vortex.core.array.UnknownArray;
@@ -77,7 +78,7 @@ class VortexReaderTest {
     @Test
     void open_wrongMagic_throwsVortexException(@TempDir Path tmpDir) throws IOException {
         // Given
-        byte[] bytes = new byte[VortexReader.TRAILER_SIZE]; // exactly 8 bytes
+        byte[] bytes = new byte[VortexFormat.TRAILER_SIZE]; // exactly 8 bytes
         bytes[4] = 'X';
         bytes[5] = 'X';
         bytes[6] = 'X';
@@ -107,7 +108,7 @@ class VortexReaderTest {
 
             // Then
             assertThat(sut.version()).isEqualTo(1);
-            assertThat(sut.fileSize()).isGreaterThan(VortexReader.TRAILER_SIZE);
+            assertThat(sut.fileSize()).isGreaterThan(VortexFormat.TRAILER_SIZE);
             assertThat(sut.layout()).isNotNull();
             assertThat(sut.footer()).isNotNull();
         }
@@ -134,7 +135,7 @@ class VortexReaderTest {
         };
 
         // Then
-        assertThat(trailerMagic).isEqualTo(VortexReader.MAGIC);
+        assertThat(trailerMagic).isEqualTo(VortexFormat.MAGIC.toArray(java.lang.foreign.ValueLayout.JAVA_BYTE));
     }
 
     // --- scan ---
@@ -150,7 +151,7 @@ class VortexReaderTest {
     void fixture_trailerHasExpectedVersion(String name) throws IOException, URISyntaxException {
         // Given
         byte[] bytes = Files.readAllBytes(fixtureFile(name));
-        int trailerStart = bytes.length - VortexReader.TRAILER_SIZE;
+        int trailerStart = bytes.length - VortexFormat.TRAILER_SIZE;
 
         // When
         int version = java.nio.ByteBuffer.wrap(bytes, trailerStart, 2)

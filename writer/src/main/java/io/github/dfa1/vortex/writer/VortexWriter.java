@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.writer;
 import com.google.flatbuffers.FlatBufferBuilder;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.VortexFormat;
 import io.github.dfa1.vortex.encoding.AlpEncoding;
 import io.github.dfa1.vortex.encoding.BitpackedEncoding;
 import io.github.dfa1.vortex.encoding.BoolEncoding;
@@ -63,8 +64,6 @@ import java.util.Set;
 /// ```
 public final class VortexWriter implements Closeable {
 
-    private static final int VERSION = 1;
-
     // Indices into layout_specs list in the Footer
     private static final int LAYOUT_FLAT = 0;
     private static final int LAYOUT_CHUNKED = 1;
@@ -76,9 +75,6 @@ public final class VortexWriter implements Closeable {
     private static final int GLOBAL_DICT_MAX_CARDINALITY = 2_048;
     // Fraction of distinct values in first chunk below which a column is a dict candidate.
     private static final double GLOBAL_DICT_RATIO_THRESHOLD = 0.5;
-
-    private static final ByteBuffer MAGIC = ByteBuffer.wrap(new byte[]{'V', 'T', 'X', 'F'})
-                                                    .asReadOnlyBuffer();
 
     private static final List<Encoding> DEFAULT_CODECS = List.of(
             new AlpEncoding(), new PrimitiveEncoding(), new BoolEncoding(), new DictEncoding(), new VarBinEncoding());
@@ -303,11 +299,11 @@ public final class VortexWriter implements Closeable {
                 layoutOff, layoutBuf.capacity());
         write(psBuf);
 
-        // 8-byte trailer: version(u16 LE) | postscriptLen(u16 LE) | magic(4)
-        var trailer = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN);
-        trailer.putShort((short) VERSION);
+        // Trailer: version(u16 LE) | postscriptLen(u16 LE) | magic(4)
+        var trailer = ByteBuffer.allocate(VortexFormat.TRAILER_SIZE).order(ByteOrder.LITTLE_ENDIAN);
+        trailer.putShort((short) VortexFormat.VERSION);
         trailer.putShort((short) psBuf.capacity());
-        trailer.put(MAGIC.duplicate());
+        trailer.put(VortexFormat.MAGIC.asByteBuffer());
         trailer.flip();
         channel.write(trailer);
     }

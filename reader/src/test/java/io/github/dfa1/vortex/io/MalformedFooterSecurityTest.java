@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.io;
 
 import com.google.flatbuffers.FlatBufferBuilder;
 import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.core.VortexFormat;
 import io.github.dfa1.vortex.encoding.EncodingRegistry;
 import io.github.dfa1.vortex.fbs.ArraySpec;
 import io.github.dfa1.vortex.fbs.Footer;
@@ -40,7 +41,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class MalformedFooterSecurityTest {
 
-    private static final byte[] MAGIC = {'V', 'T', 'X', 'F'};
     private static final EncodingRegistry REGISTRY = EncodingRegistry.empty();
 
     static Stream<Arguments> outOfBoundsSpecs() {
@@ -173,7 +173,7 @@ class MalformedFooterSecurityTest {
         ByteBuffer trailer = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN);
         trailer.putShort((short) 1);
         trailer.putShort((short) psLen);
-        trailer.put(MAGIC);
+        trailer.put(VortexFormat.MAGIC.asByteBuffer());
         trailer.flip();
 
         Path file = dir.resolve(name);
