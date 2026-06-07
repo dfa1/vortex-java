@@ -2,12 +2,15 @@ package io.github.dfa1.vortex.core.array;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteOrder;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -24,6 +27,67 @@ class LongArrayTest {
         DType dtype = new DType.Primitive(PType.I64, false);
         return new LongArray(dtype, values.length, seg);
     }
+
+    @Nested
+    class ForEachLong {
+
+        @Test
+        void visitsAllElementsInOrder() {
+            // Given
+            LongArray sut = of(100L, 200L, 300L);
+            List<Long> collected = new ArrayList<>();
+
+            // When
+            sut.forEachLong(collected::add);
+
+            // Then
+            assertThat(collected).containsExactly(100L, 200L, 300L);
+        }
+
+        @Test
+        void emptyArray_consumerNeverCalled() {
+            // Given
+            LongArray sut = of();
+            List<Long> collected = new ArrayList<>();
+
+            // When
+            sut.forEachLong(collected::add);
+
+            // Then
+            assertThat(collected).isEmpty();
+        }
+
+        @Test
+        void singleElement_consumerCalledOnce() {
+            // Given
+            LongArray sut = of(99L);
+            List<Long> collected = new ArrayList<>();
+
+            // When
+            sut.forEachLong(collected::add);
+
+            // Then
+            assertThat(collected).containsExactly(99L);
+        }
+
+        @Test
+        void logicalLengthExceedsCapacity_wrapsAround() {
+            // Given — constant-encoding: 1-element buffer, logical length 4; all 4 visits yield same value
+            MemorySegment seg = Arena.ofAuto().allocate(8, 8);
+            seg.setAtIndex(LE_LONG, 0, 42L);
+            LongArray sut = new LongArray(new DType.Primitive(PType.I64, false), 4, seg);
+            List<Long> collected = new ArrayList<>();
+
+            // When
+            sut.forEachLong(collected::add);
+
+            // Then
+            assertThat(collected).containsExactly(42L, 42L, 42L, 42L);
+        }
+    }
+
+    @Nested
+    class Fold {
 
     @Test
     void fold_sum_returnsCorrectTotal() {
@@ -72,4 +136,6 @@ class LongArrayTest {
         // Then
         assertThat(result).isEqualTo(42L);
     }
+
+    } // Fold
 }
