@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.encoding;
 
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.ArraySegments;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -35,10 +36,10 @@ class ConstantEncodingTest {
             assertThat(result.length()).isEqualTo(rowCount);
             // Constant encoding must not materialize the full array: the backing buffer must
             // hold exactly one element. Before fix: buffer is rowCount * 8 bytes.
-            assertThat(result.segment().byteSize())
+            assertThat(ArraySegments.of(result).byteSize())
                     .as("constant encoding must not allocate O(rowCount) memory")
                     .isEqualTo(Long.BYTES);
-            assertThat(result.segment().get(PTypeIO.LE_LONG, 0L)).isEqualTo(42L);
+            assertThat(ArraySegments.of(result).get(PTypeIO.LE_LONG, 0L)).isEqualTo(42L);
         }
     }
 
@@ -79,8 +80,8 @@ class ConstantEncodingTest {
 
             // Then — buffer holds one element; logical length is n
             assertThat(result.length()).isEqualTo(data.length);
-            assertThat(result.segment().byteSize()).isEqualTo(Integer.BYTES);
-            assertThat(result.segment().get(le, 0L)).isEqualTo(data[0]);
+            assertThat(ArraySegments.of(result).byteSize()).isEqualTo(Integer.BYTES);
+            assertThat(ArraySegments.of(result).get(le, 0L)).isEqualTo(data[0]);
         }
 
         @ParameterizedTest
@@ -98,8 +99,8 @@ class ConstantEncodingTest {
 
             // Then — buffer holds one element; logical length is n
             assertThat(result.length()).isEqualTo(data.length);
-            assertThat(result.segment().byteSize()).isEqualTo(Long.BYTES);
-            assertThat(result.segment().get(le, 0L)).isEqualTo(data[0]);
+            assertThat(ArraySegments.of(result).byteSize()).isEqualTo(Long.BYTES);
+            assertThat(ArraySegments.of(result).get(le, 0L)).isEqualTo(data[0]);
         }
     }
 }

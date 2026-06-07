@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.ArraySegments;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.MaskedArray;
 import io.github.dfa1.vortex.proto.EncodingProtos;
@@ -68,7 +69,7 @@ class RleEncodingTest {
 
             // Then
             assertThat(result.length()).isEqualTo(1);
-            assertThat(result.segment().get(PTypeIO.LE_INT, 0)).isEqualTo(42);
+            assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, 0)).isEqualTo(42);
         }
 
         @Test
@@ -90,7 +91,7 @@ class RleEncodingTest {
             // Then
             assertThat(result.length()).isEqualTo(n);
             for (int i = 0; i < n; i++) {
-                assertThat(result.segment().get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(99);
+                assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(99);
             }
         }
 
@@ -110,7 +111,7 @@ class RleEncodingTest {
             assertThat(result.length()).isEqualTo(data.length);
             int[] expected = {1, 1, 1, 2, 2, 3};
             for (int i = 0; i < expected.length; i++) {
-                assertThat(result.segment().get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(expected[i]);
+                assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(expected[i]);
             }
         }
 
@@ -133,7 +134,7 @@ class RleEncodingTest {
             // Then
             assertThat(result.length()).isEqualTo(n);
             for (int i = 0; i < n; i++) {
-                assertThat(result.segment().get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(i / 100);
+                assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(i / 100);
             }
         }
 
@@ -152,7 +153,7 @@ class RleEncodingTest {
             // Then
             assertThat(result.length()).isEqualTo(data.length);
             for (int i = 0; i < data.length; i++) {
-                assertThat(result.segment().get(PTypeIO.LE_LONG, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
+                assertThat(ArraySegments.of(result).get(PTypeIO.LE_LONG, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
             }
         }
 
@@ -175,7 +176,7 @@ class RleEncodingTest {
             // Then
             assertThat(result.length()).isEqualTo(n);
             for (int i = 0; i < n; i++) {
-                assertThat(result.segment().get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(i / 50);
+                assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(i / 50);
             }
         }
 
@@ -198,7 +199,7 @@ class RleEncodingTest {
             assertThat(result.length()).isEqualTo(data.length);
             var le = PTypeIO.LE_SHORT;
             for (int i = 0; i < data.length; i++) {
-                assertThat(Short.toUnsignedInt(result.segment().get(le, (long) i * 2)))
+                assertThat(Short.toUnsignedInt(ArraySegments.of(result).get(le, (long) i * 2)))
                         .as("index %d", i).isEqualTo(i);
             }
         }
@@ -218,7 +219,7 @@ class RleEncodingTest {
             // Then
             assertThat(result.length()).isEqualTo(data.length);
             for (int i = 0; i < data.length; i++) {
-                assertThat(result.segment().get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
+                assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
             }
         }
     }
@@ -263,7 +264,7 @@ class RleEncodingTest {
 
             // Then — verify values near the chunk boundary
             for (int i = 1000; i < 1048; i++) {
-                assertThat(result.segment().get(PTypeIO.LE_INT, (long) i * 4))
+                assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, (long) i * 4))
                         .as("index %d", i).isEqualTo(i / 100);
             }
         }
@@ -339,7 +340,7 @@ class RleEncodingTest {
             // Then
             assertThat(result.length()).isEqualTo(n);
             for (int i = 0; i < n; i++) {
-                assertThat(result.segment().get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(i / 100);
+                assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(i / 100);
             }
         }
 

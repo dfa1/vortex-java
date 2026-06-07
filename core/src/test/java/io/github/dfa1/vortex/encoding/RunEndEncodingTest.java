@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.ArraySegments;
 import io.github.dfa1.vortex.proto.DTypeProtos;
 import io.github.dfa1.vortex.proto.EncodingProtos;
 import org.junit.jupiter.api.Nested;
@@ -87,7 +88,7 @@ class RunEndEncodingTest {
             assertThat(result.length()).isEqualTo(5L);
             var layout = PTypeIO.LE_LONG;
             for (int i = 0; i < 5; i++) {
-                assertThat(result.segment().get(layout, (long) i * 8)).isEqualTo(42L);
+                assertThat(ArraySegments.of(result).get(layout, (long) i * 8)).isEqualTo(42L);
             }
         }
 
@@ -107,7 +108,7 @@ class RunEndEncodingTest {
             long[] expected = {10, 10, 20, 20, 20, 30, 30};
             var layout = PTypeIO.LE_LONG;
             for (int i = 0; i < expected.length; i++) {
-                assertThat(result.segment().get(layout, (long) i * 8))
+                assertThat(ArraySegments.of(result).get(layout, (long) i * 8))
                         .as("index %d", i).isEqualTo(expected[i]);
             }
         }
@@ -128,7 +129,7 @@ class RunEndEncodingTest {
             long[] expected = {10L, 20L, 20L};
             var layout = PTypeIO.LE_LONG;
             for (int i = 0; i < expected.length; i++) {
-                assertThat(result.segment().get(layout, (long) i * 8))
+                assertThat(ArraySegments.of(result).get(layout, (long) i * 8))
                         .as("index %d", i).isEqualTo(expected[i]);
             }
         }
@@ -163,7 +164,7 @@ class RunEndEncodingTest {
             // Then
             assertThat(result.length()).isEqualTo(data.length);
             for (int i = 0; i < data.length; i++) {
-                assertThat(result.segment().get(le, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
+                assertThat(ArraySegments.of(result).get(le, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
             }
         }
 

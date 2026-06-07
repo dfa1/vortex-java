@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.encoding;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.ArraySegments;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.MaskedArray;
 import io.github.dfa1.vortex.core.array.StructArray;
@@ -137,7 +138,7 @@ class StructEncodingTest {
             // Then
             assertThat(result.length()).isEqualTo(data.length);
             for (int i = 0; i < data.length; i++) {
-                assertThat(result.segment().get(PTypeIO.LE_LONG, (long) i * 8)).isEqualTo(data[i]);
+                assertThat(ArraySegments.of(result).get(PTypeIO.LE_LONG, (long) i * 8)).isEqualTo(data[i]);
             }
         }
 

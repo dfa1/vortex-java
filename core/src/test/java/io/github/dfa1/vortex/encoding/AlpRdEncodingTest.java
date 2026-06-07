@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
+import io.github.dfa1.vortex.core.array.ArraySegments;
 import io.github.dfa1.vortex.proto.EncodingProtos;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -27,7 +28,7 @@ class AlpRdEncodingTest {
             // Then
             var layout = PTypeIO.LE_DOUBLE;
             for (int i = 0; i < values.length; i++) {
-                assertThat(result.segment().get(layout, (long) i * 8))
+                assertThat(ArraySegments.of(result).get(layout, (long) i * 8))
                         .as("index %d", i).isCloseTo(values[i], within(1e-9));
             }
         }

@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.ArraySegments;
 import io.github.dfa1.vortex.core.array.BoolArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.proto.DTypeProtos;
@@ -93,7 +94,7 @@ class SparseEncodingTest {
             // Then
             var layout = PTypeIO.LE_LONG;
             for (int i = 0; i < data.length; i++) {
-                assertThat(decoded.segment().get(layout, (long) i * 8))
+                assertThat(ArraySegments.of(decoded).get(layout, (long) i * 8))
                         .as("index %d", i).isEqualTo(data[i]);
             }
         }
@@ -111,7 +112,7 @@ class SparseEncodingTest {
             // Then
             var layout = PTypeIO.LE_DOUBLE;
             for (int i = 0; i < data.length; i++) {
-                assertThat(decoded.segment().get(layout, (long) i * 8))
+                assertThat(ArraySegments.of(decoded).get(layout, (long) i * 8))
                         .as("index %d", i).isEqualTo(data[i]);
             }
         }
@@ -261,7 +262,7 @@ class SparseEncodingTest {
             assertThat(result.length()).isEqualTo(5L);
             var layout = PTypeIO.LE_LONG;
             for (int i = 0; i < 5; i++) {
-                assertThat(result.segment().get(layout, (long) i * 8))
+                assertThat(ArraySegments.of(result).get(layout, (long) i * 8))
                         .as("index %d", i).isEqualTo(fill);
             }
         }
@@ -282,7 +283,7 @@ class SparseEncodingTest {
             var layout = PTypeIO.LE_LONG;
             long[] expected = {0, 10, 0, 0, 0, 50, 0, 0};
             for (int i = 0; i < expected.length; i++) {
-                assertThat(result.segment().get(layout, (long) i * 8))
+                assertThat(ArraySegments.of(result).get(layout, (long) i * 8))
                         .as("index %d", i).isEqualTo(expected[i]);
             }
         }
@@ -300,10 +301,10 @@ class SparseEncodingTest {
 
             // Then
             var layout = PTypeIO.LE_DOUBLE;
-            assertThat(result.segment().get(layout, 0L)).isNaN();
-            assertThat(result.segment().get(layout, 8L)).isNaN();
-            assertThat(result.segment().get(layout, 16L)).isEqualTo(3.14);
-            assertThat(result.segment().get(layout, 24L)).isNaN();
+            assertThat(ArraySegments.of(result).get(layout, 0L)).isNaN();
+            assertThat(ArraySegments.of(result).get(layout, 8L)).isNaN();
+            assertThat(ArraySegments.of(result).get(layout, 16L)).isEqualTo(3.14);
+            assertThat(ArraySegments.of(result).get(layout, 24L)).isNaN();
         }
 
         @Test
@@ -319,7 +320,7 @@ class SparseEncodingTest {
 
             // Then
             var layout = PTypeIO.LE_LONG;
-            assertThat(result.segment().get(layout, 16L)).isEqualTo(777L);
+            assertThat(ArraySegments.of(result).get(layout, 16L)).isEqualTo(777L);
         }
 
         // regression: NULL_VALUE fill caused "unexpected scalar kind NULL_VALUE" on nullable cols
@@ -339,7 +340,7 @@ class SparseEncodingTest {
             // Then
             var layout = PTypeIO.LE_LONG;
             for (int i = 0; i < 4; i++) {
-                assertThat(result.segment().get(layout, (long) i * 8)).as("index %d", i).isZero();
+                assertThat(ArraySegments.of(result).get(layout, (long) i * 8)).as("index %d", i).isZero();
             }
         }
 

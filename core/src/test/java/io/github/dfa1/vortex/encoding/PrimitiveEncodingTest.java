@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.ArraySegments;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.MaskedArray;
 import org.junit.jupiter.api.Nested;
@@ -70,7 +71,7 @@ class PrimitiveEncodingTest {
             assertThat(result.length()).isEqualTo(data.length);
             var le = PTypeIO.LE_LONG;
             for (int i = 0; i < data.length; i++) {
-                assertThat(result.segment().get(le, (long) i * 8)).isEqualTo(data[i]);
+                assertThat(ArraySegments.of(result).get(le, (long) i * 8)).isEqualTo(data[i]);
             }
         }
 
@@ -91,7 +92,7 @@ class PrimitiveEncodingTest {
             assertThat(result.length()).isEqualTo(data.length);
             var le = PTypeIO.LE_INT;
             for (int i = 0; i < data.length; i++) {
-                assertThat(result.segment().get(le, (long) i * 4)).isEqualTo(data[i]);
+                assertThat(ArraySegments.of(result).get(le, (long) i * 4)).isEqualTo(data[i]);
             }
         }
 
@@ -112,7 +113,7 @@ class PrimitiveEncodingTest {
             assertThat(result.length()).isEqualTo(data.length);
             var le = PTypeIO.LE_DOUBLE;
             for (int i = 0; i < data.length; i++) {
-                assertThat(result.segment().get(le, (long) i * 8)).isEqualTo(data[i]);
+                assertThat(ArraySegments.of(result).get(le, (long) i * 8)).isEqualTo(data[i]);
             }
         }
 

@@ -45,12 +45,8 @@ public final class MaskedArray implements Array {
     /// Delegates to {@link #inner()}'s segment; validity is not surfaced here.
     ///
     /// @return the primary segment of the inner array
-    /// @deprecated inherited from {@link Array#segment()}; validity silently dropped — prefer {@link #inner()} directly
-    @Override
-    @Deprecated(forRemoval = true)
-    @SuppressWarnings("deprecation")
     public MemorySegment segment() {
-        return child.segment();
+        return ArraySegments.of(child);
     }
 
     /// Returns the validity bitmap, or {@code null} if all positions are valid.

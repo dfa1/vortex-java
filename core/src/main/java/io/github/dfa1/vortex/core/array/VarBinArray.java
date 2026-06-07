@@ -95,7 +95,6 @@ public final class VarBinArray implements Array {
         return length;
     }
 
-    @Override
     public MemorySegment segment() {
         return bytes;
     }

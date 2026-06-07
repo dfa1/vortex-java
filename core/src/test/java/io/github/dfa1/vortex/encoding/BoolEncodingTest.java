@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.encoding;
 
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.ArraySegments;
 import io.github.dfa1.vortex.core.array.BoolArray;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -45,7 +46,7 @@ class BoolEncodingTest {
             assertThat(result).isInstanceOf(BoolArray.class);
             assertThat(result.length()).isEqualTo(data.length);
             for (int i = 0; i < data.length; i++) {
-                byte byteVal = result.segment().get(ValueLayout.JAVA_BYTE, i / 8);
+                byte byteVal = ArraySegments.of(result).get(ValueLayout.JAVA_BYTE, i / 8);
                 boolean decoded = ((byteVal >>> (i % 8)) & 1) == 1;
                 assertThat(decoded).as("index %d", i).isEqualTo(data[i]);
             }

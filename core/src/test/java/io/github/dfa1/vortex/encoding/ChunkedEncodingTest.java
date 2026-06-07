@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.ArraySegments;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -55,11 +56,11 @@ class ChunkedEncodingTest {
 
             // Then
             assertThat(result.length()).isEqualTo(5);
-            assertThat(result.segment().get(LE_LONG, 0L)).isEqualTo(10L);
-            assertThat(result.segment().get(LE_LONG, 8L)).isEqualTo(20L);
-            assertThat(result.segment().get(LE_LONG, 16L)).isEqualTo(30L);
-            assertThat(result.segment().get(LE_LONG, 24L)).isEqualTo(40L);
-            assertThat(result.segment().get(LE_LONG, 32L)).isEqualTo(50L);
+            assertThat(ArraySegments.of(result).get(LE_LONG, 0L)).isEqualTo(10L);
+            assertThat(ArraySegments.of(result).get(LE_LONG, 8L)).isEqualTo(20L);
+            assertThat(ArraySegments.of(result).get(LE_LONG, 16L)).isEqualTo(30L);
+            assertThat(ArraySegments.of(result).get(LE_LONG, 24L)).isEqualTo(40L);
+            assertThat(ArraySegments.of(result).get(LE_LONG, 32L)).isEqualTo(50L);
         }
 
         @Test
@@ -141,11 +142,11 @@ class ChunkedEncodingTest {
 
             // Then
             assertThat(result.length()).isEqualTo(5);
-            assertThat(result.segment().get(LE_LONG, 0L)).isEqualTo(10L);
-            assertThat(result.segment().get(LE_LONG, 8L)).isEqualTo(20L);
-            assertThat(result.segment().get(LE_LONG, 16L)).isEqualTo(30L);
-            assertThat(result.segment().get(LE_LONG, 24L)).isEqualTo(40L);
-            assertThat(result.segment().get(LE_LONG, 32L)).isEqualTo(50L);
+            assertThat(ArraySegments.of(result).get(LE_LONG, 0L)).isEqualTo(10L);
+            assertThat(ArraySegments.of(result).get(LE_LONG, 8L)).isEqualTo(20L);
+            assertThat(ArraySegments.of(result).get(LE_LONG, 16L)).isEqualTo(30L);
+            assertThat(ArraySegments.of(result).get(LE_LONG, 24L)).isEqualTo(40L);
+            assertThat(ArraySegments.of(result).get(LE_LONG, 32L)).isEqualTo(50L);
         }
 
         @Test
@@ -180,7 +181,7 @@ class ChunkedEncodingTest {
             // Then
             assertThat(result.length()).isEqualTo(3);
             for (int i = 0; i < 3; i++) {
-                assertThat(result.segment().get(LE_LONG, (long) i * 8)).isEqualTo(data[i]);
+                assertThat(ArraySegments.of(result).get(LE_LONG, (long) i * 8)).isEqualTo(data[i]);
             }
         }
 

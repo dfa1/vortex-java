@@ -48,7 +48,6 @@ public final class GenericArray implements Array {
         return length;
     }
 
-    @Override
     public MemorySegment segment() {
         return buffers[0];
     }

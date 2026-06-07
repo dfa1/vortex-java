@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.encoding;
 
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.ArraySegments;
 import io.github.dfa1.vortex.proto.DTypeProtos;
 import io.github.dfa1.vortex.proto.EncodingProtos;
 import org.junit.jupiter.api.Nested;
@@ -74,11 +75,11 @@ class BitpackedEncodingPatchesTest {
 
             // Then
             assertThat(result.length()).isEqualTo(base.length);
-            assertThat(result.segment().get(PTypeIO.LE_INT, 0L)).isEqualTo(10);
-            assertThat(result.segment().get(PTypeIO.LE_INT, 4L)).isEqualTo(777);
-            assertThat(result.segment().get(PTypeIO.LE_INT, 8L)).isEqualTo(30);
-            assertThat(result.segment().get(PTypeIO.LE_INT, 12L)).isEqualTo(999);
-            assertThat(result.segment().get(PTypeIO.LE_INT, 16L)).isEqualTo(50);
+            assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, 0L)).isEqualTo(10);
+            assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, 4L)).isEqualTo(777);
+            assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, 8L)).isEqualTo(30);
+            assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, 12L)).isEqualTo(999);
+            assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, 16L)).isEqualTo(50);
         }
     }
 }

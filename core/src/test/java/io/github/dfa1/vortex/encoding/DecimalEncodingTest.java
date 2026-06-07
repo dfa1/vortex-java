@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.ArraySegments;
 import io.github.dfa1.vortex.proto.EncodingProtos;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -38,7 +39,7 @@ class DecimalEncodingTest {
             // Then
             assertThat(result.length()).isEqualTo(values.length);
             for (int i = 0; i < values.length; i++) {
-                assertThat(result.segment().get(PTypeIO.LE_LONG, (long) i * 8)).isEqualTo(values[i]);
+                assertThat(ArraySegments.of(result).get(PTypeIO.LE_LONG, (long) i * 8)).isEqualTo(values[i]);
             }
         }
 

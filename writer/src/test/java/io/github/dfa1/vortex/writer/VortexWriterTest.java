@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.writer;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.ArraySegments;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.encoding.AlpEncoding;
 import io.github.dfa1.vortex.encoding.EncodingRegistry;
@@ -134,7 +135,7 @@ class VortexWriterTest {
             assertThat(results).hasSize(1);
             Array idArray = results.getFirst().columns().get("id");
             assertThat(idArray.length()).isEqualTo(3L);
-            MemorySegment buf = idArray.segment();
+            MemorySegment buf = ArraySegments.of(idArray);
             assertThat(buf.get(ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), 0)).isEqualTo(42L);
             assertThat(buf.get(ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), 8)).isEqualTo(100L);
             assertThat(buf.get(ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), 16)).isEqualTo(-1L);
