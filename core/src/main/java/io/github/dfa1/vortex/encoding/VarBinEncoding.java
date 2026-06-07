@@ -124,7 +124,7 @@ public final class VarBinEncoding implements Encoding {
                 throw new VortexException(EncodingId.VORTEX_VARBIN, "invalid metadata", e);
             }
 
-            PType offsetsPtype = PType.values()[meta.getOffsetsPtype().getNumber()];
+            PType offsetsPtype = PType.fromOrdinal(meta.getOffsetsPtype().getNumber());
             DType offsetsDtype = new DType.Primitive(offsetsPtype, false);
             long n = ctx.rowCount();
 

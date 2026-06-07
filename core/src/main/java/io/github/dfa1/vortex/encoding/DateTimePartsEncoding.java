@@ -199,9 +199,9 @@ public final class DateTimePartsEncoding implements Encoding {
                 throw new VortexException(EncodingId.VORTEX_DATETIMEPARTS, "invalid metadata: " + e.getMessage());
             }
 
-            PType daysPtype = PType.values()[decoded.getDaysPtypeValue()];
-            PType secondsPtype = PType.values()[decoded.getSecondsPtypeValue()];
-            PType subsecondsPtype = PType.values()[decoded.getSubsecondsPtypeValue()];
+            PType daysPtype = PType.fromOrdinal(decoded.getDaysPtypeValue());
+            PType secondsPtype = PType.fromOrdinal(decoded.getSecondsPtypeValue());
+            PType subsecondsPtype = PType.fromOrdinal(decoded.getSubsecondsPtypeValue());
             boolean nullable = ctx.dtype().nullable();
 
             Array days = ctx.decodeChild(0, new DType.Primitive(daysPtype, nullable), ctx.rowCount());

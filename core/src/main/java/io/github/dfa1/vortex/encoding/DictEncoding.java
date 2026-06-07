@@ -372,7 +372,7 @@ public final class DictEncoding implements Encoding {
         }
 
         private static Array decodeLegacyJava(DecodeContext ctx, byte codeTypeByte) {
-            PType codePType = PType.values()[Byte.toUnsignedInt(codeTypeByte)];
+            PType codePType = PType.fromOrdinal(Byte.toUnsignedInt(codeTypeByte));
             PType valPType = ((DType.Primitive) ctx.dtype()).ptype();
             int elemSize = valPType.byteSize();
             long rowCount = ctx.rowCount();
@@ -407,7 +407,7 @@ public final class DictEncoding implements Encoding {
                 throw new VortexException(EncodingId.VORTEX_DICT, "invalid proto metadata", e);
             }
 
-            PType codePType = PType.values()[meta.getCodesPtype().getNumber()];
+            PType codePType = PType.fromOrdinal(meta.getCodesPtype().getNumber());
             long valuesLen = meta.getValuesLen();
             long rowCount = ctx.rowCount();
             PType valPType = ((DType.Primitive) ctx.dtype()).ptype();
@@ -431,7 +431,7 @@ public final class DictEncoding implements Encoding {
         }
 
         private static Array decodeUtf8DictLegacy(DecodeContext ctx, ByteBuffer meta) {
-            PType codePType = PType.values()[Byte.toUnsignedInt(meta.get(0))];
+            PType codePType = PType.fromOrdinal(Byte.toUnsignedInt(meta.get(0)));
             long n = ctx.rowCount();
 
             MemorySegment dictBytes = ctx.buffer(0);
@@ -451,7 +451,7 @@ public final class DictEncoding implements Encoding {
             } catch (com.google.protobuf.InvalidProtocolBufferException e) {
                 throw new VortexException(EncodingId.VORTEX_DICT, "invalid utf8 dict proto metadata", e);
             }
-            PType codePType = PType.values()[meta.getCodesPtype().getNumber()];
+            PType codePType = PType.fromOrdinal(meta.getCodesPtype().getNumber());
             long dictSize = meta.getValuesLen();
             long n = ctx.rowCount();
 

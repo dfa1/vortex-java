@@ -441,7 +441,7 @@ public final class AlpRdEncoding implements Encoding {
             MemorySegment out, MemorySegment rightSeg, int rightBitWidth) {
             long numPatches = pm.getLen();
             long offset = pm.getOffset();
-            PType idxPtype = PType.values()[pm.getIndicesPtype().getNumber()];
+            PType idxPtype = PType.fromOrdinal(pm.getIndicesPtype().getNumber());
 
             MemorySegment idxSeg = ctx.decodeChildSegment(2, new DType.Primitive(idxPtype, false), numPatches);
             MemorySegment valSeg = ctx.decodeChildSegment(3, U16_DTYPE, numPatches);
@@ -458,7 +458,7 @@ public final class AlpRdEncoding implements Encoding {
         private static void applyPatchesF32(DecodeContext ctx, EncodingProtos.PatchesMetadata pm, MemorySegment out, MemorySegment rightSeg, int rightBitWidth) {
             long numPatches = pm.getLen();
             long offset = pm.getOffset();
-            PType idxPtype = PType.values()[pm.getIndicesPtype().getNumber()];
+            PType idxPtype = PType.fromOrdinal(pm.getIndicesPtype().getNumber());
 
             MemorySegment idxSeg = ctx.decodeChildSegment(2, new DType.Primitive(idxPtype, false), numPatches);
             MemorySegment valSeg = ctx.decodeChildSegment(3, U16_DTYPE, numPatches);

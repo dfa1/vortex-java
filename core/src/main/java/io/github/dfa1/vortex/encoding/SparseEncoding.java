@@ -384,7 +384,7 @@ public final class SparseEncoding implements Encoding {
 
         // PType proto enum ordinals match Java PType ordinals (U8=0..F64=10)
         private static PType ptypeFromProto(DTypeProtos.PType proto) {
-            return PType.values()[proto.getNumber()];
+            return PType.fromOrdinal(proto.getNumber());
         }
     }
 }

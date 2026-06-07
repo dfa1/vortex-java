@@ -55,4 +55,26 @@ public enum PType {
         return this == I8 || this == I16 || this == I32 || this == I64
                        || this == F16 || this == F32 || this == F64;
     }
+
+    /// Returns the {@link PType} for the given enum ordinal — the integer value the wire format
+    /// uses to identify a physical type.
+    ///
+    /// <p>Unlike {@code PType.values()[ordinal]}, this method validates the ordinal against the
+    /// declared range and throws {@link VortexException} for crafted out-of-range values rather
+    /// than the JDK's {@link ArrayIndexOutOfBoundsException}. Use this at every decode site that
+    /// reads a ptype from untrusted metadata.
+    ///
+    /// @param ordinal the enum ordinal, typically taken from a Protobuf {@code ptype} field
+    /// @return the {@link PType} for the given ordinal
+    /// @throws VortexException if {@code ordinal} is negative or greater than the largest defined
+    ///                         {@link PType} ordinal
+    public static PType fromOrdinal(int ordinal) {
+        PType[] all = values();
+        if (ordinal < 0 || ordinal >= all.length) {
+            throw new VortexException(
+                    "invalid PType ordinal=" + ordinal
+                            + " (expected 0.." + (all.length - 1) + ")");
+        }
+        return all[ordinal];
+    }
 }

@@ -203,8 +203,8 @@ public final class FsstEncoding implements Encoding {
                 throw new VortexException(EncodingId.VORTEX_FSST, "invalid metadata", e);
             }
 
-            PType uncompLenPType = PType.values()[meta.getUncompressedLengthsPtype().getNumber()];
-            PType codesOffPType = PType.values()[meta.getCodesOffsetsPtype().getNumber()];
+            PType uncompLenPType = PType.fromOrdinal(meta.getUncompressedLengthsPtype().getNumber());
+            PType codesOffPType = PType.fromOrdinal(meta.getCodesOffsetsPtype().getNumber());
 
             long n = ctx.rowCount();
 

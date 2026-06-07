@@ -484,7 +484,7 @@ public final class RleEncoding implements Encoding {
         }
 
         private static PType ptypeFromProto(DTypeProtos.PType proto) {
-            return PType.values()[proto.getNumber()];
+            return PType.fromOrdinal(proto.getNumber());
         }
     }
 }

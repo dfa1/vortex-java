@@ -120,7 +120,7 @@ public final class ListEncoding implements Encoding {
             }
 
             long elementsLen = meta.getElementsLen();
-            PType offsetPtype = PType.values()[meta.getOffsetPtype().getNumber()];
+            PType offsetPtype = PType.fromOrdinal(meta.getOffsetPtype().getNumber());
             long outerLen = ctx.rowCount();
 
             DType elementDtype = listDtype.elementType();

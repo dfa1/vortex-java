@@ -134,8 +134,8 @@ public final class ListViewEncoding implements Encoding {
             }
 
             long elementsLen = meta.getElementsLen();
-            PType offsetPtype = PType.values()[meta.getOffsetPtype().getNumber()];
-            PType sizePtype = PType.values()[meta.getSizePtype().getNumber()];
+            PType offsetPtype = PType.fromOrdinal(meta.getOffsetPtype().getNumber());
+            PType sizePtype = PType.fromOrdinal(meta.getSizePtype().getNumber());
             long outerLen = ctx.rowCount();
 
             DType elementDtype = listDtype.elementType();

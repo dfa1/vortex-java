@@ -90,7 +90,7 @@ public final class DecimalBytePartsEncoding implements Encoding {
                         "lower_part_count > 0 not supported, got " + lowerPartCount);
             }
 
-            PType mspPtype = PType.values()[decoded.getZerothChildPtypeValue()];
+            PType mspPtype = PType.fromOrdinal(decoded.getZerothChildPtypeValue());
             boolean nullable = ctx.dtype().nullable();
             DType mspDtype = new DType.Primitive(mspPtype, nullable);
             ArrayNode mspNode = ctx.node().children()[0];

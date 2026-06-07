@@ -89,8 +89,6 @@ Per-encoding gotchas:
 - [ ] **Decimal field validation** — `convertDType` accepts `Decimal{precision, scale}`
   without checking `precision <= 38`, `0 <= scale <= precision`.
 - [ ] **Extension DType `metadata`** — unbounded byte buffer copy. Cap.
-- [ ] **`parseFrom` wrap** — every `*.parseFrom(byteBuffer)` site must wrap
-  `InvalidProtocolBufferException` as `VortexException`. Audit `core/` encodings.
 
 ### Resource caps
 
