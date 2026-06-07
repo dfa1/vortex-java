@@ -59,7 +59,8 @@ public final class ShortArray implements Array {
     /// @param i zero-based index (must be in {@code [0, length)})
     /// @return the signed short value at position {@code i}
     public short getShort(long i) {
-        return buffer.getAtIndex(PTypeIO.LE_SHORT, i);
+        long cap = buffer.byteSize() / PTypeIO.LE_SHORT.byteSize();
+        return buffer.getAtIndex(PTypeIO.LE_SHORT, i % cap);
     }
 
     /// Returns the element at the given index as an {@code int}, widening to unsigned if the dtype is U16.
@@ -67,7 +68,8 @@ public final class ShortArray implements Array {
     /// @param i zero-based index (must be in {@code [0, length)})
     /// @return the element at position {@code i} as an int (unsigned-widened for U16)
     public int getInt(long i) {
-        short raw = buffer.getAtIndex(PTypeIO.LE_SHORT, i);
+        long cap = buffer.byteSize() / PTypeIO.LE_SHORT.byteSize();
+        short raw = buffer.getAtIndex(PTypeIO.LE_SHORT, i % cap);
         boolean unsigned = dtype instanceof DType.Primitive p && p.ptype() == PType.U16;
         return unsigned ? Short.toUnsignedInt(raw) : raw;
     }
@@ -80,9 +82,10 @@ public final class ShortArray implements Array {
     public long fold(long identity, LongBinaryOperator op) {
         MemorySegment buf = buffer;
         long n = length;
+        long cap = buf.byteSize() / PTypeIO.LE_SHORT.byteSize();
         long result = identity;
         for (long i = 0; i < n; i++) {
-            result = op.applyAsLong(result, buf.getAtIndex(PTypeIO.LE_SHORT, i));
+            result = op.applyAsLong(result, buf.getAtIndex(PTypeIO.LE_SHORT, i % cap));
         }
         return result;
     }

@@ -19,6 +19,7 @@ import io.github.dfa1.vortex.core.array.MaskedArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.encoding.EncodingRegistry;
+import io.github.dfa1.vortex.io.VortexInspector;
 import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.ScanResult;
 import org.apache.arrow.memory.BufferAllocator;
@@ -383,7 +384,8 @@ class RustJavaReaderComparisonIntegrationTest {
     void rust_vs_javaReader_statsMatch(String fixture, @TempDir Path tmp) throws Exception {
         // Given
         Path local = download(BASE.resolve(fixture), tmp);
-
+        String inspect = VortexInspector.inspect(VortexReader.open(local));
+        System.out.println(inspect);
         // When
         Stats rustStats = rustStats(local);
         Stats javaStats = javaStats(local);

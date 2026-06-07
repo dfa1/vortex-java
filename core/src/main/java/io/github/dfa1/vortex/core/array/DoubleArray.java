@@ -59,7 +59,8 @@ public final class DoubleArray implements Array {
     /// @param i zero-based logical index (must be in {@code [0, length)})
     /// @return the double value at position {@code i}
     public double getDouble(long i) {
-        return buffer.getAtIndex(PTypeIO.LE_DOUBLE, i);
+        long cap = buffer.byteSize() / PTypeIO.LE_DOUBLE.byteSize();
+        return buffer.getAtIndex(PTypeIO.LE_DOUBLE, i % cap);
     }
 
     /// Invokes the consumer for each element in order.
@@ -68,8 +69,9 @@ public final class DoubleArray implements Array {
     public void forEachDouble(DoubleConsumer c) {
         MemorySegment buf = buffer;
         long n = length;
+        long cap = buf.byteSize() / PTypeIO.LE_DOUBLE.byteSize();
         for (long i = 0; i < n; i++) {
-            c.accept(buf.getAtIndex(PTypeIO.LE_DOUBLE, i));
+            c.accept(buf.getAtIndex(PTypeIO.LE_DOUBLE, i % cap));
         }
     }
 
@@ -79,11 +81,10 @@ public final class DoubleArray implements Array {
     /// @param op       binary operator applied to accumulator and each element in order
     /// @return the final accumulated value
     public double fold(double identity, DoubleBinaryOperator op) {
-        MemorySegment buf = buffer;
-        long n = length;
+        long cap = buffer.byteSize() / PTypeIO.LE_DOUBLE.byteSize();
         double result = identity;
-        for (long i = 0; i < n; i++) {
-            result = op.applyAsDouble(result, buf.getAtIndex(PTypeIO.LE_DOUBLE, i));
+        for (long i = 0; i < length; i++) {
+            result = op.applyAsDouble(result, buffer.getAtIndex(PTypeIO.LE_DOUBLE, i % cap));
         }
         return result;
     }

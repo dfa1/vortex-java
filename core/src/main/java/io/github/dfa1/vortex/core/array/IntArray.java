@@ -59,7 +59,8 @@ public final class IntArray implements Array {
     /// @param i zero-based index (must be in {@code [0, length)})
     /// @return the int value at position {@code i}
     public int getInt(long i) {
-        return buffer.getAtIndex(PTypeIO.LE_INT, i);
+        long cap = buffer.byteSize() / PTypeIO.LE_INT.byteSize();
+        return buffer.getAtIndex(PTypeIO.LE_INT, i % cap);
     }
 
     /// Passes each element to the given consumer in order.
@@ -68,8 +69,9 @@ public final class IntArray implements Array {
     public void forEachInt(IntConsumer c) {
         MemorySegment buf = buffer;
         long n = length;
+        long cap = buf.byteSize() / PTypeIO.LE_INT.byteSize();
         for (long i = 0; i < n; i++) {
-            c.accept(buf.getAtIndex(PTypeIO.LE_INT, i));
+            c.accept(buf.getAtIndex(PTypeIO.LE_INT, i % cap));
         }
     }
 
@@ -79,11 +81,10 @@ public final class IntArray implements Array {
     /// @param op       binary operator applied to the accumulator and each int element
     /// @return the final accumulated result
     public int fold(int identity, IntBinaryOperator op) {
-        MemorySegment buf = buffer;
-        long n = length;
+        long cap = buffer.byteSize() / PTypeIO.LE_INT.byteSize();
         int result = identity;
-        for (long i = 0; i < n; i++) {
-            result = op.applyAsInt(result, buf.getAtIndex(PTypeIO.LE_INT, i));
+        for (long i = 0; i < length; i++) {
+            result = op.applyAsInt(result, buffer.getAtIndex(PTypeIO.LE_INT, i % cap));
         }
         return result;
     }

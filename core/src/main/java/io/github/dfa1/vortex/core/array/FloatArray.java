@@ -58,7 +58,8 @@ public final class FloatArray implements Array {
     /// @param i zero-based index (must be in {@code [0, length)})
     /// @return the float value at position {@code i}
     public float getFloat(long i) {
-        return buffer.getAtIndex(PTypeIO.LE_FLOAT, i);
+        long cap = buffer.byteSize() / PTypeIO.LE_FLOAT.byteSize();
+        return buffer.getAtIndex(PTypeIO.LE_FLOAT, i % cap);
     }
 
     /// Folds all elements using the given binary operator and identity value.
@@ -69,9 +70,10 @@ public final class FloatArray implements Array {
     public double fold(double identity, DoubleBinaryOperator op) {
         MemorySegment buf = buffer;
         long n = length;
+        long cap = buf.byteSize() / PTypeIO.LE_FLOAT.byteSize();
         double result = identity;
         for (long i = 0; i < n; i++) {
-            result = op.applyAsDouble(result, buf.getAtIndex(PTypeIO.LE_FLOAT, i));
+            result = op.applyAsDouble(result, buf.getAtIndex(PTypeIO.LE_FLOAT, i % cap));
         }
         return result;
     }

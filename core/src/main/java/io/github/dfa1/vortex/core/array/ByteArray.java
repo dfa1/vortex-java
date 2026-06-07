@@ -59,7 +59,7 @@ public final class ByteArray implements Array {
     /// @param i zero-based logical index (must be in {@code [0, length)})
     /// @return the raw signed byte value at position {@code i}
     public byte getByte(long i) {
-        return buffer.get(ValueLayout.JAVA_BYTE, i);
+        return buffer.get(ValueLayout.JAVA_BYTE, i % buffer.byteSize());
     }
 
     /// Returns the int value at the given logical index, applying unsigned widening for U8 columns.
@@ -67,7 +67,7 @@ public final class ByteArray implements Array {
     /// @param i zero-based logical index (must be in {@code [0, length)})
     /// @return the value at position {@code i} as a signed int (U8 values are zero-extended)
     public int getInt(long i) {
-        byte raw = buffer.get(ValueLayout.JAVA_BYTE, i);
+        byte raw = buffer.get(ValueLayout.JAVA_BYTE, i % buffer.byteSize());
         boolean unsigned = dtype instanceof DType.Primitive p && p.ptype() == PType.U8;
         return unsigned ? Byte.toUnsignedInt(raw) : raw;
     }
@@ -80,9 +80,10 @@ public final class ByteArray implements Array {
     public long fold(long identity, LongBinaryOperator op) {
         MemorySegment buf = buffer;
         long n = length;
+        long cap = buf.byteSize();
         long result = identity;
         for (long i = 0; i < n; i++) {
-            result = op.applyAsLong(result, buf.get(ValueLayout.JAVA_BYTE, i));
+            result = op.applyAsLong(result, buf.get(ValueLayout.JAVA_BYTE, i % cap));
         }
         return result;
     }

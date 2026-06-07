@@ -59,7 +59,8 @@ public final class LongArray implements Array {
     /// @param i zero-based index (must be in {@code [0, length)})
     /// @return the long value at position {@code i}
     public long getLong(long i) {
-        return buffer.getAtIndex(PTypeIO.LE_LONG, i);
+        long cap = buffer.byteSize() / PTypeIO.LE_LONG.byteSize();
+        return buffer.getAtIndex(PTypeIO.LE_LONG, i % cap);
     }
 
     /// Passes each element to the given consumer in order.
@@ -68,8 +69,9 @@ public final class LongArray implements Array {
     public void forEachLong(LongConsumer c) {
         MemorySegment buf = buffer;
         long n = length;
+        long cap = buf.byteSize() / PTypeIO.LE_LONG.byteSize();
         for (long i = 0; i < n; i++) {
-            c.accept(buf.getAtIndex(PTypeIO.LE_LONG, i));
+            c.accept(buf.getAtIndex(PTypeIO.LE_LONG, i % cap));
         }
     }
 
@@ -81,9 +83,10 @@ public final class LongArray implements Array {
     public long fold(long identity, LongBinaryOperator op) {
         MemorySegment buf = buffer;
         long n = length;
+        long cap = buf.byteSize() / PTypeIO.LE_LONG.byteSize();
         long result = identity;
         for (long i = 0; i < n; i++) {
-            result = op.applyAsLong(result, buf.getAtIndex(PTypeIO.LE_LONG, i));
+            result = op.applyAsLong(result, buf.getAtIndex(PTypeIO.LE_LONG, i % cap));
         }
         return result;
     }
