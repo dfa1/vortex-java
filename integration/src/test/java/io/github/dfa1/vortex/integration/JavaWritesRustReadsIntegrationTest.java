@@ -825,7 +825,7 @@ class JavaWritesRustReadsIntegrationTest {
     }
 
     /// F16: PrimitiveEncoding stores raw short bits — NaN and Inf are just bit patterns.
-    /// Disabled: vortex-jni 0.72 does not export F16 via Arrow C Data Interface.
+    /// Disabled: vortex-jni does not export F16 via Arrow C Data Interface (not fixed as of 0.74.0).
     @Disabled
     @Test
     void javaWriter_jniReader_f16_nanAndInf(@TempDir Path tmp) throws IOException {

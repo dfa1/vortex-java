@@ -7,7 +7,7 @@ Background reading on design decisions, architecture, and benchmarks.
 The official Vortex ecosystem provides JVM bindings via JNI (bundled native `.so`/`.dylib`).
 JNI bindings are fast but add deployment friction: platform-specific artifacts, native build
 toolchains, and crash-domain coupling between the JVM and native code. The JAR for
-vortex-jni 0.72 is **258MB**.
+vortex-jni 0.74.0 is **33MB**.
 
 This library takes a different approach — 100% Java, no JNI, no `sun.misc.Unsafe`.
 It uses the Java FFM API (`MemorySegment` / `Arena`, Java 25+) for zero-copy memory-mapped
