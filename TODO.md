@@ -109,8 +109,6 @@ relax for large fixtures.
 
 ### Process
 
-- [ ] **GitHub private vulnerability reporting** — enable in repo settings (referenced by
-  `SECURITY.md`).
 - [ ] **Error messages** — review every `VortexException` message for adversary-controlled
   byte echo. Hex-escape or length-cap byte fields in messages.
 
