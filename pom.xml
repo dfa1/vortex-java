@@ -71,7 +71,7 @@
 		<slf4j.version>2.0.18</slf4j.version>
 		<!-- release plugins -->
 		<central-publishing-plugin.version>0.10.0</central-publishing-plugin.version>
-		<maven-gpg-plugin.version>3.2.7</maven-gpg-plugin.version>
+		<maven-gpg-plugin.version>3.2.8</maven-gpg-plugin.version>
 		<maven-source-plugin.version>3.4.0</maven-source-plugin.version>
 		<maven-javadoc-plugin.version>3.11.2</maven-javadoc-plugin.version>
 	</properties>
