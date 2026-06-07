@@ -388,7 +388,8 @@ public final class ScanIterator implements AutoCloseable {
         long byteOffset = 0;
         for (Layout flat : flats) {
             Array chunk = decodeFlat(flat, dtype, arena);
-            MemorySegment src = chunk.segment();
+            Array chunkData = chunk instanceof MaskedArray m ? m.inner() : chunk;
+            MemorySegment src = chunkData.segment();
             MemorySegment.copy(src, 0, combined, byteOffset, src.byteSize());
             byteOffset += src.byteSize();
         }

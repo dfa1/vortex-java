@@ -2,6 +2,8 @@ package io.github.dfa1.vortex.core.array;
 
 import io.github.dfa1.vortex.core.DType;
 
+import java.lang.foreign.MemorySegment;
+
 /// Decoded {@code vortex.masked} array: a non-nullable child paired with an optional validity bitmap.
 ///
 /// <p>Invariant: {@code child} has no actual nulls — nullability is expressed solely via
@@ -38,6 +40,17 @@ public final class MaskedArray implements Array {
     /// @return the inner payload {@link Array}
     public Array inner() {
         return child;
+    }
+
+    /// Delegates to {@link #inner()}'s segment; validity is not surfaced here.
+    ///
+    /// @return the primary segment of the inner array
+    /// @deprecated inherited from {@link Array#segment()}; validity silently dropped — prefer {@link #inner()} directly
+    @Override
+    @Deprecated(forRemoval = true)
+    @SuppressWarnings("deprecation")
+    public MemorySegment segment() {
+        return child.segment();
     }
 
     /// Returns the validity bitmap, or {@code null} if all positions are valid.
