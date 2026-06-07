@@ -61,7 +61,7 @@ class ZigZagEncodingTest {
             // Then
             assertThat(result).isInstanceOf(IntArray.class);
             assertThat(result.length()).isEqualTo(expected.length);
-            MemorySegment seg = result.buffer(0);
+            MemorySegment seg = result.segment();
             for (int i = 0; i < expected.length; i++) {
                 assertThat(seg.get(PTypeIO.LE_INT, (long) i * 4))
                         .as("index %d", i).isEqualTo(expected[i]);
@@ -120,7 +120,7 @@ class ZigZagEncodingTest {
             // Then
             assertThat(result.length()).isEqualTo(data.length);
             for (int i = 0; i < data.length; i++) {
-                assertThat(result.buffer(0).get(le, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
+                assertThat(result.segment().get(le, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
             }
         }
 
@@ -140,7 +140,7 @@ class ZigZagEncodingTest {
             // Then
             assertThat(result.length()).isEqualTo(data.length);
             for (int i = 0; i < data.length; i++) {
-                assertThat(result.buffer(0).get(le, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
+                assertThat(result.segment().get(le, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
             }
         }
     }

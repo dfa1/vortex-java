@@ -51,7 +51,10 @@ public final class ListArray implements Array {
         return offsets;
     }
 
-    @Override
+    /// Returns the child array at position {@code i} (0 = elements, 1 = offsets).
+    ///
+    /// @param i child index
+    /// @return the child {@link Array}
     public Array child(int i) {
         return switch (i) {
             case 0 -> elements;

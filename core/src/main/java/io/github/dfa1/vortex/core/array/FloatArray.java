@@ -34,14 +34,6 @@ public final class FloatArray implements Array {
         return length;
     }
 
-    @Override
-    public MemorySegment buffer(int i) {
-        if (i != 0) {
-            throw new IndexOutOfBoundsException(i);
-        }
-        return buffer;
-    }
-
     /// Returns the raw backing segment (little-endian, 4 bytes per element).
     ///
     /// @return the backing {@link MemorySegment}

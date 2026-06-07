@@ -17,10 +17,6 @@ import java.util.function.IntConsumer;
 /// {@link #getByteLength} and {@link #forEachByteLength} for callers that only
 /// need lengths, and allocating {@link #getBytes} for full value retrieval.
 ///
-/// Stays backward-compatible via {@code buffer(0)} (→ bytes) and
-/// {@code child(0)} (→ offsets Array) so encoding internals that haven't
-/// been updated continue to work.
-///
 /// Dict mode: created via {@link #ofDict}. Stores dict values + codes directly;
 /// all accessors resolve through the dictionary without materializing strings.
 public final class VarBinArray implements Array {
@@ -50,7 +46,7 @@ public final class VarBinArray implements Array {
         this.length = length;
         this.bytes = bytes;
         this.offsetsArr = offsetsArr;
-        this.offsetsSeg = offsetsArr.buffer(0);
+        this.offsetsSeg = offsetsArr.segment();
         this.offsetsPtype = offsetsPtype;
         this.dictValOffsets = null;
         this.dictValOffPType = null;
@@ -103,22 +99,8 @@ public final class VarBinArray implements Array {
     }
 
     @Override
-    public MemorySegment buffer(int i) {
-        if (i != 0) {
-            throw new IndexOutOfBoundsException(i);
-        }
+    public MemorySegment segment() {
         return bytes;
-    }
-
-    @Override
-    public Array child(int i) {
-        if (i != 0) {
-            throw new IndexOutOfBoundsException(i);
-        }
-        if (offsetsArr == null) {
-            throw new IllegalStateException("child(0) not available in dict mode");
-        }
-        return offsetsArr;
     }
 
     /// Returns the concatenated raw bytes segment backing all elements.
@@ -126,6 +108,17 @@ public final class VarBinArray implements Array {
     /// @return the bytes {@link MemorySegment}
     public MemorySegment bytesSegment() {
         return bytes;
+    }
+
+    /// Returns the physical type of the offsets values.
+    ///
+    /// @return the {@link PType} used to encode the offsets array
+    /// @throws IllegalStateException if this array is in dict mode
+    public PType offsetsPtype() {
+        if (offsetsPtype == null) {
+            throw new IllegalStateException("offsetsPtype() not available in dict mode");
+        }
+        return offsetsPtype;
     }
 
     /// Returns the offsets segment (length + 1 entries); each element {@code i} spans

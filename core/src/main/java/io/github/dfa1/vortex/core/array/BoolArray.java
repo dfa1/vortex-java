@@ -33,14 +33,6 @@ public final class BoolArray implements Array {
         return length;
     }
 
-    @Override
-    public MemorySegment buffer(int i) {
-        if (i != 0) {
-            throw new IndexOutOfBoundsException(i);
-        }
-        return buffer;
-    }
-
     /// Returns the raw bit-packed backing segment (LSB-first, one byte per 8 elements).
     ///
     /// @return the backing {@link MemorySegment}

@@ -55,7 +55,7 @@ class BitpackedEncodingTest {
             assertThat(result.length()).isEqualTo(data.length);
             var le = PTypeIO.LE_INT;
             for (int i = 0; i < data.length; i++) {
-                assertThat(result.buffer(0).get(le, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
+                assertThat(result.segment().get(le, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
             }
         }
 
@@ -75,7 +75,7 @@ class BitpackedEncodingTest {
             assertThat(result.length()).isEqualTo(data.length);
             var le = PTypeIO.LE_LONG;
             for (int i = 0; i < data.length; i++) {
-                assertThat(result.buffer(0).get(le, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
+                assertThat(result.segment().get(le, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
             }
         }
 

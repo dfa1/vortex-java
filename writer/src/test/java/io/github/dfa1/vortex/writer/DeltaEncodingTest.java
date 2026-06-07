@@ -69,7 +69,7 @@ class DeltaEncodingTest {
             assertThat(arr.length()).isEqualTo(5L);
             var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
             for (int i = 0; i < data.length; i++) {
-                assertThat(arr.buffer(0).get(layout, (long) i * 8)).isEqualTo(data[i]);
+                assertThat(arr.segment().get(layout, (long) i * 8)).isEqualTo(data[i]);
             }
         }
     }
@@ -93,7 +93,7 @@ class DeltaEncodingTest {
             Array arr = results.getFirst().columns().get("ts");
             var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
             for (int i = 0; i < data.length; i++) {
-                assertThat(arr.buffer(0).get(layout, (long) i * 8)).isEqualTo(data[i]);
+                assertThat(arr.segment().get(layout, (long) i * 8)).isEqualTo(data[i]);
             }
         }
     }
@@ -117,7 +117,7 @@ class DeltaEncodingTest {
             Array arr = results.getFirst().columns().get("ts");
             var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
             for (int i = 0; i < data.length; i++) {
-                assertThat(arr.buffer(0).get(layout, (long) i * 8)).isEqualTo(42L);
+                assertThat(arr.segment().get(layout, (long) i * 8)).isEqualTo(42L);
             }
         }
     }
@@ -141,7 +141,7 @@ class DeltaEncodingTest {
             Array arr = results.getFirst().columns().get("ts");
             assertThat(arr.length()).isEqualTo(1L);
             var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-            assertThat(arr.buffer(0).get(layout, 0L)).isEqualTo(99L);
+            assertThat(arr.segment().get(layout, 0L)).isEqualTo(99L);
         }
     }
 
@@ -164,7 +164,7 @@ class DeltaEncodingTest {
             Array arr = results.getFirst().columns().get("ts");
             var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
             for (int i = 0; i < data.length; i++) {
-                assertThat(arr.buffer(0).get(layout, (long) i * 8)).isEqualTo(data[i]);
+                assertThat(arr.segment().get(layout, (long) i * 8)).isEqualTo(data[i]);
             }
         }
     }
@@ -194,13 +194,13 @@ class DeltaEncodingTest {
             assertThat(iter.hasNext()).isTrue();
             Array a1 = iter.next().columns().get("ts");
             for (int i = 0; i < chunk1.length; i++) {
-                assertThat(a1.buffer(0).get(layout, (long) i * 8)).isEqualTo(chunk1[i]);
+                assertThat(a1.segment().get(layout, (long) i * 8)).isEqualTo(chunk1[i]);
             }
 
             assertThat(iter.hasNext()).isTrue();
             Array a2 = iter.next().columns().get("ts");
             for (int i = 0; i < chunk2.length; i++) {
-                assertThat(a2.buffer(0).get(layout, (long) i * 8)).isEqualTo(chunk2[i]);
+                assertThat(a2.segment().get(layout, (long) i * 8)).isEqualTo(chunk2[i]);
             }
 
             assertThat(iter.hasNext()).isFalse();
@@ -232,7 +232,7 @@ class DeltaEncodingTest {
             assertThat(arr.length()).isEqualTo((long) n);
             var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
             for (int i = 0; i < n; i++) {
-                assertThat(arr.buffer(0).get(layout, (long) i * 8))
+                assertThat(arr.segment().get(layout, (long) i * 8))
                         .as("index %d", i)
                         .isEqualTo(data[i]);
             }

@@ -172,7 +172,7 @@ public final class RunEndEncoding implements Encoding {
             PType valuePtype = p.ptype();
             Array valuesArr = ctx.decodeChild(1, ctx.dtype(), numRuns);
 
-            return expand(endsArr.buffer(0), valuesArr.buffer(0),
+            return expand(endsArr.segment(), valuesArr.segment(),
                     endsPtype, valuePtype, numRuns, offset, n, ctx.dtype(), ctx.arena());
         }
 
@@ -261,7 +261,7 @@ public final class RunEndEncoding implements Encoding {
                 PType endsPtype, long numRuns, long offset, long n,
                 DType dtype, SegmentAllocator arena
         ) {
-            MemorySegment endsSeg = endsArr.buffer(0);
+            MemorySegment endsSeg = endsArr.segment();
             long numBytes = (n + 7) >>> 3;
             MemorySegment out = arena.allocate(numBytes);
 
@@ -289,10 +289,10 @@ public final class RunEndEncoding implements Encoding {
                 PType endsPtype, long numRuns, long offset, long n,
                 DType dtype, SegmentAllocator arena
         ) {
-            MemorySegment endsSeg = endsArr.buffer(0);
+            MemorySegment endsSeg = endsArr.segment();
             MemorySegment valBytes = valuesArr.bytesSegment();
             MemorySegment valOffsets = valuesArr.offsetsSegment();
-            PType valOffPtype = ((DType.Primitive) valuesArr.child(0).dtype()).ptype();
+            PType valOffPtype = valuesArr.offsetsPtype();
 
             long totalBytes = 0;
             long logicalPos = 0;

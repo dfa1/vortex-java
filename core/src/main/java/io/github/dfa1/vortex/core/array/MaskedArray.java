@@ -1,18 +1,14 @@
 package io.github.dfa1.vortex.core.array;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.VortexException;
-
-import java.lang.foreign.MemorySegment;
 
 /// Decoded {@code vortex.masked} array: a non-nullable child paired with an optional validity bitmap.
 ///
 /// <p>Invariant: {@code child} has no actual nulls — nullability is expressed solely via
 /// {@code validity}. When {@code validity} is {@code null} all positions are valid.
 ///
-/// <p>{@link #buffer(int)} delegates to the child so that existing consumers that read raw
-/// value buffers continue to work transparently. Use {@link #isValid(long)} to check
-/// individual positions before trusting a value.
+/// <p>Use {@link #inner()} to access the payload and {@link #isValid(long)} to check validity
+/// before trusting a value.
 public final class MaskedArray implements Array {
 
     private final Array child;
@@ -35,25 +31,6 @@ public final class MaskedArray implements Array {
     @Override
     public long length() {
         return child.length();
-    }
-
-    @Override
-    public MemorySegment buffer(int i) {
-        return child.buffer(i);
-    }
-
-    @Override
-    public Array child(int i) {
-        return switch (i) {
-            case 0 -> child;
-            case 1 -> {
-                if (validity == null) {
-                    throw new VortexException("no validity child: masked array was encoded as AllValid");
-                }
-                yield validity;
-            }
-            default -> throw new IndexOutOfBoundsException(i);
-        };
     }
 
     /// Returns the non-nullable payload array wrapped by this masked array.

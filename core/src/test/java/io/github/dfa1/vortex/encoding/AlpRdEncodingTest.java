@@ -27,7 +27,7 @@ class AlpRdEncodingTest {
             // Then
             var layout = PTypeIO.LE_DOUBLE;
             for (int i = 0; i < values.length; i++) {
-                assertThat(result.buffer(0).get(layout, (long) i * 8))
+                assertThat(result.segment().get(layout, (long) i * 8))
                         .as("index %d", i).isCloseTo(values[i], within(1e-9));
             }
         }

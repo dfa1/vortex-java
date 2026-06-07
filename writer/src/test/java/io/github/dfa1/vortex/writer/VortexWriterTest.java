@@ -134,7 +134,7 @@ class VortexWriterTest {
             assertThat(results).hasSize(1);
             Array idArray = results.getFirst().columns().get("id");
             assertThat(idArray.length()).isEqualTo(3L);
-            MemorySegment buf = idArray.buffer(0);
+            MemorySegment buf = idArray.segment();
             assertThat(buf.get(ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), 0)).isEqualTo(42L);
             assertThat(buf.get(ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), 8)).isEqualTo(100L);
             assertThat(buf.get(ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), 16)).isEqualTo(-1L);

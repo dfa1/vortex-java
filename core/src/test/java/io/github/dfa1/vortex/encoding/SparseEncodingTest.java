@@ -93,7 +93,7 @@ class SparseEncodingTest {
             // Then
             var layout = PTypeIO.LE_LONG;
             for (int i = 0; i < data.length; i++) {
-                assertThat(decoded.buffer(0).get(layout, (long) i * 8))
+                assertThat(decoded.segment().get(layout, (long) i * 8))
                         .as("index %d", i).isEqualTo(data[i]);
             }
         }
@@ -111,7 +111,7 @@ class SparseEncodingTest {
             // Then
             var layout = PTypeIO.LE_DOUBLE;
             for (int i = 0; i < data.length; i++) {
-                assertThat(decoded.buffer(0).get(layout, (long) i * 8))
+                assertThat(decoded.segment().get(layout, (long) i * 8))
                         .as("index %d", i).isEqualTo(data[i]);
             }
         }
@@ -261,7 +261,7 @@ class SparseEncodingTest {
             assertThat(result.length()).isEqualTo(5L);
             var layout = PTypeIO.LE_LONG;
             for (int i = 0; i < 5; i++) {
-                assertThat(result.buffer(0).get(layout, (long) i * 8))
+                assertThat(result.segment().get(layout, (long) i * 8))
                         .as("index %d", i).isEqualTo(fill);
             }
         }
@@ -282,7 +282,7 @@ class SparseEncodingTest {
             var layout = PTypeIO.LE_LONG;
             long[] expected = {0, 10, 0, 0, 0, 50, 0, 0};
             for (int i = 0; i < expected.length; i++) {
-                assertThat(result.buffer(0).get(layout, (long) i * 8))
+                assertThat(result.segment().get(layout, (long) i * 8))
                         .as("index %d", i).isEqualTo(expected[i]);
             }
         }
@@ -300,10 +300,10 @@ class SparseEncodingTest {
 
             // Then
             var layout = PTypeIO.LE_DOUBLE;
-            assertThat(result.buffer(0).get(layout, 0L)).isNaN();
-            assertThat(result.buffer(0).get(layout, 8L)).isNaN();
-            assertThat(result.buffer(0).get(layout, 16L)).isEqualTo(3.14);
-            assertThat(result.buffer(0).get(layout, 24L)).isNaN();
+            assertThat(result.segment().get(layout, 0L)).isNaN();
+            assertThat(result.segment().get(layout, 8L)).isNaN();
+            assertThat(result.segment().get(layout, 16L)).isEqualTo(3.14);
+            assertThat(result.segment().get(layout, 24L)).isNaN();
         }
 
         @Test
@@ -319,7 +319,7 @@ class SparseEncodingTest {
 
             // Then
             var layout = PTypeIO.LE_LONG;
-            assertThat(result.buffer(0).get(layout, 16L)).isEqualTo(777L);
+            assertThat(result.segment().get(layout, 16L)).isEqualTo(777L);
         }
 
         // regression: NULL_VALUE fill caused "unexpected scalar kind NULL_VALUE" on nullable cols
@@ -339,7 +339,7 @@ class SparseEncodingTest {
             // Then
             var layout = PTypeIO.LE_LONG;
             for (int i = 0; i < 4; i++) {
-                assertThat(result.buffer(0).get(layout, (long) i * 8)).as("index %d", i).isZero();
+                assertThat(result.segment().get(layout, (long) i * 8)).as("index %d", i).isZero();
             }
         }
 

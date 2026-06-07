@@ -46,7 +46,10 @@ public final class FixedSizeListArray implements Array {
         return dtype.fixedSize();
     }
 
-    @Override
+    /// Returns the elements child array.
+    ///
+    /// @param i must be 0
+    /// @return the child {@link Array} at index {@code i}
     public Array child(int i) {
         if (i != 0) {
             throw new ArrayIndexOutOfBoundsException("FixedSizeListArray child index " + i);

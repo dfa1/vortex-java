@@ -225,7 +225,7 @@ public final class SparseEncoding implements Encoding {
                 Array indicesArray = ctx.decodeChild(0, indicesDtype, numPatches);
                 Array valuesArray = ctx.decodeChild(1, ctx.dtype(), numPatches);
                 applyPatches(out, n, valuePtype,
-                        indicesArray.buffer(0), valuesArray.buffer(0), indicesPtype, numPatches, offset);
+                        indicesArray.segment(), valuesArray.segment(), indicesPtype, numPatches, offset);
             }
 
             return switch (valuePtype) {
@@ -248,7 +248,7 @@ public final class SparseEncoding implements Encoding {
                 DType indicesDtype = new DType.Primitive(indicesPtype, false);
                 Array indicesArray = ctx.decodeChild(0, indicesDtype, numPatches);
                 Array valuesArray = ctx.decodeChild(1, ctx.dtype(), numPatches);
-                MemorySegment idxSeg = indicesArray.buffer(0);
+                MemorySegment idxSeg = indicesArray.segment();
                 BoolArray bools = (BoolArray) valuesArray;
                 for (long i = 0; i < numPatches; i++) {
                     if (bools.getBoolean(i)) {
@@ -277,11 +277,11 @@ public final class SparseEncoding implements Encoding {
             Array indicesArray = ctx.decodeChild(0, indicesDtype, numPatches);
             Array valuesArray = ctx.decodeChild(1, ctx.dtype(), numPatches);
 
-            MemorySegment idxSeg = indicesArray.buffer(0);
+            MemorySegment idxSeg = indicesArray.segment();
             VarBinArray varBin = (VarBinArray) valuesArray;
             MemorySegment valBytes = varBin.bytesSegment();
             MemorySegment valOffsets = varBin.offsetsSegment();
-            PType valOffPtype = ((DType.Primitive) varBin.child(0).dtype()).ptype();
+            PType valOffPtype = varBin.offsetsPtype();
 
             long totalBytes = 0;
             for (long i = 0; i < numPatches; i++) {

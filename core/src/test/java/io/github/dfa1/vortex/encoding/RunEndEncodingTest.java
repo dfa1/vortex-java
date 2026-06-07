@@ -87,7 +87,7 @@ class RunEndEncodingTest {
             assertThat(result.length()).isEqualTo(5L);
             var layout = PTypeIO.LE_LONG;
             for (int i = 0; i < 5; i++) {
-                assertThat(result.buffer(0).get(layout, (long) i * 8)).isEqualTo(42L);
+                assertThat(result.segment().get(layout, (long) i * 8)).isEqualTo(42L);
             }
         }
 
@@ -107,7 +107,7 @@ class RunEndEncodingTest {
             long[] expected = {10, 10, 20, 20, 20, 30, 30};
             var layout = PTypeIO.LE_LONG;
             for (int i = 0; i < expected.length; i++) {
-                assertThat(result.buffer(0).get(layout, (long) i * 8))
+                assertThat(result.segment().get(layout, (long) i * 8))
                         .as("index %d", i).isEqualTo(expected[i]);
             }
         }
@@ -128,7 +128,7 @@ class RunEndEncodingTest {
             long[] expected = {10L, 20L, 20L};
             var layout = PTypeIO.LE_LONG;
             for (int i = 0; i < expected.length; i++) {
-                assertThat(result.buffer(0).get(layout, (long) i * 8))
+                assertThat(result.segment().get(layout, (long) i * 8))
                         .as("index %d", i).isEqualTo(expected[i]);
             }
         }
@@ -163,7 +163,7 @@ class RunEndEncodingTest {
             // Then
             assertThat(result.length()).isEqualTo(data.length);
             for (int i = 0; i < data.length; i++) {
-                assertThat(result.buffer(0).get(le, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
+                assertThat(result.segment().get(le, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
             }
         }
 

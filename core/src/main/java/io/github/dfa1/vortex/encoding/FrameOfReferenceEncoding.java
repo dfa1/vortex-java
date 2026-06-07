@@ -225,7 +225,7 @@ public final class FrameOfReferenceEncoding implements Encoding {
                 return validity != null ? new MaskedArray(rawEncoded, validity) : rawEncoded;
             }
 
-            MemorySegment src = rawEncoded.buffer(0);
+            MemorySegment src = rawEncoded.segment();
             long n = ctx.rowCount();
             MemorySegment dst = applyReference(src, n, p.ptype(), ref, ctx.arena());
             Array result = switch (p.ptype()) {

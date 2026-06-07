@@ -84,7 +84,7 @@ class FrameOfReferenceEncodingTest {
             assertThat(result.length()).isEqualTo(residuals.length);
             var layout = PTypeIO.LE_LONG;
             for (int i = 0; i < expected.length; i++) {
-                assertThat(result.buffer(0).get(layout, (long) i * 8))
+                assertThat(result.segment().get(layout, (long) i * 8))
                         .as("index %d", i)
                         .isEqualTo(expected[i]);
             }
@@ -107,7 +107,7 @@ class FrameOfReferenceEncodingTest {
             assertThat(result.length()).isEqualTo(residuals.length);
             var layout = PTypeIO.LE_INT;
             for (int i = 0; i < expected.length; i++) {
-                assertThat(result.buffer(0).get(layout, (long) i * 4))
+                assertThat(result.segment().get(layout, (long) i * 4))
                         .as("index %d", i)
                         .isEqualTo(expected[i]);
             }
@@ -126,7 +126,7 @@ class FrameOfReferenceEncodingTest {
             // Then — values unchanged
             var layout = PTypeIO.LE_LONG;
             for (int i = 0; i < residuals.length; i++) {
-                assertThat(result.buffer(0).get(layout, (long) i * 8)).isEqualTo(residuals[i]);
+                assertThat(result.segment().get(layout, (long) i * 8)).isEqualTo(residuals[i]);
             }
         }
 
@@ -143,7 +143,7 @@ class FrameOfReferenceEncodingTest {
 
             // Then
             var layout = PTypeIO.LE_LONG;
-            long got = result.buffer(0).get(layout, 0L);
+            long got = result.segment().get(layout, 0L);
             assertThat(got).isEqualTo(residuals[0] + reference);
         }
 
@@ -187,8 +187,8 @@ class FrameOfReferenceEncodingTest {
             assertThat(masked.isValid(2)).isTrue();
             assertThat(masked.isValid(3)).isFalse();
             var layout = PTypeIO.LE_INT;
-            assertThat(masked.child(0).buffer(0).get(layout, 0L)).isEqualTo(100);
-            assertThat(masked.child(0).buffer(0).get(layout, 8L)).isEqualTo(105);
+            assertThat(masked.inner().segment().get(layout, 0L)).isEqualTo(100);
+            assertThat(masked.inner().segment().get(layout, 8L)).isEqualTo(105);
         }
     }
 
@@ -230,7 +230,7 @@ class FrameOfReferenceEncodingTest {
             // Then
             assertThat(result.length()).isEqualTo(data.length);
             for (int i = 0; i < data.length; i++) {
-                assertThat(result.buffer(0).get(le, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
+                assertThat(result.segment().get(le, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
             }
         }
 
@@ -250,7 +250,7 @@ class FrameOfReferenceEncodingTest {
             // Then
             assertThat(result.length()).isEqualTo(data.length);
             for (int i = 0; i < data.length; i++) {
-                assertThat(result.buffer(0).get(le, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
+                assertThat(result.segment().get(le, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
             }
         }
     }

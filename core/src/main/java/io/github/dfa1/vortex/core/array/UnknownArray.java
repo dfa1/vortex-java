@@ -29,12 +29,18 @@ public record UnknownArray(
         Array[] children
 ) implements Array {
 
-    @Override
+    /// Returns the raw buffer at position {@code i}.
+    ///
+    /// @param i buffer index
+    /// @return the {@link MemorySegment} for buffer {@code i}
     public MemorySegment buffer(int i) {
         return buffers[i];
     }
 
-    @Override
+    /// Returns the child array at position {@code i}.
+    ///
+    /// @param i child index
+    /// @return the child {@link Array} at index {@code i}
     public Array child(int i) {
         return children[i];
     }

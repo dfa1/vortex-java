@@ -423,7 +423,7 @@ public final class AlpEncoding implements Encoding {
             double df = F10_F64[expF];
             double de = IF10_F64[expE];
 
-            MemorySegment src = encoded.buffer(0);
+            MemorySegment src = encoded.segment();
             // In-place when the child returned a writable arena buffer (e.g. BitpackedEncoding, DeltaEncoding).
             // Fall back to a new allocation when the source is a read-only mmap slice (PrimitiveEncoding).
             MemorySegment buf = src.isReadOnly() ? ctx.arena().allocate(n * 8, 8) : src;
@@ -451,7 +451,7 @@ public final class AlpEncoding implements Encoding {
             float df = F10_F32[expF];
             float de = IF10_F32[expE];
 
-            MemorySegment src32 = encoded.buffer(0);
+            MemorySegment src32 = encoded.segment();
             MemorySegment buf32 = src32.isReadOnly() ? ctx.arena().allocate(n * 4, 4) : src32;
             if (src32.isReadOnly()) {
                 for (long i = 0; i < n; i++) {
@@ -479,8 +479,8 @@ public final class AlpEncoding implements Encoding {
             Array idxArr = ctx.decodeChild(1, new DType.Primitive(idxPtype, false), numPatches);
             Array valArr = ctx.decodeChild(2, ctx.dtype(), numPatches);
 
-            MemorySegment idxSeg = idxArr.buffer(0);
-            MemorySegment valSeg = valArr.buffer(0);
+            MemorySegment idxSeg = idxArr.segment();
+            MemorySegment valSeg = valArr.segment();
 
             for (long i = 0; i < numPatches; i++) {
                 long absIdx = readUnsigned(idxSeg, i, idxPtype) - offset;

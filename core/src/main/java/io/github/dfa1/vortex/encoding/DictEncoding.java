@@ -383,7 +383,7 @@ public final class DictEncoding implements Encoding {
             // Codes: decode through registry — supports both raw (VORTEX_PRIMITIVE) and cascade (FASTLANES_BITPACKED) children
             DType codesDtype = new DType.Primitive(codePType, false);
             Array codesArr = ctx.decodeChild(1, codesDtype, rowCount);
-            MemorySegment codesBuf = codesArr.buffer(0);
+            MemorySegment codesBuf = codesArr.segment();
 
             MemorySegment out = ctx.arena().allocate(rowCount * (long) elemSize);
             switch (codePType) {
@@ -419,8 +419,8 @@ public final class DictEncoding implements Encoding {
             Array codesArr = ctx.decodeChild(0, codesDtype, rowCount);
             Array valuesArr = ctx.decodeChild(1, ctx.dtype(), valuesLen);
 
-            MemorySegment codesBuf = codesArr.buffer(0);
-            MemorySegment valuesBuf = valuesArr.buffer(0);
+            MemorySegment codesBuf = codesArr.segment();
+            MemorySegment valuesBuf = valuesArr.segment();
 
             MemorySegment out = ctx.arena().allocate(rowCount * (long) elemSize);
             // Loop-unswitch: pull the codePType switch outside the hot loop so the JIT
@@ -462,7 +462,7 @@ public final class DictEncoding implements Encoding {
             // Rust layout: children[0]=codes, children[1]=values(VarBin)
             DType codesDtype = new DType.Primitive(codePType, false);
             Array codesArr = ctx.decodeChild(0, codesDtype, n);
-            MemorySegment codesBuf = codesArr.buffer(0);
+            MemorySegment codesBuf = codesArr.segment();
 
             Array valuesArr = ctx.decodeChild(1, ctx.dtype(), dictSize);
             VarBinArray varBinValues = (VarBinArray) valuesArr;

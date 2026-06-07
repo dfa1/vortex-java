@@ -35,10 +35,10 @@ class ConstantEncodingTest {
             assertThat(result.length()).isEqualTo(rowCount);
             // Constant encoding must not materialize the full array: the backing buffer must
             // hold exactly one element. Before fix: buffer is rowCount * 8 bytes.
-            assertThat(result.buffer(0).byteSize())
+            assertThat(result.segment().byteSize())
                     .as("constant encoding must not allocate O(rowCount) memory")
                     .isEqualTo(Long.BYTES);
-            assertThat(result.buffer(0).get(PTypeIO.LE_LONG, 0L)).isEqualTo(42L);
+            assertThat(result.segment().get(PTypeIO.LE_LONG, 0L)).isEqualTo(42L);
         }
     }
 
@@ -79,8 +79,8 @@ class ConstantEncodingTest {
 
             // Then — buffer holds one element; logical length is n
             assertThat(result.length()).isEqualTo(data.length);
-            assertThat(result.buffer(0).byteSize()).isEqualTo(Integer.BYTES);
-            assertThat(result.buffer(0).get(le, 0L)).isEqualTo(data[0]);
+            assertThat(result.segment().byteSize()).isEqualTo(Integer.BYTES);
+            assertThat(result.segment().get(le, 0L)).isEqualTo(data[0]);
         }
 
         @ParameterizedTest
@@ -98,8 +98,8 @@ class ConstantEncodingTest {
 
             // Then — buffer holds one element; logical length is n
             assertThat(result.length()).isEqualTo(data.length);
-            assertThat(result.buffer(0).byteSize()).isEqualTo(Long.BYTES);
-            assertThat(result.buffer(0).get(le, 0L)).isEqualTo(data[0]);
+            assertThat(result.segment().byteSize()).isEqualTo(Long.BYTES);
+            assertThat(result.segment().get(le, 0L)).isEqualTo(data[0]);
         }
     }
 }

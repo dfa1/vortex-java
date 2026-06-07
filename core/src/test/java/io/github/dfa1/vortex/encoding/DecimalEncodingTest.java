@@ -38,7 +38,7 @@ class DecimalEncodingTest {
             // Then
             assertThat(result.length()).isEqualTo(values.length);
             for (int i = 0; i < values.length; i++) {
-                assertThat(result.buffer(0).get(PTypeIO.LE_LONG, (long) i * 8)).isEqualTo(values[i]);
+                assertThat(result.segment().get(PTypeIO.LE_LONG, (long) i * 8)).isEqualTo(values[i]);
             }
         }
 

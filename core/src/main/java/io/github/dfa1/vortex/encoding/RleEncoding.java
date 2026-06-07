@@ -344,9 +344,9 @@ public final class RleEncoding implements Encoding {
                 indicesValidity = masked.validity();
             }
 
-            long[] values = readLongs(valuesArr.buffer(0), (int) valuesLen, ptype);
-            int[] indices = readIndices(indicesArr.buffer(0), (int) indicesLen, indicesPtype);
-            long[] valuesIdxOffsets = readUnsignedLongs(offsetsArr.buffer(0), (int) offsetsLen, offsetsPtype);
+            long[] values = readLongs(valuesArr.segment(), (int) valuesLen, ptype);
+            int[] indices = readIndices(indicesArr.segment(), (int) indicesLen, indicesPtype);
+            long[] valuesIdxOffsets = readUnsignedLongs(offsetsArr.segment(), (int) offsetsLen, offsetsPtype);
 
             // offset < FL_CHUNK_SIZE so chunk_start = 0 always.
             int numChunks = (int) (indicesLen / FL_CHUNK_SIZE);

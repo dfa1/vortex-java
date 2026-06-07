@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.MaskedArray;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -113,7 +114,7 @@ class MaskedEncodingTest {
         }
 
         @Test
-        void buffer_delegatesToChild() {
+        void inner_containsChildValues() {
             // Given
             var sut = new MaskedEncoding();
             EncodingRegistry registry = buildRegistry();
@@ -121,12 +122,13 @@ class MaskedEncodingTest {
             EncodeResult ctx = maskedResult(new int[]{7, 8, 9}, null);
 
             // When
-            Array result = sut.decode(EncodeTestHelper.toDecodeContext(ctx, 3L, i32Nullable, registry));
+            MaskedArray result = (MaskedArray) sut.decode(EncodeTestHelper.toDecodeContext(ctx, 3L, i32Nullable, registry));
+            IntArray inner = (IntArray) result.inner();
 
-            // Then — buffer(0) works and contains child values
-            assertThat(result.buffer(0).get(PTypeIO.LE_INT, 0L)).isEqualTo(7);
-            assertThat(result.buffer(0).get(PTypeIO.LE_INT, 4L)).isEqualTo(8);
-            assertThat(result.buffer(0).get(PTypeIO.LE_INT, 8L)).isEqualTo(9);
+            // Then
+            assertThat(inner.segment().get(PTypeIO.LE_INT, 0L)).isEqualTo(7);
+            assertThat(inner.segment().get(PTypeIO.LE_INT, 4L)).isEqualTo(8);
+            assertThat(inner.segment().get(PTypeIO.LE_INT, 8L)).isEqualTo(9);
         }
 
         @Test

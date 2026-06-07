@@ -137,7 +137,7 @@ class StructEncodingTest {
             // Then
             assertThat(result.length()).isEqualTo(data.length);
             for (int i = 0; i < data.length; i++) {
-                assertThat(result.buffer(0).get(PTypeIO.LE_LONG, (long) i * 8)).isEqualTo(data[i]);
+                assertThat(result.segment().get(PTypeIO.LE_LONG, (long) i * 8)).isEqualTo(data[i]);
             }
         }
 
@@ -167,7 +167,7 @@ class StructEncodingTest {
             // Then — validity preserved; values accessible via inner array
             assertThat(result).isInstanceOf(MaskedArray.class);
             MaskedArray masked = (MaskedArray) result;
-            LongArray values = (LongArray) masked.child(0);
+            LongArray values = (LongArray) masked.inner();
             assertThat(values.length()).isEqualTo(data.length);
             for (int i = 0; i < data.length; i++) {
                 assertThat(masked.isValid(i)).isTrue();

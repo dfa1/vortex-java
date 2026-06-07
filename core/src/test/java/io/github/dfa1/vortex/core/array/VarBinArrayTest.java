@@ -113,23 +113,21 @@ class VarBinArrayTest {
         }
 
         @Test
-        void buffer_invalidIndex_throws() {
+        void segment_returnsBytesSegment() {
             // Given
             VarBinArray sut = of("a");
 
             // When / Then
-            assertThatThrownBy(() -> sut.buffer(1))
-                    .isInstanceOf(IndexOutOfBoundsException.class);
+            assertThat(sut.segment()).isSameAs(sut.bytesSegment());
         }
 
         @Test
-        void child_invalidIndex_throws() {
+        void offsetsPtype_returnsOffsetType() {
             // Given
             VarBinArray sut = of("a");
 
             // When / Then
-            assertThatThrownBy(() -> sut.child(1))
-                    .isInstanceOf(IndexOutOfBoundsException.class);
+            assertThat(sut.offsetsPtype()).isNotNull();
         }
     }
 
@@ -197,12 +195,12 @@ class VarBinArrayTest {
         }
 
         @Test
-        void child_inDictMode_throws() {
+        void offsetsSegment_inDictMode_throws() {
             // Given
             VarBinArray sut = ofDict(new String[]{"x"}, new int[]{0});
 
             // When / Then
-            assertThatThrownBy(() -> sut.child(0))
+            assertThatThrownBy(() -> sut.offsetsSegment())
                     .isInstanceOf(IllegalStateException.class);
         }
     }

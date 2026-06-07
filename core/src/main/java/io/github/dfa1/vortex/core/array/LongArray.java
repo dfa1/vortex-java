@@ -35,14 +35,6 @@ public final class LongArray implements Array {
         return length;
     }
 
-    @Override
-    public MemorySegment buffer(int i) {
-        if (i != 0) {
-            throw new IndexOutOfBoundsException(i);
-        }
-        return buffer;
-    }
-
     /// Returns the raw backing segment (little-endian, 8 bytes per element).
     ///
     /// @return the backing {@link MemorySegment}

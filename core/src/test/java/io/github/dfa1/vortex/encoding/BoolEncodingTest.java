@@ -45,7 +45,7 @@ class BoolEncodingTest {
             assertThat(result).isInstanceOf(BoolArray.class);
             assertThat(result.length()).isEqualTo(data.length);
             for (int i = 0; i < data.length; i++) {
-                byte byteVal = result.buffer(0).get(ValueLayout.JAVA_BYTE, i / 8);
+                byte byteVal = result.segment().get(ValueLayout.JAVA_BYTE, i / 8);
                 boolean decoded = ((byteVal >>> (i % 8)) & 1) == 1;
                 assertThat(decoded).as("index %d", i).isEqualTo(data[i]);
             }

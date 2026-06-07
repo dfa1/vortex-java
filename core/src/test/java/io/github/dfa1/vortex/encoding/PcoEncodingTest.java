@@ -422,8 +422,8 @@ class PcoEncodingTest {
             assertThat(masked.isValid(0)).isTrue();
             assertThat(masked.isValid(1)).isFalse();
             assertThat(masked.isValid(2)).isTrue();
-            assertThat(((LongArray) masked.child(0)).getLong(0)).isEqualTo(100L);
-            assertThat(((LongArray) masked.child(0)).getLong(2)).isEqualTo(200L);
+            assertThat(((LongArray) masked.inner()).getLong(0)).isEqualTo(100L);
+            assertThat(((LongArray) masked.inner()).getLong(2)).isEqualTo(200L);
         }
 
         @Test
@@ -448,8 +448,8 @@ class PcoEncodingTest {
             MaskedArray masked = (MaskedArray) result;
             assertThat(masked.isValid(0)).isFalse();
             assertThat(masked.isValid(1)).isFalse();
-            assertThat(((LongArray) masked.child(0)).getLong(0)).isZero();
-            assertThat(((LongArray) masked.child(0)).getLong(1)).isZero();
+            assertThat(((LongArray) masked.inner()).getLong(0)).isZero();
+            assertThat(((LongArray) masked.inner()).getLong(1)).isZero();
         }
 
         @Test
@@ -474,8 +474,8 @@ class PcoEncodingTest {
             MaskedArray masked = (MaskedArray) result;
             assertThat(masked.isValid(0)).isTrue();
             assertThat(masked.isValid(1)).isTrue();
-            assertThat(((LongArray) masked.child(0)).getLong(0)).isEqualTo(10L);
-            assertThat(((LongArray) masked.child(0)).getLong(1)).isEqualTo(20L);
+            assertThat(((LongArray) masked.inner()).getLong(0)).isEqualTo(10L);
+            assertThat(((LongArray) masked.inner()).getLong(1)).isEqualTo(20L);
         }
     }
 

@@ -70,7 +70,7 @@ class PrimitiveEncodingTest {
             assertThat(result.length()).isEqualTo(data.length);
             var le = PTypeIO.LE_LONG;
             for (int i = 0; i < data.length; i++) {
-                assertThat(result.buffer(0).get(le, (long) i * 8)).isEqualTo(data[i]);
+                assertThat(result.segment().get(le, (long) i * 8)).isEqualTo(data[i]);
             }
         }
 
@@ -91,7 +91,7 @@ class PrimitiveEncodingTest {
             assertThat(result.length()).isEqualTo(data.length);
             var le = PTypeIO.LE_INT;
             for (int i = 0; i < data.length; i++) {
-                assertThat(result.buffer(0).get(le, (long) i * 4)).isEqualTo(data[i]);
+                assertThat(result.segment().get(le, (long) i * 4)).isEqualTo(data[i]);
             }
         }
 
@@ -112,7 +112,7 @@ class PrimitiveEncodingTest {
             assertThat(result.length()).isEqualTo(data.length);
             var le = PTypeIO.LE_DOUBLE;
             for (int i = 0; i < data.length; i++) {
-                assertThat(result.buffer(0).get(le, (long) i * 8)).isEqualTo(data[i]);
+                assertThat(result.segment().get(le, (long) i * 8)).isEqualTo(data[i]);
             }
         }
 
@@ -163,12 +163,12 @@ class PrimitiveEncodingTest {
             // Then — returns MaskedArray; only valid positions are usable
             assertThat(result).isInstanceOf(MaskedArray.class);
             MaskedArray masked = (MaskedArray) result;
-            assertThat(masked.child(0)).isInstanceOf(IntArray.class);
+            assertThat(masked.inner()).isInstanceOf(IntArray.class);
             assertThat(masked.isValid(0)).isTrue();
             assertThat(masked.isValid(1)).isFalse();
             assertThat(masked.isValid(2)).isTrue();
             assertThat(masked.isValid(3)).isFalse();
-            IntArray values = (IntArray) masked.child(0);
+            IntArray values = (IntArray) masked.inner();
             assertThat(values.getInt(0)).isEqualTo(10);
             assertThat(values.getInt(2)).isEqualTo(20);
         }

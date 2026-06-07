@@ -68,7 +68,7 @@ class DictEncodingTest {
             Array arr = results.getFirst().columns().get("category");
             assertThat(arr.length()).isEqualTo(6L);
             var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-            var buf = arr.buffer(0);
+            var buf = arr.segment();
             assertThat(buf.get(layout, 0)).isEqualTo(1);
             assertThat(buf.get(layout, 4)).isEqualTo(2);
             assertThat(buf.get(layout, 8)).isEqualTo(1);
@@ -101,7 +101,7 @@ class DictEncodingTest {
             Array arr = results.getFirst().columns().get("category");
             assertThat(arr.length()).isEqualTo(4L);
             var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-            var buf = arr.buffer(0);
+            var buf = arr.segment();
             for (int i = 0; i < 4; i++) {
                 assertThat(buf.get(layout, (long) i * 4)).isEqualTo(42);
             }
@@ -131,17 +131,17 @@ class DictEncodingTest {
             assertThat(iter.hasNext()).isTrue();
             Array a1 = iter.next().columns().get("category");
             assertThat(a1.length()).isEqualTo(3L);
-            assertThat(a1.buffer(0).get(layout, 0)).isEqualTo(10);
-            assertThat(a1.buffer(0).get(layout, 4)).isEqualTo(20);
-            assertThat(a1.buffer(0).get(layout, 8)).isEqualTo(10);
+            assertThat(a1.segment().get(layout, 0)).isEqualTo(10);
+            assertThat(a1.segment().get(layout, 4)).isEqualTo(20);
+            assertThat(a1.segment().get(layout, 8)).isEqualTo(10);
 
             assertThat(iter.hasNext()).isTrue();
             Array a2 = iter.next().columns().get("category");
             assertThat(a2.length()).isEqualTo(4L);
-            assertThat(a2.buffer(0).get(layout, 0)).isEqualTo(30);
-            assertThat(a2.buffer(0).get(layout, 4)).isEqualTo(10);
-            assertThat(a2.buffer(0).get(layout, 8)).isEqualTo(20);
-            assertThat(a2.buffer(0).get(layout, 12)).isEqualTo(30);
+            assertThat(a2.segment().get(layout, 0)).isEqualTo(30);
+            assertThat(a2.segment().get(layout, 4)).isEqualTo(10);
+            assertThat(a2.segment().get(layout, 8)).isEqualTo(20);
+            assertThat(a2.segment().get(layout, 12)).isEqualTo(30);
 
             assertThat(iter.hasNext()).isFalse();
         }

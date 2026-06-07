@@ -25,20 +25,15 @@ public sealed interface Array
     /// @return dtype
     DType dtype();
 
-    /// Returns the raw buffer at position {@code i} (used by some {@link io.github.dfa1.vortex.encoding.Encoding}).
+    /// Returns the primary backing segment for this array (e.g., the raw little-endian values for primitive arrays).
     ///
-    /// @param i buffer index
-    /// @return memory segment for buffer {@code i}
-    default MemorySegment buffer(int i) {
-        throw new VortexException(getClass().getSimpleName() + " has no raw buffers");
-    }
-
-    /// Returns the child array at position {@code i} (used by some {@link io.github.dfa1.vortex.encoding.Encoding}).
+    /// <p>Supported by all primitive array types and {@link VarBinArray} (returns the bytes segment).
+    /// Throws for array types with no single primary buffer (e.g., {@link StructArray}, {@link MaskedArray}).
     ///
-    /// @param i child index
-    /// @return child array at index {@code i}
-    default Array child(int i) {
-        throw new VortexException(getClass().getSimpleName() + " has no children");
+    /// @return the primary backing {@link MemorySegment}
+    /// @throws VortexException if this array type has no single primary segment
+    default MemorySegment segment() {
+        throw new VortexException(getClass().getSimpleName() + " has no primary segment");
     }
 
 }

@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.encoding;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.GenericArray;
 import io.github.dfa1.vortex.proto.EncodingProtos;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -25,7 +26,7 @@ class DecimalBytePartsEncodingTest {
             // When
             EncodeResult encoded = sut.encode(dtype, values, EncodeTestHelper.testCtx());
             DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, values.length, dtype, registry);
-            Array result = sut.decode(ctx);
+            GenericArray result = (GenericArray) sut.decode(ctx);
 
             // Then
             assertThat(result.length()).isEqualTo(values.length);
@@ -33,7 +34,7 @@ class DecimalBytePartsEncodingTest {
             assertThat(msp.length()).isEqualTo(values.length);
             var le = PTypeIO.LE_LONG;
             for (int i = 0; i < values.length; i++) {
-                assertThat(msp.buffer(0).get(le, (long) i * 8)).isEqualTo(values[i]);
+                assertThat(msp.segment().get(le, (long) i * 8)).isEqualTo(values[i]);
             }
         }
 

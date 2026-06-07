@@ -134,8 +134,8 @@ public final class ScanIterator implements AutoCloseable {
     ) {
         PType ptype = dtype.ptype();
         int elemBytes = ptype.byteSize();
-        MemorySegment valBuf = values.buffer(0);
-        MemorySegment codesBuf = codes.buffer(0);
+        MemorySegment valBuf = values.segment();
+        MemorySegment codesBuf = codes.segment();
         MemorySegment out = arena.allocate(n * elemBytes, elemBytes);
         for (long i = 0; i < n; i++) {
             long code = readUnsigned(codesBuf, i, codesPType);
@@ -163,8 +163,8 @@ public final class ScanIterator implements AutoCloseable {
         VarBinArray varBinValues = (VarBinArray) values;
         MemorySegment valBytes = varBinValues.bytesSegment();
         MemorySegment valOffsets = varBinValues.offsetsSegment();
-        PType valOffPType = ((DType.Primitive) varBinValues.child(0).dtype()).ptype();
-        MemorySegment codesSegs = codes.buffer(0);
+        PType valOffPType = varBinValues.offsetsPtype();
+        MemorySegment codesSegs = codes.segment();
 
         // First pass: total output byte length
         long totalBytes = 0L;
@@ -388,7 +388,7 @@ public final class ScanIterator implements AutoCloseable {
         long byteOffset = 0;
         for (Layout flat : flats) {
             Array chunk = decodeFlat(flat, dtype, arena);
-            MemorySegment src = chunk.buffer(0);
+            MemorySegment src = chunk.segment();
             MemorySegment.copy(src, 0, combined, byteOffset, src.byteSize());
             byteOffset += src.byteSize();
         }
@@ -435,7 +435,7 @@ public final class ScanIterator implements AutoCloseable {
         // before any O(n) allocation so an inflated layout row_count cannot trigger OOM.
         // Full-decode encodings (e.g. bitpacked) write n * elemBytes to the arena during
         // decodeLayout above, so their buffer will already match n — check passes for them.
-        long bufferCodes = codes.buffer(0).byteSize() / (long) codesPType.byteSize();
+        long bufferCodes = codes.segment().byteSize() / (long) codesPType.byteSize();
         if (bufferCodes < n) {
             throw new VortexException(EncodingId.VORTEX_DICT,
                     "dict codes: layout row_count=" + n + " exceeds buffer capacity=" + bufferCodes);
@@ -443,9 +443,9 @@ public final class ScanIterator implements AutoCloseable {
 
         if (values instanceof VarBinArray vb) {
             MemorySegment valOffsets = vb.offsetsSegment();
-            PType valOffPType = ((DType.Primitive) vb.child(0).dtype()).ptype();
+            PType valOffPType = vb.offsetsPtype();
             return VarBinArray.ofDict(dtype, n, vb.bytesSegment(), valOffsets, valOffPType,
-                    codes.buffer(0), codesPType);
+                    codes.segment(), codesPType);
         }
         if (dtype instanceof DType.Primitive pDtype) {
             return expandDictPrimitive(values, codes, codesPType, pDtype, n, arena);

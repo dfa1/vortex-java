@@ -215,8 +215,8 @@ public final class FsstEncoding implements Encoding {
 
             Array uncompLens = ctx.decodeChild(0, new DType.Primitive(uncompLenPType, false), n);
             Array codesOffsets = ctx.decodeChild(1, new DType.Primitive(codesOffPType, false), n + 1);
-            MemorySegment uncompLensSeg = uncompLens.buffer(0);
-            MemorySegment codesOffsetsSeg = codesOffsets.buffer(0);
+            MemorySegment uncompLensSeg = uncompLens.segment();
+            MemorySegment codesOffsetsSeg = codesOffsets.segment();
 
             long totalUncompressed = 0L;
             for (long i = 0; i < n; i++) {

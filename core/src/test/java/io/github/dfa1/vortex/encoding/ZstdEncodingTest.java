@@ -465,7 +465,7 @@ class ZstdEncodingTest {
             assertThat(result.isValid(1)).isFalse();
             assertThat(result.isValid(2)).isTrue();
             assertThat(result.isValid(3)).isFalse();
-            IntArray child = (IntArray) result.child(0);
+            IntArray child = (IntArray) result.inner();
             assertThat(child.getInt(0)).isEqualTo(10);
             assertThat(child.getInt(2)).isEqualTo(30);
         }
@@ -492,7 +492,7 @@ class ZstdEncodingTest {
             assertThat(result.isValid(0)).isTrue();
             assertThat(result.isValid(1)).isFalse();
             assertThat(result.isValid(2)).isTrue();
-            VarBinArray child = (VarBinArray) result.child(0);
+            VarBinArray child = (VarBinArray) result.inner();
             assertThat(child.getString(0)).isEqualTo("hello");
             assertThat(child.getString(2)).isEqualTo("world");
         }

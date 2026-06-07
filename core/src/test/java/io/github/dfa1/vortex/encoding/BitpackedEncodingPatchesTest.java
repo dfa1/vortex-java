@@ -74,11 +74,11 @@ class BitpackedEncodingPatchesTest {
 
             // Then
             assertThat(result.length()).isEqualTo(base.length);
-            assertThat(result.buffer(0).get(PTypeIO.LE_INT, 0L)).isEqualTo(10);
-            assertThat(result.buffer(0).get(PTypeIO.LE_INT, 4L)).isEqualTo(777);
-            assertThat(result.buffer(0).get(PTypeIO.LE_INT, 8L)).isEqualTo(30);
-            assertThat(result.buffer(0).get(PTypeIO.LE_INT, 12L)).isEqualTo(999);
-            assertThat(result.buffer(0).get(PTypeIO.LE_INT, 16L)).isEqualTo(50);
+            assertThat(result.segment().get(PTypeIO.LE_INT, 0L)).isEqualTo(10);
+            assertThat(result.segment().get(PTypeIO.LE_INT, 4L)).isEqualTo(777);
+            assertThat(result.segment().get(PTypeIO.LE_INT, 8L)).isEqualTo(30);
+            assertThat(result.segment().get(PTypeIO.LE_INT, 12L)).isEqualTo(999);
+            assertThat(result.segment().get(PTypeIO.LE_INT, 16L)).isEqualTo(50);
         }
     }
 }

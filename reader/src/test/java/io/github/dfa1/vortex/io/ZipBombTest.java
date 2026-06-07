@@ -66,7 +66,7 @@ class ZipBombTest {
 
             // Then — O(1) buffer proves fix is in place; logical length unchanged
             assertThat(col.length()).isEqualTo(claimedRows);
-            assertThat(col.buffer(0).byteSize())
+            assertThat(col.segment().byteSize())
                     .as("ConstantEncoding must not allocate O(rowCount) memory")
                     .isEqualTo(Long.BYTES);
         }

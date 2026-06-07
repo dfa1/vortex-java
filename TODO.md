@@ -71,34 +71,12 @@
 
 ## API
 
-- [ ] **Remove `buffer(int i)` and `child(int i)` from `Array` interface** — these are decoder
-  plumbing leaking into the consumer API. Each cascading decoder should receive and return
-  concrete types (`IntArray`, `VarBinArray`, etc.) so callers cast explicitly rather than
-  calling through the interface and hitting a runtime `VortexException`. Keeps `Array`
-  as a pure consumer API (`getInt(i)`, `fold()`, `length()`, `dtype()`).
-
-  **Plan (4 steps, each independently releasable):**
-
-  - **Step 1 — Typed accessors on concrete arrays.** Add named methods instead of positional
-    `buffer(i)`: `LongArray.segment()`, `IntArray.segment()`, `DoubleArray.segment()`, etc.;
-    `VarBinArray.bytesSegment()` + `VarBinArray.offsetsSegment()` (internal fields already exist);
-    `MaskedArray.inner()` → `Array`, `MaskedArray.validity()` → `BoolArray`.
-
-  - **Step 2 — `DecodeContext.decodeChildAs(int i, Class<T>)`.** Cascading-decoder helper that
-    decodes child `i` and casts to `T`, throwing `VortexException` on type mismatch. Replaces
-    the `registry.decode(childCtx)` + `.buffer(0)` two-step in every cascading encoder.
-
-  - **Step 3 — Migrate all call sites (~30 in encoders, ~10 in `ScanIterator`).** Encoders:
-    `decode(child).buffer(0)` → `decodeChildAs(i, XxxArray.class).segment()`. `VarBinArray`
-    constructor: change `offsetsArr` param from `Array` to concrete `IntArray`/`LongArray`.
-    `ScanIterator`: pattern-match to concrete type then call `.segment()`; replace
-    `values.child(0).buffer(0)` with `values.offsetsSegment()`. `FrameOfReferenceEncoding` /
-    `RleEncoding`: `masked.child(0)` → `masked.inner()`, `masked.child(1)` → `masked.validity()`.
-
-  - **Step 4 — Remove from `Array` interface.** Drop `buffer(int i)` and `child(int i)` from the
-    sealed interface. `UnknownArray` keeps them as plain record accessors (not interface-inherited).
-    Note: `ScanIterator.truncateArray` calls `a.child(0)` on `StructArray` — add
-    `StructArray.column(int i)` or use existing field accessor before this step.
+- [x] **Remove `buffer(int i)` and `child(int i)` from `Array` interface** — DONE.
+  Replaced with `segment()` default method on the interface (throws for non-primary-segment types).
+  All primitive arrays, `VarBinArray` (returns bytes), and `GenericArray` override it.
+  `UnknownArray` keeps `buffer(int i)` and `child(int i)` as plain concrete methods (not interface).
+  `MaskedArray` drops both; callers use `inner()` and `validity()`.
+  Added `VarBinArray.offsetsPtype()` to replace all `.child(0).dtype()` patterns.
 
 - [ ] Use domain primitives (`UInt32`, `UInt64`, etc.) as value classes via Project Valhalla instead of raw `long`/`int`
     - See https://dfa1.github.io/articles/rethink-domain-primitives-with-valhalla

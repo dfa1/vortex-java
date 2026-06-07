@@ -139,7 +139,7 @@ class AlpEncodingTest {
             assertThat(result.length()).isEqualTo(encoded.length);
             var layout = PTypeIO.LE_DOUBLE;
             for (int i = 0; i < expected.length; i++) {
-                assertThat(result.buffer(0).get(layout, (long) i * 8))
+                assertThat(result.segment().get(layout, (long) i * 8))
                         .as("index %d", i).isCloseTo(expected[i], within(1e-9));
             }
         }
@@ -161,11 +161,11 @@ class AlpEncodingTest {
 
             // Then
             var layout = PTypeIO.LE_DOUBLE;
-            assertThat(result.buffer(0).get(layout, 0L)).isCloseTo(1.0, within(1e-9));
-            assertThat(result.buffer(0).get(layout, 8L)).isNaN();
-            assertThat(result.buffer(0).get(layout, 16L)).isCloseTo(2.0, within(1e-9));
-            assertThat(result.buffer(0).get(layout, 24L)).isInfinite();
-            assertThat(result.buffer(0).get(layout, 32L)).isCloseTo(3.0, within(1e-9));
+            assertThat(result.segment().get(layout, 0L)).isCloseTo(1.0, within(1e-9));
+            assertThat(result.segment().get(layout, 8L)).isNaN();
+            assertThat(result.segment().get(layout, 16L)).isCloseTo(2.0, within(1e-9));
+            assertThat(result.segment().get(layout, 24L)).isInfinite();
+            assertThat(result.segment().get(layout, 32L)).isCloseTo(3.0, within(1e-9));
         }
 
         @ParameterizedTest
@@ -187,7 +187,7 @@ class AlpEncodingTest {
 
             // Then
             var layout = PTypeIO.LE_DOUBLE;
-            double decoded = result.buffer(0).get(layout, 0L);
+            double decoded = result.segment().get(layout, 0L);
             assertThat(decoded).isCloseTo(value, within(1e-6));
         }
 
@@ -207,7 +207,7 @@ class AlpEncodingTest {
             // Then
             var layout = PTypeIO.LE_FLOAT;
             for (int i = 0; i < expected.length; i++) {
-                assertThat(result.buffer(0).get(layout, (long) i * 4))
+                assertThat(result.segment().get(layout, (long) i * 4))
                         .as("index %d", i).isCloseTo(expected[i], within(1e-6f));
             }
         }
@@ -232,7 +232,7 @@ class AlpEncodingTest {
             // Then
             var layout = PTypeIO.LE_FLOAT;
             for (int i = 0; i < values.length; i++) {
-                assertThat(result.buffer(0).get(layout, (long) i * 4))
+                assertThat(result.segment().get(layout, (long) i * 4))
                         .as("index %d", i).isCloseTo(values[i], within(1e-6f));
             }
         }
@@ -252,11 +252,11 @@ class AlpEncodingTest {
 
             // Then
             var layout = PTypeIO.LE_FLOAT;
-            assertThat(result.buffer(0).get(layout, 0L)).isCloseTo(1.0f, within(1e-6f));
-            assertThat(result.buffer(0).get(layout, 4L)).isNaN();
-            assertThat(result.buffer(0).get(layout, 8L)).isCloseTo(2.5f, within(1e-6f));
-            assertThat(result.buffer(0).get(layout, 12L)).isInfinite();
-            assertThat(result.buffer(0).get(layout, 16L)).isCloseTo(3.0f, within(1e-6f));
+            assertThat(result.segment().get(layout, 0L)).isCloseTo(1.0f, within(1e-6f));
+            assertThat(result.segment().get(layout, 4L)).isNaN();
+            assertThat(result.segment().get(layout, 8L)).isCloseTo(2.5f, within(1e-6f));
+            assertThat(result.segment().get(layout, 12L)).isInfinite();
+            assertThat(result.segment().get(layout, 16L)).isCloseTo(3.0f, within(1e-6f));
         }
 
         @Test
@@ -275,7 +275,7 @@ class AlpEncodingTest {
             // Then
             var layout = PTypeIO.LE_DOUBLE;
             for (int i = 0; i < values.length; i++) {
-                assertThat(result.buffer(0).get(layout, (long) i * 8))
+                assertThat(result.segment().get(layout, (long) i * 8))
                         .as("index %d", i).isCloseTo(values[i], within(1e-9));
             }
         }

@@ -62,7 +62,10 @@ public final class ListViewArray implements Array {
         return sizes;
     }
 
-    @Override
+    /// Returns the child array at position {@code i} (0 = elements, 1 = offsets, 2 = sizes).
+    ///
+    /// @param i child index
+    /// @return the child {@link Array}
     public Array child(int i) {
         return switch (i) {
             case 0 -> elements;

@@ -117,7 +117,7 @@ class RustWritesJavaReadsIntegrationTest {
         var arr = chunk.columns().get("id");
         long[] out = new long[(int) arr.length()];
         for (int i = 0; i < out.length; i++) {
-            out[i] = arr.buffer(0).get(layout, (long) i * Long.BYTES);
+            out[i] = arr.segment().get(layout, (long) i * Long.BYTES);
         }
         return out;
     }
@@ -127,7 +127,7 @@ class RustWritesJavaReadsIntegrationTest {
         var arr = chunk.columns().get("value");
         double[] out = new double[(int) arr.length()];
         for (int i = 0; i < out.length; i++) {
-            out[i] = arr.buffer(0).get(layout, (long) i * Double.BYTES);
+            out[i] = arr.segment().get(layout, (long) i * Double.BYTES);
         }
         return out;
     }
@@ -289,7 +289,7 @@ class RustWritesJavaReadsIntegrationTest {
             for (ScanResult r : results) {
                 var arr = r.columns().get("value");
                 for (long j = 0; j < arr.length(); j++) {
-                    double v = arr.buffer(0).get(layout, j * Double.BYTES);
+                    double v = arr.segment().get(layout, j * Double.BYTES);
                     sum += v;
                     if (spotIdx < 9) {
                         first9[spotIdx++] = v;
@@ -350,7 +350,7 @@ class RustWritesJavaReadsIntegrationTest {
             for (ScanResult r : results) {
                 var arr = r.columns().get("id");
                 for (long j = 0; j < arr.length(); j++) {
-                    sum += arr.buffer(0).get(longLayout, j * Long.BYTES);
+                    sum += arr.segment().get(longLayout, j * Long.BYTES);
                 }
             }
             assertThat(sum).isEqualTo(40_000_000L);

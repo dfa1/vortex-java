@@ -238,7 +238,7 @@ class RustJavaReaderComparisonIntegrationTest {
 
     private static Double numericSum(Array arr) {
         if (arr instanceof MaskedArray m) {
-            Array child = m.child(0);
+            Array child = m.inner();
             return switch (child) {
                 case LongArray v -> {
                     long s = 0;

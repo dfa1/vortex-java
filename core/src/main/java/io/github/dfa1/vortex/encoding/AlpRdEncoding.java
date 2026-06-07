@@ -400,8 +400,8 @@ public final class AlpRdEncoding implements Encoding {
             Array leftParts = ctx.decodeChild(0, U16_DTYPE, n);
             Array rightParts = ctx.decodeChild(1, U64_DTYPE, n);
 
-            MemorySegment leftSeg = leftParts.buffer(0);
-            MemorySegment rightSeg = rightParts.buffer(0);
+            MemorySegment leftSeg = leftParts.segment();
+            MemorySegment rightSeg = rightParts.segment();
             MemorySegment out = ctx.arena().allocate(n * Long.BYTES, Long.BYTES);
 
             for (long i = 0; i < n; i++) {
@@ -424,8 +424,8 @@ public final class AlpRdEncoding implements Encoding {
             Array leftParts = ctx.decodeChild(0, U16_DTYPE, n);
             Array rightParts = ctx.decodeChild(1, U32_DTYPE, n);
 
-            MemorySegment leftSeg = leftParts.buffer(0);
-            MemorySegment rightSeg = rightParts.buffer(0);
+            MemorySegment leftSeg = leftParts.segment();
+            MemorySegment rightSeg = rightParts.segment();
             MemorySegment out = ctx.arena().allocate(n * Integer.BYTES, Integer.BYTES);
 
             for (long i = 0; i < n; i++) {
@@ -452,8 +452,8 @@ public final class AlpRdEncoding implements Encoding {
             Array idxArr = ctx.decodeChild(2, new DType.Primitive(idxPtype, false), numPatches);
             Array valArr = ctx.decodeChild(3, U16_DTYPE, numPatches);
 
-            MemorySegment idxSeg = idxArr.buffer(0);
-            MemorySegment valSeg = valArr.buffer(0);
+            MemorySegment idxSeg = idxArr.segment();
+            MemorySegment valSeg = valArr.segment();
 
             for (long j = 0; j < numPatches; j++) {
                 long absIdx = readUnsigned(idxSeg, j, idxPtype) - offset;
@@ -472,8 +472,8 @@ public final class AlpRdEncoding implements Encoding {
             Array idxArr = ctx.decodeChild(2, new DType.Primitive(idxPtype, false), numPatches);
             Array valArr = ctx.decodeChild(3, U16_DTYPE, numPatches);
 
-            MemorySegment idxSeg = idxArr.buffer(0);
-            MemorySegment valSeg = valArr.buffer(0);
+            MemorySegment idxSeg = idxArr.segment();
+            MemorySegment valSeg = valArr.segment();
 
             for (long j = 0; j < numPatches; j++) {
                 long absIdx = readUnsigned(idxSeg, j, idxPtype) - offset;

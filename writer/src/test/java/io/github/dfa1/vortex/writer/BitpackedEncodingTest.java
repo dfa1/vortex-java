@@ -68,7 +68,7 @@ class BitpackedEncodingTest {
             assertThat(arr.length()).isEqualTo(8L);
             var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
             for (int i = 0; i < data.length; i++) {
-                assertThat(arr.buffer(0).get(layout, (long) i * 4)).isEqualTo(data[i]);
+                assertThat(arr.segment().get(layout, (long) i * 4)).isEqualTo(data[i]);
             }
         }
     }
@@ -93,7 +93,7 @@ class BitpackedEncodingTest {
             Array arr = results.getFirst().columns().get("value");
             var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
             for (int i = 0; i < data.length; i++) {
-                assertThat(arr.buffer(0).get(layout, (long) i * 4)).isEqualTo(42);
+                assertThat(arr.segment().get(layout, (long) i * 4)).isEqualTo(42);
             }
         }
     }
@@ -118,7 +118,7 @@ class BitpackedEncodingTest {
             Array arr = results.getFirst().columns().get("value");
             var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
             for (int i = 0; i < data.length; i++) {
-                assertThat(arr.buffer(0).get(layout, (long) i * 4)).isEqualTo(data[i]);
+                assertThat(arr.segment().get(layout, (long) i * 4)).isEqualTo(data[i]);
             }
         }
     }
@@ -149,14 +149,14 @@ class BitpackedEncodingTest {
             Array a1 = iter.next().columns().get("value");
             assertThat(a1.length()).isEqualTo(3L);
             for (int i = 0; i < chunk1.length; i++) {
-                assertThat(a1.buffer(0).get(layout, (long) i * 4)).isEqualTo(chunk1[i]);
+                assertThat(a1.segment().get(layout, (long) i * 4)).isEqualTo(chunk1[i]);
             }
 
             assertThat(iter.hasNext()).isTrue();
             Array a2 = iter.next().columns().get("value");
             assertThat(a2.length()).isEqualTo(3L);
             for (int i = 0; i < chunk2.length; i++) {
-                assertThat(a2.buffer(0).get(layout, (long) i * 4)).isEqualTo(chunk2[i]);
+                assertThat(a2.segment().get(layout, (long) i * 4)).isEqualTo(chunk2[i]);
             }
 
             assertThat(iter.hasNext()).isFalse();
@@ -187,7 +187,7 @@ class BitpackedEncodingTest {
             Array arr = results.getFirst().columns().get("value");
             var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
             for (int i = 0; i < data.length; i++) {
-                assertThat(arr.buffer(0).get(layout, (long) i * 4))
+                assertThat(arr.segment().get(layout, (long) i * 4))
                         .as("value at index %d", i)
                         .isEqualTo(data[i]);
             }
