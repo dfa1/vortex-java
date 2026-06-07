@@ -28,11 +28,26 @@ public record DecodeContext(
         EncodingRegistry registry,
         SegmentAllocator arena
 ) {
-    /// Recursively decode child `i` using the same segment buffers, registry and arena.
+    /// Recursively decode child {@code i} using this context's dtype and row count.
     ///
     /// @param i zero-based child index within this node's children array
     /// @return the decoded {@link Array} for child {@code i}
     public Array decodeChild(int i) {
+        ArrayNode child = node.children()[i];
+        var childCtx = new DecodeContext(child, dtype, rowCount, segmentBuffers, registry, arena);
+        return registry.decode(childCtx);
+    }
+
+    /// Recursively decode child {@code i} with an explicit dtype and row count.
+    ///
+    /// <p>Use this overload when the child has a different logical type or length
+    /// than the parent (e.g. run-end arrays, patch children, validity bitmaps).
+    ///
+    /// @param i        zero-based child index within this node's children array
+    /// @param dtype    logical type to assign to the child context
+    /// @param rowCount number of logical rows for the child
+    /// @return the decoded {@link Array} for child {@code i}
+    public Array decodeChild(int i, DType dtype, long rowCount) {
         ArrayNode child = node.children()[i];
         var childCtx = new DecodeContext(child, dtype, rowCount, segmentBuffers, registry, arena);
         return registry.decode(childCtx);
