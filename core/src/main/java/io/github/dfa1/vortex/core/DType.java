@@ -15,7 +15,7 @@ import java.nio.ByteBuffer;
 public sealed interface DType
         permits DType.Null, DType.Bool, DType.Primitive, DType.Decimal,
                         DType.Utf8, DType.Binary, DType.Struct,
-                        DType.List, DType.FixedSizeList, DType.Extension {
+                        DType.List, DType.FixedSizeList, DType.Extension, DType.Variant {
 
     /// Returns whether this type allows null values.
     ///
@@ -38,6 +38,7 @@ public sealed interface DType
             case List(var elem, _) -> new List(elem, nullable);
             case FixedSizeList(var elem, var size, _) -> new FixedSizeList(elem, size, nullable);
             case Extension(var id, var storage, var meta, _) -> new Extension(id, storage, meta, nullable);
+            case Variant _ -> new Variant(nullable);
         };
     }
 
@@ -131,5 +132,11 @@ public sealed interface DType
             ByteBuffer metadata,
             boolean nullable
     ) implements DType {
+    }
+
+    /// Variant logical type for semi-structured data (analogous to Parquet variant / JSON).
+    ///
+    /// @param nullable whether null values are permitted
+    record Variant(boolean nullable) implements DType {
     }
 }

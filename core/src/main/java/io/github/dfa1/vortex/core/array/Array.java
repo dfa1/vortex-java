@@ -10,7 +10,8 @@ import io.github.dfa1.vortex.core.DType;
 public sealed interface Array
         permits BoolArray, ByteArray, DoubleArray, EmptyArray, FixedSizeListArray, Float16Array,
                         FloatArray, GenericArray, IntArray, ListArray, ListViewArray, LongArray,
-                        MaskedArray, NullArray, ShortArray, StructArray, UnknownArray, VarBinArray {
+                        MaskedArray, NullArray, ShortArray, StructArray, UnknownArray, VarBinArray,
+                        VariantArray {
 
     /// Returns the number of elements in this array.
     ///

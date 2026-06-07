@@ -17,6 +17,7 @@ import io.github.dfa1.vortex.fbs.Primitive;
 import io.github.dfa1.vortex.fbs.Struct_;
 import io.github.dfa1.vortex.fbs.Type;
 import io.github.dfa1.vortex.fbs.Utf8;
+import io.github.dfa1.vortex.fbs.Variant;
 
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
@@ -219,6 +220,7 @@ final class PostscriptParser {
                         convertDType(e.storageDtype(new io.github.dfa1.vortex.fbs.DType())),
                         e.metadataAsByteBuffer(), false);
             }
+            case Type.Variant -> new DType.Variant(((Variant) fbs.type(new Variant())).nullable());
             default -> throw new VortexException("unsupported DType typeType=" + typeType);
         };
     }

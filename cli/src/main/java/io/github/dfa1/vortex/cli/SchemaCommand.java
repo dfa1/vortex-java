@@ -55,6 +55,7 @@ final class SchemaCommand {
                     "list<" + formatDType(elem) + ">[" + size + "]" + (nullable ? "?" : "");
             case DType.Extension(var id, var storage, var meta, var nullable) ->
                     "ext<" + id + ">" + (nullable ? "?" : "");
+            case DType.Variant(var nullable) -> "variant" + (nullable ? "?" : "");
         };
     }
 }

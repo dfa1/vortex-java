@@ -38,8 +38,8 @@ For the rest of the API surface (reader, writer, scan, CLI), see [reference.md](
 | `fastlanes.delta`           | `DeltaEncoding`            | ✅      | ✅      | Integer PTypes                                                        |
 | `fastlanes.for`             | `FrameOfReferenceEncoding` | ✅      | ✅      | Integer PTypes                                                        |
 | `fastlanes.rle`             | `RleEncoding`              | ✅      | ✅      | Chunk-based RLE                                                       |
-| `vortex.patched`            | —                          | ❌      | ❌      | No decoder yet; reads as `UnknownArray` when `allowUnknown()` enabled |
-| `vortex.variant`            | —                          | ❌      | ❌      | No decoder yet; reads as `UnknownArray` when `allowUnknown()` enabled |
+| `vortex.patched`            | `PatchedEncoding`          | ✅      | ❌      | Primitive PTypes; encode not yet implemented                          |
+| `vortex.variant`            | `VariantEncoding`          | ✅      | ❌      | Encode not yet implemented                                            |
 
 ### Unknown encodings
 
