@@ -245,10 +245,22 @@ public final class VortexReader implements VortexHandle {
             return ArrayStats.empty();
         }
         int segIdx = flat.segments().getFirst();
+        if (segIdx < 0 || segIdx >= footer.segmentSpecs().size()) {
+            return ArrayStats.empty();
+        }
         SegmentSpec spec = footer.segmentSpecs().get(segIdx);
         long segLen = spec.length();
+        // Need at least 4 bytes for the trailing little-endian fbLen.
+        if (segLen < 4) {
+            return ArrayStats.empty();
+        }
         MemorySegment seg = fileSegment.asSlice(spec.offset(), segLen);
         int fbLen = seg.get(LE_INT, segLen - 4);
+        // Reject negative fbLen (signed int from untrusted bytes) or any value that would push
+        // fbStart below 0 → asSlice(negative, ...) throws IndexOutOfBoundsException without this guard.
+        if (fbLen < 0 || fbLen > segLen - 4) {
+            return ArrayStats.empty();
+        }
         long fbStart = segLen - 4L - fbLen;
         var fbBuf = seg.asSlice(fbStart, fbLen).asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
         var fbArray = io.github.dfa1.vortex.fbs.Array.getRootAsArray(fbBuf);

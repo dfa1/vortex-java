@@ -41,11 +41,6 @@ parser exception. Each entry below is either a known gap, a contract audit, or s
 
 ### Parser hardening
 
-- [ ] **Layout metadata size limit** — `metadataAsByteBuffer()` returns an unbounded slice;
-  the FlatBuffer runtime doesn't bound it. Cap (e.g. 4 MiB) and reject larger.
-- [ ] **`readFlatStats` `fbLen` validation** — `VortexReader.readFlatStats` reads
-  `fbLen = seg.get(LE_INT, segLen - 4)` with no check that `0 <= fbLen <= segLen - 4`. Negative
-  or oversize → `IndexOutOfBoundsException` from `asSlice`.
 - [ ] **Audit every `MemorySegment.asSlice` call site for bounds wrapping** —
   `grep -rn 'asSlice' core/src/main reader/src/main`. Each call on untrusted offsets/lengths
   must throw `VortexException` rather than the JDK's `IndexOutOfBoundsException`. Either wrap
@@ -79,8 +74,6 @@ Per-encoding gotchas:
 
 ### Proto-level hardening
 
-- [ ] **Decimal field validation** — `convertDType` accepts `Decimal{precision, scale}`
-  without checking `precision <= 38`, `0 <= scale <= precision`.
 - [ ] **Extension DType `metadata`** — unbounded byte buffer copy. Cap.
 
 ### Resource caps
@@ -116,8 +109,8 @@ relax for large fixtures.
 
 ### Process
 
-- [ ] **`SECURITY.md`** — private disclosure policy, supported versions, contact address.
-- [ ] **GitHub private vulnerability reporting** — enable in repo settings.
+- [ ] **GitHub private vulnerability reporting** — enable in repo settings (referenced by
+  `SECURITY.md`).
 - [ ] **Error messages** — review every `VortexException` message for adversary-controlled
   byte echo. Hex-escape or length-cap byte fields in messages.
 

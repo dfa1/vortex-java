@@ -32,6 +32,13 @@ FlatBuffer/Protobuf runtime exceptions). Regression suite lives under
 - **Layout-tree depth cap** — `PostscriptParser.convertLayout` is capped at depth 64,
   preventing both unbounded nesting and self-referential FlatBuffer cycles (a ~120-byte
   cycle attack previously triggered `StackOverflowError`).
+- **Layout metadata size cap** — per-layout `metadataAsByteBuffer()` is capped at 4 MiB
+  (above any real encoding's footprint; FSST's symbol table is the largest at ~32 KiB).
+- **Decimal field validation** — `DType.Decimal` is rejected unless `precision ∈ [1, 38]`
+  and `scale ∈ [0, precision]`, matching IEEE 754-2008 decimal128.
+- **`readFlatStats` bounds-check** — zone-map stats reads now validate the trailing
+  little-endian `fbLen` field against the segment size, returning empty stats on malformed
+  input rather than throwing `IndexOutOfBoundsException` from `MemorySegment.asSlice`.
 
 ### Added
 

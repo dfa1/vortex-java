@@ -33,6 +33,12 @@ final class PostscriptParser {
     /// blowing the JVM stack during {@link #convertLayout(io.github.dfa1.vortex.fbs.Layout, List, int)}.
     static final int MAX_LAYOUT_DEPTH = 64;
 
+    /// Hard cap on per-layout metadata size. The FlatBuffer runtime returns an unbounded slice
+    /// from {@code metadataAsByteBuffer()}; a crafted file can claim a multi-gigabyte metadata
+    /// blob and force later allocators into pathological behaviour. 4 MiB is well above any
+    /// real encoding's metadata footprint (the largest is FSST's symbol table at ~32 KiB).
+    static final int MAX_LAYOUT_METADATA_BYTES = 4 * 1024 * 1024;
+
     private PostscriptParser() {
     }
 
@@ -160,6 +166,11 @@ final class PostscriptParser {
         String encodingId = layoutSpecs.get(encIdx);
 
         ByteBuffer metadata = l.metadataAsByteBuffer();
+        if (metadata != null && metadata.remaining() > MAX_LAYOUT_METADATA_BYTES) {
+            throw new VortexException(
+                    "layout metadata size " + metadata.remaining()
+                            + " exceeds limit (" + MAX_LAYOUT_METADATA_BYTES + ")");
+        }
 
         var children = new ArrayList<Layout>(l.childrenLength());
         for (int i = 0; i < l.childrenLength(); i++) {
@@ -185,7 +196,20 @@ final class PostscriptParser {
             }
             case Type.Decimal -> {
                 var d = (Decimal) fbs.type(new Decimal());
-                yield new DType.Decimal((byte) d.precision(), d.scale(), d.nullable());
+                int precision = d.precision();
+                int scale = d.scale();
+                // IEEE 754-2008 decimal128 covers precision up to 38 digits; scale must be in
+                // [0, precision]. Reject crafted values up front rather than letting a downstream
+                // BigDecimal/byte-width calculation fail with an unrelated exception.
+                if (precision < 1 || precision > 38) {
+                    throw new VortexException(
+                            "decimal precision " + precision + " out of range (expected 1..38)");
+                }
+                if (scale < 0 || scale > precision) {
+                    throw new VortexException(
+                            "decimal scale " + scale + " out of range (expected 0.." + precision + ")");
+                }
+                yield new DType.Decimal((byte) precision, (byte) scale, d.nullable());
             }
             case Type.Utf8 -> new DType.Utf8(((Utf8) fbs.type(new Utf8())).nullable());
             case Type.Binary -> new DType.Binary(((Binary) fbs.type(new Binary())).nullable());
