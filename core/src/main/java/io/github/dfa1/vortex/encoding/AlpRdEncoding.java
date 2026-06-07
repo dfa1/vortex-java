@@ -397,8 +397,8 @@ public final class AlpRdEncoding implements Encoding {
         private static Array decodeF64(DecodeContext ctx,
             EncodingProtos.ALPRDMetadata meta,
             short[] dict, int rightBitWidth, long n) {
-            Array leftParts = decodeChildAs(ctx, 0, U16_DTYPE, n);
-            Array rightParts = decodeChildAs(ctx, 1, U64_DTYPE, n);
+            Array leftParts = ctx.decodeChild(0, U16_DTYPE, n);
+            Array rightParts = ctx.decodeChild(1, U64_DTYPE, n);
 
             MemorySegment leftSeg = leftParts.buffer(0);
             MemorySegment rightSeg = rightParts.buffer(0);
@@ -421,8 +421,8 @@ public final class AlpRdEncoding implements Encoding {
         private static Array decodeF32(DecodeContext ctx,
             EncodingProtos.ALPRDMetadata meta,
             short[] dict, int rightBitWidth, long n) {
-            Array leftParts = decodeChildAs(ctx, 0, U16_DTYPE, n);
-            Array rightParts = decodeChildAs(ctx, 1, U32_DTYPE, n);
+            Array leftParts = ctx.decodeChild(0, U16_DTYPE, n);
+            Array rightParts = ctx.decodeChild(1, U32_DTYPE, n);
 
             MemorySegment leftSeg = leftParts.buffer(0);
             MemorySegment rightSeg = rightParts.buffer(0);
@@ -449,8 +449,8 @@ public final class AlpRdEncoding implements Encoding {
             long offset = pm.getOffset();
             PType idxPtype = PType.values()[pm.getIndicesPtype().getNumber()];
 
-            Array idxArr = decodeChildAs(ctx, 2, new DType.Primitive(idxPtype, false), numPatches);
-            Array valArr = decodeChildAs(ctx, 3, U16_DTYPE, numPatches);
+            Array idxArr = ctx.decodeChild(2, new DType.Primitive(idxPtype, false), numPatches);
+            Array valArr = ctx.decodeChild(3, U16_DTYPE, numPatches);
 
             MemorySegment idxSeg = idxArr.buffer(0);
             MemorySegment valSeg = valArr.buffer(0);
@@ -469,8 +469,8 @@ public final class AlpRdEncoding implements Encoding {
             long offset = pm.getOffset();
             PType idxPtype = PType.values()[pm.getIndicesPtype().getNumber()];
 
-            Array idxArr = decodeChildAs(ctx, 2, new DType.Primitive(idxPtype, false), numPatches);
-            Array valArr = decodeChildAs(ctx, 3, U16_DTYPE, numPatches);
+            Array idxArr = ctx.decodeChild(2, new DType.Primitive(idxPtype, false), numPatches);
+            Array valArr = ctx.decodeChild(3, U16_DTYPE, numPatches);
 
             MemorySegment idxSeg = idxArr.buffer(0);
             MemorySegment valSeg = valArr.buffer(0);
@@ -482,13 +482,6 @@ public final class AlpRdEncoding implements Encoding {
                 int rightBits = rightSeg.getAtIndex(PTypeIO.LE_INT, absIdx);
                 out.setAtIndex(PTypeIO.LE_INT, (int) absIdx, leftBits | rightBits);
             }
-        }
-
-        private static Array decodeChildAs(DecodeContext parent, int childIdx, DType dtype, long rowCount) {
-            ArrayNode childNode = parent.node().children()[childIdx];
-            DecodeContext childCtx = new DecodeContext(
-                childNode, dtype, rowCount, parent.segmentBuffers(), parent.registry(), parent.arena());
-            return parent.registry().decode(childCtx);
         }
 
         private static long readUnsigned(MemorySegment seg, long i, PType ptype) {

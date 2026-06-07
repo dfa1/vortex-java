@@ -616,8 +616,8 @@ public final class BitpackedEncoding implements Encoding {
             long offset = pm.getOffset();
             PType idxPtype = ptypeFromProto(pm.getIndicesPtype());
 
-            Array idxArr = decodeChildAs(ctx, 0, new DType.Primitive(idxPtype, false), numPatches);
-            Array valArr = decodeChildAs(ctx, 1, ctx.dtype(), numPatches);
+            Array idxArr = ctx.decodeChild(0, new DType.Primitive(idxPtype, false), numPatches);
+            Array valArr = ctx.decodeChild(1, ctx.dtype(), numPatches);
 
             MemorySegment idxSeg = idxArr.buffer(0);
             MemorySegment valSeg = valArr.buffer(0);
@@ -631,13 +631,6 @@ public final class BitpackedEncoding implements Encoding {
                 }
                 MemorySegment.copy(valSeg, i * elemBytes, out, absIdx * elemBytes, elemBytes);
             }
-        }
-
-        private static Array decodeChildAs(DecodeContext parent, int childIdx, DType dtype, long rowCount) {
-            ArrayNode childNode = parent.node().children()[childIdx];
-            DecodeContext childCtx = new DecodeContext(
-                    childNode, dtype, rowCount, parent.segmentBuffers(), parent.registry(), parent.arena());
-            return parent.registry().decode(childCtx);
         }
 
         private static long readUnsignedIdx(MemorySegment seg, long i, PType ptype) {

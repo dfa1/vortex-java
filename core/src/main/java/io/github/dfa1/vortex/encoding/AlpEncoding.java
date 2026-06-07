@@ -415,7 +415,7 @@ public final class AlpEncoding implements Encoding {
         }
 
         private static Array decodeF64(DecodeContext ctx, EncodingProtos.ALPMetadata meta, int expE, int expF, long n) {
-            Array encoded = decodeChildAs(ctx, 0, I64_DTYPE, n);
+            Array encoded = ctx.decodeChild(0, I64_DTYPE, n);
 
             // Two separate lookups match Rust's left-to-right: (encoded * F10[f]) * IF10[e].
             // Precomputing a single factor = F10[f] * IF10[e] then encoded * factor uses different
@@ -445,7 +445,7 @@ public final class AlpEncoding implements Encoding {
         }
 
         private static Array decodeF32(DecodeContext ctx, EncodingProtos.ALPMetadata meta, int expE, int expF, long n) {
-            Array encoded = decodeChildAs(ctx, 0, I32_DTYPE, n);
+            Array encoded = ctx.decodeChild(0, I32_DTYPE, n);
 
             // Two separate lookups match Rust's left-to-right: (encoded * F10[f]) * IF10[e].
             float df = F10_F32[expF];
@@ -476,8 +476,8 @@ public final class AlpEncoding implements Encoding {
             long offset = pm.getOffset();
             PType idxPtype = ptypeFromProto(pm.getIndicesPtype());
 
-            Array idxArr = decodeChildAs(ctx, 1, new DType.Primitive(idxPtype, false), numPatches);
-            Array valArr = decodeChildAs(ctx, 2, ctx.dtype(), numPatches);
+            Array idxArr = ctx.decodeChild(1, new DType.Primitive(idxPtype, false), numPatches);
+            Array valArr = ctx.decodeChild(2, ctx.dtype(), numPatches);
 
             MemorySegment idxSeg = idxArr.buffer(0);
             MemorySegment valSeg = valArr.buffer(0);
@@ -486,13 +486,6 @@ public final class AlpEncoding implements Encoding {
                 long absIdx = readUnsigned(idxSeg, i, idxPtype) - offset;
                 MemorySegment.copy(valSeg, i * elemBytes, out, absIdx * elemBytes, elemBytes);
             }
-        }
-
-        private static Array decodeChildAs(DecodeContext parent, int childIdx, DType dtype, long rowCount) {
-            ArrayNode childNode = parent.node().children()[childIdx];
-            DecodeContext childCtx = new DecodeContext(
-                childNode, dtype, rowCount, parent.segmentBuffers(), parent.registry(), parent.arena());
-            return parent.registry().decode(childCtx);
         }
 
         private static long readUnsigned(MemorySegment seg, long i, PType ptype) {

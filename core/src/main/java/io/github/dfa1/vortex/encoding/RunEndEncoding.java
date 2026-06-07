@@ -154,15 +154,15 @@ public final class RunEndEncoding implements Encoding {
 
             long n = ctx.rowCount();
             DType endsDtype = new DType.Primitive(endsPtype, false);
-            Array endsArr = decodeChildAs(ctx, 0, endsDtype, numRuns);
+            Array endsArr = ctx.decodeChild(0, endsDtype, numRuns);
 
             if (ctx.dtype() instanceof DType.Utf8 || ctx.dtype() instanceof DType.Binary) {
-                Array valuesArr = decodeChildAs(ctx, 1, ctx.dtype(), numRuns);
+                Array valuesArr = ctx.decodeChild(1, ctx.dtype(), numRuns);
                 return expandStrings(endsArr, (VarBinArray) valuesArr, endsPtype, numRuns, offset, n, ctx.dtype(), ctx.arena());
             }
 
             if (ctx.dtype() instanceof DType.Bool) {
-                Array valuesArr = decodeChildAs(ctx, 1, ctx.dtype(), numRuns);
+                Array valuesArr = ctx.decodeChild(1, ctx.dtype(), numRuns);
                 return expandBool(endsArr, (BoolArray) valuesArr, endsPtype, numRuns, offset, n, ctx.dtype(), ctx.arena());
             }
 
@@ -170,7 +170,7 @@ public final class RunEndEncoding implements Encoding {
                 throw new VortexException(EncodingId.VORTEX_RUNEND, "expected primitive dtype, got " + ctx.dtype());
             }
             PType valuePtype = p.ptype();
-            Array valuesArr = decodeChildAs(ctx, 1, ctx.dtype(), numRuns);
+            Array valuesArr = ctx.decodeChild(1, ctx.dtype(), numRuns);
 
             return expand(endsArr.buffer(0), valuesArr.buffer(0),
                     endsPtype, valuePtype, numRuns, offset, n, ctx.dtype(), ctx.arena());
@@ -290,8 +290,8 @@ public final class RunEndEncoding implements Encoding {
                 DType dtype, SegmentAllocator arena
         ) {
             MemorySegment endsSeg = endsArr.buffer(0);
-            MemorySegment valBytes = valuesArr.buffer(0);
-            MemorySegment valOffsets = valuesArr.child(0).buffer(0);
+            MemorySegment valBytes = valuesArr.bytesSegment();
+            MemorySegment valOffsets = valuesArr.offsetsSegment();
             PType valOffPtype = ((DType.Primitive) valuesArr.child(0).dtype()).ptype();
 
             long totalBytes = 0;
@@ -336,13 +336,6 @@ public final class RunEndEncoding implements Encoding {
             DType i32 = new DType.Primitive(PType.I32, false);
             Array offsetArr = new IntArray(i32, n + 1, outOffsets.asReadOnly());
             return new VarBinArray(dtype, n, outBytes.asReadOnly(), offsetArr, PType.I32);
-        }
-
-        private static Array decodeChildAs(DecodeContext parent, int childIdx, DType dtype, long rowCount) {
-            ArrayNode childNode = parent.node().children()[childIdx];
-            DecodeContext childCtx = new DecodeContext(
-                    childNode, dtype, rowCount, parent.segmentBuffers(), parent.registry(), parent.arena());
-            return parent.registry().decode(childCtx);
         }
 
         private static long readUnsigned(MemorySegment seg, long i, PType ptype) {

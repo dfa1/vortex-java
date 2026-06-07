@@ -160,9 +160,10 @@ public final class ScanIterator implements AutoCloseable {
             PType codesPType, DType dtype,
             long n, SegmentAllocator arena
     ) {
-        MemorySegment valBytes = values.buffer(0);
-        MemorySegment valOffsets = values.child(0).buffer(0);
-        PType valOffPType = ((DType.Primitive) values.child(0).dtype()).ptype();
+        VarBinArray varBinValues = (VarBinArray) values;
+        MemorySegment valBytes = varBinValues.bytesSegment();
+        MemorySegment valOffsets = varBinValues.offsetsSegment();
+        PType valOffPType = ((DType.Primitive) varBinValues.child(0).dtype()).ptype();
         MemorySegment codesSegs = codes.buffer(0);
 
         // First pass: total output byte length
@@ -225,22 +226,22 @@ public final class ScanIterator implements AutoCloseable {
         }
         return switch (arr) {
             case LongArray a ->
-                    new LongArray(a.dtype(), rows, a.buffer(0).asSlice(0, rows * Long.BYTES));
+                    new LongArray(a.dtype(), rows, a.segment().asSlice(0, rows * Long.BYTES));
             case IntArray a ->
-                    new IntArray(a.dtype(), rows, a.buffer(0).asSlice(0, rows * Integer.BYTES));
+                    new IntArray(a.dtype(), rows, a.segment().asSlice(0, rows * Integer.BYTES));
             case DoubleArray a ->
-                    new DoubleArray(a.dtype(), rows, a.buffer(0).asSlice(0, rows * Double.BYTES));
+                    new DoubleArray(a.dtype(), rows, a.segment().asSlice(0, rows * Double.BYTES));
             case FloatArray a ->
-                    new FloatArray(a.dtype(), rows, a.buffer(0).asSlice(0, rows * Float.BYTES));
+                    new FloatArray(a.dtype(), rows, a.segment().asSlice(0, rows * Float.BYTES));
             case ShortArray a ->
-                    new ShortArray(a.dtype(), rows, a.buffer(0).asSlice(0, rows * Short.BYTES));
-            case ByteArray a -> new ByteArray(a.dtype(), rows, a.buffer(0).asSlice(0, rows));
+                    new ShortArray(a.dtype(), rows, a.segment().asSlice(0, rows * Short.BYTES));
+            case ByteArray a -> new ByteArray(a.dtype(), rows, a.segment().asSlice(0, rows));
             case BoolArray a ->
-                    new BoolArray(a.dtype(), rows, a.buffer(0).asSlice(0, (rows + 7) / 8));
+                    new BoolArray(a.dtype(), rows, a.segment().asSlice(0, (rows + 7) / 8));
             case NullArray a -> new NullArray(a.dtype(), rows);
             case VarBinArray a -> a.truncate(rows);
             case MaskedArray a -> {
-                Array truncChild = truncateArray((Array) a.child(0), rows);
+                Array truncChild = truncateArray(a.inner(), rows);
                 BoolArray v = a.validity();
                 BoolArray truncValidity = (v != null) ? (BoolArray) truncateArray(v, rows) : null;
                 yield new MaskedArray(truncChild, truncValidity);
@@ -440,10 +441,10 @@ public final class ScanIterator implements AutoCloseable {
                     "dict codes: layout row_count=" + n + " exceeds buffer capacity=" + bufferCodes);
         }
 
-        if (values instanceof VarBinArray) {
-            MemorySegment valOffsets = values.child(0).buffer(0);
-            PType valOffPType = ((DType.Primitive) values.child(0).dtype()).ptype();
-            return VarBinArray.ofDict(dtype, n, values.buffer(0), valOffsets, valOffPType,
+        if (values instanceof VarBinArray vb) {
+            MemorySegment valOffsets = vb.offsetsSegment();
+            PType valOffPType = ((DType.Primitive) vb.child(0).dtype()).ptype();
+            return VarBinArray.ofDict(dtype, n, vb.bytesSegment(), valOffsets, valOffPType,
                     codes.buffer(0), codesPType);
         }
         if (dtype instanceof DType.Primitive pDtype) {

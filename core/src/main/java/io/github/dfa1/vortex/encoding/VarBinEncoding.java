@@ -129,11 +129,7 @@ public final class VarBinEncoding implements Encoding {
             long n = ctx.rowCount();
 
             // Offsets: n+1 elements; bytes: raw string data.
-            ArrayNode offsetsNode = ctx.node().children()[0];
-            DecodeContext offsetsCtx = new DecodeContext(
-                    offsetsNode, offsetsDtype, n + 1,
-                    ctx.segmentBuffers(), ctx.registry(), ctx.arena());
-            Array offsets = ctx.registry().decode(offsetsCtx);
+            Array offsets = ctx.decodeChild(0, offsetsDtype, n + 1);
 
             MemorySegment bytes = ctx.buffer(0);
 

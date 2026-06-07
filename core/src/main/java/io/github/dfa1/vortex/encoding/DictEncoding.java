@@ -382,7 +382,7 @@ public final class DictEncoding implements Encoding {
 
             // Codes: decode through registry — supports both raw (VORTEX_PRIMITIVE) and cascade (FASTLANES_BITPACKED) children
             DType codesDtype = new DType.Primitive(codePType, false);
-            Array codesArr = decodeChildAs(ctx, 1, codesDtype, rowCount);
+            Array codesArr = ctx.decodeChild(1, codesDtype, rowCount);
             MemorySegment codesBuf = codesArr.buffer(0);
 
             MemorySegment out = ctx.arena().allocate(rowCount * (long) elemSize);
@@ -416,8 +416,8 @@ public final class DictEncoding implements Encoding {
 
             // Rust layout: children[0]=codes, children[1]=values
             DType codesDtype = new DType.Primitive(codePType, false);
-            Array codesArr = decodeChildAs(ctx, 0, codesDtype, rowCount);
-            Array valuesArr = decodeChildAs(ctx, 1, ctx.dtype(), valuesLen);
+            Array codesArr = ctx.decodeChild(0, codesDtype, rowCount);
+            Array valuesArr = ctx.decodeChild(1, ctx.dtype(), valuesLen);
 
             MemorySegment codesBuf = codesArr.buffer(0);
             MemorySegment valuesBuf = valuesArr.buffer(0);
@@ -461,23 +461,17 @@ public final class DictEncoding implements Encoding {
 
             // Rust layout: children[0]=codes, children[1]=values(VarBin)
             DType codesDtype = new DType.Primitive(codePType, false);
-            Array codesArr = decodeChildAs(ctx, 0, codesDtype, n);
+            Array codesArr = ctx.decodeChild(0, codesDtype, n);
             MemorySegment codesBuf = codesArr.buffer(0);
 
-            Array valuesArr = decodeChildAs(ctx, 1, ctx.dtype(), dictSize);
-            MemorySegment dictBytes = valuesArr.buffer(0);
-            MemorySegment dictOffsets = valuesArr.child(0).buffer(0);
+            Array valuesArr = ctx.decodeChild(1, ctx.dtype(), dictSize);
+            VarBinArray varBinValues = (VarBinArray) valuesArr;
+            MemorySegment dictBytes = varBinValues.bytesSegment();
+            MemorySegment dictOffsets = varBinValues.offsetsSegment();
 
             return VarBinArray.ofDict(ctx.dtype(), n,
                     dictBytes, dictOffsets, PType.I64,
                     codesBuf, codePType);
-        }
-
-        private static Array decodeChildAs(DecodeContext parent, int childIdx, DType dtype, long rowCount) {
-            ArrayNode childNode = parent.node().children()[childIdx];
-            DecodeContext childCtx = new DecodeContext(
-                    childNode, dtype, rowCount, parent.segmentBuffers(), parent.registry(), parent.arena());
-            return parent.registry().decode(childCtx);
         }
 
         private static long readCode(MemorySegment buf, PType codePType, long i) {

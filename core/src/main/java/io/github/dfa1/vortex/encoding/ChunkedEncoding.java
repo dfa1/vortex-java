@@ -129,21 +129,15 @@ public final class ChunkedEncoding implements Encoding {
             List<Array> chunks = new ArrayList<>(nchunks);
             for (int i = 0; i < nchunks; i++) {
                 long chunkLen = offsets[i + 1] - offsets[i];
-                ArrayNode chunkNode = ctx.node().children()[i + 1];
-                var chunkCtx = new DecodeContext(
-                        chunkNode, dtype, chunkLen, ctx.segmentBuffers(), ctx.registry(), ctx.arena());
-                chunks.add(ctx.registry().decode(chunkCtx));
+                chunks.add(ctx.decodeChild(i + 1, dtype, chunkLen));
             }
 
             return concat(chunks, dtype, ctx.rowCount(), ctx.arena());
         }
 
         private static long[] readOffsets(DecodeContext ctx, int nchunks) {
-            ArrayNode offsetsNode = ctx.node().children()[0];
             DType u64 = new DType.Primitive(PType.U64, false);
-            var offsetsCtx = new DecodeContext(
-                    offsetsNode, u64, nchunks + 1L, ctx.segmentBuffers(), ctx.registry(), ctx.arena());
-            Array offsetsArray = ctx.registry().decode(offsetsCtx);
+            Array offsetsArray = ctx.decodeChild(0, u64, nchunks + 1L);
             MemorySegment offsetsBuf = offsetsArray.buffer(0);
             long[] offsets = new long[nchunks + 1];
             for (int i = 0; i <= nchunks; i++) {

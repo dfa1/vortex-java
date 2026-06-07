@@ -222,8 +222,8 @@ public final class SparseEncoding implements Encoding {
 
             if (numPatches > 0) {
                 DType indicesDtype = new DType.Primitive(indicesPtype, false);
-                Array indicesArray = decodeChild(ctx, 0, indicesDtype, numPatches);
-                Array valuesArray = decodeChild(ctx, 1, ctx.dtype(), numPatches);
+                Array indicesArray = ctx.decodeChild(0, indicesDtype, numPatches);
+                Array valuesArray = ctx.decodeChild(1, ctx.dtype(), numPatches);
                 applyPatches(out, n, valuePtype,
                         indicesArray.buffer(0), valuesArray.buffer(0), indicesPtype, numPatches, offset);
             }
@@ -246,8 +246,8 @@ public final class SparseEncoding implements Encoding {
             MemorySegment out = ctx.arena().allocate(numBytes);
             if (numPatches > 0) {
                 DType indicesDtype = new DType.Primitive(indicesPtype, false);
-                Array indicesArray = decodeChild(ctx, 0, indicesDtype, numPatches);
-                Array valuesArray = decodeChild(ctx, 1, ctx.dtype(), numPatches);
+                Array indicesArray = ctx.decodeChild(0, indicesDtype, numPatches);
+                Array valuesArray = ctx.decodeChild(1, ctx.dtype(), numPatches);
                 MemorySegment idxSeg = indicesArray.buffer(0);
                 BoolArray bools = (BoolArray) valuesArray;
                 for (long i = 0; i < numPatches; i++) {
@@ -274,13 +274,13 @@ public final class SparseEncoding implements Encoding {
             }
 
             DType indicesDtype = new DType.Primitive(indicesPtype, false);
-            Array indicesArray = decodeChild(ctx, 0, indicesDtype, numPatches);
-            Array valuesArray = decodeChild(ctx, 1, ctx.dtype(), numPatches);
+            Array indicesArray = ctx.decodeChild(0, indicesDtype, numPatches);
+            Array valuesArray = ctx.decodeChild(1, ctx.dtype(), numPatches);
 
             MemorySegment idxSeg = indicesArray.buffer(0);
             VarBinArray varBin = (VarBinArray) valuesArray;
-            MemorySegment valBytes = varBin.buffer(0);
-            MemorySegment valOffsets = varBin.child(0).buffer(0);
+            MemorySegment valBytes = varBin.bytesSegment();
+            MemorySegment valOffsets = varBin.offsetsSegment();
             PType valOffPtype = ((DType.Primitive) varBin.child(0).dtype()).ptype();
 
             long totalBytes = 0;
@@ -320,17 +320,6 @@ public final class SparseEncoding implements Encoding {
                 case I64, U64 -> seg.getAtIndex(PTypeIO.LE_LONG, i);
                 default -> throw new VortexException(EncodingId.VORTEX_SPARSE, "unsupported offset ptype " + ptype);
             };
-        }
-
-        private static Array decodeChild(DecodeContext parent, int childIdx, DType dtype, long rowCount) {
-            ArrayNode childNode = parent.node().children()[childIdx];
-            DecodeContext childCtx = new DecodeContext(
-                    childNode, dtype, rowCount, parent.segmentBuffers(), parent.registry(), parent.arena());
-            try {
-                return parent.registry().decode(childCtx);
-            } catch (Exception e) {
-                throw new VortexException(EncodingId.VORTEX_SPARSE, "failed to decode child " + childIdx, e);
-            }
         }
 
         private static void fillSegment(MemorySegment out, long n, PType ptype, ScalarProtos.ScalarValue scalar) {

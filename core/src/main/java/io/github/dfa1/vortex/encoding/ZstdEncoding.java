@@ -218,11 +218,7 @@ public final class ZstdEncoding implements Encoding {
 
             BoolArray validity = null;
             if (ctx.node().children().length > 0) {
-                ArrayNode childNode = ctx.node().children()[0];
-                DecodeContext childCtx = new DecodeContext(
-                        childNode, new DType.Bool(false), ctx.rowCount(),
-                        ctx.segmentBuffers(), ctx.registry(), ctx.arena());
-                Array validityArray = ctx.registry().decode(childCtx);
+                Array validityArray = ctx.decodeChild(0, new DType.Bool(false), ctx.rowCount());
                 if (!(validityArray instanceof BoolArray ba)) {
                     throw new VortexException(EncodingId.VORTEX_ZSTD,
                             "validity child decoded to unexpected type: " + validityArray.getClass().getSimpleName());

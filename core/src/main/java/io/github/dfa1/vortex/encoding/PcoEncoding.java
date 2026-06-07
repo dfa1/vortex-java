@@ -111,7 +111,7 @@ public final class PcoEncoding implements Encoding {
             BoolArray validity = null;
             long validCount = n;
             if (ctx.node().children().length > 0) {
-                Array validityArr = decodeChild(ctx, new DType.Bool(false), n);
+                Array validityArr = ctx.decodeChild(0, new DType.Bool(false), n);
                 if (!(validityArr instanceof BoolArray ba)) {
                     throw new VortexException(EncodingId.VORTEX_PCO,
                             "pco validity child must be Bool, got: " + validityArr.getClass().getSimpleName());
@@ -274,13 +274,6 @@ public final class PcoEncoding implements Encoding {
             }
             DType nonNullDtype = new DType.Primitive(ptype, false);
             return new MaskedArray(toArray(nonNullDtype, n, fullOut), validity);
-        }
-
-        private static Array decodeChild(DecodeContext parent, DType dtype, long rowCount) {
-            ArrayNode childNode = parent.node().children()[0];
-            DecodeContext childCtx = new DecodeContext(
-                    childNode, dtype, rowCount, parent.segmentBuffers(), parent.registry(), parent.arena());
-            return parent.registry().decode(childCtx);
         }
 
         /// Decode one Classic-mode page into rawLatents and return the updated byte offset.

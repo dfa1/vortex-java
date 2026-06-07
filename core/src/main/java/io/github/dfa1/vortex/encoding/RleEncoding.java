@@ -332,16 +332,16 @@ public final class RleEncoding implements Encoding {
             DType indicesDtype = new DType.Primitive(indicesPtype, false);
             DType offsetsDtype = new DType.Primitive(offsetsPtype, false);
 
-            Array valuesArr = decodeChildAs(ctx, 0, valuesDtype, valuesLen);
-            Array indicesRaw = decodeChildAs(ctx, 1, indicesDtype, indicesLen);
-            Array offsetsArr = decodeChildAs(ctx, 2, offsetsDtype, offsetsLen);
+            Array valuesArr = ctx.decodeChild(0, valuesDtype, valuesLen);
+            Array indicesRaw = ctx.decodeChild(1, indicesDtype, indicesLen);
+            Array offsetsArr = ctx.decodeChild(2, offsetsDtype, offsetsLen);
 
             // Indices may carry a validity bitmap when the output column is nullable.
             BoolArray indicesValidity = null;
             Array indicesArr = indicesRaw;
             if (indicesRaw instanceof MaskedArray masked) {
-                indicesArr = masked.child(0);
-                indicesValidity = (BoolArray) masked.child(1);
+                indicesArr = masked.inner();
+                indicesValidity = masked.validity();
             }
 
             long[] values = readLongs(valuesArr.buffer(0), (int) valuesLen, ptype);
@@ -482,13 +482,6 @@ public final class RleEncoding implements Encoding {
                 PTypeIO.set(seg, (long) i * elemSize, ptype, decoded[offset + i]);
             }
             return seg;
-        }
-
-        private static Array decodeChildAs(DecodeContext parent, int childIdx, DType dtype, long rowCount) {
-            ArrayNode childNode = parent.node().children()[childIdx];
-            DecodeContext childCtx = new DecodeContext(
-                    childNode, dtype, rowCount, parent.segmentBuffers(), parent.registry(), parent.arena());
-            return parent.registry().decode(childCtx);
         }
 
         private static PType ptypeFromProto(DTypeProtos.PType proto) {

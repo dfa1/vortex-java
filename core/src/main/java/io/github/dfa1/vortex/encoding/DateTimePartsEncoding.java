@@ -204,20 +204,12 @@ public final class DateTimePartsEncoding implements Encoding {
             PType subsecondsPtype = PType.values()[decoded.getSubsecondsPtypeValue()];
             boolean nullable = ctx.dtype().nullable();
 
-            Array days = decodeChild(ctx, 0, new DType.Primitive(daysPtype, nullable));
-            Array seconds = decodeChild(ctx, 1, new DType.Primitive(secondsPtype, false));
-            Array subseconds = decodeChild(ctx, 2, new DType.Primitive(subsecondsPtype, false));
+            Array days = ctx.decodeChild(0, new DType.Primitive(daysPtype, nullable), ctx.rowCount());
+            Array seconds = ctx.decodeChild(1, new DType.Primitive(secondsPtype, false), ctx.rowCount());
+            Array subseconds = ctx.decodeChild(2, new DType.Primitive(subsecondsPtype, false), ctx.rowCount());
 
             return new GenericArray(ctx.dtype(), ctx.rowCount(), new MemorySegment[0],
                     new Array[]{days, seconds, subseconds});
-        }
-
-        private static Array decodeChild(DecodeContext ctx, int idx, DType childDtype) {
-            ArrayNode childNode = ctx.node().children()[idx];
-            DecodeContext childCtx = new DecodeContext(
-                    childNode, childDtype, ctx.rowCount(),
-                    ctx.segmentBuffers(), ctx.registry(), ctx.arena());
-            return ctx.registry().decode(childCtx);
         }
     }
 }

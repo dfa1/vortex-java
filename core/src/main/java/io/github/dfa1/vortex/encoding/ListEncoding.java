@@ -126,18 +126,10 @@ public final class ListEncoding implements Encoding {
             DType elementDtype = listDtype.elementType();
             DType offsetsDtype = new DType.Primitive(offsetPtype, false);
 
-            Array elements = decodeChildAs(ctx, 0, elementDtype, elementsLen);
-            Array offsets = decodeChildAs(ctx, 1, offsetsDtype, outerLen + 1);
+            Array elements = ctx.decodeChild(0, elementDtype, elementsLen);
+            Array offsets = ctx.decodeChild(1, offsetsDtype, outerLen + 1);
 
             return new ListArray(listDtype, outerLen, elements, offsets);
-        }
-
-        private static Array decodeChildAs(DecodeContext parent, int childIdx, DType dtype, long rowCount) {
-            ArrayNode childNode = parent.node().children()[childIdx];
-            DecodeContext childCtx = new DecodeContext(
-                    childNode, dtype, rowCount,
-                    parent.segmentBuffers(), parent.registry(), parent.arena());
-            return parent.registry().decode(childCtx);
         }
     }
 }

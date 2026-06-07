@@ -54,11 +54,11 @@ public final class MaskedEncoding implements Encoding {
                         "expected 1 or 2 children, got " + numChildren);
             }
 
-            Array child = decodeChild(ctx, 0, ctx.dtype().withNullable(false), ctx.rowCount());
+            Array child = ctx.decodeChild(0, ctx.dtype().withNullable(false), ctx.rowCount());
 
             BoolArray validity = null;
             if (numChildren == 2) {
-                Array validityArray = decodeChild(ctx, 1, new DType.Bool(false), ctx.rowCount());
+                Array validityArray = ctx.decodeChild(1, new DType.Bool(false), ctx.rowCount());
                 if (!(validityArray instanceof BoolArray ba)) {
                     throw new VortexException(EncodingId.VORTEX_MASKED,
                             "validity child decoded to unexpected type: " + validityArray.getClass().getSimpleName());
@@ -67,14 +67,6 @@ public final class MaskedEncoding implements Encoding {
             }
 
             return new MaskedArray(child, validity);
-        }
-
-        private static Array decodeChild(DecodeContext parent, int idx, DType dtype, long rowCount) {
-            ArrayNode childNode = parent.node().children()[idx];
-            DecodeContext childCtx = new DecodeContext(
-                    childNode, dtype, rowCount,
-                    parent.segmentBuffers(), parent.registry(), parent.arena());
-            return parent.registry().decode(childCtx);
         }
     }
 }

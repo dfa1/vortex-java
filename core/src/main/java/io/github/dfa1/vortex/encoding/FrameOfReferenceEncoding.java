@@ -212,8 +212,8 @@ public final class FrameOfReferenceEncoding implements Encoding {
             BoolArray validity = null;
             Array rawEncoded = encoded;
             if (encoded instanceof MaskedArray masked) {
-                rawEncoded = masked.child(0);
-                validity = (BoolArray) masked.child(1);
+                rawEncoded = masked.inner();
+                validity = masked.validity();
             }
 
             if (!(ctx.dtype() instanceof DType.Primitive p)) {

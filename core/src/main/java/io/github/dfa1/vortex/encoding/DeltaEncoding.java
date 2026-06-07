@@ -304,8 +304,8 @@ public final class DeltaEncoding implements Encoding {
             long basesLen = (deltasLen / FL_CHUNK_SIZE) * lanes;
             DType dtype = ctx.dtype();
 
-            Array basesArr = decodeChildAs(ctx, 0, dtype, basesLen);
-            Array deltasArr = decodeChildAs(ctx, 1, dtype, deltasLen);
+            Array basesArr = ctx.decodeChild(0, dtype, basesLen);
+            Array deltasArr = ctx.decodeChild(1, dtype, deltasLen);
 
             long[] basesAll = readLongs(basesArr.buffer(0), (int) basesLen, ptype);
             long[] deltasAll = readLongs(deltasArr.buffer(0), (int) deltasLen, ptype);
@@ -376,11 +376,5 @@ public final class DeltaEncoding implements Encoding {
             return out;
         }
 
-        private static Array decodeChildAs(DecodeContext parent, int childIdx, DType dtype, long rowCount) {
-            ArrayNode childNode = parent.node().children()[childIdx];
-            DecodeContext childCtx = new DecodeContext(
-                    childNode, dtype, rowCount, parent.segmentBuffers(), parent.registry(), parent.arena());
-            return parent.registry().decode(childCtx);
-        }
     }
 }

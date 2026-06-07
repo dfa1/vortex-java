@@ -109,11 +109,7 @@ public final class ZigZagEncoding implements Encoding {
             PType unsigned = toUnsigned(signed);
             long n = ctx.rowCount();
 
-            ArrayNode childNode = ctx.node().children()[0];
-            DecodeContext childCtx = new DecodeContext(
-                    childNode, new DType.Primitive(unsigned, false), n,
-                    ctx.segmentBuffers(), ctx.registry(), ctx.arena());
-            Array encoded = ctx.registry().decode(childCtx);
+            Array encoded = ctx.decodeChild(0, new DType.Primitive(unsigned, false), n);
 
             MemorySegment src = encoded.buffer(0);
             MemorySegment dst = ctx.arena().allocate(n * signed.byteSize());

@@ -213,8 +213,8 @@ public final class FsstEncoding implements Encoding {
             MemorySegment symbolLensBuf = ctx.buffer(1); // 1 byte per symbol
             MemorySegment compressedBytes = ctx.buffer(2); // FSST-compressed heap
 
-            Array uncompLens = decodeChild(ctx, 0, uncompLenPType, n);
-            Array codesOffsets = decodeChild(ctx, 1, codesOffPType, n + 1);
+            Array uncompLens = ctx.decodeChild(0, new DType.Primitive(uncompLenPType, false), n);
+            Array codesOffsets = ctx.decodeChild(1, new DType.Primitive(codesOffPType, false), n + 1);
             MemorySegment uncompLensSeg = uncompLens.buffer(0);
             MemorySegment codesOffsetsSeg = codesOffsets.buffer(0);
 
@@ -239,15 +239,6 @@ public final class FsstEncoding implements Encoding {
             DType i32 = new DType.Primitive(PType.I32, false);
             Array offsets = new IntArray(i32, n + 1, outOffsets.asReadOnly());
             return new VarBinArray(ctx.dtype(), n, outBytes.asReadOnly(), offsets, PType.I32);
-        }
-
-        private static Array decodeChild(DecodeContext parent, int idx, PType ptype, long rowCount) {
-            ArrayNode childNode = parent.node().children()[idx];
-            DType dtype = new DType.Primitive(ptype, false);
-            DecodeContext childCtx = new DecodeContext(
-                    childNode, dtype, rowCount,
-                    parent.segmentBuffers(), parent.registry(), parent.arena());
-            return parent.registry().decode(childCtx);
         }
 
         private static long decompressString(

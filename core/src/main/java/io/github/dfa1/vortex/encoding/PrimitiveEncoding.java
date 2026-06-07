@@ -326,11 +326,7 @@ public final class PrimitiveEncoding implements Encoding {
                 case F16 -> new Float16Array(dt, n, buf);
             };
             if (ctx.node().children().length == 1) {
-                ArrayNode validityNode = ctx.node().children()[0];
-                var validityCtx = new DecodeContext(
-                        validityNode, new DType.Bool(false), n,
-                        ctx.segmentBuffers(), ctx.registry(), ctx.arena());
-                Array va = ctx.registry().decode(validityCtx);
+                Array va = ctx.decodeChild(0, new DType.Bool(false), n);
                 if (!(va instanceof BoolArray validity)) {
                     throw new VortexException(EncodingId.VORTEX_PRIMITIVE,
                             "validity child decoded to unexpected type: " + va.getClass().getSimpleName());
