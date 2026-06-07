@@ -5,7 +5,7 @@ All notable changes to **vortex-java** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.4.0] — Unreleased
+## [0.4.0] — 2026-06-07
 
 The headline themes for this release are a **security-hardening sweep** of the file-format
 parser, a **public-API cleanup** of the `Array` hierarchy (the heap-allocated `buffer(int)` /
@@ -112,4 +112,4 @@ FlatBuffer/Protobuf runtime exceptions). Regression suite lives under
   with a consistent project-internal-first ordering.
 - Checkstyle scope tightened to exclude generated `fbs`/`proto` packages.
 
-[0.4.0]: https://github.com/dfa1/vortex-java/compare/v0.3.2...main
+[0.4.0]: https://github.com/dfa1/vortex-java/compare/v0.3.2...v0.4.0
