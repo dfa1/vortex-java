@@ -106,13 +106,13 @@ The JIT sees the full decode path as ordinary Java bytecode.
 ```
          ┌──────────────────────────────────────────┐
          │                  core                    │
-         │  DType · Encoding · EncodingRegistry      │
-         │  proto/fbs generated sources              │
+         │  DType · Encoding · EncodingRegistry     │
+         │  proto/fbs generated sources             │
          └──────────┬─────────────────┬─────────────┘
                     │                 │
-          ┌─────────▼──────┐  ┌───────▼────────────┐
+          ┌─────────▼──────┐  ┌───────▼─────────────┐
           │     reader     │  │       writer        │
-          │  VortexReader  │  │    VortexWriter      │
+          │  VortexReader  │  │    VortexWriter     │
           │  ScanIterator  │  │  CascadingCompressor│
           └──┬─────────────┘  └───────┬─────────────┘
              │    ┌───────────────────┘
