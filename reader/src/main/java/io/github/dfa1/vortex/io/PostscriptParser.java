@@ -54,7 +54,26 @@ final class PostscriptParser {
                                       ? slice(fileSegment, dtypeSeg.offset(), dtypeSeg.length())
                                       : null;
 
-        return parseBlobs(footerBuf, layoutBuf, dtypeBuf);
+        ParsedFile parsed = parseBlobs(footerBuf, layoutBuf, dtypeBuf);
+        validateSegmentSpecs(parsed.footer().segmentSpecs(), fileSize);
+        return parsed;
+    }
+
+    /// Rejects {@link SegmentSpec} entries whose declared range is not entirely contained in the
+    /// memory-mapped file. Without this check, every scan-time {@code fileSegment.asSlice(offset,
+    /// length)} on these specs would throw {@link IndexOutOfBoundsException}, breaking the
+    /// "malformed input → {@link VortexException}" contract.
+    static void validateSegmentSpecs(List<SegmentSpec> specs, long fileSize) {
+        for (int i = 0; i < specs.size(); i++) {
+            SegmentSpec s = specs.get(i);
+            long offset = s.offset();
+            long length = s.length();
+            if (offset < 0 || length < 0 || offset > fileSize || length > fileSize - offset) {
+                throw new VortexException(
+                        "footer segmentSpecs[" + i + "] out of bounds: offset=" + offset
+                                + " length=" + length + " fileSize=" + fileSize);
+            }
+        }
     }
 
     private static void checkBlobBounds(String name, long offset, long length, long fileSize) {

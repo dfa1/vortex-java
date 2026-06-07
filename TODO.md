@@ -41,10 +41,6 @@ parser exception. Each entry below is either a known gap, a contract audit, or s
 
 ### Parser hardening
 
-- [ ] **Footer segment-spec bounds at parse time** — `PostscriptParser.convertFooter` does
-  not validate `segmentSpec.offset`/`length` against `fileSize`. Negative or overflowing
-  values surface as `IndexOutOfBoundsException` later in `ScanIterator`/`VortexReader.readFlatStats`
-  when `fileSegment.asSlice(offset, length)` is called. Validate once at parse time, fail fast.
 - [ ] **Layout-tree depth limit** — `PostscriptParser.convertLayout` recurses on children with
   no max depth. Crafted nested layout → `StackOverflowError`. Add a depth cap (e.g. 64) and
   throw `VortexException` on overrun.
