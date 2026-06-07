@@ -55,10 +55,6 @@ public record DecodeContext(
 
     /// Recursively decode child {@code i} and return its primary backing segment.
     ///
-    /// <p>Equivalent to {@code decodeChild(i).segment()} but routes through
-    /// {@link Encoding#decodeSegment(DecodeContext)} to avoid the deprecated
-    /// {@link io.github.dfa1.vortex.core.array.Array#segment()} interface method.
-    ///
     /// @param i zero-based child index within this node's children array
     /// @return the primary {@link MemorySegment} of the decoded child
     public MemorySegment decodeChildSegment(int i) {
@@ -68,10 +64,6 @@ public record DecodeContext(
     }
 
     /// Recursively decode child {@code i} with an explicit dtype and row count, returning its primary segment.
-    ///
-    /// <p>Equivalent to {@code decodeChild(i, dtype, rowCount).segment()} but routes through
-    /// {@link Encoding#decodeSegment(DecodeContext)} to avoid the deprecated
-    /// {@link io.github.dfa1.vortex.core.array.Array#segment()} interface method.
     ///
     /// @param i        zero-based child index within this node's children array
     /// @param dtype    logical type to assign to the child context

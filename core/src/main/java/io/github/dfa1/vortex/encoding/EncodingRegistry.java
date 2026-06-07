@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.encoding;
 
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.ArraySegments;
 import io.github.dfa1.vortex.core.array.UnknownArray;
 
 import java.lang.foreign.MemorySegment;
@@ -129,7 +130,7 @@ public final class EncodingRegistry {
             case UnknownArrayNode _ -> null;
         };
         if (encoding != null) {
-            return encoding.decodeSegment(ctx);
+            return ArraySegments.of(encoding.decode(ctx));
         }
         String id = switch (node) {
             case KnownArrayNode k -> k.encodingId().id();

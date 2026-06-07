@@ -168,6 +168,11 @@ In every module `pom.xml`, dependencies are grouped with comments:
 
 Omit a section if empty (e.g. integration module has no production deps; performance has no test deps).
 
+## API design
+
+- Keep public interfaces as small as possible.
+- Don't expose internals. When in doubt, leave it out or make it private.
+
 ## Code style
 
 - indents are 4 spaces, enforced by checkstyle

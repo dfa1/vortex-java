@@ -2,9 +2,6 @@ package io.github.dfa1.vortex.encoding;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.array.Array;
-import io.github.dfa1.vortex.core.array.ArraySegments;
-
-import java.lang.foreign.MemorySegment;
 
 /// Combines encode and decode for one encoding type.
 /// Register via [EncodingRegistry] — implementations are discoverable via ServiceLoader.
@@ -33,19 +30,6 @@ public interface Encoding {
     /// @param ctx   encoding context supplying the arena for output buffer allocation
     /// @return encode result containing the root node, buffers, and optional stats
     EncodeResult encode(DType dtype, Object data, EncodeContext ctx);
-
-    /// Decodes this encoding and returns the primary backing segment of the result.
-    ///
-    /// <p>Default implementation decodes via {@link #decode(DecodeContext)} and extracts
-    /// the segment via {@link ArraySegments#of(Array)}. Override for efficiency if the
-    /// internal decode can return the buffer directly.
-    ///
-    /// @param ctx decoding context
-    /// @return the primary {@link MemorySegment} of the decoded array
-    /// @throws io.github.dfa1.vortex.core.VortexException if this encoding produces no primary segment
-    default MemorySegment decodeSegment(DecodeContext ctx) {
-        return ArraySegments.of(decode(ctx));
-    }
 
     /// Cascade-aware encode: returns a partial step with open child slots.
     /// Default wraps the terminal {@link #encode} result; override to expose children.

@@ -9,6 +9,7 @@ import dev.vortex.api.Session;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.ArraySegments;
 import io.github.dfa1.vortex.encoding.EncodingRegistry;
 import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.ScanResult;
@@ -178,7 +179,7 @@ public class RustWritesJavaReadsBigFileBenchmark {
             while (iter.hasNext()) {
                 ScanResult r = iter.next();
                 Array arr = r.columns().get("c0");
-                MemorySegment buf = arr.buffer(0);
+                MemorySegment buf = ArraySegments.of(arr);
                 long count = buf.byteSize() / Long.BYTES;
                 for (long i = 0; i < count; i++) {
                     sum += buf.getAtIndex(LE_LONG, i);
