@@ -85,20 +85,13 @@
   `DecodeContext.decodeChildSegment(int, DType, long)` → `MemorySegment` (same word, opposite semantics).
 
 - [ ] **Remove `segment()` from `Array` interface** — marked `@Deprecated(forRemoval=true)`.
-  Plan: add `Encoding.decodeSegment(DecodeContext)` (default throws); each encoding that produces a
-  segment-backed result overrides it directly. Add `DecodeContext.decodeChildSegment(int, DType, long)`
-  routing through the registry. Replace all `decodeChild(...); arr.segment()` pairs with
-  `decodeChildSegment(...)`.
-  Three non-trivial call sites:
-  - `VarBinArray` constructor: `offsetsArr` field is dead weight — only used to call `.segment()` once.
-    Fix: change constructor to accept `MemorySegment offsetsSeg` directly; remove the `Array offsetsArr`
-    field. Callers (`ZstdEncoding`, `VarBinViewEncoding`) already hold concrete types and can pass
-    `.segment()` at the call site.
-  - `ConstantEncoding:166`: `storage = decode(storageCtx)` is a recursive self-call; `ConstantEncoding`
-    always returns `GenericArray`. Fix: cast `((GenericArray) storage).segment()`.
-  - `FrameOfReferenceEncoding:228`: `rawEncoded` is either `ctx.decodeChild(0)` or `masked.inner()`,
-    always a primitive array. `ptype` is known at that point. Fix: sealed switch on `rawEncoded` by
-    ptype, or pattern-match `switch (rawEncoded)` over concrete primitive array types.
+  Phase 1+2 done: `Encoding.decodeSegment`, `DecodeContext.decodeChildSegment`, `ArraySegments` helper,
+  all encoding call sites migrated, `VarBinArray` constructor changed to `MemorySegment offsetsSeg`,
+  `ScanIterator` dict expansion migrated to typed params.
+  Remaining work (Phase 4):
+  - Remove `MaskedArray.segment()` delegation override
+  - Delete the deprecated `segment()` default from `Array` interface
+  - Delete `ArraySegments` (or keep as internal util — no callers remain outside)
   Once all call sites gone, delete the default method.
 
 - [ ] Use domain primitives (`UInt32`, `UInt64`, etc.) as value classes via Project Valhalla instead of raw `long`/`int`

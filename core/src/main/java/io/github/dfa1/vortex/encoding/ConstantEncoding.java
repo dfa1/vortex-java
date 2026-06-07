@@ -235,9 +235,7 @@ public final class ConstantEncoding implements Encoding {
                 offsetsSeg.setAtIndex(PTypeIO.LE_INT, i, (int) (i * strLen));
             }
 
-            DType i32 = new DType.Primitive(PType.I32, false);
-            Array offsets = new IntArray(i32, n + 1, offsetsSeg.asReadOnly());
-            return new VarBinArray(ctx.dtype(), n, bytesSeg.asReadOnly(), offsets, PType.I32);
+            return new VarBinArray(ctx.dtype(), n, bytesSeg.asReadOnly(), offsetsSeg.asReadOnly(), PType.I32);
         }
 
         private static long scalarToRawBits(ScalarProtos.ScalarValue scalar, PType ptype) {

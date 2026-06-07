@@ -32,9 +32,7 @@ class VarBinArrayTest {
             bb.putInt(o);
         }
         MemorySegment offsetsSeg = MemorySegment.ofArray(bb.array());
-        DType i32 = new DType.Primitive(PType.I32, false);
-        IntArray offsetsArr = new IntArray(i32, offs.length, offsetsSeg);
-        return new VarBinArray(UTF8, values.length, bytes, offsetsArr, PType.I32);
+        return new VarBinArray(UTF8, values.length, bytes, offsetsSeg, PType.I32);
     }
 
     @Nested

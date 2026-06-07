@@ -24,7 +24,6 @@ public final class VarBinArray implements Array {
     private final DType dtype;
     private final long length;
     private final MemorySegment bytes;
-    private final Array offsetsArr;
     private final MemorySegment offsetsSeg;
     private final PType offsetsPtype;
 
@@ -39,14 +38,13 @@ public final class VarBinArray implements Array {
     /// @param dtype        logical type (Utf8 or Binary)
     /// @param length       number of variable-length elements
     /// @param bytes        concatenated raw byte data for all elements
-    /// @param offsetsArr   offsets array of length {@code length + 1}; {@code offsets[i]..offsets[i+1]} is element {@code i}
+    /// @param offsetsSeg   offsets segment of length {@code length + 1}; {@code offsets[i]..offsets[i+1]} is element {@code i}
     /// @param offsetsPtype physical type of the offsets values (I32/U32 or I64/U64)
-    public VarBinArray(DType dtype, long length, MemorySegment bytes, Array offsetsArr, PType offsetsPtype) {
+    public VarBinArray(DType dtype, long length, MemorySegment bytes, MemorySegment offsetsSeg, PType offsetsPtype) {
         this.dtype = dtype;
         this.length = length;
         this.bytes = bytes;
-        this.offsetsArr = offsetsArr;
-        this.offsetsSeg = offsetsArr.segment();
+        this.offsetsSeg = offsetsSeg;
         this.offsetsPtype = offsetsPtype;
         this.dictValOffsets = null;
         this.dictValOffPType = null;
@@ -60,7 +58,6 @@ public final class VarBinArray implements Array {
         this.dtype = dtype;
         this.length = length;
         this.bytes = dictValBytes;
-        this.offsetsArr = null;
         this.offsetsSeg = null;
         this.offsetsPtype = null;
         this.dictValOffsets = dictValOffsets;
@@ -238,10 +235,6 @@ public final class VarBinArray implements Array {
         long byteEnd = readOffset(rows);
         int offBytes = (offsetsPtype == PType.I32 || offsetsPtype == PType.U32) ? Integer.BYTES : Long.BYTES;
         MemorySegment newOffsetsSeg = offsetsSeg.asSlice(0, (rows + 1) * offBytes);
-        DType offDtype = new DType.Primitive(offsetsPtype, false);
-        Array newOffsetsArr = (offBytes == Integer.BYTES)
-                                      ? new IntArray(offDtype, rows + 1, newOffsetsSeg)
-                                      : new LongArray(offDtype, rows + 1, newOffsetsSeg);
-        return new VarBinArray(dtype, rows, bytes.asSlice(0, byteEnd > 0 ? byteEnd : 0), newOffsetsArr, offsetsPtype);
+        return new VarBinArray(dtype, rows, bytes.asSlice(0, byteEnd > 0 ? byteEnd : 0), newOffsetsSeg, offsetsPtype);
     }
 }

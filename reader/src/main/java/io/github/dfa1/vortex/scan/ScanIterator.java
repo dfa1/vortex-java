@@ -128,14 +128,12 @@ public final class ScanIterator implements AutoCloseable {
     }
 
     private static Array expandDictPrimitive(
-            Array values, Array codes,
+            MemorySegment valBuf, MemorySegment codesBuf,
             PType codesPType, DType.Primitive dtype,
             long n, SegmentAllocator arena
     ) {
         PType ptype = dtype.ptype();
         int elemBytes = ptype.byteSize();
-        MemorySegment valBuf = values.segment();
-        MemorySegment codesBuf = codes.segment();
         MemorySegment out = arena.allocate(n * elemBytes, elemBytes);
         for (long i = 0; i < n; i++) {
             long code = readUnsigned(codesBuf, i, codesPType);
@@ -156,15 +154,13 @@ public final class ScanIterator implements AutoCloseable {
     // ── Column map builder ────────────────────────────────────────────────────
 
     private static Array expandDictStrings(
-            Array values, Array codes,
+            VarBinArray values, MemorySegment codesSegs,
             PType codesPType, DType dtype,
             long n, SegmentAllocator arena
     ) {
-        VarBinArray varBinValues = (VarBinArray) values;
-        MemorySegment valBytes = varBinValues.bytesSegment();
-        MemorySegment valOffsets = varBinValues.offsetsSegment();
-        PType valOffPType = varBinValues.offsetsPtype();
-        MemorySegment codesSegs = codes.segment();
+        MemorySegment valBytes = values.bytesSegment();
+        MemorySegment valOffsets = values.offsetsSegment();
+        PType valOffPType = values.offsetsPtype();
 
         // First pass: total output byte length
         long totalBytes = 0L;
@@ -192,9 +188,7 @@ public final class ScanIterator implements AutoCloseable {
             outOffsets.setAtIndex(LE_INT, i + 1, (int) bytePos);
         }
 
-        DType i32 = new DType.Primitive(PType.I32, false);
-        Array offsetArr = new IntArray(i32, n + 1, outOffsets.asReadOnly());
-        return new VarBinArray(dtype, n, outBytes.asReadOnly(), offsetArr, PType.I32);
+        return new VarBinArray(dtype, n, outBytes.asReadOnly(), outOffsets.asReadOnly(), PType.I32);
     }
 
     // ── Flat segment decoding ─────────────────────────────────────────────────
@@ -207,6 +201,19 @@ public final class ScanIterator implements AutoCloseable {
             case I32 -> seg.getAtIndex(LE_INT, idx);
             case I64, U64 -> seg.getAtIndex(LE_LONG, idx);
             default -> throw new VortexException(EncodingId.VORTEX_DICT, "layout: unsupported ptype " + ptype);
+        };
+    }
+
+    private static MemorySegment segmentOf(Array arr) {
+        return switch (arr) {
+            case ByteArray a -> a.segment();
+            case ShortArray a -> a.segment();
+            case IntArray a -> a.segment();
+            case LongArray a -> a.segment();
+            case FloatArray a -> a.segment();
+            case DoubleArray a -> a.segment();
+            case BoolArray a -> a.segment();
+            default -> throw new VortexException("segmentOf: unsupported array type " + arr.getClass().getSimpleName());
         };
     }
 
@@ -389,7 +396,7 @@ public final class ScanIterator implements AutoCloseable {
         for (Layout flat : flats) {
             Array chunk = decodeFlat(flat, dtype, arena);
             Array chunkData = chunk instanceof MaskedArray m ? m.inner() : chunk;
-            MemorySegment src = chunkData.segment();
+            MemorySegment src = segmentOf(chunkData);
             MemorySegment.copy(src, 0, combined, byteOffset, src.byteSize());
             byteOffset += src.byteSize();
         }
@@ -431,12 +438,21 @@ public final class ScanIterator implements AutoCloseable {
         Array values = decodeLayout(valuesLayout, dtype, arena);
         Array codes = decodeLayout(codesLayout, new DType.Primitive(codesPType, false), arena);
 
+        MemorySegment codesSeg = switch (codes) {
+            case ByteArray a -> a.segment();
+            case ShortArray a -> a.segment();
+            case IntArray a -> a.segment();
+            case LongArray a -> a.segment();
+            default -> throw new VortexException(EncodingId.VORTEX_DICT,
+                    "unexpected codes array type: " + codes.getClass().getSimpleName());
+        };
+
         // Zip-bomb guard: for direct-mapped encodings (e.g. vortex.primitive), the codes
         // buffer is mmap-bounded and can be much smaller than the claimed rowCount. Reject
         // before any O(n) allocation so an inflated layout row_count cannot trigger OOM.
         // Full-decode encodings (e.g. bitpacked) write n * elemBytes to the arena during
         // decodeLayout above, so their buffer will already match n — check passes for them.
-        long bufferCodes = codes.segment().byteSize() / (long) codesPType.byteSize();
+        long bufferCodes = codesSeg.byteSize() / (long) codesPType.byteSize();
         if (bufferCodes < n) {
             throw new VortexException(EncodingId.VORTEX_DICT,
                     "dict codes: layout row_count=" + n + " exceeds buffer capacity=" + bufferCodes);
@@ -446,12 +462,22 @@ public final class ScanIterator implements AutoCloseable {
             MemorySegment valOffsets = vb.offsetsSegment();
             PType valOffPType = vb.offsetsPtype();
             return VarBinArray.ofDict(dtype, n, vb.bytesSegment(), valOffsets, valOffPType,
-                    codes.segment(), codesPType);
+                    codesSeg, codesPType);
         }
         if (dtype instanceof DType.Primitive pDtype) {
-            return expandDictPrimitive(values, codes, codesPType, pDtype, n, arena);
+            MemorySegment valBuf = switch (values) {
+                case ByteArray a -> a.segment();
+                case ShortArray a -> a.segment();
+                case IntArray a -> a.segment();
+                case LongArray a -> a.segment();
+                case FloatArray a -> a.segment();
+                case DoubleArray a -> a.segment();
+                default -> throw new VortexException(EncodingId.VORTEX_DICT,
+                        "unexpected values array type: " + values.getClass().getSimpleName());
+            };
+            return expandDictPrimitive(valBuf, codesSeg, codesPType, pDtype, n, arena);
         }
-        return expandDictStrings(values, codes, codesPType, dtype, n, arena);
+        return expandDictStrings((VarBinArray) values, codesSeg, codesPType, dtype, n, arena);
     }
 
     private static PType readDictLayoutCodesPType(ByteBuffer rawMeta) {

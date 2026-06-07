@@ -333,9 +333,7 @@ public final class RunEndEncoding implements Encoding {
                 logicalPos = runEnd;
             }
 
-            DType i32 = new DType.Primitive(PType.I32, false);
-            Array offsetArr = new IntArray(i32, n + 1, outOffsets.asReadOnly());
-            return new VarBinArray(dtype, n, outBytes.asReadOnly(), offsetArr, PType.I32);
+            return new VarBinArray(dtype, n, outBytes.asReadOnly(), outOffsets.asReadOnly(), PType.I32);
         }
 
         private static long readUnsigned(MemorySegment seg, long i, PType ptype) {

@@ -4,7 +4,6 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
-import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
 
 import java.lang.foreign.Arena;
@@ -154,9 +153,7 @@ public final class VarBinViewEncoding implements Encoding {
                 outOffsets.setAtIndex(PTypeIO.LE_LONG, i + 1, bytePos);
             }
 
-            Array offsetsArr = new LongArray(new DType.Primitive(PType.I64, false), n + 1,
-                    outOffsets);
-            return new VarBinArray(ctx.dtype(), n, outBytes.asReadOnly(), offsetsArr, PType.I64);
+            return new VarBinArray(ctx.dtype(), n, outBytes.asReadOnly(), outOffsets, PType.I64);
         }
     }
 }

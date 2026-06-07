@@ -5,7 +5,6 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
-import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.proto.EncodingProtos;
 
@@ -234,9 +233,7 @@ public final class FsstEncoding implements Encoding {
                 outOffsets.setAtIndex(PTypeIO.LE_INT, i + 1, (int) outPos);
             }
 
-            DType i32 = new DType.Primitive(PType.I32, false);
-            Array offsets = new IntArray(i32, n + 1, outOffsets.asReadOnly());
-            return new VarBinArray(ctx.dtype(), n, outBytes.asReadOnly(), offsets, PType.I32);
+            return new VarBinArray(ctx.dtype(), n, outBytes.asReadOnly(), outOffsets.asReadOnly(), PType.I32);
         }
 
         private static long decompressString(
