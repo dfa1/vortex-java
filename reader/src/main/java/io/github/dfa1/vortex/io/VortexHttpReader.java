@@ -13,7 +13,6 @@ import io.github.dfa1.vortex.scan.ScanOptions;
 import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -79,34 +78,18 @@ public final class VortexHttpReader implements VortexHandle {
 
         MemorySegment tailSeg = MemorySegment.ofArray(tail);
         long trailerOff = tailLen - VortexFormat.TRAILER_SIZE;
-
-        int version = Short.toUnsignedInt(tailSeg.get(VortexReader.LE_SHORT, trailerOff));
-        int postscriptLen = Short.toUnsignedInt(tailSeg.get(VortexReader.LE_SHORT, trailerOff + 2));
-        checkMagic(tailSeg, trailerOff + 4, uri);
-
-        if (version != VortexFormat.VERSION) {
-            throw new VortexException(
-                "unsupported file version=" + version
-                    + " (this reader supports version " + VortexFormat.VERSION + ")");
-        }
-        if (postscriptLen == 0) {
-            throw new VortexException("invalid postscript: length is zero");
-        }
         long bodyBytes = fileSize - VortexFormat.TRAILER_SIZE;
-        if (postscriptLen > bodyBytes) {
-            throw new VortexException(
-                "invalid postscript: length=" + postscriptLen
-                    + " exceeds file body size=" + bodyBytes);
-        }
+        Trailer trailer = Trailer.parse(tailSeg.asSlice(trailerOff, VortexFormat.TRAILER_SIZE), bodyBytes);
 
-        long psOffInTail = trailerOff - postscriptLen;
+        // HTTP-specific: postscript may extend past the prefetched tail and need a larger fetch.
+        long psOffInTail = trailerOff - trailer.postscriptLen();
         if (psOffInTail < 0) {
             throw new VortexException(
                 "postscript (%d bytes) extends beyond %d-byte tail; fetch larger tail"
-                    .formatted(postscriptLen, TAIL_SIZE));
+                    .formatted(trailer.postscriptLen(), TAIL_SIZE));
         }
 
-        ByteBuffer postscriptBuf = tailSeg.asSlice(psOffInTail, postscriptLen)
+        ByteBuffer postscriptBuf = tailSeg.asSlice(psOffInTail, trailer.postscriptLen())
                                        .asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
 
         var ps = Postscript.getRootAsPostscript(postscriptBuf);
@@ -130,7 +113,7 @@ public final class VortexHttpReader implements VortexHandle {
         var parsed = PostscriptParser.parseBlobs(footerBuf, layoutBuf, dtypeBuf);
 
         return new VortexHttpReader(
-            uri, fileSize, version,
+            uri, fileSize, trailer.version(),
             parsed.footer(), parsed.dtype(), parsed.layout(),
             registry
         );
@@ -189,18 +172,6 @@ public final class VortexHttpReader implements VortexHandle {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("interrupted fetching range from " + uri, e);
-        }
-    }
-
-    private static void checkMagic(MemorySegment seg, long offset, URI uri) {
-        MemorySegment magicSlice = seg.asSlice(offset, VortexFormat.MAGIC_SIZE);
-        if (magicSlice.mismatch(VortexFormat.MAGIC) != -1) {
-            throw new VortexException(
-                "invalid magic bytes [%02x %02x %02x %02x] from %s".formatted(
-                    magicSlice.get(ValueLayout.JAVA_BYTE, 0),
-                    magicSlice.get(ValueLayout.JAVA_BYTE, 1),
-                    magicSlice.get(ValueLayout.JAVA_BYTE, 2),
-                    magicSlice.get(ValueLayout.JAVA_BYTE, 3), uri));
         }
     }
 

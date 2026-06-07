@@ -30,9 +30,7 @@ import java.util.Map;
 /// Close this to release the memory-mapped region.
 public final class VortexReader implements VortexHandle {
 
-    static final ValueLayout.OfShort LE_SHORT =
-            ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-    static final ValueLayout.OfInt LE_INT =
+    private static final ValueLayout.OfInt LE_INT =
             ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     private final Arena arena;
@@ -86,39 +84,12 @@ public final class VortexReader implements VortexHandle {
     private static VortexReader parse(
             MemorySegment seg, long size, Arena arena, EncodingRegistry registry
     ) {
-        // 8-byte trailer: version(u16 LE) | postscriptLen(u16 LE) | magic(4)
-        var trailer = seg.asSlice(size - VortexFormat.TRAILER_SIZE, VortexFormat.TRAILER_SIZE);
-
-        int version = Short.toUnsignedInt(trailer.get(LE_SHORT, 0));
-        int postscriptLen = Short.toUnsignedInt(trailer.get(LE_SHORT, 2));
-
-        MemorySegment magicSlice = trailer.asSlice(4, VortexFormat.MAGIC_SIZE);
-        if (magicSlice.mismatch(VortexFormat.MAGIC) != -1) {
-            throw new VortexException(
-                    "invalid magic bytes [%02x %02x %02x %02x]".formatted(
-                            magicSlice.get(ValueLayout.JAVA_BYTE, 0),
-                            magicSlice.get(ValueLayout.JAVA_BYTE, 1),
-                            magicSlice.get(ValueLayout.JAVA_BYTE, 2),
-                            magicSlice.get(ValueLayout.JAVA_BYTE, 3)));
-        }
-
-        if (version != VortexFormat.VERSION) {
-            throw new VortexException(
-                    "unsupported file version=" + version
-                            + " (this reader supports version " + VortexFormat.VERSION + ")");
-        }
-        if (postscriptLen == 0) {
-            throw new VortexException("invalid postscript: length is zero");
-        }
         long bodyBytes = size - VortexFormat.TRAILER_SIZE;
-        if (postscriptLen > bodyBytes) {
-            throw new VortexException(
-                    "invalid postscript: length=" + postscriptLen
-                            + " exceeds file body size=" + bodyBytes);
-        }
+        var trailerSeg = seg.asSlice(bodyBytes, VortexFormat.TRAILER_SIZE);
+        Trailer trailer = Trailer.parse(trailerSeg, bodyBytes);
 
-        long postscriptOffset = bodyBytes - postscriptLen;
-        var postscriptBuf = seg.asSlice(postscriptOffset, postscriptLen)
+        long postscriptOffset = bodyBytes - trailer.postscriptLen();
+        var postscriptBuf = seg.asSlice(postscriptOffset, trailer.postscriptLen())
                                     .asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
 
         PostscriptParser.ParsedFile parsed;
@@ -131,7 +102,7 @@ public final class VortexReader implements VortexHandle {
         }
 
         return new VortexReader(
-                arena, seg, size, version,
+                arena, seg, size, trailer.version(),
                 parsed.footer(), parsed.dtype(), parsed.layout(),
                 registry
         );
