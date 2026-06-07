@@ -20,6 +20,7 @@ import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.core.array.StructArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
+import io.github.dfa1.vortex.encoding.FlatSegmentDecoder;
 import io.github.dfa1.vortex.io.VortexHandle;
 
 import java.lang.foreign.Arena;
@@ -421,7 +422,7 @@ public final class ScanIterator implements AutoCloseable {
         int segIdx = flat.segments().getFirst();
         SegmentSpec spec = file.footer().segmentSpecs().get(segIdx);
         MemorySegment seg = file.slice(spec.offset(), spec.length());
-        return file.registry().decodeSegment(seg, file.footer().arraySpecs(), dtype, flat.rowCount(), arena);
+        return new FlatSegmentDecoder(file.registry()).decode(seg, file.footer().arraySpecs(), dtype, flat.rowCount(), arena);
     }
 
     private Array decodeDictLayout(Layout dictLayout, DType dtype, SegmentAllocator arena) {

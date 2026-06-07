@@ -78,21 +78,13 @@
   `MaskedArray` drops both; callers use `inner()` and `validity()`.
   Added `VarBinArray.offsetsPtype()` to replace all `.child(0).dtype()` patterns.
 
-- [ ] **Extract flat-segment parsing out of `EncodingRegistry`** — `EncodingRegistry.decodeSegment(MemorySegment, ...)`
-  contains file-format logic (FlatBuffer parse, buffer offset arithmetic, `asByteBuffer()`) that belongs in
-  a dedicated `FlatSegmentDecoder` class called by the scan layer. Registry becomes pure dispatch:
-  `register()`, `decode(DecodeContext)`. Also eliminates the name collision with the planned
-  `DecodeContext.decodeChildSegment(int, DType, long)` → `MemorySegment` (same word, opposite semantics).
+- [x] **Extract flat-segment parsing out of `EncodingRegistry`** — DONE. `FlatSegmentDecoder` owns
+  all file-format knowledge (FlatBuffer parse, buffer-offset arithmetic). Registry is now pure dispatch:
+  `register()`, `decode(DecodeContext)`, `decodeAsSegment(DecodeContext)`.
 
-- [ ] **Remove `segment()` from `Array` interface** — marked `@Deprecated(forRemoval=true)`.
-  Phase 1+2 done: `Encoding.decodeSegment`, `DecodeContext.decodeChildSegment`, `ArraySegments` helper,
-  all encoding call sites migrated, `VarBinArray` constructor changed to `MemorySegment offsetsSeg`,
-  `ScanIterator` dict expansion migrated to typed params.
-  Remaining work (Phase 4):
-  - Remove `MaskedArray.segment()` delegation override
-  - Delete the deprecated `segment()` default from `Array` interface
-  - Delete `ArraySegments` (or keep as internal util — no callers remain outside)
-  Once all call sites gone, delete the default method.
+- [x] **Remove `segment()` from `Array` interface** — DONE. `Array` now exposes only `length()` and
+  `dtype()`. `ArraySegments.of(Array)` in `core.array` is the canonical way to extract a `MemorySegment`
+  from any concrete subtype. All call sites migrated across core/reader/writer/integration.
 
 - [ ] Use domain primitives (`UInt32`, `UInt64`, etc.) as value classes via Project Valhalla instead of raw `long`/`int`
     - See https://dfa1.github.io/articles/rethink-domain-primitives-with-valhalla
