@@ -72,8 +72,6 @@ FlatBuffer/Protobuf runtime exceptions). Regression suite lives under
   via `offsetsSegment()`.
 - **`ArrayStats`** is no longer eagerly stored on decoded array types; statistics are now
   read on demand from the FlatBuffer node, matching the Rust reference implementation.
-- **`vortex-jni`** dependency bumped to **0.74.0**.
-- **JUnit Jupiter** bumped to **6.1.0** (was 5.11.4). Tests now require JUnit 6.
 
 ### Fixed
 
@@ -105,7 +103,8 @@ FlatBuffer/Protobuf runtime exceptions). Regression suite lives under
 ### Build & Tooling
 
 - **Dependabot enabled** for Maven and GitHub Actions.
-- Numerous dependency bumps: Mockito, FastCSV (3 → 4), H2 (2.3 → 2.4), Checkstyle, Zstd-JNI,
+- Numerous dependency bumps: JUnit Jupiter (5.11.4 → 6.1.0, tests now require JUnit 6),
+  Mockito, FastCSV (3 → 4), H2 (2.3 → 2.4), Checkstyle, Zstd-JNI,
   maven-compiler/surefire/failsafe/javadoc/source/shade/gpg/antrun/exec/build-helper plugins,
   `actions/checkout` (4 → 6), `actions/setup-java` (4 → 5), `actions/cache` (4 → 5),
   Sonatype central-publishing plugin.
