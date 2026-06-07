@@ -38,7 +38,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * lengths, offsets past end-of-file, and {@code offset + length} overflowing the file size at
  * the moment the postscript is parsed — before any scan iterator is ever created.
  */
-class MalformedFooterTest {
+class MalformedFooterSecurityTest {
 
     private static final byte[] MAGIC = {'V', 'T', 'X', 'F'};
     private static final EncodingRegistry REGISTRY = EncodingRegistry.empty();

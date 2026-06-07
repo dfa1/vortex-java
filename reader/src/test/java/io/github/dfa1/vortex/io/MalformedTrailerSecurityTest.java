@@ -28,7 +28,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * offset 4..7  magic         "VTXF"
  * </pre>
  */
-class MalformedTrailerTest {
+class MalformedTrailerSecurityTest {
 
     private static final byte[] MAGIC = {'V', 'T', 'X', 'F'};
     private static final EncodingRegistry REGISTRY = EncodingRegistry.empty();

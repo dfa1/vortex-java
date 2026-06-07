@@ -42,7 +42,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * <p>Both attacks are fixed: tests use small row counts safe for CI and assert the
  * expected post-fix behavior (no OOM; either completes or throws {@link io.github.dfa1.vortex.core.VortexException}).
  */
-class ZipBombTest {
+class ZipBombSecurityTest {
 
     // ~130-byte file claims 1 billion I64 rows; used for both attack vectors.
     private static final long BOMB = 1_000_000_000L;
