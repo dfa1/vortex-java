@@ -58,7 +58,7 @@
 		<zstd-jni.version>1.5.7-10</zstd-jni.version>
 		<flatbuffers.version>25.2.10</flatbuffers.version>
 		<protobuf.version>4.35.0</protobuf.version>
-		<fastcsv.version>3.6.0</fastcsv.version>
+		<fastcsv.version>4.3.0</fastcsv.version>
 		<hardwood.version>1.0.0.CR1</hardwood.version>
 		<jmh.version>1.37</jmh.version>
 		<!-- testing -->
