@@ -1,6 +1,6 @@
 # Compatibility
 
-Tested against the [Rust reference implementation](https://github.com/spiraldb/vortex) v0.72.0.
+Tested against the [Rust reference implementation](https://github.com/vortex-data/vortex) v0.72.0.
 For the rest of the API surface (reader, writer, scan, CLI), see [reference.md](reference.md).
 
 ## Encodings

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What it is
 
-Java 25 native implementation of the [Vortex](https://github.com/spiraldb/vortex) columnar file format. Uses FFM (
+Java 25 native implementation of the [Vortex](https://github.com/vortex-data/vortex) columnar file format. Uses FFM (
 `MemorySegment`/`Arena`) instead of JNI or `sun.misc.Unsafe`.
 
 ## Branching strategy

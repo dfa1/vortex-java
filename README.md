@@ -6,13 +6,13 @@
 
 > **Alpha** — not production-ready. APIs will change without notice.
 
-Pure-Java reader/writer for the [Vortex](https://github.com/spiraldb/vortex) columnar file format.
+Pure-Java reader/writer for the [Vortex](https://github.com/vortex-data/vortex) columnar file format.
 100% Java, no JNI, no `sun.misc.Unsafe`. Uses the FFM API (`MemorySegment`/`Arena`, Java 25+)
 for zero-copy memory-mapped reads.
 
 | Project                                                             | Language | Notes                                   |
 |---------------------------------------------------------------------|----------|-----------------------------------------|
-| [spiraldb/vortex](https://github.com/spiraldb/vortex)               | Rust     | Reference implementation + JNI bindings |
+| [vortex-data/vortex](https://github.com/vortex-data/vortex)         | Rust     | Reference implementation + JNI bindings |
 | [LaurieRhodes/vortex-go](https://github.com/LaurieRhodes/vortex-go) | Go       | Pure-language port                      |
 | **dfa1/vortex-java**                                                | **Java** | **This library**                        |
 
