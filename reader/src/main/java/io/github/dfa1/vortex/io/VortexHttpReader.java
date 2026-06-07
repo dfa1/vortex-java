@@ -35,8 +35,12 @@ public final class VortexHttpReader implements VortexHandle {
     /// all metadata blobs for typical Vortex files.
     static final int TAIL_SIZE = 65 * 1024;
 
+    /// Shared across all instances. JDK HttpClient is heavyweight and designed for reuse;
+    /// per-reader instantiation would create redundant connection pools and selector threads.
+    /// Never closed: lifetime tracks the JVM.
+    private static final HttpClient CLIENT = HttpClient.newHttpClient();
+
     private final URI uri;
-    private final HttpClient client;
     private final Arena arena;
     private final long fileSize;
     private final int version;
@@ -46,13 +50,12 @@ public final class VortexHttpReader implements VortexHandle {
     private final EncodingRegistry registry;
 
     private VortexHttpReader(
-            URI uri, HttpClient client, Arena arena, long fileSize,
-            int version, Footer footer, DType dtype, Layout layout,
-            EncodingRegistry registry
+        URI uri, long fileSize,
+        int version, Footer footer, DType dtype, Layout layout,
+        EncodingRegistry registry
     ) {
         this.uri = uri;
-        this.client = client;
-        this.arena = arena;
+        this.arena = Arena.ofConfined();
         this.fileSize = fileSize;
         this.version = version;
         this.footer = footer;
@@ -66,93 +69,84 @@ public final class VortexHttpReader implements VortexHandle {
     }
 
     public static VortexHttpReader open(URI uri, EncodingRegistry registry) throws IOException {
-        HttpClient client = HttpClient.newHttpClient();
-        Arena arena = Arena.ofConfined();
-        try {
-            // Single suffix Range request — Content-Range response header gives us fileSize.
-            // Avoids a separate HEAD round trip.
-            TailFetch tf = fetchTail(client, uri);
-            byte[] tail = tf.bytes();
-            long tailStart = tf.start();
-            long fileSize = tf.fileSize();
-            long tailLen = tail.length;
+        // Single suffix Range request — Content-Range response header gives us fileSize.
+        // Avoids a separate HEAD round trip.
+        TailFetch tf = fetchTail(uri);
+        byte[] tail = tf.bytes();
+        long tailStart = tf.start();
+        long fileSize = tf.fileSize();
+        long tailLen = tail.length;
 
-            MemorySegment tailSeg = MemorySegment.ofArray(tail);
-            long trailerOff = tailLen - VortexFormat.TRAILER_SIZE;
+        MemorySegment tailSeg = MemorySegment.ofArray(tail);
+        long trailerOff = tailLen - VortexFormat.TRAILER_SIZE;
 
-            int version = Short.toUnsignedInt(tailSeg.get(VortexReader.LE_SHORT, trailerOff));
-            int postscriptLen = Short.toUnsignedInt(tailSeg.get(VortexReader.LE_SHORT, trailerOff + 2));
-            checkMagic(tailSeg, trailerOff + 4, uri);
+        int version = Short.toUnsignedInt(tailSeg.get(VortexReader.LE_SHORT, trailerOff));
+        int postscriptLen = Short.toUnsignedInt(tailSeg.get(VortexReader.LE_SHORT, trailerOff + 2));
+        checkMagic(tailSeg, trailerOff + 4, uri);
 
-            if (version != VortexFormat.VERSION) {
-                throw new VortexException(
-                        "unsupported file version=" + version
-                                + " (this reader supports version " + VortexFormat.VERSION + ")");
-            }
-            if (postscriptLen == 0) {
-                throw new VortexException("invalid postscript: length is zero");
-            }
-            long bodyBytes = fileSize - VortexFormat.TRAILER_SIZE;
-            if (postscriptLen > bodyBytes) {
-                throw new VortexException(
-                        "invalid postscript: length=" + postscriptLen
-                                + " exceeds file body size=" + bodyBytes);
-            }
-
-            long psOffInTail = trailerOff - postscriptLen;
-            if (psOffInTail < 0) {
-                throw new VortexException(
-                        "postscript (%d bytes) extends beyond %d-byte tail; fetch larger tail"
-                                .formatted(postscriptLen, TAIL_SIZE));
-            }
-
-            ByteBuffer postscriptBuf = tailSeg.asSlice(psOffInTail, postscriptLen)
-                                               .asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
-
-            var ps = Postscript.getRootAsPostscript(postscriptBuf);
-
-            var footerSpec = ps.footer();
-            if (footerSpec == null) {
-                throw new VortexException("postscript missing footer segment");
-            }
-            var layoutSpec = ps.layout();
-            if (layoutSpec == null) {
-                throw new VortexException("postscript missing layout segment");
-            }
-            var dtypeSpec = ps.dtype();
-
-            ByteBuffer footerBuf = fetchBlob(footerSpec.offset(), footerSpec.length(),
-                    tailStart, tail, client, uri);
-            ByteBuffer layoutBuf = fetchBlob(layoutSpec.offset(), layoutSpec.length(),
-                    tailStart, tail, client, uri);
-            ByteBuffer dtypeBuf = (dtypeSpec != null && dtypeSpec.length() > 0)
-                                          ? fetchBlob(dtypeSpec.offset(), dtypeSpec.length(), tailStart, tail, client, uri)
-                                          : null;
-
-            var parsed = PostscriptParser.parseBlobs(footerBuf, layoutBuf, dtypeBuf);
-
-            return new VortexHttpReader(
-                    uri, client, arena, fileSize, version,
-                    parsed.footer(), parsed.dtype(), parsed.layout(),
-                    registry
-            );
-        } catch (Exception e) {
-            arena.close();
-            throw e;
+        if (version != VortexFormat.VERSION) {
+            throw new VortexException(
+                "unsupported file version=" + version
+                    + " (this reader supports version " + VortexFormat.VERSION + ")");
         }
+        if (postscriptLen == 0) {
+            throw new VortexException("invalid postscript: length is zero");
+        }
+        long bodyBytes = fileSize - VortexFormat.TRAILER_SIZE;
+        if (postscriptLen > bodyBytes) {
+            throw new VortexException(
+                "invalid postscript: length=" + postscriptLen
+                    + " exceeds file body size=" + bodyBytes);
+        }
+
+        long psOffInTail = trailerOff - postscriptLen;
+        if (psOffInTail < 0) {
+            throw new VortexException(
+                "postscript (%d bytes) extends beyond %d-byte tail; fetch larger tail"
+                    .formatted(postscriptLen, TAIL_SIZE));
+        }
+
+        ByteBuffer postscriptBuf = tailSeg.asSlice(psOffInTail, postscriptLen)
+                                       .asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
+
+        var ps = Postscript.getRootAsPostscript(postscriptBuf);
+
+        var footerSpec = ps.footer();
+        if (footerSpec == null) {
+            throw new VortexException("postscript missing footer segment");
+        }
+        var layoutSpec = ps.layout();
+        if (layoutSpec == null) {
+            throw new VortexException("postscript missing layout segment");
+        }
+        var dtypeSpec = ps.dtype();
+
+        ByteBuffer footerBuf = fetchBlob(footerSpec.offset(), footerSpec.length(), tailStart, tail, uri);
+        ByteBuffer layoutBuf = fetchBlob(layoutSpec.offset(), layoutSpec.length(), tailStart, tail, uri);
+        ByteBuffer dtypeBuf = (dtypeSpec != null && dtypeSpec.length() > 0)
+                                  ? fetchBlob(dtypeSpec.offset(), dtypeSpec.length(), tailStart, tail, uri)
+                                  : null;
+
+        var parsed = PostscriptParser.parseBlobs(footerBuf, layoutBuf, dtypeBuf);
+
+        return new VortexHttpReader(
+            uri, fileSize, version,
+            parsed.footer(), parsed.dtype(), parsed.layout(),
+            registry
+        );
     }
 
     /// Fetches the last [#TAIL_SIZE] bytes in one request.
     /// Parses `Content-Range: bytes start-end/total` to extract file size and tail offset,
     /// avoiding a separate HEAD round trip.
-    private static TailFetch fetchTail(HttpClient client, URI uri) throws IOException {
+    private static TailFetch fetchTail(URI uri) throws IOException {
         HttpRequest req = HttpRequest.newBuilder(uri)
-                                  .header("Range", "bytes=-" + TAIL_SIZE)
-                                  .GET()
-                                  .build();
+                              .header("Range", "bytes=-" + TAIL_SIZE)
+                              .GET()
+                              .build();
         HttpResponse<byte[]> resp;
         try {
-            resp = client.send(req, HttpResponse.BodyHandlers.ofByteArray());
+            resp = CLIENT.send(req, HttpResponse.BodyHandlers.ofByteArray());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("interrupted fetching tail of " + uri, e);
@@ -164,7 +158,7 @@ public final class VortexHttpReader implements VortexHandle {
         if (status == 206) {
             // Content-Range: bytes <start>-<end>/<total>
             String cr = resp.headers().firstValue("Content-Range")
-                                .orElseThrow(() -> new VortexException("206 response missing Content-Range from " + uri));
+                            .orElseThrow(() -> new VortexException("206 response missing Content-Range from " + uri));
             String spec = cr.substring("bytes ".length()); // "<start>-<end>/<total>"
             int slash = spec.indexOf('/');
             long total = Long.parseLong(spec.substring(slash + 1));
@@ -180,13 +174,13 @@ public final class VortexHttpReader implements VortexHandle {
         throw new VortexException("HTTP " + status + " fetching tail of " + uri);
     }
 
-    private static byte[] fetchRange(HttpClient client, URI uri, long from, long to) throws IOException {
+    private static byte[] fetchRange(URI uri, long from, long to) throws IOException {
         HttpRequest req = HttpRequest.newBuilder(uri)
-                                  .header("Range", "bytes=" + from + "-" + to)
-                                  .GET()
-                                  .build();
+                              .header("Range", "bytes=" + from + "-" + to)
+                              .GET()
+                              .build();
         try {
-            HttpResponse<byte[]> resp = client.send(req, HttpResponse.BodyHandlers.ofByteArray());
+            HttpResponse<byte[]> resp = CLIENT.send(req, HttpResponse.BodyHandlers.ofByteArray());
             int status = resp.statusCode();
             if (status != 206 && status != 200) {
                 throw new VortexException("HTTP " + status + " fetching range from " + uri);
@@ -202,11 +196,11 @@ public final class VortexHttpReader implements VortexHandle {
         MemorySegment magicSlice = seg.asSlice(offset, VortexFormat.MAGIC_SIZE);
         if (magicSlice.mismatch(VortexFormat.MAGIC) != -1) {
             throw new VortexException(
-                    "invalid magic bytes [%02x %02x %02x %02x] from %s".formatted(
-                            magicSlice.get(ValueLayout.JAVA_BYTE, 0),
-                            magicSlice.get(ValueLayout.JAVA_BYTE, 1),
-                            magicSlice.get(ValueLayout.JAVA_BYTE, 2),
-                            magicSlice.get(ValueLayout.JAVA_BYTE, 3), uri));
+                "invalid magic bytes [%02x %02x %02x %02x] from %s".formatted(
+                    magicSlice.get(ValueLayout.JAVA_BYTE, 0),
+                    magicSlice.get(ValueLayout.JAVA_BYTE, 1),
+                    magicSlice.get(ValueLayout.JAVA_BYTE, 2),
+                    magicSlice.get(ValueLayout.JAVA_BYTE, 3), uri));
         }
     }
 
@@ -214,16 +208,16 @@ public final class VortexHttpReader implements VortexHandle {
     /// If the blob falls within the already-fetched `tail`, extracts it directly;
     /// otherwise fires an additional Range request.
     private static ByteBuffer fetchBlob(
-            long offset, long length,
-            long tailStart, byte[] tail,
-            HttpClient client, URI uri
+        long offset, long length,
+        long tailStart, byte[] tail,
+        URI uri
     ) throws IOException {
         if (offset >= tailStart) {
             int relOffset = (int) (offset - tailStart);
             return ByteBuffer.wrap(tail, relOffset, (int) length)
-                           .slice().order(ByteOrder.LITTLE_ENDIAN);
+                       .slice().order(ByteOrder.LITTLE_ENDIAN);
         }
-        byte[] bytes = fetchRange(client, uri, offset, offset + length - 1);
+        byte[] bytes = fetchRange(uri, offset, offset + length - 1);
         return ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
     }
 
@@ -260,10 +254,10 @@ public final class VortexHttpReader implements VortexHandle {
     public MemorySegment slice(long offset, long length) {
         byte[] bytes;
         try {
-            bytes = fetchRange(client, uri, offset, offset + length - 1);
+            bytes = fetchRange(uri, offset, offset + length - 1);
         } catch (IOException e) {
             throw new VortexException(
-                    "failed to fetch [%d, %d) from %s: %s".formatted(offset, offset + length, uri, e.getMessage()));
+                "failed to fetch [%d, %d) from %s: %s".formatted(offset, offset + length, uri, e.getMessage()));
         }
         MemorySegment seg = arena.allocate(length);
         MemorySegment.copy(MemorySegment.ofArray(bytes), 0, seg, 0, length);
@@ -278,7 +272,6 @@ public final class VortexHttpReader implements VortexHandle {
     @Override
     public void close() {
         arena.close();
-        client.close();
     }
 
     private record TailFetch(byte[] bytes, long start, long fileSize) {
