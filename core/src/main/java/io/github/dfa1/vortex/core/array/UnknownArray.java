@@ -29,11 +29,7 @@ public record UnknownArray(
         Array[] children
 ) implements Array {
 
-    /// Returns the raw buffer at position {@code i}.
-    ///
-    /// @param i buffer index
-    /// @return the {@link MemorySegment} for buffer {@code i}
-    public MemorySegment buffer(int i) {
+    MemorySegment buffer(int i) {
         return buffers[i];
     }
 

@@ -13,7 +13,7 @@ public final class GenericArray implements Array {
 
     private final DType dtype;
     private final long length;
-    final MemorySegment[] buffers;
+    private final MemorySegment[] buffers;
     private final Array[] children;
 
     /// Creates a new {@code GenericArray} with the given buffers and children.
@@ -48,11 +48,7 @@ public final class GenericArray implements Array {
         return length;
     }
 
-    /// Returns the raw buffer at position {@code i}.
-    ///
-    /// @param i buffer index
-    /// @return the {@link MemorySegment} for buffer {@code i}
-    public MemorySegment buffer(int i) {
+    MemorySegment buffer(int i) {
         return buffers[i];
     }
 
