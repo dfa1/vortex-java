@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.core.array;
 
-import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -32,7 +31,6 @@ public final class VarBinArray implements Array {
     private final Array offsetsArr;
     private final MemorySegment offsetsSeg;
     private final PType offsetsPtype;
-    private final ArrayStats stats;
 
     // dict mode: non-null when this array lazily resolves through a dictionary
     private final MemorySegment dictValOffsets;
@@ -47,15 +45,13 @@ public final class VarBinArray implements Array {
     /// @param bytes        concatenated raw byte data for all elements
     /// @param offsetsArr   offsets array of length {@code length + 1}; {@code offsets[i]..offsets[i+1]} is element {@code i}
     /// @param offsetsPtype physical type of the offsets values (I32/U32 or I64/U64)
-    /// @param stats        per-array statistics, or {@link io.github.dfa1.vortex.core.ArrayStats#empty()} if unknown
-    public VarBinArray(DType dtype, long length, MemorySegment bytes, Array offsetsArr, PType offsetsPtype, ArrayStats stats) {
+    public VarBinArray(DType dtype, long length, MemorySegment bytes, Array offsetsArr, PType offsetsPtype) {
         this.dtype = dtype;
         this.length = length;
         this.bytes = bytes;
         this.offsetsArr = offsetsArr;
         this.offsetsSeg = offsetsArr.buffer(0);
         this.offsetsPtype = offsetsPtype;
-        this.stats = stats;
         this.dictValOffsets = null;
         this.dictValOffPType = null;
         this.dictCodesSegs = null;
@@ -64,14 +60,13 @@ public final class VarBinArray implements Array {
 
     private VarBinArray(DType dtype, long length,
             MemorySegment dictValBytes, MemorySegment dictValOffsets, PType dictValOffPType,
-            MemorySegment dictCodesSegs, PType dictCodesPType, ArrayStats stats) {
+            MemorySegment dictCodesSegs, PType dictCodesPType) {
         this.dtype = dtype;
         this.length = length;
         this.bytes = dictValBytes;
         this.offsetsArr = null;
         this.offsetsSeg = null;
         this.offsetsPtype = null;
-        this.stats = stats;
         this.dictValOffsets = dictValOffsets;
         this.dictValOffPType = dictValOffPType;
         this.dictCodesSegs = dictCodesSegs;
@@ -88,15 +83,13 @@ public final class VarBinArray implements Array {
     /// @param dictValOffPType physical type of the dictionary value offsets
     /// @param dictCodesSegs   per-row dictionary code indices (length = n)
     /// @param dictCodesPType  physical type of the dictionary codes
-    /// @param stats           per-array statistics, or {@link io.github.dfa1.vortex.core.ArrayStats#empty()} if unknown
     /// @return a new dict-mode {@code VarBinArray}
     public static VarBinArray ofDict(DType dtype, long n,
             MemorySegment dictValBytes,
             MemorySegment dictValOffsets, PType dictValOffPType,
-            MemorySegment dictCodesSegs, PType dictCodesPType,
-            ArrayStats stats) {
+            MemorySegment dictCodesSegs, PType dictCodesPType) {
         return new VarBinArray(dtype, n, dictValBytes, dictValOffsets, dictValOffPType,
-                dictCodesSegs, dictCodesPType, stats);
+                dictCodesSegs, dictCodesPType);
     }
 
     @Override
@@ -107,13 +100,6 @@ public final class VarBinArray implements Array {
     @Override
     public long length() {
         return length;
-    }
-
-    /// Returns per-array statistics.
-    ///
-    /// @return array statistics
-    public ArrayStats stats() {
-        return stats;
     }
 
     @Override
@@ -235,15 +221,15 @@ public final class VarBinArray implements Array {
         if (dictCodesSegs != null) {
             int codeBytes = dictCodesPType.byteSize();
             return VarBinArray.ofDict(dtype, rows, bytes, dictValOffsets, dictValOffPType,
-                    dictCodesSegs.asSlice(0, rows * codeBytes), dictCodesPType, ArrayStats.empty());
+                    dictCodesSegs.asSlice(0, rows * codeBytes), dictCodesPType);
         }
         long byteEnd = readOffset(rows);
         int offBytes = (offsetsPtype == PType.I32 || offsetsPtype == PType.U32) ? Integer.BYTES : Long.BYTES;
         MemorySegment newOffsetsSeg = offsetsSeg.asSlice(0, (rows + 1) * offBytes);
         DType offDtype = new DType.Primitive(offsetsPtype, false);
         Array newOffsetsArr = (offBytes == Integer.BYTES)
-                                      ? new IntArray(offDtype, rows + 1, newOffsetsSeg, ArrayStats.empty())
-                                      : new LongArray(offDtype, rows + 1, newOffsetsSeg, ArrayStats.empty());
-        return new VarBinArray(dtype, rows, bytes.asSlice(0, byteEnd > 0 ? byteEnd : 0), newOffsetsArr, offsetsPtype, ArrayStats.empty());
+                                      ? new IntArray(offDtype, rows + 1, newOffsetsSeg)
+                                      : new LongArray(offDtype, rows + 1, newOffsetsSeg);
+        return new VarBinArray(dtype, rows, bytes.asSlice(0, byteEnd > 0 ? byteEnd : 0), newOffsetsArr, offsetsPtype);
     }
 }

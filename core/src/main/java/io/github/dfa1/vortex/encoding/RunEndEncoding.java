@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -193,10 +192,10 @@ public final class RunEndEncoding implements Encoding {
             }
             MemorySegment ro = out.asReadOnly();
             return switch (valuePtype) {
-                case I64, U64 -> new LongArray(dtype, n, ro, ArrayStats.empty());
-                case I32, U32 -> new IntArray(dtype, n, ro, ArrayStats.empty());
-                case I16, U16 -> new ShortArray(dtype, n, ro, ArrayStats.empty());
-                case I8, U8 -> new ByteArray(dtype, n, ro, ArrayStats.empty());
+                case I64, U64 -> new LongArray(dtype, n, ro);
+                case I32, U32 -> new IntArray(dtype, n, ro);
+                case I16, U16 -> new ShortArray(dtype, n, ro);
+                case I8, U8 -> new ByteArray(dtype, n, ro);
                 default -> throw new VortexException(EncodingId.VORTEX_RUNEND, "unsupported ptype " + valuePtype);
             };
         }
@@ -282,7 +281,7 @@ public final class RunEndEncoding implements Encoding {
                 }
                 logicalPos = runEnd;
             }
-            return new BoolArray(dtype, n, out.asReadOnly(), ArrayStats.empty());
+            return new BoolArray(dtype, n, out.asReadOnly());
         }
 
         private static Array expandStrings(
@@ -335,8 +334,8 @@ public final class RunEndEncoding implements Encoding {
             }
 
             DType i32 = new DType.Primitive(PType.I32, false);
-            Array offsetArr = new IntArray(i32, n + 1, outOffsets.asReadOnly(), ArrayStats.empty());
-            return new VarBinArray(dtype, n, outBytes.asReadOnly(), offsetArr, PType.I32, ArrayStats.empty());
+            Array offsetArr = new IntArray(i32, n + 1, outOffsets.asReadOnly());
+            return new VarBinArray(dtype, n, outBytes.asReadOnly(), offsetArr, PType.I32);
         }
 
         private static Array decodeChildAs(DecodeContext parent, int childIdx, DType dtype, long rowCount) {

@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -397,7 +396,7 @@ public final class RleEncoding implements Encoding {
                     validityBuf.set(ValueLayout.JAVA_BYTE, byteIdx, (byte) (current | (1 << (j & 7))));
                 }
             }
-            BoolArray outputValidity = new BoolArray(new DType.Bool(false), rowCount, validityBuf, ArrayStats.empty());
+            BoolArray outputValidity = new BoolArray(new DType.Bool(false), rowCount, validityBuf);
             return new MaskedArray(result, outputValidity);
         }
 
@@ -410,13 +409,13 @@ public final class RleEncoding implements Encoding {
 
         private static Array toArray(DType dtype, long n, MemorySegment seg, PType ptype) {
             return switch (ptype) {
-                case I64, U64 -> new LongArray(dtype, n, seg, ArrayStats.empty());
-                case I32, U32 -> new IntArray(dtype, n, seg, ArrayStats.empty());
-                case I16, U16 -> new ShortArray(dtype, n, seg, ArrayStats.empty());
-                case I8, U8 -> new ByteArray(dtype, n, seg, ArrayStats.empty());
-                case F64 -> new DoubleArray(dtype, n, seg, ArrayStats.empty());
-                case F32 -> new FloatArray(dtype, n, seg, ArrayStats.empty());
-                case F16 -> new Float16Array(dtype, n, seg, ArrayStats.empty());
+                case I64, U64 -> new LongArray(dtype, n, seg);
+                case I32, U32 -> new IntArray(dtype, n, seg);
+                case I16, U16 -> new ShortArray(dtype, n, seg);
+                case I8, U8 -> new ByteArray(dtype, n, seg);
+                case F64 -> new DoubleArray(dtype, n, seg);
+                case F32 -> new FloatArray(dtype, n, seg);
+                case F16 -> new Float16Array(dtype, n, seg);
             };
         }
 

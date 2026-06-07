@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.core.array;
 
-import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 
 /// Decoded fixed-size list array: holds a flat elements [Array] of length {@code outerLen * fixedSize}.
@@ -31,13 +30,6 @@ public final class FixedSizeListArray implements Array {
     @Override
     public DType dtype() {
         return dtype;
-    }
-
-    /// Returns per-array statistics (always empty for fixed-size list arrays).
-    ///
-    /// @return empty array statistics
-    public ArrayStats stats() {
-        return ArrayStats.empty();
     }
 
     /// Returns the flat elements array containing {@code outerLen * fixedSize} values.

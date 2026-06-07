@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.encoding;
 
-import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.BoolArray;
@@ -55,6 +54,6 @@ public final class ByteBoolEncoding implements Encoding {
                 packed.set(ValueLayout.JAVA_BYTE, byteIdx, (byte) (cur | (1 << (i & 7))));
             }
         }
-        return new BoolArray(ctx.dtype(), n, packed, ArrayStats.empty());
+        return new BoolArray(ctx.dtype(), n, packed);
     }
 }

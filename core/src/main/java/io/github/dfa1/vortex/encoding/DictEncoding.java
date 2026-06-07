@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -445,8 +444,7 @@ public final class DictEncoding implements Encoding {
 
             return VarBinArray.ofDict(ctx.dtype(), n,
                     dictBytes, dictOffsets, PType.I64,
-                    codes, codePType,
-                    ArrayStats.empty());
+                    codes, codePType);
         }
 
         private static Array decodeUtf8DictProto(DecodeContext ctx, ByteBuffer metaBuf) {
@@ -472,8 +470,7 @@ public final class DictEncoding implements Encoding {
 
             return VarBinArray.ofDict(ctx.dtype(), n,
                     dictBytes, dictOffsets, PType.I64,
-                    codesBuf, codePType,
-                    ArrayStats.empty());
+                    codesBuf, codePType);
         }
 
         private static Array decodeChildAs(DecodeContext parent, int childIdx, DType dtype, long rowCount) {
@@ -608,12 +605,12 @@ public final class DictEncoding implements Encoding {
 
         private static Array typedArray(DType dtype, PType ptype, long n, MemorySegment seg) {
             return switch (ptype) {
-                case I64, U64 -> new LongArray(dtype, n, seg, ArrayStats.empty());
-                case I32, U32 -> new IntArray(dtype, n, seg, ArrayStats.empty());
-                case F64 -> new DoubleArray(dtype, n, seg, ArrayStats.empty());
-                case F32 -> new FloatArray(dtype, n, seg, ArrayStats.empty());
-                case I16, U16 -> new ShortArray(dtype, n, seg, ArrayStats.empty());
-                case I8, U8 -> new ByteArray(dtype, n, seg, ArrayStats.empty());
+                case I64, U64 -> new LongArray(dtype, n, seg);
+                case I32, U32 -> new IntArray(dtype, n, seg);
+                case F64 -> new DoubleArray(dtype, n, seg);
+                case F32 -> new FloatArray(dtype, n, seg);
+                case I16, U16 -> new ShortArray(dtype, n, seg);
+                case I8, U8 -> new ByteArray(dtype, n, seg);
                 default -> throw new VortexException(EncodingId.VORTEX_DICT, "unsupported ptype " + ptype);
             };
         }

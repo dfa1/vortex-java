@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.encoding;
 
-import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -177,12 +176,12 @@ public final class ChunkedEncoding implements Encoding {
             }
             MemorySegment ro = combined.asReadOnly();
             return switch (ptype) {
-                case I64, U64 -> new LongArray(dtype, totalRows, ro, ArrayStats.empty());
-                case I32, U32 -> new IntArray(dtype, totalRows, ro, ArrayStats.empty());
-                case F64 -> new DoubleArray(dtype, totalRows, ro, ArrayStats.empty());
-                case F32 -> new FloatArray(dtype, totalRows, ro, ArrayStats.empty());
-                case I16, U16 -> new ShortArray(dtype, totalRows, ro, ArrayStats.empty());
-                case I8, U8 -> new ByteArray(dtype, totalRows, ro, ArrayStats.empty());
+                case I64, U64 -> new LongArray(dtype, totalRows, ro);
+                case I32, U32 -> new IntArray(dtype, totalRows, ro);
+                case F64 -> new DoubleArray(dtype, totalRows, ro);
+                case F32 -> new FloatArray(dtype, totalRows, ro);
+                case I16, U16 -> new ShortArray(dtype, totalRows, ro);
+                case I8, U8 -> new ByteArray(dtype, totalRows, ro);
                 default -> throw new VortexException(EncodingId.VORTEX_CHUNKED,
                         "unsupported ptype for concat: " + ptype);
             };

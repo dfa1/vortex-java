@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.core.array;
 
-import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 
 import java.lang.foreign.MemorySegment;
@@ -47,13 +46,6 @@ public final class GenericArray implements Array {
     @Override
     public long length() {
         return length;
-    }
-
-    /// Returns per-array statistics (always empty for generic arrays).
-    ///
-    /// @return empty array statistics
-    public ArrayStats stats() {
-        return ArrayStats.empty();
     }
 
     @Override

@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.core.array;
 
-import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 
@@ -14,19 +13,16 @@ public final class ByteArray implements Array {
     private final DType dtype;
     private final long length;
     private final MemorySegment buffer;
-    private final ArrayStats stats;
 
     /// Constructs a {@code ByteArray} backed by the given buffer.
     ///
     /// @param dtype  logical type, must be a {@link io.github.dfa1.vortex.core.DType.Primitive} with ptype I8 or U8
     /// @param length number of logical elements
     /// @param buffer raw byte data (one byte per element, little-endian)
-    /// @param stats  per-array statistics, or {@link ArrayStats#empty()} if unknown
-    public ByteArray(DType dtype, long length, MemorySegment buffer, ArrayStats stats) {
+    public ByteArray(DType dtype, long length, MemorySegment buffer) {
         this.dtype = dtype;
         this.length = length;
         this.buffer = buffer;
-        this.stats = stats;
     }
 
     @Override
@@ -37,13 +33,6 @@ public final class ByteArray implements Array {
     @Override
     public long length() {
         return length;
-    }
-
-    /// Returns the per-array statistics for this array.
-    ///
-    /// @return the {@link ArrayStats} associated with this array
-    public ArrayStats stats() {
-        return stats;
     }
 
     @Override

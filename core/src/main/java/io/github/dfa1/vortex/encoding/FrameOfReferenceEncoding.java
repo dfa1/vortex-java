@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -230,11 +229,11 @@ public final class FrameOfReferenceEncoding implements Encoding {
             long n = ctx.rowCount();
             MemorySegment dst = applyReference(src, n, p.ptype(), ref, ctx.arena());
             Array result = switch (p.ptype()) {
-                case I64, U64 -> new LongArray(ctx.dtype(), n, dst, ArrayStats.empty());
-                case I32, U32 -> new IntArray(ctx.dtype(), n, dst, ArrayStats.empty());
-                case F64 -> new DoubleArray(ctx.dtype(), n, dst, ArrayStats.empty());
-                case I16, U16 -> new ShortArray(ctx.dtype(), n, dst, ArrayStats.empty());
-                case I8, U8 -> new ByteArray(ctx.dtype(), n, dst, ArrayStats.empty());
+                case I64, U64 -> new LongArray(ctx.dtype(), n, dst);
+                case I32, U32 -> new IntArray(ctx.dtype(), n, dst);
+                case F64 -> new DoubleArray(ctx.dtype(), n, dst);
+                case I16, U16 -> new ShortArray(ctx.dtype(), n, dst);
+                case I8, U8 -> new ByteArray(ctx.dtype(), n, dst);
                 default -> throw new VortexException(EncodingId.FASTLANES_FOR, "unsupported ptype " + p.ptype());
             };
             return validity != null ? new MaskedArray(result, validity) : result;

@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -442,7 +441,7 @@ public final class AlpEncoding implements Encoding {
                 applyPatches(ctx, meta.getPatches(), buf, 8);
             }
 
-            return new DoubleArray(ctx.dtype(), n, buf.asReadOnly(), ArrayStats.empty());
+            return new DoubleArray(ctx.dtype(), n, buf.asReadOnly());
         }
 
         private static Array decodeF32(DecodeContext ctx, EncodingProtos.ALPMetadata meta, int expE, int expF, long n) {
@@ -468,7 +467,7 @@ public final class AlpEncoding implements Encoding {
                 applyPatches(ctx, meta.getPatches(), buf32, 4);
             }
 
-            return new FloatArray(ctx.dtype(), n, buf32.asReadOnly(), ArrayStats.empty());
+            return new FloatArray(ctx.dtype(), n, buf32.asReadOnly());
         }
 
         private static void applyPatches(DecodeContext ctx, EncodingProtos.PatchesMetadata pm,

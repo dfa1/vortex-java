@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -215,10 +214,10 @@ public final class SequenceEncoding implements Encoding {
                 }
             }
             return switch (pt) {
-                case I64, U64 -> new LongArray(dtype, n, seg, ArrayStats.empty());
-                case I32, U32 -> new IntArray(dtype, n, seg, ArrayStats.empty());
-                case I16, U16 -> new ShortArray(dtype, n, seg, ArrayStats.empty());
-                case I8, U8 -> new ByteArray(dtype, n, seg, ArrayStats.empty());
+                case I64, U64 -> new LongArray(dtype, n, seg);
+                case I32, U32 -> new IntArray(dtype, n, seg);
+                case I16, U16 -> new ShortArray(dtype, n, seg);
+                case I8, U8 -> new ByteArray(dtype, n, seg);
                 default -> throw new VortexException(EncodingId.VORTEX_SEQUENCE, "unsupported ptype " + pt);
             };
         }
@@ -230,7 +229,7 @@ public final class SequenceEncoding implements Encoding {
             for (long i = 0; i < n; i++) {
                 seg.setAtIndex(PTypeIO.LE_FLOAT, i, base + i * mul);
             }
-            return new FloatArray(dtype, n, seg, ArrayStats.empty());
+            return new FloatArray(dtype, n, seg);
         }
 
         private static Array decodeF64(EncodingProtos.SequenceMetadata meta, long n, DType dtype, SegmentAllocator arena) {
@@ -240,7 +239,7 @@ public final class SequenceEncoding implements Encoding {
             for (long i = 0; i < n; i++) {
                 seg.setAtIndex(PTypeIO.LE_DOUBLE, i, base + i * mul);
             }
-            return new DoubleArray(dtype, n, seg, ArrayStats.empty());
+            return new DoubleArray(dtype, n, seg);
         }
 
         private static Array decodeF16(EncodingProtos.SequenceMetadata meta, long n, DType dtype, SegmentAllocator arena) {
@@ -252,7 +251,7 @@ public final class SequenceEncoding implements Encoding {
             for (long i = 0; i < n; i++) {
                 seg.setAtIndex(PTypeIO.LE_SHORT, i, Float.floatToFloat16(base + i * mul));
             }
-            return new Float16Array(dtype, n, seg, ArrayStats.empty());
+            return new Float16Array(dtype, n, seg);
         }
 
         private static long signedValue(io.github.dfa1.vortex.proto.ScalarProtos.ScalarValue sv) {

@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.encoding;
 
-import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.BoolArray;
@@ -69,6 +68,6 @@ public final class BoolEncoding implements Encoding {
 
     @Override
     public Array decode(DecodeContext ctx) {
-        return new BoolArray(ctx.dtype(), ctx.rowCount(), ctx.buffer(0), ArrayStats.empty());
+        return new BoolArray(ctx.dtype(), ctx.rowCount(), ctx.buffer(0));
     }
 }

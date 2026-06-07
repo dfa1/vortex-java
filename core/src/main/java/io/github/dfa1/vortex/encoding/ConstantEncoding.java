@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -185,12 +184,12 @@ public final class ConstantEncoding implements Encoding {
 
             MemorySegment ro = outSeg.asReadOnly();
             return switch (ptype) {
-                case I64, U64 -> new LongArray(ctx.dtype(), n, ro, ArrayStats.empty());
-                case I32, U32 -> new IntArray(ctx.dtype(), n, ro, ArrayStats.empty());
-                case F64 -> new DoubleArray(ctx.dtype(), n, ro, ArrayStats.empty());
-                case F32 -> new FloatArray(ctx.dtype(), n, ro, ArrayStats.empty());
-                case I16, U16 -> new ShortArray(ctx.dtype(), n, ro, ArrayStats.empty());
-                case I8, U8 -> new ByteArray(ctx.dtype(), n, ro, ArrayStats.empty());
+                case I64, U64 -> new LongArray(ctx.dtype(), n, ro);
+                case I32, U32 -> new IntArray(ctx.dtype(), n, ro);
+                case F64 -> new DoubleArray(ctx.dtype(), n, ro);
+                case F32 -> new FloatArray(ctx.dtype(), n, ro);
+                case I16, U16 -> new ShortArray(ctx.dtype(), n, ro);
+                case I8, U8 -> new ByteArray(ctx.dtype(), n, ro);
                 default -> throw new VortexException(EncodingId.VORTEX_CONSTANT, "unsupported ptype " + ptype);
             };
         }
@@ -216,7 +215,7 @@ public final class ConstantEncoding implements Encoding {
                     seg.set(ValueLayout.JAVA_BYTE, i, (byte) 0xFF);
                 }
             }
-            return new BoolArray(ctx.dtype(), n, seg.asReadOnly(), ArrayStats.empty());
+            return new BoolArray(ctx.dtype(), n, seg.asReadOnly());
         }
 
         private static Array decodeString(DecodeContext ctx, ScalarProtos.ScalarValue scalar, long n) {
@@ -237,8 +236,8 @@ public final class ConstantEncoding implements Encoding {
             }
 
             DType i32 = new DType.Primitive(PType.I32, false);
-            Array offsets = new IntArray(i32, n + 1, offsetsSeg.asReadOnly(), ArrayStats.empty());
-            return new VarBinArray(ctx.dtype(), n, bytesSeg.asReadOnly(), offsets, PType.I32, ArrayStats.empty());
+            Array offsets = new IntArray(i32, n + 1, offsetsSeg.asReadOnly());
+            return new VarBinArray(ctx.dtype(), n, bytesSeg.asReadOnly(), offsets, PType.I32);
         }
 
         private static long scalarToRawBits(ScalarProtos.ScalarValue scalar, PType ptype) {

@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -238,8 +237,8 @@ public final class FsstEncoding implements Encoding {
             }
 
             DType i32 = new DType.Primitive(PType.I32, false);
-            Array offsets = new IntArray(i32, n + 1, outOffsets.asReadOnly(), ArrayStats.empty());
-            return new VarBinArray(ctx.dtype(), n, outBytes.asReadOnly(), offsets, PType.I32, ArrayStats.empty());
+            Array offsets = new IntArray(i32, n + 1, outOffsets.asReadOnly());
+            return new VarBinArray(ctx.dtype(), n, outBytes.asReadOnly(), offsets, PType.I32);
         }
 
         private static Array decodeChild(DecodeContext parent, int idx, PType ptype, long rowCount) {

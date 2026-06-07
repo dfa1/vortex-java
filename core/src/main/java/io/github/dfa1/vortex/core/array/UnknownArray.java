@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.core.array;
 
-import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 
 import java.lang.foreign.MemorySegment;
@@ -21,15 +20,13 @@ import java.nio.ByteBuffer;
 /// @param metadata   raw encoding metadata bytes, or {@code null}
 /// @param buffers    raw data buffers owned by this node
 /// @param children   decoded child arrays (also wrapped as unknown)
-/// @param stats      per-array statistics
 public record UnknownArray(
         String encodingId,
         DType dtype,
         long length,
         ByteBuffer metadata,
         MemorySegment[] buffers,
-        Array[] children,
-        ArrayStats stats
+        Array[] children
 ) implements Array {
 
     @Override

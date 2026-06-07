@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -620,11 +619,11 @@ public final class PcoEncoding implements Encoding {
         private static Array toArray(DType dtype, long n, MemorySegment out) {
             PType ptype = ((DType.Primitive) dtype).ptype();
             return switch (ptype) {
-                case I16, U16 -> new ShortArray(dtype, n, out, ArrayStats.empty());
-                case I32, U32 -> new IntArray(dtype, n, out, ArrayStats.empty());
-                case F32 -> new FloatArray(dtype, n, out, ArrayStats.empty());
-                case I64, U64 -> new LongArray(dtype, n, out, ArrayStats.empty());
-                case F64 -> new DoubleArray(dtype, n, out, ArrayStats.empty());
+                case I16, U16 -> new ShortArray(dtype, n, out);
+                case I32, U32 -> new IntArray(dtype, n, out);
+                case F32 -> new FloatArray(dtype, n, out);
+                case I64, U64 -> new LongArray(dtype, n, out);
+                case F64 -> new DoubleArray(dtype, n, out);
                 default -> throw new VortexException(EncodingId.VORTEX_PCO,
                         "pco: unsupported ptype " + ptype);
             };

@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.core.array;
 
-import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
 
@@ -35,13 +34,6 @@ public final class StructArray implements Array {
     @Override
     public DType dtype() {
         return dtype;
-    }
-
-    /// Returns per-array statistics (always empty for struct arrays).
-    ///
-    /// @return empty array statistics
-    public ArrayStats stats() {
-        return ArrayStats.empty();
     }
 
     /// Returns the number of fields in this struct.

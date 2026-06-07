@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -230,12 +229,12 @@ public final class SparseEncoding implements Encoding {
             }
 
             return switch (valuePtype) {
-                case I64, U64 -> new LongArray(ctx.dtype(), n, out, ArrayStats.empty());
-                case I32, U32 -> new IntArray(ctx.dtype(), n, out, ArrayStats.empty());
-                case F64 -> new DoubleArray(ctx.dtype(), n, out, ArrayStats.empty());
-                case F32 -> new FloatArray(ctx.dtype(), n, out, ArrayStats.empty());
-                case I16, U16 -> new ShortArray(ctx.dtype(), n, out, ArrayStats.empty());
-                case I8, U8 -> new ByteArray(ctx.dtype(), n, out, ArrayStats.empty());
+                case I64, U64 -> new LongArray(ctx.dtype(), n, out);
+                case I32, U32 -> new IntArray(ctx.dtype(), n, out);
+                case F64 -> new DoubleArray(ctx.dtype(), n, out);
+                case F32 -> new FloatArray(ctx.dtype(), n, out);
+                case I16, U16 -> new ShortArray(ctx.dtype(), n, out);
+                case I8, U8 -> new ByteArray(ctx.dtype(), n, out);
                 default -> throw new VortexException(EncodingId.VORTEX_SPARSE, "unsupported ptype " + valuePtype);
             };
         }
@@ -260,7 +259,7 @@ public final class SparseEncoding implements Encoding {
                     }
                 }
             }
-            return new BoolArray(ctx.dtype(), n, out, ArrayStats.empty());
+            return new BoolArray(ctx.dtype(), n, out);
         }
 
         private static Array decodeVarBin(
@@ -270,8 +269,8 @@ public final class SparseEncoding implements Encoding {
             if (numPatches == 0) {
                 MemorySegment outBytes = ctx.arena().allocate(1);
                 DType i32dtype = new DType.Primitive(PType.I32, false);
-                Array offsetArr = new IntArray(i32dtype, n + 1, outOffsets, ArrayStats.empty());
-                return new VarBinArray(ctx.dtype(), n, outBytes, offsetArr, PType.I32, ArrayStats.empty());
+                Array offsetArr = new IntArray(i32dtype, n + 1, outOffsets);
+                return new VarBinArray(ctx.dtype(), n, outBytes, offsetArr, PType.I32);
             }
 
             DType indicesDtype = new DType.Primitive(indicesPtype, false);
@@ -311,8 +310,8 @@ public final class SparseEncoding implements Encoding {
             }
 
             DType i32dtype = new DType.Primitive(PType.I32, false);
-            Array offsetArr = new IntArray(i32dtype, n + 1, outOffsets, ArrayStats.empty());
-            return new VarBinArray(ctx.dtype(), n, outBytes, offsetArr, PType.I32, ArrayStats.empty());
+            Array offsetArr = new IntArray(i32dtype, n + 1, outOffsets);
+            return new VarBinArray(ctx.dtype(), n, outBytes, offsetArr, PType.I32);
         }
 
         private static long readVarBinOffset(MemorySegment seg, long i, PType ptype) {

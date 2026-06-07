@@ -316,15 +316,14 @@ public final class PrimitiveEncoding implements Encoding {
             long n = ctx.rowCount();
             DType dt = ctx.dtype();
             PType ptype = ((DType.Primitive) dt).ptype();
-            var stats = ctx.node().stats();
             Array values = switch (ptype) {
-                case I64, U64 -> new LongArray(dt, n, buf, stats);
-                case I32, U32 -> new IntArray(dt, n, buf, stats);
-                case F64 -> new DoubleArray(dt, n, buf, stats);
-                case F32 -> new FloatArray(dt, n, buf, stats);
-                case I16, U16 -> new ShortArray(dt, n, buf, stats);
-                case I8, U8 -> new ByteArray(dt, n, buf, stats);
-                case F16 -> new Float16Array(dt, n, buf, stats);
+                case I64, U64 -> new LongArray(dt, n, buf);
+                case I32, U32 -> new IntArray(dt, n, buf);
+                case F64 -> new DoubleArray(dt, n, buf);
+                case F32 -> new FloatArray(dt, n, buf);
+                case I16, U16 -> new ShortArray(dt, n, buf);
+                case I8, U8 -> new ByteArray(dt, n, buf);
+                case F16 -> new Float16Array(dt, n, buf);
             };
             if (ctx.node().children().length == 1) {
                 ArrayNode validityNode = ctx.node().children()[0];

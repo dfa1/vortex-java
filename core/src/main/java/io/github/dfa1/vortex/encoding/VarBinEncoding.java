@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -138,7 +137,7 @@ public final class VarBinEncoding implements Encoding {
 
             MemorySegment bytes = ctx.buffer(0);
 
-            return new VarBinArray(ctx.dtype(), n, bytes, offsets, offsetsPtype, ArrayStats.empty());
+            return new VarBinArray(ctx.dtype(), n, bytes, offsets, offsetsPtype);
         }
     }
 }

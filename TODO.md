@@ -71,6 +71,12 @@
 
 ## API
 
+- [ ] **Remove `buffer(int i)` and `child(int i)` from `Array` interface** — these are decoder
+  plumbing leaking into the consumer API. Each cascading decoder should receive and return
+  concrete types (`IntArray`, `VarBinArray`, etc.) so callers cast explicitly rather than
+  calling through the interface and hitting a runtime `VortexException`. Keeps `Array`
+  as a pure consumer API (`getInt(i)`, `fold()`, `length()`, `dtype()`).
+
 - [ ] Use domain primitives (`UInt32`, `UInt64`, etc.) as value classes via Project Valhalla instead of raw `long`/`int`
     - See https://dfa1.github.io/articles/rethink-domain-primitives-with-valhalla
     - Candidates: `PType` integer kinds, buffer offsets, row indices, byte lengths

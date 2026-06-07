@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -282,10 +281,10 @@ public final class BitpackedEncoding implements Encoding {
             }
 
             return switch (ptype) {
-                case I64, U64 -> new LongArray(ctx.dtype(), rowCount, output, ArrayStats.empty());
-                case I32, U32 -> new IntArray(ctx.dtype(), rowCount, output, ArrayStats.empty());
-                case I16, U16 -> new ShortArray(ctx.dtype(), rowCount, output, ArrayStats.empty());
-                case I8, U8 -> new ByteArray(ctx.dtype(), rowCount, output, ArrayStats.empty());
+                case I64, U64 -> new LongArray(ctx.dtype(), rowCount, output);
+                case I32, U32 -> new IntArray(ctx.dtype(), rowCount, output);
+                case I16, U16 -> new ShortArray(ctx.dtype(), rowCount, output);
+                case I8, U8 -> new ByteArray(ctx.dtype(), rowCount, output);
                 default -> throw new VortexException(EncodingId.FASTLANES_BITPACKED, "unsupported ptype " + ptype);
             };
         }

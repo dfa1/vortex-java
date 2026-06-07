@@ -106,7 +106,7 @@ public final class EncodingRegistry {
         }
         return new UnknownArray(
                 rawId, ctx.dtype(), ctx.rowCount(),
-                node.metadata(), bufs, children, node.stats());
+                node.metadata(), bufs, children);
     }
 
     /// Enable passthrough decode for unknown encoding ids.

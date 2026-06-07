@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.core.array;
 
-import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import org.junit.jupiter.api.Nested;
@@ -34,8 +33,8 @@ class VarBinArrayTest {
         }
         MemorySegment offsetsSeg = MemorySegment.ofArray(bb.array());
         DType i32 = new DType.Primitive(PType.I32, false);
-        IntArray offsetsArr = new IntArray(i32, offs.length, offsetsSeg, ArrayStats.empty());
-        return new VarBinArray(UTF8, values.length, bytes, offsetsArr, PType.I32, ArrayStats.empty());
+        IntArray offsetsArr = new IntArray(i32, offs.length, offsetsSeg);
+        return new VarBinArray(UTF8, values.length, bytes, offsetsArr, PType.I32);
     }
 
     @Nested
@@ -151,7 +150,7 @@ class VarBinArrayTest {
 
             return VarBinArray.ofDict(UTF8, codes.length,
                     dictValBytes, dictValOffsets, PType.I32,
-                    dictCodes, PType.I32, ArrayStats.empty());
+                    dictCodes, PType.I32);
         }
 
         private static MemorySegment leInts(int[] values) {

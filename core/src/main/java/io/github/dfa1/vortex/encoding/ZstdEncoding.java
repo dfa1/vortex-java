@@ -6,7 +6,6 @@ import io.airlift.compress.v3.zstd.ZstdCompressor;
 import io.airlift.compress.v3.zstd.ZstdDecompressor;
 import io.airlift.compress.v3.zstd.ZstdJavaCompressor;
 import io.airlift.compress.v3.zstd.ZstdJavaDecompressor;
-import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -310,8 +309,8 @@ public final class ZstdEncoding implements Encoding {
             }
 
             DType i32 = new DType.Primitive(PType.I32, false);
-            IntArray offsetsArr = new IntArray(i32, rowCount + 1, offsets, ArrayStats.empty());
-            return new VarBinArray(dtype.withNullable(false), rowCount, values, offsetsArr, PType.I32, ArrayStats.empty());
+            IntArray offsetsArr = new IntArray(i32, rowCount + 1, offsets);
+            return new VarBinArray(dtype.withNullable(false), rowCount, values, offsetsArr, PType.I32);
         }
 
         private static MemorySegment decompressFramesWithDict(
@@ -383,13 +382,13 @@ public final class ZstdEncoding implements Encoding {
         private static Array buildPrimitive(DType.Primitive dt, long n, MemorySegment decompressed) {
             PType ptype = dt.ptype();
             return switch (ptype) {
-                case I64, U64 -> new LongArray(dt, n, decompressed, ArrayStats.empty());
-                case I32, U32 -> new IntArray(dt, n, decompressed, ArrayStats.empty());
-                case F64 -> new DoubleArray(dt, n, decompressed, ArrayStats.empty());
-                case F32 -> new FloatArray(dt, n, decompressed, ArrayStats.empty());
-                case I16, U16 -> new ShortArray(dt, n, decompressed, ArrayStats.empty());
-                case I8, U8 -> new ByteArray(dt, n, decompressed, ArrayStats.empty());
-                case F16 -> new Float16Array(dt, n, decompressed, ArrayStats.empty());
+                case I64, U64 -> new LongArray(dt, n, decompressed);
+                case I32, U32 -> new IntArray(dt, n, decompressed);
+                case F64 -> new DoubleArray(dt, n, decompressed);
+                case F32 -> new FloatArray(dt, n, decompressed);
+                case I16, U16 -> new ShortArray(dt, n, decompressed);
+                case I8, U8 -> new ByteArray(dt, n, decompressed);
+                case F16 -> new Float16Array(dt, n, decompressed);
             };
         }
 
@@ -419,8 +418,8 @@ public final class ZstdEncoding implements Encoding {
             }
 
             DType i32 = new DType.Primitive(PType.I32, false);
-            IntArray offsetsArr = new IntArray(i32, n + 1, offsets, ArrayStats.empty());
-            return new VarBinArray(dtype, n, values, offsetsArr, PType.I32, ArrayStats.empty());
+            IntArray offsetsArr = new IntArray(i32, n + 1, offsets);
+            return new VarBinArray(dtype, n, values, offsetsArr, PType.I32);
         }
     }
 }

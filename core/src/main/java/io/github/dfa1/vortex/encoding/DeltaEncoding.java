@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -294,10 +293,10 @@ public final class DeltaEncoding implements Encoding {
             if (deltasLen == 0L) {
                 MemorySegment empty = ctx.arena().allocate(0);
                 return switch (ptype) {
-                    case I64, U64 -> new LongArray(ctx.dtype(), 0L, empty, ArrayStats.empty());
-                    case I32, U32 -> new IntArray(ctx.dtype(), 0L, empty, ArrayStats.empty());
-                    case I16, U16 -> new ShortArray(ctx.dtype(), 0L, empty, ArrayStats.empty());
-                    case I8, U8 -> new ByteArray(ctx.dtype(), 0L, empty, ArrayStats.empty());
+                    case I64, U64 -> new LongArray(ctx.dtype(), 0L, empty);
+                    case I32, U32 -> new IntArray(ctx.dtype(), 0L, empty);
+                    case I16, U16 -> new ShortArray(ctx.dtype(), 0L, empty);
+                    case I8, U8 -> new ByteArray(ctx.dtype(), 0L, empty);
                     default -> throw new VortexException(EncodingId.FASTLANES_DELTA, "unsupported ptype: " + ptype);
                 };
             }
@@ -338,10 +337,10 @@ public final class DeltaEncoding implements Encoding {
 
             MemorySegment seg = fromLongs(result, ptype, ctx.arena());
             return switch (ptype) {
-                case I64, U64 -> new LongArray(ctx.dtype(), rowCount, seg, ArrayStats.empty());
-                case I32, U32 -> new IntArray(ctx.dtype(), rowCount, seg, ArrayStats.empty());
-                case I16, U16 -> new ShortArray(ctx.dtype(), rowCount, seg, ArrayStats.empty());
-                case I8, U8 -> new ByteArray(ctx.dtype(), rowCount, seg, ArrayStats.empty());
+                case I64, U64 -> new LongArray(ctx.dtype(), rowCount, seg);
+                case I32, U32 -> new IntArray(ctx.dtype(), rowCount, seg);
+                case I16, U16 -> new ShortArray(ctx.dtype(), rowCount, seg);
+                case I8, U8 -> new ByteArray(ctx.dtype(), rowCount, seg);
                 default -> throw new VortexException(EncodingId.FASTLANES_DELTA, "unsupported ptype: " + ptype);
             };
         }

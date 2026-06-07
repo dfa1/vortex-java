@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.encoding;
 
-import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -125,28 +124,28 @@ public final class ZigZagEncoding implements Encoding {
                         int u = Byte.toUnsignedInt(src.get(ValueLayout.JAVA_BYTE, i));
                         dst.set(ValueLayout.JAVA_BYTE, i, (byte) ((u >>> 1) ^ -(u & 1)));
                     }
-                    yield new ByteArray(ctx.dtype(), n, dst, ArrayStats.empty());
+                    yield new ByteArray(ctx.dtype(), n, dst);
                 }
                 case I16 -> {
                     for (long i = 0; i < n; i++) {
                         int u = Short.toUnsignedInt(src.get(PTypeIO.LE_SHORT, i * 2));
                         dst.set(PTypeIO.LE_SHORT, i * 2, (short) ((u >>> 1) ^ -(u & 1)));
                     }
-                    yield new ShortArray(ctx.dtype(), n, dst, ArrayStats.empty());
+                    yield new ShortArray(ctx.dtype(), n, dst);
                 }
                 case I32 -> {
                     for (long i = 0; i < n; i++) {
                         int u = src.get(PTypeIO.LE_INT, i * 4);
                         dst.set(PTypeIO.LE_INT, i * 4, (u >>> 1) ^ -(u & 1));
                     }
-                    yield new IntArray(ctx.dtype(), n, dst, ArrayStats.empty());
+                    yield new IntArray(ctx.dtype(), n, dst);
                 }
                 case I64 -> {
                     for (long i = 0; i < n; i++) {
                         long u = src.get(PTypeIO.LE_LONG, i * 8);
                         dst.set(PTypeIO.LE_LONG, i * 8, (u >>> 1) ^ -(u & 1));
                     }
-                    yield new LongArray(ctx.dtype(), n, dst, ArrayStats.empty());
+                    yield new LongArray(ctx.dtype(), n, dst);
                 }
                 default -> throw new VortexException(EncodingId.VORTEX_ZIGZAG, "unreachable");
             };

@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.core.array;
 
-import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import org.junit.jupiter.api.Test;
@@ -23,7 +22,7 @@ class LongArrayTest {
             seg.setAtIndex(LE_LONG, i, values[i]);
         }
         DType dtype = new DType.Primitive(PType.I64, false);
-        return new LongArray(dtype, values.length, seg, ArrayStats.empty());
+        return new LongArray(dtype, values.length, seg);
     }
 
     @Test

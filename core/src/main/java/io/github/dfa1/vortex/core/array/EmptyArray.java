@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.core.array;
 
-import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 
 /// Zero-length [Array]. Has no buffers or children.
@@ -21,10 +20,4 @@ public record EmptyArray(DType dtype) implements Array {
         return 0;
     }
 
-    /// Returns empty statistics — an array with zero elements has no meaningful stats.
-    ///
-    /// @return an empty {@link ArrayStats} instance
-    public ArrayStats stats() {
-        return ArrayStats.empty();
-    }
 }

@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.core.array;
 
-import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 
@@ -13,19 +12,16 @@ public final class FloatArray implements Array {
     private final DType dtype;
     private final long length;
     private final MemorySegment buffer;
-    private final ArrayStats stats;
 
     /// Creates a new {@code FloatArray} backed by the given memory segment.
     ///
     /// @param dtype  logical type, must be F32
     /// @param length number of elements
     /// @param buffer little-endian float data (4 bytes per element)
-    /// @param stats  per-array statistics, or {@link io.github.dfa1.vortex.core.ArrayStats#empty()} if unknown
-    public FloatArray(DType dtype, long length, MemorySegment buffer, ArrayStats stats) {
+    public FloatArray(DType dtype, long length, MemorySegment buffer) {
         this.dtype = dtype;
         this.length = length;
         this.buffer = buffer;
-        this.stats = stats;
     }
 
     @Override
@@ -36,13 +32,6 @@ public final class FloatArray implements Array {
     @Override
     public long length() {
         return length;
-    }
-
-    /// Returns per-array statistics.
-    ///
-    /// @return array statistics
-    public ArrayStats stats() {
-        return stats;
     }
 
     @Override
