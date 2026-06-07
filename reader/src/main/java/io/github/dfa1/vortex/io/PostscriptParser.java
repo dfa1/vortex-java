@@ -26,6 +26,12 @@ import java.util.List;
 
 final class PostscriptParser {
 
+    /// Hard cap on layout-tree recursion depth. Real-world layouts are typically four levels
+    /// (Struct → Zoned → Chunked → Flat); 64 is well past any expected schema and prevents
+    /// adversarial inputs — deeply nested trees or self-referential FlatBuffer cycles — from
+    /// blowing the JVM stack during {@link #convertLayout(io.github.dfa1.vortex.fbs.Layout, List, int)}.
+    static final int MAX_LAYOUT_DEPTH = 64;
+
     private PostscriptParser() {
     }
 
@@ -90,7 +96,7 @@ final class PostscriptParser {
             var fbsLayout = io.github.dfa1.vortex.fbs.Layout.getRootAsLayout(layoutBuf);
 
             Footer footer = convertFooter(fbsFooter);
-            Layout layout = convertLayout(fbsLayout, footer.layoutSpecs());
+            Layout layout = convertLayout(fbsLayout, footer.layoutSpecs(), 0);
 
             DType dtype = null;
             if (dtypeBuf != null && dtypeBuf.hasRemaining()) {
@@ -139,7 +145,11 @@ final class PostscriptParser {
                 List.copyOf(segmentSpecs), List.copyOf(compressionSpecs));
     }
 
-    private static Layout convertLayout(io.github.dfa1.vortex.fbs.Layout l, List<String> layoutSpecs) {
+    private static Layout convertLayout(io.github.dfa1.vortex.fbs.Layout l, List<String> layoutSpecs, int depth) {
+        if (depth > MAX_LAYOUT_DEPTH) {
+            throw new VortexException(
+                    "layout tree depth exceeds limit (" + MAX_LAYOUT_DEPTH + ")");
+        }
         int encIdx = l.encoding();
         if (encIdx < 0 || encIdx >= layoutSpecs.size()) {
             throw new VortexException(
@@ -152,7 +162,7 @@ final class PostscriptParser {
 
         var children = new ArrayList<Layout>(l.childrenLength());
         for (int i = 0; i < l.childrenLength(); i++) {
-            children.add(convertLayout(l.children(i), layoutSpecs));
+            children.add(convertLayout(l.children(i), layoutSpecs, depth + 1));
         }
 
         var segments = new ArrayList<Integer>(l.segmentsLength());

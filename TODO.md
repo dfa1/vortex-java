@@ -41,9 +41,6 @@ parser exception. Each entry below is either a known gap, a contract audit, or s
 
 ### Parser hardening
 
-- [ ] **Layout-tree depth limit** — `PostscriptParser.convertLayout` recurses on children with
-  no max depth. Crafted nested layout → `StackOverflowError`. Add a depth cap (e.g. 64) and
-  throw `VortexException` on overrun.
 - [ ] **Layout metadata size limit** — `metadataAsByteBuffer()` returns an unbounded slice;
   the FlatBuffer runtime doesn't bound it. Cap (e.g. 4 MiB) and reject larger.
 - [ ] **`readFlatStats` `fbLen` validation** — `VortexReader.readFlatStats` reads
