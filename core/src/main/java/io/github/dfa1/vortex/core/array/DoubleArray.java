@@ -12,7 +12,7 @@ public final class DoubleArray implements Array {
 
     private final DType dtype;
     private final long length;
-    private final MemorySegment buffer;
+    final MemorySegment buffer;
 
     /// Constructs a {@code DoubleArray} backed by the given buffer.
     ///
@@ -35,12 +35,6 @@ public final class DoubleArray implements Array {
         return length;
     }
 
-    /// Returns the raw backing segment (little-endian, 8 bytes per element).
-    ///
-    /// @return the backing {@link MemorySegment}
-    public MemorySegment segment() {
-        return buffer;
-    }
 
     /// Returns the double value at the given logical index.
     ///

@@ -21,16 +21,16 @@ public final class ArraySegments {
     public static MemorySegment of(Array arr) {
         Array data = arr instanceof MaskedArray m ? m.inner() : arr;
         return switch (data) {
-            case IntArray a -> a.segment();
-            case LongArray a -> a.segment();
-            case DoubleArray a -> a.segment();
-            case FloatArray a -> a.segment();
-            case ShortArray a -> a.segment();
-            case ByteArray a -> a.segment();
-            case BoolArray a -> a.segment();
-            case Float16Array a -> a.segment();
-            case VarBinArray a -> a.segment();
-            case GenericArray a -> a.segment();
+            case IntArray a -> a.buffer;
+            case LongArray a -> a.buffer;
+            case DoubleArray a -> a.buffer;
+            case FloatArray a -> a.buffer;
+            case ShortArray a -> a.buffer;
+            case ByteArray a -> a.buffer;
+            case BoolArray a -> a.buffer;
+            case Float16Array a -> a.buffer;
+            case VarBinArray a -> a.bytes;
+            case GenericArray a -> a.buffers[0];
             default -> throw new VortexException(data.getClass().getSimpleName() + " has no primary segment");
         };
     }

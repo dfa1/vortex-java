@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.io;
 import com.google.flatbuffers.FlatBufferBuilder;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.ArraySegments;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.encoding.ConstantEncoding;
 import io.github.dfa1.vortex.encoding.EncodingRegistry;
@@ -68,7 +69,7 @@ class ZipBombTest {
             // Then — O(1) buffer proves fix is in place; logical length unchanged
             assertThat(col.length()).isEqualTo(claimedRows);
             assertThat(col).isInstanceOf(LongArray.class);
-            assertThat(((LongArray) col).segment().byteSize())
+            assertThat(ArraySegments.of(col).byteSize())
                     .as("ConstantEncoding must not allocate O(rowCount) memory")
                     .isEqualTo(Long.BYTES);
         }

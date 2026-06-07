@@ -111,15 +111,6 @@ class VarBinArrayTest {
         }
 
         @Test
-        void segment_returnsBytesSegment() {
-            // Given
-            VarBinArray sut = of("a");
-
-            // When / Then
-            assertThat(sut.segment()).isSameAs(sut.bytesSegment());
-        }
-
-        @Test
         void offsetsPtype_returnsOffsetType() {
             // Given
             VarBinArray sut = of("a");

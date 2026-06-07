@@ -12,7 +12,7 @@ public final class ShortArray implements Array {
 
     private final DType dtype;
     private final long length;
-    private final MemorySegment buffer;
+    final MemorySegment buffer;
 
     /// Creates a new {@code ShortArray} backed by the given memory segment.
     ///
@@ -35,12 +35,6 @@ public final class ShortArray implements Array {
         return length;
     }
 
-    /// Returns the raw backing segment (little-endian, 2 bytes per element).
-    ///
-    /// @return the backing {@link MemorySegment}
-    public MemorySegment segment() {
-        return buffer;
-    }
 
     /// Returns the raw signed short value at the given index.
     ///

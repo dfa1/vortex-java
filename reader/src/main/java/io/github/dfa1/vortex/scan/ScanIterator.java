@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.SegmentSpec;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.ArraySegments;
 import io.github.dfa1.vortex.core.array.BoolArray;
 import io.github.dfa1.vortex.core.array.ByteArray;
 import io.github.dfa1.vortex.core.array.DoubleArray;
@@ -205,19 +206,6 @@ public final class ScanIterator implements AutoCloseable {
         };
     }
 
-    private static MemorySegment segmentOf(Array arr) {
-        return switch (arr) {
-            case ByteArray a -> a.segment();
-            case ShortArray a -> a.segment();
-            case IntArray a -> a.segment();
-            case LongArray a -> a.segment();
-            case FloatArray a -> a.segment();
-            case DoubleArray a -> a.segment();
-            case BoolArray a -> a.segment();
-            default -> throw new VortexException("segmentOf: unsupported array type " + arr.getClass().getSimpleName());
-        };
-    }
-
     // ── Zone-map pruning ──────────────────────────────────────────────────────
 
     private static Map<String, Array> truncateColumns(Map<String, Array> columns, long rows) {
@@ -234,18 +222,18 @@ public final class ScanIterator implements AutoCloseable {
         }
         return switch (arr) {
             case LongArray a ->
-                    new LongArray(a.dtype(), rows, a.segment().asSlice(0, rows * Long.BYTES));
+                    new LongArray(a.dtype(), rows, ArraySegments.of(a).asSlice(0, rows * Long.BYTES));
             case IntArray a ->
-                    new IntArray(a.dtype(), rows, a.segment().asSlice(0, rows * Integer.BYTES));
+                    new IntArray(a.dtype(), rows, ArraySegments.of(a).asSlice(0, rows * Integer.BYTES));
             case DoubleArray a ->
-                    new DoubleArray(a.dtype(), rows, a.segment().asSlice(0, rows * Double.BYTES));
+                    new DoubleArray(a.dtype(), rows, ArraySegments.of(a).asSlice(0, rows * Double.BYTES));
             case FloatArray a ->
-                    new FloatArray(a.dtype(), rows, a.segment().asSlice(0, rows * Float.BYTES));
+                    new FloatArray(a.dtype(), rows, ArraySegments.of(a).asSlice(0, rows * Float.BYTES));
             case ShortArray a ->
-                    new ShortArray(a.dtype(), rows, a.segment().asSlice(0, rows * Short.BYTES));
-            case ByteArray a -> new ByteArray(a.dtype(), rows, a.segment().asSlice(0, rows));
+                    new ShortArray(a.dtype(), rows, ArraySegments.of(a).asSlice(0, rows * Short.BYTES));
+            case ByteArray a -> new ByteArray(a.dtype(), rows, ArraySegments.of(a).asSlice(0, rows));
             case BoolArray a ->
-                    new BoolArray(a.dtype(), rows, a.segment().asSlice(0, (rows + 7) / 8));
+                    new BoolArray(a.dtype(), rows, ArraySegments.of(a).asSlice(0, (rows + 7) / 8));
             case NullArray a -> new NullArray(a.dtype(), rows);
             case VarBinArray a -> a.truncate(rows);
             case MaskedArray a -> {
@@ -397,7 +385,7 @@ public final class ScanIterator implements AutoCloseable {
         for (Layout flat : flats) {
             Array chunk = decodeFlat(flat, dtype, arena);
             Array chunkData = chunk instanceof MaskedArray m ? m.inner() : chunk;
-            MemorySegment src = segmentOf(chunkData);
+            MemorySegment src = ArraySegments.of(chunkData);
             MemorySegment.copy(src, 0, combined, byteOffset, src.byteSize());
             byteOffset += src.byteSize();
         }
@@ -439,14 +427,7 @@ public final class ScanIterator implements AutoCloseable {
         Array values = decodeLayout(valuesLayout, dtype, arena);
         Array codes = decodeLayout(codesLayout, new DType.Primitive(codesPType, false), arena);
 
-        MemorySegment codesSeg = switch (codes) {
-            case ByteArray a -> a.segment();
-            case ShortArray a -> a.segment();
-            case IntArray a -> a.segment();
-            case LongArray a -> a.segment();
-            default -> throw new VortexException(EncodingId.VORTEX_DICT,
-                    "unexpected codes array type: " + codes.getClass().getSimpleName());
-        };
+        MemorySegment codesSeg = ArraySegments.of(codes);
 
         // Zip-bomb guard: for direct-mapped encodings (e.g. vortex.primitive), the codes
         // buffer is mmap-bounded and can be much smaller than the claimed rowCount. Reject
@@ -466,16 +447,7 @@ public final class ScanIterator implements AutoCloseable {
                     codesSeg, codesPType);
         }
         if (dtype instanceof DType.Primitive pDtype) {
-            MemorySegment valBuf = switch (values) {
-                case ByteArray a -> a.segment();
-                case ShortArray a -> a.segment();
-                case IntArray a -> a.segment();
-                case LongArray a -> a.segment();
-                case FloatArray a -> a.segment();
-                case DoubleArray a -> a.segment();
-                default -> throw new VortexException(EncodingId.VORTEX_DICT,
-                        "unexpected values array type: " + values.getClass().getSimpleName());
-            };
+            MemorySegment valBuf = ArraySegments.of(values);
             return expandDictPrimitive(valBuf, codesSeg, codesPType, pDtype, n, arena);
         }
         return expandDictStrings((VarBinArray) values, codesSeg, codesPType, dtype, n, arena);

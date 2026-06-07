@@ -11,7 +11,7 @@ public final class FloatArray implements Array {
 
     private final DType dtype;
     private final long length;
-    private final MemorySegment buffer;
+    final MemorySegment buffer;
 
     /// Creates a new {@code FloatArray} backed by the given memory segment.
     ///
@@ -34,12 +34,6 @@ public final class FloatArray implements Array {
         return length;
     }
 
-    /// Returns the raw backing segment (little-endian, 4 bytes per element).
-    ///
-    /// @return the backing {@link MemorySegment}
-    public MemorySegment segment() {
-        return buffer;
-    }
 
     /// Returns the float value at the given index.
     ///

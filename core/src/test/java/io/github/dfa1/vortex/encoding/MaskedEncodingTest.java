@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.ArraySegments;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.MaskedArray;
 import org.junit.jupiter.api.Nested;
@@ -126,9 +127,9 @@ class MaskedEncodingTest {
             IntArray inner = (IntArray) result.inner();
 
             // Then
-            assertThat(inner.segment().get(PTypeIO.LE_INT, 0L)).isEqualTo(7);
-            assertThat(inner.segment().get(PTypeIO.LE_INT, 4L)).isEqualTo(8);
-            assertThat(inner.segment().get(PTypeIO.LE_INT, 8L)).isEqualTo(9);
+            assertThat(ArraySegments.of(inner).get(PTypeIO.LE_INT, 0L)).isEqualTo(7);
+            assertThat(ArraySegments.of(inner).get(PTypeIO.LE_INT, 4L)).isEqualTo(8);
+            assertThat(ArraySegments.of(inner).get(PTypeIO.LE_INT, 8L)).isEqualTo(9);
         }
 
         @Test

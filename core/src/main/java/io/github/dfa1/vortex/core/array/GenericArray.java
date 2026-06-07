@@ -13,7 +13,7 @@ public final class GenericArray implements Array {
 
     private final DType dtype;
     private final long length;
-    private final MemorySegment[] buffers;
+    final MemorySegment[] buffers;
     private final Array[] children;
 
     /// Creates a new {@code GenericArray} with the given buffers and children.
@@ -46,10 +46,6 @@ public final class GenericArray implements Array {
     @Override
     public long length() {
         return length;
-    }
-
-    public MemorySegment segment() {
-        return buffers[0];
     }
 
     /// Returns the raw buffer at position {@code i}.

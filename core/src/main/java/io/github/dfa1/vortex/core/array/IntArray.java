@@ -12,7 +12,7 @@ public final class IntArray implements Array {
 
     private final DType dtype;
     private final long length;
-    private final MemorySegment buffer;
+    final MemorySegment buffer;
 
     /// Creates a new {@code IntArray} backed by the given memory segment.
     ///
@@ -35,12 +35,6 @@ public final class IntArray implements Array {
         return length;
     }
 
-    /// Returns the raw backing segment (little-endian, 4 bytes per element).
-    ///
-    /// @return the backing {@link MemorySegment}
-    public MemorySegment segment() {
-        return buffer;
-    }
 
     /// Returns the int value at the given index.
     ///
