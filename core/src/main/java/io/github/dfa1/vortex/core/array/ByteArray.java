@@ -43,6 +43,13 @@ public final class ByteArray implements Array {
         return buffer;
     }
 
+    /// Returns the raw backing segment (one byte per element).
+    ///
+    /// @return the backing {@link MemorySegment}
+    public MemorySegment segment() {
+        return buffer;
+    }
+
     /// Returns the raw byte value at the given logical index.
     ///
     /// @param i zero-based logical index (must be in {@code [0, length)})

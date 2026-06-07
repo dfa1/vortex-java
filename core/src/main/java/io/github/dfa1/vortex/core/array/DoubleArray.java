@@ -43,6 +43,13 @@ public final class DoubleArray implements Array {
         return buffer;
     }
 
+    /// Returns the raw backing segment (little-endian, 8 bytes per element).
+    ///
+    /// @return the backing {@link MemorySegment}
+    public MemorySegment segment() {
+        return buffer;
+    }
+
     /// Returns the double value at the given logical index.
     ///
     /// @param i zero-based logical index (must be in {@code [0, length)})

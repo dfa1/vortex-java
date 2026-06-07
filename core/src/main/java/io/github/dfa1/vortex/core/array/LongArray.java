@@ -43,6 +43,13 @@ public final class LongArray implements Array {
         return buffer;
     }
 
+    /// Returns the raw backing segment (little-endian, 8 bytes per element).
+    ///
+    /// @return the backing {@link MemorySegment}
+    public MemorySegment segment() {
+        return buffer;
+    }
+
     /// Returns the long value at the given index.
     ///
     /// @param i zero-based index (must be in {@code [0, length)})

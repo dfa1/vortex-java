@@ -43,6 +43,13 @@ public final class IntArray implements Array {
         return buffer;
     }
 
+    /// Returns the raw backing segment (little-endian, 4 bytes per element).
+    ///
+    /// @return the backing {@link MemorySegment}
+    public MemorySegment segment() {
+        return buffer;
+    }
+
     /// Returns the int value at the given index.
     ///
     /// @param i zero-based index (must be in {@code [0, length)})

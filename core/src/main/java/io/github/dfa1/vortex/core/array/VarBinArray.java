@@ -121,6 +121,25 @@ public final class VarBinArray implements Array {
         return offsetsArr;
     }
 
+    /// Returns the concatenated raw bytes segment backing all elements.
+    ///
+    /// @return the bytes {@link MemorySegment}
+    public MemorySegment bytesSegment() {
+        return bytes;
+    }
+
+    /// Returns the offsets segment (length + 1 entries); each element {@code i} spans
+    /// {@code bytes[offsets[i]..offsets[i+1]]}.
+    ///
+    /// @return the offsets {@link MemorySegment}
+    /// @throws IllegalStateException if this array is in dict mode
+    public MemorySegment offsetsSegment() {
+        if (offsetsSeg == null) {
+            throw new IllegalStateException("offsetsSegment() not available in dict mode");
+        }
+        return offsetsSeg;
+    }
+
     /// Returns a copy of the raw bytes for element {@code i}.
     ///
     /// @param i zero-based logical index (must be in {@code [0, length)})

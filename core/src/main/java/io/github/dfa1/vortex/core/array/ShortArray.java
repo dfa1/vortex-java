@@ -43,6 +43,13 @@ public final class ShortArray implements Array {
         return buffer;
     }
 
+    /// Returns the raw backing segment (little-endian, 2 bytes per element).
+    ///
+    /// @return the backing {@link MemorySegment}
+    public MemorySegment segment() {
+        return buffer;
+    }
+
     /// Returns the raw signed short value at the given index.
     ///
     /// @param i zero-based index (must be in {@code [0, length)})

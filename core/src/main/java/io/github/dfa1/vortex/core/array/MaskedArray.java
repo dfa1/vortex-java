@@ -56,6 +56,13 @@ public final class MaskedArray implements Array {
         };
     }
 
+    /// Returns the non-nullable payload array wrapped by this masked array.
+    ///
+    /// @return the inner payload {@link Array}
+    public Array inner() {
+        return child;
+    }
+
     /// Returns the validity bitmap, or {@code null} if all positions are valid.
     ///
     /// @return the validity bitmap, or {@code null} when all values are valid

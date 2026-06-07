@@ -41,6 +41,13 @@ public final class BoolArray implements Array {
         return buffer;
     }
 
+    /// Returns the raw bit-packed backing segment (LSB-first, one byte per 8 elements).
+    ///
+    /// @return the backing {@link MemorySegment}
+    public MemorySegment segment() {
+        return buffer;
+    }
+
     /// Returns the boolean value at the given logical index.
     ///
     /// @param i zero-based logical index (must be in {@code [0, length)})

@@ -43,6 +43,13 @@ public final class Float16Array implements Array {
         return buffer;
     }
 
+    /// Returns the raw backing segment (little-endian, 2 bytes per element).
+    ///
+    /// @return the backing {@link MemorySegment}
+    public MemorySegment segment() {
+        return buffer;
+    }
+
     /// Returns the element at the given index widened to a single-precision float.
     ///
     /// @param i zero-based index (must be in {@code [0, length)})
