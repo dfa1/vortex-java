@@ -52,8 +52,6 @@ FlatBuffer/Protobuf runtime exceptions). Regression suite lives under
 - **`*SecurityTest` test-naming convention** — adversarial / robustness tests are now grouped
   under the `*SecurityTest` suffix, mirroring the existing `*IntegrationTest` convention.
   Run with `./mvnw test -Dtest='*SecurityTest'`.
-- **`ArraySegments` public utility** — replaces ad-hoc casts when callers need raw
-  `MemorySegment` access to an `Array`.
 - **`FlatSegmentDecoder`** — extracted from `EncodingRegistry`; the registry is now pure
   dispatch.
 
