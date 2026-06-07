@@ -71,21 +71,6 @@
 
 ## API
 
-- [x] **Remove `buffer(int i)` and `child(int i)` from `Array` interface** — DONE.
-  Replaced with `segment()` default method on the interface (throws for non-primary-segment types).
-  All primitive arrays, `VarBinArray` (returns bytes), and `GenericArray` override it.
-  `UnknownArray` keeps `buffer(int i)` and `child(int i)` as plain concrete methods (not interface).
-  `MaskedArray` drops both; callers use `inner()` and `validity()`.
-  Added `VarBinArray.offsetsPtype()` to replace all `.child(0).dtype()` patterns.
-
-- [x] **Extract flat-segment parsing out of `EncodingRegistry`** — DONE. `FlatSegmentDecoder` owns
-  all file-format knowledge (FlatBuffer parse, buffer-offset arithmetic). Registry is now pure dispatch:
-  `register()`, `decode(DecodeContext)`, `decodeAsSegment(DecodeContext)`.
-
-- [x] **Remove `segment()` from `Array` interface** — DONE. `Array` now exposes only `length()` and
-  `dtype()`. `ArraySegments.of(Array)` in `core.array` is the canonical way to extract a `MemorySegment`
-  from any concrete subtype. All call sites migrated across core/reader/writer/integration.
-
 - [ ] Use domain primitives (`UInt32`, `UInt64`, etc.) as value classes via Project Valhalla instead of raw `long`/`int`
     - See https://dfa1.github.io/articles/rethink-domain-primitives-with-valhalla
     - Candidates: `PType` integer kinds, buffer offsets, row indices, byte lengths
@@ -173,8 +158,6 @@ on any S3 fixture (all fixtures are Rust-produced; decode unblocks them).
 
 **Phases**:
 
-- [x] **Phase E0 — gate**. Consumer = `VortexWriter` cascade (`WriteOptions.cascading(3)`) — closes
-  the NYC taxi compression gap vs Rust without the 6× Zstd read penalty. Gate cleared.
 - [ ] **Phase E1 — bit writer**. `LeBitWriter` over `Arena`-backed `MemorySegment`. Mirrors
   `pco/src/bit_writer.rs`. Property test: random bit sequences round-trip via `LeBitReader`.
 - [ ] **Phase E2 — Classic mode, no delta, fixed bins, no optimization**. Hardcoded bin layout
