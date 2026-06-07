@@ -27,7 +27,8 @@ public interface VortexHandle extends Closeable {
 
     EncodingRegistry registry();
 
-    /// Returns a view of bytes `[offset, offset+length)` within the file.
+    /// Returns a read-only view of bytes `[offset, offset+length)` within the file.
+    /// Writes through the returned segment throw `UnsupportedOperationException`.
     MemorySegment slice(long offset, long length);
 
     ScanIterator scan(ScanOptions options);

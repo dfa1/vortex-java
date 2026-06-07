@@ -266,10 +266,10 @@ public final class VortexReader implements VortexHandle {
         return ArrayStats.fromFbs(root.stats());
     }
 
-    /// Zero-copy slice of the memory-mapped file.
+    /// Zero-copy read-only slice of the memory-mapped file.
     @Override
     public MemorySegment slice(long offset, long length) {
-        return fileSegment.asSlice(offset, length);
+        return fileSegment.asSlice(offset, length).asReadOnly();
     }
 
     @Override
