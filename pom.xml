@@ -62,7 +62,7 @@
 		<hardwood.version>1.0.0.CR1</hardwood.version>
 		<jmh.version>1.37</jmh.version>
 		<!-- testing -->
-		<h2.version>2.3.232</h2.version>
+		<h2.version>2.4.240</h2.version>
 		<junit.version>5.11.4</junit.version>
 		<assertj.version>3.27.7</assertj.version>
 		<mockito.version>5.23.0</mockito.version>
