@@ -16,6 +16,10 @@
         <property name="message" value="Line has trailing spaces."/>
     </module>
 
+    <module name="SuppressionSingleFilter">
+        <property name="files" value="[\\/](fbs|proto)[\\/]"/>
+    </module>
+
     <module name="TreeWalker">
         <module name="ConstantName"/>
         <module name="LocalFinalVariableName"/>
