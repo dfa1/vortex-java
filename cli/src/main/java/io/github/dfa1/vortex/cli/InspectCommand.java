@@ -42,10 +42,29 @@ final class InspectCommand {
                 System.out.print(VortexInspector.inspect(handle));
             }
             return ExitStatus.OK;
-        } catch (IOException e) {
-            System.err.println("error: " + e.getMessage());
+        } catch (IOException | RuntimeException e) {
+            System.err.println("error: " + describe(e));
+            if (System.getenv("VORTEX_DEBUG") != null) {
+                e.printStackTrace(System.err);
+            }
             return ExitStatus.ERROR;
         }
+    }
+
+    private static String describe(Throwable t) {
+        StringBuilder sb = new StringBuilder();
+        Throwable cur = t;
+        while (cur != null) {
+            if (!sb.isEmpty()) {
+                sb.append(" -> ");
+            }
+            sb.append(cur.getClass().getSimpleName());
+            if (cur.getMessage() != null) {
+                sb.append(": ").append(cur.getMessage());
+            }
+            cur = cur.getCause();
+        }
+        return sb.toString();
     }
 
     private static VortexHandle open(String target) throws IOException {
