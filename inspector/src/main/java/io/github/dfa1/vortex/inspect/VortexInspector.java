@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.inspect;
 
+import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.Layout;
 import io.github.dfa1.vortex.core.SegmentSpec;
@@ -76,6 +77,11 @@ public final class VortexInspector {
                 if (!child.usedEncodings().isEmpty()) {
                     sb.append("  [").append(String.join(", ", child.usedEncodings())).append("]");
                 }
+                ArrayStats agg = aggregateStats(child);
+                if (agg.min() != null || agg.max() != null) {
+                    sb.append("  min=").append(format(agg.min()))
+                            .append(" max=").append(format(agg.max()));
+                }
                 sb.append('\n');
             }
         } else {
@@ -83,6 +89,59 @@ public final class VortexInspector {
             appendLayoutInline(sb, layout);
             sb.append('\n');
         }
+    }
+
+    private static ArrayStats aggregateStats(InspectorTree.Node node) {
+        Object min = node.stats().min();
+        Object max = node.stats().max();
+        for (InspectorTree.Node child : node.children()) {
+            ArrayStats cs = aggregateStats(child);
+            min = pickMin(min, cs.min());
+            max = pickMax(max, cs.max());
+        }
+        if (min == null && max == null) {
+            return ArrayStats.empty();
+        }
+        return new ArrayStats(min, max, null, null, null, null);
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static Object pickMin(Object a, Object b) {
+        if (a == null) {
+            return b;
+        }
+        if (b == null) {
+            return a;
+        }
+        if (a.getClass() != b.getClass() || !(a instanceof Comparable)) {
+            return a;
+        }
+        return ((Comparable) a).compareTo(b) <= 0 ? a : b;
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static Object pickMax(Object a, Object b) {
+        if (a == null) {
+            return b;
+        }
+        if (b == null) {
+            return a;
+        }
+        if (a.getClass() != b.getClass() || !(a instanceof Comparable)) {
+            return a;
+        }
+        return ((Comparable) a).compareTo(b) >= 0 ? a : b;
+    }
+
+    private static String format(Object v) {
+        if (v == null) {
+            return "?";
+        }
+        String s = v.toString();
+        if (s.length() > 30) {
+            return s.substring(0, 27) + "...";
+        }
+        return s;
     }
 
     private static void appendLayoutInline(StringBuilder sb, Layout layout) {

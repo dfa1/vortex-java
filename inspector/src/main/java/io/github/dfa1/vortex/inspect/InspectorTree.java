@@ -1,10 +1,12 @@
 package io.github.dfa1.vortex.inspect;
 
+import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.Footer;
 import io.github.dfa1.vortex.core.Layout;
 import io.github.dfa1.vortex.core.SegmentSpec;
 import io.github.dfa1.vortex.fbs.Array;
+import io.github.dfa1.vortex.fbs.ArrayNode;
 import io.github.dfa1.vortex.io.VortexHandle;
 
 import java.lang.foreign.MemorySegment;
@@ -62,11 +64,13 @@ public record InspectorTree(
     /// @param layout         underlying [Layout] from the file footer
     /// @param fieldName      column name when this node is a direct child of a top-level struct
     /// @param usedEncodings  encoding IDs referenced by this subtree
+    /// @param stats          per-array statistics decoded from the segment's FlatBuffer
     /// @param children       child nodes
     public record Node(
             Layout layout,
             Optional<String> fieldName,
             Set<String> usedEncodings,
+            ArrayStats stats,
             List<Node> children) {
     }
 
@@ -87,9 +91,11 @@ public record InspectorTree(
             for (int i = 0; i < root.children().size(); i++) {
                 Node child = root.children().get(i);
                 String name = i < colNames.size() ? colNames.get(i) : "col" + i;
-                namedChildren.add(new Node(child.layout(), Optional.of(name), child.usedEncodings(), child.children()));
+                namedChildren.add(new Node(child.layout(), Optional.of(name),
+                        child.usedEncodings(), child.stats(), child.children()));
             }
-            root = new Node(root.layout(), Optional.empty(), root.usedEncodings(), List.copyOf(namedChildren));
+            root = new Node(root.layout(), Optional.empty(), root.usedEncodings(),
+                    root.stats(), List.copyOf(namedChildren));
         }
 
         return new InspectorTree(
@@ -106,16 +112,18 @@ public record InspectorTree(
     private static Node buildNode(Layout layout, Optional<String> fieldName, VortexHandle handle,
             List<String> arraySpecs, Set<String> overallUsed) {
         Set<String> localUsed = new LinkedHashSet<>();
+        ArrayStats stats = ArrayStats.empty();
         if (layout.isFlat() && !layout.segments().isEmpty()) {
             int segIdx = layout.segments().getFirst();
             SegmentSpec spec = handle.footer().segmentSpecs().get(segIdx);
             if (spec.compression().code == 0) {
                 MemorySegment seg = handle.slice(spec.offset(), spec.length());
-                String enc = peekRootEncoding(seg, arraySpecs);
-                if (enc != null) {
-                    localUsed.add(enc);
-                    overallUsed.add(enc);
+                Peek peek = peekFlatRoot(seg, arraySpecs);
+                if (peek.encoding() != null) {
+                    localUsed.add(peek.encoding());
+                    overallUsed.add(peek.encoding());
                 }
+                stats = peek.stats();
             }
         }
         List<Node> children = new ArrayList<>(layout.children().size());
@@ -124,19 +132,23 @@ public record InspectorTree(
             localUsed.addAll(n.usedEncodings());
             children.add(n);
         }
-        return new Node(layout, fieldName, Set.copyOf(localUsed), List.copyOf(children));
+        return new Node(layout, fieldName, Set.copyOf(localUsed), stats, List.copyOf(children));
     }
 
-    private static String peekRootEncoding(MemorySegment seg, List<String> arraySpecs) {
+    private static Peek peekFlatRoot(MemorySegment seg, List<String> arraySpecs) {
         int segLen = (int) seg.byteSize();
         ByteBuffer bb = seg.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
         int fbLen = bb.getInt(segLen - 4);
         int fbStart = segLen - 4 - fbLen;
         ByteBuffer fbBuf = bb.slice(fbStart, fbLen).order(ByteOrder.LITTLE_ENDIAN);
         Array fbArray = Array.getRootAsArray(fbBuf);
-        if (fbArray.root() == null) {
-            return null;
+        ArrayNode root = fbArray.root();
+        if (root == null) {
+            return new Peek(null, ArrayStats.empty());
         }
-        return arraySpecs.get(fbArray.root().encoding());
+        return new Peek(arraySpecs.get(root.encoding()), ArrayStats.fromFbs(root.stats()));
+    }
+
+    private record Peek(String encoding, ArrayStats stats) {
     }
 }
