@@ -61,7 +61,7 @@ public final class VortexInspector {
             sb.append(indent).append('[').append(i).append("] ")
                     .append("off=").append(spec.offset())
                     .append("  len=").append(formatBytes(spec.length()))
-                    .append("  comp=").append(spec.compression().name())
+                    .append("  compression=").append(spec.compression().name())
                     .append('\n');
         }
     }
