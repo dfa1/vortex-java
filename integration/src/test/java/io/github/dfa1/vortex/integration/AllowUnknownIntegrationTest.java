@@ -9,7 +9,6 @@ import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.UnknownArray;
 import io.github.dfa1.vortex.encoding.EncodingRegistry;
 import io.github.dfa1.vortex.io.VortexReader;
-import io.github.dfa1.vortex.scan.ScanResult;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
@@ -26,10 +25,11 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -72,15 +72,6 @@ class AllowUnknownIntegrationTest {
         }
     }
 
-    private static List<ScanResult> scanAll(VortexReader vf) {
-        var results = new ArrayList<ScanResult>();
-        var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.all());
-        while (iter.hasNext()) {
-            results.add(iter.next());
-        }
-        return results;
-    }
-
     @Test
     void allowUnknown_emptyRegistry_allColumnsReturnUnknownArray(@TempDir Path tmp) throws IOException {
         // Given — JNI writes a real file; empty registry has no decoders
@@ -88,22 +79,26 @@ class AllowUnknownIntegrationTest {
         writeJni(file, 10_000);
 
         // When
-        List<ScanResult> results;
-        try (VortexReader vf = VortexReader.open(file, EncodingRegistry.builder().allowUnknown().build())) {
-            results = scanAll(vf);
+        var totalRows = new AtomicLong();
+        var allUnknown = new AtomicBoolean(true);
+        var chunkCount = new AtomicLong();
+        try (VortexReader vf = VortexReader.open(file, EncodingRegistry.builder().allowUnknown().build());
+             var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.all())) {
+            iter.forEachRemaining(c -> {
+                totalRows.addAndGet(c.rowCount());
+                chunkCount.incrementAndGet();
+                for (Array col : c.columns().values()) {
+                    if (!(col instanceof UnknownArray)) {
+                        allUnknown.set(false);
+                    }
+                }
+            });
         }
 
         // Then — every column value is UnknownArray; file was readable without throwing
-        assertThat(results).isNotEmpty();
-        long totalRows = results.stream().mapToLong(ScanResult::rowCount).sum();
-        assertThat(totalRows).isEqualTo(10_000);
-        for (ScanResult r : results) {
-            for (Array col : r.columns().values()) {
-                assertThat(col)
-                        .describedAs("column should be UnknownArray when no decoder registered")
-                        .isInstanceOf(UnknownArray.class);
-            }
-        }
+        assertThat(chunkCount).hasPositiveValue();
+        assertThat(totalRows).hasValue(10_000L);
+        assertThat(allUnknown).describedAs("every column must be UnknownArray").isTrue();
     }
 
     @Test
@@ -114,8 +109,9 @@ class AllowUnknownIntegrationTest {
 
         // When / Then — strict mode throws rather than returning UnknownArray
         assertThatThrownBy(() -> {
-            try (VortexReader vf = VortexReader.open(file, EncodingRegistry.empty())) {
-                scanAll(vf);
+            try (VortexReader vf = VortexReader.open(file, EncodingRegistry.empty());
+                 var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.all())) {
+                iter.forEachRemaining(c -> {});
             }
         }).isInstanceOf(VortexException.class);
     }
@@ -127,19 +123,23 @@ class AllowUnknownIntegrationTest {
         writeJni(file, 10_000);
 
         // When
-        List<ScanResult> results;
-        try (VortexReader vf = VortexReader.open(file, EncodingRegistry.builder().registerServiceLoaded().allowUnknown().build())) {
-            results = scanAll(vf);
+        var chunkCount = new AtomicLong();
+        var anyUnknown = new AtomicBoolean(false);
+        try (VortexReader vf = VortexReader.open(file,
+                EncodingRegistry.builder().registerServiceLoaded().allowUnknown().build());
+             var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.all())) {
+            iter.forEachRemaining(c -> {
+                chunkCount.incrementAndGet();
+                for (Array col : c.columns().values()) {
+                    if (col instanceof UnknownArray) {
+                        anyUnknown.set(true);
+                    }
+                }
+            });
         }
 
         // Then — allowUnknown() is a no-op when all encodings are registered; no UnknownArray
-        assertThat(results).isNotEmpty();
-        for (ScanResult r : results) {
-            for (Array col : r.columns().values()) {
-                assertThat(col)
-                        .describedAs("fully-supported file should not produce UnknownArray")
-                        .isNotInstanceOf(UnknownArray.class);
-            }
-        }
+        assertThat(chunkCount).hasPositiveValue();
+        assertThat(anyUnknown).describedAs("fully-supported file should not produce UnknownArray").isFalse();
     }
 }

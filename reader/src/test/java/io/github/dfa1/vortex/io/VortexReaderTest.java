@@ -12,8 +12,8 @@ import io.github.dfa1.vortex.encoding.EncodeResult;
 import io.github.dfa1.vortex.encoding.Encoding;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.EncodingRegistry;
+import io.github.dfa1.vortex.scan.Chunk;
 import io.github.dfa1.vortex.scan.ScanOptions;
-import io.github.dfa1.vortex.scan.ScanResult;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -177,7 +177,9 @@ class VortexReaderTest {
         // When / Then — layout traversal succeeds; decode fails only on missing decoder
         try (var sut = VortexReader.open(path, EncodingRegistry.empty());
              var iter = sut.scan(ScanOptions.all())) {
-            assertThatThrownBy(iter::hasNext)
+            // Decode now happens in next(), not hasNext() — hasNext() is side-effect-free.
+            assertThat(iter.hasNext()).isTrue();
+            assertThatThrownBy(iter::next)
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("no encoding registered");
         }
@@ -202,13 +204,14 @@ class VortexReaderTest {
 
             // Then
             assertThat(iter.hasNext()).isTrue();
-            ScanResult chunk = iter.next();
-            assertThat(chunk.rowCount()).isGreaterThan(0);
-            assertThat(chunk.columns()).isNotEmpty();
-            for (Array column : chunk.columns().values()) {
-                assertThat(column).isInstanceOf(UnknownArray.class);
-                UnknownArray foreign = (UnknownArray) column;
-                assertThat(foreign.encodingId()).startsWith("vortex.").describedAs(name);
+            try (Chunk chunk = iter.next()) {
+                assertThat(chunk.rowCount()).isGreaterThan(0);
+                assertThat(chunk.columns()).isNotEmpty();
+                for (Array column : chunk.columns().values()) {
+                    assertThat(column).isInstanceOf(UnknownArray.class);
+                    UnknownArray foreign = (UnknownArray) column;
+                    assertThat(foreign.encodingId()).startsWith("vortex.").describedAs(name);
+                }
             }
         }
     }
@@ -232,9 +235,10 @@ class VortexReaderTest {
 
             // Then
             assertThat(iter.hasNext()).isTrue();
-            ScanResult chunk = iter.next();
-            assertThat(chunk.rowCount()).isGreaterThan(0);
-            assertThat(chunk.columns()).isNotEmpty();
+            try (Chunk chunk = iter.next()) {
+                assertThat(chunk.rowCount()).isGreaterThan(0);
+                assertThat(chunk.columns()).isNotEmpty();
+            }
         }
     }
 
@@ -249,8 +253,10 @@ class VortexReaderTest {
         try (var sut = VortexReader.open(path, registry);
              var iter = sut.scan(ScanOptions.all())) {
             while (iter.hasNext()) {
-                iter.next();
-                chunkCount++;
+                try (Chunk c = iter.next()) {
+                    chunkCount++;
+                    assertThat(c.rowCount()).isGreaterThan(0);
+                }
             }
         }
 
@@ -269,10 +275,11 @@ class VortexReaderTest {
         try (var sut = VortexReader.open(path);
              var iter = sut.scan(ScanOptions.limit(limit))) {
             while (iter.hasNext()) {
-                ScanResult chunk = iter.next();
-                totalRows += chunk.rowCount();
-                for (Array col : chunk.columns().values()) {
-                    assertThat(col.length()).isLessThanOrEqualTo(limit);
+                try (Chunk chunk = iter.next()) {
+                    totalRows += chunk.rowCount();
+                    for (Array col : chunk.columns().values()) {
+                        assertThat(col.length()).isLessThanOrEqualTo(limit);
+                    }
                 }
             }
         }
@@ -290,7 +297,9 @@ class VortexReaderTest {
              var iter = sut.scan(ScanOptions.all())) {
             totalWithoutLimit = 0;
             while (iter.hasNext()) {
-                totalWithoutLimit += iter.next().rowCount();
+                try (Chunk c = iter.next()) {
+                    totalWithoutLimit += c.rowCount();
+                }
             }
         }
 
@@ -299,7 +308,9 @@ class VortexReaderTest {
         try (var sut = VortexReader.open(path);
              var iter = sut.scan(ScanOptions.limit(Long.MAX_VALUE))) {
             while (iter.hasNext()) {
-                totalWithLimit += iter.next().rowCount();
+                try (Chunk c = iter.next()) {
+                    totalWithLimit += c.rowCount();
+                }
             }
         }
 
@@ -317,7 +328,9 @@ class VortexReaderTest {
         try (var sut = VortexReader.open(path);
              var iter = sut.scan(ScanOptions.limit(0))) {
             while (iter.hasNext()) {
-                totalRows += iter.next().rowCount();
+                try (Chunk c = iter.next()) {
+                    totalRows += c.rowCount();
+                }
             }
         }
 

@@ -87,11 +87,12 @@ class ZipBombSecurityTest {
         Path bomb = buildDictBomb(tmp, 100L);
         var registry = EncodingRegistry.builder().register(new PrimitiveEncoding()).build();
 
-        // When / Then — VortexException before any O(n) allocation
+        // When / Then — VortexException before any O(n) allocation. Decode now runs
+        // in next() (hasNext() is side-effect free), so the validation throws there.
         assertThatThrownBy(() -> {
             try (var reader = VortexReader.open(bomb, registry);
                  var iter = reader.scan(ScanOptions.all())) {
-                iter.hasNext();
+                iter.next();
             }
         }).isInstanceOf(VortexException.class)
           .hasMessageContaining("codes");

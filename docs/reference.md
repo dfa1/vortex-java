@@ -130,23 +130,29 @@ Sealed predicate used for zone-map pruning (per-chunk min/max). Chunks that cann
 
 ### `ScanIterator` (`io.github.dfa1.vortex.scan.ScanIterator`)
 
-Implements `AutoCloseable`. Drives one scan.
+Implements `Iterator<Chunk>` and `AutoCloseable`. Drives one scan.
 
-| Method      | Notes                                                                |
-|-------------|----------------------------------------------------------------------|
-| `hasNext()` | **Closes the previous chunk's arena.** Access all column data first. |
-| `next()`    | Returns `ScanResult`                                                 |
-| `close()`   | Releases iterator state                                              |
+| Method                 | Notes                                                                                |
+|------------------------|--------------------------------------------------------------------------------------|
+| `hasNext()`            | Side-effect-free. Returns whether another chunk is available after zone-map pruning. |
+| `next()`               | Returns a fresh `Chunk` whose arena the caller closes. Throws `IllegalStateException` if a prior `Chunk` is still open, or `NoSuchElementException` if exhausted. |
+| `forEachRemaining(Consumer)` | Overridden to wrap each `next()` in try-with-resources so chunks auto-close.   |
+| `close()`              | Releases iterator state and closes any chunk still open.                             |
 
-### `ScanResult` (`io.github.dfa1.vortex.scan.ScanResult`)
+### `Chunk` (`io.github.dfa1.vortex.scan.Chunk`)
 
-Record: `(long rowCount, Map<String, Array> columns)`.
+Implements `AutoCloseable`. Each chunk owns a confined `Arena` holding the decoded
+columnar buffers; closing the chunk releases the arena. After `close()`, touching
+any `Array` previously returned by `column(...)` or `columns()` raises FFM's scope
+check (`IllegalStateException`).
 
 | Method                                  | Notes                                                    |
 |-----------------------------------------|----------------------------------------------------------|
 | `rowCount()`                            | Rows in this chunk                                       |
 | `columns()`                             | All columns in this chunk                                |
 | `<T extends Array> column(String name)` | Typed column lookup; throws `VortexException` if unknown |
+| `isClosed()`                            | Whether `close()` has run                                |
+| `close()`                               | Releases the chunk's arena. Idempotent.                  |
 
 ---
 

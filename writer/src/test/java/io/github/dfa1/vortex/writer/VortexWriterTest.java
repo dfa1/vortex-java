@@ -9,8 +9,8 @@ import io.github.dfa1.vortex.encoding.AlpEncoding;
 import io.github.dfa1.vortex.encoding.EncodingRegistry;
 import io.github.dfa1.vortex.encoding.PrimitiveEncoding;
 import io.github.dfa1.vortex.io.VortexReader;
+import io.github.dfa1.vortex.scan.Chunk;
 import io.github.dfa1.vortex.scan.ScanOptions;
-import io.github.dfa1.vortex.scan.ScanResult;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -36,18 +36,19 @@ class VortexWriterTest {
                     new DType.Primitive(PType.F64, false)),
             false);
 
-    // ── writeChunk validation ─────────────────────────────────────────────────
-
-    private static List<ScanResult> scanAll(VortexReader vf, ScanOptions opts) {
-        var results = new ArrayList<ScanResult>();
-        var iter = vf.scan(opts);
-        while (iter.hasNext()) {
-            results.add(iter.next());
-        }
-        return results;
+    private record ChunkSnapshot(long rowCount, java.util.Set<String> columnNames) {
     }
 
-    // ── Round-trip: write then read ───────────────────────────────────────────
+    /// Materializes every chunk into a value-only snapshot and closes each
+    /// chunk before returning, so the result list can outlive the iterator.
+    private static List<ChunkSnapshot> snapshotAll(VortexReader vf, ScanOptions opts) {
+        var snapshots = new ArrayList<ChunkSnapshot>();
+        try (var iter = vf.scan(opts)) {
+            iter.forEachRemaining(c ->
+                    snapshots.add(new ChunkSnapshot(c.rowCount(), java.util.Set.copyOf(c.columns().keySet()))));
+        }
+        return snapshots;
+    }
 
     private static EncodingRegistry primitiveRegistry() {
         return EncodingRegistry.builder()
@@ -55,6 +56,8 @@ class VortexWriterTest {
                 .register(new PrimitiveEncoding())
                 .build();
     }
+
+    // ── writeChunk validation ─────────────────────────────────────────────────
 
     @Test
     void writeChunk_missingColumn_throwsIllegalArgument(@TempDir Path tmp) throws IOException {
@@ -68,6 +71,8 @@ class VortexWriterTest {
                     .hasMessageContaining("missing column: value");
         }
     }
+
+    // ── Round-trip: write then read ───────────────────────────────────────────
 
     @Test
     void writeAndRead_singleChunk_returnsCorrectRowCount(@TempDir Path tmp) throws IOException {
@@ -85,10 +90,10 @@ class VortexWriterTest {
         // Then
         var registry = primitiveRegistry();
         try (var vf = VortexReader.open(file, registry)) {
-            List<ScanResult> results = scanAll(vf, ScanOptions.all());
-            assertThat(results).hasSize(1);
-            assertThat(results.getFirst().rowCount()).isEqualTo(3L);
-            assertThat(results.getFirst().columns()).containsKeys("id", "value");
+            List<ChunkSnapshot> snapshots = snapshotAll(vf, ScanOptions.all());
+            assertThat(snapshots).hasSize(1);
+            assertThat(snapshots.getFirst().rowCount()).isEqualTo(3L);
+            assertThat(snapshots.getFirst().columnNames()).contains("id", "value");
         }
     }
 
@@ -107,10 +112,10 @@ class VortexWriterTest {
         // Then
         var registry = primitiveRegistry();
         try (var vf = VortexReader.open(file, registry)) {
-            List<ScanResult> results = scanAll(vf, ScanOptions.all());
-            assertThat(results).hasSize(2);
-            assertThat(results.get(0).rowCount()).isEqualTo(2L);
-            assertThat(results.get(1).rowCount()).isEqualTo(3L);
+            List<ChunkSnapshot> snapshots = snapshotAll(vf, ScanOptions.all());
+            assertThat(snapshots).hasSize(2);
+            assertThat(snapshots.get(0).rowCount()).isEqualTo(2L);
+            assertThat(snapshots.get(1).rowCount()).isEqualTo(3L);
         }
     }
 
@@ -130,15 +135,19 @@ class VortexWriterTest {
 
         // Then
         var registry = primitiveRegistry();
-        try (var vf = VortexReader.open(file, registry)) {
-            List<ScanResult> results = scanAll(vf, ScanOptions.all());
-            assertThat(results).hasSize(1);
-            Array idArray = results.getFirst().columns().get("id");
-            assertThat(idArray.length()).isEqualTo(3L);
-            MemorySegment buf = ArraySegments.of(idArray);
-            assertThat(buf.get(ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), 0)).isEqualTo(42L);
-            assertThat(buf.get(ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), 8)).isEqualTo(100L);
-            assertThat(buf.get(ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), 16)).isEqualTo(-1L);
+        var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+        try (var vf = VortexReader.open(file, registry);
+             var iter = vf.scan(ScanOptions.all())) {
+            assertThat(iter.hasNext()).isTrue();
+            try (Chunk chunk = iter.next()) {
+                Array idArray = chunk.columns().get("id");
+                assertThat(idArray.length()).isEqualTo(3L);
+                MemorySegment buf = ArraySegments.of(idArray);
+                assertThat(buf.get(layout, 0)).isEqualTo(42L);
+                assertThat(buf.get(layout, 8)).isEqualTo(100L);
+                assertThat(buf.get(layout, 16)).isEqualTo(-1L);
+            }
+            assertThat(iter.hasNext()).isFalse();
         }
     }
 
@@ -155,12 +164,15 @@ class VortexWriterTest {
 
         // When
         var registry = primitiveRegistry();
-        try (var vf = VortexReader.open(file, registry)) {
-            List<ScanResult> results = scanAll(vf, ScanOptions.all());
-            LongArray idArray = results.getFirst().column("id");
+        try (var vf = VortexReader.open(file, registry);
+             var iter = vf.scan(ScanOptions.all())) {
+            assertThat(iter.hasNext()).isTrue();
+            try (Chunk chunk = iter.next()) {
+                LongArray idArray = chunk.column("id");
 
-            // Then
-            assertThat(idArray.fold(0L, Long::sum)).isEqualTo(60L);
+                // Then
+                assertThat(idArray.fold(0L, Long::sum)).isEqualTo(60L);
+            }
         }
     }
 
@@ -176,11 +188,13 @@ class VortexWriterTest {
 
         // When / Then
         var registry = primitiveRegistry();
-        try (var vf = VortexReader.open(file, registry)) {
-            List<ScanResult> results = scanAll(vf, ScanOptions.all());
-            ScanResult sut = results.getFirst();
-            assertThatThrownBy(() -> sut.column("nonexistent"))
-                    .hasMessageContaining("unknown column: nonexistent");
+        try (var vf = VortexReader.open(file, registry);
+             var iter = vf.scan(ScanOptions.all())) {
+            assertThat(iter.hasNext()).isTrue();
+            try (Chunk sut = iter.next()) {
+                assertThatThrownBy(() -> sut.column("nonexistent"))
+                        .hasMessageContaining("unknown column: nonexistent");
+            }
         }
     }
 
@@ -199,10 +213,10 @@ class VortexWriterTest {
         // Then
         var registry = primitiveRegistry();
         try (var vf = VortexReader.open(file, registry)) {
-            List<ScanResult> results = scanAll(vf, ScanOptions.columns("id"));
-            assertThat(results).hasSize(1);
-            assertThat(results.getFirst().columns()).containsKey("id");
-            assertThat(results.getFirst().columns()).doesNotContainKey("value");
+            List<ChunkSnapshot> snapshots = snapshotAll(vf, ScanOptions.columns("id"));
+            assertThat(snapshots).hasSize(1);
+            assertThat(snapshots.getFirst().columnNames()).contains("id");
+            assertThat(snapshots.getFirst().columnNames()).doesNotContain("value");
         }
     }
 }

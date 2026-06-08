@@ -32,21 +32,39 @@ import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.function.Consumer;
 
-/// Iterates over decoded chunks from a [VortexReader].
+/// Iterates over decoded chunks from a [io.github.dfa1.vortex.io.VortexReader].
+///
+/// Each call to [#next()] returns a [Chunk] that owns a confined
+/// [Arena]; the caller closes it via try-with-resources. The iterator itself
+/// is also [AutoCloseable] — closing it releases any chunk still open.
 ///
 /// Usage:
 /// ```java
 /// try (var iter = file.scan(ScanOptions.all())) {
 ///     while (iter.hasNext()) {
-///         ScanResult chunk = iter.next();
+///         try (Chunk chunk = iter.next()) {
+///             // read columns; refs invalid after chunk.close()
+///         }
 ///     }
 /// }
 /// ```
-public final class ScanIterator implements AutoCloseable {
+///
+/// `forEachRemaining` is overridden to run each chunk inside a
+/// try-with-resources block automatically:
+///
+/// ```java
+/// try (var iter = file.scan(opts)) {
+///     iter.forEachRemaining(chunk -> sum += sumColumn(chunk, "price"));
+/// }
+/// ```
+public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
 
     private static final ValueLayout.OfShort LE_SHORT = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
     private static final ValueLayout.OfInt LE_INT = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
@@ -55,14 +73,15 @@ public final class ScanIterator implements AutoCloseable {
     private final VortexHandle file;
     private final EncodingRegistry registry;
     private final ScanOptions options;
-    private Arena chunkArena;
 
     private List<ChunkSpec> chunks;
     private List<String> projectedNames;
     private List<DType> projectedDtypes;
     private int chunkIndex;
+    private int peekedChunkIdx = -1;
     private long rowsReturned;
-    private ScanResult current;
+    private Chunk openChunk;
+    private boolean closed;
 
     public ScanIterator(VortexHandle file, EncodingRegistry registry, ScanOptions options) {
         this.file = file;
@@ -251,52 +270,94 @@ public final class ScanIterator implements AutoCloseable {
         };
     }
 
+    @Override
     public boolean hasNext() {
+        if (closed) {
+            return false;
+        }
         if (chunks == null) {
             initialize();
+        }
+        if (peekedChunkIdx >= 0) {
+            return true;
         }
         if (rowsReturned >= options.limit()) {
             return false;
         }
-
         while (chunkIndex < chunks.size()) {
-            ChunkSpec chunk = chunks.get(chunkIndex++);
-            if (options.hasFilter() && canPruneChunk(chunk, options.rowFilter())) {
+            ChunkSpec spec = chunks.get(chunkIndex);
+            if (options.hasFilter() && canPruneChunk(spec, options.rowFilter())) {
+                chunkIndex++;
                 continue;
             }
-
-            if (chunkArena != null) {
-                chunkArena.close();
-            }
-            chunkArena = Arena.ofConfined();
-
-            long remaining = options.limit() - rowsReturned;
-            long chunkRows = Math.min(chunk.rowCount(), remaining);
-            Map<String, Array> columns = buildColumnMap(chunk);
-            if (chunkRows < chunk.rowCount()) {
-                columns = truncateColumns(columns, chunkRows);
-            }
-            current = new ScanResult(chunkRows, columns);
-            rowsReturned += chunkRows;
+            peekedChunkIdx = chunkIndex;
             return true;
         }
-        // Do not close here — the last chunk's arena stays open until close() is called.
-        // This preserves data validity for callers that collect results before processing.
         return false;
     }
 
-    public ScanResult next() {
-        if (current == null) {
-            throw new VortexException("call hasNext() first");
+    @Override
+    public Chunk next() {
+        if (!hasNext()) {
+            throw new NoSuchElementException();
         }
-        return current;
+        if (openChunk != null && !openChunk.isClosed()) {
+            throw new IllegalStateException(
+                    "previous Chunk is still open — close it before calling next()");
+        }
+        ChunkSpec spec = chunks.get(peekedChunkIdx);
+        chunkIndex = peekedChunkIdx + 1;
+        peekedChunkIdx = -1;
+
+        long remaining = options.limit() - rowsReturned;
+        long chunkRows = Math.min(spec.rowCount(), remaining);
+
+        Arena arena = Arena.ofConfined();
+        try {
+            Map<String, Array> columns = buildColumnMap(spec, arena);
+            if (chunkRows < spec.rowCount()) {
+                columns = truncateColumns(columns, chunkRows);
+            }
+            rowsReturned += chunkRows;
+            Chunk chunk = new Chunk(chunkRows, columns, arena, this::onChunkClosed);
+            openChunk = chunk;
+            return chunk;
+        } catch (RuntimeException e) {
+            arena.close();
+            throw e;
+        }
+    }
+
+    /// Runs {@code action} on each remaining chunk inside a try-with-resources
+    /// block so every chunk's [Arena] is released before the next iteration.
+    /// Prefer this over a manual {@code while (hasNext()) { next(); }} loop
+    /// when no early-exit is needed.
+    ///
+    /// @param action consumer invoked once per remaining chunk
+    @Override
+    public void forEachRemaining(Consumer<? super Chunk> action) {
+        while (hasNext()) {
+            try (Chunk c = next()) {
+                action.accept(c);
+            }
+        }
     }
 
     @Override
     public void close() {
-        if (chunkArena != null) {
-            chunkArena.close();
-            chunkArena = null;
+        if (closed) {
+            return;
+        }
+        closed = true;
+        if (openChunk != null && !openChunk.isClosed()) {
+            openChunk.close();
+        }
+        openChunk = null;
+    }
+
+    private void onChunkClosed(Chunk chunk) {
+        if (openChunk == chunk) {
+            openChunk = null;
         }
     }
 
@@ -335,11 +396,11 @@ public final class ScanIterator implements AutoCloseable {
     // Map.of with 1 or 2 args allocates Map1/Map2 (~2-4 fields) — avoids the
     // LinkedHashMap + Map.copyOf pair that would otherwise allocate per chunk.
     // Direct array index into ChunkSpec.columnLayouts avoids HashMap.get() per column.
-    private Map<String, Array> buildColumnMap(ChunkSpec chunk) {
+    private Map<String, Array> buildColumnMap(ChunkSpec chunk, Arena arena) {
         Layout[] layouts = chunk.columnLayouts();
         int n = projectedNames.size();
         if (n == 1) {
-            Array arr = decodeLayout(layouts[0], projectedDtypes.getFirst(), chunkArena);
+            Array arr = decodeLayout(layouts[0], projectedDtypes.getFirst(), arena);
             if (arr instanceof StructArray sa) {
                 return expandStruct(sa);
             }
@@ -347,12 +408,12 @@ public final class ScanIterator implements AutoCloseable {
         }
         if (n == 2) {
             return Map.of(
-                    projectedNames.get(0), decodeLayout(layouts[0], projectedDtypes.get(0), chunkArena),
-                    projectedNames.get(1), decodeLayout(layouts[1], projectedDtypes.get(1), chunkArena));
+                    projectedNames.get(0), decodeLayout(layouts[0], projectedDtypes.get(0), arena),
+                    projectedNames.get(1), decodeLayout(layouts[1], projectedDtypes.get(1), arena));
         }
         var scratch = new LinkedHashMap<String, Array>(n);
         for (int i = 0; i < n; i++) {
-            scratch.put(projectedNames.get(i), decodeLayout(layouts[i], projectedDtypes.get(i), chunkArena));
+            scratch.put(projectedNames.get(i), decodeLayout(layouts[i], projectedDtypes.get(i), arena));
         }
         return Map.copyOf(scratch);
     }

@@ -5,9 +5,9 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.io.VortexReader;
+import io.github.dfa1.vortex.scan.Chunk;
 import io.github.dfa1.vortex.scan.ScanIterator;
 import io.github.dfa1.vortex.scan.ScanOptions;
-import io.github.dfa1.vortex.scan.ScanResult;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -41,14 +41,15 @@ class CsvImporterTest {
 
             try (ScanIterator iter = reader.scan(ScanOptions.all())) {
                 assertThat(iter.hasNext()).isTrue();
-                ScanResult chunk = iter.next();
-                assertThat(chunk.rowCount()).isEqualTo(2);
-                LongArray ids = chunk.column("id");
-                assertThat(ids.getLong(0)).isEqualTo(1L);
-                assertThat(ids.getLong(1)).isEqualTo(2L);
-                VarBinArray names = chunk.column("name");
-                assertThat(names.getString(0)).isEqualTo("Alice");
-                assertThat(names.getString(1)).isEqualTo("Bob");
+                try (Chunk chunk = iter.next()) {
+                    assertThat(chunk.rowCount()).isEqualTo(2);
+                    LongArray ids = chunk.column("id");
+                    assertThat(ids.getLong(0)).isEqualTo(1L);
+                    assertThat(ids.getLong(1)).isEqualTo(2L);
+                    VarBinArray names = chunk.column("name");
+                    assertThat(names.getString(0)).isEqualTo("Alice");
+                    assertThat(names.getString(1)).isEqualTo("Bob");
+                }
             }
         }
     }
@@ -107,9 +108,10 @@ class CsvImporterTest {
             assertThat(schema.fieldTypes().getFirst()).isEqualTo(new DType.Utf8(false));
             try (ScanIterator iter = reader.scan(ScanOptions.all())) {
                 assertThat(iter.hasNext()).isTrue();
-                ScanResult chunk = iter.next();
-                VarBinArray values = chunk.column("value");
-                assertThat(values.getString(0)).isEqualTo("42");
+                try (Chunk chunk = iter.next()) {
+                    VarBinArray values = chunk.column("value");
+                    assertThat(values.getString(0)).isEqualTo("42");
+                }
             }
         }
     }

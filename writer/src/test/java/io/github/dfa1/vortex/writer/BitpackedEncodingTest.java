@@ -8,7 +8,6 @@ import io.github.dfa1.vortex.encoding.BitpackedEncoding;
 import io.github.dfa1.vortex.encoding.EncodingRegistry;
 import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.ScanOptions;
-import io.github.dfa1.vortex.scan.ScanResult;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -28,18 +27,26 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class BitpackedEncodingTest {
 
+    private static final ValueLayout.OfInt LE_INT = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
     private static final DType.Struct I32_SCHEMA = new DType.Struct(
             List.of("value"),
             List.of(new DType.Primitive(PType.I32, false)),
             false);
 
-    private static List<ScanResult> scanAll(VortexReader vf) {
-        var results = new ArrayList<ScanResult>();
-        var iter = vf.scan(ScanOptions.all());
-        while (iter.hasNext()) {
-            results.add(iter.next());
+    /// Materializes every chunk of the named I32 column into a primitive int[] by
+    /// copying values out of the per-chunk arena before each [io.github.dfa1.vortex.scan.Chunk]
+    /// closes. Returns a heap array independent of the scan lifecycle.
+    private static int[] readAllInts(VortexReader vf, String col) {
+        var collected = new ArrayList<Integer>();
+        try (var iter = vf.scan(ScanOptions.all())) {
+            iter.forEachRemaining(c -> {
+                Array arr = c.column(col);
+                for (long i = 0; i < arr.length(); i++) {
+                    collected.add(ArraySegments.of(arr).get(LE_INT, i * Integer.BYTES));
+                }
+            });
         }
-        return results;
+        return collected.stream().mapToInt(Integer::intValue).toArray();
     }
 
     private static EncodingRegistry bitpackedRegistry() {
@@ -61,14 +68,7 @@ class BitpackedEncodingTest {
 
         // Then
         try (var vf = VortexReader.open(file, bitpackedRegistry())) {
-            List<ScanResult> results = scanAll(vf);
-            assertThat(results).hasSize(1);
-            Array arr = results.getFirst().columns().get("value");
-            assertThat(arr.length()).isEqualTo(8L);
-            var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-            for (int i = 0; i < data.length; i++) {
-                assertThat(ArraySegments.of(arr).get(layout, (long) i * 4)).isEqualTo(data[i]);
-            }
+            assertThat(readAllInts(vf, "value")).containsExactly(data);
         }
     }
 
@@ -87,13 +87,7 @@ class BitpackedEncodingTest {
 
         // Then
         try (var vf = VortexReader.open(file, bitpackedRegistry())) {
-            List<ScanResult> results = scanAll(vf);
-            assertThat(results).hasSize(1);
-            Array arr = results.getFirst().columns().get("value");
-            var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-            for (int i = 0; i < data.length; i++) {
-                assertThat(ArraySegments.of(arr).get(layout, (long) i * 4)).isEqualTo(42);
-            }
+            assertThat(readAllInts(vf, "value")).containsExactly(data);
         }
     }
 
@@ -112,13 +106,7 @@ class BitpackedEncodingTest {
 
         // Then
         try (var vf = VortexReader.open(file, bitpackedRegistry())) {
-            List<ScanResult> results = scanAll(vf);
-            assertThat(results).hasSize(1);
-            Array arr = results.getFirst().columns().get("value");
-            var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-            for (int i = 0; i < data.length; i++) {
-                assertThat(ArraySegments.of(arr).get(layout, (long) i * 4)).isEqualTo(data[i]);
-            }
+            assertThat(readAllInts(vf, "value")).containsExactly(data);
         }
     }
 
@@ -139,26 +127,9 @@ class BitpackedEncodingTest {
             sut.writeChunk(Map.of("value", chunk2));
         }
 
-        // Then — process each chunk before advancing; hasNext() closes the previous chunk's arena
-        try (var vf = VortexReader.open(file, bitpackedRegistry());
-             var iter = vf.scan(ScanOptions.all())) {
-            var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-
-            assertThat(iter.hasNext()).isTrue();
-            Array a1 = iter.next().columns().get("value");
-            assertThat(a1.length()).isEqualTo(3L);
-            for (int i = 0; i < chunk1.length; i++) {
-                assertThat(ArraySegments.of(a1).get(layout, (long) i * 4)).isEqualTo(chunk1[i]);
-            }
-
-            assertThat(iter.hasNext()).isTrue();
-            Array a2 = iter.next().columns().get("value");
-            assertThat(a2.length()).isEqualTo(3L);
-            for (int i = 0; i < chunk2.length; i++) {
-                assertThat(ArraySegments.of(a2).get(layout, (long) i * 4)).isEqualTo(chunk2[i]);
-            }
-
-            assertThat(iter.hasNext()).isFalse();
+        // Then — read both chunks, each in its own try-with-resources scope
+        try (var vf = VortexReader.open(file, bitpackedRegistry())) {
+            assertThat(readAllInts(vf, "value")).containsExactly(100, 200, 150, 300, 400, 350);
         }
     }
 
@@ -181,15 +152,7 @@ class BitpackedEncodingTest {
 
         // Then
         try (var vf = VortexReader.open(file, bitpackedRegistry())) {
-            List<ScanResult> results = scanAll(vf);
-            assertThat(results).hasSize(1);
-            Array arr = results.getFirst().columns().get("value");
-            var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-            for (int i = 0; i < data.length; i++) {
-                assertThat(ArraySegments.of(arr).get(layout, (long) i * 4))
-                        .as("value at index %d", i)
-                        .isEqualTo(data[i]);
-            }
+            assertThat(readAllInts(vf, "value")).containsExactly(data);
         }
     }
 }

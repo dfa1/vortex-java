@@ -12,7 +12,7 @@ import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.ArraySegments;
 import io.github.dfa1.vortex.encoding.EncodingRegistry;
 import io.github.dfa1.vortex.io.VortexReader;
-import io.github.dfa1.vortex.scan.ScanResult;
+import io.github.dfa1.vortex.scan.Chunk;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
@@ -174,15 +174,16 @@ public class RustWritesJavaReadsBigFileBenchmark {
 
     private long scanJava() throws IOException {
         long sum = 0L;
-        try (VortexReader vf = VortexReader.open(benchFile, registry)) {
-            var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("c0"));
+        try (VortexReader vf = VortexReader.open(benchFile, registry);
+             var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("c0"))) {
             while (iter.hasNext()) {
-                ScanResult r = iter.next();
-                Array arr = r.columns().get("c0");
-                MemorySegment buf = ArraySegments.of(arr);
-                long count = buf.byteSize() / Long.BYTES;
-                for (long i = 0; i < count; i++) {
-                    sum += buf.getAtIndex(LE_LONG, i);
+                try (Chunk c = iter.next()) {
+                    Array arr = c.columns().get("c0");
+                    MemorySegment buf = ArraySegments.of(arr);
+                    long count = buf.byteSize() / Long.BYTES;
+                    for (long i = 0; i < count; i++) {
+                        sum += buf.getAtIndex(LE_LONG, i);
+                    }
                 }
             }
         }

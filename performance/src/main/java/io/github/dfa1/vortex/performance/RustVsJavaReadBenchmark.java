@@ -15,7 +15,7 @@ import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.encoding.EncodingRegistry;
 import io.github.dfa1.vortex.io.VortexReader;
-import io.github.dfa1.vortex.scan.ScanResult;
+import io.github.dfa1.vortex.scan.Chunk;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import org.apache.arrow.c.ArrowArray;
@@ -279,12 +279,13 @@ public class RustVsJavaReadBenchmark {
     @Benchmark
     public long javaReadCascading() throws IOException {
         long sum = 0L;
-        try (VortexReader vf = VortexReader.open(cascadingFile, registry)) {
-            var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("volume"));
+        try (VortexReader vf = VortexReader.open(cascadingFile, registry);
+             var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("volume"))) {
             while (iter.hasNext()) {
-                ScanResult r = iter.next();
-                LongArray volume = r.column("volume");
-                sum += volume.fold(0L, Long::sum);
+                try (Chunk c = iter.next()) {
+                    LongArray volume = c.column("volume");
+                    sum += volume.fold(0L, Long::sum);
+                }
             }
         }
         return sum;
@@ -294,12 +295,13 @@ public class RustVsJavaReadBenchmark {
     @Benchmark
     public long javaReadVolume() throws IOException {
         long sum = 0L;
-        try (VortexReader vf = VortexReader.open(benchFile, registry)) {
-            var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("volume"));
+        try (VortexReader vf = VortexReader.open(benchFile, registry);
+             var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("volume"))) {
             while (iter.hasNext()) {
-                ScanResult r = iter.next();
-                LongArray volume = r.column("volume");
-                sum += volume.fold(0L, Long::sum);
+                try (Chunk c = iter.next()) {
+                    LongArray volume = c.column("volume");
+                    sum += volume.fold(0L, Long::sum);
+                }
             }
         }
         return sum;
@@ -309,12 +311,13 @@ public class RustVsJavaReadBenchmark {
     @Benchmark
     public double javaReadClose() throws IOException {
         double sum = 0.0;
-        try (VortexReader vf = VortexReader.open(benchFile, registry)) {
-            var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("close"));
+        try (VortexReader vf = VortexReader.open(benchFile, registry);
+             var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("close"))) {
             while (iter.hasNext()) {
-                ScanResult r = iter.next();
-                DoubleArray close = r.column("close");
-                sum += close.fold(0.0, Double::sum);
+                try (Chunk c = iter.next()) {
+                    DoubleArray close = c.column("close");
+                    sum += close.fold(0.0, Double::sum);
+                }
             }
         }
         return sum;
@@ -324,12 +327,13 @@ public class RustVsJavaReadBenchmark {
     @Benchmark
     public long javaReadSymbol() throws IOException {
         long[] sum = {0L};
-        try (VortexReader vf = VortexReader.open(benchFile, registry)) {
-            var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("symbol"));
+        try (VortexReader vf = VortexReader.open(benchFile, registry);
+             var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("symbol"))) {
             while (iter.hasNext()) {
-                ScanResult r = iter.next();
-                VarBinArray symbol = r.column("symbol");
-                symbol.forEachByteLength(v -> sum[0] += v);
+                try (Chunk c = iter.next()) {
+                    VarBinArray symbol = c.column("symbol");
+                    symbol.forEachByteLength(v -> sum[0] += v);
+                }
             }
         }
         return sum[0];

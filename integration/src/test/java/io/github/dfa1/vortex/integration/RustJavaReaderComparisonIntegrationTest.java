@@ -21,7 +21,7 @@ import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.encoding.EncodingRegistry;
 import io.github.dfa1.vortex.io.VortexInspector;
 import io.github.dfa1.vortex.io.VortexReader;
-import io.github.dfa1.vortex.scan.ScanResult;
+import io.github.dfa1.vortex.scan.Chunk;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.Float4Vector;
@@ -216,17 +216,18 @@ class RustJavaReaderComparisonIntegrationTest {
         try (VortexReader reader = VortexReader.open(file, EncodingRegistry.loadAll());
              var iter = reader.scan(io.github.dfa1.vortex.scan.ScanOptions.all())) {
             while (iter.hasNext()) {
-                ScanResult chunk = iter.next();
-                rowCount += chunk.rowCount();
-                for (Map.Entry<String, Array> e : chunk.columns().entrySet()) {
-                    Array arr = e.getValue();
-                    Double numSum = numericSum(arr);
-                    if (numSum != null) {
-                        numSums.merge(e.getKey(), numSum, Double::sum);
-                    }
-                    Long strLen = stringByteLength(arr);
-                    if (strLen != null && strLen > 0) {
-                        strLenSums.merge(e.getKey(), strLen, Long::sum);
+                try (Chunk chunk = iter.next()) {
+                    rowCount += chunk.rowCount();
+                    for (Map.Entry<String, Array> e : chunk.columns().entrySet()) {
+                        Array arr = e.getValue();
+                        Double numSum = numericSum(arr);
+                        if (numSum != null) {
+                            numSums.merge(e.getKey(), numSum, Double::sum);
+                        }
+                        Long strLen = stringByteLength(arr);
+                        if (strLen != null && strLen > 0) {
+                            strLenSums.merge(e.getKey(), strLen, Long::sum);
+                        }
                     }
                 }
             }

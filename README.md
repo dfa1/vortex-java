@@ -37,17 +37,22 @@ for zero-copy memory-mapped reads.
 try (VortexReader vf = VortexReader.open(Path.of("data/example.vortex"));
      var iter = vf.scan(ScanOptions.all())) {
     while (iter.hasNext()) {
-        var chunk = iter.next();
-        LongArray ts = chunk.column("timestamp");
-        for (long i = 0; i < ts.length(); i++) {
-            System.out.println(ts.getLong(i));
+        try (Chunk chunk = iter.next()) {
+            LongArray ts = chunk.column("timestamp");
+            for (long i = 0; i < ts.length(); i++) {
+                System.out.println(ts.getLong(i));
+            }
         }
     }
 }
 ```
 
-> **Note:** `iter.hasNext()` closes the previous chunk's arena. Access all column data
-> before calling `hasNext()` again. See [docs/explanation.md#memory-model](docs/explanation.md#memory-model).
+> **Lifecycle.** `ScanIterator` implements `Iterator<Chunk>` and `Chunk` implements
+> `AutoCloseable`. Each chunk owns a confined `Arena`; closing it releases the
+> decoded buffers. Calling `iter.next()` while a prior chunk is still open throws
+> `IllegalStateException`. Use try-with-resources, or
+> `iter.forEachRemaining(c -> ...)` which closes each chunk for you. See
+> [docs/explanation.md#memory-model](docs/explanation.md#memory-model).
 
 For more examples — writing, projection, filtering, custom encodings, and the CLI —
 see the documentation below.

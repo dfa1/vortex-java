@@ -180,6 +180,12 @@ Omit a section if empty (e.g. integration module has no production deps; perform
 - Zero SonarQube bugs/smells policy.
 - No `sun.misc.Unsafe` or internal JDK APIs.
 - Prefer explicit over clever. Fail fast on unhandled cases.
+- Always prefer idiomatic modern Java. Reuse the standard library and language
+  features the JDK already provides — e.g. override `Iterator.forEachRemaining`
+  instead of inventing a parallel `forEachChunk`; use `Optional`, records,
+  sealed types, pattern switches, virtual threads, FFM — over hand-rolled
+  equivalents. New APIs should look and feel like JDK APIs Java developers
+  already know.
 - Always use braces for `if`/`else`/`for`/`while` bodies, even single-liners:
   ```java
   // WRONG

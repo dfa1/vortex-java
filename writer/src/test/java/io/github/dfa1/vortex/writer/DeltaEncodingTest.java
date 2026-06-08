@@ -8,7 +8,6 @@ import io.github.dfa1.vortex.encoding.DeltaEncoding;
 import io.github.dfa1.vortex.encoding.EncodingRegistry;
 import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.ScanOptions;
-import io.github.dfa1.vortex.scan.ScanResult;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -28,18 +27,23 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class DeltaEncodingTest {
 
+    private static final ValueLayout.OfLong LE_LONG = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
     private static final DType.Struct I64_SCHEMA = new DType.Struct(
             List.of("ts"),
             List.of(new DType.Primitive(PType.I64, false)),
             false);
 
-    private static List<ScanResult> scanAll(VortexReader vf) {
-        var results = new ArrayList<ScanResult>();
-        var iter = vf.scan(ScanOptions.all());
-        while (iter.hasNext()) {
-            results.add(iter.next());
+    private static long[] readAllLongs(VortexReader vf, String col) {
+        var collected = new ArrayList<Long>();
+        try (var iter = vf.scan(ScanOptions.all())) {
+            iter.forEachRemaining(c -> {
+                Array arr = c.column(col);
+                for (long i = 0; i < arr.length(); i++) {
+                    collected.add(ArraySegments.of(arr).get(LE_LONG, i * Long.BYTES));
+                }
+            });
         }
-        return results;
+        return collected.stream().mapToLong(Long::longValue).toArray();
     }
 
     private static EncodingRegistry deltaRegistry() {
@@ -64,14 +68,7 @@ class DeltaEncodingTest {
 
         // Then
         try (var vf = VortexReader.open(file, deltaRegistry())) {
-            List<ScanResult> results = scanAll(vf);
-            assertThat(results).hasSize(1);
-            Array arr = results.getFirst().columns().get("ts");
-            assertThat(arr.length()).isEqualTo(5L);
-            var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-            for (int i = 0; i < data.length; i++) {
-                assertThat(ArraySegments.of(arr).get(layout, (long) i * 8)).isEqualTo(data[i]);
-            }
+            assertThat(readAllLongs(vf, "ts")).containsExactly(data);
         }
     }
 
@@ -90,12 +87,7 @@ class DeltaEncodingTest {
 
         // Then
         try (var vf = VortexReader.open(file, deltaRegistry())) {
-            List<ScanResult> results = scanAll(vf);
-            Array arr = results.getFirst().columns().get("ts");
-            var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-            for (int i = 0; i < data.length; i++) {
-                assertThat(ArraySegments.of(arr).get(layout, (long) i * 8)).isEqualTo(data[i]);
-            }
+            assertThat(readAllLongs(vf, "ts")).containsExactly(data);
         }
     }
 
@@ -114,12 +106,7 @@ class DeltaEncodingTest {
 
         // Then
         try (var vf = VortexReader.open(file, deltaRegistry())) {
-            List<ScanResult> results = scanAll(vf);
-            Array arr = results.getFirst().columns().get("ts");
-            var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-            for (int i = 0; i < data.length; i++) {
-                assertThat(ArraySegments.of(arr).get(layout, (long) i * 8)).isEqualTo(42L);
-            }
+            assertThat(readAllLongs(vf, "ts")).containsExactly(data);
         }
     }
 
@@ -138,11 +125,7 @@ class DeltaEncodingTest {
 
         // Then
         try (var vf = VortexReader.open(file, deltaRegistry())) {
-            List<ScanResult> results = scanAll(vf);
-            Array arr = results.getFirst().columns().get("ts");
-            assertThat(arr.length()).isEqualTo(1L);
-            var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-            assertThat(ArraySegments.of(arr).get(layout, 0L)).isEqualTo(99L);
+            assertThat(readAllLongs(vf, "ts")).containsExactly(data);
         }
     }
 
@@ -161,12 +144,7 @@ class DeltaEncodingTest {
 
         // Then
         try (var vf = VortexReader.open(file, deltaRegistry())) {
-            List<ScanResult> results = scanAll(vf);
-            Array arr = results.getFirst().columns().get("ts");
-            var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-            for (int i = 0; i < data.length; i++) {
-                assertThat(ArraySegments.of(arr).get(layout, (long) i * 8)).isEqualTo(data[i]);
-            }
+            assertThat(readAllLongs(vf, "ts")).containsExactly(data);
         }
     }
 
@@ -187,24 +165,10 @@ class DeltaEncodingTest {
             sut.writeChunk(Map.of("ts", chunk2));
         }
 
-        // Then — process each chunk before advancing; hasNext() closes the previous chunk's arena
-        try (var vf = VortexReader.open(file, deltaRegistry());
-             var iter = vf.scan(ScanOptions.all())) {
-            var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-
-            assertThat(iter.hasNext()).isTrue();
-            Array a1 = iter.next().columns().get("ts");
-            for (int i = 0; i < chunk1.length; i++) {
-                assertThat(ArraySegments.of(a1).get(layout, (long) i * 8)).isEqualTo(chunk1[i]);
-            }
-
-            assertThat(iter.hasNext()).isTrue();
-            Array a2 = iter.next().columns().get("ts");
-            for (int i = 0; i < chunk2.length; i++) {
-                assertThat(ArraySegments.of(a2).get(layout, (long) i * 8)).isEqualTo(chunk2[i]);
-            }
-
-            assertThat(iter.hasNext()).isFalse();
+        // Then
+        try (var vf = VortexReader.open(file, deltaRegistry())) {
+            assertThat(readAllLongs(vf, "ts"))
+                    .containsExactly(1000L, 1001L, 1002L, 2000L, 2005L, 2010L);
         }
     }
 
@@ -227,16 +191,7 @@ class DeltaEncodingTest {
 
         // Then
         try (var vf = VortexReader.open(file, deltaRegistry())) {
-            List<ScanResult> results = scanAll(vf);
-            assertThat(results).hasSize(1);
-            Array arr = results.getFirst().columns().get("ts");
-            assertThat(arr.length()).isEqualTo((long) n);
-            var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-            for (int i = 0; i < n; i++) {
-                assertThat(ArraySegments.of(arr).get(layout, (long) i * 8))
-                        .as("index %d", i)
-                        .isEqualTo(data[i]);
-            }
+            assertThat(readAllLongs(vf, "ts")).containsExactly(data);
         }
     }
 }

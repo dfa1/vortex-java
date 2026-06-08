@@ -7,7 +7,6 @@ import io.github.dfa1.vortex.encoding.PrimitiveEncoding;
 import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.RowFilter;
 import io.github.dfa1.vortex.scan.ScanOptions;
-import io.github.dfa1.vortex.scan.ScanResult;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -41,17 +40,16 @@ class ZoneMapPruningTest {
         return file;
     }
 
-    private static List<ScanResult> scanWith(Path file, RowFilter filter) throws IOException {
+    /// Returns one entry per surviving chunk: its row count after filter pruning.
+    private static List<Long> scanRowCounts(Path file, RowFilter filter) throws IOException {
         var opts = new ScanOptions(List.of(), filter, ScanOptions.NO_LIMIT);
         var registry = primitiveRegistry();
-        var results = new ArrayList<ScanResult>();
+        var rowCounts = new ArrayList<Long>();
         try (var vf = VortexReader.open(file, registry);
              var iter = vf.scan(opts)) {
-            while (iter.hasNext()) {
-                results.add(iter.next());
-            }
+            iter.forEachRemaining(c -> rowCounts.add(c.rowCount()));
         }
-        return results;
+        return rowCounts;
     }
 
     private static long[] range(long from, long to) {
@@ -72,12 +70,10 @@ class ZoneMapPruningTest {
         Path file = writeThreeChunks(tmp);
 
         // When
-        List<ScanResult> results = scanWith(file, RowFilter.gte("id", 75L));
+        List<Long> rowCounts = scanRowCounts(file, RowFilter.gte("id", 75L));
 
         // Then
-        assertThat(results).hasSize(2);
-        assertThat(results.get(0).rowCount()).isEqualTo(50L); // chunk 2
-        assertThat(results.get(1).rowCount()).isEqualTo(50L); // chunk 3
+        assertThat(rowCounts).containsExactly(50L, 50L); // chunk 2, 3
     }
 
     @Test
@@ -86,12 +82,10 @@ class ZoneMapPruningTest {
         Path file = writeThreeChunks(tmp);
 
         // When
-        List<ScanResult> results = scanWith(file, RowFilter.lte("id", 75L));
+        List<Long> rowCounts = scanRowCounts(file, RowFilter.lte("id", 75L));
 
         // Then
-        assertThat(results).hasSize(2);
-        assertThat(results.get(0).rowCount()).isEqualTo(50L); // chunk 1
-        assertThat(results.get(1).rowCount()).isEqualTo(50L); // chunk 2
+        assertThat(rowCounts).containsExactly(50L, 50L); // chunk 1, 2
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -102,11 +96,10 @@ class ZoneMapPruningTest {
         Path file = writeThreeChunks(tmp);
 
         // When
-        List<ScanResult> results = scanWith(file, RowFilter.eq("id", 75L));
+        List<Long> rowCounts = scanRowCounts(file, RowFilter.eq("id", 75L));
 
         // Then
-        assertThat(results).hasSize(1);
-        assertThat(results.getFirst().rowCount()).isEqualTo(50L); // chunk 2
+        assertThat(rowCounts).containsExactly(50L); // chunk 2
     }
 
     @Test
@@ -115,13 +108,12 @@ class ZoneMapPruningTest {
         Path file = writeThreeChunks(tmp);
 
         // When
-        List<ScanResult> results = scanWith(file, RowFilter.and(
+        List<Long> rowCounts = scanRowCounts(file, RowFilter.and(
                 RowFilter.gte("id", 51L),
                 RowFilter.lte("id", 100L)));
 
         // Then
-        assertThat(results).hasSize(1);
-        assertThat(results.getFirst().rowCount()).isEqualTo(50L); // chunk 2
+        assertThat(rowCounts).containsExactly(50L); // chunk 2
     }
 
     @Test
@@ -130,9 +122,9 @@ class ZoneMapPruningTest {
         Path file = writeThreeChunks(tmp);
 
         // When
-        List<ScanResult> results = scanWith(file, null);
+        List<Long> rowCounts = scanRowCounts(file, null);
 
         // Then
-        assertThat(results).hasSize(3);
+        assertThat(rowCounts).hasSize(3);
     }
 }

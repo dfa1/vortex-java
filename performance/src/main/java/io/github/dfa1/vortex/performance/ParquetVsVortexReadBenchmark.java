@@ -11,7 +11,7 @@ import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.encoding.EncodingRegistry;
 import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.parquet.ParquetImporter;
-import io.github.dfa1.vortex.scan.ScanResult;
+import io.github.dfa1.vortex.scan.Chunk;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -210,12 +210,13 @@ public class ParquetVsVortexReadBenchmark {
     @Benchmark
     public double vortexRead() throws IOException {
         double sum = 0.0;
-        try (VortexReader vr = VortexReader.open(vortexFile, registry)) {
-            var iter = vr.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("trip_distance"));
+        try (VortexReader vr = VortexReader.open(vortexFile, registry);
+             var iter = vr.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("trip_distance"))) {
             while (iter.hasNext()) {
-                ScanResult r = iter.next();
-                DoubleArray col = r.column("trip_distance");
-                sum += col.fold(0.0, Double::sum);
+                try (Chunk c = iter.next()) {
+                    DoubleArray col = c.column("trip_distance");
+                    sum += col.fold(0.0, Double::sum);
+                }
             }
         }
         return sum;
@@ -228,14 +229,15 @@ public class ParquetVsVortexReadBenchmark {
     public double vortexReadMultiColumn() throws IOException {
         double fareSum = 0.0;
         long idSum = 0L;
-        try (VortexReader vr = VortexReader.open(vortexFile, registry)) {
-            var iter = vr.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("fare_amount", "PULocationID"));
+        try (VortexReader vr = VortexReader.open(vortexFile, registry);
+             var iter = vr.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("fare_amount", "PULocationID"))) {
             while (iter.hasNext()) {
-                ScanResult r = iter.next();
-                DoubleArray fare = r.column("fare_amount");
-                IntArray loc = r.column("PULocationID");
-                fareSum += fare.fold(0.0, Double::sum);
-                idSum += loc.fold(0, Integer::sum);
+                try (Chunk c = iter.next()) {
+                    DoubleArray fare = c.column("fare_amount");
+                    IntArray loc = c.column("PULocationID");
+                    fareSum += fare.fold(0.0, Double::sum);
+                    idSum += loc.fold(0, Integer::sum);
+                }
             }
         }
         return fareSum + idSum;

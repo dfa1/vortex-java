@@ -8,8 +8,8 @@ import io.github.dfa1.vortex.encoding.DictEncoding;
 import io.github.dfa1.vortex.encoding.EncodingRegistry;
 import io.github.dfa1.vortex.encoding.PrimitiveEncoding;
 import io.github.dfa1.vortex.io.VortexReader;
+import io.github.dfa1.vortex.scan.Chunk;
 import io.github.dfa1.vortex.scan.ScanOptions;
-import io.github.dfa1.vortex.scan.ScanResult;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -27,18 +27,23 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class DictEncodingTest {
 
+    private static final ValueLayout.OfInt LE_INT = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
     private static final DType.Struct SCHEMA = new DType.Struct(
             List.of("category"),
             List.of(new DType.Primitive(PType.I32, false)),
             false);
 
-    private static List<ScanResult> scanAll(VortexReader vf, ScanOptions opts) {
-        var results = new ArrayList<ScanResult>();
-        var iter = vf.scan(opts);
-        while (iter.hasNext()) {
-            results.add(iter.next());
+    private static int[] readAllInts(VortexReader vf, String col) {
+        var collected = new ArrayList<Integer>();
+        try (var iter = vf.scan(ScanOptions.all())) {
+            iter.forEachRemaining(c -> {
+                Array arr = c.column(col);
+                for (long i = 0; i < arr.length(); i++) {
+                    collected.add(ArraySegments.of(arr).get(LE_INT, i * Integer.BYTES));
+                }
+            });
         }
-        return results;
+        return collected.stream().mapToInt(Integer::intValue).toArray();
     }
 
     private static EncodingRegistry dictRegistry() {
@@ -62,20 +67,8 @@ class DictEncodingTest {
         }
 
         // Then
-        var registry = dictRegistry();
-        try (var vf = VortexReader.open(file, registry)) {
-            List<ScanResult> results = scanAll(vf, ScanOptions.all());
-            assertThat(results).hasSize(1);
-            Array arr = results.getFirst().columns().get("category");
-            assertThat(arr.length()).isEqualTo(6L);
-            var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-            var buf = ArraySegments.of(arr);
-            assertThat(buf.get(layout, 0)).isEqualTo(1);
-            assertThat(buf.get(layout, 4)).isEqualTo(2);
-            assertThat(buf.get(layout, 8)).isEqualTo(1);
-            assertThat(buf.get(layout, 12)).isEqualTo(3);
-            assertThat(buf.get(layout, 16)).isEqualTo(2);
-            assertThat(buf.get(layout, 20)).isEqualTo(1);
+        try (var vf = VortexReader.open(file, dictRegistry())) {
+            assertThat(readAllInts(vf, "category")).containsExactly(data);
         }
     }
 
@@ -95,17 +88,8 @@ class DictEncodingTest {
         }
 
         // Then
-        var registry = dictRegistry();
-        try (var vf = VortexReader.open(file, registry)) {
-            List<ScanResult> results = scanAll(vf, ScanOptions.all());
-            assertThat(results).hasSize(1);
-            Array arr = results.getFirst().columns().get("category");
-            assertThat(arr.length()).isEqualTo(4L);
-            var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-            var buf = ArraySegments.of(arr);
-            for (int i = 0; i < 4; i++) {
-                assertThat(buf.get(layout, (long) i * 4)).isEqualTo(42);
-            }
+        try (var vf = VortexReader.open(file, dictRegistry())) {
+            assertThat(readAllInts(vf, "category")).containsExactly(data);
         }
     }
 
@@ -124,25 +108,27 @@ class DictEncodingTest {
             sut.writeChunk(Map.of("category", chunk2));
         }
 
-        // Then — process each chunk before advancing; hasNext() closes the previous chunk's arena
+        // Then — process each chunk inside try-with-resources; arena released after close()
         try (var vf = VortexReader.open(file, dictRegistry());
              var iter = vf.scan(ScanOptions.all())) {
-            var layout = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+            assertThat(iter.hasNext()).isTrue();
+            try (Chunk c1 = iter.next()) {
+                Array a1 = c1.columns().get("category");
+                assertThat(a1.length()).isEqualTo(3L);
+                assertThat(ArraySegments.of(a1).get(LE_INT, 0)).isEqualTo(10);
+                assertThat(ArraySegments.of(a1).get(LE_INT, 4)).isEqualTo(20);
+                assertThat(ArraySegments.of(a1).get(LE_INT, 8)).isEqualTo(10);
+            }
 
             assertThat(iter.hasNext()).isTrue();
-            Array a1 = iter.next().columns().get("category");
-            assertThat(a1.length()).isEqualTo(3L);
-            assertThat(ArraySegments.of(a1).get(layout, 0)).isEqualTo(10);
-            assertThat(ArraySegments.of(a1).get(layout, 4)).isEqualTo(20);
-            assertThat(ArraySegments.of(a1).get(layout, 8)).isEqualTo(10);
-
-            assertThat(iter.hasNext()).isTrue();
-            Array a2 = iter.next().columns().get("category");
-            assertThat(a2.length()).isEqualTo(4L);
-            assertThat(ArraySegments.of(a2).get(layout, 0)).isEqualTo(30);
-            assertThat(ArraySegments.of(a2).get(layout, 4)).isEqualTo(10);
-            assertThat(ArraySegments.of(a2).get(layout, 8)).isEqualTo(20);
-            assertThat(ArraySegments.of(a2).get(layout, 12)).isEqualTo(30);
+            try (Chunk c2 = iter.next()) {
+                Array a2 = c2.columns().get("category");
+                assertThat(a2.length()).isEqualTo(4L);
+                assertThat(ArraySegments.of(a2).get(LE_INT, 0)).isEqualTo(30);
+                assertThat(ArraySegments.of(a2).get(LE_INT, 4)).isEqualTo(10);
+                assertThat(ArraySegments.of(a2).get(LE_INT, 8)).isEqualTo(20);
+                assertThat(ArraySegments.of(a2).get(LE_INT, 12)).isEqualTo(30);
+            }
 
             assertThat(iter.hasNext()).isFalse();
         }

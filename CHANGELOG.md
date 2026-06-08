@@ -9,11 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Chunk` (`io.github.dfa1.vortex.scan.Chunk`) — replaces `ScanResult`. Each chunk owns
+  a confined `Arena` and implements `AutoCloseable`. The standard
+  `Iterator.forEachRemaining(Consumer<Chunk>)` is overridden on `ScanIterator` to wrap
+  each chunk in try-with-resources, so callers that don't need early-exit get
+  automatic per-chunk cleanup with no new API to learn.
+
 ### Changed
+
+- **Breaking — scan API lifecycle.** `ScanIterator` now implements
+  `Iterator<Chunk>`. `next()` returns a `Chunk` that the caller must close
+  (try-with-resources); `hasNext()` is side-effect-free. Calling `next()` while a
+  prior `Chunk` is still open throws `IllegalStateException`. This removes the
+  previous footgun where `iter.hasNext()` silently closed the previous chunk's
+  arena, invalidating any `Array` references the caller still held. Use after
+  `close()` raises FFM's scope check (`IllegalStateException`) instead of returning
+  undefined data. See the updated examples in `README.md` and
+  `docs/explanation.md#memory-model`.
 
 ### Fixed
 
 ### Removed
+
+- `ScanResult` — renamed to `Chunk` and given lifecycle methods. Update imports:
+  `io.github.dfa1.vortex.scan.ScanResult` → `io.github.dfa1.vortex.scan.Chunk`.
 
 [0.5.0]: https://github.com/dfa1/vortex-java/compare/v0.4.0...main
 

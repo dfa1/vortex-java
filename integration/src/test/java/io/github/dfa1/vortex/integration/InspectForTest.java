@@ -17,11 +17,13 @@ class InspectForTest {
             try (VortexReader r = VortexReader.open(Path.of(f), EncodingRegistry.loadAll())) {
                 System.out.println("=== " + f + " ===");
                 System.out.println(VortexInspector.inspect(r));
-                var iter = r.scan(io.github.dfa1.vortex.scan.ScanOptions.all());
-                if (iter.hasNext()) {
-                    var chunk = iter.next();
-                    chunk.columns().forEach((name, arr) ->
-                                                    System.out.println("  col=" + name + " type=" + arr.getClass().getSimpleName() + " dtype=" + arr.dtype()));
+                try (var iter = r.scan(io.github.dfa1.vortex.scan.ScanOptions.all())) {
+                    if (iter.hasNext()) {
+                        try (var chunk = iter.next()) {
+                            chunk.columns().forEach((name, arr) ->
+                                    System.out.println("  col=" + name + " type=" + arr.getClass().getSimpleName() + " dtype=" + arr.dtype()));
+                        }
+                    }
                 }
             }
         }

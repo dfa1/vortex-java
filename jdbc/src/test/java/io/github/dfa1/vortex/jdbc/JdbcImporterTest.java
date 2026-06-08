@@ -7,9 +7,9 @@ import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.io.VortexReader;
+import io.github.dfa1.vortex.scan.Chunk;
 import io.github.dfa1.vortex.scan.ScanIterator;
 import io.github.dfa1.vortex.scan.ScanOptions;
-import io.github.dfa1.vortex.scan.ScanResult;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -71,24 +71,25 @@ class JdbcImporterTest {
 
                 try (ScanIterator iter = reader.scan(ScanOptions.all())) {
                     assertThat(iter.hasNext()).isTrue();
-                    ScanResult chunk = iter.next();
-                    assertThat(chunk.rowCount()).isEqualTo(2);
+                    try (Chunk chunk = iter.next()) {
+                        assertThat(chunk.rowCount()).isEqualTo(2);
 
-                    LongArray ids = chunk.column("ID");
-                    assertThat(ids.getLong(0)).isEqualTo(1L);
-                    assertThat(ids.getLong(1)).isEqualTo(2L);
+                        LongArray ids = chunk.column("ID");
+                        assertThat(ids.getLong(0)).isEqualTo(1L);
+                        assertThat(ids.getLong(1)).isEqualTo(2L);
 
-                    VarBinArray names = chunk.column("NAME");
-                    assertThat(names.getString(0)).isEqualTo("Alice");
-                    assertThat(names.getString(1)).isEqualTo("Bob");
+                        VarBinArray names = chunk.column("NAME");
+                        assertThat(names.getString(0)).isEqualTo("Alice");
+                        assertThat(names.getString(1)).isEqualTo("Bob");
 
-                    DoubleArray scores = chunk.column("SCORE");
-                    assertThat(scores.getDouble(0)).isEqualTo(1.5);
-                    assertThat(scores.getDouble(1)).isEqualTo(2.7);
+                        DoubleArray scores = chunk.column("SCORE");
+                        assertThat(scores.getDouble(0)).isEqualTo(1.5);
+                        assertThat(scores.getDouble(1)).isEqualTo(2.7);
 
-                    BoolArray active = chunk.column("ACTIVE");
-                    assertThat(active.getBoolean(0)).isTrue();
-                    assertThat(active.getBoolean(1)).isFalse();
+                        BoolArray active = chunk.column("ACTIVE");
+                        assertThat(active.getBoolean(0)).isTrue();
+                        assertThat(active.getBoolean(1)).isFalse();
+                    }
                 }
             }
         }
@@ -114,13 +115,12 @@ class JdbcImporterTest {
             try (VortexReader reader = VortexReader.open(vortex)) {
                 List<Long> collected = new ArrayList<>();
                 try (ScanIterator iter = reader.scan(ScanOptions.all())) {
-                    while (iter.hasNext()) {
-                        ScanResult chunk = iter.next();
+                    iter.forEachRemaining(chunk -> {
                         LongArray arr = chunk.column("N");
                         for (long r = 0; r < chunk.rowCount(); r++) {
                             collected.add(arr.getLong(r));
                         }
-                    }
+                    });
                 }
                 assertThat(collected).containsExactly(0L, 1L, 2L, 3L, 4L);
             }
@@ -163,11 +163,12 @@ class JdbcImporterTest {
             try (VortexReader reader = VortexReader.open(vortex)) {
                 try (ScanIterator iter = reader.scan(ScanOptions.all())) {
                     assertThat(iter.hasNext()).isTrue();
-                    ScanResult chunk = iter.next();
-                    LongArray nums = chunk.column("N");
-                    assertThat(nums.getLong(0)).isEqualTo(0L);
-                    VarBinArray strs = chunk.column("S");
-                    assertThat(strs.getString(0)).isEqualTo("");
+                    try (Chunk chunk = iter.next()) {
+                        LongArray nums = chunk.column("N");
+                        assertThat(nums.getLong(0)).isEqualTo(0L);
+                        VarBinArray strs = chunk.column("S");
+                        assertThat(strs.getString(0)).isEqualTo("");
+                    }
                 }
             }
         }
@@ -217,8 +218,9 @@ class JdbcImporterTest {
                 assertThat(schema.fieldNames()).containsExactly("ID", "LABEL");
                 try (ScanIterator iter = reader.scan(ScanOptions.all())) {
                     assertThat(iter.hasNext()).isTrue();
-                    ScanResult chunk = iter.next();
-                    assertThat(chunk.rowCount()).isEqualTo(2);
+                    try (Chunk chunk = iter.next()) {
+                        assertThat(chunk.rowCount()).isEqualTo(2);
+                    }
                 }
             }
         }

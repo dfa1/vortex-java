@@ -132,11 +132,40 @@ and the chunk-0 stats child — the tree collapses to `Struct → Chunked → [F
 ## Memory model
 
 `VortexReader` memory-maps the entire file into one `MemorySegment` (confined `Arena`).
-All `Array` buffers returned during a scan are zero-copy slices of that segment — their
-lifetime is tied to the `VortexReader`. Close the reader to release the mapped region.
+Decoded `Array` buffers returned during a scan are zero-copy slices of that segment —
+or of a per-chunk arena allocated for decode output. Close the reader to release
+the mapped region.
 
-The iterator-based scan API is load-bearing: `iter.hasNext()` closes the previous chunk's
-arena. Access all column data before calling `hasNext()` again.
+### Per-chunk lifetime: `Chunk implements AutoCloseable`
+
+`ScanIterator` implements `Iterator<Chunk>`. Each `Chunk` owns a confined `Arena`
+that holds its decoded columnar buffers; calling `chunk.close()` releases the arena.
+The idiomatic pattern is nested try-with-resources:
+
+```java
+try (var reader = VortexReader.open(path);
+     var iter   = reader.scan(opts)) {           // releases iterator state
+    while (iter.hasNext()) {
+        try (Chunk chunk = iter.next()) {        // releases this chunk's arena
+            // use chunk.column(...) — refs are valid only inside this block
+        }
+    }
+}
+```
+
+Calling `iter.next()` while a previous chunk is still open throws
+`IllegalStateException` — the API refuses to silently invalidate live references.
+After `chunk.close()`, touching any previously-returned `Array` raises FFM's scope
+check (`IllegalStateException` from `MemorySegment`), not undefined behavior.
+
+For bulk consumption with auto-close per element, override the standard
+`Iterator.forEachRemaining` is provided:
+
+```java
+try (var iter = reader.scan(opts)) {
+    iter.forEachRemaining(c -> sum += c.column("price").fold(0.0, Double::sum));
+}
+```
 
 For the reader / scan method signatures, see [reference.md#reader-api](reference.md#reader-api).
 
@@ -250,8 +279,8 @@ VortexReader.open(path)
 vortexReader.scan(opts) → ScanIterator
   └─ pre-index Flat nodes into ChunkSpec[] — one entry per row group per column
 
-ScanIterator.next() → ScanResult (per row-group)
-  └─ decodeLayout(layout, dtype, chunkArena)
+ScanIterator.next() → Chunk (per row-group, AutoCloseable; owns its own Arena)
+  └─ decodeLayout(layout, dtype, chunk.arena)
        ├─ Flat   → slice MemorySegment from mmap region
        │           └─ EncodingRegistry.decodeSegment(seg, …)
        │                └─ Encoding.decode(DecodeContext)  →  Array (zero-copy)
@@ -260,8 +289,9 @@ ScanIterator.next() → ScanResult (per row-group)
        └─ Dict    → decode values layout + codes layout separately, then expand
 ```
 
-All `Array` buffers are zero-copy slices of the mmap'd `MemorySegment`.
-Advancing the iterator (`hasNext()`) closes the chunk's `Arena` and releases them.
+Decoded `Array` buffers are either zero-copy slices of the mmap'd `MemorySegment`
+or allocations in the chunk's own `Arena`. `chunk.close()` releases that arena —
+after which any reference into it raises FFM's scope check.
 
 ### Write path
 

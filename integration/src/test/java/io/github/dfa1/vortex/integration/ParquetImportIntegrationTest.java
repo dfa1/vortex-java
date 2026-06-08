@@ -8,9 +8,9 @@ import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.parquet.ParquetImporter;
+import io.github.dfa1.vortex.scan.Chunk;
 import io.github.dfa1.vortex.scan.ScanIterator;
 import io.github.dfa1.vortex.scan.ScanOptions;
-import io.github.dfa1.vortex.scan.ScanResult;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -37,13 +37,11 @@ class ParquetImportIntegrationTest {
     private static final int EXPECTED_ROWS = 100;
 
     private static long countRows(VortexReader reader) {
-        long total = 0;
+        var total = new java.util.concurrent.atomic.AtomicLong();
         try (ScanIterator iter = reader.scan(ScanOptions.all())) {
-            while (iter.hasNext()) {
-                total += iter.next().rowCount();
-            }
+            iter.forEachRemaining(c -> total.addAndGet(c.rowCount()));
         }
-        return total;
+        return total.get();
     }
 
     private static long countParquetRows(Path path) throws Exception {
@@ -125,11 +123,12 @@ class ParquetImportIntegrationTest {
         try (VortexReader reader = VortexReader.open(vortexFile);
              ScanIterator iter = reader.scan(ScanOptions.all())) {
             assertThat(iter.hasNext()).isTrue();
-            ScanResult first = iter.next();
-            LongArray col = first.column("c_customer_sk");
-            assertThat(col.getLong(0)).isEqualTo(100L);
-            assertThat(col.getLong(1)).isEqualTo(99L);
-            assertThat(col.getLong(2)).isEqualTo(98L);
+            try (Chunk first = iter.next()) {
+                LongArray col = first.column("c_customer_sk");
+                assertThat(col.getLong(0)).isEqualTo(100L);
+                assertThat(col.getLong(1)).isEqualTo(99L);
+                assertThat(col.getLong(2)).isEqualTo(98L);
+            }
         }
     }
 
@@ -147,11 +146,12 @@ class ParquetImportIntegrationTest {
         try (VortexReader reader = VortexReader.open(vortexFile);
              ScanIterator iter = reader.scan(ScanOptions.all())) {
             assertThat(iter.hasNext()).isTrue();
-            ScanResult first = iter.next();
-            VarBinArray col = first.column("c_first_name");
-            assertThat(col.getString(0)).isEqualTo("Jeannette");
-            assertThat(col.getString(1)).isEqualTo("Austin");
-            assertThat(col.getString(2)).isEqualTo("David");
+            try (Chunk first = iter.next()) {
+                VarBinArray col = first.column("c_first_name");
+                assertThat(col.getString(0)).isEqualTo("Jeannette");
+                assertThat(col.getString(1)).isEqualTo("Austin");
+                assertThat(col.getString(2)).isEqualTo("David");
+            }
         }
     }
 

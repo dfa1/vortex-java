@@ -11,12 +11,11 @@ import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.ArraySegments;
-import io.github.dfa1.vortex.core.array.Float16Array;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.encoding.EncodingRegistry;
 import io.github.dfa1.vortex.io.VortexReader;
-import io.github.dfa1.vortex.scan.ScanResult;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
@@ -43,7 +42,9 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -97,40 +98,56 @@ class RustWritesJavaReadsIntegrationTest {
         }
     }
 
-    private static List<ScanResult> scanAll(VortexReader vf) {
+    /// Value-only chunk snapshot — copies columnar data out of the per-chunk arena
+    /// so assertions can run after the [io.github.dfa1.vortex.scan.Chunk] has been
+    /// closed. Each entry in {@code columns} is a primitive Java array
+    /// (long[]/double[]/short[]/…) sized per [PType].
+    private record JavaChunk(long rowCount, Map<String, Object> columns) {
+    }
+
+    private static List<JavaChunk> scanAll(VortexReader vf) {
         return scanAll(vf, io.github.dfa1.vortex.scan.ScanOptions.all());
     }
 
-    private static List<ScanResult> scanAll(VortexReader vf,
+    private static List<JavaChunk> scanAll(VortexReader vf,
             io.github.dfa1.vortex.scan.ScanOptions opts) {
-        var results = new ArrayList<ScanResult>();
-        var iter = vf.scan(opts);
-        while (iter.hasNext()) {
-            results.add(iter.next());
+        var results = new ArrayList<JavaChunk>();
+        try (var iter = vf.scan(opts)) {
+            iter.forEachRemaining(c -> {
+                var mat = new LinkedHashMap<String, Object>(c.columns().size());
+                for (var e : c.columns().entrySet()) {
+                    mat.put(e.getKey(), snapshotArray(e.getValue()));
+                }
+                results.add(new JavaChunk(c.rowCount(), mat));
+            });
         }
         return results;
     }
 
-    // ── JNI write helpers ─────────────────────────────────────────────────────
-
-    private static long[] toLongs(ScanResult chunk) {
-        var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-        var arr = chunk.columns().get("id");
-        long[] out = new long[(int) arr.length()];
-        for (int i = 0; i < out.length; i++) {
-            out[i] = ArraySegments.of(arr).get(layout, (long) i * Long.BYTES);
-        }
-        return out;
+    /// Copies a primitive [Array]'s underlying [java.lang.foreign.MemorySegment]
+    /// into a heap primitive array — long[]/int[]/double[]/float[]/short[]/byte[].
+    private static Object snapshotArray(Array arr) {
+        var ptype = ((DType.Primitive) arr.dtype()).ptype();
+        var seg = ArraySegments.of(arr);
+        return switch (ptype) {
+            case I64, U64 -> seg.toArray(ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN));
+            case I32, U32 -> seg.toArray(ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN));
+            case F64 -> seg.toArray(ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN));
+            case F32 -> seg.toArray(ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN));
+            case F16, I16, U16 -> seg.toArray(ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN));
+            case I8, U8 -> seg.toArray(ValueLayout.JAVA_BYTE);
+            default -> throw new AssertionError("unsupported ptype: " + ptype);
+        };
     }
 
-    private static double[] toDoubles(ScanResult chunk) {
-        var layout = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-        var arr = chunk.columns().get("value");
-        double[] out = new double[(int) arr.length()];
-        for (int i = 0; i < out.length; i++) {
-            out[i] = ArraySegments.of(arr).get(layout, (long) i * Double.BYTES);
-        }
-        return out;
+    // ── JNI write helpers ─────────────────────────────────────────────────────
+
+    private static long[] ids(JavaChunk chunk) {
+        return (long[]) chunk.columns().get("id");
+    }
+
+    private static double[] values(JavaChunk chunk) {
+        return (double[]) chunk.columns().get("value");
     }
 
     // ── Java read helpers ─────────────────────────────────────────────────────
@@ -172,16 +189,15 @@ class RustWritesJavaReadsIntegrationTest {
     }
 
     private static long[] readJavaLongColumn(Path file, String column) throws IOException {
-        try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
+        try (var vf = VortexReader.open(file, EncodingRegistry.loadAll());
+             var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns(column))) {
             var longs = new ArrayList<Long>();
-            var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns(column));
-            while (iter.hasNext()) {
-                ScanResult r = iter.next();
-                LongArray arr = (LongArray) r.columns().get(column);
+            iter.forEachRemaining(c -> {
+                LongArray arr = (LongArray) c.columns().get(column);
                 for (long i = 0; i < arr.length(); i++) {
                     longs.add(arr.getLong(i));
                 }
-            }
+            });
             return longs.stream().mapToLong(Long::longValue).toArray();
         }
     }
@@ -218,11 +234,11 @@ class RustWritesJavaReadsIntegrationTest {
 
         // When / Then
         try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
-            List<ScanResult> results = scanAll(vf);
+            List<JavaChunk> results = scanAll(vf);
             assertThat(results).hasSize(1);
             assertThat(results.getFirst().rowCount()).isEqualTo(3L);
-            assertThat(toLongs(results.getFirst())).containsExactly(1L, 2L, 3L);
-            assertThat(toDoubles(results.getFirst())).containsExactly(1.1, 2.2, 3.3);
+            assertThat(ids(results.getFirst())).containsExactly(1L, 2L, 3L);
+            assertThat(values(results.getFirst())).containsExactly(1.1, 2.2, 3.3);
         }
     }
 
@@ -238,11 +254,11 @@ class RustWritesJavaReadsIntegrationTest {
 
         // When / Then — JNI may merge small batches; verify total rows and values
         try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
-            List<ScanResult> results = scanAll(vf);
-            long totalRows = results.stream().mapToLong(ScanResult::rowCount).sum();
+            List<JavaChunk> results = scanAll(vf);
+            long totalRows = results.stream().mapToLong(JavaChunk::rowCount).sum();
             assertThat(totalRows).isEqualTo(5L);
             long[] allIds = results.stream()
-                                    .flatMapToLong(r -> java.util.Arrays.stream(toLongs(r)))
+                                    .flatMapToLong(r -> java.util.Arrays.stream(ids(r)))
                                     .toArray();
             assertThat(allIds).containsExactly(1L, 2L, 3L, 4L, 5L);
         }
@@ -256,11 +272,11 @@ class RustWritesJavaReadsIntegrationTest {
 
         // When / Then
         try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
-            List<ScanResult> results = scanAll(vf, io.github.dfa1.vortex.scan.ScanOptions.columns("id"));
+            List<JavaChunk> results = scanAll(vf, io.github.dfa1.vortex.scan.ScanOptions.columns("id"));
             assertThat(results).hasSize(1);
             assertThat(results.getFirst().columns()).containsKey("id");
             assertThat(results.getFirst().columns()).doesNotContainKey("value");
-            assertThat(toLongs(results.getFirst())).containsExactly(10L, 20L);
+            assertThat(ids(results.getFirst())).containsExactly(10L, 20L);
         }
     }
 
@@ -280,17 +296,15 @@ class RustWritesJavaReadsIntegrationTest {
 
         // When / Then
         try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
-            List<ScanResult> results = scanAll(vf, io.github.dfa1.vortex.scan.ScanOptions.columns("value"));
-            long total = results.stream().mapToLong(ScanResult::rowCount).sum();
+            List<JavaChunk> results = scanAll(vf, io.github.dfa1.vortex.scan.ScanOptions.columns("value"));
+            long total = results.stream().mapToLong(JavaChunk::rowCount).sum();
             assertThat(total).isEqualTo(n);
-            var layout = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
             double sum = 0;
             double[] first9 = new double[9];
             int spotIdx = 0;
-            for (ScanResult r : results) {
-                var arr = r.columns().get("value");
-                for (long j = 0; j < arr.length(); j++) {
-                    double v = ArraySegments.of(arr).get(layout, j * Double.BYTES);
+            for (JavaChunk r : results) {
+                double[] decoded = values(r);
+                for (double v : decoded) {
                     sum += v;
                     if (spotIdx < 9) {
                         first9[spotIdx++] = v;
@@ -337,8 +351,8 @@ class RustWritesJavaReadsIntegrationTest {
 
         // When / Then — decodes without error, correct row count, correct values
         try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
-            List<ScanResult> results = scanAll(vf);
-            long totalRows = results.stream().mapToLong(ScanResult::rowCount).sum();
+            List<JavaChunk> results = scanAll(vf);
+            long totalRows = results.stream().mapToLong(JavaChunk::rowCount).sum();
             assertThat(totalRows).isEqualTo(n);
             assertThat(vf.dtype()).isInstanceOf(DType.Struct.class);
             DType colDtype = ((DType.Struct) vf.dtype()).field("id");
@@ -346,12 +360,10 @@ class RustWritesJavaReadsIntegrationTest {
             // null slots store 0 (bitpacked folds validity); non-null slot i stores i
             // sum(i for i in [0,10000) if i%5!=0) = 49995000 - 5*(0+5+…+9995) = 40000000
             // if proto tag drifts, all values decode as 0 and sum would be 0
-            var longLayout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
             long sum = 0;
-            for (ScanResult r : results) {
-                var arr = r.columns().get("id");
-                for (long j = 0; j < arr.length(); j++) {
-                    sum += ArraySegments.of(arr).get(longLayout, j * Long.BYTES);
+            for (JavaChunk r : results) {
+                for (long v : ids(r)) {
+                    sum += v;
                 }
             }
             assertThat(sum).isEqualTo(40_000_000L);
@@ -456,17 +468,20 @@ class RustWritesJavaReadsIntegrationTest {
 
         // When
         try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
-            List<ScanResult> results = scanAll(vf);
+            List<JavaChunk> results = scanAll(vf);
 
             // Then — correct dtype, correct values
             assertThat(vf.dtype()).isInstanceOf(DType.Struct.class);
             assertThat(((DType.Struct) vf.dtype()).field("v"))
                     .isEqualTo(new DType.Primitive(PType.F16, false));
             assertThat(results).hasSize(1);
-            Float16Array arr = (Float16Array) results.getFirst().columns().get("v");
-            assertThat(arr.length()).isEqualTo(f16bits.length);
+            // F16 column snapshots as a short[] (raw float16 bits)
+            short[] decoded = (short[]) results.getFirst().columns().get("v");
+            assertThat(decoded.length).isEqualTo(f16bits.length);
             for (int i = 0; i < f16bits.length; i++) {
-                assertThat(arr.getFloat(i)).as("index %d", i).isEqualTo(Float.float16ToFloat(f16bits[i]));
+                assertThat(Float.float16ToFloat(decoded[i]))
+                        .as("index %d", i)
+                        .isEqualTo(Float.float16ToFloat(f16bits[i]));
             }
         }
     }

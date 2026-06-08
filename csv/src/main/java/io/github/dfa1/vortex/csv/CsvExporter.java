@@ -15,7 +15,7 @@ import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.ScanIterator;
 import io.github.dfa1.vortex.scan.ScanOptions;
-import io.github.dfa1.vortex.scan.ScanResult;
+import io.github.dfa1.vortex.scan.Chunk;
 
 import java.io.FilterWriter;
 import java.io.IOException;
@@ -83,20 +83,21 @@ public final class CsvExporter {
         String[] row = new String[colCount];
         try (ScanIterator iter = reader.scan(scanOptions)) {
             while (iter.hasNext()) {
-                ScanResult chunk = iter.next();
-                Array[] arrays = new Array[colCount];
-                for (int c = 0; c < colCount; c++) {
-                    arrays[c] = chunk.column(colNames.get(c));
-                }
-                long rowCount = chunk.rowCount();
-                for (long r = 0; r < rowCount; r++) {
-                    if (!predicate.test(chunk, r)) {
-                        continue;
-                    }
+                try (Chunk chunk = iter.next()) {
+                    Array[] arrays = new Array[colCount];
                     for (int c = 0; c < colCount; c++) {
-                        row[c] = cellValue(arrays[c], r);
+                        arrays[c] = chunk.column(colNames.get(c));
                     }
-                    csvWriter.writeRecord(row);
+                    long rowCount = chunk.rowCount();
+                    for (long r = 0; r < rowCount; r++) {
+                        if (!predicate.test(chunk, r)) {
+                            continue;
+                        }
+                        for (int c = 0; c < colCount; c++) {
+                            row[c] = cellValue(arrays[c], r);
+                        }
+                        csvWriter.writeRecord(row);
+                    }
                 }
             }
         }
