@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.integration;
 
 
 import io.github.dfa1.vortex.encoding.EncodingRegistry;
-import io.github.dfa1.vortex.io.VortexInspector;
+import io.github.dfa1.vortex.inspect.VortexInspector;
 import io.github.dfa1.vortex.io.VortexReader;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;

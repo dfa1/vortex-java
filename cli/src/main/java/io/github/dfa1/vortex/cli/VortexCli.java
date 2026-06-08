@@ -35,7 +35,7 @@ public final class VortexCli {
 
     static void printUsage(PrintStream out) {
         out.println("Usage: java -jar vortex.jar <subcommand> [args]");
-        out.println("  inspect <file.vortex>               print file structure");
+        out.println("  inspect [--tui] <file|url>          print file structure (or open TUI); url is http(s)://");
         out.println("  export  <file.vortex>               write CSV to stdout");
         out.println("  import  <file.csv|file.parquet> [out.vortex]  convert CSV or Parquet to Vortex");
         out.println("  schema  <file.vortex>               print dtype (machine-readable)");

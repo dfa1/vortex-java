@@ -39,6 +39,11 @@
 			<scope>test</scope>
 		</dependency>
 		<dependency>
+			<groupId>io.github.dfa1.vortex</groupId>
+			<artifactId>vortex-inspector</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
 			<groupId>dev.vortex</groupId>
 			<artifactId>vortex-jni</artifactId>
 			<scope>test</scope>

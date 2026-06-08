@@ -30,6 +30,10 @@
 			<groupId>io.github.dfa1.vortex</groupId>
 			<artifactId>vortex-reader</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>io.github.dfa1.vortex</groupId>
+			<artifactId>vortex-inspector</artifactId>
+		</dependency>
 		<!-- testing -->
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>

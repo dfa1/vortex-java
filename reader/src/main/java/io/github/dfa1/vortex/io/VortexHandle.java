@@ -29,8 +29,8 @@ public interface VortexHandle extends Closeable {
     ///
     /// <p><strong>Internal escape hatch.</strong> This method is on the public
     /// {@link VortexHandle} interface only because {@link io.github.dfa1.vortex.scan.ScanIterator}
-    /// and {@link VortexInspector} live in sibling packages and need cross-package access to the
-    /// raw backing segment. It is not part of the supported stability contract; signatures and
+    /// and the inspector module's {@code VortexInspector} live in sibling packages and need
+    /// cross-package access to the raw backing segment. It is not part of the supported stability contract; signatures and
     /// semantics may change without a deprecation cycle. Application code should rely on
     /// {@link #scan(ScanOptions)} and the typed array accessors instead.
     ///

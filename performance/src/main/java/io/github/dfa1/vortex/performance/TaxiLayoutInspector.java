@@ -9,7 +9,7 @@ import dev.vortex.api.Session;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.encoding.EncodingRegistry;
-import io.github.dfa1.vortex.io.VortexInspector;
+import io.github.dfa1.vortex.inspect.VortexInspector;
 import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.parquet.ImportOptions;
 import io.github.dfa1.vortex.parquet.ParquetImporter;
