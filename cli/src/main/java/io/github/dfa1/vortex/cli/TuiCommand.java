@@ -41,7 +41,9 @@ final class TuiCommand {
                 Thread.currentThread().interrupt();
             }
             System.err.println("error: " + describe(e));
-            e.printStackTrace(System.err);
+            if (System.getenv("VORTEX_DEBUG") != null) {
+                e.printStackTrace(System.err);
+            }
             return ExitStatus.ERROR;
         }
     }
