@@ -127,8 +127,20 @@ public final class VortexInspectorTui {
             this.worker = worker;
             this.expanded.add(tree.root());
             indexColumns(tree.root());
-            indexStatsChildren(tree.root());
+            indexStatsChildrenOnWorker(tree.root());
             prefetchTopColumns();
+        }
+
+        private void indexStatsChildrenOnWorker(InspectorTree.Node root) {
+            if (worker == null) {
+                indexStatsChildren(root);
+                return;
+            }
+            try {
+                worker.runAndAwait(() -> indexStatsChildren(root));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
 
         private void indexStatsChildren(InspectorTree.Node node) {
