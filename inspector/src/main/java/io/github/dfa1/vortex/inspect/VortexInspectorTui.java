@@ -415,11 +415,16 @@ public final class VortexInspectorTui {
                 }
                 lines.add("Segments:  " + layout.segments().size()
                         + " (" + formatBytes(subtotal) + ")");
+                long rows = layout.rowCount();
                 for (int idx : layout.segments()) {
                     SegmentSpec spec = tree.segmentSpecs().get(idx);
+                    String bits = rows > 0
+                            ? "  bits/elem=" + String.format("%.2f", spec.length() * 8.0 / rows)
+                            : "";
                     lines.add("  [" + idx + "] off=" + spec.offset()
                             + "  len=" + formatBytes(spec.length())
-                            + "  comp=" + spec.compression().name());
+                            + "  compression=" + spec.compression().name()
+                            + bits);
                 }
             } else {
                 lines.add("Segments:  0");

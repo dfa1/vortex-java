@@ -39,8 +39,8 @@ class VortexInspectorTest {
                 .contains("Registered encodings: vortex.flat, fastlanes.bitpacked, vortex.constant")
                 .contains("Used encodings: ")
                 .contains("Segments: 2")
-                .contains("[0] off=0  len=512 B  comp=NONE")
-                .contains("[1] off=512  len=512 B  comp=LZ4")
+                .contains("[0] off=0  len=512 B  compression=NONE")
+                .contains("[1] off=512  len=512 B  compression=LZ4")
                 .contains("Layout:")
                 .contains("struct (1000 rows)")
                 .contains("[fastlanes.bitpacked]");
@@ -60,9 +60,9 @@ class VortexInspectorTest {
 
         // Then
         assertThat(out)
-                .contains("[0] off=0  len=1.0 KB  comp=ZSTD")
-                .contains("[1] off=1024  len=2.0 KB  comp=NONE")
-                .contains("[2] off=3072  len=4.0 KB  comp=LZ4");
+                .contains("[0] off=0  len=1.0 KB  compression=ZSTD")
+                .contains("[1] off=1024  len=2.0 KB  compression=NONE")
+                .contains("[2] off=3072  len=4.0 KB  compression=LZ4");
     }
 
     @Test
