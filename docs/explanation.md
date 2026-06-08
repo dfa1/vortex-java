@@ -25,6 +25,60 @@ The FFM API (`MemorySegment`, `Arena`) was finalized as a standard API in JDK 22
 Java 25 is the first LTS release to ship FFM as stable — requiring it means no preview flags,
 no upgrade risk, and a supported LTS for users.
 
+## File layout
+
+A Vortex file is written front-to-back: buffers first, then metadata blobs, then a small
+self-describing tail. A reader bootstraps from the last 8 bytes — no scanning required.
+
+```
+ byte 0
+ ┌──────────────────────────────────────────────┐
+ │  Buffer 0   (encoded segment)                │  ← column data, written by
+ │  Buffer 1   (encoded segment)                │    each writeChunk() call.
+ │  ...                                         │    Aligned, no per-buffer header.
+ │  Buffer N-1 (encoded segment)                │
+ ├──────────────────────────────────────────────┤
+ │  Footer    (FlatBuffer)                      │  ← SegmentSpec[]: (offset,length)
+ │                                              │    for every buffer above.
+ ├──────────────────────────────────────────────┤
+ │  DType     (Protobuf)                        │  ← schema: column names + types.
+ ├──────────────────────────────────────────────┤
+ │  Layout    (FlatBuffer)                      │  ← tree of Flat / Chunked /
+ │                                              │    Zoned / Struct / Dict nodes;
+ │                                              │    leaves point into Footer's
+ │                                              │    SegmentSpec[] by index.
+ ├──────────────────────────────────────────────┤
+ │  Postscript (FlatBuffer)                     │  ← (offset,length) of Footer,
+ │                                              │    DType, Layout above.
+ ├──────────────────────────────────────────────┤
+ │  Trailer   (8 bytes, little-endian)          │
+ │    u16 version │ u16 postscriptLen │ "VTXF"  │  ← magic confirms file type;
+ └──────────────────────────────────────────────┘     postscriptLen locates Postscript.
+                                                EOF
+```
+
+Bootstrap sequence on open:
+
+1. `mmap` whole file into one `MemorySegment`.
+2. Read last 8 bytes → check `VTXF` magic, read `postscriptLen`.
+3. Postscript sits at `EOF - 8 - postscriptLen`; parse it to get offsets of Footer, DType, Layout.
+4. Parse Footer (segment table), DType (schema), Layout (tree).
+5. Scans resolve Layout leaves to `SegmentSpec` → slice the mmap region zero-copy.
+
+Layout tree shape (typical):
+
+```
+ Struct                                  ← one child per column
+   └─ Zoned(stats)                       ← per-chunk min/max for zone-map pruning
+        └─ Chunked                       ← sequence of row groups
+             ├─ Flat (encoding=…)        ← single encoded segment on disk
+             ├─ Flat (encoding=…)
+             └─ ...
+```
+
+`Flat` leaves carry an `encoding` ID (e.g. `vortex.flat`, `fastlanes.bitpacked`,
+`vortex.alp`); `EncodingRegistry` maps ID → decoder.
+
 ## Memory model
 
 `VortexReader` memory-maps the entire file into one `MemorySegment` (confined `Arena`).
