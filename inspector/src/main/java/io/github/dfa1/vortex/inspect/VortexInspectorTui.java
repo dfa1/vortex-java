@@ -26,7 +26,10 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 /// Interactive viewer for a Vortex file's inspector tree, drawn with raw ANSI
 /// escapes — no library dependency.
@@ -71,14 +74,24 @@ public final class VortexInspectorTui {
         /// Decoded values shown per column in the data view.
         private static final int DATA_PREVIEW_ROWS = 32;
 
+        /// Render cadence while idle — drives spinner animation and reaping of
+        /// background fetches so updates land even when the user isn't typing.
+        private static final long POLL_INTERVAL_MS = 80;
+
+        /// ASCII spinner frames; cycled by render tick.
+        private static final char[] SPINNER = {'|', '/', '-', '\\'};
+
         private final RawTerminal term;
         private final InspectorTree tree;
         private final VortexHandle handle;
         private final Set<InspectorTree.Node> expanded = new HashSet<>();
         private final Map<InspectorTree.Node, InspectorTree.Peek> peekCache = new HashMap<>();
         private final Map<InspectorTree.Node, byte[]> hexCache = new HashMap<>();
-        private final Map<String, List<String>> dataCache = new HashMap<>();
+        private final ConcurrentMap<String, DataState> dataCache = new ConcurrentHashMap<>();
         private final Map<InspectorTree.Node, String> columnOf = new HashMap<>();
+        private volatile int pendingLoads;
+        private volatile String lastError;
+        private long tick;
         private int selected;
         private int scrollOffset;
 
@@ -88,6 +101,16 @@ public final class VortexInspectorTui {
             this.handle = handle;
             this.expanded.add(tree.root());
             indexColumns(tree.root());
+            prefetchTopColumns();
+        }
+
+        private void prefetchTopColumns() {
+            if (!tree.root().layout().isStruct()) {
+                return;
+            }
+            for (InspectorTree.Node col : tree.root().children()) {
+                col.fieldName().ifPresent(this::startDataLoad);
+            }
         }
 
         private void indexColumns(InspectorTree.Node root) {
@@ -126,11 +149,17 @@ public final class VortexInspectorTui {
                     selected = 0;
                 }
                 render(items);
-                Key key = term.readKey();
+                Optional<Key> maybeKey = term.readKey(POLL_INTERVAL_MS);
+                if (maybeKey.isEmpty()) {
+                    tick++;
+                    continue;
+                }
+                Key key = maybeKey.get();
                 if (isQuit(key)) {
                     return;
                 }
                 handleKey(key, items);
+                tick++;
             }
         }
 
@@ -203,7 +232,7 @@ public final class VortexInspectorTui {
             int height = size.rows();
             int leftWidth = Math.max(20, width / 2);
             int bodyTop = 2;
-            int bodyBottom = height - 1;
+            int bodyBottom = height - 2;
             int bodyHeight = bodyBottom - bodyTop;
 
             if (selected < scrollOffset) {
@@ -221,10 +250,33 @@ public final class VortexInspectorTui {
                 drawDetails(buf, items.get(selected).node(),
                         leftWidth + 2, bodyTop, width - leftWidth - 2, bodyHeight);
             }
+            drawStatus(buf, width, height - 1);
             drawFooter(buf, width, height);
             buf.append(Ansi.moveTo(height, 1));
             term.write(buf.toString());
             term.flush();
+        }
+
+        private void drawStatus(StringBuilder buf, int width, int row) {
+            int loads = pendingLoads;
+            String err = lastError;
+            String text;
+            int bg;
+            if (err != null) {
+                text = " ! " + err;
+                bg = 41; // red
+            } else if (loads > 0) {
+                text = " " + SPINNER[(int) (tick % SPINNER.length)]
+                        + " I/O " + loads + " pending";
+                bg = 44; // blue
+            } else {
+                text = " ready";
+                bg = 42; // green
+            }
+            buf.append(Ansi.moveTo(row, 1));
+            buf.append(Ansi.bg(bg)).append(Ansi.fg(30));
+            buf.append(pad(text, width));
+            buf.append(Ansi.RESET);
         }
 
         private void drawHeader(StringBuilder buf, int width) {
@@ -337,12 +389,19 @@ public final class VortexInspectorTui {
                 }
             }
             if (col != null) {
-                List<String> values = loadDataPreview(col);
-                if (!values.isEmpty()) {
-                    lines.add("");
-                    lines.add("Data (column '" + col + "', first " + values.size() + " rows):");
-                    for (int i = 0; i < values.size(); i++) {
-                        lines.add(String.format("  [%2d] %s", i, values.get(i)));
+                DataState state = loadDataPreview(col);
+                lines.add("");
+                switch (state) {
+                    case DataState.Pending ignored ->
+                            lines.add("Data (column '" + col + "'):  "
+                                    + SPINNER[(int) (tick % SPINNER.length)] + " loading...");
+                    case DataState.Failed(String msg) ->
+                            lines.add("Data (column '" + col + "'):  ! " + msg);
+                    case DataState.Loaded(List<String> values) -> {
+                        lines.add("Data (column '" + col + "', first " + values.size() + " rows):");
+                        for (int i = 0; i < values.size(); i++) {
+                            lines.add(String.format("  [%2d] %s", i, values.get(i)));
+                        }
                     }
                 }
             } else if (layout.isFlat() && !layout.segments().isEmpty()) {
@@ -361,31 +420,80 @@ public final class VortexInspectorTui {
             return lines;
         }
 
-        private List<String> loadDataPreview(String columnName) {
-            return dataCache.computeIfAbsent(columnName, name -> {
-                try {
-                    ScanOptions opts = ScanOptions.columns(name).withLimit(DATA_PREVIEW_ROWS);
-                    try (ScanIterator it = handle.scan(opts)) {
-                        if (!it.hasNext()) {
-                            return List.of();
-                        }
-                        try (Chunk chunk = it.next()) {
-                            Array array = chunk.columns().get(name);
-                            if (array == null) {
-                                return List.of();
-                            }
-                            int n = (int) Math.min(array.length(), DATA_PREVIEW_ROWS);
-                            List<String> out = new ArrayList<>(n);
-                            for (int i = 0; i < n; i++) {
-                                out.add(formatValue(array, i));
-                            }
-                            return List.copyOf(out);
-                        }
+        private DataState loadDataPreview(String columnName) {
+            DataState existing = dataCache.get(columnName);
+            if (existing != null) {
+                return existing;
+            }
+            startDataLoad(columnName);
+            return dataCache.getOrDefault(columnName, DataState.PENDING);
+        }
+
+        private void startDataLoad(String columnName) {
+            if (dataCache.putIfAbsent(columnName, DataState.PENDING) != null) {
+                return;
+            }
+            pendingLoads++;
+            Thread.ofVirtual().name("tui-data-" + columnName).start(() -> runDataLoad(columnName));
+        }
+
+        private void runDataLoad(String columnName) {
+            try {
+                ScanOptions opts = ScanOptions.columns(columnName).withLimit(DATA_PREVIEW_ROWS);
+                try (ScanIterator it = handle.scan(opts)) {
+                    if (!it.hasNext()) {
+                        dataCache.put(columnName, new DataState.Loaded(List.of()));
+                        return;
                     }
-                } catch (RuntimeException e) {
-                    return List.of();
+                    try (Chunk chunk = it.next()) {
+                        Array array = chunk.columns().get(columnName);
+                        if (array == null) {
+                            dataCache.put(columnName, new DataState.Loaded(List.of()));
+                            return;
+                        }
+                        int n = (int) Math.min(array.length(), DATA_PREVIEW_ROWS);
+                        List<String> out = new ArrayList<>(n);
+                        for (int i = 0; i < n; i++) {
+                            out.add(formatValue(array, i));
+                        }
+                        dataCache.put(columnName, new DataState.Loaded(List.copyOf(out)));
+                    }
                 }
-            });
+            } catch (RuntimeException e) {
+                dataCache.put(columnName, new DataState.Failed(messageOf(e)));
+                lastError = columnName + ": " + messageOf(e);
+            } finally {
+                pendingLoads--;
+            }
+        }
+
+        private static String messageOf(Throwable t) {
+            String m = t.getMessage();
+            return m != null ? m : t.getClass().getSimpleName();
+        }
+
+        /// Per-column data fetch state — pending while a virtual thread is
+        /// fetching, loaded with values once decoded, failed with a message
+        /// on error. Sealed so callers can pattern-match exhaustively.
+        sealed interface DataState {
+            /// Singleton state for a fetch in flight.
+            DataState PENDING = new Pending();
+
+            /// In-flight fetch.
+            record Pending() implements DataState {
+            }
+
+            /// Completed fetch with decoded values.
+            ///
+            /// @param values formatted first rows of the column
+            record Loaded(List<String> values) implements DataState {
+            }
+
+            /// Failed fetch carrying a short error description.
+            ///
+            /// @param message short error string
+            record Failed(String message) implements DataState {
+            }
         }
 
         private static String formatValue(Array array, int i) {

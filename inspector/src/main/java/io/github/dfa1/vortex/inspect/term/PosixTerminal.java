@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.inspect.term;
 
 import java.io.IOException;
 import java.io.PrintStream;
+import java.util.Optional;
 import java.lang.foreign.Arena;
 import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.Linker;
@@ -126,6 +127,23 @@ public final class PosixTerminal implements RawTerminal {
     @Override
     public Key readKey() throws IOException {
         return KeyDecoder.next(System.in);
+    }
+
+    @Override
+    public Optional<Key> readKey(long timeoutMs) throws IOException {
+        long deadline = System.nanoTime() + timeoutMs * 1_000_000L;
+        while (System.in.available() == 0) {
+            if (System.nanoTime() >= deadline) {
+                return Optional.empty();
+            }
+            try {
+                Thread.sleep(20);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return Optional.empty();
+            }
+        }
+        return Optional.of(KeyDecoder.next(System.in));
     }
 
     @Override
