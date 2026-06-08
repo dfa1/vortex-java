@@ -244,7 +244,18 @@ See [docs/compatibility.md](docs/compatibility.md) for the full encoding support
 
 - [ ] **Global dict for F64 low-cardinality** — excluded from `isDictCandidate` because ALP/RLE were expected to
   win; but for columns like `mta_tax` (8 unique F64 values) and `Airport_fee` (4 unique), dict codes are
-  ~same size as ALP+bitpack while Rust uses dict. Measure actual gain before implementing.
+  ~same size as ALP+bitpack while Rust uses dict. Measure actual gain before implementing. Utf8 global dict
+  plumbing already in place (see `writeGlobalDictUtf8Column`); the F64 case is a relaxation of one branch in
+  `isDictCandidate` plus its own value-array materializer.
+
+- [ ] **Global dict for `Binary` dtype** — `DictEncoding.accepts` already covers `Utf8` and `Binary`-ish bytes,
+  but the writer's candidate scan only handles `DType.Primitive` + `DType.Utf8`. Mirror the Utf8 path for
+  binary columns once a real workload surfaces.
+
+- [ ] **Multi-symbol size comparison test** — `FileSizeComparisonIntegrationTest` writes a single ticker
+  symbol ("ACME" × N), so the global-dict-Utf8 path is not exercised in size measurement. Add a variant
+  using the 5-symbol generator from `OhlcEncodingInspectionIntegrationTest#writeOhlcMultiSymbol` and assert
+  the global-dict file is smaller than the per-chunk-dict baseline.
 
 - [ ] **FSST in CASCADE_CODECS** — `FsstEncoding` exists but not in the cascade; Rust uses FSST for
   `store_and_fwd_flag`. Small gain on taxi (~0.1 MB).
