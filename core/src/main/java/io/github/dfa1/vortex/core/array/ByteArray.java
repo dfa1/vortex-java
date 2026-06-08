@@ -13,6 +13,9 @@ public final class ByteArray implements Array {
     private final DType dtype;
     private final long length;
     private final MemorySegment buffer;
+    // Buffer capacity in bytes (= elements for 1-byte ptypes).
+    // Equals length for normal arrays; smaller for ConstantEncoding broadcast.
+    private final long elementCount;
 
     /// Constructs a {@code ByteArray} backed by the given buffer.
     ///
@@ -23,6 +26,7 @@ public final class ByteArray implements Array {
         this.dtype = dtype;
         this.length = length;
         this.buffer = buffer;
+        this.elementCount = buffer.byteSize();
     }
 
     @Override
@@ -45,7 +49,7 @@ public final class ByteArray implements Array {
     /// @param i zero-based logical index (must be in {@code [0, length)})
     /// @return the raw signed byte value at position {@code i}
     public byte getByte(long i) {
-        return buffer.get(ValueLayout.JAVA_BYTE, i % buffer.byteSize());
+        return buffer.get(ValueLayout.JAVA_BYTE, length == elementCount ? i : i % elementCount);
     }
 
     /// Returns the int value at the given logical index, applying unsigned widening for U8 columns.
@@ -53,7 +57,7 @@ public final class ByteArray implements Array {
     /// @param i zero-based logical index (must be in {@code [0, length)})
     /// @return the value at position {@code i} as a signed int (U8 values are zero-extended)
     public int getInt(long i) {
-        byte raw = buffer.get(ValueLayout.JAVA_BYTE, i % buffer.byteSize());
+        byte raw = buffer.get(ValueLayout.JAVA_BYTE, length == elementCount ? i : i % elementCount);
         boolean unsigned = dtype instanceof DType.Primitive p && p.ptype() == PType.U8;
         return unsigned ? Byte.toUnsignedInt(raw) : raw;
     }
@@ -66,10 +70,16 @@ public final class ByteArray implements Array {
     public long fold(long identity, LongBinaryOperator op) {
         MemorySegment buf = buffer;
         long n = length;
-        long cap = buf.byteSize();
         long result = identity;
-        for (long i = 0; i < n; i++) {
-            result = op.applyAsLong(result, buf.get(ValueLayout.JAVA_BYTE, i % cap));
+        if (n == elementCount) {
+            for (long i = 0; i < n; i++) {
+                result = op.applyAsLong(result, buf.get(ValueLayout.JAVA_BYTE, i));
+            }
+        } else {
+            long cap = elementCount;
+            for (long i = 0; i < n; i++) {
+                result = op.applyAsLong(result, buf.get(ValueLayout.JAVA_BYTE, i % cap));
+            }
         }
         return result;
     }

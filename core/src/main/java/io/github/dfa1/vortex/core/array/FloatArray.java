@@ -12,6 +12,7 @@ public final class FloatArray implements Array {
     private final DType dtype;
     private final long length;
     private final MemorySegment buffer;
+    private final long elementCount;
 
     /// Creates a new {@code FloatArray} backed by the given memory segment.
     ///
@@ -22,6 +23,7 @@ public final class FloatArray implements Array {
         this.dtype = dtype;
         this.length = length;
         this.buffer = buffer;
+        this.elementCount = buffer.byteSize() / PTypeIO.LE_FLOAT.byteSize();
     }
 
     @Override
@@ -44,8 +46,7 @@ public final class FloatArray implements Array {
     /// @param i zero-based index (must be in {@code [0, length)})
     /// @return the float value at position {@code i}
     public float getFloat(long i) {
-        long cap = buffer.byteSize() / PTypeIO.LE_FLOAT.byteSize();
-        return buffer.getAtIndex(PTypeIO.LE_FLOAT, i % cap);
+        return buffer.getAtIndex(PTypeIO.LE_FLOAT, length == elementCount ? i : i % elementCount);
     }
 
     /// Folds all elements using the given binary operator and identity value.
@@ -56,10 +57,16 @@ public final class FloatArray implements Array {
     public double fold(double identity, DoubleBinaryOperator op) {
         MemorySegment buf = buffer;
         long n = length;
-        long cap = buf.byteSize() / PTypeIO.LE_FLOAT.byteSize();
         double result = identity;
-        for (long i = 0; i < n; i++) {
-            result = op.applyAsDouble(result, buf.getAtIndex(PTypeIO.LE_FLOAT, i % cap));
+        if (n == elementCount) {
+            for (long i = 0; i < n; i++) {
+                result = op.applyAsDouble(result, buf.getAtIndex(PTypeIO.LE_FLOAT, i));
+            }
+        } else {
+            long cap = elementCount;
+            for (long i = 0; i < n; i++) {
+                result = op.applyAsDouble(result, buf.getAtIndex(PTypeIO.LE_FLOAT, i % cap));
+            }
         }
         return result;
     }

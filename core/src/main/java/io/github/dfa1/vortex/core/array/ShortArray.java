@@ -13,6 +13,7 @@ public final class ShortArray implements Array {
     private final DType dtype;
     private final long length;
     private final MemorySegment buffer;
+    private final long elementCount;
 
     /// Creates a new {@code ShortArray} backed by the given memory segment.
     ///
@@ -23,6 +24,7 @@ public final class ShortArray implements Array {
         this.dtype = dtype;
         this.length = length;
         this.buffer = buffer;
+        this.elementCount = buffer.byteSize() / PTypeIO.LE_SHORT.byteSize();
     }
 
     @Override
@@ -45,8 +47,7 @@ public final class ShortArray implements Array {
     /// @param i zero-based index (must be in {@code [0, length)})
     /// @return the signed short value at position {@code i}
     public short getShort(long i) {
-        long cap = buffer.byteSize() / PTypeIO.LE_SHORT.byteSize();
-        return buffer.getAtIndex(PTypeIO.LE_SHORT, i % cap);
+        return buffer.getAtIndex(PTypeIO.LE_SHORT, length == elementCount ? i : i % elementCount);
     }
 
     /// Returns the element at the given index as an {@code int}, widening to unsigned if the dtype is U16.
@@ -54,8 +55,7 @@ public final class ShortArray implements Array {
     /// @param i zero-based index (must be in {@code [0, length)})
     /// @return the element at position {@code i} as an int (unsigned-widened for U16)
     public int getInt(long i) {
-        long cap = buffer.byteSize() / PTypeIO.LE_SHORT.byteSize();
-        short raw = buffer.getAtIndex(PTypeIO.LE_SHORT, i % cap);
+        short raw = buffer.getAtIndex(PTypeIO.LE_SHORT, length == elementCount ? i : i % elementCount);
         boolean unsigned = dtype instanceof DType.Primitive p && p.ptype() == PType.U16;
         return unsigned ? Short.toUnsignedInt(raw) : raw;
     }
@@ -68,10 +68,16 @@ public final class ShortArray implements Array {
     public long fold(long identity, LongBinaryOperator op) {
         MemorySegment buf = buffer;
         long n = length;
-        long cap = buf.byteSize() / PTypeIO.LE_SHORT.byteSize();
         long result = identity;
-        for (long i = 0; i < n; i++) {
-            result = op.applyAsLong(result, buf.getAtIndex(PTypeIO.LE_SHORT, i % cap));
+        if (n == elementCount) {
+            for (long i = 0; i < n; i++) {
+                result = op.applyAsLong(result, buf.getAtIndex(PTypeIO.LE_SHORT, i));
+            }
+        } else {
+            long cap = elementCount;
+            for (long i = 0; i < n; i++) {
+                result = op.applyAsLong(result, buf.getAtIndex(PTypeIO.LE_SHORT, i % cap));
+            }
         }
         return result;
     }

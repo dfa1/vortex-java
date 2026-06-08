@@ -13,6 +13,11 @@ public final class DoubleArray implements Array {
     private final DType dtype;
     private final long length;
     private final MemorySegment buffer;
+    // Pre-computed buffer capacity in elements. Equals `length` for normal arrays;
+    // smaller for ConstantEncoding (1-element broadcast, length = logical row count).
+    // Hoisting it out of every hot-loop iteration is what makes the fast-path
+    // branch in fold/forEachDouble unswitch-able and vectorizable.
+    private final long elementCount;
 
     /// Constructs a {@code DoubleArray} backed by the given buffer.
     ///
@@ -23,6 +28,7 @@ public final class DoubleArray implements Array {
         this.dtype = dtype;
         this.length = length;
         this.buffer = buffer;
+        this.elementCount = buffer.byteSize() / PTypeIO.LE_DOUBLE.byteSize();
     }
 
     @Override
@@ -45,8 +51,7 @@ public final class DoubleArray implements Array {
     /// @param i zero-based logical index (must be in {@code [0, length)})
     /// @return the double value at position {@code i}
     public double getDouble(long i) {
-        long cap = buffer.byteSize() / PTypeIO.LE_DOUBLE.byteSize();
-        return buffer.getAtIndex(PTypeIO.LE_DOUBLE, i % cap);
+        return buffer.getAtIndex(PTypeIO.LE_DOUBLE, length == elementCount ? i : i % elementCount);
     }
 
     /// Invokes the consumer for each element in order.
@@ -55,9 +60,15 @@ public final class DoubleArray implements Array {
     public void forEachDouble(DoubleConsumer c) {
         MemorySegment buf = buffer;
         long n = length;
-        long cap = buf.byteSize() / PTypeIO.LE_DOUBLE.byteSize();
-        for (long i = 0; i < n; i++) {
-            c.accept(buf.getAtIndex(PTypeIO.LE_DOUBLE, i % cap));
+        if (n == elementCount) {
+            for (long i = 0; i < n; i++) {
+                c.accept(buf.getAtIndex(PTypeIO.LE_DOUBLE, i));
+            }
+        } else {
+            long cap = elementCount;
+            for (long i = 0; i < n; i++) {
+                c.accept(buf.getAtIndex(PTypeIO.LE_DOUBLE, i % cap));
+            }
         }
     }
 
@@ -67,10 +78,18 @@ public final class DoubleArray implements Array {
     /// @param op       binary operator applied to accumulator and each element in order
     /// @return the final accumulated value
     public double fold(double identity, DoubleBinaryOperator op) {
-        long cap = buffer.byteSize() / PTypeIO.LE_DOUBLE.byteSize();
+        MemorySegment buf = buffer;
+        long n = length;
         double result = identity;
-        for (long i = 0; i < length; i++) {
-            result = op.applyAsDouble(result, buffer.getAtIndex(PTypeIO.LE_DOUBLE, i % cap));
+        if (n == elementCount) {
+            for (long i = 0; i < n; i++) {
+                result = op.applyAsDouble(result, buf.getAtIndex(PTypeIO.LE_DOUBLE, i));
+            }
+        } else {
+            long cap = elementCount;
+            for (long i = 0; i < n; i++) {
+                result = op.applyAsDouble(result, buf.getAtIndex(PTypeIO.LE_DOUBLE, i % cap));
+            }
         }
         return result;
     }

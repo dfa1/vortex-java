@@ -13,6 +13,11 @@ public final class LongArray implements Array {
     private final DType dtype;
     private final long length;
     private final MemorySegment buffer;
+    // Pre-computed buffer capacity in elements. Equals `length` for normal arrays;
+    // smaller for ConstantEncoding (1-element broadcast, length = logical row count).
+    // Hoisting it out of every hot-loop iteration is what makes the fast-path
+    // branch in fold/forEachLong unswitch-able and vectorizable.
+    private final long elementCount;
 
     /// Creates a new {@code LongArray} backed by the given memory segment.
     ///
@@ -23,6 +28,7 @@ public final class LongArray implements Array {
         this.dtype = dtype;
         this.length = length;
         this.buffer = buffer;
+        this.elementCount = buffer.byteSize() / PTypeIO.LE_LONG.byteSize();
     }
 
     @Override
@@ -45,8 +51,7 @@ public final class LongArray implements Array {
     /// @param i zero-based index (must be in {@code [0, length)})
     /// @return the long value at position {@code i}
     public long getLong(long i) {
-        long cap = buffer.byteSize() / PTypeIO.LE_LONG.byteSize();
-        return buffer.getAtIndex(PTypeIO.LE_LONG, i % cap);
+        return buffer.getAtIndex(PTypeIO.LE_LONG, length == elementCount ? i : i % elementCount);
     }
 
     /// Passes each element to the given consumer in order.
@@ -55,9 +60,15 @@ public final class LongArray implements Array {
     public void forEachLong(LongConsumer c) {
         MemorySegment buf = buffer;
         long n = length;
-        long cap = buf.byteSize() / PTypeIO.LE_LONG.byteSize();
-        for (long i = 0; i < n; i++) {
-            c.accept(buf.getAtIndex(PTypeIO.LE_LONG, i % cap));
+        if (n == elementCount) {
+            for (long i = 0; i < n; i++) {
+                c.accept(buf.getAtIndex(PTypeIO.LE_LONG, i));
+            }
+        } else {
+            long cap = elementCount;
+            for (long i = 0; i < n; i++) {
+                c.accept(buf.getAtIndex(PTypeIO.LE_LONG, i % cap));
+            }
         }
     }
 
@@ -69,10 +80,16 @@ public final class LongArray implements Array {
     public long fold(long identity, LongBinaryOperator op) {
         MemorySegment buf = buffer;
         long n = length;
-        long cap = buf.byteSize() / PTypeIO.LE_LONG.byteSize();
         long result = identity;
-        for (long i = 0; i < n; i++) {
-            result = op.applyAsLong(result, buf.getAtIndex(PTypeIO.LE_LONG, i % cap));
+        if (n == elementCount) {
+            for (long i = 0; i < n; i++) {
+                result = op.applyAsLong(result, buf.getAtIndex(PTypeIO.LE_LONG, i));
+            }
+        } else {
+            long cap = elementCount;
+            for (long i = 0; i < n; i++) {
+                result = op.applyAsLong(result, buf.getAtIndex(PTypeIO.LE_LONG, i % cap));
+            }
         }
         return result;
     }

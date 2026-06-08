@@ -13,6 +13,9 @@ public final class IntArray implements Array {
     private final DType dtype;
     private final long length;
     private final MemorySegment buffer;
+    // Pre-computed buffer capacity in elements. Equals `length` for normal arrays;
+    // smaller for ConstantEncoding (1-element broadcast, length = logical row count).
+    private final long elementCount;
 
     /// Creates a new {@code IntArray} backed by the given memory segment.
     ///
@@ -23,6 +26,7 @@ public final class IntArray implements Array {
         this.dtype = dtype;
         this.length = length;
         this.buffer = buffer;
+        this.elementCount = buffer.byteSize() / PTypeIO.LE_INT.byteSize();
     }
 
     @Override
@@ -45,8 +49,7 @@ public final class IntArray implements Array {
     /// @param i zero-based index (must be in {@code [0, length)})
     /// @return the int value at position {@code i}
     public int getInt(long i) {
-        long cap = buffer.byteSize() / PTypeIO.LE_INT.byteSize();
-        return buffer.getAtIndex(PTypeIO.LE_INT, i % cap);
+        return buffer.getAtIndex(PTypeIO.LE_INT, length == elementCount ? i : i % elementCount);
     }
 
     /// Passes each element to the given consumer in order.
@@ -55,9 +58,15 @@ public final class IntArray implements Array {
     public void forEachInt(IntConsumer c) {
         MemorySegment buf = buffer;
         long n = length;
-        long cap = buf.byteSize() / PTypeIO.LE_INT.byteSize();
-        for (long i = 0; i < n; i++) {
-            c.accept(buf.getAtIndex(PTypeIO.LE_INT, i % cap));
+        if (n == elementCount) {
+            for (long i = 0; i < n; i++) {
+                c.accept(buf.getAtIndex(PTypeIO.LE_INT, i));
+            }
+        } else {
+            long cap = elementCount;
+            for (long i = 0; i < n; i++) {
+                c.accept(buf.getAtIndex(PTypeIO.LE_INT, i % cap));
+            }
         }
     }
 
@@ -67,10 +76,18 @@ public final class IntArray implements Array {
     /// @param op       binary operator applied to the accumulator and each int element
     /// @return the final accumulated result
     public int fold(int identity, IntBinaryOperator op) {
-        long cap = buffer.byteSize() / PTypeIO.LE_INT.byteSize();
+        MemorySegment buf = buffer;
+        long n = length;
         int result = identity;
-        for (long i = 0; i < length; i++) {
-            result = op.applyAsInt(result, buffer.getAtIndex(PTypeIO.LE_INT, i % cap));
+        if (n == elementCount) {
+            for (long i = 0; i < n; i++) {
+                result = op.applyAsInt(result, buf.getAtIndex(PTypeIO.LE_INT, i));
+            }
+        } else {
+            long cap = elementCount;
+            for (long i = 0; i < n; i++) {
+                result = op.applyAsInt(result, buf.getAtIndex(PTypeIO.LE_INT, i % cap));
+            }
         }
         return result;
     }
