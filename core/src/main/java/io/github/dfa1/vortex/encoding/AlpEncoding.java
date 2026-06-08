@@ -428,8 +428,16 @@ public final class AlpEncoding implements Encoding {
             MemorySegment buf = src.isReadOnly() ? ctx.arena().allocate(n * 8, 8) : src;
             if (src.isReadOnly()) {
                 long srcCap = SegmentBroadcast.capacity(src, 8);
-                for (long i = 0; i < n; i++) {
-                    buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) src.getAtIndex(PTypeIO.LE_LONG, i % srcCap) * df * de);
+                // Branch-split: skip modulo when no broadcast needed (the 99% case).
+                // Modulo per element is not free; the inner loop loses auto-vectorization.
+                if (srcCap == n) {
+                    for (long i = 0; i < n; i++) {
+                        buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) src.getAtIndex(PTypeIO.LE_LONG, i) * df * de);
+                    }
+                } else {
+                    for (long i = 0; i < n; i++) {
+                        buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) src.getAtIndex(PTypeIO.LE_LONG, i % srcCap) * df * de);
+                    }
                 }
             } else {
                 for (long i = 0; i < n; i++) {
@@ -453,8 +461,14 @@ public final class AlpEncoding implements Encoding {
             MemorySegment buf32 = src32.isReadOnly() ? ctx.arena().allocate(n * 4, 4) : src32;
             if (src32.isReadOnly()) {
                 long srcCap = SegmentBroadcast.capacity(src32, 4);
-                for (long i = 0; i < n; i++) {
-                    buf32.setAtIndex(PTypeIO.LE_FLOAT, i, (float) src32.getAtIndex(PTypeIO.LE_INT, i % srcCap) * df * de);
+                if (srcCap == n) {
+                    for (long i = 0; i < n; i++) {
+                        buf32.setAtIndex(PTypeIO.LE_FLOAT, i, (float) src32.getAtIndex(PTypeIO.LE_INT, i) * df * de);
+                    }
+                } else {
+                    for (long i = 0; i < n; i++) {
+                        buf32.setAtIndex(PTypeIO.LE_FLOAT, i, (float) src32.getAtIndex(PTypeIO.LE_INT, i % srcCap) * df * de);
+                    }
                 }
             } else {
                 for (long i = 0; i < n; i++) {
@@ -479,10 +493,19 @@ public final class AlpEncoding implements Encoding {
             MemorySegment idxSeg = ctx.decodeChildSegment(1, new DType.Primitive(idxPtype, false), numPatches);
             MemorySegment valSeg = ctx.decodeChildSegment(2, ctx.dtype(), numPatches);
 
-            for (long i = 0; i < numPatches; i++) {
-                long absIdx = readUnsigned(idxSeg, SegmentBroadcast.elementOffset(idxSeg, i, idxBytes), idxPtype) - offset;
-                MemorySegment.copy(valSeg, SegmentBroadcast.elementOffset(valSeg, i, elemBytes),
-                        out, absIdx * elemBytes, elemBytes);
+            // Branch-split: hoist caps and skip modulo when child segments are fully populated.
+            long idxCap = SegmentBroadcast.capacity(idxSeg, idxBytes);
+            long valCap = SegmentBroadcast.capacity(valSeg, elemBytes);
+            if (idxCap >= numPatches && valCap >= numPatches) {
+                for (long i = 0; i < numPatches; i++) {
+                    long absIdx = readUnsigned(idxSeg, i * idxBytes, idxPtype) - offset;
+                    MemorySegment.copy(valSeg, i * elemBytes, out, absIdx * elemBytes, elemBytes);
+                }
+            } else {
+                for (long i = 0; i < numPatches; i++) {
+                    long absIdx = readUnsigned(idxSeg, (i % idxCap) * idxBytes, idxPtype) - offset;
+                    MemorySegment.copy(valSeg, (i % valCap) * elemBytes, out, absIdx * elemBytes, elemBytes);
+                }
             }
         }
 
