@@ -328,17 +328,19 @@ Files with unrecognised IDs throw `VortexException` unless the builder enabled `
 
 ## Benchmarks
 
-JMH throughput (ops/s = full-file scans per second). Higher is better.
+JMH throughput (ops/s = full-file scans per second). Higher is better. Numbers
+re-measured 2026-06-08 against commit `051a794`.
 
-**Environment:** Apple M5, OpenJDK 25, 3 warmup × 3 s, 5 measurement × 5 s, fork 1.
+**Environment:** Apple M5, OpenJDK 25, 5 warmup × 3 s, 10 measurement × 5 s, fork 1.
 
 ### OHLC read — 10 M rows, 58.9 MB (Rust-written file, single-column projection)
 
-| Benchmark       | Java (ops/s) | JNI/Rust (ops/s) | Java speedup |
-|-----------------|--------------|------------------|--------------|
-| close (F64/ALP) | 76.7 ± 0.3   | 50.4 ± 2.8       | **1.5×**     |
-| volume (I64)    | 127.9 ± 2.3  | 52.9 ± 0.6       | **2.4×**     |
-| symbol (varbin) | 110.4 ± 0.4  | 9.6 ± 0.9        | **11.5×**    |
+| Benchmark           | Java (ops/s)  | JNI/Rust (ops/s) | Java speedup |
+|---------------------|---------------|------------------|--------------|
+| close (F64/ALP)     | 61.0 ± 5.8    | 47.9 ± 0.7       | **1.3×**     |
+| volume (I64/bitpacked) | 104.8 ± 5.1 | 48.4 ± 1.7      | **2.2×**     |
+| symbol (varbin)     | 97.8 ± 1.8    | 9.2 ± 0.4        | **10.6×**    |
+| cascading (depth 3, volume) | 80.9 ± 1.2 | n/a          | —            |
 
 ### OHLC write — 10 M rows
 
@@ -347,6 +349,7 @@ JMH throughput (ops/s = full-file scans per second). Higher is better.
 | write     | 4.4 ± 1.1    | 0.7 ± 0.1        | **6.4×**     |
 
 The Java write is faster but also produces bigger files (more optimization work remains).
+_Last measured before 2026-06-08; re-run pending._
 
 ### Big-file scan — 100 M rows × 4 I64 columns, ~3 GB (Rust-written file, all columns)
 
@@ -354,13 +357,15 @@ The Java write is faster but also produces bigger files (more optimization work 
 |-----------|--------------|------------------|--------------|
 | scan      | 20.4 ± 0.9   | 5.7 ± 0.6        | **3.6×**     |
 
+_Last measured before 2026-06-08; re-run pending._
+
 ### Parquet vs Vortex read — NYC Yellow Taxi 2024-01, 3 M rows, 19 columns
 
 Both formats store all 19 columns; projection happens at read time. Both sides scalar decode
 (Hardwood disables SIMD on JDK 25; Vortex Java uses FFM scalar reads throughout).
-File sizes: Parquet 47.6 MB, Vortex Java 50 MB.
 
-**Environment:** Apple M5, OpenJDK 25, 5 warmup × 3 s, 5 measurement × 5 s, fork 2.
+**Environment:** Apple M5, OpenJDK 25, 5 warmup × 3 s, 10 measurement × 5 s, fork 1.
+Re-measured 2026-06-08 against commit `051a794`.
 
 Two Parquet variants are measured to isolate format cost from API overhead:
 
@@ -371,22 +376,27 @@ Two Parquet variants are measured to isolate format cost from API overhead:
 
 | Benchmark                                                                | ops/s        | vs Parquet batch         |
 |--------------------------------------------------------------------------|--------------|--------------------------|
-| `parquetRead` — batch, 1 col (`trip_distance`)                           | 166.5 ± 4.0  | baseline                 |
-| `parquetReadRowByRow` — row cursor, 1 col                                | 67.6 ± 4.4   | 0.41× (2.5× API penalty) |
-| `vortexRead` — 1 col (`trip_distance`)                                   | 235.1 ± 6.9  | **1.41×**                |
-| `parquetReadMultiColumn` — batch, 2 cols (`fare_amount`, `PULocationID`) | 133.0 ± 18.3 | baseline                 |
-| `parquetReadMultiColumnRowByRow` — row cursor, 2 cols                    | 44.0 ± 2.2   | 0.33× (3× API penalty)   |
-| `vortexReadMultiColumn` — 2 cols                                         | 122.6 ± 3.3  | 0.92×                    |
+| `parquetRead` — batch, 1 col (`trip_distance`)                           | 137.0 ± 14.8 | baseline                 |
+| `parquetReadRowByRow` — row cursor, 1 col                                | 69.7 ± 0.9   | 0.51× (2× API penalty)   |
+| `vortexRead` — 1 col (`trip_distance`)                                   | 43.0 ± 1.5   | **0.31×**                |
+| `parquetReadMultiColumn` — batch, 2 cols (`fare_amount`, `PULocationID`) | 137.4 ± 10.7 | baseline                 |
+| `parquetReadMultiColumnRowByRow` — row cursor, 2 cols                    | 40.7 ± 1.9   | 0.30× (3.4× API penalty) |
+| `vortexReadMultiColumn` — 2 cols                                         | 34.1 ± 1.6   | 0.25×                    |
 
-Single-column: Vortex 1.4× faster than Parquet batch — format advantage is real (mmap
-zero-copy + ALP vs Parquet RLE/ZSTD page decode).
+**Known regression vs 2026-06-05 snapshot** (`vortexRead` was 235 → 43; `vortexReadMultiColumn`
+was 122 → 34, Parquet path stable). The collapse is in the Vortex decode path on the
+`ParquetImporter`-generated file — likely a cascade choice change that landed between
+`363a885` and `051a794`. The OHLC bench (raw I64/F64 columns) recovered to 100+ ops/s
+with the broadcast fast-path fix; this one did not, which points at a path the broadcast
+fix doesn't cover (probably dict-of-ALP or ZSTD-on-F64 sneaking into the cascade). Bisect
++ fix tracked separately — these numbers are the current honest snapshot, not the target.
 
-Multi-column: Vortex (122.6) slightly behind Parquet batch (133.0). Known gap: Rust uses a
-global dict per column (one tiny dict for all 3 M rows); Java applies dict per 131 K-row
-chunk, increasing per-chunk overhead for low-cardinality columns like `PULocationID` (260
-unique values).
+#### Format-level advantages (theory)
 
-#### Why Vortex is faster on single-column reads
+The bullets below describe the structural reasons Vortex *should* outperform Parquet on
+single-column reads, and did so in the 2026-06-05 measurement (235 → vs Parquet's 166).
+The current Vortex score sits below Parquet on this benchmark while the regression noted
+above is being investigated; the format properties themselves are unchanged.
 
 **0. O(1) random access within a column.**
 Fixed-width encodings (ALP, BitPacked) make row N directly addressable:
