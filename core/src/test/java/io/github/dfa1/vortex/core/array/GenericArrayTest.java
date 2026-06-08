@@ -142,6 +142,66 @@ class GenericArrayTest {
     }
 
     @Test
+    void getDecimal_widthDerivedFromBufferNotPrecision() {
+        // Given — decimal(15,2) is precision 15 (≤18 → "should" be I64), but
+        // vortex.decimal stores at whatever valuesType the encoder picked. A
+        // narrower width fits if all values are small. The old precision-based
+        // table picked 8 bytes here and read garbage. The current impl derives
+        // width from buffer.byteSize / length, so storing 3 I32 values at the
+        // same precision 15 decodes correctly.
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment buf = arena.allocate(12); // 3 × 4 bytes (I32 mantissa)
+            buf.set(ValueLayout.JAVA_INT_UNALIGNED, 0, 1234);
+            buf.set(ValueLayout.JAVA_INT_UNALIGNED, 4, -50);
+            buf.set(ValueLayout.JAVA_INT_UNALIGNED, 8, 0);
+            DType.Decimal dec = new DType.Decimal((byte) 15, (byte) 2, false);
+            GenericArray sut = new GenericArray(dec, 3, buf);
+
+            // When / Then
+            assertThat(sut.getDecimal(0)).isEqualByComparingTo(new BigDecimal("12.34"));
+            assertThat(sut.getDecimal(1)).isEqualByComparingTo(new BigDecimal("-0.50"));
+            assertThat(sut.getDecimal(2)).isEqualByComparingTo(BigDecimal.ZERO);
+        }
+    }
+
+    @Test
+    void getDecimal_unalignedBufferSize_throws() {
+        // Given — buffer size not a clean multiple of length means we can't
+        // derive a sensible per-element width; fail fast rather than silently
+        // reading garbage from a half-element offset.
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment buf = arena.allocate(7); // not divisible by length=2
+            DType.Decimal dec = new DType.Decimal((byte) 4, (byte) 0, false);
+            GenericArray sut = new GenericArray(dec, 2, buf);
+
+            // When / Then
+            assertThatThrownBy(() -> sut.getDecimal(0))
+                    .isInstanceOf(io.github.dfa1.vortex.core.VortexException.class)
+                    .hasMessageContaining("not a multiple");
+        }
+    }
+
+    @Test
+    void getDecimal_indexOutOfBounds_throws() {
+        // Given — explicit bounds check guards against silent garbage reads
+        // when callers don't respect length()
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment buf = arena.allocate(8);
+            DType.Decimal dec = new DType.Decimal((byte) 4, (byte) 0, false);
+            GenericArray sut = new GenericArray(dec, 1, buf);
+
+            // When / Then
+            assertThatThrownBy(() -> sut.getDecimal(-1))
+                    .isInstanceOf(IndexOutOfBoundsException.class);
+            assertThatThrownBy(() -> sut.getDecimal(1))
+                    .isInstanceOf(IndexOutOfBoundsException.class)
+                    .hasMessageContaining("out of bounds");
+            assertThatThrownBy(() -> sut.getDecimal(Long.MAX_VALUE))
+                    .isInstanceOf(IndexOutOfBoundsException.class);
+        }
+    }
+
+    @Test
     void getDecimal_nonDecimalDtype_throws() {
         // Given — guards against silently returning garbage on misuse
         try (Arena arena = Arena.ofConfined()) {
