@@ -1,8 +1,12 @@
 package io.github.dfa1.vortex.core.array;
 
 import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 
 /// Fallback [Array] for dtypes that lack a dedicated concrete subtype.
 ///
@@ -93,6 +97,55 @@ public final class GenericArray implements Array {
     /// @return child count
     public int childCount() {
         return children.length;
+    }
+
+    /// Decodes the decimal value at row {@code i}.
+    ///
+    /// Only valid when this array's dtype is {@link DType.Decimal} and the
+    /// underlying storage is a single buffer of little-endian two's-complement
+    /// integers (the shape produced by {@code vortex.decimal} decoding). The
+    /// element width is derived from the dtype's precision: 1 / 2 / 4 / 8 / 16
+    /// bytes for precision ≤ 2 / 4 / 9 / 18 / 38 respectively.
+    ///
+    /// @param i row index, {@code 0 <= i < length()}
+    /// @return decoded value as a {@link BigDecimal} with the dtype's scale
+    /// @throws VortexException if this array isn't a single-buffer decimal
+    public BigDecimal getDecimal(long i) {
+        if (!(dtype instanceof DType.Decimal d)) {
+            throw new VortexException("getDecimal called on non-decimal dtype: " + dtype);
+        }
+        if (buffers.length != 1) {
+            throw new VortexException("getDecimal requires a single-buffer GenericArray; got "
+                    + buffers.length);
+        }
+        int width = decimalByteWidth(d.precision());
+        BigInteger mantissa = readSignedLe(buffers[0], i * width, width);
+        return new BigDecimal(mantissa, d.scale());
+    }
+
+    private static int decimalByteWidth(int precision) {
+        if (precision <= 2) {
+            return 1;
+        }
+        if (precision <= 4) {
+            return 2;
+        }
+        if (precision <= 9) {
+            return 4;
+        }
+        if (precision <= 18) {
+            return 8;
+        }
+        return 16;
+    }
+
+    private static BigInteger readSignedLe(MemorySegment buf, long offset, int width) {
+        // Little-endian two's-complement on disk; BigInteger expects big-endian.
+        byte[] be = new byte[width];
+        for (int k = 0; k < width; k++) {
+            be[width - 1 - k] = buf.get(ValueLayout.JAVA_BYTE, offset + k);
+        }
+        return new BigInteger(be);
     }
 
     /// Returns the child array at position {@code i}.
