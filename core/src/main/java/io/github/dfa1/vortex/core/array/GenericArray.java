@@ -48,8 +48,51 @@ public final class GenericArray implements Array {
         return length;
     }
 
+    /// Returns a view of this array clamped to {@code newLength} logical rows.
+    /// Buffers and children are reused as-is; callers are expected to respect
+    /// {@link #length()} when reading. Used by the scan iterator to honour
+    /// {@code ScanOptions.limit} for dtypes that don't have a typed array.
+    ///
+    /// @param newLength desired logical length; must be {@code <= length()}
+    /// @return a new {@code GenericArray} sharing this array's buffers and children
+    /// @throws IllegalArgumentException if {@code newLength} exceeds the current length
+    public GenericArray withLength(long newLength) {
+        if (newLength < 0 || newLength > length) {
+            throw new IllegalArgumentException(
+                    "newLength " + newLength + " out of range [0," + length + "]");
+        }
+        if (newLength == length) {
+            return this;
+        }
+        return new GenericArray(dtype, newLength, buffers, children);
+    }
+
     MemorySegment buffer(int i) {
         return buffers[i];
+    }
+
+    /// Returns the number of raw memory buffers backing this array.
+    ///
+    /// @return buffer count
+    public int bufferCount() {
+        return buffers.length;
+    }
+
+    /// Returns the raw buffer at position {@code i}. Used by callers that need
+    /// to inspect encoded bytes when no typed accessor exists for the dtype
+    /// (e.g. the TUI inspector decoding {@code Decimal} cells).
+    ///
+    /// @param i buffer index
+    /// @return the underlying {@link MemorySegment}
+    public MemorySegment bufferAt(int i) {
+        return buffers[i];
+    }
+
+    /// Returns the number of child arrays.
+    ///
+    /// @return child count
+    public int childCount() {
+        return children.length;
     }
 
     /// Returns the child array at position {@code i}.

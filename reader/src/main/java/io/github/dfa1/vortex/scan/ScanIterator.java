@@ -13,6 +13,7 @@ import io.github.dfa1.vortex.core.array.ByteArray;
 import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.EmptyArray;
 import io.github.dfa1.vortex.core.array.FloatArray;
+import io.github.dfa1.vortex.core.array.GenericArray;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.MaskedArray;
@@ -265,6 +266,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                 yield new MaskedArray(truncChild, truncValidity);
             }
             case EmptyArray a -> a;
+            case GenericArray a -> a.withLength(rows);
             default ->
                     throw new VortexException("limit: truncation not supported for " + arr.getClass().getSimpleName());
         };

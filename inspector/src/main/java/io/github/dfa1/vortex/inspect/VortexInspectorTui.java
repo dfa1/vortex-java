@@ -2,11 +2,13 @@ package io.github.dfa1.vortex.inspect;
 
 import io.github.dfa1.vortex.core.Layout;
 import io.github.dfa1.vortex.core.SegmentSpec;
+import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.BoolArray;
 import io.github.dfa1.vortex.core.array.ByteArray;
 import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.FloatArray;
+import io.github.dfa1.vortex.core.array.GenericArray;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
@@ -484,10 +486,7 @@ public final class VortexInspectorTui {
 
         private void runDataLoad(String columnName) {
             try {
-                // No withLimit: ScanIterator.truncateArray rejects GenericArray
-                // (decimal_byte_parts columns), and chunks are the granularity
-                // anyway. We slice to DATA_PREVIEW_ROWS in the format loop below.
-                ScanOptions opts = ScanOptions.columns(columnName);
+                ScanOptions opts = ScanOptions.columns(columnName).withLimit(DATA_PREVIEW_ROWS);
                 try (ScanIterator it = handle.scan(opts)) {
                     if (!it.hasNext()) {
                         dataCache.put(columnName, new DataState.Loaded(List.of()));
@@ -551,11 +550,53 @@ public final class VortexInspectorTui {
                 case DoubleArray a -> Double.toString(a.getDouble(i));
                 case FloatArray a -> Float.toString(a.getFloat(i));
                 case BoolArray a -> Boolean.toString(a.getBoolean(i));
-                case VarBinArray a -> a.dtype() instanceof io.github.dfa1.vortex.core.DType.Utf8
+                case VarBinArray a -> a.dtype() instanceof DType.Utf8
                         ? "\"" + a.getString(i) + "\""
                         : bytesToShortHex(a.getBytes(i));
+                case GenericArray a when a.dtype() instanceof DType.Decimal d
+                        && a.bufferCount() == 1 -> formatDecimal(a, i, d);
                 default -> "<" + array.getClass().getSimpleName() + " " + array.dtype() + ">";
             };
+        }
+
+        private static String formatDecimal(GenericArray a, int i, DType.Decimal d) {
+            int byteWidth = decimalByteWidth(d.precision());
+            java.lang.foreign.MemorySegment buf = a.bufferAt(0);
+            long offset = (long) i * byteWidth;
+            try {
+                java.math.BigInteger mantissa = readSignedInt(buf, offset, byteWidth);
+                java.math.BigDecimal value = new java.math.BigDecimal(mantissa, d.scale());
+                return value.toPlainString();
+            } catch (RuntimeException e) {
+                return "<decimal?>";
+            }
+        }
+
+        private static int decimalByteWidth(int precision) {
+            if (precision <= 2) {
+                return 1;
+            }
+            if (precision <= 4) {
+                return 2;
+            }
+            if (precision <= 9) {
+                return 4;
+            }
+            if (precision <= 18) {
+                return 8;
+            }
+            return 16;
+        }
+
+        private static java.math.BigInteger readSignedInt(java.lang.foreign.MemorySegment buf,
+                long offset, int byteWidth) {
+            // Little-endian two's-complement; mirror Java arithmetic by building the
+            // bytes in big-endian order before handing them to BigInteger.
+            byte[] be = new byte[byteWidth];
+            for (int k = 0; k < byteWidth; k++) {
+                be[byteWidth - 1 - k] = buf.get(java.lang.foreign.ValueLayout.JAVA_BYTE, offset + k);
+            }
+            return new java.math.BigInteger(be);
         }
 
         private static String bytesToShortHex(byte[] bytes) {
