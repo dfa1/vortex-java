@@ -526,7 +526,7 @@ public final class VortexInspectorTui {
                     int n = (int) Math.min(arr.length(), DATA_PREVIEW_ROWS);
                     List<String> out = new ArrayList<>(n);
                     for (int i = 0; i < n; i++) {
-                        out.add(formatValue(arr, i));
+                        out.add(formatValue(arr, i, dtype));
                     }
                     dictCache.put(dictNode, new DataState.Loaded(List.copyOf(out)));
                 }
@@ -538,12 +538,16 @@ public final class VortexInspectorTui {
 
         private DType columnDtypeFor(InspectorTree.Node node) {
             String col = columnOf.get(node);
-            DType root = tree.dtype();
             if (col == null) {
-                return root;
+                return tree.dtype();
             }
+            return columnDtypeByName(col);
+        }
+
+        private DType columnDtypeByName(String columnName) {
+            DType root = tree.dtype();
             if (root instanceof DType.Struct s) {
-                int idx = s.fieldNames().indexOf(col);
+                int idx = s.fieldNames().indexOf(columnName);
                 if (idx >= 0) {
                     return s.fieldTypes().get(idx);
                 }
@@ -564,6 +568,7 @@ public final class VortexInspectorTui {
 
         private void runDataLoad(String columnName) {
             try {
+                DType declared = columnDtypeByName(columnName);
                 ScanOptions opts = ScanOptions.columns(columnName).withLimit(DATA_PREVIEW_ROWS);
                 try (ScanIterator it = handle.scan(opts)) {
                     if (!it.hasNext()) {
@@ -579,7 +584,7 @@ public final class VortexInspectorTui {
                         int n = (int) Math.min(array.length(), DATA_PREVIEW_ROWS);
                         List<String> out = new ArrayList<>(n);
                         for (int i = 0; i < n; i++) {
-                            out.add(formatValue(array, i));
+                            out.add(formatValue(array, i, declared));
                         }
                         dataCache.put(columnName, new DataState.Loaded(List.copyOf(out)));
                     }
@@ -619,11 +624,11 @@ public final class VortexInspectorTui {
             }
         }
 
-        private static String formatValue(Array array, int i) {
-            if (array.dtype() instanceof DType.Extension ext
+        private static String formatValue(Array array, int i, DType declared) {
+            if (declared instanceof DType.Extension ext
                     && Extensions.DATE.equals(ext.extensionId())) {
                 try {
-                    return Extensions.localDate(array, i).toString();
+                    return Extensions.localDateFromStorage(array, i).toString();
                 } catch (RuntimeException e) {
                     // fall through to generic rendering on shape mismatch
                 }
