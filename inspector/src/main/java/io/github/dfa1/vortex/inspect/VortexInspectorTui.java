@@ -8,9 +8,12 @@ import io.github.dfa1.vortex.inspect.term.RawTerminal;
 import io.github.dfa1.vortex.io.VortexHandle;
 
 import java.io.IOException;
+import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /// Interactive viewer for a Vortex file's inspector tree, drawn with raw ANSI
@@ -42,20 +45,27 @@ public final class VortexInspectorTui {
     public static void show(VortexHandle handle, InspectorTree.Progress progress) throws IOException {
         InspectorTree tree = InspectorTree.build(handle, progress);
         try (RawTerminal term = RawTerminal.open()) {
-            new Loop(term, tree).run();
+            new Loop(term, tree, handle).run();
         }
     }
 
     private static final class Loop {
+        /// Bytes to display per Flat segment in the hex pane. 256 lines up to
+        /// 16 rows of 16, which fits comfortably under the existing details.
+        private static final int HEX_PREVIEW_BYTES = 256;
+
         private final RawTerminal term;
         private final InspectorTree tree;
+        private final VortexHandle handle;
         private final Set<InspectorTree.Node> expanded = new HashSet<>();
+        private final Map<InspectorTree.Node, byte[]> hexCache = new HashMap<>();
         private int selected;
         private int scrollOffset;
 
-        Loop(RawTerminal term, InspectorTree tree) {
+        Loop(RawTerminal term, InspectorTree tree, VortexHandle handle) {
             this.term = term;
             this.tree = tree;
+            this.handle = handle;
             this.expanded.add(tree.root());
         }
 
@@ -281,7 +291,68 @@ public final class VortexInspectorTui {
                     lines.add("  max: " + node.stats().max());
                 }
             }
+            if (layout.isFlat() && !layout.segments().isEmpty()) {
+                byte[] preview = loadHexPreview(node);
+                if (preview.length > 0) {
+                    lines.add("");
+                    int segIdx = layout.segments().getFirst();
+                    SegmentSpec spec = tree.segmentSpecs().get(segIdx);
+                    lines.add("Hex (first " + preview.length + " B of segment "
+                            + segIdx + ", total " + formatBytes(spec.length()) + "):");
+                    for (int off = 0; off < preview.length; off += 16) {
+                        lines.add(formatHexRow(preview, off));
+                    }
+                }
+            }
             return lines;
+        }
+
+        private byte[] loadHexPreview(InspectorTree.Node node) {
+            return hexCache.computeIfAbsent(node, n -> {
+                Layout layout = n.layout();
+                int segIdx = layout.segments().getFirst();
+                SegmentSpec spec = tree.segmentSpecs().get(segIdx);
+                int wanted = (int) Math.min((long) HEX_PREVIEW_BYTES, spec.length());
+                if (wanted <= 0) {
+                    return new byte[0];
+                }
+                try {
+                    MemorySegment seg = handle.slice(spec.offset(), wanted);
+                    byte[] buf = new byte[wanted];
+                    MemorySegment.copy(seg, 0, MemorySegment.ofArray(buf), 0, wanted);
+                    return buf;
+                } catch (RuntimeException e) {
+                    return new byte[0];
+                }
+            });
+        }
+
+        private static String formatHexRow(byte[] data, int offset) {
+            StringBuilder sb = new StringBuilder(80);
+            sb.append(String.format("%08x  ", offset));
+            for (int i = 0; i < 16; i++) {
+                int idx = offset + i;
+                if (idx < data.length) {
+                    sb.append(String.format("%02x ", data[idx] & 0xff));
+                } else {
+                    sb.append("   ");
+                }
+                if (i == 7) {
+                    sb.append(' ');
+                }
+            }
+            sb.append(" |");
+            for (int i = 0; i < 16; i++) {
+                int idx = offset + i;
+                if (idx >= data.length) {
+                    sb.append(' ');
+                    continue;
+                }
+                int b = data[idx] & 0xff;
+                sb.append(b >= 0x20 && b < 0x7f ? (char) b : '.');
+            }
+            sb.append('|');
+            return sb.toString();
         }
 
         private record Item(InspectorTree.Node node, int depth) {
