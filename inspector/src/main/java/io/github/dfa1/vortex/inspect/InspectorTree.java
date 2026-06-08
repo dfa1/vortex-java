@@ -82,6 +82,75 @@ public record InspectorTree(
         return build(handle, Progress.NOOP);
     }
 
+    /// Builds an inspector tree without peeking segments — every node starts
+    /// with an empty encoding set and {@link ArrayStats#empty()} stats. The
+    /// resulting tree contains only structure derived from the file's footer
+    /// and layout, so the call is essentially free on remote handles.
+    ///
+    /// Use with {@link #peek(Node, VortexHandle)} for lazy on-demand resolution.
+    ///
+    /// @param handle open file handle
+    /// @return immutable shallow inspector tree
+    public static InspectorTree buildShallow(VortexHandle handle) {
+        Footer footer = handle.footer();
+        Layout layout = handle.layout();
+        DType dtype = handle.dtype();
+        List<String> colNames = (dtype instanceof DType.Struct s) ? s.fieldNames() : List.of();
+        Node root = shallowNode(layout, Optional.empty());
+        if (layout.isStruct()) {
+            List<Node> named = new ArrayList<>(root.children().size());
+            for (int i = 0; i < root.children().size(); i++) {
+                Node child = root.children().get(i);
+                String name = i < colNames.size() ? colNames.get(i) : "col" + i;
+                named.add(new Node(child.layout(), Optional.of(name),
+                        Set.of(), ArrayStats.empty(), child.children()));
+            }
+            root = new Node(root.layout(), Optional.empty(), Set.of(),
+                    ArrayStats.empty(), List.copyOf(named));
+        }
+        return new InspectorTree(
+                handle.version(),
+                handle.fileSize(),
+                dtype,
+                footer.arraySpecs(),
+                Set.of(),
+                footer.segmentSpecs(),
+                layout.rowCount(),
+                root);
+    }
+
+    private static Node shallowNode(Layout layout, Optional<String> fieldName) {
+        List<Node> children = new ArrayList<>(layout.children().size());
+        for (Layout child : layout.children()) {
+            children.add(shallowNode(child, Optional.empty()));
+        }
+        return new Node(layout, fieldName, Set.of(), ArrayStats.empty(), List.copyOf(children));
+    }
+
+    /// Resolves encoding id + stats for one Flat node by reading its first
+    /// segment. Returns [Peek#EMPTY] for non-Flat nodes, segments under
+    /// compression, or missing data.
+    ///
+    /// Callers should cache the result — every call triggers a fresh
+    /// {@code handle.slice()}, which is a network round-trip on remote handles.
+    ///
+    /// @param node   node to resolve
+    /// @param handle open file handle
+    /// @return peek result; never {@code null}
+    public static Peek peek(Node node, VortexHandle handle) {
+        Layout layout = node.layout();
+        if (!layout.isFlat() || layout.segments().isEmpty()) {
+            return Peek.EMPTY;
+        }
+        int segIdx = layout.segments().getFirst();
+        SegmentSpec spec = handle.footer().segmentSpecs().get(segIdx);
+        if (spec.compression().code != 0) {
+            return Peek.EMPTY;
+        }
+        MemorySegment seg = handle.slice(spec.offset(), spec.length());
+        return peekFlatRoot(seg, handle.footer().arraySpecs());
+    }
+
     /// Builds an inspector tree from an open Vortex file handle, reporting
     /// progress on each Flat-segment peek (which on remote-storage handles
     /// triggers a separate HTTP range request).
@@ -198,6 +267,15 @@ public record InspectorTree(
         return new Peek(arraySpecs.get(root.encoding()), ArrayStats.fromFbs(root.stats()));
     }
 
-    private record Peek(String encoding, ArrayStats stats) {
+    /// Result of a single Flat segment peek - the resolved encoding id (or
+    /// {@code null} when the FlatBuffer carried no root) plus the per-array
+    /// statistics decoded from the same FlatBuffer.
+    ///
+    /// @param encoding resolved encoding id from the array spec table, or {@code null}
+    /// @param stats    per-array stats, or {@link ArrayStats#empty()} if unknown
+    public record Peek(String encoding, ArrayStats stats) {
+        /// Sentinel returned for non-Flat nodes, compressed segments, or
+        /// segments that don't carry an array root.
+        public static final Peek EMPTY = new Peek(null, ArrayStats.empty());
     }
 }

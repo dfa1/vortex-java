@@ -13,6 +13,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
@@ -171,6 +172,76 @@ class InspectorTreeTest {
         // When / Then — NOOP passes; no NPE
         InspectorTree sut = InspectorTree.build(handle, InspectorTree.Progress.NOOP);
         assertThat(sut.root().children()).hasSize(1);
+    }
+
+    @Test
+    void buildShallow_skipsAllSlicesAndStillNamesColumns() {
+        // Given — shallow build is the path the TUI uses; it must touch zero segment
+        // bytes (so opening a remote file is instant) yet still populate fieldName on
+        // top-level struct children.
+        Layout col0 = new Layout("vortex.flat", 10, null, List.of(), List.of(0));
+        Layout col1 = new Layout("vortex.flat", 10, null, List.of(), List.of(1));
+        Layout root = struct(10, List.of(col0, col1));
+        DType dtype = new DType.Struct(List.of("id", "value"),
+                List.of(new DType.Primitive(PType.I64, false),
+                        new DType.Primitive(PType.F64, false)),
+                false);
+        List<SegmentSpec> segs = List.of(
+                new SegmentSpec(0, 64, (byte) 0, CompressionScheme.NONE),
+                new SegmentSpec(64, 64, (byte) 0, CompressionScheme.NONE));
+        givenHandle(dtype, root, List.of("vortex.flat"), segs);
+
+        // When
+        InspectorTree sut = InspectorTree.buildShallow(handle);
+
+        // Then — column names assigned, but no peek fired so stats / usedEncodings empty
+        assertThat(sut.root().children().get(0).fieldName()).contains("id");
+        assertThat(sut.root().children().get(1).fieldName()).contains("value");
+        assertThat(sut.usedEncodings()).isEmpty();
+        assertThat(sut.root().children().get(0).usedEncodings()).isEmpty();
+        assertThat(sut.root().children().get(0).stats()).isEqualTo(io.github.dfa1.vortex.core.ArrayStats.empty());
+        // Slice is reserved for lazy peek; shallow build must never call it
+        org.mockito.Mockito.verify(handle, org.mockito.Mockito.never()).slice(
+                org.mockito.Mockito.anyLong(), org.mockito.Mockito.anyLong());
+    }
+
+    @Test
+    void peek_nonFlatNode_returnsEmptyWithoutSlicing() {
+        // Given — peek is the lazy hook the TUI uses on the selected node. Non-Flat
+        // layouts (struct, chunked, stats wrappers) carry no array root and must short
+        // out without slicing, so navigating to them doesn't hit the network.
+        Layout structLayout = struct(0, List.of());
+        InspectorTree.Node node = new InspectorTree.Node(structLayout, java.util.Optional.empty(),
+                Set.of(), io.github.dfa1.vortex.core.ArrayStats.empty(), List.of());
+
+        // When
+        InspectorTree.Peek result = InspectorTree.peek(node, handle);
+
+        // Then
+        assertThat(result).isSameAs(InspectorTree.Peek.EMPTY);
+        org.mockito.Mockito.verify(handle, org.mockito.Mockito.never()).slice(
+                org.mockito.Mockito.anyLong(), org.mockito.Mockito.anyLong());
+    }
+
+    @Test
+    void peek_compressedFlatSegment_returnsEmptyWithoutSlicing() {
+        // Given — compressed segments would need the encoding to decompress before
+        // their FlatBuffer can be parsed; peek skips them rather than slicing garbage.
+        Layout flat = new Layout("vortex.flat", 10, null, List.of(), List.of(0));
+        InspectorTree.Node node = new InspectorTree.Node(flat, java.util.Optional.empty(),
+                Set.of(), io.github.dfa1.vortex.core.ArrayStats.empty(), List.of());
+        given(handle.footer()).willReturn(new io.github.dfa1.vortex.core.Footer(
+                List.of("vortex.flat"), List.of(),
+                List.of(new SegmentSpec(0, 100, (byte) 0, CompressionScheme.ZSTD)),
+                List.of()));
+
+        // When
+        InspectorTree.Peek result = InspectorTree.peek(node, handle);
+
+        // Then
+        assertThat(result).isSameAs(InspectorTree.Peek.EMPTY);
+        org.mockito.Mockito.verify(handle, org.mockito.Mockito.never()).slice(
+                org.mockito.Mockito.anyLong(), org.mockito.Mockito.anyLong());
     }
 
     @Test
