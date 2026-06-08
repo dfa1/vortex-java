@@ -1,11 +1,13 @@
 package io.github.dfa1.vortex.cli;
 
+import io.github.dfa1.vortex.inspect.InspectorTree;
 import io.github.dfa1.vortex.inspect.VortexInspectorTui;
 import io.github.dfa1.vortex.io.VortexHandle;
 import io.github.dfa1.vortex.io.VortexHttpReader;
 import io.github.dfa1.vortex.io.VortexReader;
 
 import java.io.IOException;
+import java.io.PrintStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
@@ -25,7 +27,7 @@ final class TuiCommand {
             if (handle == null) {
                 return ExitStatus.FILE_NOT_FOUND;
             }
-            VortexInspectorTui.show(handle);
+            VortexInspectorTui.show(handle, progressBar(System.err));
             return ExitStatus.OK;
         } catch (IOException | RuntimeException e) {
             System.err.println("error: " + describe(e));
@@ -51,6 +53,27 @@ final class TuiCommand {
             return null;
         }
         return VortexReader.open(path);
+    }
+
+    private static InspectorTree.Progress progressBar(PrintStream out) {
+        int width = 30;
+        return (current, total) -> {
+            if (total <= 0) {
+                return;
+            }
+            int filled = (int) ((long) current * width / total);
+            StringBuilder bar = new StringBuilder(width + 32);
+            bar.append('\r').append("Loading metadata [");
+            for (int i = 0; i < width; i++) {
+                bar.append(i < filled ? '#' : '-');
+            }
+            bar.append("] ").append(current).append('/').append(total);
+            if (current == total) {
+                bar.append('\n');
+            }
+            out.print(bar);
+            out.flush();
+        };
     }
 
     private static String describe(Throwable t) {

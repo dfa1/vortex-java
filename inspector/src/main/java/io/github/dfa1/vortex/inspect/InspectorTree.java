@@ -79,13 +79,28 @@ public record InspectorTree(
     /// @param handle open file handle
     /// @return immutable inspector tree
     public static InspectorTree build(VortexHandle handle) {
+        return build(handle, Progress.NOOP);
+    }
+
+    /// Builds an inspector tree from an open Vortex file handle, reporting
+    /// progress on each Flat-segment peek (which on remote-storage handles
+    /// triggers a separate HTTP range request).
+    ///
+    /// @param handle   open file handle
+    /// @param progress progress sink receiving {@code (current, total)} after each segment peek
+    /// @return immutable inspector tree
+    public static InspectorTree build(VortexHandle handle, Progress progress) {
         Footer footer = handle.footer();
         Layout layout = handle.layout();
         DType dtype = handle.dtype();
 
+        int total = countPeekableSegments(layout, footer);
+        int[] counter = {0};
+
         List<String> colNames = (dtype instanceof DType.Struct s) ? s.fieldNames() : List.of();
         Set<String> overallUsed = new LinkedHashSet<>();
-        Node root = buildNode(layout, Optional.empty(), handle, footer.arraySpecs(), overallUsed);
+        Node root = buildNode(layout, Optional.empty(), handle, footer.arraySpecs(),
+                overallUsed, progress, counter, total);
         if (layout.isStruct()) {
             List<Node> namedChildren = new ArrayList<>(root.children().size());
             for (int i = 0; i < root.children().size(); i++) {
@@ -110,7 +125,8 @@ public record InspectorTree(
     }
 
     private static Node buildNode(Layout layout, Optional<String> fieldName, VortexHandle handle,
-            List<String> arraySpecs, Set<String> overallUsed) {
+            List<String> arraySpecs, Set<String> overallUsed,
+            Progress progress, int[] counter, int total) {
         Set<String> localUsed = new LinkedHashSet<>();
         ArrayStats stats = ArrayStats.empty();
         if (layout.isFlat() && !layout.segments().isEmpty()) {
@@ -124,15 +140,48 @@ public record InspectorTree(
                     overallUsed.add(peek.encoding());
                 }
                 stats = peek.stats();
+                counter[0]++;
+                progress.update(counter[0], total);
             }
         }
         List<Node> children = new ArrayList<>(layout.children().size());
         for (Layout child : layout.children()) {
-            Node n = buildNode(child, Optional.empty(), handle, arraySpecs, overallUsed);
+            Node n = buildNode(child, Optional.empty(), handle, arraySpecs, overallUsed,
+                    progress, counter, total);
             localUsed.addAll(n.usedEncodings());
             children.add(n);
         }
         return new Node(layout, fieldName, Set.copyOf(localUsed), stats, List.copyOf(children));
+    }
+
+    private static int countPeekableSegments(Layout layout, Footer footer) {
+        int n = 0;
+        if (layout.isFlat() && !layout.segments().isEmpty()) {
+            SegmentSpec spec = footer.segmentSpecs().get(layout.segments().getFirst());
+            if (spec.compression().code == 0) {
+                n++;
+            }
+        }
+        for (Layout child : layout.children()) {
+            n += countPeekableSegments(child, footer);
+        }
+        return n;
+    }
+
+    /// Callback used by [#build(VortexHandle, Progress)] to report how many
+    /// flat segments have been peeked so far. Implementations may render a
+    /// progress bar, log, or ignore (see [#NOOP]).
+    @FunctionalInterface
+    public interface Progress {
+        /// Sink that discards updates.
+        Progress NOOP = (current, total) -> {
+        };
+
+        /// Reports progress.
+        ///
+        /// @param current number of segments peeked so far
+        /// @param total   total peekable segments in the file
+        void update(int current, int total);
     }
 
     private static Peek peekFlatRoot(MemorySegment seg, List<String> arraySpecs) {
