@@ -121,6 +121,27 @@ class GenericArrayTest {
     }
 
     @Test
+    void getDecimal_childArrayShape_decodesViaMostSignificantPart() {
+        // Given — the shape vortex.decimal_byte_parts decoders produce when
+        // lower_part_count == 0: zero buffers, one LongArray child carrying
+        // the i64 mantissa.
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment mspBuf = arena.allocate(24);
+            mspBuf.set(ValueLayout.JAVA_LONG_UNALIGNED, 0, 4321L);
+            mspBuf.set(ValueLayout.JAVA_LONG_UNALIGNED, 8, -100L);
+            mspBuf.set(ValueLayout.JAVA_LONG_UNALIGNED, 16, 0L);
+            LongArray msp = new LongArray(new DType.Primitive(PType.I64, false), 3, mspBuf);
+            DType.Decimal dec = new DType.Decimal((byte) 15, (byte) 2, false);
+            GenericArray sut = new GenericArray(dec, 3, new MemorySegment[0], new Array[]{msp});
+
+            // When / Then
+            assertThat(sut.getDecimal(0)).isEqualByComparingTo(new BigDecimal("43.21"));
+            assertThat(sut.getDecimal(1)).isEqualByComparingTo(new BigDecimal("-1.00"));
+            assertThat(sut.getDecimal(2)).isEqualByComparingTo(BigDecimal.ZERO);
+        }
+    }
+
+    @Test
     void getDecimal_nonDecimalDtype_throws() {
         // Given — guards against silently returning garbage on misuse
         try (Arena arena = Arena.ofConfined()) {
