@@ -132,6 +132,48 @@ class InspectorTreeTest {
     }
 
     @Test
+    void build_reportsProgressOncePerPeekedSegment() {
+        // Given — struct of two compressed (skipped) + two uncompressed Flat columns.
+        // Only uncompressed leaves trigger peekFlatRoot, so progress should fire twice
+        // with total=2.
+        Layout c1 = new Layout("vortex.flat", 0, null, List.of(), List.of(0));
+        Layout c2 = new Layout("vortex.flat", 0, null, List.of(), List.of(1));
+        Layout c3 = new Layout("vortex.flat", 0, null, List.of(), List.of(2));
+        Layout root = struct(0, List.of(c1, c2, c3));
+        DType dtype = new DType.Struct(List.of("a", "b", "c"),
+                List.of(new DType.Primitive(PType.I32, false),
+                        new DType.Primitive(PType.I32, false),
+                        new DType.Primitive(PType.I32, false)),
+                false);
+        List<SegmentSpec> segs = List.of(
+                new SegmentSpec(0, 1024, (byte) 0, CompressionScheme.ZSTD),  // skipped
+                new SegmentSpec(1024, 1024, (byte) 0, CompressionScheme.LZ4), // skipped
+                new SegmentSpec(2048, 1024, (byte) 0, CompressionScheme.LZ4)); // skipped
+        givenHandle(dtype, root, List.of("vortex.flat"), segs);
+
+        java.util.List<int[]> reports = new java.util.ArrayList<>();
+
+        // When
+        InspectorTree.build(handle, (cur, tot) -> reports.add(new int[]{cur, tot}));
+
+        // Then — all three are compressed, so no peeks fire; progress never called
+        assertThat(reports).isEmpty();
+    }
+
+    @Test
+    void build_progressNoop_isAcceptedAndProducesSameTree() {
+        // Given
+        Layout root = struct(0, List.of(leaf("vortex.constant", 0)));
+        DType dtype = new DType.Struct(List.of("c"),
+                List.of(new DType.Primitive(PType.I32, false)), false);
+        givenHandle(dtype, root, List.of("vortex.constant"), List.of());
+
+        // When / Then — NOOP passes; no NPE
+        InspectorTree sut = InspectorTree.build(handle, InspectorTree.Progress.NOOP);
+        assertThat(sut.root().children()).hasSize(1);
+    }
+
+    @Test
     void build_flatChildWithCompressedSegment_skipsRootEncodingPeek() {
         // Given — peekRootEncoding() reads the segment as a FlatBuffer; compressed segments
         // are intentionally skipped so a malformed or compressed payload can't crash the

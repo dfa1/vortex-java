@@ -29,7 +29,18 @@ public final class VortexInspectorTui {
     /// @param handle open Vortex file handle
     /// @throws IOException if the terminal cannot be initialized
     public static void show(VortexHandle handle) throws IOException {
-        InspectorTree tree = InspectorTree.build(handle);
+        show(handle, InspectorTree.Progress.NOOP);
+    }
+
+    /// Builds an inspector tree (reporting progress on each segment peek)
+    /// and runs the interactive viewer until quit. Useful for remote files
+    /// where {@link InspectorTree#build} can take seconds.
+    ///
+    /// @param handle   open Vortex file handle
+    /// @param progress progress sink, called once per Flat segment peeked
+    /// @throws IOException if the terminal cannot be initialized
+    public static void show(VortexHandle handle, InspectorTree.Progress progress) throws IOException {
+        InspectorTree tree = InspectorTree.build(handle, progress);
         try (RawTerminal term = RawTerminal.open()) {
             new Loop(term, tree).run();
         }
