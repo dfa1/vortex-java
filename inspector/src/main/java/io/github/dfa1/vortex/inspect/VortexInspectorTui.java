@@ -61,9 +61,27 @@ public final class VortexInspectorTui {
     /// @param progress unused; kept for API stability
     /// @throws IOException if the terminal cannot be initialized
     public static void show(VortexHandle handle, InspectorTree.Progress progress) throws IOException {
+        show(handle, null, progress);
+    }
+
+    /// Variant that dispatches every {@code handle} I/O call onto the supplied
+    /// {@link IoWorker}. Required when the handle was opened on a different
+    /// thread (Vortex readers use a confined {@link java.lang.foreign.Arena},
+    /// so cross-thread access throws {@code WrongThreadException}).
+    ///
+    /// Passing {@code null} for {@code worker} falls back to synchronous I/O
+    /// on the render thread — fine for tests but causes the sluggishness this
+    /// machinery was built to avoid.
+    ///
+    /// @param handle   open Vortex file handle
+    /// @param worker   I/O dispatcher that owns the handle's thread; may be {@code null}
+    /// @param progress unused; kept for API stability
+    /// @throws IOException if the terminal cannot be initialized
+    public static void show(VortexHandle handle, IoWorker worker, InspectorTree.Progress progress)
+            throws IOException {
         InspectorTree tree = InspectorTree.buildShallow(handle);
         try (RawTerminal term = RawTerminal.open()) {
-            new Loop(term, tree, handle).run();
+            new Loop(term, tree, handle, worker).run();
         }
     }
 
@@ -84,21 +102,24 @@ public final class VortexInspectorTui {
         private final RawTerminal term;
         private final InspectorTree tree;
         private final VortexHandle handle;
+        private final IoWorker worker;
         private final Set<InspectorTree.Node> expanded = new HashSet<>();
-        private final Map<InspectorTree.Node, InspectorTree.Peek> peekCache = new HashMap<>();
-        private final Map<InspectorTree.Node, byte[]> hexCache = new HashMap<>();
+        private final ConcurrentMap<InspectorTree.Node, InspectorTree.Peek> peekCache = new ConcurrentHashMap<>();
+        private final Set<InspectorTree.Node> peekInFlight = ConcurrentHashMap.newKeySet();
+        private final ConcurrentMap<InspectorTree.Node, byte[]> hexCache = new ConcurrentHashMap<>();
+        private final Set<InspectorTree.Node> hexInFlight = ConcurrentHashMap.newKeySet();
         private final ConcurrentMap<String, DataState> dataCache = new ConcurrentHashMap<>();
         private final Map<InspectorTree.Node, String> columnOf = new HashMap<>();
-        private volatile int pendingLoads;
         private volatile String lastError;
         private long tick;
         private int selected;
         private int scrollOffset;
 
-        Loop(RawTerminal term, InspectorTree tree, VortexHandle handle) {
+        Loop(RawTerminal term, InspectorTree tree, VortexHandle handle, IoWorker worker) {
             this.term = term;
             this.tree = tree;
             this.handle = handle;
+            this.worker = worker;
             this.expanded.add(tree.root());
             indexColumns(tree.root());
             prefetchTopColumns();
@@ -130,13 +151,34 @@ public final class VortexInspectorTui {
         }
 
         private InspectorTree.Peek peek(InspectorTree.Node node) {
-            return peekCache.computeIfAbsent(node, n -> {
-                try {
-                    return InspectorTree.peek(n, handle);
-                } catch (RuntimeException e) {
-                    return InspectorTree.Peek.EMPTY;
-                }
-            });
+            InspectorTree.Peek cached = peekCache.get(node);
+            if (cached != null) {
+                return cached;
+            }
+            if (worker == null) {
+                InspectorTree.Peek p = safePeek(node);
+                peekCache.put(node, p);
+                return p;
+            }
+            if (peekInFlight.add(node)) {
+                worker.submit(() -> {
+                    try {
+                        peekCache.put(node, safePeek(node));
+                    } finally {
+                        peekInFlight.remove(node);
+                    }
+                });
+            }
+            return InspectorTree.Peek.EMPTY;
+        }
+
+        private InspectorTree.Peek safePeek(InspectorTree.Node node) {
+            try {
+                return InspectorTree.peek(node, handle);
+            } catch (RuntimeException e) {
+                lastError = "peek: " + messageOf(e);
+                return InspectorTree.Peek.EMPTY;
+            }
         }
 
         void run() throws IOException {
@@ -258,7 +300,7 @@ public final class VortexInspectorTui {
         }
 
         private void drawStatus(StringBuilder buf, int width, int row) {
-            int loads = pendingLoads;
+            int loads = worker == null ? 0 : worker.pending();
             String err = lastError;
             String text;
             int bg;
@@ -433,8 +475,11 @@ public final class VortexInspectorTui {
             if (dataCache.putIfAbsent(columnName, DataState.PENDING) != null) {
                 return;
             }
-            pendingLoads++;
-            Thread.ofVirtual().name("tui-data-" + columnName).start(() -> runDataLoad(columnName));
+            if (worker == null) {
+                runDataLoad(columnName);
+                return;
+            }
+            worker.submit(() -> runDataLoad(columnName));
         }
 
         private void runDataLoad(String columnName) {
@@ -462,8 +507,6 @@ public final class VortexInspectorTui {
             } catch (RuntimeException e) {
                 dataCache.put(columnName, new DataState.Failed(messageOf(e)));
                 lastError = columnName + ": " + messageOf(e);
-            } finally {
-                pendingLoads--;
             }
         }
 
@@ -526,23 +569,44 @@ public final class VortexInspectorTui {
         }
 
         private byte[] loadHexPreview(InspectorTree.Node node) {
-            return hexCache.computeIfAbsent(node, n -> {
-                Layout layout = n.layout();
-                int segIdx = layout.segments().getFirst();
-                SegmentSpec spec = tree.segmentSpecs().get(segIdx);
-                int wanted = (int) Math.min((long) HEX_PREVIEW_BYTES, spec.length());
-                if (wanted <= 0) {
-                    return new byte[0];
-                }
-                try {
-                    MemorySegment seg = handle.slice(spec.offset(), wanted);
-                    byte[] buf = new byte[wanted];
-                    MemorySegment.copy(seg, 0, MemorySegment.ofArray(buf), 0, wanted);
-                    return buf;
-                } catch (RuntimeException e) {
-                    return new byte[0];
-                }
-            });
+            byte[] cached = hexCache.get(node);
+            if (cached != null) {
+                return cached;
+            }
+            if (worker == null) {
+                byte[] bytes = fetchHex(node);
+                hexCache.put(node, bytes);
+                return bytes;
+            }
+            if (hexInFlight.add(node)) {
+                worker.submit(() -> {
+                    try {
+                        hexCache.put(node, fetchHex(node));
+                    } finally {
+                        hexInFlight.remove(node);
+                    }
+                });
+            }
+            return new byte[0];
+        }
+
+        private byte[] fetchHex(InspectorTree.Node node) {
+            Layout layout = node.layout();
+            int segIdx = layout.segments().getFirst();
+            SegmentSpec spec = tree.segmentSpecs().get(segIdx);
+            int wanted = (int) Math.min((long) HEX_PREVIEW_BYTES, spec.length());
+            if (wanted <= 0) {
+                return new byte[0];
+            }
+            try {
+                MemorySegment seg = handle.slice(spec.offset(), wanted);
+                byte[] buf = new byte[wanted];
+                MemorySegment.copy(seg, 0, MemorySegment.ofArray(buf), 0, wanted);
+                return buf;
+            } catch (RuntimeException e) {
+                lastError = "hex: " + messageOf(e);
+                return new byte[0];
+            }
         }
 
         private static String formatHexRow(byte[] data, int offset) {
