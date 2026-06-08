@@ -200,14 +200,12 @@ class FileSizeComparisonIntegrationTest {
         assertThat(javaSize).isLessThan(jniSize * 2);
 
         // Then — Java file is readable with correct row count
-        long totalRows = 0L;
-        try (VortexReader reader = VortexReader.open(javaFile, EncodingRegistry.loadAll())) {
-            var iter = reader.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("volume"));
-            while (iter.hasNext()) {
-                totalRows += iter.next().<LongArray>column("volume").length();
-            }
+        var totalRows = new java.util.concurrent.atomic.AtomicLong();
+        try (VortexReader reader = VortexReader.open(javaFile, EncodingRegistry.loadAll());
+             var iter = reader.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("volume"))) {
+            iter.forEachRemaining(c -> totalRows.addAndGet(c.<LongArray>column("volume").length()));
         }
-        assertThat(totalRows).isEqualTo(TOTAL_ROWS);
+        assertThat(totalRows.get()).isEqualTo(TOTAL_ROWS);
     }
 
     @Test
@@ -232,13 +230,11 @@ class FileSizeComparisonIntegrationTest {
         assertThat(zstdSize).isLessThan(noZstdSize);
 
         // Then — Zstd file is readable with correct row count
-        long totalRows = 0L;
-        try (VortexReader reader = VortexReader.open(withZstd, EncodingRegistry.loadAll())) {
-            var iter = reader.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("volume"));
-            while (iter.hasNext()) {
-                totalRows += iter.next().<LongArray>column("volume").length();
-            }
+        var totalRows = new java.util.concurrent.atomic.AtomicLong();
+        try (VortexReader reader = VortexReader.open(withZstd, EncodingRegistry.loadAll());
+             var iter = reader.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("volume"))) {
+            iter.forEachRemaining(c -> totalRows.addAndGet(c.<LongArray>column("volume").length()));
         }
-        assertThat(totalRows).isEqualTo(TOTAL_ROWS);
+        assertThat(totalRows.get()).isEqualTo(TOTAL_ROWS);
     }
 }

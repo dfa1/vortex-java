@@ -24,14 +24,12 @@ For the full subcommand list, see [reference.md#cli](reference.md#cli).
 **API:**
 
 ```java
-long total = 0;
+var total = new java.util.concurrent.atomic.AtomicLong();
 try (VortexReader vf = VortexReader.open(Path.of("data.vortex"));
      var iter = vf.scan(ScanOptions.all())) {
-    while (iter.hasNext()) {
-        total += iter.next().rowCount();
-    }
+    iter.forEachRemaining(c -> total.addAndGet(c.rowCount()));
 }
-System.out.println(total);
+System.out.println(total.get());
 ```
 
 **CLI:**

@@ -67,7 +67,9 @@ class VortexHttpReaderIT {
         try (var sut = VortexHttpReader.open(FOR_ARRAY);
              var iter = sut.scan(ScanOptions.all())) {
             while (iter.hasNext()) {
-                totalRows += iter.next().rowCount();
+                try (var c = iter.next()) {
+                    totalRows += c.rowCount();
+                }
             }
         }
 
@@ -89,7 +91,9 @@ class VortexHttpReaderIT {
         try (var sut = VortexHttpReader.open(uri);
              var iter = sut.scan(ScanOptions.all())) {
             while (iter.hasNext()) {
-                totalRows += iter.next().rowCount();
+                try (var c = iter.next()) {
+                    totalRows += c.rowCount();
+                }
             }
         }
 
@@ -108,7 +112,9 @@ class VortexHttpReaderIT {
         try (var sut = VortexHttpReader.open(uri);
              var iter = sut.scan(ScanOptions.all())) {
             while (iter.hasNext()) {
-                totalRows += iter.next().rowCount();
+                try (var c = iter.next()) {
+                    totalRows += c.rowCount();
+                }
             }
         }
 
@@ -127,7 +133,9 @@ class VortexHttpReaderIT {
         try (var sut = VortexHttpReader.open(uri);
              var iter = sut.scan(ScanOptions.all())) {
             while (iter.hasNext()) {
-                totalRows += iter.next().rowCount();
+                try (var c = iter.next()) {
+                    totalRows += c.rowCount();
+                }
             }
         }
 

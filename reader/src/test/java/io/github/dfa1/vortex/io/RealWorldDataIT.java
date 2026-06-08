@@ -41,8 +41,10 @@ class RealWorldDataIT {
         try (var sut = VortexReader.open(file);
              var iter = sut.scan(ScanOptions.all())) {
             while (iter.hasNext()) {
-                totalRows += iter.next().rowCount();
-                chunks++;
+                try (var c = iter.next()) {
+                    totalRows += c.rowCount();
+                    chunks++;
+                }
             }
         }
 
