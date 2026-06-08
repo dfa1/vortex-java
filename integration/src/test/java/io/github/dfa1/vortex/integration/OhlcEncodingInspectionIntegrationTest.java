@@ -134,4 +134,75 @@ class OhlcEncodingInspectionIntegrationTest {
         assertThat(report).contains("volume");
         assertThat(report).contains("Used encodings:");
     }
+
+    @Test
+    void writeOhlc10kToTmp_persistentFile() throws IOException {
+        Path file = Path.of("/tmp", "ohlc-10000.vtx");
+        java.nio.file.Files.deleteIfExists(file);
+        writeOhlcMultiSymbol(file, 10_000, BATCH_SIZE,
+                new String[]{"ACME", "WIDGET", "GADGET", "MEGA", "PIXEL"});
+        System.out.printf("[OhlcWriter] wrote %d rows to %s (%.1f KB)%n",
+                10_000, file, java.nio.file.Files.size(file) / 1024.0);
+        assertThat(java.nio.file.Files.exists(file)).isTrue();
+    }
+
+    /// Variant of writeOhlc that cycles through multiple ticker symbols so the
+    /// resulting file exercises low-cardinality Utf8 column compression.
+    private static void writeOhlcMultiSymbol(Path file, int totalRows, int batchSize,
+            String[] symbols) throws IOException {
+        String uri = file.toAbsolutePath().toUri().toString();
+        var rng = new Random(42L);
+        double[] px = new double[symbols.length];
+        java.util.Arrays.fill(px, 100.0);
+        int day = (int) LocalDate.of(2020, 1, 2).toEpochDay();
+
+        try (VortexWriter writer = VortexWriter.create(SESSION, uri, OHLC_SCHEMA, new HashMap<>(), ALLOCATOR)) {
+            int rowsLeft = totalRows;
+            int rowIndex = 0;
+            while (rowsLeft > 0) {
+                int n = Math.min(rowsLeft, batchSize);
+                try (VectorSchemaRoot root = VectorSchemaRoot.create(OHLC_SCHEMA, ALLOCATOR)) {
+                    DateDayVector dateVec = (DateDayVector) root.getVector("date");
+                    VarCharVector symbolVec = (VarCharVector) root.getVector("symbol");
+                    Float8Vector openVec = (Float8Vector) root.getVector("open");
+                    Float8Vector highVec = (Float8Vector) root.getVector("high");
+                    Float8Vector lowVec = (Float8Vector) root.getVector("low");
+                    Float8Vector closeVec = (Float8Vector) root.getVector("close");
+                    BigIntVector volumeVec = (BigIntVector) root.getVector("volume");
+                    dateVec.allocateNew(n);
+                    symbolVec.allocateNew(n);
+                    openVec.allocateNew(n);
+                    highVec.allocateNew(n);
+                    lowVec.allocateNew(n);
+                    closeVec.allocateNew(n);
+                    volumeVec.allocateNew(n);
+
+                    for (int i = 0; i < n; i++, rowIndex++) {
+                        int symIdx = rowIndex % symbols.length;
+                        double ret = rng.nextGaussian() * 0.02;
+                        double o = round(px[symIdx] * (1 + ret * 0.3));
+                        double c = round(px[symIdx] * (1 + ret));
+                        double spread = Math.abs(px[symIdx] * rng.nextDouble() * 0.03);
+                        double h = round(Math.max(o, c) + spread);
+                        double l = round(Math.min(o, c) - spread);
+                        dateVec.setSafe(i, day + rowIndex / symbols.length);
+                        symbolVec.setSafe(i, symbols[symIdx].getBytes(StandardCharsets.UTF_8));
+                        openVec.setSafe(i, o);
+                        highVec.setSafe(i, h);
+                        lowVec.setSafe(i, l);
+                        closeVec.setSafe(i, c);
+                        volumeVec.setSafe(i, Math.max(100_000L, Math.round(1_000_000 + rng.nextGaussian() * 200_000)));
+                        px[symIdx] = c;
+                    }
+                    root.setRowCount(n);
+                    try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
+                         ArrowSchema schema = ArrowSchema.allocateNew(ALLOCATOR)) {
+                        Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, schema);
+                        writer.writeBatch(arr.memoryAddress(), schema.memoryAddress());
+                    }
+                }
+                rowsLeft -= n;
+            }
+        }
+    }
 }

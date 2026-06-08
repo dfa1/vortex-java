@@ -261,8 +261,14 @@ public final class VortexWriter implements Closeable {
                 throw new IllegalArgumentException("missing column: " + colName);
             }
 
-            if (!firstChunkSeen && options.globalDict() && colDtype instanceof DType.Primitive p) {
-                if (isDictCandidate(p.ptype(), data)) {
+            if (!firstChunkSeen && options.globalDict()) {
+                boolean candidate = false;
+                if (colDtype instanceof DType.Primitive p) {
+                    candidate = isDictCandidate(p.ptype(), data);
+                } else if (colDtype instanceof DType.Utf8) {
+                    candidate = isUtf8DictCandidate((String[]) data);
+                }
+                if (candidate) {
                     dictCandidates.add(colName);
                 }
             }
@@ -309,9 +315,21 @@ public final class VortexWriter implements Closeable {
     }
 
     private int writeSegment(DType dtype, Object data) throws IOException {
+        return writeSegment(dtype, data, null);
+    }
+
+    /// Writes a segment, optionally forcing a specific {@code encodingOverride} instead of
+    /// the configured cascade. Used by the global Utf8 dictionary path where the values
+    /// segment must be flat varbin — the cascade would otherwise re-pick {@link
+    /// io.github.dfa1.vortex.encoding.DictEncoding} and wrap the dictionary in another
+    /// dict (which the reader cannot unwrap).
+    private int writeSegment(DType dtype, Object data, Encoding encodingOverride) throws IOException {
         try (Arena arena = Arena.ofConfined()) {
             EncodeResult result;
-            if (options.allowedCascading() > 0) {
+            if (encodingOverride != null) {
+                EncodeContext encodeCtx = EncodeContext.of(arena, this.defaultRegistry);
+                result = encodingOverride.encode(dtype, data, encodeCtx);
+            } else if (options.allowedCascading() > 0) {
                 EncodeContext encodeCtx = EncodeContext.ofDepth(options.allowedCascading(), arena, cascadeRegistry);
                 CascadingCompressor compressor = new CascadingCompressor(cascadeCodecs);
                 result = compressor.encode(dtype, data, encodeCtx);
@@ -574,7 +592,11 @@ public final class VortexWriter implements Closeable {
             }
             int colIdx = schema.fieldNames().indexOf(colName);
             DType colDtype = schema.fieldTypes().get(colIdx);
-            writeGlobalDictColumn(colName, (DType.Primitive) colDtype, chunks);
+            if (colDtype instanceof DType.Primitive p) {
+                writeGlobalDictColumn(colName, p, chunks);
+            } else if (colDtype instanceof DType.Utf8 u) {
+                writeGlobalDictUtf8Column(colName, u, chunks);
+            }
         }
     }
 
@@ -624,6 +646,88 @@ public final class VortexWriter implements Closeable {
         }
 
         dictColRefs.put(colName, new DictColRef(valuesSegIdx, dictSize, codesSegIdxes, chunkRowCounts));
+    }
+
+    private void writeGlobalDictUtf8Column(String colName, DType.Utf8 dtype, List<Object> chunks)
+            throws IOException {
+        // Build global string -> code map across all chunks (insertion order = code value).
+        var valueMap = new LinkedHashMap<String, Integer>();
+        for (Object chunk : chunks) {
+            for (String s : (String[]) chunk) {
+                valueMap.computeIfAbsent(s, k -> valueMap.size());
+            }
+        }
+
+        int dictSize = valueMap.size();
+        if (dictSize > GLOBAL_DICT_MAX_CARDINALITY) {
+            // Cardinality exceeded threshold after seeing all data — fall back to per-chunk.
+            for (Object chunk : chunks) {
+                long rowCount = arrayLength(chunk);
+                int segIdx = writeSegment(dtype, chunk);
+                colChunks.get(colName).add(new ChunkRef(segIdx, rowCount));
+            }
+            return;
+        }
+
+        PType codePType = codePTypeForSize(dictSize);
+
+        // Write unique strings as a flat VarBin segment — bypass cascade so DictEncoding
+        // doesn't wrap the (all-unique-by-construction) dictionary in another dict that
+        // the reader's decodeDictLayout cannot unwrap.
+        String[] uniques = valueMap.keySet().toArray(new String[0]);
+        int valuesSegIdx = writeSegment(dtype, uniques, new VarBinEncoding());
+
+        // Write one codes segment per original chunk.
+        DType codesDtype = new DType.Primitive(codePType, false);
+        List<Integer> codesSegIdxes = new ArrayList<>();
+        List<Long> chunkRowCounts = new ArrayList<>();
+        for (Object chunk : chunks) {
+            String[] strs = (String[]) chunk;
+            Object codesArr = buildUtf8CodesArray(strs, valueMap, codePType);
+            codesSegIdxes.add(writeSegment(codesDtype, codesArr));
+            chunkRowCounts.add((long) strs.length);
+        }
+        dictColRefs.put(colName, new DictColRef(valuesSegIdx, dictSize, codesSegIdxes, chunkRowCounts));
+    }
+
+    private static Object buildUtf8CodesArray(String[] strs, Map<String, Integer> valueMap, PType codePType) {
+        return switch (codePType) {
+            case U8 -> {
+                byte[] codes = new byte[strs.length];
+                for (int i = 0; i < strs.length; i++) {
+                    codes[i] = (byte) (int) valueMap.get(strs[i]);
+                }
+                yield codes;
+            }
+            case U16 -> {
+                short[] codes = new short[strs.length];
+                for (int i = 0; i < strs.length; i++) {
+                    codes[i] = (short) (int) valueMap.get(strs[i]);
+                }
+                yield codes;
+            }
+            default -> {
+                int[] codes = new int[strs.length];
+                for (int i = 0; i < strs.length; i++) {
+                    codes[i] = valueMap.get(strs[i]);
+                }
+                yield codes;
+            }
+        };
+    }
+
+    private static boolean isUtf8DictCandidate(String[] data) {
+        if (data.length == 0) {
+            return false;
+        }
+        var seen = new java.util.HashSet<String>(GLOBAL_DICT_MAX_CARDINALITY + 1);
+        for (String s : data) {
+            seen.add(s);
+            if (seen.size() > GLOBAL_DICT_MAX_CARDINALITY) {
+                return false;
+            }
+        }
+        return seen.size() * 2 < data.length;
     }
 
     private static boolean isDictCandidate(PType ptype, Object data) {
