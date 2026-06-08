@@ -19,7 +19,7 @@ import io.github.dfa1.vortex.core.array.MaskedArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.encoding.EncodingRegistry;
-import io.github.dfa1.vortex.io.VortexInspector;
+import io.github.dfa1.vortex.inspect.VortexInspector;
 import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.Chunk;
 import org.apache.arrow.memory.BufferAllocator;
