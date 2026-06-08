@@ -553,50 +553,10 @@ public final class VortexInspectorTui {
                 case VarBinArray a -> a.dtype() instanceof DType.Utf8
                         ? "\"" + a.getString(i) + "\""
                         : bytesToShortHex(a.getBytes(i));
-                case GenericArray a when a.dtype() instanceof DType.Decimal d
-                        && a.bufferCount() == 1 -> formatDecimal(a, i, d);
+                case GenericArray a when a.dtype() instanceof DType.Decimal
+                        && a.bufferCount() == 1 -> a.getDecimal(i).toPlainString();
                 default -> "<" + array.getClass().getSimpleName() + " " + array.dtype() + ">";
             };
-        }
-
-        private static String formatDecimal(GenericArray a, int i, DType.Decimal d) {
-            int byteWidth = decimalByteWidth(d.precision());
-            java.lang.foreign.MemorySegment buf = a.bufferAt(0);
-            long offset = (long) i * byteWidth;
-            try {
-                java.math.BigInteger mantissa = readSignedInt(buf, offset, byteWidth);
-                java.math.BigDecimal value = new java.math.BigDecimal(mantissa, d.scale());
-                return value.toPlainString();
-            } catch (RuntimeException e) {
-                return "<decimal?>";
-            }
-        }
-
-        private static int decimalByteWidth(int precision) {
-            if (precision <= 2) {
-                return 1;
-            }
-            if (precision <= 4) {
-                return 2;
-            }
-            if (precision <= 9) {
-                return 4;
-            }
-            if (precision <= 18) {
-                return 8;
-            }
-            return 16;
-        }
-
-        private static java.math.BigInteger readSignedInt(java.lang.foreign.MemorySegment buf,
-                long offset, int byteWidth) {
-            // Little-endian two's-complement; mirror Java arithmetic by building the
-            // bytes in big-endian order before handing them to BigInteger.
-            byte[] be = new byte[byteWidth];
-            for (int k = 0; k < byteWidth; k++) {
-                be[byteWidth - 1 - k] = buf.get(java.lang.foreign.ValueLayout.JAVA_BYTE, offset + k);
-            }
-            return new java.math.BigInteger(be);
         }
 
         private static String bytesToShortHex(byte[] bytes) {
