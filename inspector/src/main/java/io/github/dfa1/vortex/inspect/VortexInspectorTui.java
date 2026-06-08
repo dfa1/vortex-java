@@ -260,6 +260,16 @@ public final class VortexInspectorTui {
                     lines.add("  - " + enc);
                 }
             }
+            if (node.stats().min() != null || node.stats().max() != null) {
+                lines.add("");
+                lines.add("Stats:");
+                if (node.stats().min() != null) {
+                    lines.add("  min: " + node.stats().min());
+                }
+                if (node.stats().max() != null) {
+                    lines.add("  max: " + node.stats().max());
+                }
+            }
             return lines;
         }
 

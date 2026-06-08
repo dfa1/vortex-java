@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.inspect;
 
+import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.CompressionScheme;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.Layout;
@@ -68,7 +69,7 @@ class VortexInspectorTest {
     void render_nonStruct_inlinesSingleColumnLayout() {
         // Given
         Layout leaf = new Layout("vortex.flat", 100, null, List.of(), List.of());
-        InspectorTree.Node root = new InspectorTree.Node(leaf, Optional.empty(), Set.of(), List.of());
+        InspectorTree.Node root = new InspectorTree.Node(leaf, Optional.empty(), Set.of(), ArrayStats.empty(), List.of());
         InspectorTree sut = new InspectorTree(
                 1, 256L,
                 new DType.Primitive(PType.I32, false),
@@ -106,10 +107,10 @@ class VortexInspectorTest {
         Layout zoned = new Layout("vortex.stats", 1000, null, List.of(chunked), List.of());
         Layout structLayout = new Layout("vortex.struct", 1000, null, List.of(zoned), List.of());
 
-        InspectorTree.Node flatN = new InspectorTree.Node(flat, Optional.empty(), Set.of(), List.of());
-        InspectorTree.Node chunkedN = new InspectorTree.Node(chunked, Optional.empty(), Set.of(), List.of(flatN));
-        InspectorTree.Node zonedN = new InspectorTree.Node(zoned, Optional.of("v"), Set.of(), List.of(chunkedN));
-        InspectorTree.Node rootN = new InspectorTree.Node(structLayout, Optional.empty(), Set.of(), List.of(zonedN));
+        InspectorTree.Node flatN = new InspectorTree.Node(flat, Optional.empty(), Set.of(), ArrayStats.empty(), List.of());
+        InspectorTree.Node chunkedN = new InspectorTree.Node(chunked, Optional.empty(), Set.of(), ArrayStats.empty(), List.of(flatN));
+        InspectorTree.Node zonedN = new InspectorTree.Node(zoned, Optional.of("v"), Set.of(), ArrayStats.empty(), List.of(chunkedN));
+        InspectorTree.Node rootN = new InspectorTree.Node(structLayout, Optional.empty(), Set.of(), ArrayStats.empty(), List.of(zonedN));
 
         InspectorTree sut = new InspectorTree(
                 1, 1024L,
@@ -122,6 +123,47 @@ class VortexInspectorTest {
 
         // Then
         assertThat(out).contains("vortex.stats(1000 rows) → vortex.chunked(1000 rows) → vortex.flat(1000 rows)");
+    }
+
+    @Test
+    void render_aggregatesMinMaxAcrossChunks() {
+        // Given — column with two chunked Flat leaves; aggregate should fold each leaf's stats
+        Layout chunk1 = new Layout("vortex.flat", 500, null, List.of(), List.of());
+        Layout chunk2 = new Layout("vortex.flat", 500, null, List.of(), List.of());
+        Layout chunked = new Layout("vortex.chunked", 1000, null, List.of(chunk1, chunk2), List.of());
+        Layout structLayout = new Layout("vortex.struct", 1000, null, List.of(chunked), List.of());
+
+        InspectorTree.Node c1 = new InspectorTree.Node(chunk1, Optional.empty(), Set.of(),
+                new ArrayStats(10L, 50L, null, null, null, null), List.of());
+        InspectorTree.Node c2 = new InspectorTree.Node(chunk2, Optional.empty(), Set.of(),
+                new ArrayStats(5L, 100L, null, null, null, null), List.of());
+        InspectorTree.Node chunkedN = new InspectorTree.Node(chunked, Optional.of("id"),
+                Set.of("vortex.flat"), ArrayStats.empty(), List.of(c1, c2));
+        InspectorTree.Node rootN = new InspectorTree.Node(structLayout, Optional.empty(),
+                Set.of("vortex.flat"), ArrayStats.empty(), List.of(chunkedN));
+
+        InspectorTree sut = new InspectorTree(1, 1024L,
+                new DType.Struct(List.of("id"), List.of(new DType.Primitive(PType.I64, false)), false),
+                List.of("vortex.flat"), Set.of(), List.of(), 1000L, rootN);
+
+        // When
+        String out = VortexInspector.render(sut);
+
+        // Then — min over (10, 5) = 5; max over (50, 100) = 100
+        assertThat(out).contains("min=5 max=100");
+    }
+
+    @Test
+    void render_columnWithoutStats_omitsMinMax() {
+        // Given — default tree has ArrayStats.empty() on every node
+        InspectorTree sut = struct2col(1, 100L, List.of(), Set.of());
+
+        // When
+        String out = VortexInspector.render(sut);
+
+        // Then
+        assertThat(out).doesNotContain("min=");
+        assertThat(out).doesNotContain("max=");
     }
 
     @Test
@@ -142,11 +184,12 @@ class VortexInspectorTest {
         Layout root = new Layout("vortex.struct", 1000, null, List.of(idLeaf, valLeaf), List.of());
 
         InspectorTree.Node idNode = new InspectorTree.Node(idLeaf,
-                Optional.of("id"), Set.of("fastlanes.bitpacked"), List.of());
+                Optional.of("id"), Set.of("fastlanes.bitpacked"), ArrayStats.empty(), List.of());
         InspectorTree.Node valNode = new InspectorTree.Node(valLeaf,
-                Optional.of("value"), Set.of("vortex.constant"), List.of());
+                Optional.of("value"), Set.of("vortex.constant"), ArrayStats.empty(), List.of());
         InspectorTree.Node rootNode = new InspectorTree.Node(root,
-                Optional.empty(), Set.of("fastlanes.bitpacked", "vortex.constant"), List.of(idNode, valNode));
+                Optional.empty(), Set.of("fastlanes.bitpacked", "vortex.constant"),
+                ArrayStats.empty(), List.of(idNode, valNode));
 
         DType dtype = new DType.Struct(
                 List.of("id", "value"),
