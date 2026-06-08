@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.cli;
 
-import io.github.dfa1.vortex.inspect.VortexInspector;
+import io.github.dfa1.vortex.inspect.VortexInspectorTui;
 import io.github.dfa1.vortex.io.VortexHandle;
 import io.github.dfa1.vortex.io.VortexHttpReader;
 import io.github.dfa1.vortex.io.VortexReader;
@@ -11,21 +11,21 @@ import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-final class InspectCommand {
+final class TuiCommand {
 
-    private InspectCommand() {
+    private TuiCommand() {
     }
 
     static int run(String[] args) {
         if (args.length != 2) {
-            System.err.println("usage: inspect <file.vortex | http(s)://url>");
+            System.err.println("usage: tui <file.vortex | http(s)://url>");
             return ExitStatus.USAGE_ERROR;
         }
         try (VortexHandle handle = open(args[1])) {
             if (handle == null) {
                 return ExitStatus.FILE_NOT_FOUND;
             }
-            System.out.print(VortexInspector.inspect(handle));
+            VortexInspectorTui.show(handle);
             return ExitStatus.OK;
         } catch (IOException | RuntimeException e) {
             System.err.println("error: " + describe(e));
@@ -34,22 +34,6 @@ final class InspectCommand {
             }
             return ExitStatus.ERROR;
         }
-    }
-
-    private static String describe(Throwable t) {
-        StringBuilder sb = new StringBuilder();
-        Throwable cur = t;
-        while (cur != null) {
-            if (!sb.isEmpty()) {
-                sb.append(" -> ");
-            }
-            sb.append(cur.getClass().getSimpleName());
-            if (cur.getMessage() != null) {
-                sb.append(": ").append(cur.getMessage());
-            }
-            cur = cur.getCause();
-        }
-        return sb.toString();
     }
 
     private static VortexHandle open(String target) throws IOException {
@@ -67,5 +51,21 @@ final class InspectCommand {
             return null;
         }
         return VortexReader.open(path);
+    }
+
+    private static String describe(Throwable t) {
+        StringBuilder sb = new StringBuilder();
+        Throwable cur = t;
+        while (cur != null) {
+            if (!sb.isEmpty()) {
+                sb.append(" -> ");
+            }
+            sb.append(cur.getClass().getSimpleName());
+            if (cur.getMessage() != null) {
+                sb.append(": ").append(cur.getMessage());
+            }
+            cur = cur.getCause();
+        }
+        return sb.toString();
     }
 }
