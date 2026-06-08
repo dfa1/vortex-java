@@ -99,6 +99,26 @@ before/after comparison so regressions are traceable.
 
 Common optimizations to consider (in order of typical impact):
 
+0. **Branch-split modulo / division / variable-target branches out of hot loops.** ⚠️ *Top of the
+   list because we shipped this regression twice in this codebase.* A single `i % cap` per element
+   blocks C2's auto-vectorizer (superword pass refuses `Op_ModL`/`Op_DivL`; no SIMD ISA has integer
+   divide). Loop-invariant cap doesn't save you — strength-reduction needs a *compile-time* constant
+   divisor. Per-element scalar modulo is also 20–40 cycles on Apple silicon. Combined: easy 5–10×
+   throughput loss. **Fix shape:** hoist the divisor once, gate two specialized loop bodies on a
+   single boolean check so the fast path has zero modulos and the slow path covers the rare case
+   (broadcast, clamp, etc.).
+   ```java
+   long cap = SegmentBroadcast.capacity(src, 8);
+   if (cap == n) {
+       for (long i = 0; i < n; i++) ... src.getAtIndex(LE_LONG, i) ...
+   } else {
+       for (long i = 0; i < n; i++) ... src.getAtIndex(LE_LONG, i % cap) ...
+   }
+   ```
+   Same trap: per-element validity-bit checks, sign-extension switches, narrow-vs-wide branches —
+   anything that makes the body non-uniform across rows.  History: commit `ed658b7` added modulo
+   for ConstantEncoding broadcast safety with a (wrong) "JIT hoists it" claim; bisect later proved
+   single-commit 5.5× regression on `vortexRead`. Fixes in `051a794`, `442021f`.
 1. **Allocate decode output from `ctx.arena()`** — hard rule from `CLAUDE.md`. Never
    `new byte[n]` + `MemorySegment.ofArray()` for codec output: heap allocation, GC pressure,
    extra copy. Use `ctx.arena().allocate(n * elemBytes, alignment)` so the buffer lives on the
@@ -116,7 +136,9 @@ Common optimizations to consider (in order of typical impact):
 8. **Reduce GC pressure** — pool expensive objects, avoid finalizers, off-heap where justified.
 9. **Enable huge pages** — add `-XX:+UseTransparentHugePages` to `jvmArgs` for comparison.
 
-After each change, run `./benchmark.sh` and compare the new score against the stored baseline.
+After each change, run `./bench` and compare the new score against the stored baseline. If JFR
+`-prof stack:lines=10` shows `idiv`, `sdiv`, or any arithmetic-helper frame as a hot stack, suspect
+modulo/division in a hot loop first — go straight to #0.
 
 ---
 

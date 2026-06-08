@@ -139,6 +139,40 @@ MemorySegment out = ctx.arena().allocate(n * elemBytes);
 If the allocation is in a private static helper that doesn't receive `DecodeContext`, add an `Arena arena` parameter
 and pass `ctx.arena()` from the `decode()` call site.
 
+**Hot-loop rule — never put modulo, division, or branch-with-variable-target on every element.**
+A single `i % cap` per row blocks JIT auto-vectorization (C2 superword pass refuses to vectorize loops containing
+`Op_ModL`/`Op_DivL`; no SIMD ISA has an integer-divide opcode). Even loop-invariant `cap` doesn't save you —
+strength-reduction (Barrett/Granlund-Montgomery) requires a *compile-time* constant divisor. Per-element scalar
+modulo also costs 20–40 cycles on Apple silicon vs ~1 cycle for surrounding loads. Net: one modulo in the body of
+a 1M-row inner loop has cost 5–10× regressions in this codebase already (commits `ed658b7` → `051a794` → `442021f`).
+
+If you need broadcast/clamp/masking semantics for the rare path, **branch-split**: hoist the cap once outside the
+loop, gate two specialized loop bodies on the cheap check.
+
+```java
+// WRONG — modulo per element kills vectorization and adds 20+ cycles/iter
+long cap = SegmentBroadcast.capacity(src, 8);
+for (long i = 0; i < n; i++) {
+    out.setAtIndex(LE_LONG, i, src.getAtIndex(LE_LONG, i % cap));
+}
+
+// CORRECT — fast path has zero modulos; slow path only fires for ConstantEncoding broadcast
+long cap = SegmentBroadcast.capacity(src, 8);
+if (cap == n) {
+    for (long i = 0; i < n; i++) {
+        out.setAtIndex(LE_LONG, i, src.getAtIndex(LE_LONG, i));
+    }
+} else {
+    for (long i = 0; i < n; i++) {
+        out.setAtIndex(LE_LONG, i, src.getAtIndex(LE_LONG, i % cap));
+    }
+}
+```
+
+The same rule applies to bounds checks, validity-bit checks, sign-extension switches — anything that
+makes the body of a multi-million-row loop non-uniform. Profile with JFR (`-prof stack:lines=10`); if you
+see `idiv` / `sdiv` / arithmetic helpers showing up as the hot frame, it's almost always this pattern.
+
 ## Reference implementation
 
 When stuck on encoding/decoding behavior, consult the Rust reference implementation at
