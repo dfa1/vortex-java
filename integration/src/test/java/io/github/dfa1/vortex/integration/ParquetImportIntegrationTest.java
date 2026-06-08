@@ -156,6 +156,38 @@ class ParquetImportIntegrationTest {
     }
 
     @Test
+    void taxiParquet_importedSize_vsOriginal(@TempDir Path tmp) throws Exception {
+        // Given — NYC Yellow Taxi 2024-01 (~3M rows, 19 cols, mix of I64 / F64 / I32 / Utf8).
+        // Uses the same parquet file as ParquetVsVortexReadBenchmark (cached in /tmp).
+        Path cached = Path.of("/tmp", "yellow_tripdata_2024-01.parquet");
+        Path src;
+        if (java.nio.file.Files.exists(cached)) {
+            src = cached;
+        } else {
+            assumeNetworkAvailable();
+            src = tmp.resolve("yellow_tripdata_2024-01.parquet");
+            try (var in = URI.create("https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2024-01.parquet")
+                    .toURL().openStream()) {
+                java.nio.file.Files.copy(in, src);
+            }
+        }
+        Path vortex = tmp.resolve("taxi.vortex");
+
+        // When
+        ParquetImporter.importParquet(src, vortex);
+
+        // Then
+        long parquetSize = java.nio.file.Files.size(src);
+        long vortexSize = java.nio.file.Files.size(vortex);
+        System.out.printf(
+                "[TaxiSizeComparison] Parquet=%,d bytes (%.1f MB)  Vortex=%,d bytes (%.1f MB)  Vortex/Parquet=%.2fx%n",
+                parquetSize, parquetSize / 1_048_576.0,
+                vortexSize, vortexSize / 1_048_576.0,
+                (double) vortexSize / parquetSize);
+        assertThat(vortexSize).isGreaterThan(0);
+    }
+
+    @Test
     void parquetAndVortexRowCountsAreEqual(@TempDir Path tmp) throws Exception {
         // Given
         assumeNetworkAvailable();
