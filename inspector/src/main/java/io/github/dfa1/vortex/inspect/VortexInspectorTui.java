@@ -484,7 +484,10 @@ public final class VortexInspectorTui {
 
         private void runDataLoad(String columnName) {
             try {
-                ScanOptions opts = ScanOptions.columns(columnName).withLimit(DATA_PREVIEW_ROWS);
+                // No withLimit: ScanIterator.truncateArray rejects GenericArray
+                // (decimal_byte_parts columns), and chunks are the granularity
+                // anyway. We slice to DATA_PREVIEW_ROWS in the format loop below.
+                ScanOptions opts = ScanOptions.columns(columnName);
                 try (ScanIterator it = handle.scan(opts)) {
                     if (!it.hasNext()) {
                         dataCache.put(columnName, new DataState.Loaded(List.of()));
@@ -551,7 +554,7 @@ public final class VortexInspectorTui {
                 case VarBinArray a -> a.dtype() instanceof io.github.dfa1.vortex.core.DType.Utf8
                         ? "\"" + a.getString(i) + "\""
                         : bytesToShortHex(a.getBytes(i));
-                default -> "<" + array.getClass().getSimpleName() + ">";
+                default -> "<" + array.getClass().getSimpleName() + " " + array.dtype() + ">";
             };
         }
 
