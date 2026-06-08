@@ -101,26 +101,49 @@ public final class GenericArray implements Array {
 
     /// Decodes the decimal value at row {@code i}.
     ///
-    /// Only valid when this array's dtype is {@link DType.Decimal} and the
-    /// underlying storage is a single buffer of little-endian two's-complement
-    /// integers (the shape produced by {@code vortex.decimal} decoding). The
-    /// element width is derived from the dtype's precision: 1 / 2 / 4 / 8 / 16
-    /// bytes for precision ≤ 2 / 4 / 9 / 18 / 38 respectively.
+    /// Handles the two shapes produced by Vortex decimal decoders:
+    ///
+    /// - **single-buffer**: one raw buffer of little-endian two's-complement
+    ///   integers (one element per row); element width derived from the
+    ///   dtype's precision (1 / 2 / 4 / 8 / 16 bytes for precision ≤ 2 / 4 /
+    ///   9 / 18 / 38). Produced by {@code vortex.decimal}.
+    /// - **child-array**: zero buffers, one child holding the most-significant
+    ///   integer part as a {@link LongArray}, {@link IntArray}, {@link ShortArray},
+    ///   or {@link ByteArray}. Produced by {@code vortex.decimal_byte_parts}
+    ///   when {@code lower_part_count == 0}.
     ///
     /// @param i row index, {@code 0 <= i < length()}
     /// @return decoded value as a {@link BigDecimal} with the dtype's scale
-    /// @throws VortexException if this array isn't a single-buffer decimal
+    /// @throws VortexException if the dtype isn't decimal or the array shape
+    ///         doesn't match either supported layout
     public BigDecimal getDecimal(long i) {
         if (!(dtype instanceof DType.Decimal d)) {
             throw new VortexException("getDecimal called on non-decimal dtype: " + dtype);
         }
-        if (buffers.length != 1) {
-            throw new VortexException("getDecimal requires a single-buffer GenericArray; got "
-                    + buffers.length);
+        BigInteger mantissa;
+        if (buffers.length == 1 && children.length == 0) {
+            int width = decimalByteWidth(d.precision());
+            mantissa = readSignedLe(buffers[0], i * width, width);
+        } else if (buffers.length == 0 && children.length == 1) {
+            mantissa = mantissaFromChild(children[0], i);
+        } else {
+            throw new VortexException("getDecimal: unsupported decimal shape buffers="
+                    + buffers.length + " children=" + children.length);
         }
-        int width = decimalByteWidth(d.precision());
-        BigInteger mantissa = readSignedLe(buffers[0], i * width, width);
         return new BigDecimal(mantissa, d.scale());
+    }
+
+    private static BigInteger mantissaFromChild(Array child, long i) {
+        return switch (child) {
+            case LongArray a -> BigInteger.valueOf(a.getLong(i));
+            case IntArray a -> BigInteger.valueOf(a.getInt(i));
+            case ShortArray a -> BigInteger.valueOf(a.getShort(i));
+            case ByteArray a -> BigInteger.valueOf(a.getByte(i));
+            case MaskedArray a -> mantissaFromChild(a.inner(), i);
+            default ->
+                    throw new VortexException("getDecimal: unsupported mantissa child type "
+                            + child.getClass().getSimpleName());
+        };
     }
 
     private static int decimalByteWidth(int precision) {

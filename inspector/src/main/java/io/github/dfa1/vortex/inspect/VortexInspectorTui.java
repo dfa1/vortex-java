@@ -553,10 +553,18 @@ public final class VortexInspectorTui {
                 case VarBinArray a -> a.dtype() instanceof DType.Utf8
                         ? "\"" + a.getString(i) + "\""
                         : bytesToShortHex(a.getBytes(i));
-                case GenericArray a when a.dtype() instanceof DType.Decimal
-                        && a.bufferCount() == 1 -> a.getDecimal(i).toPlainString();
+                case GenericArray a when a.dtype() instanceof DType.Decimal ->
+                        tryDecimal(a, i);
                 default -> "<" + array.getClass().getSimpleName() + " " + array.dtype() + ">";
             };
+        }
+
+        private static String tryDecimal(GenericArray a, int i) {
+            try {
+                return a.getDecimal(i).toPlainString();
+            } catch (RuntimeException e) {
+                return "<" + a.getClass().getSimpleName() + " " + a.dtype() + ">";
+            }
         }
 
         private static String bytesToShortHex(byte[] bytes) {
