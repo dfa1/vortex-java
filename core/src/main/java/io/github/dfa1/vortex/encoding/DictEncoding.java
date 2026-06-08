@@ -470,10 +470,12 @@ public final class DictEncoding implements Encoding {
         }
 
         private static long readCode(MemorySegment buf, PType codePType, long i) {
+            long cap = SegmentBroadcast.capacity(buf, codePType.byteSize());
+            long idx = i % cap;
             return switch (codePType) {
-                case U8 -> Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, i));
-                case U16 -> Short.toUnsignedLong(buf.get(PTypeIO.LE_SHORT, i * 2));
-                case U32 -> Integer.toUnsignedLong(buf.get(PTypeIO.LE_INT, i * 4));
+                case U8 -> Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, idx));
+                case U16 -> Short.toUnsignedLong(buf.get(PTypeIO.LE_SHORT, idx * 2));
+                case U32 -> Integer.toUnsignedLong(buf.get(PTypeIO.LE_INT, idx * 4));
                 default -> throw new VortexException(EncodingId.VORTEX_DICT, "unexpected code type: " + codePType);
             };
         }
@@ -482,35 +484,37 @@ public final class DictEncoding implements Encoding {
                 MemorySegment codes, MemorySegment values, MemorySegment out,
                 long rowCount, int elemSize
         ) {
+            long codesCap = SegmentBroadcast.capacity(codes, 1);
+            long valuesCap = SegmentBroadcast.capacity(values, elemSize);
             switch (elemSize) {
                 case 8 -> {
                     for (long i = 0; i < rowCount; i++) {
-                        long code = Byte.toUnsignedLong(codes.get(ValueLayout.JAVA_BYTE, i));
-                        out.setAtIndex(PTypeIO.LE_LONG, i, values.getAtIndex(PTypeIO.LE_LONG, code));
+                        long code = Byte.toUnsignedLong(codes.get(ValueLayout.JAVA_BYTE, i % codesCap));
+                        out.setAtIndex(PTypeIO.LE_LONG, i, values.getAtIndex(PTypeIO.LE_LONG, code % valuesCap));
                     }
                 }
                 case 4 -> {
                     for (long i = 0; i < rowCount; i++) {
-                        long code = Byte.toUnsignedLong(codes.get(ValueLayout.JAVA_BYTE, i));
-                        out.setAtIndex(PTypeIO.LE_INT, i, values.getAtIndex(PTypeIO.LE_INT, code));
+                        long code = Byte.toUnsignedLong(codes.get(ValueLayout.JAVA_BYTE, i % codesCap));
+                        out.setAtIndex(PTypeIO.LE_INT, i, values.getAtIndex(PTypeIO.LE_INT, code % valuesCap));
                     }
                 }
                 case 2 -> {
                     for (long i = 0; i < rowCount; i++) {
-                        long code = Byte.toUnsignedLong(codes.get(ValueLayout.JAVA_BYTE, i));
-                        out.setAtIndex(PTypeIO.LE_SHORT, i, values.getAtIndex(PTypeIO.LE_SHORT, code));
+                        long code = Byte.toUnsignedLong(codes.get(ValueLayout.JAVA_BYTE, i % codesCap));
+                        out.setAtIndex(PTypeIO.LE_SHORT, i, values.getAtIndex(PTypeIO.LE_SHORT, code % valuesCap));
                     }
                 }
                 case 1 -> {
                     for (long i = 0; i < rowCount; i++) {
-                        long code = Byte.toUnsignedLong(codes.get(ValueLayout.JAVA_BYTE, i));
-                        out.set(ValueLayout.JAVA_BYTE, i, values.get(ValueLayout.JAVA_BYTE, code));
+                        long code = Byte.toUnsignedLong(codes.get(ValueLayout.JAVA_BYTE, i % codesCap));
+                        out.set(ValueLayout.JAVA_BYTE, i, values.get(ValueLayout.JAVA_BYTE, code % valuesCap));
                     }
                 }
                 default -> {
                     for (long i = 0, outOff = 0; i < rowCount; i++, outOff += elemSize) {
-                        long code = Byte.toUnsignedLong(codes.get(ValueLayout.JAVA_BYTE, i));
-                        MemorySegment.copy(values, code * elemSize, out, outOff, elemSize);
+                        long code = Byte.toUnsignedLong(codes.get(ValueLayout.JAVA_BYTE, i % codesCap));
+                        MemorySegment.copy(values, (code % valuesCap) * elemSize, out, outOff, elemSize);
                     }
                 }
             }
@@ -520,35 +524,37 @@ public final class DictEncoding implements Encoding {
                 MemorySegment codes, MemorySegment values, MemorySegment out,
                 long rowCount, int elemSize
         ) {
+            long codesCap = SegmentBroadcast.capacity(codes, 2);
+            long valuesCap = SegmentBroadcast.capacity(values, elemSize);
             switch (elemSize) {
                 case 8 -> {
                     for (long i = 0; i < rowCount; i++) {
-                        long code = Short.toUnsignedLong(codes.get(PTypeIO.LE_SHORT, i * 2));
-                        out.setAtIndex(PTypeIO.LE_LONG, i, values.getAtIndex(PTypeIO.LE_LONG, code));
+                        long code = Short.toUnsignedLong(codes.get(PTypeIO.LE_SHORT, (i % codesCap) * 2));
+                        out.setAtIndex(PTypeIO.LE_LONG, i, values.getAtIndex(PTypeIO.LE_LONG, code % valuesCap));
                     }
                 }
                 case 4 -> {
                     for (long i = 0; i < rowCount; i++) {
-                        long code = Short.toUnsignedLong(codes.get(PTypeIO.LE_SHORT, i * 2));
-                        out.setAtIndex(PTypeIO.LE_INT, i, values.getAtIndex(PTypeIO.LE_INT, code));
+                        long code = Short.toUnsignedLong(codes.get(PTypeIO.LE_SHORT, (i % codesCap) * 2));
+                        out.setAtIndex(PTypeIO.LE_INT, i, values.getAtIndex(PTypeIO.LE_INT, code % valuesCap));
                     }
                 }
                 case 2 -> {
                     for (long i = 0; i < rowCount; i++) {
-                        long code = Short.toUnsignedLong(codes.get(PTypeIO.LE_SHORT, i * 2));
-                        out.setAtIndex(PTypeIO.LE_SHORT, i, values.getAtIndex(PTypeIO.LE_SHORT, code));
+                        long code = Short.toUnsignedLong(codes.get(PTypeIO.LE_SHORT, (i % codesCap) * 2));
+                        out.setAtIndex(PTypeIO.LE_SHORT, i, values.getAtIndex(PTypeIO.LE_SHORT, code % valuesCap));
                     }
                 }
                 case 1 -> {
                     for (long i = 0; i < rowCount; i++) {
-                        long code = Short.toUnsignedLong(codes.get(PTypeIO.LE_SHORT, i * 2));
-                        out.set(ValueLayout.JAVA_BYTE, i, values.get(ValueLayout.JAVA_BYTE, code));
+                        long code = Short.toUnsignedLong(codes.get(PTypeIO.LE_SHORT, (i % codesCap) * 2));
+                        out.set(ValueLayout.JAVA_BYTE, i, values.get(ValueLayout.JAVA_BYTE, code % valuesCap));
                     }
                 }
                 default -> {
                     for (long i = 0, outOff = 0; i < rowCount; i++, outOff += elemSize) {
-                        long code = Short.toUnsignedLong(codes.get(PTypeIO.LE_SHORT, i * 2));
-                        MemorySegment.copy(values, code * elemSize, out, outOff, elemSize);
+                        long code = Short.toUnsignedLong(codes.get(PTypeIO.LE_SHORT, (i % codesCap) * 2));
+                        MemorySegment.copy(values, (code % valuesCap) * elemSize, out, outOff, elemSize);
                     }
                 }
             }
@@ -558,35 +564,37 @@ public final class DictEncoding implements Encoding {
                 MemorySegment codes, MemorySegment values, MemorySegment out,
                 long rowCount, int elemSize
         ) {
+            long codesCap = SegmentBroadcast.capacity(codes, 4);
+            long valuesCap = SegmentBroadcast.capacity(values, elemSize);
             switch (elemSize) {
                 case 8 -> {
                     for (long i = 0; i < rowCount; i++) {
-                        long code = Integer.toUnsignedLong(codes.get(PTypeIO.LE_INT, i * 4));
-                        out.setAtIndex(PTypeIO.LE_LONG, i, values.getAtIndex(PTypeIO.LE_LONG, code));
+                        long code = Integer.toUnsignedLong(codes.get(PTypeIO.LE_INT, (i % codesCap) * 4));
+                        out.setAtIndex(PTypeIO.LE_LONG, i, values.getAtIndex(PTypeIO.LE_LONG, code % valuesCap));
                     }
                 }
                 case 4 -> {
                     for (long i = 0; i < rowCount; i++) {
-                        long code = Integer.toUnsignedLong(codes.get(PTypeIO.LE_INT, i * 4));
-                        out.setAtIndex(PTypeIO.LE_INT, i, values.getAtIndex(PTypeIO.LE_INT, code));
+                        long code = Integer.toUnsignedLong(codes.get(PTypeIO.LE_INT, (i % codesCap) * 4));
+                        out.setAtIndex(PTypeIO.LE_INT, i, values.getAtIndex(PTypeIO.LE_INT, code % valuesCap));
                     }
                 }
                 case 2 -> {
                     for (long i = 0; i < rowCount; i++) {
-                        long code = Integer.toUnsignedLong(codes.get(PTypeIO.LE_INT, i * 4));
-                        out.setAtIndex(PTypeIO.LE_SHORT, i, values.getAtIndex(PTypeIO.LE_SHORT, code));
+                        long code = Integer.toUnsignedLong(codes.get(PTypeIO.LE_INT, (i % codesCap) * 4));
+                        out.setAtIndex(PTypeIO.LE_SHORT, i, values.getAtIndex(PTypeIO.LE_SHORT, code % valuesCap));
                     }
                 }
                 case 1 -> {
                     for (long i = 0; i < rowCount; i++) {
-                        long code = Integer.toUnsignedLong(codes.get(PTypeIO.LE_INT, i * 4));
-                        out.set(ValueLayout.JAVA_BYTE, i, values.get(ValueLayout.JAVA_BYTE, code));
+                        long code = Integer.toUnsignedLong(codes.get(PTypeIO.LE_INT, (i % codesCap) * 4));
+                        out.set(ValueLayout.JAVA_BYTE, i, values.get(ValueLayout.JAVA_BYTE, code % valuesCap));
                     }
                 }
                 default -> {
                     for (long i = 0, outOff = 0; i < rowCount; i++, outOff += elemSize) {
-                        long code = Integer.toUnsignedLong(codes.get(PTypeIO.LE_INT, i * 4));
-                        MemorySegment.copy(values, code * elemSize, out, outOff, elemSize);
+                        long code = Integer.toUnsignedLong(codes.get(PTypeIO.LE_INT, (i % codesCap) * 4));
+                        MemorySegment.copy(values, (code % valuesCap) * elemSize, out, outOff, elemSize);
                     }
                 }
             }

@@ -619,23 +619,25 @@ public final class BitpackedEncoding implements Encoding {
             MemorySegment idxSeg = ctx.decodeChildSegment(0, new DType.Primitive(idxPtype, false), numPatches);
             MemorySegment valSeg = ctx.decodeChildSegment(1, ctx.dtype(), numPatches);
 
+            int idxBytes = idxPtype.byteSize();
             long n = ctx.rowCount();
             for (long i = 0; i < numPatches; i++) {
-                long absIdx = readUnsignedIdx(idxSeg, i, idxPtype) - offset;
+                long absIdx = readUnsignedIdx(idxSeg, SegmentBroadcast.elementOffset(idxSeg, i, idxBytes), idxPtype) - offset;
                 if (absIdx < 0 || absIdx >= n) {
                     throw new VortexException(EncodingId.FASTLANES_BITPACKED,
                             "patch index " + absIdx + " out of range [0," + n + ")");
                 }
-                MemorySegment.copy(valSeg, i * elemBytes, out, absIdx * elemBytes, elemBytes);
+                MemorySegment.copy(valSeg, SegmentBroadcast.elementOffset(valSeg, i, elemBytes),
+                        out, absIdx * elemBytes, elemBytes);
             }
         }
 
-        private static long readUnsignedIdx(MemorySegment seg, long i, PType ptype) {
+        private static long readUnsignedIdx(MemorySegment seg, long off, PType ptype) {
             return switch (ptype) {
-                case U8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, i));
-                case U16 -> Short.toUnsignedLong(seg.get(PTypeIO.LE_SHORT, i * 2));
-                case U32 -> Integer.toUnsignedLong(seg.get(PTypeIO.LE_INT, i * 4));
-                case U64 -> seg.get(PTypeIO.LE_LONG, i * 8);
+                case U8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, off));
+                case U16 -> Short.toUnsignedLong(seg.get(PTypeIO.LE_SHORT, off));
+                case U32 -> Integer.toUnsignedLong(seg.get(PTypeIO.LE_INT, off));
+                case U64 -> seg.get(PTypeIO.LE_LONG, off);
                 default -> throw new VortexException(EncodingId.FASTLANES_BITPACKED,
                         "non-unsigned patch index ptype " + ptype);
             };

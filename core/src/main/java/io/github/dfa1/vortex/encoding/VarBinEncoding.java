@@ -131,6 +131,19 @@ public final class VarBinEncoding implements Encoding {
             // Offsets: n+1 elements; bytes: raw string data.
             MemorySegment offsets = ctx.decodeChildSegment(0, offsetsDtype, n + 1);
 
+            // VarBinArray indexes offsets[i]..offsets[i+1] via raw getAtIndex without modulo.
+            // If a constant-encoded child returned a 1-element segment, materialize the full
+            // n+1 layout here so VarBinArray reads stay in bounds. A truly constant offsets
+            // array means every string is empty and starts at the same position — a degenerate
+            // but well-defined case.
+            int offBytes = offsetsPtype.byteSize();
+            long offCap = SegmentBroadcast.capacity(offsets, offBytes);
+            if (offCap < n + 1) {
+                MemorySegment materialized = ctx.arena().allocate((n + 1) * (long) offBytes, offBytes);
+                SegmentBroadcast.broadcastCopy(offsets, materialized, n + 1, offBytes);
+                offsets = materialized;
+            }
+
             MemorySegment bytes = ctx.buffer(0);
 
             return new VarBinArray(ctx.dtype(), n, bytes, offsets, offsetsPtype);

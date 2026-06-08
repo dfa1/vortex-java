@@ -423,11 +423,13 @@ public final class AlpEncoding implements Encoding {
 
             MemorySegment src = ctx.decodeChildSegment(0, I64_DTYPE, n);
             // In-place when the child returned a writable arena buffer (e.g. BitpackedEncoding, DeltaEncoding).
-            // Fall back to a new allocation when the source is a read-only mmap slice (PrimitiveEncoding).
+            // Fall back to a new allocation when the source is a read-only mmap slice (PrimitiveEncoding)
+            // or a broadcasted single element (ConstantEncoding).
             MemorySegment buf = src.isReadOnly() ? ctx.arena().allocate(n * 8, 8) : src;
             if (src.isReadOnly()) {
+                long srcCap = SegmentBroadcast.capacity(src, 8);
                 for (long i = 0; i < n; i++) {
-                    buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) src.getAtIndex(PTypeIO.LE_LONG, i) * df * de);
+                    buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) src.getAtIndex(PTypeIO.LE_LONG, i % srcCap) * df * de);
                 }
             } else {
                 for (long i = 0; i < n; i++) {
@@ -450,8 +452,9 @@ public final class AlpEncoding implements Encoding {
             MemorySegment src32 = ctx.decodeChildSegment(0, I32_DTYPE, n);
             MemorySegment buf32 = src32.isReadOnly() ? ctx.arena().allocate(n * 4, 4) : src32;
             if (src32.isReadOnly()) {
+                long srcCap = SegmentBroadcast.capacity(src32, 4);
                 for (long i = 0; i < n; i++) {
-                    buf32.setAtIndex(PTypeIO.LE_FLOAT, i, (float) src32.getAtIndex(PTypeIO.LE_INT, i) * df * de);
+                    buf32.setAtIndex(PTypeIO.LE_FLOAT, i, (float) src32.getAtIndex(PTypeIO.LE_INT, i % srcCap) * df * de);
                 }
             } else {
                 for (long i = 0; i < n; i++) {
@@ -471,22 +474,24 @@ public final class AlpEncoding implements Encoding {
             long numPatches = pm.getLen();
             long offset = pm.getOffset();
             PType idxPtype = ptypeFromProto(pm.getIndicesPtype());
+            int idxBytes = idxPtype.byteSize();
 
             MemorySegment idxSeg = ctx.decodeChildSegment(1, new DType.Primitive(idxPtype, false), numPatches);
             MemorySegment valSeg = ctx.decodeChildSegment(2, ctx.dtype(), numPatches);
 
             for (long i = 0; i < numPatches; i++) {
-                long absIdx = readUnsigned(idxSeg, i, idxPtype) - offset;
-                MemorySegment.copy(valSeg, i * elemBytes, out, absIdx * elemBytes, elemBytes);
+                long absIdx = readUnsigned(idxSeg, SegmentBroadcast.elementOffset(idxSeg, i, idxBytes), idxPtype) - offset;
+                MemorySegment.copy(valSeg, SegmentBroadcast.elementOffset(valSeg, i, elemBytes),
+                        out, absIdx * elemBytes, elemBytes);
             }
         }
 
-        private static long readUnsigned(MemorySegment seg, long i, PType ptype) {
+        private static long readUnsigned(MemorySegment seg, long off, PType ptype) {
             return switch (ptype) {
-                case U8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, i));
-                case U16 -> Short.toUnsignedLong(seg.get(PTypeIO.LE_SHORT, i * 2));
-                case U32 -> Integer.toUnsignedLong(seg.get(PTypeIO.LE_INT, i * 4));
-                case U64 -> seg.get(PTypeIO.LE_LONG, i * 8);
+                case U8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, off));
+                case U16 -> Short.toUnsignedLong(seg.get(PTypeIO.LE_SHORT, off));
+                case U32 -> Integer.toUnsignedLong(seg.get(PTypeIO.LE_INT, off));
+                case U64 -> seg.get(PTypeIO.LE_LONG, off);
                 default -> throw new VortexException(EncodingId.VORTEX_ALP, "non-unsigned patch index ptype " + ptype);
             };
         }

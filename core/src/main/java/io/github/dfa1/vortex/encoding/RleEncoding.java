@@ -421,8 +421,9 @@ public final class RleEncoding implements Encoding {
         private static long[] readLongs(MemorySegment buf, int count, PType ptype) {
             long[] out = new long[count];
             int elemSize = ptype.byteSize();
+            long cap = SegmentBroadcast.capacity(buf, elemSize);
             for (int i = 0; i < count; i++) {
-                long off = (long) i * elemSize;
+                long off = (i % cap) * elemSize;
                 out[i] = switch (ptype) {
                     case I8 -> buf.get(ValueLayout.JAVA_BYTE, off);
                     case U8 -> Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, off));
@@ -440,15 +441,17 @@ public final class RleEncoding implements Encoding {
 
         private static int[] readIndices(MemorySegment buf, int count, PType indicesPtype) {
             int[] out = new int[count];
+            int elemSize = indicesPtype.byteSize();
+            long cap = SegmentBroadcast.capacity(buf, elemSize);
             switch (indicesPtype) {
                 case U8 -> {
                     for (int i = 0; i < count; i++) {
-                        out[i] = Byte.toUnsignedInt(buf.get(ValueLayout.JAVA_BYTE, i));
+                        out[i] = Byte.toUnsignedInt(buf.get(ValueLayout.JAVA_BYTE, i % cap));
                     }
                 }
                 case U16 -> {
                     for (int i = 0; i < count; i++) {
-                        out[i] = Short.toUnsignedInt(buf.get(PTypeIO.LE_SHORT, (long) i * 2));
+                        out[i] = Short.toUnsignedInt(buf.get(PTypeIO.LE_SHORT, (i % cap) * 2));
                     }
                 }
                 default ->
@@ -460,8 +463,9 @@ public final class RleEncoding implements Encoding {
         private static long[] readUnsignedLongs(MemorySegment buf, int count, PType ptype) {
             long[] out = new long[count];
             int elemSize = ptype.byteSize();
+            long cap = SegmentBroadcast.capacity(buf, elemSize);
             for (int i = 0; i < count; i++) {
-                long off = (long) i * elemSize;
+                long off = (i % cap) * elemSize;
                 out[i] = switch (ptype) {
                     case U8 -> Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, off));
                     case U16 -> Short.toUnsignedLong(buf.get(PTypeIO.LE_SHORT, off));

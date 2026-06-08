@@ -399,17 +399,19 @@ public final class AlpRdEncoding implements Encoding {
             short[] dict, int rightBitWidth, long n) {
             MemorySegment leftSeg = ctx.decodeChildSegment(0, U16_DTYPE, n);
             MemorySegment rightSeg = ctx.decodeChildSegment(1, U64_DTYPE, n);
+            long leftCap = SegmentBroadcast.capacity(leftSeg, 2);
+            long rightCap = SegmentBroadcast.capacity(rightSeg, 8);
             MemorySegment out = ctx.arena().allocate(n * Long.BYTES, Long.BYTES);
 
             for (long i = 0; i < n; i++) {
-                int code = Short.toUnsignedInt(leftSeg.getAtIndex(PTypeIO.LE_SHORT, i));
+                int code = Short.toUnsignedInt(leftSeg.getAtIndex(PTypeIO.LE_SHORT, i % leftCap));
                 long leftBits = (long) (dict[code] & 0xFFFF) << rightBitWidth;
-                long rightBits = rightSeg.getAtIndex(PTypeIO.LE_LONG, i);
+                long rightBits = rightSeg.getAtIndex(PTypeIO.LE_LONG, i % rightCap);
                 out.setAtIndex(PTypeIO.LE_LONG, i, leftBits | rightBits);
             }
 
             if (meta.hasPatches()) {
-                applyPatchesF64(ctx, meta.getPatches(), out, rightSeg, rightBitWidth);
+                applyPatchesF64(ctx, meta.getPatches(), out, rightSeg, rightCap, rightBitWidth);
             }
 
             return new DoubleArray(ctx.dtype(), n, out.asReadOnly());
@@ -420,17 +422,19 @@ public final class AlpRdEncoding implements Encoding {
             short[] dict, int rightBitWidth, long n) {
             MemorySegment leftSeg = ctx.decodeChildSegment(0, U16_DTYPE, n);
             MemorySegment rightSeg = ctx.decodeChildSegment(1, U32_DTYPE, n);
+            long leftCap = SegmentBroadcast.capacity(leftSeg, 2);
+            long rightCap = SegmentBroadcast.capacity(rightSeg, 4);
             MemorySegment out = ctx.arena().allocate(n * Integer.BYTES, Integer.BYTES);
 
             for (long i = 0; i < n; i++) {
-                int code = Short.toUnsignedInt(leftSeg.getAtIndex(PTypeIO.LE_SHORT, i));
+                int code = Short.toUnsignedInt(leftSeg.getAtIndex(PTypeIO.LE_SHORT, i % leftCap));
                 int leftBits = (dict[code] & 0xFFFF) << rightBitWidth;
-                int rightBits = rightSeg.getAtIndex(PTypeIO.LE_INT, i);
+                int rightBits = rightSeg.getAtIndex(PTypeIO.LE_INT, i % rightCap);
                 out.setAtIndex(PTypeIO.LE_INT, i, leftBits | rightBits);
             }
 
             if (meta.hasPatches()) {
-                applyPatchesF32(ctx, meta.getPatches(), out, rightSeg, rightBitWidth);
+                applyPatchesF32(ctx, meta.getPatches(), out, rightSeg, rightCap, rightBitWidth);
             }
 
             return new FloatArray(ctx.dtype(), n, out.asReadOnly());
@@ -438,46 +442,51 @@ public final class AlpRdEncoding implements Encoding {
 
         private static void applyPatchesF64(DecodeContext ctx,
             EncodingProtos.PatchesMetadata pm,
-            MemorySegment out, MemorySegment rightSeg, int rightBitWidth) {
+            MemorySegment out, MemorySegment rightSeg, long rightCap, int rightBitWidth) {
             long numPatches = pm.getLen();
             long offset = pm.getOffset();
             PType idxPtype = PType.fromOrdinal(pm.getIndicesPtype().getNumber());
 
             MemorySegment idxSeg = ctx.decodeChildSegment(2, new DType.Primitive(idxPtype, false), numPatches);
             MemorySegment valSeg = ctx.decodeChildSegment(3, U16_DTYPE, numPatches);
+            int idxBytes = idxPtype.byteSize();
+            long valCap = SegmentBroadcast.capacity(valSeg, 2);
 
             for (long j = 0; j < numPatches; j++) {
-                long absIdx = readUnsigned(idxSeg, j, idxPtype) - offset;
-                short actualLeftU16 = valSeg.getAtIndex(PTypeIO.LE_SHORT, j);
+                long absIdx = readUnsigned(idxSeg, SegmentBroadcast.elementOffset(idxSeg, j, idxBytes), idxPtype) - offset;
+                short actualLeftU16 = valSeg.getAtIndex(PTypeIO.LE_SHORT, j % valCap);
                 long leftBits = (long) (actualLeftU16 & 0xFFFF) << rightBitWidth;
-                long rightBits = rightSeg.getAtIndex(PTypeIO.LE_LONG, absIdx);
+                long rightBits = rightSeg.getAtIndex(PTypeIO.LE_LONG, absIdx % rightCap);
                 out.setAtIndex(PTypeIO.LE_LONG, absIdx, leftBits | rightBits);
             }
         }
 
-        private static void applyPatchesF32(DecodeContext ctx, EncodingProtos.PatchesMetadata pm, MemorySegment out, MemorySegment rightSeg, int rightBitWidth) {
+        private static void applyPatchesF32(DecodeContext ctx, EncodingProtos.PatchesMetadata pm,
+            MemorySegment out, MemorySegment rightSeg, long rightCap, int rightBitWidth) {
             long numPatches = pm.getLen();
             long offset = pm.getOffset();
             PType idxPtype = PType.fromOrdinal(pm.getIndicesPtype().getNumber());
 
             MemorySegment idxSeg = ctx.decodeChildSegment(2, new DType.Primitive(idxPtype, false), numPatches);
             MemorySegment valSeg = ctx.decodeChildSegment(3, U16_DTYPE, numPatches);
+            int idxBytes = idxPtype.byteSize();
+            long valCap = SegmentBroadcast.capacity(valSeg, 2);
 
             for (long j = 0; j < numPatches; j++) {
-                long absIdx = readUnsigned(idxSeg, j, idxPtype) - offset;
-                short actualLeftU16 = valSeg.getAtIndex(PTypeIO.LE_SHORT, j);
+                long absIdx = readUnsigned(idxSeg, SegmentBroadcast.elementOffset(idxSeg, j, idxBytes), idxPtype) - offset;
+                short actualLeftU16 = valSeg.getAtIndex(PTypeIO.LE_SHORT, j % valCap);
                 int leftBits = (actualLeftU16 & 0xFFFF) << rightBitWidth;
-                int rightBits = rightSeg.getAtIndex(PTypeIO.LE_INT, absIdx);
+                int rightBits = rightSeg.getAtIndex(PTypeIO.LE_INT, absIdx % rightCap);
                 out.setAtIndex(PTypeIO.LE_INT, (int) absIdx, leftBits | rightBits);
             }
         }
 
-        private static long readUnsigned(MemorySegment seg, long i, PType ptype) {
+        private static long readUnsigned(MemorySegment seg, long off, PType ptype) {
             return switch (ptype) {
-                case U8 -> Byte.toUnsignedLong(seg.get(java.lang.foreign.ValueLayout.JAVA_BYTE, i));
-                case U16 -> Short.toUnsignedLong(seg.get(PTypeIO.LE_SHORT, i * 2));
-                case U32 -> Integer.toUnsignedLong(seg.get(PTypeIO.LE_INT, i * 4));
-                case U64 -> seg.get(PTypeIO.LE_LONG, i * 8);
+                case U8 -> Byte.toUnsignedLong(seg.get(java.lang.foreign.ValueLayout.JAVA_BYTE, off));
+                case U16 -> Short.toUnsignedLong(seg.get(PTypeIO.LE_SHORT, off));
+                case U32 -> Integer.toUnsignedLong(seg.get(PTypeIO.LE_INT, off));
+                case U64 -> seg.get(PTypeIO.LE_LONG, off);
                 default -> throw new VortexException(EncodingId.VORTEX_ALPRD,
                     "non-unsigned patch index ptype " + ptype);
             };

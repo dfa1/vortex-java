@@ -106,7 +106,7 @@ public final class PatchedEncoding implements Encoding {
             MemorySegment patchValuesSeg = ctx.decodeChildSegment(3, ctx.dtype(), nPatches);
 
             MemorySegment out = ctx.arena().allocate(n * elemBytes);
-            MemorySegment.copy(innerSeg, 0, out, 0, n * elemBytes);
+            SegmentBroadcast.broadcastCopy(innerSeg, out, n, elemBytes);
 
             if (nPatches > 0) {
                 applyPatches(out, n, nChunks, nLanes, offset, elemBytes,
@@ -129,20 +129,23 @@ public final class PatchedEncoding implements Encoding {
                 MemorySegment out, long n, long nChunks, long nLanes, long offset, int elemBytes,
                 MemorySegment laneOffsets, MemorySegment patchIndices, MemorySegment patchValues
         ) {
+            long laneCap = SegmentBroadcast.capacity(laneOffsets, 4);
+            long idxCap = SegmentBroadcast.capacity(patchIndices, 2);
+            long valCap = SegmentBroadcast.capacity(patchValues, elemBytes);
             for (long chunk = 0; chunk < nChunks; chunk++) {
                 long start = Integer.toUnsignedLong(
-                        laneOffsets.getAtIndex(PTypeIO.LE_INT, chunk * nLanes));
+                        laneOffsets.getAtIndex(PTypeIO.LE_INT, (chunk * nLanes) % laneCap));
                 long stop = Integer.toUnsignedLong(
-                        laneOffsets.getAtIndex(PTypeIO.LE_INT, chunk * nLanes + nLanes));
+                        laneOffsets.getAtIndex(PTypeIO.LE_INT, (chunk * nLanes + nLanes) % laneCap));
 
                 for (long i = start; i < stop; i++) {
                     long physicalIdx = chunk * 1024
-                            + Short.toUnsignedLong(patchIndices.getAtIndex(PTypeIO.LE_SHORT, i));
+                            + Short.toUnsignedLong(patchIndices.getAtIndex(PTypeIO.LE_SHORT, i % idxCap));
                     if (physicalIdx < offset || physicalIdx >= offset + n) {
                         continue;
                     }
                     long outputIdx = physicalIdx - offset;
-                    MemorySegment.copy(patchValues, i * elemBytes, out, outputIdx * elemBytes, elemBytes);
+                    MemorySegment.copy(patchValues, (i % valCap) * elemBytes, out, outputIdx * elemBytes, elemBytes);
                 }
             }
         }

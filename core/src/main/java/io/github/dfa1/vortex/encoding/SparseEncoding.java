@@ -248,9 +248,10 @@ public final class SparseEncoding implements Encoding {
                 DType indicesDtype = new DType.Primitive(indicesPtype, false);
                 MemorySegment idxSeg = ctx.decodeChildSegment(0, indicesDtype, numPatches);
                 BoolArray bools = (BoolArray) ctx.decodeChild(1, ctx.dtype(), numPatches);
+                int idxBytes = indicesPtype.byteSize();
                 for (long i = 0; i < numPatches; i++) {
                     if (bools.getBoolean(i)) {
-                        long pos = readUnsignedIdx(idxSeg, i, indicesPtype) - offset;
+                        long pos = readUnsignedIdx(idxSeg, SegmentBroadcast.elementOffset(idxSeg, i, idxBytes), indicesPtype) - offset;
                         long byteIdx = pos >>> 3;
                         byte cur = out.get(ValueLayout.JAVA_BYTE, byteIdx);
                         out.set(ValueLayout.JAVA_BYTE, byteIdx, (byte) (cur | (1 << (pos & 7))));
@@ -276,6 +277,7 @@ public final class SparseEncoding implements Encoding {
             MemorySegment valOffsets = varBin.offsetsSegment();
             PType valOffPtype = varBin.offsetsPtype();
 
+            int idxBytes = indicesPtype.byteSize();
             long totalBytes = 0;
             for (long i = 0; i < numPatches; i++) {
                 totalBytes += readVarBinOffset(valOffsets, i + 1, valOffPtype)
@@ -287,7 +289,7 @@ public final class SparseEncoding implements Encoding {
             long bytePos = 0;
             for (long pos = 0; pos < n; pos++) {
                 if (patchCursor < numPatches) {
-                    long patchPos = readUnsignedIdx(idxSeg, patchCursor, indicesPtype) - offset;
+                    long patchPos = readUnsignedIdx(idxSeg, SegmentBroadcast.elementOffset(idxSeg, patchCursor, idxBytes), indicesPtype) - offset;
                     if (patchPos == pos) {
                         long strStart = readVarBinOffset(valOffsets, patchCursor, valOffPtype);
                         long strEnd = readVarBinOffset(valOffsets, patchCursor + 1, valOffPtype);
@@ -327,35 +329,36 @@ public final class SparseEncoding implements Encoding {
                 PType idxPtype, long numPatches, long offset
         ) {
             int elemBytes = valuePtype.byteSize();
+            int idxBytes = idxPtype.byteSize();
             ByteBuffer outBuf = out.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
             for (long i = 0; i < numPatches; i++) {
-                long idx = readUnsignedIdx(idxSeg, i, idxPtype) - offset;
+                long idx = readUnsignedIdx(idxSeg, SegmentBroadcast.elementOffset(idxSeg, i, idxBytes), idxPtype) - offset;
                 if (idx < 0 || idx >= n) {
                     throw new VortexException(EncodingId.VORTEX_SPARSE,
                             "patch index " + idx + " out of range [0," + n + ")");
                 }
-                long val = readElem(valSeg, i, valuePtype);
+                long val = readElem(valSeg, SegmentBroadcast.elementOffset(valSeg, i, elemBytes), valuePtype);
                 outBuf.position((int) (idx * elemBytes));
                 writeElem(outBuf, valuePtype, val);
             }
         }
 
-        private static long readUnsignedIdx(MemorySegment seg, long i, PType ptype) {
+        private static long readUnsignedIdx(MemorySegment seg, long off, PType ptype) {
             return switch (ptype) {
-                case U8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, i));
-                case U16 -> Short.toUnsignedLong(seg.get(PTypeIO.LE_SHORT, i * 2));
-                case U32 -> Integer.toUnsignedLong(seg.get(PTypeIO.LE_INT, i * 4));
-                case U64 -> seg.get(PTypeIO.LE_LONG, i * 8);
+                case U8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, off));
+                case U16 -> Short.toUnsignedLong(seg.get(PTypeIO.LE_SHORT, off));
+                case U32 -> Integer.toUnsignedLong(seg.get(PTypeIO.LE_INT, off));
+                case U64 -> seg.get(PTypeIO.LE_LONG, off);
                 default -> throw new VortexException(EncodingId.VORTEX_SPARSE, "non-unsigned index ptype " + ptype);
             };
         }
 
-        private static long readElem(MemorySegment seg, long i, PType ptype) {
+        private static long readElem(MemorySegment seg, long off, PType ptype) {
             return switch (ptype) {
-                case I8, U8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, i));
-                case I16, U16 -> Short.toUnsignedLong(seg.get(PTypeIO.LE_SHORT, i * 2));
-                case I32, U32 -> Integer.toUnsignedLong(seg.get(PTypeIO.LE_INT, i * 4));
-                case I64, U64, F32, F64 -> seg.get(PTypeIO.LE_LONG, i * 8);
+                case I8, U8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, off));
+                case I16, U16 -> Short.toUnsignedLong(seg.get(PTypeIO.LE_SHORT, off));
+                case I32, U32 -> Integer.toUnsignedLong(seg.get(PTypeIO.LE_INT, off));
+                case I64, U64, F32, F64 -> seg.get(PTypeIO.LE_LONG, off);
                 default -> throw new UnsupportedOperationException("vortex.sparse: unsupported ptype " + ptype);
             };
         }

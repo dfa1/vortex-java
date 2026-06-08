@@ -214,10 +214,12 @@ public final class FsstEncoding implements Encoding {
 
             MemorySegment uncompLensSeg = ctx.decodeChildSegment(0, new DType.Primitive(uncompLenPType, false), n);
             MemorySegment codesOffsetsSeg = ctx.decodeChildSegment(1, new DType.Primitive(codesOffPType, false), n + 1);
+            long uncompLensCap = SegmentBroadcast.capacity(uncompLensSeg, uncompLenPType.byteSize());
+            long codesOffCap = SegmentBroadcast.capacity(codesOffsetsSeg, codesOffPType.byteSize());
 
             long totalUncompressed = 0L;
             for (long i = 0; i < n; i++) {
-                totalUncompressed += readUnsigned(uncompLensSeg, i, uncompLenPType);
+                totalUncompressed += readUnsigned(uncompLensSeg, i % uncompLensCap, uncompLenPType);
             }
 
             MemorySegment outBytes = ctx.arena().allocate(totalUncompressed);
@@ -226,8 +228,8 @@ public final class FsstEncoding implements Encoding {
 
             long outPos = 0L;
             for (long i = 0; i < n; i++) {
-                long cStart = readUnsigned(codesOffsetsSeg, i, codesOffPType);
-                long cEnd = readUnsigned(codesOffsetsSeg, i + 1, codesOffPType);
+                long cStart = readUnsigned(codesOffsetsSeg, i % codesOffCap, codesOffPType);
+                long cEnd = readUnsigned(codesOffsetsSeg, (i + 1) % codesOffCap, codesOffPType);
                 outPos = decompressString(compressedBytes, symbolsBuf, symbolLensBuf,
                         cStart, cEnd, outBytes, outPos);
                 outOffsets.setAtIndex(PTypeIO.LE_INT, i + 1, (int) outPos);

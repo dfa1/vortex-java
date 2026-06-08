@@ -110,33 +110,35 @@ public final class ZigZagEncoding implements Encoding {
             long n = ctx.rowCount();
 
             MemorySegment src = ctx.decodeChildSegment(0, new DType.Primitive(unsigned, false), n);
-            MemorySegment dst = ctx.arena().allocate(n * signed.byteSize());
+            int elemBytes = signed.byteSize();
+            long srcCap = SegmentBroadcast.capacity(src, elemBytes);
+            MemorySegment dst = ctx.arena().allocate(n * elemBytes);
 
             return switch (signed) {
                 case I8 -> {
                     for (long i = 0; i < n; i++) {
-                        int u = Byte.toUnsignedInt(src.get(ValueLayout.JAVA_BYTE, i));
+                        int u = Byte.toUnsignedInt(src.get(ValueLayout.JAVA_BYTE, i % srcCap));
                         dst.set(ValueLayout.JAVA_BYTE, i, (byte) ((u >>> 1) ^ -(u & 1)));
                     }
                     yield new ByteArray(ctx.dtype(), n, dst);
                 }
                 case I16 -> {
                     for (long i = 0; i < n; i++) {
-                        int u = Short.toUnsignedInt(src.get(PTypeIO.LE_SHORT, i * 2));
+                        int u = Short.toUnsignedInt(src.get(PTypeIO.LE_SHORT, (i % srcCap) * 2));
                         dst.set(PTypeIO.LE_SHORT, i * 2, (short) ((u >>> 1) ^ -(u & 1)));
                     }
                     yield new ShortArray(ctx.dtype(), n, dst);
                 }
                 case I32 -> {
                     for (long i = 0; i < n; i++) {
-                        int u = src.get(PTypeIO.LE_INT, i * 4);
+                        int u = src.get(PTypeIO.LE_INT, (i % srcCap) * 4);
                         dst.set(PTypeIO.LE_INT, i * 4, (u >>> 1) ^ -(u & 1));
                     }
                     yield new IntArray(ctx.dtype(), n, dst);
                 }
                 case I64 -> {
                     for (long i = 0; i < n; i++) {
-                        long u = src.get(PTypeIO.LE_LONG, i * 8);
+                        long u = src.get(PTypeIO.LE_LONG, (i % srcCap) * 8);
                         dst.set(PTypeIO.LE_LONG, i * 8, (u >>> 1) ^ -(u & 1));
                     }
                     yield new LongArray(ctx.dtype(), n, dst);

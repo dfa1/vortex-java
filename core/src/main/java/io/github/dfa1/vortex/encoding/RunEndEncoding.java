@@ -203,10 +203,12 @@ public final class RunEndEncoding implements Encoding {
 
         private static void expandByte(MemorySegment endsSeg, MemorySegment valuesSeg,
                 PType endsPtype, long numRuns, long offset, long n, MemorySegment out) {
+            long endsCap = SegmentBroadcast.capacity(endsSeg, endsPtype.byteSize());
+            long valCap = SegmentBroadcast.capacity(valuesSeg, 1);
             long logicalPos = 0L, outPos = 0L;
             for (long run = 0; run < numRuns && outPos < n; run++) {
-                long runEnd = readUnsigned(endsSeg, run, endsPtype);
-                byte rawValue = valuesSeg.get(ValueLayout.JAVA_BYTE, run);
+                long runEnd = readUnsigned(endsSeg, run % endsCap, endsPtype);
+                byte rawValue = valuesSeg.get(ValueLayout.JAVA_BYTE, run % valCap);
                 long writeEnd = Math.min(runEnd, offset + n);
                 for (long lp = Math.max(logicalPos, offset); lp < writeEnd; lp++, outPos++) {
                     out.set(ValueLayout.JAVA_BYTE, outPos, rawValue);
@@ -217,10 +219,12 @@ public final class RunEndEncoding implements Encoding {
 
         private static void expandShort(MemorySegment endsSeg, MemorySegment valuesSeg,
                 PType endsPtype, long numRuns, long offset, long n, MemorySegment out) {
+            long endsCap = SegmentBroadcast.capacity(endsSeg, endsPtype.byteSize());
+            long valCap = SegmentBroadcast.capacity(valuesSeg, 2);
             long logicalPos = 0L, outPos = 0L;
             for (long run = 0; run < numRuns && outPos < n; run++) {
-                long runEnd = readUnsigned(endsSeg, run, endsPtype);
-                short rawValue = valuesSeg.get(PTypeIO.LE_SHORT, run * 2);
+                long runEnd = readUnsigned(endsSeg, run % endsCap, endsPtype);
+                short rawValue = valuesSeg.get(PTypeIO.LE_SHORT, (run % valCap) * 2);
                 long writeEnd = Math.min(runEnd, offset + n);
                 for (long lp = Math.max(logicalPos, offset); lp < writeEnd; lp++, outPos++) {
                     out.set(PTypeIO.LE_SHORT, outPos * 2, rawValue);
@@ -231,10 +235,12 @@ public final class RunEndEncoding implements Encoding {
 
         private static void expandInt(MemorySegment endsSeg, MemorySegment valuesSeg,
                 PType endsPtype, long numRuns, long offset, long n, MemorySegment out) {
+            long endsCap = SegmentBroadcast.capacity(endsSeg, endsPtype.byteSize());
+            long valCap = SegmentBroadcast.capacity(valuesSeg, 4);
             long logicalPos = 0L, outPos = 0L;
             for (long run = 0; run < numRuns && outPos < n; run++) {
-                long runEnd = readUnsigned(endsSeg, run, endsPtype);
-                int rawValue = valuesSeg.get(PTypeIO.LE_INT, run * 4);
+                long runEnd = readUnsigned(endsSeg, run % endsCap, endsPtype);
+                int rawValue = valuesSeg.get(PTypeIO.LE_INT, (run % valCap) * 4);
                 long writeEnd = Math.min(runEnd, offset + n);
                 for (long lp = Math.max(logicalPos, offset); lp < writeEnd; lp++, outPos++) {
                     out.set(PTypeIO.LE_INT, outPos * 4, rawValue);
@@ -245,10 +251,12 @@ public final class RunEndEncoding implements Encoding {
 
         private static void expandLong(MemorySegment endsSeg, MemorySegment valuesSeg,
                 PType endsPtype, long numRuns, long offset, long n, MemorySegment out) {
+            long endsCap = SegmentBroadcast.capacity(endsSeg, endsPtype.byteSize());
+            long valCap = SegmentBroadcast.capacity(valuesSeg, 8);
             long logicalPos = 0L, outPos = 0L;
             for (long run = 0; run < numRuns && outPos < n; run++) {
-                long runEnd = readUnsigned(endsSeg, run, endsPtype);
-                long rawValue = valuesSeg.get(PTypeIO.LE_LONG, run * 8);
+                long runEnd = readUnsigned(endsSeg, run % endsCap, endsPtype);
+                long rawValue = valuesSeg.get(PTypeIO.LE_LONG, (run % valCap) * 8);
                 long writeEnd = Math.min(runEnd, offset + n);
                 for (long lp = Math.max(logicalPos, offset); lp < writeEnd; lp++, outPos++) {
                     out.set(PTypeIO.LE_LONG, outPos * 8, rawValue);
@@ -263,13 +271,14 @@ public final class RunEndEncoding implements Encoding {
                 DType dtype, SegmentAllocator arena
         ) {
             MemorySegment endsSeg = ArraySegments.of(endsArr);
+            long endsCap = SegmentBroadcast.capacity(endsSeg, endsPtype.byteSize());
             long numBytes = (n + 7) >>> 3;
             MemorySegment out = arena.allocate(numBytes);
 
             long outIdx = 0;
             long logicalPos = 0;
             for (long run = 0; run < numRuns && outIdx < n; run++) {
-                long runEnd = readUnsigned(endsSeg, run, endsPtype);
+                long runEnd = readUnsigned(endsSeg, run % endsCap, endsPtype);
                 boolean val = valuesArr.getBoolean(run);
                 long lo = Math.max(logicalPos, offset);
                 long hi = Math.min(runEnd, offset + n);
@@ -291,6 +300,7 @@ public final class RunEndEncoding implements Encoding {
                 DType dtype, SegmentAllocator arena
         ) {
             MemorySegment endsSeg = ArraySegments.of(endsArr);
+            long endsCap = SegmentBroadcast.capacity(endsSeg, endsPtype.byteSize());
             MemorySegment valBytes = valuesArr.bytesSegment();
             MemorySegment valOffsets = valuesArr.offsetsSegment();
             PType valOffPtype = valuesArr.offsetsPtype();
@@ -298,7 +308,7 @@ public final class RunEndEncoding implements Encoding {
             long totalBytes = 0;
             long logicalPos = 0;
             for (long run = 0; run < numRuns; run++) {
-                long runEnd = readUnsigned(endsSeg, run, endsPtype);
+                long runEnd = readUnsigned(endsSeg, run % endsCap, endsPtype);
                 long lo = Math.max(logicalPos, offset);
                 long hi = Math.min(runEnd, offset + n);
                 long count = Math.max(0, hi - lo);
@@ -316,7 +326,7 @@ public final class RunEndEncoding implements Encoding {
             long outIdx = 0;
             logicalPos = 0;
             for (long run = 0; run < numRuns && outIdx < n; run++) {
-                long runEnd = readUnsigned(endsSeg, run, endsPtype);
+                long runEnd = readUnsigned(endsSeg, run % endsCap, endsPtype);
                 long lo = Math.max(logicalPos, offset);
                 long hi = Math.min(runEnd, offset + n);
                 if (hi > lo) {
