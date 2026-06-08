@@ -112,6 +112,7 @@ public final class VortexInspectorTui {
         private final ConcurrentMap<InspectorTree.Node, byte[]> hexCache = new ConcurrentHashMap<>();
         private final Set<InspectorTree.Node> hexInFlight = ConcurrentHashMap.newKeySet();
         private final ConcurrentMap<String, DataState> dataCache = new ConcurrentHashMap<>();
+        private final ConcurrentMap<InspectorTree.Node, DataState> dictCache = new ConcurrentHashMap<>();
         private final Map<InspectorTree.Node, String> columnOf = new HashMap<>();
         private volatile String lastError;
         private long tick;
@@ -433,6 +434,22 @@ public final class VortexInspectorTui {
                     lines.add("  max: " + p.stats().max());
                 }
             }
+            if (layout.isDict() && layout.children().size() >= 1) {
+                DataState dictState = loadDictPreview(node);
+                lines.add("");
+                switch (dictState) {
+                    case DataState.Pending ignored ->
+                            lines.add("Dictionary:  " + SPINNER[(int) (tick % SPINNER.length)] + " loading...");
+                    case DataState.Failed(String msg) ->
+                            lines.add("Dictionary:  ! " + msg);
+                    case DataState.Loaded(List<String> values) -> {
+                        lines.add("Dictionary (" + values.size() + " entries):");
+                        for (int i = 0; i < values.size(); i++) {
+                            lines.add(String.format("  [%2d] %s", i, values.get(i)));
+                        }
+                    }
+                }
+            }
             if (col != null) {
                 DataState state = loadDataPreview(col);
                 lines.add("");
@@ -472,6 +489,66 @@ public final class VortexInspectorTui {
             }
             startDataLoad(columnName);
             return dataCache.getOrDefault(columnName, DataState.PENDING);
+        }
+
+        private DataState loadDictPreview(InspectorTree.Node dictNode) {
+            DataState existing = dictCache.get(dictNode);
+            if (existing != null) {
+                return existing;
+            }
+            if (dictCache.putIfAbsent(dictNode, DataState.PENDING) != null) {
+                return dictCache.get(dictNode);
+            }
+            if (worker == null) {
+                runDictLoad(dictNode);
+            } else {
+                worker.submit(() -> runDictLoad(dictNode));
+            }
+            return dictCache.getOrDefault(dictNode, DataState.PENDING);
+        }
+
+        private void runDictLoad(InspectorTree.Node dictNode) {
+            try {
+                Layout values = dictNode.layout().children().get(0);
+                DType dtype = columnDtypeFor(dictNode);
+                if (dtype == null) {
+                    dictCache.put(dictNode, new DataState.Loaded(List.of()));
+                    return;
+                }
+                try (java.lang.foreign.Arena arena = java.lang.foreign.Arena.ofConfined()) {
+                    int segIdx = values.segments().getFirst();
+                    SegmentSpec spec = tree.segmentSpecs().get(segIdx);
+                    java.lang.foreign.MemorySegment seg = handle.slice(spec.offset(), spec.length());
+                    io.github.dfa1.vortex.core.array.Array arr =
+                            new io.github.dfa1.vortex.encoding.FlatSegmentDecoder(handle.registry())
+                                    .decode(seg, handle.footer().arraySpecs(),
+                                            dtype, values.rowCount(), arena);
+                    int n = (int) Math.min(arr.length(), DATA_PREVIEW_ROWS);
+                    List<String> out = new ArrayList<>(n);
+                    for (int i = 0; i < n; i++) {
+                        out.add(formatValue(arr, i));
+                    }
+                    dictCache.put(dictNode, new DataState.Loaded(List.copyOf(out)));
+                }
+            } catch (RuntimeException e) {
+                dictCache.put(dictNode, new DataState.Failed(messageOf(e)));
+                lastError = "dict: " + messageOf(e);
+            }
+        }
+
+        private DType columnDtypeFor(InspectorTree.Node node) {
+            String col = columnOf.get(node);
+            DType root = tree.dtype();
+            if (col == null) {
+                return root;
+            }
+            if (root instanceof DType.Struct s) {
+                int idx = s.fieldNames().indexOf(col);
+                if (idx >= 0) {
+                    return s.fieldTypes().get(idx);
+                }
+            }
+            return root;
         }
 
         private void startDataLoad(String columnName) {

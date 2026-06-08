@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.io;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.Footer;
 import io.github.dfa1.vortex.core.Layout;
+import io.github.dfa1.vortex.encoding.EncodingRegistry;
 import io.github.dfa1.vortex.scan.ScanIterator;
 import io.github.dfa1.vortex.scan.ScanOptions;
 
@@ -43,6 +44,17 @@ public interface VortexHandle extends Closeable {
     MemorySegment slice(long offset, long length);
 
     ScanIterator scan(ScanOptions options);
+
+    /// Returns the {@link EncodingRegistry} this handle was opened with.
+    ///
+    /// <p><strong>Internal escape hatch.</strong> Exposed for tooling
+    /// (e.g. the inspector's dictionary preview) that needs to decode an
+    /// internal subtree node directly via {@link io.github.dfa1.vortex.encoding.FlatSegmentDecoder}.
+    /// Not part of the supported stability contract; signatures may change
+    /// without deprecation.
+    ///
+    /// @return the registry used to resolve encoding ids during scan
+    EncodingRegistry registry();
 
     @Override
     void close();
