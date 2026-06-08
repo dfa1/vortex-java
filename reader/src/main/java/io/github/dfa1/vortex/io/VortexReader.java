@@ -163,6 +163,11 @@ public final class VortexReader implements VortexHandle {
         return new ScanIterator(this, registry, options);
     }
 
+    @Override
+    public EncodingRegistry registry() {
+        return registry;
+    }
+
     /// Aggregated per-column statistics (global min/max across all chunks).
     /// Returns an empty map if the root layout is not a struct.
     /// Columns with no embedded stats return [ArrayStats#empty()].

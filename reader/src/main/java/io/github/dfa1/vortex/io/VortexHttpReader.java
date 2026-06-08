@@ -241,6 +241,11 @@ public final class VortexHttpReader implements VortexHandle {
     }
 
     @Override
+    public EncodingRegistry registry() {
+        return registry;
+    }
+
+    @Override
     public void close() {
         arena.close();
     }
