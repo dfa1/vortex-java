@@ -39,6 +39,21 @@ public final class Extensions {
         return LocalDate.ofEpochDay(epochDay(array, i));
     }
 
+    /// Decodes a {@code vortex.date} cell directly from its storage array.
+    ///
+    /// Use when the caller has already established (via column metadata) that
+    /// the array represents a date, but the Array itself no longer carries the
+    /// Extension dtype - the case after {@code vortex.ext}'s decoder unwraps
+    /// the storage child and returns it with its primitive dtype.
+    ///
+    /// @param storage signed-integer storage array
+    /// @param i       row index, {@code 0 <= i < storage.length()}
+    /// @return decoded date
+    /// @throws VortexException if {@code storage} isn't an integer primitive
+    public static LocalDate localDateFromStorage(Array storage, long i) {
+        return LocalDate.ofEpochDay(epochDay(storage, i));
+    }
+
     private static long epochDay(Array array, long i) {
         return switch (array) {
             case ByteArray a -> a.getByte(i);
