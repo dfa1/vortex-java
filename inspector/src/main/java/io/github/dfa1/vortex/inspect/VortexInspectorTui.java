@@ -2,10 +2,22 @@ package io.github.dfa1.vortex.inspect;
 
 import io.github.dfa1.vortex.core.Layout;
 import io.github.dfa1.vortex.core.SegmentSpec;
+import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.BoolArray;
+import io.github.dfa1.vortex.core.array.ByteArray;
+import io.github.dfa1.vortex.core.array.DoubleArray;
+import io.github.dfa1.vortex.core.array.FloatArray;
+import io.github.dfa1.vortex.core.array.IntArray;
+import io.github.dfa1.vortex.core.array.LongArray;
+import io.github.dfa1.vortex.core.array.ShortArray;
+import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.inspect.term.Ansi;
 import io.github.dfa1.vortex.inspect.term.Key;
 import io.github.dfa1.vortex.inspect.term.RawTerminal;
 import io.github.dfa1.vortex.io.VortexHandle;
+import io.github.dfa1.vortex.scan.Chunk;
+import io.github.dfa1.vortex.scan.ScanIterator;
+import io.github.dfa1.vortex.scan.ScanOptions;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -36,29 +48,37 @@ public final class VortexInspectorTui {
     }
 
     /// Builds an inspector tree (reporting progress on each segment peek)
-    /// and runs the interactive viewer until quit. Useful for remote files
-    /// where {@link InspectorTree#build} can take seconds.
+    /// and runs the interactive viewer until quit. The TUI now uses the
+    /// shallow builder so the screen is interactive immediately; encoding,
+    /// stats and data previews are fetched lazily as the user navigates.
+    /// The {@code progress} parameter is retained for source compatibility
+    /// but is no longer invoked - shallow build does no peeks.
     ///
     /// @param handle   open Vortex file handle
-    /// @param progress progress sink, called once per Flat segment peeked
+    /// @param progress unused; kept for API stability
     /// @throws IOException if the terminal cannot be initialized
     public static void show(VortexHandle handle, InspectorTree.Progress progress) throws IOException {
-        InspectorTree tree = InspectorTree.build(handle, progress);
+        InspectorTree tree = InspectorTree.buildShallow(handle);
         try (RawTerminal term = RawTerminal.open()) {
             new Loop(term, tree, handle).run();
         }
     }
 
     private static final class Loop {
-        /// Bytes to display per Flat segment in the hex pane. 256 lines up to
-        /// 16 rows of 16, which fits comfortably under the existing details.
+        /// Bytes shown per Flat segment when falling back to the raw hex view.
         private static final int HEX_PREVIEW_BYTES = 256;
+
+        /// Decoded values shown per column in the data view.
+        private static final int DATA_PREVIEW_ROWS = 32;
 
         private final RawTerminal term;
         private final InspectorTree tree;
         private final VortexHandle handle;
         private final Set<InspectorTree.Node> expanded = new HashSet<>();
+        private final Map<InspectorTree.Node, InspectorTree.Peek> peekCache = new HashMap<>();
         private final Map<InspectorTree.Node, byte[]> hexCache = new HashMap<>();
+        private final Map<String, List<String>> dataCache = new HashMap<>();
+        private final Map<InspectorTree.Node, String> columnOf = new HashMap<>();
         private int selected;
         private int scrollOffset;
 
@@ -67,6 +87,33 @@ public final class VortexInspectorTui {
             this.tree = tree;
             this.handle = handle;
             this.expanded.add(tree.root());
+            indexColumns(tree.root());
+        }
+
+        private void indexColumns(InspectorTree.Node root) {
+            if (!root.layout().isStruct()) {
+                return;
+            }
+            for (InspectorTree.Node colNode : root.children()) {
+                colNode.fieldName().ifPresent(name -> tagSubtree(colNode, name));
+            }
+        }
+
+        private void tagSubtree(InspectorTree.Node node, String columnName) {
+            columnOf.put(node, columnName);
+            for (InspectorTree.Node child : node.children()) {
+                tagSubtree(child, columnName);
+            }
+        }
+
+        private InspectorTree.Peek peek(InspectorTree.Node node) {
+            return peekCache.computeIfAbsent(node, n -> {
+                try {
+                    return InspectorTree.peek(n, handle);
+                } catch (RuntimeException e) {
+                    return InspectorTree.Peek.EMPTY;
+                }
+            });
         }
 
         void run() throws IOException {
@@ -254,8 +301,13 @@ public final class VortexInspectorTui {
         private List<String> detailLines(InspectorTree.Node node) {
             List<String> lines = new ArrayList<>();
             Layout layout = node.layout();
-            lines.add("Encoding:  " + layout.encodingId());
+            InspectorTree.Peek p = peek(node);
+            lines.add("Encoding:  " + (p.encoding() != null ? p.encoding() : layout.encodingId()));
             node.fieldName().ifPresent(name -> lines.add("Field:     " + name));
+            String col = columnOf.get(node);
+            if (col != null && !node.fieldName().isPresent()) {
+                lines.add("Column:    " + col);
+            }
             lines.add("Rows:      " + layout.rowCount());
             lines.add("Children:  " + layout.children().size());
             if (!layout.segments().isEmpty()) {
@@ -274,24 +326,26 @@ public final class VortexInspectorTui {
             } else {
                 lines.add("Segments:  0");
             }
-            if (!node.usedEncodings().isEmpty()) {
-                lines.add("");
-                lines.add("Used encodings:");
-                for (String enc : node.usedEncodings()) {
-                    lines.add("  - " + enc);
-                }
-            }
-            if (node.stats().min() != null || node.stats().max() != null) {
+            if (p.stats().min() != null || p.stats().max() != null) {
                 lines.add("");
                 lines.add("Stats:");
-                if (node.stats().min() != null) {
-                    lines.add("  min: " + node.stats().min());
+                if (p.stats().min() != null) {
+                    lines.add("  min: " + p.stats().min());
                 }
-                if (node.stats().max() != null) {
-                    lines.add("  max: " + node.stats().max());
+                if (p.stats().max() != null) {
+                    lines.add("  max: " + p.stats().max());
                 }
             }
-            if (layout.isFlat() && !layout.segments().isEmpty()) {
+            if (col != null) {
+                List<String> values = loadDataPreview(col);
+                if (!values.isEmpty()) {
+                    lines.add("");
+                    lines.add("Data (column '" + col + "', first " + values.size() + " rows):");
+                    for (int i = 0; i < values.size(); i++) {
+                        lines.add(String.format("  [%2d] %s", i, values.get(i)));
+                    }
+                }
+            } else if (layout.isFlat() && !layout.segments().isEmpty()) {
                 byte[] preview = loadHexPreview(node);
                 if (preview.length > 0) {
                     lines.add("");
@@ -305,6 +359,62 @@ public final class VortexInspectorTui {
                 }
             }
             return lines;
+        }
+
+        private List<String> loadDataPreview(String columnName) {
+            return dataCache.computeIfAbsent(columnName, name -> {
+                try {
+                    ScanOptions opts = ScanOptions.columns(name).withLimit(DATA_PREVIEW_ROWS);
+                    try (ScanIterator it = handle.scan(opts)) {
+                        if (!it.hasNext()) {
+                            return List.of();
+                        }
+                        try (Chunk chunk = it.next()) {
+                            Array array = chunk.columns().get(name);
+                            if (array == null) {
+                                return List.of();
+                            }
+                            int n = (int) Math.min(array.length(), DATA_PREVIEW_ROWS);
+                            List<String> out = new ArrayList<>(n);
+                            for (int i = 0; i < n; i++) {
+                                out.add(formatValue(array, i));
+                            }
+                            return List.copyOf(out);
+                        }
+                    }
+                } catch (RuntimeException e) {
+                    return List.of();
+                }
+            });
+        }
+
+        private static String formatValue(Array array, int i) {
+            return switch (array) {
+                case LongArray a -> Long.toString(a.getLong(i));
+                case IntArray a -> Integer.toString(a.getInt(i));
+                case ShortArray a -> Short.toString(a.getShort(i));
+                case ByteArray a -> Byte.toString(a.getByte(i));
+                case DoubleArray a -> Double.toString(a.getDouble(i));
+                case FloatArray a -> Float.toString(a.getFloat(i));
+                case BoolArray a -> Boolean.toString(a.getBoolean(i));
+                case VarBinArray a -> a.dtype() instanceof io.github.dfa1.vortex.core.DType.Utf8
+                        ? "\"" + a.getString(i) + "\""
+                        : bytesToShortHex(a.getBytes(i));
+                default -> "<" + array.getClass().getSimpleName() + ">";
+            };
+        }
+
+        private static String bytesToShortHex(byte[] bytes) {
+            int n = Math.min(bytes.length, 16);
+            StringBuilder sb = new StringBuilder(n * 3 + 2);
+            sb.append("0x");
+            for (int i = 0; i < n; i++) {
+                sb.append(String.format("%02x", bytes[i] & 0xff));
+            }
+            if (bytes.length > n) {
+                sb.append("...");
+            }
+            return sb.toString();
         }
 
         private byte[] loadHexPreview(InspectorTree.Node node) {
