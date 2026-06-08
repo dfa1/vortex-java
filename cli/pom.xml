@@ -75,6 +75,23 @@
 							<transformers>
 								<transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
 									<mainClass>io.github.dfa1.vortex.cli.VortexCli</mainClass>
+									<manifestEntries>
+										<!--
+											Enables the FFM downcalls in inspector/term/PosixTerminal
+											+ WindowsTerminal (tcgetattr, cfmakeraw, ioctl,
+											SetConsoleMode) without the user having to pass the
+											enable-native-access flag on the command line.
+											Per JEP 472 (finalized in JDK 25), the JVM otherwise
+											emits a "restricted method called" warning on each first
+											call and threatens to block restricted methods entirely
+											in a future release; this manifest attribute is the
+											standard way for an uber-jar to opt in once at build
+											time. Only the cli uber-jar gets this; vortex-core and
+											vortex-reader consumers still have to enable native
+											access themselves for their own integrations.
+										-->
+										<Enable-Native-Access>ALL-UNNAMED</Enable-Native-Access>
+									</manifestEntries>
 								</transformer>
 								<transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer" />
 							</transformers>
