@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.cli;
 
 import io.github.dfa1.vortex.inspect.InspectorTree;
+import io.github.dfa1.vortex.inspect.IoWorker;
 import io.github.dfa1.vortex.inspect.VortexInspectorTui;
 import io.github.dfa1.vortex.io.VortexHandle;
 import io.github.dfa1.vortex.io.VortexHttpReader;
@@ -12,6 +13,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.atomic.AtomicReference;
 
 final class TuiCommand {
 
@@ -23,18 +25,51 @@ final class TuiCommand {
             System.err.println("usage: tui <file.vortex | http(s)://url>");
             return ExitStatus.USAGE_ERROR;
         }
-        try (VortexHandle handle = open(args[1])) {
+        try (IoWorker worker = new IoWorker("vortex-tui-io")) {
+            VortexHandle handle = openOnWorker(worker, args[1]);
             if (handle == null) {
                 return ExitStatus.FILE_NOT_FOUND;
             }
-            VortexInspectorTui.show(handle, progressBar(System.err));
+            try {
+                VortexInspectorTui.show(handle, worker, progressBar(System.err));
+            } finally {
+                closeOnWorker(worker, handle);
+            }
             return ExitStatus.OK;
-        } catch (IOException | RuntimeException e) {
+        } catch (IOException | RuntimeException | InterruptedException e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             System.err.println("error: " + describe(e));
             if (System.getenv("VORTEX_DEBUG") != null) {
                 e.printStackTrace(System.err);
             }
             return ExitStatus.ERROR;
+        }
+    }
+
+    private static VortexHandle openOnWorker(IoWorker worker, String target)
+            throws InterruptedException, IOException {
+        AtomicReference<VortexHandle> handle = new AtomicReference<>();
+        AtomicReference<IOException> failure = new AtomicReference<>();
+        worker.runAndAwait(() -> {
+            try {
+                handle.set(open(target));
+            } catch (IOException e) {
+                failure.set(e);
+            }
+        });
+        if (failure.get() != null) {
+            throw failure.get();
+        }
+        return handle.get();
+    }
+
+    private static void closeOnWorker(IoWorker worker, VortexHandle handle) {
+        try {
+            worker.runAndAwait(handle::close);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 
