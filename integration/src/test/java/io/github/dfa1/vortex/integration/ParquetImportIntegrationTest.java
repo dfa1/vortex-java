@@ -14,6 +14,7 @@ import io.github.dfa1.vortex.scan.ScanOptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -164,11 +165,16 @@ class ParquetImportIntegrationTest {
         if (java.nio.file.Files.exists(cached)) {
             src = cached;
         } else {
-            assumeNetworkAvailable();
+            // CloudFront rate-limits / blocks some egress IPs (notably GitHub Actions
+            // runners → 403). Skip rather than fail when the download isn't possible.
             src = tmp.resolve("yellow_tripdata_2024-01.parquet");
             try (var in = URI.create("https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2024-01.parquet")
                     .toURL().openStream()) {
                 java.nio.file.Files.copy(in, src);
+            } catch (IOException e) {
+                org.junit.jupiter.api.Assumptions.assumeTrue(false,
+                        "could not download taxi parquet: " + e.getMessage());
+                return;
             }
         }
         Path vortex = tmp.resolve("taxi.vortex");
