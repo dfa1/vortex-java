@@ -65,19 +65,69 @@ Bootstrap sequence on open:
 4. Parse Footer (segment table), DType (schema), Layout (tree).
 5. Scans resolve Layout leaves to `SegmentSpec` → slice the mmap region zero-copy.
 
-Layout tree shape (typical):
+### Layout nodes
+
+Every `Layout` node carries five fields: `encodingId`, `rowCount`, `metadata` (opaque
+bytes for the node type), `children` (sub-layouts), `segments` (indices into the
+file-level `SegmentSpec[]` table). Five node types exist today:
+
+| ID              | Constant  | Children  | Role |
+|-----------------|-----------|-----------|------|
+| `vortex.struct` | `STRUCT`  | N         | Row type. One child per column. Root of every file. |
+| `vortex.stats`  | `ZONED`   | 1         | Wraps a child layout and carries per-chunk min/max as zone maps. Pruned at scan time when filter predicate falls outside `[min, max]`. |
+| `vortex.chunked`| `CHUNKED` | M (+1)    | Row-group sequence. Optional stats child at index 0 when `metadata[0] == 1` (per-chunk stats sidecar); remaining children are the data chunks. |
+| `vortex.dict`   | `DICT`    | 2         | Dictionary-encoded leaf. `children[0]` = values layout, `children[1]` = codes layout. `metadata` holds the codes `PType` (varint, proto field 1). Decoder gathers values by code. |
+| `vortex.flat`   | `FLAT`    | 0         | Leaf. References one `SegmentSpec` via `segments[0]`. Decoded by the encoding named in the segment's `arraySpec`, not by `encodingId` itself — see below. |
+
+### Layout vs. array encoding
+
+Two encoding-ID namespaces, easy to confuse:
+
+- **Layout encoding** — node type in the layout tree (`vortex.flat`, `vortex.chunked`,
+  `vortex.struct`, `vortex.stats`, `vortex.dict`). Tells the reader *how to navigate*.
+- **Array encoding** — bytes-on-disk codec (`vortex.primitive`, `fastlanes.bitpacked`,
+  `vortex.alp`, `vortex.alp_rd`, `vortex.for`, `vortex.runend`, `vortex.varbin`,
+  `vortex.bool`, `vortex.constant`, `pco`, `zstd`, `fsst`, …). Tells the reader
+  *how to decode the bytes* a `Flat` leaf points at.
+
+A `Flat` leaf's `segments[0]` resolves to a `SegmentSpec` (offset + length in the file)
+plus an `ArraySpec` (the array-encoding ID + child segment indices for cascaded codecs).
+`EncodingRegistry` looks up the array encoding and calls `decode(DecodeContext)`.
+
+### Typical trees
+
+Plain primitive column (e.g. `Int64`, single chunk):
 
 ```
- Struct                                  ← one child per column
-   └─ Zoned(stats)                       ← per-chunk min/max for zone-map pruning
-        └─ Chunked                       ← sequence of row groups
-             ├─ Flat (encoding=…)        ← single encoded segment on disk
-             ├─ Flat (encoding=…)
+ Struct
+   └─ Zoned(stats)
+        └─ Chunked              ← rowCount = total rows; one Flat per chunk
+             ├─ Flat → SegmentSpec → fastlanes.bitpacked
+             ├─ Flat → SegmentSpec → fastlanes.bitpacked
              └─ ...
 ```
 
-`Flat` leaves carry an `encoding` ID (e.g. `vortex.flat`, `fastlanes.bitpacked`,
-`vortex.alp`); `EncodingRegistry` maps ID → decoder.
+Low-cardinality string column with dict layout:
+
+```
+ Struct
+   └─ Zoned(stats)
+        └─ Chunked
+             └─ Dict
+                  ├─ values:  Flat → SegmentSpec → vortex.varbin   (the unique strings)
+                  └─ codes:   Flat → SegmentSpec → fastlanes.bitpacked  (one code per row)
+```
+
+### Pruning by zone maps
+
+`vortex.stats` is the pruning hook. At scan time, when `ScanOptions` carries a
+predicate, the reader walks `Zoned` nodes first: it inspects the child `Chunked`'s
+per-chunk min/max sidecar, drops chunks whose `[min, max]` cannot satisfy the predicate,
+and only opens segments for survivors. Smaller chunks (default 131 072 rows) →
+finer-grained pruning than Parquet's row-group granularity (typically 1 M rows).
+
+When `WriteOptions.enableZoneMaps` is false, the writer omits the wrapping `Zoned` node
+and the chunk-0 stats child — the tree collapses to `Struct → Chunked → [Flat …]`.
 
 ## Memory model
 
