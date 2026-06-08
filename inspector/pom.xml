@@ -28,10 +28,6 @@
 			<groupId>com.google.flatbuffers</groupId>
 			<artifactId>flatbuffers-java</artifactId>
 		</dependency>
-		<dependency>
-			<groupId>com.googlecode.lanterna</groupId>
-			<artifactId>lanterna</artifactId>
-		</dependency>
 
 		<!-- testing -->
 		<dependency>

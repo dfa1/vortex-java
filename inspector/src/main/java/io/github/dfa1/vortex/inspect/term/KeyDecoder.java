@@ -1,0 +1,89 @@
+package io.github.dfa1.vortex.inspect.term;
+
+import java.io.IOException;
+import java.io.InputStream;
+
+/// Translates raw stdin bytes into [Key] events.
+///
+/// Recognises common CSI sequences emitted by xterm-compatible terminals:
+/// {@code ESC [ A/B/C/D} for arrows, {@code ESC [ 5~ / 6~} for PgUp/PgDn,
+/// {@code ESC [ H / F} and {@code ESC [ 1~ / 4~} for Home/End. Any unrecognised
+/// escape sequence is dropped and decoding continues with the next byte.
+///
+/// Stateless across reads - call [#next(InputStream)] for each event.
+public final class KeyDecoder {
+
+    private KeyDecoder() {
+    }
+
+    /// Reads the next key from {@code in}, blocking until at least one byte arrives.
+    ///
+    /// @param in raw input stream (typically {@code System.in} in cbreak mode)
+    /// @return the decoded key, or [Key.Eof] if the stream is at EOF
+    /// @throws IOException if the underlying read fails
+    public static Key next(InputStream in) throws IOException {
+        int b = in.read();
+        if (b < 0) {
+            return Key.Eof.INSTANCE;
+        }
+        if (b == 0x1B) {
+            return readAfterEsc(in);
+        }
+        if (b == '\r' || b == '\n') {
+            return Key.Enter.INSTANCE;
+        }
+        return new Key.Char((char) b);
+    }
+
+    private static Key readAfterEsc(InputStream in) throws IOException {
+        // Bare ESC: no follow-up byte available within a short window.
+        // We approximate by peeking via available(); proper terminal IO would
+        // use a select() / VTIME timer, but this is enough for q/Esc quit.
+        if (in.available() == 0) {
+            return Key.Escape.INSTANCE;
+        }
+        int b1 = in.read();
+        if (b1 != '[' && b1 != 'O') {
+            return Key.Escape.INSTANCE;
+        }
+        int b2 = in.read();
+        return switch (b2) {
+            case 'A' -> Key.ArrowUp.INSTANCE;
+            case 'B' -> Key.ArrowDown.INSTANCE;
+            case 'C' -> Key.ArrowRight.INSTANCE;
+            case 'D' -> Key.ArrowLeft.INSTANCE;
+            case 'H' -> Key.Home.INSTANCE;
+            case 'F' -> Key.End.INSTANCE;
+            default -> readTildeSequence(in, b2);
+        };
+    }
+
+    private static Key readTildeSequence(InputStream in, int firstDigit) throws IOException {
+        if (firstDigit < '0' || firstDigit > '9') {
+            return Key.Escape.INSTANCE;
+        }
+        int digit = firstDigit - '0';
+        int next = in.read();
+        if (next == -1) {
+            return Key.Eof.INSTANCE;
+        }
+        // Two-digit codes like ESC [ 15~; collapse to single digit by ignoring extras.
+        while (next >= '0' && next <= '9') {
+            digit = digit * 10 + (next - '0');
+            next = in.read();
+            if (next == -1) {
+                return Key.Eof.INSTANCE;
+            }
+        }
+        if (next != '~') {
+            return Key.Escape.INSTANCE;
+        }
+        return switch (digit) {
+            case 1, 7 -> Key.Home.INSTANCE;
+            case 4, 8 -> Key.End.INSTANCE;
+            case 5 -> Key.PageUp.INSTANCE;
+            case 6 -> Key.PageDown.INSTANCE;
+            default -> Key.Escape.INSTANCE;
+        };
+    }
+}
