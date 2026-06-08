@@ -72,6 +72,39 @@ class ExtensionsTest {
     }
 
     @Test
+    void localDate_withExplicitExtAndStorage_decodes() {
+        // Given — ExtEncoding.decode strips the extension wrapper before the
+        // TUI gets the array, so the caller threads the declared dtype back
+        // in. This overload must still verify the extension id rather than
+        // trust any caller-supplied storage as a date.
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment buf = arena.allocate(4);
+            buf.set(ValueLayout.JAVA_INT_UNALIGNED, 0, 9538);
+            IntArray storage = new IntArray(I32, 1, buf);
+            DType.Extension ext = new DType.Extension(Extensions.DATE, I32, null, false);
+
+            // When / Then
+            assertThat(Extensions.localDate(ext, storage, 0))
+                    .isEqualTo(LocalDate.of(1996, 2, 12));
+        }
+    }
+
+    @Test
+    void localDate_withWrongExtensionId_throws() {
+        // Given — passing some other extension's storage array must not be
+        // silently interpreted as a date
+        try (Arena arena = Arena.ofConfined()) {
+            IntArray storage = new IntArray(I32, 1, arena.allocate(4));
+            DType.Extension notDate = new DType.Extension("vortex.something", I32, null, false);
+
+            // When / Then
+            assertThatThrownBy(() -> Extensions.localDate(notDate, storage, 0))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("non-date extension");
+        }
+    }
+
+    @Test
     void localDate_unsupportedStorage_throws() {
         // Given — a date dtype on top of a varbin array makes no semantic sense
         try (Arena arena = Arena.ofConfined()) {

@@ -655,7 +655,7 @@ public final class VortexInspectorTui {
             if (declared instanceof DType.Extension ext
                     && Extensions.DATE.equals(ext.extensionId())) {
                 try {
-                    return Extensions.localDateFromStorage(array, i).toString();
+                    return Extensions.localDate(ext, array, i).toString();
                 } catch (RuntimeException e) {
                     // fall through to generic rendering on shape mismatch
                 }
