@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1780866233933,
+  "lastUpdate": 1780955199858,
   "repoUrl": "https://github.com/dfa1/vortex-java",
   "entries": {
     "Benchmark": [
@@ -384,6 +384,88 @@ window.BENCHMARK_DATA = {
           {
             "name": "io.github.dfa1.vortex.performance.RustVsJavaWriteBenchmark.jniWrite",
             "value": 0.31563548376065786,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Davide Angelocola",
+            "username": "dfa1",
+            "email": "davide.angelocola@gmail.com"
+          },
+          "committer": {
+            "name": "Davide Angelocola",
+            "username": "dfa1",
+            "email": "davide.angelocola@gmail.com"
+          },
+          "id": "ab3ca3fb9082018827669f54d48ebb4cf3435a58",
+          "message": "perf(bitpacked): hoist per-row bookkeeping out of unpackLoop64 block loop\n\nInner row body computed seven row-dependent quantities (currWord, nextWord,\nshift, remainingBits, currentBits, loMask, hiMask, plus FL_ORDER lookup)\nfrom `row` and `bitWidth` on every iteration. `bitWidth` is constant for\nthe duration of unpackLoop64, so these only need to be computed once.\n\nFor a 10M-row I64 column at bitWidth ~20, this drops 7 × 64 × ~9750 blocks\n≈ 4.4M ops out of the hot path. JFR shows BitpackedEncoding$Decoder.unpackLoop64\nas the largest visible Java frame (31% of RUNNABLE time on\nRustVsJavaReadBenchmark.javaReadVolume).\n\nPre-compute eight 64-entry int[]/long[] tables at method entry, look up\nper row inside the block loop. Inner lane loop body is unchanged\n(buf.get / >>> / & / out.set).\n\nBench (M5, JDK 25, 5 warmup × 3s + 10 measurement × 5s, fork 1):\n\n  RustVsJavaReadBenchmark.javaReadVolume\n    before: 109.319 ± 1.042 ops/s\n    after:  113.526 ± 1.033 ops/s   (+3.8 %)\n\nError bars don't overlap so the gain is real, just modest. Vector API\nrewrite of the inner lane loop (TODO line ~) would be the next material\nstep; this is a no-risk micro-cleanup pending that work.\n\nCo-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>",
+          "timestamp": "2026-06-08T21:44:44Z",
+          "url": "https://github.com/dfa1/vortex-java/commit/ab3ca3fb9082018827669f54d48ebb4cf3435a58"
+        },
+        "date": 1780955198968,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.javaReadCascading",
+            "value": 33.31412861587643,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.javaReadClose",
+            "value": 28.03234639559291,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.javaReadSymbol",
+            "value": 39.265354990617,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.javaReadVolume",
+            "value": 42.37086578959571,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.jniReadClose",
+            "value": 25.986498988974603,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.jniReadSymbol",
+            "value": 4.595693055019596,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.jniReadVolume",
+            "value": 26.655738328332063,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaWriteBenchmark.javaWrite",
+            "value": 0.6439435691730853,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaWriteBenchmark.javaWriteCascading",
+            "value": 0.22850632349248337,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaWriteBenchmark.jniWrite",
+            "value": 0.2965529220075181,
             "unit": "ops/s",
             "extra": "iterations: 3\nforks: 1\nthreads: 1"
           }
