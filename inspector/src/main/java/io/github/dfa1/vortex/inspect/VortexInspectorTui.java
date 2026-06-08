@@ -114,6 +114,7 @@ public final class VortexInspectorTui {
         private final ConcurrentMap<String, DataState> dataCache = new ConcurrentHashMap<>();
         private final ConcurrentMap<InspectorTree.Node, DataState> dictCache = new ConcurrentHashMap<>();
         private final Map<InspectorTree.Node, String> columnOf = new HashMap<>();
+        private final Set<InspectorTree.Node> statsChildren = new HashSet<>();
         private volatile String lastError;
         private long tick;
         private int selected;
@@ -126,7 +127,27 @@ public final class VortexInspectorTui {
             this.worker = worker;
             this.expanded.add(tree.root());
             indexColumns(tree.root());
+            indexStatsChildren(tree.root());
             prefetchTopColumns();
+        }
+
+        private void indexStatsChildren(InspectorTree.Node node) {
+            Layout layout = node.layout();
+            if (layout.isZoned() && node.children().size() >= 2) {
+                // Zoned: child[0] = data, child[1] = per-chunk stats payload
+                statsChildren.add(node.children().get(1));
+            } else if (layout.isChunked() && hasLeadingStats(layout) && !node.children().isEmpty()) {
+                // Chunked with metadata[0] == 1: child[0] is the stats payload
+                statsChildren.add(node.children().get(0));
+            }
+            for (InspectorTree.Node child : node.children()) {
+                indexStatsChildren(child);
+            }
+        }
+
+        private static boolean hasLeadingStats(Layout layout) {
+            java.nio.ByteBuffer meta = layout.metadata();
+            return meta != null && meta.hasRemaining() && meta.get(meta.position()) == 1;
         }
 
         private void prefetchTopColumns() {
@@ -377,8 +398,9 @@ public final class VortexInspectorTui {
             String label = item.depth() == 0 && node.layout().isStruct()
                     ? "struct"
                     : node.fieldName().map(n -> n + ": ").orElse("") + node.layout().encodingId();
+            String tag = statsChildren.contains(node) ? ", stats" : "";
             return " ".repeat(item.depth() * 2) + marker + label
-                    + "  (" + node.layout().rowCount() + " rows)";
+                    + "  (" + node.layout().rowCount() + " rows" + tag + ")";
         }
 
         private void drawDivider(StringBuilder buf, int col, int top, int bottom) {
