@@ -20,7 +20,7 @@ import java.lang.invoke.MethodHandle;
 /// On entry: saves the original {@code termios}, switches to alt screen, hides
 /// the cursor. On [#close()]: restores everything, even on exceptions, via a
 /// shutdown hook that fires if the caller skips try-with-resources.
-public final class PosixTerminal implements RawTerminal {
+public final class PosixTerminal implements Terminal {
 
     private static final int STDIN_FD = 0;
     private static final int STDOUT_FD = 1;

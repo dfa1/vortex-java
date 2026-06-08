@@ -20,7 +20,7 @@ import java.lang.invoke.MethodHandle;
 ///
 /// {@code GetConsoleScreenBufferInfo} drives [#size()]; we report the visible
 /// window rect, not the scrollback buffer.
-public final class WindowsTerminal implements RawTerminal {
+public final class WindowsTerminal implements Terminal {
 
     private static final long STD_INPUT_HANDLE = -10L;
     private static final long STD_OUTPUT_HANDLE = -11L;

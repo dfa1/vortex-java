@@ -16,7 +16,7 @@ import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.inspect.term.Ansi;
 import io.github.dfa1.vortex.inspect.term.Key;
-import io.github.dfa1.vortex.inspect.term.RawTerminal;
+import io.github.dfa1.vortex.inspect.term.Terminal;
 import io.github.dfa1.vortex.io.VortexHandle;
 import io.github.dfa1.vortex.scan.Chunk;
 import io.github.dfa1.vortex.scan.ScanIterator;
@@ -83,7 +83,7 @@ public final class VortexInspectorTui {
     public static void show(VortexHandle handle, IoWorker worker, InspectorTree.Progress progress)
             throws IOException {
         InspectorTree tree = InspectorTree.buildShallow(handle);
-        try (RawTerminal term = RawTerminal.open()) {
+        try (Terminal term = Terminal.open()) {
             new Loop(term, tree, handle, worker).run();
         }
     }
@@ -102,7 +102,7 @@ public final class VortexInspectorTui {
         /// ASCII spinner frames; cycled by render tick.
         private static final char[] SPINNER = {'|', '/', '-', '\\'};
 
-        private final RawTerminal term;
+        private final Terminal term;
         private final InspectorTree tree;
         private final VortexHandle handle;
         private final IoWorker worker;
@@ -134,7 +134,7 @@ public final class VortexInspectorTui {
         private int selected;
         private int scrollOffset;
 
-        Loop(RawTerminal term, InspectorTree tree, VortexHandle handle, IoWorker worker) {
+        Loop(Terminal term, InspectorTree tree, VortexHandle handle, IoWorker worker) {
             this.term = term;
             this.tree = tree;
             this.handle = handle;
@@ -320,7 +320,7 @@ public final class VortexInspectorTui {
         }
 
         private void render(List<Item> items) throws IOException {
-            RawTerminal.Size size = term.size();
+            Terminal.Size size = term.size();
             int width = size.cols();
             int height = size.rows();
             int leftWidth = Math.max(20, width / 2);

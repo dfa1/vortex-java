@@ -11,13 +11,13 @@ import java.util.Optional;
 ///
 /// Usage:
 /// ```
-/// try (RawTerminal term = RawTerminal.open()) {
+/// try (Terminal term = Terminal.open()) {
 ///     term.write(Ansi.CLEAR_SCREEN);
 ///     Key k = term.readKey();
 ///     ...
 /// }
 /// ```
-public sealed interface RawTerminal extends AutoCloseable
+public sealed interface Terminal extends AutoCloseable
         permits PosixTerminal, WindowsTerminal {
 
     /// Opens the platform-appropriate raw-mode terminal.
@@ -27,7 +27,7 @@ public sealed interface RawTerminal extends AutoCloseable
     ///
     /// @return an open raw terminal handle
     /// @throws IOException if the OS-level setup fails
-    static RawTerminal open() throws IOException {
+    static Terminal open() throws IOException {
         String os = System.getProperty("os.name", "").toLowerCase();
         if (os.contains("win")) {
             return WindowsTerminal.open();
