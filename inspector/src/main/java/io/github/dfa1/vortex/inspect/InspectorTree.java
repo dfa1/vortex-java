@@ -61,14 +61,6 @@ public record InspectorTree(
 
     /// One layout node in the inspector tree.
     ///
-    /// <p>Uses identity equality and hashing — two Nodes are equal only if they
-    /// are the same reference. Avoids touching {@link Layout#metadata()} (a
-    /// {@link java.nio.ByteBuffer} that may wrap an Arena-confined segment,
-    /// crashing with {@link WrongThreadException} when hashed from any thread
-    /// other than the handle's owner). Inspector containers — expanded sets,
-    /// peek/hex/dict caches — key by Node, so identity semantics keep them
-    /// thread-safe across the IoWorker / render-thread split.
-    ///
     /// @param layout         underlying [Layout] from the file footer
     /// @param fieldName      column name when this node is a direct child of a top-level struct
     /// @param usedEncodings  encoding IDs referenced by this subtree
@@ -80,16 +72,6 @@ public record InspectorTree(
             Set<String> usedEncodings,
             ArrayStats stats,
             List<Node> children) {
-
-        @Override
-        public boolean equals(Object o) {
-            return this == o;
-        }
-
-        @Override
-        public int hashCode() {
-            return System.identityHashCode(this);
-        }
     }
 
     /// Builds an inspector tree from an open Vortex file handle.

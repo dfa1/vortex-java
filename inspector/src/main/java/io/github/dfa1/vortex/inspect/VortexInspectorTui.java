@@ -25,8 +25,8 @@ import io.github.dfa1.vortex.scan.ScanOptions;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -106,15 +106,29 @@ public final class VortexInspectorTui {
         private final InspectorTree tree;
         private final VortexHandle handle;
         private final IoWorker worker;
-        private final Set<InspectorTree.Node> expanded = new HashSet<>();
-        private final ConcurrentMap<InspectorTree.Node, InspectorTree.Peek> peekCache = new ConcurrentHashMap<>();
-        private final Set<InspectorTree.Node> peekInFlight = ConcurrentHashMap.newKeySet();
-        private final ConcurrentMap<InspectorTree.Node, byte[]> hexCache = new ConcurrentHashMap<>();
-        private final Set<InspectorTree.Node> hexInFlight = ConcurrentHashMap.newKeySet();
+        // Identity-keyed containers throughout: InspectorTree.Node wraps a
+        // Layout record whose ByteBuffer metadata field crashes with
+        // WrongThreadException when its hashCode reads arena-confined bytes
+        // from any thread other than the handle's owner. Identity hashing
+        // sidesteps that entirely and matches the natural semantics — Nodes
+        // are constructed exactly once per shallow build and uniquely
+        // identify a position in the tree.
+        private final Set<InspectorTree.Node> expanded =
+                Collections.newSetFromMap(new IdentityHashMap<>());
+        private final Map<InspectorTree.Node, InspectorTree.Peek> peekCache =
+                Collections.synchronizedMap(new IdentityHashMap<>());
+        private final Set<InspectorTree.Node> peekInFlight =
+                Collections.synchronizedSet(Collections.newSetFromMap(new IdentityHashMap<>()));
+        private final Map<InspectorTree.Node, byte[]> hexCache =
+                Collections.synchronizedMap(new IdentityHashMap<>());
+        private final Set<InspectorTree.Node> hexInFlight =
+                Collections.synchronizedSet(Collections.newSetFromMap(new IdentityHashMap<>()));
         private final ConcurrentMap<String, DataState> dataCache = new ConcurrentHashMap<>();
-        private final ConcurrentMap<InspectorTree.Node, DataState> dictCache = new ConcurrentHashMap<>();
-        private final Map<InspectorTree.Node, String> columnOf = new HashMap<>();
-        private final Set<InspectorTree.Node> statsChildren = new HashSet<>();
+        private final Map<InspectorTree.Node, DataState> dictCache =
+                Collections.synchronizedMap(new IdentityHashMap<>());
+        private final Map<InspectorTree.Node, String> columnOf = new IdentityHashMap<>();
+        private final Set<InspectorTree.Node> statsChildren =
+                Collections.newSetFromMap(new IdentityHashMap<>());
         private volatile String lastError;
         private long tick;
         private int selected;
