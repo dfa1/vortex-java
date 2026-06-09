@@ -4,10 +4,10 @@
 
 - [ ] Move project to a dedicated organization
 - [ ] Create website
+   - build something like hardwood.dev but for vortex files
 - [ ] Publish benchmarks — run `./bench` locally, push JMH JSON to gh-pages via `bench-publish` script, view at
   `https://jmh.morethan.io/?source=https://dfa1.github.io/vortex-java/benchmark-result.json`; dated files for history
   comparison via `?source=url1,url2`; then drop `.github/workflows/benchmark.yml`
-- [ ] Build something like hardwood.dev but for vortex files
 
 ## Performance
 
@@ -22,15 +22,9 @@
   FrameOfReference add-base, ZigZag decode, ALP F64 reconstruction, future pco offset+base loop. Measure
   vs scalar baseline with JMH; only adopt where speedup is material and code stays readable. Pin against
   a specific JDK build since Vector API is incubating until Valhalla lands.
-- [ ] Review zero-copy
-
-## Testing
-
-- [ ] **Verify proto compatibility with upstream** — `dtype.proto` and `scalar.proto` exist in
-  `spiraldb/vortex/vortex-proto/proto/` and should be kept in sync with our copies. Encoding
-  metadata (e.g. `RLEMetadata`, `RunEndMetadata`) has no upstream `.proto`; tag mismatches
-  silently produce zero/default values in proto3. Add value-level assertions (not just
-  `rowCount > 0`) to integration tests to catch silent corruption.
+- [ ] Support for preview Vector API
+   - when JVM flag is activated, put in the Encode/Decode context the type SCALAR / VECTOR
+   - if flag is active, any encoder/decoder will switch to vectorized
 
 ## Security
 
@@ -208,14 +202,12 @@ relax for large fixtures.
     - See https://dfa1.github.io/articles/rethink-domain-primitives-with-valhalla
     - Candidates: `PType` integer kinds, buffer offsets, row indices, byte lengths
     - Goal: type-safety at zero cost (value class = no heap alloc, no boxing)
-
 - [ ] **Align `ArrayStats` with Rust lazy model** — Rust's `Array` trait exposes `statistics()`
   returning `Option<ArrayStatistics>`; stats are lazy and optional, read from the FlatBuffer node
   on demand. Java's `ArrayStats` was removed from decoded array objects (done) but `KnownArrayNode`
   still stores them eagerly at parse time. Evaluate: expose stats on-demand via a `stats(ArrayNode)`
   helper on `EncodingRegistry` or `DecodeContext`; surface them on `Array` only for types where
   zone-map callers actually need it (today: only `ZonedEncoding`).
-
 - [ ] **Audit runtime pluggability vs Rust impl** — maintainer (2026-06-04) flagged that Rust supports
   runtime registration for: Encodings, DTypes, Compute, Layouts. Java status:
     - Encodings: ✅ `ServiceLoader` + `EncodingRegistry.Builder.register()`; ✅ `allowUnknown()` passthrough for
