@@ -60,6 +60,34 @@ class VortexWriterTest {
     // ── writeChunk validation ─────────────────────────────────────────────────
 
     @Test
+    void writeChunk_autoroutesExtensionCollectionViaSpecExtension(@TempDir Path tmp) throws IOException {
+        // Given — schema with a vortex.date column; user passes List<LocalDate> directly,
+        // expecting the writer to call DateExtension.encodeAll under the hood
+        var dateSchema = new DType.Struct(
+                List.of("birthdays"),
+                List.of(io.github.dfa1.vortex.extension.DateExtension.INSTANCE.dtype(false)),
+                false);
+        List<java.time.LocalDate> dates = List.of(
+                java.time.LocalDate.of(1996, 2, 12),
+                java.time.LocalDate.of(2026, 6, 9));
+        Path file = tmp.resolve("dates.vtx");
+
+        // When — Collection input replaces the int[] the writer would normally expect.
+        // The auto-route resolves the spec extension, encodes to int[], then drops the
+        // logical Extension wrapper before picking a physical encoding.
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, dateSchema, WriteOptions.defaults())) {
+            sut.writeChunk(Map.of("birthdays", dates));
+        }
+
+        // Then — file exists and carries the encoded segment + metadata. Reader-side
+        // unwrapping of Extension columns lives in a separate change (Tier 3b TODO), so
+        // we don't reach into the segments here — write-path correctness is the contract.
+        assertThat(file).exists();
+        assertThat(file.toFile().length()).isGreaterThan(0L);
+    }
+
+    @Test
     void writeChunk_missingColumn_throwsIllegalArgument(@TempDir Path tmp) throws IOException {
         // Given
         Path file = tmp.resolve("missing.vtx");

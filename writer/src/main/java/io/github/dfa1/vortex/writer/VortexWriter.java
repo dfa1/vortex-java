@@ -261,6 +261,20 @@ public final class VortexWriter implements Closeable {
                 throw new IllegalArgumentException("missing column: " + colName);
             }
 
+            // Auto-route extension columns: callers can pass List<LocalDate>, List<Instant>,
+            // etc., and we route through the matching spec extension to produce the int[] /
+            // long[] / byte[] the downstream segment writer expects. The physical encoding
+            // then selects against the storage dtype (I32, I64, ...) rather than the
+            // Extension wrapper, which has no registered encoding.
+            if (colDtype instanceof DType.Extension extDtype && data instanceof java.util.Collection<?> coll) {
+                io.github.dfa1.vortex.extension.Extension impl =
+                        io.github.dfa1.vortex.extension.Extension.findKnown(extDtype);
+                if (impl != null) {
+                    data = impl.encodeAll(extDtype, coll);
+                    colDtype = extDtype.storageDType();
+                }
+            }
+
             if (!firstChunkSeen && options.globalDict()) {
                 boolean candidate = false;
                 if (colDtype instanceof DType.Primitive p) {

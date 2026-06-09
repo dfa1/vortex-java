@@ -165,4 +165,11 @@ public final class TimestampExtension implements Extension {
         }
         return out;
     }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public Object encodeAll(DType.Extension dtype, Collection<?> values) {
+        TimeUnit unit = ExtensionStorage.readUnit(dtype);
+        return encodeAll((Collection<Instant>) values, unit);
+    }
 }

@@ -132,4 +132,11 @@ public final class TimeExtension implements Extension {
             case Days -> throw new VortexException("Time.encodeAll: Days unit not valid for vortex.time");
         };
     }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public Object encodeAll(DType.Extension dtype, Collection<?> values) {
+        TimeUnit unit = ExtensionStorage.readUnit(dtype);
+        return encodeAll((Collection<java.time.LocalTime>) values, unit);
+    }
 }

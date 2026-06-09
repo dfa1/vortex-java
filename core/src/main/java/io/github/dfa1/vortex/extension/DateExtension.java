@@ -82,4 +82,10 @@ public final class DateExtension implements Extension {
         }
         return out;
     }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public Object encodeAll(DType.Extension dtype, Collection<?> values) {
+        return encodeAll((Collection<LocalDate>) values);
+    }
 }
