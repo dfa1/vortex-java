@@ -63,8 +63,15 @@ public final class TimestampExtension implements Extension {
     /// @param storage signed-integer storage array
     /// @param i       row index, {@code 0 <= i < storage.length()}
     /// @return decoded instant
+    /// @throws io.github.dfa1.vortex.core.VortexException if the metadata unit is
+    ///         {@link TimeUnit#Days} or storage isn't an integer primitive
     public Instant instant(DType.Extension ext, Array storage, long i) {
-        return io.github.dfa1.vortex.core.Extension.TIMESTAMP.instant(ext, storage, i);
+        ExtensionStorage.checkBounds(i, storage.length());
+        TimeUnit unit = ExtensionStorage.readUnit(ext);
+        if (unit == TimeUnit.Days) {
+            throw new io.github.dfa1.vortex.core.VortexException("Timestamp.instant: Days unit not valid");
+        }
+        return ExtensionStorage.instantFromRaw(ExtensionStorage.epochInteger(storage, i), unit);
     }
 
     /// Decodes the timestamp cell at row {@code i} to a {@link ZonedDateTime}
@@ -75,14 +82,34 @@ public final class TimestampExtension implements Extension {
     /// @param i       row index, {@code 0 <= i < storage.length()}
     /// @return decoded zoned date-time
     public ZonedDateTime zonedDateTime(DType.Extension ext, Array storage, long i) {
-        return io.github.dfa1.vortex.core.Extension.TIMESTAMP.zonedDateTime(ext, storage, i);
+        return instant(ext, storage, i).atZone(timezone(ext).orElse(java.time.ZoneOffset.UTC));
     }
 
     /// Returns the IANA timezone recorded in the extension metadata.
     ///
     /// @param ext declared extension dtype
     /// @return parsed zone id, or empty when no timezone is recorded
+    /// @throws io.github.dfa1.vortex.core.VortexException if the metadata is truncated mid-string
     public Optional<ZoneId> timezone(DType.Extension ext) {
-        return io.github.dfa1.vortex.core.Extension.TIMESTAMP.timezone(ext);
+        ByteBuffer meta = ext.metadata();
+        if (meta == null || meta.remaining() < 3) {
+            return Optional.empty();
+        }
+        ByteBuffer le = meta.duplicate().order(ByteOrder.LITTLE_ENDIAN);
+        int basePos = le.position();
+        int tzLen = Short.toUnsignedInt(le.getShort(basePos + 1));
+        if (tzLen == 0) {
+            return Optional.empty();
+        }
+        if (le.remaining() < 3 + tzLen) {
+            throw new io.github.dfa1.vortex.core.VortexException(
+                    "timestamp metadata truncated: declared tz_len="
+                            + tzLen + " but only " + (le.remaining() - 3) + " bytes available");
+        }
+        byte[] tzBytes = new byte[tzLen];
+        for (int k = 0; k < tzLen; k++) {
+            tzBytes[k] = le.get(basePos + 3 + k);
+        }
+        return Optional.of(ZoneId.of(new String(tzBytes, StandardCharsets.UTF_8)));
     }
 }

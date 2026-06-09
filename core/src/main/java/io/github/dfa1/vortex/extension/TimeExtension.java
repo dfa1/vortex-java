@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.extension;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.encoding.TimeUnit;
 
@@ -55,7 +56,16 @@ public final class TimeExtension implements Extension {
     /// @param storage signed-integer storage (I32 for s/ms, I64 for μs/ns)
     /// @param i       row index, {@code 0 <= i < storage.length()}
     /// @return decoded local time
+    /// @throws VortexException if the metadata unit is {@link TimeUnit#Days}
+    ///         or storage isn't an integer primitive
     public LocalTime decode(DType.Extension ext, Array storage, long i) {
-        return io.github.dfa1.vortex.core.Extension.TIME.decode(ext, storage, i);
+        ExtensionStorage.checkBounds(i, storage.length());
+        TimeUnit unit = ExtensionStorage.readUnit(ext);
+        if (unit == TimeUnit.Days) {
+            throw new VortexException("Time.decode: Days unit not valid for vortex.time");
+        }
+        long raw = ExtensionStorage.epochInteger(storage, i);
+        long nanos = raw * (1_000_000_000L / unit.divisor());
+        return LocalTime.ofNanoOfDay(nanos);
     }
 }

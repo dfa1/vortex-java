@@ -2,7 +2,10 @@ package io.github.dfa1.vortex.extension;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.ByteArray;
+import io.github.dfa1.vortex.core.array.FixedSizeListArray;
 
 import java.util.UUID;
 
@@ -35,7 +38,29 @@ public final class UuidExtension implements Extension {
     /// @param storage UUID storage array
     /// @param i       row index, {@code 0 <= i < storage.length()}
     /// @return decoded {@link UUID}
+    /// @throws VortexException if storage isn't a {@code FixedSizeListArray<ByteArray>} of size 16
     public UUID decode(Array storage, long i) {
-        return io.github.dfa1.vortex.core.Extension.UUID.decode(storage, i);
+        ExtensionStorage.checkBounds(i, storage.length());
+        if (!(storage instanceof FixedSizeListArray fsl)) {
+            throw new VortexException("Uuid.decode: expected FixedSizeListArray, got "
+                    + storage.getClass().getSimpleName());
+        }
+        if (fsl.fixedSize() != 16) {
+            throw new VortexException("Uuid.decode: expected fixedSize 16, got " + fsl.fixedSize());
+        }
+        if (!(fsl.elements() instanceof ByteArray bytes)) {
+            throw new VortexException("Uuid.decode: expected ByteArray elements, got "
+                    + fsl.elements().getClass().getSimpleName());
+        }
+        long base = i * 16;
+        long msb = 0L;
+        long lsb = 0L;
+        for (int k = 0; k < 8; k++) {
+            msb = (msb << 8) | (bytes.getByte(base + k) & 0xffL);
+        }
+        for (int k = 0; k < 8; k++) {
+            lsb = (lsb << 8) | (bytes.getByte(base + 8 + k) & 0xffL);
+        }
+        return new UUID(msb, lsb);
     }
 }

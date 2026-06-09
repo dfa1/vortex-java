@@ -35,7 +35,9 @@ public final class DateExtension implements Extension {
     /// @param storage signed-integer storage (Byte/Short/Int/Long, possibly Masked)
     /// @param i       row index, {@code 0 <= i < storage.length()}
     /// @return decoded date
+    /// @throws io.github.dfa1.vortex.core.VortexException if storage isn't an integer primitive
     public LocalDate decode(Array storage, long i) {
-        return io.github.dfa1.vortex.core.Extension.DATE.decode(storage, i);
+        ExtensionStorage.checkBounds(i, storage.length());
+        return LocalDate.ofEpochDay(ExtensionStorage.epochInteger(storage, i));
     }
 }
