@@ -125,8 +125,6 @@ The `, stats` suffix on a row indicates the node carries zone-map statistics
 `vortex.dict` nodes show their dictionary entries; flat numeric leaves show
 a hex preview of the encoded buffer plus decoded data.
 
-Set `VORTEX_DEBUG=1` to print full stack traces on error.
-
 ---
 
 ## Project columns

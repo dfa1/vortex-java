@@ -29,9 +29,7 @@ final class InspectCommand {
             return ExitStatus.OK;
         } catch (IOException | RuntimeException e) {
             System.err.println("error: " + describe(e));
-            if (System.getenv("VORTEX_DEBUG") != null) {
-                e.printStackTrace(System.err);
-            }
+            e.printStackTrace(System.err);
             return ExitStatus.ERROR;
         }
     }
