@@ -105,6 +105,117 @@ class ExtensionsTest {
     }
 
     @Test
+    void uuid_roundTripsKnownValue() {
+        // Given — Arrow canonical layout: FixedSizeList<U8>[16]; one well-known UUID
+        // (RFC 9562 example) plus its inverse, so msb/lsb extraction is exercised in
+        // both halves rather than only the high bytes.
+        java.util.UUID expected = java.util.UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment buf = arena.allocate(16);
+            long msb = expected.getMostSignificantBits();
+            long lsb = expected.getLeastSignificantBits();
+            for (int k = 0; k < 8; k++) {
+                buf.set(ValueLayout.JAVA_BYTE, k, (byte) ((msb >> (56 - 8 * k)) & 0xff));
+                buf.set(ValueLayout.JAVA_BYTE, 8 + k, (byte) ((lsb >> (56 - 8 * k)) & 0xff));
+            }
+            ByteArray inner = new ByteArray(new DType.Primitive(PType.U8, false), 16, buf);
+            DType.FixedSizeList fslDtype = new DType.FixedSizeList(
+                    new DType.Primitive(PType.U8, false), 16, false);
+            FixedSizeListArray sut = new FixedSizeListArray(fslDtype, 1, inner);
+
+            // When / Then
+            assertThat(Extensions.uuid(sut, 0)).isEqualTo(expected);
+        }
+    }
+
+    @Test
+    void uuid_zeroBytes_decodesToZeroUuid() {
+        // Given — defensive: all-zero UUID is the most common "null UUID" sentinel
+        // and a regression test for sign extension on getByte
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment buf = arena.allocate(16);
+            ByteArray inner = new ByteArray(new DType.Primitive(PType.U8, false), 16, buf);
+            DType.FixedSizeList fslDtype = new DType.FixedSizeList(
+                    new DType.Primitive(PType.U8, false), 16, false);
+            FixedSizeListArray sut = new FixedSizeListArray(fslDtype, 1, inner);
+
+            // When / Then
+            assertThat(Extensions.uuid(sut, 0))
+                    .isEqualTo(new java.util.UUID(0L, 0L));
+        }
+    }
+
+    @Test
+    void uuid_allOnesBytes_decodesWithoutSignExtension() {
+        // Given — 0xff in every position; if getByte returned a sign-extended int
+        // and we forgot the & 0xffL mask, msb/lsb would land as 0xff..fff..ff with
+        // sign bits poisoning the upper longs. Use the highest-bit pattern as the
+        // sign-extension trap.
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment buf = arena.allocate(16);
+            for (int k = 0; k < 16; k++) {
+                buf.set(ValueLayout.JAVA_BYTE, k, (byte) 0xff);
+            }
+            ByteArray inner = new ByteArray(new DType.Primitive(PType.U8, false), 16, buf);
+            DType.FixedSizeList fslDtype = new DType.FixedSizeList(
+                    new DType.Primitive(PType.U8, false), 16, false);
+            FixedSizeListArray sut = new FixedSizeListArray(fslDtype, 1, inner);
+
+            // When / Then
+            assertThat(Extensions.uuid(sut, 0))
+                    .isEqualTo(new java.util.UUID(-1L, -1L));
+        }
+    }
+
+    @Test
+    void uuid_wrongFixedSize_throws() {
+        // Given — 8-byte FixedSizeList isn't a UUID; catch the mismatch up front
+        try (Arena arena = Arena.ofConfined()) {
+            ByteArray inner = new ByteArray(new DType.Primitive(PType.U8, false), 8, arena.allocate(8));
+            DType.FixedSizeList wrongSize = new DType.FixedSizeList(
+                    new DType.Primitive(PType.U8, false), 8, false);
+            FixedSizeListArray sut = new FixedSizeListArray(wrongSize, 1, inner);
+
+            // When / Then
+            assertThatThrownBy(() -> Extensions.uuid(sut, 0))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("fixedSize 16");
+        }
+    }
+
+    @Test
+    void uuid_wrongStorageType_throws() {
+        // Given — a plain IntArray isn't FixedSizeList; guard against callers
+        // passing the wrong column by mistake
+        try (Arena arena = Arena.ofConfined()) {
+            IntArray notFsl = new IntArray(I32, 1, arena.allocate(4));
+
+            // When / Then
+            assertThatThrownBy(() -> Extensions.uuid(notFsl, 0))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("FixedSizeListArray");
+        }
+    }
+
+    @Test
+    void uuid_explicitExtensionOverload_verifiesId() {
+        // Given — passing a non-uuid extension dtype must not be silently
+        // reinterpreted as a uuid storage column
+        try (Arena arena = Arena.ofConfined()) {
+            ByteArray inner = new ByteArray(new DType.Primitive(PType.U8, false), 16, arena.allocate(16));
+            DType.FixedSizeList fslDtype = new DType.FixedSizeList(
+                    new DType.Primitive(PType.U8, false), 16, false);
+            FixedSizeListArray storage = new FixedSizeListArray(fslDtype, 1, inner);
+            DType.Extension wrongExt = new DType.Extension("vortex.something", fslDtype, null, false);
+
+            // When / Then
+            assertThatThrownBy(() -> Extensions.uuid(wrongExt, storage, 0))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("non-uuid extension");
+        }
+    }
+
+    @Test
     void localDate_indexOutOfBounds_throws() {
         // Given — both overloads must reject indices past the array length
         // rather than silently reading whatever the storage decoder returns

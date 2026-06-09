@@ -18,6 +18,10 @@ public final class Extensions {
     /// (1970-01-01), Arrow-compatible.
     public static final String DATE = "vortex.date";
 
+    /// Extension id for UUID columns - storage is
+    /// {@code FixedSizeList(Primitive(U8), 16)}, Arrow-compatible.
+    public static final String UUID_ID = "vortex.uuid";
+
     private Extensions() {
     }
 
@@ -59,6 +63,59 @@ public final class Extensions {
         }
         checkBounds(i, storage.length());
         return LocalDate.ofEpochDay(epochDay(storage, i));
+    }
+
+    /// Decodes a {@code vortex.uuid} cell.
+    ///
+    /// Storage shape per Arrow's canonical UUID extension: a
+    /// {@link FixedSizeListArray} of {@link ByteArray} (U8) with
+    /// {@code fixedSize == 16}; row {@code i} is the 16 contiguous bytes
+    /// {@code [i*16, i*16+16)} interpreted as a big-endian UUID.
+    ///
+    /// @param storage UUID extension's storage array
+    /// @param i       row index, {@code 0 <= i < storage.length()}
+    /// @return decoded {@link java.util.UUID}
+    /// @throws VortexException if {@code storage} isn't a
+    ///         {@code FixedSizeListArray<ByteArray>} of size 16
+    public static java.util.UUID uuid(Array storage, long i) {
+        checkBounds(i, storage.length());
+        if (!(storage instanceof FixedSizeListArray fsl)) {
+            throw new VortexException("uuid: expected FixedSizeListArray storage, got "
+                    + storage.getClass().getSimpleName());
+        }
+        if (fsl.fixedSize() != 16) {
+            throw new VortexException("uuid: expected fixedSize 16, got " + fsl.fixedSize());
+        }
+        if (!(fsl.elements() instanceof ByteArray bytes)) {
+            throw new VortexException("uuid: expected ByteArray elements, got "
+                    + fsl.elements().getClass().getSimpleName());
+        }
+        long base = i * 16;
+        long msb = 0L;
+        long lsb = 0L;
+        for (int k = 0; k < 8; k++) {
+            msb = (msb << 8) | (bytes.getByte(base + k) & 0xffL);
+        }
+        for (int k = 0; k < 8; k++) {
+            lsb = (lsb << 8) | (bytes.getByte(base + 8 + k) & 0xffL);
+        }
+        return new java.util.UUID(msb, lsb);
+    }
+
+    /// Same as {@link #uuid(Array, long)} but verifies the declared extension id.
+    /// Use after {@code vortex.ext}'s decoder has unwrapped the storage and the
+    /// Array no longer carries the Extension dtype.
+    ///
+    /// @param ext     the column's declared extension dtype; must be {@code vortex.uuid}
+    /// @param storage UUID storage array
+    /// @param i       row index, {@code 0 <= i < storage.length()}
+    /// @return decoded {@link java.util.UUID}
+    /// @throws VortexException if {@code ext} isn't {@code vortex.uuid} or storage shape doesn't match
+    public static java.util.UUID uuid(DType.Extension ext, Array storage, long i) {
+        if (!UUID_ID.equals(ext.extensionId())) {
+            throw new VortexException("uuid called with non-uuid extension: " + ext.extensionId());
+        }
+        return uuid(storage, i);
     }
 
     private static void checkBounds(long i, long length) {
