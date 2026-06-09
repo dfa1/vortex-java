@@ -133,13 +133,6 @@ public sealed interface Extension {
             return LocalTime.ofNanoOfDay(nanos);
         }
 
-        /// Returns the {@link TimeUnit} recorded in the extension metadata.
-        ///
-        /// @param ext extension dtype
-        /// @return decoded time unit
-        public TimeUnit unit(DType.Extension ext) {
-            return readUnit(ext);
-        }
     }
 
     /// {@code vortex.timestamp} — I64 epoch count plus optional IANA timezone.
@@ -212,13 +205,6 @@ public sealed interface Extension {
             return Optional.of(ZoneId.of(new String(tzBytes, StandardCharsets.UTF_8)));
         }
 
-        /// Returns the {@link TimeUnit} recorded in the extension metadata.
-        ///
-        /// @param ext extension dtype
-        /// @return decoded time unit
-        public TimeUnit unit(DType.Extension ext) {
-            return readUnit(ext);
-        }
     }
 
     /// {@code vortex.uuid} — 16-byte UUID stored as
