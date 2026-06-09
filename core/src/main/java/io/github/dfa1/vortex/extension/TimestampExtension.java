@@ -11,6 +11,9 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 /// {@code vortex.timestamp} — I64 epoch count plus optional IANA timezone.
@@ -113,5 +116,53 @@ public final class TimestampExtension implements Extension {
             tzBytes[k] = le.get(basePos + 3 + k);
         }
         return Optional.of(ZoneId.of(new String(tzBytes, StandardCharsets.UTF_8)));
+    }
+
+    /// Decodes every row of {@code storage} into a list of instants.
+    ///
+    /// @param ext     declared extension dtype carrying the unit
+    /// @param storage signed-integer storage array
+    /// @return list of decoded instants in row order
+    public List<Instant> decodeAll(DType.Extension ext, Array storage) {
+        int n = Math.toIntExact(storage.length());
+        List<Instant> out = new ArrayList<>(n);
+        for (long i = 0; i < n; i++) {
+            out.add(instant(ext, storage, i));
+        }
+        return out;
+    }
+
+    /// Encodes an instant at the given unit.
+    ///
+    /// @param value instant
+    /// @param unit  resolution
+    /// @return epoch count in {@code unit}
+    /// @throws io.github.dfa1.vortex.core.VortexException if {@code unit} is {@link TimeUnit#Days}
+    public long encode(Instant value, TimeUnit unit) {
+        return switch (unit) {
+            case Seconds -> value.getEpochSecond();
+            case Milliseconds -> value.toEpochMilli();
+            case Microseconds -> Math.multiplyExact(value.getEpochSecond(), 1_000_000L)
+                    + value.getNano() / 1_000L;
+            case Nanoseconds -> Math.multiplyExact(value.getEpochSecond(), 1_000_000_000L)
+                    + value.getNano();
+            case Days -> throw new io.github.dfa1.vortex.core.VortexException(
+                    "Timestamp.encode: Days unit not valid");
+        };
+    }
+
+    /// Encodes a collection of instants into a packed {@code long[]} matching
+    /// the I64 storage layout the writer accepts.
+    ///
+    /// @param values instants to encode
+    /// @param unit   resolution
+    /// @return packed {@code long[]} suitable for {@code writer.writeChunk}
+    public long[] encodeAll(Collection<Instant> values, TimeUnit unit) {
+        long[] out = new long[values.size()];
+        int i = 0;
+        for (Instant v : values) {
+            out[i++] = encode(v, unit);
+        }
+        return out;
     }
 }

@@ -5,6 +5,9 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.Array;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 
 /// {@code vortex.date} — days since the Unix epoch, signed integer storage.
 /// Per Arrow's canonical Date type.
@@ -41,5 +44,42 @@ public final class DateExtension implements Extension {
     public LocalDate decode(Array storage, long i) {
         ExtensionStorage.checkBounds(i, storage.length());
         return LocalDate.ofEpochDay(ExtensionStorage.epochInteger(storage, i));
+    }
+
+    /// Decodes every row of {@code storage} into a list of dates.
+    ///
+    /// @param storage signed-integer storage array
+    /// @return list of decoded dates in row order
+    public List<LocalDate> decodeAll(Array storage) {
+        int n = Math.toIntExact(storage.length());
+        List<LocalDate> out = new ArrayList<>(n);
+        for (long i = 0; i < n; i++) {
+            out.add(decode(storage, i));
+        }
+        return out;
+    }
+
+    /// Encodes a date as its epoch-day count for I32 storage.
+    ///
+    /// @param value local date
+    /// @return days since the Unix epoch
+    /// @throws ArithmeticException if {@code value} is too far from the epoch to fit in I32
+    public int encode(LocalDate value) {
+        return Math.toIntExact(value.toEpochDay());
+    }
+
+    /// Encodes a collection of dates into the storage layout the writer accepts
+    /// for an I32 column (a primitive {@code int[]} in row order).
+    ///
+    /// @param values dates to encode
+    /// @return packed {@code int[]} suitable for {@code writer.writeChunk}
+    /// @throws ArithmeticException if any date is too far from the epoch to fit in I32
+    public int[] encodeAll(Collection<LocalDate> values) {
+        int[] out = new int[values.size()];
+        int i = 0;
+        for (LocalDate v : values) {
+            out[i++] = encode(v);
+        }
+        return out;
     }
 }

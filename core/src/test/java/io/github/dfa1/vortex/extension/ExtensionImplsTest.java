@@ -23,6 +23,7 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -78,6 +79,35 @@ class ExtensionImplsTest {
                 // When / Then
                 assertThat(DateExtension.INSTANCE.decode(storage, 0))
                         .isEqualTo(LocalDate.of(1969, 12, 31));
+            }
+        }
+
+        @Test
+        void encode_singleDate_returnsEpochDay() {
+            // Given / When / Then — 1996-02-12 anchored against the same TPC-H sample as decode
+            assertThat(DateExtension.INSTANCE.encode(LocalDate.of(1996, 2, 12))).isEqualTo(9538);
+        }
+
+        @Test
+        void encodeAll_thenDecodeAll_roundTrips() {
+            // Given — a small set covers ordering + a pre-epoch row to exercise sign handling
+            java.util.List<LocalDate> dates = java.util.List.of(
+                    LocalDate.of(1969, 12, 31),
+                    LocalDate.of(1970, 1, 1),
+                    LocalDate.of(1996, 2, 12),
+                    LocalDate.of(2026, 6, 9));
+
+            // When — encode -> storage Array -> decodeAll
+            int[] packed = DateExtension.INSTANCE.encodeAll(dates);
+            try (Arena arena = Arena.ofConfined()) {
+                MemorySegment buf = arena.allocate(packed.length * 4L);
+                for (int i = 0; i < packed.length; i++) {
+                    buf.set(ValueLayout.JAVA_INT_UNALIGNED, i * 4L, packed[i]);
+                }
+                IntArray storage = new IntArray(I32, packed.length, buf);
+
+                // Then — order + values preserved end-to-end
+                assertThat(DateExtension.INSTANCE.decodeAll(storage)).isEqualTo(dates);
             }
         }
     }
@@ -144,6 +174,36 @@ class ExtensionImplsTest {
                         .isInstanceOf(VortexException.class)
                         .hasMessageContaining("Days unit not valid");
             }
+        }
+
+        @Test
+        void encodeAll_secondsReturnsIntArray() {
+            // Given — Seconds resolution uses I32 storage; encodeAll must produce int[]
+            // to match the writer's array-type switch
+            Object packed = TimeExtension.INSTANCE.encodeAll(
+                    java.util.List.of(LocalTime.of(1, 1, 1)), TimeUnit.Seconds);
+
+            // Then — 01:01:01 = 3661 s
+            assertThat(packed).isEqualTo(new int[]{3661});
+        }
+
+        @Test
+        void encodeAll_nanosecondsReturnsLongArray() {
+            // Given — nanos resolution needs I64; encodeAll switches return type to long[]
+            Object packed = TimeExtension.INSTANCE.encodeAll(
+                    java.util.List.of(LocalTime.ofNanoOfDay(42)), TimeUnit.Nanoseconds);
+
+            // Then
+            assertThat(packed).isEqualTo(new long[]{42L});
+        }
+
+        @Test
+        void encodeAll_daysUnitThrows() {
+            // Given — Days isn't sub-second; encodeAll fails with the same error decode does
+            assertThatThrownBy(() -> TimeExtension.INSTANCE.encodeAll(
+                    java.util.List.of(LocalTime.NOON), TimeUnit.Days))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("Days unit not valid");
         }
     }
 
@@ -245,6 +305,39 @@ class ExtensionImplsTest {
         }
 
         @Test
+        void encodeAll_milliseconds_thenDecodeAll_roundTrips() {
+            // Given — instants chosen to exercise positive + negative + sub-second
+            java.util.List<Instant> instants = java.util.List.of(
+                    Instant.ofEpochMilli(-1500L),
+                    Instant.ofEpochMilli(0L),
+                    Instant.ofEpochMilli(1_000L),
+                    Instant.ofEpochMilli(1_733_000_000_000L));
+
+            // When
+            long[] packed = TimestampExtension.INSTANCE.encodeAll(instants, TimeUnit.Milliseconds);
+            try (Arena arena = Arena.ofConfined()) {
+                MemorySegment buf = arena.allocate(packed.length * 8L);
+                for (int i = 0; i < packed.length; i++) {
+                    buf.set(ValueLayout.JAVA_LONG_UNALIGNED, i * 8L, packed[i]);
+                }
+                LongArray storage = new LongArray(I64, packed.length, buf);
+                DType.Extension ext = ext("vortex.timestamp", I64, tzMeta((byte) 2, null));
+
+                // Then — order + values preserved end-to-end
+                assertThat(TimestampExtension.INSTANCE.decodeAll(ext, storage)).isEqualTo(instants);
+            }
+        }
+
+        @Test
+        void encode_daysUnitThrows() {
+            // Given — Days isn't a sub-second unit on the encode side either
+            assertThatThrownBy(() -> TimestampExtension.INSTANCE.encode(
+                    Instant.EPOCH, TimeUnit.Days))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("Days unit not valid");
+        }
+
+        @Test
         void timezone_truncatedMetadata_throws() {
             // Given — declared tz_len longer than buffer can carry
             ByteBuffer meta = ByteBuffer.allocate(6).order(ByteOrder.LITTLE_ENDIAN);
@@ -317,6 +410,30 @@ class ExtensionImplsTest {
                 // When / Then
                 assertThat(UuidExtension.INSTANCE.decode(storage, 0))
                         .isEqualTo(new java.util.UUID(-1L, -1L));
+            }
+        }
+
+        @Test
+        void encode_thenDecodeAll_roundTrips() {
+            // Given — pair of UUIDs covers both halves of the packed buffer + sign-extension edge
+            java.util.List<UUID> ids = java.util.List.of(
+                    UUID.fromString("123e4567-e89b-12d3-a456-426614174000"),
+                    new UUID(-1L, -1L));
+
+            // When — encodeAll produces a flat byte[] sized 16*N
+            byte[] packed = UuidExtension.INSTANCE.encodeAll(ids);
+            assertThat(packed).hasSize(32);
+            try (Arena arena = Arena.ofConfined()) {
+                MemorySegment buf = arena.allocate(packed.length);
+                for (int i = 0; i < packed.length; i++) {
+                    buf.set(ValueLayout.JAVA_BYTE, i, packed[i]);
+                }
+                ByteArray inner = new ByteArray(U8, packed.length, buf);
+                FixedSizeListArray storage = new FixedSizeListArray(
+                        new DType.FixedSizeList(U8, 16, false), ids.size(), inner);
+
+                // Then
+                assertThat(UuidExtension.INSTANCE.decodeAll(storage)).isEqualTo(ids);
             }
         }
 

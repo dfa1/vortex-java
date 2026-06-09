@@ -8,6 +8,9 @@ import io.github.dfa1.vortex.encoding.TimeUnit;
 
 import java.nio.ByteBuffer;
 import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 
 /// {@code vortex.time} — sub-day count in the {@link TimeUnit} recorded in the metadata byte.
 public final class TimeExtension implements Extension {
@@ -69,5 +72,64 @@ public final class TimeExtension implements Extension {
         long raw = ExtensionStorage.epochInteger(storage, i);
         long nanos = raw * (1_000_000_000L / unit.divisor());
         return LocalTime.ofNanoOfDay(nanos);
+    }
+
+    /// Decodes every row of {@code storage} into a list of times.
+    ///
+    /// @param ext     declared extension dtype carrying the unit
+    /// @param storage signed-integer storage array
+    /// @return list of decoded times in row order
+    public List<LocalTime> decodeAll(DType.Extension ext, Array storage) {
+        int n = Math.toIntExact(storage.length());
+        List<LocalTime> out = new ArrayList<>(n);
+        for (long i = 0; i < n; i++) {
+            out.add(decode(ext, storage, i));
+        }
+        return out;
+    }
+
+    /// Encodes a time-of-day at the given unit.
+    ///
+    /// @param value local time
+    /// @param unit  resolution
+    /// @return sub-day count in {@code unit}
+    /// @throws VortexException if {@code unit} is {@link TimeUnit#Days}
+    public long encode(LocalTime value, TimeUnit unit) {
+        if (unit == TimeUnit.Days) {
+            throw new VortexException("Time.encode: Days unit not valid for vortex.time");
+        }
+        long divisor = 1_000_000_000L / unit.divisor();
+        return value.toNanoOfDay() / divisor;
+    }
+
+    /// Encodes a collection of times into the storage layout matching the unit:
+    /// {@code int[]} for {@link TimeUnit#Seconds}/{@link TimeUnit#Milliseconds},
+    /// {@code long[]} for {@link TimeUnit#Microseconds}/{@link TimeUnit#Nanoseconds}.
+    /// Return type is {@code Object} so the writer can switch on the array type.
+    ///
+    /// @param values times to encode
+    /// @param unit   resolution; controls storage width
+    /// @return {@code int[]} or {@code long[]} suitable for {@code writer.writeChunk}
+    /// @throws VortexException if {@code unit} is {@link TimeUnit#Days}
+    public Object encodeAll(Collection<LocalTime> values, TimeUnit unit) {
+        return switch (unit) {
+            case Seconds, Milliseconds -> {
+                int[] out = new int[values.size()];
+                int i = 0;
+                for (LocalTime v : values) {
+                    out[i++] = Math.toIntExact(encode(v, unit));
+                }
+                yield out;
+            }
+            case Microseconds, Nanoseconds -> {
+                long[] out = new long[values.size()];
+                int i = 0;
+                for (LocalTime v : values) {
+                    out[i++] = encode(v, unit);
+                }
+                yield out;
+            }
+            case Days -> throw new VortexException("Time.encodeAll: Days unit not valid for vortex.time");
+        };
     }
 }
