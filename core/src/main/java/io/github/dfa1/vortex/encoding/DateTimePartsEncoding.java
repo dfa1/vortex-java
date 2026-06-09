@@ -1,13 +1,13 @@
 package io.github.dfa1.vortex.encoding;
 
-import com.google.protobuf.InvalidProtocolBufferException;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.GenericArray;
-import io.github.dfa1.vortex.proto.DTypeProtos;
-import io.github.dfa1.vortex.proto.EncodingProtos;
+import io.github.dfa1.vortex.proto.DateTimePartsMetadata;
+
+import java.io.IOException;
 
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
@@ -74,8 +74,8 @@ public final class DateTimePartsEncoding implements Encoding {
         private static final long SECONDS_PER_DAY = 86_400L;
         private static final DType I64 = new DType.Primitive(PType.I64, false);
         private static final DType I64_NULLABLE = new DType.Primitive(PType.I64, true);
-        private static final DTypeProtos.PType I64_PROTO =
-                DTypeProtos.PType.forNumber(PType.I64.ordinal());
+        private static final io.github.dfa1.vortex.proto.PType I64_PROTO =
+                io.github.dfa1.vortex.proto.PType.fromValue(PType.I64.ordinal());
 
         static EncodeResult encode(DType.Extension dtype, DateTimePartsData data, EncodeContext ctx) {
             ByteBuffer extMeta = dtype.metadata();
@@ -127,12 +127,7 @@ public final class DateTimePartsEncoding implements Encoding {
             EncodeNode secondsNode = EncodeNode.remapBufferIndices(secondsResult.rootNode(), off1);
             EncodeNode subsecondsNode = EncodeNode.remapBufferIndices(subsecondsResult.rootNode(), off2);
 
-            byte[] metaBytes = EncodingProtos.DateTimePartsMetadata.newBuilder()
-                                       .setDaysPtype(I64_PROTO)
-                                       .setSecondsPtype(I64_PROTO)
-                                       .setSubsecondsPtype(I64_PROTO)
-                                       .build()
-                                       .toByteArray();
+            byte[] metaBytes = new DateTimePartsMetadata(I64_PROTO, I64_PROTO, I64_PROTO).encode();
 
             EncodeNode root = new EncodeNode(
                     EncodingId.VORTEX_DATETIMEPARTS,
@@ -169,9 +164,7 @@ public final class DateTimePartsEncoding implements Encoding {
                 subseconds[i] = rem % divisor;
             }
 
-            byte[] metaBytes = EncodingProtos.DateTimePartsMetadata.newBuilder()
-                                       .setDaysPtype(I64_PROTO).setSecondsPtype(I64_PROTO).setSubsecondsPtype(I64_PROTO)
-                                       .build().toByteArray();
+            byte[] metaBytes = new DateTimePartsMetadata(I64_PROTO, I64_PROTO, I64_PROTO).encode();
 
             // 3 null slots filled by the cascading compressor (days, seconds, subseconds)
             EncodeNode partialRoot = new EncodeNode(
@@ -197,18 +190,17 @@ public final class DateTimePartsEncoding implements Encoding {
             if (meta == null || meta.remaining() == 0) {
                 throw new VortexException(EncodingId.VORTEX_DATETIMEPARTS, "missing metadata");
             }
-            EncodingProtos.DateTimePartsMetadata decoded;
+            DateTimePartsMetadata decoded;
             try {
-                byte[] bytes = new byte[meta.remaining()];
-                meta.duplicate().get(bytes);
-                decoded = EncodingProtos.DateTimePartsMetadata.parseFrom(bytes);
-            } catch (InvalidProtocolBufferException e) {
+                MemorySegment metaSeg = MemorySegment.ofBuffer(meta.duplicate());
+                decoded = DateTimePartsMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            } catch (IOException e) {
                 throw new VortexException(EncodingId.VORTEX_DATETIMEPARTS, "invalid metadata: " + e.getMessage());
             }
 
-            PType daysPtype = PType.fromOrdinal(decoded.getDaysPtypeValue());
-            PType secondsPtype = PType.fromOrdinal(decoded.getSecondsPtypeValue());
-            PType subsecondsPtype = PType.fromOrdinal(decoded.getSubsecondsPtypeValue());
+            PType daysPtype = PType.fromOrdinal(decoded.days_ptype().value());
+            PType secondsPtype = PType.fromOrdinal(decoded.seconds_ptype().value());
+            PType subsecondsPtype = PType.fromOrdinal(decoded.subseconds_ptype().value());
             boolean nullable = ctx.dtype().nullable();
 
             Array days = ctx.decodeChild(0, new DType.Primitive(daysPtype, nullable), ctx.rowCount());

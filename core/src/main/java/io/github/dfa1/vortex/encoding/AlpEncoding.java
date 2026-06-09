@@ -1,15 +1,16 @@
 package io.github.dfa1.vortex.encoding;
 
-import com.google.protobuf.InvalidProtocolBufferException;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.FloatArray;
-import io.github.dfa1.vortex.proto.DTypeProtos;
-import io.github.dfa1.vortex.proto.EncodingProtos;
-import io.github.dfa1.vortex.proto.ScalarProtos;
+import io.github.dfa1.vortex.proto.ALPMetadata;
+import io.github.dfa1.vortex.proto.PatchesMetadata;
+import io.github.dfa1.vortex.proto.ScalarValue;
+
+import java.io.IOException;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -189,8 +190,7 @@ public final class AlpEncoding implements Encoding {
             EncodeNode encodedNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
 
             if (d.patchIndices().isEmpty()) {
-                byte[] metaBytes = EncodingProtos.ALPMetadata.newBuilder()
-                                       .setExpE(d.expE()).setExpF(d.expF()).build().toByteArray();
+                byte[] metaBytes = new ALPMetadata(d.expE(), d.expF(), null).encode();
                 EncodeNode root = new EncodeNode(EncodingId.VORTEX_ALP,
                     ByteBuffer.wrap(metaBytes), new EncodeNode[]{encodedNode}, new int[0]);
                 return new EncodeResult(root, List.of(encodedBuf), d.statsMin(), d.statsMax());
@@ -204,9 +204,8 @@ public final class AlpEncoding implements Encoding {
                 valBuf.setAtIndex(PTypeIO.LE_DOUBLE, i, d.patchValues().get(i));
             }
 
-            EncodingProtos.PatchesMetadata patches = buildPatchesMeta(numPatches);
-            byte[] metaBytes = EncodingProtos.ALPMetadata.newBuilder()
-                                   .setExpE(d.expE()).setExpF(d.expF()).setPatches(patches).build().toByteArray();
+            PatchesMetadata patches = buildPatchesMeta(numPatches);
+            byte[] metaBytes = new ALPMetadata(d.expE(), d.expF(), patches).encode();
 
             EncodeNode idxNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
             EncodeNode valNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
@@ -222,8 +221,7 @@ public final class AlpEncoding implements Encoding {
         private static CascadeStep encodeCascadeF64(double[] values, EncodeContext ctx) {
             AlpF64Data d = computeF64(values);
             if (d.patchIndices().isEmpty()) {
-                byte[] metaBytes = EncodingProtos.ALPMetadata.newBuilder()
-                                       .setExpE(d.expE()).setExpF(d.expF()).build().toByteArray();
+                byte[] metaBytes = new ALPMetadata(d.expE(), d.expF(), null).encode();
                 // children[0] will be filled by the compressor after recursing on the ChildSlot
                 EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_ALP,
                     ByteBuffer.wrap(metaBytes), new EncodeNode[1], new int[0]);
@@ -239,9 +237,8 @@ public final class AlpEncoding implements Encoding {
                 valBuf.setAtIndex(PTypeIO.LE_DOUBLE, i, d.patchValues().get(i));
             }
 
-            EncodingProtos.PatchesMetadata patches = buildPatchesMeta(numPatches);
-            byte[] metaBytes = EncodingProtos.ALPMetadata.newBuilder()
-                                   .setExpE(d.expE()).setExpF(d.expF()).setPatches(patches).build().toByteArray();
+            PatchesMetadata patches = buildPatchesMeta(numPatches);
+            byte[] metaBytes = new ALPMetadata(d.expE(), d.expF(), patches).encode();
 
             // ownedBuffers[0]=idxBuf, [1]=valBuf; child I64 will be appended after (starting at idx 2)
             EncodeNode idxNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
@@ -327,8 +324,7 @@ public final class AlpEncoding implements Encoding {
             EncodeNode encodedNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
 
             if (patchIndices.isEmpty()) {
-                byte[] metaBytes = EncodingProtos.ALPMetadata.newBuilder()
-                                       .setExpE(expE).setExpF(expF).build().toByteArray();
+                byte[] metaBytes = new ALPMetadata(expE, expF, null).encode();
                 EncodeNode root = new EncodeNode(EncodingId.VORTEX_ALP,
                     ByteBuffer.wrap(metaBytes), new EncodeNode[]{encodedNode}, new int[0]);
                 return new EncodeResult(root, List.of(encodedBuf), statsMin, statsMax);
@@ -342,13 +338,12 @@ public final class AlpEncoding implements Encoding {
                 valBuf.setAtIndex(PTypeIO.LE_FLOAT, i, patchValues.get(i));
             }
 
-            EncodingProtos.PatchesMetadata patches = EncodingProtos.PatchesMetadata.newBuilder()
-                                                         .setLen(numPatches)
-                                                         .setOffset(0)
-                                                         .setIndicesPtype(DTypeProtos.PType.forNumber(PType.U32.ordinal()))
-                                                         .build();
-            byte[] metaBytes = EncodingProtos.ALPMetadata.newBuilder()
-                                   .setExpE(expE).setExpF(expF).setPatches(patches).build().toByteArray();
+            PatchesMetadata patches = new PatchesMetadata(
+                    numPatches,
+                    0L,
+                    io.github.dfa1.vortex.proto.PType.fromValue(PType.U32.ordinal()),
+                    null, null, null);
+            byte[] metaBytes = new ALPMetadata(expE, expF, patches).encode();
 
             EncodeNode idxNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
             EncodeNode valNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
@@ -359,20 +354,20 @@ public final class AlpEncoding implements Encoding {
             return new EncodeResult(root, List.of(encodedBuf, idxBuf, valBuf), statsMin, statsMax);
         }
 
-        private static EncodingProtos.PatchesMetadata buildPatchesMeta(int numPatches) {
-            return EncodingProtos.PatchesMetadata.newBuilder()
-                       .setLen(numPatches)
-                       .setOffset(0)
-                       .setIndicesPtype(DTypeProtos.PType.forNumber(PType.U32.ordinal()))
-                       .build();
+        private static PatchesMetadata buildPatchesMeta(int numPatches) {
+            return new PatchesMetadata(
+                    numPatches,
+                    0L,
+                    io.github.dfa1.vortex.proto.PType.fromValue(PType.U32.ordinal()),
+                    null, null, null);
         }
 
         private static byte[] scalarF64(double v) {
-            return ScalarProtos.ScalarValue.newBuilder().setF64Value(v).build().toByteArray();
+            return ScalarValue.ofF64Value(v).encode();
         }
 
         private static byte[] scalarF32(float v) {
-            return ScalarProtos.ScalarValue.newBuilder().setF32Value(v).build().toByteArray();
+            return ScalarValue.ofF32Value(v).encode();
         }
 
         private record AlpF64Data(int expE, int expF, long[] encodedArr,
@@ -387,13 +382,14 @@ public final class AlpEncoding implements Encoding {
             ByteBuffer rawMeta = ctx.metadata();
             // Proto3 omits fields equal to their default value (0), so ALPMetadata{expE=0,expF=0}
             // serialises to 0 bytes; treat null/empty metadata as the all-zero default instance.
-            EncodingProtos.ALPMetadata meta;
+            ALPMetadata meta;
             if (rawMeta == null || !rawMeta.hasRemaining()) {
-                meta = EncodingProtos.ALPMetadata.getDefaultInstance();
+                meta = new ALPMetadata(0, 0, null);
             } else {
                 try {
-                    meta = EncodingProtos.ALPMetadata.parseFrom(rawMeta.duplicate());
-                } catch (InvalidProtocolBufferException e) {
+                    MemorySegment metaSeg = MemorySegment.ofBuffer(rawMeta.duplicate());
+                    meta = ALPMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+                } catch (IOException e) {
                     throw new VortexException(EncodingId.VORTEX_ALP, "invalid metadata", e);
                 }
             }
@@ -402,8 +398,8 @@ public final class AlpEncoding implements Encoding {
                 throw new VortexException(EncodingId.VORTEX_ALP, "expected primitive dtype, got " + ctx.dtype());
             }
 
-            int expE = meta.getExpE();
-            int expF = meta.getExpF();
+            int expE = meta.exp_e();
+            int expF = meta.exp_f();
             PType ptype = p.ptype();
             long n = ctx.rowCount();
 
@@ -414,7 +410,7 @@ public final class AlpEncoding implements Encoding {
             };
         }
 
-        private static Array decodeF64(DecodeContext ctx, EncodingProtos.ALPMetadata meta, int expE, int expF, long n) {
+        private static Array decodeF64(DecodeContext ctx, ALPMetadata meta, int expE, int expF, long n) {
             // Two separate lookups match Rust's left-to-right: (encoded * F10[f]) * IF10[e].
             // Precomputing a single factor = F10[f] * IF10[e] then encoded * factor uses different
             // associativity and can produce different IEEE 754 results for some (expE, expF) pairs.
@@ -445,14 +441,14 @@ public final class AlpEncoding implements Encoding {
                 }
             }
 
-            if (meta.hasPatches()) {
-                applyPatches(ctx, meta.getPatches(), buf, 8);
+            if (meta.patches() != null) {
+                applyPatches(ctx, meta.patches(), buf, 8);
             }
 
             return new DoubleArray(ctx.dtype(), n, buf.asReadOnly());
         }
 
-        private static Array decodeF32(DecodeContext ctx, EncodingProtos.ALPMetadata meta, int expE, int expF, long n) {
+        private static Array decodeF32(DecodeContext ctx, ALPMetadata meta, int expE, int expF, long n) {
             // Two separate lookups match Rust's left-to-right: (encoded * F10[f]) * IF10[e].
             float df = F10_F32[expF];
             float de = IF10_F32[expE];
@@ -476,18 +472,18 @@ public final class AlpEncoding implements Encoding {
                 }
             }
 
-            if (meta.hasPatches()) {
-                applyPatches(ctx, meta.getPatches(), buf32, 4);
+            if (meta.patches() != null) {
+                applyPatches(ctx, meta.patches(), buf32, 4);
             }
 
             return new FloatArray(ctx.dtype(), n, buf32.asReadOnly());
         }
 
-        private static void applyPatches(DecodeContext ctx, EncodingProtos.PatchesMetadata pm,
+        private static void applyPatches(DecodeContext ctx, PatchesMetadata pm,
             MemorySegment out, int elemBytes) {
-            long numPatches = pm.getLen();
-            long offset = pm.getOffset();
-            PType idxPtype = ptypeFromProto(pm.getIndicesPtype());
+            long numPatches = pm.len();
+            long offset = pm.offset();
+            PType idxPtype = ptypeFromProto(pm.indices_ptype());
             int idxBytes = idxPtype.byteSize();
 
             MemorySegment idxSeg = ctx.decodeChildSegment(1, new DType.Primitive(idxPtype, false), numPatches);
@@ -519,8 +515,8 @@ public final class AlpEncoding implements Encoding {
             };
         }
 
-        private static PType ptypeFromProto(DTypeProtos.PType proto) {
-            return PType.fromOrdinal(proto.getNumber());
+        private static PType ptypeFromProto(io.github.dfa1.vortex.proto.PType proto) {
+            return PType.fromOrdinal(proto.value());
         }
     }
 }

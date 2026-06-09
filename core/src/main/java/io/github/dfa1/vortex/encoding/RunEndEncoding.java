@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.encoding;
 
-import com.google.protobuf.InvalidProtocolBufferException;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -12,8 +11,9 @@ import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
-import io.github.dfa1.vortex.proto.DTypeProtos;
-import io.github.dfa1.vortex.proto.EncodingProtos;
+import io.github.dfa1.vortex.proto.RunEndMetadata;
+
+import java.io.IOException;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
@@ -96,12 +96,11 @@ public final class RunEndEncoding implements Encoding {
                 PTypeIO.set(valuesBuf, (long) i * elemBytes, ptype, values.get(i));
             }
 
-            byte[] metaBytes = EncodingProtos.RunEndMetadata.newBuilder()
-                                       .setEndsPtype(io.github.dfa1.vortex.proto.DTypeProtos.PType.forNumber(PType.U32.ordinal()))
-                                       .setNumRuns(numRuns)
-                                       .setOffset(0)
-                                       .build()
-                                       .toByteArray();
+            byte[] metaBytes = new RunEndMetadata(
+                    io.github.dfa1.vortex.proto.PType.fromValue(PType.U32.ordinal()),
+                    numRuns,
+                    0L
+            ).encode();
 
             EncodeNode endsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
             EncodeNode valuesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
@@ -142,16 +141,17 @@ public final class RunEndEncoding implements Encoding {
                 throw new VortexException(EncodingId.VORTEX_RUNEND, "missing metadata");
             }
 
-            EncodingProtos.RunEndMetadata meta;
+            RunEndMetadata meta;
             try {
-                meta = EncodingProtos.RunEndMetadata.parseFrom(rawMeta.duplicate());
-            } catch (InvalidProtocolBufferException e) {
+                MemorySegment metaSeg = MemorySegment.ofBuffer(rawMeta.duplicate());
+                meta = RunEndMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            } catch (IOException e) {
                 throw new VortexException(EncodingId.VORTEX_RUNEND, "invalid metadata", e);
             }
 
-            PType endsPtype = ptypeFromProto(meta.getEndsPtype());
-            long numRuns = meta.getNumRuns();
-            long offset = meta.getOffset();
+            PType endsPtype = ptypeFromProto(meta.ends_ptype());
+            long numRuns = meta.num_runs();
+            long offset = meta.offset();
 
             long n = ctx.rowCount();
             DType endsDtype = new DType.Primitive(endsPtype, false);
@@ -365,8 +365,8 @@ public final class RunEndEncoding implements Encoding {
             };
         }
 
-        private static PType ptypeFromProto(DTypeProtos.PType proto) {
-            return PType.fromOrdinal(proto.getNumber());
+        private static PType ptypeFromProto(io.github.dfa1.vortex.proto.PType proto) {
+            return PType.fromOrdinal(proto.value());
         }
     }
 }

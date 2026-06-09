@@ -1,14 +1,14 @@
 package io.github.dfa1.vortex.encoding;
 
-import com.google.protobuf.InvalidProtocolBufferException;
+import java.io.IOException;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.FloatArray;
-import io.github.dfa1.vortex.proto.DTypeProtos;
-import io.github.dfa1.vortex.proto.EncodingProtos;
+import io.github.dfa1.vortex.proto.ALPRDMetadata;
+import io.github.dfa1.vortex.proto.PatchesMetadata;
 
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
@@ -286,15 +286,13 @@ public final class AlpRdEncoding implements Encoding {
             EncodeNode leftNode = EncodeNode.remapBufferIndices(leftResult.rootNode(), 0);
             EncodeNode rightNode = EncodeNode.remapBufferIndices(rightResult.rootNode(), leftBufCount);
 
-            EncodingProtos.ALPRDMetadata.Builder metaBuilder = EncodingProtos.ALPRDMetadata.newBuilder()
-                                                                   .setRightBitWidth(rightBitWidth)
-                                                                   .setDictLen(dict.length)
-                                                                   .setLeftPartsPtype(DTypeProtos.PType.forNumber(PType.U16.ordinal()));
+            java.util.List<Integer> dictList = new ArrayList<>(dict.length);
             for (short d : dict) {
-                metaBuilder.addDict(d & 0xFFFF);
+                dictList.add(d & 0xFFFF);
             }
 
             EncodeNode[] children;
+            PatchesMetadata patchesMeta = null;
             if (excPos.isEmpty()) {
                 children = new EncodeNode[]{leftNode, rightNode};
             } else {
@@ -315,16 +313,21 @@ public final class AlpRdEncoding implements Encoding {
                 EncodeNode idxNode = EncodeNode.remapBufferIndices(idxResult.rootNode(), idxOffset);
                 EncodeNode valNode = EncodeNode.remapBufferIndices(valResult.rootNode(), idxOffset + idxBufCount);
 
-                EncodingProtos.PatchesMetadata patches = EncodingProtos.PatchesMetadata.newBuilder()
-                                                             .setLen(excPos.size())
-                                                             .setOffset(0)
-                                                             .setIndicesPtype(DTypeProtos.PType.forNumber(PType.U64.ordinal()))
-                                                             .build();
-                metaBuilder.setPatches(patches);
+                patchesMeta = new PatchesMetadata(
+                        (long) excPos.size(),
+                        0L,
+                        io.github.dfa1.vortex.proto.PType.fromValue(PType.U64.ordinal()),
+                        null, null, null);
                 children = new EncodeNode[]{leftNode, rightNode, idxNode, valNode};
             }
 
-            byte[] metaBytes = metaBuilder.build().toByteArray();
+            byte[] metaBytes = new ALPRDMetadata(
+                    rightBitWidth,
+                    dict.length,
+                    dictList,
+                    io.github.dfa1.vortex.proto.PType.fromValue(PType.U16.ordinal()),
+                    patchesMeta
+            ).encode();
             EncodeNode root = new EncodeNode(
                 EncodingId.VORTEX_ALPRD, ByteBuffer.wrap(metaBytes), children, new int[]{});
             return new EncodeResult(root, List.copyOf(allBuffers), null, null);
@@ -343,11 +346,12 @@ public final class AlpRdEncoding implements Encoding {
             EncodeNode leftNode = EncodeNode.remapBufferIndices(leftResult.rootNode(), 0);
             EncodeNode rightNode = EncodeNode.remapBufferIndices(rightResult.rootNode(), leftBufCount);
 
-            byte[] metaBytes = EncodingProtos.ALPRDMetadata.newBuilder()
-                                   .setRightBitWidth(48)
-                                   .setDictLen(0)
-                                   .setLeftPartsPtype(DTypeProtos.PType.forNumber(PType.U16.ordinal()))
-                                   .build().toByteArray();
+            byte[] metaBytes = new ALPRDMetadata(
+                    48,
+                    0,
+                    java.util.List.of(),
+                    io.github.dfa1.vortex.proto.PType.fromValue(PType.U16.ordinal()),
+                    null).encode();
 
             EncodeNode root = new EncodeNode(
                 EncodingId.VORTEX_ALPRD, ByteBuffer.wrap(metaBytes),
@@ -369,18 +373,18 @@ public final class AlpRdEncoding implements Encoding {
     private static final class Decoder {
 
         static Array decode(DecodeContext ctx) {
-            EncodingProtos.ALPRDMetadata meta = parseMeta(ctx);
+            ALPRDMetadata meta = parseMeta(ctx);
 
             if (!(ctx.dtype() instanceof DType.Primitive p)) {
                 throw new VortexException(EncodingId.VORTEX_ALPRD,
                     "expected primitive dtype, got " + ctx.dtype());
             }
 
-            int rightBitWidth = meta.getRightBitWidth();
-            int dictLen = meta.getDictLen();
+            int rightBitWidth = meta.right_bit_width();
+            int dictLen = meta.dict_len();
             short[] dict = new short[dictLen];
             for (int i = 0; i < dictLen; i++) {
-                dict[i] = (short) (meta.getDict(i) & 0xFFFF);
+                dict[i] = (short) (meta.dict().get(i) & 0xFFFF);
             }
 
             long n = ctx.rowCount();
@@ -395,7 +399,7 @@ public final class AlpRdEncoding implements Encoding {
         }
 
         private static Array decodeF64(DecodeContext ctx,
-            EncodingProtos.ALPRDMetadata meta,
+            ALPRDMetadata meta,
             short[] dict, int rightBitWidth, long n) {
             MemorySegment leftSeg = ctx.decodeChildSegment(0, U16_DTYPE, n);
             MemorySegment rightSeg = ctx.decodeChildSegment(1, U64_DTYPE, n);
@@ -410,15 +414,15 @@ public final class AlpRdEncoding implements Encoding {
                 out.setAtIndex(PTypeIO.LE_LONG, i, leftBits | rightBits);
             }
 
-            if (meta.hasPatches()) {
-                applyPatchesF64(ctx, meta.getPatches(), out, rightSeg, rightCap, rightBitWidth);
+            if (meta.patches() != null) {
+                applyPatchesF64(ctx, meta.patches(), out, rightSeg, rightCap, rightBitWidth);
             }
 
             return new DoubleArray(ctx.dtype(), n, out.asReadOnly());
         }
 
         private static Array decodeF32(DecodeContext ctx,
-            EncodingProtos.ALPRDMetadata meta,
+            ALPRDMetadata meta,
             short[] dict, int rightBitWidth, long n) {
             MemorySegment leftSeg = ctx.decodeChildSegment(0, U16_DTYPE, n);
             MemorySegment rightSeg = ctx.decodeChildSegment(1, U32_DTYPE, n);
@@ -433,19 +437,19 @@ public final class AlpRdEncoding implements Encoding {
                 out.setAtIndex(PTypeIO.LE_INT, i, leftBits | rightBits);
             }
 
-            if (meta.hasPatches()) {
-                applyPatchesF32(ctx, meta.getPatches(), out, rightSeg, rightCap, rightBitWidth);
+            if (meta.patches() != null) {
+                applyPatchesF32(ctx, meta.patches(), out, rightSeg, rightCap, rightBitWidth);
             }
 
             return new FloatArray(ctx.dtype(), n, out.asReadOnly());
         }
 
         private static void applyPatchesF64(DecodeContext ctx,
-            EncodingProtos.PatchesMetadata pm,
+            PatchesMetadata pm,
             MemorySegment out, MemorySegment rightSeg, long rightCap, int rightBitWidth) {
-            long numPatches = pm.getLen();
-            long offset = pm.getOffset();
-            PType idxPtype = PType.fromOrdinal(pm.getIndicesPtype().getNumber());
+            long numPatches = pm.len();
+            long offset = pm.offset();
+            PType idxPtype = PType.fromOrdinal(pm.indices_ptype().value());
 
             MemorySegment idxSeg = ctx.decodeChildSegment(2, new DType.Primitive(idxPtype, false), numPatches);
             MemorySegment valSeg = ctx.decodeChildSegment(3, U16_DTYPE, numPatches);
@@ -461,11 +465,11 @@ public final class AlpRdEncoding implements Encoding {
             }
         }
 
-        private static void applyPatchesF32(DecodeContext ctx, EncodingProtos.PatchesMetadata pm,
+        private static void applyPatchesF32(DecodeContext ctx, PatchesMetadata pm,
             MemorySegment out, MemorySegment rightSeg, long rightCap, int rightBitWidth) {
-            long numPatches = pm.getLen();
-            long offset = pm.getOffset();
-            PType idxPtype = PType.fromOrdinal(pm.getIndicesPtype().getNumber());
+            long numPatches = pm.len();
+            long offset = pm.offset();
+            PType idxPtype = PType.fromOrdinal(pm.indices_ptype().value());
 
             MemorySegment idxSeg = ctx.decodeChildSegment(2, new DType.Primitive(idxPtype, false), numPatches);
             MemorySegment valSeg = ctx.decodeChildSegment(3, U16_DTYPE, numPatches);
@@ -492,14 +496,16 @@ public final class AlpRdEncoding implements Encoding {
             };
         }
 
-        private static EncodingProtos.ALPRDMetadata parseMeta(DecodeContext ctx) {
+        private static ALPRDMetadata parseMeta(DecodeContext ctx) {
             ByteBuffer rawMeta = ctx.metadata();
             if (rawMeta == null || !rawMeta.hasRemaining()) {
-                return EncodingProtos.ALPRDMetadata.getDefaultInstance();
+                return new ALPRDMetadata(0, 0, java.util.List.of(),
+                        io.github.dfa1.vortex.proto.PType.fromValue(PType.U16.ordinal()), null);
             }
             try {
-                return EncodingProtos.ALPRDMetadata.parseFrom(rawMeta.duplicate());
-            } catch (InvalidProtocolBufferException e) {
+                MemorySegment metaSeg = MemorySegment.ofBuffer(rawMeta.duplicate());
+                return ALPRDMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            } catch (IOException e) {
                 throw new VortexException(EncodingId.VORTEX_ALPRD, "invalid metadata", e);
             }
         }

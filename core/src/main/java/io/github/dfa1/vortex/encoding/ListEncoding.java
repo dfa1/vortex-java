@@ -1,12 +1,13 @@
 package io.github.dfa1.vortex.encoding;
 
-import com.google.protobuf.InvalidProtocolBufferException;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.ListArray;
-import io.github.dfa1.vortex.proto.EncodingProtos;
+import io.github.dfa1.vortex.proto.ListMetadata;
+
+import java.io.IOException;
 
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
@@ -74,11 +75,10 @@ public final class ListEncoding implements Encoding {
             EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, elemBufCount);
 
             long elementsLen = data.offsets()[(int) data.outerLen()];
-            byte[] metaBytes = EncodingProtos.ListMetadata.newBuilder()
-                                       .setElementsLen(elementsLen)
-                                       .setOffsetPtype(io.github.dfa1.vortex.proto.DTypeProtos.PType.forNumber(PType.I64.ordinal()))
-                                       .build()
-                                       .toByteArray();
+            byte[] metaBytes = new ListMetadata(
+                    elementsLen,
+                    io.github.dfa1.vortex.proto.PType.fromValue(PType.I64.ordinal())
+            ).encode();
 
             EncodeNode root = new EncodeNode(
                     EncodingId.VORTEX_LIST,
@@ -112,15 +112,16 @@ public final class ListEncoding implements Encoding {
                         "expected 2 or 3 children, got " + nchildren);
             }
 
-            EncodingProtos.ListMetadata meta;
+            ListMetadata meta;
             try {
-                meta = EncodingProtos.ListMetadata.parseFrom(ctx.metadata().duplicate());
-            } catch (InvalidProtocolBufferException e) {
+                MemorySegment metaSeg = MemorySegment.ofBuffer(ctx.metadata().duplicate());
+                meta = ListMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            } catch (IOException e) {
                 throw new VortexException(EncodingId.VORTEX_LIST, "invalid metadata", e);
             }
 
-            long elementsLen = meta.getElementsLen();
-            PType offsetPtype = PType.fromOrdinal(meta.getOffsetPtype().getNumber());
+            long elementsLen = meta.elements_len();
+            PType offsetPtype = PType.fromOrdinal(meta.offset_ptype().value());
             long outerLen = ctx.rowCount();
 
             DType elementDtype = listDtype.elementType();

@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.encoding;
 
-import com.google.protobuf.InvalidProtocolBufferException;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -12,7 +11,10 @@ import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.MaskedArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
-import io.github.dfa1.vortex.proto.EncodingProtos;
+import io.github.dfa1.vortex.proto.PcoChunkInfo;
+import io.github.dfa1.vortex.proto.PcoMetadata;
+
+import java.io.IOException;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
@@ -94,7 +96,7 @@ public final class PcoEncoding implements Encoding {
                 ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
         static Array decode(DecodeContext ctx) {
-            EncodingProtos.PcoMetadata meta = parseMeta(ctx);
+            PcoMetadata meta = parseMeta(ctx);
             validateHeader(meta);
 
             DType dtype = ctx.dtype();
@@ -128,7 +130,7 @@ public final class PcoEncoding implements Encoding {
             // decodePage always writes U64 latents (8 bytes per element).
             MemorySegment rawLatents = ctx.arena().allocate(validCount * Long.BYTES);
 
-            int nChunks = meta.getChunksCount();
+            int nChunks = meta.chunks().size();
             int bufIdx = 0;
             long rawByteOffset = 0L;
 
@@ -138,7 +140,7 @@ public final class PcoEncoding implements Encoding {
             int[] batchOffsetBits2 = new int[PcoTansDecoder.BATCH_N];
 
             for (int c = 0; c < nChunks; c++) {
-                EncodingProtos.PcoChunkInfo chunkInfo = meta.getChunks(c);
+                PcoChunkInfo chunkInfo = meta.chunks().get(c);
                 MemorySegment chunkMetaBuf = ctx.buffer(bufIdx++);
                 PcoChunkMeta chunkMeta = readChunkMeta(chunkMetaBuf, dtypeSize);
 
@@ -148,16 +150,16 @@ public final class PcoEncoding implements Encoding {
 
                 // Compute total values in this chunk.
                 int chunkN = 0;
-                for (int p = 0; p < chunkInfo.getPagesCount(); p++) {
-                    chunkN += chunkInfo.getPages(p).getNValues();
+                for (int p = 0; p < chunkInfo.pages().size(); p++) {
+                    chunkN += chunkInfo.pages().get(p).n_values();
                 }
 
                 if (deltaVariant == 3) {
                     // Conv1 delta: 64-bit check is in readChunkMeta; 64-bit case never reaches here.
                     PcoTansDecoder primaryTans = PcoTansDecoder.build(
                             chunkMeta.ansSizeLog(), chunkMeta.bins());
-                    for (int p = 0; p < chunkInfo.getPagesCount(); p++) {
-                        int pageN = chunkInfo.getPages(p).getNValues();
+                    for (int p = 0; p < chunkInfo.pages().size(); p++) {
+                        int pageN = chunkInfo.pages().get(p).n_values();
                         MemorySegment pageBuf = ctx.buffer(bufIdx++);
                         rawByteOffset = decodeConv1Page(
                                 primaryTans, chunkMeta.ansSizeLog(),
@@ -182,8 +184,8 @@ public final class PcoEncoding implements Encoding {
                     int windowN = 1 << chunkMeta.windowNLog();
                     long mid = typeMid(dtypeSize);
                     long mask = typeMask(dtypeSize);
-                    for (int p = 0; p < chunkInfo.getPagesCount(); p++) {
-                        int pageN = chunkInfo.getPages(p).getNValues();
+                    for (int p = 0; p < chunkInfo.pages().size(); p++) {
+                        int pageN = chunkInfo.pages().get(p).n_values();
                         MemorySegment pageBuf = ctx.buffer(bufIdx++);
                         rawByteOffset = decodeLookbackPage(
                                 deltaTans, chunkMeta.deltaAnsSizeLog(),
@@ -198,8 +200,8 @@ public final class PcoEncoding implements Encoding {
                     // Single-latent var: Classic or Dict.
                     int primaryDtypeSize = (mode == 4) ? 32 : dtypeSize;
                     PcoTansDecoder tans = PcoTansDecoder.build(chunkMeta.ansSizeLog(), chunkMeta.bins());
-                    for (int p = 0; p < chunkInfo.getPagesCount(); p++) {
-                        int pageN = chunkInfo.getPages(p).getNValues();
+                    for (int p = 0; p < chunkInfo.pages().size(); p++) {
+                        int pageN = chunkInfo.pages().get(p).n_values();
                         MemorySegment pageBuf = ctx.buffer(bufIdx++);
                         rawByteOffset = decodeClassicPage(tans, chunkMeta.ansSizeLog(),
                                 chunkMeta.deltaOrder(), primaryDtypeSize,
@@ -221,8 +223,8 @@ public final class PcoEncoding implements Encoding {
 
                     MemorySegment rawAdjs = ctx.arena().allocate((long) chunkN * Long.BYTES);
                     long adjByteOffset = 0L;
-                    for (int p = 0; p < chunkInfo.getPagesCount(); p++) {
-                        int pageN = chunkInfo.getPages(p).getNValues();
+                    for (int p = 0; p < chunkInfo.pages().size(); p++) {
+                        int pageN = chunkInfo.pages().get(p).n_values();
                         MemorySegment pageBuf = ctx.buffer(bufIdx++);
                         decodeIntMultPage(primaryTans, primaryAnsSizeLog, deltaOrder,
                                 secondaryTans, secondaryAnsSizeLog, secondaryDeltaOrder,
@@ -853,21 +855,22 @@ public final class PcoEncoding implements Encoding {
             return bins;
         }
 
-        private static EncodingProtos.PcoMetadata parseMeta(DecodeContext ctx) {
+        private static PcoMetadata parseMeta(DecodeContext ctx) {
             ByteBuffer raw = ctx.metadata();
             if (raw == null) {
                 throw new VortexException(EncodingId.VORTEX_PCO, "missing PcoMetadata");
             }
             try {
-                return EncodingProtos.PcoMetadata.parseFrom(raw.duplicate());
-            } catch (InvalidProtocolBufferException e) {
+                MemorySegment metaSeg = MemorySegment.ofBuffer(raw.duplicate());
+                return PcoMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            } catch (IOException e) {
                 throw new VortexException(EncodingId.VORTEX_PCO,
                         "invalid PcoMetadata: " + e.getMessage());
             }
         }
 
-        private static void validateHeader(EncodingProtos.PcoMetadata meta) {
-            byte[] header = meta.getHeader().toByteArray();
+        private static void validateHeader(PcoMetadata meta) {
+            byte[] header = meta.header();
             if (header.length < 2) {
                 throw new VortexException(EncodingId.VORTEX_PCO,
                         "pco header too short: " + header.length + " bytes");

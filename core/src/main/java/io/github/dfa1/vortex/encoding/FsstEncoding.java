@@ -1,13 +1,13 @@
 package io.github.dfa1.vortex.encoding;
 
-import com.google.protobuf.InvalidProtocolBufferException;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.VarBinArray;
-import io.github.dfa1.vortex.proto.EncodingProtos;
+import io.github.dfa1.vortex.proto.FSSTMetadata;
 
+import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -144,13 +144,10 @@ public final class FsstEncoding implements Encoding {
                 codesOffBuf.setAtIndex(PTypeIO.LE_INT, i + 1, (int) off);
             }
 
-            byte[] metaBytes = EncodingProtos.FSSTMetadata.newBuilder()
-                                       .setUncompressedLengthsPtype(
-                                               io.github.dfa1.vortex.proto.DTypeProtos.PType.forNumber(PType.I32.ordinal()))
-                                       .setCodesOffsetsPtype(
-                                               io.github.dfa1.vortex.proto.DTypeProtos.PType.forNumber(PType.I32.ordinal()))
-                                       .build()
-                                       .toByteArray();
+            byte[] metaBytes = new FSSTMetadata(
+                    io.github.dfa1.vortex.proto.PType.fromValue(PType.I32.ordinal()),
+                    io.github.dfa1.vortex.proto.PType.fromValue(PType.I32.ordinal())
+            ).encode();
 
             EncodeNode uncompLensNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 3);
             EncodeNode codesOffNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 4);
@@ -196,15 +193,16 @@ public final class FsstEncoding implements Encoding {
             if (rawMeta == null) {
                 throw new VortexException(EncodingId.VORTEX_FSST, "missing metadata");
             }
-            EncodingProtos.FSSTMetadata meta;
+            FSSTMetadata meta;
             try {
-                meta = EncodingProtos.FSSTMetadata.parseFrom(rawMeta.duplicate());
-            } catch (InvalidProtocolBufferException e) {
+                MemorySegment metaSeg = MemorySegment.ofBuffer(rawMeta.duplicate());
+                meta = FSSTMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            } catch (IOException e) {
                 throw new VortexException(EncodingId.VORTEX_FSST, "invalid metadata", e);
             }
 
-            PType uncompLenPType = PType.fromOrdinal(meta.getUncompressedLengthsPtype().getNumber());
-            PType codesOffPType = PType.fromOrdinal(meta.getCodesOffsetsPtype().getNumber());
+            PType uncompLenPType = PType.fromOrdinal(meta.uncompressed_lengths_ptype().value());
+            PType codesOffPType = PType.fromOrdinal(meta.codes_offsets_ptype().value());
 
             long n = ctx.rowCount();
 
