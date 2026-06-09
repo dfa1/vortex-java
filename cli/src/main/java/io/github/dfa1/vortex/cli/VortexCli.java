@@ -1,11 +1,17 @@
 package io.github.dfa1.vortex.cli;
 
 import java.io.PrintStream;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /// Entry point for the Vortex command-line tool.
 ///
 /// Exit codes: see {@link ExitStatus}.
 public final class VortexCli {
+
+    static {
+        Logger.getLogger("dev.hardwood").setLevel(Level.WARNING);
+    }
 
     private VortexCli() {
     }
