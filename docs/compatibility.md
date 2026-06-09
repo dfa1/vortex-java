@@ -63,12 +63,12 @@ metadata. The Rust catalogue lives in
 [`vortex-array/src/extension/`](https://github.com/vortex-data/vortex/tree/develop/vortex-array/src/extension);
 each subdir below names a canonical extension id and its on-disk shape.
 
-| Extension id        | Storage                                        | Metadata                                    | Java decoder                                  | Status |
-|---------------------|-------------------------------------------------|---------------------------------------------|-----------------------------------------------|--------|
-| `vortex.date`       | I32 (days) or I64 (ms) since Unix epoch         | 1 byte: `TimeUnit` (2 = ms, 4 = days)       | `Extensions.localDate(Array, long)`           | ✅      |
-| `vortex.time`       | I32 (s/ms) or I64 (μs/ns) since midnight        | 1 byte: `TimeUnit`                          | _not yet_                                     | ❌      |
-| `vortex.timestamp`  | I64 with `TimeUnit` (s/ms/μs/ns) + optional tz  | 1 byte unit + UTF-8 tz string (optional)    | _not yet_                                     | ❌      |
-| `vortex.uuid`       | `FixedSizeList(Primitive(U8), 16)`              | 1 byte UUID version (optional, 0xff = unset) | _not yet_                                     | ❌      |
+| Extension id        | Storage                                        | Metadata                                    | Java decoder                                                                 | Status |
+|---------------------|-------------------------------------------------|---------------------------------------------|------------------------------------------------------------------------------|--------|
+| `vortex.date`       | I32 (days) or I64 (ms) since Unix epoch         | 1 byte: `TimeUnit` (2 = ms, 4 = days)       | `Extensions.localDate(Array, long)`                                          | ✅      |
+| `vortex.time`       | I32 (s/ms) or I64 (μs/ns) since midnight        | 1 byte: `TimeUnit`                          | `Extensions.localTime(DType.Extension, Array, long)`                         | ✅      |
+| `vortex.timestamp`  | I64 with `TimeUnit` (s/ms/μs/ns) + optional tz  | 1 byte unit + u16 LE tz_len + UTF-8 tz bytes | `Extensions.instant(...)` / `Extensions.zonedDateTime(...)` / `timezone(...)` | ✅      |
+| `vortex.uuid`       | `FixedSizeList(Primitive(U8), 16)`              | 1 byte UUID version (optional, 0xff = unset) | `Extensions.uuid(Array, long)`                                               | ✅      |
 
 `TimeUnit` (see [`extension/datetime/unit.rs`](https://github.com/vortex-data/vortex/blob/develop/vortex-array/src/extension/datetime/unit.rs))
 encodes precision in the first metadata byte:
