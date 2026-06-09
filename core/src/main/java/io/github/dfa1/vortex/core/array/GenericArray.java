@@ -157,7 +157,12 @@ public final class GenericArray implements Array {
             case IntArray a -> BigInteger.valueOf(a.getInt(i));
             case ShortArray a -> BigInteger.valueOf(a.getShort(i));
             case ByteArray a -> BigInteger.valueOf(a.getByte(i));
-            case MaskedArray a -> mantissaFromChild(a.inner(), i);
+            case MaskedArray a -> {
+                if (!a.isValid(i)) {
+                    throw new VortexException("getDecimal: null cell at index " + i);
+                }
+                yield mantissaFromChild(a.inner(), i);
+            }
             default ->
                     throw new VortexException("getDecimal: unsupported mantissa child type "
                             + child.getClass().getSimpleName());
