@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.encoding;
 
-import com.google.protobuf.InvalidProtocolBufferException;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -16,8 +15,9 @@ import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.NullArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
-import io.github.dfa1.vortex.proto.ScalarProtos;
+import io.github.dfa1.vortex.proto.ScalarValue;
 
+import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
@@ -75,8 +75,8 @@ public final class ConstantEncoding implements Encoding {
                 throw new VortexException(EncodingId.VORTEX_CONSTANT, "not a constant array");
             }
             long firstRaw = readFirstRaw(data, ptype);
-            ScalarProtos.ScalarValue scalar = buildScalar(ptype, firstRaw);
-            return EncodeResult.simple(EncodingId.VORTEX_CONSTANT, MemorySegment.ofArray(scalar.toByteArray()));
+            ScalarValue scalar = buildScalar(ptype, firstRaw);
+            return EncodeResult.simple(EncodingId.VORTEX_CONSTANT, MemorySegment.ofArray(scalar.encode()));
         }
 
         private static long readFirstRaw(Object data, PType ptype) {
@@ -119,12 +119,12 @@ public final class ConstantEncoding implements Encoding {
             return true;
         }
 
-        private static ScalarProtos.ScalarValue buildScalar(PType ptype, long rawBits) {
+        private static ScalarValue buildScalar(PType ptype, long rawBits) {
             return switch (ptype) {
-                case U8, U16, U32, U64 -> ScalarProtos.ScalarValue.newBuilder().setUint64Value(rawBits).build();
-                case I8, I16, I32, I64 -> ScalarProtos.ScalarValue.newBuilder().setInt64Value(rawBits).build();
-                case F32 -> ScalarProtos.ScalarValue.newBuilder().setF32Value(Float.intBitsToFloat((int) rawBits)).build();
-                case F64 -> ScalarProtos.ScalarValue.newBuilder().setF64Value(Double.longBitsToDouble(rawBits)).build();
+                case U8, U16, U32, U64 -> ScalarValue.ofUint64Value(rawBits);
+                case I8, I16, I32, I64 -> ScalarValue.ofInt64Value(rawBits);
+                case F32 -> ScalarValue.ofF32Value(Float.intBitsToFloat((int) rawBits));
+                case F64 -> ScalarValue.ofF64Value(Double.longBitsToDouble(rawBits));
                 default -> throw new VortexException(EncodingId.VORTEX_CONSTANT, "unsupported ptype: " + ptype);
             };
         }
@@ -134,10 +134,10 @@ public final class ConstantEncoding implements Encoding {
 
         private static Array decode(DecodeContext ctx) {
             MemorySegment scalarBuf = ctx.buffer(0);
-            ScalarProtos.ScalarValue scalar;
+            ScalarValue scalar;
             try {
-                scalar = ScalarProtos.ScalarValue.parseFrom(scalarBuf.asByteBuffer());
-            } catch (InvalidProtocolBufferException e) {
+                scalar = ScalarValue.decode(scalarBuf, 0, scalarBuf.byteSize());
+            } catch (IOException e) {
                 throw new VortexException(EncodingId.VORTEX_CONSTANT, "invalid scalar value", e);
             }
 
@@ -195,9 +195,9 @@ public final class ConstantEncoding implements Encoding {
             };
         }
 
-        private static Array decodeDecimal(DecodeContext ctx, ScalarProtos.ScalarValue scalar, long n) {
+        private static Array decodeDecimal(DecodeContext ctx, ScalarValue scalar, long n) {
             // Decimal stored as i128 (16 bytes LE) in bytes_value
-            byte[] elemBytes = scalar.getBytesValue().toByteArray();
+            byte[] elemBytes = scalar.bytes_value();
             int elemLen = elemBytes.length;
             MemorySegment outSeg = ctx.arena().allocate(n * elemLen);
             MemorySegment elemSeg = MemorySegment.ofArray(elemBytes);
@@ -207,8 +207,8 @@ public final class ConstantEncoding implements Encoding {
             return new GenericArray(ctx.dtype(), n, outSeg.asReadOnly());
         }
 
-        private static Array decodeBool(DecodeContext ctx, ScalarProtos.ScalarValue scalar, long n) {
-            boolean value = scalar.getBoolValue();
+        private static Array decodeBool(DecodeContext ctx, ScalarValue scalar, long n) {
+            boolean value = scalar.bool_value() != null && scalar.bool_value();
             long numBytes = (n + 7) >>> 3;
             MemorySegment seg = ctx.arena().allocate(numBytes);
             if (value) {
@@ -219,10 +219,10 @@ public final class ConstantEncoding implements Encoding {
             return new BoolArray(ctx.dtype(), n, seg.asReadOnly());
         }
 
-        private static Array decodeString(DecodeContext ctx, ScalarProtos.ScalarValue scalar, long n) {
-            byte[] strBytes = scalar.hasStringValue()
-                                  ? scalar.getStringValue().getBytes(StandardCharsets.UTF_8)
-                                  : scalar.getBytesValue().toByteArray();
+        private static Array decodeString(DecodeContext ctx, ScalarValue scalar, long n) {
+            byte[] strBytes = scalar.string_value() != null
+                                  ? scalar.string_value().getBytes(StandardCharsets.UTF_8)
+                                  : (scalar.bytes_value() != null ? scalar.bytes_value() : new byte[0]);
 
             int strLen = strBytes.length;
 
@@ -239,16 +239,20 @@ public final class ConstantEncoding implements Encoding {
             return new VarBinArray(ctx.dtype(), n, bytesSeg.asReadOnly(), offsetsSeg.asReadOnly(), PType.I32);
         }
 
-        private static long scalarToRawBits(ScalarProtos.ScalarValue scalar, PType ptype) {
-            return switch (scalar.getKindCase()) {
-                case INT64_VALUE -> scalar.getInt64Value();
-                case UINT64_VALUE -> scalar.getUint64Value();
-                case F32_VALUE -> Float.floatToRawIntBits(scalar.getF32Value());
-                case F64_VALUE -> Double.doubleToRawLongBits(scalar.getF64Value());
-                case KIND_NOT_SET -> 0L;
-                default -> throw new VortexException(EncodingId.VORTEX_CONSTANT,
-                    "unexpected scalar kind " + scalar.getKindCase());
-            };
+        private static long scalarToRawBits(ScalarValue scalar, PType ptype) {
+            if (scalar.int64_value() != null) {
+                return scalar.int64_value();
+            }
+            if (scalar.uint64_value() != null) {
+                return scalar.uint64_value();
+            }
+            if (scalar.f32_value() != null) {
+                return Float.floatToRawIntBits(scalar.f32_value());
+            }
+            if (scalar.f64_value() != null) {
+                return Double.doubleToRawLongBits(scalar.f64_value());
+            }
+            return 0L;
         }
 
         private static void writeRaw(ByteBuffer buf, PType ptype, long rawBits) {
