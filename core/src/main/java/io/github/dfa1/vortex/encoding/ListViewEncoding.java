@@ -1,12 +1,13 @@
 package io.github.dfa1.vortex.encoding;
 
-import com.google.protobuf.InvalidProtocolBufferException;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.ListViewArray;
-import io.github.dfa1.vortex.proto.EncodingProtos;
+import io.github.dfa1.vortex.proto.ListViewMetadata;
+
+import java.io.IOException;
 
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
@@ -87,12 +88,11 @@ public final class ListViewEncoding implements Encoding {
             EncodeNode sizesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, elemBufCount + 1);
 
             long elementsLen = java.lang.reflect.Array.getLength(data.elements());
-            byte[] metaBytes = EncodingProtos.ListViewMetadata.newBuilder()
-                                       .setElementsLen(elementsLen)
-                                       .setOffsetPtype(io.github.dfa1.vortex.proto.DTypeProtos.PType.forNumber(PType.I32.ordinal()))
-                                       .setSizePtype(io.github.dfa1.vortex.proto.DTypeProtos.PType.forNumber(PType.I32.ordinal()))
-                                       .build()
-                                       .toByteArray();
+            byte[] metaBytes = new ListViewMetadata(
+                    elementsLen,
+                    io.github.dfa1.vortex.proto.PType.fromValue(PType.I32.ordinal()),
+                    io.github.dfa1.vortex.proto.PType.fromValue(PType.I32.ordinal())
+            ).encode();
 
             EncodeNode root = new EncodeNode(
                     EncodingId.VORTEX_LISTVIEW,
@@ -126,16 +126,17 @@ public final class ListViewEncoding implements Encoding {
                         "expected 3 or 4 children, got " + nchildren);
             }
 
-            EncodingProtos.ListViewMetadata meta;
+            ListViewMetadata meta;
             try {
-                meta = EncodingProtos.ListViewMetadata.parseFrom(ctx.metadata().duplicate());
-            } catch (InvalidProtocolBufferException e) {
+                MemorySegment metaSeg = MemorySegment.ofBuffer(ctx.metadata().duplicate());
+                meta = ListViewMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            } catch (IOException e) {
                 throw new VortexException(EncodingId.VORTEX_LISTVIEW, "invalid metadata", e);
             }
 
-            long elementsLen = meta.getElementsLen();
-            PType offsetPtype = PType.fromOrdinal(meta.getOffsetPtype().getNumber());
-            PType sizePtype = PType.fromOrdinal(meta.getSizePtype().getNumber());
+            long elementsLen = meta.elements_len();
+            PType offsetPtype = PType.fromOrdinal(meta.offset_ptype().value());
+            PType sizePtype = PType.fromOrdinal(meta.size_ptype().value());
             long outerLen = ctx.rowCount();
 
             DType elementDtype = listDtype.elementType();

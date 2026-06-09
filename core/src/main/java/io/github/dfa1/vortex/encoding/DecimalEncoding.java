@@ -1,12 +1,12 @@
 package io.github.dfa1.vortex.encoding;
 
-import com.google.protobuf.InvalidProtocolBufferException;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.GenericArray;
-import io.github.dfa1.vortex.proto.EncodingProtos;
+import io.github.dfa1.vortex.proto.DecimalMetadata;
 
+import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -55,8 +55,7 @@ public final class DecimalEncoding implements Encoding {
                 throw new VortexException(EncodingId.VORTEX_DECIMAL,
                         "buffer size %d not multiple of byteWidth %d".formatted(data.byteSize(), bw));
             }
-            ByteBuffer metaBuf = ByteBuffer.wrap(
-                    EncodingProtos.DecimalMetadata.newBuilder().setValuesType(valuesType).build().toByteArray());
+            ByteBuffer metaBuf = ByteBuffer.wrap(new DecimalMetadata(valuesType).encode());
             EncodeNode node = new EncodeNode(EncodingId.VORTEX_DECIMAL, metaBuf, new EncodeNode[0], new int[]{0});
             return new EncodeResult(node, List.of(data), null, null);
         }
@@ -101,15 +100,14 @@ public final class DecimalEncoding implements Encoding {
             if (meta == null || meta.remaining() == 0) {
                 throw new VortexException(EncodingId.VORTEX_DECIMAL, "missing metadata");
             }
-            EncodingProtos.DecimalMetadata decoded;
+            DecimalMetadata decoded;
             try {
-                byte[] bytes = new byte[meta.remaining()];
-                meta.duplicate().get(bytes);
-                decoded = EncodingProtos.DecimalMetadata.parseFrom(bytes);
-            } catch (InvalidProtocolBufferException e) {
+                MemorySegment metaSeg = MemorySegment.ofBuffer(meta.duplicate());
+                decoded = DecimalMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            } catch (IOException e) {
                 throw new VortexException(EncodingId.VORTEX_DECIMAL, "invalid metadata: " + e.getMessage());
             }
-            int valuesType = decoded.getValuesType();
+            int valuesType = decoded.values_type();
             int byteWidth = decimalTypeByteWidth(valuesType);
             MemorySegment buffer = ctx.buffer(0);
             long expected = ctx.rowCount() * byteWidth;

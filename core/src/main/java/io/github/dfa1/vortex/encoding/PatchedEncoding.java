@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.encoding;
 
-import com.google.protobuf.CodedInputStream;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -11,6 +10,7 @@ import io.github.dfa1.vortex.core.array.FloatArray;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
+import io.github.dfa1.vortex.proto.PatchedMetadata;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -66,20 +66,15 @@ public final class PatchedEncoding implements Encoding {
                 throw new VortexException(EncodingId.VORTEX_PATCHED, "missing metadata");
             }
 
-            long nPatches = 0;
-            long nLanes = 0;
-            long offset = 0;
+            long nPatches;
+            long nLanes;
+            long offset;
             try {
-                CodedInputStream cin = CodedInputStream.newInstance(rawMeta.duplicate());
-                while (!cin.isAtEnd()) {
-                    int tag = cin.readTag();
-                    switch (tag >>> 3) {
-                        case 1 -> nPatches = Integer.toUnsignedLong(cin.readUInt32());
-                        case 2 -> nLanes = Integer.toUnsignedLong(cin.readUInt32());
-                        case 3 -> offset = Integer.toUnsignedLong(cin.readUInt32());
-                        default -> cin.skipField(tag);
-                    }
-                }
+                MemorySegment metaSeg = MemorySegment.ofBuffer(rawMeta.duplicate());
+                PatchedMetadata meta = PatchedMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+                nPatches = Integer.toUnsignedLong(meta.n_patches());
+                nLanes = Integer.toUnsignedLong(meta.n_lanes());
+                offset = Integer.toUnsignedLong(meta.offset());
             } catch (IOException e) {
                 throw new VortexException(EncodingId.VORTEX_PATCHED, "invalid metadata", e);
             }

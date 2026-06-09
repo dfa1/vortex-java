@@ -132,3 +132,13 @@ message PcoMetadata {
   bytes header = 1;
   repeated PcoChunkInfo chunks = 2;
 }
+
+message PatchedMetadata {
+  uint32 n_patches = 1;
+  uint32 n_lanes = 2;
+  uint32 offset = 3;
+}
+
+message VariantMetadata {
+  optional vortex.dtype.DType shredded_dtype = 1;
+}

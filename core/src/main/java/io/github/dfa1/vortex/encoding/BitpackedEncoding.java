@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.encoding;
 
-import com.google.protobuf.InvalidProtocolBufferException;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -9,9 +8,11 @@ import io.github.dfa1.vortex.core.array.ByteArray;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
-import io.github.dfa1.vortex.proto.DTypeProtos;
-import io.github.dfa1.vortex.proto.EncodingProtos;
-import io.github.dfa1.vortex.proto.ScalarProtos;
+import io.github.dfa1.vortex.proto.BitPackedMetadata;
+import io.github.dfa1.vortex.proto.PatchesMetadata;
+import io.github.dfa1.vortex.proto.ScalarValue;
+
+import java.io.IOException;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -97,11 +98,7 @@ public final class BitpackedEncoding implements Encoding {
 
             MemorySegment packed = packFastLanes(longs, n, bitWidth, typeBits, ctx.arena());
 
-            byte[] metaBytes = EncodingProtos.BitPackedMetadata.newBuilder()
-                                       .setBitWidth(bitWidth)
-                                       .setOffset(0)
-                                       .build()
-                                       .toByteArray();
+            byte[] metaBytes = new BitPackedMetadata(bitWidth, 0, null).encode();
 
             byte[] statsMin = n > 0 ? statsBytes(ptype, signedMin) : null;
             byte[] statsMax = n > 0 ? statsBytes(ptype, signedMax) : null;
@@ -223,9 +220,9 @@ public final class BitpackedEncoding implements Encoding {
 
         private static byte[] statsBytes(PType ptype, long value) {
             if (isUnsigned(ptype)) {
-                return ScalarProtos.ScalarValue.newBuilder().setUint64Value(value).build().toByteArray();
+                return ScalarValue.ofUint64Value(value).encode();
             }
-            return ScalarProtos.ScalarValue.newBuilder().setInt64Value(value).build().toByteArray();
+            return ScalarValue.ofInt64Value(value).encode();
         }
 
         private static long readWordFromSeg(MemorySegment seg, int off, int typeBits) {
@@ -259,15 +256,16 @@ public final class BitpackedEncoding implements Encoding {
                 throw new VortexException(EncodingId.FASTLANES_BITPACKED, "missing metadata");
             }
 
-            EncodingProtos.BitPackedMetadata meta;
+            BitPackedMetadata meta;
             try {
-                meta = EncodingProtos.BitPackedMetadata.parseFrom(rawMeta.duplicate());
-            } catch (InvalidProtocolBufferException e) {
+                MemorySegment metaSeg = MemorySegment.ofBuffer(rawMeta.duplicate());
+                meta = BitPackedMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            } catch (IOException e) {
                 throw new VortexException(EncodingId.FASTLANES_BITPACKED, "invalid metadata", e);
             }
 
-            int bitWidth = meta.getBitWidth();
-            int offset = meta.getOffset();
+            int bitWidth = meta.bit_width();
+            int offset = meta.offset();
             PType ptype = ((DType.Primitive) ctx.dtype()).ptype();
             int typeBits = ptype.byteSize() * 8;
             long rowCount = ctx.rowCount();
@@ -276,8 +274,8 @@ public final class BitpackedEncoding implements Encoding {
             MemorySegment output = ctx.arena().allocate(rowCount * ptype.byteSize());
             fastlanesUnpackToSeg(packed, bitWidth, offset, typeBits, rowCount, output);
 
-            if (meta.hasPatches()) {
-                applyPatches(ctx, meta.getPatches(), output, ptype.byteSize());
+            if (meta.patches() != null) {
+                applyPatches(ctx, meta.patches(), output, ptype.byteSize());
             }
 
             return switch (ptype) {
@@ -694,14 +692,14 @@ public final class BitpackedEncoding implements Encoding {
             }
         }
 
-        private static void applyPatches(DecodeContext ctx, EncodingProtos.PatchesMetadata pm,
+        private static void applyPatches(DecodeContext ctx, PatchesMetadata pm,
                 MemorySegment out, int elemBytes) {
-            long numPatches = pm.getLen();
+            long numPatches = pm.len();
             if (numPatches == 0) {
                 return;
             }
-            long offset = pm.getOffset();
-            PType idxPtype = ptypeFromProto(pm.getIndicesPtype());
+            long offset = pm.offset();
+            PType idxPtype = ptypeFromProto(pm.indices_ptype());
 
             MemorySegment idxSeg = ctx.decodeChildSegment(0, new DType.Primitive(idxPtype, false), numPatches);
             MemorySegment valSeg = ctx.decodeChildSegment(1, ctx.dtype(), numPatches);
@@ -730,8 +728,8 @@ public final class BitpackedEncoding implements Encoding {
             };
         }
 
-        private static PType ptypeFromProto(DTypeProtos.PType proto) {
-            return PType.fromOrdinal(proto.getNumber());
+        private static PType ptypeFromProto(io.github.dfa1.vortex.proto.PType proto) {
+            return PType.fromOrdinal(proto.value());
         }
     }
 }
