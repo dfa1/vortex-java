@@ -7,6 +7,7 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.nio.ByteOrder;
 
 /// Fallback [Array] for dtypes that lack a dedicated concrete subtype.
 ///
@@ -169,11 +170,32 @@ public final class GenericArray implements Array {
         };
     }
 
+    private static final ValueLayout.OfShort SHORT_LE =
+            ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+    private static final ValueLayout.OfInt INT_LE =
+            ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+    private static final ValueLayout.OfLong LONG_LE =
+            ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+
     private static BigInteger readSignedLe(MemorySegment buf, long offset, int width) {
-        // Little-endian two's-complement on disk; BigInteger expects big-endian.
-        byte[] be = new byte[width];
-        for (int k = 0; k < width; k++) {
-            be[width - 1 - k] = buf.get(ValueLayout.JAVA_BYTE, offset + k);
+        return switch (width) {
+            case 1 -> BigInteger.valueOf(buf.get(ValueLayout.JAVA_BYTE, offset));
+            case 2 -> BigInteger.valueOf(buf.get(SHORT_LE, offset));
+            case 4 -> BigInteger.valueOf(buf.get(INT_LE, offset));
+            case 8 -> BigInteger.valueOf(buf.get(LONG_LE, offset));
+            case 16 -> readSigned128Le(buf, offset);
+            default -> throw new VortexException("readSignedLe: unsupported width " + width);
+        };
+    }
+
+    private static BigInteger readSigned128Le(MemorySegment buf, long offset) {
+        // Two's-complement i128 on disk in little-endian; BigInteger ingests big-endian.
+        // No SIMD intrinsic for 16-byte signed integer, so we materialise into a heap
+        // buffer here. Only fires for decimal(>18, _) — narrow-precision fast paths above
+        // stay allocation-free.
+        byte[] be = new byte[16];
+        for (int k = 0; k < 16; k++) {
+            be[15 - k] = buf.get(ValueLayout.JAVA_BYTE, offset + k);
         }
         return new BigInteger(be);
     }
