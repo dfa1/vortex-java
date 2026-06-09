@@ -105,6 +105,26 @@ class ExtensionsTest {
     }
 
     @Test
+    void localDate_indexOutOfBounds_throws() {
+        // Given — both overloads must reject indices past the array length
+        // rather than silently reading whatever the storage decoder returns
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment buf = arena.allocate(4);
+            IntArray storage = new IntArray(I32, 1, buf);
+            DType.Extension ext = new DType.Extension(Extensions.DATE, I32, null, false);
+            IntArray dated = new IntArray(DATE_DTYPE, 1, buf);
+
+            // When / Then
+            assertThatThrownBy(() -> Extensions.localDate(dated, 1))
+                    .isInstanceOf(IndexOutOfBoundsException.class);
+            assertThatThrownBy(() -> Extensions.localDate(dated, -1))
+                    .isInstanceOf(IndexOutOfBoundsException.class);
+            assertThatThrownBy(() -> Extensions.localDate(ext, storage, 1))
+                    .isInstanceOf(IndexOutOfBoundsException.class);
+        }
+    }
+
+    @Test
     void localDate_unsupportedStorage_throws() {
         // Given — a date dtype on top of a varbin array makes no semantic sense
         try (Arena arena = Arena.ofConfined()) {

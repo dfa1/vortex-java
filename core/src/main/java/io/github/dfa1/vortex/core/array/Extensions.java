@@ -5,9 +5,10 @@ import io.github.dfa1.vortex.core.VortexException;
 
 import java.time.LocalDate;
 
-/// Decoding helpers for Vortex extension dtypes (e.g. {@code vortex.date},
-/// {@code vortex.timestamp}) that ship as primitive storage arrays plus an
-/// extension id on the {@link DType}.
+/// Decoding helpers for Vortex extension dtypes that ship as a primitive
+/// storage array plus an extension id on the {@link DType}. Currently covers
+/// {@code vortex.date}; {@code vortex.time} / {@code vortex.timestamp} live
+/// on the TODO list until a public ScalarUnit type is available.
 ///
 /// Lives in core so any reader-jar consumer can decode these cells without
 /// reimplementing the storage conventions.
@@ -36,6 +37,7 @@ public final class Extensions {
         if (!(array.dtype() instanceof DType.Extension ext) || !DATE.equals(ext.extensionId())) {
             throw new VortexException("localDate called on non-date dtype: " + array.dtype());
         }
+        checkBounds(i, array.length());
         return LocalDate.ofEpochDay(epochDay(array, i));
     }
 
@@ -55,7 +57,14 @@ public final class Extensions {
         if (!DATE.equals(ext.extensionId())) {
             throw new VortexException("localDate called with non-date extension: " + ext.extensionId());
         }
+        checkBounds(i, storage.length());
         return LocalDate.ofEpochDay(epochDay(storage, i));
+    }
+
+    private static void checkBounds(long i, long length) {
+        if (i < 0 || i >= length) {
+            throw new IndexOutOfBoundsException("index " + i + " out of bounds for length " + length);
+        }
     }
 
     private static long epochDay(Array array, long i) {
