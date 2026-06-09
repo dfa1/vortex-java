@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1780955199858,
+  "lastUpdate": 1781040861661,
   "repoUrl": "https://github.com/dfa1/vortex-java",
   "entries": {
     "Benchmark": [
@@ -466,6 +466,88 @@ window.BENCHMARK_DATA = {
           {
             "name": "io.github.dfa1.vortex.performance.RustVsJavaWriteBenchmark.jniWrite",
             "value": 0.2965529220075181,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Davide Angelocola",
+            "username": "dfa1",
+            "email": "davide.angelocola@gmail.com"
+          },
+          "committer": {
+            "name": "Davide Angelocola",
+            "username": "dfa1",
+            "email": "davide.angelocola@gmail.com"
+          },
+          "id": "57a5a3871cea3c07a8d3da766b308d807c3c30fc",
+          "message": "fix(cli): silence dev.hardwood VectorSupport INFO log at startup\n\nHardwood emits a JUL INFO line on every cold start telling the user\nSIMD is disabled. Useful in benchmarks, noise in the CLI. Raise the\npackage logger to WARNING in VortexCli's static init.\n\nCo-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>",
+          "timestamp": "2026-06-09T16:53:06Z",
+          "url": "https://github.com/dfa1/vortex-java/commit/57a5a3871cea3c07a8d3da766b308d807c3c30fc"
+        },
+        "date": 1781040861323,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.javaReadCascading",
+            "value": 36.585899235977514,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.javaReadClose",
+            "value": 29.383638499535817,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.javaReadSymbol",
+            "value": 40.216640120194114,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.javaReadVolume",
+            "value": 48.59925109184558,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.jniReadClose",
+            "value": 26.194535380252365,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.jniReadSymbol",
+            "value": 4.60466406335174,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.jniReadVolume",
+            "value": 27.678471271653905,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaWriteBenchmark.javaWrite",
+            "value": 0.6411708402890054,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaWriteBenchmark.javaWriteCascading",
+            "value": 0.22297761408906502,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaWriteBenchmark.jniWrite",
+            "value": 0.31130107428340703,
             "unit": "ops/s",
             "extra": "iterations: 3\nforks: 1\nthreads: 1"
           }
