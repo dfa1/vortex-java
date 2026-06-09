@@ -209,6 +209,135 @@ class ExtensionsTest {
     }
 
     @Test
+    void instant_secondsUnit_decodesEpoch() {
+        // Given — TimeUnit tag 3 (Seconds), no tz; raw 0 = Unix epoch
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment buf = arena.allocate(8);
+            buf.set(ValueLayout.JAVA_LONG_UNALIGNED, 0, 0L);
+            LongArray storage = new LongArray(new DType.Primitive(PType.I64, false), 1, buf);
+
+            // When / Then
+            assertThat(Extensions.instant(timestampExt((byte) 3, null), storage, 0))
+                    .isEqualTo(java.time.Instant.EPOCH);
+        }
+    }
+
+    @Test
+    void instant_microsecondsUnit_handlesNegativeRaw() {
+        // Given — pre-epoch micros: 1996-02-12T00:00:00Z is 824083200_000_000 micros
+        // Negate to flip into pre-epoch so the floorDiv path is actually exercised
+        // (plain / would round the 2-micro remainder towards zero and skew seconds)
+        long micros = -1_500_001L; // -1.500001s; expected: epochSecond = -2, nanos = 499_999_000
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment buf = arena.allocate(8);
+            buf.set(ValueLayout.JAVA_LONG_UNALIGNED, 0, micros);
+            LongArray storage = new LongArray(new DType.Primitive(PType.I64, false), 1, buf);
+
+            // When
+            java.time.Instant got = Extensions.instant(timestampExt((byte) 1, null), storage, 0);
+
+            // Then
+            assertThat(got.getEpochSecond()).isEqualTo(-2L);
+            assertThat(got.getNano()).isEqualTo(499_999_000);
+        }
+    }
+
+    @Test
+    void instant_nanosecondsUnit_decodesFullPrecision() {
+        // Given — TimeUnit tag 0 (Nanoseconds): 1_000_000_001 ns = 1.000_000_001 s
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment buf = arena.allocate(8);
+            buf.set(ValueLayout.JAVA_LONG_UNALIGNED, 0, 1_000_000_001L);
+            LongArray storage = new LongArray(new DType.Primitive(PType.I64, false), 1, buf);
+
+            // When / Then
+            assertThat(Extensions.instant(timestampExt((byte) 0, null), storage, 0))
+                    .isEqualTo(java.time.Instant.ofEpochSecond(1, 1));
+        }
+    }
+
+    @Test
+    void instant_daysUnit_throws() {
+        // Given — Days isn't valid for timestamps
+        try (Arena arena = Arena.ofConfined()) {
+            LongArray storage = new LongArray(new DType.Primitive(PType.I64, false), 1, arena.allocate(8));
+
+            // When / Then
+            assertThatThrownBy(() -> Extensions.instant(timestampExt((byte) 4, null), storage, 0))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("Days unit not valid");
+        }
+    }
+
+    @Test
+    void zonedDateTime_withTimezone_appliesIt() {
+        // Given — milliseconds since epoch + a Europe/Paris tz string in metadata
+        long ms = 1_000L; // 1 second past epoch
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment buf = arena.allocate(8);
+            buf.set(ValueLayout.JAVA_LONG_UNALIGNED, 0, ms);
+            LongArray storage = new LongArray(new DType.Primitive(PType.I64, false), 1, buf);
+
+            // When
+            java.time.ZonedDateTime got = Extensions.zonedDateTime(
+                    timestampExt((byte) 2, "Europe/Paris"), storage, 0);
+
+            // Then
+            assertThat(got.getZone()).isEqualTo(java.time.ZoneId.of("Europe/Paris"));
+            assertThat(got.toInstant()).isEqualTo(java.time.Instant.ofEpochMilli(ms));
+        }
+    }
+
+    @Test
+    void zonedDateTime_noTimezone_defaultsToUtc() {
+        // Given — tz_len = 0 in metadata means caller didn't record a zone; default UTC
+        // is unambiguous and matches the Arrow convention
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment buf = arena.allocate(8);
+            buf.set(ValueLayout.JAVA_LONG_UNALIGNED, 0, 0L);
+            LongArray storage = new LongArray(new DType.Primitive(PType.I64, false), 1, buf);
+
+            // When
+            java.time.ZonedDateTime got = Extensions.zonedDateTime(
+                    timestampExt((byte) 2, null), storage, 0);
+
+            // Then
+            assertThat(got.getZone()).isEqualTo(java.time.ZoneOffset.UTC);
+        }
+    }
+
+    @Test
+    void timezone_truncatedMetadata_throws() {
+        // Given — metadata claims tz_len=5 but provides only 3 bytes of payload
+        java.nio.ByteBuffer meta = java.nio.ByteBuffer.allocate(6).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        meta.put(0, (byte) 2);     // ms
+        meta.putShort(1, (short) 5); // tz_len=5
+        meta.put(3, (byte) 'U');
+        meta.put(4, (byte) 'T');
+        meta.put(5, (byte) 'C');   // only 3 of the 5 declared bytes present
+        DType.Extension ext = new DType.Extension(Extensions.TIMESTAMP,
+                new DType.Primitive(PType.I64, false), meta, false);
+
+        // When / Then
+        assertThatThrownBy(() -> Extensions.timezone(ext))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("truncated");
+    }
+
+    private static DType.Extension timestampExt(byte tag, String tz) {
+        byte[] tzBytes = tz == null ? new byte[0] : tz.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        java.nio.ByteBuffer meta = java.nio.ByteBuffer.allocate(3 + tzBytes.length)
+                .order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        meta.put(0, tag);
+        meta.putShort(1, (short) tzBytes.length);
+        for (int k = 0; k < tzBytes.length; k++) {
+            meta.put(3 + k, tzBytes[k]);
+        }
+        return new DType.Extension(Extensions.TIMESTAMP,
+                new DType.Primitive(PType.I64, false), meta, false);
+    }
+
+    @Test
     void uuid_roundTripsKnownValue() {
         // Given — Arrow canonical layout: FixedSizeList<U8>[16]; one well-known UUID
         // (RFC 9562 example) plus its inverse, so msb/lsb extraction is exercised in

@@ -4,8 +4,16 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.TimeUnit;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.util.Optional;
 
 /// Decoding helpers for Vortex extension dtypes that ship as a primitive
 /// storage array plus an extension id on the {@link DType}. Currently covers
@@ -28,6 +36,13 @@ public final class Extensions {
     /// counting seconds / milliseconds (I32) or microseconds / nanoseconds
     /// (I64) since midnight; the unit is the first byte of {@code ext.metadata()}.
     public static final String TIME = "vortex.time";
+
+    /// Extension id for timestamp columns - storage is an I64 count of the
+    /// recorded {@link TimeUnit} since the Unix epoch, with an optional
+    /// IANA-style timezone string carried in the extension metadata.
+    /// Metadata layout: {@code byte[0] = TimeUnit tag, bytes[1..3] = tz_len
+    /// (u16 LE), bytes[3..3+tz_len] = tz UTF-8}.
+    public static final String TIMESTAMP = "vortex.timestamp";
 
     private Extensions() {
     }
@@ -141,11 +156,100 @@ public final class Extensions {
     }
 
     private static TimeUnit readUnit(DType.Extension ext) {
-        java.nio.ByteBuffer meta = ext.metadata();
+        ByteBuffer meta = ext.metadata();
         if (meta == null || !meta.hasRemaining()) {
             throw new VortexException("missing TimeUnit metadata byte for " + ext.extensionId());
         }
         return TimeUnit.fromTag(meta.get(meta.position()));
+    }
+
+    /// Decodes a {@code vortex.timestamp} cell to an {@link Instant}, ignoring
+    /// any timezone the column metadata carries. Use {@link #zonedDateTime}
+    /// when the timezone matters.
+    ///
+    /// Storage is an I64 count of the metadata-recorded {@link TimeUnit} since
+    /// the Unix epoch. {@link TimeUnit#Days} is invalid for timestamps.
+    ///
+    /// @param ext     declared extension dtype; must be {@code vortex.timestamp}
+    /// @param storage signed-integer storage array
+    /// @param i       row index, {@code 0 <= i < storage.length()}
+    /// @return decoded instant
+    /// @throws VortexException if {@code ext} isn't {@code vortex.timestamp},
+    ///         the metadata unit is Days, or storage isn't an integer primitive
+    public static Instant instant(DType.Extension ext, Array storage, long i) {
+        if (!TIMESTAMP.equals(ext.extensionId())) {
+            throw new VortexException("instant called with non-timestamp extension: " + ext.extensionId());
+        }
+        checkBounds(i, storage.length());
+        TimeUnit unit = readUnit(ext);
+        if (unit == TimeUnit.Days) {
+            throw new VortexException("instant: Days unit not valid for vortex.timestamp");
+        }
+        return instantFromRaw(epochDay(storage, i), unit);
+    }
+
+    /// Decodes a {@code vortex.timestamp} cell to a {@link ZonedDateTime}
+    /// using the timezone carried in the extension metadata. Falls back to
+    /// {@link ZoneOffset#UTC} when the metadata has no timezone string.
+    ///
+    /// @param ext     declared extension dtype; must be {@code vortex.timestamp}
+    /// @param storage signed-integer storage array
+    /// @param i       row index, {@code 0 <= i < storage.length()}
+    /// @return decoded zoned date-time
+    /// @throws VortexException if {@code ext} isn't {@code vortex.timestamp},
+    ///         the metadata unit is Days, or storage isn't an integer primitive
+    public static ZonedDateTime zonedDateTime(DType.Extension ext, Array storage, long i) {
+        Instant instant = instant(ext, storage, i);
+        return instant.atZone(timezone(ext).orElse(ZoneOffset.UTC));
+    }
+
+    /// Returns the optional IANA timezone string carried in a
+    /// {@code vortex.timestamp} extension's metadata.
+    ///
+    /// @param ext declared extension dtype
+    /// @return zone id parsed from {@code ext.metadata()} bytes 3..3+tz_len,
+    ///         or empty when {@code tz_len == 0}
+    /// @throws VortexException if the metadata is truncated mid-string
+    public static Optional<ZoneId> timezone(DType.Extension ext) {
+        ByteBuffer meta = ext.metadata();
+        if (meta == null || meta.remaining() < 3) {
+            return Optional.empty();
+        }
+        ByteBuffer le = meta.duplicate().order(ByteOrder.LITTLE_ENDIAN);
+        int basePos = le.position();
+        int tzLen = Short.toUnsignedInt(le.getShort(basePos + 1));
+        if (tzLen == 0) {
+            return Optional.empty();
+        }
+        if (le.remaining() < 3 + tzLen) {
+            throw new VortexException("timestamp metadata truncated: declared tz_len="
+                    + tzLen + " but only " + (le.remaining() - 3) + " bytes available");
+        }
+        byte[] tzBytes = new byte[tzLen];
+        for (int k = 0; k < tzLen; k++) {
+            tzBytes[k] = le.get(basePos + 3 + k);
+        }
+        return Optional.of(ZoneId.of(new String(tzBytes, StandardCharsets.UTF_8)));
+    }
+
+    private static Instant instantFromRaw(long raw, TimeUnit unit) {
+        return switch (unit) {
+            case Seconds -> Instant.ofEpochSecond(raw);
+            case Milliseconds -> Instant.ofEpochMilli(raw);
+            case Microseconds -> {
+                // floorDiv/floorMod handle negative timestamps (pre-1970) symmetrically;
+                // plain / and % round towards zero and break the seconds boundary.
+                long secs = Math.floorDiv(raw, 1_000_000L);
+                long nanos = Math.floorMod(raw, 1_000_000L) * 1_000L;
+                yield Instant.ofEpochSecond(secs, nanos);
+            }
+            case Nanoseconds -> {
+                long secs = Math.floorDiv(raw, 1_000_000_000L);
+                long nanos = Math.floorMod(raw, 1_000_000_000L);
+                yield Instant.ofEpochSecond(secs, nanos);
+            }
+            case Days -> throw new VortexException("Days unit not valid for vortex.timestamp");
+        };
     }
 
     /// Same as {@link #uuid(Array, long)} but verifies the declared extension id.
