@@ -217,7 +217,7 @@ The `cli` module ships a fat jar with subcommands for inspecting and querying Vo
 
 ```bash
 ./mvnw package -pl cli -am -DskipTests
-java -jar cli/target/vortex.jar <subcommand> [args]
+java -jar cli/target/vortex-cli-*-all.jar <subcommand> [args]
 ```
 
 | Subcommand | Syntax                                         | Description                                      |

@@ -12,7 +12,7 @@ Build the fat jar once; reuse it for every CLI recipe below:
 
 ```bash
 ./mvnw package -pl cli -am -DskipTests
-java -jar cli/target/vortex.jar <subcommand> [args]
+java -jar cli/target/vortex-cli-*-all.jar <subcommand> [args]
 ```
 
 For the full subcommand list, see [reference.md#cli](reference.md#cli).
@@ -35,7 +35,7 @@ System.out.println(total.get());
 **CLI:**
 
 ```bash
-java -jar cli/target/vortex.jar count data.vortex
+java -jar cli/target/vortex-cli-*-all.jar count data.vortex
 ```
 
 ---
@@ -55,13 +55,13 @@ try (VortexReader vf = VortexReader.open(Path.of("data.vortex"))) {
 
 ```bash
 # column names and types
-java -jar cli/target/vortex.jar schema data.vortex
+java -jar cli/target/vortex-cli-*-all.jar schema data.vortex
 
 # full layout tree with encoding IDs, row counts, buffer sizes
-java -jar cli/target/vortex.jar inspect data.vortex
+java -jar cli/target/vortex-cli-*-all.jar inspect data.vortex
 
 # per-column min/max statistics
-java -jar cli/target/vortex.jar stats data.vortex
+java -jar cli/target/vortex-cli-*-all.jar stats data.vortex
 ```
 
 ---
@@ -75,10 +75,10 @@ on demand as you navigate.
 
 ```bash
 # local file
-java -jar cli/target/vortex.jar tui data.vortex
+java -jar cli/target/vortex-cli-*-all.jar tui data.vortex
 
 # remote file (HTTP range requests)
-java -jar cli/target/vortex.jar tui https://example.com/data.vortex
+java -jar cli/target/vortex-cli-*-all.jar tui https://example.com/data.vortex
 ```
 
 A loading bar prints to stderr while metadata is read, then the screen splits
@@ -146,7 +146,7 @@ try (VortexReader vf = VortexReader.open(Path.of("trades.vortex"));
 **CLI:**
 
 ```bash
-java -jar cli/target/vortex.jar select trades.vortex symbol price
+java -jar cli/target/vortex-cli-*-all.jar select trades.vortex symbol price
 ```
 
 ---
@@ -182,7 +182,7 @@ and [reference.md#filter-expression-syntax](reference.md#filter-expression-synta
 **CLI:**
 
 ```bash
-java -jar cli/target/vortex.jar filter trades.vortex "volume >= 1000000"
+java -jar cli/target/vortex-cli-*-all.jar filter trades.vortex "volume >= 1000000"
 ```
 
 ---
@@ -207,7 +207,7 @@ try (VortexReader vf = VortexReader.open(Path.of("data.vortex"));
 
 ```bash
 # export first 10 rows to CSV
-java -jar cli/target/vortex.jar export data.vortex | head -n 11   # 1 header + 10 rows
+java -jar cli/target/vortex-cli-*-all.jar export data.vortex | head -n 11   # 1 header + 10 rows
 ```
 
 ---
@@ -240,10 +240,10 @@ ParquetImporter.importParquet(Path.of("data.parquet"), Path.of("data.vortex"), o
 
 ```bash
 # output defaults to <input>.vortex
-java -jar cli/target/vortex.jar import data.parquet
+java -jar cli/target/vortex-cli-*-all.jar import data.parquet
 
 # explicit output path
-java -jar cli/target/vortex.jar import data.parquet out.vortex
+java -jar cli/target/vortex-cli-*-all.jar import data.parquet out.vortex
 ```
 
 ---
@@ -253,7 +253,7 @@ java -jar cli/target/vortex.jar import data.parquet out.vortex
 **CLI only** (CSV has no schema — types are inferred):
 
 ```bash
-java -jar cli/target/vortex.jar import data.csv
+java -jar cli/target/vortex-cli-*-all.jar import data.csv
 # writes data.vortex, prints size savings
 ```
 
@@ -265,13 +265,13 @@ java -jar cli/target/vortex.jar import data.csv
 
 ```bash
 # all columns
-java -jar cli/target/vortex.jar export data.vortex > out.csv
+java -jar cli/target/vortex-cli-*-all.jar export data.vortex > out.csv
 
 # specific columns
-java -jar cli/target/vortex.jar select data.vortex col1 col2 > out.csv
+java -jar cli/target/vortex-cli-*-all.jar select data.vortex col1 col2 > out.csv
 
 # filtered rows
-java -jar cli/target/vortex.jar filter data.vortex "price >= 100" > out.csv
+java -jar cli/target/vortex-cli-*-all.jar filter data.vortex "price >= 100" > out.csv
 ```
 
 ---

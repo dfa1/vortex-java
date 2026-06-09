@@ -35,7 +35,7 @@ public final class VortexCli {
     }
 
     static void printUsage(PrintStream out) {
-        out.println("Usage: java -jar vortex.jar <subcommand> [args]");
+        out.println("Usage: java -jar vortex-cli-<version>-all.jar <subcommand> [args]");
         out.println("  inspect <file|url>                  print file structure; url is http(s)://");
         out.println("  tui     <file|url>                  open interactive inspector; url is http(s)://");
         out.println("  export  <file.vortex>               write CSV to stdout");
