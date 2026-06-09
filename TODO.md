@@ -198,6 +198,19 @@ relax for large fixtures.
 
 ## API
 
+- [ ] **Redesign Extension API** — current design mixes 3 concerns into overlapping shapes
+  (sealed `Extension` hierarchy + `ExtensionId` enum + `DType.Extension` wire record carrying a raw
+  `String`). Also collides on naming with `fbs.Extension`. Open spec namespace fights the closed sealed
+  type. Target: `ExtensionType<DomainT, StorageT>` interface per spec extension, populated via
+  `ExtensionRegistry` (ServiceLoader, mirrors `EncodingRegistry`). End-user code for
+  `List<LocalDate>` round-trip:
+  ```java
+  var schema = new DType.Struct(List.of("birthdays"),
+                                List.of(DateExtensionType.INSTANCE.dtype(false)), false);
+  writer.writeChunk(Map.of("birthdays", DateExtensionType.INSTANCE.encode(dates)));
+  List<LocalDate> back = DateExtensionType.INSTANCE.decodeAll(reader.column("birthdays"));
+  ```
+  Hides wire string, storage type, and epoch math. Tracked in conversation 2026-06-09.
 - [ ] Use domain primitives (`UInt32`, `UInt64`, etc.) as value classes via Project Valhalla instead of raw `long`/`int`
     - See https://dfa1.github.io/articles/rethink-domain-primitives-with-valhalla
     - Candidates: `PType` integer kinds, buffer offsets, row indices, byte lengths
