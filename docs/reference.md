@@ -223,6 +223,7 @@ java -jar cli/target/vortex.jar <subcommand> [args]
 | Subcommand | Syntax                                         | Description                                      |
 |------------|------------------------------------------------|--------------------------------------------------|
 | `inspect`  | `inspect <file.vortex>`                        | Layout tree, encodings, row counts, buffer sizes |
+| `tui`      | `tui <file.vortex \| http(s)://url>`           | Interactive terminal browser (lazy stats + data) |
 | `schema`   | `schema <file.vortex>`                         | Column names and types                           |
 | `count`    | `count <file.vortex>`                          | Total row count                                  |
 | `stats`    | `stats <file.vortex>`                          | Per-column min/max                               |

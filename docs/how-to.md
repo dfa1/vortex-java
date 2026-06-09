@@ -66,6 +66,69 @@ java -jar cli/target/vortex.jar stats data.vortex
 
 ---
 
+## Inspect interactively (TUI)
+
+For files where the static `inspect` output is too dense, the `tui` subcommand opens
+an interactive terminal browser. The layout tree is loaded lazily — per-array
+statistics, dictionary entries, hex previews, and decoded data are fetched
+on demand as you navigate.
+
+```bash
+# local file
+java -jar cli/target/vortex.jar tui data.vortex
+
+# remote file (HTTP range requests)
+java -jar cli/target/vortex.jar tui https://example.com/data.vortex
+```
+
+A loading bar prints to stderr while metadata is read, then the screen splits
+into a tree pane on the left and a details pane on the right:
+
+```
+ data.vortex                                                                    
+ v struct  (3000000 rows)                                                       
+     v timestamp: vortex.zoned  (3000000 rows, stats)              | encoding: vortex.zoned
+         > vortex.chunked  (3000000 rows)                          | rows:     3000000
+     > symbol: vortex.dict  (3000000 rows)                         | min:      1700000000000
+     > price: vortex.alp  (3000000 rows, stats)                    | max:      1700002999000
+       volume: fastlanes.bitpacked  (3000000 rows)                 |
+                                                                   | bit width: 21
+                                                                   | offsets:   8 segments
+                                                                   |
+                                                                   | preview (hex):
+                                                                   |   0x00f0c2e9b3 8c01...
+ ↑↓ nav   →/Enter expand   ← collapse   q quit                                  
+```
+
+**Keymap:**
+
+| Key                 | Action                                  |
+|---------------------|-----------------------------------------|
+| `↑` / `↓`           | Move selection one row                  |
+| `PgUp` / `PgDn`     | Jump 10 rows                            |
+| `Home` / `End`      | Jump to first / last visible row        |
+| `→`                 | Expand node                             |
+| `←`                 | Collapse node                           |
+| `Enter`             | Toggle expand / collapse                |
+| `q` / `Q` / `Esc`   | Quit                                    |
+
+**Tree markers:**
+
+| Marker | Meaning                                |
+|--------|----------------------------------------|
+| `>`    | Collapsed (has children)               |
+| `v`    | Expanded                               |
+| (none) | Leaf node                              |
+
+The `, stats` suffix on a row indicates the node carries zone-map statistics
+(min / max per chunk) — selecting it shows the values in the details pane.
+`vortex.dict` nodes show their dictionary entries; flat numeric leaves show
+a hex preview of the encoded buffer plus decoded data.
+
+Set `VORTEX_DEBUG=1` to print full stack traces on error.
+
+---
+
 ## Project columns
 
 **API:**
