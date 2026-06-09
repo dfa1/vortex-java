@@ -133,6 +133,21 @@ public sealed interface DType
             boolean nullable
     ) implements DType {
 
+        /// Hard cap on extension metadata size. Spec-defined extensions use 0–3 bytes
+        /// (e.g. timestamp = TimeUnit tag + tz length + tz UTF-8); 64 KiB is generous
+        /// for custom extensions while blocking attacker-supplied multi-megabyte blobs
+        /// that would inflate parser allocations.
+        public static final int MAX_METADATA_SIZE = 64 * 1024;
+
+        /// @throws VortexException if {@code metadata} carries more than
+        ///         {@link #MAX_METADATA_SIZE} readable bytes
+        public Extension {
+            if (metadata != null && metadata.remaining() > MAX_METADATA_SIZE) {
+                throw new VortexException("extension metadata too large: "
+                        + metadata.remaining() + " > " + MAX_METADATA_SIZE);
+            }
+        }
+
         /// Returns the closed-world classification of this extension's id.
         /// Pattern-match exhaustively: known ids resolve to the matching
         /// record, anything else lands in {@link io.github.dfa1.vortex.core.Extension.Custom}.

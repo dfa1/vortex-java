@@ -66,10 +66,6 @@ Per-encoding gotchas:
 - [ ] **Pco**: `bits_per_offset > 64`; `bin_count == 0` with non-empty page; per-page
   `n` greater than `DEFAULT_MAX_PAGE_N`; ANS state values inconsistent with weight table.
 
-### Proto-level hardening
-
-- [ ] **Extension DType `metadata`** — unbounded byte buffer copy. Cap.
-
 ### Resource caps
 
 Currently no limits; mmap pressure + decoder allocations are bounded only by file content.
