@@ -93,18 +93,27 @@
 									</arguments>
 								</configuration>
 							</execution>
-							<!-- 2. Generate Java from Protobuf schemas -->
+							<!--
+								2. Generate MemorySegment-native Java from Protobuf schemas via vortex-proto-gen.
+
+								Pre-step: run `./mvnw compile -pl proto-gen` once so this exec finds the classes.
+								We use a direct exec (rather than declaring vortex-proto-gen as a Maven dep) to avoid
+								an artificial provided-scope dep that would leak into the published core POM.
+							-->
 							<execution>
-								<id>protoc-generate</id>
+								<id>protogen-generate</id>
 								<phase>generate-sources</phase>
 								<goals>
 									<goal>exec</goal>
 								</goals>
 								<configuration>
-									<executable>protoc</executable>
+									<executable>java</executable>
 									<arguments>
-										<argument>--java_out=${project.basedir}/src/main/java</argument>
-										<argument>--proto_path=${project.basedir}/src/main/proto</argument>
+										<argument>-cp</argument>
+										<argument>${project.basedir}/../proto-gen/target/classes</argument>
+										<argument>io.github.dfa1.vortex.protogen.Main</argument>
+										<argument>--out</argument>
+										<argument>${project.basedir}/src/main/java/io/github/dfa1/vortex/proto</argument>
 										<argument>${project.basedir}/src/main/proto/dtype.proto</argument>
 										<argument>${project.basedir}/src/main/proto/scalar.proto</argument>
 										<argument>${project.basedir}/src/main/proto/encodings.proto</argument>

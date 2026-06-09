@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.encoding;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.BoolArray;
-import io.github.dfa1.vortex.proto.ScalarProtos;
+import io.github.dfa1.vortex.proto.ScalarValue;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -58,10 +58,10 @@ public final class BoolEncoding implements Encoding {
             }
         }
         byte[] statsMin = bools.length > 0
-                                  ? ScalarProtos.ScalarValue.newBuilder().setBoolValue(!hasFalse).build().toByteArray()
+                                  ? ScalarValue.ofBoolValue(!hasFalse).encode()
                                   : null;
         byte[] statsMax = bools.length > 0
-                                  ? ScalarProtos.ScalarValue.newBuilder().setBoolValue(hasTrue).build().toByteArray()
+                                  ? ScalarValue.ofBoolValue(hasTrue).encode()
                                   : null;
         return EncodeResult.simple(encodingId(), encodeBool(bools, ctx.arena()), statsMin, statsMax);
     }

@@ -38,6 +38,7 @@
 	</scm>
 
 	<modules>
+		<module>proto-gen</module>
 		<module>core</module>
 		<module>reader</module>
 		<module>writer</module>
