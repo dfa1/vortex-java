@@ -7,7 +7,6 @@ import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.BoolArray;
 import io.github.dfa1.vortex.core.array.ByteArray;
 import io.github.dfa1.vortex.core.array.DoubleArray;
-import io.github.dfa1.vortex.core.array.Extensions;
 import io.github.dfa1.vortex.core.array.FloatArray;
 import io.github.dfa1.vortex.core.array.GenericArray;
 import io.github.dfa1.vortex.core.array.IntArray;
@@ -679,9 +678,9 @@ public final class VortexInspectorTui {
 
         private static String formatValue(Array array, int i, DType declared) {
             if (declared instanceof DType.Extension ext
-                    && Extensions.DATE.equals(ext.extensionId())) {
+                    && ext.kind() instanceof io.github.dfa1.vortex.core.Extension.Date date) {
                 try {
-                    return Extensions.localDate(ext, array, i).toString();
+                    return date.decode(array, i).toString();
                 } catch (RuntimeException e) {
                     // fall through to generic rendering on shape mismatch
                 }

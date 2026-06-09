@@ -132,6 +132,16 @@ public sealed interface DType
             ByteBuffer metadata,
             boolean nullable
     ) implements DType {
+
+        /// Returns the closed-world classification of this extension's id.
+        /// Pattern-match exhaustively: known ids resolve to the matching
+        /// record, anything else lands in {@link io.github.dfa1.vortex.core.Extension.Custom}.
+        ///
+        /// @return the {@link io.github.dfa1.vortex.core.Extension} record
+        ///         for this extension's id
+        public io.github.dfa1.vortex.core.Extension kind() {
+            return io.github.dfa1.vortex.core.Extension.of(extensionId);
+        }
     }
 
     /// Variant logical type for semi-structured data (analogous to Parquet variant / JSON).
