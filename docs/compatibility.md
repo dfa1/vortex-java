@@ -63,12 +63,26 @@ metadata. The Rust catalogue lives in
 [`vortex-array/src/extension/`](https://github.com/vortex-data/vortex/tree/develop/vortex-array/src/extension);
 each subdir below names a canonical extension id and its on-disk shape.
 
-| Extension id        | Storage                                        | Metadata                                    | Java decoder                                                                 | Status |
-|---------------------|-------------------------------------------------|---------------------------------------------|------------------------------------------------------------------------------|--------|
-| `vortex.date`       | I32 (days) or I64 (ms) since Unix epoch         | 1 byte: `TimeUnit` (2 = ms, 4 = days)       | `Extensions.localDate(Array, long)`                                          | ✅      |
-| `vortex.time`       | I32 (s/ms) or I64 (μs/ns) since midnight        | 1 byte: `TimeUnit`                          | `Extensions.localTime(DType.Extension, Array, long)`                         | ✅      |
-| `vortex.timestamp`  | I64 with `TimeUnit` (s/ms/μs/ns) + optional tz  | 1 byte unit + u16 LE tz_len + UTF-8 tz bytes | `Extensions.instant(...)` / `Extensions.zonedDateTime(...)` / `timezone(...)` | ✅      |
-| `vortex.uuid`       | `FixedSizeList(Primitive(U8), 16)`              | 1 byte UUID version (optional, 0xff = unset) | `Extensions.uuid(Array, long)`                                               | ✅      |
+Extensions are exposed as a sealed `Extension` hierarchy. Each record carries
+its own typed decode methods; pattern-match on `ext.kind()` to dispatch:
+
+```java
+switch (ext.kind()) {
+    case Extension.Date d      -> d.decode(storage, i);          // LocalDate
+    case Extension.Time t      -> t.decode(ext, storage, i);     // LocalTime
+    case Extension.Timestamp ts -> ts.instant(ext, storage, i);  // Instant
+    case Extension.Uuid u      -> u.decode(storage, i);          // UUID
+    case Extension.Custom c    -> ... // any other id, raw String available
+}
+```
+
+| Extension id        | Record               | Storage                                         | Metadata                                  | Status |
+|---------------------|----------------------|-------------------------------------------------|-------------------------------------------|--------|
+| `vortex.date`       | `Extension.Date`     | Signed integer days since 1970-01-01            | none                                      | ✅      |
+| `vortex.time`       | `Extension.Time`     | I32 (s/ms) or I64 (μs/ns) since midnight        | 1 byte: `TimeUnit`                        | ✅      |
+| `vortex.timestamp`  | `Extension.Timestamp`| I64 epoch count in the recorded `TimeUnit`      | unit byte + u16 LE tz_len + UTF-8 tz      | ✅      |
+| `vortex.uuid`       | `Extension.Uuid`     | `FixedSizeList(Primitive(U8), 16)`              | none                                      | ✅      |
+| _custom ids_        | `Extension.Custom`   | _whatever the column declares_                  | _opaque bytes_                            | passthrough |
 
 `TimeUnit` (see [`extension/datetime/unit.rs`](https://github.com/vortex-data/vortex/blob/develop/vortex-array/src/extension/datetime/unit.rs))
 encodes precision in the first metadata byte:
