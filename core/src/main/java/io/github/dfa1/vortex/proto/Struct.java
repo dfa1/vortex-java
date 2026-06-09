@@ -2,12 +2,14 @@ package io.github.dfa1.vortex.proto;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
+import javax.annotation.processing.Generated;
 
 /// Generated from proto3 message {@code vortex.dtype.Struct}.
 /// Do not edit by hand — regenerate via {@code ./mvnw generate-sources -pl core -P regenerate-sources}.
 /// @param names field tag 1
 /// @param dtypes field tag 2
 /// @param nullable field tag 3
+@Generated("io.github.dfa1.vortex.protogen.CodeGen")
 public record Struct(
         java.util.List<String> names,
         java.util.List<DType> dtypes,

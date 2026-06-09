@@ -1,7 +1,10 @@
 package io.github.dfa1.vortex.proto;
 
+import javax.annotation.processing.Generated;
+
 /// Generated from proto3 enum {@code google.protobuf.NullValue}.
 /// Do not edit by hand — regenerate via {@code ./mvnw generate-sources -pl core -P regenerate-sources}.
+@Generated("io.github.dfa1.vortex.protogen.CodeGen")
 public enum NullValue {
     NULL_VALUE(0);
 

@@ -2,12 +2,14 @@ package io.github.dfa1.vortex.proto;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
+import javax.annotation.processing.Generated;
 
 /// Generated from proto3 message {@code vortex.encodings.BitPackedMetadata}.
 /// Do not edit by hand — regenerate via {@code ./mvnw generate-sources -pl core -P regenerate-sources}.
 /// @param bit_width field tag 1
 /// @param offset field tag 2
 /// @param patches field tag 3
+@Generated("io.github.dfa1.vortex.protogen.CodeGen")
 public record BitPackedMetadata(
         int bit_width,
         int offset,

@@ -1,14 +1,14 @@
 package io.github.dfa1.vortex.encoding;
 
-import com.google.protobuf.InvalidProtocolBufferException;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.VarBinArray;
-import io.github.dfa1.vortex.proto.EncodingProtos;
-import io.github.dfa1.vortex.proto.ScalarProtos;
+import io.github.dfa1.vortex.proto.ScalarValue;
+import io.github.dfa1.vortex.proto.VarBinMetadata;
 
+import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
@@ -80,10 +80,7 @@ public final class VarBinEncoding implements Encoding {
                 offsetsBuf.setAtIndex(PTypeIO.LE_LONG, i + 1, pos);
             }
 
-            byte[] metaBytes = EncodingProtos.VarBinMetadata.newBuilder()
-                                       .setOffsetsPtype(io.github.dfa1.vortex.proto.DTypeProtos.PType.forNumber(PType.I64.ordinal()))
-                                       .build()
-                                       .toByteArray();
+            byte[] metaBytes = new VarBinMetadata(io.github.dfa1.vortex.proto.PType.fromValue(PType.I64.ordinal())).encode();
 
             String minStr = null;
             String maxStr = null;
@@ -98,10 +95,8 @@ public final class VarBinEncoding implements Encoding {
                     maxStr = s;
                 }
             }
-            byte[] statsMin = minStr != null
-                                      ? ScalarProtos.ScalarValue.newBuilder().setStringValue(minStr).build().toByteArray() : null;
-            byte[] statsMax = maxStr != null
-                                      ? ScalarProtos.ScalarValue.newBuilder().setStringValue(maxStr).build().toByteArray() : null;
+            byte[] statsMin = minStr != null ? ScalarValue.ofStringValue(minStr).encode() : null;
+            byte[] statsMax = maxStr != null ? ScalarValue.ofStringValue(maxStr).encode() : null;
 
             EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
             EncodeNode root = new EncodeNode(EncodingId.VORTEX_VARBIN, ByteBuffer.wrap(metaBytes),
@@ -117,14 +112,15 @@ public final class VarBinEncoding implements Encoding {
             if (rawMeta == null) {
                 throw new VortexException(EncodingId.VORTEX_VARBIN, "missing metadata");
             }
-            EncodingProtos.VarBinMetadata meta;
+            VarBinMetadata meta;
             try {
-                meta = EncodingProtos.VarBinMetadata.parseFrom(rawMeta.duplicate());
-            } catch (InvalidProtocolBufferException e) {
+                MemorySegment metaSeg = MemorySegment.ofBuffer(rawMeta.duplicate());
+                meta = VarBinMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            } catch (IOException e) {
                 throw new VortexException(EncodingId.VORTEX_VARBIN, "invalid metadata", e);
             }
 
-            PType offsetsPtype = PType.fromOrdinal(meta.getOffsetsPtype().getNumber());
+            PType offsetsPtype = PType.fromOrdinal(meta.offsets_ptype().value());
             DType offsetsDtype = new DType.Primitive(offsetsPtype, false);
             long n = ctx.rowCount();
 

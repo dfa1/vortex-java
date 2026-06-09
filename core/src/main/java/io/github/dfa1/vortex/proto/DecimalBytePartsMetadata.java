@@ -2,11 +2,13 @@ package io.github.dfa1.vortex.proto;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
+import javax.annotation.processing.Generated;
 
 /// Generated from proto3 message {@code vortex.encodings.DecimalBytePartsMetadata}.
 /// Do not edit by hand — regenerate via {@code ./mvnw generate-sources -pl core -P regenerate-sources}.
 /// @param zeroth_child_ptype field tag 1
 /// @param lower_part_count field tag 2
+@Generated("io.github.dfa1.vortex.protogen.CodeGen")
 public record DecimalBytePartsMetadata(
         PType zeroth_child_ptype,
         int lower_part_count

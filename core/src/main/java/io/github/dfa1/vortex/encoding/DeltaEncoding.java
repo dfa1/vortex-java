@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.encoding;
 
-import com.google.protobuf.InvalidProtocolBufferException;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -9,9 +8,10 @@ import io.github.dfa1.vortex.core.array.ByteArray;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
-import io.github.dfa1.vortex.proto.EncodingProtos;
-import io.github.dfa1.vortex.proto.ScalarProtos;
+import io.github.dfa1.vortex.proto.DeltaMetadata;
+import io.github.dfa1.vortex.proto.ScalarValue;
 
+import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
@@ -168,11 +168,7 @@ public final class DeltaEncoding implements Encoding {
             MemorySegment basesSeg = fromLongs(basesAll, ptype, ctx.arena());
             MemorySegment deltasSeg = fromLongs(deltasAll, ptype, ctx.arena());
 
-            byte[] metaBytes = EncodingProtos.DeltaMetadata.newBuilder()
-                                       .setDeltasLen(paddedLen)
-                                       .setOffset(0)
-                                       .build()
-                                       .toByteArray();
+            byte[] metaBytes = new DeltaMetadata(paddedLen, 0).encode();
 
             byte[] statsMin = n > 0 ? statsBytes(ptype, minVal) : null;
             byte[] statsMax = n > 0 ? statsBytes(ptype, maxVal) : null;
@@ -260,9 +256,9 @@ public final class DeltaEncoding implements Encoding {
 
         private static byte[] statsBytes(PType ptype, long value) {
             if (isUnsigned(ptype)) {
-                return ScalarProtos.ScalarValue.newBuilder().setUint64Value(value).build().toByteArray();
+                return ScalarValue.ofUint64Value(value).encode();
             }
-            return ScalarProtos.ScalarValue.newBuilder().setInt64Value(value).build().toByteArray();
+            return ScalarValue.ofInt64Value(value).encode();
         }
     }
 
@@ -270,13 +266,14 @@ public final class DeltaEncoding implements Encoding {
 
         static Array decode(DecodeContext ctx) {
             ByteBuffer rawMeta = ctx.metadata();
-            EncodingProtos.DeltaMetadata meta;
+            DeltaMetadata meta;
             if (rawMeta == null || !rawMeta.hasRemaining()) {
-                meta = EncodingProtos.DeltaMetadata.getDefaultInstance();
+                meta = new DeltaMetadata(0L, 0);
             } else {
                 try {
-                    meta = EncodingProtos.DeltaMetadata.parseFrom(rawMeta.duplicate());
-                } catch (InvalidProtocolBufferException e) {
+                    MemorySegment metaSeg = MemorySegment.ofBuffer(rawMeta.duplicate());
+                    meta = DeltaMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+                } catch (IOException e) {
                     throw new VortexException(EncodingId.FASTLANES_DELTA, "invalid metadata", e);
                 }
             }
@@ -287,8 +284,8 @@ public final class DeltaEncoding implements Encoding {
             int lanes = lanes(ptype);
             long mask = typeMask(ptype);
 
-            long deltasLen = meta.getDeltasLen();
-            int offset = meta.getOffset();
+            long deltasLen = meta.deltas_len();
+            int offset = meta.offset();
 
             if (deltasLen == 0L) {
                 MemorySegment empty = ctx.arena().allocate(0);

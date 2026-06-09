@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.encoding;
 
-import com.google.protobuf.InvalidProtocolBufferException;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -15,8 +14,9 @@ import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.MaskedArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
-import io.github.dfa1.vortex.proto.DTypeProtos;
-import io.github.dfa1.vortex.proto.EncodingProtos;
+import io.github.dfa1.vortex.proto.RLEMetadata;
+
+import java.io.IOException;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
@@ -130,15 +130,14 @@ public final class RleEncoding implements Encoding {
             PType indicesPtype = PType.U16;
             PType offsetsPtype = PType.U64;
 
-            byte[] metaBytes = EncodingProtos.RLEMetadata.newBuilder()
-                                       .setValuesLen(globalValuesCount)
-                                       .setIndicesLen(paddedLen)
-                                       .setIndicesPtype(DTypeProtos.PType.forNumber(indicesPtype.ordinal()))
-                                       .setValuesIdxOffsetsLen(numChunks)
-                                       .setValuesIdxOffsetsPtype(DTypeProtos.PType.forNumber(offsetsPtype.ordinal()))
-                                       .setOffset(0)
-                                       .build()
-                                       .toByteArray();
+            byte[] metaBytes = new RLEMetadata(
+                    globalValuesCount,
+                    paddedLen,
+                    io.github.dfa1.vortex.proto.PType.fromValue(indicesPtype.ordinal()),
+                    numChunks,
+                    io.github.dfa1.vortex.proto.PType.fromValue(offsetsPtype.ordinal()),
+                    0L
+            ).encode();
 
             EncodeNode valuesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
             EncodeNode indicesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
@@ -177,15 +176,14 @@ public final class RleEncoding implements Encoding {
             MemorySegment empty = ctx.arena().allocate(0);
             PType indicesPtype = PType.U16;
             PType offsetsPtype = PType.U64;
-            byte[] metaBytes = EncodingProtos.RLEMetadata.newBuilder()
-                                       .setValuesLen(0)
-                                       .setIndicesLen(0)
-                                       .setIndicesPtype(DTypeProtos.PType.forNumber(indicesPtype.ordinal()))
-                                       .setValuesIdxOffsetsLen(0)
-                                       .setValuesIdxOffsetsPtype(DTypeProtos.PType.forNumber(offsetsPtype.ordinal()))
-                                       .setOffset(0)
-                                       .build()
-                                       .toByteArray();
+            byte[] metaBytes = new RLEMetadata(
+                    0L,
+                    0L,
+                    io.github.dfa1.vortex.proto.PType.fromValue(indicesPtype.ordinal()),
+                    0L,
+                    io.github.dfa1.vortex.proto.PType.fromValue(offsetsPtype.ordinal()),
+                    0L
+            ).encode();
             EncodeNode valuesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
             EncodeNode indicesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
             EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
@@ -305,19 +303,20 @@ public final class RleEncoding implements Encoding {
 
         static Array decode(DecodeContext ctx) {
             ByteBuffer rawMeta = ctx.metadata();
-            EncodingProtos.RLEMetadata meta;
+            RLEMetadata meta;
             try {
-                meta = EncodingProtos.RLEMetadata.parseFrom(rawMeta.duplicate());
-            } catch (InvalidProtocolBufferException e) {
+                MemorySegment metaSeg = MemorySegment.ofBuffer(rawMeta.duplicate());
+                meta = RLEMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            } catch (IOException e) {
                 throw new VortexException(EncodingId.FASTLANES_RLE, "invalid metadata", e);
             }
 
-            long valuesLen = meta.getValuesLen();
-            long indicesLen = meta.getIndicesLen();
-            PType indicesPtype = ptypeFromProto(meta.getIndicesPtype());
-            long offsetsLen = meta.getValuesIdxOffsetsLen();
-            PType offsetsPtype = ptypeFromProto(meta.getValuesIdxOffsetsPtype());
-            int offset = (int) meta.getOffset();
+            long valuesLen = meta.values_len();
+            long indicesLen = meta.indices_len();
+            PType indicesPtype = ptypeFromProto(meta.indices_ptype());
+            long offsetsLen = meta.values_idx_offsets_len();
+            PType offsetsPtype = ptypeFromProto(meta.values_idx_offsets_ptype());
+            int offset = (int) meta.offset();
 
             long rowCount = ctx.rowCount();
             if (rowCount == 0 || indicesLen == 0) {
@@ -487,8 +486,8 @@ public final class RleEncoding implements Encoding {
             return seg;
         }
 
-        private static PType ptypeFromProto(DTypeProtos.PType proto) {
-            return PType.fromOrdinal(proto.getNumber());
+        private static PType ptypeFromProto(io.github.dfa1.vortex.proto.PType proto) {
+            return PType.fromOrdinal(proto.value());
         }
     }
 }

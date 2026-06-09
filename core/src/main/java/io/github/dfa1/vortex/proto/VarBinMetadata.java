@@ -2,10 +2,12 @@ package io.github.dfa1.vortex.proto;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
+import javax.annotation.processing.Generated;
 
 /// Generated from proto3 message {@code vortex.encodings.VarBinMetadata}.
 /// Do not edit by hand — regenerate via {@code ./mvnw generate-sources -pl core -P regenerate-sources}.
 /// @param offsets_ptype field tag 1
+@Generated("io.github.dfa1.vortex.protogen.CodeGen")
 public record VarBinMetadata(
         PType offsets_ptype
 ) {

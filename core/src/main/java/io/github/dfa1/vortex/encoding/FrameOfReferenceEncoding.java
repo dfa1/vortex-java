@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.encoding;
 
-import com.google.protobuf.InvalidProtocolBufferException;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -13,7 +12,9 @@ import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.MaskedArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
-import io.github.dfa1.vortex.proto.ScalarProtos;
+import io.github.dfa1.vortex.proto.ScalarValue;
+
+import java.io.IOException;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
@@ -108,10 +109,8 @@ public final class FrameOfReferenceEncoding implements Encoding {
                 case U8, U16, U32, U64 -> true;
                 default -> false;
             };
-            ScalarProtos.ScalarValue scalar = unsigned
-                                                      ? ScalarProtos.ScalarValue.newBuilder().setUint64Value(ref).build()
-                                                      : ScalarProtos.ScalarValue.newBuilder().setInt64Value(ref).build();
-            return ByteBuffer.wrap(scalar.toByteArray());
+            ScalarValue scalar = unsigned ? ScalarValue.ofUint64Value(ref) : ScalarValue.ofInt64Value(ref);
+            return ByteBuffer.wrap(scalar.encode());
         }
 
         /// Returns residuals as a Java primitive array of the correct type (for passing as ChildSlot data).
@@ -200,10 +199,11 @@ public final class FrameOfReferenceEncoding implements Encoding {
             if (rawMeta == null || !rawMeta.hasRemaining()) {
                 throw new VortexException(EncodingId.FASTLANES_FOR, "missing metadata");
             }
-            ScalarProtos.ScalarValue scalar;
+            ScalarValue scalar;
             try {
-                scalar = ScalarProtos.ScalarValue.parseFrom(rawMeta.duplicate());
-            } catch (InvalidProtocolBufferException e) {
+                MemorySegment metaSeg = MemorySegment.ofBuffer(rawMeta.duplicate());
+                scalar = ScalarValue.decode(metaSeg, 0, metaSeg.byteSize());
+            } catch (IOException e) {
                 throw new VortexException(EncodingId.FASTLANES_FOR, "invalid metadata", e);
             }
 
@@ -240,14 +240,14 @@ public final class FrameOfReferenceEncoding implements Encoding {
             return validity != null ? new MaskedArray(result, validity) : result;
         }
 
-        private static long referenceValue(ScalarProtos.ScalarValue scalar) {
-            return switch (scalar.getKindCase()) {
-                case INT64_VALUE -> scalar.getInt64Value();
-                case UINT64_VALUE -> scalar.getUint64Value();
-                case KIND_NOT_SET -> 0L;
-                default -> throw new VortexException(EncodingId.FASTLANES_FOR,
-                        "unexpected scalar kind " + scalar.getKindCase());
-            };
+        private static long referenceValue(ScalarValue scalar) {
+            if (scalar.int64_value() != null) {
+                return scalar.int64_value();
+            }
+            if (scalar.uint64_value() != null) {
+                return scalar.uint64_value();
+            }
+            return 0L;
         }
 
         private static MemorySegment applyReference(MemorySegment src, long n, PType ptype, long ref, SegmentAllocator arena) {

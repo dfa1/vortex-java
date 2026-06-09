@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.proto;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
+import javax.annotation.processing.Generated;
 
 /// Generated from proto3 message {@code vortex.encodings.RLEMetadata}.
 /// Do not edit by hand — regenerate via {@code ./mvnw generate-sources -pl core -P regenerate-sources}.
@@ -11,6 +12,7 @@ import java.lang.foreign.MemorySegment;
 /// @param values_idx_offsets_len field tag 4
 /// @param values_idx_offsets_ptype field tag 5
 /// @param offset field tag 6
+@Generated("io.github.dfa1.vortex.protogen.CodeGen")
 public record RLEMetadata(
         long values_len,
         long indices_len,

@@ -13,7 +13,7 @@ import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.MaskedArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
-import io.github.dfa1.vortex.proto.ScalarProtos;
+import io.github.dfa1.vortex.proto.ScalarValue;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -293,19 +293,19 @@ public final class PrimitiveEncoding implements Encoding {
         }
 
         private static byte[] scalarI64(long v) {
-            return ScalarProtos.ScalarValue.newBuilder().setInt64Value(v).build().toByteArray();
+            return ScalarValue.ofInt64Value(v).encode();
         }
 
         private static byte[] scalarU64(long v) {
-            return ScalarProtos.ScalarValue.newBuilder().setUint64Value(v).build().toByteArray();
+            return ScalarValue.ofUint64Value(v).encode();
         }
 
         private static byte[] scalarF32(float v) {
-            return ScalarProtos.ScalarValue.newBuilder().setF32Value(v).build().toByteArray();
+            return ScalarValue.ofF32Value(v).encode();
         }
 
         private static byte[] scalarF64(double v) {
-            return ScalarProtos.ScalarValue.newBuilder().setF64Value(v).build().toByteArray();
+            return ScalarValue.ofF64Value(v).encode();
         }
     }
 
