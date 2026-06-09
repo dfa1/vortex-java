@@ -707,6 +707,10 @@ public final class VortexInspectorTui {
             try {
                 return a.getDecimal(i).toPlainString();
             } catch (RuntimeException e) {
+                String msg = e.getMessage();
+                if (msg != null && msg.contains("null cell")) {
+                    return "null";
+                }
                 return "<" + a.getClass().getSimpleName() + " " + a.dtype() + ">";
             }
         }

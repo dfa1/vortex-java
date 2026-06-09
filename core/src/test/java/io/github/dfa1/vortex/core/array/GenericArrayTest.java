@@ -202,6 +202,35 @@ class GenericArrayTest {
     }
 
     @Test
+    void getDecimal_nullCellInMaskedChild_throws() {
+        // Given — mantissa-child shape with a MaskedArray wrapping a LongArray;
+        // the validity bitmap says index 1 is null. Without the validity check
+        // the previous code would happily decode whatever bytes sat at that
+        // slot and return a garbage BigDecimal.
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment mspBuf = arena.allocate(16);
+            mspBuf.set(ValueLayout.JAVA_LONG_UNALIGNED, 0, 1234L);
+            mspBuf.set(ValueLayout.JAVA_LONG_UNALIGNED, 8, 9999L);
+            LongArray msp = new LongArray(new DType.Primitive(PType.I64, false), 2, mspBuf);
+
+            MemorySegment validityBuf = arena.allocate(1);
+            // bit 0 set = index 0 valid; bit 1 clear = index 1 null
+            validityBuf.set(ValueLayout.JAVA_BYTE, 0, (byte) 0b0000_0001);
+            BoolArray validity = new BoolArray(new DType.Bool(false), 2, validityBuf);
+
+            MaskedArray masked = new MaskedArray(msp, validity);
+            DType.Decimal dec = new DType.Decimal((byte) 15, (byte) 2, true);
+            GenericArray sut = new GenericArray(dec, 2, new MemorySegment[0], new Array[]{masked});
+
+            // When / Then
+            assertThat(sut.getDecimal(0)).isEqualByComparingTo(new BigDecimal("12.34"));
+            assertThatThrownBy(() -> sut.getDecimal(1))
+                    .isInstanceOf(io.github.dfa1.vortex.core.VortexException.class)
+                    .hasMessageContaining("null cell at index 1");
+        }
+    }
+
+    @Test
     void getDecimal_nonDecimalDtype_throws() {
         // Given — guards against silently returning garbage on misuse
         try (Arena arena = Arena.ofConfined()) {
