@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.inspect.term;
+package io.github.dfa1.vortex.cli.tui.term;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;

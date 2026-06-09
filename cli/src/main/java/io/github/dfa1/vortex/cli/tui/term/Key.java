@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.inspect.term;
+package io.github.dfa1.vortex.cli.tui.term;
 
 /// Decoded terminal input event.
 public sealed interface Key {

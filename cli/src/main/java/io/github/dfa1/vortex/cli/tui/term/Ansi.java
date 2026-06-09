@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.inspect.term;
+package io.github.dfa1.vortex.cli.tui.term;
 
 /// ANSI / xterm CSI escape constants and small formatting helpers.
 ///

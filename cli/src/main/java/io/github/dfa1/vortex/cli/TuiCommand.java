@@ -1,8 +1,8 @@
 package io.github.dfa1.vortex.cli;
 
+import io.github.dfa1.vortex.cli.tui.IoWorker;
+import io.github.dfa1.vortex.cli.tui.VortexInspectorTui;
 import io.github.dfa1.vortex.inspect.InspectorTree;
-import io.github.dfa1.vortex.inspect.IoWorker;
-import io.github.dfa1.vortex.inspect.VortexInspectorTui;
 import io.github.dfa1.vortex.io.VortexHandle;
 import io.github.dfa1.vortex.io.VortexHttpReader;
 import io.github.dfa1.vortex.io.VortexReader;

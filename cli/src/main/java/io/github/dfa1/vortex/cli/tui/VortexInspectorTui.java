@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.inspect;
+package io.github.dfa1.vortex.cli.tui;
 
 import io.github.dfa1.vortex.core.Layout;
 import io.github.dfa1.vortex.core.SegmentSpec;
@@ -13,9 +13,10 @@ import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
-import io.github.dfa1.vortex.inspect.term.Ansi;
-import io.github.dfa1.vortex.inspect.term.Key;
-import io.github.dfa1.vortex.inspect.term.Terminal;
+import io.github.dfa1.vortex.cli.tui.term.Ansi;
+import io.github.dfa1.vortex.cli.tui.term.Key;
+import io.github.dfa1.vortex.cli.tui.term.Terminal;
+import io.github.dfa1.vortex.inspect.InspectorTree;
 import io.github.dfa1.vortex.io.VortexHandle;
 import io.github.dfa1.vortex.scan.Chunk;
 import io.github.dfa1.vortex.scan.ScanIterator;

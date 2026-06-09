@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.inspect.term;
+package io.github.dfa1.vortex.cli.tui.term;
 
 import java.io.IOException;
 import java.io.InputStream;

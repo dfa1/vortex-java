@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.inspect;
+package io.github.dfa1.vortex.cli.tui;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -15,15 +15,17 @@ import java.util.concurrent.atomic.AtomicInteger;
 /// when computing UI state.
 public final class IoWorker implements AutoCloseable {
 
-    private final BlockingQueue<Runnable> queue = new LinkedBlockingQueue<>();
+    private final BlockingQueue<Runnable> queue;
+    private final AtomicInteger pending;
     private final Thread thread;
-    private final AtomicInteger pending = new AtomicInteger();
     private volatile boolean closed;
 
     /// Creates and starts the worker thread.
     ///
     /// @param name thread name
     public IoWorker(String name) {
+        this.queue = new LinkedBlockingQueue<>();
+        this.pending = new AtomicInteger();
         this.thread = new Thread(this::loop, name);
         this.thread.setDaemon(true);
         this.thread.start();
