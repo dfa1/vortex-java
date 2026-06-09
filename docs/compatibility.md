@@ -56,6 +56,36 @@ try (VortexReader vf = VortexReader.open(path, registry)) {
 }
 ```
 
+## Extension types
+
+Extension dtypes wrap a primitive storage array with a logical-id tag plus optional
+metadata. The Rust catalogue lives in
+[`vortex-array/src/extension/`](https://github.com/vortex-data/vortex/tree/develop/vortex-array/src/extension);
+each subdir below names a canonical extension id and its on-disk shape.
+
+| Extension id        | Storage                                        | Metadata                                    | Java decoder                                  | Status |
+|---------------------|-------------------------------------------------|---------------------------------------------|-----------------------------------------------|--------|
+| `vortex.date`       | I32 (days) or I64 (ms) since Unix epoch         | 1 byte: `TimeUnit` (2 = ms, 4 = days)       | `Extensions.localDate(Array, long)`           | ✅      |
+| `vortex.time`       | I32 (s/ms) or I64 (μs/ns) since midnight        | 1 byte: `TimeUnit`                          | _not yet_                                     | ❌      |
+| `vortex.timestamp`  | I64 with `TimeUnit` (s/ms/μs/ns) + optional tz  | 1 byte unit + UTF-8 tz string (optional)    | _not yet_                                     | ❌      |
+| `vortex.uuid`       | `FixedSizeList(Primitive(U8), 16)`              | 1 byte UUID version (optional, 0xff = unset) | _not yet_                                     | ❌      |
+
+`TimeUnit` (see [`extension/datetime/unit.rs`](https://github.com/vortex-data/vortex/blob/develop/vortex-array/src/extension/datetime/unit.rs))
+encodes precision in the first metadata byte:
+
+| Value | Unit         |
+|-------|--------------|
+| 0     | Nanoseconds  |
+| 1     | Microseconds |
+| 2     | Milliseconds |
+| 3     | Seconds      |
+| 4     | Days         |
+
+For unsupported extension ids the inspector falls back to a placeholder cell
+(`<GenericArray ext<vortex.X>>`); the underlying storage array still decodes
+correctly via the primitive accessors, callers just have to format the value
+themselves.
+
 ## S3 Fixture Status (v0.72.0)
 
 Cross-language round-trips tested against Rust-written fixture files hosted at
