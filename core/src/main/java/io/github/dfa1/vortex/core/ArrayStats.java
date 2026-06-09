@@ -1,9 +1,11 @@
 package io.github.dfa1.vortex.core;
 
-import com.google.protobuf.InvalidProtocolBufferException;
-import io.github.dfa1.vortex.proto.ScalarProtos;
+import io.github.dfa1.vortex.proto.ScalarValue;
 
+import java.io.IOException;
+import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 
 /// Per-array statistics embedded in the encoding tree.
 ///
@@ -52,18 +54,31 @@ public record ArrayStats(
             return null;
         }
         try {
-            ScalarProtos.ScalarValue sv = ScalarProtos.ScalarValue.parseFrom(bytes.duplicate());
-            return switch (sv.getKindCase()) {
-                case INT64_VALUE -> sv.getInt64Value();
-                case UINT64_VALUE -> sv.getUint64Value();
-                case F32_VALUE -> sv.getF32Value();
-                case F64_VALUE -> sv.getF64Value();
-                case BOOL_VALUE -> sv.getBoolValue();
-                case STRING_VALUE -> sv.getStringValue();
-                case BYTES_VALUE -> sv.getBytesValue().toStringUtf8();
-                default -> null;
-            };
-        } catch (InvalidProtocolBufferException e) {
+            MemorySegment seg = MemorySegment.ofBuffer(bytes.duplicate());
+            ScalarValue sv = ScalarValue.decode(seg, 0, seg.byteSize());
+            if (sv.int64_value() != null) {
+                return sv.int64_value();
+            }
+            if (sv.uint64_value() != null) {
+                return sv.uint64_value();
+            }
+            if (sv.f32_value() != null) {
+                return sv.f32_value();
+            }
+            if (sv.f64_value() != null) {
+                return sv.f64_value();
+            }
+            if (sv.bool_value() != null) {
+                return sv.bool_value();
+            }
+            if (sv.string_value() != null) {
+                return sv.string_value();
+            }
+            if (sv.bytes_value() != null) {
+                return new String(sv.bytes_value(), StandardCharsets.UTF_8);
+            }
+            return null;
+        } catch (IOException e) {
             throw new VortexException("invalid scalar value in array stats", e);
         }
     }

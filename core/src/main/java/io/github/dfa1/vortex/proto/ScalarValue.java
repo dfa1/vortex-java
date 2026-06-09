@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.proto;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
+import javax.annotation.processing.Generated;
 
 /// Generated from proto3 message {@code vortex.scalar.ScalarValue}.
 /// Do not edit by hand — regenerate via {@code ./mvnw generate-sources -pl core -P regenerate-sources}.
@@ -16,6 +17,7 @@ import java.lang.foreign.MemorySegment;
 /// @param list_value field tag 9
 /// @param f16_value field tag 10
 /// @param variant_value field tag 11
+@Generated("io.github.dfa1.vortex.protogen.CodeGen")
 public record ScalarValue(
         NullValue null_value,
         Boolean bool_value,

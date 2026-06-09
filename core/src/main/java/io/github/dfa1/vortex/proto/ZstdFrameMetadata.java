@@ -2,11 +2,13 @@ package io.github.dfa1.vortex.proto;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
+import javax.annotation.processing.Generated;
 
 /// Generated from proto3 message {@code vortex.encodings.ZstdFrameMetadata}.
 /// Do not edit by hand — regenerate via {@code ./mvnw generate-sources -pl core -P regenerate-sources}.
 /// @param uncompressed_size field tag 1
 /// @param n_values field tag 2
+@Generated("io.github.dfa1.vortex.protogen.CodeGen")
 public record ZstdFrameMetadata(
         long uncompressed_size,
         long n_values

@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.encoding;
 
-import com.google.protobuf.InvalidProtocolBufferException;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -13,9 +12,11 @@ import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
-import io.github.dfa1.vortex.proto.DTypeProtos;
-import io.github.dfa1.vortex.proto.EncodingProtos;
-import io.github.dfa1.vortex.proto.ScalarProtos;
+import io.github.dfa1.vortex.proto.PatchesMetadata;
+import io.github.dfa1.vortex.proto.ScalarValue;
+import io.github.dfa1.vortex.proto.SparseMetadata;
+
+import java.io.IOException;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -83,22 +84,23 @@ public final class SparseEncoding implements Encoding {
             int numPatches = patchIdx.size();
             PType idxPtype = chooseIdxPtype(n);
 
-            ScalarProtos.ScalarValue fillScalar = zeroScalar(ptype);
-            byte[] fillBytes = fillScalar.toByteArray();
+            ScalarValue fillScalar = zeroScalar(ptype);
+            byte[] fillBytes = fillScalar.encode();
             MemorySegment fillBuf = ctx.arena().allocate(fillBytes.length);
             MemorySegment.copy(MemorySegment.ofArray(fillBytes), 0, fillBuf, 0, fillBytes.length);
 
             MemorySegment idxBuf = buildIdxBuf(patchIdx, idxPtype, numPatches, ctx);
             MemorySegment valBuf = buildValBuf(patchBits, ptype, numPatches, ctx);
 
-            byte[] metaBytes = EncodingProtos.SparseMetadata.newBuilder()
-                                       .setPatches(EncodingProtos.PatchesMetadata.newBuilder()
-                                                           .setLen(numPatches)
-                                                           .setOffset(0)
-                                                           .setIndicesPtype(DTypeProtos.PType.forNumber(idxPtype.ordinal()))
-                                                           .build())
-                                       .build()
-                                       .toByteArray();
+            PatchesMetadata patchesMeta = new PatchesMetadata(
+                    numPatches,
+                    0L,
+                    io.github.dfa1.vortex.proto.PType.fromValue(idxPtype.ordinal()),
+                    null,
+                    null,
+                    null
+            );
+            byte[] metaBytes = new SparseMetadata(patchesMeta).encode();
 
             EncodeNode idxNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
             EncodeNode valNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
@@ -144,13 +146,12 @@ public final class SparseEncoding implements Encoding {
             }
         }
 
-        private static ScalarProtos.ScalarValue zeroScalar(PType ptype) {
-            ScalarProtos.ScalarValue.Builder b = ScalarProtos.ScalarValue.newBuilder();
+        private static ScalarValue zeroScalar(PType ptype) {
             return switch (ptype) {
-                case I8, I16, I32, I64 -> b.setInt64Value(0L).build();
-                case U8, U16, U32, U64 -> b.setUint64Value(0L).build();
-                case F32 -> b.setF32Value(0.0f).build();
-                case F64 -> b.setF64Value(0.0).build();
+                case I8, I16, I32, I64 -> ScalarValue.ofInt64Value(0L);
+                case U8, U16, U32, U64 -> ScalarValue.ofUint64Value(0L);
+                case F32 -> ScalarValue.ofF32Value(0.0f);
+                case F64 -> ScalarValue.ofF64Value(0.0);
                 default -> throw new VortexException(EncodingId.VORTEX_SPARSE, "unsupported ptype: " + ptype);
             };
         }
@@ -181,17 +182,18 @@ public final class SparseEncoding implements Encoding {
             if (rawMeta == null || !rawMeta.hasRemaining()) {
                 throw new VortexException(EncodingId.VORTEX_SPARSE, "missing metadata");
             }
-            EncodingProtos.SparseMetadata sparseMeta;
+            SparseMetadata sparseMeta;
             try {
-                sparseMeta = EncodingProtos.SparseMetadata.parseFrom(rawMeta.duplicate());
-            } catch (InvalidProtocolBufferException e) {
+                MemorySegment metaSeg = MemorySegment.ofBuffer(rawMeta.duplicate());
+                sparseMeta = SparseMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            } catch (IOException e) {
                 throw new VortexException(EncodingId.VORTEX_SPARSE, "invalid metadata", e);
             }
 
-            EncodingProtos.PatchesMetadata patches = sparseMeta.getPatches();
-            long numPatches = patches.getLen();
-            long offset = patches.getOffset();
-            PType indicesPtype = ptypeFromProto(patches.getIndicesPtype());
+            PatchesMetadata patches = sparseMeta.patches();
+            long numPatches = patches.len();
+            long offset = patches.offset();
+            PType indicesPtype = ptypeFromProto(patches.indices_ptype());
 
             long n = ctx.rowCount();
 
@@ -209,10 +211,10 @@ public final class SparseEncoding implements Encoding {
             PType valuePtype = ((DType.Primitive) ctx.dtype()).ptype();
 
             MemorySegment fillBuf = ctx.buffer(0);
-            ScalarProtos.ScalarValue fillScalar;
+            ScalarValue fillScalar;
             try {
-                fillScalar = ScalarProtos.ScalarValue.parseFrom(fillBuf.asByteBuffer());
-            } catch (InvalidProtocolBufferException e) {
+                fillScalar = ScalarValue.decode(fillBuf, 0, fillBuf.byteSize());
+            } catch (IOException e) {
                 throw new VortexException(EncodingId.VORTEX_SPARSE, "invalid fill value", e);
             }
 
@@ -315,7 +317,7 @@ public final class SparseEncoding implements Encoding {
             };
         }
 
-        private static void fillSegment(MemorySegment out, long n, PType ptype, ScalarProtos.ScalarValue scalar) {
+        private static void fillSegment(MemorySegment out, long n, PType ptype, ScalarValue scalar) {
             long fillLong = scalarToLong(scalar);
             ByteBuffer bb = out.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
             for (long i = 0; i < n; i++) {
@@ -373,21 +375,25 @@ public final class SparseEncoding implements Encoding {
             }
         }
 
-        private static long scalarToLong(ScalarProtos.ScalarValue scalar) {
-            return switch (scalar.getKindCase()) {
-                case INT64_VALUE -> scalar.getInt64Value();
-                case UINT64_VALUE -> scalar.getUint64Value();
-                case F32_VALUE -> Float.floatToRawIntBits(scalar.getF32Value());
-                case F64_VALUE -> Double.doubleToRawLongBits(scalar.getF64Value());
-                case NULL_VALUE, KIND_NOT_SET -> 0L;
-                default -> throw new VortexException(EncodingId.VORTEX_SPARSE,
-                        "unexpected scalar kind " + scalar.getKindCase());
-            };
+        private static long scalarToLong(ScalarValue scalar) {
+            if (scalar.int64_value() != null) {
+                return scalar.int64_value();
+            }
+            if (scalar.uint64_value() != null) {
+                return scalar.uint64_value();
+            }
+            if (scalar.f32_value() != null) {
+                return Float.floatToRawIntBits(scalar.f32_value());
+            }
+            if (scalar.f64_value() != null) {
+                return Double.doubleToRawLongBits(scalar.f64_value());
+            }
+            return 0L;
         }
 
         // PType proto enum ordinals match Java PType ordinals (U8=0..F64=10)
-        private static PType ptypeFromProto(DTypeProtos.PType proto) {
-            return PType.fromOrdinal(proto.getNumber());
+        private static PType ptypeFromProto(io.github.dfa1.vortex.proto.PType proto) {
+            return PType.fromOrdinal(proto.value());
         }
     }
 }

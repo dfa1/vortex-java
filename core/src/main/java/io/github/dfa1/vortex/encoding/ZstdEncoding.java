@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
 import com.github.luben.zstd.ZstdDecompressCtx;
-import com.google.protobuf.InvalidProtocolBufferException;
 import io.airlift.compress.v3.zstd.ZstdCompressor;
 import io.airlift.compress.v3.zstd.ZstdDecompressor;
 import io.airlift.compress.v3.zstd.ZstdJavaCompressor;
@@ -20,8 +19,10 @@ import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.MaskedArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
-import io.github.dfa1.vortex.proto.EncodingProtos;
+import io.github.dfa1.vortex.proto.ZstdFrameMetadata;
+import io.github.dfa1.vortex.proto.ZstdMetadata;
 
+import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -105,12 +106,10 @@ public final class ZstdEncoding implements Encoding {
 
         private static EncodeResult buildResult(byte[] raw, long n) {
             byte[] compressed = compress(raw);
-            byte[] meta = EncodingProtos.ZstdMetadata.newBuilder()
-                                  .setDictionarySize(0)
-                                  .addFrames(EncodingProtos.ZstdFrameMetadata.newBuilder()
-                                                     .setUncompressedSize(raw.length)
-                                                     .setNValues(n))
-                                  .build().toByteArray();
+            byte[] meta = new ZstdMetadata(
+                    0,
+                    java.util.List.of(new ZstdFrameMetadata(raw.length, n))
+            ).encode();
             EncodeNode root = new EncodeNode(EncodingId.VORTEX_ZSTD, ByteBuffer.wrap(meta),
                     new EncodeNode[0], new int[]{0});
             return new EncodeResult(root, List.of(MemorySegment.ofArray(compressed)), null, null);
@@ -208,13 +207,14 @@ public final class ZstdEncoding implements Encoding {
             if (rawMeta == null) {
                 throw new VortexException(EncodingId.VORTEX_ZSTD, "missing metadata");
             }
-            EncodingProtos.ZstdMetadata meta;
+            ZstdMetadata meta;
             try {
-                meta = EncodingProtos.ZstdMetadata.parseFrom(rawMeta.duplicate());
-            } catch (InvalidProtocolBufferException e) {
+                MemorySegment metaSeg = MemorySegment.ofBuffer(rawMeta.duplicate());
+                meta = ZstdMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            } catch (IOException e) {
                 throw new VortexException(EncodingId.VORTEX_ZSTD, "invalid metadata", e);
             }
-            boolean hasDictionary = meta.getDictionarySize() != 0;
+            boolean hasDictionary = meta.dictionary_size() != 0;
 
             BoolArray validity = null;
             if (ctx.node().children().length > 0) {
@@ -226,10 +226,10 @@ public final class ZstdEncoding implements Encoding {
                 validity = ba;
             }
 
-            int frameCount = meta.getFramesCount();
+            int frameCount = meta.frames().size();
             long totalUncompressed = 0;
             for (int i = 0; i < frameCount; i++) {
-                totalUncompressed += meta.getFrames(i).getUncompressedSize();
+                totalUncompressed += meta.frames().get(i).uncompressed_size();
             }
 
             MemorySegment decompressed = hasDictionary
@@ -309,7 +309,7 @@ public final class ZstdEncoding implements Encoding {
 
         private static MemorySegment decompressFramesWithDict(
                 DecodeContext ctx,
-                EncodingProtos.ZstdMetadata meta,
+                ZstdMetadata meta,
                 int frameCount,
                 long totalUncompressed
         ) {
@@ -320,7 +320,7 @@ public final class ZstdEncoding implements Encoding {
                 long outOffset = 0;
                 for (int i = 0; i < frameCount; i++) {
                     byte[] compressed = ctx.buffer(i + 1).toArray(ValueLayout.JAVA_BYTE);
-                    int uncompSize = (int) meta.getFrames(i).getUncompressedSize();
+                    int uncompSize = (int) meta.frames().get(i).uncompressed_size();
                     byte[] temp = new byte[uncompSize];
                     int written = zctx.decompressByteArray(temp, 0, uncompSize, compressed, 0, compressed.length);
                     if (written != uncompSize) {
@@ -340,7 +340,7 @@ public final class ZstdEncoding implements Encoding {
 
         private static MemorySegment decompressFrames(
                 DecodeContext ctx,
-                EncodingProtos.ZstdMetadata meta,
+                ZstdMetadata meta,
                 int frameCount,
                 long totalUncompressed
         ) {
@@ -350,7 +350,7 @@ public final class ZstdEncoding implements Encoding {
             for (int i = 0; i < frameCount; i++) {
                 MemorySegment frameSeg = ctx.buffer(i);
                 byte[] compressed = frameSeg.toArray(ValueLayout.JAVA_BYTE);
-                int uncompSize = (int) meta.getFrames(i).getUncompressedSize();
+                int uncompSize = (int) meta.frames().get(i).uncompressed_size();
                 byte[] temp = new byte[uncompSize];
                 int written = decompressor.decompress(compressed, 0, compressed.length, temp, 0, uncompSize);
                 if (written != uncompSize) {

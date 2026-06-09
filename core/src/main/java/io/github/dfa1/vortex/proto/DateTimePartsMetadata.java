@@ -2,12 +2,14 @@ package io.github.dfa1.vortex.proto;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
+import javax.annotation.processing.Generated;
 
 /// Generated from proto3 message {@code vortex.encodings.DateTimePartsMetadata}.
 /// Do not edit by hand — regenerate via {@code ./mvnw generate-sources -pl core -P regenerate-sources}.
 /// @param days_ptype field tag 1
 /// @param seconds_ptype field tag 2
 /// @param subseconds_ptype field tag 3
+@Generated("io.github.dfa1.vortex.protogen.CodeGen")
 public record DateTimePartsMetadata(
         PType days_ptype,
         PType seconds_ptype,

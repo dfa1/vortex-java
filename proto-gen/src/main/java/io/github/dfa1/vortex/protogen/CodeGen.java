@@ -62,8 +62,10 @@ public final class CodeGen {
     private String emitEnum(TypeRegistry.ResolvedType.Enum e) {
         StringBuilder sb = new StringBuilder();
         sb.append("package ").append(PROTO_PKG).append(";\n\n");
+        sb.append("import javax.annotation.processing.Generated;\n\n");
         sb.append("/// Generated from proto3 enum {@code ").append(e.fqn()).append("}.\n");
         sb.append("/// Do not edit by hand — regenerate via {@code ./mvnw generate-sources -pl core -P regenerate-sources}.\n");
+        sb.append("@Generated(\"io.github.dfa1.vortex.protogen.CodeGen\")\n");
         sb.append("public enum ").append(e.javaName()).append(" {\n");
         List<Ast.EnumValue> values = e.decl().values();
         for (int i = 0; i < values.size(); i++) {
@@ -100,12 +102,14 @@ public final class CodeGen {
         StringBuilder sb = new StringBuilder();
         sb.append("package ").append(PROTO_PKG).append(";\n\n");
         sb.append("import java.io.IOException;\n");
-        sb.append("import java.lang.foreign.MemorySegment;\n\n");
+        sb.append("import java.lang.foreign.MemorySegment;\n");
+        sb.append("import javax.annotation.processing.Generated;\n\n");
         sb.append("/// Generated from proto3 message {@code ").append(m.fqn()).append("}.\n");
         sb.append("/// Do not edit by hand — regenerate via {@code ./mvnw generate-sources -pl core -P regenerate-sources}.\n");
         for (Field f : fields) {
             sb.append("/// @param ").append(f.name).append(" field tag ").append(f.number).append("\n");
         }
+        sb.append("@Generated(\"io.github.dfa1.vortex.protogen.CodeGen\")\n");
         sb.append("public record ").append(m.javaName()).append("(\n");
         for (int i = 0; i < fields.size(); i++) {
             Field f = fields.get(i);

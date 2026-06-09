@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.proto;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
+import javax.annotation.processing.Generated;
 
 /// Generated from proto3 message {@code vortex.encodings.ALPRDMetadata}.
 /// Do not edit by hand — regenerate via {@code ./mvnw generate-sources -pl core -P regenerate-sources}.
@@ -10,6 +11,7 @@ import java.lang.foreign.MemorySegment;
 /// @param dict field tag 3
 /// @param left_parts_ptype field tag 4
 /// @param patches field tag 5
+@Generated("io.github.dfa1.vortex.protogen.CodeGen")
 public record ALPRDMetadata(
         int right_bit_width,
         int dict_len,

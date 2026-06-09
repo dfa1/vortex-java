@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.encoding;
 
-import com.google.protobuf.InvalidProtocolBufferException;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -12,8 +11,11 @@ import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
-import io.github.dfa1.vortex.proto.EncodingProtos;
-import io.github.dfa1.vortex.proto.ScalarProtos;
+import io.github.dfa1.vortex.proto.DictMetadata;
+import io.github.dfa1.vortex.proto.ScalarValue;
+import io.github.dfa1.vortex.proto.VarBinMetadata;
+
+import java.io.IOException;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -145,16 +147,16 @@ public final class DictEncoding implements Encoding {
                 writeCodeToSeg(codesBuf, codePType, i, valueMap.get(strings[i]));
             }
 
-            byte[] metaBytes = EncodingProtos.DictMetadata.newBuilder()
-                                       .setValuesLen(dictSize)
-                                       .setCodesPtype(io.github.dfa1.vortex.proto.DTypeProtos.PType.forNumber(codePType.ordinal()))
-                                       .build()
-                                       .toByteArray();
+            byte[] metaBytes = new DictMetadata(
+                    dictSize,
+                    io.github.dfa1.vortex.proto.PType.fromValue(codePType.ordinal()),
+                    null,
+                    null
+            ).encode();
 
-            byte[] varBinMetaBytes = EncodingProtos.VarBinMetadata.newBuilder()
-                                             .setOffsetsPtype(io.github.dfa1.vortex.proto.DTypeProtos.PType.forNumber(PType.I64.ordinal()))
-                                             .build()
-                                             .toByteArray();
+            byte[] varBinMetaBytes = new VarBinMetadata(
+                    io.github.dfa1.vortex.proto.PType.fromValue(PType.I64.ordinal())
+            ).encode();
 
             // Rust layout: children[0]=codes, children[1]=values(VarBin)
             EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
@@ -170,10 +172,8 @@ public final class DictEncoding implements Encoding {
 
             String minStr = valueMap.keySet().stream().min(String::compareTo).orElse(null);
             String maxStr = valueMap.keySet().stream().max(String::compareTo).orElse(null);
-            byte[] statsMin = minStr != null
-                                      ? ScalarProtos.ScalarValue.newBuilder().setStringValue(minStr).build().toByteArray() : null;
-            byte[] statsMax = maxStr != null
-                                      ? ScalarProtos.ScalarValue.newBuilder().setStringValue(maxStr).build().toByteArray() : null;
+            byte[] statsMin = minStr != null ? ScalarValue.ofStringValue(minStr).encode() : null;
+            byte[] statsMax = maxStr != null ? ScalarValue.ofStringValue(maxStr).encode() : null;
             return new EncodeResult(root, List.of(dictBytesBuf, dictOffsetsBuf, codesBuf), statsMin, statsMax);
         }
 
@@ -400,15 +400,16 @@ public final class DictEncoding implements Encoding {
         }
 
         private static Array decodeRustProto(DecodeContext ctx, ByteBuffer metaBuf) {
-            EncodingProtos.DictMetadata meta;
+            DictMetadata meta;
             try {
-                meta = EncodingProtos.DictMetadata.parseFrom(metaBuf);
-            } catch (InvalidProtocolBufferException e) {
+                MemorySegment metaSeg = MemorySegment.ofBuffer(metaBuf);
+                meta = DictMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            } catch (IOException e) {
                 throw new VortexException(EncodingId.VORTEX_DICT, "invalid proto metadata", e);
             }
 
-            PType codePType = PType.fromOrdinal(meta.getCodesPtype().getNumber());
-            long valuesLen = meta.getValuesLen();
+            PType codePType = PType.fromOrdinal(meta.codes_ptype().value());
+            long valuesLen = meta.values_len();
             long rowCount = ctx.rowCount();
             PType valPType = ((DType.Primitive) ctx.dtype()).ptype();
             int elemSize = valPType.byteSize();
@@ -445,14 +446,15 @@ public final class DictEncoding implements Encoding {
 
         private static Array decodeUtf8DictProto(DecodeContext ctx, ByteBuffer metaBuf) {
             // DictMetadata proto (field 1=values_len, field 2=codes_ptype) — same message Rust uses.
-            EncodingProtos.DictMetadata meta;
+            DictMetadata meta;
             try {
-                meta = EncodingProtos.DictMetadata.parseFrom(metaBuf);
-            } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+                MemorySegment metaSeg = MemorySegment.ofBuffer(metaBuf);
+                meta = DictMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            } catch (IOException e) {
                 throw new VortexException(EncodingId.VORTEX_DICT, "invalid utf8 dict proto metadata", e);
             }
-            PType codePType = PType.fromOrdinal(meta.getCodesPtype().getNumber());
-            long dictSize = meta.getValuesLen();
+            PType codePType = PType.fromOrdinal(meta.codes_ptype().value());
+            long dictSize = meta.values_len();
             long n = ctx.rowCount();
 
             // Rust layout: children[0]=codes, children[1]=values(VarBin)

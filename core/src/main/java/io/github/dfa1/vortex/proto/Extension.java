@@ -2,12 +2,14 @@ package io.github.dfa1.vortex.proto;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
+import javax.annotation.processing.Generated;
 
 /// Generated from proto3 message {@code vortex.dtype.Extension}.
 /// Do not edit by hand — regenerate via {@code ./mvnw generate-sources -pl core -P regenerate-sources}.
 /// @param id field tag 1
 /// @param storage_dtype field tag 2
 /// @param metadata field tag 3
+@Generated("io.github.dfa1.vortex.protogen.CodeGen")
 public record Extension(
         String id,
         DType storage_dtype,

@@ -2,11 +2,13 @@ package io.github.dfa1.vortex.proto;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
+import javax.annotation.processing.Generated;
 
 /// Generated from proto3 message {@code vortex.encodings.DeltaMetadata}.
 /// Do not edit by hand — regenerate via {@code ./mvnw generate-sources -pl core -P regenerate-sources}.
 /// @param deltas_len field tag 1
 /// @param offset field tag 2
+@Generated("io.github.dfa1.vortex.protogen.CodeGen")
 public record DeltaMetadata(
         long deltas_len,
         int offset

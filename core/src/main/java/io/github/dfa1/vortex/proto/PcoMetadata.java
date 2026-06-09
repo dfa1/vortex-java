@@ -2,11 +2,13 @@ package io.github.dfa1.vortex.proto;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
+import javax.annotation.processing.Generated;
 
 /// Generated from proto3 message {@code vortex.encodings.PcoMetadata}.
 /// Do not edit by hand — regenerate via {@code ./mvnw generate-sources -pl core -P regenerate-sources}.
 /// @param header field tag 1
 /// @param chunks field tag 2
+@Generated("io.github.dfa1.vortex.protogen.CodeGen")
 public record PcoMetadata(
         byte[] header,
         java.util.List<PcoChunkInfo> chunks
