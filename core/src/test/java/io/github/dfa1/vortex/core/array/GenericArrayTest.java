@@ -142,6 +142,45 @@ class GenericArrayTest {
     }
 
     @Test
+    void getDecimal_i128Buffer_decodesWideMantissa() {
+        // Given — decimal(38,4) stores mantissas wider than i64; vortex.decimal
+        // writes 16-byte little-endian two's-complement. Two values: 2^70 (way
+        // above I64.MAX) and -2^70 anchor the high-precision path the
+        // narrower-width tests never exercise.
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment buf = arena.allocate(32);
+            java.math.BigInteger pos = java.math.BigInteger.TWO.pow(70);
+            java.math.BigInteger neg = pos.negate();
+            writeI128Le(buf, 0, pos);
+            writeI128Le(buf, 16, neg);
+            DType.Decimal dec = new DType.Decimal((byte) 38, (byte) 4, false);
+            GenericArray sut = new GenericArray(dec, 2, buf);
+
+            // When / Then
+            assertThat(sut.getDecimal(0)).isEqualByComparingTo(new BigDecimal(pos, 4));
+            assertThat(sut.getDecimal(1)).isEqualByComparingTo(new BigDecimal(neg, 4));
+        }
+    }
+
+    private static void writeI128Le(MemorySegment buf, long offset, java.math.BigInteger value) {
+        // BigInteger.toByteArray() returns minimum-length big-endian two's-complement.
+        // Pad / sign-extend to 16 bytes, then reverse into the little-endian wire slot.
+        byte[] be = value.toByteArray();
+        byte[] le16 = new byte[16];
+        // sign-extend pad in big-endian form
+        byte sign = (byte) (value.signum() < 0 ? 0xFF : 0x00);
+        for (int i = 0; i < 16; i++) {
+            le16[15 - i] = sign;
+        }
+        for (int i = 0; i < be.length && i < 16; i++) {
+            le16[i] = be[be.length - 1 - i];
+        }
+        for (int i = 0; i < 16; i++) {
+            buf.set(ValueLayout.JAVA_BYTE, offset + i, le16[i]);
+        }
+    }
+
+    @Test
     void getDecimal_widthDerivedFromBufferNotPrecision() {
         // Given — decimal(15,2) is precision 15 (≤18 → "should" be I64), but
         // vortex.decimal stores at whatever valuesType the encoder picked. A
