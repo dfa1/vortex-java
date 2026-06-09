@@ -194,19 +194,27 @@ relax for large fixtures.
 
 ## API
 
-- [ ] **Redesign Extension API** — current design mixes 3 concerns into overlapping shapes
-  (sealed `Extension` hierarchy + `ExtensionId` enum + `DType.Extension` wire record carrying a raw
-  `String`). Also collides on naming with `fbs.Extension`. Open spec namespace fights the closed sealed
-  type. Target: `ExtensionType<DomainT, StorageT>` interface per spec extension, populated via
-  `ExtensionRegistry` (ServiceLoader, mirrors `EncodingRegistry`). End-user code for
-  `List<LocalDate>` round-trip:
-  ```java
-  var schema = new DType.Struct(List.of("birthdays"),
-                                List.of(DateExtensionType.INSTANCE.dtype(false)), false);
-  writer.writeChunk(Map.of("birthdays", DateExtensionType.INSTANCE.encode(dates)));
-  List<LocalDate> back = DateExtensionType.INSTANCE.decodeAll(reader.column("birthdays"));
-  ```
-  Hides wire string, storage type, and epoch math. Tracked in conversation 2026-06-09.
+- [ ] **Finish Extension API redesign — reader-side unwrap (Tier 3b)** —
+  the new `io.github.dfa1.vortex.extension` package landed (Extension interface +
+  ExtensionId enum + DateExtension/TimeExtension/TimestampExtension/UuidExtension
+  singletons; legacy sealed `core.Extension` retired; `Registry` now indexes both
+  encodings and extensions; writer auto-routes `Collection<LocalDate>` etc. via
+  `Extension.findKnown`). Remaining gap: physical encodings (`PrimitiveEncoding.Decoder`
+  and friends) cast the column dtype to `DType.Primitive`, so reading an Extension
+  column crashes with `ClassCastException`. Fix: unwrap `DType.Extension →
+  storageDType()` once in the scan / `DecodeContext` pipeline before calling
+  `Encoding.decode`. Then add the full round-trip integration test (write
+  `List<LocalDate>` → read back as `List<LocalDate>`) and a convenience accessor
+  like `chunk.column("birthdays").as(LocalDate.class)`.
+- [ ] **Extension API — JDBC bridge (Tier 3c)** — map `vortex.date → java.sql.Date`,
+  `vortex.time → java.sql.Time`, `vortex.timestamp → java.sql.Timestamp`,
+  `vortex.uuid → java.util.UUID`. Lives in the `jdbc/` module; depends on Tier 3b
+  for the reader side.
+- [ ] **Extension API — registry-driven writer auto-route** — `VortexWriter.writeChunk`
+  currently calls `Extension.findKnown`, which hardcodes the 4 spec impls. Switch
+  to `Registry.lookup(ExtensionId)` so third-party extensions registered via
+  ServiceLoader are auto-routed too. Requires writer's `defaultRegistry` to include
+  service-loaded extensions (today it's encoding-only).
 - [ ] Use domain primitives (`UInt32`, `UInt64`, etc.) as value classes via Project Valhalla instead of raw `long`/`int`
     - See https://dfa1.github.io/articles/rethink-domain-primitives-with-valhalla
     - Candidates: `PType` integer kinds, buffer offsets, row indices, byte lengths
