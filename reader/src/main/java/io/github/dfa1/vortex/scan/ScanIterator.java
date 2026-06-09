@@ -22,7 +22,7 @@ import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.core.array.StructArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.encoding.EncodingRegistry;
+import io.github.dfa1.vortex.encoding.Registry;
 import io.github.dfa1.vortex.encoding.FlatSegmentDecoder;
 import io.github.dfa1.vortex.io.VortexHandle;
 
@@ -72,7 +72,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     private static final ValueLayout.OfLong LE_LONG = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     private final VortexHandle file;
-    private final EncodingRegistry registry;
+    private final Registry registry;
     private final ScanOptions options;
 
     private List<ChunkSpec> chunks;
@@ -84,7 +84,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     private Chunk openChunk;
     private boolean closed;
 
-    public ScanIterator(VortexHandle file, EncodingRegistry registry, ScanOptions options) {
+    public ScanIterator(VortexHandle file, Registry registry, ScanOptions options) {
         this.file = file;
         this.registry = registry;
         this.options = options;

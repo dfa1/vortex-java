@@ -14,7 +14,7 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.ArraySegments;
 import io.github.dfa1.vortex.core.array.LongArray;
-import io.github.dfa1.vortex.encoding.EncodingRegistry;
+import io.github.dfa1.vortex.encoding.Registry;
 import io.github.dfa1.vortex.io.VortexReader;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
@@ -153,7 +153,7 @@ class RustWritesJavaReadsIntegrationTest {
     // ── Java read helpers ─────────────────────────────────────────────────────
 
     private static String firstI64Column(Path file) throws IOException {
-        try (var vf = VortexReader.open(file, EncodingRegistry.empty())) {
+        try (var vf = VortexReader.open(file, Registry.empty())) {
             if (vf.dtype() instanceof DType.Struct struct) {
                 for (int i = 0; i < struct.fieldNames().size(); i++) {
                     if (struct.fieldTypes().get(i) instanceof DType.Primitive(PType pt, boolean _) && pt == PType.I64) {
@@ -189,7 +189,7 @@ class RustWritesJavaReadsIntegrationTest {
     }
 
     private static long[] readJavaLongColumn(Path file, String column) throws IOException {
-        try (var vf = VortexReader.open(file, EncodingRegistry.loadAll());
+        try (var vf = VortexReader.open(file, Registry.loadAll());
              var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns(column))) {
             var longs = new ArrayList<Long>();
             iter.forEachRemaining(c -> {
@@ -233,7 +233,7 @@ class RustWritesJavaReadsIntegrationTest {
         writeJni(file, ids, vals);
 
         // When / Then
-        try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
+        try (var vf = VortexReader.open(file, Registry.loadAll())) {
             List<JavaChunk> results = scanAll(vf);
             assertThat(results).hasSize(1);
             assertThat(results.getFirst().rowCount()).isEqualTo(3L);
@@ -253,7 +253,7 @@ class RustWritesJavaReadsIntegrationTest {
         }
 
         // When / Then — JNI may merge small batches; verify total rows and values
-        try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
+        try (var vf = VortexReader.open(file, Registry.loadAll())) {
             List<JavaChunk> results = scanAll(vf);
             long totalRows = results.stream().mapToLong(JavaChunk::rowCount).sum();
             assertThat(totalRows).isEqualTo(5L);
@@ -271,7 +271,7 @@ class RustWritesJavaReadsIntegrationTest {
         writeJni(file, new long[]{10L, 20L}, new double[]{0.1, 0.2});
 
         // When / Then
-        try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
+        try (var vf = VortexReader.open(file, Registry.loadAll())) {
             List<JavaChunk> results = scanAll(vf, io.github.dfa1.vortex.scan.ScanOptions.columns("id"));
             assertThat(results).hasSize(1);
             assertThat(results.getFirst().columns()).containsKey("id");
@@ -295,7 +295,7 @@ class RustWritesJavaReadsIntegrationTest {
         writeJni(file, ids, vals);
 
         // When / Then
-        try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
+        try (var vf = VortexReader.open(file, Registry.loadAll())) {
             List<JavaChunk> results = scanAll(vf, io.github.dfa1.vortex.scan.ScanOptions.columns("value"));
             long total = results.stream().mapToLong(JavaChunk::rowCount).sum();
             assertThat(total).isEqualTo(n);
@@ -350,7 +350,7 @@ class RustWritesJavaReadsIntegrationTest {
         }
 
         // When / Then — decodes without error, correct row count, correct values
-        try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
+        try (var vf = VortexReader.open(file, Registry.loadAll())) {
             List<JavaChunk> results = scanAll(vf);
             long totalRows = results.stream().mapToLong(JavaChunk::rowCount).sum();
             assertThat(totalRows).isEqualTo(n);
@@ -467,7 +467,7 @@ class RustWritesJavaReadsIntegrationTest {
         }
 
         // When
-        try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
+        try (var vf = VortexReader.open(file, Registry.loadAll())) {
             List<JavaChunk> results = scanAll(vf);
 
             // Then — correct dtype, correct values

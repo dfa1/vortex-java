@@ -20,8 +20,8 @@ class VarBinEncodingTest {
     @Nested
     class Encode {
 
-        private static EncodingRegistry buildRegistry() {
-            return EncodingRegistry.builder()
+        private static Registry buildRegistry() {
+            return Registry.builder()
                     .register(new VarBinEncoding())
                     .register(new PrimitiveEncoding())
                     .build();
@@ -146,7 +146,7 @@ class VarBinEncodingTest {
             var sut = new VarBinEncoding();
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_VARBIN, null, new ArrayNode[0], new int[0], null);
             DecodeContext ctx = new DecodeContext(node, DTypes.UTF8, 3, new MemorySegment[0],
-                    EncodingRegistry.empty(), Arena.ofAuto());
+                    Registry.empty(), Arena.ofAuto());
 
             // When / Then
             assertThatThrownBy(() -> sut.decode(ctx))

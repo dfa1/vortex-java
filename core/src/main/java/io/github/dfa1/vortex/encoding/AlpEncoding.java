@@ -52,7 +52,7 @@ public final class AlpEncoding implements Encoding {
     static final DType I64_DTYPE = new DType.Primitive(PType.I64, false);
     static final DType I32_DTYPE = new DType.Primitive(PType.I32, false);
 
-    /// Creates a new {@code AlpEncoding} instance; use via {@link EncodingRegistry}.
+    /// Creates a new {@code AlpEncoding} instance; use via {@link Registry}.
     public AlpEncoding() {
     }
 

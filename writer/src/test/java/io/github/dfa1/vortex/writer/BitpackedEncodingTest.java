@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.ArraySegments;
 import io.github.dfa1.vortex.encoding.BitpackedEncoding;
-import io.github.dfa1.vortex.encoding.EncodingRegistry;
+import io.github.dfa1.vortex.encoding.Registry;
 import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.ScanOptions;
 import org.junit.jupiter.api.Test;
@@ -49,8 +49,8 @@ class BitpackedEncodingTest {
         return collected.stream().mapToInt(Integer::intValue).toArray();
     }
 
-    private static EncodingRegistry bitpackedRegistry() {
-        return EncodingRegistry.builder().register(new BitpackedEncoding()).build();
+    private static Registry bitpackedRegistry() {
+        return Registry.builder().register(new BitpackedEncoding()).build();
     }
 
     @Test

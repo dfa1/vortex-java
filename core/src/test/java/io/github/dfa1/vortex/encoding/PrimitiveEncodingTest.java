@@ -60,7 +60,7 @@ class PrimitiveEncodingTest {
             // Given
             DType dtype = new DType.Primitive(PType.I64, false);
             var sut = new PrimitiveEncoding();
-            EncodingRegistry registry = TestRegistry.of(sut);
+            Registry registry = TestRegistry.of(sut);
 
             // When
             EncodeResult encoded = sut.encode(dtype, data, EncodeTestHelper.testCtx());
@@ -81,7 +81,7 @@ class PrimitiveEncodingTest {
             // Given
             DType dtype = new DType.Primitive(PType.I32, false);
             var sut = new PrimitiveEncoding();
-            EncodingRegistry registry = TestRegistry.of(sut);
+            Registry registry = TestRegistry.of(sut);
 
             // When
             EncodeResult encoded = sut.encode(dtype, data, EncodeTestHelper.testCtx());
@@ -102,7 +102,7 @@ class PrimitiveEncodingTest {
             // Given
             DType dtype = new DType.Primitive(PType.F64, false);
             var sut = new PrimitiveEncoding();
-            EncodingRegistry registry = TestRegistry.of(sut);
+            Registry registry = TestRegistry.of(sut);
 
             // When
             EncodeResult encoded = sut.encode(dtype, data, EncodeTestHelper.testCtx());
@@ -148,7 +148,7 @@ class PrimitiveEncodingTest {
             ArrayNode primNode = ArrayNode.of(
                     EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[]{validityNode}, new int[]{0}, ArrayStats.empty());
 
-            EncodingRegistry registry = TestRegistry.of(new PrimitiveEncoding(), new BoolEncoding());
+            Registry registry = TestRegistry.of(new PrimitiveEncoding(), new BoolEncoding());
 
             DType dtype = new DType.Primitive(PType.I32, false);
             DecodeContext ctx = new DecodeContext(
@@ -183,7 +183,7 @@ class PrimitiveEncodingTest {
             ArrayNode primNode = ArrayNode.of(
                     EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0}, ArrayStats.empty());
 
-            EncodingRegistry registry = TestRegistry.of(new PrimitiveEncoding());
+            Registry registry = TestRegistry.of(new PrimitiveEncoding());
 
             DType dtype = new DType.Primitive(PType.I32, false);
             DecodeContext ctx = new DecodeContext(

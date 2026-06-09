@@ -22,7 +22,7 @@ import java.util.List;
 /// <p>Decode: {@code signed = (unsigned >>> 1) ^ -(unsigned & 1)} applied element-wise.
 public final class ZigZagEncoding implements Encoding {
 
-    /// Creates a new {@code ZigZagEncoding} instance; use via {@link EncodingRegistry}.
+    /// Creates a new {@code ZigZagEncoding} instance; use via {@link Registry}.
     public ZigZagEncoding() {
     }
 

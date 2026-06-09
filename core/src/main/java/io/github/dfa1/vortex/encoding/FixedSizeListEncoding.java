@@ -25,7 +25,7 @@ import java.util.List;
 /// it is not stored in metadata.
 public final class FixedSizeListEncoding implements Encoding {
 
-    /// Creates a new {@code FixedSizeListEncoding} instance; use via {@link EncodingRegistry}.
+    /// Creates a new {@code FixedSizeListEncoding} instance; use via {@link Registry}.
     public FixedSizeListEncoding() {
     }
 

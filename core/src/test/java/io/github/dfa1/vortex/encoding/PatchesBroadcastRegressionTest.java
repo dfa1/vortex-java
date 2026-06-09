@@ -84,7 +84,7 @@ class PatchesBroadcastRegressionTest {
                     new ArrayNode[]{idxChild, valChild}, new int[]{0}, null);
 
             DType dtype = new DType.Primitive(PType.I64, false);
-            EncodingRegistry registry = EncodingRegistry.loadAll();
+            Registry registry = Registry.loadAll();
             DecodeContext ctx = new DecodeContext(root, dtype, n,
                     new MemorySegment[]{packedSeg, idxBufSeg, valBufSeg},
                     registry, Arena.ofAuto());

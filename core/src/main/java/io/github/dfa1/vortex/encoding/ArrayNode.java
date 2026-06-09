@@ -9,7 +9,7 @@ import java.nio.ByteBuffer;
 ///
 /// Sealed: a node is either [KnownArrayNode] (id resolves to an [EncodingId]) or
 /// [UnknownArrayNode] (id is an arbitrary string only meaningful for
-/// [EncodingRegistry#allowUnknown()] passthrough decode).
+/// [Registry#allowUnknown()] passthrough decode).
 sealed interface ArrayNode permits KnownArrayNode, UnknownArrayNode {
     /// Short factory for the common case: a node whose encoding id is well-known.
     /// Mostly used by tests and helper code that converts an [EncodeNode] tree back into

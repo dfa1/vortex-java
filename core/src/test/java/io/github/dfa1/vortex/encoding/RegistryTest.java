@@ -13,12 +13,12 @@ import java.nio.ByteBuffer;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-class EncodingRegistryTest {
+class RegistryTest {
 
     @Test
     void empty() {
         // Given
-        EncodingRegistry emptySut = EncodingRegistry.empty();
+        Registry emptySut = Registry.empty();
 
         // When
         boolean result1 = emptySut.hasEncoding(EncodingId.VORTEX_DECIMAL);
@@ -27,7 +27,7 @@ class EncodingRegistryTest {
         assertThat(result1).isFalse();
 
         // When
-        EncodingRegistry sut = EncodingRegistry.builder().register(new DecimalEncoding()).build();
+        Registry sut = Registry.builder().register(new DecimalEncoding()).build();
         boolean result2 = sut.hasEncoding(EncodingId.VORTEX_DECIMAL);
 
         // Then
@@ -35,9 +35,49 @@ class EncodingRegistryTest {
     }
 
     @Test
+    void extensionLookup_serviceLoadedReturnsImpl() {
+        // Given — defaults populate both namespaces from ServiceLoader; the 4 spec
+        // extensions must be reachable by typed id without any explicit registration.
+        // ServiceLoader constructs fresh instances rather than reusing INSTANCE, so we
+        // assert type identity, not object identity.
+        Registry sut = Registry.loadAll();
+
+        // When / Then
+        assertThat(sut.lookup(io.github.dfa1.vortex.extension.ExtensionId.VORTEX_DATE))
+                .isExactlyInstanceOf(io.github.dfa1.vortex.extension.DateExtension.class);
+        assertThat(sut.lookup(io.github.dfa1.vortex.extension.ExtensionId.VORTEX_TIME))
+                .isExactlyInstanceOf(io.github.dfa1.vortex.extension.TimeExtension.class);
+        assertThat(sut.lookup(io.github.dfa1.vortex.extension.ExtensionId.VORTEX_TIMESTAMP))
+                .isExactlyInstanceOf(io.github.dfa1.vortex.extension.TimestampExtension.class);
+        assertThat(sut.lookup(io.github.dfa1.vortex.extension.ExtensionId.VORTEX_UUID))
+                .isExactlyInstanceOf(io.github.dfa1.vortex.extension.UuidExtension.class);
+    }
+
+    @Test
+    void extensionLookup_emptyRegistryReturnsNull() {
+        // Given — explicit empty registry, no ServiceLoader
+        Registry sut = Registry.empty();
+
+        // When / Then — null signals "not registered"; matches existing Encoding lookup contract
+        assertThat(sut.lookup(io.github.dfa1.vortex.extension.ExtensionId.VORTEX_DATE)).isNull();
+    }
+
+    @Test
+    void extensionDuplicateRegistration_throws() {
+        // Given — same extension registered twice must fail-fast at build time, not at first use
+        Registry.Builder sut = Registry.builder()
+                .register(io.github.dfa1.vortex.extension.DateExtension.INSTANCE);
+
+        // When / Then
+        assertThatThrownBy(() -> sut.register(io.github.dfa1.vortex.extension.DateExtension.INSTANCE))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("already registered");
+    }
+
+    @Test
     void duplicateIdThrows() {
         // Given
-        EncodingRegistry.Builder sut = EncodingRegistry.builder().register(new DecimalEncoding());
+        Registry.Builder sut = Registry.builder().register(new DecimalEncoding());
 
         // When / Then
         assertThatThrownBy(() -> sut.register(new DecimalEncoding()))
@@ -48,7 +88,7 @@ class EncodingRegistryTest {
     @Test
     void all() {
         // Given
-        EncodingRegistry sut = EncodingRegistry.loadAll();
+        Registry sut = Registry.loadAll();
 
         // When
         for (EncodingId encodingId : EncodingId.values()) {
@@ -59,7 +99,7 @@ class EncodingRegistryTest {
     @Test
     void decodeUnknownEncodingThrowsByDefault() {
         // Given
-        EncodingRegistry sut = EncodingRegistry.empty();
+        Registry sut = Registry.empty();
         ArrayNode node = new UnknownArrayNode("some.unknown",
                 ByteBuffer.allocate(0), new ArrayNode[0], new int[0], ArrayStats.empty());
         DecodeContext ctx = new DecodeContext(node, DTypes.I32, 0L,
@@ -74,7 +114,7 @@ class EncodingRegistryTest {
     @Test
     void decodeKnownEncodingWithoutDecoderThrowsByDefault() {
         // Given — EncodingId is known but no Encoding registered for it
-        EncodingRegistry sut = EncodingRegistry.empty();
+        Registry sut = Registry.empty();
         ArrayNode node = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE,
                 ByteBuffer.allocate(0), new ArrayNode[0], new int[0], ArrayStats.empty());
         DecodeContext ctx = new DecodeContext(node, DTypes.I32, 0L,
@@ -89,7 +129,7 @@ class EncodingRegistryTest {
     @Test
     void decodeKnownEncodingWithoutDecoderReturnsUnknownArrayWhenAllowed() {
         // Given — EncodingId is known but no Encoding registered; allowUnknown covers this too
-        EncodingRegistry sut = EncodingRegistry.builder().allowUnknown().build();
+        Registry sut = Registry.builder().allowUnknown().build();
         ArrayNode node = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE,
                 ByteBuffer.allocate(0), new ArrayNode[0], new int[0], ArrayStats.empty());
         DecodeContext ctx = new DecodeContext(node, DTypes.I32, 0L,
@@ -106,7 +146,7 @@ class EncodingRegistryTest {
     @Test
     void decodeUnknownEncodingReturnsUnknownArrayWhenAllowed() {
         // Given
-        EncodingRegistry sut = EncodingRegistry.builder().allowUnknown().build();
+        Registry sut = Registry.builder().allowUnknown().build();
         ByteBuffer metadata = ByteBuffer.wrap(new byte[]{1, 2, 3});
         MemorySegment buf = Arena.ofAuto().allocate(4);
         buf.set(java.lang.foreign.ValueLayout.JAVA_INT, 0, 42);
@@ -133,7 +173,7 @@ class EncodingRegistryTest {
     @Test
     void decodeUnknownEncodingWrapsChildrenAsUnknown() {
         // Given
-        EncodingRegistry sut = EncodingRegistry.builder().allowUnknown().build();
+        Registry sut = Registry.builder().allowUnknown().build();
         // Child uses a known id (vortex.primitive); allow-unknown still wraps it unknown because
         // its parent is unknown — mirrors Rust decode_foreign in vortex-array/src/serde.rs:380.
         ArrayNode child = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE,

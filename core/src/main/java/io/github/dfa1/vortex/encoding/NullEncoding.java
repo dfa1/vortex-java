@@ -11,7 +11,7 @@ import java.util.List;
 /// No buffers, no children, empty metadata. Decode returns a [NullArray] of the requested length.
 public final class NullEncoding implements Encoding {
 
-    /// Creates a new {@code NullEncoding} instance; use via {@link EncodingRegistry}.
+    /// Creates a new {@code NullEncoding} instance; use via {@link Registry}.
     public NullEncoding() {
     }
 

@@ -38,7 +38,7 @@ class NullEncodingTest {
             EncodeResult encoded = sut.encode(DTypes.NULL, null, EncodeTestHelper.testCtx());
             ArrayNode node = ArrayNode.of(encoded.rootNode().encodingId(), null, new ArrayNode[0], new int[0], null);
             DecodeContext ctx = new DecodeContext(node, DTypes.NULL, rowCount, new MemorySegment[0],
-                    EncodingRegistry.empty(), Arena.ofAuto());
+                    Registry.empty(), Arena.ofAuto());
 
             // Then
             var decoded = sut.decode(ctx);
@@ -52,7 +52,7 @@ class NullEncodingTest {
 
         private static DecodeContext buildNullCtx(long rowCount) {
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_NULL, null, new ArrayNode[0], new int[0], null);
-            EncodingRegistry registry = EncodingRegistry.builder().register(new NullEncoding()).build();
+            Registry registry = Registry.builder().register(new NullEncoding()).build();
             return new DecodeContext(node, DTypes.NULL, rowCount, new MemorySegment[0], registry, Arena.ofAuto());
         }
 

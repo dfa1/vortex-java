@@ -34,7 +34,7 @@ import java.nio.ByteBuffer;
 /// patch tables address positions {@code c*1024 + patch_indices[i]} in the output.
 public final class PatchedEncoding implements Encoding {
 
-    /// Creates a new {@code PatchedEncoding} instance; use via {@link EncodingRegistry}.
+    /// Creates a new {@code PatchedEncoding} instance; use via {@link Registry}.
     public PatchedEncoding() {
     }
 

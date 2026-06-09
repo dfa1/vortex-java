@@ -17,7 +17,7 @@ import io.github.dfa1.vortex.encoding.EncodeNode;
 import io.github.dfa1.vortex.encoding.EncodeResult;
 import io.github.dfa1.vortex.encoding.Encoding;
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.encoding.EncodingRegistry;
+import io.github.dfa1.vortex.encoding.Registry;
 import io.github.dfa1.vortex.encoding.FrameOfReferenceEncoding;
 import io.github.dfa1.vortex.encoding.ListData;
 import io.github.dfa1.vortex.encoding.ListViewData;
@@ -86,9 +86,9 @@ public final class VortexWriter implements Closeable {
     private final DType.Struct schema;
     private final WriteOptions options;
     private final List<Encoding> encodings;
-    private final EncodingRegistry defaultRegistry;
+    private final Registry defaultRegistry;
     private final List<Encoding> cascadeCodecs;
-    private final EncodingRegistry cascadeRegistry;
+    private final Registry cascadeRegistry;
     private final List<SegRef> segs = new ArrayList<>();
     private final Map<String, List<ChunkRef>> colChunks = new LinkedHashMap<>();
     private final Map<EncodingId, Integer> encodingIdx = new LinkedHashMap<>();
@@ -108,9 +108,9 @@ public final class VortexWriter implements Closeable {
         this.schema = schema;
         this.options = options;
         this.encodings = encodings;
-        this.defaultRegistry = EncodingRegistry.of(encodings);
+        this.defaultRegistry = Registry.of(encodings);
         this.cascadeCodecs = buildCascadeCodecs(options);
-        this.cascadeRegistry = EncodingRegistry.of(this.cascadeCodecs);
+        this.cascadeRegistry = Registry.of(this.cascadeCodecs);
         for (String name : schema.fieldNames()) {
             colChunks.put(name, new ArrayList<>());
         }

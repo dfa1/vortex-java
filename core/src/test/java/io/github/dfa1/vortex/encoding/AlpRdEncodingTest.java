@@ -18,7 +18,7 @@ class AlpRdEncodingTest {
             // Given
             double[] values = {0.1, 0.2, 0.3, 0.4, 0.5};
             AlpRdEncoding sut = new AlpRdEncoding();
-            EncodingRegistry registry = TestRegistry.of(sut, new BitpackedEncoding(), new PrimitiveEncoding());
+            Registry registry = TestRegistry.of(sut, new BitpackedEncoding(), new PrimitiveEncoding());
 
             // When
             EncodeResult encoded = sut.encode(DTypes.F64, values, EncodeTestHelper.testCtx());

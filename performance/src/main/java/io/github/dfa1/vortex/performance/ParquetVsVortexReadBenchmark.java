@@ -8,7 +8,7 @@ import dev.hardwood.reader.RowReader;
 import dev.hardwood.schema.ColumnProjection;
 import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.IntArray;
-import io.github.dfa1.vortex.encoding.EncodingRegistry;
+import io.github.dfa1.vortex.encoding.Registry;
 import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.parquet.ParquetImporter;
 import io.github.dfa1.vortex.scan.Chunk;
@@ -74,7 +74,7 @@ public class ParquetVsVortexReadBenchmark {
 
     private Path parquetFile;
     private Path vortexFile;
-    private EncodingRegistry registry;
+    private Registry registry;
 
     private static Path downloadIfAbsent(Path dest, String url) throws Exception {
         if (Files.exists(dest)) {
@@ -96,7 +96,7 @@ public class ParquetVsVortexReadBenchmark {
 
     @Setup(Level.Trial)
     public void setup() throws Exception {
-        registry = EncodingRegistry.loadAll();
+        registry = Registry.loadAll();
         synchronized (SETUP_LOCK) {
             if (sharedParquetFile == null) {
                 String override = System.getProperty("bench.parquet");

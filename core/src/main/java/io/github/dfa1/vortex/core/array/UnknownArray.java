@@ -11,7 +11,7 @@ import java.nio.ByteBuffer;
 /// unknown), and stats. Children of an unknown node are always wrapped unknown — matches
 /// Rust `decode_foreign` in `vortex-array/src/serde.rs`.
 ///
-/// Constructed by `EncodingRegistry` when `allowUnknown()` is set and an encoding id is not
+/// Constructed by `Registry` when `allowUnknown()` is set and an encoding id is not
 /// in the registry. Data access beyond `buffer(i)` and `child(i)` is not supported.
 ///
 /// @param encodingId the unrecognised encoding id string

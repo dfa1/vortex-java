@@ -20,8 +20,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class MaskedEncodingTest {
 
-    private static EncodingRegistry buildRegistry() {
-        EncodingRegistry registry = TestRegistry.of(new MaskedEncoding(), new PrimitiveEncoding(), new BoolEncoding());
+    private static Registry buildRegistry() {
+        Registry registry = TestRegistry.of(new MaskedEncoding(), new PrimitiveEncoding(), new BoolEncoding());
         return registry;
     }
 
@@ -60,7 +60,7 @@ class MaskedEncodingTest {
         void oneChild_noValidity_allPositionsValid() {
             // Given
             var sut = new MaskedEncoding();
-            EncodingRegistry registry = buildRegistry();
+            Registry registry = buildRegistry();
             DType i32Nullable = new DType.Primitive(PType.I32, true);
             EncodeResult ctx = maskedResult(new int[]{10, 20, 30}, null);
 
@@ -80,7 +80,7 @@ class MaskedEncodingTest {
         void twoChildren_withValidity_masksNulls() {
             // Given
             var sut = new MaskedEncoding();
-            EncodingRegistry registry = buildRegistry();
+            Registry registry = buildRegistry();
             DType i32Nullable = new DType.Primitive(PType.I32, true);
             EncodeResult ctx = maskedResult(new int[]{1, 2, 3, 4, 5},
                     new boolean[]{true, false, true, false, true});
@@ -103,7 +103,7 @@ class MaskedEncodingTest {
         void dtype_isNullable() {
             // Given
             var sut = new MaskedEncoding();
-            EncodingRegistry registry = buildRegistry();
+            Registry registry = buildRegistry();
             DType i32Nullable = new DType.Primitive(PType.I32, true);
             EncodeResult ctx = maskedResult(new int[]{1, 2, 3}, null);
 
@@ -118,7 +118,7 @@ class MaskedEncodingTest {
         void inner_containsChildValues() {
             // Given
             var sut = new MaskedEncoding();
-            EncodingRegistry registry = buildRegistry();
+            Registry registry = buildRegistry();
             DType i32Nullable = new DType.Primitive(PType.I32, true);
             EncodeResult ctx = maskedResult(new int[]{7, 8, 9}, null);
 
@@ -136,7 +136,7 @@ class MaskedEncodingTest {
         void buffersPresentThrows() {
             // Given
             var sut = new MaskedEncoding();
-            EncodingRegistry registry = buildRegistry();
+            Registry registry = buildRegistry();
             DType i32Nullable = new DType.Primitive(PType.I32, true);
 
             // Build a node with an unexpected buffer index
@@ -158,7 +158,7 @@ class MaskedEncodingTest {
         void zeroChildrenThrows() {
             // Given
             var sut = new MaskedEncoding();
-            EncodingRegistry registry = buildRegistry();
+            Registry registry = buildRegistry();
             DType i32Nullable = new DType.Primitive(PType.I32, true);
 
             EncodeNode maskedNode = new EncodeNode(
@@ -176,7 +176,7 @@ class MaskedEncodingTest {
         void threeChildrenThrows() {
             // Given
             var sut = new MaskedEncoding();
-            EncodingRegistry registry = buildRegistry();
+            Registry registry = buildRegistry();
             DType i32Nullable = new DType.Primitive(PType.I32, true);
 
             PrimitiveEncoding primitiveEncoding = new PrimitiveEncoding();

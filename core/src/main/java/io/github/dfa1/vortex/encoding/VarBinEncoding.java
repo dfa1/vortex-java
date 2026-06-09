@@ -31,7 +31,7 @@ import java.util.List;
 /// </ul>
 public final class VarBinEncoding implements Encoding {
 
-    /// Creates a new {@code VarBinEncoding} instance; use via {@link EncodingRegistry}.
+    /// Creates a new {@code VarBinEncoding} instance; use via {@link Registry}.
     public VarBinEncoding() {
     }
 

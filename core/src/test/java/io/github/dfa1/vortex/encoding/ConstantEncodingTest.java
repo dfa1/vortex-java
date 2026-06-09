@@ -32,7 +32,7 @@ class ConstantEncodingTest {
             // the correct impl stores exactly one element regardless of logical length.
             long rowCount = 10_000_000L;
             var sut = new ConstantEncoding();
-            EncodingRegistry registry = TestRegistry.of(sut);
+            Registry registry = TestRegistry.of(sut);
 
             // When
             EncodeResult encoded = sut.encode(DTypes.I64, new long[]{42L}, EncodeTestHelper.testCtx());
@@ -77,7 +77,7 @@ class ConstantEncodingTest {
         void encodeDecode_i32_isLossless(int[] data) {
             // Given
             var sut = new ConstantEncoding();
-            EncodingRegistry registry = TestRegistry.of(sut);
+            Registry registry = TestRegistry.of(sut);
             var le = PTypeIO.LE_INT;
 
             // When
@@ -96,7 +96,7 @@ class ConstantEncodingTest {
         void encodeDecode_i64_isLossless(long[] data) {
             // Given
             var sut = new ConstantEncoding();
-            EncodingRegistry registry = TestRegistry.of(sut);
+            Registry registry = TestRegistry.of(sut);
             var le = PTypeIO.LE_LONG;
 
             // When
@@ -125,7 +125,7 @@ class ConstantEncodingTest {
             // Given
             long constant = 0xDEADBEEFCAFEBABEL;
             var sut = new ConstantEncoding();
-            EncodingRegistry registry = TestRegistry.of(sut);
+            Registry registry = TestRegistry.of(sut);
             EncodeResult encoded = sut.encode(DTypes.I64, new long[]{constant}, EncodeTestHelper.testCtx());
             DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, rowCount, DTypes.I64, registry);
 
@@ -149,7 +149,7 @@ class ConstantEncodingTest {
             long rowCount = 1_000_000L;
             long constant = 7L;
             var sut = new ConstantEncoding();
-            EncodingRegistry registry = TestRegistry.of(sut);
+            Registry registry = TestRegistry.of(sut);
             EncodeResult encoded = sut.encode(DTypes.I64, new long[]{constant}, EncodeTestHelper.testCtx());
             DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, rowCount, DTypes.I64, registry);
 
@@ -169,7 +169,7 @@ class ConstantEncodingTest {
             long rowCount = 10_000L;
             int constant = -123_456;
             var sut = new ConstantEncoding();
-            EncodingRegistry registry = TestRegistry.of(sut);
+            Registry registry = TestRegistry.of(sut);
             EncodeResult encoded = sut.encode(DTypes.I32, new int[]{constant}, EncodeTestHelper.testCtx());
             DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, rowCount, DTypes.I32, registry);
 
@@ -189,7 +189,7 @@ class ConstantEncodingTest {
             long rowCount = 10_000L;
             double constant = 3.141592653589793;
             var sut = new ConstantEncoding();
-            EncodingRegistry registry = TestRegistry.of(sut);
+            Registry registry = TestRegistry.of(sut);
             EncodeResult encoded = sut.encode(DTypes.F64, new double[]{constant}, EncodeTestHelper.testCtx());
             DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, rowCount, DTypes.F64, registry);
 
@@ -211,7 +211,7 @@ class ConstantEncodingTest {
             long rowCount = 10_000L;
             float constant = 2.71828f;
             var sut = new ConstantEncoding();
-            EncodingRegistry registry = TestRegistry.of(sut);
+            Registry registry = TestRegistry.of(sut);
             EncodeResult encoded = sut.encode(DTypes.F32, new float[]{constant}, EncodeTestHelper.testCtx());
             DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, rowCount, DTypes.F32, registry);
 
@@ -230,7 +230,7 @@ class ConstantEncodingTest {
             long rowCount = 10_000L;
             short constant = (short) -12345;
             var sut = new ConstantEncoding();
-            EncodingRegistry registry = TestRegistry.of(sut);
+            Registry registry = TestRegistry.of(sut);
             EncodeResult encoded = sut.encode(DTypes.I16, new short[]{constant}, EncodeTestHelper.testCtx());
             DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, rowCount, DTypes.I16, registry);
 
@@ -249,7 +249,7 @@ class ConstantEncodingTest {
             long rowCount = 10_000L;
             byte constant = (byte) -42;
             var sut = new ConstantEncoding();
-            EncodingRegistry registry = TestRegistry.of(sut);
+            Registry registry = TestRegistry.of(sut);
             EncodeResult encoded = sut.encode(DTypes.I8, new byte[]{constant}, EncodeTestHelper.testCtx());
             DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, rowCount, DTypes.I8, registry);
 

@@ -27,7 +27,7 @@ import java.util.List;
 /// and {@code nfields == 1}.
 public final class StructEncoding implements Encoding {
 
-    /// Creates a new {@code StructEncoding} instance; use via {@link EncodingRegistry}.
+    /// Creates a new {@code StructEncoding} instance; use via {@link Registry}.
     public StructEncoding() {
     }
 

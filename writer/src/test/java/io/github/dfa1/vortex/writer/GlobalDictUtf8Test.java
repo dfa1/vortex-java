@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.writer;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.VarBinArray;
-import io.github.dfa1.vortex.encoding.EncodingRegistry;
+import io.github.dfa1.vortex.encoding.Registry;
 import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.ScanOptions;
 import org.junit.jupiter.api.Test;
@@ -70,7 +70,7 @@ class GlobalDictUtf8Test {
         assertThat(size).as("global dict for 5 chunks of 1000 strings").isLessThan(8_000L);
 
         // And values round-trip exactly across all chunks.
-        try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
+        try (var vf = VortexReader.open(file, Registry.loadAll())) {
             List<String> got = readAllStrings(vf, "status");
             assertThat(got).hasSize(rowsPerChunk * chunkCount);
             // Spot-check: first row of chunk c starts with dict[c % 3], etc.
@@ -99,7 +99,7 @@ class GlobalDictUtf8Test {
         }
 
         // Then — file is readable, all rows round-trip (correctness, not size).
-        try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
+        try (var vf = VortexReader.open(file, Registry.loadAll())) {
             List<String> got = readAllStrings(vf, "status");
             assertThat(got).hasSize(rows);
             for (int i = 0; i < rows; i++) {
@@ -125,7 +125,7 @@ class GlobalDictUtf8Test {
         }
 
         // Then
-        try (var vf = VortexReader.open(file, EncodingRegistry.loadAll())) {
+        try (var vf = VortexReader.open(file, Registry.loadAll())) {
             List<String> got = readAllStrings(vf, "status");
             assertThat(got).containsExactly(data);
         }

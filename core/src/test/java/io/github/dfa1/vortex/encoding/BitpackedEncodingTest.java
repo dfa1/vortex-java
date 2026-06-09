@@ -45,7 +45,7 @@ class BitpackedEncodingTest {
         void encodeDecode_u32_isLossless(String name, int[] data) {
             // Given
             var sut = new BitpackedEncoding();
-            EncodingRegistry registry = TestRegistry.of(sut);
+            Registry registry = TestRegistry.of(sut);
 
             // When
             EncodeResult encoded = sut.encode(DTypes.U32, data, EncodeTestHelper.testCtx());
@@ -65,7 +65,7 @@ class BitpackedEncodingTest {
         void encodeDecode_u64_isLossless(String name, long[] data) {
             // Given
             var sut = new BitpackedEncoding();
-            EncodingRegistry registry = TestRegistry.of(sut);
+            Registry registry = TestRegistry.of(sut);
 
             // When
             EncodeResult encoded = sut.encode(DTypes.U64, data, EncodeTestHelper.testCtx());

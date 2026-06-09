@@ -44,7 +44,7 @@ class ChunkedEncodingTest {
             long[] chunk1 = {40L, 50L};
             DType i64 = new DType.Primitive(PType.I64, false);
             var sut = new ChunkedEncoding();
-            EncodingRegistry registry = EncodingRegistry.builder()
+            Registry registry = Registry.builder()
                     .register(sut)
                     .register(new PrimitiveEncoding())
                     .build();
@@ -105,7 +105,7 @@ class ChunkedEncodingTest {
             DType u64 = new DType.Primitive(PType.U64, false);
 
             var sut = new ChunkedEncoding();
-            EncodingRegistry registry = EncodingRegistry.builder()
+            Registry registry = Registry.builder()
                     .register(sut)
                     .register(new PrimitiveEncoding())
                     .build();
@@ -158,7 +158,7 @@ class ChunkedEncodingTest {
             DType i64 = new DType.Primitive(PType.I64, false);
             DType u64 = new DType.Primitive(PType.U64, false);
 
-            EncodingRegistry registry = EncodingRegistry.builder()
+            Registry registry = Registry.builder()
                     .register(new ChunkedEncoding())
                     .register(new PrimitiveEncoding())
                     .build();
@@ -192,7 +192,7 @@ class ChunkedEncodingTest {
         void noChildren_throws() {
             // Given
             DType i64 = new DType.Primitive(PType.I64, false);
-            EncodingRegistry registry = EncodingRegistry.builder()
+            Registry registry = Registry.builder()
                     .register(new ChunkedEncoding())
                     .build();
             ArrayNode root = ArrayNode.of(EncodingId.VORTEX_CHUNKED, null, new ArrayNode[]{}, new int[]{}, null);

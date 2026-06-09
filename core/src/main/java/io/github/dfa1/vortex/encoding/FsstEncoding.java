@@ -30,7 +30,7 @@ import java.util.List;
 /// <p>Output: varbin-compatible {@code Array} (buffer[0] = uncompressed bytes, child[0] = I32 offsets).
 public final class FsstEncoding implements Encoding {
 
-    /// Creates a new {@code FsstEncoding} instance; use via {@link EncodingRegistry}.
+    /// Creates a new {@code FsstEncoding} instance; use via {@link Registry}.
     public FsstEncoding() {
     }
 

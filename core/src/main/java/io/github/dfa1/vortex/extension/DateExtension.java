@@ -13,7 +13,9 @@ public final class DateExtension implements Extension {
     /// Singleton instance.
     public static final DateExtension INSTANCE = new DateExtension();
 
-    private DateExtension() {
+    /// Public no-arg constructor for {@link java.util.ServiceLoader}.
+    /// Prefer the {@link #INSTANCE} singleton in application code.
+    public DateExtension() {
     }
 
     @Override

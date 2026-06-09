@@ -56,7 +56,7 @@ public final class PcoEncoding implements Encoding {
     static final int BITS_TO_ENCODE_OFFSET_BITS_32 = 6; // log2(32) + 1
     static final int BITS_TO_ENCODE_OFFSET_BITS_16 = 5; // log2(16) + 1
 
-    /// Creates a new {@code PcoEncoding} instance; use via {@link EncodingRegistry}.
+    /// Creates a new {@code PcoEncoding} instance; use via {@link Registry}.
     public PcoEncoding() {
     }
 

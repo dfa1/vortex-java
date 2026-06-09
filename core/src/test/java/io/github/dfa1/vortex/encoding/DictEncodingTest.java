@@ -84,7 +84,7 @@ class DictEncodingTest {
         void encodeDecode_i32_isLossless(int[] data) {
             // Given
             var sut = new DictEncoding();
-            EncodingRegistry registry = TestRegistry.withPrimitive(sut);
+            Registry registry = TestRegistry.withPrimitive(sut);
 
             // When
             EncodeResult encoded = sut.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
@@ -104,7 +104,7 @@ class DictEncodingTest {
         void encodeDecode_i64_isLossless(long[] data) {
             // Given
             var sut = new DictEncoding();
-            EncodingRegistry registry = TestRegistry.withPrimitive(sut);
+            Registry registry = TestRegistry.withPrimitive(sut);
 
             // When
             EncodeResult encoded = sut.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
@@ -139,7 +139,7 @@ class DictEncodingTest {
         void encodeDecode_utf8_isLossless(String name, String[] data) {
             // Given
             var sut = new DictEncoding();
-            EncodingRegistry registry = EncodingRegistry.builder()
+            Registry registry = Registry.builder()
                     .register(sut)
                     .register(new PrimitiveEncoding())
                     .register(new VarBinEncoding())

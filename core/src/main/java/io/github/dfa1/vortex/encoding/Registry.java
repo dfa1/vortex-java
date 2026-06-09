@@ -4,6 +4,8 @@ import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.ArraySegments;
 import io.github.dfa1.vortex.core.array.UnknownArray;
+import io.github.dfa1.vortex.extension.Extension;
+import io.github.dfa1.vortex.extension.ExtensionId;
 
 import java.lang.foreign.MemorySegment;
 import java.util.HashMap;
@@ -11,17 +13,24 @@ import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
 
-/// Registry mapping encoding IDs to [Encoding] implementations.
+/// Registry mapping wire identifiers to their library implementations:
+/// [Encoding] keyed by [EncodingId], and [Extension] keyed by [ExtensionId].
 ///
 /// Instances are immutable after construction. Build one via [#builder()] or via the
 /// [#loadAll()], [#empty()], [#of(List)] convenience factories.
-public final class EncodingRegistry {
+public final class Registry {
 
     private final Map<EncodingId, Encoding> encodings;
+    private final Map<ExtensionId, Extension> extensions;
     private final boolean allowUnknown;
 
-    private EncodingRegistry(Map<EncodingId, Encoding> encodings, boolean allowUnknown) {
+    private Registry(
+            Map<EncodingId, Encoding> encodings,
+            Map<ExtensionId, Extension> extensions,
+            boolean allowUnknown
+    ) {
         this.encodings = Map.copyOf(encodings);
+        this.extensions = Map.copyOf(extensions);
         this.allowUnknown = allowUnknown;
     }
 
@@ -34,23 +43,23 @@ public final class EncodingRegistry {
 
     /// Load all [Encoding]s registered via `ServiceLoader`.
     ///
-    /// @return an immutable {@link EncodingRegistry} populated with all service-loaded encodings
-    public static EncodingRegistry loadAll() {
+    /// @return an immutable {@link Registry} populated with all service-loaded encodings
+    public static Registry loadAll() {
         return builder().registerServiceLoaded().build();
     }
 
     /// Creates an empty registry with no encodings registered.
     ///
-    /// @return a new empty immutable {@link EncodingRegistry}
-    public static EncodingRegistry empty() {
+    /// @return a new empty immutable {@link Registry}
+    public static Registry empty() {
         return builder().build();
     }
 
     /// Creates a registry populated with the given encodings.
     ///
     /// @param encodings the encodings to register
-    /// @return an immutable {@link EncodingRegistry} populated with the given encodings
-    public static EncodingRegistry of(List<Encoding> encodings) {
+    /// @return an immutable {@link Registry} populated with the given encodings
+    public static Registry of(List<Encoding> encodings) {
         var b = builder();
         for (Encoding e : encodings) {
             b.register(e);
@@ -106,6 +115,14 @@ public final class EncodingRegistry {
         return encodings.get(encodingId);
     }
 
+    /// Returns the registered extension for {@code extensionId}, or {@code null} if not registered.
+    ///
+    /// @param extensionId the extension id to look up
+    /// @return the registered {@link Extension}, or {@code null}
+    public Extension lookup(ExtensionId extensionId) {
+        return extensions.get(extensionId);
+    }
+
     MemorySegment decodeAsSegment(DecodeContext ctx) {
         ArrayNode node = ctx.node();
         Encoding encoding = switch (node) {
@@ -141,12 +158,13 @@ public final class EncodingRegistry {
         throw new VortexException("no encoding registered for " + id);
     }
 
-    /// Builder for [EncodingRegistry].
+    /// Builder for [Registry].
     ///
-    /// Not thread-safe. Build once, use everywhere — the produced [EncodingRegistry] is immutable.
+    /// Not thread-safe. Build once, use everywhere — the produced [Registry] is immutable.
     public static final class Builder {
 
         private final Map<EncodingId, Encoding> encodings = new HashMap<>();
+        private final Map<ExtensionId, Extension> extensions = new HashMap<>();
         private boolean allowUnknown = false;
 
         private Builder() {
@@ -165,13 +183,29 @@ public final class EncodingRegistry {
             return this;
         }
 
-        /// Registers every [Encoding] discovered via `ServiceLoader`.
+        /// Registers an extension implementation.
+        ///
+        /// @param extension the {@link Extension} to register
+        /// @return this builder, for chaining
+        /// @throws VortexException if an extension with the same id is already registered
+        public Builder register(Extension extension) {
+            Extension old = extensions.put(extension.extensionId(), extension);
+            if (old != null) {
+                throw new VortexException("extension %s already registered".formatted(extension.extensionId()));
+            }
+            return this;
+        }
+
+        /// Registers every [Encoding] and [Extension] discovered via `ServiceLoader`.
         ///
         /// @return this builder, for chaining
-        /// @throws VortexException if a service-loaded encoding collides with one already registered
+        /// @throws VortexException if a service-loaded entry collides with one already registered
         public Builder registerServiceLoaded() {
             for (Encoding encoding : ServiceLoader.load(Encoding.class)) {
                 register(encoding);
+            }
+            for (Extension extension : ServiceLoader.load(Extension.class)) {
+                register(extension);
             }
             return this;
         }
@@ -188,11 +222,11 @@ public final class EncodingRegistry {
             return this;
         }
 
-        /// Builds an immutable [EncodingRegistry].
+        /// Builds an immutable [Registry].
         ///
         /// @return the immutable registry
-        public EncodingRegistry build() {
-            return new EncodingRegistry(encodings, allowUnknown);
+        public Registry build() {
+            return new Registry(encodings, extensions, allowUnknown);
         }
     }
 }

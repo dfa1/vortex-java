@@ -26,7 +26,7 @@ import java.util.List;
 /// </ul>
 public final class ListEncoding implements Encoding {
 
-    /// Creates a new {@code ListEncoding} instance; use via {@link EncodingRegistry}.
+    /// Creates a new {@code ListEncoding} instance; use via {@link Registry}.
     public ListEncoding() {
     }
 

@@ -6,7 +6,7 @@ import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.LongArray;
-import io.github.dfa1.vortex.encoding.EncodingRegistry;
+import io.github.dfa1.vortex.encoding.Registry;
 import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
@@ -201,7 +201,7 @@ class FileSizeComparisonIntegrationTest {
 
         // Then — Java file is readable with correct row count
         var totalRows = new java.util.concurrent.atomic.AtomicLong();
-        try (VortexReader reader = VortexReader.open(javaFile, EncodingRegistry.loadAll());
+        try (VortexReader reader = VortexReader.open(javaFile, Registry.loadAll());
              var iter = reader.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("volume"))) {
             iter.forEachRemaining(c -> totalRows.addAndGet(c.<LongArray>column("volume").length()));
         }
@@ -231,7 +231,7 @@ class FileSizeComparisonIntegrationTest {
 
         // Then — Zstd file is readable with correct row count
         var totalRows = new java.util.concurrent.atomic.AtomicLong();
-        try (VortexReader reader = VortexReader.open(withZstd, EncodingRegistry.loadAll());
+        try (VortexReader reader = VortexReader.open(withZstd, Registry.loadAll());
              var iter = reader.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("volume"))) {
             iter.forEachRemaining(c -> totalRows.addAndGet(c.<LongArray>column("volume").length()));
         }

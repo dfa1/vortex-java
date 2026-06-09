@@ -35,7 +35,7 @@ class BoolEncodingTest {
         void encodeDecode_isLossless(boolean[] data) {
             // Given
             var sut = new BoolEncoding();
-            EncodingRegistry registry = TestRegistry.of(sut);
+            Registry registry = TestRegistry.of(sut);
 
             // When
             EncodeResult encoded = sut.encode(DTypes.BOOL, data, EncodeTestHelper.testCtx());

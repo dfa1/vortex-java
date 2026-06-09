@@ -6,7 +6,7 @@ import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.ArraySegments;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.encoding.AlpEncoding;
-import io.github.dfa1.vortex.encoding.EncodingRegistry;
+import io.github.dfa1.vortex.encoding.Registry;
 import io.github.dfa1.vortex.encoding.PrimitiveEncoding;
 import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.Chunk;
@@ -50,8 +50,8 @@ class VortexWriterTest {
         return snapshots;
     }
 
-    private static EncodingRegistry primitiveRegistry() {
-        return EncodingRegistry.builder()
+    private static Registry primitiveRegistry() {
+        return Registry.builder()
                 .register(new AlpEncoding())
                 .register(new PrimitiveEncoding())
                 .build();

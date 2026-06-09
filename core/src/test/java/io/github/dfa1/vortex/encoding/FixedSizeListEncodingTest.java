@@ -24,8 +24,8 @@ class FixedSizeListEncodingTest {
         return ArrayNode.of(node.encodingId(), node.metadata(), children, node.bufferIndices(), ArrayStats.empty());
     }
 
-    private static EncodingRegistry registry() {
-        return EncodingRegistry.builder()
+    private static Registry registry() {
+        return Registry.builder()
                 .register(new FixedSizeListEncoding())
                 .register(new PrimitiveEncoding())
                 .build();

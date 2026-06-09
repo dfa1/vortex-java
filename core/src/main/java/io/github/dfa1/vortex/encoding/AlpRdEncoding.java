@@ -41,7 +41,7 @@ public final class AlpRdEncoding implements Encoding {
     private static final DType U32_DTYPE = new DType.Primitive(PType.U32, false);
     private static final DType U64_DTYPE = new DType.Primitive(PType.U64, false);
 
-    /// Creates a new {@code AlpRdEncoding} instance; use via {@link EncodingRegistry}.
+    /// Creates a new {@code AlpRdEncoding} instance; use via {@link Registry}.
     public AlpRdEncoding() {
     }
 

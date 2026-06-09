@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.io;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.Footer;
 import io.github.dfa1.vortex.core.Layout;
-import io.github.dfa1.vortex.encoding.EncodingRegistry;
+import io.github.dfa1.vortex.encoding.Registry;
 import io.github.dfa1.vortex.scan.ScanIterator;
 import io.github.dfa1.vortex.scan.ScanOptions;
 
@@ -45,7 +45,7 @@ public interface VortexHandle extends Closeable {
 
     ScanIterator scan(ScanOptions options);
 
-    /// Returns the {@link EncodingRegistry} this handle was opened with.
+    /// Returns the {@link Registry} this handle was opened with.
     ///
     /// <p><strong>Internal escape hatch.</strong> Exposed for tooling
     /// (e.g. the inspector's dictionary preview) that needs to decode an
@@ -54,7 +54,7 @@ public interface VortexHandle extends Closeable {
     /// without deprecation.
     ///
     /// @return the registry used to resolve encoding ids during scan
-    EncodingRegistry registry();
+    Registry registry();
 
     @Override
     void close();

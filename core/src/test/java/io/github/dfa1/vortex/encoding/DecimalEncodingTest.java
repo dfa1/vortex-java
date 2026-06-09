@@ -29,7 +29,7 @@ class DecimalEncodingTest {
             MemorySegment input = TestSegments.leLongs(values);
             DType dtype = new DType.Decimal((byte) 18, (byte) 2, false);
             var sut = new DecimalEncoding();
-            EncodingRegistry registry = TestRegistry.of(sut);
+            Registry registry = TestRegistry.of(sut);
 
             // When
             EncodeResult encoded = sut.encode(dtype, input, EncodeTestHelper.testCtx());

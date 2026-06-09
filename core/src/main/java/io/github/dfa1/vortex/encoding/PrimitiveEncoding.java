@@ -22,7 +22,7 @@ import java.lang.foreign.MemorySegment;
 /// Encodes all [DType.Primitive] types; embeds min/max stats as Protobuf ScalarValue bytes.
 public final class PrimitiveEncoding implements Encoding {
 
-    /// Creates a new {@code PrimitiveEncoding} instance; use via {@link EncodingRegistry}.
+    /// Creates a new {@code PrimitiveEncoding} instance; use via {@link Registry}.
     public PrimitiveEncoding() {
     }
 

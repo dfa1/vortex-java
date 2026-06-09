@@ -25,7 +25,7 @@ import java.util.List;
 /// <p>Decode materialises all values into a flat {@link VarBinArray} (bytes + I64 offsets).
 public final class VarBinViewEncoding implements Encoding {
 
-    /// Creates a new {@code VarBinViewEncoding} instance; use via {@link EncodingRegistry}.
+    /// Creates a new {@code VarBinViewEncoding} instance; use via {@link Registry}.
     public VarBinViewEncoding() {
     }
 

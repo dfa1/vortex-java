@@ -18,7 +18,7 @@ import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.MaskedArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
-import io.github.dfa1.vortex.encoding.EncodingRegistry;
+import io.github.dfa1.vortex.encoding.Registry;
 import io.github.dfa1.vortex.inspect.VortexInspector;
 import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.Chunk;
@@ -213,7 +213,7 @@ class RustJavaReaderComparisonIntegrationTest {
         Map<String, Double> numSums = new LinkedHashMap<>();
         Map<String, Long> strLenSums = new LinkedHashMap<>();
         long rowCount = 0;
-        try (VortexReader reader = VortexReader.open(file, EncodingRegistry.loadAll());
+        try (VortexReader reader = VortexReader.open(file, Registry.loadAll());
              var iter = reader.scan(io.github.dfa1.vortex.scan.ScanOptions.all())) {
             while (iter.hasNext()) {
                 try (Chunk chunk = iter.next()) {

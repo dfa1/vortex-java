@@ -93,7 +93,7 @@ class FsstEncodingTest {
             EncodeResult result = sut.encode(DTypes.UTF8, values, EncodeTestHelper.testCtx());
             MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
             ArrayNode node = toArrayNode(result.rootNode());
-            EncodingRegistry registry = EncodingRegistry.builder()
+            Registry registry = Registry.builder()
                     .register(new PrimitiveEncoding())
                     .register(sut)
                     .build();
@@ -165,8 +165,8 @@ class FsstEncodingTest {
             return new DecodeContext(root, DTypes.UTF8, n, segs, buildRegistry(), arena);
         }
 
-        private static EncodingRegistry buildRegistry() {
-            return EncodingRegistry.builder().register(new PrimitiveEncoding()).build();
+        private static Registry buildRegistry() {
+            return Registry.builder().register(new PrimitiveEncoding()).build();
         }
 
         @Test

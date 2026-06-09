@@ -28,7 +28,7 @@ import java.util.List;
 /// Decode: {@code output[i] = encoded[i] + reference} (wrapping arithmetic).
 public final class FrameOfReferenceEncoding implements Encoding {
 
-    /// Creates a new {@code FrameOfReferenceEncoding} instance; use via {@link EncodingRegistry}.
+    /// Creates a new {@code FrameOfReferenceEncoding} instance; use via {@link Registry}.
     public FrameOfReferenceEncoding() {
     }
 

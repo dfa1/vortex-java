@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.array.Array;
 
 /// Combines encode and decode for one encoding type.
-/// Register via [EncodingRegistry] — implementations are discoverable via ServiceLoader.
+/// Register via [Registry] — implementations are discoverable via ServiceLoader.
 public interface Encoding {
     /// Returns the encoding id for this encoding.
     ///

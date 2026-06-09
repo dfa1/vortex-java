@@ -7,7 +7,7 @@ import io.github.dfa1.vortex.core.Layout;
 import io.github.dfa1.vortex.core.SegmentSpec;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.VortexFormat;
-import io.github.dfa1.vortex.encoding.EncodingRegistry;
+import io.github.dfa1.vortex.encoding.Registry;
 import io.github.dfa1.vortex.scan.ScanIterator;
 import io.github.dfa1.vortex.scan.ScanOptions;
 
@@ -40,12 +40,12 @@ public final class VortexReader implements VortexHandle {
     private final Footer footer;
     private final DType dtype;
     private final Layout layout;
-    private final EncodingRegistry registry;
+    private final Registry registry;
 
     private VortexReader(
             Arena arena, MemorySegment fileSegment, long fileSize,
             int version, Footer footer, DType dtype, Layout layout,
-            EncodingRegistry registry
+            Registry registry
     ) {
         this.arena = arena;
         this.fileSegment = fileSegment;
@@ -60,10 +60,10 @@ public final class VortexReader implements VortexHandle {
     /// Open a Vortex file. Memory-maps the entire file; all subsequent reads
     /// are zero-copy slices. Call [#close()] when done.
     public static VortexReader open(Path path) throws IOException {
-        return open(path, EncodingRegistry.loadAll());
+        return open(path, Registry.loadAll());
     }
 
-    public static VortexReader open(Path path, EncodingRegistry registry) throws IOException {
+    public static VortexReader open(Path path, Registry registry) throws IOException {
         Arena arena = Arena.ofConfined();
         try (var channel = FileChannel.open(path, StandardOpenOption.READ)) {
             long size = channel.size();
@@ -82,7 +82,7 @@ public final class VortexReader implements VortexHandle {
     }
 
     private static VortexReader parse(
-            MemorySegment seg, long size, Arena arena, EncodingRegistry registry
+            MemorySegment seg, long size, Arena arena, Registry registry
     ) {
         long bodyBytes = size - VortexFormat.TRAILER_SIZE;
         var trailerSeg = seg.asSlice(bodyBytes, VortexFormat.TRAILER_SIZE);
@@ -164,7 +164,7 @@ public final class VortexReader implements VortexHandle {
     }
 
     @Override
-    public EncodingRegistry registry() {
+    public Registry registry() {
         return registry;
     }
 

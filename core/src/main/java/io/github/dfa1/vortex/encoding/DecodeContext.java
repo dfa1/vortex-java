@@ -25,7 +25,7 @@ public record DecodeContext(
         DType dtype,
         long rowCount,
         MemorySegment[] segmentBuffers,
-        EncodingRegistry registry,
+        Registry registry,
         SegmentAllocator arena
 ) {
     /// Recursively decode child {@code i} using this context's dtype and row count.

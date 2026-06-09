@@ -46,7 +46,7 @@ class RandomAccessTest {
             original[i] = (long) i * 1_000_003L + 7L;
         }
 
-        EncodingRegistry registry = TestRegistry.withPrimitive(sut);
+        Registry registry = TestRegistry.withPrimitive(sut);
         EncodeResult encoded = sut.encode(dtype, original, EncodeTestHelper.testCtx());
         DecodeContext ctx = EncodeTestHelper.toDecodeContext(encoded, N, dtype, registry);
 

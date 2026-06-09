@@ -15,12 +15,12 @@ final class EncodeTestHelper {
     ///
     /// @return a test-suitable {@link EncodeContext}
     static EncodeContext testCtx() {
-        return EncodeContext.of(Arena.ofAuto(), EncodingRegistry.loadAll());
+        return EncodeContext.of(Arena.ofAuto(), Registry.loadAll());
     }
 
     static DecodeContext toDecodeContext(
             EncodeResult result, long rowCount, io.github.dfa1.vortex.core.DType dtype,
-            EncodingRegistry registry
+            Registry registry
     ) {
         List<MemorySegment> buffers = result.buffers();
         MemorySegment[] segments = buffers.toArray(new MemorySegment[0]);

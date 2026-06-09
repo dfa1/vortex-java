@@ -32,7 +32,7 @@ class SequenceEncodingTest {
         private static DecodeContext encodeResultToCtx(EncodeResult result, DType dtype, long n) {
             ByteBuffer meta = result.rootNode().metadata();
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_SEQUENCE, meta, new ArrayNode[0], new int[0], null);
-            return new DecodeContext(node, dtype, n, new MemorySegment[0], EncodingRegistry.empty(), Arena.ofAuto());
+            return new DecodeContext(node, dtype, n, new MemorySegment[0], Registry.empty(), Arena.ofAuto());
         }
 
         @Test
@@ -140,7 +140,7 @@ class SequenceEncodingTest {
                     EncodingId.VORTEX_SEQUENCE,
                     ByteBuffer.wrap(meta),
                     new ArrayNode[0], new int[0], null);
-            return new DecodeContext(node, dtype, n, new MemorySegment[0], EncodingRegistry.empty(), Arena.ofAuto());
+            return new DecodeContext(node, dtype, n, new MemorySegment[0], Registry.empty(), Arena.ofAuto());
         }
 
         private static byte[] intMeta(long base, long mul) {
@@ -260,7 +260,7 @@ class SequenceEncodingTest {
             // Given
             var sut = new SequenceEncoding();
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_SEQUENCE, null, new ArrayNode[0], new int[0], null);
-            DecodeContext ctx = new DecodeContext(node, DTypes.I64, 3, new MemorySegment[0], EncodingRegistry.empty(), Arena.ofAuto());
+            DecodeContext ctx = new DecodeContext(node, DTypes.I64, 3, new MemorySegment[0], Registry.empty(), Arena.ofAuto());
 
             // When / Then
             assertThatThrownBy(() -> sut.decode(ctx))

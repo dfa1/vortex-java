@@ -24,7 +24,7 @@ import java.util.List;
 /// </ul>
 public final class VariantEncoding implements Encoding {
 
-    /// Creates a new {@code VariantEncoding} instance; use via {@link EncodingRegistry}.
+    /// Creates a new {@code VariantEncoding} instance; use via {@link Registry}.
     public VariantEncoding() {
     }
 

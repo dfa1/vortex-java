@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.ArraySegments;
 import io.github.dfa1.vortex.encoding.DeltaEncoding;
-import io.github.dfa1.vortex.encoding.EncodingRegistry;
+import io.github.dfa1.vortex.encoding.Registry;
 import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.ScanOptions;
 import org.junit.jupiter.api.Test;
@@ -46,8 +46,8 @@ class DeltaEncodingTest {
         return collected.stream().mapToLong(Long::longValue).toArray();
     }
 
-    private static EncodingRegistry deltaRegistry() {
-        return EncodingRegistry.builder()
+    private static Registry deltaRegistry() {
+        return Registry.builder()
                 .register(new DeltaEncoding())
                 .register(new io.github.dfa1.vortex.encoding.PrimitiveEncoding())
                 .build();

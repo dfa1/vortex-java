@@ -51,7 +51,7 @@ public final class RleEncoding implements Encoding {
 
     static final int FL_CHUNK_SIZE = 1024;
 
-    /// Creates a new {@code RleEncoding} instance; use via {@link EncodingRegistry}.
+    /// Creates a new {@code RleEncoding} instance; use via {@link Registry}.
     public RleEncoding() {
     }
 

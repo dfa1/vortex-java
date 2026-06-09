@@ -62,7 +62,7 @@ class VariantEncodingTest {
             ArrayNode variantNode = ArrayNode.of(EncodingId.VORTEX_VARIANT, null,
                     new ArrayNode[]{coreNode}, new int[]{}, null);
 
-            EncodingRegistry registry = TestRegistry.of(new VariantEncoding(), new NullEncoding());
+            Registry registry = TestRegistry.of(new VariantEncoding(), new NullEncoding());
             DecodeContext ctx = new DecodeContext(variantNode, VARIANT_DTYPE, N,
                     new MemorySegment[0], registry, Arena.ofAuto());
 
@@ -95,7 +95,7 @@ class VariantEncodingTest {
                     new ArrayNode[]{coreNode, shreddedNode}, new int[]{}, null);
 
             MemorySegment[] segments = {i32Segment(1, 2, 3)};
-            EncodingRegistry registry = TestRegistry.of(new VariantEncoding(), new NullEncoding(), new PrimitiveEncoding());
+            Registry registry = TestRegistry.of(new VariantEncoding(), new NullEncoding(), new PrimitiveEncoding());
             DecodeContext ctx = new DecodeContext(variantNode, VARIANT_DTYPE, N,
                     segments, registry, Arena.ofAuto());
 
@@ -117,7 +117,7 @@ class VariantEncodingTest {
             ArrayNode variantNode = ArrayNode.of(EncodingId.VORTEX_VARIANT, ByteBuffer.allocate(0),
                     new ArrayNode[]{coreNode}, new int[]{}, null);
 
-            EncodingRegistry registry = TestRegistry.of(new VariantEncoding(), new NullEncoding());
+            Registry registry = TestRegistry.of(new VariantEncoding(), new NullEncoding());
             DecodeContext ctx = new DecodeContext(variantNode, VARIANT_DTYPE, N,
                     new MemorySegment[0], registry, Arena.ofAuto());
 
@@ -137,7 +137,7 @@ class VariantEncodingTest {
             ArrayNode variantNode = ArrayNode.of(EncodingId.VORTEX_VARIANT, null,
                     new ArrayNode[]{coreNode}, new int[]{}, null);
 
-            EncodingRegistry registry = TestRegistry.of(new VariantEncoding(), new NullEncoding());
+            Registry registry = TestRegistry.of(new VariantEncoding(), new NullEncoding());
             DecodeContext ctx = new DecodeContext(variantNode, nullableVariant, N,
                     new MemorySegment[0], registry, Arena.ofAuto());
 
@@ -155,7 +155,7 @@ class VariantEncodingTest {
             ArrayNode variantNode = ArrayNode.of(EncodingId.VORTEX_VARIANT, null,
                     new ArrayNode[0], new int[]{}, null);
 
-            EncodingRegistry registry = TestRegistry.of(new VariantEncoding());
+            Registry registry = TestRegistry.of(new VariantEncoding());
             DecodeContext ctx = new DecodeContext(variantNode, VARIANT_DTYPE, N,
                     new MemorySegment[0], registry, Arena.ofAuto());
 

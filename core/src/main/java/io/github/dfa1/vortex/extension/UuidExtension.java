@@ -15,7 +15,9 @@ public final class UuidExtension implements Extension {
     /// Singleton instance.
     public static final UuidExtension INSTANCE = new UuidExtension();
 
-    private UuidExtension() {
+    /// Public no-arg constructor for {@link java.util.ServiceLoader}.
+    /// Prefer the {@link #INSTANCE} singleton in application code.
+    public UuidExtension() {
     }
 
     @Override

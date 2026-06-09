@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.core.Footer;
 import io.github.dfa1.vortex.core.Layout;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.VortexFormat;
-import io.github.dfa1.vortex.encoding.EncodingRegistry;
+import io.github.dfa1.vortex.encoding.Registry;
 import io.github.dfa1.vortex.fbs.Postscript;
 import io.github.dfa1.vortex.scan.ScanIterator;
 import io.github.dfa1.vortex.scan.ScanOptions;
@@ -46,12 +46,12 @@ public final class VortexHttpReader implements VortexHandle {
     private final Footer footer;
     private final DType dtype;
     private final Layout layout;
-    private final EncodingRegistry registry;
+    private final Registry registry;
 
     private VortexHttpReader(
         URI uri, long fileSize,
         int version, Footer footer, DType dtype, Layout layout,
-        EncodingRegistry registry
+        Registry registry
     ) {
         this.uri = uri;
         this.arena = Arena.ofConfined();
@@ -64,10 +64,10 @@ public final class VortexHttpReader implements VortexHandle {
     }
 
     public static VortexHttpReader open(URI uri) throws IOException {
-        return open(uri, EncodingRegistry.loadAll());
+        return open(uri, Registry.loadAll());
     }
 
-    public static VortexHttpReader open(URI uri, EncodingRegistry registry) throws IOException {
+    public static VortexHttpReader open(URI uri, Registry registry) throws IOException {
         // Single suffix Range request — Content-Range response header gives us fileSize.
         // Avoids a separate HEAD round trip.
         TailFetch tf = fetchTail(uri);
@@ -241,7 +241,7 @@ public final class VortexHttpReader implements VortexHandle {
     }
 
     @Override
-    public EncodingRegistry registry() {
+    public Registry registry() {
         return registry;
     }
 

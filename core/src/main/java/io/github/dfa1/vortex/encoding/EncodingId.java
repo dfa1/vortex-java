@@ -105,7 +105,7 @@ public enum EncodingId {
     }
 
     /// Non-throwing lookup: returns the matching constant or `null` for ids not in this enum.
-    /// Used by [EncodingRegistry] to discriminate [KnownArrayNode] from [UnknownArrayNode].
+    /// Used by [Registry] to discriminate [KnownArrayNode] from [UnknownArrayNode].
     ///
     /// @param id raw encoding id string to look up
     /// @return the matching {@link EncodingId}, or {@code null} if not recognised

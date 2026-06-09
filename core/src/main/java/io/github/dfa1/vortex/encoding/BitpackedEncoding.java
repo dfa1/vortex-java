@@ -32,7 +32,7 @@ public final class BitpackedEncoding implements Encoding {
     // FL_ORDER permutation from the FastLanes paper / spiraldb/fastlanes-rs.
     static final int[] FL_ORDER = {0, 4, 2, 6, 1, 5, 3, 7};
 
-    /// Creates a new {@code BitpackedEncoding} instance; use via {@link EncodingRegistry}.
+    /// Creates a new {@code BitpackedEncoding} instance; use via {@link Registry}.
     public BitpackedEncoding() {
     }
 

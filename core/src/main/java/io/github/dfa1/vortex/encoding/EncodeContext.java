@@ -10,12 +10,12 @@ import java.util.Set;
 /// Encoding context passed to every {@link Encoding#encode} and {@link Encoding#encodeCascade} call.
 ///
 /// <p>Carries a caller-scoped {@link Arena} for encode output buffers, an
-/// {@link EncodingRegistry} for cross-encoder delegation, and cascading compression
+/// {@link Registry} for cross-encoder delegation, and cascading compression
 /// parameters (depth, exclusions, sampling) used by {@link CascadingCompressor}.
 ///
-/// <p>In non-cascading paths, use {@link #of(Arena, EncodingRegistry)} — cascade
+/// <p>In non-cascading paths, use {@link #of(Arena, Registry)} — cascade
 /// parameters default to depth 0 with no exclusions.
-/// In cascading paths, use {@link #ofDepth(int, Arena, EncodingRegistry)} and let
+/// In cascading paths, use {@link #ofDepth(int, Arena, Registry)} and let
 /// {@link CascadingCompressor} derive child contexts via {@link #withDecrementedDepth()}
 /// and {@link #withExcluded(EncodingId)}.
 ///
@@ -28,7 +28,7 @@ import java.util.Set;
 /// @param sampleFraction   fraction of rows to sample when the array is large
 public record EncodeContext(
         Arena arena,
-        EncodingRegistry encodings,
+        Registry encodings,
         int allowedCascading,
         Set<EncodingId> excluded,
         long sampleSeed,
@@ -41,7 +41,7 @@ public record EncodeContext(
     /// @param arena     the arena to allocate encode output buffers from
     /// @param encodings the registry used for {@link #lookupEncoding} calls
     /// @return a new {@link EncodeContext} ready for non-cascading encoding
-    public static EncodeContext of(Arena arena, EncodingRegistry encodings) {
+    public static EncodeContext of(Arena arena, Registry encodings) {
         return new EncodeContext(arena, encodings, 0, Set.of(), 42L, 4096, 0.05);
     }
 
@@ -51,7 +51,7 @@ public record EncodeContext(
     /// @param arena     the arena to allocate encode output buffers from
     /// @param encodings the registry used for {@link #lookupEncoding} calls
     /// @return a new {@link EncodeContext} ready for cascading compression
-    public static EncodeContext ofDepth(int depth, Arena arena, EncodingRegistry encodings) {
+    public static EncodeContext ofDepth(int depth, Arena arena, Registry encodings) {
         return new EncodeContext(arena, encodings, depth, Set.of(), 42L, 4096, 0.05);
     }
 

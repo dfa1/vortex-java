@@ -11,7 +11,7 @@ final class TestDecodeContexts {
     private final io.github.dfa1.vortex.core.DType dtype;
     private long rowCount = 0;
     private MemorySegment[] segments = new MemorySegment[0];
-    private EncodingRegistry registry = EncodingRegistry.empty();
+    private Registry registry = Registry.empty();
     private Arena arena = Arena.global();
 
     private TestDecodeContexts(ArrayNode node, io.github.dfa1.vortex.core.DType dtype) {
@@ -33,7 +33,7 @@ final class TestDecodeContexts {
         return this;
     }
 
-    TestDecodeContexts registry(EncodingRegistry reg) {
+    TestDecodeContexts registry(Registry reg) {
         this.registry = reg;
         return this;
     }

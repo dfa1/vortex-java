@@ -36,7 +36,7 @@ import java.util.List;
 /// {@code output[indices[i] - offset] = values[i]} for each patch.
 public final class SparseEncoding implements Encoding {
 
-    /// Creates a new {@code SparseEncoding} instance; use via {@link EncodingRegistry}.
+    /// Creates a new {@code SparseEncoding} instance; use via {@link Registry}.
     public SparseEncoding() {
     }
 

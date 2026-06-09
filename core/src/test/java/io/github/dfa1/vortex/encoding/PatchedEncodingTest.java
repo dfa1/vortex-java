@@ -111,7 +111,7 @@ class PatchedEncodingTest {
         ArrayNode patchedNode = ArrayNode.of(EncodingId.VORTEX_PATCHED, meta,
                 new ArrayNode[]{innerNode, laneNode, idxNode, valNode}, new int[]{}, null);
 
-        EncodingRegistry registry = TestRegistry.of(new PatchedEncoding(), new PrimitiveEncoding());
+        Registry registry = TestRegistry.of(new PatchedEncoding(), new PrimitiveEncoding());
         DecodeContext ctx = new DecodeContext(patchedNode, dtype, n, segments, registry, Arena.ofAuto());
         return new PatchedEncoding().decode(ctx);
     }
@@ -227,7 +227,7 @@ class PatchedEncodingTest {
                     new ArrayNode[]{innerNode, innerNode, innerNode, innerNode}, new int[]{}, null);
             MemorySegment seg = i32Segment(1, 2, 3);
             DecodeContext ctx = new DecodeContext(patchedNode, new DType.Primitive(PType.I32, false), 3,
-                    new MemorySegment[]{seg}, EncodingRegistry.empty(), Arena.ofAuto());
+                    new MemorySegment[]{seg}, Registry.empty(), Arena.ofAuto());
 
             // When / Then
             assertThatThrownBy(() -> new PatchedEncoding().decode(ctx))

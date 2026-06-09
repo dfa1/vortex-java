@@ -65,7 +65,7 @@ class BitpackedEncodingPatchesTest {
                     MemorySegment.ofArray(valBuf)
             };
 
-            EncodingRegistry registry = TestRegistry.of(new BitpackedEncoding(), new PrimitiveEncoding());
+            Registry registry = TestRegistry.of(new BitpackedEncoding(), new PrimitiveEncoding());
 
             DecodeContext ctx = new DecodeContext(
                     bpNode, DTypes.I32, base.length, segments, registry, Arena.global());

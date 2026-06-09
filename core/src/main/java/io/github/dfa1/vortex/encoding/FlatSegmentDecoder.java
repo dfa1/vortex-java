@@ -22,12 +22,12 @@ import java.util.List;
 /// encoding-spec lookup.
 public final class FlatSegmentDecoder {
 
-    private final EncodingRegistry registry;
+    private final Registry registry;
 
     /// Creates a decoder backed by the given registry.
     ///
     /// @param registry the registry used to dispatch to concrete {@link Encoding} impls
-    public FlatSegmentDecoder(EncodingRegistry registry) {
+    public FlatSegmentDecoder(Registry registry) {
         this.registry = registry;
     }
 

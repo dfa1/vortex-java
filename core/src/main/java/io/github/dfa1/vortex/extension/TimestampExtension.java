@@ -21,7 +21,9 @@ public final class TimestampExtension implements Extension {
     /// Singleton instance.
     public static final TimestampExtension INSTANCE = new TimestampExtension();
 
-    private TimestampExtension() {
+    /// Public no-arg constructor for {@link java.util.ServiceLoader}.
+    /// Prefer the {@link #INSTANCE} singleton in application code.
+    public TimestampExtension() {
     }
 
     @Override

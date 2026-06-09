@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.io;
 import com.google.flatbuffers.FlatBufferBuilder;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.VortexFormat;
-import io.github.dfa1.vortex.encoding.EncodingRegistry;
+import io.github.dfa1.vortex.encoding.Registry;
 import io.github.dfa1.vortex.fbs.ArraySpec;
 import io.github.dfa1.vortex.fbs.Footer;
 import io.github.dfa1.vortex.fbs.Layout;
@@ -38,7 +38,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class LayoutDepthBombSecurityTest {
 
-    private static final EncodingRegistry REGISTRY = EncodingRegistry.empty();
+    private static final Registry REGISTRY = Registry.empty();
 
     @Test
     void deeplyNestedLayout_throwsVortexException(@TempDir Path tmp) throws Exception {

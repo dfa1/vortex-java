@@ -15,7 +15,9 @@ public final class TimeExtension implements Extension {
     /// Singleton instance.
     public static final TimeExtension INSTANCE = new TimeExtension();
 
-    private TimeExtension() {
+    /// Public no-arg constructor for {@link java.util.ServiceLoader}.
+    /// Prefer the {@link #INSTANCE} singleton in application code.
+    public TimeExtension() {
     }
 
     @Override

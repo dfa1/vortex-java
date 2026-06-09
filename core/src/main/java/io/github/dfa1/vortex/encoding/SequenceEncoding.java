@@ -28,7 +28,7 @@ import java.util.List;
 /// Output is allocated on the heap; not backed by the file's mapped region.
 public final class SequenceEncoding implements Encoding {
 
-    /// Creates a new {@code SequenceEncoding} instance; use via {@link EncodingRegistry}.
+    /// Creates a new {@code SequenceEncoding} instance; use via {@link Registry}.
     public SequenceEncoding() {
     }
 

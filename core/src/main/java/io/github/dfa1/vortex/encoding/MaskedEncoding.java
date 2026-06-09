@@ -17,7 +17,7 @@ import io.github.dfa1.vortex.core.array.MaskedArray;
 /// </ul>
 public final class MaskedEncoding implements Encoding {
 
-    /// Creates a new {@code MaskedEncoding} instance; use via {@link EncodingRegistry}.
+    /// Creates a new {@code MaskedEncoding} instance; use via {@link Registry}.
     public MaskedEncoding() {
     }
 

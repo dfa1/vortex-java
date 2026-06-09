@@ -24,7 +24,7 @@ class ListViewEncodingTest {
         return ArrayNode.of(node.encodingId(), node.metadata(), children, node.bufferIndices(), ArrayStats.empty());
     }
 
-    private static EncodingRegistry registry() {
+    private static Registry registry() {
         return TestRegistry.of(new ListViewEncoding(), new PrimitiveEncoding());
     }
 

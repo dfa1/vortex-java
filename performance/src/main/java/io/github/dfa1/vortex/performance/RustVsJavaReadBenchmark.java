@@ -13,7 +13,7 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
-import io.github.dfa1.vortex.encoding.EncodingRegistry;
+import io.github.dfa1.vortex.encoding.Registry;
 import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.Chunk;
 import io.github.dfa1.vortex.writer.VortexWriter;
@@ -135,7 +135,7 @@ public class RustVsJavaReadBenchmark {
 
     private Path benchFile;
     private Path cascadingFile;
-    private EncodingRegistry registry;
+    private Registry registry;
     private BufferAllocator allocator;
 
     private static double round(double v) {
@@ -144,7 +144,7 @@ public class RustVsJavaReadBenchmark {
 
     @Setup(Level.Trial)
     public void setup() throws IOException {
-        registry = EncodingRegistry.loadAll();
+        registry = Registry.loadAll();
         allocator = ArrowAllocation.rootAllocator();
 
         synchronized (FILE_LOCK) {

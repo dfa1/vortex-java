@@ -45,7 +45,7 @@ class SparseEncodingTest {
             ArrayNode sparseNode = ArrayNode.of(root.encodingId(), root.metadata(),
                     new ArrayNode[]{idxNode, valNode}, root.bufferIndices(), ArrayStats.empty());
 
-            EncodingRegistry registry = TestRegistry.of(new SparseEncoding(), new PrimitiveEncoding());
+            Registry registry = TestRegistry.of(new SparseEncoding(), new PrimitiveEncoding());
 
             DecodeContext ctx = new DecodeContext(sparseNode, dtype, n, segments, registry, Arena.global());
             return new SparseEncoding().decode(ctx);
@@ -197,7 +197,7 @@ class SparseEncodingTest {
                     MemorySegment.ofArray(valBuf)
             };
 
-            EncodingRegistry registry = TestRegistry.of(new SparseEncoding(), new PrimitiveEncoding());
+            Registry registry = TestRegistry.of(new SparseEncoding(), new PrimitiveEncoding());
 
             return new DecodeContext(sparseNode, dtype, rowCount, segments, registry, java.lang.foreign.Arena.global());
         }
@@ -394,7 +394,7 @@ class SparseEncodingTest {
                     ByteBuffer.wrap(meta),
                     new ArrayNode[]{idxNode, valNode}, new int[]{0}, ArrayStats.empty());
 
-            EncodingRegistry registry = TestRegistry.of(new SparseEncoding(), new PrimitiveEncoding(), new VarBinEncoding());
+            Registry registry = TestRegistry.of(new SparseEncoding(), new PrimitiveEncoding(), new VarBinEncoding());
 
             MemorySegment[] segments = {
                     MemorySegment.ofArray(nullFill),
@@ -437,7 +437,7 @@ class SparseEncodingTest {
                     ByteBuffer.wrap(meta),
                     new ArrayNode[]{idxNode, valNode}, new int[]{0}, ArrayStats.empty());
 
-            EncodingRegistry registry = TestRegistry.of(new SparseEncoding(), new PrimitiveEncoding(), new BoolEncoding());
+            Registry registry = TestRegistry.of(new SparseEncoding(), new PrimitiveEncoding(), new BoolEncoding());
 
             MemorySegment[] segments = {
                     MemorySegment.ofArray(nullFill),

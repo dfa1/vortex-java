@@ -19,7 +19,7 @@ class CascadingCompressorTest {
             new BitpackedEncoding(), new PrimitiveEncoding());
 
     private static EncodeContext ctx(int depth) {
-        return EncodeContext.ofDepth(depth, Arena.ofAuto(), EncodingRegistry.of(ALL_CODECS));
+        return EncodeContext.ofDepth(depth, Arena.ofAuto(), Registry.of(ALL_CODECS));
     }
 
     @Nested
@@ -69,7 +69,7 @@ class CascadingCompressorTest {
             }
             // Depth=1 but ALP excluded via context
             EncodeContext encodeCtx = new EncodeContext(
-                    Arena.ofAuto(), EncodingRegistry.of(ALL_CODECS),
+                    Arena.ofAuto(), Registry.of(ALL_CODECS),
                     1, Set.of(EncodingId.VORTEX_ALP), 42L, 64, 0.1);
             CascadingCompressor sut = new CascadingCompressor(ALL_CODECS);
 
@@ -106,7 +106,7 @@ class CascadingCompressorTest {
             CascadingCompressor sut = new CascadingCompressor(ALL_CODECS);
 
             // When
-            EncodingRegistry registry = EncodingRegistry.of(ALL_CODECS);
+            Registry registry = Registry.of(ALL_CODECS);
             EncodeResult result = sut.encode(DTypes.F64, values, EncodeContext.ofDepth(1, Arena.ofAuto(), registry));
             DecodeContext decodeCtx = EncodeTestHelper.toDecodeContext(result, values.length, DTypes.F64, registry);
             DoubleArray decoded = (DoubleArray) registry.decode(decodeCtx);
@@ -127,7 +127,7 @@ class CascadingCompressorTest {
             CascadingCompressor sut = new CascadingCompressor(ALL_CODECS);
 
             // When
-            EncodingRegistry registry = EncodingRegistry.of(ALL_CODECS);
+            Registry registry = Registry.of(ALL_CODECS);
             EncodeResult result = sut.encode(DTypes.I64, values, EncodeContext.ofDepth(1, Arena.ofAuto(), registry));
             DecodeContext decodeCtx = EncodeTestHelper.toDecodeContext(result, values.length, DTypes.I64, registry);
             LongArray decoded = (LongArray) registry.decode(decodeCtx);
@@ -148,7 +148,7 @@ class CascadingCompressorTest {
             CascadingCompressor sut = new CascadingCompressor(ALL_CODECS);
 
             // When
-            EncodingRegistry registry = EncodingRegistry.of(ALL_CODECS);
+            Registry registry = Registry.of(ALL_CODECS);
             EncodeResult result = sut.encode(DTypes.I32, values, EncodeContext.ofDepth(1, Arena.ofAuto(), registry));
             DecodeContext decodeCtx = EncodeTestHelper.toDecodeContext(result, values.length, DTypes.I32, registry);
             io.github.dfa1.vortex.core.array.IntArray decoded =

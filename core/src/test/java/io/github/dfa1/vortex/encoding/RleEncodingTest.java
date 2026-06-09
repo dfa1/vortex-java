@@ -22,8 +22,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class RleEncodingTest {
 
-    private static EncodingRegistry registry() {
-        return EncodingRegistry.builder()
+    private static Registry registry() {
+        return Registry.builder()
                 .register(new RleEncoding())
                 .register(new PrimitiveEncoding())
                 .build();
@@ -300,7 +300,7 @@ class RleEncodingTest {
                     new ArrayNode[]{origRoot.children()[0], nullableIndices, origRoot.children()[2]},
                     origRoot.bufferIndices(), ArrayStats.empty());
 
-            EncodingRegistry reg = EncodingRegistry.builder()
+            Registry reg = Registry.builder()
                     .register(sut)
                     .register(new PrimitiveEncoding())
                     .register(new BoolEncoding())
