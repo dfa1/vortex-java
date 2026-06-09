@@ -105,6 +105,110 @@ class ExtensionsTest {
     }
 
     @Test
+    void localTime_secondsUnit_decodesViaI32() {
+        // Given — TimeUnit tag 3 (Seconds), storage I32: 3661 seconds = 01:01:01
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment buf = arena.allocate(4);
+            buf.set(ValueLayout.JAVA_INT_UNALIGNED, 0, 3661);
+            IntArray storage = new IntArray(I32, 1, buf);
+
+            // When / Then
+            assertThat(Extensions.localTime(timeExt((byte) 3), storage, 0))
+                    .isEqualTo(java.time.LocalTime.of(1, 1, 1));
+        }
+    }
+
+    @Test
+    void localTime_millisecondsUnit_decodesViaI32() {
+        // Given — TimeUnit tag 2 (Milliseconds): 3_661_500 ms = 01:01:01.500
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment buf = arena.allocate(4);
+            buf.set(ValueLayout.JAVA_INT_UNALIGNED, 0, 3_661_500);
+            IntArray storage = new IntArray(I32, 1, buf);
+
+            // When / Then
+            assertThat(Extensions.localTime(timeExt((byte) 2), storage, 0))
+                    .isEqualTo(java.time.LocalTime.of(1, 1, 1, 500_000_000));
+        }
+    }
+
+    @Test
+    void localTime_microsecondsUnit_decodesViaI64() {
+        // Given — TimeUnit tag 1 (Microseconds): 1 second + 1 microsecond
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment buf = arena.allocate(8);
+            buf.set(ValueLayout.JAVA_LONG_UNALIGNED, 0, 1_000_001L);
+            LongArray storage = new LongArray(new DType.Primitive(PType.I64, false), 1, buf);
+
+            // When / Then
+            assertThat(Extensions.localTime(timeExt((byte) 1), storage, 0))
+                    .isEqualTo(java.time.LocalTime.of(0, 0, 1, 1_000));
+        }
+    }
+
+    @Test
+    void localTime_nanosecondsUnit_decodesViaI64() {
+        // Given — TimeUnit tag 0 (Nanoseconds): 42 nanos past midnight
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment buf = arena.allocate(8);
+            buf.set(ValueLayout.JAVA_LONG_UNALIGNED, 0, 42L);
+            LongArray storage = new LongArray(new DType.Primitive(PType.I64, false), 1, buf);
+
+            // When / Then
+            assertThat(Extensions.localTime(timeExt((byte) 0), storage, 0))
+                    .isEqualTo(java.time.LocalTime.ofNanoOfDay(42));
+        }
+    }
+
+    @Test
+    void localTime_daysUnit_throws() {
+        // Given — Days isn't a sub-second unit, so vortex.time with Days is malformed
+        try (Arena arena = Arena.ofConfined()) {
+            IntArray storage = new IntArray(I32, 1, arena.allocate(4));
+
+            // When / Then
+            assertThatThrownBy(() -> Extensions.localTime(timeExt((byte) 4), storage, 0))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("Days unit not valid");
+        }
+    }
+
+    @Test
+    void localTime_wrongExtensionId_throws() {
+        // Given — guards against calling with a non-time extension
+        try (Arena arena = Arena.ofConfined()) {
+            IntArray storage = new IntArray(I32, 1, arena.allocate(4));
+            DType.Extension wrongExt = new DType.Extension("vortex.date", I32, null, false);
+
+            // When / Then
+            assertThatThrownBy(() -> Extensions.localTime(wrongExt, storage, 0))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("non-time extension");
+        }
+    }
+
+    @Test
+    void localTime_missingMetadata_throws() {
+        // Given — metadata byte must specify TimeUnit; otherwise we can't know
+        // whether the storage is in seconds, ms, μs, or ns
+        try (Arena arena = Arena.ofConfined()) {
+            IntArray storage = new IntArray(I32, 1, arena.allocate(4));
+            DType.Extension noMetaExt = new DType.Extension(Extensions.TIME, I32, null, false);
+
+            // When / Then
+            assertThatThrownBy(() -> Extensions.localTime(noMetaExt, storage, 0))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("missing TimeUnit metadata");
+        }
+    }
+
+    private static DType.Extension timeExt(byte tag) {
+        java.nio.ByteBuffer meta = java.nio.ByteBuffer.allocate(1);
+        meta.put(0, tag);
+        return new DType.Extension(Extensions.TIME, I32, meta, false);
+    }
+
+    @Test
     void uuid_roundTripsKnownValue() {
         // Given — Arrow canonical layout: FixedSizeList<U8>[16]; one well-known UUID
         // (RFC 9562 example) plus its inverse, so msb/lsb extraction is exercised in

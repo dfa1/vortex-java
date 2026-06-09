@@ -2,8 +2,10 @@ package io.github.dfa1.vortex.core.array;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.encoding.TimeUnit;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 
 /// Decoding helpers for Vortex extension dtypes that ship as a primitive
 /// storage array plus an extension id on the {@link DType}. Currently covers
@@ -21,6 +23,11 @@ public final class Extensions {
     /// Extension id for UUID columns - storage is
     /// {@code FixedSizeList(Primitive(U8), 16)}, Arrow-compatible.
     public static final String UUID_ID = "vortex.uuid";
+
+    /// Extension id for time-of-day columns - storage is a signed integer
+    /// counting seconds / milliseconds (I32) or microseconds / nanoseconds
+    /// (I64) since midnight; the unit is the first byte of {@code ext.metadata()}.
+    public static final String TIME = "vortex.time";
 
     private Extensions() {
     }
@@ -100,6 +107,45 @@ public final class Extensions {
             lsb = (lsb << 8) | (bytes.getByte(base + 8 + k) & 0xffL);
         }
         return new java.util.UUID(msb, lsb);
+    }
+
+    /// Decodes a {@code vortex.time} cell to a {@link LocalTime}.
+    ///
+    /// The storage array must be a signed integer primitive ({@link IntArray}
+    /// for second / millisecond precision, {@link LongArray} for microsecond /
+    /// nanosecond precision), optionally wrapped in {@link MaskedArray}. The
+    /// {@link TimeUnit} read from {@code ext.metadata()} byte 0 selects the
+    /// precision; {@link TimeUnit#Days} is not valid for time-of-day and
+    /// throws.
+    ///
+    /// @param ext     the column's declared extension dtype; must be {@code vortex.time}
+    /// @param storage signed-integer storage array
+    /// @param i       row index, {@code 0 <= i < storage.length()}
+    /// @return decoded time-of-day
+    /// @throws VortexException if {@code ext} isn't {@code vortex.time},
+    ///         the metadata unit is {@link TimeUnit#Days}, or {@code storage}
+    ///         isn't an integer primitive
+    public static LocalTime localTime(DType.Extension ext, Array storage, long i) {
+        if (!TIME.equals(ext.extensionId())) {
+            throw new VortexException("localTime called with non-time extension: " + ext.extensionId());
+        }
+        checkBounds(i, storage.length());
+        TimeUnit unit = readUnit(ext);
+        if (unit == TimeUnit.Days) {
+            throw new VortexException("localTime: Days unit not valid for vortex.time");
+        }
+        long raw = epochDay(storage, i);
+        // raw is in `unit`; scale to nanos-of-day. divisor() = units per second.
+        long nanos = raw * (1_000_000_000L / unit.divisor());
+        return LocalTime.ofNanoOfDay(nanos);
+    }
+
+    private static TimeUnit readUnit(DType.Extension ext) {
+        java.nio.ByteBuffer meta = ext.metadata();
+        if (meta == null || !meta.hasRemaining()) {
+            throw new VortexException("missing TimeUnit metadata byte for " + ext.extensionId());
+        }
+        return TimeUnit.fromTag(meta.get(meta.position()));
     }
 
     /// Same as {@link #uuid(Array, long)} but verifies the declared extension id.
