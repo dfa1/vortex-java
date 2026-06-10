@@ -27,7 +27,7 @@ public record DictMetadata(
     public static DictMetadata decode(MemorySegment __seg, long __off, long __len) throws IOException {
         ProtoReader r = new ProtoReader(__seg, __off, __len);
         int values_len = 0;
-        PType codes_ptype = PType.fromValue(0);
+        PType codes_ptype = PType.U8;
         Boolean is_nullable_codes = null;
         Boolean all_values_referenced = null;
         while (r.hasMore()) {
@@ -37,7 +37,12 @@ public record DictMetadata(
                     values_len = r.readVarint32();
                 }
                 case 2 -> {
-                    codes_ptype = PType.fromValue(r.readVarint32());
+                    int __ev = r.readVarint32();
+                    try {
+                        codes_ptype = PType.fromValue(__ev);
+                    } catch (IllegalArgumentException __iae) {
+                        throw new IOException("unknown PType value: " + __ev);
+                    }
                 }
                 case 3 -> {
                     is_nullable_codes = r.readBool();

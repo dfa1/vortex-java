@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.proto;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
+import java.util.Arrays;
 import javax.annotation.processing.Generated;
 
 /// Generated from proto3 message {@code vortex.encodings.PcoMetadata}.
@@ -44,7 +45,7 @@ public record PcoMetadata(
     /// @return encoded bytes
     public byte[] encode() {
         ProtoWriter w = new ProtoWriter();
-        if (header.length != 0) {
+        if (header != null && header.length != 0) {
             w.writeTag(1, 2);
             w.writeBytes(header);
         }
@@ -53,5 +54,25 @@ public record PcoMetadata(
             w.writeEmbedded(__v.encode());
         }
         return w.toByteArray();
+    }
+
+    @Override
+    public boolean equals(Object __o) {
+        if (this == __o) {
+            return true;
+        }
+        if (!(__o instanceof PcoMetadata __that)) {
+            return false;
+        }
+        return java.util.Arrays.equals(header, __that.header)
+            && java.util.Objects.equals(chunks, __that.chunks);
+    }
+
+    @Override
+    public int hashCode() {
+        int __h = 1;
+        __h = 31 * __h + java.util.Arrays.hashCode(header);
+        __h = 31 * __h + java.util.Objects.hashCode(chunks);
+        return __h;
     }
 }

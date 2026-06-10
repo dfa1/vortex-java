@@ -21,6 +21,11 @@ public final class Main {
         List<Path> protos = new ArrayList<>();
         for (int i = 0; i < args.length; i++) {
             if ("--out".equals(args[i])) {
+                if (i + 1 >= args.length) {
+                    System.err.println("usage: protogen --out <dir> <proto> [<proto> ...]");
+                    System.exit(2);
+                    return;
+                }
                 out = Path.of(args[++i]);
             } else {
                 protos.add(Path.of(args[i]));

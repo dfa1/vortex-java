@@ -23,7 +23,7 @@ public record ListMetadata(
     public static ListMetadata decode(MemorySegment __seg, long __off, long __len) throws IOException {
         ProtoReader r = new ProtoReader(__seg, __off, __len);
         long elements_len = 0;
-        PType offset_ptype = PType.fromValue(0);
+        PType offset_ptype = PType.U8;
         while (r.hasMore()) {
             int tag = r.readVarint32();
             switch (tag >>> 3) {
@@ -31,7 +31,12 @@ public record ListMetadata(
                     elements_len = r.readVarint64();
                 }
                 case 2 -> {
-                    offset_ptype = PType.fromValue(r.readVarint32());
+                    int __ev = r.readVarint32();
+                    try {
+                        offset_ptype = PType.fromValue(__ev);
+                    } catch (IllegalArgumentException __iae) {
+                        throw new IOException("unknown PType value: " + __ev);
+                    }
                 }
                 default -> r.skipField(tag & 7);
             }

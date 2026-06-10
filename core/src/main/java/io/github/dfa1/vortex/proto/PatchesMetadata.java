@@ -32,7 +32,7 @@ public record PatchesMetadata(
         ProtoReader r = new ProtoReader(__seg, __off, __len);
         long len = 0;
         long offset = 0;
-        PType indices_ptype = PType.fromValue(0);
+        PType indices_ptype = PType.U8;
         Long chunk_offsets_len = null;
         PType chunk_offsets_ptype = null;
         Long offset_within_chunk = null;
@@ -46,13 +46,23 @@ public record PatchesMetadata(
                     offset = r.readVarint64();
                 }
                 case 3 -> {
-                    indices_ptype = PType.fromValue(r.readVarint32());
+                    int __ev = r.readVarint32();
+                    try {
+                        indices_ptype = PType.fromValue(__ev);
+                    } catch (IllegalArgumentException __iae) {
+                        throw new IOException("unknown PType value: " + __ev);
+                    }
                 }
                 case 4 -> {
                     chunk_offsets_len = r.readVarint64();
                 }
                 case 5 -> {
-                    chunk_offsets_ptype = PType.fromValue(r.readVarint32());
+                    int __ev = r.readVarint32();
+                    try {
+                        chunk_offsets_ptype = PType.fromValue(__ev);
+                    } catch (IllegalArgumentException __iae) {
+                        throw new IOException("unknown PType value: " + __ev);
+                    }
                 }
                 case 6 -> {
                     offset_within_chunk = r.readVarint64();

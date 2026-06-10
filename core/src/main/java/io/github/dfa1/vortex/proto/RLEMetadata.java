@@ -32,9 +32,9 @@ public record RLEMetadata(
         ProtoReader r = new ProtoReader(__seg, __off, __len);
         long values_len = 0;
         long indices_len = 0;
-        PType indices_ptype = PType.fromValue(0);
+        PType indices_ptype = PType.U8;
         long values_idx_offsets_len = 0;
-        PType values_idx_offsets_ptype = PType.fromValue(0);
+        PType values_idx_offsets_ptype = PType.U8;
         long offset = 0;
         while (r.hasMore()) {
             int tag = r.readVarint32();
@@ -46,13 +46,23 @@ public record RLEMetadata(
                     indices_len = r.readVarint64();
                 }
                 case 3 -> {
-                    indices_ptype = PType.fromValue(r.readVarint32());
+                    int __ev = r.readVarint32();
+                    try {
+                        indices_ptype = PType.fromValue(__ev);
+                    } catch (IllegalArgumentException __iae) {
+                        throw new IOException("unknown PType value: " + __ev);
+                    }
                 }
                 case 4 -> {
                     values_idx_offsets_len = r.readVarint64();
                 }
                 case 5 -> {
-                    values_idx_offsets_ptype = PType.fromValue(r.readVarint32());
+                    int __ev = r.readVarint32();
+                    try {
+                        values_idx_offsets_ptype = PType.fromValue(__ev);
+                    } catch (IllegalArgumentException __iae) {
+                        throw new IOException("unknown PType value: " + __ev);
+                    }
                 }
                 case 6 -> {
                     offset = r.readVarint64();

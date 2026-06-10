@@ -20,12 +20,17 @@ public record VarBinMetadata(
     /// @throws IOException if the slice is malformed or truncated
     public static VarBinMetadata decode(MemorySegment __seg, long __off, long __len) throws IOException {
         ProtoReader r = new ProtoReader(__seg, __off, __len);
-        PType offsets_ptype = PType.fromValue(0);
+        PType offsets_ptype = PType.U8;
         while (r.hasMore()) {
             int tag = r.readVarint32();
             switch (tag >>> 3) {
                 case 1 -> {
-                    offsets_ptype = PType.fromValue(r.readVarint32());
+                    int __ev = r.readVarint32();
+                    try {
+                        offsets_ptype = PType.fromValue(__ev);
+                    } catch (IllegalArgumentException __iae) {
+                        throw new IOException("unknown PType value: " + __ev);
+                    }
                 }
                 default -> r.skipField(tag & 7);
             }

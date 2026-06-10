@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.proto;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
+import java.util.Arrays;
 import javax.annotation.processing.Generated;
 
 /// Generated from proto3 message {@code vortex.dtype.Extension}.
@@ -50,7 +51,7 @@ public record Extension(
     /// @return encoded bytes
     public byte[] encode() {
         ProtoWriter w = new ProtoWriter();
-        if (!id.isEmpty()) {
+        if (id != null && !id.isEmpty()) {
             w.writeTag(1, 2);
             w.writeString(id);
         }
@@ -63,5 +64,27 @@ public record Extension(
             w.writeBytes(metadata);
         }
         return w.toByteArray();
+    }
+
+    @Override
+    public boolean equals(Object __o) {
+        if (this == __o) {
+            return true;
+        }
+        if (!(__o instanceof Extension __that)) {
+            return false;
+        }
+        return java.util.Objects.equals(id, __that.id)
+            && java.util.Objects.equals(storage_dtype, __that.storage_dtype)
+            && java.util.Arrays.equals(metadata, __that.metadata);
+    }
+
+    @Override
+    public int hashCode() {
+        int __h = 1;
+        __h = 31 * __h + java.util.Objects.hashCode(id);
+        __h = 31 * __h + java.util.Objects.hashCode(storage_dtype);
+        __h = 31 * __h + java.util.Arrays.hashCode(metadata);
+        return __h;
     }
 }

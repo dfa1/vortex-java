@@ -97,14 +97,22 @@ final class ProtoWriter {
         pos += bytes.length;
     }
 
+    private static final int MAX_CAP = Integer.MAX_VALUE - 8;
+
     private void ensure(int extra) {
+        if (extra < 0 || pos > MAX_CAP - extra) {
+            throw new OutOfMemoryError("proto writer would exceed " + MAX_CAP + " bytes");
+        }
         int needed = pos + extra;
         if (needed > buf.length) {
-            int newCap = buf.length << 1;
+            long newCap = ((long) buf.length) << 1;
             while (newCap < needed) {
                 newCap <<= 1;
             }
-            buf = Arrays.copyOf(buf, newCap);
+            if (newCap > MAX_CAP) {
+                newCap = MAX_CAP;
+            }
+            buf = Arrays.copyOf(buf, (int) newCap);
         }
     }
 }
