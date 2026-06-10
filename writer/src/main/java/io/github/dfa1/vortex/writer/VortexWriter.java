@@ -122,9 +122,13 @@ public final class VortexWriter implements Closeable {
     /// the matching extension impl — including third-party extensions outside
     /// {@link io.github.dfa1.vortex.extension.Extension#findKnown}.
     private static Registry buildWriterRegistry(List<Encoding> encodings) {
-        Registry.Builder b = Registry.builder().registerExtensionsServiceLoaded();
+        Registry.Builder b = Registry.builder();
         for (Encoding e : encodings) {
             b.register(e);
+        }
+        for (io.github.dfa1.vortex.extension.Extension ext :
+                java.util.ServiceLoader.load(io.github.dfa1.vortex.extension.Extension.class)) {
+            b.register(ext);
         }
         return b.build();
     }
