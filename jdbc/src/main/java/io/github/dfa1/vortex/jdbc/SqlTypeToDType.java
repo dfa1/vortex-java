@@ -2,6 +2,9 @@ package io.github.dfa1.vortex.jdbc;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.extension.DateExtension;
+import io.github.dfa1.vortex.extension.TimeExtension;
+import io.github.dfa1.vortex.extension.TimestampExtension;
 
 import java.sql.Types;
 
@@ -21,6 +24,9 @@ final class SqlTypeToDType {
             case Types.BOOLEAN, Types.BIT -> new DType.Bool(nullable);
             case Types.VARCHAR, Types.CHAR, Types.LONGVARCHAR,
                  Types.NVARCHAR, Types.NCHAR, Types.LONGNVARCHAR, Types.CLOB -> new DType.Utf8(nullable);
+            case Types.DATE -> DateExtension.INSTANCE.dtype(nullable);
+            case Types.TIME -> TimeExtension.INSTANCE.dtype(nullable);
+            case Types.TIMESTAMP -> TimestampExtension.INSTANCE.dtype(nullable);
             default -> throw new UnsupportedOperationException("unsupported SQL type: " + sqlType);
         };
     }

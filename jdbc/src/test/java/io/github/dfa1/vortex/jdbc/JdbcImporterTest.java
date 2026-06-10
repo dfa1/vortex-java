@@ -95,6 +95,59 @@ class JdbcImporterTest {
         }
 
         @Test
+        void roundTripsTemporalSqlTypesViaExtensions(@TempDir Path tmp) throws Exception {
+            // Given — DATE, TIME, TIMESTAMP columns map to vortex.date / .time / .timestamp
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("CREATE TABLE temporal ("
+                        + "id BIGINT NOT NULL, "
+                        + "d DATE NOT NULL, "
+                        + "t TIME NOT NULL, "
+                        + "ts TIMESTAMP NOT NULL)");
+                stmt.execute("INSERT INTO temporal VALUES "
+                        + "(1, DATE '1996-02-12', TIME '01:01:01', TIMESTAMP '2026-06-10 12:00:00')");
+                stmt.execute("INSERT INTO temporal VALUES "
+                        + "(2, DATE '2026-06-10', TIME '00:00:00', TIMESTAMP '1970-01-01 00:00:00')");
+            }
+            Path vortex = tmp.resolve("temporal.vortex");
+
+            // When
+            JdbcImporter.importQuery(conn, "SELECT * FROM temporal ORDER BY id", vortex);
+
+            // Then — schema declares the three extension dtypes
+            try (VortexReader reader = VortexReader.open(vortex,
+                    io.github.dfa1.vortex.encoding.Registry.loadAll())) {
+                DType.Struct schema = (DType.Struct) reader.dtype();
+                assertThat(schema.fieldTypes().get(1))
+                        .isEqualTo(io.github.dfa1.vortex.extension.DateExtension.INSTANCE.dtype(false));
+                assertThat(schema.fieldTypes().get(2))
+                        .isEqualTo(io.github.dfa1.vortex.extension.TimeExtension.INSTANCE.dtype(false));
+                assertThat(schema.fieldTypes().get(3))
+                        .isEqualTo(io.github.dfa1.vortex.extension.TimestampExtension.INSTANCE.dtype(false));
+
+                // And — decoded values round-trip through the matching extension impl
+                try (ScanIterator iter = reader.scan(ScanOptions.all())) {
+                    assertThat(iter.hasNext()).isTrue();
+                    try (Chunk chunk = iter.next()) {
+                        assertThat(chunk.rowCount()).isEqualTo(2);
+
+                        assertThat(io.github.dfa1.vortex.extension.DateExtension.INSTANCE
+                                .decodeAll(chunk.column("D")))
+                                .containsExactly(
+                                        java.time.LocalDate.of(1996, 2, 12),
+                                        java.time.LocalDate.of(2026, 6, 10));
+
+                        DType.Extension tsDtype = (DType.Extension) schema.fieldTypes().get(3);
+                        assertThat(io.github.dfa1.vortex.extension.TimestampExtension.INSTANCE
+                                .decodeAll(tsDtype, chunk.column("TS")))
+                                .containsExactly(
+                                        java.sql.Timestamp.valueOf("2026-06-10 12:00:00").toInstant(),
+                                        java.sql.Timestamp.valueOf("1970-01-01 00:00:00").toInstant());
+                    }
+                }
+            }
+        }
+
+        @Test
         void splitsIntoMultipleChunks(@TempDir Path tmp) throws Exception {
             // Given
             try (Statement stmt = conn.createStatement()) {

@@ -4,15 +4,20 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.writer.VortexWriter;
 
+import io.github.dfa1.vortex.extension.ExtensionId;
+
 import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.sql.Connection;
+import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.sql.Time;
+import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -133,6 +138,9 @@ public final class JdbcImporter {
             case DType.Primitive p when p.ptype() == PType.F32 -> new float[size];
             case DType.Bool ignored -> new boolean[size];
             case DType.Utf8 ignored -> new String[size];
+            // Extension columns buffer as domain-typed lists; VortexWriter.writeChunk
+            // auto-routes Collection<DomainT> through the matching extension impl.
+            case DType.Extension ext -> new ArrayList<>(size);
             default -> throw new UnsupportedOperationException("unsupported dtype: " + dtype);
         };
     }
@@ -154,8 +162,39 @@ public final class JdbcImporter {
         } else if (dtype instanceof DType.Utf8) {
             String val = rs.getString(colIdx);
             ((String[]) buffer)[rowIdx] = val != null ? val : "";
+        } else if (dtype instanceof DType.Extension ext) {
+            fillExtensionCell((List<Object>) buffer, rs, colIdx, ext);
         } else {
             throw new UnsupportedOperationException("unsupported dtype: " + dtype);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void fillExtensionCell(List<Object> buffer, ResultSet rs, int colIdx,
+            DType.Extension ext) throws SQLException {
+        ExtensionId id = ExtensionId.tryFrom(ext.extensionId());
+        if (id == null) {
+            throw new UnsupportedOperationException("unsupported extension: " + ext.extensionId());
+        }
+        // SQL NULL → null in the buffer. Nullable-extension write support (MaskedArray
+        // storage + per-cell validity bit) is still pending — until then, a NULL in a
+        // NOT NULL column would round-trip wrong, but the database constraint prevents
+        // that, and the encoder NPEs loudly if anything slips through.
+        switch (id) {
+            case VORTEX_DATE -> {
+                Date d = rs.getDate(colIdx);
+                buffer.add(rs.wasNull() ? null : d.toLocalDate());
+            }
+            case VORTEX_TIME -> {
+                Time t = rs.getTime(colIdx);
+                buffer.add(rs.wasNull() ? null : t.toLocalTime());
+            }
+            case VORTEX_TIMESTAMP -> {
+                Timestamp ts = rs.getTimestamp(colIdx);
+                buffer.add(rs.wasNull() ? null : ts.toInstant());
+            }
+            case VORTEX_UUID -> throw new UnsupportedOperationException(
+                    "JDBC UUID import not yet implemented");
         }
     }
 
@@ -178,6 +217,7 @@ public final class JdbcImporter {
             case float[] arr -> rows == arr.length ? arr : Arrays.copyOf(arr, rows);
             case boolean[] arr -> rows == arr.length ? arr : Arrays.copyOf(arr, rows);
             case String[] arr -> rows == arr.length ? arr : Arrays.copyOf(arr, rows);
+            case List<?> list -> rows == list.size() ? list : list.subList(0, rows);
             default -> throw new UnsupportedOperationException("unsupported buffer type: " + buffer.getClass());
         };
     }
