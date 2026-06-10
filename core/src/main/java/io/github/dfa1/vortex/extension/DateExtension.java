@@ -48,13 +48,20 @@ public final class DateExtension implements Extension {
         return LocalDate.ofEpochDay(ExtensionStorage.epochInteger(storage, i));
     }
 
-    /// Decodes every row of {@code storage} into a list of dates.
+    /// Decodes every row of {@code storage} into a list of dates. {@link io.github.dfa1.vortex.core.array.MaskedArray}
+    /// storage yields {@code null} at invalid positions instead of throwing.
     ///
-    /// @param storage signed-integer storage array
-    /// @return list of decoded dates in row order
+    /// @param storage signed-integer storage array (optionally wrapped in {@code MaskedArray})
+    /// @return list of decoded dates in row order; {@code null} entries mark invalid rows
     public List<LocalDate> decodeAll(Array storage) {
         int n = Math.toIntExact(storage.length());
         List<LocalDate> out = new ArrayList<>(n);
+        if (storage instanceof io.github.dfa1.vortex.core.array.MaskedArray masked) {
+            for (long i = 0; i < n; i++) {
+                out.add(masked.isValid(i) ? decode(masked.inner(), i) : null);
+            }
+            return out;
+        }
         for (long i = 0; i < n; i++) {
             out.add(decode(storage, i));
         }

@@ -3,12 +3,17 @@ package io.github.dfa1.vortex.extension;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.core.array.BoolArray;
+import io.github.dfa1.vortex.core.array.IntArray;
+import io.github.dfa1.vortex.core.array.MaskedArray;
 import io.github.dfa1.vortex.core.array.NullableData;
 import io.github.dfa1.vortex.encoding.TimeUnit;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.time.LocalTime;
 import java.util.Arrays;
 import java.util.List;
@@ -104,6 +109,29 @@ class TimeExtensionTest {
 
         // Then
         assertThat(packed).isEqualTo(new long[]{42L});
+    }
+
+    @Test
+    void decodeAll_maskedArray_yieldsNullAtInvalidPositions() {
+        // Given — Milliseconds (I32 storage) + validity at position 1 = null
+        try (Arena arena = Arena.ofConfined()) {
+            int millisNoon = (int) (LocalTime.NOON.toNanoOfDay() / 1_000_000L);
+            MemorySegment buf = arena.allocate(8);
+            buf.set(ValueLayout.JAVA_INT_UNALIGNED, 0, millisNoon);
+            buf.set(ValueLayout.JAVA_INT_UNALIGNED, 4, 0);
+            IntArray inner = new IntArray(I32, 2, buf);
+            MemorySegment validityBuf = arena.allocate(1);
+            validityBuf.set(ValueLayout.JAVA_BYTE, 0, (byte) 0b0000_0001);
+            BoolArray validity = new BoolArray(new DType.Bool(false), 2, validityBuf);
+
+            // When
+            List<LocalTime> out = sut.decodeAll(
+                    sut.dtype(TimeUnit.Milliseconds, true),
+                    new MaskedArray(inner, validity));
+
+            // Then
+            assertThat(out).containsExactly(LocalTime.NOON, null);
+        }
     }
 
     @Test

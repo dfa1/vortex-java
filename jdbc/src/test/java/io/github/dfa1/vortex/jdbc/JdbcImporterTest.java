@@ -227,6 +227,15 @@ class JdbcImporterTest {
                         assertThat(uMasked.isValid(2)).isTrue();
                         assertThat(io.github.dfa1.vortex.extension.UuidExtension.INSTANCE.decode(uMasked, 0))
                                 .isEqualTo(u1);
+
+                        // And — decodeAll preserves nulls in the returned list at row 1
+                        assertThat(io.github.dfa1.vortex.extension.DateExtension.INSTANCE.decodeAll(dMasked))
+                                .containsExactly(
+                                        java.time.LocalDate.of(1996, 2, 12),
+                                        null,
+                                        java.time.LocalDate.of(2026, 6, 10));
+                        assertThat(io.github.dfa1.vortex.extension.UuidExtension.INSTANCE.decodeAll(uMasked))
+                                .containsExactly(u1, null, u1);
                     }
                 }
             }

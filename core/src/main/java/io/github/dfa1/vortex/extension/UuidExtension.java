@@ -75,13 +75,20 @@ public final class UuidExtension implements Extension {
         return new UUID(msb, lsb);
     }
 
-    /// Decodes every row of {@code storage} into a list of UUIDs.
+    /// Decodes every row of {@code storage} into a list of UUIDs. {@link io.github.dfa1.vortex.core.array.MaskedArray}
+    /// storage yields {@code null} at invalid positions instead of throwing.
     ///
-    /// @param storage UUID storage array
-    /// @return list of decoded UUIDs in row order
+    /// @param storage UUID storage array (optionally wrapped in {@code MaskedArray})
+    /// @return list of decoded UUIDs in row order; {@code null} entries mark invalid rows
     public List<UUID> decodeAll(Array storage) {
         int n = Math.toIntExact(storage.length());
         List<UUID> out = new ArrayList<>(n);
+        if (storage instanceof io.github.dfa1.vortex.core.array.MaskedArray masked) {
+            for (long i = 0; i < n; i++) {
+                out.add(masked.isValid(i) ? decode(masked.inner(), i) : null);
+            }
+            return out;
+        }
         for (long i = 0; i < n; i++) {
             out.add(decode(storage, i));
         }

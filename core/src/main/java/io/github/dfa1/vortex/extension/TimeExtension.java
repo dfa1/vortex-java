@@ -75,14 +75,21 @@ public final class TimeExtension implements Extension {
         return LocalTime.ofNanoOfDay(nanos);
     }
 
-    /// Decodes every row of {@code storage} into a list of times.
+    /// Decodes every row of {@code storage} into a list of times. {@link io.github.dfa1.vortex.core.array.MaskedArray}
+    /// storage yields {@code null} at invalid positions instead of throwing.
     ///
     /// @param ext     declared extension dtype carrying the unit
-    /// @param storage signed-integer storage array
-    /// @return list of decoded times in row order
+    /// @param storage signed-integer storage array (optionally wrapped in {@code MaskedArray})
+    /// @return list of decoded times in row order; {@code null} entries mark invalid rows
     public List<LocalTime> decodeAll(DType.Extension ext, Array storage) {
         int n = Math.toIntExact(storage.length());
         List<LocalTime> out = new ArrayList<>(n);
+        if (storage instanceof io.github.dfa1.vortex.core.array.MaskedArray masked) {
+            for (long i = 0; i < n; i++) {
+                out.add(masked.isValid(i) ? decode(ext, masked.inner(), i) : null);
+            }
+            return out;
+        }
         for (long i = 0; i < n; i++) {
             out.add(decode(ext, storage, i));
         }

@@ -3,8 +3,10 @@ package io.github.dfa1.vortex.extension;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.core.array.BoolArray;
 import io.github.dfa1.vortex.core.array.ByteArray;
 import io.github.dfa1.vortex.core.array.FixedSizeListArray;
+import io.github.dfa1.vortex.core.array.MaskedArray;
 import io.github.dfa1.vortex.core.array.NullableData;
 import io.github.dfa1.vortex.encoding.FixedSizeListData;
 import org.junit.jupiter.api.Nested;
@@ -159,6 +161,31 @@ class UuidExtensionTest {
                     Arrays.asList(UUID.fromString("00000000-0000-0000-0000-000000000001"), null)))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("vortex.uuid");
+        }
+    }
+
+    @Test
+    void decodeAll_maskedArray_yieldsNullAtInvalidPositions() {
+        // Given — 2 UUIDs in flat byte storage, validity says row 1 = null
+        java.util.UUID u1 = java.util.UUID.fromString("12345678-1234-5678-9abc-def012345678");
+        try (Arena arena = Arena.ofConfined()) {
+            byte[] flat = sut.encodeAll(java.util.List.of(u1, new java.util.UUID(0L, 0L)));
+            MemorySegment buf = arena.allocate(flat.length);
+            for (int i = 0; i < flat.length; i++) {
+                buf.set(ValueLayout.JAVA_BYTE, i, flat[i]);
+            }
+            ByteArray innerBytes = new ByteArray(U8, flat.length, buf);
+            FixedSizeListArray innerFsl = new FixedSizeListArray(
+                    new DType.FixedSizeList(U8, 16, false), 2, innerBytes);
+            MemorySegment validityBuf = arena.allocate(1);
+            validityBuf.set(ValueLayout.JAVA_BYTE, 0, (byte) 0b0000_0001);
+            BoolArray validity = new BoolArray(new DType.Bool(false), 2, validityBuf);
+
+            // When
+            java.util.List<java.util.UUID> out = sut.decodeAll(new MaskedArray(innerFsl, validity));
+
+            // Then
+            assertThat(out).containsExactly(u1, null);
         }
     }
 

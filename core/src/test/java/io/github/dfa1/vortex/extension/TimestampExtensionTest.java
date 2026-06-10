@@ -3,7 +3,9 @@ package io.github.dfa1.vortex.extension;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.core.array.BoolArray;
 import io.github.dfa1.vortex.core.array.LongArray;
+import io.github.dfa1.vortex.core.array.MaskedArray;
 import io.github.dfa1.vortex.core.array.NullableData;
 import io.github.dfa1.vortex.encoding.TimeUnit;
 import org.junit.jupiter.api.Nested;
@@ -191,6 +193,27 @@ class TimestampExtensionTest {
 
             // Then — order + values preserved end-to-end
             assertThat(sut.decodeAll(dtype, storage)).isEqualTo(instants);
+        }
+    }
+
+    @Test
+    void decodeAll_maskedArray_yieldsNullAtInvalidPositions() {
+        // Given — Milliseconds storage with row 1 null. ext dtype uses I64 storage.
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment buf = arena.allocate(16);
+            buf.set(ValueLayout.JAVA_LONG_UNALIGNED, 0, 1_000L);
+            buf.set(ValueLayout.JAVA_LONG_UNALIGNED, 8, 0L);
+            LongArray inner = new LongArray(I64, 2, buf);
+            MemorySegment validityBuf = arena.allocate(1);
+            validityBuf.set(ValueLayout.JAVA_BYTE, 0, (byte) 0b0000_0001);
+            BoolArray validity = new BoolArray(new DType.Bool(false), 2, validityBuf);
+            DType.Extension dtype = sut.dtype(true);
+
+            // When
+            List<Instant> out = sut.decodeAll(dtype, new MaskedArray(inner, validity));
+
+            // Then
+            assertThat(out).containsExactly(Instant.ofEpochMilli(1_000L), null);
         }
     }
 

@@ -120,14 +120,21 @@ public final class TimestampExtension implements Extension {
         return Optional.of(ZoneId.of(new String(tzBytes, StandardCharsets.UTF_8)));
     }
 
-    /// Decodes every row of {@code storage} into a list of instants.
+    /// Decodes every row of {@code storage} into a list of instants. {@link io.github.dfa1.vortex.core.array.MaskedArray}
+    /// storage yields {@code null} at invalid positions instead of throwing.
     ///
     /// @param ext     declared extension dtype carrying the unit
-    /// @param storage signed-integer storage array
-    /// @return list of decoded instants in row order
+    /// @param storage signed-integer storage array (optionally wrapped in {@code MaskedArray})
+    /// @return list of decoded instants in row order; {@code null} entries mark invalid rows
     public List<Instant> decodeAll(DType.Extension ext, Array storage) {
         int n = Math.toIntExact(storage.length());
         List<Instant> out = new ArrayList<>(n);
+        if (storage instanceof io.github.dfa1.vortex.core.array.MaskedArray masked) {
+            for (long i = 0; i < n; i++) {
+                out.add(masked.isValid(i) ? instant(ext, masked.inner(), i) : null);
+            }
+            return out;
+        }
         for (long i = 0; i < n; i++) {
             out.add(instant(ext, storage, i));
         }

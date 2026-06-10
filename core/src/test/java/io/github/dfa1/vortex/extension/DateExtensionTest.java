@@ -3,7 +3,9 @@ package io.github.dfa1.vortex.extension;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.core.array.BoolArray;
 import io.github.dfa1.vortex.core.array.IntArray;
+import io.github.dfa1.vortex.core.array.MaskedArray;
 import io.github.dfa1.vortex.core.array.NullableData;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -123,6 +125,32 @@ class DateExtensionTest {
             assertThatThrownBy(() -> sut.encodeAll(dtype, Arrays.asList(LocalDate.of(2026, 1, 1), null)))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("vortex.date");
+        }
+    }
+
+    @Test
+    void decodeAll_maskedArray_yieldsNullAtInvalidPositions() {
+        // Given — MaskedArray wrapping IntArray: 3 rows, row 1 null. epochInteger
+        // would throw on the null cell; decodeAll must short-circuit via isValid
+        // and emit a null entry instead.
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment buf = arena.allocate(12);
+            buf.set(ValueLayout.JAVA_INT_UNALIGNED, 0, sut.encode(LocalDate.of(2026, 1, 1)));
+            buf.set(ValueLayout.JAVA_INT_UNALIGNED, 4, 0);
+            buf.set(ValueLayout.JAVA_INT_UNALIGNED, 8, sut.encode(LocalDate.of(2026, 1, 3)));
+            IntArray inner = new IntArray(I32, 3, buf);
+            MemorySegment validityBuf = arena.allocate(1);
+            validityBuf.set(ValueLayout.JAVA_BYTE, 0, (byte) 0b0000_0101);
+            BoolArray validity = new BoolArray(new DType.Bool(false), 3, validityBuf);
+
+            // When
+            List<LocalDate> out = sut.decodeAll(new MaskedArray(inner, validity));
+
+            // Then
+            assertThat(out).containsExactly(
+                    LocalDate.of(2026, 1, 1),
+                    null,
+                    LocalDate.of(2026, 1, 3));
         }
     }
 
