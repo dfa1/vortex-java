@@ -50,18 +50,24 @@ public record Struct(
     /// @return encoded bytes
     public byte[] encode() {
         ProtoWriter w = new ProtoWriter();
+        encodeTo(w);
+        return w.toByteArray();
+    }
+
+    void encodeTo(ProtoWriter w) {
         for (String __v : names) {
             w.writeTag(1, 2);
             w.writeString(__v);
         }
         for (DType __v : dtypes) {
             w.writeTag(2, 2);
-            w.writeEmbedded(__v.encode());
+            int __mark = w.beginLenDelim();
+            __v.encodeTo(w);
+            w.endLenDelim(__mark);
         }
         if (nullable) {
             w.writeTag(3, 0);
             w.writeBool(nullable);
         }
-        return w.toByteArray();
     }
 }

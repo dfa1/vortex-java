@@ -43,6 +43,11 @@ public record ZstdFrameMetadata(
     /// @return encoded bytes
     public byte[] encode() {
         ProtoWriter w = new ProtoWriter();
+        encodeTo(w);
+        return w.toByteArray();
+    }
+
+    void encodeTo(ProtoWriter w) {
         if (uncompressed_size != 0L) {
             w.writeTag(1, 0);
             w.writeVarint64(uncompressed_size);
@@ -51,6 +56,5 @@ public record ZstdFrameMetadata(
             w.writeTag(2, 0);
             w.writeVarint64(n_values);
         }
-        return w.toByteArray();
     }
 }

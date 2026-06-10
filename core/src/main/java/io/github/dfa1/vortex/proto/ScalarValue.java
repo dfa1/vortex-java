@@ -105,6 +105,11 @@ public record ScalarValue(
     /// @return encoded bytes
     public byte[] encode() {
         ProtoWriter w = new ProtoWriter();
+        encodeTo(w);
+        return w.toByteArray();
+    }
+
+    void encodeTo(ProtoWriter w) {
         if (null_value != null) {
             w.writeTag(1, 0);
             w.writeVarint32(null_value.value());
@@ -139,7 +144,9 @@ public record ScalarValue(
         }
         if (list_value != null) {
             w.writeTag(9, 2);
-            w.writeEmbedded(list_value.encode());
+            int __mark = w.beginLenDelim();
+            list_value.encodeTo(w);
+            w.endLenDelim(__mark);
         }
         if (f16_value != null) {
             w.writeTag(10, 0);
@@ -147,9 +154,10 @@ public record ScalarValue(
         }
         if (variant_value != null) {
             w.writeTag(11, 2);
-            w.writeEmbedded(variant_value.encode());
+            int __mark = w.beginLenDelim();
+            variant_value.encodeTo(w);
+            w.endLenDelim(__mark);
         }
-        return w.toByteArray();
     }
 
     /// Factory for oneof case {@code null_value} (field tag 1).

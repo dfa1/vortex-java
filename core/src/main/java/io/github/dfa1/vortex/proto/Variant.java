@@ -37,10 +37,14 @@ public record Variant(
     /// @return encoded bytes
     public byte[] encode() {
         ProtoWriter w = new ProtoWriter();
+        encodeTo(w);
+        return w.toByteArray();
+    }
+
+    void encodeTo(ProtoWriter w) {
         if (nullable) {
             w.writeTag(1, 0);
             w.writeBool(nullable);
         }
-        return w.toByteArray();
     }
 }

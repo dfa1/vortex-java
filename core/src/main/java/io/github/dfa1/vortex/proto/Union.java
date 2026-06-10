@@ -37,10 +37,14 @@ public record Union(
     /// @return encoded bytes
     public byte[] encode() {
         ProtoWriter w = new ProtoWriter();
+        encodeTo(w);
+        return w.toByteArray();
+    }
+
+    void encodeTo(ProtoWriter w) {
         if (nullable) {
             w.writeTag(4, 0);
             w.writeBool(nullable);
         }
-        return w.toByteArray();
     }
 }

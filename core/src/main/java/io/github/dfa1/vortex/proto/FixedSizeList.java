@@ -50,9 +50,16 @@ public record FixedSizeList(
     /// @return encoded bytes
     public byte[] encode() {
         ProtoWriter w = new ProtoWriter();
+        encodeTo(w);
+        return w.toByteArray();
+    }
+
+    void encodeTo(ProtoWriter w) {
         if (element_type != null) {
             w.writeTag(1, 2);
-            w.writeEmbedded(element_type.encode());
+            int __mark = w.beginLenDelim();
+            element_type.encodeTo(w);
+            w.endLenDelim(__mark);
         }
         if (size != 0) {
             w.writeTag(2, 0);
@@ -62,6 +69,5 @@ public record FixedSizeList(
             w.writeTag(3, 0);
             w.writeBool(nullable);
         }
-        return w.toByteArray();
     }
 }

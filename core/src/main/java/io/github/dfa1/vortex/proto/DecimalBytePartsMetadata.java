@@ -48,6 +48,11 @@ public record DecimalBytePartsMetadata(
     /// @return encoded bytes
     public byte[] encode() {
         ProtoWriter w = new ProtoWriter();
+        encodeTo(w);
+        return w.toByteArray();
+    }
+
+    void encodeTo(ProtoWriter w) {
         if (zeroth_child_ptype.value() != 0) {
             w.writeTag(1, 0);
             w.writeVarint32(zeroth_child_ptype.value());
@@ -56,6 +61,5 @@ public record DecimalBytePartsMetadata(
             w.writeTag(2, 0);
             w.writeVarint32(lower_part_count);
         }
-        return w.toByteArray();
     }
 }

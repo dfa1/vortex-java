@@ -44,14 +44,20 @@ public record ZstdMetadata(
     /// @return encoded bytes
     public byte[] encode() {
         ProtoWriter w = new ProtoWriter();
+        encodeTo(w);
+        return w.toByteArray();
+    }
+
+    void encodeTo(ProtoWriter w) {
         if (dictionary_size != 0) {
             w.writeTag(1, 0);
             w.writeVarint32(dictionary_size);
         }
         for (ZstdFrameMetadata __v : frames) {
             w.writeTag(2, 2);
-            w.writeEmbedded(__v.encode());
+            int __mark = w.beginLenDelim();
+            __v.encodeTo(w);
+            w.endLenDelim(__mark);
         }
-        return w.toByteArray();
     }
 }

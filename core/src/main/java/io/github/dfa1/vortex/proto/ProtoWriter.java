@@ -91,6 +91,61 @@ final class ProtoWriter {
         writeRaw(encoded);
     }
 
+    /// Reserves space for a length-delimited region whose payload size is unknown until written.
+    /// Returns a mark to pass back to {@link #endLenDelim(int)}; the caller writes the payload
+    /// in between. Avoids the alloc/copy round-trip of writing into a temporary {@code ProtoWriter}.
+    ///
+    /// Reserves the worst-case 5 bytes for a varint32 length; {@link #endLenDelim} backpatches
+    /// the actual length and shifts the payload left if a shorter varint suffices.
+    int beginLenDelim() {
+        ensure(MAX_LEN_VARINT);
+        int mark = pos;
+        pos += MAX_LEN_VARINT;
+        return mark;
+    }
+
+    /// Finalises a length-delimited region opened by {@link #beginLenDelim()}.
+    /// Writes the payload length as a varint at the reserved offset and shifts the payload
+    /// left if the varint is shorter than 5 bytes.
+    void endLenDelim(int mark) {
+        int payloadStart = mark + MAX_LEN_VARINT;
+        int payloadEnd = pos;
+        int payloadLen = payloadEnd - payloadStart;
+        int lenVarintSize = varintSize(payloadLen);
+        if (lenVarintSize < MAX_LEN_VARINT) {
+            int shift = MAX_LEN_VARINT - lenVarintSize;
+            System.arraycopy(buf, payloadStart, buf, payloadStart - shift, payloadLen);
+            pos -= shift;
+        }
+        // Write the varint at offset `mark` without disturbing `pos`.
+        int writeAt = mark;
+        long v = payloadLen & 0xffffffffL;
+        while ((v & ~0x7fL) != 0L) {
+            buf[writeAt++] = (byte) ((v & 0x7f) | 0x80);
+            v >>>= 7;
+        }
+        buf[writeAt] = (byte) v;
+    }
+
+    private static int varintSize(int value) {
+        long v = value & 0xffffffffL;
+        if (v < (1L << 7)) {
+            return 1;
+        }
+        if (v < (1L << 14)) {
+            return 2;
+        }
+        if (v < (1L << 21)) {
+            return 3;
+        }
+        if (v < (1L << 28)) {
+            return 4;
+        }
+        return 5;
+    }
+
+    private static final int MAX_LEN_VARINT = 5;
+
     private void writeRaw(byte[] bytes) {
         ensure(bytes.length);
         System.arraycopy(bytes, 0, buf, pos, bytes.length);

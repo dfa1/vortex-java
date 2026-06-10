@@ -43,6 +43,11 @@ public record DeltaMetadata(
     /// @return encoded bytes
     public byte[] encode() {
         ProtoWriter w = new ProtoWriter();
+        encodeTo(w);
+        return w.toByteArray();
+    }
+
+    void encodeTo(ProtoWriter w) {
         if (deltas_len != 0L) {
             w.writeTag(1, 0);
             w.writeVarint64(deltas_len);
@@ -51,6 +56,5 @@ public record DeltaMetadata(
             w.writeTag(2, 0);
             w.writeVarint32(offset);
         }
-        return w.toByteArray();
     }
 }

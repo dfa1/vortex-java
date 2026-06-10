@@ -282,10 +282,16 @@ public final class CodeGen {
         sb.append("    /// @return encoded bytes\n");
         sb.append("    public byte[] encode() {\n");
         sb.append("        ProtoWriter w = new ProtoWriter();\n");
+        sb.append("        encodeTo(w);\n");
+        sb.append("        return w.toByteArray();\n");
+        sb.append("    }\n\n");
+        // Package-private encoder that writes the record's wire bytes into the caller's
+        // ProtoWriter. Used by nested-message emitters to avoid the alloc/copy round-trip
+        // of creating a temporary writer and calling toByteArray() per nested field.
+        sb.append("    void encodeTo(ProtoWriter w) {\n");
         for (Field f : fields) {
             f.emitEncode(sb, "        ");
         }
-        sb.append("        return w.toByteArray();\n");
         sb.append("    }\n");
     }
 
@@ -521,15 +527,14 @@ public final class CodeGen {
         public void emitEncode(StringBuilder sb, String indent, Field f) {
             int wt = wireType(s);
             if (wt != 2) {
-                // Pack primitives into a single LEN region.
+                // Pack primitives into a single LEN region via backpatch — no temp ProtoWriter.
                 sb.append(indent).append("if (!").append(f.name).append(".isEmpty()) {\n");
-                sb.append(indent).append("    ProtoWriter packed = new ProtoWriter();\n");
-                sb.append(indent).append("    for (").append(boxedName(s)).append(" __v : ").append(f.name).append(") {\n");
-                sb.append(indent).append("        ").append(writeStmtOnWriter(s, "packed", "__v")).append("\n");
-                sb.append(indent).append("    }\n");
-                sb.append(indent).append("    byte[] __bytes = packed.toByteArray();\n");
                 sb.append(indent).append("    w.writeTag(").append(f.number).append(", 2);\n");
-                sb.append(indent).append("    w.writeEmbedded(__bytes);\n");
+                sb.append(indent).append("    int __mark = w.beginLenDelim();\n");
+                sb.append(indent).append("    for (").append(boxedName(s)).append(" __v : ").append(f.name).append(") {\n");
+                sb.append(indent).append("        ").append(writeStmt(s, "__v")).append("\n");
+                sb.append(indent).append("    }\n");
+                sb.append(indent).append("    w.endLenDelim(__mark);\n");
                 sb.append(indent).append("}\n");
             } else {
                 // LEN-type repeated: tag-per-element.
@@ -653,12 +658,12 @@ public final class CodeGen {
         @Override
         public void emitEncode(StringBuilder sb, String indent, Field f) {
             sb.append(indent).append("if (!").append(f.name).append(".isEmpty()) {\n");
-            sb.append(indent).append("    ProtoWriter packed = new ProtoWriter();\n");
-            sb.append(indent).append("    for (").append(javaName).append(" __v : ").append(f.name).append(") {\n");
-            sb.append(indent).append("        packed.writeVarint32(__v.value());\n");
-            sb.append(indent).append("    }\n");
             sb.append(indent).append("    w.writeTag(").append(f.number).append(", 2);\n");
-            sb.append(indent).append("    w.writeEmbedded(packed.toByteArray());\n");
+            sb.append(indent).append("    int __mark = w.beginLenDelim();\n");
+            sb.append(indent).append("    for (").append(javaName).append(" __v : ").append(f.name).append(") {\n");
+            sb.append(indent).append("        w.writeVarint32(__v.value());\n");
+            sb.append(indent).append("    }\n");
+            sb.append(indent).append("    w.endLenDelim(__mark);\n");
             sb.append(indent).append("}\n");
         }
     }
@@ -678,7 +683,9 @@ public final class CodeGen {
         public void emitEncode(StringBuilder sb, String indent, Field f) {
             sb.append(indent).append("if (").append(f.name).append(" != null) {\n");
             sb.append(indent).append("    w.writeTag(").append(f.number).append(", 2);\n");
-            sb.append(indent).append("    w.writeEmbedded(").append(f.name).append(".encode());\n");
+            sb.append(indent).append("    int __mark = w.beginLenDelim();\n");
+            sb.append(indent).append("    ").append(f.name).append(".encodeTo(w);\n");
+            sb.append(indent).append("    w.endLenDelim(__mark);\n");
             sb.append(indent).append("}\n");
         }
     }
@@ -694,7 +701,9 @@ public final class CodeGen {
         public void emitEncode(StringBuilder sb, String indent, Field f) {
             sb.append(indent).append("for (").append(javaName).append(" __v : ").append(f.name).append(") {\n");
             sb.append(indent).append("    w.writeTag(").append(f.number).append(", 2);\n");
-            sb.append(indent).append("    w.writeEmbedded(__v.encode());\n");
+            sb.append(indent).append("    int __mark = w.beginLenDelim();\n");
+            sb.append(indent).append("    __v.encodeTo(w);\n");
+            sb.append(indent).append("    w.endLenDelim(__mark);\n");
             sb.append(indent).append("}\n");
         }
     }

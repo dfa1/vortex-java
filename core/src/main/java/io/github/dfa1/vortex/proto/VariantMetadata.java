@@ -38,10 +38,16 @@ public record VariantMetadata(
     /// @return encoded bytes
     public byte[] encode() {
         ProtoWriter w = new ProtoWriter();
+        encodeTo(w);
+        return w.toByteArray();
+    }
+
+    void encodeTo(ProtoWriter w) {
         if (shredded_dtype != null) {
             w.writeTag(1, 2);
-            w.writeEmbedded(shredded_dtype.encode());
+            int __mark = w.beginLenDelim();
+            shredded_dtype.encodeTo(w);
+            w.endLenDelim(__mark);
         }
-        return w.toByteArray();
     }
 }

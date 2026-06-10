@@ -64,6 +64,11 @@ public record DateTimePartsMetadata(
     /// @return encoded bytes
     public byte[] encode() {
         ProtoWriter w = new ProtoWriter();
+        encodeTo(w);
+        return w.toByteArray();
+    }
+
+    void encodeTo(ProtoWriter w) {
         if (days_ptype.value() != 0) {
             w.writeTag(1, 0);
             w.writeVarint32(days_ptype.value());
@@ -76,6 +81,5 @@ public record DateTimePartsMetadata(
             w.writeTag(3, 0);
             w.writeVarint32(subseconds_ptype.value());
         }
-        return w.toByteArray();
     }
 }

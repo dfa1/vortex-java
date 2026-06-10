@@ -37,11 +37,15 @@ public record Field(
     /// @return encoded bytes
     public byte[] encode() {
         ProtoWriter w = new ProtoWriter();
+        encodeTo(w);
+        return w.toByteArray();
+    }
+
+    void encodeTo(ProtoWriter w) {
         if (name != null) {
             w.writeTag(1, 2);
             w.writeString(name);
         }
-        return w.toByteArray();
     }
 
     /// Factory for oneof case {@code name} (field tag 1).

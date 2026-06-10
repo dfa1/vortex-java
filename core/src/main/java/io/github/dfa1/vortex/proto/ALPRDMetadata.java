@@ -74,6 +74,11 @@ public record ALPRDMetadata(
     /// @return encoded bytes
     public byte[] encode() {
         ProtoWriter w = new ProtoWriter();
+        encodeTo(w);
+        return w.toByteArray();
+    }
+
+    void encodeTo(ProtoWriter w) {
         if (right_bit_width != 0) {
             w.writeTag(1, 0);
             w.writeVarint32(right_bit_width);
@@ -83,13 +88,12 @@ public record ALPRDMetadata(
             w.writeVarint32(dict_len);
         }
         if (!dict.isEmpty()) {
-            ProtoWriter packed = new ProtoWriter();
-            for (Integer __v : dict) {
-                packed.writeVarint32(__v);
-            }
-            byte[] __bytes = packed.toByteArray();
             w.writeTag(3, 2);
-            w.writeEmbedded(__bytes);
+            int __mark = w.beginLenDelim();
+            for (Integer __v : dict) {
+                w.writeVarint32(__v);
+            }
+            w.endLenDelim(__mark);
         }
         if (left_parts_ptype.value() != 0) {
             w.writeTag(4, 0);
@@ -97,8 +101,9 @@ public record ALPRDMetadata(
         }
         if (patches != null) {
             w.writeTag(5, 2);
-            w.writeEmbedded(patches.encode());
+            int __mark = w.beginLenDelim();
+            patches.encodeTo(w);
+            w.endLenDelim(__mark);
         }
-        return w.toByteArray();
     }
 }
