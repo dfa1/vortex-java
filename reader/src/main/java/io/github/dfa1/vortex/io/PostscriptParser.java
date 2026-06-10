@@ -1,10 +1,10 @@
 package io.github.dfa1.vortex.io;
 
+import io.github.dfa1.vortex.core.BoundedSegment;
 import io.github.dfa1.vortex.core.CompressionScheme;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.Footer;
 import io.github.dfa1.vortex.core.Layout;
-import io.github.dfa1.vortex.core.MemorySegments;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.SegmentSpec;
 import io.github.dfa1.vortex.core.VortexException;
@@ -20,9 +20,7 @@ import io.github.dfa1.vortex.fbs.Type;
 import io.github.dfa1.vortex.fbs.Utf8;
 import io.github.dfa1.vortex.fbs.Variant;
 
-import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -43,7 +41,7 @@ final class PostscriptParser {
     private PostscriptParser() {
     }
 
-    static ParsedFile parse(ByteBuffer postscriptBuf, MemorySegment fileSegment, long fileSize) {
+    static ParsedFile parse(ByteBuffer postscriptBuf, BoundedSegment file) {
         var ps = Postscript.getRootAsPostscript(postscriptBuf);
 
         var footerSeg = ps.footer();
@@ -56,16 +54,20 @@ final class PostscriptParser {
         }
         var dtypeSeg = ps.dtype();
 
+        // BoundedSegment.slice does the bounds check; the explicit checkBlobBounds calls
+        // below are kept because they produce more specific error messages naming the blob
+        // ("postscript footer blob out of bounds" vs the generic "vortex file" context label).
+        long fileSize = file.byteSize();
         checkBlobBounds("footer", footerSeg.offset(), footerSeg.length(), fileSize);
         checkBlobBounds("layout", layoutSeg.offset(), layoutSeg.length(), fileSize);
         if (dtypeSeg != null && dtypeSeg.length() > 0) {
             checkBlobBounds("dtype", dtypeSeg.offset(), dtypeSeg.length(), fileSize);
         }
 
-        ByteBuffer footerBuf = slice(fileSegment, footerSeg.offset(), footerSeg.length());
-        ByteBuffer layoutBuf = slice(fileSegment, layoutSeg.offset(), layoutSeg.length());
+        ByteBuffer footerBuf = file.slice(footerSeg.offset(), footerSeg.length(), "footer blob").asByteBufferLE();
+        ByteBuffer layoutBuf = file.slice(layoutSeg.offset(), layoutSeg.length(), "layout blob").asByteBufferLE();
         ByteBuffer dtypeBuf = (dtypeSeg != null && dtypeSeg.length() > 0)
-                                      ? slice(fileSegment, dtypeSeg.offset(), dtypeSeg.length())
+                                      ? file.slice(dtypeSeg.offset(), dtypeSeg.length(), "dtype blob").asByteBufferLE()
                                       : null;
 
         ParsedFile parsed = parseBlobs(footerBuf, layoutBuf, dtypeBuf);
@@ -119,9 +121,6 @@ final class PostscriptParser {
         }
     }
 
-    private static ByteBuffer slice(MemorySegment seg, long offset, long length) {
-        return MemorySegments.slice(seg, offset, length, "postscript blob").asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
-    }
 
     static Footer convertFooter(io.github.dfa1.vortex.fbs.Footer f) {
         var arraySpecs = new ArrayList<String>(f.arraySpecsLength());

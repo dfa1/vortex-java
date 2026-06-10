@@ -1,9 +1,9 @@
 package io.github.dfa1.vortex.io;
 
+import io.github.dfa1.vortex.core.BoundedSegment;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.Footer;
 import io.github.dfa1.vortex.core.Layout;
-import io.github.dfa1.vortex.core.MemorySegments;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.VortexFormat;
 import io.github.dfa1.vortex.encoding.Registry;
@@ -77,10 +77,10 @@ public final class VortexHttpReader implements VortexHandle {
         long fileSize = tf.fileSize();
         long tailLen = tail.length;
 
-        MemorySegment tailSeg = MemorySegment.ofArray(tail);
+        BoundedSegment tailRegion = new BoundedSegment(MemorySegment.ofArray(tail), "http tail");
         long trailerOff = tailLen - VortexFormat.TRAILER_SIZE;
         long bodyBytes = fileSize - VortexFormat.TRAILER_SIZE;
-        Trailer trailer = Trailer.parse(MemorySegments.slice(tailSeg, trailerOff, VortexFormat.TRAILER_SIZE, "http trailer"), bodyBytes);
+        Trailer trailer = Trailer.parse(tailRegion.slice(trailerOff, VortexFormat.TRAILER_SIZE, "http trailer"), bodyBytes);
 
         // HTTP-specific: postscript may extend past the prefetched tail and need a larger fetch.
         long psOffInTail = trailerOff - trailer.postscriptLen();
@@ -90,8 +90,8 @@ public final class VortexHttpReader implements VortexHandle {
                     .formatted(trailer.postscriptLen(), TAIL_SIZE));
         }
 
-        ByteBuffer postscriptBuf = MemorySegments.slice(tailSeg, psOffInTail, trailer.postscriptLen(), "http postscript")
-                                       .asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
+        ByteBuffer postscriptBuf = tailRegion.slice(psOffInTail, trailer.postscriptLen(), "http postscript")
+                                       .asByteBufferLE();
 
         var ps = Postscript.getRootAsPostscript(postscriptBuf);
 

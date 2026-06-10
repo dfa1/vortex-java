@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.io;
 
+import io.github.dfa1.vortex.core.BoundedSegment;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.VortexFormat;
 
@@ -20,15 +21,16 @@ record Trailer(int version, int postscriptLen) {
     private static final ValueLayout.OfShort LE_SHORT =
             ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
-    /// Parse the 8-byte trailer from a [MemorySegment] view and validate magic, version, and
+    /// Parse the 8-byte trailer from a [BoundedSegment] view and validate magic, version, and
     /// postscript length against the body size.
     ///
-    /// @param trailerSeg the trailer slice, must be exactly [VortexFormat#TRAILER_SIZE] bytes
+    /// @param trailer    the trailer region, must be exactly [VortexFormat#TRAILER_SIZE] bytes
     /// @param bodyBytes  number of bytes in the file body (i.e. `fileSize - TRAILER_SIZE`)
     /// @return validated [Trailer]
     /// @throws VortexException if the magic mismatches, the version is unsupported, or
     ///                         postscriptLen is zero or exceeds {@code bodyBytes}
-    static Trailer parse(MemorySegment trailerSeg, long bodyBytes) {
+    static Trailer parse(BoundedSegment trailer, long bodyBytes) {
+        MemorySegment trailerSeg = trailer.unwrapForSubParser("trailer parser");
         int version = Short.toUnsignedInt(trailerSeg.get(LE_SHORT, 0));
         int postscriptLen = Short.toUnsignedInt(trailerSeg.get(LE_SHORT, 2));
 

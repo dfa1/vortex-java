@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.io;
 
 import io.github.dfa1.vortex.core.ArrayStats;
+import io.github.dfa1.vortex.core.BoundedSegment;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.Footer;
 import io.github.dfa1.vortex.core.Layout;
@@ -16,6 +17,7 @@ import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
@@ -85,17 +87,18 @@ public final class VortexReader implements VortexHandle {
     private static VortexReader parse(
             MemorySegment seg, long size, Arena arena, Registry registry
     ) {
+        BoundedSegment file = new BoundedSegment(seg, "vortex file");
         long bodyBytes = size - VortexFormat.TRAILER_SIZE;
-        var trailerSeg = MemorySegments.slice(seg, bodyBytes, VortexFormat.TRAILER_SIZE, "trailer");
-        Trailer trailer = Trailer.parse(trailerSeg, bodyBytes);
+        BoundedSegment trailerRegion = file.slice(bodyBytes, VortexFormat.TRAILER_SIZE, "trailer");
+        Trailer trailer = Trailer.parse(trailerRegion, bodyBytes);
 
         long postscriptOffset = bodyBytes - trailer.postscriptLen();
-        var postscriptBuf = MemorySegments.slice(seg, postscriptOffset, trailer.postscriptLen(), "postscript blob")
-                                    .asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
+        ByteBuffer postscriptBuf = file.slice(postscriptOffset, trailer.postscriptLen(), "postscript blob")
+                                       .asByteBufferLE();
 
         PostscriptParser.ParsedFile parsed;
         try {
-            parsed = PostscriptParser.parse(postscriptBuf, seg, size);
+            parsed = PostscriptParser.parse(postscriptBuf, file);
         } catch (VortexException e) {
             throw e;
         } catch (RuntimeException e) {

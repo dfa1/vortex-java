@@ -29,6 +29,21 @@ public final class MemorySegments {
     /// @throws VortexException if {@code off} or {@code len} is negative, or if
     ///                         {@code off + len > seg.byteSize()}
     public static MemorySegment slice(MemorySegment seg, long off, long len, String context) {
+        checkRange(seg, off, len, context);
+        return seg.asSlice(off, len);
+    }
+
+    /// Bounds-check {@code off} and {@code len} against {@code seg} without producing a slice.
+    /// Used by {@link BoundedSegment}'s primitive readers, which need bounds-checking before
+    /// a {@link MemorySegment#get} call but do not need to materialise a sub-segment.
+    ///
+    /// @param seg     backing segment
+    /// @param off     start offset
+    /// @param len     range length
+    /// @param context label used in the {@link VortexException} message
+    /// @throws VortexException if {@code off} or {@code len} is negative, or if
+    ///                         {@code off + len > seg.byteSize()}
+    public static void checkRange(MemorySegment seg, long off, long len, String context) {
         long segSize = seg.byteSize();
         if (off < 0) {
             throw new VortexException("malformed " + context + ": negative offset " + off);
@@ -42,6 +57,5 @@ public final class MemorySegments {
             throw new VortexException("malformed " + context + ": offset+length "
                     + off + "+" + len + " exceeds segment size " + segSize);
         }
-        return seg.asSlice(off, len);
     }
 }
