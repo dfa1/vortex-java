@@ -23,6 +23,7 @@ import java.sql.DriverManager;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -142,6 +143,40 @@ class JdbcImporterTest {
                                 .containsExactly(
                                         java.sql.Timestamp.valueOf("2026-06-10 12:00:00").toInstant(),
                                         java.sql.Timestamp.valueOf("1970-01-01 00:00:00").toInstant());
+                    }
+                }
+            }
+        }
+
+        @Test
+        void roundTripsUuidColumnViaExtension(@TempDir Path tmp) throws Exception {
+            // Given — H2 UUID column type. Driver returns java.util.UUID from rs.getObject.
+            UUID u1 = UUID.fromString("12345678-1234-5678-9abc-def012345678");
+            UUID u2 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("CREATE TABLE uuids (id BIGINT NOT NULL, u UUID NOT NULL)");
+                stmt.execute("INSERT INTO uuids VALUES (1, '" + u1 + "')");
+                stmt.execute("INSERT INTO uuids VALUES (2, '" + u2 + "')");
+            }
+            Path vortex = tmp.resolve("uuids.vortex");
+
+            // When
+            JdbcImporter.importQuery(conn, "SELECT * FROM uuids ORDER BY id", vortex);
+
+            // Then — column maps to vortex.uuid extension; values round-trip exactly
+            try (VortexReader reader = VortexReader.open(vortex,
+                    io.github.dfa1.vortex.encoding.Registry.loadAll())) {
+                DType.Struct schema = (DType.Struct) reader.dtype();
+                assertThat(schema.fieldTypes().get(1))
+                        .isEqualTo(io.github.dfa1.vortex.extension.UuidExtension.INSTANCE.dtype(false));
+
+                try (ScanIterator iter = reader.scan(ScanOptions.all())) {
+                    assertThat(iter.hasNext()).isTrue();
+                    try (Chunk chunk = iter.next()) {
+                        assertThat(chunk.rowCount()).isEqualTo(2);
+                        assertThat(io.github.dfa1.vortex.extension.UuidExtension.INSTANCE
+                                .decodeAll(chunk.column("U")))
+                                .containsExactly(u1, u2);
                     }
                 }
             }

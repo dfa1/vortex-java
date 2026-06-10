@@ -23,6 +23,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /// Reads rows from a JDBC {@link ResultSet} and writes a Vortex file.
 ///
@@ -87,7 +88,7 @@ public final class JdbcImporter {
         for (int c = 1; c <= colCount; c++) {
             boolean nullable = meta.isNullable(c) != ResultSetMetaData.columnNoNulls;
             names.add(meta.getColumnLabel(c));
-            types.add(SqlTypeToDType.map(meta.getColumnType(c), nullable));
+            types.add(SqlTypeToDType.map(meta.getColumnType(c), meta.getColumnTypeName(c), nullable));
         }
         return new DType.Struct(names, types, false);
     }
@@ -193,9 +194,37 @@ public final class JdbcImporter {
                 Timestamp ts = rs.getTimestamp(colIdx);
                 buffer.add(rs.wasNull() ? null : ts.toInstant());
             }
-            case VORTEX_UUID -> throw new UnsupportedOperationException(
-                    "JDBC UUID import not yet implemented");
+            case VORTEX_UUID -> {
+                Object raw = rs.getObject(colIdx);
+                buffer.add(rs.wasNull() ? null : toUuid(raw));
+            }
         }
+    }
+
+    private static UUID toUuid(Object raw) {
+        // Driver representations vary: PostgreSQL returns java.util.UUID, H2 returns
+        // UUID for native UUID columns but byte[16] for BINARY(16), other drivers fall
+        // back to the 36-char canonical string. Handle the three observed shapes.
+        if (raw instanceof UUID u) {
+            return u;
+        }
+        if (raw instanceof byte[] bytes) {
+            if (bytes.length != 16) {
+                throw new IllegalArgumentException("UUID byte[] must be length 16, got " + bytes.length);
+            }
+            long msb = 0L;
+            long lsb = 0L;
+            for (int k = 0; k < 8; k++) {
+                msb = (msb << 8) | (bytes[k] & 0xffL);
+                lsb = (lsb << 8) | (bytes[8 + k] & 0xffL);
+            }
+            return new UUID(msb, lsb);
+        }
+        if (raw instanceof String s) {
+            return UUID.fromString(s);
+        }
+        throw new UnsupportedOperationException(
+                "unsupported JDBC UUID representation: " + (raw == null ? "null" : raw.getClass().getName()));
     }
 
     private static Map<String, Object> toChunkMap(DType.Struct schema, Object[] buffers, int rows) {

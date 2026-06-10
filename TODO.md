@@ -212,12 +212,6 @@ relax for large fixtures.
   storage + validity-false for nulls. `JdbcImporter.fillExtensionCell` already
   pushes `null` into the buffer on `rs.wasNull()`, so the importer is the
   driving consumer.
-- [ ] **JDBC UUID import** — `JdbcImporter.fillExtensionCell` throws on
-  `VORTEX_UUID` today. JDBC support varies by driver: PostgreSQL exposes UUIDs
-  as `Types.OTHER` with `getObject(col) instanceof UUID`; H2/MySQL serialize
-  them as `Types.BINARY(16)` or `Types.VARCHAR(36)`. Detection should be a
-  per-driver heuristic, not just `Types.X`. Closes the matrix once Postgres /
-  H2 round-trip tests pass.
 - [ ] Use domain primitives (`UInt32`, `UInt64`, etc.) as value classes via Project Valhalla instead of raw `long`/`int`
     - See https://dfa1.github.io/articles/rethink-domain-primitives-with-valhalla
     - Candidates: `PType` integer kinds, buffer offsets, row indices, byte lengths
