@@ -128,20 +128,12 @@ final class ProtoWriter {
     }
 
     private static int varintSize(int value) {
-        long v = value & 0xffffffffL;
-        if (v < (1L << 7)) {
-            return 1;
-        }
-        if (v < (1L << 14)) {
-            return 2;
-        }
-        if (v < (1L << 21)) {
-            return 3;
-        }
-        if (v < (1L << 28)) {
-            return 4;
-        }
-        return 5;
+        // Branchless: derive varint byte count from position of highest set bit.
+        // `| 1` collapses value=0 into the 1-byte case (otherwise numberOfLeadingZeros(0)=32 → 0 bytes).
+        // (31 - lz) is the index of the highest set bit (0..31); dividing by 7 and adding 1
+        // maps bit-width → varint byte count (1..5). Compiles to LZCNT + sub + strength-reduced
+        // divide-by-7, ~3 cycles vs the 4-branch cascade.
+        return (31 - Integer.numberOfLeadingZeros(value | 1)) / 7 + 1;
     }
 
     private static final int MAX_LEN_VARINT = 5;
