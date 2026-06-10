@@ -231,6 +231,19 @@ public final class Registry {
             return this;
         }
 
+        /// Registers every [Extension] discovered via `ServiceLoader` without touching
+        /// encodings. Useful for the writer, which builds its registry from an explicit
+        /// encoding list but still wants the spec extensions auto-routed.
+        ///
+        /// @return this builder, for chaining
+        /// @throws VortexException if a service-loaded extension collides with one already registered
+        public Builder registerExtensionsServiceLoaded() {
+            for (Extension extension : ServiceLoader.load(Extension.class)) {
+                register(extension);
+            }
+            return this;
+        }
+
         /// Enable passthrough decode for unknown encoding ids.
         ///
         /// Default is strict: unknown ids throw [VortexException]. When enabled, unknown nodes

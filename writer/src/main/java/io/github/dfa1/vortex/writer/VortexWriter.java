@@ -108,12 +108,25 @@ public final class VortexWriter implements Closeable {
         this.schema = schema;
         this.options = options;
         this.encodings = encodings;
-        this.defaultRegistry = Registry.of(encodings);
+        this.defaultRegistry = buildWriterRegistry(encodings);
         this.cascadeCodecs = buildCascadeCodecs(options);
-        this.cascadeRegistry = Registry.of(this.cascadeCodecs);
+        this.cascadeRegistry = buildWriterRegistry(this.cascadeCodecs);
         for (String name : schema.fieldNames()) {
             colChunks.put(name, new ArrayList<>());
         }
+    }
+
+    /// Builds the writer's registry: the explicit encoding list plus every
+    /// {@link io.github.dfa1.vortex.extension.Extension} discovered via ServiceLoader,
+    /// so {@code writeChunk} can auto-route {@code Collection<DomainT>} inputs through
+    /// the matching extension impl — including third-party extensions outside
+    /// {@link io.github.dfa1.vortex.extension.Extension#findKnown}.
+    private static Registry buildWriterRegistry(List<Encoding> encodings) {
+        Registry.Builder b = Registry.builder().registerExtensionsServiceLoaded();
+        for (Encoding e : encodings) {
+            b.register(e);
+        }
+        return b.build();
     }
 
     private static List<Encoding> buildCascadeCodecs(WriteOptions options) {
@@ -267,8 +280,10 @@ public final class VortexWriter implements Closeable {
             // then selects against the storage dtype (I32, I64, ...) rather than the
             // Extension wrapper, which has no registered encoding.
             if (colDtype instanceof DType.Extension extDtype && data instanceof java.util.Collection<?> coll) {
+                io.github.dfa1.vortex.extension.ExtensionId extId =
+                        io.github.dfa1.vortex.extension.ExtensionId.tryFrom(extDtype.extensionId());
                 io.github.dfa1.vortex.extension.Extension impl =
-                        io.github.dfa1.vortex.extension.Extension.findKnown(extDtype);
+                        extId == null ? null : defaultRegistry.lookup(extId);
                 if (impl != null) {
                     data = impl.encodeAll(extDtype, coll);
                     colDtype = extDtype.storageDType();
