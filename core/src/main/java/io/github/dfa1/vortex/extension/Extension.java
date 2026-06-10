@@ -44,7 +44,7 @@ public interface Extension {
     ///
     /// @param dtype declared extension dtype
     /// @return matching spec extension singleton, or {@code null}
-    static Extension findKnown(DType.Extension dtype) {
+    static @org.jspecify.annotations.Nullable Extension findKnown(DType.Extension dtype) {
         ExtensionId id = ExtensionId.tryFrom(dtype.extensionId());
         if (id == null) {
             return null;

@@ -75,6 +75,10 @@
 		<maven-gpg-plugin.version>3.2.8</maven-gpg-plugin.version>
 		<maven-source-plugin.version>3.4.0</maven-source-plugin.version>
 		<maven-javadoc-plugin.version>3.12.0</maven-javadoc-plugin.version>
+		<!-- static analysis -->
+		<errorprone.version>2.36.0</errorprone.version>
+		<nullaway.version>0.12.3</nullaway.version>
+		<jspecify.version>1.0.0</jspecify.version>
 	</properties>
 
 	<dependencyManagement>
@@ -150,6 +154,11 @@
 				<artifactId>jmh-generator-annprocess</artifactId>
 				<version>${jmh.version}</version>
 			</dependency>
+			<dependency>
+				<groupId>org.jspecify</groupId>
+				<artifactId>jspecify</artifactId>
+				<version>${jspecify.version}</version>
+			</dependency>
 			<!-- testing -->
 			<dependency>
 				<groupId>com.h2database</groupId>
@@ -223,6 +232,29 @@
 					<version>3.15.0</version>
 					<configuration>
 						<release>25</release>
+						<!-- Error Prone + NullAway. Generated proto/fbs sources stay outside the
+						     annotated set; checks fire only on hand-written io.github.dfa1.vortex code. -->
+						<annotationProcessorPaths>
+							<path>
+								<groupId>com.google.errorprone</groupId>
+								<artifactId>error_prone_core</artifactId>
+								<version>${errorprone.version}</version>
+							</path>
+							<path>
+								<groupId>com.uber.nullaway</groupId>
+								<artifactId>nullaway</artifactId>
+								<version>${nullaway.version}</version>
+							</path>
+						</annotationProcessorPaths>
+						<compilerArgs>
+							<arg>-XDcompilePolicy=simple</arg>
+							<arg>--should-stop=ifError=FLOW</arg>
+							<arg>-Xplugin:ErrorProne -XepDisableAllChecks -Xep:NullAway:ERROR -XepOpt:NullAway:OnlyNullMarked=true -XepOpt:NullAway:JSpecifyMode=true -XepOpt:NullAway:ExcludedClassAnnotations=javax.annotation.processing.Generated,jakarta.annotation.Generated -XepExcludedPaths:.*/(fbs|proto|cli/.*tui|cli/.*server)/.*</arg>
+						</compilerArgs>
+						<!-- Error Prone needs jdk.compiler internals exposed to the Maven JVM. The
+						     required add-exports / add-opens flags live in .mvn/jvm.config so they
+						     apply to every Maven invocation; setting them as compilerArgs has
+						     no effect because maven-compiler-plugin runs javac in the same JVM. -->
 					</configuration>
 				</plugin>
 				<plugin>

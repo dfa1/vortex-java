@@ -49,7 +49,7 @@ public enum ExtensionId {
     ///
     /// @param id raw extension id string
     /// @return matching constant, or {@code null} if not a known spec extension
-    public static ExtensionId tryFrom(String id) {
+    public static @org.jspecify.annotations.Nullable ExtensionId tryFrom(String id) {
         return LOOKUP.get(id);
     }
 

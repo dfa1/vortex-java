@@ -29,6 +29,10 @@
 			<groupId>com.github.luben</groupId>
 			<artifactId>zstd-jni</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>org.jspecify</groupId>
+			<artifactId>jspecify</artifactId>
+		</dependency>
 		<!-- testing -->
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>

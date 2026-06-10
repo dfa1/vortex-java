@@ -49,7 +49,7 @@ public final class TimestampExtension implements Extension {
     /// @param zone     IANA timezone, or {@code null} for none
     /// @param nullable whether the column allows nulls
     /// @return matching extension dtype
-    public DType.Extension dtype(TimeUnit unit, ZoneId zone, boolean nullable) {
+    public DType.Extension dtype(TimeUnit unit, @org.jspecify.annotations.Nullable ZoneId zone, boolean nullable) {
         byte[] tzBytes = zone == null ? new byte[0] : zone.getId().getBytes(StandardCharsets.UTF_8);
         ByteBuffer meta = ByteBuffer.allocate(3 + tzBytes.length).order(ByteOrder.LITTLE_ENDIAN);
         meta.put(0, (byte) unit.ordinal());
