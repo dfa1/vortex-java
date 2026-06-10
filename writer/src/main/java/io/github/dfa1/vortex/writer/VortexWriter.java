@@ -18,6 +18,7 @@ import io.github.dfa1.vortex.encoding.EncodeResult;
 import io.github.dfa1.vortex.encoding.Encoding;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.ExtEncoding;
+import io.github.dfa1.vortex.encoding.FixedSizeListEncoding;
 import io.github.dfa1.vortex.encoding.Registry;
 import io.github.dfa1.vortex.encoding.FrameOfReferenceEncoding;
 import io.github.dfa1.vortex.encoding.ListData;
@@ -82,8 +83,6 @@ public final class VortexWriter implements Closeable {
             new VarBinEncoding(), new ExtEncoding(),
             new io.github.dfa1.vortex.encoding.FixedSizeListEncoding());
 
-    private static final ExtEncoding EXT_ENCODING = new ExtEncoding();
-
     // Base cascade codec list — no Zstd. Zstd is appended (before PrimitiveEncoding) when
     // WriteOptions.enableZstd() is true. See WriteOptions.withZstd(boolean) for the tradeoff.
 
@@ -139,12 +138,26 @@ public final class VortexWriter implements Closeable {
     }
 
     private static List<Encoding> buildCascadeCodecs(WriteOptions options) {
-        List<Encoding> codecs = new ArrayList<>(List.of(
-                new DateTimePartsEncoding(),
-                new ConstantEncoding(),
-                new AlpEncoding(), new FrameOfReferenceEncoding(), new RunEndEncoding(), new RleEncoding(),
-                new DictEncoding(), new BitpackedEncoding(),
-                new VarBinEncoding()));
+        List<Encoding> codecs = new ArrayList<>();
+        // Extension-dtype dispatch order matters: findPrimitiveEncoding picks the first
+        // accepting codec. DateTimePartsEncoding goes first because it consumes
+        // pre-decomposed DateTimePartsData (Parquet importer path); when the data is
+        // raw primitive storage (JDBC's long[] via TimestampExtension.encodeAll) it
+        // returns notApplicable and spliceResult excludes it, falling back to
+        // ExtEncoding which cascades the storage child through FoR/Bitpacked/RLE/ALP.
+        // FixedSizeListEncoding handles UUID-style fixed-size byte storage downstream
+        // of ExtEncoding.
+        codecs.add(new DateTimePartsEncoding());
+        codecs.add(new ExtEncoding());
+        codecs.add(new FixedSizeListEncoding());
+        codecs.add(new ConstantEncoding());
+        codecs.add(new AlpEncoding());
+        codecs.add(new FrameOfReferenceEncoding());
+        codecs.add(new RunEndEncoding());
+        codecs.add(new RleEncoding());
+        codecs.add(new DictEncoding());
+        codecs.add(new BitpackedEncoding());
+        codecs.add(new VarBinEncoding());
         if (options.enableZstd()) {
             codecs.add(new ZstdEncoding());
         }
@@ -295,7 +308,6 @@ public final class VortexWriter implements Closeable {
             // long[] / byte[] storage array. The dtype stays as DType.Extension so
             // ExtEncoding wraps the storage child below — matches Rust's nested layout
             // (ExtEncoding → PrimitiveEncoding) and lets Registry skip its unwrap path.
-            boolean extensionColumn = false;
             if (colDtype instanceof DType.Extension extDtype && data instanceof java.util.Collection<?> coll) {
                 io.github.dfa1.vortex.extension.ExtensionId extId =
                         io.github.dfa1.vortex.extension.ExtensionId.tryFrom(extDtype.extensionId());
@@ -303,7 +315,6 @@ public final class VortexWriter implements Closeable {
                         extId == null ? null : defaultRegistry.lookup(extId);
                 if (impl != null) {
                     data = impl.encodeAll(extDtype, coll);
-                    extensionColumn = true;
                 }
             }
 
@@ -323,9 +334,7 @@ public final class VortexWriter implements Closeable {
                 dictBuffers.computeIfAbsent(colName, k -> new ArrayList<>()).add(data);
             } else {
                 long rowCount = arrayLength(data);
-                int segIdx = extensionColumn
-                        ? writeSegment(colDtype, data, EXT_ENCODING)
-                        : writeSegment(colDtype, data);
+                int segIdx = writeSegment(colDtype, data);
                 colChunks.get(colName).add(new ChunkRef(segIdx, rowCount));
             }
         }

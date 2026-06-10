@@ -78,6 +78,46 @@ class ExtEncodingTest {
     }
 
     @Nested
+    class Cascade {
+
+        @Test
+        void encodeCascade_exposesStorageAsOpenChild() {
+            // Given — extension wraps an I64 storage column
+            long[] data = {100L, 200L, 300L, 400L};
+            DType storageDType = new DType.Primitive(PType.I64, false);
+            DType extDType = new DType.Extension("vortex.timestamp", storageDType, null, false);
+            var sut = new ExtEncoding();
+
+            // When
+            CascadeStep step = sut.encodeCascade(extDType, data, EncodeTestHelper.testCtx());
+
+            // Then — non-terminal step with one open slot for the storage child
+            assertThat(step.applicable()).isTrue();
+            assertThat(step.isTerminal()).isFalse();
+            assertThat(step.openChildren()).hasSize(1);
+            ChildSlot slot = step.openChildren().get(0);
+            assertThat(slot.childDtype()).isEqualTo(storageDType);
+            assertThat(slot.childData()).isSameAs(data);
+            assertThat(slot.parentChildIdx()).isEqualTo(0);
+            assertThat(step.partialRoot().encodingId()).isEqualTo(EncodingId.VORTEX_EXT);
+            assertThat(step.partialRoot().children()).hasSize(1);
+        }
+
+        @Test
+        void encodeCascade_rejectsNonExtensionDtype() {
+            // Given
+            var sut = new ExtEncoding();
+
+            // When / Then
+            org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                    sut.encodeCascade(new DType.Primitive(PType.I64, false), new long[]{1L},
+                            EncodeTestHelper.testCtx()))
+                    .isInstanceOf(io.github.dfa1.vortex.core.VortexException.class)
+                    .hasMessageContaining("expected extension dtype");
+        }
+    }
+
+    @Nested
     class Decode {
 
         @Test

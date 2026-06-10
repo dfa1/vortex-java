@@ -85,9 +85,12 @@ public final class CascadingCompressor {
         }
         // Non-primitives (extension types): find the accepting encoding and splice
         // through it so its cascaded children (e.g. datetimeparts → days/seconds/subseconds)
-        // are recursively compressed rather than stored as raw primitives.
+        // are recursively compressed rather than stored as raw primitives. Honour the
+        // excluded set so spliceResult's notApplicable retry can rotate to the next
+        // accepting encoding (e.g. DateTimePartsEncoding → ExtEncoding when the input
+        // is raw storage rather than DateTimePartsData).
         if (!(dtype instanceof DType.Primitive)) {
-            return spliceResult(findPrimitiveEncoding(dtype), dtype, data, ctx);
+            return spliceResult(findPrimitiveEncoding(dtype, ctx.excluded()), dtype, data, ctx);
         }
         int n = dataLength(data);
 
@@ -119,7 +122,7 @@ public final class CascadingCompressor {
 
         if (winner == null) {
             // No encoding beats primitive — fall back
-            return findPrimitiveEncoding(dtype).encode(dtype, data, ctx);
+            return findPrimitiveEncoding(dtype, ctx.excluded()).encode(dtype, data, ctx);
         }
 
         // Re-run winner on full data
@@ -206,14 +209,21 @@ public final class CascadingCompressor {
         return new EncodeResult(root, List.copyOf(allBuffers), null, null);
     }
 
-    private Encoding findPrimitiveEncoding(DType dtype) {
+    private Encoding findPrimitiveEncoding(DType dtype, java.util.Set<EncodingId> excluded) {
         for (Encoding enc : encodings) {
+            if (excluded.contains(enc.encodingId())) {
+                continue;
+            }
             if (enc.encodingId().equals(EncodingId.VORTEX_PRIMITIVE) && enc.accepts(dtype)) {
                 return enc;
             }
         }
-        // Fall through to any accepting encoding
+        // Fall through to any accepting encoding (still honouring exclusions so that
+        // spliceResult's notApplicable retry rotates to the next candidate).
         for (Encoding enc : encodings) {
+            if (excluded.contains(enc.encodingId())) {
+                continue;
+            }
             if (enc.accepts(dtype)) {
                 return enc;
             }

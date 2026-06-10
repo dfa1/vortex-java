@@ -54,6 +54,13 @@ public final class DateTimePartsEncoding implements Encoding {
 
     @Override
     public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext encodeCtx) {
+        // accepts(dtype) is true for any Extension; only DateTimePartsData carries the
+        // pre-decomposed days/seconds/subseconds shape this encoding consumes. Bail out
+        // for raw primitive storage (e.g. JDBC long[] via TimestampExtension.encodeAll)
+        // so the compressor can excludeAndRetry, picking ExtEncoding instead.
+        if (!(data instanceof DateTimePartsData)) {
+            return CascadeStep.notApplicable();
+        }
         return Encoder.encodeCascade((DType.Extension) dtype, (DateTimePartsData) data);
     }
 

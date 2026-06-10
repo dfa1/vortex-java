@@ -206,6 +206,51 @@ class VortexWriterTest {
     }
 
     @Test
+    void writeChunk_cascadeCompressesTimestampExtensionStorage(@TempDir Path tmp) throws IOException {
+        // Given — monotonically increasing timestamps that cascade should reduce via
+        // FrameOfReference + Bitpacked. Without cascade, storage stays as flat U64.
+        DType.Extension tsDtype = io.github.dfa1.vortex.extension.TimestampExtension.INSTANCE.dtype(
+                io.github.dfa1.vortex.encoding.TimeUnit.Milliseconds, null, false);
+        var schema = new DType.Struct(List.of("events"), List.of(tsDtype), false);
+        long base = 1_733_000_000_000L;
+        List<java.time.Instant> instants = new ArrayList<>(4096);
+        for (int i = 0; i < 4096; i++) {
+            instants.add(java.time.Instant.ofEpochMilli(base + i));
+        }
+
+        Path flatFile = tmp.resolve("ts_flat.vtx");
+        Path cascadedFile = tmp.resolve("ts_cascaded.vtx");
+
+        // When — same data, depth 0 (no cascade) vs depth 3 (cascade enabled)
+        writeOne(flatFile, schema, instants, WriteOptions.defaults());
+        writeOne(cascadedFile, schema, instants, WriteOptions.cascading(3));
+
+        // Then — cascaded file must be smaller because primitive storage is bit-packed
+        long flatSize = java.nio.file.Files.size(flatFile);
+        long cascadedSize = java.nio.file.Files.size(cascadedFile);
+        assertThat(cascadedSize)
+                .as("cascade should compress extension storage; flat=%d cascaded=%d", flatSize, cascadedSize)
+                .isLessThan(flatSize);
+
+        // And — cascaded file still round-trips back to the same Instants
+        try (var vf = VortexReader.open(cascadedFile, Registry.loadAll());
+             var iter = vf.scan(ScanOptions.all())) {
+            try (Chunk chunk = iter.next()) {
+                assertThat(chunk.as("events", java.time.Instant.class))
+                        .containsExactlyElementsOf(instants);
+            }
+        }
+    }
+
+    private static void writeOne(Path file, DType.Struct schema, Object data, WriteOptions options)
+            throws IOException {
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, options)) {
+            sut.writeChunk(Map.of(schema.fieldNames().get(0), data));
+        }
+    }
+
+    @Test
     void writeChunk_missingColumn_throwsIllegalArgument(@TempDir Path tmp) throws IOException {
         // Given
         Path file = tmp.resolve("missing.vtx");

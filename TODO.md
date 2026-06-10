@@ -194,14 +194,6 @@ relax for large fixtures.
 
 ## API
 
-- [ ] **Cascade-compress the ExtEncoding child** — `ExtEncoding.encode` hardcodes
-  the storage child to `vortex.primitive`, so extension columns skip the
-  cascading compressor (no FrameOfReference / Bitpacked / RLE / ALP). Match Rust
-  by routing the child through the cascade — either by giving ExtEncoding the
-  cascade list at construction, or by having the writer call `cascadeRegistry`
-  on the storage data and wrapping the result in an `ExtEncoding` node manually.
-  Closes the only compression regression introduced when the writer switched to
-  the ExtEncoding-wrapped layout.
 - [ ] **Nullable extension columns** — extension columns marked `nullable=true`
   can't currently round-trip SQL NULL (or any `null` element from the writer
   auto-route). `Extension.encodeAll(DType.Extension, Collection<?>)` returns

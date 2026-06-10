@@ -11,10 +11,16 @@ import java.util.List;
 /// <p>No buffers, empty metadata. Child slot 0: the storage array encoded/decoded using
 /// the extension dtype's storage dtype and same row count.
 ///
-/// <p>Encode: picks the first encoding from the fallback list that accepts the storage dtype
-/// (currently {@link PrimitiveEncoding} for numeric storage, {@link FixedSizeListEncoding}
-/// for UUID-style fixed-size byte storage) and wraps its result in an ext node.
-/// Decode: unwraps the single child and returns it directly.
+/// <p>Encode (non-cascading {@link #encode}): picks the first encoding from the static
+/// fallback list that accepts the storage dtype ({@link PrimitiveEncoding} for numeric
+/// storage, {@link FixedSizeListEncoding} for UUID-style fixed-size byte storage) and
+/// wraps its result in an ext node.
+///
+/// <p>Encode (cascading {@link #encodeCascade}): exposes the storage child as an open
+/// {@link ChildSlot} so the {@link CascadingCompressor} can pick the best encoding
+/// (FoR/Bitpacked/RLE/ALP/etc.) for numeric storage arrays.
+///
+/// <p>Decode: unwraps the single child and returns it directly.
 public final class ExtEncoding implements Encoding {
 
     /// Creates a new {@code ExtEncoding} instance.
@@ -54,6 +60,16 @@ public final class ExtEncoding implements Encoding {
         EncodeResult childResult = storageEncoding.encode(storage, data, ctx);
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_EXT, null, new EncodeNode[]{childResult.rootNode()}, new int[0]);
         return new EncodeResult(root, childResult.buffers(), childResult.statsMin(), childResult.statsMax());
+    }
+
+    @Override
+    public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
+        if (!(dtype instanceof DType.Extension ext)) {
+            throw new VortexException(EncodingId.VORTEX_EXT, "expected extension dtype, got " + dtype);
+        }
+        EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_EXT, null, new EncodeNode[1], new int[0]);
+        ChildSlot slot = new ChildSlot(ext.storageDType(), data, 0);
+        return new CascadeStep(partialRoot, List.of(), List.of(slot), null, null, true);
     }
 
     @Override
