@@ -1,0 +1,47 @@
+package io.github.dfa1.vortex.core;
+
+import java.lang.foreign.MemorySegment;
+
+/// Bounds-checked wrappers for {@link MemorySegment} slicing on untrusted input.
+///
+/// <p>Every call site in {@code io}, {@code scan}, and {@code encoding} that slices a
+/// memory-mapped file region by an offset or length read from the on-disk schema must
+/// route through {@link #slice(MemorySegment, long, long, String)} instead of calling
+/// {@link MemorySegment#asSlice(long, long)} directly. The contract: malformed input
+/// throws {@link VortexException}, never {@link IndexOutOfBoundsException},
+/// {@link IllegalArgumentException}, or any other unchecked JDK exception.
+public final class MemorySegments {
+
+    private MemorySegments() {
+    }
+
+    /// Returns a slice of {@code seg} starting at {@code off} for {@code len} bytes,
+    /// rejecting out-of-range or overflow-prone input with a {@link VortexException}
+    /// labelled by {@code context}.
+    ///
+    /// @param seg     backing segment
+    /// @param off     start offset in bytes; must be {@code >= 0} and {@code <= seg.byteSize() - len}
+    /// @param len     slice length in bytes; must be {@code >= 0} and {@code <= seg.byteSize() - off}
+    /// @param context short label used in the exception message (e.g. {@code "footer blob"},
+    ///                {@code "segment spec data"}) so malformed-input errors point at the
+    ///                specific on-disk structure rather than a generic offset
+    /// @return the bounds-checked slice
+    /// @throws VortexException if {@code off} or {@code len} is negative, or if
+    ///                         {@code off + len > seg.byteSize()}
+    public static MemorySegment slice(MemorySegment seg, long off, long len, String context) {
+        long segSize = seg.byteSize();
+        if (off < 0) {
+            throw new VortexException("malformed " + context + ": negative offset " + off);
+        }
+        if (len < 0) {
+            throw new VortexException("malformed " + context + ": negative length " + len);
+        }
+        // Overflow-safe form of `off + len > segSize`. The subtraction can't underflow because
+        // len has already been bounded against segSize on the line above (segSize >= 0 always).
+        if (len > segSize || off > segSize - len) {
+            throw new VortexException("malformed " + context + ": offset+length "
+                    + off + "+" + len + " exceeds segment size " + segSize);
+        }
+        return seg.asSlice(off, len);
+    }
+}

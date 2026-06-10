@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.Footer;
 import io.github.dfa1.vortex.core.Layout;
+import io.github.dfa1.vortex.core.MemorySegments;
 import io.github.dfa1.vortex.core.SegmentSpec;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.VortexFormat;
@@ -85,11 +86,11 @@ public final class VortexReader implements VortexHandle {
             MemorySegment seg, long size, Arena arena, Registry registry
     ) {
         long bodyBytes = size - VortexFormat.TRAILER_SIZE;
-        var trailerSeg = seg.asSlice(bodyBytes, VortexFormat.TRAILER_SIZE);
+        var trailerSeg = MemorySegments.slice(seg, bodyBytes, VortexFormat.TRAILER_SIZE, "trailer");
         Trailer trailer = Trailer.parse(trailerSeg, bodyBytes);
 
         long postscriptOffset = bodyBytes - trailer.postscriptLen();
-        var postscriptBuf = seg.asSlice(postscriptOffset, trailer.postscriptLen())
+        var postscriptBuf = MemorySegments.slice(seg, postscriptOffset, trailer.postscriptLen(), "postscript blob")
                                     .asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
 
         PostscriptParser.ParsedFile parsed;
@@ -218,15 +219,17 @@ public final class VortexReader implements VortexHandle {
         if (segLen < 4) {
             return ArrayStats.empty();
         }
-        MemorySegment seg = fileSegment.asSlice(spec.offset(), segLen);
+        MemorySegment seg = MemorySegments.slice(fileSegment, spec.offset(), segLen, "stats segment");
         int fbLen = seg.get(LE_INT, segLen - 4);
         // Reject negative fbLen (signed int from untrusted bytes) or any value that would push
-        // fbStart below 0 → asSlice(negative, ...) throws IndexOutOfBoundsException without this guard.
+        // fbStart below 0. MemorySegments.slice would catch this too, but returning empty here keeps
+        // the older lenient behaviour for files with corrupt stats blobs — MemorySegments is reserved
+        // for offsets/lengths that must be valid (the data path).
         if (fbLen < 0 || fbLen > segLen - 4) {
             return ArrayStats.empty();
         }
         long fbStart = segLen - 4L - fbLen;
-        var fbBuf = seg.asSlice(fbStart, fbLen).asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
+        var fbBuf = MemorySegments.slice(seg, fbStart, fbLen, "stats flatbuffer").asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
         var fbArray = io.github.dfa1.vortex.fbs.Array.getRootAsArray(fbBuf);
         var root = fbArray.root();
         if (root == null) {
@@ -238,7 +241,7 @@ public final class VortexReader implements VortexHandle {
     /// Zero-copy read-only slice of the memory-mapped file.
     @Override
     public MemorySegment slice(long offset, long length) {
-        return fileSegment.asSlice(offset, length).asReadOnly();
+        return MemorySegments.slice(fileSegment, offset, length, "file segment").asReadOnly();
     }
 
     @Override

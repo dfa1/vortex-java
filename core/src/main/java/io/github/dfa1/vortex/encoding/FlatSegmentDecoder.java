@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.encoding;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.ArrayStats;
+import io.github.dfa1.vortex.core.MemorySegments;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.fbs.Buffer;
 
@@ -55,7 +56,7 @@ public final class FlatSegmentDecoder {
         for (int i = 0; i < numBuffers; i++) {
             Buffer bufDesc = fbArray.buffers(i);
             dataOffset += bufDesc.padding();
-            bufs[i] = seg.asSlice(dataOffset, bufDesc.length());
+            bufs[i] = MemorySegments.slice(seg, dataOffset, bufDesc.length(), "encoded buffer " + i);
             dataOffset += bufDesc.length();
         }
 

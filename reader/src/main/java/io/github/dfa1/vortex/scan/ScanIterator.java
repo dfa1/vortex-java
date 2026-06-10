@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.scan;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.Layout;
+import io.github.dfa1.vortex.core.MemorySegments;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.SegmentSpec;
 import io.github.dfa1.vortex.core.VortexException;
@@ -638,7 +639,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         // segment as a ByteBuffer would fail for segments larger than 2 GB (ByteBuffer cap).
         int fbLen = seg.get(LE_INT, segLen - 4);
         long fbStart = segLen - 4L - fbLen;
-        ByteBuffer fbBuf = seg.asSlice(fbStart, fbLen).asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
+        ByteBuffer fbBuf = MemorySegments.slice(seg, fbStart, fbLen, "stats flatbuffer").asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
         var fbArray = io.github.dfa1.vortex.fbs.Array.getRootAsArray(fbBuf);
 
         io.github.dfa1.vortex.fbs.ArrayNode root = fbArray.root();

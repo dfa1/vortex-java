@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.CompressionScheme;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.Footer;
 import io.github.dfa1.vortex.core.Layout;
+import io.github.dfa1.vortex.core.MemorySegments;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.SegmentSpec;
 import io.github.dfa1.vortex.core.VortexException;
@@ -119,7 +120,7 @@ final class PostscriptParser {
     }
 
     private static ByteBuffer slice(MemorySegment seg, long offset, long length) {
-        return seg.asSlice(offset, length).asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
+        return MemorySegments.slice(seg, offset, length, "postscript blob").asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
     }
 
     static Footer convertFooter(io.github.dfa1.vortex.fbs.Footer f) {
