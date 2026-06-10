@@ -1,0 +1,170 @@
+package io.github.dfa1.vortex.extension;
+
+import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.core.array.LongArray;
+import io.github.dfa1.vortex.encoding.TimeUnit;
+import org.junit.jupiter.api.Test;
+
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.util.List;
+
+import static io.github.dfa1.vortex.extension.ExtensionTestSupport.I64;
+import static io.github.dfa1.vortex.extension.ExtensionTestSupport.ext;
+import static io.github.dfa1.vortex.extension.ExtensionTestSupport.i64;
+import static io.github.dfa1.vortex.extension.ExtensionTestSupport.tzMeta;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+class TimestampExtensionTest {
+
+    private final TimestampExtension sut = TimestampExtension.INSTANCE;
+
+    @Test
+    void identity() {
+        assertThat(sut.extensionId()).isSameAs(ExtensionId.VORTEX_TIMESTAMP);
+    }
+
+    @Test
+    void dtype_defaultIsMsUtcless() {
+        // Given — default factory yields ms storage with empty tz_len
+        DType.Extension dtype = sut.dtype(false);
+
+        // Then — byte 0 = ms ordinal, bytes 1..3 = 0 (tz_len = 0)
+        assertThat(dtype.storageDType()).isEqualTo(new DType.Primitive(PType.I64, false));
+        assertThat(dtype.metadata().get(0)).isEqualTo((byte) TimeUnit.Milliseconds.ordinal());
+        assertThat(dtype.metadata().getShort(1)).isEqualTo((short) 0);
+    }
+
+    @Test
+    void dtype_withTimezoneEncodesIanaName() {
+        // Given — timezone bytes are appended after the 3-byte header so decode can pull them back
+        DType.Extension dtype = sut.dtype(TimeUnit.Microseconds, ZoneId.of("Europe/Paris"), false);
+
+        // Then — header tz_len matches the UTF-8 length; the actual bytes follow
+        int tzLen = Short.toUnsignedInt(dtype.metadata().getShort(1));
+        assertThat(tzLen).isEqualTo("Europe/Paris".getBytes().length);
+        assertThat(sut.timezone(dtype)).contains(ZoneId.of("Europe/Paris"));
+    }
+
+    @Test
+    void dtype_noTimezoneReadsBackAsEmpty() {
+        // Given — defensive: round-trip the null-tz case through timezone()
+        DType.Extension dtype = sut.dtype(TimeUnit.Milliseconds, null, false);
+
+        // Then — must not fall back to a synthetic zone
+        assertThat(sut.timezone(dtype)).isEmpty();
+    }
+
+    @Test
+    void dtype_utcRoundTrips() {
+        // Given — UTC is a degenerate case worth checking separately from Europe/Paris
+        DType.Extension dtype = sut.dtype(TimeUnit.Seconds, ZoneOffset.UTC, false);
+
+        // Then
+        assertThat(sut.timezone(dtype)).contains(ZoneOffset.UTC);
+    }
+
+    @Test
+    void instant_microsecondsPath_handlesNegativeRaw() {
+        // Given — pre-epoch micros exercise the floorDiv / floorMod path
+        long micros = -1_500_001L; // -1.500001s
+        try (Arena arena = Arena.ofConfined()) {
+            DType.Extension dtype = ext("vortex.timestamp", I64, tzMeta((byte) 1, null));
+
+            // When
+            Instant got = sut.instant(dtype, i64(arena, micros), 0);
+
+            // Then
+            assertThat(got.getEpochSecond()).isEqualTo(-2L);
+            assertThat(got.getNano()).isEqualTo(499_999_000);
+        }
+    }
+
+    @Test
+    void zonedDateTime_withTimezone_appliesIt() {
+        // Given — ms since epoch + Europe/Paris tz in metadata
+        try (Arena arena = Arena.ofConfined()) {
+            DType.Extension dtype = ext("vortex.timestamp", I64, tzMeta((byte) 2, "Europe/Paris"));
+
+            // When
+            ZonedDateTime got = sut.zonedDateTime(dtype, i64(arena, 1_000L), 0);
+
+            // Then
+            assertThat(got.getZone()).isEqualTo(ZoneId.of("Europe/Paris"));
+            assertThat(got.toInstant()).isEqualTo(Instant.ofEpochMilli(1_000L));
+        }
+    }
+
+    @Test
+    void zonedDateTime_noTimezone_defaultsToUtc() {
+        // Given — tz_len = 0 should fall back to UTC for unambiguity
+        try (Arena arena = Arena.ofConfined()) {
+            DType.Extension dtype = ext("vortex.timestamp", I64, tzMeta((byte) 2, null));
+
+            // When
+            ZonedDateTime got = sut.zonedDateTime(dtype, i64(arena, 0L), 0);
+
+            // Then
+            assertThat(got.getZone()).isEqualTo(ZoneOffset.UTC);
+        }
+    }
+
+    @Test
+    void encodeAll_milliseconds_thenDecodeAll_roundTrips() {
+        // Given — instants chosen to exercise positive + negative + sub-second
+        List<Instant> instants = List.of(
+                Instant.ofEpochMilli(-1500L),
+                Instant.ofEpochMilli(0L),
+                Instant.ofEpochMilli(1_000L),
+                Instant.ofEpochMilli(1_733_000_000_000L));
+
+        // When
+        long[] packed = sut.encodeAll(instants, TimeUnit.Milliseconds);
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment buf = arena.allocate(packed.length * 8L);
+            for (int i = 0; i < packed.length; i++) {
+                buf.set(ValueLayout.JAVA_LONG_UNALIGNED, i * 8L, packed[i]);
+            }
+            LongArray storage = new LongArray(I64, packed.length, buf);
+            DType.Extension dtype = ext("vortex.timestamp", I64, tzMeta((byte) 2, null));
+
+            // Then — order + values preserved end-to-end
+            assertThat(sut.decodeAll(dtype, storage)).isEqualTo(instants);
+        }
+    }
+
+    @Test
+    void encode_daysUnitThrows() {
+        // Given — Days isn't a sub-second unit on the encode side either
+        assertThatThrownBy(() -> sut.encode(Instant.EPOCH, TimeUnit.Days))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("Days unit not valid");
+    }
+
+    @Test
+    void timezone_truncatedMetadata_throws() {
+        // Given — declared tz_len longer than buffer can carry
+        ByteBuffer meta = ByteBuffer.allocate(6).order(ByteOrder.LITTLE_ENDIAN);
+        meta.put(0, (byte) 2);
+        meta.putShort(1, (short) 5);
+        meta.put(3, (byte) 'U');
+        meta.put(4, (byte) 'T');
+        meta.put(5, (byte) 'C');
+        DType.Extension truncated = ext("vortex.timestamp", I64, meta);
+
+        // When / Then
+        assertThatThrownBy(() -> sut.timezone(truncated))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("truncated");
+    }
+}
