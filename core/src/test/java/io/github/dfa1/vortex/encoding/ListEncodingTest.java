@@ -1,10 +1,10 @@
 package io.github.dfa1.vortex.encoding;
 
+import io.github.dfa1.vortex.proto.ListMetadata;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.ListArray;
 import io.github.dfa1.vortex.core.array.LongArray;
-import io.github.dfa1.vortex.proto.EncodingProtos;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -192,11 +192,11 @@ class ListEncodingTest {
 
             // When
             EncodeResult result = sut.encode(DTypes.LIST_I32, data, EncodeTestHelper.testCtx());
-            EncodingProtos.ListMetadata meta =
-                    EncodingProtos.ListMetadata.parseFrom(result.rootNode().metadata().duplicate());
+            ListMetadata meta =
+                    ListMetadata.decode(java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate()), 0, java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate()).byteSize());
 
             // Then
-            assertThat(meta.getElementsLen()).isEqualTo(5);
+            assertThat(meta.elements_len()).isEqualTo(5);
         }
     }
 }

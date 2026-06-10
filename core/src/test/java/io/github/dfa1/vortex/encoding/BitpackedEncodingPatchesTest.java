@@ -1,10 +1,10 @@
 package io.github.dfa1.vortex.encoding;
 
+import io.github.dfa1.vortex.proto.BitPackedMetadata;
+import io.github.dfa1.vortex.proto.PatchesMetadata;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.ArraySegments;
-import io.github.dfa1.vortex.proto.DTypeProtos;
-import io.github.dfa1.vortex.proto.EncodingProtos;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -32,17 +32,9 @@ class BitpackedEncodingPatchesTest {
             byte[] packedBytes = packedSeg.toArray(java.lang.foreign.ValueLayout.JAVA_BYTE);
 
             // Build new BitPackedMetadata that re-uses the packed bytes but advertises patches.
-            EncodingProtos.PatchesMetadata patches = EncodingProtos.PatchesMetadata.newBuilder()
-                                                             .setLen(2)
-                                                             .setOffset(0)
-                                                             .setIndicesPtype(DTypeProtos.PType.U32)
-                                                             .build();
-            byte[] metaBytes = EncodingProtos.BitPackedMetadata.newBuilder()
-                                       .setBitWidth(6) // matches encoder's choice for max=50
-                                       .setOffset(0)
-                                       .setPatches(patches)
-                                       .build()
-                                       .toByteArray();
+            PatchesMetadata patches = new PatchesMetadata(2L, 0L,
+                    io.github.dfa1.vortex.proto.PType.U32, null, null, null);
+            byte[] metaBytes = new BitPackedMetadata(6, 0, patches).encode();
 
             byte[] idxBuf = new byte[2 * 4];
             ByteBuffer.wrap(idxBuf).order(ByteOrder.LITTLE_ENDIAN).putInt(1).putInt(3);

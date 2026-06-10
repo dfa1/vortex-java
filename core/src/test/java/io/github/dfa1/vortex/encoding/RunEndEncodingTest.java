@@ -1,12 +1,11 @@
 package io.github.dfa1.vortex.encoding;
 
+import io.github.dfa1.vortex.proto.RunEndMetadata;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.ArraySegments;
-import io.github.dfa1.vortex.proto.DTypeProtos;
-import io.github.dfa1.vortex.proto.EncodingProtos;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -28,12 +27,8 @@ class RunEndEncodingTest {
                 DType dtype, long rowCount,
                 long[] ends, long[] values, PType endsPtype, long offset
         ) {
-            byte[] metaBytes = EncodingProtos.RunEndMetadata.newBuilder()
-                                       .setEndsPtype(DTypeProtos.PType.forNumber(endsPtype.ordinal()))
-                                       .setNumRuns(ends.length)
-                                       .setOffset(offset)
-                                       .build()
-                                       .toByteArray();
+            byte[] metaBytes = new RunEndMetadata(io.github.dfa1.vortex.proto.PType.fromValue(endsPtype.ordinal()), ends.length, offset)
+                                       .encode();
 
             byte[] endsBuf = toLEBytes(ends, endsPtype);
             byte[] valBuf = toLEBytes(values, PType.I64);
@@ -176,12 +171,12 @@ class RunEndEncodingTest {
 
             // When
             EncodeResult result = sut.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
-            EncodingProtos.RunEndMetadata meta =
-                    EncodingProtos.RunEndMetadata.parseFrom(result.rootNode().metadata().duplicate());
+            RunEndMetadata meta =
+                    RunEndMetadata.decode(java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate()), 0, java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate()).byteSize());
 
             // Then
-            assertThat(meta.getNumRuns()).isEqualTo(3);
-            assertThat(meta.getEndsPtypeValue()).isEqualTo(2); // U32
+            assertThat(meta.num_runs()).isEqualTo(3);
+            assertThat(meta.ends_ptype().value()).isEqualTo(2); // U32
         }
     }
 }

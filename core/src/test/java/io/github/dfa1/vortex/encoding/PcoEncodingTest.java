@@ -1,12 +1,13 @@
 package io.github.dfa1.vortex.encoding;
 
-import com.google.protobuf.ByteString;
+import io.github.dfa1.vortex.proto.PcoChunkInfo;
+import io.github.dfa1.vortex.proto.PcoMetadata;
+import io.github.dfa1.vortex.proto.PcoPageInfo;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.MaskedArray;
-import io.github.dfa1.vortex.proto.EncodingProtos;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -27,10 +28,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class PcoEncodingTest {
 
     private static ByteBuffer validMetaBuffer() {
-        EncodingProtos.PcoMetadata meta = EncodingProtos.PcoMetadata.newBuilder()
-                                                  .setHeader(ByteString.copyFrom(new byte[]{PcoEncoding.PCO_FORMAT_MAJOR, PcoEncoding.PCO_FORMAT_MINOR}))
-                                                  .build();
-        return ByteBuffer.wrap(meta.toByteArray());
+        PcoMetadata meta = new PcoMetadata(new byte[]{PcoEncoding.PCO_FORMAT_MAJOR, PcoEncoding.PCO_FORMAT_MINOR}, java.util.List.of());
+        return ByteBuffer.wrap(meta.encode());
     }
 
     private static DecodeContext ctxWith(ByteBuffer meta, DType dtype, long rowCount, MemorySegment[] buffers) {
@@ -79,13 +78,10 @@ class PcoEncodingTest {
 
     /// Build a PcoMetadata proto with one chunk containing one page of {@code nValues} values.
     private static ByteBuffer metaWithOneChunk(int nValues) {
-        EncodingProtos.PcoMetadata meta = EncodingProtos.PcoMetadata.newBuilder()
-                                                  .setHeader(ByteString.copyFrom(new byte[]{PcoEncoding.PCO_FORMAT_MAJOR, PcoEncoding.PCO_FORMAT_MINOR}))
-                                                  .addChunks(EncodingProtos.PcoChunkInfo.newBuilder()
-                                                                     .addPages(EncodingProtos.PcoPageInfo.newBuilder().setNValues(nValues).build())
-                                                                     .build())
-                                                  .build();
-        return ByteBuffer.wrap(meta.toByteArray());
+        PcoMetadata meta = new PcoMetadata(
+                new byte[]{PcoEncoding.PCO_FORMAT_MAJOR, PcoEncoding.PCO_FORMAT_MINOR},
+                java.util.List.of(new PcoChunkInfo(java.util.List.of(new PcoPageInfo(nValues)))));
+        return ByteBuffer.wrap(meta.encode());
     }
 
     /// Chunk-meta bytes for Classic mode, Consecutive delta at {@code order}, ansSizeLog=0, nBins=0.
@@ -237,10 +233,8 @@ class PcoEncodingTest {
         void decode_invalidHeaderVersion_throwsUnsupported() {
             // Given
             var sut = new PcoEncoding();
-            EncodingProtos.PcoMetadata meta = EncodingProtos.PcoMetadata.newBuilder()
-                                                      .setHeader(ByteString.copyFrom(new byte[]{0x03, 0x00}))
-                                                      .build();
-            DecodeContext ctx = ctxWith(ByteBuffer.wrap(meta.toByteArray()),
+            PcoMetadata meta = new PcoMetadata(new byte[]{0x03, 0x00}, java.util.List.of());
+            DecodeContext ctx = ctxWith(ByteBuffer.wrap(meta.encode()),
                     new DType.Primitive(PType.I64, false), 0, new MemorySegment[0]);
 
             // When / Then
@@ -334,15 +328,11 @@ class PcoEncodingTest {
             // Given — 1 chunk, 2 pages each containing 1 value (Consecutive order=1).
             // buffers: [chunkMeta, page0, page1]; page0 moment=10→value 10, page1 moment=20→value 20.
             var sut = new PcoEncoding();
-            EncodingProtos.PcoMetadata meta = EncodingProtos.PcoMetadata.newBuilder()
-                                                      .setHeader(ByteString.copyFrom(new byte[]{PcoEncoding.PCO_FORMAT_MAJOR, PcoEncoding.PCO_FORMAT_MINOR}))
-                                                      .addChunks(EncodingProtos.PcoChunkInfo.newBuilder()
-                                                                         .addPages(EncodingProtos.PcoPageInfo.newBuilder().setNValues(1).build())
-                                                                         .addPages(EncodingProtos.PcoPageInfo.newBuilder().setNValues(1).build())
-                                                                         .build())
-                                                      .build();
+            PcoMetadata meta = new PcoMetadata(
+                    new byte[]{PcoEncoding.PCO_FORMAT_MAJOR, PcoEncoding.PCO_FORMAT_MINOR},
+                    java.util.List.of(new PcoChunkInfo(java.util.List.of(new PcoPageInfo(1), new PcoPageInfo(1)))));
             DecodeContext ctx = ctxWith(
-                    ByteBuffer.wrap(meta.toByteArray()),
+                    ByteBuffer.wrap(meta.encode()),
                     new DType.Primitive(PType.U64, false),
                     2,
                     new MemorySegment[]{chunkMetaConsecutive(1), pageWithMoments(10L), pageWithMoments(20L)});
@@ -361,17 +351,13 @@ class PcoEncodingTest {
             // Given — 2 chunks each with 1 page containing 1 value (Consecutive order=1).
             // buffers: [chunkMeta0, page0, chunkMeta1, page1]; values=[100, 200].
             var sut = new PcoEncoding();
-            EncodingProtos.PcoMetadata meta = EncodingProtos.PcoMetadata.newBuilder()
-                                                      .setHeader(ByteString.copyFrom(new byte[]{PcoEncoding.PCO_FORMAT_MAJOR, PcoEncoding.PCO_FORMAT_MINOR}))
-                                                      .addChunks(EncodingProtos.PcoChunkInfo.newBuilder()
-                                                                         .addPages(EncodingProtos.PcoPageInfo.newBuilder().setNValues(1).build())
-                                                                         .build())
-                                                      .addChunks(EncodingProtos.PcoChunkInfo.newBuilder()
-                                                                         .addPages(EncodingProtos.PcoPageInfo.newBuilder().setNValues(1).build())
-                                                                         .build())
-                                                      .build();
+            PcoMetadata meta = new PcoMetadata(
+                    new byte[]{PcoEncoding.PCO_FORMAT_MAJOR, PcoEncoding.PCO_FORMAT_MINOR},
+                    java.util.List.of(
+                            new PcoChunkInfo(java.util.List.of(new PcoPageInfo(1))),
+                            new PcoChunkInfo(java.util.List.of(new PcoPageInfo(1)))));
             DecodeContext ctx = ctxWith(
-                    ByteBuffer.wrap(meta.toByteArray()),
+                    ByteBuffer.wrap(meta.encode()),
                     new DType.Primitive(PType.U64, false),
                     2,
                     new MemorySegment[]{
@@ -397,16 +383,12 @@ class PcoEncodingTest {
             // Validity bits LSB-first: bit0=1, bit1=0, bit2=1 → byte 0x05.
             // Pco encodes only valid values: 1 chunk, 2 pages of nValues=1 (Consecutive order=1).
             var sut = new PcoEncoding();
-            EncodingProtos.PcoMetadata meta = EncodingProtos.PcoMetadata.newBuilder()
-                                                      .setHeader(ByteString.copyFrom(new byte[]{PcoEncoding.PCO_FORMAT_MAJOR, PcoEncoding.PCO_FORMAT_MINOR}))
-                                                      .addChunks(EncodingProtos.PcoChunkInfo.newBuilder()
-                                                                         .addPages(EncodingProtos.PcoPageInfo.newBuilder().setNValues(1).build())
-                                                                         .addPages(EncodingProtos.PcoPageInfo.newBuilder().setNValues(1).build())
-                                                                         .build())
-                                                      .build();
+            PcoMetadata meta = new PcoMetadata(
+                    new byte[]{PcoEncoding.PCO_FORMAT_MAJOR, PcoEncoding.PCO_FORMAT_MINOR},
+                    java.util.List.of(new PcoChunkInfo(java.util.List.of(new PcoPageInfo(1), new PcoPageInfo(1)))));
             MemorySegment validityBuf = segmentOf((byte) 0x05); // bits: 1,0,1
             DecodeContext ctx = ctxWithValidity(
-                    ByteBuffer.wrap(meta.toByteArray()),
+                    ByteBuffer.wrap(meta.encode()),
                     new DType.Primitive(PType.U64, true),
                     3,
                     validityBuf,

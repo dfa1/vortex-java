@@ -1,10 +1,9 @@
 package io.github.dfa1.vortex.encoding;
 
+import io.github.dfa1.vortex.proto.FSSTMetadata;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.VarBinArray;
-import io.github.dfa1.vortex.proto.DTypeProtos;
-import io.github.dfa1.vortex.proto.EncodingProtos;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -149,10 +148,7 @@ class FsstEncodingTest {
 
             MemorySegment[] segs = {symBuf, symLenBuf, compBuf, uncompLenBuf, codesOffBuf};
 
-            byte[] metaBytes = EncodingProtos.FSSTMetadata.newBuilder()
-                                       .setUncompressedLengthsPtype(DTypeProtos.PType.forNumber(PType.I32.ordinal()))
-                                       .setCodesOffsetsPtype(DTypeProtos.PType.forNumber(PType.I32.ordinal()))
-                                       .build().toByteArray();
+            byte[] metaBytes = new FSSTMetadata(io.github.dfa1.vortex.proto.PType.fromValue(PType.I32.ordinal()), io.github.dfa1.vortex.proto.PType.fromValue(PType.I32.ordinal())).encode();
 
             ArrayNode uncompLensNode = ArrayNode.of(
                     EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{3}, null);
@@ -290,12 +286,12 @@ class FsstEncodingTest {
 
             // When
             EncodeResult result = sut.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
-            EncodingProtos.FSSTMetadata meta =
-                    EncodingProtos.FSSTMetadata.parseFrom(result.rootNode().metadata().duplicate());
+            FSSTMetadata meta =
+                    FSSTMetadata.decode(java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate()), 0, java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate()).byteSize());
 
             // Then
-            assertThat(meta.getUncompressedLengthsPtypeValue()).isEqualTo(6); // I32
-            assertThat(meta.getCodesOffsetsPtypeValue()).isEqualTo(6);        // I32
+            assertThat(meta.uncompressed_lengths_ptype().value()).isEqualTo(6); // I32
+            assertThat(meta.codes_offsets_ptype().value()).isEqualTo(6);        // I32
         }
     }
 }

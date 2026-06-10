@@ -53,7 +53,7 @@ class CodeGenTest {
         assertThat(src).contains("int bit_width");
         assertThat(src).contains("int offset");
         assertThat(src).contains("PatchesMetadata patches");
-        assertThat(src).contains("public static BitPackedMetadata decode(MemorySegment seg, long off, long len)");
+        assertThat(src).contains("public static BitPackedMetadata decode(MemorySegment __seg, long __off, long __len)");
         assertThat(src).contains("public byte[] encode()");
     }
 

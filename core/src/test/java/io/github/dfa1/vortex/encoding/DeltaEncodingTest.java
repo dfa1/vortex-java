@@ -2,7 +2,9 @@ package io.github.dfa1.vortex.encoding;
 
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.ArraySegments;
-import io.github.dfa1.vortex.proto.EncodingProtos;
+import io.github.dfa1.vortex.proto.DeltaMetadata;
+
+import java.lang.foreign.MemorySegment;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -117,11 +119,11 @@ class DeltaEncodingTest {
 
             // When
             EncodeResult result = sut.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
-            EncodingProtos.DeltaMetadata meta =
-                    EncodingProtos.DeltaMetadata.parseFrom(result.rootNode().metadata().duplicate());
+            MemorySegment metaSeg = MemorySegment.ofBuffer(result.rootNode().metadata().duplicate());
+            DeltaMetadata meta = DeltaMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 
             // Then
-            assertThat(meta.getDeltasLen()).isGreaterThan(0);
+            assertThat(meta.deltas_len()).isGreaterThan(0);
         }
     }
 }

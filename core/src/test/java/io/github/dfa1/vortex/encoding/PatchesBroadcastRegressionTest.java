@@ -1,13 +1,13 @@
 package io.github.dfa1.vortex.encoding;
 
+import io.github.dfa1.vortex.proto.BitPackedMetadata;
+import io.github.dfa1.vortex.proto.PatchesMetadata;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.ArraySegments;
-import io.github.dfa1.vortex.proto.DTypeProtos;
-import io.github.dfa1.vortex.proto.EncodingProtos;
-import io.github.dfa1.vortex.proto.ScalarProtos;
 import org.junit.jupiter.api.Test;
+import io.github.dfa1.vortex.proto.ScalarValue;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -43,29 +43,17 @@ class PatchesBroadcastRegressionTest {
 
         // Indices constant scalar (single U32 = 2 — all three patches will "see" index 2).
         // The indices being constant is also a broadcast case for the idx side.
-        ScalarProtos.ScalarValue idxScalar = ScalarProtos.ScalarValue.newBuilder()
-                .setUint64Value(2L)
-                .build();
-        byte[] idxScalarBytes = idxScalar.toByteArray();
+        ScalarValue idxScalar = ScalarValue.ofUint64Value(2L);
+        byte[] idxScalarBytes = idxScalar.encode();
 
         // Values constant scalar (single I64 = 42).
-        ScalarProtos.ScalarValue valScalar = ScalarProtos.ScalarValue.newBuilder()
-                .setInt64Value(constantPatchValue)
-                .build();
-        byte[] valScalarBytes = valScalar.toByteArray();
+        ScalarValue valScalar = ScalarValue.ofInt64Value(constantPatchValue);
+        byte[] valScalarBytes = valScalar.encode();
 
         // Bitpacked metadata: bitWidth=1, patches{...}.
-        EncodingProtos.PatchesMetadata patches = EncodingProtos.PatchesMetadata.newBuilder()
-                .setLen(numPatches)
-                .setOffset(0)
-                .setIndicesPtype(DTypeProtos.PType.U32)
-                .build();
-        EncodingProtos.BitPackedMetadata meta = EncodingProtos.BitPackedMetadata.newBuilder()
-                .setBitWidth(1)
-                .setOffset(0)
-                .setPatches(patches)
-                .build();
-        ByteBuffer metaBuf = ByteBuffer.wrap(meta.toByteArray()).order(ByteOrder.LITTLE_ENDIAN);
+        PatchesMetadata patches = new PatchesMetadata(numPatches, 0, io.github.dfa1.vortex.proto.PType.U32, null, null, null);
+        BitPackedMetadata meta = new BitPackedMetadata(1, 0, patches);
+        ByteBuffer metaBuf = ByteBuffer.wrap(meta.encode()).order(ByteOrder.LITTLE_ENDIAN);
 
         // Buffers: [packed, idxConstantScalar, valConstantScalar]
         try (Arena arena = Arena.ofConfined()) {

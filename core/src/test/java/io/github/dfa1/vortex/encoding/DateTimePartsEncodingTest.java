@@ -1,11 +1,11 @@
 package io.github.dfa1.vortex.encoding;
 
+import io.github.dfa1.vortex.proto.DateTimePartsMetadata;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.GenericArray;
 import io.github.dfa1.vortex.core.array.LongArray;
-import io.github.dfa1.vortex.proto.EncodingProtos;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -241,13 +241,13 @@ class DateTimePartsEncodingTest {
 
             // When
             EncodeResult result = sut.encode(EXT_TIMESTAMP_MS, data, EncodeTestHelper.testCtx());
-            EncodingProtos.DateTimePartsMetadata meta =
-                    EncodingProtos.DateTimePartsMetadata.parseFrom(result.rootNode().metadata().duplicate());
+            DateTimePartsMetadata meta =
+                    DateTimePartsMetadata.decode(java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate()), 0, java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate()).byteSize());
 
             // Then
-            assertThat(meta.getDaysPtypeValue()).isEqualTo(7);       // I64
-            assertThat(meta.getSecondsPtypeValue()).isEqualTo(7);    // I64
-            assertThat(meta.getSubsecondsPtypeValue()).isEqualTo(7); // I64
+            assertThat(meta.days_ptype().value()).isEqualTo(7);       // I64
+            assertThat(meta.seconds_ptype().value()).isEqualTo(7);    // I64
+            assertThat(meta.subseconds_ptype().value()).isEqualTo(7); // I64
         }
     }
 }
