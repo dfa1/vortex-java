@@ -4,12 +4,18 @@ import java.lang.foreign.MemorySegment;
 
 /// Bounds-checked wrappers for {@link MemorySegment} slicing on untrusted input.
 ///
-/// <p>Every call site in {@code io}, {@code scan}, and {@code encoding} that slices a
-/// memory-mapped file region by an offset or length read from the on-disk schema must
-/// route through {@link #slice(MemorySegment, long, long, String)} instead of calling
-/// {@link MemorySegment#asSlice(long, long)} directly. The contract: malformed input
-/// throws {@link VortexException}, never {@link IndexOutOfBoundsException},
-/// {@link IllegalArgumentException}, or any other unchecked JDK exception.
+/// <p>Application code in {@code io}, {@code scan}, and {@code encoding} should prefer
+/// {@link BoundedSegment}, which encapsulates a segment + context label and makes the
+/// safe-slice operation the only available API on the type. This class is the underlying
+/// implementation: {@code BoundedSegment.slice} delegates to {@link #slice}, and
+/// {@code BoundedSegment}'s primitive readers delegate to {@link #checkRange}.
+///
+/// <p>Direct {@code MemorySegments.slice} use is reserved for the few places that build a
+/// {@code BoundedSegment} in the first place (the mmap boundary in {@code VortexReader.parse})
+/// or that need a bounded {@link MemorySegment} without producing a {@code BoundedSegment}.
+/// In both cases the contract is the same: malformed input throws {@link VortexException},
+/// never {@link IndexOutOfBoundsException}, {@link IllegalArgumentException}, or any other
+/// unchecked JDK exception.
 public final class MemorySegments {
 
     private MemorySegments() {

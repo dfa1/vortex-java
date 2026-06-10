@@ -5,7 +5,6 @@ import io.github.dfa1.vortex.core.BoundedSegment;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.Footer;
 import io.github.dfa1.vortex.core.Layout;
-import io.github.dfa1.vortex.core.MemorySegments;
 import io.github.dfa1.vortex.core.SegmentSpec;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.VortexFormat;
@@ -222,17 +221,18 @@ public final class VortexReader implements VortexHandle {
         if (segLen < 4) {
             return ArrayStats.empty();
         }
-        MemorySegment seg = MemorySegments.slice(fileSegment, spec.offset(), segLen, "stats segment");
-        int fbLen = seg.get(LE_INT, segLen - 4);
+        BoundedSegment statsRegion = new BoundedSegment(fileSegment, "vortex file")
+                .slice(spec.offset(), segLen, "stats segment");
+        int fbLen = statsRegion.getIntLE(segLen - 4);
         // Reject negative fbLen (signed int from untrusted bytes) or any value that would push
-        // fbStart below 0. MemorySegments.slice would catch this too, but returning empty here keeps
-        // the older lenient behaviour for files with corrupt stats blobs — MemorySegments is reserved
-        // for offsets/lengths that must be valid (the data path).
+        // fbStart below 0. BoundedSegment.slice would also catch this, but returning empty here keeps
+        // the older lenient behaviour for files with corrupt stats blobs — bounded slicing is
+        // reserved for offsets/lengths that must be valid (the data path).
         if (fbLen < 0 || fbLen > segLen - 4) {
             return ArrayStats.empty();
         }
         long fbStart = segLen - 4L - fbLen;
-        var fbBuf = MemorySegments.slice(seg, fbStart, fbLen, "stats flatbuffer").asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
+        var fbBuf = statsRegion.slice(fbStart, fbLen, "stats flatbuffer").asByteBufferLE();
         var fbArray = io.github.dfa1.vortex.fbs.Array.getRootAsArray(fbBuf);
         var root = fbArray.root();
         if (root == null) {
@@ -244,9 +244,8 @@ public final class VortexReader implements VortexHandle {
     /// Zero-copy slice of the memory-mapped file, wrapped as a {@link BoundedSegment}.
     @Override
     public BoundedSegment slice(long offset, long length) {
-        return new BoundedSegment(
-                MemorySegments.slice(fileSegment, offset, length, "file segment").asReadOnly(),
-                "file slice");
+        return new BoundedSegment(fileSegment, "vortex file")
+                .slice(offset, length, "file slice");
     }
 
     @Override
