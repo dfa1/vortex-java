@@ -18,15 +18,24 @@ Never use `mvn install` or `./mvwn install`.
 
 Generated sources (`fbs`/`proto` → Java) are committed under `core/src/main/java`.
 Normal builds need no external tools.
+
+Proto-to-Java generation is in-process via the `proto-gen` module (no `protoc` needed).
+The generator emits one record per message with a {@code decode(MemorySegment, long, long)} static
+factory and an {@code encode()} method that operate directly on a memory segment — no `byte[]`
+copy, no `protobuf-java` runtime, no `sun.misc.Unsafe`.
+
 To regenerate after editing `.fbs` or `.proto` schemas:
 
 ```bash
-brew install flatbuffers protobuf
+brew install flatbuffers              # only needed for .fbs edits
+./mvnw compile -pl proto-gen          # build the proto generator (only on .proto edits)
 ./mvnw generate-sources -pl core -P regenerate-sources
 # then commit the updated files
 ```
 
 Any `flatc` version works — the profile strips the version guard automatically.
+`flatc` runs every time the profile is active; if you only changed `.proto` files, revert any
+spurious `fbs/` diffs with `git checkout -- core/src/main/java/io/github/dfa1/vortex/fbs/`.
 
 ```bash
 # Build all modules
@@ -276,18 +285,26 @@ Simple encodings (≤ ~80 lines total, e.g. `NullEncoding`, `BoolEncoding`) are 
 
 ### Metadata-only encodings
 
-Some encodings store all data in protobuf metadata — no buffers, no children (e.g. `SequenceEncoding`).
+Some encodings store all data in proto3 metadata — no buffers, no children (e.g. `SequenceEncoding`).
 Their `EncodeResult` uses an `EncodeNode` with `metadata` set and an empty `bufferIndices` array:
 
 ```java
-ByteBuffer metaBuf = ByteBuffer.wrap(meta.toByteArray());
+ByteBuffer metaBuf = ByteBuffer.wrap(meta.encode());
 EncodeNode node = new EncodeNode(encodingId, metaBuf, new EncodeNode[0], new int[]{});
-return new
-
-EncodeResult(node, List.of(), null,null);
+return new EncodeResult(node, List.of(), null, null);
 ```
 
-The decoder reads back via `ctx.metadata()`, not `ctx.buffer(n)`.
+The decoder reads back via `ctx.metadata()`, not `ctx.buffer(n)`:
+
+```java
+MemorySegment metaSeg = MemorySegment.ofBuffer(ctx.metadata().duplicate());
+FooMetadata meta = FooMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+```
+
+Generated proto records live in `io.github.dfa1.vortex.proto`. The runtime decoder
+(`ProtoReader`, `ProtoWriter`) is package-private — generated code calls it directly.
+For oneof messages (e.g. `ScalarValue`), prefer the static `ofXxxValue(v)` factory over
+the 11-arg constructor.
 
 ## Testing
 
