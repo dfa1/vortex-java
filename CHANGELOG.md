@@ -7,10 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.6.0] — Unreleased
 
-The headline theme is the **proto-rewrite**: `protobuf-java` is dropped in favour of an
-in-tree MemorySegment-native proto3 codec, generated from `.proto` schemas by a new
-`proto-gen` module. CLI uber-jar shrinks ~14% and the JDK 25 `sun.misc.Unsafe` stderr
-warning (emitted by `protobuf-java`'s `UnsafeUtil`) is gone.
+Two headline themes. The **proto-rewrite** drops `protobuf-java` in favour of an in-tree
+MemorySegment-native proto3 codec, generated from `.proto` schemas by a new `proto-gen`
+module — CLI uber-jar shrinks ~14% and the JDK 25 `sun.misc.Unsafe` stderr warning is
+gone. The **Extension API redesign** retires the prior sealed `core.Extension` hierarchy
+in favour of a service-loader `Extension` SPI on the `Registry`, adds writer auto-route
+from domain collections (`List<LocalDate>`, `List<UUID>`, ...), UUID extension support,
+JDBC import for SQL DATE/TIME/TIMESTAMP/UUID, nullable column round-trip, and
+`Chunk.as(name, Class)` typed access.
 
 ### Added
 
@@ -19,35 +23,79 @@ warning (emitted by `protobuf-java`'s `UnsafeUtil`) is gone.
   `enum` per proto enum, each carrying a `@Generated("io.github.dfa1.vortex.protogen.CodeGen")`
   annotation. Records expose `decode(MemorySegment, long, long)` static factories and
   `encode()` instance methods that operate directly on a memory segment — zero `byte[]`
-  copy, no `protobuf-java` runtime.
+  copy, no `protobuf-java` runtime. (ae6c46a, 743278d, b527f84)
 - **`ProtoReader` / `ProtoWriter`** — package-private proto3 wire-format primitives
   under `io.github.dfa1.vortex.proto`. Reads varint / sint64 / fixed32 / fixed64 /
   length-delimited / packed-repeated payloads, with bounds checks and a 10-byte cap on
-  varint length. 42 unit tests cover happy path + truncation + bounds.
+  varint length. 42 unit tests cover happy path + truncation + bounds. (ae6c46a, b527f84)
 - **Oneof factories** on generated records (e.g. `ScalarValue.ofInt64Value(123L)`) —
-  avoids the 11-arg constructor for `ScalarValue`'s oneof.
+  avoids the 11-arg constructor for `ScalarValue`'s oneof. (b527f84)
 - **`PatchedMetadata` / `VariantMetadata`** — added to `encodings.proto`. Previously
-  hand-parsed with `CodedInputStream`; now go through the generated record path.
+  hand-parsed with `CodedInputStream`; now go through the generated record path. (743278d, b527f84)
+- **Nullable extension columns** — `vortex.date`, `vortex.time`, `vortex.timestamp`,
+  `vortex.uuid` round-trip null elements via the `ExtEncoding → MaskedEncoding → primitive`
+  layout. New `NullableData(values, validity)` carrier feeds the writer; `MaskedEncoding.encode`
+  splits storage + Bool validity child. `JdbcImporter` preserves SQL NULL end-to-end. (1015f9b)
+- **Null-preserving `decodeAll`** — `DateExtension`, `TimeExtension`, `TimestampExtension`,
+  `UuidExtension` `decodeAll(MaskedArray)` yields `List<T>` with `null` at invalid positions
+  instead of throwing on `epochInteger`. (24c64a9)
+- **Extension SPI** — `Extension` interface + `ExtensionId` enum, ServiceLoader-discovered,
+  registered on `Registry`. Third-party extensions register via the builder. (1af6f2a, 0d3815f, 834d2f1)
+- **Spec extension impls** — `DateExtension`, `TimeExtension`, `TimestampExtension`,
+  `UuidExtension`. Each carries `encode`, `decode`, `decodeAll`, polymorphic
+  `encodeAll(DType.Extension, Collection<?>)` for writer auto-routing. (0d3815f, bba49c7)
+- **Writer auto-route extension columns** — `writeChunk` accepts domain collections
+  (`List<LocalDate>`, `List<Instant>`, `List<UUID>`, ...) and routes through the matching
+  extension impl to produce `int[]` / `long[]` / `FixedSizeListData` storage. (1d54b57, bd6dbdc, 75d7b4b)
+- **`vortex.uuid` extension** — `FixedSizeList(U8, 16)` storage, big-endian byte layout.
+  Writer + reader + JDBC vendor-type-name detection (PostgreSQL `java.util.UUID`, H2
+  `BINARY(16)`, others via canonical string). (89a0a69, cce2d2d)
+- **JDBC import: extension types** — `Types.DATE` / `Types.TIME` / `Types.TIMESTAMP` /
+  vendor UUID columns map to `vortex.date` / `.time` / `.timestamp` / `.uuid`. (9f31d9e, cce2d2d)
+- **`Chunk.as(name, Class)`** — typed extension access without manual `Extension.findKnown`
+  + `decodeAll` boilerplate. (e5cefb0)
+- **ExtEncoding storage cascade-compress** — storage child goes through the cascading
+  compressor (`FoR` / `Bitpacked` / `ALP` / `RLE` / etc.) instead of bare `Primitive`. (33cf42e)
+
+### Breaking
+
+- **`EncodingRegistry` → `Registry`** — renamed; now holds both Encodings and Extensions.
+  ServiceLoader discovery unified via a single `registerServiceLoaded()` call on the
+  builder. (834d2f1, 2272fe4)
+- **`core.Extension` sealed hierarchy retired** — replaced by `extension.Extension`
+  interface + concrete impl classes (`DateExtension`, ...). Callers go through
+  `Extension.findKnown(dtype)` or `Registry.lookup(ExtensionId)`. (2a0ed93)
+- **Reader unwrap path removed** — `ExtEncoding` wraps + unwraps the storage child
+  uniformly; the previous one-off unwrap shortcut in the registry is gone. (4d4ab34, 75d7b4b)
 
 ### Changed
 
 - **Build-time tooling**: `regenerate-sources` profile no longer shells out to `protoc`.
   Run `./mvnw compile -pl proto-gen` once, then
   `./mvnw generate-sources -pl core -P regenerate-sources`. `brew install protobuf` is
-  no longer needed for normal development.
+  no longer needed for normal development. (743278d)
 - **Encoding consumers**: 25 encoding classes (`ALP`, `Bitpacked`, `Dict`, `Rle`,
   `Sparse`, `Sequence`, etc.) and 23 test files rewritten to use the new record API.
   Constructor calls are positional; field accessors follow proto3 snake_case
-  (`meta.bit_width()`, not `meta.getBitWidth()`).
+  (`meta.bit_width()`, not `meta.getBitWidth()`). (0132417, 68be6fc, 743278d)
+
+### Fixed
+
+- **`PostscriptParser`**: extension dtype `nullable` was hardcoded `false` on read; now
+  derived from the storage dtype, matching the Rust spec (`ext_dtype.storage_dtype()`
+  carries the column nullability). (1015f9b)
+- **`DType.Extension.metadata`** capped at 64 KiB during parse — prevents crafted
+  extension metadata from inflating memory on hostile input. (22a5f59)
+- **CLI startup**: silenced `dev.hardwood VectorSupport` INFO log on every cold start. (57a5a38)
 
 ### Removed
 
 - **`com.google.protobuf:protobuf-java`** dependency dropped from `core`, `reader`,
   `writer`, and root `dependencyManagement`. The `protobuf.version` property is gone.
   CLI uber-jar: **14 MB → 12 MB**. JDK 25 `sun.misc.Unsafe::arrayBaseOffset` stderr
-  warning emitted by `UnsafeUtil` on every cold start: **gone**.
+  warning emitted by `UnsafeUtil` on every cold start: **gone**. (743278d)
 - `protoc` no longer required by the build. `brew install flatbuffers` covers `.fbs`
-  edits; `.proto` edits use the in-process generator.
+  edits; `.proto` edits use the in-process generator. (743278d)
 
 ### Compatibility
 
@@ -66,6 +114,16 @@ All 872 unit + 243 integration tests pass on JDK 25.
 No measurable change on bulk-read benchmarks (`RustVsJavaReadBenchmark.javaReadCascading`
 within 1% of main, stdev ±2 ops/s). Proto metadata parse is < 1% of work on multi-million-row
 scans; the win is architectural, not throughput.
+
+- **`ProtoWriter.varintSize`** — branchless via `Integer.numberOfLeadingZeros` (~3 cycles
+  vs 4-branch cascade). Hot on every length-delimited write. (42177ca)
+- **`ProtoWriter` backpatched length-delim writes** — eliminate the temp `ProtoWriter`
+  allocation per nested message. (c79611e)
+
+### Documentation
+
+- Compatibility doc bumped to Rust reference v0.74.0; Union / onpair / Variant gaps
+  documented. (cf73887)
 
 [0.6.0]: https://github.com/dfa1/vortex-java/compare/v0.5.0...main
 
