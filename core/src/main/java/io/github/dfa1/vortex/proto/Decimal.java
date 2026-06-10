@@ -49,6 +49,11 @@ public record Decimal(
     /// @return encoded bytes
     public byte[] encode() {
         ProtoWriter w = new ProtoWriter();
+        encodeTo(w);
+        return w.toByteArray();
+    }
+
+    void encodeTo(ProtoWriter w) {
         if (precision != 0) {
             w.writeTag(1, 0);
             w.writeVarint32(precision);
@@ -61,6 +66,5 @@ public record Decimal(
             w.writeTag(3, 0);
             w.writeBool(nullable);
         }
-        return w.toByteArray();
     }
 }

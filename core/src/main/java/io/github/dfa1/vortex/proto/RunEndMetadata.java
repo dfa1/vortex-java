@@ -54,6 +54,11 @@ public record RunEndMetadata(
     /// @return encoded bytes
     public byte[] encode() {
         ProtoWriter w = new ProtoWriter();
+        encodeTo(w);
+        return w.toByteArray();
+    }
+
+    void encodeTo(ProtoWriter w) {
         if (ends_ptype.value() != 0) {
             w.writeTag(1, 0);
             w.writeVarint32(ends_ptype.value());
@@ -66,6 +71,5 @@ public record RunEndMetadata(
             w.writeTag(3, 0);
             w.writeVarint64(offset);
         }
-        return w.toByteArray();
     }
 }

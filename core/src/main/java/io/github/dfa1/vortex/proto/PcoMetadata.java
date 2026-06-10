@@ -45,15 +45,21 @@ public record PcoMetadata(
     /// @return encoded bytes
     public byte[] encode() {
         ProtoWriter w = new ProtoWriter();
+        encodeTo(w);
+        return w.toByteArray();
+    }
+
+    void encodeTo(ProtoWriter w) {
         if (header != null && header.length != 0) {
             w.writeTag(1, 2);
             w.writeBytes(header);
         }
         for (PcoChunkInfo __v : chunks) {
             w.writeTag(2, 2);
-            w.writeEmbedded(__v.encode());
+            int __mark = w.beginLenDelim();
+            __v.encodeTo(w);
+            w.endLenDelim(__mark);
         }
-        return w.toByteArray();
     }
 
     @Override

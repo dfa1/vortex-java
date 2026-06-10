@@ -53,6 +53,11 @@ public record FSSTMetadata(
     /// @return encoded bytes
     public byte[] encode() {
         ProtoWriter w = new ProtoWriter();
+        encodeTo(w);
+        return w.toByteArray();
+    }
+
+    void encodeTo(ProtoWriter w) {
         if (uncompressed_lengths_ptype.value() != 0) {
             w.writeTag(1, 0);
             w.writeVarint32(uncompressed_lengths_ptype.value());
@@ -61,6 +66,5 @@ public record FSSTMetadata(
             w.writeTag(2, 0);
             w.writeVarint32(codes_offsets_ptype.value());
         }
-        return w.toByteArray();
     }
 }

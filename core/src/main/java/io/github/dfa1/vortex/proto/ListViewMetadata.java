@@ -59,6 +59,11 @@ public record ListViewMetadata(
     /// @return encoded bytes
     public byte[] encode() {
         ProtoWriter w = new ProtoWriter();
+        encodeTo(w);
+        return w.toByteArray();
+    }
+
+    void encodeTo(ProtoWriter w) {
         if (elements_len != 0L) {
             w.writeTag(1, 0);
             w.writeVarint64(elements_len);
@@ -71,6 +76,5 @@ public record ListViewMetadata(
             w.writeTag(3, 0);
             w.writeVarint32(size_ptype.value());
         }
-        return w.toByteArray();
     }
 }

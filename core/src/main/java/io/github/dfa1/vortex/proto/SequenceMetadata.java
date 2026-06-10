@@ -45,14 +45,22 @@ public record SequenceMetadata(
     /// @return encoded bytes
     public byte[] encode() {
         ProtoWriter w = new ProtoWriter();
+        encodeTo(w);
+        return w.toByteArray();
+    }
+
+    void encodeTo(ProtoWriter w) {
         if (base != null) {
             w.writeTag(1, 2);
-            w.writeEmbedded(base.encode());
+            int __mark = w.beginLenDelim();
+            base.encodeTo(w);
+            w.endLenDelim(__mark);
         }
         if (multiplier != null) {
             w.writeTag(2, 2);
-            w.writeEmbedded(multiplier.encode());
+            int __mark = w.beginLenDelim();
+            multiplier.encodeTo(w);
+            w.endLenDelim(__mark);
         }
-        return w.toByteArray();
     }
 }

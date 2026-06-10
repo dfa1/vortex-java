@@ -45,14 +45,22 @@ public record Scalar(
     /// @return encoded bytes
     public byte[] encode() {
         ProtoWriter w = new ProtoWriter();
+        encodeTo(w);
+        return w.toByteArray();
+    }
+
+    void encodeTo(ProtoWriter w) {
         if (dtype != null) {
             w.writeTag(1, 2);
-            w.writeEmbedded(dtype.encode());
+            int __mark = w.beginLenDelim();
+            dtype.encodeTo(w);
+            w.endLenDelim(__mark);
         }
         if (value != null) {
             w.writeTag(2, 2);
-            w.writeEmbedded(value.encode());
+            int __mark = w.beginLenDelim();
+            value.encodeTo(w);
+            w.endLenDelim(__mark);
         }
-        return w.toByteArray();
     }
 }

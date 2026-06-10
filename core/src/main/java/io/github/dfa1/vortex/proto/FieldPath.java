@@ -38,10 +38,16 @@ public record FieldPath(
     /// @return encoded bytes
     public byte[] encode() {
         ProtoWriter w = new ProtoWriter();
+        encodeTo(w);
+        return w.toByteArray();
+    }
+
+    void encodeTo(ProtoWriter w) {
         for (Field __v : path) {
             w.writeTag(1, 2);
-            w.writeEmbedded(__v.encode());
+            int __mark = w.beginLenDelim();
+            __v.encodeTo(w);
+            w.endLenDelim(__mark);
         }
-        return w.toByteArray();
     }
 }

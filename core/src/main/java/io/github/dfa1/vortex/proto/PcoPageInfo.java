@@ -37,10 +37,14 @@ public record PcoPageInfo(
     /// @return encoded bytes
     public byte[] encode() {
         ProtoWriter w = new ProtoWriter();
+        encodeTo(w);
+        return w.toByteArray();
+    }
+
+    void encodeTo(ProtoWriter w) {
         if (n_values != 0) {
             w.writeTag(1, 0);
             w.writeVarint32(n_values);
         }
-        return w.toByteArray();
     }
 }

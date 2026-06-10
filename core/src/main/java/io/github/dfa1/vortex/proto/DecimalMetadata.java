@@ -37,10 +37,14 @@ public record DecimalMetadata(
     /// @return encoded bytes
     public byte[] encode() {
         ProtoWriter w = new ProtoWriter();
+        encodeTo(w);
+        return w.toByteArray();
+    }
+
+    void encodeTo(ProtoWriter w) {
         if (values_type != 0) {
             w.writeTag(1, 0);
             w.writeVarint32(values_type);
         }
-        return w.toByteArray();
     }
 }

@@ -115,55 +115,83 @@ public record DType(
     /// @return encoded bytes
     public byte[] encode() {
         ProtoWriter w = new ProtoWriter();
+        encodeTo(w);
+        return w.toByteArray();
+    }
+
+    void encodeTo(ProtoWriter w) {
         if (null_ != null) {
             w.writeTag(1, 2);
-            w.writeEmbedded(null_.encode());
+            int __mark = w.beginLenDelim();
+            null_.encodeTo(w);
+            w.endLenDelim(__mark);
         }
         if (bool != null) {
             w.writeTag(2, 2);
-            w.writeEmbedded(bool.encode());
+            int __mark = w.beginLenDelim();
+            bool.encodeTo(w);
+            w.endLenDelim(__mark);
         }
         if (primitive != null) {
             w.writeTag(3, 2);
-            w.writeEmbedded(primitive.encode());
+            int __mark = w.beginLenDelim();
+            primitive.encodeTo(w);
+            w.endLenDelim(__mark);
         }
         if (decimal != null) {
             w.writeTag(4, 2);
-            w.writeEmbedded(decimal.encode());
+            int __mark = w.beginLenDelim();
+            decimal.encodeTo(w);
+            w.endLenDelim(__mark);
         }
         if (utf8 != null) {
             w.writeTag(5, 2);
-            w.writeEmbedded(utf8.encode());
+            int __mark = w.beginLenDelim();
+            utf8.encodeTo(w);
+            w.endLenDelim(__mark);
         }
         if (binary != null) {
             w.writeTag(6, 2);
-            w.writeEmbedded(binary.encode());
+            int __mark = w.beginLenDelim();
+            binary.encodeTo(w);
+            w.endLenDelim(__mark);
         }
         if (struct != null) {
             w.writeTag(7, 2);
-            w.writeEmbedded(struct.encode());
+            int __mark = w.beginLenDelim();
+            struct.encodeTo(w);
+            w.endLenDelim(__mark);
         }
         if (list != null) {
             w.writeTag(8, 2);
-            w.writeEmbedded(list.encode());
+            int __mark = w.beginLenDelim();
+            list.encodeTo(w);
+            w.endLenDelim(__mark);
         }
         if (extension != null) {
             w.writeTag(9, 2);
-            w.writeEmbedded(extension.encode());
+            int __mark = w.beginLenDelim();
+            extension.encodeTo(w);
+            w.endLenDelim(__mark);
         }
         if (fixed_size_list != null) {
             w.writeTag(10, 2);
-            w.writeEmbedded(fixed_size_list.encode());
+            int __mark = w.beginLenDelim();
+            fixed_size_list.encodeTo(w);
+            w.endLenDelim(__mark);
         }
         if (variant != null) {
             w.writeTag(11, 2);
-            w.writeEmbedded(variant.encode());
+            int __mark = w.beginLenDelim();
+            variant.encodeTo(w);
+            w.endLenDelim(__mark);
         }
         if (union != null) {
             w.writeTag(12, 2);
-            w.writeEmbedded(union.encode());
+            int __mark = w.beginLenDelim();
+            union.encodeTo(w);
+            w.endLenDelim(__mark);
         }
-        return w.toByteArray();
     }
 
     /// Factory for oneof case {@code null} (field tag 1).

@@ -51,19 +51,25 @@ public record Extension(
     /// @return encoded bytes
     public byte[] encode() {
         ProtoWriter w = new ProtoWriter();
+        encodeTo(w);
+        return w.toByteArray();
+    }
+
+    void encodeTo(ProtoWriter w) {
         if (id != null && !id.isEmpty()) {
             w.writeTag(1, 2);
             w.writeString(id);
         }
         if (storage_dtype != null) {
             w.writeTag(2, 2);
-            w.writeEmbedded(storage_dtype.encode());
+            int __mark = w.beginLenDelim();
+            storage_dtype.encodeTo(w);
+            w.endLenDelim(__mark);
         }
         if (metadata != null) {
             w.writeTag(3, 2);
             w.writeBytes(metadata);
         }
-        return w.toByteArray();
     }
 
     @Override

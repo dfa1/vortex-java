@@ -331,6 +331,96 @@ class ProtoRuntimeTest {
     }
 
     @Nested
+    class Backpatch {
+
+        @Test
+        void shortPayloadCompactsLengthVarint() throws IOException {
+            // Given — payload of 3 bytes fits in 1-byte varint length.
+            // beginLenDelim reserves 5 bytes; endLenDelim shifts the payload left by 4.
+            ProtoWriter w = new ProtoWriter();
+            int mark = w.beginLenDelim();
+            w.writeVarint64(1);
+            w.writeVarint64(2);
+            w.writeVarint64(3);
+            w.endLenDelim(mark);
+
+            // When
+            byte[] bytes = w.toByteArray();
+
+            // Then — len=3 (1 byte) + 3 payload bytes = 4 total, no wasted padding.
+            assertThat(bytes).containsExactly(0x03, 0x01, 0x02, 0x03);
+        }
+
+        @Test
+        void backpatchedMatchesLegacyEmbeddedPattern() throws IOException {
+            // Given — same packed varint payload via backpatch vs. the legacy
+            // "temp ProtoWriter + writeEmbedded" pattern. Output bytes must match exactly,
+            // proving the backpatch refactor is wire-compatible.
+            ProtoWriter backpatch = new ProtoWriter();
+            int mark = backpatch.beginLenDelim();
+            for (int i = 0; i < 50; i++) {
+                backpatch.writeVarint64(i);
+            }
+            backpatch.endLenDelim(mark);
+
+            ProtoWriter legacy = new ProtoWriter();
+            ProtoWriter inner = new ProtoWriter();
+            for (int i = 0; i < 50; i++) {
+                inner.writeVarint64(i);
+            }
+            legacy.writeEmbedded(inner.toByteArray());
+
+            // When + Then
+            assertThat(backpatch.toByteArray()).containsExactly(legacy.toByteArray());
+        }
+
+        @Test
+        void emptyPayloadProducesSingleZeroLength() {
+            // Given — len-delim region with no payload.
+            ProtoWriter w = new ProtoWriter();
+            int mark = w.beginLenDelim();
+            w.endLenDelim(mark);
+
+            // When + Then — single 0x00 byte (length=0), 4 padding bytes shifted out.
+            assertThat(w.toByteArray()).containsExactly(0x00);
+        }
+
+        @Test
+        void largePayloadKeepsMultiByteLengthVarint() throws IOException {
+            // Given — payload large enough to need a 2-byte length varint (>= 128 bytes).
+            // Shift = 5 - 2 = 3 bytes leftward.
+            ProtoWriter w = new ProtoWriter();
+            int mark = w.beginLenDelim();
+            byte[] payload = new byte[200];
+            for (int i = 0; i < payload.length; i++) {
+                payload[i] = (byte) (i & 0xff);
+            }
+            for (byte b : payload) {
+                w.writeFixed32(b & 0xff); // 4 bytes each — actually use raw write
+            }
+            w.endLenDelim(mark);
+
+            // When — decode the length back, verify payload survives the shift.
+            byte[] bytes = w.toByteArray();
+            ProtoReader r = new ProtoReader(MemorySegment.ofArray(bytes), 0, bytes.length);
+            int len = r.readVarint32();
+
+            // Then — length matches 200 * 4 = 800; remaining bytes are exactly the payload.
+            assertThat(len).isEqualTo(800);
+            assertThat(bytes.length - varintBytes(len)).isEqualTo(800);
+        }
+
+        private int varintBytes(int v) {
+            int n = 1;
+            while ((v & ~0x7f) != 0) {
+                v >>>= 7;
+                n++;
+            }
+            return n;
+        }
+    }
+
+    @Nested
     class Bounds {
 
         @Test

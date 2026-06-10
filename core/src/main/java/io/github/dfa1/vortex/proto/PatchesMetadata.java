@@ -77,6 +77,11 @@ public record PatchesMetadata(
     /// @return encoded bytes
     public byte[] encode() {
         ProtoWriter w = new ProtoWriter();
+        encodeTo(w);
+        return w.toByteArray();
+    }
+
+    void encodeTo(ProtoWriter w) {
         if (len != 0L) {
             w.writeTag(1, 0);
             w.writeVarint64(len);
@@ -101,6 +106,5 @@ public record PatchesMetadata(
             w.writeTag(6, 0);
             w.writeVarint64(offset_within_chunk);
         }
-        return w.toByteArray();
     }
 }

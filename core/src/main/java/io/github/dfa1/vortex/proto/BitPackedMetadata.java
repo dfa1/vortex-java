@@ -50,6 +50,11 @@ public record BitPackedMetadata(
     /// @return encoded bytes
     public byte[] encode() {
         ProtoWriter w = new ProtoWriter();
+        encodeTo(w);
+        return w.toByteArray();
+    }
+
+    void encodeTo(ProtoWriter w) {
         if (bit_width != 0) {
             w.writeTag(1, 0);
             w.writeVarint32(bit_width);
@@ -60,8 +65,9 @@ public record BitPackedMetadata(
         }
         if (patches != null) {
             w.writeTag(3, 2);
-            w.writeEmbedded(patches.encode());
+            int __mark = w.beginLenDelim();
+            patches.encodeTo(w);
+            w.endLenDelim(__mark);
         }
-        return w.toByteArray();
     }
 }

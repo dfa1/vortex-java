@@ -77,6 +77,11 @@ public record RLEMetadata(
     /// @return encoded bytes
     public byte[] encode() {
         ProtoWriter w = new ProtoWriter();
+        encodeTo(w);
+        return w.toByteArray();
+    }
+
+    void encodeTo(ProtoWriter w) {
         if (values_len != 0L) {
             w.writeTag(1, 0);
             w.writeVarint64(values_len);
@@ -101,6 +106,5 @@ public record RLEMetadata(
             w.writeTag(6, 0);
             w.writeVarint64(offset);
         }
-        return w.toByteArray();
     }
 }
