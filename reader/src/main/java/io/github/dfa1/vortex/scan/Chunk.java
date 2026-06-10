@@ -117,10 +117,8 @@ public final class Chunk implements AutoCloseable {
         if (!(colDtype instanceof DType.Extension ext)) {
             throw new VortexException("not an extension column: " + name);
         }
-        ExtensionId id = ExtensionId.tryFrom(ext.extensionId());
-        if (id == null) {
-            throw new VortexException("not a spec extension id: " + ext.extensionId());
-        }
+        ExtensionId id = ExtensionId.tryFrom(ext.extensionId())
+                .orElseThrow(() -> new VortexException("not a spec extension id: " + ext.extensionId()));
         Array storage = column(name);
         Object result = switch (id) {
             case VORTEX_DATE -> {

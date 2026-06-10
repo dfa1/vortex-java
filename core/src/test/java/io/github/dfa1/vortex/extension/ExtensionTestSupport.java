@@ -34,7 +34,7 @@ final class ExtensionTestSupport {
         return meta;
     }
 
-    static ByteBuffer tzMeta(byte unitTag, String tz) {
+    static ByteBuffer tzMeta(byte unitTag, @org.jspecify.annotations.Nullable String tz) {
         byte[] tzBytes = tz == null ? new byte[0] : tz.getBytes(StandardCharsets.UTF_8);
         ByteBuffer meta = ByteBuffer.allocate(3 + tzBytes.length).order(ByteOrder.LITTLE_ENDIAN);
         meta.put(0, unitTag);

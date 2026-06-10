@@ -680,7 +680,8 @@ public final class VortexInspectorTui {
         private static String formatValue(Array array, int i, DType declared) {
             if (declared instanceof DType.Extension ext
                     && io.github.dfa1.vortex.extension.ExtensionId.tryFrom(ext.extensionId())
-                            == io.github.dfa1.vortex.extension.ExtensionId.VORTEX_DATE) {
+                            .filter(id -> id == io.github.dfa1.vortex.extension.ExtensionId.VORTEX_DATE)
+                            .isPresent()) {
                 try {
                     return io.github.dfa1.vortex.extension.DateExtension.INSTANCE.decode(array, i).toString();
                 } catch (RuntimeException e) {

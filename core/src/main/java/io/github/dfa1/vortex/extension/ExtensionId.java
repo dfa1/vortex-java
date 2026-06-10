@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.extension;
 import io.github.dfa1.vortex.core.VortexException;
 
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -48,9 +49,9 @@ public enum ExtensionId {
     /// Non-throwing lookup for a raw extension id string.
     ///
     /// @param id raw extension id string
-    /// @return matching constant, or {@code null} if not a known spec extension
-    public static @org.jspecify.annotations.Nullable ExtensionId tryFrom(String id) {
-        return LOOKUP.get(id);
+    /// @return matching constant, or empty if not a known spec extension
+    public static Optional<ExtensionId> tryFrom(String id) {
+        return Optional.ofNullable(LOOKUP.get(id));
     }
 
     /// Returns the canonical wire-format id string.

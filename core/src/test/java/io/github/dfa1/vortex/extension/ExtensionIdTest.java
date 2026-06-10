@@ -20,14 +20,14 @@ class ExtensionIdTest {
     void tryFrom_knownIds_returnEnumConstant(String wire, ExtensionId expected) {
         // Given / When / Then — wire string round-trips to the enum constant
         // so the LOOKUP map stays in sync with the enum definition
-        assertThat(ExtensionId.tryFrom(wire)).isSameAs(expected);
+        assertThat(ExtensionId.tryFrom(wire)).contains(expected);
     }
 
     @Test
-    void tryFrom_unknownId_returnsNull() {
+    void tryFrom_unknownId_returnsEmpty() {
         // Given — open-world extension id; library doesn't recognise it
         // When / Then — non-throwing miss so the registry can route to passthrough
-        assertThat(ExtensionId.tryFrom("acme.geopoint")).isNull();
+        assertThat(ExtensionId.tryFrom("acme.geopoint")).isEmpty();
     }
 
     @Test

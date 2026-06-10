@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
 
 import java.util.Collection;
+import java.util.Optional;
 
 /// Contract for a Vortex extension type — pairs the wire-format identity
 /// (an [ExtensionId]) with a factory for the matching [DType.Extension]
@@ -37,23 +38,19 @@ public interface Extension {
         throw new VortexException("encode not supported for " + extensionId());
     }
 
-    /// Resolves a {@link DType.Extension} to its spec-defined singleton, or
-    /// {@code null} when the wire id isn't one of the four spec extensions.
+    /// Resolves a {@link DType.Extension} to its spec-defined singleton.
     /// Closes over the closed-set spec impls; third-party extensions go
     /// through {@link io.github.dfa1.vortex.encoding.Registry#lookup(ExtensionId)}.
     ///
     /// @param dtype declared extension dtype
-    /// @return matching spec extension singleton, or {@code null}
-    static @org.jspecify.annotations.Nullable Extension findKnown(DType.Extension dtype) {
-        ExtensionId id = ExtensionId.tryFrom(dtype.extensionId());
-        if (id == null) {
-            return null;
-        }
-        return switch (id) {
+    /// @return matching spec extension singleton, or empty when the wire id
+    ///         isn't one of the four spec extensions
+    static Optional<Extension> findKnown(DType.Extension dtype) {
+        return ExtensionId.tryFrom(dtype.extensionId()).map(id -> switch (id) {
             case VORTEX_DATE -> DateExtension.INSTANCE;
             case VORTEX_TIME -> TimeExtension.INSTANCE;
             case VORTEX_TIMESTAMP -> TimestampExtension.INSTANCE;
             case VORTEX_UUID -> UuidExtension.INSTANCE;
-        };
+        });
     }
 }
