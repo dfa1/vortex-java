@@ -94,6 +94,76 @@ class VortexWriterTest {
     }
 
     @Test
+    void writeChunk_roundTripsTimeExtension(@TempDir Path tmp) throws IOException {
+        // Given — milliseconds resolution exercises the I32 storage branch of
+        // TimeExtension.encodeAll; ns / μs branches go through I64 (not asserted here
+        // to keep the test focused — TimeExtension tests cover both).
+        DType.Extension timeDtype = io.github.dfa1.vortex.extension.TimeExtension.INSTANCE.dtype(
+                io.github.dfa1.vortex.encoding.TimeUnit.Milliseconds, false);
+        var schema = new DType.Struct(List.of("clock"), List.of(timeDtype), false);
+        List<java.time.LocalTime> times = List.of(
+                java.time.LocalTime.of(0, 0, 0, 0),
+                java.time.LocalTime.of(1, 1, 1, 500_000_000),
+                java.time.LocalTime.of(23, 59, 59, 999_000_000));
+        Path file = tmp.resolve("times.vtx");
+
+        // When
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            sut.writeChunk(Map.of("clock", times));
+        }
+
+        // Then
+        try (var vf = VortexReader.open(file, Registry.loadAll());
+             var iter = vf.scan(ScanOptions.all())) {
+            assertThat(iter.hasNext()).isTrue();
+            try (Chunk chunk = iter.next()) {
+                Array storage = chunk.columns().get("clock");
+                assertThat(io.github.dfa1.vortex.extension.TimeExtension.INSTANCE
+                        .decodeAll(timeDtype, storage))
+                        .containsExactlyElementsOf(times);
+            }
+        }
+    }
+
+    @Test
+    void writeChunk_roundTripsTimestampExtension(@TempDir Path tmp) throws IOException {
+        // Given — pre-epoch + epoch + future to exercise sign + boundary; ms resolution
+        DType.Extension tsDtype = io.github.dfa1.vortex.extension.TimestampExtension.INSTANCE.dtype(
+                io.github.dfa1.vortex.encoding.TimeUnit.Milliseconds, null, false);
+        var schema = new DType.Struct(List.of("events"), List.of(tsDtype), false);
+        List<java.time.Instant> instants = List.of(
+                java.time.Instant.ofEpochMilli(-1_500L),
+                java.time.Instant.EPOCH,
+                java.time.Instant.ofEpochMilli(1_733_000_000_000L));
+        Path file = tmp.resolve("ts.vtx");
+
+        // When
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            sut.writeChunk(Map.of("events", instants));
+        }
+
+        // Then
+        try (var vf = VortexReader.open(file, Registry.loadAll());
+             var iter = vf.scan(ScanOptions.all())) {
+            assertThat(iter.hasNext()).isTrue();
+            try (Chunk chunk = iter.next()) {
+                Array storage = chunk.columns().get("events");
+                assertThat(io.github.dfa1.vortex.extension.TimestampExtension.INSTANCE
+                        .decodeAll(tsDtype, storage))
+                        .containsExactlyElementsOf(instants);
+            }
+        }
+    }
+
+    // UUID round-trip blocked on two unrelated writer gaps:
+    //   1. ExtEncoding.encode hardcodes the child to vortex.primitive — UUID storage
+    //      is FixedSizeList(U8, 16) and PrimitiveEncoding doesn't accept it.
+    //   2. VortexWriter.serializeDType has no FixedSizeList case at all.
+    // Tracked in TODO; UuidExtension itself is exercised by ExtensionImplsTest.
+
+    @Test
     void writeChunk_missingColumn_throwsIllegalArgument(@TempDir Path tmp) throws IOException {
         // Given
         Path file = tmp.resolve("missing.vtx");
