@@ -97,19 +97,32 @@ public final class JdbcImporter {
             int colCount, JdbcImportOptions options) throws SQLException, IOException {
         int chunkSize = options.chunkSize();
         Object[] buffers = allocateBuffers(schema, colCount, chunkSize);
+        // Per-column validity tracker. Non-null entry means the column is maskable
+        // (nullable Primitive/Bool/Utf8); null entry means extension (self-tracking) or
+        // non-nullable (no validity needed).
+        boolean[][] validity = allocateValidity(schema, colCount, chunkSize);
+        boolean[] anyNull = new boolean[colCount];
         int rowsInBuffer = 0;
         long totalRows = 0;
 
         while (rs.next()) {
             for (int c = 0; c < colCount; c++) {
-                fillCell(buffers[c], rowsInBuffer, rs, c + 1, schema.fieldTypes().get(c));
+                boolean wasNull = fillCell(buffers[c], rowsInBuffer, rs, c + 1, schema.fieldTypes().get(c));
+                if (validity[c] != null) {
+                    validity[c][rowsInBuffer] = !wasNull;
+                    if (wasNull) {
+                        anyNull[c] = true;
+                    }
+                }
             }
             rowsInBuffer++;
             if (rowsInBuffer == chunkSize) {
-                writer.writeChunk(toChunkMap(schema, buffers, rowsInBuffer));
+                writer.writeChunk(toChunkMap(schema, buffers, validity, anyNull, rowsInBuffer));
                 totalRows += rowsInBuffer;
                 rowsInBuffer = 0;
                 buffers = allocateBuffers(schema, colCount, chunkSize);
+                validity = allocateValidity(schema, colCount, chunkSize);
+                Arrays.fill(anyNull, false);
                 if (options.progressListener() != null) {
                     options.progressListener().onProgress(totalRows, -1);
                 }
@@ -117,8 +130,29 @@ public final class JdbcImporter {
         }
 
         if (rowsInBuffer > 0) {
-            writer.writeChunk(toChunkMap(schema, buffers, rowsInBuffer));
+            writer.writeChunk(toChunkMap(schema, buffers, validity, anyNull, rowsInBuffer));
         }
+    }
+
+    private static boolean[][] allocateValidity(DType.Struct schema, int colCount, int size) {
+        boolean[][] out = new boolean[colCount][];
+        for (int c = 0; c < colCount; c++) {
+            DType dt = schema.fieldTypes().get(c);
+            if (isMaskable(dt)) {
+                out[c] = new boolean[size];
+            }
+        }
+        return out;
+    }
+
+    private static boolean isMaskable(DType dt) {
+        // Extensions self-track via the null-tolerant Collection buffer + Extension.encodeAll.
+        // Bool nullable not yet wired (no Bool inner encoding on MaskedEncoding fallback).
+        return switch (dt) {
+            case DType.Primitive p -> p.nullable();
+            case DType.Utf8 u -> u.nullable();
+            default -> false;
+        };
     }
 
     private static Object[] allocateBuffers(DType.Struct schema, int colCount, int size) {
@@ -146,7 +180,7 @@ public final class JdbcImporter {
         };
     }
 
-    private static void fillCell(Object buffer, int rowIdx, ResultSet rs, int colIdx, DType dtype)
+    private static boolean fillCell(Object buffer, int rowIdx, ResultSet rs, int colIdx, DType dtype)
             throws SQLException {
         if (dtype instanceof DType.Primitive p) {
             switch (p.ptype()) {
@@ -158,13 +192,22 @@ public final class JdbcImporter {
                 case F32 -> ((float[]) buffer)[rowIdx] = rs.getFloat(colIdx);
                 default -> throw new UnsupportedOperationException("unsupported primitive type: " + p.ptype());
             }
+            // rs.wasNull must be called after the typed getter; primitive getters return 0
+            // for SQL NULL, so the storage already carries the zero placeholder required by
+            // the MaskedArray invariant.
+            return rs.wasNull();
         } else if (dtype instanceof DType.Bool) {
             ((boolean[]) buffer)[rowIdx] = rs.getBoolean(colIdx);
+            return rs.wasNull();
         } else if (dtype instanceof DType.Utf8) {
             String val = rs.getString(colIdx);
+            // NULL → empty string placeholder; validity bit records the actual null
             ((String[]) buffer)[rowIdx] = val != null ? val : "";
+            return val == null;
         } else if (dtype instanceof DType.Extension ext) {
             fillExtensionCell((List<Object>) buffer, rs, colIdx, ext);
+            // Extensions track their own nulls in the Collection buffer.
+            return false;
         } else {
             throw new UnsupportedOperationException("unsupported dtype: " + dtype);
         }
@@ -226,11 +269,21 @@ public final class JdbcImporter {
                 "unsupported JDBC UUID representation: " + (raw == null ? "null" : raw.getClass().getName()));
     }
 
-    private static Map<String, Object> toChunkMap(DType.Struct schema, Object[] buffers, int rows) {
+    private static Map<String, Object> toChunkMap(DType.Struct schema, Object[] buffers,
+            boolean[][] validity, boolean[] anyNull, int rows) {
         List<String> names = schema.fieldNames();
         Map<String, Object> chunk = new LinkedHashMap<>();
         for (int c = 0; c < names.size(); c++) {
-            chunk.put(names.get(c), trimBuffer(buffers[c], rows));
+            Object trimmed = trimBuffer(buffers[c], rows);
+            if (validity[c] != null && anyNull[c]) {
+                boolean[] trimmedValidity = rows == validity[c].length
+                        ? validity[c]
+                        : Arrays.copyOf(validity[c], rows);
+                chunk.put(names.get(c),
+                        new io.github.dfa1.vortex.core.array.NullableData(trimmed, trimmedValidity));
+            } else {
+                chunk.put(names.get(c), trimmed);
+            }
         }
         return chunk;
     }

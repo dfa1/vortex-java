@@ -328,27 +328,49 @@ class JdbcImporterTest {
         }
 
         @Test
-        void nullValuesMapToZeroOrEmpty(@TempDir Path tmp) throws Exception {
-            // Given
+        void nullValuesPreserveValidityViaMaskedArray(@TempDir Path tmp) throws Exception {
+            // Given — nullable BIGINT and VARCHAR columns with mixed NULL rows. The writer
+            // must emit vortex.masked wrapping the storage so isValid() distinguishes a real
+            // 0 / "" value from a SQL NULL.
             try (Statement stmt = conn.createStatement()) {
                 stmt.execute("CREATE TABLE nullable_cols (n BIGINT, s VARCHAR(50))");
                 stmt.execute("INSERT INTO nullable_cols VALUES (NULL, NULL)");
+                stmt.execute("INSERT INTO nullable_cols VALUES (0, '')");
+                stmt.execute("INSERT INTO nullable_cols VALUES (42, 'hi')");
             }
             Path vortex = tmp.resolve("nullable.vortex");
             JdbcImportOptions options = JdbcImportOptions.defaults().withWriteOptions(WriteOptions.defaults());
 
             // When
-            JdbcImporter.importQuery(conn, "SELECT * FROM nullable_cols", vortex, options);
+            JdbcImporter.importQuery(conn, "SELECT * FROM nullable_cols ORDER BY n NULLS FIRST", vortex, options);
 
-            // Then
+            // Then — both columns decode as MaskedArray; row 0 is null, rows 1 and 2 are valid
             try (VortexReader reader = VortexReader.open(vortex)) {
                 try (ScanIterator iter = reader.scan(ScanOptions.all())) {
                     assertThat(iter.hasNext()).isTrue();
                     try (Chunk chunk = iter.next()) {
-                        LongArray nums = chunk.column("N");
-                        assertThat(nums.getLong(0)).isEqualTo(0L);
-                        VarBinArray strs = chunk.column("S");
-                        assertThat(strs.getString(0)).isEqualTo("");
+                        io.github.dfa1.vortex.core.array.Array nCol = chunk.column("N");
+                        io.github.dfa1.vortex.core.array.Array sCol = chunk.column("S");
+                        assertThat(nCol).isInstanceOf(io.github.dfa1.vortex.core.array.MaskedArray.class);
+                        assertThat(sCol).isInstanceOf(io.github.dfa1.vortex.core.array.MaskedArray.class);
+
+                        io.github.dfa1.vortex.core.array.MaskedArray nMasked =
+                                (io.github.dfa1.vortex.core.array.MaskedArray) nCol;
+                        assertThat(nMasked.isValid(0)).isFalse();
+                        assertThat(nMasked.isValid(1)).isTrue();
+                        assertThat(nMasked.isValid(2)).isTrue();
+                        LongArray nInner = (LongArray) nMasked.inner();
+                        assertThat(nInner.getLong(1)).isEqualTo(0L);
+                        assertThat(nInner.getLong(2)).isEqualTo(42L);
+
+                        io.github.dfa1.vortex.core.array.MaskedArray sMasked =
+                                (io.github.dfa1.vortex.core.array.MaskedArray) sCol;
+                        assertThat(sMasked.isValid(0)).isFalse();
+                        assertThat(sMasked.isValid(1)).isTrue();
+                        assertThat(sMasked.isValid(2)).isTrue();
+                        VarBinArray sInner = (VarBinArray) sMasked.inner();
+                        assertThat(sInner.getString(1)).isEmpty();
+                        assertThat(sInner.getString(2)).isEqualTo("hi");
                     }
                 }
             }

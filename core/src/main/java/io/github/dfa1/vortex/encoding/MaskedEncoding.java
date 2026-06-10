@@ -53,6 +53,7 @@ public final class MaskedEncoding implements Encoding {
 
     private static final List<Encoding> INNER_FALLBACK = List.of(
             new PrimitiveEncoding(),
+            new VarBinEncoding(),
             new FixedSizeListEncoding());
 
     private static final class Encoder {

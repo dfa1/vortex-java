@@ -319,7 +319,10 @@ public final class VortexWriter implements Closeable {
                 }
             }
 
-            if (!firstChunkSeen && options.globalDict()) {
+            if (!firstChunkSeen && options.globalDict()
+                    && !(data instanceof io.github.dfa1.vortex.core.array.NullableData)) {
+                // Global dict candidate detection inspects raw primitive/String arrays; nullable
+                // columns route through MaskedEncoding instead of DictEncoding.
                 boolean candidate = false;
                 if (colDtype instanceof DType.Primitive p) {
                     candidate = isDictCandidate(p.ptype(), data);
@@ -382,6 +385,14 @@ public final class VortexWriter implements Closeable {
     /// io.github.dfa1.vortex.encoding.DictEncoding} and wrap the dictionary in another
     /// dict (which the reader cannot unwrap).
     private int writeSegment(DType dtype, Object data, Encoding encodingOverride) throws IOException {
+        // Non-extension nullable columns (Primitive, Utf8) wrap with MaskedEncoding here.
+        // Extension columns route through ExtEncoding.encode which itself delegates to
+        // MaskedEncoding when its storage data is NullableData — handled inside ExtEncoding.
+        if (encodingOverride == null
+                && data instanceof io.github.dfa1.vortex.core.array.NullableData
+                && !(dtype instanceof DType.Extension)) {
+            encodingOverride = new io.github.dfa1.vortex.encoding.MaskedEncoding();
+        }
         try (Arena arena = Arena.ofConfined()) {
             EncodeResult result;
             if (encodingOverride != null) {
