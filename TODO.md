@@ -194,27 +194,27 @@ relax for large fixtures.
 
 ## API
 
-- [ ] **Finish Extension API redesign — reader-side unwrap (Tier 3b)** —
-  the new `io.github.dfa1.vortex.extension` package landed (Extension interface +
-  ExtensionId enum + DateExtension/TimeExtension/TimestampExtension/UuidExtension
-  singletons; legacy sealed `core.Extension` retired; `Registry` now indexes both
-  encodings and extensions; writer auto-routes `Collection<LocalDate>` etc. via
-  `Extension.findKnown`). Remaining gap: physical encodings (`PrimitiveEncoding.Decoder`
-  and friends) cast the column dtype to `DType.Primitive`, so reading an Extension
-  column crashes with `ClassCastException`. Fix: unwrap `DType.Extension →
-  storageDType()` once in the scan / `DecodeContext` pipeline before calling
-  `Encoding.decode`. Then add the full round-trip integration test (write
-  `List<LocalDate>` → read back as `List<LocalDate>`) and a convenience accessor
-  like `chunk.column("birthdays").as(LocalDate.class)`.
-- [ ] **Extension API — JDBC bridge (Tier 3c)** — map `vortex.date → java.sql.Date`,
-  `vortex.time → java.sql.Time`, `vortex.timestamp → java.sql.Timestamp`,
-  `vortex.uuid → java.util.UUID`. Lives in the `jdbc/` module; depends on Tier 3b
-  for the reader side.
-- [ ] **Extension API — registry-driven writer auto-route** — `VortexWriter.writeChunk`
-  currently calls `Extension.findKnown`, which hardcodes the 4 spec impls. Switch
-  to `Registry.lookup(ExtensionId)` so third-party extensions registered via
-  ServiceLoader are auto-routed too. Requires writer's `defaultRegistry` to include
-  service-loaded extensions (today it's encoding-only).
+- [ ] **Nullable extension columns** — extension columns marked `nullable=true`
+  can't currently round-trip SQL NULL (or any `null` element from the writer
+  auto-route). `Extension.encodeAll(DType.Extension, Collection<?>)` returns
+  one packed storage array; there's no parallel validity bitmap channel. Fix:
+  extend the polymorphic `encodeAll` return shape to carry a validity mask
+  (or use `MaskedArray`-aware writer plumbing) and teach `DateExtension` /
+  `TimeExtension` / `TimestampExtension` / `UuidExtension` to emit zero-value
+  storage + validity-false for nulls. `JdbcImporter.fillExtensionCell` already
+  pushes `null` into the buffer on `rs.wasNull()`, so the importer is the
+  driving consumer.
+- [ ] **JDBC UUID import** — `JdbcImporter.fillExtensionCell` throws on
+  `VORTEX_UUID` today. JDBC support varies by driver: PostgreSQL exposes UUIDs
+  as `Types.OTHER` with `getObject(col) instanceof UUID`; H2/MySQL serialize
+  them as `Types.BINARY(16)` or `Types.VARCHAR(36)`. Detection should be a
+  per-driver heuristic, not just `Types.X`. Closes the matrix once Postgres /
+  H2 round-trip tests pass.
+- [ ] **Convenience reader accessor for extension columns** —
+  `chunk.column("birthdays").as(LocalDate.class)` sugar over
+  `DateExtension.INSTANCE.decodeAll(storage)`. Today callers have to know
+  which `*Extension.INSTANCE.decodeAll(...)` to invoke. Useful once the
+  nullable + UUID gaps are settled.
 - [ ] Use domain primitives (`UInt32`, `UInt64`, etc.) as value classes via Project Valhalla instead of raw `long`/`int`
     - See https://dfa1.github.io/articles/rethink-domain-primitives-with-valhalla
     - Candidates: `PType` integer kinds, buffer offsets, row indices, byte lengths
