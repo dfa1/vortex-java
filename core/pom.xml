@@ -21,10 +21,6 @@
 			<artifactId>flatbuffers-java</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>com.google.protobuf</groupId>
-			<artifactId>protobuf-java</artifactId>
-		</dependency>
-		<dependency>
 			<groupId>io.airlift</groupId>
 			<artifactId>aircompressor-v3</artifactId>
 			<version>${aircompressor.version}</version>
@@ -56,7 +52,7 @@
 	  Normal builds need no external tools.
 
 	  To regenerate after editing .fbs or .proto schemas:
-	    brew install flatbuffers protobuf
+	    brew install flatbuffers
 	    ./mvnw generate-sources -pl core -P regenerate-sources
 	  Then commit the updated files.
 	  Any flatc version works — the profile strips the version guard automatically.

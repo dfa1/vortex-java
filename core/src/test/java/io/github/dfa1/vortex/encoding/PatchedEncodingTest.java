@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
+import io.github.dfa1.vortex.proto.PatchedMetadata;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.Array;
@@ -21,32 +22,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PatchedEncodingTest {
 
-    // Build metadata bytes for PatchedMetadata { n_patches=field1, n_lanes=field2, offset=field3 }
-    // Proto3 varint encoding: tag = (fieldNumber << 3) | wireType(0)
     private static ByteBuffer patchedMeta(int nPatches, int nLanes, int offset) {
-        byte[] buf = new byte[12];
-        int pos = 0;
-        // field 1: n_patches
-        buf[pos++] = 0x08;
-        pos = writeVarint(buf, pos, nPatches);
-        // field 2: n_lanes
-        buf[pos++] = 0x10;
-        pos = writeVarint(buf, pos, nLanes);
-        // field 3: offset (skip if 0 — proto3 omits default values)
-        if (offset != 0) {
-            buf[pos++] = 0x18;
-            pos = writeVarint(buf, pos, offset);
-        }
-        return ByteBuffer.wrap(buf, 0, pos);
-    }
-
-    private static int writeVarint(byte[] buf, int pos, int value) {
-        while ((value & ~0x7F) != 0) {
-            buf[pos++] = (byte) ((value & 0x7F) | 0x80);
-            value >>>= 7;
-        }
-        buf[pos++] = (byte) value;
-        return pos;
+        return ByteBuffer.wrap(new PatchedMetadata(nPatches, nLanes, offset).encode());
     }
 
     private static MemorySegment i32Segment(int... values) {

@@ -1,11 +1,11 @@
 package io.github.dfa1.vortex.encoding;
 
+import io.github.dfa1.vortex.proto.DecimalMetadata;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.ArraySegments;
-import io.github.dfa1.vortex.proto.EncodingProtos;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -87,8 +87,8 @@ class DecimalEncodingTest {
             // Then
             byte[] metaBytes = new byte[encoded.rootNode().metadata().remaining()];
             encoded.rootNode().metadata().duplicate().get(metaBytes);
-            EncodingProtos.DecimalMetadata meta = EncodingProtos.DecimalMetadata.parseFrom(metaBytes);
-            assertThat(meta.getValuesType()).isEqualTo(expectedValuesType);
+            DecimalMetadata meta = DecimalMetadata.decode(java.lang.foreign.MemorySegment.ofArray(metaBytes), 0, metaBytes.length);
+            assertThat(meta.values_type()).isEqualTo(expectedValuesType);
         }
 
         @Test

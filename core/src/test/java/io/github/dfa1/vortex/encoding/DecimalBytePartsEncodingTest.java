@@ -1,10 +1,10 @@
 package io.github.dfa1.vortex.encoding;
 
+import io.github.dfa1.vortex.proto.DecimalBytePartsMetadata;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.ArraySegments;
 import io.github.dfa1.vortex.core.array.GenericArray;
-import io.github.dfa1.vortex.proto.EncodingProtos;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -68,10 +68,10 @@ class DecimalBytePartsEncodingTest {
             // Then
             byte[] metaBytes = new byte[result.rootNode().metadata().remaining()];
             result.rootNode().metadata().duplicate().get(metaBytes);
-            EncodingProtos.DecimalBytePartsMetadata meta =
-                    EncodingProtos.DecimalBytePartsMetadata.parseFrom(metaBytes);
-            assertThat(meta.getZerothChildPtypeValue()).isEqualTo(7); // I64 ordinal
-            assertThat(meta.getLowerPartCount()).isEqualTo(0);
+            DecimalBytePartsMetadata meta =
+                    DecimalBytePartsMetadata.decode(java.lang.foreign.MemorySegment.ofArray(metaBytes), 0, metaBytes.length);
+            assertThat(meta.zeroth_child_ptype().value()).isEqualTo(7); // I64 ordinal
+            assertThat(meta.lower_part_count()).isEqualTo(0);
         }
     }
 }

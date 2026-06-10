@@ -59,7 +59,6 @@
 		<aircompressor.version>3.6</aircompressor.version>
 		<zstd-jni.version>1.5.7-10</zstd-jni.version>
 		<flatbuffers.version>25.2.10</flatbuffers.version>
-		<protobuf.version>4.35.0</protobuf.version>
 		<fastcsv.version>4.3.0</fastcsv.version>
 		<hardwood.version>1.0.0.CR1</hardwood.version>
 		<jmh.version>1.37</jmh.version>
@@ -140,11 +139,6 @@
 				<groupId>com.google.flatbuffers</groupId>
 				<artifactId>flatbuffers-java</artifactId>
 				<version>${flatbuffers.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>com.google.protobuf</groupId>
-				<artifactId>protobuf-java</artifactId>
-				<version>${protobuf.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>org.openjdk.jmh</groupId>

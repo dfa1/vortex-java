@@ -1,7 +1,8 @@
 package io.github.dfa1.vortex.encoding;
 
-import com.google.protobuf.InvalidProtocolBufferException;
-import com.google.protobuf.NullValue;
+import io.github.dfa1.vortex.proto.PatchesMetadata;
+import io.github.dfa1.vortex.proto.SparseMetadata;
+import io.github.dfa1.vortex.proto.VarBinMetadata;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
@@ -9,13 +10,12 @@ import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.ArraySegments;
 import io.github.dfa1.vortex.core.array.BoolArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
-import io.github.dfa1.vortex.proto.DTypeProtos;
-import io.github.dfa1.vortex.proto.EncodingProtos;
-import io.github.dfa1.vortex.proto.ScalarProtos;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import io.github.dfa1.vortex.proto.NullValue;
+import io.github.dfa1.vortex.proto.ScalarValue;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -52,7 +52,7 @@ class SparseEncodingTest {
         }
 
         @Test
-        void encode_allZeros_noPatches() throws InvalidProtocolBufferException {
+        void encode_allZeros_noPatches() throws java.io.IOException {
             // Given
             long[] data = {0L, 0L, 0L, 0L};
             SparseEncoding sut = new SparseEncoding();
@@ -61,13 +61,14 @@ class SparseEncodingTest {
             EncodeResult result = sut.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
 
             // Then
-            EncodingProtos.SparseMetadata meta = EncodingProtos.SparseMetadata.parseFrom(
-                    result.rootNode().metadata().array());
-            assertThat(meta.getPatches().getLen()).isZero();
+            java.nio.ByteBuffer metaBuf = result.rootNode().metadata().duplicate();
+            java.lang.foreign.MemorySegment metaSeg = java.lang.foreign.MemorySegment.ofBuffer(metaBuf);
+            SparseMetadata meta = SparseMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            assertThat(meta.patches().len()).isZero();
         }
 
         @Test
-        void encode_withNonZero_createsPatches() throws InvalidProtocolBufferException {
+        void encode_withNonZero_createsPatches() throws java.io.IOException {
             // Given — [0, 10, 0, 50, 0]
             long[] data = {0L, 10L, 0L, 50L, 0L};
             SparseEncoding sut = new SparseEncoding();
@@ -76,9 +77,10 @@ class SparseEncodingTest {
             EncodeResult result = sut.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
 
             // Then
-            EncodingProtos.SparseMetadata meta = EncodingProtos.SparseMetadata.parseFrom(
-                    result.rootNode().metadata().array());
-            assertThat(meta.getPatches().getLen()).isEqualTo(2);
+            java.nio.ByteBuffer metaBuf = result.rootNode().metadata().duplicate();
+            java.lang.foreign.MemorySegment metaSeg = java.lang.foreign.MemorySegment.ofBuffer(metaBuf);
+            SparseMetadata meta = SparseMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            assertThat(meta.patches().len()).isEqualTo(2);
         }
 
         @Test
@@ -119,7 +121,7 @@ class SparseEncodingTest {
 
         @ParameterizedTest
         @ValueSource(ints = {0, 1, 100})
-        void encode_empty_or_allZero_noPatches(int size) throws InvalidProtocolBufferException {
+        void encode_empty_or_allZero_noPatches(int size) throws java.io.IOException {
             // Given
             long[] data = new long[size];
             SparseEncoding sut = new SparseEncoding();
@@ -128,9 +130,10 @@ class SparseEncodingTest {
             EncodeResult result = sut.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
 
             // Then
-            EncodingProtos.SparseMetadata meta = EncodingProtos.SparseMetadata.parseFrom(
-                    result.rootNode().metadata().array());
-            assertThat(meta.getPatches().getLen()).isZero();
+            java.nio.ByteBuffer metaBuf = result.rootNode().metadata().duplicate();
+            java.lang.foreign.MemorySegment metaSeg = java.lang.foreign.MemorySegment.ofBuffer(metaBuf);
+            SparseMetadata meta = SparseMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            assertThat(meta.patches().len()).isZero();
         }
     }
 
@@ -148,8 +151,7 @@ class SparseEncodingTest {
                 DType dtype, long rowCount, long fillLong, PType idxPtype,
                 long[] patchIndices, long[] patchValues, long offset
         ) {
-            byte[] fillBytes = ScalarProtos.ScalarValue.newBuilder()
-                                       .setInt64Value(fillLong).build().toByteArray();
+            byte[] fillBytes = ScalarValue.ofInt64Value(fillLong).encode();
 
             byte[] metaBytes = buildSparseMetaBytes(patchIndices.length, offset, idxPtype);
 
@@ -164,8 +166,7 @@ class SparseEncodingTest {
                 DType dtype, long rowCount, double fillDouble,
                 long[] patchIndices, double[] patchValues
         ) {
-            byte[] fillBytes = ScalarProtos.ScalarValue.newBuilder()
-                                       .setF64Value(fillDouble).build().toByteArray();
+            byte[] fillBytes = ScalarValue.ofF64Value(fillDouble).encode();
             byte[] metaBytes = buildSparseMetaBytes(patchIndices.length, 0L, PType.U32);
 
             byte[] idxBuf = toLEBytes(patchIndices, PType.U32);
@@ -203,15 +204,9 @@ class SparseEncodingTest {
         }
 
         private static byte[] buildSparseMetaBytes(long numPatches, long offset, PType idxPtype) {
-            EncodingProtos.PatchesMetadata patchesMeta = EncodingProtos.PatchesMetadata.newBuilder()
-                                                                 .setLen(numPatches)
-                                                                 .setOffset(offset)
-                                                                 .setIndicesPtype(DTypeProtos.PType.forNumber(idxPtype.ordinal()))
-                                                                 .build();
-            return EncodingProtos.SparseMetadata.newBuilder()
-                           .setPatches(patchesMeta)
-                           .build()
-                           .toByteArray();
+            PatchesMetadata patchesMeta = new PatchesMetadata(numPatches, offset, io.github.dfa1.vortex.proto.PType.fromValue(idxPtype.ordinal()), null, null, null);
+            return new SparseMetadata(patchesMeta)
+                           .encode();
         }
 
         private static byte[] toLEBytes(long[] values, PType ptype) {
@@ -327,8 +322,7 @@ class SparseEncodingTest {
         @Test
         void decode_nullValueFill_treatedAsZero() {
             // Given — fill encoded as ScalarValue.NULL_VALUE (as Rust writes for nullable cols)
-            byte[] nullFill = ScalarProtos.ScalarValue.newBuilder()
-                                      .setNullValue(NullValue.NULL_VALUE).build().toByteArray();
+            byte[] nullFill = ScalarValue.ofNullValue(NullValue.NULL_VALUE).encode();
             byte[] meta = buildSparseMetaBytes(0, 0L, PType.U32);
             DecodeContext ctx = buildCtx(DTypes.I64, 4, nullFill, meta, new byte[0], new byte[0],
                     new DType.Primitive(PType.U32, false));
@@ -349,8 +343,7 @@ class SparseEncodingTest {
         void decode_utf8_noPatches_allEmpty() {
             // Given — Utf8 sparse, no patches → all positions empty (null fill)
             DType utf8 = new DType.Utf8(true);
-            byte[] nullFill = ScalarProtos.ScalarValue.newBuilder()
-                                      .setNullValue(NullValue.NULL_VALUE).build().toByteArray();
+            byte[] nullFill = ScalarValue.ofNullValue(NullValue.NULL_VALUE).encode();
             byte[] meta = buildSparseMetaBytes(0, 0L, PType.U32);
             DecodeContext ctx = buildCtx(utf8, 3, nullFill, meta, new byte[0], new byte[0],
                     new DType.Primitive(PType.U32, false));
@@ -372,16 +365,13 @@ class SparseEncodingTest {
         void decode_utf8_withPatches_writesStringsAtIndices() {
             // Given — 5 Utf8 elements, patches at [1]="hi" and [3]="bye"
             DType utf8 = new DType.Utf8(true);
-            byte[] nullFill = ScalarProtos.ScalarValue.newBuilder()
-                                      .setNullValue(NullValue.NULL_VALUE).build().toByteArray();
+            byte[] nullFill = ScalarValue.ofNullValue(NullValue.NULL_VALUE).encode();
             byte[] meta = buildSparseMetaBytes(2, 0L, PType.U32);
 
             byte[] idxBuf = toLEBytes(new long[]{1L, 3L}, PType.U32);
             byte[] strBytes = "hibye".getBytes(StandardCharsets.UTF_8);
             byte[] offsets = intLEBytes(new int[]{0, 2, 5});
-            byte[] varBinMeta = EncodingProtos.VarBinMetadata.newBuilder()
-                                        .setOffsetsPtype(DTypeProtos.PType.forNumber(PType.I32.ordinal()))
-                                        .build().toByteArray();
+            byte[] varBinMeta = new VarBinMetadata(io.github.dfa1.vortex.proto.PType.fromValue(PType.I32.ordinal())).encode();
 
             ArrayNode offsetsNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
                     new ArrayNode[0], new int[]{3}, ArrayStats.empty());
@@ -423,8 +413,7 @@ class SparseEncodingTest {
         void decode_bool_withPatches_setsBitsAtIndices() {
             // Given — 6 Bool elements, patches at [2]=true and [5]=true
             DType bool = new DType.Bool(true);
-            byte[] nullFill = ScalarProtos.ScalarValue.newBuilder()
-                                      .setNullValue(NullValue.NULL_VALUE).build().toByteArray();
+            byte[] nullFill = ScalarValue.ofNullValue(NullValue.NULL_VALUE).encode();
             byte[] meta = buildSparseMetaBytes(2, 0L, PType.U32);
             byte[] idxBuf = toLEBytes(new long[]{2L, 5L}, PType.U32);
             byte[] boolBits = new byte[]{0b00000011};

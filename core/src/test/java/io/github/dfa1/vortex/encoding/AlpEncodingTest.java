@@ -3,7 +3,8 @@ package io.github.dfa1.vortex.encoding;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.ArraySegments;
-import io.github.dfa1.vortex.proto.EncodingProtos;
+import io.github.dfa1.vortex.proto.ALPMetadata;
+import io.github.dfa1.vortex.proto.PatchesMetadata;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -28,19 +29,14 @@ class AlpEncodingTest {
                 long[] patchIndices,
                 double[] patchValues
         ) {
-            EncodingProtos.ALPMetadata.Builder metaBuilder = EncodingProtos.ALPMetadata.newBuilder()
-                                                                     .setExpE(expE).setExpF(expF);
-
-            if (patchIndices != null) {
-                EncodingProtos.PatchesMetadata pm = EncodingProtos.PatchesMetadata.newBuilder()
-                                                            .setLen(patchIndices.length)
-                                                            .setOffset(0)
-                                                            .setIndicesPtype(io.github.dfa1.vortex.proto.DTypeProtos.PType.U32)
-                                                            .build();
-                metaBuilder.setPatches(pm);
-            }
-
-            byte[] metaBytes = metaBuilder.build().toByteArray();
+            PatchesMetadata pm = patchIndices != null
+                    ? new PatchesMetadata(
+                            (long) patchIndices.length,
+                            0L,
+                            io.github.dfa1.vortex.proto.PType.U32,
+                            null, null, null)
+                    : null;
+            byte[] metaBytes = new ALPMetadata(expE, expF, pm).encode();
 
             byte[] encBuf = new byte[encodedVals.length * 8];
             ByteBuffer bb = ByteBuffer.wrap(encBuf).order(ByteOrder.LITTLE_ENDIAN);
@@ -95,10 +91,7 @@ class AlpEncodingTest {
                 int expE, int expF,
                 int[] encodedVals
         ) {
-            EncodingProtos.ALPMetadata.Builder metaBuilder = EncodingProtos.ALPMetadata.newBuilder()
-                                                                     .setExpE(expE).setExpF(expF);
-
-            byte[] metaBytes = metaBuilder.build().toByteArray();
+            byte[] metaBytes = new ALPMetadata(expE, expF, null).encode();
 
             byte[] encBuf = new byte[encodedVals.length * 4];
             ByteBuffer bb = ByteBuffer.wrap(encBuf).order(ByteOrder.LITTLE_ENDIAN);
@@ -289,11 +282,11 @@ class AlpEncodingTest {
 
             // When
             EncodeResult result = sut.encode(DTypes.F64, values, EncodeTestHelper.testCtx());
-            EncodingProtos.ALPMetadata meta =
-                    EncodingProtos.ALPMetadata.parseFrom(result.rootNode().metadata().duplicate());
+            MemorySegment metaSeg = MemorySegment.ofBuffer(result.rootNode().metadata().duplicate());
+            ALPMetadata meta = ALPMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 
             // Then
-            assertThat(meta.getExpE()).isGreaterThan(0);
+            assertThat(meta.exp_e()).isGreaterThan(0);
         }
     }
 }

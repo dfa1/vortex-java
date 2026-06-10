@@ -8,8 +8,8 @@ import io.github.dfa1.vortex.core.array.Float16Array;
 import io.github.dfa1.vortex.core.array.FloatArray;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
-import io.github.dfa1.vortex.proto.EncodingProtos;
-import io.github.dfa1.vortex.proto.ScalarProtos;
+import io.github.dfa1.vortex.proto.ScalarValue;
+import io.github.dfa1.vortex.proto.SequenceMetadata;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -144,31 +144,21 @@ class SequenceEncodingTest {
         }
 
         private static byte[] intMeta(long base, long mul) {
-            return EncodingProtos.SequenceMetadata.newBuilder()
-                           .setBase(ScalarProtos.ScalarValue.newBuilder().setInt64Value(base))
-                           .setMultiplier(ScalarProtos.ScalarValue.newBuilder().setInt64Value(mul))
-                           .build().toByteArray();
+            return new SequenceMetadata(ScalarValue.ofInt64Value(base), ScalarValue.ofInt64Value(mul)).encode();
         }
 
         private static byte[] f64Meta(double base, double mul) {
-            return EncodingProtos.SequenceMetadata.newBuilder()
-                           .setBase(ScalarProtos.ScalarValue.newBuilder().setF64Value(base))
-                           .setMultiplier(ScalarProtos.ScalarValue.newBuilder().setF64Value(mul))
-                           .build().toByteArray();
+            return new SequenceMetadata(ScalarValue.ofF64Value(base), ScalarValue.ofF64Value(mul)).encode();
         }
 
         private static byte[] f32Meta(float base, float mul) {
-            return EncodingProtos.SequenceMetadata.newBuilder()
-                           .setBase(ScalarProtos.ScalarValue.newBuilder().setF32Value(base))
-                           .setMultiplier(ScalarProtos.ScalarValue.newBuilder().setF32Value(mul))
-                           .build().toByteArray();
+            return new SequenceMetadata(ScalarValue.ofF32Value(base), ScalarValue.ofF32Value(mul)).encode();
         }
 
         private static byte[] f16Meta(short baseShort, short mulShort) {
-            return EncodingProtos.SequenceMetadata.newBuilder()
-                           .setBase(ScalarProtos.ScalarValue.newBuilder().setF16Value(Short.toUnsignedLong(baseShort)))
-                           .setMultiplier(ScalarProtos.ScalarValue.newBuilder().setF16Value(Short.toUnsignedLong(mulShort)))
-                           .build().toByteArray();
+            return new SequenceMetadata(
+                    ScalarValue.ofF16Value(Short.toUnsignedLong(baseShort)),
+                    ScalarValue.ofF16Value(Short.toUnsignedLong(mulShort))).encode();
         }
 
         @ParameterizedTest
@@ -312,14 +302,14 @@ class SequenceEncodingTest {
 
             // When
             EncodeResult result = sut.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
-            EncodingProtos.SequenceMetadata meta =
-                    EncodingProtos.SequenceMetadata.parseFrom(result.rootNode().metadata().duplicate());
+            MemorySegment metaSeg = MemorySegment.ofBuffer(result.rootNode().metadata().duplicate());
+            SequenceMetadata meta = SequenceMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 
             // Then
-            assertThat(meta.hasBase()).isTrue();
-            assertThat(meta.hasMultiplier()).isTrue();
-            assertThat(meta.getBase().getInt64Value()).isEqualTo(10L);
-            assertThat(meta.getMultiplier().getInt64Value()).isEqualTo(2L);
+            assertThat(meta.base()).isNotNull();
+            assertThat(meta.multiplier()).isNotNull();
+            assertThat(meta.base().int64_value()).isEqualTo(10L);
+            assertThat(meta.multiplier().int64_value()).isEqualTo(2L);
         }
     }
 }

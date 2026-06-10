@@ -1,9 +1,9 @@
 package io.github.dfa1.vortex.encoding;
 
+import io.github.dfa1.vortex.proto.ListViewMetadata;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.ListViewArray;
-import io.github.dfa1.vortex.proto.EncodingProtos;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -193,11 +193,12 @@ class ListViewEncodingTest {
 
             // When
             EncodeResult result = sut.encode(DTypes.LIST_I32, data, EncodeTestHelper.testCtx());
-            EncodingProtos.ListViewMetadata meta =
-                    EncodingProtos.ListViewMetadata.parseFrom(result.rootNode().metadata().duplicate());
+            java.nio.ByteBuffer metaBuf = result.rootNode().metadata().duplicate();
+            java.lang.foreign.MemorySegment metaSeg = java.lang.foreign.MemorySegment.ofBuffer(metaBuf);
+            ListViewMetadata meta = ListViewMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 
             // Then
-            assertThat(meta.getElementsLen()).isEqualTo(5);
+            assertThat(meta.elements_len()).isEqualTo(5);
         }
     }
 }

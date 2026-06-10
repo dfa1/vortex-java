@@ -1,10 +1,10 @@
 package io.github.dfa1.vortex.encoding;
 
+import io.github.dfa1.vortex.proto.VarBinMetadata;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.VarBinArray;
-import io.github.dfa1.vortex.proto.EncodingProtos;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -167,11 +167,11 @@ class VarBinEncodingTest {
 
             // When
             EncodeResult result = sut.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
-            EncodingProtos.VarBinMetadata meta =
-                    EncodingProtos.VarBinMetadata.parseFrom(result.rootNode().metadata().duplicate());
+            VarBinMetadata meta =
+                    VarBinMetadata.decode(java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate()), 0, java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate()).byteSize());
 
             // Then
-            assertThat(meta.getOffsetsPtypeValue()).isEqualTo(7); // I64
+            assertThat(meta.offsets_ptype().value()).isEqualTo(7); // I64
         }
     }
 }

@@ -18,10 +18,10 @@ import io.github.dfa1.vortex.fbs.PostscriptSegment;
 import io.github.dfa1.vortex.fbs.Primitive;
 import io.github.dfa1.vortex.fbs.SegmentSpec;
 import io.github.dfa1.vortex.fbs.Type;
-import io.github.dfa1.vortex.proto.ScalarProtos;
 import io.github.dfa1.vortex.scan.ScanOptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import io.github.dfa1.vortex.proto.ScalarValue;
 
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
@@ -114,8 +114,7 @@ class ZipBombSecurityTest {
      */
     private static Path buildConstantBomb(Path dir, long claimedRows) throws Exception {
         // ConstantEncoding stores the scalar value in buffer 0 as protobuf bytes.
-        byte[] protoBytes = ScalarProtos.ScalarValue.newBuilder()
-                .setInt64Value(42L).build().toByteArray();
+        byte[] protoBytes = ScalarValue.ofInt64Value(42L).encode();
         byte[] seg = buildOneBufferSegment(protoBytes);
 
         ByteBuffer footerBuf = buildFooter(

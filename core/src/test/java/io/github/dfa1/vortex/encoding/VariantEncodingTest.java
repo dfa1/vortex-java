@@ -2,10 +2,11 @@ package io.github.dfa1.vortex.encoding;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.proto.Primitive;
+import io.github.dfa1.vortex.proto.VariantMetadata;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.NullArray;
 import io.github.dfa1.vortex.core.array.VariantArray;
-import io.github.dfa1.vortex.proto.DTypeProtos;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -22,15 +23,8 @@ class VariantEncodingTest {
     private static final DType VARIANT_DTYPE = new DType.Variant(false);
     private static final int N = 3;
 
-    // Build a DType proto bytes for VariantMetadataProto { shredded_dtype = 1 }
-    private static ByteBuffer variantMetaWithShredded(DTypeProtos.DType shredded) {
-        byte[] dtypeBytes = shredded.toByteArray();
-        // field 1, wire type 2 (length-delimited): tag = 0x0A, then varint length, then bytes
-        byte[] meta = new byte[1 + 1 + dtypeBytes.length];
-        meta[0] = 0x0A;
-        meta[1] = (byte) dtypeBytes.length;
-        System.arraycopy(dtypeBytes, 0, meta, 2, dtypeBytes.length);
-        return ByteBuffer.wrap(meta);
+    private static ByteBuffer variantMetaWithShredded(io.github.dfa1.vortex.proto.DType shredded) {
+        return ByteBuffer.wrap(new VariantMetadata(shredded).encode());
     }
 
     // Build inner / shredded child nodes backed by primitive buffer at the given segment index.
@@ -81,12 +75,8 @@ class VariantEncodingTest {
         @Test
         void decode_withShredded_decodesSecondChild() {
             // Given — 2 children: null core_storage + primitive shredded; metadata encodes I32 dtype
-            DTypeProtos.DType shreddedProto = DTypeProtos.DType.newBuilder()
-                    .setPrimitive(DTypeProtos.Primitive.newBuilder()
-                            .setType(DTypeProtos.PType.I32)
-                            .setNullable(false)
-                            .build())
-                    .build();
+            io.github.dfa1.vortex.proto.DType shreddedProto = io.github.dfa1.vortex.proto.DType.ofPrimitive(
+                    new Primitive(io.github.dfa1.vortex.proto.PType.I32, false));
             ByteBuffer meta = variantMetaWithShredded(shreddedProto);
 
             ArrayNode coreNode = nullChildNode();

@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
+import io.github.dfa1.vortex.proto.RLEMetadata;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
@@ -7,7 +8,6 @@ import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.ArraySegments;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.MaskedArray;
-import io.github.dfa1.vortex.proto.EncodingProtos;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -353,13 +353,13 @@ class RleEncodingTest {
 
             // When
             EncodeResult result = sut.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
-            EncodingProtos.RLEMetadata meta =
-                    EncodingProtos.RLEMetadata.parseFrom(result.rootNode().metadata().duplicate());
+            RLEMetadata meta =
+                    RLEMetadata.decode(java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate()), 0, java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate()).byteSize());
 
             // Then
-            assertThat(meta.getValuesLen()).isEqualTo(2);
-            assertThat(meta.getIndicesLen()).isGreaterThan(0);
-            assertThat(meta.getIndicesPtypeValue()).isEqualTo(1); // U16
+            assertThat(meta.values_len()).isEqualTo(2);
+            assertThat(meta.indices_len()).isGreaterThan(0);
+            assertThat(meta.indices_ptype().value()).isEqualTo(1); // U16
         }
     }
 }

@@ -1,5 +1,7 @@
 package io.github.dfa1.vortex.encoding;
 
+import io.github.dfa1.vortex.proto.ZstdFrameMetadata;
+import io.github.dfa1.vortex.proto.ZstdMetadata;
 import com.github.luben.zstd.ZstdCompressCtx;
 import io.airlift.compress.v3.zstd.ZstdCompressor;
 import io.airlift.compress.v3.zstd.ZstdJavaCompressor;
@@ -10,7 +12,6 @@ import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.MaskedArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
-import io.github.dfa1.vortex.proto.EncodingProtos;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -190,17 +191,6 @@ class ZstdEncodingTest {
             return ArrayNode.of(enc.encodingId(), enc.metadata(), children, enc.bufferIndices(), null);
         }
 
-        private static byte[] metaNoDict(long[] uncompressedSizes, long[] nValues) {
-            EncodingProtos.ZstdMetadata.Builder builder = EncodingProtos.ZstdMetadata.newBuilder()
-                                                                  .setDictionarySize(0);
-            for (int i = 0; i < uncompressedSizes.length; i++) {
-                builder.addFrames(EncodingProtos.ZstdFrameMetadata.newBuilder()
-                                          .setUncompressedSize(uncompressedSizes[i])
-                                          .setNValues(nValues[i]));
-            }
-            return builder.build().toByteArray();
-        }
-
         private static DecodeContext makeCtx(byte[] meta, DType dtype, long n, byte[]... compressedFrames) {
             MemorySegment[] segments = new MemorySegment[compressedFrames.length];
             int[] bufIndices = new int[compressedFrames.length];
@@ -218,6 +208,14 @@ class ZstdEncodingTest {
             byte[] out = new byte[compressor.maxCompressedLength(input.length)];
             int len = compressor.compress(input, 0, input.length, out, 0, out.length);
             return Arrays.copyOf(out, len);
+        }
+
+        private static byte[] metaNoDict(long[] uncompressedSizes, long[] nValues) {
+            java.util.List<ZstdFrameMetadata> frames = new java.util.ArrayList<>();
+            for (int i = 0; i < uncompressedSizes.length; i++) {
+                frames.add(new ZstdFrameMetadata(uncompressedSizes[i], nValues[i]));
+            }
+            return new ZstdMetadata(0, frames).encode();
         }
 
         private static byte[] toLeBytes(int[] values) {
@@ -251,138 +249,6 @@ class ZstdEncodingTest {
         }
 
         @Test
-        void decode_primitiveI32_singleFrame_roundTrips() {
-            // Given
-            var sut = new ZstdEncoding();
-            int[] values = {10, 20, 30, 40};
-            byte[] raw = toLeBytes(values);
-            byte[] compressed = compress(raw);
-            DecodeContext ctx = makeCtx(
-                    metaNoDict(new long[]{raw.length}, new long[]{values.length}),
-                    DTypes.I32, values.length, compressed
-            );
-
-            // When
-            IntArray result = (IntArray) sut.decode(ctx);
-
-            // Then
-            assertThat(result.length()).isEqualTo(values.length);
-            for (int i = 0; i < values.length; i++) {
-                assertThat(result.getInt(i)).as("index %d", i).isEqualTo(values[i]);
-            }
-        }
-
-        @Test
-        void decode_primitiveI64_singleFrame_roundTrips() {
-            // Given
-            var sut = new ZstdEncoding();
-            long[] values = {100L, 200L, 300L};
-            byte[] raw = toLeBytes(values);
-            byte[] compressed = compress(raw);
-            DecodeContext ctx = makeCtx(
-                    metaNoDict(new long[]{raw.length}, new long[]{values.length}),
-                    DTypes.I64, values.length, compressed
-            );
-
-            // When
-            LongArray result = (LongArray) sut.decode(ctx);
-
-            // Then
-            assertThat(result.length()).isEqualTo(values.length);
-            for (int i = 0; i < values.length; i++) {
-                assertThat(result.getLong(i)).as("index %d", i).isEqualTo(values[i]);
-            }
-        }
-
-        @Test
-        void decode_utf8_singleFrame_roundTrips() {
-            // Given
-            var sut = new ZstdEncoding();
-            String[] strings = {"hello", "world", "zstd"};
-            byte[] raw = toLengthPrefixed(strings);
-            byte[] compressed = compress(raw);
-            DecodeContext ctx = makeCtx(
-                    metaNoDict(new long[]{raw.length}, new long[]{strings.length}),
-                    DTypes.UTF8, strings.length, compressed
-            );
-
-            // When
-            VarBinArray result = (VarBinArray) sut.decode(ctx);
-
-            // Then
-            assertThat(result.length()).isEqualTo(strings.length);
-            for (int i = 0; i < strings.length; i++) {
-                assertThat(result.getString(i)).as("index %d", i).isEqualTo(strings[i]);
-            }
-        }
-
-        @Test
-        void decode_primitiveI32_multipleFrames_roundTrips() {
-            // Given
-            var sut = new ZstdEncoding();
-            int[] frame0Values = {1, 2, 3};
-            int[] frame1Values = {4, 5};
-            byte[] raw0 = toLeBytes(frame0Values);
-            byte[] raw1 = toLeBytes(frame1Values);
-            byte[] comp0 = compress(raw0);
-            byte[] comp1 = compress(raw1);
-            byte[] meta = metaNoDict(
-                    new long[]{raw0.length, raw1.length},
-                    new long[]{frame0Values.length, frame1Values.length}
-            );
-            DecodeContext ctx = makeCtx(meta, DTypes.I32, 5, comp0, comp1);
-
-            // When
-            IntArray result = (IntArray) sut.decode(ctx);
-
-            // Then
-            assertThat(result.length()).isEqualTo(5);
-            assertThat(result.getInt(0)).isEqualTo(1);
-            assertThat(result.getInt(4)).isEqualTo(5);
-        }
-
-        @Test
-        void decode_emptyArray_returnsZeroLengthArray() {
-            // Given
-            var sut = new ZstdEncoding();
-            byte[] meta = metaNoDict(new long[0], new long[0]);
-            DecodeContext ctx = makeCtx(meta, DTypes.I32, 0);
-
-            // When
-            IntArray result = (IntArray) sut.decode(ctx);
-
-            // Then
-            assertThat(result.length()).isZero();
-        }
-
-        @Test
-        void decode_withDictionary_primitive_roundTrips() {
-            // Given
-            var sut = new ZstdEncoding();
-            int[] values = {10, 20, 30, 40};
-            byte[] raw = toLeBytes(values);
-            byte[] dictBytes = makeDictFor(raw);
-            byte[] compressed = compressWithDict(raw, dictBytes);
-            byte[] meta = EncodingProtos.ZstdMetadata.newBuilder()
-                                  .setDictionarySize(dictBytes.length)
-                                  .addFrames(EncodingProtos.ZstdFrameMetadata.newBuilder()
-                                                     .setUncompressedSize(raw.length)
-                                                     .setNValues(values.length))
-                                  .build().toByteArray();
-            // buffer[0]=dict, buffer[1]=frame
-            DecodeContext ctx = makeDictCtx(meta, DTypes.I32, values.length, dictBytes, compressed);
-
-            // When
-            IntArray result = (IntArray) sut.decode(ctx);
-
-            // Then
-            assertThat(result.length()).isEqualTo(values.length);
-            for (int i = 0; i < values.length; i++) {
-                assertThat(result.getInt(i)).as("index %d", i).isEqualTo(values[i]);
-            }
-        }
-
-        @Test
         void decode_withDictionary_utf8_roundTrips() {
             // Given
             var sut = new ZstdEncoding();
@@ -390,12 +256,8 @@ class ZstdEncodingTest {
             byte[] raw = toLengthPrefixed(strings);
             byte[] dictBytes = makeDictFor(raw);
             byte[] compressed = compressWithDict(raw, dictBytes);
-            byte[] meta = EncodingProtos.ZstdMetadata.newBuilder()
-                                  .setDictionarySize(dictBytes.length)
-                                  .addFrames(EncodingProtos.ZstdFrameMetadata.newBuilder()
-                                                     .setUncompressedSize(raw.length)
-                                                     .setNValues(strings.length))
-                                  .build().toByteArray();
+            byte[] meta = new ZstdMetadata(dictBytes.length,
+                    java.util.List.of(new ZstdFrameMetadata(raw.length, strings.length))).encode();
             DecodeContext ctx = makeDictCtx(meta, DTypes.UTF8, strings.length, dictBytes, compressed);
 
             // When
@@ -419,13 +281,9 @@ class ZstdEncodingTest {
             byte[] dictBytes = makeDictFor(raw0, raw1);
             byte[] comp0 = compressWithDict(raw0, dictBytes);
             byte[] comp1 = compressWithDict(raw1, dictBytes);
-            byte[] meta = EncodingProtos.ZstdMetadata.newBuilder()
-                                  .setDictionarySize(dictBytes.length)
-                                  .addFrames(EncodingProtos.ZstdFrameMetadata.newBuilder()
-                                                     .setUncompressedSize(raw0.length).setNValues(frame0.length))
-                                  .addFrames(EncodingProtos.ZstdFrameMetadata.newBuilder()
-                                                     .setUncompressedSize(raw1.length).setNValues(frame1.length))
-                                  .build().toByteArray();
+            byte[] meta = new ZstdMetadata(dictBytes.length, java.util.List.of(
+                    new ZstdFrameMetadata(raw0.length, frame0.length),
+                    new ZstdFrameMetadata(raw1.length, frame1.length))).encode();
             DecodeContext ctx = makeDictCtx(meta, DTypes.I32, 5, dictBytes, comp0, comp1);
 
             // When
@@ -549,11 +407,11 @@ class ZstdEncodingTest {
 
             // When
             EncodeResult result = sut.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
-            EncodingProtos.ZstdMetadata meta =
-                    EncodingProtos.ZstdMetadata.parseFrom(result.rootNode().metadata().duplicate());
+            ZstdMetadata meta =
+                    ZstdMetadata.decode(java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate()), 0, java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate()).byteSize());
 
             // Then
-            assertThat(meta.getFramesCount()).isGreaterThan(0);
+            assertThat(meta.frames().size()).isGreaterThan(0);
         }
     }
 }

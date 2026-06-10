@@ -6,7 +6,7 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.ArraySegments;
 import io.github.dfa1.vortex.core.array.MaskedArray;
-import io.github.dfa1.vortex.proto.ScalarProtos;
+import io.github.dfa1.vortex.proto.ScalarValue;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -29,10 +29,7 @@ class FrameOfReferenceEncodingTest {
         private static DecodeContext buildForContext(
                 DType dtype, long reference, long[] residuals, PType ptype
         ) {
-            byte[] metaBytes = ScalarProtos.ScalarValue.newBuilder()
-                                       .setInt64Value(reference)
-                                       .build()
-                                       .toByteArray();
+            byte[] metaBytes = ScalarValue.ofInt64Value(reference).encode();
 
             int elemBytes = ptype.byteSize();
             byte[] childBytes = new byte[residuals.length * elemBytes];
@@ -166,7 +163,7 @@ class FrameOfReferenceEncodingTest {
                     EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{1}, ArrayStats.empty());
             ArrayNode primNode = ArrayNode.of(
                     EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[]{validityNode}, new int[]{0}, ArrayStats.empty());
-            byte[] metaBytes = ScalarProtos.ScalarValue.newBuilder().setInt64Value(reference).build().toByteArray();
+            byte[] metaBytes = ScalarValue.ofInt64Value(reference).encode();
             ArrayNode forNode = ArrayNode.of(
                     EncodingId.FASTLANES_FOR, ByteBuffer.wrap(metaBytes), new ArrayNode[]{primNode}, new int[0], ArrayStats.empty());
 

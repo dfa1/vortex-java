@@ -1,8 +1,8 @@
 package io.github.dfa1.vortex.encoding;
 
+import io.github.dfa1.vortex.proto.BitPackedMetadata;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.ArraySegments;
-import io.github.dfa1.vortex.proto.EncodingProtos;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -88,11 +88,11 @@ class BitpackedEncodingTest {
 
             // When
             EncodeResult result = sut.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
-            EncodingProtos.BitPackedMetadata meta =
-                    EncodingProtos.BitPackedMetadata.parseFrom(result.rootNode().metadata().duplicate());
+            BitPackedMetadata meta =
+                    BitPackedMetadata.decode(java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate()), 0, java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate()).byteSize());
 
             // Then
-            assertThat(meta.getBitWidth()).isGreaterThan(0);
+            assertThat(meta.bit_width()).isGreaterThan(0);
         }
     }
 }

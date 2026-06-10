@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.encoding;
 
+import io.github.dfa1.vortex.proto.ALPRDMetadata;
 import io.github.dfa1.vortex.core.array.ArraySegments;
-import io.github.dfa1.vortex.proto.EncodingProtos;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -42,11 +42,11 @@ class AlpRdEncodingTest {
 
             // When
             EncodeResult result = sut.encode(DTypes.F64, values, EncodeTestHelper.testCtx());
-            EncodingProtos.ALPRDMetadata meta =
-                    EncodingProtos.ALPRDMetadata.parseFrom(result.rootNode().metadata().duplicate());
+            ALPRDMetadata meta =
+                    ALPRDMetadata.decode(java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate()), 0, java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate()).byteSize());
 
             // Then
-            assertThat(meta.getRightBitWidth()).isGreaterThan(0);
+            assertThat(meta.right_bit_width()).isGreaterThan(0);
         }
     }
 }
