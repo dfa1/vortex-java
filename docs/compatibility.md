@@ -1,7 +1,16 @@
 # Compatibility
 
-Tested against the [Rust reference implementation](https://github.com/vortex-data/vortex) v0.72.0.
+Tested against the [Rust reference implementation](https://github.com/vortex-data/vortex) v0.74.0.
 For the rest of the API surface (reader, writer, scan, CLI), see [reference.md](reference.md).
+
+## Known wire-format gaps
+
+| Item | Introduced | Java status |
+|------|------------|-------------|
+| `DType::Union` (`fbs.DType.Type.Union = 12`) | Rust 0.71.0 | ❌ Decode throws `VortexException("unsupported DType typeType=12")`. No `DType.Union` variant in Java's sealed type. |
+| `vortex.onpair` experimental string encoding | Rust 0.74.0 | ❌ Not registered. Files using it fail to decode unless `Registry.allowUnknown()` is enabled. |
+| `vortex.variant` write path | Rust 0.73.0 (`Allow writing Variant to files`, #7945) | ❌ Java decode works; Java encode throws `"encode not yet implemented"`. Java→Rust round-trip not possible for Variant columns. |
+| Arrow extension array import affecting Variant shape | Rust 0.74.0 (#8125) | Untested. Re-run integration fixtures against v0.74.0 once published. |
 
 ## Encodings
 
@@ -39,7 +48,8 @@ For the rest of the API surface (reader, writer, scan, CLI), see [reference.md](
 | `fastlanes.for`             | `FrameOfReferenceEncoding` | ✅      | ✅      | Integer PTypes                                                        |
 | `fastlanes.rle`             | `RleEncoding`              | ✅      | ✅      | Chunk-based RLE                                                       |
 | `vortex.patched`            | `PatchedEncoding`          | ✅      | ❌      | Primitive PTypes; encode not yet implemented                          |
-| `vortex.variant`            | `VariantEncoding`          | ✅      | ❌      | Encode not yet implemented                                            |
+| `vortex.variant`            | `VariantEncoding`          | ✅      | ❌      | Decode (incl. shredded child); encode not yet implemented (Rust 0.73+) |
+| `vortex.onpair`             | _none_                     | ❌      | ❌      | Experimental in Rust 0.74.0; not yet ported                            |
 
 ### Unknown encodings
 
@@ -122,6 +132,10 @@ correctly via the primitive accessors, callers just have to format the value
 themselves.
 
 ## S3 Fixture Status (v0.72.0)
+
+> **Note:** the fixture matrix below is locked to `v0.72.0/`. The Rust reference is
+> now at `v0.74.0`; re-run the integration suite against `v0.74.0/arrays/` once
+> upstream publishes the corresponding fixture set, and refresh this section.
 
 Cross-language round-trips tested against Rust-written fixture files hosted at
 `s3://vortex-compat-fixtures/v0.72.0/arrays/`.
