@@ -57,7 +57,7 @@ class StructEncodingTest {
             // Then — decode round-trip
             MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
             Registry registry = TestRegistry.of(new StructEncoding(), new PrimitiveEncoding());
-            DecodeContext ctx = new DecodeContext(
+            DecodeContext ctx = DecodeContext.ofRawBuffers(
                     toArrayNode(result.rootNode()), dtype, ids.length, bufs, registry, Arena.global());
             StructArray decoded = (StructArray) sut.decode(ctx);
 
@@ -117,7 +117,7 @@ class StructEncodingTest {
 
         private static DecodeContext buildStructCtx(ArrayNode structNode, MemorySegment[] segs, long rowCount) {
             Registry registry = TestRegistry.of(new StructEncoding(), new PrimitiveEncoding());
-            return new DecodeContext(structNode, DTypes.I64, rowCount, segs, registry, Arena.global());
+            return DecodeContext.ofRawBuffers(structNode, DTypes.I64, rowCount, segs, registry, Arena.global());
         }
 
         @Test
@@ -155,7 +155,7 @@ class StructEncodingTest {
                     new ArrayNode[]{validityNode, valuesNode}, new int[0], ArrayStats.empty());
 
             Registry registry = TestRegistry.of(new StructEncoding(), new PrimitiveEncoding(), new BoolEncoding());
-            DecodeContext ctx = new DecodeContext(
+            DecodeContext ctx = DecodeContext.ofRawBuffers(
                     structNode, DTypes.I64, data.length,
                     new MemorySegment[]{validitySeg, valuesSeg},
                     registry, Arena.global());

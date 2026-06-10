@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
+import io.github.dfa1.vortex.core.BoundedSegment;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.array.Array;
 
@@ -24,10 +25,32 @@ public record DecodeContext(
         ArrayNode node,
         DType dtype,
         long rowCount,
-        MemorySegment[] segmentBuffers,
+        BoundedSegment[] segmentBuffers,
         Registry registry,
         SegmentAllocator arena
 ) {
+    /// Convenience factory that wraps raw {@link MemorySegment} buffers as {@link BoundedSegment}s
+    /// for tests and other callers that produce synthetic, trusted buffer arrays. Production
+    /// decoders receive their buffers from {@link FlatSegmentDecoder}, which already wraps them
+    /// against the parent flat segment.
+    ///
+    /// @param node      array node describing this encoding's tree structure
+    /// @param dtype     logical type expected for the decoded array
+    /// @param rowCount  number of logical rows to decode
+    /// @param rawBufs   raw segment buffers; each wrapped as {@code "test buffer i"}
+    /// @param registry  encoding registry used for recursive child decoding
+    /// @param arena     allocator for decode output
+    /// @return a {@link DecodeContext} backed by bounded views of {@code rawBufs}
+    public static DecodeContext ofRawBuffers(
+            ArrayNode node, DType dtype, long rowCount,
+            MemorySegment[] rawBufs, Registry registry, SegmentAllocator arena) {
+        BoundedSegment[] wrapped = new BoundedSegment[rawBufs.length];
+        for (int i = 0; i < rawBufs.length; i++) {
+            wrapped[i] = new BoundedSegment(rawBufs[i], "test buffer " + i);
+        }
+        return new DecodeContext(node, dtype, rowCount, wrapped, registry, arena);
+    }
+
     /// Recursively decode child {@code i} using this context's dtype and row count.
     ///
     /// @param i zero-based child index within this node's children array
@@ -78,8 +101,8 @@ public record DecodeContext(
     /// Return the buffer at position `i` in this node's bufferIndices.
     ///
     /// @param i zero-based index into this node's {@code bufferIndices} array
-    /// @return the {@link MemorySegment} for the referenced segment buffer
-    public MemorySegment buffer(int i) {
+    /// @return the {@link BoundedSegment} for the referenced segment buffer
+    public BoundedSegment buffer(int i) {
         return segmentBuffers[node.bufferIndices()[i]];
     }
 

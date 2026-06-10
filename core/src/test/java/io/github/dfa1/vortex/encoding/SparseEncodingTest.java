@@ -47,7 +47,7 @@ class SparseEncodingTest {
 
             Registry registry = TestRegistry.of(new SparseEncoding(), new PrimitiveEncoding());
 
-            DecodeContext ctx = new DecodeContext(sparseNode, dtype, n, segments, registry, Arena.global());
+            DecodeContext ctx = DecodeContext.ofRawBuffers(sparseNode, dtype, n, segments, registry, Arena.global());
             return new SparseEncoding().decode(ctx);
         }
 
@@ -200,7 +200,7 @@ class SparseEncodingTest {
 
             Registry registry = TestRegistry.of(new SparseEncoding(), new PrimitiveEncoding());
 
-            return new DecodeContext(sparseNode, dtype, rowCount, segments, registry, java.lang.foreign.Arena.global());
+            return DecodeContext.ofRawBuffers(sparseNode, dtype, rowCount, segments, registry, java.lang.foreign.Arena.global());
         }
 
         private static byte[] buildSparseMetaBytes(long numPatches, long offset, PType idxPtype) {
@@ -392,7 +392,7 @@ class SparseEncodingTest {
                     MemorySegment.ofArray(strBytes),
                     MemorySegment.ofArray(offsets),
             };
-            DecodeContext ctx = new DecodeContext(sparseNode, utf8, 5, segments, registry, Arena.global());
+            DecodeContext ctx = DecodeContext.ofRawBuffers(sparseNode, utf8, 5, segments, registry, Arena.global());
             SparseEncoding sut = new SparseEncoding();
 
             // When
@@ -433,7 +433,7 @@ class SparseEncodingTest {
                     MemorySegment.ofArray(idxBuf),
                     MemorySegment.ofArray(boolBits),
             };
-            DecodeContext ctx = new DecodeContext(sparseNode, bool, 6, segments, registry, Arena.global());
+            DecodeContext ctx = DecodeContext.ofRawBuffers(sparseNode, bool, 6, segments, registry, Arena.global());
             SparseEncoding sut = new SparseEncoding();
 
             // When

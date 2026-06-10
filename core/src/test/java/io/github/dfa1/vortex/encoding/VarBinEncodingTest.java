@@ -145,7 +145,7 @@ class VarBinEncodingTest {
             // Given
             var sut = new VarBinEncoding();
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_VARBIN, null, new ArrayNode[0], new int[0], null);
-            DecodeContext ctx = new DecodeContext(node, DTypes.UTF8, 3, new MemorySegment[0],
+            DecodeContext ctx = DecodeContext.ofRawBuffers(node, DTypes.UTF8, 3, new MemorySegment[0],
                     Registry.empty(), Arena.ofAuto());
 
             // When / Then

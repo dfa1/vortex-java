@@ -44,6 +44,6 @@ final class TestDecodeContexts {
     }
 
     DecodeContext build() {
-        return new DecodeContext(node, dtype, rowCount, segments, registry, arena);
+        return DecodeContext.ofRawBuffers(node, dtype, rowCount, segments, registry, arena);
     }
 }

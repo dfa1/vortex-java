@@ -55,7 +55,7 @@ class ExtEncodingTest {
             // Decode back
             Registry registry = TestRegistry.of(new PrimitiveEncoding(), new ExtEncoding());
             ArrayNode rootNode = encodeNodeToArrayNode(result.rootNode());
-            DecodeContext ctx = new DecodeContext(
+            DecodeContext ctx = DecodeContext.ofRawBuffers(
                     rootNode, extDType, data.length,
                     result.buffers().toArray(MemorySegment[]::new),
                     registry, Arena.ofAuto());
@@ -136,7 +136,7 @@ class ExtEncodingTest {
 
             Registry registry = TestRegistry.of(new PrimitiveEncoding(), new ExtEncoding());
 
-            DecodeContext ctx = new DecodeContext(
+            DecodeContext ctx = DecodeContext.ofRawBuffers(
                     extNode, extDType, values.length, new MemorySegment[]{buf}, registry, Arena.ofAuto());
 
             var sut = new ExtEncoding();

@@ -49,7 +49,7 @@ class RunEndEncodingTest {
 
             Registry registry = TestRegistry.of(new RunEndEncoding(), new PrimitiveEncoding());
 
-            return new DecodeContext(reNode, dtype, rowCount, segments, registry, java.lang.foreign.Arena.global());
+            return DecodeContext.ofRawBuffers(reNode, dtype, rowCount, segments, registry, java.lang.foreign.Arena.global());
         }
 
         private static byte[] toLEBytes(long[] values, PType ptype) {

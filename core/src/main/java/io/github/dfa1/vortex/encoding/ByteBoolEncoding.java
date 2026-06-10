@@ -44,7 +44,7 @@ public final class ByteBoolEncoding implements Encoding {
     @Override
     public Array decode(DecodeContext ctx) {
         long n = ctx.rowCount();
-        MemorySegment bytes = ctx.buffer(0);
+        MemorySegment bytes = ctx.buffer(0).unwrapForSubParser("bytebool encoding");
         long packedBytes = (n + 7) >>> 3;
         MemorySegment packed = ctx.arena().allocate(packedBytes > 0 ? packedBytes : 1);
         for (long i = 0; i < n; i++) {

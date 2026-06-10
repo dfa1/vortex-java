@@ -25,7 +25,7 @@ final class EncodeTestHelper {
         List<MemorySegment> buffers = result.buffers();
         MemorySegment[] segments = buffers.toArray(new MemorySegment[0]);
         ArrayNode root = toArrayNode(result.rootNode());
-        return new DecodeContext(root, dtype, rowCount, segments, registry, Arena.ofAuto());
+        return DecodeContext.ofRawBuffers(root, dtype, rowCount, segments, registry, Arena.ofAuto());
     }
 
     private static ArrayNode toArrayNode(EncodeNode enc) {

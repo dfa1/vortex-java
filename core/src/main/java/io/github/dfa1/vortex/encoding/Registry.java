@@ -77,7 +77,7 @@ public final class Registry {
         };
         MemorySegment[] bufs = new MemorySegment[node.bufferIndices().length];
         for (int i = 0; i < bufs.length; i++) {
-            bufs[i] = ctx.buffer(i);
+            bufs[i] = ctx.buffer(i).unwrapForSubParser("registry");
         }
         Array[] children = new Array[node.children().length];
         for (int i = 0; i < children.length; i++) {

@@ -109,7 +109,7 @@ public final class DecimalEncoding implements Encoding {
             }
             int valuesType = decoded.values_type();
             int byteWidth = decimalTypeByteWidth(valuesType);
-            MemorySegment buffer = ctx.buffer(0);
+            MemorySegment buffer = ctx.buffer(0).unwrapForSubParser("decimal encoding");
             long expected = ctx.rowCount() * byteWidth;
             if (buffer.byteSize() < expected) {
                 throw new VortexException(EncodingId.VORTEX_DECIMAL,

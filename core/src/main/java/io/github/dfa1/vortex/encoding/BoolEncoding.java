@@ -68,6 +68,6 @@ public final class BoolEncoding implements Encoding {
 
     @Override
     public Array decode(DecodeContext ctx) {
-        return new BoolArray(ctx.dtype(), ctx.rowCount(), ctx.buffer(0));
+        return new BoolArray(ctx.dtype(), ctx.rowCount(), ctx.buffer(0).unwrapForSubParser("bool encoding"));
     }
 }

@@ -206,9 +206,9 @@ public final class FsstEncoding implements Encoding {
 
             long n = ctx.rowCount();
 
-            MemorySegment symbolsBuf = ctx.buffer(0); // 8 bytes per symbol (LE u64)
-            MemorySegment symbolLensBuf = ctx.buffer(1); // 1 byte per symbol
-            MemorySegment compressedBytes = ctx.buffer(2); // FSST-compressed heap
+            MemorySegment symbolsBuf = ctx.buffer(0).unwrapForSubParser("fsst encoding"); // 8 bytes per symbol (LE u64)
+            MemorySegment symbolLensBuf = ctx.buffer(1).unwrapForSubParser("fsst encoding"); // 1 byte per symbol
+            MemorySegment compressedBytes = ctx.buffer(2).unwrapForSubParser("fsst encoding"); // FSST-compressed heap
 
             MemorySegment uncompLensSeg = ctx.decodeChildSegment(0, new DType.Primitive(uncompLenPType, false), n);
             MemorySegment codesOffsetsSeg = ctx.decodeChildSegment(1, new DType.Primitive(codesOffPType, false), n + 1);

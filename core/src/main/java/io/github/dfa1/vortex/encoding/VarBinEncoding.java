@@ -140,7 +140,7 @@ public final class VarBinEncoding implements Encoding {
                 offsets = materialized;
             }
 
-            MemorySegment bytes = ctx.buffer(0);
+            MemorySegment bytes = ctx.buffer(0).unwrapForSubParser("varbin encoding");
 
             return new VarBinArray(ctx.dtype(), n, bytes, offsets, offsetsPtype);
         }

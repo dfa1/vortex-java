@@ -120,10 +120,10 @@ public final class VarBinViewEncoding implements Encoding {
             }
 
             // Views buffer is the last; data buffers are 0..numBufs-2
-            MemorySegment viewsBuf = ctx.buffer(numBufs - 1);
+            MemorySegment viewsBuf = ctx.buffer(numBufs - 1).unwrapForSubParser("varbinview encoding");
             MemorySegment[] dataBufs = new MemorySegment[numBufs - 1];
             for (int i = 0; i < dataBufs.length; i++) {
-                dataBufs[i] = ctx.buffer(i);
+                dataBufs[i] = ctx.buffer(i).unwrapForSubParser("varbinview encoding");
             }
 
             long n = ctx.rowCount();

@@ -102,7 +102,7 @@ class RegistryTest {
         Registry sut = Registry.empty();
         ArrayNode node = new UnknownArrayNode("some.unknown",
                 ByteBuffer.allocate(0), new ArrayNode[0], new int[0], ArrayStats.empty());
-        DecodeContext ctx = new DecodeContext(node, DTypes.I32, 0L,
+        DecodeContext ctx = DecodeContext.ofRawBuffers(node, DTypes.I32, 0L,
                 new MemorySegment[0], sut, Arena.ofAuto());
 
         // When / Then
@@ -117,7 +117,7 @@ class RegistryTest {
         Registry sut = Registry.empty();
         ArrayNode node = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE,
                 ByteBuffer.allocate(0), new ArrayNode[0], new int[0], ArrayStats.empty());
-        DecodeContext ctx = new DecodeContext(node, DTypes.I32, 0L,
+        DecodeContext ctx = DecodeContext.ofRawBuffers(node, DTypes.I32, 0L,
                 new MemorySegment[0], sut, Arena.ofAuto());
 
         // When / Then
@@ -132,7 +132,7 @@ class RegistryTest {
         Registry sut = Registry.builder().allowUnknown().build();
         ArrayNode node = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE,
                 ByteBuffer.allocate(0), new ArrayNode[0], new int[0], ArrayStats.empty());
-        DecodeContext ctx = new DecodeContext(node, DTypes.I32, 0L,
+        DecodeContext ctx = DecodeContext.ofRawBuffers(node, DTypes.I32, 0L,
                 new MemorySegment[0], sut, Arena.ofAuto());
 
         // When
@@ -152,7 +152,7 @@ class RegistryTest {
         buf.set(java.lang.foreign.ValueLayout.JAVA_INT, 0, 42);
         ArrayNode node = new UnknownArrayNode("some.unknown",
                 metadata, new ArrayNode[0], new int[]{0}, ArrayStats.empty());
-        DecodeContext ctx = new DecodeContext(node, DTypes.I32, 5L,
+        DecodeContext ctx = DecodeContext.ofRawBuffers(node, DTypes.I32, 5L,
                 new MemorySegment[]{buf}, sut, Arena.ofAuto());
 
         // When
@@ -180,7 +180,7 @@ class RegistryTest {
                 ByteBuffer.allocate(0), new ArrayNode[0], new int[0], ArrayStats.empty());
         ArrayNode parent = new UnknownArrayNode("some.unknown",
                 ByteBuffer.allocate(0), new ArrayNode[]{child}, new int[0], ArrayStats.empty());
-        DecodeContext ctx = new DecodeContext(parent, DTypes.I32, 0L,
+        DecodeContext ctx = DecodeContext.ofRawBuffers(parent, DTypes.I32, 0L,
                 new MemorySegment[0], sut, Arena.ofAuto());
 
         // When

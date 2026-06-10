@@ -141,7 +141,7 @@ public final class PcoEncoding implements Encoding {
 
             for (int c = 0; c < nChunks; c++) {
                 PcoChunkInfo chunkInfo = meta.chunks().get(c);
-                MemorySegment chunkMetaBuf = ctx.buffer(bufIdx++);
+                MemorySegment chunkMetaBuf = ctx.buffer(bufIdx++).unwrapForSubParser("pco encoding");
                 PcoChunkMeta chunkMeta = readChunkMeta(chunkMetaBuf, dtypeSize);
 
                 int mode = chunkMeta.mode();
@@ -160,7 +160,7 @@ public final class PcoEncoding implements Encoding {
                             chunkMeta.ansSizeLog(), chunkMeta.bins());
                     for (int p = 0; p < chunkInfo.pages().size(); p++) {
                         int pageN = chunkInfo.pages().get(p).n_values();
-                        MemorySegment pageBuf = ctx.buffer(bufIdx++);
+                        MemorySegment pageBuf = ctx.buffer(bufIdx++).unwrapForSubParser("pco encoding");
                         rawByteOffset = decodeConv1Page(
                                 primaryTans, chunkMeta.ansSizeLog(),
                                 chunkMeta.conv1Weights().length,
@@ -186,7 +186,7 @@ public final class PcoEncoding implements Encoding {
                     long mask = typeMask(dtypeSize);
                     for (int p = 0; p < chunkInfo.pages().size(); p++) {
                         int pageN = chunkInfo.pages().get(p).n_values();
-                        MemorySegment pageBuf = ctx.buffer(bufIdx++);
+                        MemorySegment pageBuf = ctx.buffer(bufIdx++).unwrapForSubParser("pco encoding");
                         rawByteOffset = decodeLookbackPage(
                                 deltaTans, chunkMeta.deltaAnsSizeLog(),
                                 primaryTans, chunkMeta.ansSizeLog(),
@@ -202,7 +202,7 @@ public final class PcoEncoding implements Encoding {
                     PcoTansDecoder tans = PcoTansDecoder.build(chunkMeta.ansSizeLog(), chunkMeta.bins());
                     for (int p = 0; p < chunkInfo.pages().size(); p++) {
                         int pageN = chunkInfo.pages().get(p).n_values();
-                        MemorySegment pageBuf = ctx.buffer(bufIdx++);
+                        MemorySegment pageBuf = ctx.buffer(bufIdx++).unwrapForSubParser("pco encoding");
                         rawByteOffset = decodeClassicPage(tans, chunkMeta.ansSizeLog(),
                                 chunkMeta.deltaOrder(), primaryDtypeSize,
                                 pageBuf, pageN, rawLatents, rawByteOffset,
@@ -225,7 +225,7 @@ public final class PcoEncoding implements Encoding {
                     long adjByteOffset = 0L;
                     for (int p = 0; p < chunkInfo.pages().size(); p++) {
                         int pageN = chunkInfo.pages().get(p).n_values();
-                        MemorySegment pageBuf = ctx.buffer(bufIdx++);
+                        MemorySegment pageBuf = ctx.buffer(bufIdx++).unwrapForSubParser("pco encoding");
                         decodeIntMultPage(primaryTans, primaryAnsSizeLog, deltaOrder,
                                 secondaryTans, secondaryAnsSizeLog, secondaryDeltaOrder,
                                 dtypeSize, pageBuf, pageN,

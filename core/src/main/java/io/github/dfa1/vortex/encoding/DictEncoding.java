@@ -378,7 +378,7 @@ public final class DictEncoding implements Encoding {
             long rowCount = ctx.rowCount();
 
             // Values: always VORTEX_PRIMITIVE leaf, read direct
-            MemorySegment valuesBuf = ctx.segmentBuffers()[ctx.node().children()[0].bufferIndices()[0]];
+            MemorySegment valuesBuf = ctx.segmentBuffers()[ctx.node().children()[0].bufferIndices()[0]].unwrapForSubParser("dict encoding values");
 
             // Codes: decode through registry — supports both raw (VORTEX_PRIMITIVE) and cascade (FASTLANES_BITPACKED) children
             DType codesDtype = new DType.Primitive(codePType, false);
@@ -435,9 +435,9 @@ public final class DictEncoding implements Encoding {
             PType codePType = PType.fromOrdinal(Byte.toUnsignedInt(meta.get(0)));
             long n = ctx.rowCount();
 
-            MemorySegment dictBytes = ctx.buffer(0);
-            MemorySegment dictOffsets = ctx.buffer(1);
-            MemorySegment codes = ctx.buffer(2);
+            MemorySegment dictBytes = ctx.buffer(0).unwrapForSubParser("dict encoding");
+            MemorySegment dictOffsets = ctx.buffer(1).unwrapForSubParser("dict encoding");
+            MemorySegment codes = ctx.buffer(2).unwrapForSubParser("dict encoding");
 
             return VarBinArray.ofDict(ctx.dtype(), n,
                     dictBytes, dictOffsets, PType.I64,

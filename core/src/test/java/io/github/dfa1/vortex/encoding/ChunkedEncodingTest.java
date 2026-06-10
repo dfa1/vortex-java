@@ -137,7 +137,7 @@ class ChunkedEncodingTest {
                     new ArrayNode[]{offsetsNode, chunk0Node, chunk1Node},
                     new int[]{}, null);
 
-            DecodeContext ctx = new DecodeContext(root, i64, 5L, allBufs, registry, Arena.ofAuto());
+            DecodeContext ctx = DecodeContext.ofRawBuffers(root, i64, 5L, allBufs, registry, Arena.ofAuto());
 
             // When
             Array result = sut.decode(ctx);
@@ -176,7 +176,7 @@ class ChunkedEncodingTest {
                     new ArrayNode[]{toArrayNode(offsetsResult.rootNode()), toArrayNode(remapped(chunkResult.rootNode(), 1))},
                     new int[]{}, null);
 
-            DecodeContext ctx = new DecodeContext(root, i64, 3L, allBufs, registry, Arena.ofAuto());
+            DecodeContext ctx = DecodeContext.ofRawBuffers(root, i64, 3L, allBufs, registry, Arena.ofAuto());
 
             // When
             Array result = new ChunkedEncoding().decode(ctx);
@@ -196,7 +196,7 @@ class ChunkedEncodingTest {
                     .register(new ChunkedEncoding())
                     .build();
             ArrayNode root = ArrayNode.of(EncodingId.VORTEX_CHUNKED, null, new ArrayNode[]{}, new int[]{}, null);
-            DecodeContext ctx = new DecodeContext(root, i64, 0L, new MemorySegment[]{}, registry, Arena.ofAuto());
+            DecodeContext ctx = DecodeContext.ofRawBuffers(root, i64, 0L, new MemorySegment[]{}, registry, Arena.ofAuto());
 
             // When / Then
             assertThatThrownBy(() -> new ChunkedEncoding().decode(ctx))

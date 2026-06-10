@@ -151,7 +151,7 @@ class PrimitiveEncodingTest {
             Registry registry = TestRegistry.of(new PrimitiveEncoding(), new BoolEncoding());
 
             DType dtype = new DType.Primitive(PType.I32, false);
-            DecodeContext ctx = new DecodeContext(
+            DecodeContext ctx = DecodeContext.ofRawBuffers(
                     primNode, dtype, raw.length,
                     new MemorySegment[]{valuesSeg, validitySeg},
                     registry, Arena.global());
@@ -186,7 +186,7 @@ class PrimitiveEncodingTest {
             Registry registry = TestRegistry.of(new PrimitiveEncoding());
 
             DType dtype = new DType.Primitive(PType.I32, false);
-            DecodeContext ctx = new DecodeContext(
+            DecodeContext ctx = DecodeContext.ofRawBuffers(
                     primNode, dtype, raw.length,
                     new MemorySegment[]{valuesSeg},
                     registry, Arena.global());

@@ -312,7 +312,7 @@ public final class PrimitiveEncoding implements Encoding {
     private static final class Decoder {
 
         private static Array decode(DecodeContext ctx) {
-            MemorySegment buf = ctx.buffer(0);
+            MemorySegment buf = ctx.buffer(0).unwrapForSubParser("primitive encoding");
             long n = ctx.rowCount();
             DType dt = ctx.dtype();
             PType ptype = ((DType.Primitive) dt).ptype();

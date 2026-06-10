@@ -84,7 +84,7 @@ class AlpEncodingTest {
 
             Registry registry = TestRegistry.of(new AlpEncoding(), new PrimitiveEncoding());
 
-            return new DecodeContext(alpNode, DTypes.F64, encodedVals.length, segments, registry, java.lang.foreign.Arena.global());
+            return DecodeContext.ofRawBuffers(alpNode, DTypes.F64, encodedVals.length, segments, registry, java.lang.foreign.Arena.global());
         }
 
         private static DecodeContext buildAlpCtxF32(
@@ -109,7 +109,7 @@ class AlpEncodingTest {
 
             Registry registry = TestRegistry.of(new AlpEncoding(), new PrimitiveEncoding());
 
-            return new DecodeContext(alpNode, DTypes.F32, encodedVals.length, segments, registry, java.lang.foreign.Arena.global());
+            return DecodeContext.ofRawBuffers(alpNode, DTypes.F32, encodedVals.length, segments, registry, java.lang.foreign.Arena.global());
         }
 
         @Test

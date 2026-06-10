@@ -305,7 +305,7 @@ class RleEncodingTest {
                     .register(new PrimitiveEncoding())
                     .register(new BoolEncoding())
                     .build();
-            DecodeContext ctx = new DecodeContext(root, dtype, data.length, segments, reg, Arena.ofAuto());
+            DecodeContext ctx = DecodeContext.ofRawBuffers(root, dtype, data.length, segments, reg, Arena.ofAuto());
 
             // When
             Array result = sut.decode(ctx);

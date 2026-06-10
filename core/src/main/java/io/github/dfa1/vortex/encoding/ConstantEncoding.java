@@ -133,7 +133,7 @@ public final class ConstantEncoding implements Encoding {
     private static final class Decoder {
 
         private static Array decode(DecodeContext ctx) {
-            MemorySegment scalarBuf = ctx.buffer(0);
+            MemorySegment scalarBuf = ctx.buffer(0).unwrapForSubParser("constant encoding");
             ScalarValue scalar;
             try {
                 scalar = ScalarValue.decode(scalarBuf, 0, scalarBuf.byteSize());

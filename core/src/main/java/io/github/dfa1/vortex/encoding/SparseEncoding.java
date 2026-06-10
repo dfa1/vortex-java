@@ -210,7 +210,7 @@ public final class SparseEncoding implements Encoding {
             }
             PType valuePtype = ((DType.Primitive) ctx.dtype()).ptype();
 
-            MemorySegment fillBuf = ctx.buffer(0);
+            MemorySegment fillBuf = ctx.buffer(0).unwrapForSubParser("sparse encoding");
             ScalarValue fillScalar;
             try {
                 fillScalar = ScalarValue.decode(fillBuf, 0, fillBuf.byteSize());

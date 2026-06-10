@@ -129,7 +129,7 @@ class ZstdEncodingTest {
             }
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ZSTD, ByteBuffer.wrap(meta),
                     new ArrayNode[0], bufIndices, null);
-            return new DecodeContext(node, dtype, n, segments, Registry.empty(), Arena.ofAuto());
+            return DecodeContext.ofRawBuffers(node, dtype, n, segments, Registry.empty(), Arena.ofAuto());
         }
 
         private static byte[] makeDictFor(byte[]... samples) {
@@ -179,7 +179,7 @@ class ZstdEncodingTest {
 
             Registry registry = Registry.builder().register(new BoolEncoding()).build();
 
-            return new DecodeContext(node, dtype, n, allSegments.toArray(new MemorySegment[0]),
+            return DecodeContext.ofRawBuffers(node, dtype, n, allSegments.toArray(new MemorySegment[0]),
                     registry, Arena.ofAuto());
         }
 
@@ -200,7 +200,7 @@ class ZstdEncodingTest {
             }
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ZSTD, ByteBuffer.wrap(meta),
                     new ArrayNode[0], bufIndices, null);
-            return new DecodeContext(node, dtype, n, segments, Registry.empty(), Arena.ofAuto());
+            return DecodeContext.ofRawBuffers(node, dtype, n, segments, Registry.empty(), Arena.ofAuto());
         }
 
         private static byte[] compress(byte[] input) {
@@ -382,7 +382,7 @@ class ZstdEncodingTest {
             // Given
             var sut = new ZstdEncoding();
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ZSTD, null, new ArrayNode[0], new int[0], null);
-            DecodeContext ctx = new DecodeContext(node, DTypes.I32, 0, new MemorySegment[0],
+            DecodeContext ctx = DecodeContext.ofRawBuffers(node, DTypes.I32, 0, new MemorySegment[0],
                     Registry.empty(), Arena.ofAuto());
 
             // When / Then

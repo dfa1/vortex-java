@@ -270,7 +270,7 @@ public final class BitpackedEncoding implements Encoding {
             int typeBits = ptype.byteSize() * 8;
             long rowCount = ctx.rowCount();
 
-            MemorySegment packed = ctx.buffer(0);
+            MemorySegment packed = ctx.buffer(0).unwrapForSubParser("bitpacked encoding");
             MemorySegment output = ctx.arena().allocate(rowCount * ptype.byteSize());
             fastlanesUnpackToSeg(packed, bitWidth, offset, typeBits, rowCount, output);
 

@@ -96,7 +96,7 @@ class FsstEncodingTest {
                     .register(new PrimitiveEncoding())
                     .register(sut)
                     .build();
-            DecodeContext ctx = new DecodeContext(node, DTypes.UTF8, values.length, bufs, registry, arena);
+            DecodeContext ctx = DecodeContext.ofRawBuffers(node, DTypes.UTF8, values.length, bufs, registry, arena);
             var decoded = (VarBinArray) sut.decode(ctx);
 
             // Then
@@ -158,7 +158,7 @@ class FsstEncodingTest {
                     EncodingId.VORTEX_FSST, ByteBuffer.wrap(metaBytes),
                     new ArrayNode[]{uncompLensNode, codesOffNode}, new int[]{0, 1, 2}, null);
 
-            return new DecodeContext(root, DTypes.UTF8, n, segs, buildRegistry(), arena);
+            return DecodeContext.ofRawBuffers(root, DTypes.UTF8, n, segs, buildRegistry(), arena);
         }
 
         private static Registry buildRegistry() {
@@ -265,7 +265,7 @@ class FsstEncodingTest {
             // Given
             var sut = new FsstEncoding();
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_FSST, null, new ArrayNode[0], new int[0], null);
-            DecodeContext ctx = new DecodeContext(node, DTypes.UTF8, 0, new MemorySegment[0],
+            DecodeContext ctx = DecodeContext.ofRawBuffers(node, DTypes.UTF8, 0, new MemorySegment[0],
                     buildRegistry(), Arena.ofAuto());
 
             // When / Then

@@ -66,7 +66,7 @@ class ByteBoolEncodingTest {
             MemorySegment buf = MemorySegment.ofArray(byteValues);
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_BYTEBOOL, null, new ArrayNode[0], new int[]{0}, null);
             Registry registry = Registry.builder().register(new ByteBoolEncoding()).build();
-            return new DecodeContext(node, DTypes.BOOL, byteValues.length, new MemorySegment[]{buf}, registry,
+            return DecodeContext.ofRawBuffers(node, DTypes.BOOL, byteValues.length, new MemorySegment[]{buf}, registry,
                     Arena.ofAuto());
         }
 

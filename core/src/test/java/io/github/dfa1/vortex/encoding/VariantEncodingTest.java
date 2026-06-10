@@ -57,7 +57,7 @@ class VariantEncodingTest {
                     new ArrayNode[]{coreNode}, new int[]{}, null);
 
             Registry registry = TestRegistry.of(new VariantEncoding(), new NullEncoding());
-            DecodeContext ctx = new DecodeContext(variantNode, VARIANT_DTYPE, N,
+            DecodeContext ctx = DecodeContext.ofRawBuffers(variantNode, VARIANT_DTYPE, N,
                     new MemorySegment[0], registry, Arena.ofAuto());
 
             // When
@@ -86,7 +86,7 @@ class VariantEncodingTest {
 
             MemorySegment[] segments = {i32Segment(1, 2, 3)};
             Registry registry = TestRegistry.of(new VariantEncoding(), new NullEncoding(), new PrimitiveEncoding());
-            DecodeContext ctx = new DecodeContext(variantNode, VARIANT_DTYPE, N,
+            DecodeContext ctx = DecodeContext.ofRawBuffers(variantNode, VARIANT_DTYPE, N,
                     segments, registry, Arena.ofAuto());
 
             // When
@@ -108,7 +108,7 @@ class VariantEncodingTest {
                     new ArrayNode[]{coreNode}, new int[]{}, null);
 
             Registry registry = TestRegistry.of(new VariantEncoding(), new NullEncoding());
-            DecodeContext ctx = new DecodeContext(variantNode, VARIANT_DTYPE, N,
+            DecodeContext ctx = DecodeContext.ofRawBuffers(variantNode, VARIANT_DTYPE, N,
                     new MemorySegment[0], registry, Arena.ofAuto());
 
             // When
@@ -128,7 +128,7 @@ class VariantEncodingTest {
                     new ArrayNode[]{coreNode}, new int[]{}, null);
 
             Registry registry = TestRegistry.of(new VariantEncoding(), new NullEncoding());
-            DecodeContext ctx = new DecodeContext(variantNode, nullableVariant, N,
+            DecodeContext ctx = DecodeContext.ofRawBuffers(variantNode, nullableVariant, N,
                     new MemorySegment[0], registry, Arena.ofAuto());
 
             // When
@@ -146,7 +146,7 @@ class VariantEncodingTest {
                     new ArrayNode[0], new int[]{}, null);
 
             Registry registry = TestRegistry.of(new VariantEncoding());
-            DecodeContext ctx = new DecodeContext(variantNode, VARIANT_DTYPE, N,
+            DecodeContext ctx = DecodeContext.ofRawBuffers(variantNode, VARIANT_DTYPE, N,
                     new MemorySegment[0], registry, Arena.ofAuto());
 
             // When / Then

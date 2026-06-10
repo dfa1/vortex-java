@@ -314,12 +314,12 @@ public final class ZstdEncoding implements Encoding {
                 long totalUncompressed
         ) {
             MemorySegment out = ctx.arena().allocate(totalUncompressed);
-            byte[] dictBytes = ctx.buffer(0).toArray(ValueLayout.JAVA_BYTE);
+            byte[] dictBytes = ctx.buffer(0).unwrapForSubParser("zstd encoding").toArray(ValueLayout.JAVA_BYTE);
             try (ZstdDecompressCtx zctx = new ZstdDecompressCtx()) {
                 zctx.loadDict(dictBytes);
                 long outOffset = 0;
                 for (int i = 0; i < frameCount; i++) {
-                    byte[] compressed = ctx.buffer(i + 1).toArray(ValueLayout.JAVA_BYTE);
+                    byte[] compressed = ctx.buffer(i + 1).unwrapForSubParser("zstd encoding").toArray(ValueLayout.JAVA_BYTE);
                     int uncompSize = (int) meta.frames().get(i).uncompressed_size();
                     byte[] temp = new byte[uncompSize];
                     int written = zctx.decompressByteArray(temp, 0, uncompSize, compressed, 0, compressed.length);
@@ -348,7 +348,7 @@ public final class ZstdEncoding implements Encoding {
             ZstdDecompressor decompressor = new ZstdJavaDecompressor();
             long outOffset = 0;
             for (int i = 0; i < frameCount; i++) {
-                MemorySegment frameSeg = ctx.buffer(i);
+                MemorySegment frameSeg = ctx.buffer(i).unwrapForSubParser("zstd encoding");
                 byte[] compressed = frameSeg.toArray(ValueLayout.JAVA_BYTE);
                 int uncompSize = (int) meta.frames().get(i).uncompressed_size();
                 byte[] temp = new byte[uncompSize];

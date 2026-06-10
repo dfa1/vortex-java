@@ -35,7 +35,7 @@ class PcoEncodingTest {
     private static DecodeContext ctxWith(ByteBuffer meta, DType dtype, long rowCount, MemorySegment[] buffers) {
         ArrayNode node = ArrayNode.of(EncodingId.VORTEX_PCO, meta, new ArrayNode[0],
                 bufferIndices(buffers.length), null);
-        return new DecodeContext(node, dtype, rowCount, buffers, Registry.empty(), Arena.ofAuto());
+        return DecodeContext.ofRawBuffers(node, dtype, rowCount, buffers, Registry.empty(), Arena.ofAuto());
     }
 
     /// Build a nullable DecodeContext: validity buffer at index 0, pco buffers at indices 1..N.
@@ -57,7 +57,7 @@ class PcoEncodingTest {
                 pcoBufferIndices, null);
 
         Registry registry = TestRegistry.of(new BoolEncoding());
-        return new DecodeContext(pcoNode, dtype, rowCount, allBuffers, registry, Arena.ofAuto());
+        return DecodeContext.ofRawBuffers(pcoNode, dtype, rowCount, allBuffers, registry, Arena.ofAuto());
     }
 
     private static int[] bufferIndices(int n) {

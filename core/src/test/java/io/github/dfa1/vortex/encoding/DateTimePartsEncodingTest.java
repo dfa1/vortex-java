@@ -116,7 +116,7 @@ class DateTimePartsEncodingTest {
             // When
             EncodeResult result = sut.encode(EXT_TIMESTAMP_MS, data, EncodeTestHelper.testCtx());
             MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
-            DecodeContext ctx = new DecodeContext(
+            DecodeContext ctx = DecodeContext.ofRawBuffers(
                     toArrayNode(result.rootNode()), EXT_TIMESTAMP_MS, 1, bufs, registry(), Arena.global());
             GenericArray decoded = (GenericArray) sut.decode(ctx);
 
@@ -143,7 +143,7 @@ class DateTimePartsEncodingTest {
             // When
             EncodeResult result = sut.encode(EXT_TIMESTAMP_NS, data, EncodeTestHelper.testCtx());
             MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
-            DecodeContext ctx = new DecodeContext(
+            DecodeContext ctx = DecodeContext.ofRawBuffers(
                     toArrayNode(result.rootNode()), EXT_TIMESTAMP_NS, 1, bufs, registry(), Arena.global());
             GenericArray decoded = (GenericArray) sut.decode(ctx);
 
@@ -166,7 +166,7 @@ class DateTimePartsEncodingTest {
             // When
             EncodeResult result = sut.encode(EXT_TIMESTAMP_MS, data, EncodeTestHelper.testCtx());
             MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
-            DecodeContext ctx = new DecodeContext(
+            DecodeContext ctx = DecodeContext.ofRawBuffers(
                     toArrayNode(result.rootNode()), EXT_TIMESTAMP_MS, 1, bufs, registry(), Arena.global());
             GenericArray decoded = (GenericArray) sut.decode(ctx);
 
@@ -190,7 +190,7 @@ class DateTimePartsEncodingTest {
             // When
             EncodeResult result = sut.encode(EXT_TIMESTAMP_MS, data, EncodeTestHelper.testCtx());
             MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
-            DecodeContext ctx = new DecodeContext(
+            DecodeContext ctx = DecodeContext.ofRawBuffers(
                     toArrayNode(result.rootNode()), EXT_TIMESTAMP_MS, 4, bufs, registry(), Arena.global());
             GenericArray decoded = (GenericArray) sut.decode(ctx);
 
@@ -218,7 +218,7 @@ class DateTimePartsEncodingTest {
             // When
             EncodeResult result = sut.encode(dtype, data, EncodeTestHelper.testCtx());
             MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
-            DecodeContext ctx = new DecodeContext(
+            DecodeContext ctx = DecodeContext.ofRawBuffers(
                     toArrayNode(result.rootNode()), dtype, 1, bufs, registry(), Arena.global());
             GenericArray decoded = (GenericArray) sut.decode(ctx);
 

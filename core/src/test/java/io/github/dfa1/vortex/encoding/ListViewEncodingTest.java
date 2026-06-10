@@ -83,7 +83,7 @@ class ListViewEncodingTest {
             // When
             EncodeResult result = sut.encode(DTypes.LIST_I32, data, EncodeTestHelper.testCtx());
             MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
-            DecodeContext ctx = new DecodeContext(
+            DecodeContext ctx = DecodeContext.ofRawBuffers(
                     toArrayNode(result.rootNode()), DTypes.LIST_I32, 3, bufs, registry(), Arena.global());
             ListViewArray decoded = (ListViewArray) sut.decode(ctx);
 
@@ -112,7 +112,7 @@ class ListViewEncodingTest {
             // When
             EncodeResult result = sut.encode(DTypes.LIST_I32, data, EncodeTestHelper.testCtx());
             MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
-            DecodeContext ctx = new DecodeContext(
+            DecodeContext ctx = DecodeContext.ofRawBuffers(
                     toArrayNode(result.rootNode()), DTypes.LIST_I32, 2, bufs, registry(), Arena.global());
             ListViewArray decoded = (ListViewArray) sut.decode(ctx);
 
@@ -135,7 +135,7 @@ class ListViewEncodingTest {
             // When
             EncodeResult result = sut.encode(DTypes.LIST_I32, data, EncodeTestHelper.testCtx());
             MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
-            DecodeContext ctx = new DecodeContext(
+            DecodeContext ctx = DecodeContext.ofRawBuffers(
                     toArrayNode(result.rootNode()), DTypes.LIST_I32, 1, bufs, registry(), Arena.global());
             ListViewArray decoded = (ListViewArray) sut.decode(ctx);
 

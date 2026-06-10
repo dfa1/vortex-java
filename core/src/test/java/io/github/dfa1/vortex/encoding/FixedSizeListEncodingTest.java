@@ -85,7 +85,7 @@ class FixedSizeListEncodingTest {
             // When
             EncodeResult result = sut.encode(dtype, data, EncodeTestHelper.testCtx());
             MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
-            DecodeContext ctx = new DecodeContext(
+            DecodeContext ctx = DecodeContext.ofRawBuffers(
                     toArrayNode(result.rootNode()), dtype, 2, bufs, registry(), Arena.global());
             FixedSizeListArray decoded = (FixedSizeListArray) sut.decode(ctx);
 
@@ -110,7 +110,7 @@ class FixedSizeListEncodingTest {
             // When
             EncodeResult result = sut.encode(dtype, data, EncodeTestHelper.testCtx());
             MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
-            DecodeContext ctx = new DecodeContext(
+            DecodeContext ctx = DecodeContext.ofRawBuffers(
                     toArrayNode(result.rootNode()), dtype, 3, bufs, registry(), Arena.global());
             FixedSizeListArray decoded = (FixedSizeListArray) sut.decode(ctx);
 
@@ -129,7 +129,7 @@ class FixedSizeListEncodingTest {
             FixedSizeListEncoding sut = new FixedSizeListEncoding();
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_FIXED_SIZE_LIST, null,
                     new ArrayNode[0], new int[0], ArrayStats.empty());
-            DecodeContext ctx = new DecodeContext(node, DTypes.I32, 0, new MemorySegment[0], registry(), Arena.global());
+            DecodeContext ctx = DecodeContext.ofRawBuffers(node, DTypes.I32, 0, new MemorySegment[0], registry(), Arena.global());
 
             // When / Then
             assertThatThrownBy(() -> sut.decode(ctx))

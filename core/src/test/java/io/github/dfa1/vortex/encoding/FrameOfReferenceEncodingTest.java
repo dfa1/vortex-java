@@ -62,7 +62,7 @@ class FrameOfReferenceEncodingTest {
 
             Registry registry = TestRegistry.of(new FrameOfReferenceEncoding(), new PrimitiveEncoding());
 
-            return new DecodeContext(forNode, dtype, residuals.length, segments, registry, java.lang.foreign.Arena.global());
+            return DecodeContext.ofRawBuffers(forNode, dtype, residuals.length, segments, registry, java.lang.foreign.Arena.global());
         }
 
         @Test
@@ -170,7 +170,7 @@ class FrameOfReferenceEncodingTest {
             Registry registry = TestRegistry.of(new FrameOfReferenceEncoding(), new PrimitiveEncoding(), new BoolEncoding());
 
             MemorySegment[] segments = {MemorySegment.ofArray(residualBytes), validitySeg};
-            DecodeContext ctx = new DecodeContext(
+            DecodeContext ctx = DecodeContext.ofRawBuffers(
                     forNode, DTypes.I32, residuals.length, segments, registry, java.lang.foreign.Arena.global());
             FrameOfReferenceEncoding sut = new FrameOfReferenceEncoding();
 

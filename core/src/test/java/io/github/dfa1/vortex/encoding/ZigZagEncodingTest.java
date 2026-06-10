@@ -45,7 +45,7 @@ class ZigZagEncodingTest {
             ArrayNode zigzagNode = ArrayNode.of(EncodingId.VORTEX_ZIGZAG, null, new ArrayNode[]{primitiveNode}, new int[0], null);
 
             Registry registry = TestRegistry.of(new ZigZagEncoding(), new PrimitiveEncoding());
-            return new DecodeContext(zigzagNode, DTypes.I32, encodedUnsigned.length,
+            return DecodeContext.ofRawBuffers(zigzagNode, DTypes.I32, encodedUnsigned.length,
                     new MemorySegment[]{seg}, registry, Arena.ofAuto());
         }
 

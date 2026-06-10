@@ -59,7 +59,7 @@ class BitpackedEncodingPatchesTest {
 
             Registry registry = TestRegistry.of(new BitpackedEncoding(), new PrimitiveEncoding());
 
-            DecodeContext ctx = new DecodeContext(
+            DecodeContext ctx = DecodeContext.ofRawBuffers(
                     bpNode, DTypes.I32, base.length, segments, registry, Arena.global());
 
             // When
