@@ -47,7 +47,7 @@ Files containing unrecognised encoding IDs throw `VortexException` by default. O
 passthrough mode to read such files without failing:
 
 ```java
-EncodingRegistry registry = EncodingRegistry.builder()
+Registry registry = Registry.builder()
         .registerServiceLoaded()
         .allowUnknown()
         .build();
@@ -63,26 +63,47 @@ metadata. The Rust catalogue lives in
 [`vortex-array/src/extension/`](https://github.com/vortex-data/vortex/tree/develop/vortex-array/src/extension);
 each subdir below names a canonical extension id and its on-disk shape.
 
-Extensions are exposed as a sealed `Extension` hierarchy. Each record carries
-its own typed decode methods; pattern-match on `ext.kind()` to dispatch:
+Extensions live in `io.github.dfa1.vortex.extension`. Each spec extension is a
+singleton implementing the `Extension` interface, with typed encode/decode
+methods on the concrete impl. Resolve a column to its impl via
+`Registry.lookup(ExtensionId)`, or grab the singleton directly:
 
 ```java
-switch (ext.kind()) {
-    case Extension.Date d      -> d.decode(storage, i);          // LocalDate
-    case Extension.Time t      -> t.decode(ext, storage, i);     // LocalTime
-    case Extension.Timestamp ts -> ts.instant(ext, storage, i);  // Instant
-    case Extension.Uuid u      -> u.decode(storage, i);          // UUID
-    case Extension.Custom c    -> ... // any other id, raw String available
+DType.Extension dtype = (DType.Extension) schema.field("birthdays");
+List<LocalDate> values = DateExtension.INSTANCE.decodeAll(chunk.column("birthdays"));
+```
+
+End-to-end round-trip — write a `List<LocalDate>`, read it back:
+
+```java
+var schema = new DType.Struct(List.of("birthdays"),
+                              List.of(DateExtension.INSTANCE.dtype(false)), false);
+writer.writeChunk(Map.of("birthdays", dates));                  // Collection auto-routed
+
+try (var iter = reader.scan(ScanOptions.all());
+     Chunk chunk = iter.next()) {
+    List<LocalDate> back = chunk.as("birthdays", LocalDate.class);
 }
 ```
 
-| Extension id        | Record               | Storage                                         | Metadata                                  | Status |
-|---------------------|----------------------|-------------------------------------------------|-------------------------------------------|--------|
-| `vortex.date`       | `Extension.Date`     | Signed integer days since 1970-01-01            | none                                      | ✅      |
-| `vortex.time`       | `Extension.Time`     | I32 (s/ms) or I64 (μs/ns) since midnight        | 1 byte: `TimeUnit`                        | ✅      |
-| `vortex.timestamp`  | `Extension.Timestamp`| I64 epoch count in the recorded `TimeUnit`      | unit byte + u16 LE tz_len + UTF-8 tz      | ✅      |
-| `vortex.uuid`       | `Extension.Uuid`     | `FixedSizeList(Primitive(U8), 16)`              | none                                      | ✅      |
-| _custom ids_        | `Extension.Custom`   | _whatever the column declares_                  | _opaque bytes_                            | passthrough |
+`Chunk.as(name, Class)` hides the per-extension decode dispatch for the four
+spec extensions (`LocalDate` ↔ `vortex.date`, `LocalTime` ↔ `vortex.time`,
+`Instant` ↔ `vortex.timestamp`, `UUID` ↔ `vortex.uuid`). Third-party
+extensions still go through `Registry.lookup(ExtensionId)` and the impl's own
+typed methods.
+
+`ExtensionId` is the enum of known spec ids (`VORTEX_DATE`, `VORTEX_TIME`,
+`VORTEX_TIMESTAMP`, `VORTEX_UUID`). Unknown wire ids on `DType.Extension`
+round-trip verbatim through the raw `String` field — the registry simply
+returns `null` for them and callers can read the storage column directly.
+
+| Extension id        | Impl                   | Storage                                         | Metadata                                  | Round-trip |
+|---------------------|------------------------|-------------------------------------------------|-------------------------------------------|------------|
+| `vortex.date`       | `DateExtension`        | Signed integer days since 1970-01-01            | none                                      | ✅          |
+| `vortex.time`       | `TimeExtension`        | I32 (s/ms) or I64 (μs/ns) since midnight        | 1 byte: `TimeUnit`                        | ✅          |
+| `vortex.timestamp`  | `TimestampExtension`   | I64 epoch count in the recorded `TimeUnit`      | unit byte + u16 LE tz_len + UTF-8 tz      | ✅          |
+| `vortex.uuid`       | `UuidExtension`        | `FixedSizeList(Primitive(U8), 16)`              | none                                      | decode only |
+| _custom ids_        | _none_                 | _whatever the column declares_                  | _opaque bytes_                            | passthrough |
 
 `TimeUnit` (see [`extension/datetime/unit.rs`](https://github.com/vortex-data/vortex/blob/develop/vortex-array/src/extension/datetime/unit.rs))
 encodes precision in the first metadata byte:

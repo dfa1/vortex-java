@@ -107,9 +107,9 @@ Struct → Zoned(Stats) → Chunked → [Flat, Flat, ...]
 - **Zoned** (`vortex.stats`): wraps a child with per-chunk min/max statistics used for zone-map pruning
 - **Struct**: one child per column
 
-Encoding IDs are strings (e.g. `"vortex.flat"`, `"fastlanes.bitpacked"`). `EncodingRegistry` maps IDs → `Encoding` impls
+Encoding IDs are strings (e.g. `"vortex.flat"`, `"fastlanes.bitpacked"`). `Registry` maps IDs → `Encoding` impls
 via `ServiceLoader`. The registry is immutable after construction — register custom encodings on the builder:
-`EncodingRegistry.builder().registerServiceLoaded().register(myEncoding).build()`.
+`Registry.builder().registerServiceLoaded().register(myEncoding).build()`.
 
 **Adding a new encoding:** three touch-points, always all three:
 
@@ -117,6 +117,17 @@ via `ServiceLoader`. The registry is immutable after construction — register c
 2. `AlpRdEncoding.java` (or `FooEncoding.java`) — implement `Encoding`
 3. `core/src/main/resources/META-INF/services/io.github.dfa1.vortex.encoding.Encoding` — add the fully-qualified class
    name
+
+**Adding a new extension type:** mirrors the encoding pattern — three touch-points:
+
+1. `io.github.dfa1.vortex.extension.ExtensionId` — add enum constant `VORTEX_FOO("vortex.foo")`
+2. `FooExtension.java` — implement `Extension` (public no-arg ctor for ServiceLoader + `INSTANCE` singleton);
+   override `encodeAll(DType.Extension, Collection<?>)` for writer auto-routing
+3. `core/src/main/resources/META-INF/services/io.github.dfa1.vortex.extension.Extension` — add the fully-qualified class
+   name
+
+Writer's `Extension.findKnown` covers the four spec extensions inline; third-party extensions go through
+`Registry.lookup(ExtensionId)`.
 
 ### Memory model
 

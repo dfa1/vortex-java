@@ -283,10 +283,10 @@ Use `allowUnknown()` to read the file anyway — columns with unknown encodings 
 returned as `UnknownArray` (opaque, not decodable, but the rest of the file is readable):
 
 ```java
-import io.github.dfa1.vortex.encoding.EncodingRegistry;
+import io.github.dfa1.vortex.encoding.Registry;
 import io.github.dfa1.vortex.core.array.UnknownArray;
 
-EncodingRegistry registry = EncodingRegistry.builder()
+Registry registry = Registry.builder()
         .registerServiceLoaded()
         .allowUnknown()
         .build();

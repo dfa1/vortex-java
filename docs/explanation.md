@@ -92,7 +92,7 @@ Two encoding-ID namespaces, easy to confuse:
 
 A `Flat` leaf's `segments[0]` resolves to a `SegmentSpec` (offset + length in the file)
 plus an `ArraySpec` (the array-encoding ID + child segment indices for cascaded codecs).
-`EncodingRegistry` looks up the array encoding and calls `decode(DecodeContext)`.
+`Registry` looks up the array encoding and calls `decode(DecodeContext)`.
 
 ### Typical trees
 
@@ -239,7 +239,7 @@ The JIT sees the full decode path as ordinary Java bytecode.
 ```
          ┌──────────────────────────────────────────┐
          │                  core                    │
-         │  DType · Encoding · EncodingRegistry     │
+         │  DType · Encoding · Registry     │
          │  proto/fbs generated sources             │
          └──────────┬─────────────────┬─────────────┘
                     │                 │
@@ -282,7 +282,7 @@ vortexReader.scan(opts) → ScanIterator
 ScanIterator.next() → Chunk (per row-group, AutoCloseable; owns its own Arena)
   └─ decodeLayout(layout, dtype, chunk.arena)
        ├─ Flat   → slice MemorySegment from mmap region
-       │           └─ EncodingRegistry.decodeSegment(seg, …)
+       │           └─ Registry.decodeSegment(seg, …)
        │                └─ Encoding.decode(DecodeContext)  →  Array (zero-copy)
        ├─ Chunked → collect Flat children, decode each, concatenate buffers
        ├─ Zoned   → skip zone-map metadata, recurse into child layout
@@ -316,14 +316,14 @@ writer.close()
   └─ write 8-byte trailer           → version · postscriptLen · magic (VTXF)
 ```
 
-### How `EncodingRegistry` resolves encodings
+### How `Registry` resolves encodings
 
-`EncodingRegistry.loadAll()` uses `ServiceLoader` to discover all `Encoding`
+`Registry.loadAll()` uses `ServiceLoader` to discover all `Encoding`
 implementations on the classpath. Each encoding declares its ID via `encodingId()`.
 At decode time the registry maps the ID string from the Layout node to the right
 `Encoding` instance and calls `decode(DecodeContext)`.
 
-Custom encodings can be added at build time: `EncodingRegistry.builder().register(myEncoding).build()`.
+Custom encodings can be added at build time: `Registry.builder().register(myEncoding).build()`.
 Files with unrecognised IDs throw `VortexException` unless the builder enabled `allowUnknown()`.
 
 ## Benchmarks

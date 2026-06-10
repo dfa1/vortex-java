@@ -225,11 +225,6 @@ relax for large fixtures.
   them as `Types.BINARY(16)` or `Types.VARCHAR(36)`. Detection should be a
   per-driver heuristic, not just `Types.X`. Closes the matrix once Postgres /
   H2 round-trip tests pass.
-- [ ] **Convenience reader accessor for extension columns** —
-  `chunk.column("birthdays").as(LocalDate.class)` sugar over
-  `DateExtension.INSTANCE.decodeAll(storage)`. Today callers have to know
-  which `*Extension.INSTANCE.decodeAll(...)` to invoke. Useful once the
-  nullable + UUID gaps are settled.
 - [ ] Use domain primitives (`UInt32`, `UInt64`, etc.) as value classes via Project Valhalla instead of raw `long`/`int`
     - See https://dfa1.github.io/articles/rethink-domain-primitives-with-valhalla
     - Candidates: `PType` integer kinds, buffer offsets, row indices, byte lengths

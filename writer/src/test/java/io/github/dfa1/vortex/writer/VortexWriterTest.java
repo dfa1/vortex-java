@@ -86,8 +86,7 @@ class VortexWriterTest {
              var iter = vf.scan(ScanOptions.all())) {
             assertThat(iter.hasNext()).isTrue();
             try (Chunk chunk = iter.next()) {
-                Array storage = chunk.columns().get("birthdays");
-                assertThat(io.github.dfa1.vortex.extension.DateExtension.INSTANCE.decodeAll(storage))
+                assertThat(chunk.as("birthdays", java.time.LocalDate.class))
                         .containsExactlyElementsOf(dates);
             }
         }
@@ -118,9 +117,7 @@ class VortexWriterTest {
              var iter = vf.scan(ScanOptions.all())) {
             assertThat(iter.hasNext()).isTrue();
             try (Chunk chunk = iter.next()) {
-                Array storage = chunk.columns().get("clock");
-                assertThat(io.github.dfa1.vortex.extension.TimeExtension.INSTANCE
-                        .decodeAll(timeDtype, storage))
+                assertThat(chunk.as("clock", java.time.LocalTime.class))
                         .containsExactlyElementsOf(times);
             }
         }
@@ -149,10 +146,33 @@ class VortexWriterTest {
              var iter = vf.scan(ScanOptions.all())) {
             assertThat(iter.hasNext()).isTrue();
             try (Chunk chunk = iter.next()) {
-                Array storage = chunk.columns().get("events");
-                assertThat(io.github.dfa1.vortex.extension.TimestampExtension.INSTANCE
-                        .decodeAll(tsDtype, storage))
+                assertThat(chunk.as("events", java.time.Instant.class))
                         .containsExactlyElementsOf(instants);
+            }
+        }
+    }
+
+    @Test
+    void chunkAs_mismatchedDomainType_throws(@TempDir Path tmp) throws IOException {
+        // Given — a vortex.date column on disk, but caller asks for Instant
+        var dateSchema = new DType.Struct(
+                List.of("birthdays"),
+                List.of(io.github.dfa1.vortex.extension.DateExtension.INSTANCE.dtype(false)),
+                false);
+        Path file = tmp.resolve("dates2.vtx");
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, dateSchema, WriteOptions.defaults())) {
+            sut.writeChunk(Map.of("birthdays",
+                    List.of(java.time.LocalDate.of(2026, 6, 10))));
+        }
+
+        try (var vf = VortexReader.open(file, Registry.loadAll());
+             var iter = vf.scan(ScanOptions.all())) {
+            try (Chunk chunk = iter.next()) {
+                // When / Then — the accessor must fail-fast, not return a wrongly-cast list
+                assertThatThrownBy(() -> chunk.as("birthdays", java.time.Instant.class))
+                        .isInstanceOf(io.github.dfa1.vortex.core.VortexException.class)
+                        .hasMessageContaining("decodes to LocalDate, not Instant");
             }
         }
     }

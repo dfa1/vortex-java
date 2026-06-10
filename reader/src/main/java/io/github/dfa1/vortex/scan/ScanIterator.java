@@ -321,7 +321,11 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                 columns = truncateColumns(columns, chunkRows);
             }
             rowsReturned += chunkRows;
-            Chunk chunk = new Chunk(chunkRows, columns, arena, this::onChunkClosed);
+            Map<String, DType> chunkDtypes = new java.util.LinkedHashMap<>();
+            for (int i = 0; i < projectedNames.size(); i++) {
+                chunkDtypes.put(projectedNames.get(i), projectedDtypes.get(i));
+            }
+            Chunk chunk = new Chunk(chunkRows, columns, chunkDtypes, arena, this::onChunkClosed);
             openChunk = chunk;
             return chunk;
         } catch (RuntimeException e) {
