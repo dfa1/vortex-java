@@ -17,6 +17,7 @@ import io.github.dfa1.vortex.encoding.EncodeNode;
 import io.github.dfa1.vortex.encoding.EncodeResult;
 import io.github.dfa1.vortex.encoding.Encoding;
 import io.github.dfa1.vortex.encoding.EncodingId;
+import io.github.dfa1.vortex.encoding.ExtEncoding;
 import io.github.dfa1.vortex.encoding.Registry;
 import io.github.dfa1.vortex.encoding.FrameOfReferenceEncoding;
 import io.github.dfa1.vortex.encoding.ListData;
@@ -77,7 +78,10 @@ public final class VortexWriter implements Closeable {
     private static final double GLOBAL_DICT_RATIO_THRESHOLD = 0.5;
 
     private static final List<Encoding> DEFAULT_CODECS = List.of(
-            new AlpEncoding(), new PrimitiveEncoding(), new BoolEncoding(), new DictEncoding(), new VarBinEncoding());
+            new AlpEncoding(), new PrimitiveEncoding(), new BoolEncoding(), new DictEncoding(),
+            new VarBinEncoding(), new ExtEncoding());
+
+    private static final ExtEncoding EXT_ENCODING = new ExtEncoding();
 
     // Base cascade codec list — no Zstd. Zstd is appended (before PrimitiveEncoding) when
     // WriteOptions.enableZstd() is true. See WriteOptions.withZstd(boolean) for the tradeoff.
@@ -280,9 +284,10 @@ public final class VortexWriter implements Closeable {
 
             // Auto-route extension columns: callers can pass List<LocalDate>, List<Instant>,
             // etc., and we route through the matching spec extension to produce the int[] /
-            // long[] / byte[] the downstream segment writer expects. The physical encoding
-            // then selects against the storage dtype (I32, I64, ...) rather than the
-            // Extension wrapper, which has no registered encoding.
+            // long[] / byte[] storage array. The dtype stays as DType.Extension so
+            // ExtEncoding wraps the storage child below — matches Rust's nested layout
+            // (ExtEncoding → PrimitiveEncoding) and lets Registry skip its unwrap path.
+            boolean extensionColumn = false;
             if (colDtype instanceof DType.Extension extDtype && data instanceof java.util.Collection<?> coll) {
                 io.github.dfa1.vortex.extension.ExtensionId extId =
                         io.github.dfa1.vortex.extension.ExtensionId.tryFrom(extDtype.extensionId());
@@ -290,7 +295,7 @@ public final class VortexWriter implements Closeable {
                         extId == null ? null : defaultRegistry.lookup(extId);
                 if (impl != null) {
                     data = impl.encodeAll(extDtype, coll);
-                    colDtype = extDtype.storageDType();
+                    extensionColumn = true;
                 }
             }
 
@@ -310,7 +315,9 @@ public final class VortexWriter implements Closeable {
                 dictBuffers.computeIfAbsent(colName, k -> new ArrayList<>()).add(data);
             } else {
                 long rowCount = arrayLength(data);
-                int segIdx = writeSegment(colDtype, data);
+                int segIdx = extensionColumn
+                        ? writeSegment(colDtype, data, EXT_ENCODING)
+                        : writeSegment(colDtype, data);
                 colChunks.get(colName).add(new ChunkRef(segIdx, rowCount));
             }
         }
