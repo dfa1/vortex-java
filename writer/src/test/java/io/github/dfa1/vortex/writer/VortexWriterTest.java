@@ -177,11 +177,33 @@ class VortexWriterTest {
         }
     }
 
-    // UUID round-trip blocked on two unrelated writer gaps:
-    //   1. ExtEncoding.encode hardcodes the child to vortex.primitive — UUID storage
-    //      is FixedSizeList(U8, 16) and PrimitiveEncoding doesn't accept it.
-    //   2. VortexWriter.serializeDType has no FixedSizeList case at all.
-    // Tracked in TODO; UuidExtension itself is exercised by ExtensionImplsTest.
+    @Test
+    void writeChunk_roundTripsUuidExtension(@TempDir Path tmp) throws IOException {
+        // Given — UUIDs cover both halves of the 16-byte buffer and a sign-extension edge
+        DType.Extension uuidDtype = io.github.dfa1.vortex.extension.UuidExtension.INSTANCE.dtype(false);
+        var schema = new DType.Struct(List.of("ids"), List.of(uuidDtype), false);
+        List<java.util.UUID> ids = List.of(
+                java.util.UUID.fromString("123e4567-e89b-12d3-a456-426614174000"),
+                new java.util.UUID(-1L, -1L),
+                new java.util.UUID(0L, 0L));
+        Path file = tmp.resolve("uuids.vtx");
+
+        // When
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            sut.writeChunk(Map.of("ids", ids));
+        }
+
+        // Then
+        try (var vf = VortexReader.open(file, Registry.loadAll());
+             var iter = vf.scan(ScanOptions.all())) {
+            assertThat(iter.hasNext()).isTrue();
+            try (Chunk chunk = iter.next()) {
+                assertThat(chunk.as("ids", java.util.UUID.class))
+                        .containsExactlyElementsOf(ids);
+            }
+        }
+    }
 
     @Test
     void writeChunk_missingColumn_throwsIllegalArgument(@TempDir Path tmp) throws IOException {

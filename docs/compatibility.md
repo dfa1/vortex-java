@@ -102,7 +102,7 @@ returns `null` for them and callers can read the storage column directly.
 | `vortex.date`       | `DateExtension`        | Signed integer days since 1970-01-01            | none                                      | ✅          |
 | `vortex.time`       | `TimeExtension`        | I32 (s/ms) or I64 (μs/ns) since midnight        | 1 byte: `TimeUnit`                        | ✅          |
 | `vortex.timestamp`  | `TimestampExtension`   | I64 epoch count in the recorded `TimeUnit`      | unit byte + u16 LE tz_len + UTF-8 tz      | ✅          |
-| `vortex.uuid`       | `UuidExtension`        | `FixedSizeList(Primitive(U8), 16)`              | none                                      | decode only |
+| `vortex.uuid`       | `UuidExtension`        | `FixedSizeList(Primitive(U8), 16)`              | none                                      | ✅          |
 | _custom ids_        | _none_                 | _whatever the column declares_                  | _opaque bytes_                            | passthrough |
 
 `TimeUnit` (see [`extension/datetime/unit.rs`](https://github.com/vortex-data/vortex/blob/develop/vortex-array/src/extension/datetime/unit.rs))

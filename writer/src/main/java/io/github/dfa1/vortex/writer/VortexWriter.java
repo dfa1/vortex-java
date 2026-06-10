@@ -79,7 +79,8 @@ public final class VortexWriter implements Closeable {
 
     private static final List<Encoding> DEFAULT_CODECS = List.of(
             new AlpEncoding(), new PrimitiveEncoding(), new BoolEncoding(), new DictEncoding(),
-            new VarBinEncoding(), new ExtEncoding());
+            new VarBinEncoding(), new ExtEncoding(),
+            new io.github.dfa1.vortex.encoding.FixedSizeListEncoding());
 
     private static final ExtEncoding EXT_ENCODING = new ExtEncoding();
 
@@ -179,6 +180,7 @@ public final class VortexWriter implements Closeable {
             case ListData d -> d.outerLen();
             case ListViewData d -> d.outerLen();
             case DateTimePartsData d -> d.timestamps().length;
+            case io.github.dfa1.vortex.encoding.FixedSizeListData d -> d.outerLen();
             default -> throw new UnsupportedOperationException(
                     "unsupported data type: " + data.getClass());
         };
@@ -231,6 +233,12 @@ public final class VortexWriter implements Closeable {
                 int elemTypeOff = serializeDType(fbb, l.elementType());
                 int inner = io.github.dfa1.vortex.fbs.List.createList(fbb, elemTypeOff, l.nullable());
                 yield io.github.dfa1.vortex.fbs.DType.createDType(fbb, Type.List, inner);
+            }
+            case DType.FixedSizeList fsl -> {
+                int elemTypeOff = serializeDType(fbb, fsl.elementType());
+                int inner = io.github.dfa1.vortex.fbs.FixedSizeList.createFixedSizeList(
+                        fbb, elemTypeOff, fsl.fixedSize(), fsl.nullable());
+                yield io.github.dfa1.vortex.fbs.DType.createDType(fbb, Type.FixedSizeList, inner);
             }
             case DType.Extension e -> {
                 int idOff = fbb.createString(e.extensionId());

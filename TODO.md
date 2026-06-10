@@ -194,13 +194,6 @@ relax for large fixtures.
 
 ## API
 
-- [ ] **UUID extension write-path support** — writing a `vortex.uuid` column
-  fails for two reasons: (1) `ExtEncoding.encode` hardcodes the storage child
-  to `vortex.primitive`, which doesn't accept the UUID's
-  `FixedSizeList(U8, 16)` storage; (2) `VortexWriter.serializeDType` has no
-  FixedSizeList case at all. Reader-side decode already works (covered by
-  `ExtensionImplsTest`); writer-side blocks the round-trip test that's
-  otherwise ready in `VortexWriterTest`.
 - [ ] **Cascade-compress the ExtEncoding child** — `ExtEncoding.encode` hardcodes
   the storage child to `vortex.primitive`, so extension columns skip the
   cascading compressor (no FrameOfReference / Bitpacked / RLE / ALP). Match Rust

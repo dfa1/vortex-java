@@ -120,6 +120,7 @@ public final class UuidExtension implements Extension {
     @Override
     @SuppressWarnings("unchecked")
     public Object encodeAll(DType.Extension dtype, Collection<?> values) {
-        return encodeAll((Collection<UUID>) values);
+        byte[] flat = encodeAll((Collection<UUID>) values);
+        return new io.github.dfa1.vortex.encoding.FixedSizeListData(flat, values.size());
     }
 }
