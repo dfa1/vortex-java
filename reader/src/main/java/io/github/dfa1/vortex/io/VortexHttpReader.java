@@ -220,10 +220,10 @@ public final class VortexHttpReader implements VortexHandle {
 
     // ── HTTP helpers ──────────────────────────────────────────────────────────
 
-    /// Fetches bytes `[offset, offset+length)` via HTTP Range and returns them
-    /// as an off-heap [MemorySegment] tied to this reader's [Arena].
+    /// Fetches bytes `[offset, offset+length)` via HTTP Range and returns them as a
+    /// {@link BoundedSegment} wrapping an off-heap region tied to this reader's {@link Arena}.
     @Override
-    public MemorySegment slice(long offset, long length) {
+    public BoundedSegment slice(long offset, long length) {
         byte[] bytes;
         try {
             bytes = fetchRange(uri, offset, offset + length - 1);
@@ -233,7 +233,7 @@ public final class VortexHttpReader implements VortexHandle {
         }
         MemorySegment seg = arena.allocate(length);
         MemorySegment.copy(MemorySegment.ofArray(bytes), 0, seg, 0, length);
-        return seg.asReadOnly();
+        return new BoundedSegment(seg.asReadOnly(), "http range " + offset + ".." + (offset + length));
     }
 
     @Override

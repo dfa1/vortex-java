@@ -147,7 +147,7 @@ public record InspectorTree(
         if (spec.compression().code != 0) {
             return Peek.EMPTY;
         }
-        MemorySegment seg = handle.slice(spec.offset(), spec.length());
+        MemorySegment seg = handle.slice(spec.offset(), spec.length()).unwrapForSubParser("inspector flat segment decoder");
         return peekFlatRoot(seg, handle.footer().arraySpecs());
     }
 
@@ -202,7 +202,7 @@ public record InspectorTree(
             int segIdx = layout.segments().getFirst();
             SegmentSpec spec = handle.footer().segmentSpecs().get(segIdx);
             if (spec.compression().code == 0) {
-                MemorySegment seg = handle.slice(spec.offset(), spec.length());
+                MemorySegment seg = handle.slice(spec.offset(), spec.length()).unwrapForSubParser("inspector flat segment decoder");
                 Peek peek = peekFlatRoot(seg, arraySpecs);
                 if (peek.encoding() != null) {
                     localUsed.add(peek.encoding());

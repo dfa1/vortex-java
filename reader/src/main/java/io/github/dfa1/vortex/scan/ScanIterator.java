@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.scan;
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.Layout;
-import io.github.dfa1.vortex.core.MemorySegments;
+import io.github.dfa1.vortex.core.BoundedSegment;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.SegmentSpec;
 import io.github.dfa1.vortex.core.VortexException;
@@ -480,7 +480,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         }
         int segIdx = flat.segments().getFirst();
         SegmentSpec spec = file.footer().segmentSpecs().get(segIdx);
-        MemorySegment seg = file.slice(spec.offset(), spec.length());
+        MemorySegment seg = file.slice(spec.offset(), spec.length()).unwrapForSubParser("flat segment decoder");
         return new FlatSegmentDecoder(registry).decode(seg, file.footer().arraySpecs(), dtype, flat.rowCount(), arena);
     }
 
@@ -633,13 +633,14 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         int segIdx = flat.segments().getFirst();
         SegmentSpec spec = file.footer().segmentSpecs().get(segIdx);
         long segLen = spec.length();
-        MemorySegment seg = file.slice(spec.offset(), segLen);
+        BoundedSegment statsRegion = file.slice(spec.offset(), segLen);
+        MemorySegment seg = statsRegion.unwrapForSubParser("stats segment fbLen read");
 
         // Stats FlatBuffer lives in the segment's last 4+fbLen bytes; reading the whole
         // segment as a ByteBuffer would fail for segments larger than 2 GB (ByteBuffer cap).
         int fbLen = seg.get(LE_INT, segLen - 4);
         long fbStart = segLen - 4L - fbLen;
-        ByteBuffer fbBuf = MemorySegments.slice(seg, fbStart, fbLen, "stats flatbuffer").asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
+        ByteBuffer fbBuf = statsRegion.slice(fbStart, fbLen, "stats flatbuffer").asByteBufferLE();
         var fbArray = io.github.dfa1.vortex.fbs.Array.getRootAsArray(fbBuf);
 
         io.github.dfa1.vortex.fbs.ArrayNode root = fbArray.root();

@@ -571,7 +571,7 @@ public final class VortexInspectorTui {
                 try (java.lang.foreign.Arena arena = java.lang.foreign.Arena.ofConfined()) {
                     int segIdx = values.segments().getFirst();
                     SegmentSpec spec = tree.segmentSpecs().get(segIdx);
-                    java.lang.foreign.MemorySegment seg = handle.slice(spec.offset(), spec.length());
+                    java.lang.foreign.MemorySegment seg = handle.slice(spec.offset(), spec.length()).unwrapForSubParser("inspector tui flat segment");
                     io.github.dfa1.vortex.core.array.Array arr =
                             new io.github.dfa1.vortex.encoding.FlatSegmentDecoder(handle.registry())
                                     .decode(seg, handle.footer().arraySpecs(),
@@ -760,7 +760,7 @@ public final class VortexInspectorTui {
                 return new byte[0];
             }
             try {
-                MemorySegment seg = handle.slice(spec.offset(), wanted);
+                MemorySegment seg = handle.slice(spec.offset(), wanted).unwrapForSubParser("inspector tui hex peek");
                 byte[] buf = new byte[wanted];
                 MemorySegment.copy(seg, 0, MemorySegment.ofArray(buf), 0, wanted);
                 return buf;

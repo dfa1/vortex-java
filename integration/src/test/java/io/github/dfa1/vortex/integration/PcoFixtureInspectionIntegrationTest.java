@@ -101,7 +101,7 @@ class PcoFixtureInspectionIntegrationTest {
         if ((layout.isFlat() || layout.isDict()) && !layout.segments().isEmpty()) {
             int segIdx = layout.segments().getFirst();
             SegmentSpec spec = segmentSpecs.get(segIdx);
-            MemorySegment seg = vf.slice(spec.offset(), spec.length());
+            MemorySegment seg = vf.slice(spec.offset(), spec.length()).unwrapForSubParser("integration test inspector");
             scanFlatSegment(seg, arraySpecs, stats, currentPath);
             return;
         }

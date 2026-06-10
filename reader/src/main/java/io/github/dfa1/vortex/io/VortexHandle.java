@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.io;
 
+import io.github.dfa1.vortex.core.BoundedSegment;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.Footer;
 import io.github.dfa1.vortex.core.Layout;
@@ -8,7 +9,6 @@ import io.github.dfa1.vortex.scan.ScanIterator;
 import io.github.dfa1.vortex.scan.ScanOptions;
 
 import java.io.Closeable;
-import java.lang.foreign.MemorySegment;
 
 /// Common interface for handles to a Vortex file, regardless of storage backend.
 ///
@@ -37,11 +37,12 @@ public interface VortexHandle extends Closeable {
     ///
     /// @param offset the start offset in bytes
     /// @param length the number of bytes to expose
-    /// @return a read-only [MemorySegment] view of the requested range
+    /// @return a {@link BoundedSegment} view of the requested range; bounds-checking on
+    ///         later sub-slices is enforced by the type
     /// @deprecated marked for removal once the reader-internal packages consolidate (see
     /// {@code TODO.md}); kept here as an interim escape hatch for vortex-internal callers.
     @Deprecated(since = "0.4.0", forRemoval = true)
-    MemorySegment slice(long offset, long length);
+    BoundedSegment slice(long offset, long length);
 
     ScanIterator scan(ScanOptions options);
 
