@@ -11,7 +11,7 @@
 
 	<name>vortex-inspector</name>
 	<description>Inspector for the Vortex columnar file format. Produces a structural tree model of a file's
-		schema, layout, and encodings, plus text and Lanterna-based TUI renderers.
+		schema, layout, and encodings, plus text and FFM-based ANSI TUI renderers.
 	</description>
 
 	<dependencies>
