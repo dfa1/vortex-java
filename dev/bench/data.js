@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1781040861661,
+  "lastUpdate": 1781128534579,
   "repoUrl": "https://github.com/dfa1/vortex-java",
   "entries": {
     "Benchmark": [
@@ -548,6 +548,88 @@ window.BENCHMARK_DATA = {
           {
             "name": "io.github.dfa1.vortex.performance.RustVsJavaWriteBenchmark.jniWrite",
             "value": 0.31130107428340703,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Davide Angelocola",
+            "username": "dfa1",
+            "email": "davide.angelocola@gmail.com"
+          },
+          "committer": {
+            "name": "Davide Angelocola",
+            "username": "dfa1",
+            "email": "davide.angelocola@gmail.com"
+          },
+          "id": "0714ca3a108b73758a2409ab9254fc7f08689fd2",
+          "message": "docs(inspector): drop stale Lanterna mention from pom description\n\nLanterna was replaced by the FFM ANSI driver in 0.5.0; the pom\ndescription still claimed \"Lanterna-based TUI renderers\".\n\nCo-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>",
+          "timestamp": "2026-06-10T19:55:58Z",
+          "url": "https://github.com/dfa1/vortex-java/commit/0714ca3a108b73758a2409ab9254fc7f08689fd2"
+        },
+        "date": 1781128534234,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.javaReadCascading",
+            "value": 36.77864391228895,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.javaReadClose",
+            "value": 27.36840051417585,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.javaReadSymbol",
+            "value": 37.77603067484855,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.javaReadVolume",
+            "value": 47.93634875604145,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.jniReadClose",
+            "value": 23.64510738035385,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.jniReadSymbol",
+            "value": 4.395982664995027,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.jniReadVolume",
+            "value": 24.395717144984204,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaWriteBenchmark.javaWrite",
+            "value": 0.6406131252920014,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaWriteBenchmark.javaWriteCascading",
+            "value": 0.21033230434305597,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaWriteBenchmark.jniWrite",
+            "value": 0.311918309662669,
             "unit": "ops/s",
             "extra": "iterations: 3\nforks: 1\nthreads: 1"
           }
