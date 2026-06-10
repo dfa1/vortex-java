@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.NullableData;
 import io.github.dfa1.vortex.encoding.TimeUnit;
 
 import java.nio.ByteBuffer;
@@ -137,6 +138,48 @@ public final class TimeExtension implements Extension {
     @SuppressWarnings("unchecked")
     public Object encodeAll(DType.Extension dtype, Collection<?> values) {
         TimeUnit unit = ExtensionStorage.readUnit(dtype);
-        return encodeAll((Collection<java.time.LocalTime>) values, unit);
+        Collection<LocalTime> typed = (Collection<LocalTime>) values;
+        int n = typed.size();
+        boolean[] validity = new boolean[n];
+        boolean anyNull = false;
+        Object out;
+        int i = 0;
+        switch (unit) {
+            case Seconds, Milliseconds -> {
+                int[] arr = new int[n];
+                for (LocalTime v : typed) {
+                    if (v == null) {
+                        anyNull = true;
+                    } else {
+                        arr[i] = Math.toIntExact(encode(v, unit));
+                        validity[i] = true;
+                    }
+                    i++;
+                }
+                out = arr;
+            }
+            case Microseconds, Nanoseconds -> {
+                long[] arr = new long[n];
+                for (LocalTime v : typed) {
+                    if (v == null) {
+                        anyNull = true;
+                    } else {
+                        arr[i] = encode(v, unit);
+                        validity[i] = true;
+                    }
+                    i++;
+                }
+                out = arr;
+            }
+            case Days -> throw new VortexException("Time.encodeAll: Days unit not valid for vortex.time");
+            default -> throw new VortexException("unknown TimeUnit: " + unit);
+        }
+        if (!anyNull) {
+            return out;
+        }
+        if (!dtype.nullable()) {
+            throw new VortexException("null element in non-nullable vortex.time column");
+        }
+        return new NullableData(out, validity);
     }
 }

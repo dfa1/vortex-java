@@ -46,6 +46,12 @@ public final class UuidExtension implements Extension {
     /// @throws VortexException if storage isn't a {@code FixedSizeListArray<ByteArray>} of size 16
     public UUID decode(Array storage, long i) {
         ExtensionStorage.checkBounds(i, storage.length());
+        if (storage instanceof io.github.dfa1.vortex.core.array.MaskedArray masked) {
+            if (!masked.isValid(i)) {
+                throw new VortexException("null cell at index " + i);
+            }
+            return decode(masked.inner(), i);
+        }
         if (!(storage instanceof FixedSizeListArray fsl)) {
             throw new VortexException("Uuid.decode: expected FixedSizeListArray, got "
                     + storage.getClass().getSimpleName());
@@ -120,7 +126,36 @@ public final class UuidExtension implements Extension {
     @Override
     @SuppressWarnings("unchecked")
     public Object encodeAll(DType.Extension dtype, Collection<?> values) {
-        byte[] flat = encodeAll((Collection<UUID>) values);
-        return new io.github.dfa1.vortex.encoding.FixedSizeListData(flat, values.size());
+        Collection<UUID> typed = (Collection<UUID>) values;
+        int n = typed.size();
+        byte[] flat = new byte[16 * n];
+        boolean[] validity = new boolean[n];
+        boolean anyNull = false;
+        int row = 0;
+        for (UUID v : typed) {
+            if (v == null) {
+                anyNull = true;
+            } else {
+                long msb = v.getMostSignificantBits();
+                long lsb = v.getLeastSignificantBits();
+                int off = row * 16;
+                for (int k = 0; k < 8; k++) {
+                    flat[off + k] = (byte) ((msb >> (56 - 8 * k)) & 0xff);
+                    flat[off + 8 + k] = (byte) ((lsb >> (56 - 8 * k)) & 0xff);
+                }
+                validity[row] = true;
+            }
+            row++;
+        }
+        io.github.dfa1.vortex.encoding.FixedSizeListData storage =
+                new io.github.dfa1.vortex.encoding.FixedSizeListData(flat, n);
+        if (!anyNull) {
+            return storage;
+        }
+        if (!dtype.nullable()) {
+            throw new io.github.dfa1.vortex.core.VortexException(
+                    "null element in non-nullable vortex.uuid column");
+        }
+        return new io.github.dfa1.vortex.core.array.NullableData(storage, validity);
     }
 }

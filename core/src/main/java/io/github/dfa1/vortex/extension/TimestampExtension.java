@@ -2,7 +2,9 @@ package io.github.dfa1.vortex.extension;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.NullableData;
 import io.github.dfa1.vortex.encoding.TimeUnit;
 
 import java.nio.ByteBuffer;
@@ -170,6 +172,27 @@ public final class TimestampExtension implements Extension {
     @SuppressWarnings("unchecked")
     public Object encodeAll(DType.Extension dtype, Collection<?> values) {
         TimeUnit unit = ExtensionStorage.readUnit(dtype);
-        return encodeAll((Collection<Instant>) values, unit);
+        Collection<Instant> typed = (Collection<Instant>) values;
+        int n = typed.size();
+        long[] out = new long[n];
+        boolean[] validity = new boolean[n];
+        boolean anyNull = false;
+        int i = 0;
+        for (Instant v : typed) {
+            if (v == null) {
+                anyNull = true;
+            } else {
+                out[i] = encode(v, unit);
+                validity[i] = true;
+            }
+            i++;
+        }
+        if (!anyNull) {
+            return out;
+        }
+        if (!dtype.nullable()) {
+            throw new VortexException("null element in non-nullable vortex.timestamp column");
+        }
+        return new NullableData(out, validity);
     }
 }

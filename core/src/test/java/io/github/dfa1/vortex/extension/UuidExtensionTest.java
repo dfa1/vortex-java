@@ -5,11 +5,15 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.ByteArray;
 import io.github.dfa1.vortex.core.array.FixedSizeListArray;
+import io.github.dfa1.vortex.core.array.NullableData;
+import io.github.dfa1.vortex.encoding.FixedSizeListData;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -96,6 +100,65 @@ class UuidExtensionTest {
 
             // Then
             assertThat(sut.decodeAll(storage)).isEqualTo(ids);
+        }
+    }
+
+    @Nested
+    class PolymorphicEncodeAll {
+
+        @Test
+        void noNulls_returnsFixedSizeListData() {
+            // Given — non-null path keeps the FixedSizeListData return shape so
+            // FixedSizeListEncoding picks it up without a NullableData detour
+            DType.Extension dtype = sut.dtype(false);
+            UUID id = UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
+
+            // When
+            Object result = sut.encodeAll(dtype, List.of(id));
+
+            // Then
+            assertThat(result).isInstanceOf(FixedSizeListData.class);
+            FixedSizeListData fsl = (FixedSizeListData) result;
+            assertThat(fsl.outerLen()).isEqualTo(1L);
+            assertThat(((byte[]) fsl.elements())).hasSize(16);
+        }
+
+        @Test
+        void withNulls_nullableDtype_zeroPlaceholderStride16() {
+            // Given — null entry must produce 16 zero bytes so the masked child stays free
+            // of semantic nulls; row count == validity length, not bytes/16
+            DType.Extension dtype = sut.dtype(true);
+            UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
+            List<UUID> ids = Arrays.asList(id, null, id);
+
+            // When
+            Object result = sut.encodeAll(dtype, ids);
+
+            // Then
+            assertThat(result).isInstanceOf(NullableData.class);
+            NullableData nd = (NullableData) result;
+            assertThat(nd.values()).isInstanceOf(FixedSizeListData.class);
+            FixedSizeListData fsl = (FixedSizeListData) nd.values();
+            assertThat(fsl.outerLen()).isEqualTo(3L);
+            byte[] flat = (byte[]) fsl.elements();
+            assertThat(flat).hasSize(48);
+            // Null row is bytes 16..31 — must be zero so MaskedArray invariant holds
+            for (int i = 16; i < 32; i++) {
+                assertThat(flat[i]).isZero();
+            }
+            assertThat(nd.validity()).containsExactly(true, false, true);
+        }
+
+        @Test
+        void withNulls_nonNullableDtype_throws() {
+            // Given — NOT NULL UUID column rejects null elements rather than zero-rounding
+            DType.Extension dtype = sut.dtype(false);
+
+            // When / Then
+            assertThatThrownBy(() -> sut.encodeAll(dtype,
+                    Arrays.asList(UUID.fromString("00000000-0000-0000-0000-000000000001"), null)))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("vortex.uuid");
         }
     }
 

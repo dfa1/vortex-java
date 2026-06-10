@@ -5,8 +5,12 @@ import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.BoolArray;
 import io.github.dfa1.vortex.core.array.MaskedArray;
+import io.github.dfa1.vortex.core.array.NullableData;
 
-/// Decoder for {@code vortex.masked}.
+import java.util.ArrayList;
+import java.util.List;
+
+/// Encoder/decoder for {@code vortex.masked}.
 ///
 /// <p>Wire format:
 /// <ul>
@@ -15,6 +19,10 @@ import io.github.dfa1.vortex.core.array.MaskedArray;
 ///   <li>Child 0: payload array encoded with non-nullable dtype (no actual nulls by invariant).</li>
 ///   <li>Child 1 (optional): validity bitmap, dtype {@code Bool(false)}. Absent means AllValid.</li>
 /// </ul>
+///
+/// <p>Encode input: a [NullableData] carrier whose {@code values} field matches the shape
+/// the inner encoding expects (primitive array, byte[], ...) and whose {@code validity}
+/// is parallel to it. Null positions in the source must already be zero-filled placeholders.
 public final class MaskedEncoding implements Encoding {
 
     /// Creates a new {@code MaskedEncoding} instance; use via {@link Registry}.
@@ -28,17 +36,62 @@ public final class MaskedEncoding implements Encoding {
 
     @Override
     public boolean accepts(DType dtype) {
+        // Not registry-pickable. Callers (writer auto-route, ExtEncoding) invoke encode
+        // directly when they hold a NullableData carrier.
         return false;
     }
 
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
-        throw new VortexException(EncodingId.VORTEX_MASKED, "encode not yet implemented");
+        return Encoder.encode(dtype, data, ctx);
     }
 
     @Override
     public Array decode(DecodeContext ctx) {
         return Decoder.decode(ctx);
+    }
+
+    private static final List<Encoding> INNER_FALLBACK = List.of(
+            new PrimitiveEncoding(),
+            new FixedSizeListEncoding());
+
+    private static final class Encoder {
+
+        static EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+            if (!(data instanceof NullableData nd)) {
+                throw new VortexException(EncodingId.VORTEX_MASKED,
+                        "expected NullableData, got " + (data == null ? "null" : data.getClass().getName()));
+            }
+            DType nonNullable = dtype.withNullable(false);
+            Encoding inner = pickInner(nonNullable);
+            EncodeResult valuesResult = inner.encode(nonNullable, nd.values(), ctx);
+            EncodeResult validityResult = new BoolEncoding().encode(new DType.Bool(false), nd.validity(), ctx);
+
+            int valuesBufCount = valuesResult.buffers().size();
+            EncodeNode validityNode = EncodeNode.remapBufferIndices(validityResult.rootNode(), valuesBufCount);
+
+            List<java.lang.foreign.MemorySegment> buffers = new ArrayList<>(valuesBufCount + validityResult.buffers().size());
+            buffers.addAll(valuesResult.buffers());
+            buffers.addAll(validityResult.buffers());
+
+            EncodeNode root = new EncodeNode(
+                    EncodingId.VORTEX_MASKED,
+                    null,
+                    new EncodeNode[]{valuesResult.rootNode(), validityNode},
+                    new int[0]);
+            // Stats propagate from the values child — they describe the non-null payload.
+            return new EncodeResult(root, buffers, valuesResult.statsMin(), valuesResult.statsMax());
+        }
+
+        private static Encoding pickInner(DType nonNullable) {
+            for (Encoding e : INNER_FALLBACK) {
+                if (e.accepts(nonNullable)) {
+                    return e;
+                }
+            }
+            throw new VortexException(EncodingId.VORTEX_MASKED,
+                    "no inner encoding for " + nonNullable);
+        }
     }
 
     private static final class Decoder {

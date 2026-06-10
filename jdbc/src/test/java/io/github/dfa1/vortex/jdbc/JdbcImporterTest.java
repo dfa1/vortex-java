@@ -149,6 +149,90 @@ class JdbcImporterTest {
         }
 
         @Test
+        void roundTripsNullableExtensionColumns(@TempDir Path tmp) throws Exception {
+            // Given — nullable DATE/TIME/TIMESTAMP/UUID columns with mixed NULL rows.
+            // Validates the writer's ExtEncoding -> MaskedEncoding -> primitive layout
+            // and that JdbcImporter preserves SQL NULL through to MaskedArray validity bits.
+            UUID u1 = UUID.fromString("12345678-1234-5678-9abc-def012345678");
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("CREATE TABLE nullable_ext ("
+                        + "id BIGINT NOT NULL, "
+                        + "d DATE, "
+                        + "t TIME, "
+                        + "ts TIMESTAMP, "
+                        + "u UUID)");
+                stmt.execute("INSERT INTO nullable_ext VALUES "
+                        + "(1, DATE '1996-02-12', TIME '01:01:01', TIMESTAMP '2026-06-10 12:00:00', '" + u1 + "')");
+                stmt.execute("INSERT INTO nullable_ext VALUES (2, NULL, NULL, NULL, NULL)");
+                stmt.execute("INSERT INTO nullable_ext VALUES "
+                        + "(3, DATE '2026-06-10', TIME '00:00:00', TIMESTAMP '1970-01-01 00:00:00', '" + u1 + "')");
+            }
+            Path vortex = tmp.resolve("nullable_ext.vortex");
+
+            // When
+            JdbcImporter.importQuery(conn, "SELECT * FROM nullable_ext ORDER BY id", vortex);
+
+            // Then — schema declares nullable=true on every ext column; data round-trips
+            // with row 2 marked invalid in each MaskedArray
+            try (VortexReader reader = VortexReader.open(vortex,
+                    io.github.dfa1.vortex.encoding.Registry.loadAll())) {
+                DType.Struct schema = (DType.Struct) reader.dtype();
+                assertThat(((DType.Extension) schema.fieldTypes().get(1)).nullable()).isTrue();
+                assertThat(((DType.Extension) schema.fieldTypes().get(2)).nullable()).isTrue();
+                assertThat(((DType.Extension) schema.fieldTypes().get(3)).nullable()).isTrue();
+                assertThat(((DType.Extension) schema.fieldTypes().get(4)).nullable()).isTrue();
+
+                try (ScanIterator iter = reader.scan(ScanOptions.all())) {
+                    assertThat(iter.hasNext()).isTrue();
+                    try (Chunk chunk = iter.next()) {
+                        assertThat(chunk.rowCount()).isEqualTo(3);
+
+                        io.github.dfa1.vortex.core.array.Array dCol = chunk.column("D");
+                        io.github.dfa1.vortex.core.array.Array tCol = chunk.column("T");
+                        io.github.dfa1.vortex.core.array.Array tsCol = chunk.column("TS");
+                        io.github.dfa1.vortex.core.array.Array uCol = chunk.column("U");
+                        assertThat(dCol).isInstanceOf(io.github.dfa1.vortex.core.array.MaskedArray.class);
+                        assertThat(tCol).isInstanceOf(io.github.dfa1.vortex.core.array.MaskedArray.class);
+                        assertThat(tsCol).isInstanceOf(io.github.dfa1.vortex.core.array.MaskedArray.class);
+                        assertThat(uCol).isInstanceOf(io.github.dfa1.vortex.core.array.MaskedArray.class);
+
+                        io.github.dfa1.vortex.core.array.MaskedArray dMasked =
+                                (io.github.dfa1.vortex.core.array.MaskedArray) dCol;
+                        assertThat(dMasked.isValid(0)).isTrue();
+                        assertThat(dMasked.isValid(1)).isFalse();
+                        assertThat(dMasked.isValid(2)).isTrue();
+                        assertThat(io.github.dfa1.vortex.extension.DateExtension.INSTANCE.decode(dMasked, 0))
+                                .isEqualTo(java.time.LocalDate.of(1996, 2, 12));
+                        assertThat(io.github.dfa1.vortex.extension.DateExtension.INSTANCE.decode(dMasked, 2))
+                                .isEqualTo(java.time.LocalDate.of(2026, 6, 10));
+
+                        DType.Extension tDtype = (DType.Extension) schema.fieldTypes().get(2);
+                        io.github.dfa1.vortex.core.array.MaskedArray tMasked =
+                                (io.github.dfa1.vortex.core.array.MaskedArray) tCol;
+                        assertThat(tMasked.isValid(1)).isFalse();
+                        assertThat(io.github.dfa1.vortex.extension.TimeExtension.INSTANCE.decode(tDtype, tMasked, 0))
+                                .isEqualTo(java.time.LocalTime.of(1, 1, 1));
+
+                        DType.Extension tsDtype = (DType.Extension) schema.fieldTypes().get(3);
+                        io.github.dfa1.vortex.core.array.MaskedArray tsMasked =
+                                (io.github.dfa1.vortex.core.array.MaskedArray) tsCol;
+                        assertThat(tsMasked.isValid(1)).isFalse();
+                        assertThat(io.github.dfa1.vortex.extension.TimestampExtension.INSTANCE.instant(tsDtype, tsMasked, 0))
+                                .isEqualTo(java.sql.Timestamp.valueOf("2026-06-10 12:00:00").toInstant());
+
+                        io.github.dfa1.vortex.core.array.MaskedArray uMasked =
+                                (io.github.dfa1.vortex.core.array.MaskedArray) uCol;
+                        assertThat(uMasked.isValid(0)).isTrue();
+                        assertThat(uMasked.isValid(1)).isFalse();
+                        assertThat(uMasked.isValid(2)).isTrue();
+                        assertThat(io.github.dfa1.vortex.extension.UuidExtension.INSTANCE.decode(uMasked, 0))
+                                .isEqualTo(u1);
+                    }
+                }
+            }
+        }
+
+        @Test
         void roundTripsUuidColumnViaExtension(@TempDir Path tmp) throws Exception {
             // Given — H2 UUID column type. Driver returns java.util.UUID from rs.getObject.
             UUID u1 = UUID.fromString("12345678-1234-5678-9abc-def012345678");

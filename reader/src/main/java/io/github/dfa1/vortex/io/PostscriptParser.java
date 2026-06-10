@@ -239,10 +239,12 @@ final class PostscriptParser {
             }
             case Type.Extension -> {
                 var e = (Extension) fbs.type(new Extension());
+                DType storage = convertDType(e.storageDtype(new io.github.dfa1.vortex.fbs.DType()));
                 yield new DType.Extension(
                         e.id(),
-                        convertDType(e.storageDtype(new io.github.dfa1.vortex.fbs.DType())),
-                        e.metadataAsByteBuffer(), false);
+                        storage,
+                        e.metadataAsByteBuffer(),
+                        storage.nullable());
             }
             case Type.Variant -> new DType.Variant(((Variant) fbs.type(new Variant())).nullable());
             default -> throw new VortexException("unsupported DType typeType=" + typeType);

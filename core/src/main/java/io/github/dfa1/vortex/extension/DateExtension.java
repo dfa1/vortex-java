@@ -2,7 +2,9 @@ package io.github.dfa1.vortex.extension;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.NullableData;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -86,6 +88,27 @@ public final class DateExtension implements Extension {
     @Override
     @SuppressWarnings("unchecked")
     public Object encodeAll(DType.Extension dtype, Collection<?> values) {
-        return encodeAll((Collection<LocalDate>) values);
+        Collection<LocalDate> typed = (Collection<LocalDate>) values;
+        int n = typed.size();
+        int[] out = new int[n];
+        boolean[] validity = new boolean[n];
+        boolean anyNull = false;
+        int i = 0;
+        for (LocalDate v : typed) {
+            if (v == null) {
+                anyNull = true;
+            } else {
+                out[i] = encode(v);
+                validity[i] = true;
+            }
+            i++;
+        }
+        if (!anyNull) {
+            return out;
+        }
+        if (!dtype.nullable()) {
+            throw new VortexException("null element in non-nullable vortex.date column");
+        }
+        return new NullableData(out, validity);
     }
 }

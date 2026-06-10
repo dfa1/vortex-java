@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.encoding;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.NullableData;
 
 import java.util.List;
 
@@ -47,17 +48,26 @@ public final class ExtEncoding implements Encoding {
             throw new VortexException(EncodingId.VORTEX_EXT, "expected extension dtype, got " + dtype);
         }
         DType storage = ext.storageDType();
-        Encoding storageEncoding = null;
-        for (Encoding enc : STORAGE_FALLBACK) {
-            if (enc.accepts(storage)) {
-                storageEncoding = enc;
-                break;
+        EncodeResult childResult;
+        if (data instanceof NullableData) {
+            // Nullable extension: storage is wrapped in MaskedEncoding. Spec requires the
+            // ext storage_dtype carry the same nullability as the ext dtype (see Rust
+            // ExtensionArray.try_new), so storage stays nullable; MaskedEncoding splits
+            // it into a non-nullable inner + a Bool validity child.
+            childResult = new MaskedEncoding().encode(storage, data, ctx);
+        } else {
+            Encoding storageEncoding = null;
+            for (Encoding enc : STORAGE_FALLBACK) {
+                if (enc.accepts(storage)) {
+                    storageEncoding = enc;
+                    break;
+                }
             }
+            if (storageEncoding == null) {
+                throw new VortexException(EncodingId.VORTEX_EXT, "no storage encoding for " + storage);
+            }
+            childResult = storageEncoding.encode(storage, data, ctx);
         }
-        if (storageEncoding == null) {
-            throw new VortexException(EncodingId.VORTEX_EXT, "no storage encoding for " + storage);
-        }
-        EncodeResult childResult = storageEncoding.encode(storage, data, ctx);
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_EXT, null, new EncodeNode[]{childResult.rootNode()}, new int[0]);
         return new EncodeResult(root, childResult.buffers(), childResult.statsMin(), childResult.statsMax());
     }
@@ -66,6 +76,12 @@ public final class ExtEncoding implements Encoding {
     public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
         if (!(dtype instanceof DType.Extension ext)) {
             throw new VortexException(EncodingId.VORTEX_EXT, "expected extension dtype, got " + dtype);
+        }
+        // Nullable storage goes through MaskedEncoding; that path isn't cascadable today
+        // (the masked subtree owns both the storage and its validity child), so fall back
+        // to the terminal encode.
+        if (data instanceof NullableData) {
+            return CascadeStep.terminal(encode(dtype, data, ctx));
         }
         EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_EXT, null, new EncodeNode[1], new int[0]);
         ChildSlot slot = new ChildSlot(ext.storageDType(), data, 0);

@@ -194,6 +194,7 @@ public final class VortexWriter implements Closeable {
             case ListViewData d -> d.outerLen();
             case DateTimePartsData d -> d.timestamps().length;
             case io.github.dfa1.vortex.encoding.FixedSizeListData d -> d.outerLen();
+            case io.github.dfa1.vortex.core.array.NullableData d -> d.validity().length;
             default -> throw new UnsupportedOperationException(
                     "unsupported data type: " + data.getClass());
         };

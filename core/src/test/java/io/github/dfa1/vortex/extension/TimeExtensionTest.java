@@ -3,11 +3,14 @@ package io.github.dfa1.vortex.extension;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.core.array.NullableData;
 import io.github.dfa1.vortex.encoding.TimeUnit;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
 import java.time.LocalTime;
+import java.util.Arrays;
 import java.util.List;
 
 import static io.github.dfa1.vortex.extension.ExtensionTestSupport.I32;
@@ -109,5 +112,66 @@ class TimeExtensionTest {
         assertThatThrownBy(() -> sut.encodeAll(List.of(LocalTime.NOON), TimeUnit.Days))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("Days unit not valid");
+    }
+
+    @Nested
+    class PolymorphicEncodeAll {
+
+        @Test
+        void withNulls_milliseconds_returnsNullableDataIntStorage() {
+            // Given — default ms unit -> I32 storage; null in middle, valid on both sides
+            DType.Extension dtype = sut.dtype(TimeUnit.Milliseconds, true);
+            List<LocalTime> times = Arrays.asList(LocalTime.NOON, null, LocalTime.MIDNIGHT);
+
+            // When
+            Object result = sut.encodeAll(dtype, times);
+
+            // Then
+            assertThat(result).isInstanceOf(NullableData.class);
+            NullableData nd = (NullableData) result;
+            assertThat(nd.values()).isInstanceOf(int[].class);
+            int[] storage = (int[]) nd.values();
+            assertThat(storage[1]).isZero();
+            assertThat(nd.validity()).containsExactly(true, false, true);
+        }
+
+        @Test
+        void withNulls_nanoseconds_returnsNullableDataLongStorage() {
+            // Given — nanos unit -> I64 storage; storage primitive type must follow unit
+            DType.Extension dtype = sut.dtype(TimeUnit.Nanoseconds, true);
+            List<LocalTime> times = Arrays.asList(null, LocalTime.NOON);
+
+            // When
+            Object result = sut.encodeAll(dtype, times);
+
+            // Then
+            assertThat(result).isInstanceOf(NullableData.class);
+            NullableData nd = (NullableData) result;
+            assertThat(nd.values()).isInstanceOf(long[].class);
+            assertThat(nd.validity()).containsExactly(false, true);
+        }
+
+        @Test
+        void noNulls_returnsPlainArray() {
+            // Given — non-null path keeps the int[]/long[] return shape per existing contract
+            DType.Extension dtype = sut.dtype(TimeUnit.Milliseconds, false);
+
+            // When
+            Object result = sut.encodeAll(dtype, List.of(LocalTime.NOON));
+
+            // Then
+            assertThat(result).isInstanceOf(int[].class);
+        }
+
+        @Test
+        void withNulls_nonNullableDtype_throws() {
+            // Given — NOT NULL column rejects null elements
+            DType.Extension dtype = sut.dtype(TimeUnit.Milliseconds, false);
+
+            // When / Then
+            assertThatThrownBy(() -> sut.encodeAll(dtype, Arrays.asList(LocalTime.NOON, null)))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("vortex.time");
+        }
     }
 }

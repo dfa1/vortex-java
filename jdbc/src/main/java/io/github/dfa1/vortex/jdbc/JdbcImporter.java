@@ -177,10 +177,9 @@ public final class JdbcImporter {
         if (id == null) {
             throw new UnsupportedOperationException("unsupported extension: " + ext.extensionId());
         }
-        // SQL NULL → null in the buffer. Nullable-extension write support (MaskedArray
-        // storage + per-cell validity bit) is still pending — until then, a NULL in a
-        // NOT NULL column would round-trip wrong, but the database constraint prevents
-        // that, and the encoder NPEs loudly if anything slips through.
+        // SQL NULL → null in the buffer. Nullable extension columns round-trip through the
+        // writer's ExtEncoding → MaskedEncoding → primitive layout (validity child preserved);
+        // NOT NULL columns reject any null element with VortexException during encode.
         switch (id) {
             case VORTEX_DATE -> {
                 Date d = rs.getDate(colIdx);

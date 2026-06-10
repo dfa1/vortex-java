@@ -4,7 +4,9 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.LongArray;
+import io.github.dfa1.vortex.core.array.NullableData;
 import io.github.dfa1.vortex.encoding.TimeUnit;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
@@ -16,6 +18,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
+import java.util.Arrays;
 import java.util.List;
 
 import static io.github.dfa1.vortex.extension.ExtensionTestSupport.I64;
@@ -116,6 +119,54 @@ class TimestampExtensionTest {
 
             // Then
             assertThat(got.getZone()).isEqualTo(ZoneOffset.UTC);
+        }
+    }
+
+    @Nested
+    class PolymorphicEncodeAll {
+
+        @Test
+        void noNulls_returnsPlainLongArray() {
+            // Given — non-null path keeps the long[] return shape
+            DType.Extension dtype = sut.dtype(false);
+
+            // When
+            Object result = sut.encodeAll(dtype, List.of(Instant.ofEpochMilli(1L)));
+
+            // Then
+            assertThat(result).isInstanceOf(long[].class);
+        }
+
+        @Test
+        void withNulls_nullableDtype_returnsNullableData() {
+            // Given — mixed null run, milliseconds storage; validity must reflect positions
+            DType.Extension dtype = sut.dtype(true);
+            List<Instant> instants = Arrays.asList(
+                    Instant.ofEpochMilli(10L),
+                    null,
+                    Instant.ofEpochMilli(30L));
+
+            // When
+            Object result = sut.encodeAll(dtype, instants);
+
+            // Then
+            assertThat(result).isInstanceOf(NullableData.class);
+            NullableData nd = (NullableData) result;
+            long[] storage = (long[]) nd.values();
+            assertThat(storage).hasSize(3);
+            assertThat(storage[1]).isZero();
+            assertThat(nd.validity()).containsExactly(true, false, true);
+        }
+
+        @Test
+        void withNulls_nonNullableDtype_throws() {
+            // Given — non-nullable schema rejects null inputs to prevent silent zero round-trip
+            DType.Extension dtype = sut.dtype(false);
+
+            // When / Then
+            assertThatThrownBy(() -> sut.encodeAll(dtype, Arrays.asList(Instant.EPOCH, null)))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("vortex.timestamp");
         }
     }
 
