@@ -248,6 +248,89 @@ class ProtoRuntimeTest {
     }
 
     @Nested
+    class VarintOverflow {
+
+        @Test
+        void elevenContinuationBytesThrows() {
+            // Given — 11 bytes with MSB set: exceeds the 10-byte varint64 limit.
+            // The reader must throw "varint overflow" rather than silently truncating.
+            byte[] bytes = new byte[11];
+            for (int i = 0; i < 11; i++) {
+                bytes[i] = (byte) 0xff;
+            }
+            MemorySegment seg = MemorySegment.ofArray(bytes);
+
+            // When + Then
+            assertThatThrownBy(() -> new ProtoReader(seg, 0, 11).readVarint64())
+                    .isInstanceOf(IOException.class)
+                    .hasMessageContaining("varint overflow");
+        }
+    }
+
+    @Nested
+    class UnknownEnum {
+
+        @Test
+        void unknownPTypeValueIsCheckedIOException() {
+            // Given — Primitive { type = 99 } where PType has no constant for 99.
+            // Field tag 1, wire type VARINT (0): tag byte = (1 << 3) | 0 = 0x08, value 99 = 0x63.
+            byte[] wire = new byte[]{0x08, 0x63};
+            MemorySegment seg = MemorySegment.ofArray(wire);
+
+            // When + Then — must be checked IOException (per SECURITY.md guarantee),
+            // not the underlying IllegalArgumentException from Enum.fromValue.
+            assertThatThrownBy(() -> Primitive.decode(seg, 0, wire.length))
+                    .isInstanceOf(IOException.class)
+                    .hasMessageContaining("PType");
+        }
+    }
+
+    @Nested
+    class SingleNullEncode {
+
+        @Test
+        void singleStringNullEncodesEmpty() {
+            // Given — Extension with all SINGLE fields null. Pre-fix this NPE'd on
+            // String.isEmpty() / byte[].length. Default-value SINGLE fields must skip
+            // emitting the tag entirely.
+            Extension ext = new Extension(null, null, null);
+
+            // When
+            byte[] wire = ext.encode();
+
+            // Then — no fields emitted, no NPE.
+            assertThat(wire).isEmpty();
+        }
+    }
+
+    @Nested
+    class ByteArrayEquality {
+
+        @Test
+        void recordsWithEqualByteArraysAreEqual() {
+            // Given — records auto-equals would do reference compare on byte[]. The
+            // generator overrides equals/hashCode with Arrays.equals/Arrays.hashCode
+            // so structurally equal records compare equal.
+            ScalarValue a = ScalarValue.ofBytesValue(new byte[]{1, 2, 3});
+            ScalarValue b = ScalarValue.ofBytesValue(new byte[]{1, 2, 3});
+
+            // When + Then
+            assertThat(a).isEqualTo(b);
+            assertThat(a.hashCode()).isEqualTo(b.hashCode());
+        }
+
+        @Test
+        void recordsWithDifferentByteArraysAreNotEqual() {
+            // Given
+            ScalarValue a = ScalarValue.ofBytesValue(new byte[]{1, 2, 3});
+            ScalarValue b = ScalarValue.ofBytesValue(new byte[]{1, 2, 4});
+
+            // When + Then
+            assertThat(a).isNotEqualTo(b);
+        }
+    }
+
+    @Nested
     class Bounds {
 
         @Test

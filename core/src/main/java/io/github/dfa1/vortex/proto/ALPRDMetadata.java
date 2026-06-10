@@ -31,7 +31,7 @@ public record ALPRDMetadata(
         int right_bit_width = 0;
         int dict_len = 0;
         java.util.List<Integer> dict = new java.util.ArrayList<>();
-        PType left_parts_ptype = PType.fromValue(0);
+        PType left_parts_ptype = PType.U8;
         PatchesMetadata patches = null;
         while (r.hasMore()) {
             int tag = r.readVarint32();
@@ -53,7 +53,12 @@ public record ALPRDMetadata(
                     }
                 }
                 case 4 -> {
-                    left_parts_ptype = PType.fromValue(r.readVarint32());
+                    int __ev = r.readVarint32();
+                    try {
+                        left_parts_ptype = PType.fromValue(__ev);
+                    } catch (IllegalArgumentException __iae) {
+                        throw new IOException("unknown PType value: " + __ev);
+                    }
                 }
                 case 5 -> {
                     MemorySegment __slice = r.readLenDelimSegment();

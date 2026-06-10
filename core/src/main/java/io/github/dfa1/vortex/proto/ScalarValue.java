@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.proto;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
+import java.util.Arrays;
 import javax.annotation.processing.Generated;
 
 /// Generated from proto3 message {@code vortex.scalar.ScalarValue}.
@@ -55,7 +56,12 @@ public record ScalarValue(
             int tag = r.readVarint32();
             switch (tag >>> 3) {
                 case 1 -> {
-                    null_value = NullValue.fromValue(r.readVarint32());
+                    int __ev = r.readVarint32();
+                    try {
+                        null_value = NullValue.fromValue(__ev);
+                    } catch (IllegalArgumentException __iae) {
+                        throw new IOException("unknown NullValue value: " + __ev);
+                    }
                 }
                 case 2 -> {
                     bool_value = r.readBool();
@@ -221,5 +227,43 @@ public record ScalarValue(
     /// @return a record with only the {@code variant_value} component set
     public static ScalarValue ofVariantValue(Scalar value) {
         return new ScalarValue(null, null, null, null, null, null, null, null, null, null, value);
+    }
+
+    @Override
+    public boolean equals(Object __o) {
+        if (this == __o) {
+            return true;
+        }
+        if (!(__o instanceof ScalarValue __that)) {
+            return false;
+        }
+        return java.util.Objects.equals(null_value, __that.null_value)
+            && java.util.Objects.equals(bool_value, __that.bool_value)
+            && java.util.Objects.equals(int64_value, __that.int64_value)
+            && java.util.Objects.equals(uint64_value, __that.uint64_value)
+            && java.util.Objects.equals(f32_value, __that.f32_value)
+            && java.util.Objects.equals(f64_value, __that.f64_value)
+            && java.util.Objects.equals(string_value, __that.string_value)
+            && java.util.Arrays.equals(bytes_value, __that.bytes_value)
+            && java.util.Objects.equals(list_value, __that.list_value)
+            && java.util.Objects.equals(f16_value, __that.f16_value)
+            && java.util.Objects.equals(variant_value, __that.variant_value);
+    }
+
+    @Override
+    public int hashCode() {
+        int __h = 1;
+        __h = 31 * __h + java.util.Objects.hashCode(null_value);
+        __h = 31 * __h + java.util.Objects.hashCode(bool_value);
+        __h = 31 * __h + java.util.Objects.hashCode(int64_value);
+        __h = 31 * __h + java.util.Objects.hashCode(uint64_value);
+        __h = 31 * __h + java.util.Objects.hashCode(f32_value);
+        __h = 31 * __h + java.util.Objects.hashCode(f64_value);
+        __h = 31 * __h + java.util.Objects.hashCode(string_value);
+        __h = 31 * __h + java.util.Arrays.hashCode(bytes_value);
+        __h = 31 * __h + java.util.Objects.hashCode(list_value);
+        __h = 31 * __h + java.util.Objects.hashCode(f16_value);
+        __h = 31 * __h + java.util.Objects.hashCode(variant_value);
+        return __h;
     }
 }

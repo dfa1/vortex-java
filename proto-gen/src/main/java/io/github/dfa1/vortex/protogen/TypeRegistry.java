@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.protogen;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -89,11 +90,25 @@ public final class TypeRegistry {
                 return hit;
             }
         }
-        // Try a partial match: look for any FQN ending in the given suffix.
+        // Suffix fallback: any FQN ending in ".<name>". Multiple matches must error
+        // — otherwise resolution would silently depend on HashMap iteration order.
+        String suffix = "." + name;
+        List<Map.Entry<String, ResolvedType>> matches = new ArrayList<>();
         for (Map.Entry<String, ResolvedType> e : byFqn.entrySet()) {
-            if (e.getKey().endsWith("." + name)) {
-                return e.getValue();
+            if (e.getKey().endsWith(suffix)) {
+                matches.add(e);
             }
+        }
+        if (matches.size() == 1) {
+            return matches.get(0).getValue();
+        }
+        if (matches.size() > 1) {
+            List<String> fqns = new ArrayList<>(matches.size());
+            for (Map.Entry<String, ResolvedType> e : matches) {
+                fqns.add(e.getKey());
+            }
+            fqns.sort(String::compareTo);
+            throw new ProtoParseException("ambiguous type reference: '" + name + "' matches " + fqns);
         }
         throw new ProtoParseException("unresolved type reference: '" + name + "'");
     }

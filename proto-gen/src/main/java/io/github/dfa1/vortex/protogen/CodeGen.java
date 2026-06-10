@@ -16,8 +16,6 @@ import java.util.List;
 ///   {@code java_package} option of the first parsed file.
 public final class CodeGen {
 
-    private static final String PROTO_PKG = "io.github.dfa1.vortex.proto";
-
     /// Java reserved words + literals that cannot be used as identifiers.
     /// Field/parameter names that collide get a trailing underscore.
     private static final java.util.Set<String> JAVA_RESERVED = java.util.Set.of(
@@ -48,8 +46,6 @@ public final class CodeGen {
     public void emit(Path outDir) throws IOException {
         Files.createDirectories(outDir);
         for (TypeRegistry.ResolvedType t : registry.all()) {
-            // Skip google.protobuf.NullValue — already emitted as part of the well-known pre-seed.
-            // Emit it once: the first time we see it.
             String src = switch (t) {
                 case TypeRegistry.ResolvedType.Message m -> emitMessage(m);
                 case TypeRegistry.ResolvedType.Enum e -> emitEnum(e);
@@ -61,7 +57,7 @@ public final class CodeGen {
 
     private String emitEnum(TypeRegistry.ResolvedType.Enum e) {
         StringBuilder sb = new StringBuilder();
-        sb.append("package ").append(PROTO_PKG).append(";\n\n");
+        sb.append("package ").append(e.javaPackage()).append(";\n\n");
         sb.append("import javax.annotation.processing.Generated;\n\n");
         sb.append("/// Generated from proto3 enum {@code ").append(e.fqn()).append("}.\n");
         sb.append("/// Do not edit by hand — regenerate via {@code ./mvnw generate-sources -pl core -P regenerate-sources}.\n");
@@ -99,10 +95,14 @@ public final class CodeGen {
 
     private String emitMessage(TypeRegistry.ResolvedType.Message m) {
         List<Field> fields = flattenFields(m.decl());
+        boolean hasByteArrayField = fields.stream().anyMatch(f -> f.javaType.equals("byte[]"));
         StringBuilder sb = new StringBuilder();
-        sb.append("package ").append(PROTO_PKG).append(";\n\n");
+        sb.append("package ").append(m.javaPackage()).append(";\n\n");
         sb.append("import java.io.IOException;\n");
         sb.append("import java.lang.foreign.MemorySegment;\n");
+        if (hasByteArrayField) {
+            sb.append("import java.util.Arrays;\n");
+        }
         sb.append("import javax.annotation.processing.Generated;\n\n");
         sb.append("/// Generated from proto3 message {@code ").append(m.fqn()).append("}.\n");
         sb.append("/// Do not edit by hand — regenerate via {@code ./mvnw generate-sources -pl core -P regenerate-sources}.\n");
@@ -124,8 +124,66 @@ public final class CodeGen {
         sb.append("\n");
         emitEncode(sb, fields);
         emitOneOfFactories(sb, m, fields);
+        if (hasByteArrayField) {
+            emitByteArrayEqualsHashCode(sb, m, fields);
+        }
         sb.append("}\n");
         return sb.toString();
+    }
+
+    /// Records auto-generate equals/hashCode using {@code Objects.equals}, which falls back to
+    /// reference equality for {@code byte[]} components. Override with {@code Arrays.equals}/
+    /// {@code Arrays.hashCode} so structurally equal records compare equal.
+    private void emitByteArrayEqualsHashCode(StringBuilder sb, TypeRegistry.ResolvedType.Message m, List<Field> fields) {
+        sb.append("\n    @Override\n");
+        sb.append("    public boolean equals(Object __o) {\n");
+        sb.append("        if (this == __o) {\n");
+        sb.append("            return true;\n");
+        sb.append("        }\n");
+        sb.append("        if (!(__o instanceof ").append(m.javaName()).append(" __that)) {\n");
+        sb.append("            return false;\n");
+        sb.append("        }\n");
+        for (int i = 0; i < fields.size(); i++) {
+            Field f = fields.get(i);
+            String cmp = fieldEquals(f, "__that");
+            sb.append("        ").append(i == 0 ? "return " : "    && ").append(cmp);
+            sb.append(i == fields.size() - 1 ? ";\n" : "\n");
+        }
+        if (fields.isEmpty()) {
+            sb.append("        return true;\n");
+        }
+        sb.append("    }\n\n");
+        sb.append("    @Override\n");
+        sb.append("    public int hashCode() {\n");
+        sb.append("        int __h = 1;\n");
+        for (Field f : fields) {
+            sb.append("        __h = 31 * __h + ").append(fieldHash(f)).append(";\n");
+        }
+        sb.append("        return __h;\n");
+        sb.append("    }\n");
+    }
+
+    private static String fieldEquals(Field f, String other) {
+        if (f.javaType.equals("byte[]")) {
+            return "java.util.Arrays.equals(" + f.name + ", " + other + "." + f.name + ")";
+        }
+        return switch (f.javaType) {
+            case "int", "long", "boolean", "float", "double" -> f.name + " == " + other + "." + f.name + "()";
+            default -> "java.util.Objects.equals(" + f.name + ", " + other + "." + f.name + ")";
+        };
+    }
+
+    private static String fieldHash(Field f) {
+        if (f.javaType.equals("byte[]")) {
+            return "java.util.Arrays.hashCode(" + f.name + ")";
+        }
+        return switch (f.javaType) {
+            case "int", "boolean" -> "Integer.hashCode(" + (f.javaType.equals("boolean") ? "(" + f.name + " ? 1 : 0)" : f.name) + ")";
+            case "long" -> "Long.hashCode(" + f.name + ")";
+            case "float" -> "Float.hashCode(" + f.name + ")";
+            case "double" -> "Double.hashCode(" + f.name + ")";
+            default -> "java.util.Objects.hashCode(" + f.name + ")";
+        };
     }
 
     /// Emits one static factory per oneof member, returning a record with that member set and all other components {@code null}.
@@ -324,7 +382,7 @@ public final class CodeGen {
             return switch (t) {
                 case TypeRegistry.ResolvedType.Enum e -> switch (decl.rule()) {
                     case SINGLE -> new Field(name, decl.number(), javaName,
-                            javaName + ".fromValue(0)",
+                            javaName + "." + e.decl().values().get(0).name(),
                             new EnumSingleEmitter(javaName));
                     case OPTIONAL -> new Field(name, decl.number(), javaName, "null",
                             new EnumOptionalEmitter(javaName));
@@ -401,8 +459,8 @@ public final class CodeGen {
     private static String defaultCheckNonZero(Ast.Scalar s, String var) {
         return switch (s) {
             case BOOL -> var;
-            case STRING -> "!" + var + ".isEmpty()";
-            case BYTES -> var + ".length != 0";
+            case STRING -> var + " != null && !" + var + ".isEmpty()";
+            case BYTES -> var + " != null && " + var + ".length != 0";
             case FLOAT -> "Float.floatToRawIntBits(" + var + ") != 0";
             case DOUBLE -> "Double.doubleToRawLongBits(" + var + ") != 0L";
             case UINT32, INT32 -> var + " != 0";
@@ -525,10 +583,22 @@ public final class CodeGen {
     // Enum emitters (wire type = VARINT)
     // ------------------------------------------------------------------
 
+    /// Emits a try/catch wrapper that translates {@link IllegalArgumentException} from
+    /// {@code Enum.fromValue(int)} into a checked {@link IOException}. The caller must already be
+    /// inside a {@code throws IOException} context (every {@code decode(...)} factory is).
+    private static void emitEnumDecodeWrap(StringBuilder sb, String indent, String javaName, String assignTarget) {
+        sb.append(indent).append("int __ev = r.readVarint32();\n");
+        sb.append(indent).append("try {\n");
+        sb.append(indent).append("    ").append(assignTarget).append(" = ").append(javaName).append(".fromValue(__ev);\n");
+        sb.append(indent).append("} catch (IllegalArgumentException __iae) {\n");
+        sb.append(indent).append("    throw new IOException(\"unknown ").append(javaName).append(" value: \" + __ev);\n");
+        sb.append(indent).append("}\n");
+    }
+
     private record EnumSingleEmitter(String javaName) implements Emitter {
         @Override
         public void emitDecode(StringBuilder sb, String indent, Field f) {
-            sb.append(indent).append(f.name).append(" = ").append(javaName).append(".fromValue(r.readVarint32());\n");
+            emitEnumDecodeWrap(sb, indent, javaName, f.name);
         }
 
         @Override
@@ -543,7 +613,7 @@ public final class CodeGen {
     private record EnumOptionalEmitter(String javaName) implements Emitter {
         @Override
         public void emitDecode(StringBuilder sb, String indent, Field f) {
-            sb.append(indent).append(f.name).append(" = ").append(javaName).append(".fromValue(r.readVarint32());\n");
+            emitEnumDecodeWrap(sb, indent, javaName, f.name);
         }
 
         @Override
@@ -562,9 +632,21 @@ public final class CodeGen {
             sb.append(indent).append("if (wt == 2) {\n");
             sb.append(indent).append("    int len = r.readVarint32();\n");
             sb.append(indent).append("    java.util.List<").append(javaName).append("> __target = ").append(f.name).append(";\n");
-            sb.append(indent).append("    r.readPacked(len, reader -> __target.add(").append(javaName).append(".fromValue(reader.readVarint32())));\n");
+            sb.append(indent).append("    r.readPacked(len, reader -> {\n");
+            sb.append(indent).append("        int __ev = reader.readVarint32();\n");
+            sb.append(indent).append("        try {\n");
+            sb.append(indent).append("            __target.add(").append(javaName).append(".fromValue(__ev));\n");
+            sb.append(indent).append("        } catch (IllegalArgumentException __iae) {\n");
+            sb.append(indent).append("            throw new IOException(\"unknown ").append(javaName).append(" value: \" + __ev);\n");
+            sb.append(indent).append("        }\n");
+            sb.append(indent).append("    });\n");
             sb.append(indent).append("} else {\n");
-            sb.append(indent).append("    ").append(f.name).append(".add(").append(javaName).append(".fromValue(r.readVarint32()));\n");
+            sb.append(indent).append("    int __ev2 = r.readVarint32();\n");
+            sb.append(indent).append("    try {\n");
+            sb.append(indent).append("        ").append(f.name).append(".add(").append(javaName).append(".fromValue(__ev2));\n");
+            sb.append(indent).append("    } catch (IllegalArgumentException __iae) {\n");
+            sb.append(indent).append("        throw new IOException(\"unknown ").append(javaName).append(" value: \" + __ev2);\n");
+            sb.append(indent).append("    }\n");
             sb.append(indent).append("}\n");
         }
 

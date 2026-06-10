@@ -22,16 +22,26 @@ public record FSSTMetadata(
     /// @throws IOException if the slice is malformed or truncated
     public static FSSTMetadata decode(MemorySegment __seg, long __off, long __len) throws IOException {
         ProtoReader r = new ProtoReader(__seg, __off, __len);
-        PType uncompressed_lengths_ptype = PType.fromValue(0);
-        PType codes_offsets_ptype = PType.fromValue(0);
+        PType uncompressed_lengths_ptype = PType.U8;
+        PType codes_offsets_ptype = PType.U8;
         while (r.hasMore()) {
             int tag = r.readVarint32();
             switch (tag >>> 3) {
                 case 1 -> {
-                    uncompressed_lengths_ptype = PType.fromValue(r.readVarint32());
+                    int __ev = r.readVarint32();
+                    try {
+                        uncompressed_lengths_ptype = PType.fromValue(__ev);
+                    } catch (IllegalArgumentException __iae) {
+                        throw new IOException("unknown PType value: " + __ev);
+                    }
                 }
                 case 2 -> {
-                    codes_offsets_ptype = PType.fromValue(r.readVarint32());
+                    int __ev = r.readVarint32();
+                    try {
+                        codes_offsets_ptype = PType.fromValue(__ev);
+                    } catch (IllegalArgumentException __iae) {
+                        throw new IOException("unknown PType value: " + __ev);
+                    }
                 }
                 default -> r.skipField(tag & 7);
             }
