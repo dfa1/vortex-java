@@ -80,11 +80,17 @@ class VortexWriterTest {
             sut.writeChunk(Map.of("birthdays", dates));
         }
 
-        // Then — file exists and carries the encoded segment + metadata. Reader-side
-        // unwrapping of Extension columns lives in a separate change (Tier 3b TODO), so
-        // we don't reach into the segments here — write-path correctness is the contract.
-        assertThat(file).exists();
-        assertThat(file.toFile().length()).isGreaterThan(0L);
+        // Then — read back through DateExtension.decodeAll and assert end-to-end equality.
+        // Registry.loadAll() picks up PrimitiveEncoding (storage) plus DateExtension.
+        try (var vf = VortexReader.open(file, Registry.loadAll());
+             var iter = vf.scan(ScanOptions.all())) {
+            assertThat(iter.hasNext()).isTrue();
+            try (Chunk chunk = iter.next()) {
+                Array storage = chunk.columns().get("birthdays");
+                assertThat(io.github.dfa1.vortex.extension.DateExtension.INSTANCE.decodeAll(storage))
+                        .containsExactlyElementsOf(dates);
+            }
+        }
     }
 
     @Test

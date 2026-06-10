@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
+import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.ArraySegments;
@@ -123,14 +124,33 @@ public final class Registry {
         return extensions.get(extensionId);
     }
 
+    /// Returns {@code ctx} with any {@link DType.Extension} wrapper stripped to its
+    /// storage dtype, unless the node's encoding is itself an extension-aware wrapper
+    /// (today only {@code vortex.ext}). Physical encodings
+    /// ({@link io.github.dfa1.vortex.encoding.PrimitiveEncoding}, etc.) only know about
+    /// storage types — the Extension is logical metadata on the column and would
+    /// otherwise blow up with a {@code ClassCastException} inside the encoding's
+    /// decode method.
+    private static DecodeContext unwrapExtension(DecodeContext ctx) {
+        if (!(ctx.dtype() instanceof DType.Extension extDtype)) {
+            return ctx;
+        }
+        if (ctx.node() instanceof KnownArrayNode k && k.encodingId() == EncodingId.VORTEX_EXT) {
+            return ctx;
+        }
+        return new DecodeContext(ctx.node(), extDtype.storageDType(), ctx.rowCount(),
+                ctx.segmentBuffers(), ctx.registry(), ctx.arena());
+    }
+
     MemorySegment decodeAsSegment(DecodeContext ctx) {
-        ArrayNode node = ctx.node();
+        DecodeContext physical = unwrapExtension(ctx);
+        ArrayNode node = physical.node();
         Encoding encoding = switch (node) {
             case KnownArrayNode k -> encodings.get(k.encodingId());
             case UnknownArrayNode _ -> null;
         };
         if (encoding != null) {
-            return ArraySegments.of(encoding.decode(ctx));
+            return ArraySegments.of(encoding.decode(physical));
         }
         String id = switch (node) {
             case KnownArrayNode k -> k.encodingId().id();
@@ -140,13 +160,14 @@ public final class Registry {
     }
 
     Array decode(DecodeContext ctx) {
-        ArrayNode node = ctx.node();
+        DecodeContext physical = unwrapExtension(ctx);
+        ArrayNode node = physical.node();
         Encoding encoding = switch (node) {
             case KnownArrayNode k -> encodings.get(k.encodingId());
             case UnknownArrayNode _ -> null;
         };
         if (encoding != null) {
-            return encoding.decode(ctx);
+            return encoding.decode(physical);
         }
         if (allowUnknown) {
             return decodeUnknown(ctx, node);

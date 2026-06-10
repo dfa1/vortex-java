@@ -215,10 +215,24 @@ class RustJavaReaderComparisonIntegrationTest {
         long rowCount = 0;
         try (VortexReader reader = VortexReader.open(file, Registry.loadAll());
              var iter = reader.scan(io.github.dfa1.vortex.scan.ScanOptions.all())) {
+            // Skip extension columns: Rust's stats path reports them under their logical
+            // type (timestamp etc.), so summing their storage longs would diverge from
+            // Rust's per-column report. Match Rust's behaviour by ignoring them.
+            java.util.Set<String> extensionCols = new java.util.HashSet<>();
+            if (reader.dtype() instanceof DType.Struct schema) {
+                for (int i = 0; i < schema.fieldNames().size(); i++) {
+                    if (schema.fieldTypes().get(i) instanceof DType.Extension) {
+                        extensionCols.add(schema.fieldNames().get(i));
+                    }
+                }
+            }
             while (iter.hasNext()) {
                 try (Chunk chunk = iter.next()) {
                     rowCount += chunk.rowCount();
                     for (Map.Entry<String, Array> e : chunk.columns().entrySet()) {
+                        if (extensionCols.contains(e.getKey())) {
+                            continue;
+                        }
                         Array arr = e.getValue();
                         Double numSum = numericSum(arr);
                         if (numSum != null) {
