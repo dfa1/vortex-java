@@ -5,6 +5,70 @@ All notable changes to **vortex-java** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] — Unreleased
+
+The headline theme is the **proto-rewrite**: `protobuf-java` is dropped in favour of an
+in-tree MemorySegment-native proto3 codec, generated from `.proto` schemas by a new
+`proto-gen` module. CLI uber-jar shrinks ~14% and the JDK 25 `sun.misc.Unsafe` stderr
+warning (emitted by `protobuf-java`'s `UnsafeUtil`) is gone.
+
+### Added
+
+- **`proto-gen` module** — build-time `.proto` to Java code generator. Lexer + parser +
+  type registry + emitter. Outputs one immutable Java `record` per message and one Java
+  `enum` per proto enum, each carrying a `@Generated("io.github.dfa1.vortex.protogen.CodeGen")`
+  annotation. Records expose `decode(MemorySegment, long, long)` static factories and
+  `encode()` instance methods that operate directly on a memory segment — zero `byte[]`
+  copy, no `protobuf-java` runtime.
+- **`ProtoReader` / `ProtoWriter`** — package-private proto3 wire-format primitives
+  under `io.github.dfa1.vortex.proto`. Reads varint / sint64 / fixed32 / fixed64 /
+  length-delimited / packed-repeated payloads, with bounds checks and a 10-byte cap on
+  varint length. 42 unit tests cover happy path + truncation + bounds.
+- **Oneof factories** on generated records (e.g. `ScalarValue.ofInt64Value(123L)`) —
+  avoids the 11-arg constructor for `ScalarValue`'s oneof.
+- **`PatchedMetadata` / `VariantMetadata`** — added to `encodings.proto`. Previously
+  hand-parsed with `CodedInputStream`; now go through the generated record path.
+
+### Changed
+
+- **Build-time tooling**: `regenerate-sources` profile no longer shells out to `protoc`.
+  Run `./mvnw compile -pl proto-gen` once, then
+  `./mvnw generate-sources -pl core -P regenerate-sources`. `brew install protobuf` is
+  no longer needed for normal development.
+- **Encoding consumers**: 25 encoding classes (`ALP`, `Bitpacked`, `Dict`, `Rle`,
+  `Sparse`, `Sequence`, etc.) and 23 test files rewritten to use the new record API.
+  Constructor calls are positional; field accessors follow proto3 snake_case
+  (`meta.bit_width()`, not `meta.getBitWidth()`).
+
+### Removed
+
+- **`com.google.protobuf:protobuf-java`** dependency dropped from `core`, `reader`,
+  `writer`, and root `dependencyManagement`. The `protobuf.version` property is gone.
+  CLI uber-jar: **14 MB → 12 MB**. JDK 25 `sun.misc.Unsafe::arrayBaseOffset` stderr
+  warning emitted by `UnsafeUtil` on every cold start: **gone**.
+- `protoc` no longer required by the build. `brew install flatbuffers` covers `.fbs`
+  edits; `.proto` edits use the in-process generator.
+
+### Compatibility
+
+Wire-format compatibility with the Rust reference implementation is unchanged and is
+verified by the full integration suite:
+
+- `RustWritesJavaReadsIntegrationTest` (10 tests) — Rust writes, Java reads
+- `JavaWritesRustReadsIntegrationTest` (194 tests) — Java writes, JNI reads
+- `RustJavaReaderComparisonIntegrationTest` (25 tests) — both readers, same file
+- `ParquetImportIntegrationTest` (5 tests) — round-trip through ParquetImporter
+
+All 872 unit + 243 integration tests pass on JDK 25.
+
+### Performance
+
+No measurable change on bulk-read benchmarks (`RustVsJavaReadBenchmark.javaReadCascading`
+within 1% of main, stdev ±2 ops/s). Proto metadata parse is < 1% of work on multi-million-row
+scans; the win is architectural, not throughput.
+
+[0.6.0]: https://github.com/dfa1/vortex-java/compare/v0.5.0...main
+
 ## [0.5.0] — 2026-06-09
 
 The headline themes are an **interactive inspector TUI** for navigating Vortex files

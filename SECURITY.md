@@ -1,9 +1,10 @@
 # Security Policy
 
 `vortex-java` reads and writes the [Vortex columnar file format](https://github.com/vortex-data/vortex).
-The reader memory-maps and parses untrusted binary input — trailers, FlatBuffers, Protobuf
-metadata, and per-segment encoded data. Robustness against malformed input is treated as a
-correctness contract, not a best-effort feature.
+The reader memory-maps and parses untrusted binary input — trailers, FlatBuffers, proto3
+metadata (via the in-tree MemorySegment-native `ProtoReader` — no `protobuf-java` runtime),
+and per-segment encoded data. Robustness against malformed input is treated as a correctness
+contract, not a best-effort feature.
 
 ## Supported versions
 
@@ -12,9 +13,9 @@ only if the vulnerability is critical and the fix is mechanical.
 
 | Version | Status                  |
 | ------- | ----------------------- |
-| 0.4.x   | Supported               |
-| 0.3.x   | Critical fixes only     |
-| < 0.3   | End of life             |
+| 0.6.x   | Supported               |
+| 0.5.x   | Critical fixes only     |
+| < 0.5   | End of life             |
 
 ## Reporting a vulnerability
 
@@ -46,7 +47,7 @@ In scope:
 - Any malformed `.vortex` input that causes the reader to throw an exception other than
   `io.github.dfa1.vortex.core.VortexException` (e.g. `IndexOutOfBoundsException`,
   `NegativeArraySizeException`, `OutOfMemoryError`, `StackOverflowError`, raw FlatBuffer
-  runtime exceptions, raw Protobuf parser exceptions, or a JVM crash via the FFM layer).
+  runtime exceptions, raw `IOException` from the proto3 reader, or a JVM crash via the FFM layer).
 - Any malformed `.vortex` input that causes the reader to allocate memory disproportionate
   to its on-disk size (zip-bomb-style amplification).
 - Any malformed `.vortex` input that causes silent data corruption — wrong row count,
@@ -58,9 +59,10 @@ Out of scope:
 
 - Denial of service from legitimately large inputs (multi-gigabyte files). Use the
   resource caps in `ReadOptions` (planned) to bound them.
-- Vulnerabilities in third-party dependencies (`vortex-jni`, `zstd-jni`, FlatBuffers runtime,
-  Protobuf runtime). Report those upstream; we'll bump the dependency once a fixed version
-  is available.
+- Vulnerabilities in third-party dependencies (`vortex-jni`, `zstd-jni`, FlatBuffers runtime).
+  Report those upstream; we'll bump the dependency once a fixed version is available.
+  Vortex no longer depends on `protobuf-java` — proto3 parsing is handled by the in-tree
+  `ProtoReader` (issues there are in scope).
 - Performance regressions or correctness bugs unrelated to malformed input — please open
   a regular issue.
 
@@ -76,9 +78,12 @@ exception**. Concretely:
   self-referential FlatBuffer cycles).
 - Layout metadata is capped at 4 MiB.
 - `Decimal` precision is restricted to `[1, 38]`; `scale` to `[0, precision]`.
-- `PType` ordinals from Protobuf are bounds-checked.
+- `PType` ordinals from proto3 are bounds-checked.
 - `ConstantEncoding` and dict-layout decode allocate `O(1)` memory regardless of the
   declared row count (zip-bomb mitigation).
+- `ProtoReader` enforces varint length ≤ 10 bytes, rejects truncated len-delim regions,
+  and validates segment bounds on every read. (0.6.0+ — replaces the `protobuf-java`
+  parser path; same exception contract.)
 
 The regression suite lives under `reader/src/test/java/.../*SecurityTest`. Run with
 `./mvnw test -Dtest='*SecurityTest'`.
