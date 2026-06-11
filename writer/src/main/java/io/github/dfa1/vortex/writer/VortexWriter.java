@@ -46,6 +46,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.WritableByteChannel;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -75,8 +76,6 @@ public final class VortexWriter implements Closeable {
     // Columns with global cardinality below this threshold are dict-encoded across all chunks.
     // Kept low: global dict hurts high-cardinality F64 columns (ALP codes beat U16 dict codes).
     private static final int GLOBAL_DICT_MAX_CARDINALITY = 2_048;
-    // Fraction of distinct values in first chunk below which a column is a dict candidate.
-    private static final double GLOBAL_DICT_RATIO_THRESHOLD = 0.5;
 
     private static final List<Encoding> DEFAULT_CODECS = List.of(
             new AlpEncoding(), new PrimitiveEncoding(), new BoolEncoding(), new DictEncoding(),
@@ -209,7 +208,7 @@ public final class VortexWriter implements Closeable {
 
     private static int serializeDType(FlatBufferBuilder fbb, DType dtype) {
         return switch (dtype) {
-            case DType.Null __ -> {
+            case DType.Null _ -> {
                 io.github.dfa1.vortex.fbs.Null.startNull(fbb);
                 int inner = io.github.dfa1.vortex.fbs.Null.endNull(fbb);
                 yield io.github.dfa1.vortex.fbs.DType.createDType(fbb, Type.Null, inner);
@@ -335,7 +334,7 @@ public final class VortexWriter implements Closeable {
             }
 
             if (dictCandidates.contains(colName)) {
-                dictBuffers.computeIfAbsent(colName, k -> new ArrayList<>()).add(data);
+                dictBuffers.computeIfAbsent(colName, _ -> new ArrayList<>()).add(data);
             } else {
                 long rowCount = arrayLength(data);
                 int segIdx = writeSegment(colDtype, data);
@@ -438,7 +437,7 @@ public final class VortexWriter implements Closeable {
     }
 
     private void registerEncodingIds(EncodeNode node) {
-        encodingIdx.computeIfAbsent(node.encodingId(), k -> encodingIdx.size());
+        encodingIdx.computeIfAbsent(node.encodingId(), _ -> encodingIdx.size());
         for (EncodeNode child : node.children()) {
             registerEncodingIds(child);
         }
@@ -679,7 +678,7 @@ public final class VortexWriter implements Closeable {
             int len = primitiveArrayLen(chunk, ptype);
             for (int i = 0; i < len; i++) {
                 Object v = readPrimitiveElement(chunk, ptype, i);
-                valueMap.computeIfAbsent(v, k -> valueMap.size());
+                valueMap.computeIfAbsent(v, _ -> valueMap.size());
             }
         }
 
@@ -723,7 +722,7 @@ public final class VortexWriter implements Closeable {
         var valueMap = new LinkedHashMap<String, Integer>();
         for (Object chunk : chunks) {
             for (String s : (String[]) chunk) {
-                valueMap.computeIfAbsent(s, k -> valueMap.size());
+                valueMap.computeIfAbsent(s, _ -> valueMap.size());
             }
         }
 
@@ -810,7 +809,7 @@ public final class VortexWriter implements Closeable {
         if (n == 0) {
             return false;
         }
-        var seen = new java.util.HashSet<Object>(GLOBAL_DICT_MAX_CARDINALITY + 1);
+        var seen = new HashSet<>(GLOBAL_DICT_MAX_CARDINALITY + 1);
         for (int i = 0; i < n; i++) {
             seen.add(readPrimitiveElement(data, ptype, i));
             if (seen.size() > GLOBAL_DICT_MAX_CARDINALITY) {
