@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-latest, windows-latest ]
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
         java-version: [ '25', '26' ]
 
     steps:
@@ -33,13 +33,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
-      # vortex-jni has no Windows binary on Maven Central; skip the modules that
-      # depend on it (integration, performance) when running on Windows.
-      - name: Build and test (Linux)
-        if: runner.os == 'Linux'
-        run: ./mvnw verify
-
-      - name: Build and test (Windows)
-        if: runner.os == 'Windows'
+      - name: Build and test
         shell: bash
-        run: ./mvnw verify -pl '!integration,!performance'
+        run: ./mvnw verify
