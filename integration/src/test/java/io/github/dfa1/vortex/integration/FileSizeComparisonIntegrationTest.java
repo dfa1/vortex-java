@@ -296,10 +296,10 @@ class FileSizeComparisonIntegrationTest {
                 (double) javaSize / jniSize,
                 (double) javaSize / rawBytes);
 
-        // Then — Java within 3x of JNI. Looser than the OHLC test (1.04x) because Java's
-        // FSST symbol-table builder is less aggressive than Rust's on truly random short
-        // strings; tighten the bound once FsstEncoding.Encoder catches up.
-        assertThat(javaSize).isLessThan(jniSize * 3);
+        // Then — Java within 2x of JNI. Java's FSST symbol-table builder is still less
+        // aggressive than Rust's on truly random short strings; tighten further when
+        // FsstEncoding.Encoder gets iterative symbol training (per the FSST paper).
+        assertThat(javaSize).isLessThan(jniSize * 2);
 
         // Then — Java file is readable and row count matches
         var totalRows = new java.util.concurrent.atomic.AtomicLong();

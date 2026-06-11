@@ -50,6 +50,11 @@ public final class FsstEncoding implements Encoding {
     }
 
     @Override
+    public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
+        return Encoder.encodeCascade((String[]) data, ctx);
+    }
+
+    @Override
     public Array decode(DecodeContext ctx) {
         return Decoder.decode(ctx);
     }
@@ -59,7 +64,21 @@ public final class FsstEncoding implements Encoding {
         private static final int MAX_SYMBOLS = 255;
         private static final int BIGRAM_COUNT = 65536;
 
-        static EncodeResult encode(String[] strings, EncodeContext ctx) {
+        /// Shared work: builds the FSST symbol table, compresses each string, and
+        /// materialises the three FSST-owned buffers (symbol table, symbol lengths,
+        /// compressed payload) plus the int[] children that the writer hands off to
+        /// the cascade compressor for further encoding (Constant/FoR/RLE).
+        private record Built(
+                MemorySegment symBuf,
+                MemorySegment symLenBuf,
+                MemorySegment compBuf,
+                int[] uncompLens,
+                int[] codesOff,
+                byte[] metaBytes
+        ) {
+        }
+
+        private static Built build(String[] strings, EncodeContext ctx) {
             int n = strings.length;
 
             byte[][] byteArrays = new byte[n][];
@@ -97,7 +116,6 @@ public final class FsstEncoding implements Encoding {
                 numSymbols++;
             }
 
-            // Compress each string
             byte[][] compressed = new byte[n][];
             for (int i = 0; i < n; i++) {
                 compressed[i] = compressString(byteArrays[i], codeForBigram);
@@ -105,19 +123,16 @@ public final class FsstEncoding implements Encoding {
 
             Arena arena = ctx.arena();
 
-            // Buffer 0: symbol table (8 bytes per symbol, LE u64)
             MemorySegment symBuf = arena.allocate(Math.max(numSymbols * 8L, 1), 8);
             for (int i = 0; i < numSymbols; i++) {
                 symBuf.setAtIndex(PTypeIO.LE_LONG, i, symbolValues[i]);
             }
 
-            // Buffer 1: symbol lengths (all 2 = bigram)
             MemorySegment symLenBuf = arena.allocate(Math.max(numSymbols, 1));
             for (int i = 0; i < numSymbols; i++) {
                 symLenBuf.set(ValueLayout.JAVA_BYTE, i, (byte) 2);
             }
 
-            // Buffer 2: compressed bytes (all strings concatenated)
             int totalCompressed = 0;
             for (byte[] c : compressed) {
                 totalCompressed += c.length;
@@ -129,19 +144,16 @@ public final class FsstEncoding implements Encoding {
                 pos += c.length;
             }
 
-            // Buffer 3: uncompressed lengths (I32, n elements)
-            MemorySegment uncompLenBuf = arena.allocate(Math.max(n * 4L, 1), 4);
+            int[] uncompLens = new int[n];
             for (int i = 0; i < n; i++) {
-                uncompLenBuf.setAtIndex(PTypeIO.LE_INT, i, byteArrays[i].length);
+                uncompLens[i] = byteArrays[i].length;
             }
 
-            // Buffer 4: codes offsets (I32, n+1 elements)
-            MemorySegment codesOffBuf = arena.allocate((long) (n + 1) * 4, 4);
-            long off = 0;
-            codesOffBuf.setAtIndex(PTypeIO.LE_INT, 0, 0);
+            int[] codesOff = new int[n + 1];
+            int off = 0;
             for (int i = 0; i < n; i++) {
                 off += compressed[i].length;
-                codesOffBuf.setAtIndex(PTypeIO.LE_INT, i + 1, (int) off);
+                codesOff[i + 1] = off;
             }
 
             byte[] metaBytes = new FSSTMetadata(
@@ -149,17 +161,59 @@ public final class FsstEncoding implements Encoding {
                     io.github.dfa1.vortex.proto.PType.fromValue(PType.I32.ordinal())
             ).encode();
 
+            return new Built(symBuf, symLenBuf, compBuf, uncompLens, codesOff, metaBytes);
+        }
+
+        static EncodeResult encode(String[] strings, EncodeContext ctx) {
+            int n = strings.length;
+            Built b = build(strings, ctx);
+
+            Arena arena = ctx.arena();
+            MemorySegment uncompLenBuf = arena.allocate(Math.max(n * 4L, 1), 4);
+            for (int i = 0; i < n; i++) {
+                uncompLenBuf.setAtIndex(PTypeIO.LE_INT, i, b.uncompLens()[i]);
+            }
+            MemorySegment codesOffBuf = arena.allocate((long) (n + 1) * 4, 4);
+            for (int i = 0; i <= n; i++) {
+                codesOffBuf.setAtIndex(PTypeIO.LE_INT, i, b.codesOff()[i]);
+            }
+
             EncodeNode uncompLensNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 3);
             EncodeNode codesOffNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 4);
             EncodeNode root = new EncodeNode(
                     EncodingId.VORTEX_FSST,
-                    ByteBuffer.wrap(metaBytes),
+                    ByteBuffer.wrap(b.metaBytes()),
                     new EncodeNode[]{uncompLensNode, codesOffNode},
                     new int[]{0, 1, 2});
 
             return new EncodeResult(root,
-                    List.of(symBuf, symLenBuf, compBuf, uncompLenBuf, codesOffBuf),
+                    List.of(b.symBuf(), b.symLenBuf(), b.compBuf(), uncompLenBuf, codesOffBuf),
                     null, null);
+        }
+
+        private static final DType.Primitive I32_DTYPE = new DType.Primitive(PType.I32, false);
+
+        /// Cascade-aware variant: uncompressed_lengths + codes_offsets become open
+        /// child slots so the compressor can pick the right encoding per child.
+        /// Constant uncompressed_lengths drop from O(n*4) bytes to a few; monotonic
+        /// codes_offsets compress via FoR + bitpacked residuals.
+        static CascadeStep encodeCascade(String[] strings, EncodeContext ctx) {
+            Built b = build(strings, ctx);
+
+            EncodeNode partialRoot = new EncodeNode(
+                    EncodingId.VORTEX_FSST,
+                    ByteBuffer.wrap(b.metaBytes()),
+                    new EncodeNode[2],
+                    new int[]{0, 1, 2});
+
+            ChildSlot uncompLensSlot = new ChildSlot(I32_DTYPE, b.uncompLens(), 0);
+            ChildSlot codesOffSlot = new ChildSlot(I32_DTYPE, b.codesOff(), 1);
+
+            return new CascadeStep(
+                    partialRoot,
+                    List.of(b.symBuf(), b.symLenBuf(), b.compBuf()),
+                    List.of(uncompLensSlot, codesOffSlot),
+                    null, null, true);
         }
 
         private static byte[] compressString(byte[] input, int[] codeForBigram) {

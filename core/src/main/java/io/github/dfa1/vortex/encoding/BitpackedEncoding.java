@@ -252,16 +252,20 @@ public final class BitpackedEncoding implements Encoding {
 
         static Array decode(DecodeContext ctx) {
             ByteBuffer rawMeta = ctx.metadata();
-            if (rawMeta == null) {
-                throw new VortexException(EncodingId.FASTLANES_BITPACKED, "missing metadata");
-            }
-
+            // proto3 elides default-valued fields, so BitPackedMetadata(0, 0, null)
+            // serialises to a 0-byte payload and the writer skips the empty vector.
+            // Treat absent metadata as all-defaults rather than rejecting — happens
+            // when bit_width=0 (constant residuals nested under FoR / RLE).
             BitPackedMetadata meta;
-            try {
-                MemorySegment metaSeg = MemorySegment.ofBuffer(rawMeta.duplicate());
-                meta = BitPackedMetadata.decode(metaSeg, 0, metaSeg.byteSize());
-            } catch (IOException e) {
-                throw new VortexException(EncodingId.FASTLANES_BITPACKED, "invalid metadata", e);
+            if (rawMeta == null || !rawMeta.hasRemaining()) {
+                meta = new BitPackedMetadata(0, 0, null);
+            } else {
+                try {
+                    MemorySegment metaSeg = MemorySegment.ofBuffer(rawMeta.duplicate());
+                    meta = BitPackedMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+                } catch (IOException e) {
+                    throw new VortexException(EncodingId.FASTLANES_BITPACKED, "invalid metadata", e);
+                }
             }
 
             int bitWidth = meta.bit_width();
