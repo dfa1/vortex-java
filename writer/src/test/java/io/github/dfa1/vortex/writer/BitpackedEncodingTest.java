@@ -2,52 +2,30 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.core.array.Array;
-import io.github.dfa1.vortex.core.array.ArraySegments;
 import io.github.dfa1.vortex.encoding.BitpackedEncoding;
 import io.github.dfa1.vortex.encoding.Registry;
 import io.github.dfa1.vortex.reader.VortexReader;
-import io.github.dfa1.vortex.reader.ScanOptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import static io.github.dfa1.vortex.writer.VortexReads.readAllInts;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class BitpackedEncodingTest {
 
-    private static final ValueLayout.OfInt LE_INT = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
     private static final DType.Struct I32_SCHEMA = new DType.Struct(
             List.of("value"),
             List.of(new DType.Primitive(PType.I32, false)),
             false);
-
-    /// Materializes every chunk of the named I32 column into a primitive int[] by
-    /// copying values out of the per-chunk arena before each [io.github.dfa1.vortex.reader.Chunk]
-    /// closes. Returns a heap array independent of the scan lifecycle.
-    private static int[] readAllInts(VortexReader vf, String col) {
-        var collected = new ArrayList<Integer>();
-        try (var iter = vf.scan(ScanOptions.all())) {
-            iter.forEachRemaining(c -> {
-                Array arr = c.column(col);
-                for (long i = 0; i < arr.length(); i++) {
-                    collected.add(ArraySegments.of(arr).get(LE_INT, i * Integer.BYTES));
-                }
-            });
-        }
-        return collected.stream().mapToInt(Integer::intValue).toArray();
-    }
 
     private static Registry bitpackedRegistry() {
         return Registry.builder().register(new BitpackedEncoding()).build();

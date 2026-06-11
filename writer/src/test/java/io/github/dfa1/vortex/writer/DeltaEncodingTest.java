@@ -2,49 +2,30 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.core.array.Array;
-import io.github.dfa1.vortex.core.array.ArraySegments;
 import io.github.dfa1.vortex.encoding.DeltaEncoding;
 import io.github.dfa1.vortex.encoding.Registry;
 import io.github.dfa1.vortex.reader.VortexReader;
-import io.github.dfa1.vortex.reader.ScanOptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import static io.github.dfa1.vortex.writer.VortexReads.readAllLongs;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class DeltaEncodingTest {
 
-    private static final ValueLayout.OfLong LE_LONG = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
     private static final DType.Struct I64_SCHEMA = new DType.Struct(
             List.of("ts"),
             List.of(new DType.Primitive(PType.I64, false)),
             false);
-
-    private static long[] readAllLongs(VortexReader vf, String col) {
-        var collected = new ArrayList<Long>();
-        try (var iter = vf.scan(ScanOptions.all())) {
-            iter.forEachRemaining(c -> {
-                Array arr = c.column(col);
-                for (long i = 0; i < arr.length(); i++) {
-                    collected.add(ArraySegments.of(arr).get(LE_LONG, i * Long.BYTES));
-                }
-            });
-        }
-        return collected.stream().mapToLong(Long::longValue).toArray();
-    }
 
     private static Registry deltaRegistry() {
         return Registry.builder()

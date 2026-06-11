@@ -1,11 +1,8 @@
 package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.array.Array;
-import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.encoding.Registry;
 import io.github.dfa1.vortex.reader.VortexReader;
-import io.github.dfa1.vortex.reader.ScanOptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -14,10 +11,10 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import static io.github.dfa1.vortex.writer.VortexReads.readAllStrings;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// Global dictionary encoding for low-cardinality Utf8 columns: one dict shared
@@ -28,20 +25,6 @@ class GlobalDictUtf8Test {
             List.of("status"),
             List.of(new DType.Utf8(false)),
             false);
-
-    private static List<String> readAllStrings(VortexReader vf, String col) {
-        var collected = new ArrayList<String>();
-        try (var iter = vf.scan(ScanOptions.all())) {
-            iter.forEachRemaining(c -> {
-                Array arr = c.column(col);
-                VarBinArray vb = (VarBinArray) arr;
-                for (long i = 0; i < vb.length(); i++) {
-                    collected.add(vb.getString(i));
-                }
-            });
-        }
-        return collected;
-    }
 
     @Test
     void lowCardinality_utf8_acrossChunks_usesGlobalDict(@TempDir Path tmp) throws IOException {

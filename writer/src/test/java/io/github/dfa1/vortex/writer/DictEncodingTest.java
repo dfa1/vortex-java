@@ -19,10 +19,10 @@ import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import static io.github.dfa1.vortex.writer.VortexReads.readAllInts;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class DictEncodingTest {
@@ -32,19 +32,6 @@ class DictEncodingTest {
             List.of("category"),
             List.of(new DType.Primitive(PType.I32, false)),
             false);
-
-    private static int[] readAllInts(VortexReader vf, String col) {
-        var collected = new ArrayList<Integer>();
-        try (var iter = vf.scan(ScanOptions.all())) {
-            iter.forEachRemaining(c -> {
-                Array arr = c.column(col);
-                for (long i = 0; i < arr.length(); i++) {
-                    collected.add(ArraySegments.of(arr).get(LE_INT, i * Integer.BYTES));
-                }
-            });
-        }
-        return collected.stream().mapToInt(Integer::intValue).toArray();
-    }
 
     private static Registry dictRegistry() {
         return Registry.builder()
