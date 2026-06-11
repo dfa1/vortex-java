@@ -92,7 +92,14 @@ public final class DictEncoding implements Encoding {
 
         private static CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
             if (dtype instanceof DType.Utf8) {
-                return CascadeStep.terminal(encodeUtf8((String[]) data, ctx));
+                String[] strings = (String[]) data;
+                if (isHighCardinality(strings)) {
+                    // > 50% distinct: dict codes (2 bytes per row + dict) won't beat
+                    // VarBin or FSST on the raw bytes. Defer; CascadingCompressor's
+                    // spliceResult-notApplicable retry rotates to the next acceptor.
+                    return CascadeStep.notApplicable();
+                }
+                return CascadeStep.terminal(encodeUtf8(strings, ctx));
             }
             DictData d = buildDictData(dtype, data, ctx);
             PType codePType = d.codePType();
@@ -339,6 +346,24 @@ public final class DictEncoding implements Encoding {
         }
 
         private record DictData(MemorySegment valuesBuf, Object codesArr, PType codePType, int len) {
+        }
+
+        /// Returns true when {@code strings} has more than 50% distinct values, in which
+        /// case dict codes won't beat raw VarBin / FSST on payload size. Bounded HashSet:
+        /// memory caps at ~half the input length and bails out as soon as the gate is hit.
+        private static boolean isHighCardinality(String[] strings) {
+            int n = strings.length;
+            if (n < 2) {
+                return false;
+            }
+            int gate = n / 2 + 1;
+            var seen = new java.util.HashSet<String>(gate);
+            for (String s : strings) {
+                if (seen.add(s) && seen.size() >= gate) {
+                    return true;
+                }
+            }
+            return false;
         }
     }
 

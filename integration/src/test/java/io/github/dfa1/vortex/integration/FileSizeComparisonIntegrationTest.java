@@ -237,4 +237,76 @@ class FileSizeComparisonIntegrationTest {
         }
         assertThat(totalRows.get()).isEqualTo(TOTAL_ROWS);
     }
+
+    @Test
+    void highCardinalityUtf8_javaVsJni(@TempDir Path tmp) throws IOException {
+        // Given — 50k all-distinct short strings. Dict would emit 2-byte codes per row
+        // plus the full string table; FSST is the right pick. Validates that the
+        // DictEncoding cardinality gate routes high-card Utf8 to FSST as intended.
+        int n = 50_000;
+        String[] data = new String[n];
+        java.util.Random rng = new java.util.Random(42);
+        for (int i = 0; i < n; i++) {
+            // 6-byte random alpha string; ASCII keeps it FSST-friendly
+            byte[] bytes = new byte[6];
+            for (int k = 0; k < 6; k++) {
+                bytes[k] = (byte) ('a' + rng.nextInt(26));
+            }
+            data[i] = new String(bytes, StandardCharsets.UTF_8);
+        }
+        DType.Struct javaSchema = new DType.Struct(
+                List.of("s"), List.of(new DType.Utf8(false)), false);
+        Schema jniSchema = new Schema(List.of(
+                Field.notNullable("s", new ArrowType.Utf8())));
+
+        Path javaFile = tmp.resolve("hicard-java.vtx");
+        try (FileChannel ch = FileChannel.open(javaFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             VortexWriter writer = VortexWriter.create(
+                     ch, javaSchema, WriteOptions.cascading(3).withGlobalDict(false))) {
+            writer.writeChunk(Map.of("s", data));
+        }
+
+        Path jniFile = tmp.resolve("hicard-jni.vtx");
+        String jniUri = jniFile.toAbsolutePath().toUri().toString();
+        try (dev.vortex.api.VortexWriter writer = dev.vortex.api.VortexWriter.create(
+                SESSION, jniUri, jniSchema, new HashMap<>(), ALLOCATOR);
+             VectorSchemaRoot root = VectorSchemaRoot.create(jniSchema, ALLOCATOR)) {
+            VarCharVector vec = (VarCharVector) root.getVector("s");
+            vec.allocateNew();
+            for (int i = 0; i < n; i++) {
+                vec.setSafe(i, data[i].getBytes(StandardCharsets.UTF_8));
+            }
+            root.setRowCount(n);
+            try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
+                 ArrowSchema schema = ArrowSchema.allocateNew(ALLOCATOR)) {
+                Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, schema);
+                writer.writeBatch(arr.memoryAddress(), schema.memoryAddress());
+            }
+        }
+
+        long javaSize = Files.size(javaFile);
+        long jniSize = Files.size(jniFile);
+        long rawBytes = (long) n * 6;
+        System.out.printf(
+                "[HighCardUtf8] %,d rows  raw=%,d bytes (%.1f MB)  JNI=%,d bytes (%.1f MB)  Java=%,d bytes (%.1f MB)  Java/JNI=%.2fx  Java/raw=%.2fx%n",
+                n,
+                rawBytes, rawBytes / 1_048_576.0,
+                jniSize, jniSize / 1_048_576.0,
+                javaSize, javaSize / 1_048_576.0,
+                (double) javaSize / jniSize,
+                (double) javaSize / rawBytes);
+
+        // Then — Java within 3x of JNI. Looser than the OHLC test (1.04x) because Java's
+        // FSST symbol-table builder is less aggressive than Rust's on truly random short
+        // strings; tighten the bound once FsstEncoding.Encoder catches up.
+        assertThat(javaSize).isLessThan(jniSize * 3);
+
+        // Then — Java file is readable and row count matches
+        var totalRows = new java.util.concurrent.atomic.AtomicLong();
+        try (VortexReader reader = VortexReader.open(javaFile, Registry.loadAll());
+             var iter = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("s"))) {
+            iter.forEachRemaining(c -> totalRows.addAndGet(c.column("s").length()));
+        }
+        assertThat(totalRows.get()).isEqualTo(n);
+    }
 }

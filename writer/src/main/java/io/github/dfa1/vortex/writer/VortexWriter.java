@@ -156,6 +156,12 @@ public final class VortexWriter implements Closeable {
         codecs.add(new RleEncoding());
         codecs.add(new DictEncoding());
         codecs.add(new BitpackedEncoding());
+        // FsstEncoding sits between Dict and VarBin. Today's non-primitive dispatch
+        // (CascadingCompressor.findPrimitiveEncoding) is first-match, so Dict still
+        // wins for Utf8; FSST only fires when Dict is excluded (cascade nested re-runs
+        // via spliceResult's notApplicable retry). Listing it here matches Rust which
+        // uses FSST for high-cardinality short strings (e.g. taxi store_and_fwd_flag).
+        codecs.add(new io.github.dfa1.vortex.encoding.FsstEncoding());
         codecs.add(new VarBinEncoding());
         if (options.enableZstd()) {
             codecs.add(new ZstdEncoding());
