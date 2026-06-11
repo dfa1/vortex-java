@@ -6,8 +6,8 @@ import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.ArraySegments;
 import io.github.dfa1.vortex.encoding.BitpackedEncoding;
 import io.github.dfa1.vortex.encoding.Registry;
-import io.github.dfa1.vortex.io.VortexReader;
-import io.github.dfa1.vortex.scan.ScanOptions;
+import io.github.dfa1.vortex.reader.VortexReader;
+import io.github.dfa1.vortex.reader.ScanOptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -34,7 +34,7 @@ class BitpackedEncodingTest {
             false);
 
     /// Materializes every chunk of the named I32 column into a primitive int[] by
-    /// copying values out of the per-chunk arena before each [io.github.dfa1.vortex.scan.Chunk]
+    /// copying values out of the per-chunk arena before each [io.github.dfa1.vortex.reader.Chunk]
     /// closes. Returns a heap array independent of the scan lifecycle.
     private static int[] readAllInts(VortexReader vf, String col) {
         var collected = new ArrayList<Integer>();

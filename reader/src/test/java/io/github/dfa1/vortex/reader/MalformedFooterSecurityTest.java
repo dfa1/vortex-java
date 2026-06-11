@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.io;
+package io.github.dfa1.vortex.reader;
 
 import com.google.flatbuffers.FlatBufferBuilder;
 import io.github.dfa1.vortex.core.VortexException;
@@ -13,75 +13,86 @@ import io.github.dfa1.vortex.fbs.PostscriptSegment;
 import io.github.dfa1.vortex.fbs.Primitive;
 import io.github.dfa1.vortex.fbs.SegmentSpec;
 import io.github.dfa1.vortex.fbs.Type;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Adversarial tests for the layout-tree recursion in
- * {@link PostscriptParser}'s {@code convertLayout}.
+ * Adversarial tests for {@code footer.segmentSpecs[i]} bounds.
  *
- * <p>The reader walks the layout tree recursively when materialising a file's
- * {@code Layout} object. Without a depth cap a crafted file with thousands of
- * nested children produces a {@link StackOverflowError} during {@code VortexReader.open},
- * breaking the contract that every malformed input must surface as a {@link VortexException}.
+ * <p>Every {@link SegmentSpec} declared in the footer is later sliced from the memory-mapped
+ * file via {@code fileSegment.asSlice(spec.offset(), spec.length())} at scan time. Without
+ * up-front validation, malformed offsets/lengths surface as {@code IndexOutOfBoundsException}
+ * from the FFM layer rather than {@link VortexException}, breaking the reader contract.
  *
- * <p>This test pins the contract: deeply nested layouts must be rejected as
- * {@link VortexException}, never a {@link StackOverflowError}.
+ * <p>{@link PostscriptParser#validateSegmentSpecs} now rejects negative offsets, negative
+ * lengths, offsets past end-of-file, and {@code offset + length} overflowing the file size at
+ * the moment the postscript is parsed — before any scan iterator is ever created.
  */
-class LayoutDepthBombSecurityTest {
+class MalformedFooterSecurityTest {
 
     private static final Registry REGISTRY = Registry.empty();
 
-    @Test
-    void deeplyNestedLayout_throwsVortexException(@TempDir Path tmp) throws Exception {
-        // Given — file whose layout root has 65536 levels of nested children.
-        // Typical real-world layouts are ~4 levels (Struct → Zoned → Chunked → Flat); 65536 is well past
-        // anything sane and reliably blows the JVM stack on the recursive convertLayout walk.
-        Path file = buildDeeplyNestedFile(tmp, 65536);
+    static Stream<Arguments> outOfBoundsSpecs() {
+        // SegmentSpec FlatBuffer schema: offset is u64, length is u32. Negative or
+        // huge length values get truncated by the FlatBuffer encoder, so the cases
+        // below choose values that survive the wire round-trip and still violate
+        // the bounds check: offset with sign bit set (reads back as negative long),
+        // offset past EOF, and a length that exceeds the file body (u32 max).
+        return Stream.of(
+                // (segOffset, segLength, expected substring)
+                Arguments.of(-1L, 8L, "offset=-1"),                          // signed-long negative offset
+                Arguments.of(999_999_999L, 8L, "offset=999999999"),          // offset past EOF
+                Arguments.of(0L, 4_294_967_295L, "length=4294967295")        // length > fileSize (u32 max)
+        );
+    }
 
-        // When / Then — must surface as VortexException, not StackOverflowError
+    @ParameterizedTest
+    @MethodSource("outOfBoundsSpecs")
+    void footerSegmentSpec_outOfBounds_throwsVortexException(
+            long segOffset, long segLength, String expected,
+            @TempDir Path tmp) throws Exception {
+        // Given — well-formed trailer/postscript/footer FlatBuffer, but segmentSpecs[0] points outside file
+        Path file = buildFileWithBadSegmentSpec(tmp, segOffset, segLength);
+
+        // When / Then
         assertThatThrownBy(() -> VortexReader.open(file, REGISTRY))
-                .isInstanceOf(VortexException.class);
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("segmentSpecs[0]")
+                .hasMessageContaining(expected);
     }
 
     // ── File builders ─────────────────────────────────────────────────────────
 
     /**
-     * Builds a .vtx file whose root Layout has {@code depth} levels of single-child nesting,
-     * each level reusing the same {@code vortex.flat} layout spec.
+     * Crafts a minimal .vtx file with a single I64 flat-layout column and a footer whose
+     * {@code segmentSpecs[0]} contains the supplied (deliberately bad) offset/length.
+     *
+     * <p>The file body is 8 bytes of placeholder data: the bad spec means
+     * {@code VortexReader.open} should never look at them.
      */
-    private static Path buildDeeplyNestedFile(Path dir, int depth) throws Exception {
-        byte[] body = new byte[8]; // unused placeholder
+    private static Path buildFileWithBadSegmentSpec(Path dir, long segOffset, long segLength) throws Exception {
+        byte[] body = new byte[8]; // unused; placeholder data segment
+
         ByteBuffer footerBuf = buildFooter(
                 new String[]{"vortex.primitive"},
                 new String[]{"vortex.flat"},
-                new long[]{0L},
-                new long[]{(long) body.length});
+                new long[]{segOffset},
+                new long[]{segLength});
         ByteBuffer dtypeBuf = buildI64Dtype();
-        ByteBuffer layoutBuf = buildNestedLayout(depth);
+        ByteBuffer layoutBuf = buildFlatLayout(0, 1L, 0);
 
-        return writeVtxFile(dir, "deep_nest.vtx", body, footerBuf, dtypeBuf, layoutBuf);
-    }
-
-    private static ByteBuffer buildNestedLayout(int depth) {
-        var fbb = new FlatBufferBuilder(depth * 32);
-        int segV = Layout.createSegmentsVector(fbb, new long[]{0L});
-        // Build leaf first; FlatBuffer requires children be finished before parents.
-        int current = Layout.createLayout(fbb, 0, 1L, 0, 0, segV);
-        for (int i = 0; i < depth; i++) {
-            int childV = Layout.createChildrenVector(fbb, new int[]{current});
-            current = Layout.createLayout(fbb, 0, 1L, 0, childV, 0);
-        }
-        Layout.finishLayoutBuffer(fbb, current);
-        return slice(fbb);
+        return writeVtxFile(dir, "bad_seg.vtx", body, footerBuf, dtypeBuf, layoutBuf);
     }
 
     private static ByteBuffer buildFooter(
@@ -117,6 +128,14 @@ class LayoutDepthBombSecurityTest {
         int prim = Primitive.createPrimitive(fbb, io.github.dfa1.vortex.fbs.PType.I64, false);
         int off = io.github.dfa1.vortex.fbs.DType.createDType(fbb, Type.Primitive, prim);
         io.github.dfa1.vortex.fbs.DType.finishDTypeBuffer(fbb, off);
+        return slice(fbb);
+    }
+
+    private static ByteBuffer buildFlatLayout(int layoutSpecIdx, long rowCount, int segIdx) {
+        var fbb = new FlatBufferBuilder(128);
+        int segV = Layout.createSegmentsVector(fbb, new long[]{segIdx});
+        int layoutOff = Layout.createLayout(fbb, layoutSpecIdx, rowCount, 0, 0, segV);
+        Layout.finishLayoutBuffer(fbb, layoutOff);
         return slice(fbb);
     }
 

@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.io;
+package io.github.dfa1.vortex.reader;
 
 import com.google.flatbuffers.FlatBufferBuilder;
 import io.github.dfa1.vortex.core.VortexException;
@@ -18,7 +18,6 @@ import io.github.dfa1.vortex.fbs.PostscriptSegment;
 import io.github.dfa1.vortex.fbs.Primitive;
 import io.github.dfa1.vortex.fbs.SegmentSpec;
 import io.github.dfa1.vortex.fbs.Type;
-import io.github.dfa1.vortex.scan.ScanOptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import io.github.dfa1.vortex.proto.ScalarValue;

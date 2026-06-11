@@ -1,6 +1,5 @@
-package io.github.dfa1.vortex.io;
+package io.github.dfa1.vortex.reader;
 
-import io.github.dfa1.vortex.scan.ScanOptions;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;

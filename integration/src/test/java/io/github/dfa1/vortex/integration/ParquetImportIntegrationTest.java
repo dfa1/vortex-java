@@ -6,11 +6,11 @@ import dev.hardwood.reader.RowReader;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
-import io.github.dfa1.vortex.io.VortexReader;
+import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.parquet.ParquetImporter;
-import io.github.dfa1.vortex.scan.Chunk;
-import io.github.dfa1.vortex.scan.ScanIterator;
-import io.github.dfa1.vortex.scan.ScanOptions;
+import io.github.dfa1.vortex.reader.Chunk;
+import io.github.dfa1.vortex.reader.ScanIterator;
+import io.github.dfa1.vortex.reader.ScanOptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

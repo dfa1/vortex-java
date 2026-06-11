@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.scan;
+package io.github.dfa1.vortex.reader;
 
 import java.util.List;
 

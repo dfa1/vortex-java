@@ -7,7 +7,7 @@ import io.github.dfa1.vortex.core.Layout;
 import io.github.dfa1.vortex.core.SegmentSpec;
 import io.github.dfa1.vortex.fbs.Array;
 import io.github.dfa1.vortex.fbs.ArrayNode;
-import io.github.dfa1.vortex.io.VortexHandle;
+import io.github.dfa1.vortex.reader.VortexHandle;
 
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;

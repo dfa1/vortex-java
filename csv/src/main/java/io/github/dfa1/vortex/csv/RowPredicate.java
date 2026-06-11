@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.csv;
 
-import io.github.dfa1.vortex.scan.Chunk;
+import io.github.dfa1.vortex.reader.Chunk;
 
 /// Row-level predicate evaluated against decoded chunk data.
 /// Used in conjunction with zone-map pruning: zone-maps skip whole chunks,

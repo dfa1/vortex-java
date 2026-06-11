@@ -12,10 +12,10 @@ import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
-import io.github.dfa1.vortex.io.VortexReader;
-import io.github.dfa1.vortex.scan.ScanIterator;
-import io.github.dfa1.vortex.scan.ScanOptions;
-import io.github.dfa1.vortex.scan.Chunk;
+import io.github.dfa1.vortex.reader.VortexReader;
+import io.github.dfa1.vortex.reader.ScanIterator;
+import io.github.dfa1.vortex.reader.ScanOptions;
+import io.github.dfa1.vortex.reader.Chunk;
 
 import java.io.FilterWriter;
 import java.io.IOException;

@@ -1,9 +1,9 @@
 package io.github.dfa1.vortex.cli;
 
 import io.github.dfa1.vortex.inspect.VortexInspector;
-import io.github.dfa1.vortex.io.VortexHandle;
-import io.github.dfa1.vortex.io.VortexHttpReader;
-import io.github.dfa1.vortex.io.VortexReader;
+import io.github.dfa1.vortex.reader.VortexHandle;
+import io.github.dfa1.vortex.reader.VortexHttpReader;
+import io.github.dfa1.vortex.reader.VortexReader;
 
 import java.io.IOException;
 import java.net.URI;

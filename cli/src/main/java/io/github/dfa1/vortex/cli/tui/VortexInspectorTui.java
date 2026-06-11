@@ -17,10 +17,10 @@ import io.github.dfa1.vortex.cli.tui.term.Ansi;
 import io.github.dfa1.vortex.cli.tui.term.Key;
 import io.github.dfa1.vortex.cli.tui.term.Terminal;
 import io.github.dfa1.vortex.inspect.InspectorTree;
-import io.github.dfa1.vortex.io.VortexHandle;
-import io.github.dfa1.vortex.scan.Chunk;
-import io.github.dfa1.vortex.scan.ScanIterator;
-import io.github.dfa1.vortex.scan.ScanOptions;
+import io.github.dfa1.vortex.reader.VortexHandle;
+import io.github.dfa1.vortex.reader.Chunk;
+import io.github.dfa1.vortex.reader.ScanIterator;
+import io.github.dfa1.vortex.reader.ScanOptions;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;

@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.integration;
 
 import io.github.dfa1.vortex.encoding.Registry;
 import io.github.dfa1.vortex.inspect.VortexInspector;
-import io.github.dfa1.vortex.io.VortexReader;
+import io.github.dfa1.vortex.reader.VortexReader;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
@@ -17,7 +17,7 @@ class InspectForTest {
             try (VortexReader r = VortexReader.open(Path.of(f), Registry.loadAll())) {
                 System.out.println("=== " + f + " ===");
                 System.out.println(VortexInspector.inspect(r));
-                try (var iter = r.scan(io.github.dfa1.vortex.scan.ScanOptions.all())) {
+                try (var iter = r.scan(io.github.dfa1.vortex.reader.ScanOptions.all())) {
                     if (iter.hasNext()) {
                         try (var chunk = iter.next()) {
                             chunk.columns().forEach((name, arr) ->

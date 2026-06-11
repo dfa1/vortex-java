@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.io;
+package io.github.dfa1.vortex.reader;
 
 import com.google.flatbuffers.FlatBufferBuilder;
 import io.github.dfa1.vortex.core.Footer;

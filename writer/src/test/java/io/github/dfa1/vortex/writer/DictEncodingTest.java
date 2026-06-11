@@ -7,9 +7,9 @@ import io.github.dfa1.vortex.core.array.ArraySegments;
 import io.github.dfa1.vortex.encoding.DictEncoding;
 import io.github.dfa1.vortex.encoding.Registry;
 import io.github.dfa1.vortex.encoding.PrimitiveEncoding;
-import io.github.dfa1.vortex.io.VortexReader;
-import io.github.dfa1.vortex.scan.Chunk;
-import io.github.dfa1.vortex.scan.ScanOptions;
+import io.github.dfa1.vortex.reader.VortexReader;
+import io.github.dfa1.vortex.reader.Chunk;
+import io.github.dfa1.vortex.reader.ScanOptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

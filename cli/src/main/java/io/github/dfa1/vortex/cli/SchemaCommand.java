@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.cli;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.io.VortexReader;
+import io.github.dfa1.vortex.reader.VortexReader;
 
 import java.io.IOException;
 import java.nio.file.Files;

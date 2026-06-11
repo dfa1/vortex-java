@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.io;
+package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
@@ -8,8 +8,6 @@ import io.github.dfa1.vortex.core.SegmentSpec;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.VortexFormat;
 import io.github.dfa1.vortex.encoding.Registry;
-import io.github.dfa1.vortex.scan.ScanIterator;
-import io.github.dfa1.vortex.scan.ScanOptions;
 
 import java.io.IOException;
 import java.lang.foreign.Arena;

@@ -1,11 +1,10 @@
-package io.github.dfa1.vortex.io;
+package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexFormat;
 import io.github.dfa1.vortex.core.array.ListArray;
 import io.github.dfa1.vortex.core.array.ListViewArray;
-import io.github.dfa1.vortex.scan.ScanOptions;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;

@@ -14,8 +14,8 @@ import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.encoding.Registry;
-import io.github.dfa1.vortex.io.VortexReader;
-import io.github.dfa1.vortex.scan.Chunk;
+import io.github.dfa1.vortex.reader.VortexReader;
+import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import org.apache.arrow.c.ArrowArray;
@@ -280,7 +280,7 @@ public class RustVsJavaReadBenchmark {
     public long javaReadCascading() throws IOException {
         long sum = 0L;
         try (VortexReader vf = VortexReader.open(cascadingFile, registry);
-             var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("volume"))) {
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("volume"))) {
             while (iter.hasNext()) {
                 try (Chunk c = iter.next()) {
                     LongArray volume = c.column("volume");
@@ -296,7 +296,7 @@ public class RustVsJavaReadBenchmark {
     public long javaReadVolume() throws IOException {
         long sum = 0L;
         try (VortexReader vf = VortexReader.open(benchFile, registry);
-             var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("volume"))) {
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("volume"))) {
             while (iter.hasNext()) {
                 try (Chunk c = iter.next()) {
                     LongArray volume = c.column("volume");
@@ -312,7 +312,7 @@ public class RustVsJavaReadBenchmark {
     public double javaReadClose() throws IOException {
         double sum = 0.0;
         try (VortexReader vf = VortexReader.open(benchFile, registry);
-             var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("close"))) {
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("close"))) {
             while (iter.hasNext()) {
                 try (Chunk c = iter.next()) {
                     DoubleArray close = c.column("close");
@@ -328,7 +328,7 @@ public class RustVsJavaReadBenchmark {
     public long javaReadSymbol() throws IOException {
         long[] sum = {0L};
         try (VortexReader vf = VortexReader.open(benchFile, registry);
-             var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("symbol"))) {
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("symbol"))) {
             while (iter.hasNext()) {
                 try (Chunk c = iter.next()) {
                     VarBinArray symbol = c.column("symbol");

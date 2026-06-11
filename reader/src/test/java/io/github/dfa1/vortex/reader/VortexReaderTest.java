@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.io;
+package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -12,8 +12,6 @@ import io.github.dfa1.vortex.encoding.EncodeResult;
 import io.github.dfa1.vortex.encoding.Encoding;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.Registry;
-import io.github.dfa1.vortex.scan.Chunk;
-import io.github.dfa1.vortex.scan.ScanOptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;

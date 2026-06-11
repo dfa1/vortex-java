@@ -9,9 +9,9 @@ import dev.hardwood.schema.ColumnProjection;
 import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.encoding.Registry;
-import io.github.dfa1.vortex.io.VortexReader;
+import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.parquet.ParquetImporter;
-import io.github.dfa1.vortex.scan.Chunk;
+import io.github.dfa1.vortex.reader.Chunk;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -211,7 +211,7 @@ public class ParquetVsVortexReadBenchmark {
     public double vortexRead() throws IOException {
         double sum = 0.0;
         try (VortexReader vr = VortexReader.open(vortexFile, registry);
-             var iter = vr.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("trip_distance"))) {
+             var iter = vr.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("trip_distance"))) {
             while (iter.hasNext()) {
                 try (Chunk c = iter.next()) {
                     DoubleArray col = c.column("trip_distance");
@@ -230,7 +230,7 @@ public class ParquetVsVortexReadBenchmark {
         double fareSum = 0.0;
         long idSum = 0L;
         try (VortexReader vr = VortexReader.open(vortexFile, registry);
-             var iter = vr.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("fare_amount", "PULocationID"))) {
+             var iter = vr.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("fare_amount", "PULocationID"))) {
             while (iter.hasNext()) {
                 try (Chunk c = iter.next()) {
                     DoubleArray fare = c.column("fare_amount");

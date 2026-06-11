@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.scan;
+package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
@@ -24,7 +24,6 @@ import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.Registry;
 import io.github.dfa1.vortex.encoding.FlatSegmentDecoder;
-import io.github.dfa1.vortex.io.VortexHandle;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -40,7 +39,7 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.function.Consumer;
 
-/// Iterates over decoded chunks from a [io.github.dfa1.vortex.io.VortexReader].
+/// Iterates over decoded chunks from a [io.github.dfa1.vortex.reader.VortexReader].
 ///
 /// Each call to [#next()] returns a [Chunk] that owns a confined
 /// [Arena]; the caller closes it via try-with-resources. The iterator itself

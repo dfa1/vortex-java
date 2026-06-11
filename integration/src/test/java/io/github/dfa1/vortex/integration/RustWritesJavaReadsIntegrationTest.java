@@ -15,7 +15,7 @@ import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.ArraySegments;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.encoding.Registry;
-import io.github.dfa1.vortex.io.VortexReader;
+import io.github.dfa1.vortex.reader.VortexReader;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
@@ -99,18 +99,18 @@ class RustWritesJavaReadsIntegrationTest {
     }
 
     /// Value-only chunk snapshot — copies columnar data out of the per-chunk arena
-    /// so assertions can run after the [io.github.dfa1.vortex.scan.Chunk] has been
+    /// so assertions can run after the [io.github.dfa1.vortex.reader.Chunk] has been
     /// closed. Each entry in {@code columns} is a primitive Java array
     /// (long[]/double[]/short[]/…) sized per [PType].
     private record JavaChunk(long rowCount, Map<String, Object> columns) {
     }
 
     private static List<JavaChunk> scanAll(VortexReader vf) {
-        return scanAll(vf, io.github.dfa1.vortex.scan.ScanOptions.all());
+        return scanAll(vf, io.github.dfa1.vortex.reader.ScanOptions.all());
     }
 
     private static List<JavaChunk> scanAll(VortexReader vf,
-            io.github.dfa1.vortex.scan.ScanOptions opts) {
+            io.github.dfa1.vortex.reader.ScanOptions opts) {
         var results = new ArrayList<JavaChunk>();
         try (var iter = vf.scan(opts)) {
             iter.forEachRemaining(c -> {
@@ -190,7 +190,7 @@ class RustWritesJavaReadsIntegrationTest {
 
     private static long[] readJavaLongColumn(Path file, String column) throws IOException {
         try (var vf = VortexReader.open(file, Registry.loadAll());
-             var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns(column))) {
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns(column))) {
             var longs = new ArrayList<Long>();
             iter.forEachRemaining(c -> {
                 LongArray arr = (LongArray) c.columns().get(column);
@@ -272,7 +272,7 @@ class RustWritesJavaReadsIntegrationTest {
 
         // When / Then
         try (var vf = VortexReader.open(file, Registry.loadAll())) {
-            List<JavaChunk> results = scanAll(vf, io.github.dfa1.vortex.scan.ScanOptions.columns("id"));
+            List<JavaChunk> results = scanAll(vf, io.github.dfa1.vortex.reader.ScanOptions.columns("id"));
             assertThat(results).hasSize(1);
             assertThat(results.getFirst().columns()).containsKey("id");
             assertThat(results.getFirst().columns()).doesNotContainKey("value");
@@ -296,7 +296,7 @@ class RustWritesJavaReadsIntegrationTest {
 
         // When / Then
         try (var vf = VortexReader.open(file, Registry.loadAll())) {
-            List<JavaChunk> results = scanAll(vf, io.github.dfa1.vortex.scan.ScanOptions.columns("value"));
+            List<JavaChunk> results = scanAll(vf, io.github.dfa1.vortex.reader.ScanOptions.columns("value"));
             long total = results.stream().mapToLong(JavaChunk::rowCount).sum();
             assertThat(total).isEqualTo(n);
             double sum = 0;

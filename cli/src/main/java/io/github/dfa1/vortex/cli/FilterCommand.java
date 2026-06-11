@@ -12,8 +12,8 @@ import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.csv.CsvExporter;
 import io.github.dfa1.vortex.csv.ExportOptions;
 import io.github.dfa1.vortex.csv.RowPredicate;
-import io.github.dfa1.vortex.scan.RowFilter;
-import io.github.dfa1.vortex.scan.ScanOptions;
+import io.github.dfa1.vortex.reader.RowFilter;
+import io.github.dfa1.vortex.reader.ScanOptions;
 
 import java.io.IOException;
 import java.io.OutputStreamWriter;

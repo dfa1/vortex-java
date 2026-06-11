@@ -11,8 +11,8 @@ import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.ArraySegments;
 import io.github.dfa1.vortex.encoding.Registry;
-import io.github.dfa1.vortex.io.VortexReader;
-import io.github.dfa1.vortex.scan.Chunk;
+import io.github.dfa1.vortex.reader.VortexReader;
+import io.github.dfa1.vortex.reader.Chunk;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
@@ -175,7 +175,7 @@ public class RustWritesJavaReadsBigFileBenchmark {
     private long scanJava() throws IOException {
         long sum = 0L;
         try (VortexReader vf = VortexReader.open(benchFile, registry);
-             var iter = vf.scan(io.github.dfa1.vortex.scan.ScanOptions.columns("c0"))) {
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("c0"))) {
             while (iter.hasNext()) {
                 try (Chunk c = iter.next()) {
                     Array arr = c.columns().get("c0");

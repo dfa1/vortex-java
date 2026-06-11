@@ -20,8 +20,8 @@ import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.encoding.Registry;
 import io.github.dfa1.vortex.inspect.VortexInspector;
-import io.github.dfa1.vortex.io.VortexReader;
-import io.github.dfa1.vortex.scan.Chunk;
+import io.github.dfa1.vortex.reader.VortexReader;
+import io.github.dfa1.vortex.reader.Chunk;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.Float4Vector;
@@ -214,7 +214,7 @@ class RustJavaReaderComparisonIntegrationTest {
         Map<String, Long> strLenSums = new LinkedHashMap<>();
         long rowCount = 0;
         try (VortexReader reader = VortexReader.open(file, Registry.loadAll());
-             var iter = reader.scan(io.github.dfa1.vortex.scan.ScanOptions.all())) {
+             var iter = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.all())) {
             // Skip extension columns: Rust's stats path reports them under their logical
             // type (timestamp etc.), so summing their storage longs would diverge from
             // Rust's per-column report. Match Rust's behaviour by ignoring them.

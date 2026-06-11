@@ -7,7 +7,7 @@ import io.github.dfa1.vortex.encoding.Registry;
 import io.github.dfa1.vortex.fbs.Array;
 import io.github.dfa1.vortex.fbs.ArrayNode;
 import io.github.dfa1.vortex.fbs.Buffer;
-import io.github.dfa1.vortex.io.VortexReader;
+import io.github.dfa1.vortex.reader.VortexReader;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
