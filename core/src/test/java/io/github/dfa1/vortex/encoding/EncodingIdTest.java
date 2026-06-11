@@ -1,55 +1,28 @@
 package io.github.dfa1.vortex.encoding;
 
-import io.github.dfa1.vortex.core.VortexException;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class EncodingIdTest {
 
     @Nested
-    class From {
+    class Parse {
 
         @ParameterizedTest
         @EnumSource(EncodingId.class)
-        void from_knownId_roundTrips(EncodingId id) {
-            // Given / When
-            EncodingId result = EncodingId.from(id.id());
-
-            // Then
-            assertThat(result).isSameAs(id);
+        void parse_knownId_returnsMatchingConstant(EncodingId id) {
+            // Given / When / Then — every declared constant round-trips through its wire id
+            assertThat(EncodingId.parse(id.id())).contains(id);
         }
 
         @Test
-        void from_unknownId_throwsVortexException() {
-            // Given / When / Then
-            assertThatThrownBy(() -> EncodingId.from("vortex.does.not.exist"))
-                    .isInstanceOf(VortexException.class)
-                    .hasMessageContaining("vortex.does.not.exist");
-        }
-    }
-
-    @Nested
-    class TryFrom {
-
-        @ParameterizedTest
-        @EnumSource(EncodingId.class)
-        void tryFrom_knownId_returnsMatchingConstant(EncodingId id) {
-            // Given / When
-            EncodingId result = EncodingId.tryFrom(id.id());
-
-            // Then
-            assertThat(result).isSameAs(id);
-        }
-
-        @Test
-        void tryFrom_unknownId_returnsNull() {
-            // Given / When / Then
-            assertThat(EncodingId.tryFrom("supermario")).isNull();
+        void parse_unknownId_returnsEmpty() {
+            // Given / When / Then — non-throwing miss so the registry can route to passthrough
+            assertThat(EncodingId.parse("supermario")).isEmpty();
         }
     }
 

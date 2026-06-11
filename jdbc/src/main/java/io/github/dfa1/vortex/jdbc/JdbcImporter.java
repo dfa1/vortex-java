@@ -216,10 +216,8 @@ public final class JdbcImporter {
     @SuppressWarnings("unchecked")
     private static void fillExtensionCell(List<Object> buffer, ResultSet rs, int colIdx,
             DType.Extension ext) throws SQLException {
-        ExtensionId id = ExtensionId.tryFrom(ext.extensionId());
-        if (id == null) {
-            throw new UnsupportedOperationException("unsupported extension: " + ext.extensionId());
-        }
+        ExtensionId id = ExtensionId.parse(ext.extensionId())
+                .orElseThrow(() -> new UnsupportedOperationException("unsupported extension: " + ext.extensionId()));
         // SQL NULL → null in the buffer. Nullable extension columns round-trip through the
         // writer's ExtEncoding → MaskedEncoding → primitive layout (validity child preserved);
         // NOT NULL columns reject any null element with VortexException during encode.

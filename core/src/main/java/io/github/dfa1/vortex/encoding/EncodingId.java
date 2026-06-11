@@ -1,8 +1,7 @@
 package io.github.dfa1.vortex.encoding;
 
-import io.github.dfa1.vortex.core.VortexException;
-
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -73,7 +72,7 @@ public enum EncodingId {
     /// FastLanes run-length encoding ({@code fastlanes.rle}).
     FASTLANES_RLE("fastlanes.rle"),
 
-    // Known in Rust but not yet implemented; registered so EncodingId.from() doesn't throw
+    // Known in Rust but not yet implemented; registered so EncodingId.parse() resolves
     /// Masked encoding (not yet implemented; registered to prevent parse errors).
     VORTEX_MASKED("vortex.masked"),
     /// Patched encoding (not yet implemented; registered to prevent parse errors).
@@ -91,26 +90,14 @@ public enum EncodingId {
         this.id = id;
     }
 
-    /// Returns the enum constant for the given raw encoding id string.
+    /// Parses a raw encoding id string into the matching constant.
+    /// Used by [Registry] to discriminate [KnownArrayNode] from [UnknownArrayNode];
+    /// callers that demand a known id chain {@code .orElseThrow(...)}.
     ///
     /// @param id raw encoding id string (e.g. {@code "vortex.primitive"})
-    /// @return the matching {@link EncodingId}
-    /// @throws io.github.dfa1.vortex.core.VortexException if the id is not recognised
-    public static EncodingId from(String id) {
-        EncodingId result = LOOKUP.get(id);
-        if (result == null) {
-            throw new VortexException("unknown encoding id: " + id);
-        }
-        return result;
-    }
-
-    /// Non-throwing lookup: returns the matching constant or `null` for ids not in this enum.
-    /// Used by [Registry] to discriminate [KnownArrayNode] from [UnknownArrayNode].
-    ///
-    /// @param id raw encoding id string to look up
-    /// @return the matching {@link EncodingId}, or {@code null} if not recognised
-    public static EncodingId tryFrom(String id) {
-        return LOOKUP.get(id);
+    /// @return matching constant, or empty if not recognised
+    public static Optional<EncodingId> parse(String id) {
+        return Optional.ofNullable(LOOKUP.get(id));
     }
 
     /// Returns the raw encoding id string for this constant (e.g. {@code "vortex.primitive"}).

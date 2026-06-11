@@ -84,10 +84,8 @@ public final class FlatSegmentDecoder {
         ByteBuffer rawMeta = fbs.metadataAsByteBuffer();
         ByteBuffer meta = (rawMeta != null) ? rawMeta.slice() : null;
         ArrayStats stats = ArrayStats.fromFbs(fbs.stats());
-        EncodingId known = EncodingId.tryFrom(rawEncodingId);
-        if (known != null) {
-            return new KnownArrayNode(known, meta, children, bufferIndices, stats);
-        }
-        return new UnknownArrayNode(rawEncodingId, meta, children, bufferIndices, stats);
+        return EncodingId.parse(rawEncodingId)
+                .<ArrayNode>map(known -> new KnownArrayNode(known, meta, children, bufferIndices, stats))
+                .orElseGet(() -> new UnknownArrayNode(rawEncodingId, meta, children, bufferIndices, stats));
     }
 }
