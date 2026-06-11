@@ -20,6 +20,9 @@ for zero-copy memory-mapped reads.
 
 - JVM analytics engines and OLAP systems
 - Anyone who wants mmap-backed, zero-copy columnar reads without native-library management
+- **Windows JVM users.** The Rust reference's JNI bindings (`vortex-jni`) ship Linux + macOS
+  binaries only — vortex-java is the only Vortex implementation that runs on Windows JVMs out
+  of the box. CI builds the full reactor on Linux + macOS + Windows × JDK 25 + 26.
 
 ## Quickstart
 

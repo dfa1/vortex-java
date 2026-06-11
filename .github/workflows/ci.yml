@@ -33,6 +33,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
-      - name: Build and test
-        shell: bash
+      # vortex-jni 0.74.0 ships native libs for darwin-aarch64 + linux-aarch64
+      # + linux-amd64 only. No Windows binary, so the modules that pull vortex-jni
+      # (integration, performance) are skipped on Windows. Being the only Vortex
+      # impl that runs on Windows JVMs is one of vortex-java's selling points —
+      # see README "Who is this for".
+      - name: Build and test (Linux + macOS)
+        if: runner.os != 'Windows'
         run: ./mvnw verify
+
+      - name: Build and test (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: ./mvnw verify -pl '!integration,!performance'
