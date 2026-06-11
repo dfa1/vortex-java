@@ -167,11 +167,6 @@ relax for large fixtures.
 
 ## Build
 
-- [ ] **Merge `core`/`reader`/`writer` into a single library jar** — the three modules are tightly
-  coupled (every `Encoding` class has both encode + decode; format constants are shared). A single
-  `vortex-java` artifact simplifies client dependency management and removes artificial module
-  boundaries. Keep `integration`, `performance`, and `cli` as separate modules. Package structure
-  (`encoding`, `io`, `writer`) already enforces internal boundaries without Maven.
 - [ ] switch back to module-path, but keep in mind these 2 blockers:
 -    [ ] 'dfa1' in package name is rejected by maven central
 -    [ ] automatic module names for flatbuffers is rejected by maven central
