@@ -76,30 +76,6 @@ public final class GenericArray implements Array {
         return buffers[i];
     }
 
-    /// Returns the number of raw memory buffers backing this array.
-    ///
-    /// @return buffer count
-    public int bufferCount() {
-        return buffers.length;
-    }
-
-    /// Returns the raw buffer at position {@code i}. Used by callers that need
-    /// to inspect encoded bytes when no typed accessor exists for the dtype
-    /// (e.g. the TUI inspector decoding {@code Decimal} cells).
-    ///
-    /// @param i buffer index
-    /// @return the underlying {@link MemorySegment}
-    public MemorySegment bufferAt(int i) {
-        return buffers[i];
-    }
-
-    /// Returns the number of child arrays.
-    ///
-    /// @return child count
-    public int childCount() {
-        return children.length;
-    }
-
     /// Decodes the decimal value at row {@code i}.
     ///
     /// Handles the two shapes produced by Vortex decimal decoders:
