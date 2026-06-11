@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1781128534579,
+  "lastUpdate": 1781215124171,
   "repoUrl": "https://github.com/dfa1/vortex-java",
   "entries": {
     "Benchmark": [
@@ -630,6 +630,88 @@ window.BENCHMARK_DATA = {
           {
             "name": "io.github.dfa1.vortex.performance.RustVsJavaWriteBenchmark.jniWrite",
             "value": 0.311918309662669,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Davide Angelocola",
+            "username": "dfa1",
+            "email": "davide.angelocola@gmail.com"
+          },
+          "committer": {
+            "name": "Davide Angelocola",
+            "username": "dfa1",
+            "email": "davide.angelocola@gmail.com"
+          },
+          "id": "711e1aebbc1cb476574ef4c39345197a8d8a1682",
+          "message": "perf(fsst): cascade-compress FSST child arrays\n\nFSST emits two int[] sidecars per chunk: uncompressed_lengths and\ncodes_offsets. They were written as leaf primitive nodes — for a\n50k-row chunk, that's 400 KB of raw integers per column even when\nthe lengths are constant and the offsets monotonic.\n\nSwitch FsstEncoding to publish those arrays as open ChildSlots in\nits encodeCascade step so the cascading compressor picks Constant\nfor the lengths and FoR -> Bitpacked for the offsets.\n\nSurfaced a pre-existing proto3 elision bug along the way: when\nBitPackedMetadata's fields all hold their defaults (bit_width=0 from\nconstant residuals), proto3 omits them and the encoded payload is\nzero bytes; the writer then skips the empty metadata vector and\ndecode would throw \"missing metadata\". BitpackedEncoding.Decoder\nnow treats null/empty metadata as BitPackedMetadata(0, 0, null).\n\nImpact on FileSizeComparisonIntegrationTest#highCardinalityUtf8:\n50k random 6-char strings drop from 781 KB to 500 KB; Java/JNI ratio\n1.41x (was 2.20x). Bound tightened to 2x in the test.\n\nCo-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>",
+          "timestamp": "2026-06-11T11:41:33Z",
+          "url": "https://github.com/dfa1/vortex-java/commit/711e1aebbc1cb476574ef4c39345197a8d8a1682"
+        },
+        "date": 1781215123716,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.javaReadCascading",
+            "value": 36.19592752769805,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.javaReadClose",
+            "value": 29.01920327565506,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.javaReadSymbol",
+            "value": 39.816864655259586,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.javaReadVolume",
+            "value": 46.58701460922288,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.jniReadClose",
+            "value": 25.931666211875307,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.jniReadSymbol",
+            "value": 4.629287370806197,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.jniReadVolume",
+            "value": 27.35812285459915,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaWriteBenchmark.javaWrite",
+            "value": 0.6368457268607083,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaWriteBenchmark.javaWriteCascading",
+            "value": 0.2182624363665954,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaWriteBenchmark.jniWrite",
+            "value": 0.30496755632095424,
             "unit": "ops/s",
             "extra": "iterations: 3\nforks: 1\nthreads: 1"
           }
