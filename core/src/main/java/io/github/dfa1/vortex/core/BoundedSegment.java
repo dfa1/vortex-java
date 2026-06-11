@@ -46,9 +46,8 @@ public record BoundedSegment(MemorySegment seg, String context) {
     /// @throws VortexException if {@code off} or {@code len} is negative, or if
     ///                         {@code off + len > this.byteSize()}
     public BoundedSegment slice(long off, long len, String childContext) {
-        return new BoundedSegment(
-                MemorySegments.slice(seg, off, len, context),
-                childContext);
+        checkRange(off, len);
+        return new BoundedSegment(seg.asSlice(off, len), childContext);
     }
 
     /// Bounds-checked single-byte read.
@@ -57,7 +56,7 @@ public record BoundedSegment(MemorySegment seg, String context) {
     /// @return the byte at {@code off}
     /// @throws VortexException if {@code off} is negative or {@code >= this.byteSize()}
     public byte getByte(long off) {
-        MemorySegments.checkRange(seg, off, 1, context);
+        checkRange(off, 1);
         return seg.get(BYTE, off);
     }
 
@@ -67,7 +66,7 @@ public record BoundedSegment(MemorySegment seg, String context) {
     /// @return the int at {@code off}
     /// @throws VortexException if {@code off} is negative or {@code > this.byteSize() - 4}
     public int getIntLE(long off) {
-        MemorySegments.checkRange(seg, off, 4, context);
+        checkRange(off, 4);
         return seg.get(LE_INT, off);
     }
 
@@ -77,8 +76,24 @@ public record BoundedSegment(MemorySegment seg, String context) {
     /// @return the long at {@code off}
     /// @throws VortexException if {@code off} is negative or {@code > this.byteSize() - 8}
     public long getLongLE(long off) {
-        MemorySegments.checkRange(seg, off, 8, context);
+        checkRange(off, 8);
         return seg.get(LE_LONG, off);
+    }
+
+    private void checkRange(long off, long len) {
+        long segSize = seg.byteSize();
+        if (off < 0) {
+            throw new VortexException("malformed " + context + ": negative offset " + off);
+        }
+        if (len < 0) {
+            throw new VortexException("malformed " + context + ": negative length " + len);
+        }
+        // Overflow-safe form of `off + len > segSize`. The subtraction can't underflow because
+        // len has already been bounded against segSize on the line above (segSize >= 0 always).
+        if (len > segSize || off > segSize - len) {
+            throw new VortexException("malformed " + context + ": offset+length "
+                    + off + "+" + len + " exceeds segment size " + segSize);
+        }
     }
 
     /// Little-endian {@link ByteBuffer} view of the whole bounded region, used by the
