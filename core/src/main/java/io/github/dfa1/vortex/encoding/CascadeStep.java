@@ -6,7 +6,7 @@ import java.util.List;
 /// One step in cascade-aware encoding: a partially-assembled node tree plus open child slots.
 ///
 /// <p>Terminal steps have no open children and carry a fully-resolved {@link EncodeResult}.
-/// Intermediate steps have open children that the {@link CascadingCompressor} recursively fills.
+/// Intermediate steps have open children that the {@code CascadingCompressor} (writer module) recursively fills.
 ///
 /// <p>Buffer layout: {@code ownedBuffers} holds buffers belonging to the partial root
 /// (e.g. patch index/value buffers for ALP). Child recursion results are appended after these;

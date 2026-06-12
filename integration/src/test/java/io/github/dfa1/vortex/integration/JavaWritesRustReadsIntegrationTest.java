@@ -10,22 +10,22 @@ import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.encoding.BoolEncoding;
-import io.github.dfa1.vortex.encoding.ByteBoolEncoding;
-import io.github.dfa1.vortex.encoding.ConstantEncoding;
-import io.github.dfa1.vortex.encoding.FsstEncoding;
+import io.github.dfa1.vortex.writer.encode.BoolEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.ByteBoolEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.ConstantEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.FsstEncodingEncoder;
 import io.github.dfa1.vortex.encoding.ListData;
-import io.github.dfa1.vortex.encoding.ListEncoding;
+import io.github.dfa1.vortex.writer.encode.ListEncodingEncoder;
 import io.github.dfa1.vortex.encoding.ListViewData;
-import io.github.dfa1.vortex.encoding.ListViewEncoding;
-import io.github.dfa1.vortex.encoding.NullEncoding;
-import io.github.dfa1.vortex.encoding.RleEncoding;
-import io.github.dfa1.vortex.encoding.RunEndEncoding;
-import io.github.dfa1.vortex.encoding.SparseEncoding;
-import io.github.dfa1.vortex.encoding.VarBinEncoding;
-import io.github.dfa1.vortex.encoding.VarBinViewEncoding;
-import io.github.dfa1.vortex.encoding.ZigZagEncoding;
-import io.github.dfa1.vortex.encoding.ZstdEncoding;
+import io.github.dfa1.vortex.writer.encode.ListViewEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.NullEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.RleEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.RunEndEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.SparseEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.VarBinEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.VarBinViewEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.ZigZagEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.ZstdEncodingEncoder;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import org.apache.arrow.memory.BufferAllocator;
@@ -503,7 +503,7 @@ class JavaWritesRustReadsIntegrationTest {
         String[] data = {"apple", "banana", "cherry", "date", "elderberry"};
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults(),
-                     List.of(new VarBinEncoding()))) {
+                     List.of(new VarBinEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of("s", data));
         }
@@ -520,7 +520,7 @@ class JavaWritesRustReadsIntegrationTest {
         String[] data = {"apple", "banana", "cherry", "apricot", "avocado", "almond"};
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults(),
-                     List.of(new FsstEncoding()))) {
+                     List.of(new FsstEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of("s", data));
         }
@@ -537,7 +537,7 @@ class JavaWritesRustReadsIntegrationTest {
         String[] data = {"hi", "yo", "ok", "abc", "short", "exactly12ok!"};
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults(),
-                     List.of(new VarBinViewEncoding()))) {
+                     List.of(new VarBinViewEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of("s", data));
         }
@@ -554,7 +554,7 @@ class JavaWritesRustReadsIntegrationTest {
         String[] data = {"this is long text", "another long string", "yet another long one", "thirteenchars!"};
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults(),
-                     List.of(new VarBinViewEncoding()))) {
+                     List.of(new VarBinViewEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of("s", data));
         }
@@ -571,7 +571,7 @@ class JavaWritesRustReadsIntegrationTest {
         String[] data = {"short", "this is a longer string", "hi", "medium length ok", "x", "another longer string here"};
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults(),
-                     List.of(new VarBinViewEncoding()))) {
+                     List.of(new VarBinViewEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of("s", data));
         }
@@ -590,7 +590,7 @@ class JavaWritesRustReadsIntegrationTest {
             Path file = tmp.resolve("pbt_varbinview_utf8.vtx");
             try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
                  var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults(),
-                         List.of(new VarBinViewEncoding()))) {
+                         List.of(new VarBinViewEncodingEncoder()))) {
                 sut.writeChunk(Map.of("s", data));
             }
             String[] decoded = readStringColumn(file, "s");
@@ -851,7 +851,7 @@ class JavaWritesRustReadsIntegrationTest {
         int[] data = {-1000, -1, 0, 1, 127, -127, Integer.MIN_VALUE / 2, Integer.MAX_VALUE / 2};
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults(),
-                     List.of(new ZigZagEncoding()))) {
+                     List.of(new ZigZagEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of("v", data));
         }
@@ -868,7 +868,7 @@ class JavaWritesRustReadsIntegrationTest {
         long[] data = {Long.MIN_VALUE / 2, -1L, 0L, 1L, Long.MAX_VALUE / 2};
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.defaults(),
-                     List.of(new ZigZagEncoding()))) {
+                     List.of(new ZigZagEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of("ts", data));
         }
@@ -885,7 +885,7 @@ class JavaWritesRustReadsIntegrationTest {
         int[] data = {10, 10, 10, 20, 20, 30, 30, 30, 30};
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults(),
-                     List.of(new RunEndEncoding()))) {
+                     List.of(new RunEndEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of("v", data));
         }
@@ -902,7 +902,7 @@ class JavaWritesRustReadsIntegrationTest {
         long[] data = {100L, 100L, 200L, 200L, 200L, 300L};
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.defaults(),
-                     List.of(new RunEndEncoding()))) {
+                     List.of(new RunEndEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of("ts", data));
         }
@@ -919,7 +919,7 @@ class JavaWritesRustReadsIntegrationTest {
         int[] data = {5, 5, 5, 7, 7, 5, 5, 5, 5, 9};
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults(),
-                     List.of(new RleEncoding()))) {
+                     List.of(new RleEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of("v", data));
         }
@@ -936,7 +936,7 @@ class JavaWritesRustReadsIntegrationTest {
         long[] data = {1L, 1L, 1L, 2L, 2L, 2L, 3L, 3L};
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.defaults(),
-                     List.of(new RleEncoding()))) {
+                     List.of(new RleEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of("ts", data));
         }
@@ -953,7 +953,7 @@ class JavaWritesRustReadsIntegrationTest {
         int[] data = {42, 42, 42, 42, 42};
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults(),
-                     List.of(new ConstantEncoding()))) {
+                     List.of(new ConstantEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of("v", data));
         }
@@ -970,7 +970,7 @@ class JavaWritesRustReadsIntegrationTest {
         int[] data = {0, 0, 7, 0, 0, 0, 13, 0, 0, 0};
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults(),
-                     List.of(new SparseEncoding()))) {
+                     List.of(new SparseEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of("v", data));
         }
@@ -987,7 +987,7 @@ class JavaWritesRustReadsIntegrationTest {
         boolean[] data = {true, false, true, true, false, false, true};
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, BOOL_SCHEMA, WriteOptions.defaults(),
-                     List.of(new BoolEncoding()))) {
+                     List.of(new BoolEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of("b", data));
         }
@@ -1006,7 +1006,7 @@ class JavaWritesRustReadsIntegrationTest {
         boolean[] data = {false, true, false, true, true};
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, BOOL_SCHEMA, WriteOptions.defaults(),
-                     List.of(new ByteBoolEncoding()))) {
+                     List.of(new ByteBoolEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of("b", data));
         }
@@ -1023,7 +1023,7 @@ class JavaWritesRustReadsIntegrationTest {
         long rowCount = 7L;
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, NULL_SCHEMA, WriteOptions.defaults(),
-                     List.of(new NullEncoding()))) {
+                     List.of(new NullEncodingEncoder()))) {
             // When — data is ignored by NullEncoding; pass long[] to satisfy arrayLength
             sut.writeChunk(Map.of("n", new long[(int) rowCount]));
         }
@@ -1040,7 +1040,7 @@ class JavaWritesRustReadsIntegrationTest {
         long[] data = {1L, 2L, 3L, 4L, 1000L, 9999L, Long.MAX_VALUE};
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.defaults(),
-                     List.of(new ZstdEncoding()))) {
+                     List.of(new ZstdEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of("ts", data));
         }
@@ -1057,7 +1057,7 @@ class JavaWritesRustReadsIntegrationTest {
         String[] data = {"hello", "world", "from", "zstd"};
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults(),
-                     List.of(new ZstdEncoding()))) {
+                     List.of(new ZstdEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of("s", data));
         }
@@ -1076,7 +1076,7 @@ class JavaWritesRustReadsIntegrationTest {
         ListData data = new ListData(elements, offsets, 4L);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, LIST_I64_SCHEMA, WriteOptions.defaults(),
-                     List.of(new ListEncoding()))) {
+                     List.of(new ListEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of("items", data));
         }
@@ -1096,7 +1096,7 @@ class JavaWritesRustReadsIntegrationTest {
         ListViewData data = new ListViewData(elements, offsets, sizes, 4L);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, LIST_I64_SCHEMA, WriteOptions.defaults(),
-                     List.of(new ListViewEncoding()))) {
+                     List.of(new ListViewEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of("items", data));
         }

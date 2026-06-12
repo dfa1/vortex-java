@@ -7,7 +7,7 @@ import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.UnknownArray;
-import io.github.dfa1.vortex.encoding.Registry;
+import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
@@ -82,7 +82,7 @@ class AllowUnknownIntegrationTest {
         var totalRows = new AtomicLong();
         var allUnknown = new AtomicBoolean(true);
         var chunkCount = new AtomicLong();
-        try (VortexReader vf = VortexReader.open(file, Registry.builder().allowUnknown().build());
+        try (VortexReader vf = VortexReader.open(file, ReadRegistry.builder().allowUnknown().build());
              var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.all())) {
             iter.forEachRemaining(c -> {
                 totalRows.addAndGet(c.rowCount());
@@ -109,7 +109,7 @@ class AllowUnknownIntegrationTest {
 
         // When / Then — strict mode throws rather than returning UnknownArray
         assertThatThrownBy(() -> {
-            try (VortexReader vf = VortexReader.open(file, Registry.empty());
+            try (VortexReader vf = VortexReader.open(file, ReadRegistry.empty());
                  var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.all())) {
                 iter.forEachRemaining(c -> {});
             }
@@ -126,7 +126,7 @@ class AllowUnknownIntegrationTest {
         var chunkCount = new AtomicLong();
         var anyUnknown = new AtomicBoolean(false);
         try (VortexReader vf = VortexReader.open(file,
-                Registry.builder().registerServiceLoaded().allowUnknown().build());
+                ReadRegistry.builder().registerServiceLoaded().allowUnknown().build());
              var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.all())) {
             iter.forEachRemaining(c -> {
                 chunkCount.incrementAndGet();

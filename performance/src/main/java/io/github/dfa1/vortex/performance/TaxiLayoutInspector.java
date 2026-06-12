@@ -8,7 +8,7 @@ import dev.hardwood.schema.ColumnSchema;
 import dev.vortex.api.Session;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
-import io.github.dfa1.vortex.encoding.Registry;
+import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.inspect.VortexInspector;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.parquet.ImportOptions;
@@ -140,7 +140,7 @@ public final class TaxiLayoutInspector {
     }
 
     private static void inspect(Path path) throws IOException {
-        try (VortexReader r = VortexReader.open(path, Registry.loadAll())) {
+        try (VortexReader r = VortexReader.open(path, ReadRegistry.loadAll())) {
             System.out.println(VortexInspector.inspect(r));
         }
     }

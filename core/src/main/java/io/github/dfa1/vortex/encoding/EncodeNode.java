@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.encoding;
 import java.nio.ByteBuffer;
 
 /// Describes the ArrayNode tree written into a flat segment's FlatBuffer.
-/// Mirrors [ArrayNode] for the encode path.
+/// Mirrors ArrayNode for the encode path.
 ///
 /// @param encodingId    encoding id for this node
 /// @param metadata      optional encoding-specific metadata bytes, or {@code null}

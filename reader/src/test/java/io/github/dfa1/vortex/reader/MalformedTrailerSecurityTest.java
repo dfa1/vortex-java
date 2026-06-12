@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.VortexFormat;
-import io.github.dfa1.vortex.encoding.Registry;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -31,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class MalformedTrailerSecurityTest {
 
-    private static final Registry REGISTRY = Registry.empty();
+    private static final ReadRegistry REGISTRY = ReadRegistry.empty();
 
     @Test
     void fileSmallerThanTrailer_throwsVortexException(@TempDir Path tmp) throws Exception {

@@ -1,0 +1,42 @@
+package io.github.dfa1.vortex.reader.decode;
+
+import io.github.dfa1.vortex.core.ArrayStats;
+import io.github.dfa1.vortex.encoding.EncodingId;
+
+import java.nio.ByteBuffer;
+
+/// Encoded array node as stored in a Flat layout segment.
+/// In-file representation before decoding; mirrors the Go ArrayNode struct.
+///
+/// Sealed: a node is either [KnownArrayNode] (id resolves to an [EncodingId]) or
+/// [UnknownArrayNode] (id is an arbitrary string only meaningful for
+/// {@link ReadRegistry#isAllowUnknown()} passthrough decode).
+public sealed interface ArrayNode permits KnownArrayNode, UnknownArrayNode {
+
+    /// Short factory for the common case: a node whose encoding id is well-known.
+    /// Mostly used by tests and helper code that converts an {@code EncodeNode} tree back into
+    /// an {@code ArrayNode} tree.
+    ///
+    /// @param encodingId   the well-known encoding identifier
+    /// @param metadata     encoding-specific metadata bytes, or {@code null}
+    /// @param children     child nodes
+    /// @param bufferIndices segment buffer indices for this node
+    /// @param stats        optional zone-map statistics
+    /// @return a {@link KnownArrayNode} with the given fields
+    static ArrayNode of(EncodingId encodingId, ByteBuffer metadata, ArrayNode[] children,
+            int[] bufferIndices, ArrayStats stats) {
+        return new KnownArrayNode(encodingId, metadata, children, bufferIndices, stats);
+    }
+
+    /// @return encoding-specific metadata bytes, or {@code null}
+    ByteBuffer metadata();
+
+    /// @return child nodes
+    ArrayNode[] children();
+
+    /// @return segment buffer indices for this node
+    int[] bufferIndices();
+
+    /// @return optional zone-map statistics
+    ArrayStats stats();
+}

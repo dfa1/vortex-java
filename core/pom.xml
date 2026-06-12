@@ -47,6 +47,25 @@
 		</dependency>
 	</dependencies>
 
+	<build>
+		<plugins>
+			<!-- Publish a test-jar so reader/ and writer/ tests can reuse core test
+			     helpers (DTypes, EncodeTestHelper) without duplication. -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-jar-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>publish-test-jar</id>
+						<goals>
+							<goal>test-jar</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+	</build>
+
 	<!--
 	  Generated sources (src/main/java/…/fbs and …/proto) are committed to the repo.
 	  Normal builds need no external tools.

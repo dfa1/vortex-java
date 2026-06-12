@@ -4,7 +4,7 @@ package io.github.dfa1.vortex.encoding;
 ///
 /// <p>{@code elements} is the flat array of inner values; its length must equal
 /// {@code outerLen * fixedSize}. The element type is determined by the DType passed to
-/// {@link FixedSizeListEncoding#encode}.
+/// {@code FixedSizeListEncodingEncoder.encode}.
 ///
 /// @param elements flat array of all inner values; length must equal {@code outerLen * fixedSize}
 /// @param outerLen number of outer list elements

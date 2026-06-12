@@ -4,9 +4,9 @@ import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.MemorySegment;
 
-/// Element-offset helper for child segments returned by [DecodeContext#decodeChildSegment].
+/// Element-offset helper for child segments returned by DecodeContext#decodeChildSegment.
 ///
-/// <p>{@link ConstantEncoding} deliberately stores a single element regardless of the array's
+/// <p>ConstantEncodingEncoder deliberately stores a single element regardless of the array's
 /// declared {@code rowCount} (zip-bomb defense). Consumers that bulk-read child segments by
 /// raw byte offset (e.g. {@code seg.get(LE_LONG, i * 8)} or
 /// {@code MemorySegment.copy(seg, i * elemBytes, ...)}) must replicate the lone element across
@@ -23,7 +23,7 @@ public final class SegmentBroadcast {
     /// Returns the byte offset of logical element {@code i} in {@code seg}, broadcasting if
     /// {@code seg} holds fewer elements than {@code i}.
     ///
-    /// @param seg       segment returned by [DecodeContext#decodeChildSegment]
+    /// @param seg       segment returned by DecodeContext#decodeChildSegment
     /// @param i         logical element index in {@code [0, rowCount)}
     /// @param elemBytes element width in bytes (>= 1)
     /// @return byte offset suitable for {@link MemorySegment#get} or
@@ -43,7 +43,7 @@ public final class SegmentBroadcast {
     /// <p>Used by callers that want to detect the constant case explicitly — e.g. to hoist
     /// a single read out of a hot loop.
     ///
-    /// @param seg       segment returned by [DecodeContext#decodeChildSegment]
+    /// @param seg       segment returned by DecodeContext#decodeChildSegment
     /// @param elemBytes element width in bytes (>= 1)
     /// @return physical element count
     public static long capacity(MemorySegment seg, int elemBytes) {
@@ -53,7 +53,7 @@ public final class SegmentBroadcast {
     /// Copies {@code count} elements from {@code src} to {@code dst}, broadcasting the lone
     /// element of {@code src} across {@code count} indices when {@code src} holds fewer
     /// elements than {@code count} (typically when {@code src} came from
-    /// {@link ConstantEncoding}).
+    /// ConstantEncodingEncoder).
     ///
     /// @param src       source segment (must hold ≥ 1 element)
     /// @param dst       destination segment (must hold ≥ {@code count * elemBytes} bytes)

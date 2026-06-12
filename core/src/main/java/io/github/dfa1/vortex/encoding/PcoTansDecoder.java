@@ -10,10 +10,10 @@ import java.nio.ByteOrder;
 ///
 /// Build via {@link #build(int, PcoBin[])}; then call {@link #decodePage} once per page.
 /// Port of {@code pco/src/ans/spec.rs} (spread) and {@code pco/src/ans/decoding.rs} (nodes).
-final class PcoTansDecoder {
+public final class PcoTansDecoder {
 
-    static final int BATCH_N = 256;
-    static final int ANS_INTERLEAVING = 4;
+    public static final int BATCH_N = 256;
+    public static final int ANS_INTERLEAVING = 4;
     private static final ValueLayout.OfLong LE_LONG =
             ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
     // All arrays indexed by state index in [0, tableSize).
@@ -33,7 +33,7 @@ final class PcoTansDecoder {
     /// Build the decode table from chunk latent-var metadata.
     ///
     /// Port of {@code Spec::from_weights} + {@code Decoder::new} from pcodec.
-    static PcoTansDecoder build(int ansSizeLog, PcoBin[] bins) {
+    public static PcoTansDecoder build(int ansSizeLog, PcoBin[] bins) {
         if (bins.length == 0) {
             // Degenerate: no bins → 1-state table, all offsets zero.
             return new PcoTansDecoder(new int[]{0}, new int[]{0}, new int[]{0}, new long[]{0L});
@@ -95,7 +95,7 @@ final class PcoTansDecoder {
     /// {@code ansStateIdxs} is modified in place and not valid after return.
     /// {@code batchLowers} and {@code batchOffsetBits} are caller-provided scratch arrays of
     /// length ≥ {@link #BATCH_N}; they are fully overwritten before use.
-    void decodePage(LeBitReader reader, int[] ansStateIdxs, int n,
+    public void decodePage(LeBitReader reader, int[] ansStateIdxs, int n,
             MemorySegment out, long outByteOffset,
             long[] batchLowers, int[] batchOffsetBits) {
         int remaining = n;
@@ -113,7 +113,7 @@ final class PcoTansDecoder {
     ///
     /// {@code batchLowers} and {@code batchOffsetBits} are caller-provided scratch arrays of
     /// length ≥ {@code batchN}; they are fully overwritten before use.
-    void decodeBatch(LeBitReader reader, int[] ansStateIdxs, int batchN,
+    public void decodeBatch(LeBitReader reader, int[] ansStateIdxs, int batchN,
             long[] batchLowers, int[] batchOffsetBits,
             MemorySegment out, long outByteOffset) {
         int tableSize = nextStateIdxBase.length;

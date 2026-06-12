@@ -116,7 +116,7 @@ class JdbcImporterTest {
 
             // Then — schema declares the three extension dtypes
             try (VortexReader reader = VortexReader.open(vortex,
-                    io.github.dfa1.vortex.encoding.Registry.loadAll())) {
+                    io.github.dfa1.vortex.reader.ReadRegistry.loadAll())) {
                 DType.Struct schema = (DType.Struct) reader.dtype();
                 assertThat(schema.fieldTypes().get(1))
                         .isEqualTo(io.github.dfa1.vortex.extension.DateExtension.INSTANCE.dtype(false));
@@ -175,7 +175,7 @@ class JdbcImporterTest {
             // Then — schema declares nullable=true on every ext column; data round-trips
             // with row 2 marked invalid in each MaskedArray
             try (VortexReader reader = VortexReader.open(vortex,
-                    io.github.dfa1.vortex.encoding.Registry.loadAll())) {
+                    io.github.dfa1.vortex.reader.ReadRegistry.loadAll())) {
                 DType.Struct schema = (DType.Struct) reader.dtype();
                 assertThat(((DType.Extension) schema.fieldTypes().get(1)).nullable()).isTrue();
                 assertThat(((DType.Extension) schema.fieldTypes().get(2)).nullable()).isTrue();
@@ -258,7 +258,7 @@ class JdbcImporterTest {
 
             // Then — column maps to vortex.uuid extension; values round-trip exactly
             try (VortexReader reader = VortexReader.open(vortex,
-                    io.github.dfa1.vortex.encoding.Registry.loadAll())) {
+                    io.github.dfa1.vortex.reader.ReadRegistry.loadAll())) {
                 DType.Struct schema = (DType.Struct) reader.dtype();
                 assertThat(schema.fieldTypes().get(1))
                         .isEqualTo(io.github.dfa1.vortex.extension.UuidExtension.INSTANCE.dtype(false));

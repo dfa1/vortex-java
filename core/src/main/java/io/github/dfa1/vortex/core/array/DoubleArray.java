@@ -65,8 +65,9 @@ public final class DoubleArray implements Array {
                 c.accept(buf.getAtIndex(PTypeIO.LE_DOUBLE, i));
             }
         } else {
+            long cap = elementCount;
             for (long i = 0; i < n; i++) {
-                c.accept(buf.getAtIndex(PTypeIO.LE_DOUBLE, i % elementCount));
+                c.accept(buf.getAtIndex(PTypeIO.LE_DOUBLE, i % cap));
             }
         }
     }
@@ -85,8 +86,9 @@ public final class DoubleArray implements Array {
                 result = op.applyAsDouble(result, buf.getAtIndex(PTypeIO.LE_DOUBLE, i));
             }
         } else {
+            long cap = elementCount;
             for (long i = 0; i < n; i++) {
-                result = op.applyAsDouble(result, buf.getAtIndex(PTypeIO.LE_DOUBLE, i % elementCount));
+                result = op.applyAsDouble(result, buf.getAtIndex(PTypeIO.LE_DOUBLE, i % cap));
             }
         }
         return result;

@@ -1,41 +1,18 @@
 package io.github.dfa1.vortex.extension;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.VortexException;
-
-import java.util.Collection;
 
 /// Contract for a Vortex extension type — pairs the wire-format identity
 /// (an [ExtensionId]) with a factory for the matching [DType.Extension]
-/// dtype. Behaviour-specific encode/decode methods live on each concrete
-/// implementation, not on this interface, so callers get typed return
-/// values without casting through {@code Object}.
-public interface Extension {
-
-    /// Returns the spec identity of this extension.
-    ///
-    /// @return canonical extension id
-    ExtensionId extensionId();
-
-    /// Returns the DType describing a column of this extension type.
-    ///
-    /// @param nullable whether the column allows nulls
-    /// @return matching [DType.Extension] (storage dtype + default metadata)
-    DType.Extension dtype(boolean nullable);
-
-    /// Polymorphic encode: converts a collection of domain values into the
-    /// raw storage-array shape the writer accepts ({@code int[]}, {@code long[]},
-    /// {@code byte[]}, ...). Used by the writer's auto-routing path. Concrete
-    /// impls cast {@code values} to their domain type and may consult
-    /// {@code dtype.metadata()} (e.g. {@code TimeUnit}).
-    ///
-    /// @param dtype  declared extension dtype (carries unit/timezone metadata)
-    /// @param values domain-typed values to encode
-    /// @return packed storage array
-    /// @throws VortexException by default; impls must override to support writes
-    default Object encodeAll(DType.Extension dtype, Collection<?> values) {
-        throw new VortexException("encode not supported for " + extensionId());
-    }
+/// dtype. Behaviour-specific decode methods live on each concrete
+/// implementation, not on this interface, so read callers get typed
+/// return values without casting through {@code Object}.
+///
+/// <p>Extends {@link ExtensionEncoder} so existing bifunctional implementations
+/// satisfy both contracts unchanged; ADR 0001 Phase 5 progressively peels the
+/// write-side {@code encodeAll} surface into standalone {@link ExtensionEncoder}
+/// implementations living in the writer module.
+public interface Extension extends ExtensionEncoder {
 
     /// Resolves a {@link DType.Extension} to its spec-defined singleton.
     /// Closes over the closed-set spec impls; third-party extensions go

@@ -10,7 +10,7 @@ import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.ArraySegments;
-import io.github.dfa1.vortex.encoding.Registry;
+import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.Chunk;
 import org.apache.arrow.c.ArrowArray;
@@ -95,12 +95,12 @@ public class RustWritesJavaReadsBigFileBenchmark {
 
     private Path benchFile;
     private boolean ownFile;
-    private Registry registry;
+    ReadRegistry registry;
     private BufferAllocator allocator;
 
     @Setup(Level.Trial)
     public void setup() throws IOException {
-        registry = Registry.loadAll();
+        registry = ReadRegistry.loadAll();
         allocator = ArrowAllocation.rootAllocator();
 
         String externalFile = System.getProperty("vortex.bench.bigfile");

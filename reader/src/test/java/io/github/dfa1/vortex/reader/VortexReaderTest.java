@@ -6,12 +6,10 @@ import io.github.dfa1.vortex.core.VortexFormat;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.EmptyArray;
 import io.github.dfa1.vortex.core.array.UnknownArray;
-import io.github.dfa1.vortex.encoding.DecodeContext;
-import io.github.dfa1.vortex.encoding.EncodeContext;
-import io.github.dfa1.vortex.encoding.EncodeResult;
-import io.github.dfa1.vortex.encoding.Encoding;
+import io.github.dfa1.vortex.reader.decode.DecodeContext;
+import io.github.dfa1.vortex.reader.decode.EncodingDecoder;
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.encoding.Registry;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -30,10 +28,10 @@ class VortexReaderTest {
 
     // --- trailer / magic validation ---
 
-    private static Registry buildUniversalStubRegistry() {
-        var b = Registry.builder();
+    private static ReadRegistry buildUniversalStubRegistry() {
+        var b = ReadRegistry.builder();
         for (EncodingId encodingId : EncodingId.values()) {
-            b.register(new Encoding() {
+            b.register(new EncodingDecoder() {
                 @Override
                 public EncodingId encodingId() {
                     return encodingId;
@@ -42,11 +40,6 @@ class VortexReaderTest {
                 @Override
                 public boolean accepts(DType dtype) {
                     return false;
-                }
-
-                @Override
-                public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
-                    throw new UnsupportedOperationException();
                 }
 
                 @Override
@@ -173,13 +166,13 @@ class VortexReaderTest {
         Path path = fixtureFile(name);
 
         // When / Then — layout traversal succeeds; decode fails only on missing decoder
-        try (var sut = VortexReader.open(path, Registry.empty());
+        try (var sut = VortexReader.open(path, ReadRegistry.empty());
              var iter = sut.scan(ScanOptions.all())) {
             // Decode now happens in next(), not hasNext() — hasNext() is side-effect-free.
             assertThat(iter.hasNext()).isTrue();
             assertThatThrownBy(iter::next)
                     .isInstanceOf(VortexException.class)
-                    .hasMessageContaining("no encoding registered");
+                    .hasMessageContaining("no decoder registered");
         }
     }
 
@@ -194,7 +187,7 @@ class VortexReaderTest {
     void scan_withNoDecoders_allowUnknown_returnsUnknownArray(String name) throws URISyntaxException, IOException {
         // Given — empty registry + allowUnknown: every leaf decodes to a passthrough UnknownArray
         Path path = fixtureFile(name);
-        var registry = Registry.builder().allowUnknown().build();
+        var registry = ReadRegistry.builder().allowUnknown().build();
 
         // When
         try (var sut = VortexReader.open(path, registry);

@@ -4,9 +4,8 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.ArraySegments;
-import io.github.dfa1.vortex.encoding.DictEncoding;
-import io.github.dfa1.vortex.encoding.Registry;
-import io.github.dfa1.vortex.encoding.PrimitiveEncoding;
+import io.github.dfa1.vortex.writer.encode.DictEncodingEncoder;
+import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ScanOptions;
@@ -33,10 +32,10 @@ class DictEncodingTest {
             List.of(new DType.Primitive(PType.I32, false)),
             false);
 
-    private static Registry dictRegistry() {
-        return Registry.builder()
-                .register(new DictEncoding())
-                .register(new PrimitiveEncoding())
+    private static ReadRegistry dictRegistry() {
+        return ReadRegistry.builder()
+                .register(new io.github.dfa1.vortex.reader.decode.DictEncodingDecoder())
+                .register(new io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder())
                 .build();
     }
 
@@ -48,7 +47,7 @@ class DictEncodingTest {
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults(),
-                     List.of(new DictEncoding()))) {
+                     List.of(new DictEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of("category", data));
         }
@@ -69,7 +68,7 @@ class DictEncodingTest {
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults(),
-                     List.of(new DictEncoding()))) {
+                     List.of(new DictEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of("category", data));
         }
@@ -89,7 +88,7 @@ class DictEncodingTest {
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults(),
-                     List.of(new DictEncoding()))) {
+                     List.of(new DictEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of("category", chunk1));
             sut.writeChunk(Map.of("category", chunk2));

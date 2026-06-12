@@ -9,20 +9,26 @@ import java.lang.foreign.ValueLayout;
 ///
 /// Bits are packed LSB-first within each byte (pcodec wire format convention).
 /// Bit 0 of the stream is the LSB of byte 0; bit 8 is the LSB of byte 1.
-final class LeBitReader {
+public final class LeBitReader {
 
     private static final ValueLayout.OfByte BYTE = ValueLayout.JAVA_BYTE;
 
     private final MemorySegment data;
     private long bitPos;
 
-    LeBitReader(MemorySegment data) {
+    /// Wrap {@code data} for LSB-first sequential reads from bit position 0.
+    ///
+    /// @param data backing segment
+    public LeBitReader(MemorySegment data) {
         this.data = data;
         this.bitPos = 0;
     }
 
     /// Read {@code n} bits (0 ≤ n ≤ 64) from the stream, LSB-first.
-    long readBits(int n) {
+    ///
+    /// @param n bit count, 0..64 inclusive
+    /// @return value with low {@code n} bits set from the stream
+    public long readBits(int n) {
         if (n == 0) {
             return 0L;
         }
@@ -49,7 +55,7 @@ final class LeBitReader {
     }
 
     /// Discard bits to align the stream to the next byte boundary.
-    void alignToByte() {
+    public void alignToByte() {
         int bitsInCurrentByte = (int) (bitPos & 7);
         if (bitsInCurrentByte != 0) {
             bitPos += 8 - bitsInCurrentByte;
@@ -57,11 +63,14 @@ final class LeBitReader {
     }
 
     /// Current byte offset (only meaningful after {@link #alignToByte()}).
-    long byteOffset() {
+    ///
+    /// @return current stream position in bytes
+    public long byteOffset() {
         return bitPos >>> 3;
     }
 
-    long bitsConsumed() {
+    /// @return total bits consumed since construction
+    public long bitsConsumed() {
         return bitPos;
     }
 }

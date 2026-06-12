@@ -4,12 +4,14 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 
 /// Static factories for LE-encoded MemorySegments used in encoding tests.
-final class TestSegments {
+///
+/// Public so reader/ and writer/ test trees can reuse via the core test-jar.
+public final class TestSegments {
 
     private TestSegments() {
     }
 
-    static MemorySegment leLongs(long... values) {
+    public static MemorySegment leLongs(long... values) {
         MemorySegment seg = Arena.ofAuto().allocate((long) values.length * Long.BYTES);
         for (int i = 0; i < values.length; i++) {
             seg.setAtIndex(PTypeIO.LE_LONG, i, values[i]);
@@ -17,7 +19,7 @@ final class TestSegments {
         return seg;
     }
 
-    static MemorySegment leInts(int... values) {
+    public static MemorySegment leInts(int... values) {
         MemorySegment seg = Arena.ofAuto().allocate((long) values.length * Integer.BYTES);
         for (int i = 0; i < values.length; i++) {
             seg.setAtIndex(PTypeIO.LE_INT, i, values[i]);
@@ -25,7 +27,7 @@ final class TestSegments {
         return seg;
     }
 
-    static MemorySegment leDoubles(double... values) {
+    public static MemorySegment leDoubles(double... values) {
         MemorySegment seg = Arena.ofAuto().allocate((long) values.length * Double.BYTES);
         for (int i = 0; i < values.length; i++) {
             seg.setAtIndex(PTypeIO.LE_DOUBLE, i, values[i]);
@@ -33,7 +35,7 @@ final class TestSegments {
         return seg;
     }
 
-    static MemorySegment leFloats(float... values) {
+    public static MemorySegment leFloats(float... values) {
         MemorySegment seg = Arena.ofAuto().allocate((long) values.length * Float.BYTES);
         for (int i = 0; i < values.length; i++) {
             seg.setAtIndex(PTypeIO.LE_FLOAT, i, values[i]);
@@ -41,7 +43,7 @@ final class TestSegments {
         return seg;
     }
 
-    static MemorySegment leShorts(short... values) {
+    public static MemorySegment leShorts(short... values) {
         MemorySegment seg = Arena.ofAuto().allocate((long) values.length * Short.BYTES);
         for (int i = 0; i < values.length; i++) {
             seg.setAtIndex(PTypeIO.LE_SHORT, i, values[i]);

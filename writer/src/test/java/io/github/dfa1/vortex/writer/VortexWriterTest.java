@@ -5,9 +5,7 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.ArraySegments;
 import io.github.dfa1.vortex.core.array.LongArray;
-import io.github.dfa1.vortex.encoding.AlpEncoding;
-import io.github.dfa1.vortex.encoding.Registry;
-import io.github.dfa1.vortex.encoding.PrimitiveEncoding;
+import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ScanOptions;
@@ -50,10 +48,10 @@ class VortexWriterTest {
         return snapshots;
     }
 
-    private static Registry primitiveRegistry() {
-        return Registry.builder()
-                .register(new AlpEncoding())
-                .register(new PrimitiveEncoding())
+    private static ReadRegistry primitiveRegistry() {
+        return ReadRegistry.builder()
+                .register(new io.github.dfa1.vortex.reader.decode.AlpEncodingDecoder())
+                .register(new io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder())
                 .build();
     }
 
@@ -81,8 +79,8 @@ class VortexWriterTest {
         }
 
         // Then — read back through DateExtension.decodeAll and assert end-to-end equality.
-        // Registry.loadAll() picks up PrimitiveEncoding (storage) plus DateExtension.
-        try (var vf = VortexReader.open(file, Registry.loadAll());
+        // ReadRegistry.loadAll() picks up PrimitiveEncoding (storage) plus DateExtension.
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
              var iter = vf.scan(ScanOptions.all())) {
             assertThat(iter.hasNext()).isTrue();
             try (Chunk chunk = iter.next()) {
@@ -113,7 +111,7 @@ class VortexWriterTest {
         }
 
         // Then
-        try (var vf = VortexReader.open(file, Registry.loadAll());
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
              var iter = vf.scan(ScanOptions.all())) {
             assertThat(iter.hasNext()).isTrue();
             try (Chunk chunk = iter.next()) {
@@ -142,7 +140,7 @@ class VortexWriterTest {
         }
 
         // Then
-        try (var vf = VortexReader.open(file, Registry.loadAll());
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
              var iter = vf.scan(ScanOptions.all())) {
             assertThat(iter.hasNext()).isTrue();
             try (Chunk chunk = iter.next()) {
@@ -166,7 +164,7 @@ class VortexWriterTest {
                     List.of(java.time.LocalDate.of(2026, 6, 10))));
         }
 
-        try (var vf = VortexReader.open(file, Registry.loadAll());
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
              var iter = vf.scan(ScanOptions.all())) {
             try (Chunk chunk = iter.next()) {
                 // When / Then — the accessor must fail-fast, not return a wrongly-cast list
@@ -195,7 +193,7 @@ class VortexWriterTest {
         }
 
         // Then
-        try (var vf = VortexReader.open(file, Registry.loadAll());
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
              var iter = vf.scan(ScanOptions.all())) {
             assertThat(iter.hasNext()).isTrue();
             try (Chunk chunk = iter.next()) {
@@ -233,7 +231,7 @@ class VortexWriterTest {
                 .isLessThan(flatSize);
 
         // And — cascaded file still round-trips back to the same Instants
-        try (var vf = VortexReader.open(cascadedFile, Registry.loadAll());
+        try (var vf = VortexReader.open(cascadedFile, ReadRegistry.loadAll());
              var iter = vf.scan(ScanOptions.all())) {
             try (Chunk chunk = iter.next()) {
                 assertThat(chunk.as("events", java.time.Instant.class))

@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.integration;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.Layout;
 import io.github.dfa1.vortex.core.SegmentSpec;
-import io.github.dfa1.vortex.encoding.Registry;
+import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.fbs.Array;
 import io.github.dfa1.vortex.fbs.ArrayNode;
 import io.github.dfa1.vortex.fbs.Buffer;
@@ -45,7 +45,7 @@ class PcoFixtureInspectionIntegrationTest {
     };
 
     private static void inspect(Path file, StringBuilder out) throws Exception {
-        try (VortexReader vf = VortexReader.open(file, Registry.empty())) {
+        try (VortexReader vf = VortexReader.open(file, ReadRegistry.empty())) {
             out.append("dtype: ").append(formatDType(vf.dtype())).append('\n');
             out.append("size: ").append(vf.fileSize()).append(" bytes\n");
 
