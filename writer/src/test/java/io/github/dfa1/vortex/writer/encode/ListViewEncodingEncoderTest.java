@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.core.ArrayStats;
+import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.ListViewArray;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;

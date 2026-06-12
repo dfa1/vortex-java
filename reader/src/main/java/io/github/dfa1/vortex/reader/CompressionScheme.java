@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.core;
+package io.github.dfa1.vortex.reader;
 
 /// Block-level compression scheme applied to flat segments in the Vortex file format.
 public enum CompressionScheme {

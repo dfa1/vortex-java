@@ -1,8 +1,8 @@
 package io.github.dfa1.vortex.integration;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.Layout;
-import io.github.dfa1.vortex.core.SegmentSpec;
+import io.github.dfa1.vortex.reader.Layout;
+import io.github.dfa1.vortex.reader.SegmentSpec;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.fbs.Array;
 import io.github.dfa1.vortex.fbs.ArrayNode;

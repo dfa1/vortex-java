@@ -1,5 +1,6 @@
-package io.github.dfa1.vortex.core;
+package io.github.dfa1.vortex.reader;
 
+import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.proto.ScalarValue;
 
 import java.io.IOException;

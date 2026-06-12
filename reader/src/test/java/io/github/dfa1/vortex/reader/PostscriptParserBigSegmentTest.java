@@ -1,8 +1,6 @@
 package io.github.dfa1.vortex.reader;
 
 import com.google.flatbuffers.FlatBufferBuilder;
-import io.github.dfa1.vortex.core.Footer;
-import io.github.dfa1.vortex.core.SegmentSpec;
 import io.github.dfa1.vortex.fbs.ArraySpec;
 import io.github.dfa1.vortex.fbs.LayoutSpec;
 import org.junit.jupiter.api.Test;

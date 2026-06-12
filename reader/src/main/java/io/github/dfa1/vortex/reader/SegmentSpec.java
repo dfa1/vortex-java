@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.core;
+package io.github.dfa1.vortex.reader;
 
 /// Byte range and properties of one data segment in the file.
 ///

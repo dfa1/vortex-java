@@ -1,10 +1,6 @@
 package io.github.dfa1.vortex.reader;
 
-import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.Footer;
-import io.github.dfa1.vortex.core.Layout;
-import io.github.dfa1.vortex.core.SegmentSpec;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.VortexFormat;
 
@@ -234,7 +230,7 @@ public final class VortexReader implements VortexHandle {
 
     @Override
     public io.github.dfa1.vortex.reader.array.Array decodeFlatSegment(
-            io.github.dfa1.vortex.core.SegmentSpec spec,
+            io.github.dfa1.vortex.reader.SegmentSpec spec,
             DType dtype, long rowCount,
             java.lang.foreign.SegmentAllocator arena
     ) {

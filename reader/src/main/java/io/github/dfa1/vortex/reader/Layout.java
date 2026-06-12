@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.core;
+package io.github.dfa1.vortex.reader;
 
 import java.nio.ByteBuffer;
 import java.util.List;
