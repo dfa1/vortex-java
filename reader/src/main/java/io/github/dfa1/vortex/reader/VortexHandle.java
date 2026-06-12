@@ -3,10 +3,12 @@ package io.github.dfa1.vortex.reader;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.Footer;
 import io.github.dfa1.vortex.core.Layout;
-import io.github.dfa1.vortex.encoding.Registry;
+import io.github.dfa1.vortex.core.SegmentSpec;
+import io.github.dfa1.vortex.core.array.Array;
 
 import java.io.Closeable;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 
 /// Common interface for handles to a Vortex file, regardless of storage backend.
 ///
@@ -22,6 +24,17 @@ public interface VortexHandle extends Closeable {
     int version();
 
     long fileSize();
+
+    /// Typed accessor for the common pattern "slice a flat segment by its {@link SegmentSpec}
+    /// and decode the encoded array contained therein." Replaces the raw {@link #slice}
+    /// escape hatch for read-side consumers (scan, inspector, TUI).
+    ///
+    /// @param spec     the segment spec to read from
+    /// @param dtype    logical type of the decoded array
+    /// @param rowCount number of logical rows in the segment
+    /// @param arena    allocator for decode output; lifetime matches the caller's chunk epoch
+    /// @return the decoded array
+    Array decodeFlatSegment(SegmentSpec spec, DType dtype, long rowCount, SegmentAllocator arena);
 
     /// Returns a read-only view of bytes `[offset, offset+length)` within the file.
     /// Writes through the returned segment throw `UnsupportedOperationException`.
@@ -43,7 +56,7 @@ public interface VortexHandle extends Closeable {
 
     ScanIterator scan(ScanOptions options);
 
-    /// Returns the {@link Registry} this handle was opened with.
+    /// Returns the {@link ReadRegistry} this handle was opened with.
     ///
     /// <p><strong>Internal escape hatch.</strong> Exposed for tooling
     /// (e.g. the inspector's dictionary preview) that needs to decode an
@@ -52,7 +65,7 @@ public interface VortexHandle extends Closeable {
     /// without deprecation.
     ///
     /// @return the registry used to resolve encoding ids during scan
-    Registry registry();
+    ReadRegistry registry();
 
     @Override
     void close();

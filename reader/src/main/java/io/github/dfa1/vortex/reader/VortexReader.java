@@ -7,7 +7,6 @@ import io.github.dfa1.vortex.core.Layout;
 import io.github.dfa1.vortex.core.SegmentSpec;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.VortexFormat;
-import io.github.dfa1.vortex.encoding.Registry;
 
 import java.io.IOException;
 import java.lang.foreign.Arena;
@@ -38,12 +37,12 @@ public final class VortexReader implements VortexHandle {
     private final Footer footer;
     private final DType dtype;
     private final Layout layout;
-    private final Registry registry;
+    private final ReadRegistry registry;
 
     private VortexReader(
             Arena arena, MemorySegment fileSegment, long fileSize,
             int version, Footer footer, DType dtype, Layout layout,
-            Registry registry
+            ReadRegistry registry
     ) {
         this.arena = arena;
         this.fileSegment = fileSegment;
@@ -58,10 +57,10 @@ public final class VortexReader implements VortexHandle {
     /// Open a Vortex file. Memory-maps the entire file; all subsequent reads
     /// are zero-copy slices. Call [#close()] when done.
     public static VortexReader open(Path path) throws IOException {
-        return open(path, Registry.loadAll());
+        return open(path, ReadRegistry.loadAll());
     }
 
-    public static VortexReader open(Path path, Registry registry) throws IOException {
+    public static VortexReader open(Path path, ReadRegistry registry) throws IOException {
         Arena arena = Arena.ofConfined();
         try (var channel = FileChannel.open(path, StandardOpenOption.READ)) {
             long size = channel.size();
@@ -80,7 +79,7 @@ public final class VortexReader implements VortexHandle {
     }
 
     private static VortexReader parse(
-            MemorySegment seg, long size, Arena arena, Registry registry
+            MemorySegment seg, long size, Arena arena, ReadRegistry registry
     ) {
         long bodyBytes = size - VortexFormat.TRAILER_SIZE;
         var trailerSeg = seg.asSlice(bodyBytes, VortexFormat.TRAILER_SIZE);
@@ -162,7 +161,7 @@ public final class VortexReader implements VortexHandle {
     }
 
     @Override
-    public Registry registry() {
+    public ReadRegistry registry() {
         return registry;
     }
 
@@ -231,6 +230,17 @@ public final class VortexReader implements VortexHandle {
             return ArrayStats.empty();
         }
         return ArrayStats.fromFbs(root.stats());
+    }
+
+    @Override
+    public io.github.dfa1.vortex.core.array.Array decodeFlatSegment(
+            io.github.dfa1.vortex.core.SegmentSpec spec,
+            DType dtype, long rowCount,
+            java.lang.foreign.SegmentAllocator arena
+    ) {
+        MemorySegment seg = fileSegment.asSlice(spec.offset(), spec.length()).asReadOnly();
+        return new FlatSegmentDecoder(registry)
+                .decode(seg, footer.arraySpecs(), dtype, rowCount, arena);
     }
 
     /// Zero-copy read-only slice of the memory-mapped file.

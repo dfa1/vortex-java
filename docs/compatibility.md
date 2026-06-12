@@ -3,6 +3,33 @@
 Tested against the [Rust reference implementation](https://github.com/vortex-data/vortex) v0.74.0.
 For the rest of the API surface (reader, writer, scan, CLI), see [reference.md](reference.md).
 
+## Read-only deployment
+
+The reader and inspector modules carry no transitive dependency on the writer module.
+A consumer that only needs to read Vortex files can depend on a strict subset:
+
+```xml
+<dependency>
+  <groupId>io.github.dfa1.vortex</groupId>
+  <artifactId>vortex-reader</artifactId>
+  <version>0.6.0</version>
+</dependency>
+
+<!-- optional: inspector for layout-tree introspection -->
+<dependency>
+  <groupId>io.github.dfa1.vortex</groupId>
+  <artifactId>vortex-inspector</artifactId>
+  <version>0.6.0</version>
+</dependency>
+```
+
+`./mvnw -pl core,reader,inspector verify` builds the read-only artifact set
+without the writer module on the classpath. None of the writer-side encoder
+implementations are loaded; `ServiceLoader<EncodingDecoder>` resolves only the
+standalone decoders in `reader`, falling back to the bifunctional `Encoding`
+implementations in `core` for encoding families not yet lifted (ADR 0001
+Phases 2–3).
+
 ## Known wire-format gaps
 
 | Item | Introduced | Java status |

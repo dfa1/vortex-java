@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.integration;
 
 
-import io.github.dfa1.vortex.encoding.Registry;
+import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.inspect.VortexInspector;
 import io.github.dfa1.vortex.reader.VortexReader;
 import org.junit.jupiter.api.Disabled;
@@ -14,7 +14,7 @@ class InspectForTest {
     @Test
     void inspect() throws Exception {
         for (String f : new String[]{"/tmp/for.vortex", "/tmp/rle.vortex"}) {
-            try (VortexReader r = VortexReader.open(Path.of(f), Registry.loadAll())) {
+            try (VortexReader r = VortexReader.open(Path.of(f), ReadRegistry.loadAll())) {
                 System.out.println("=== " + f + " ===");
                 System.out.println(VortexInspector.inspect(r));
                 try (var iter = r.scan(io.github.dfa1.vortex.reader.ScanOptions.all())) {

@@ -1,0 +1,99 @@
+package io.github.dfa1.vortex.writer.encode;
+
+import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.ArraySegments;
+import io.github.dfa1.vortex.reader.decode.DecodeContext;
+import io.github.dfa1.vortex.encoding.EncodeResult;
+import io.github.dfa1.vortex.encoding.EncodeTestHelper;
+import io.github.dfa1.vortex.reader.decode.DecodeTestHelper;
+import io.github.dfa1.vortex.encoding.PTypeIO;
+import io.github.dfa1.vortex.reader.ReadRegistry;
+import io.github.dfa1.vortex.reader.decode.TestRegistry;
+import io.github.dfa1.vortex.encoding.TestSegments;
+import io.github.dfa1.vortex.proto.DecimalMetadata;
+import io.github.dfa1.vortex.reader.decode.DecimalEncodingDecoder;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+class DecimalEncodingEncoderTest {
+
+    private static final DecimalEncodingEncoder ENCODER = new DecimalEncodingEncoder();
+    private static final DecimalEncodingDecoder DECODER = new DecimalEncodingDecoder();
+    private static final ReadRegistry REGISTRY = TestRegistry.ofDecoders(DECODER);
+
+    @Test
+    void roundTrip_i64Precision_preservesBuffer() {
+        long[] values = {100L, -200L, 300L};
+        MemorySegment input = TestSegments.leLongs(values);
+        DType dtype = new DType.Decimal((byte) 18, (byte) 2, false);
+
+        EncodeResult encoded = ENCODER.encode(dtype, input, EncodeTestHelper.testCtx());
+        DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, values.length, dtype, REGISTRY);
+        Array result = DECODER.decode(ctx);
+
+        assertThat(result.length()).isEqualTo(values.length);
+        for (int i = 0; i < values.length; i++) {
+            assertThat(ArraySegments.of(result).get(PTypeIO.LE_LONG, (long) i * 8)).isEqualTo(values[i]);
+        }
+    }
+
+    @Test
+    void accepts_decimalDtype_true_primitiveReturnsFalse() {
+        assertThat(ENCODER.accepts(new DType.Decimal((byte) 18, (byte) 2, false))).isTrue();
+        assertThat(ENCODER.accepts(new DType.Primitive(PType.I64, false))).isFalse();
+    }
+
+    @ParameterizedTest(name = "precision={0} → valuesType={1}")
+    @CsvSource({
+            "1,  0",
+            "2,  0",
+            "3,  1",
+            "4,  1",
+            "5,  2",
+            "9,  2",
+            "10, 3",
+            "18, 3",
+            "19, 4",
+            "38, 4",
+            "39, 5",
+    })
+    void valuesType_matchesPrecisionBoundaries(int precision, int expectedValuesType) throws Exception {
+        int byteWidth = switch (expectedValuesType) {
+            case 0 -> 1;
+            case 1 -> 2;
+            case 2 -> 4;
+            case 3 -> 8;
+            case 4 -> 16;
+            default -> 32;
+        };
+        MemorySegment input = Arena.ofAuto().allocate(byteWidth);
+        DType dtype = new DType.Decimal((byte) precision, (byte) 0, false);
+
+        EncodeResult encoded = ENCODER.encode(dtype, input, EncodeTestHelper.testCtx());
+
+        byte[] metaBytes = new byte[encoded.rootNode().metadata().remaining()];
+        encoded.rootNode().metadata().duplicate().get(metaBytes);
+        DecimalMetadata meta = DecimalMetadata.decode(java.lang.foreign.MemorySegment.ofArray(metaBytes), 0, metaBytes.length);
+        assertThat(meta.values_type()).isEqualTo(expectedValuesType);
+    }
+
+    @Test
+    void invalidBufferSize_throws() {
+        MemorySegment input = Arena.ofAuto().allocate(7);
+        DType dtype = new DType.Decimal((byte) 18, (byte) 0, false);
+
+        assertThatThrownBy(() -> ENCODER.encode(dtype, input, EncodeTestHelper.testCtx()))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("not multiple of byteWidth");
+    }
+}

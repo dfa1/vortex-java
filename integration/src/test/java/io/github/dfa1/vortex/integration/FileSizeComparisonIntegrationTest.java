@@ -6,7 +6,7 @@ import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.LongArray;
-import io.github.dfa1.vortex.encoding.Registry;
+import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
@@ -201,7 +201,7 @@ class FileSizeComparisonIntegrationTest {
 
         // Then — Java file is readable with correct row count
         var totalRows = new java.util.concurrent.atomic.AtomicLong();
-        try (VortexReader reader = VortexReader.open(javaFile, Registry.loadAll());
+        try (VortexReader reader = VortexReader.open(javaFile, ReadRegistry.loadAll());
              var iter = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("volume"))) {
             iter.forEachRemaining(c -> totalRows.addAndGet(c.<LongArray>column("volume").length()));
         }
@@ -231,7 +231,7 @@ class FileSizeComparisonIntegrationTest {
 
         // Then — Zstd file is readable with correct row count
         var totalRows = new java.util.concurrent.atomic.AtomicLong();
-        try (VortexReader reader = VortexReader.open(withZstd, Registry.loadAll());
+        try (VortexReader reader = VortexReader.open(withZstd, ReadRegistry.loadAll());
              var iter = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("volume"))) {
             iter.forEachRemaining(c -> totalRows.addAndGet(c.<LongArray>column("volume").length()));
         }
@@ -303,7 +303,7 @@ class FileSizeComparisonIntegrationTest {
 
         // Then — Java file is readable and row count matches
         var totalRows = new java.util.concurrent.atomic.AtomicLong();
-        try (VortexReader reader = VortexReader.open(javaFile, Registry.loadAll());
+        try (VortexReader reader = VortexReader.open(javaFile, ReadRegistry.loadAll());
              var iter = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("s"))) {
             iter.forEachRemaining(c -> totalRows.addAndGet(c.column("s").length()));
         }

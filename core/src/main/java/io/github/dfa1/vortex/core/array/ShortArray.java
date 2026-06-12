@@ -74,8 +74,9 @@ public final class ShortArray implements Array {
                 result = op.applyAsLong(result, buf.getAtIndex(PTypeIO.LE_SHORT, i));
             }
         } else {
+            long cap = elementCount;
             for (long i = 0; i < n; i++) {
-                result = op.applyAsLong(result, buf.getAtIndex(PTypeIO.LE_SHORT, i % elementCount));
+                result = op.applyAsLong(result, buf.getAtIndex(PTypeIO.LE_SHORT, i % cap));
             }
         }
         return result;

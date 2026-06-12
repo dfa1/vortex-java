@@ -4,30 +4,32 @@ import com.google.flatbuffers.FlatBufferBuilder;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexFormat;
-import io.github.dfa1.vortex.encoding.AlpEncoding;
-import io.github.dfa1.vortex.encoding.BitpackedEncoding;
-import io.github.dfa1.vortex.encoding.BoolEncoding;
-import io.github.dfa1.vortex.encoding.CascadingCompressor;
-import io.github.dfa1.vortex.encoding.ConstantEncoding;
 import io.github.dfa1.vortex.encoding.DateTimePartsData;
-import io.github.dfa1.vortex.encoding.DateTimePartsEncoding;
-import io.github.dfa1.vortex.encoding.DictEncoding;
 import io.github.dfa1.vortex.encoding.EncodeContext;
 import io.github.dfa1.vortex.encoding.EncodeNode;
 import io.github.dfa1.vortex.encoding.EncodeResult;
-import io.github.dfa1.vortex.encoding.Encoding;
+import io.github.dfa1.vortex.encoding.EncodingEncoder;
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.encoding.ExtEncoding;
-import io.github.dfa1.vortex.encoding.FixedSizeListEncoding;
-import io.github.dfa1.vortex.encoding.Registry;
-import io.github.dfa1.vortex.encoding.FrameOfReferenceEncoding;
 import io.github.dfa1.vortex.encoding.ListData;
 import io.github.dfa1.vortex.encoding.ListViewData;
-import io.github.dfa1.vortex.encoding.PrimitiveEncoding;
-import io.github.dfa1.vortex.encoding.RleEncoding;
-import io.github.dfa1.vortex.encoding.RunEndEncoding;
-import io.github.dfa1.vortex.encoding.VarBinEncoding;
-import io.github.dfa1.vortex.encoding.ZstdEncoding;
+import io.github.dfa1.vortex.encoding.Registry;
+import io.github.dfa1.vortex.writer.encode.AlpEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.BitpackedEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.BoolEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.CascadingCompressor;
+import io.github.dfa1.vortex.writer.encode.ConstantEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.DateTimePartsEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.DictEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.ExtEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.FixedSizeListEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.FrameOfReferenceEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.FsstEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.MaskedEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.PrimitiveEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.RleEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.RunEndEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.VarBinEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.ZstdEncodingEncoder;
 import io.github.dfa1.vortex.fbs.ArraySpec;
 import io.github.dfa1.vortex.fbs.Extension;
 import io.github.dfa1.vortex.fbs.Footer;
@@ -77,10 +79,10 @@ public final class VortexWriter implements Closeable {
     // Kept low: global dict hurts high-cardinality F64 columns (ALP codes beat U16 dict codes).
     private static final int GLOBAL_DICT_MAX_CARDINALITY = 2_048;
 
-    private static final List<Encoding> DEFAULT_CODECS = List.of(
-            new AlpEncoding(), new PrimitiveEncoding(), new BoolEncoding(), new DictEncoding(),
-            new VarBinEncoding(), new ExtEncoding(),
-            new io.github.dfa1.vortex.encoding.FixedSizeListEncoding());
+    private static final List<EncodingEncoder> DEFAULT_CODECS = List.of(
+            new AlpEncodingEncoder(), new PrimitiveEncodingEncoder(), new BoolEncodingEncoder(),
+            new DictEncodingEncoder(), new VarBinEncodingEncoder(), new ExtEncodingEncoder(),
+            new FixedSizeListEncodingEncoder());
 
     // Base cascade codec list — no Zstd. Zstd is appended (before PrimitiveEncoding) when
     // WriteOptions.enableZstd() is true. See WriteOptions.withZstd(boolean) for the tradeoff.
@@ -88,10 +90,11 @@ public final class VortexWriter implements Closeable {
     private final WritableByteChannel channel;
     private final DType.Struct schema;
     private final WriteOptions options;
-    private final List<Encoding> encodings;
-    private final Registry defaultRegistry;
-    private final List<Encoding> cascadeCodecs;
-    private final Registry cascadeRegistry;
+    private final List<EncodingEncoder> encodings;
+    private final Map<EncodingId, EncodingEncoder> defaultEncoders;
+    private final Registry extensionRegistry;
+    private final List<EncodingEncoder> cascadeCodecs;
+    private final Map<EncodingId, EncodingEncoder> cascadeEncoders;
     private final List<SegRef> segs = new ArrayList<>();
     private final Map<String, List<ChunkRef>> colChunks = new LinkedHashMap<>();
     private final Map<EncodingId, Integer> encodingIdx = new LinkedHashMap<>();
@@ -105,30 +108,34 @@ public final class VortexWriter implements Closeable {
     private boolean firstChunkSeen = false;
 
     private VortexWriter(
-            WritableByteChannel channel, DType.Struct schema, WriteOptions options, List<Encoding> encodings
+            WritableByteChannel channel, DType.Struct schema, WriteOptions options, List<EncodingEncoder> encodings
     ) {
         this.channel = channel;
         this.schema = schema;
         this.options = options;
         this.encodings = encodings;
-        this.defaultRegistry = buildWriterRegistry(encodings);
+        this.defaultEncoders = buildEncoderMap(encodings);
+        this.extensionRegistry = buildExtensionRegistry();
         this.cascadeCodecs = buildCascadeCodecs(options);
-        this.cascadeRegistry = buildWriterRegistry(this.cascadeCodecs);
+        this.cascadeEncoders = buildEncoderMap(this.cascadeCodecs);
         for (String name : schema.fieldNames()) {
             colChunks.put(name, new ArrayList<>());
         }
     }
 
-    /// Builds the writer's registry: the explicit encoding list plus every
-    /// {@link io.github.dfa1.vortex.extension.Extension} discovered via ServiceLoader,
-    /// so {@code writeChunk} can auto-route {@code Collection<DomainT>} inputs through
-    /// the matching extension impl — including third-party extensions outside
-    /// {@link io.github.dfa1.vortex.extension.Extension#findKnown}.
-    private static Registry buildWriterRegistry(List<Encoding> encodings) {
-        Registry.Builder b = Registry.builder();
-        for (Encoding e : encodings) {
-            b.register(e);
+    /// Builds the encoder map from the given encoder list.
+    private static Map<EncodingId, EncodingEncoder> buildEncoderMap(List<EncodingEncoder> encoders) {
+        Map<EncodingId, EncodingEncoder> map = new java.util.HashMap<>();
+        for (EncodingEncoder e : encoders) {
+            map.put(e.encodingId(), e);
         }
+        return Map.copyOf(map);
+    }
+
+    /// Builds a registry containing only service-loaded extensions, so {@code writeChunk}
+    /// can auto-route {@code Collection<DomainT>} inputs through the matching extension impl.
+    private static Registry buildExtensionRegistry() {
+        Registry.Builder b = Registry.builder();
         for (io.github.dfa1.vortex.extension.Extension ext :
                 java.util.ServiceLoader.load(io.github.dfa1.vortex.extension.Extension.class)) {
             b.register(ext);
@@ -136,8 +143,8 @@ public final class VortexWriter implements Closeable {
         return b.build();
     }
 
-    private static List<Encoding> buildCascadeCodecs(WriteOptions options) {
-        List<Encoding> codecs = new ArrayList<>();
+    private static List<EncodingEncoder> buildCascadeCodecs(WriteOptions options) {
+        List<EncodingEncoder> codecs = new ArrayList<>();
         // Extension-dtype dispatch order matters: findPrimitiveEncoding picks the first
         // accepting codec. DateTimePartsEncoding goes first because it consumes
         // pre-decomposed DateTimePartsData (Parquet importer path); when the data is
@@ -146,39 +153,52 @@ public final class VortexWriter implements Closeable {
         // ExtEncoding which cascades the storage child through FoR/Bitpacked/RLE/ALP.
         // FixedSizeListEncoding handles UUID-style fixed-size byte storage downstream
         // of ExtEncoding.
-        codecs.add(new DateTimePartsEncoding());
-        codecs.add(new ExtEncoding());
-        codecs.add(new FixedSizeListEncoding());
-        codecs.add(new ConstantEncoding());
-        codecs.add(new AlpEncoding());
-        codecs.add(new FrameOfReferenceEncoding());
-        codecs.add(new RunEndEncoding());
-        codecs.add(new RleEncoding());
-        codecs.add(new DictEncoding());
-        codecs.add(new BitpackedEncoding());
-        // FsstEncoding sits between Dict and VarBin. Today's non-primitive dispatch
+        codecs.add(new DateTimePartsEncodingEncoder());
+        codecs.add(new ExtEncodingEncoder());
+        codecs.add(new FixedSizeListEncodingEncoder());
+        codecs.add(new ConstantEncodingEncoder());
+        codecs.add(new AlpEncodingEncoder());
+        codecs.add(new FrameOfReferenceEncodingEncoder());
+        codecs.add(new RunEndEncodingEncoder());
+        codecs.add(new RleEncodingEncoder());
+        codecs.add(new DictEncodingEncoder());
+        codecs.add(new BitpackedEncodingEncoder());
+        // FsstEncodingEncoder sits between Dict and VarBin. Today's non-primitive dispatch
         // (CascadingCompressor.findPrimitiveEncoding) is first-match, so Dict still
         // wins for Utf8; FSST only fires when Dict is excluded (cascade nested re-runs
         // via spliceResult's notApplicable retry). Listing it here matches Rust which
         // uses FSST for high-cardinality short strings (e.g. taxi store_and_fwd_flag).
-        codecs.add(new io.github.dfa1.vortex.encoding.FsstEncoding());
-        codecs.add(new VarBinEncoding());
+        codecs.add(new FsstEncodingEncoder());
+        codecs.add(new VarBinEncodingEncoder());
         if (options.enableZstd()) {
-            codecs.add(new ZstdEncoding());
+            codecs.add(new ZstdEncodingEncoder());
         }
-        codecs.add(new PrimitiveEncoding());
-        codecs.add(new BoolEncoding());
+        codecs.add(new PrimitiveEncodingEncoder());
+        codecs.add(new BoolEncodingEncoder());
         return List.copyOf(codecs);
     }
 
+    /// Creates a {@link VortexWriter} using the default encoder set.
+    ///
+    /// @param channel the channel to write to
+    /// @param schema  the struct schema for the file
+    /// @param options write options
+    /// @return a new writer
     public static VortexWriter create(
             WritableByteChannel channel, DType.Struct schema, WriteOptions options
     ) {
         return new VortexWriter(channel, schema, options, DEFAULT_CODECS);
     }
 
+    /// Creates a {@link VortexWriter} with a custom encoder list.
+    ///
+    /// @param channel  the channel to write to
+    /// @param schema   the struct schema for the file
+    /// @param options  write options
+    /// @param encodings custom encoder list
+    /// @return a new writer
     public static VortexWriter create(
-            WritableByteChannel channel, DType.Struct schema, WriteOptions options, List<Encoding> encodings
+            WritableByteChannel channel, DType.Struct schema, WriteOptions options, List<EncodingEncoder> encodings
     ) {
         // Custom encoding list: disable global dict — using DEFAULT_CODECS for values/codes behind the scenes
         // would violate the user's expectation that only their encoding list is used.
@@ -317,7 +337,7 @@ public final class VortexWriter implements Closeable {
             if (colDtype instanceof DType.Extension extDtype && data instanceof java.util.Collection<?> coll) {
                 io.github.dfa1.vortex.extension.Extension impl =
                         io.github.dfa1.vortex.extension.ExtensionId.parse(extDtype.extensionId())
-                                .map(defaultRegistry::lookup)
+                                .map(extensionRegistry::lookup)
                                 .orElse(null);
                 if (impl != null) {
                     data = impl.encodeAll(extDtype, coll);
@@ -386,31 +406,31 @@ public final class VortexWriter implements Closeable {
 
     /// Writes a segment, optionally forcing a specific {@code encodingOverride} instead of
     /// the configured cascade. Used by the global Utf8 dictionary path where the values
-    /// segment must be flat varbin — the cascade would otherwise re-pick {@link
-    /// io.github.dfa1.vortex.encoding.DictEncoding} and wrap the dictionary in another
-    /// dict (which the reader cannot unwrap).
-    private int writeSegment(DType dtype, Object data, Encoding encodingOverride) throws IOException {
-        // Non-extension nullable columns (Primitive, Utf8) wrap with MaskedEncoding here.
-        // Extension columns route through ExtEncoding.encode which itself delegates to
-        // MaskedEncoding when its storage data is NullableData — handled inside ExtEncoding.
+    /// segment must be flat varbin — the cascade would otherwise re-pick
+    /// {@link DictEncodingEncoder} and wrap the dictionary in another dict (which the reader
+    /// cannot unwrap).
+    private int writeSegment(DType dtype, Object data, EncodingEncoder encodingOverride) throws IOException {
+        // Non-extension nullable columns (Primitive, Utf8) wrap with MaskedEncodingEncoder here.
+        // Extension columns route through ExtEncodingEncoder.encode which itself delegates to
+        // MaskedEncodingEncoder when its storage data is NullableData — handled inside ExtEncoding.
         if (encodingOverride == null
                 && data instanceof io.github.dfa1.vortex.core.array.NullableData
                 && !(dtype instanceof DType.Extension)) {
-            encodingOverride = new io.github.dfa1.vortex.encoding.MaskedEncoding();
+            encodingOverride = new MaskedEncodingEncoder();
         }
         try (Arena arena = Arena.ofConfined()) {
             EncodeResult result;
             if (encodingOverride != null) {
-                EncodeContext encodeCtx = EncodeContext.of(arena, this.defaultRegistry);
+                EncodeContext encodeCtx = EncodeContext.of(arena, defaultEncoders);
                 result = encodingOverride.encode(dtype, data, encodeCtx);
             } else if (options.allowedCascading() > 0) {
-                EncodeContext encodeCtx = EncodeContext.ofDepth(options.allowedCascading(), arena, cascadeRegistry);
+                EncodeContext encodeCtx = EncodeContext.ofDepth(options.allowedCascading(), arena, cascadeEncoders);
                 CascadingCompressor compressor = new CascadingCompressor(cascadeCodecs);
                 result = compressor.encode(dtype, data, encodeCtx);
             } else {
-                Encoding encoding = findEncoding(dtype);
-                EncodeContext encodeCtx = EncodeContext.of(arena, this.defaultRegistry);
-                result = encoding.encode(dtype, data, encodeCtx);
+                EncodingEncoder encoder = findEncoder(dtype);
+                EncodeContext encodeCtx = EncodeContext.of(arena, defaultEncoders);
+                result = encoder.encode(dtype, data, encodeCtx);
             }
             // Register all encoding IDs found in the node tree
             registerEncodingIds(result.rootNode());
@@ -449,13 +469,13 @@ public final class VortexWriter implements Closeable {
         }
     }
 
-    private Encoding findEncoding(DType dtype) {
-        for (Encoding c : encodings) {
+    private EncodingEncoder findEncoder(DType dtype) {
+        for (EncodingEncoder c : encodings) {
             if (c.accepts(dtype)) {
                 return c;
             }
         }
-        throw new UnsupportedOperationException("no encoding for dtype: " + dtype);
+        throw new UnsupportedOperationException("no encoder for dtype: " + dtype);
     }
 
     private void write(MemorySegment seg) throws IOException {
@@ -749,7 +769,7 @@ public final class VortexWriter implements Closeable {
         // doesn't wrap the (all-unique-by-construction) dictionary in another dict that
         // the reader's decodeDictLayout cannot unwrap.
         String[] uniques = valueMap.keySet().toArray(new String[0]);
-        int valuesSegIdx = writeSegment(dtype, uniques, new VarBinEncoding());
+        int valuesSegIdx = writeSegment(dtype, uniques, new VarBinEncodingEncoder());
 
         // Write one codes segment per original chunk.
         DType codesDtype = new DType.Primitive(codePType, false);

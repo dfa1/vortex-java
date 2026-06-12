@@ -5,7 +5,6 @@ import io.github.dfa1.vortex.core.Footer;
 import io.github.dfa1.vortex.core.Layout;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.VortexFormat;
-import io.github.dfa1.vortex.encoding.Registry;
 import io.github.dfa1.vortex.fbs.Postscript;
 
 import java.io.IOException;
@@ -44,12 +43,12 @@ public final class VortexHttpReader implements VortexHandle {
     private final Footer footer;
     private final DType dtype;
     private final Layout layout;
-    private final Registry registry;
+    private final ReadRegistry registry;
 
     private VortexHttpReader(
         URI uri, long fileSize,
         int version, Footer footer, DType dtype, Layout layout,
-        Registry registry
+        ReadRegistry registry
     ) {
         this.uri = uri;
         this.arena = Arena.ofConfined();
@@ -62,10 +61,10 @@ public final class VortexHttpReader implements VortexHandle {
     }
 
     public static VortexHttpReader open(URI uri) throws IOException {
-        return open(uri, Registry.loadAll());
+        return open(uri, ReadRegistry.loadAll());
     }
 
-    public static VortexHttpReader open(URI uri, Registry registry) throws IOException {
+    public static VortexHttpReader open(URI uri, ReadRegistry registry) throws IOException {
         // Single suffix Range request — Content-Range response header gives us fileSize.
         // Avoids a separate HEAD round trip.
         TailFetch tf = fetchTail(uri);
@@ -217,6 +216,17 @@ public final class VortexHttpReader implements VortexHandle {
 
     // ── HTTP helpers ──────────────────────────────────────────────────────────
 
+    @Override
+    public io.github.dfa1.vortex.core.array.Array decodeFlatSegment(
+            io.github.dfa1.vortex.core.SegmentSpec spec,
+            DType dtype, long rowCount,
+            java.lang.foreign.SegmentAllocator arenaOut
+    ) {
+        MemorySegment seg = slice(spec.offset(), spec.length());
+        return new FlatSegmentDecoder(registry)
+                .decode(seg, footer.arraySpecs(), dtype, rowCount, arenaOut);
+    }
+
     /// Fetches bytes `[offset, offset+length)` via HTTP Range and returns them
     /// as an off-heap [MemorySegment] tied to this reader's [Arena].
     @Override
@@ -239,7 +249,7 @@ public final class VortexHttpReader implements VortexHandle {
     }
 
     @Override
-    public Registry registry() {
+    public ReadRegistry registry() {
         return registry;
     }
 

@@ -25,9 +25,22 @@
 			<artifactId>flatbuffers-java</artifactId>
 		</dependency>
 		<!-- testing -->
+		<!-- project-internal test deps -->
+		<dependency>
+			<groupId>io.github.dfa1.vortex</groupId>
+			<artifactId>vortex-core</artifactId>
+			<type>test-jar</type>
+			<scope>test</scope>
+		</dependency>
 		<dependency>
 			<groupId>io.github.dfa1.vortex</groupId>
 			<artifactId>vortex-reader</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>io.github.dfa1.vortex</groupId>
+			<artifactId>vortex-reader</artifactId>
+			<type>test-jar</type>
 			<scope>test</scope>
 		</dependency>
 		<dependency>

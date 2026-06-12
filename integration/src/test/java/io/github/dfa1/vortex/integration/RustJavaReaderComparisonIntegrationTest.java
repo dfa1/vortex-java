@@ -18,7 +18,7 @@ import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.MaskedArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
-import io.github.dfa1.vortex.encoding.Registry;
+import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.inspect.VortexInspector;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.Chunk;
@@ -213,7 +213,7 @@ class RustJavaReaderComparisonIntegrationTest {
         Map<String, Double> numSums = new LinkedHashMap<>();
         Map<String, Long> strLenSums = new LinkedHashMap<>();
         long rowCount = 0;
-        try (VortexReader reader = VortexReader.open(file, Registry.loadAll());
+        try (VortexReader reader = VortexReader.open(file, ReadRegistry.loadAll());
              var iter = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.all())) {
             // Skip extension columns: Rust's stats path reports them under their logical
             // type (timestamp etc.), so summing their storage longs would diverge from

@@ -22,8 +22,6 @@ import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.core.array.StructArray;
 import io.github.dfa1.vortex.core.array.VarBinArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.encoding.Registry;
-import io.github.dfa1.vortex.encoding.FlatSegmentDecoder;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -71,7 +69,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     private static final ValueLayout.OfLong LE_LONG = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     private final VortexHandle file;
-    private final Registry registry;
+    private final ReadRegistry registry;
     private final ScanOptions options;
 
     private List<ChunkSpec> chunks;
@@ -83,7 +81,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     private Chunk openChunk;
     private boolean closed;
 
-    public ScanIterator(VortexHandle file, Registry registry, ScanOptions options) {
+    public ScanIterator(VortexHandle file, ReadRegistry registry, ScanOptions options) {
         this.file = file;
         this.registry = registry;
         this.options = options;
@@ -478,8 +476,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         }
         int segIdx = flat.segments().getFirst();
         SegmentSpec spec = file.footer().segmentSpecs().get(segIdx);
-        MemorySegment seg = file.slice(spec.offset(), spec.length());
-        return new FlatSegmentDecoder(registry).decode(seg, file.footer().arraySpecs(), dtype, flat.rowCount(), arena);
+        return file.decodeFlatSegment(spec, dtype, flat.rowCount(), arena);
     }
 
     private Array decodeDictLayout(Layout dictLayout, DType dtype, SegmentAllocator arena) {

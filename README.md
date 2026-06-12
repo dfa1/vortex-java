@@ -4,10 +4,11 @@
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.dfa1.vortex/vortex-reader.svg)](https://central.sonatype.com/artifact/io.github.dfa1.vortex/vortex-reader)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/license/Apache-2.0)
 
+> **Alpha** — not production-ready. APIs will change without notice.
+
 Pure-Java reader/writer for the [Vortex](https://github.com/vortex-data/vortex) columnar file format.
 100% Java, no JNI, no `sun.misc.Unsafe`. Uses the FFM API (`MemorySegment`/`Arena`, Java 25+)
-for zero-copy memory-mapped reads. Read benchmarks match or beat the Rust JNI on the workloads
-tested (Apple M5, JDK 25); see [docs/explanation.md#benchmarks](docs/explanation.md#benchmarks).
+for zero-copy memory-mapped reads.
 
 | Project                                                             | Language | Notes                                   |
 |---------------------------------------------------------------------|----------|-----------------------------------------|
@@ -49,12 +50,15 @@ try (VortexReader vf = VortexReader.open(Path.of("data/example.vortex"));
 }
 ```
 
-> **Lifecycle.** `Chunk` owns a confined `Arena` — close it (try-with-resources
-> or `iter.forEachRemaining`) to release the decoded buffers. Full lifecycle
-> rules: [docs/explanation.md#memory-model](docs/explanation.md#memory-model).
+> **Lifecycle.** `ScanIterator` implements `Iterator<Chunk>` and `Chunk` implements
+> `AutoCloseable`. Each chunk owns a confined `Arena`; closing it releases the
+> decoded buffers. Calling `iter.next()` while a prior chunk is still open throws
+> `IllegalStateException`. Use try-with-resources, or
+> `iter.forEachRemaining(c -> ...)` which closes each chunk for you. See
+> [docs/explanation.md#memory-model](docs/explanation.md#memory-model).
 
-For more examples (writing, projection, filtering, custom encodings, CLI) see
-the documentation below.
+For more examples — writing, projection, filtering, custom encodings, and the CLI —
+see the documentation below.
 
 ## Documentation
 

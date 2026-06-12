@@ -91,7 +91,7 @@ public enum EncodingId {
     }
 
     /// Parses a raw encoding id string into the matching constant.
-    /// Used by [Registry] to discriminate [KnownArrayNode] from [UnknownArrayNode];
+    /// Used by {@code ReadRegistry} to discriminate {@code KnownArrayNode} from {@code UnknownArrayNode};
     /// callers that demand a known id chain {@code .orElseThrow(...)}.
     ///
     /// @param id raw encoding id string (e.g. {@code "vortex.primitive"})

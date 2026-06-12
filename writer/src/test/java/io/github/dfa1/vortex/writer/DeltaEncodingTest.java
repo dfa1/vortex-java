@@ -2,8 +2,8 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.encoding.DeltaEncoding;
-import io.github.dfa1.vortex.encoding.Registry;
+import io.github.dfa1.vortex.writer.encode.DeltaEncodingEncoder;
+import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -27,10 +27,10 @@ class DeltaEncodingTest {
             List.of(new DType.Primitive(PType.I64, false)),
             false);
 
-    private static Registry deltaRegistry() {
-        return Registry.builder()
-                .register(new DeltaEncoding())
-                .register(new io.github.dfa1.vortex.encoding.PrimitiveEncoding())
+    private static ReadRegistry deltaRegistry() {
+        return ReadRegistry.builder()
+                .register(new io.github.dfa1.vortex.reader.decode.DeltaEncodingDecoder())
+                .register(new io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder())
                 .build();
     }
 
@@ -42,7 +42,7 @@ class DeltaEncodingTest {
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults(),
-                     List.of(new DeltaEncoding()))) {
+                     List.of(new DeltaEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of("ts", data));
         }
@@ -61,7 +61,7 @@ class DeltaEncodingTest {
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults(),
-                     List.of(new DeltaEncoding()))) {
+                     List.of(new DeltaEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of("ts", data));
         }
@@ -80,7 +80,7 @@ class DeltaEncodingTest {
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults(),
-                     List.of(new DeltaEncoding()))) {
+                     List.of(new DeltaEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of("ts", data));
         }
@@ -99,7 +99,7 @@ class DeltaEncodingTest {
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults(),
-                     List.of(new DeltaEncoding()))) {
+                     List.of(new DeltaEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of("ts", data));
         }
@@ -118,7 +118,7 @@ class DeltaEncodingTest {
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults(),
-                     List.of(new DeltaEncoding()))) {
+                     List.of(new DeltaEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of("ts", data));
         }
@@ -140,7 +140,7 @@ class DeltaEncodingTest {
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults(),
-                     List.of(new DeltaEncoding()))) {
+                     List.of(new DeltaEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of("ts", chunk1));
             sut.writeChunk(Map.of("ts", chunk2));
@@ -165,7 +165,7 @@ class DeltaEncodingTest {
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults(),
-                     List.of(new DeltaEncoding()))) {
+                     List.of(new DeltaEncodingEncoder()))) {
             // When
             sut.writeChunk(Map.of("ts", data));
         }

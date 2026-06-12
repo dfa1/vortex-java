@@ -76,8 +76,9 @@ public final class ByteArray implements Array {
                 result = op.applyAsLong(result, buf.get(ValueLayout.JAVA_BYTE, i));
             }
         } else {
+            long cap = elementCount;
             for (long i = 0; i < n; i++) {
-                result = op.applyAsLong(result, buf.get(ValueLayout.JAVA_BYTE, i % elementCount));
+                result = op.applyAsLong(result, buf.get(ValueLayout.JAVA_BYTE, i % cap));
             }
         }
         return result;

@@ -4,7 +4,7 @@ import dev.vortex.api.Session;
 import dev.vortex.api.VortexWriter;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
-import io.github.dfa1.vortex.encoding.Registry;
+import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.inspect.VortexInspector;
 import io.github.dfa1.vortex.reader.VortexReader;
 import org.apache.arrow.c.ArrowArray;
@@ -74,7 +74,7 @@ class VortexInspectorIntegrationTest {
 
         // When
         String report;
-        try (VortexReader vf = VortexReader.open(file, Registry.loadAll())) {
+        try (VortexReader vf = VortexReader.open(file, ReadRegistry.loadAll())) {
             report = VortexInspector.inspect(vf);
         }
 

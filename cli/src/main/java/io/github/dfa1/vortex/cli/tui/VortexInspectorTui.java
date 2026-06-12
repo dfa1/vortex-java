@@ -571,11 +571,8 @@ public final class VortexInspectorTui {
                 try (java.lang.foreign.Arena arena = java.lang.foreign.Arena.ofConfined()) {
                     int segIdx = values.segments().getFirst();
                     SegmentSpec spec = tree.segmentSpecs().get(segIdx);
-                    java.lang.foreign.MemorySegment seg = handle.slice(spec.offset(), spec.length());
                     io.github.dfa1.vortex.core.array.Array arr =
-                            new io.github.dfa1.vortex.encoding.FlatSegmentDecoder(handle.registry())
-                                    .decode(seg, handle.footer().arraySpecs(),
-                                            dtype, values.rowCount(), arena);
+                            handle.decodeFlatSegment(spec, dtype, values.rowCount(), arena);
                     int n = (int) Math.min(arr.length(), DATA_PREVIEW_ROWS);
                     List<String> out = new ArrayList<>(n);
                     for (int i = 0; i < n; i++) {

@@ -25,6 +25,14 @@
 			<artifactId>flatbuffers-java</artifactId>
 		</dependency>
 		<!-- testing -->
+		<!-- project-internal test deps -->
+		<dependency>
+			<groupId>io.github.dfa1.vortex</groupId>
+			<artifactId>vortex-core</artifactId>
+			<type>test-jar</type>
+			<scope>test</scope>
+		</dependency>
+		<!-- external test deps -->
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>
 			<artifactId>junit-jupiter</artifactId>
@@ -41,4 +49,23 @@
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
+
+	<build>
+		<plugins>
+			<!-- Publish a test-jar so writer/ tests can reuse reader test helpers
+			     (TestRegistry, TestDecodeContexts, DecodeTestHelper). -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-jar-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>publish-test-jar</id>
+						<goals>
+							<goal>test-jar</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+	</build>
 </project>
