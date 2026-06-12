@@ -200,9 +200,9 @@ class InspectorTreeTest {
         assertThat(sut.usedEncodings()).isEmpty();
         assertThat(sut.root().children().get(0).usedEncodings()).isEmpty();
         assertThat(sut.root().children().get(0).stats()).isEqualTo(io.github.dfa1.vortex.core.ArrayStats.empty());
-        // Slice is reserved for lazy peek; shallow build must never call it
-        org.mockito.Mockito.verify(handle, org.mockito.Mockito.never()).slice(
-                org.mockito.Mockito.anyLong(), org.mockito.Mockito.anyLong());
+        // rawSegment is reserved for lazy peek; shallow build must never call it
+        org.mockito.Mockito.verify(handle, org.mockito.Mockito.never()).rawSegment(
+                org.mockito.Mockito.any());
     }
 
     @Test
@@ -219,8 +219,8 @@ class InspectorTreeTest {
 
         // Then
         assertThat(result).isSameAs(InspectorTree.Peek.EMPTY);
-        org.mockito.Mockito.verify(handle, org.mockito.Mockito.never()).slice(
-                org.mockito.Mockito.anyLong(), org.mockito.Mockito.anyLong());
+        org.mockito.Mockito.verify(handle, org.mockito.Mockito.never()).rawSegment(
+                org.mockito.Mockito.any());
     }
 
     @Test
@@ -240,8 +240,8 @@ class InspectorTreeTest {
 
         // Then
         assertThat(result).isSameAs(InspectorTree.Peek.EMPTY);
-        org.mockito.Mockito.verify(handle, org.mockito.Mockito.never()).slice(
-                org.mockito.Mockito.anyLong(), org.mockito.Mockito.anyLong());
+        org.mockito.Mockito.verify(handle, org.mockito.Mockito.never()).rawSegment(
+                org.mockito.Mockito.any());
     }
 
     @Test

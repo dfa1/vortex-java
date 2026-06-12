@@ -758,7 +758,7 @@ public final class VortexInspectorTui {
                 return new byte[0];
             }
             try {
-                MemorySegment seg = handle.slice(spec.offset(), wanted);
+                MemorySegment seg = handle.rawSegment(spec);
                 byte[] buf = new byte[wanted];
                 MemorySegment.copy(seg, 0, MemorySegment.ofArray(buf), 0, wanted);
                 return buf;

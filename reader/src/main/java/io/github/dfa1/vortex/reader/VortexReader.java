@@ -243,9 +243,13 @@ public final class VortexReader implements VortexHandle {
                 .decode(seg, footer.arraySpecs(), dtype, rowCount, arena);
     }
 
-    /// Zero-copy read-only slice of the memory-mapped file.
+    /// Zero-copy read-only slice of the memory-mapped file covering the given spec.
     @Override
-    public MemorySegment slice(long offset, long length) {
+    public MemorySegment rawSegment(SegmentSpec spec) {
+        return fileSegment.asSlice(spec.offset(), spec.length()).asReadOnly();
+    }
+
+    MemorySegment slice(long offset, long length) {
         return fileSegment.asSlice(offset, length).asReadOnly();
     }
 

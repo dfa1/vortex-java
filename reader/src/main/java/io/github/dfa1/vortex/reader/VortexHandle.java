@@ -25,9 +25,8 @@ public interface VortexHandle extends Closeable {
 
     long fileSize();
 
-    /// Typed accessor for the common pattern "slice a flat segment by its {@link SegmentSpec}
-    /// and decode the encoded array contained therein." Replaces the raw {@link #slice}
-    /// escape hatch for read-side consumers (scan, inspector, TUI).
+    /// Typed accessor for the common pattern "read a flat segment by its {@link SegmentSpec}
+    /// and decode the encoded array contained therein."
     ///
     /// @param spec     the segment spec to read from
     /// @param dtype    logical type of the decoded array
@@ -36,23 +35,16 @@ public interface VortexHandle extends Closeable {
     /// @return the decoded array
     Array decodeFlatSegment(SegmentSpec spec, DType dtype, long rowCount, SegmentAllocator arena);
 
-    /// Returns a read-only view of bytes `[offset, offset+length)` within the file.
-    /// Writes through the returned segment throw `UnsupportedOperationException`.
+    /// Returns a read-only view of the bytes backing the given segment spec.
+    /// Writes through the returned segment throw {@code UnsupportedOperationException}.
     ///
-    /// <p><strong>Internal escape hatch.</strong> This method is on the public
-    /// {@link VortexHandle} interface only because {@link io.github.dfa1.vortex.reader.ScanIterator}
-    /// and the inspector module's {@code VortexInspector} live in sibling packages and need
-    /// cross-package access to the raw backing segment. It is not part of the supported stability contract; signatures and
-    /// semantics may change without a deprecation cycle. Application code should rely on
-    /// {@link #scan(ScanOptions)} and the typed array accessors instead.
+    /// <p>On memory-mapped handles this is a zero-copy slice of the mapped region.
+    /// On HTTP handles this fires a targeted range request.
     ///
-    /// @param offset the start offset in bytes
-    /// @param length the number of bytes to expose
-    /// @return a read-only [MemorySegment] view of the requested range
-    /// @deprecated marked for removal once the reader-internal packages consolidate (see
-    /// {@code TODO.md}); kept here as an interim escape hatch for vortex-internal callers.
-    @Deprecated(since = "0.4.0", forRemoval = true)
-    MemorySegment slice(long offset, long length);
+    /// @param spec the segment to read
+    /// @return a read-only {@link MemorySegment} covering exactly {@code spec.offset()} to
+    ///         {@code spec.offset() + spec.length()}
+    MemorySegment rawSegment(SegmentSpec spec);
 
     ScanIterator scan(ScanOptions options);
 

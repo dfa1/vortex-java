@@ -628,7 +628,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         int segIdx = flat.segments().getFirst();
         SegmentSpec spec = file.footer().segmentSpecs().get(segIdx);
         long segLen = spec.length();
-        MemorySegment seg = file.slice(spec.offset(), segLen);
+        MemorySegment seg = file.rawSegment(spec);
 
         // Stats FlatBuffer lives in the segment's last 4+fbLen bytes; reading the whole
         // segment as a ByteBuffer would fail for segments larger than 2 GB (ByteBuffer cap).

@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.reader;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.Footer;
 import io.github.dfa1.vortex.core.Layout;
+import io.github.dfa1.vortex.core.SegmentSpec;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.VortexFormat;
 import io.github.dfa1.vortex.fbs.Postscript;
@@ -222,15 +223,20 @@ public final class VortexHttpReader implements VortexHandle {
             DType dtype, long rowCount,
             java.lang.foreign.SegmentAllocator arenaOut
     ) {
-        MemorySegment seg = slice(spec.offset(), spec.length());
+        MemorySegment seg = rawSegment(spec);
         return new FlatSegmentDecoder(registry)
                 .decode(seg, footer.arraySpecs(), dtype, rowCount, arenaOut);
     }
 
-    /// Fetches bytes `[offset, offset+length)` via HTTP Range and returns them
-    /// as an off-heap [MemorySegment] tied to this reader's [Arena].
+    /// Fetches the bytes of the given segment spec via HTTP Range.
+    /// Returns an off-heap {@link MemorySegment} tied to this reader's {@link Arena}.
+    ///
+    /// @param spec the segment to fetch
+    /// @return a read-only {@link MemorySegment} containing the fetched bytes
     @Override
-    public MemorySegment slice(long offset, long length) {
+    public MemorySegment rawSegment(SegmentSpec spec) {
+        long offset = spec.offset();
+        long length = spec.length();
         byte[] bytes;
         try {
             bytes = fetchRange(uri, offset, offset + length - 1);

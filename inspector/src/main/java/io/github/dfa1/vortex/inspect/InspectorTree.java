@@ -132,7 +132,7 @@ public record InspectorTree(
     /// compression, or missing data.
     ///
     /// Callers should cache the result — every call triggers a fresh
-    /// {@code handle.slice()}, which is a network round-trip on remote handles.
+    /// {@link io.github.dfa1.vortex.reader.VortexHandle#rawSegment}, which is a network round-trip on remote handles.
     ///
     /// @param node   node to resolve
     /// @param handle open file handle
@@ -147,7 +147,7 @@ public record InspectorTree(
         if (spec.compression().code != 0) {
             return Peek.EMPTY;
         }
-        MemorySegment seg = handle.slice(spec.offset(), spec.length());
+        MemorySegment seg = handle.rawSegment(spec);
         return peekFlatRoot(seg, handle.footer().arraySpecs());
     }
 
@@ -202,7 +202,7 @@ public record InspectorTree(
             int segIdx = layout.segments().getFirst();
             SegmentSpec spec = handle.footer().segmentSpecs().get(segIdx);
             if (spec.compression().code == 0) {
-                MemorySegment seg = handle.slice(spec.offset(), spec.length());
+                MemorySegment seg = handle.rawSegment(spec);
                 Peek peek = peekFlatRoot(seg, arraySpecs);
                 if (peek.encoding() != null) {
                     localUsed.add(peek.encoding());
