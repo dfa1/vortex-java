@@ -6,7 +6,6 @@ import io.github.dfa1.vortex.core.PType;
 
 
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.encoding.ListData;
 
 import io.github.dfa1.vortex.encoding.PTypeIO;
 

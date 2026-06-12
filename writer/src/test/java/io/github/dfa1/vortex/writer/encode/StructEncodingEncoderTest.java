@@ -14,7 +14,6 @@ import io.github.dfa1.vortex.reader.decode.DecodeContext;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.reader.ReadRegistry;
-import io.github.dfa1.vortex.encoding.StructData;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.encoding.TestSegments;
 import io.github.dfa1.vortex.reader.decode.BoolEncodingDecoder;

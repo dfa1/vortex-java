@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.encoding;
+package io.github.dfa1.vortex.writer.encode;
 
 import java.util.List;
 

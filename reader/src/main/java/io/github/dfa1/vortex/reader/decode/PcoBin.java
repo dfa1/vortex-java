@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.encoding;
+package io.github.dfa1.vortex.reader.decode;
 
 /// One bin in a pco latent variable: a numerical range [lower, lower + 2^offsetBits).
 ///

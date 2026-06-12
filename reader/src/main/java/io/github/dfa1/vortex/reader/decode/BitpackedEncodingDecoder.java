@@ -10,7 +10,6 @@ import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.ShortArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.encoding.SegmentBroadcast;
 import io.github.dfa1.vortex.proto.BitPackedMetadata;
 import io.github.dfa1.vortex.proto.PatchesMetadata;
 

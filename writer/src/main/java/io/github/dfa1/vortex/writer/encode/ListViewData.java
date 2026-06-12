@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.encoding;
+package io.github.dfa1.vortex.writer.encode;
 
 /// Input data for encoding a {@code vortex.listview} column.
 ///

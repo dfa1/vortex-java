@@ -8,7 +8,6 @@ import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
 
 
-import io.github.dfa1.vortex.encoding.StructData;
 
 
 import java.lang.foreign.MemorySegment;

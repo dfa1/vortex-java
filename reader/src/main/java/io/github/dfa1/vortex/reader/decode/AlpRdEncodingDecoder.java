@@ -8,7 +8,6 @@ import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.FloatArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.encoding.SegmentBroadcast;
 import io.github.dfa1.vortex.proto.ALPRDMetadata;
 import io.github.dfa1.vortex.proto.PatchesMetadata;
 

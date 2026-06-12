@@ -1,13 +1,14 @@
 package io.github.dfa1.vortex.writer;
 
 import com.google.flatbuffers.FlatBufferBuilder;
+import io.github.dfa1.vortex.writer.encode.DateTimePartsData;
+import io.github.dfa1.vortex.writer.encode.FixedSizeListData;
+import io.github.dfa1.vortex.writer.encode.ListData;
+import io.github.dfa1.vortex.writer.encode.ListViewData;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexFormat;
-import io.github.dfa1.vortex.encoding.DateTimePartsData;
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.encoding.ListData;
-import io.github.dfa1.vortex.encoding.ListViewData;
 import io.github.dfa1.vortex.writer.encode.EncodeContext;
 import io.github.dfa1.vortex.writer.encode.EncodeNode;
 import io.github.dfa1.vortex.writer.encode.EncodeResult;
@@ -224,7 +225,7 @@ public final class VortexWriter implements Closeable {
             case ListData d -> d.outerLen();
             case ListViewData d -> d.outerLen();
             case DateTimePartsData d -> d.timestamps().length;
-            case io.github.dfa1.vortex.encoding.FixedSizeListData d -> d.outerLen();
+            case FixedSizeListData d -> d.outerLen();
             case io.github.dfa1.vortex.core.array.NullableData d -> d.validity().length;
             default -> throw new UnsupportedOperationException(
                     "unsupported data type: " + data.getClass());

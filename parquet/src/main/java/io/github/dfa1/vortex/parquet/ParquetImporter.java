@@ -10,7 +10,7 @@ import dev.hardwood.schema.ColumnSchema;
 import dev.hardwood.schema.FileSchema;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.encoding.DateTimePartsData;
+import io.github.dfa1.vortex.writer.encode.DateTimePartsData;
 import io.github.dfa1.vortex.encoding.TimeUnit;
 import io.github.dfa1.vortex.writer.VortexWriter;
 

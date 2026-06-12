@@ -1,6 +1,7 @@
-package io.github.dfa1.vortex.encoding;
+package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.encoding.EncodingId;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;

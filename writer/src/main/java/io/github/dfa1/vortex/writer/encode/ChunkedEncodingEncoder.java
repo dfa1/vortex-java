@@ -5,7 +5,6 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 
 
-import io.github.dfa1.vortex.encoding.ChunkedData;
 
 import io.github.dfa1.vortex.encoding.EncodingId;
 

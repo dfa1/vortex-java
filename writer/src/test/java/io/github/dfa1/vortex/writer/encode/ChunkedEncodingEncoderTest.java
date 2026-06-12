@@ -6,7 +6,6 @@ import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.ArraySegments;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
-import io.github.dfa1.vortex.encoding.ChunkedData;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
 import io.github.dfa1.vortex.encoding.EncodingId;
