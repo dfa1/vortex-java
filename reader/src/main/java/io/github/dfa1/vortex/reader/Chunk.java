@@ -3,11 +3,11 @@ package io.github.dfa1.vortex.reader;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
-import io.github.dfa1.vortex.extension.DateExtension;
 import io.github.dfa1.vortex.extension.ExtensionId;
-import io.github.dfa1.vortex.extension.TimeExtension;
-import io.github.dfa1.vortex.extension.TimestampExtension;
-import io.github.dfa1.vortex.extension.UuidExtension;
+import io.github.dfa1.vortex.reader.extension.DateExtensionDecoder;
+import io.github.dfa1.vortex.reader.extension.TimeExtensionDecoder;
+import io.github.dfa1.vortex.reader.extension.TimestampExtensionDecoder;
+import io.github.dfa1.vortex.reader.extension.UuidExtensionDecoder;
 
 import java.lang.foreign.Arena;
 import java.time.Instant;
@@ -123,19 +123,19 @@ public final class Chunk implements AutoCloseable {
         Object result = switch (id) {
             case VORTEX_DATE -> {
                 requireDomainType(name, domainType, LocalDate.class);
-                yield DateExtension.INSTANCE.decodeAll(storage);
+                yield DateExtensionDecoder.INSTANCE.decodeAll(storage);
             }
             case VORTEX_TIME -> {
                 requireDomainType(name, domainType, LocalTime.class);
-                yield TimeExtension.INSTANCE.decodeAll(ext, storage);
+                yield TimeExtensionDecoder.INSTANCE.decodeAll(ext, storage);
             }
             case VORTEX_TIMESTAMP -> {
                 requireDomainType(name, domainType, Instant.class);
-                yield TimestampExtension.INSTANCE.decodeAll(ext, storage);
+                yield TimestampExtensionDecoder.INSTANCE.decodeAll(ext, storage);
             }
             case VORTEX_UUID -> {
                 requireDomainType(name, domainType, UUID.class);
-                yield UuidExtension.INSTANCE.decodeAll(storage);
+                yield UuidExtensionDecoder.INSTANCE.decodeAll(storage);
             }
         };
         return (List<T>) result;

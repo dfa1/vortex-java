@@ -2,10 +2,10 @@ package io.github.dfa1.vortex.jdbc;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.extension.DateExtension;
-import io.github.dfa1.vortex.extension.TimeExtension;
-import io.github.dfa1.vortex.extension.TimestampExtension;
-import io.github.dfa1.vortex.extension.UuidExtension;
+import io.github.dfa1.vortex.writer.encode.DateExtensionEncoder;
+import io.github.dfa1.vortex.writer.encode.TimeExtensionEncoder;
+import io.github.dfa1.vortex.writer.encode.TimestampExtensionEncoder;
+import io.github.dfa1.vortex.writer.encode.UuidExtensionEncoder;
 
 import java.sql.Types;
 
@@ -19,7 +19,7 @@ final class SqlTypeToDType {
         // sqlType values (PostgreSQL Types.OTHER, H2 Types.BINARY or a driver-private
         // value). The vendor type name is "uuid" / "UUID" across both — detect on that.
         if (typeName != null && typeName.equalsIgnoreCase("uuid")) {
-            return UuidExtension.INSTANCE.dtype(nullable);
+            return UuidExtensionEncoder.INSTANCE.dtype(nullable);
         }
         return switch (sqlType) {
             case Types.BIGINT -> new DType.Primitive(PType.I64, nullable);
@@ -31,9 +31,9 @@ final class SqlTypeToDType {
             case Types.BOOLEAN, Types.BIT -> new DType.Bool(nullable);
             case Types.VARCHAR, Types.CHAR, Types.LONGVARCHAR,
                  Types.NVARCHAR, Types.NCHAR, Types.LONGNVARCHAR, Types.CLOB -> new DType.Utf8(nullable);
-            case Types.DATE -> DateExtension.INSTANCE.dtype(nullable);
-            case Types.TIME -> TimeExtension.INSTANCE.dtype(nullable);
-            case Types.TIMESTAMP -> TimestampExtension.INSTANCE.dtype(nullable);
+            case Types.DATE -> DateExtensionEncoder.INSTANCE.dtype(nullable);
+            case Types.TIME -> TimeExtensionEncoder.INSTANCE.dtype(nullable);
+            case Types.TIMESTAMP -> TimestampExtensionEncoder.INSTANCE.dtype(nullable);
             default -> throw new UnsupportedOperationException("unsupported SQL type: " + sqlType + " (" + typeName + ")");
         };
     }

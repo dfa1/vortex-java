@@ -63,7 +63,7 @@ class VortexWriterTest {
         // expecting the writer to call DateExtension.encodeAll under the hood
         var dateSchema = new DType.Struct(
                 List.of("birthdays"),
-                List.of(io.github.dfa1.vortex.extension.DateExtension.INSTANCE.dtype(false)),
+                List.of(io.github.dfa1.vortex.writer.encode.DateExtensionEncoder.INSTANCE.dtype(false)),
                 false);
         List<java.time.LocalDate> dates = List.of(
                 java.time.LocalDate.of(1996, 2, 12),
@@ -95,7 +95,7 @@ class VortexWriterTest {
         // Given — milliseconds resolution exercises the I32 storage branch of
         // TimeExtension.encodeAll; ns / μs branches go through I64 (not asserted here
         // to keep the test focused — TimeExtension tests cover both).
-        DType.Extension timeDtype = io.github.dfa1.vortex.extension.TimeExtension.INSTANCE.dtype(
+        DType.Extension timeDtype = io.github.dfa1.vortex.writer.encode.TimeExtensionEncoder.INSTANCE.dtype(
                 io.github.dfa1.vortex.encoding.TimeUnit.Milliseconds, false);
         var schema = new DType.Struct(List.of("clock"), List.of(timeDtype), false);
         List<java.time.LocalTime> times = List.of(
@@ -124,7 +124,7 @@ class VortexWriterTest {
     @Test
     void writeChunk_roundTripsTimestampExtension(@TempDir Path tmp) throws IOException {
         // Given — pre-epoch + epoch + future to exercise sign + boundary; ms resolution
-        DType.Extension tsDtype = io.github.dfa1.vortex.extension.TimestampExtension.INSTANCE.dtype(
+        DType.Extension tsDtype = io.github.dfa1.vortex.writer.encode.TimestampExtensionEncoder.INSTANCE.dtype(
                 io.github.dfa1.vortex.encoding.TimeUnit.Milliseconds, null, false);
         var schema = new DType.Struct(List.of("events"), List.of(tsDtype), false);
         List<java.time.Instant> instants = List.of(
@@ -155,7 +155,7 @@ class VortexWriterTest {
         // Given — a vortex.date column on disk, but caller asks for Instant
         var dateSchema = new DType.Struct(
                 List.of("birthdays"),
-                List.of(io.github.dfa1.vortex.extension.DateExtension.INSTANCE.dtype(false)),
+                List.of(io.github.dfa1.vortex.writer.encode.DateExtensionEncoder.INSTANCE.dtype(false)),
                 false);
         Path file = tmp.resolve("dates2.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
@@ -178,7 +178,7 @@ class VortexWriterTest {
     @Test
     void writeChunk_roundTripsUuidExtension(@TempDir Path tmp) throws IOException {
         // Given — UUIDs cover both halves of the 16-byte buffer and a sign-extension edge
-        DType.Extension uuidDtype = io.github.dfa1.vortex.extension.UuidExtension.INSTANCE.dtype(false);
+        DType.Extension uuidDtype = io.github.dfa1.vortex.writer.encode.UuidExtensionEncoder.INSTANCE.dtype(false);
         var schema = new DType.Struct(List.of("ids"), List.of(uuidDtype), false);
         List<java.util.UUID> ids = List.of(
                 java.util.UUID.fromString("123e4567-e89b-12d3-a456-426614174000"),
@@ -207,7 +207,7 @@ class VortexWriterTest {
     void writeChunk_cascadeCompressesTimestampExtensionStorage(@TempDir Path tmp) throws IOException {
         // Given — monotonically increasing timestamps that cascade should reduce via
         // FrameOfReference + Bitpacked. Without cascade, storage stays as flat U64.
-        DType.Extension tsDtype = io.github.dfa1.vortex.extension.TimestampExtension.INSTANCE.dtype(
+        DType.Extension tsDtype = io.github.dfa1.vortex.writer.encode.TimestampExtensionEncoder.INSTANCE.dtype(
                 io.github.dfa1.vortex.encoding.TimeUnit.Milliseconds, null, false);
         var schema = new DType.Struct(List.of("events"), List.of(tsDtype), false);
         long base = 1_733_000_000_000L;

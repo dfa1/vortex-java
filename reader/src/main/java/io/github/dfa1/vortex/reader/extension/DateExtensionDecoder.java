@@ -1,8 +1,12 @@
-package io.github.dfa1.vortex.extension;
+package io.github.dfa1.vortex.reader.extension;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.MaskedArray;
+import io.github.dfa1.vortex.extension.ExtensionId;
+
+import io.github.dfa1.vortex.reader.ExtensionDecoder;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -10,14 +14,14 @@ import java.util.List;
 
 /// {@code vortex.date} — days since the Unix epoch, signed integer storage.
 /// Per Arrow's canonical Date type.
-public final class DateExtension implements Extension {
+public final class DateExtensionDecoder implements ExtensionDecoder {
 
     /// Singleton instance.
-    public static final DateExtension INSTANCE = new DateExtension();
+    public static final DateExtensionDecoder INSTANCE = new DateExtensionDecoder();
 
     /// Public no-arg constructor for {@link java.util.ServiceLoader}.
     /// Prefer the {@link #INSTANCE} singleton in application code.
-    public DateExtension() {
+    public DateExtensionDecoder() {
     }
 
     @Override
@@ -45,7 +49,7 @@ public final class DateExtension implements Extension {
         return LocalDate.ofEpochDay(ExtensionStorage.epochInteger(storage, i));
     }
 
-    /// Decodes every row of {@code storage} into a list of dates. {@link io.github.dfa1.vortex.core.array.MaskedArray}
+    /// Decodes every row of {@code storage} into a list of dates. {@link MaskedArray}
     /// storage yields {@code null} at invalid positions instead of throwing.
     ///
     /// @param storage signed-integer storage array (optionally wrapped in {@code MaskedArray})
@@ -53,7 +57,7 @@ public final class DateExtension implements Extension {
     public List<LocalDate> decodeAll(Array storage) {
         int n = Math.toIntExact(storage.length());
         List<LocalDate> out = new ArrayList<>(n);
-        if (storage instanceof io.github.dfa1.vortex.core.array.MaskedArray masked) {
+        if (storage instanceof MaskedArray masked) {
             for (long i = 0; i < n; i++) {
                 out.add(masked.isValid(i) ? decode(masked.inner(), i) : null);
             }
@@ -64,14 +68,4 @@ public final class DateExtension implements Extension {
         }
         return out;
     }
-
-    /// Encodes a date as its epoch-day count for I32 storage.
-    ///
-    /// @param value local date
-    /// @return days since the Unix epoch
-    /// @throws ArithmeticException if {@code value} is too far from the epoch to fit in I32
-    public int encode(LocalDate value) {
-        return Math.toIntExact(value.toEpochDay());
-    }
-
 }

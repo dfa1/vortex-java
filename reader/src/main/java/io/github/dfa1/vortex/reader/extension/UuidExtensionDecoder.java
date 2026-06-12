@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.extension;
+package io.github.dfa1.vortex.reader.extension;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
@@ -6,20 +6,24 @@ import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
 import io.github.dfa1.vortex.core.array.ByteArray;
 import io.github.dfa1.vortex.core.array.FixedSizeListArray;
+import io.github.dfa1.vortex.core.array.MaskedArray;
+import io.github.dfa1.vortex.extension.ExtensionId;
+
+import io.github.dfa1.vortex.reader.ExtensionDecoder;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
 /// {@code vortex.uuid} — 16-byte UUID stored as {@code FixedSizeList(Primitive(U8), 16)}.
-public final class UuidExtension implements Extension {
+public final class UuidExtensionDecoder implements ExtensionDecoder {
 
     /// Singleton instance.
-    public static final UuidExtension INSTANCE = new UuidExtension();
+    public static final UuidExtensionDecoder INSTANCE = new UuidExtensionDecoder();
 
     /// Public no-arg constructor for {@link java.util.ServiceLoader}.
     /// Prefer the {@link #INSTANCE} singleton in application code.
-    public UuidExtension() {
+    public UuidExtensionDecoder() {
     }
 
     @Override
@@ -45,7 +49,7 @@ public final class UuidExtension implements Extension {
     /// @throws VortexException if storage isn't a {@code FixedSizeListArray<ByteArray>} of size 16
     public UUID decode(Array storage, long i) {
         ExtensionStorage.checkBounds(i, storage.length());
-        if (storage instanceof io.github.dfa1.vortex.core.array.MaskedArray masked) {
+        if (storage instanceof MaskedArray masked) {
             if (!masked.isValid(i)) {
                 throw new VortexException("null cell at index " + i);
             }
@@ -74,7 +78,7 @@ public final class UuidExtension implements Extension {
         return new UUID(msb, lsb);
     }
 
-    /// Decodes every row of {@code storage} into a list of UUIDs. {@link io.github.dfa1.vortex.core.array.MaskedArray}
+    /// Decodes every row of {@code storage} into a list of UUIDs. {@link MaskedArray}
     /// storage yields {@code null} at invalid positions instead of throwing.
     ///
     /// @param storage UUID storage array (optionally wrapped in {@code MaskedArray})
@@ -82,7 +86,7 @@ public final class UuidExtension implements Extension {
     public List<UUID> decodeAll(Array storage) {
         int n = Math.toIntExact(storage.length());
         List<UUID> out = new ArrayList<>(n);
-        if (storage instanceof io.github.dfa1.vortex.core.array.MaskedArray masked) {
+        if (storage instanceof MaskedArray masked) {
             for (long i = 0; i < n; i++) {
                 out.add(masked.isValid(i) ? decode(masked.inner(), i) : null);
             }
@@ -93,20 +97,4 @@ public final class UuidExtension implements Extension {
         }
         return out;
     }
-
-    /// Encodes a UUID as 16 big-endian bytes.
-    ///
-    /// @param value UUID to encode
-    /// @return new {@code byte[16]} carrying the canonical big-endian layout
-    public byte[] encode(UUID value) {
-        byte[] out = new byte[16];
-        long msb = value.getMostSignificantBits();
-        long lsb = value.getLeastSignificantBits();
-        for (int k = 0; k < 8; k++) {
-            out[k] = (byte) ((msb >> (56 - 8 * k)) & 0xff);
-            out[8 + k] = (byte) ((lsb >> (56 - 8 * k)) & 0xff);
-        }
-        return out;
-    }
-
 }

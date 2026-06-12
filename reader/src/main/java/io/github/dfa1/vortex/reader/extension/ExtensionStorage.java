@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.extension;
+package io.github.dfa1.vortex.reader.extension;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -13,7 +13,7 @@ import io.github.dfa1.vortex.encoding.TimeUnit;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 
-/// Low-level storage helpers shared by extension decode and encode paths.
+/// Low-level storage helpers for extension decode paths.
 public final class ExtensionStorage {
 
     private ExtensionStorage() {

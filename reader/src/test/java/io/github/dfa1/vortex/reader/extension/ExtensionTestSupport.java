@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.extension;
+package io.github.dfa1.vortex.reader.extension;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
@@ -12,9 +12,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 
-/// Shared fixtures for the per-extension test classes:
-/// canonical dtype constants and small helpers for building extension dtypes
-/// and single-row primitive storage arrays.
+/// Shared fixtures for the per-extension decoder test classes.
 final class ExtensionTestSupport {
 
     static final DType.Primitive I32 = new DType.Primitive(PType.I32, false);

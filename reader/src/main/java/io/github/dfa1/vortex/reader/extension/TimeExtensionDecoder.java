@@ -1,10 +1,14 @@
-package io.github.dfa1.vortex.extension;
+package io.github.dfa1.vortex.reader.extension;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.MaskedArray;
 import io.github.dfa1.vortex.encoding.TimeUnit;
+import io.github.dfa1.vortex.extension.ExtensionId;
+
+import io.github.dfa1.vortex.reader.ExtensionDecoder;
 
 import java.nio.ByteBuffer;
 import java.time.LocalTime;
@@ -12,14 +16,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 /// {@code vortex.time} — sub-day count in the {@link TimeUnit} recorded in the metadata byte.
-public final class TimeExtension implements Extension {
+public final class TimeExtensionDecoder implements ExtensionDecoder {
 
     /// Singleton instance.
-    public static final TimeExtension INSTANCE = new TimeExtension();
+    public static final TimeExtensionDecoder INSTANCE = new TimeExtensionDecoder();
 
     /// Public no-arg constructor for {@link java.util.ServiceLoader}.
     /// Prefer the {@link #INSTANCE} singleton in application code.
-    public TimeExtension() {
+    public TimeExtensionDecoder() {
     }
 
     @Override
@@ -73,7 +77,7 @@ public final class TimeExtension implements Extension {
         return LocalTime.ofNanoOfDay(nanos);
     }
 
-    /// Decodes every row of {@code storage} into a list of times. {@link io.github.dfa1.vortex.core.array.MaskedArray}
+    /// Decodes every row of {@code storage} into a list of times. {@link MaskedArray}
     /// storage yields {@code null} at invalid positions instead of throwing.
     ///
     /// @param ext     declared extension dtype carrying the unit
@@ -82,7 +86,7 @@ public final class TimeExtension implements Extension {
     public List<LocalTime> decodeAll(DType.Extension ext, Array storage) {
         int n = Math.toIntExact(storage.length());
         List<LocalTime> out = new ArrayList<>(n);
-        if (storage instanceof io.github.dfa1.vortex.core.array.MaskedArray masked) {
+        if (storage instanceof MaskedArray masked) {
             for (long i = 0; i < n; i++) {
                 out.add(masked.isValid(i) ? decode(ext, masked.inner(), i) : null);
             }
@@ -93,19 +97,4 @@ public final class TimeExtension implements Extension {
         }
         return out;
     }
-
-    /// Encodes a time-of-day at the given unit.
-    ///
-    /// @param value local time
-    /// @param unit  resolution
-    /// @return sub-day count in {@code unit}
-    /// @throws VortexException if {@code unit} is {@link TimeUnit#Days}
-    public long encode(LocalTime value, TimeUnit unit) {
-        if (unit == TimeUnit.Days) {
-            throw new VortexException("Time.encode: Days unit not valid for vortex.time");
-        }
-        long divisor = 1_000_000_000L / unit.divisor();
-        return value.toNanoOfDay() / divisor;
-    }
-
 }

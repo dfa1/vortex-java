@@ -1,11 +1,11 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.NullableData;
-import io.github.dfa1.vortex.extension.DateExtension;
-import io.github.dfa1.vortex.extension.ExtensionEncoder;
 import io.github.dfa1.vortex.extension.ExtensionId;
+import io.github.dfa1.vortex.writer.ExtensionEncoder;
 
 import java.time.LocalDate;
 import java.util.Collection;
@@ -29,7 +29,11 @@ public final class DateExtensionEncoder implements ExtensionEncoder {
 
     @Override
     public DType.Extension dtype(boolean nullable) {
-        return DateExtension.INSTANCE.dtype(nullable);
+        return new DType.Extension(
+                ExtensionId.VORTEX_DATE.id(),
+                new DType.Primitive(PType.I32, nullable),
+                null,
+                nullable);
     }
 
     @Override
@@ -45,7 +49,7 @@ public final class DateExtensionEncoder implements ExtensionEncoder {
             if (v == null) {
                 anyNull = true;
             } else {
-                out[i] = DateExtension.INSTANCE.encode(v);
+                out[i] = Math.toIntExact(v.toEpochDay());
                 validity[i] = true;
             }
             i++;

@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.extension;
+package io.github.dfa1.vortex.reader.extension;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.core.array.BoolArray;
 import io.github.dfa1.vortex.core.array.ByteArray;
 import io.github.dfa1.vortex.core.array.FixedSizeListArray;
 import io.github.dfa1.vortex.core.array.MaskedArray;
+import io.github.dfa1.vortex.extension.ExtensionId;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
@@ -15,13 +16,13 @@ import java.lang.foreign.ValueLayout;
 import java.util.List;
 import java.util.UUID;
 
-import static io.github.dfa1.vortex.extension.ExtensionTestSupport.U8;
+import static io.github.dfa1.vortex.reader.extension.ExtensionTestSupport.U8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-class UuidExtensionTest {
+class UuidExtensionDecoderTest {
 
-    private final UuidExtension sut = UuidExtension.INSTANCE;
+    private final UuidExtensionDecoder sut = UuidExtensionDecoder.INSTANCE;
 
     @Test
     void identity() {
@@ -82,9 +83,13 @@ class UuidExtensionTest {
         // Given — 2 UUIDs in flat byte storage, validity says row 1 = null
         UUID u1 = UUID.fromString("12345678-1234-5678-9abc-def012345678");
         try (Arena arena = Arena.ofConfined()) {
-            byte[] u1bytes = sut.encode(u1);
+            long msb = u1.getMostSignificantBits();
+            long lsb = u1.getLeastSignificantBits();
             byte[] flat = new byte[32];
-            System.arraycopy(u1bytes, 0, flat, 0, 16);
+            for (int k = 0; k < 8; k++) {
+                flat[k] = (byte) ((msb >> (56 - 8 * k)) & 0xff);
+                flat[8 + k] = (byte) ((lsb >> (56 - 8 * k)) & 0xff);
+            }
             // second UUID (all zeros) — flat[16..31] already 0
             MemorySegment buf = arena.allocate(flat.length);
             for (int i = 0; i < flat.length; i++) {

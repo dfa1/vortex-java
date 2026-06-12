@@ -1,12 +1,12 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.NullableData;
 import io.github.dfa1.vortex.encoding.FixedSizeListData;
-import io.github.dfa1.vortex.extension.ExtensionEncoder;
 import io.github.dfa1.vortex.extension.ExtensionId;
-import io.github.dfa1.vortex.extension.UuidExtension;
+import io.github.dfa1.vortex.writer.ExtensionEncoder;
 
 import java.util.Collection;
 import java.util.UUID;
@@ -30,7 +30,12 @@ public final class UuidExtensionEncoder implements ExtensionEncoder {
 
     @Override
     public DType.Extension dtype(boolean nullable) {
-        return UuidExtension.INSTANCE.dtype(nullable);
+        DType.Primitive u8 = new DType.Primitive(PType.U8, false);
+        return new DType.Extension(
+                ExtensionId.VORTEX_UUID.id(),
+                new DType.FixedSizeList(u8, 16, nullable),
+                null,
+                nullable);
     }
 
     @Override
@@ -46,7 +51,7 @@ public final class UuidExtensionEncoder implements ExtensionEncoder {
             if (v == null) {
                 anyNull = true;
             } else {
-                byte[] encoded = UuidExtension.INSTANCE.encode(v);
+                byte[] encoded = encode(v);
                 System.arraycopy(encoded, 0, flat, row * 16, 16);
                 validity[row] = true;
             }
@@ -60,5 +65,16 @@ public final class UuidExtensionEncoder implements ExtensionEncoder {
             throw new VortexException("null element in non-nullable vortex.uuid column");
         }
         return new NullableData(storage, validity);
+    }
+
+    private static byte[] encode(UUID value) {
+        byte[] out = new byte[16];
+        long msb = value.getMostSignificantBits();
+        long lsb = value.getLeastSignificantBits();
+        for (int k = 0; k < 8; k++) {
+            out[k] = (byte) ((msb >> (56 - 8 * k)) & 0xff);
+            out[8 + k] = (byte) ((lsb >> (56 - 8 * k)) & 0xff);
+        }
+        return out;
     }
 }

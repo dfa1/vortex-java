@@ -680,7 +680,7 @@ public final class VortexInspectorTui {
                             .filter(id -> id == io.github.dfa1.vortex.extension.ExtensionId.VORTEX_DATE)
                             .isPresent()) {
                 try {
-                    return io.github.dfa1.vortex.extension.DateExtension.INSTANCE.decode(array, i).toString();
+                    return io.github.dfa1.vortex.reader.extension.DateExtensionDecoder.INSTANCE.decode(array, i).toString();
                 } catch (RuntimeException e) {
                     // fall through to generic rendering on shape mismatch
                 }

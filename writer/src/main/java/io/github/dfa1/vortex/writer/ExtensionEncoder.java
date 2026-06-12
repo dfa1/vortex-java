@@ -1,21 +1,16 @@
-package io.github.dfa1.vortex.extension;
+package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.extension.ExtensionId;
 
 import java.util.Collection;
 
-/// Write-side surface of an extension. Exposes the spec identity, the matching
-/// {@link DType.Extension}, and the polymorphic {@link #encodeAll} entry point used
-/// by the writer's auto-routing path.
+/// Write-side contract for a Vortex extension type.
 ///
-/// <p>ADR 0001 Phase 5: {@link Extension} extends this interface so existing
-/// implementations satisfy it unchanged. Read-only consumers (Inspector, the scan
-/// path's extension wrapping in {@code Chunk.as(...)}) can type-narrow to
-/// {@link ExtensionEncoder}'s parent interface {@link Extension} without depending
-/// on encoder logic; once each spec extension is lifted into a standalone
-/// encoder living in {@code writer}, this interface becomes the canonical
-/// write-side type and the bifunctional {@link Extension} interface goes away.
+/// <p>Implementations pair a spec identity ({@link ExtensionId}) with the matching
+/// {@link DType.Extension} dtype and a polymorphic {@link #encodeAll} entry point used
+/// by the writer's auto-routing path.
 public interface ExtensionEncoder {
 
     /// @return the spec identity of this extension

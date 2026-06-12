@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.extension;
+package io.github.dfa1.vortex.reader.extension;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.core.array.BoolArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.core.array.MaskedArray;
 import io.github.dfa1.vortex.encoding.TimeUnit;
+import io.github.dfa1.vortex.extension.ExtensionId;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
@@ -20,16 +21,16 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.List;
 
-import static io.github.dfa1.vortex.extension.ExtensionTestSupport.I64;
-import static io.github.dfa1.vortex.extension.ExtensionTestSupport.ext;
-import static io.github.dfa1.vortex.extension.ExtensionTestSupport.i64;
-import static io.github.dfa1.vortex.extension.ExtensionTestSupport.tzMeta;
+import static io.github.dfa1.vortex.reader.extension.ExtensionTestSupport.I64;
+import static io.github.dfa1.vortex.reader.extension.ExtensionTestSupport.ext;
+import static io.github.dfa1.vortex.reader.extension.ExtensionTestSupport.i64;
+import static io.github.dfa1.vortex.reader.extension.ExtensionTestSupport.tzMeta;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-class TimestampExtensionTest {
+class TimestampExtensionDecoderTest {
 
-    private final TimestampExtension sut = TimestampExtension.INSTANCE;
+    private final TimestampExtensionDecoder sut = TimestampExtensionDecoder.INSTANCE;
 
     @Test
     void identity() {
@@ -140,14 +141,6 @@ class TimestampExtensionTest {
             // Then
             assertThat(out).containsExactly(Instant.ofEpochMilli(1_000L), null);
         }
-    }
-
-    @Test
-    void encode_daysUnitThrows() {
-        // Given — Days isn't a sub-second unit on the encode side either
-        assertThatThrownBy(() -> sut.encode(Instant.EPOCH, TimeUnit.Days))
-                .isInstanceOf(VortexException.class)
-                .hasMessageContaining("Days unit not valid");
     }
 
     @Test

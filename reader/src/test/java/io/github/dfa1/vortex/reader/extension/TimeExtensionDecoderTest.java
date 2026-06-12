@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.extension;
+package io.github.dfa1.vortex.reader.extension;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.core.array.BoolArray;
 import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.MaskedArray;
 import io.github.dfa1.vortex.encoding.TimeUnit;
+import io.github.dfa1.vortex.extension.ExtensionId;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
@@ -15,18 +16,18 @@ import java.lang.foreign.ValueLayout;
 import java.time.LocalTime;
 import java.util.List;
 
-import static io.github.dfa1.vortex.extension.ExtensionTestSupport.I32;
-import static io.github.dfa1.vortex.extension.ExtensionTestSupport.I64;
-import static io.github.dfa1.vortex.extension.ExtensionTestSupport.ext;
-import static io.github.dfa1.vortex.extension.ExtensionTestSupport.i32;
-import static io.github.dfa1.vortex.extension.ExtensionTestSupport.i64;
-import static io.github.dfa1.vortex.extension.ExtensionTestSupport.unitByte;
+import static io.github.dfa1.vortex.reader.extension.ExtensionTestSupport.I32;
+import static io.github.dfa1.vortex.reader.extension.ExtensionTestSupport.I64;
+import static io.github.dfa1.vortex.reader.extension.ExtensionTestSupport.ext;
+import static io.github.dfa1.vortex.reader.extension.ExtensionTestSupport.i32;
+import static io.github.dfa1.vortex.reader.extension.ExtensionTestSupport.i64;
+import static io.github.dfa1.vortex.reader.extension.ExtensionTestSupport.unitByte;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-class TimeExtensionTest {
+class TimeExtensionDecoderTest {
 
-    private final TimeExtension sut = TimeExtension.INSTANCE;
+    private final TimeExtensionDecoder sut = TimeExtensionDecoder.INSTANCE;
 
     @Test
     void identity() {
@@ -111,5 +112,4 @@ class TimeExtensionTest {
             assertThat(out).containsExactly(LocalTime.NOON, null);
         }
     }
-
 }

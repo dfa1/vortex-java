@@ -1,15 +1,21 @@
-package io.github.dfa1.vortex.extension;
+package io.github.dfa1.vortex.reader.extension;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.core.array.MaskedArray;
 import io.github.dfa1.vortex.encoding.TimeUnit;
+import io.github.dfa1.vortex.extension.ExtensionId;
+
+import io.github.dfa1.vortex.reader.ExtensionDecoder;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -18,14 +24,14 @@ import java.util.Optional;
 /// {@code vortex.timestamp} — I64 epoch count plus optional IANA timezone.
 /// Metadata layout: {@code byte[0] = TimeUnit tag, bytes[1..3] = tz_len (u16 LE),
 /// bytes[3..3+tz_len] = tz UTF-8}.
-public final class TimestampExtension implements Extension {
+public final class TimestampExtensionDecoder implements ExtensionDecoder {
 
     /// Singleton instance.
-    public static final TimestampExtension INSTANCE = new TimestampExtension();
+    public static final TimestampExtensionDecoder INSTANCE = new TimestampExtensionDecoder();
 
     /// Public no-arg constructor for {@link java.util.ServiceLoader}.
     /// Prefer the {@link #INSTANCE} singleton in application code.
-    public TimestampExtension() {
+    public TimestampExtensionDecoder() {
     }
 
     @Override
@@ -67,13 +73,13 @@ public final class TimestampExtension implements Extension {
     /// @param storage signed-integer storage array
     /// @param i       row index, {@code 0 <= i < storage.length()}
     /// @return decoded instant
-    /// @throws io.github.dfa1.vortex.core.VortexException if the metadata unit is
-    ///         {@link TimeUnit#Days} or storage isn't an integer primitive
+    /// @throws VortexException if the metadata unit is {@link TimeUnit#Days}
+    ///         or storage isn't an integer primitive
     public Instant instant(DType.Extension ext, Array storage, long i) {
         ExtensionStorage.checkBounds(i, storage.length());
         TimeUnit unit = ExtensionStorage.readUnit(ext);
         if (unit == TimeUnit.Days) {
-            throw new io.github.dfa1.vortex.core.VortexException("Timestamp.instant: Days unit not valid");
+            throw new VortexException("Timestamp.instant: Days unit not valid");
         }
         return ExtensionStorage.instantFromRaw(ExtensionStorage.epochInteger(storage, i), unit);
     }
@@ -86,14 +92,14 @@ public final class TimestampExtension implements Extension {
     /// @param i       row index, {@code 0 <= i < storage.length()}
     /// @return decoded zoned date-time
     public ZonedDateTime zonedDateTime(DType.Extension ext, Array storage, long i) {
-        return instant(ext, storage, i).atZone(timezone(ext).orElse(java.time.ZoneOffset.UTC));
+        return instant(ext, storage, i).atZone(timezone(ext).orElse(ZoneOffset.UTC));
     }
 
     /// Returns the IANA timezone recorded in the extension metadata.
     ///
     /// @param ext declared extension dtype
     /// @return parsed zone id, or empty when no timezone is recorded
-    /// @throws io.github.dfa1.vortex.core.VortexException if the metadata is truncated mid-string
+    /// @throws VortexException if the metadata is truncated mid-string
     public Optional<ZoneId> timezone(DType.Extension ext) {
         ByteBuffer meta = ext.metadata();
         if (meta == null || meta.remaining() < 3) {
@@ -106,7 +112,7 @@ public final class TimestampExtension implements Extension {
             return Optional.empty();
         }
         if (le.remaining() < 3 + tzLen) {
-            throw new io.github.dfa1.vortex.core.VortexException(
+            throw new VortexException(
                     "timestamp metadata truncated: declared tz_len="
                             + tzLen + " but only " + (le.remaining() - 3) + " bytes available");
         }
@@ -117,7 +123,7 @@ public final class TimestampExtension implements Extension {
         return Optional.of(ZoneId.of(new String(tzBytes, StandardCharsets.UTF_8)));
     }
 
-    /// Decodes every row of {@code storage} into a list of instants. {@link io.github.dfa1.vortex.core.array.MaskedArray}
+    /// Decodes every row of {@code storage} into a list of instants. {@link MaskedArray}
     /// storage yields {@code null} at invalid positions instead of throwing.
     ///
     /// @param ext     declared extension dtype carrying the unit
@@ -126,7 +132,7 @@ public final class TimestampExtension implements Extension {
     public List<Instant> decodeAll(DType.Extension ext, Array storage) {
         int n = Math.toIntExact(storage.length());
         List<Instant> out = new ArrayList<>(n);
-        if (storage instanceof io.github.dfa1.vortex.core.array.MaskedArray masked) {
+        if (storage instanceof MaskedArray masked) {
             for (long i = 0; i < n; i++) {
                 out.add(masked.isValid(i) ? instant(ext, masked.inner(), i) : null);
             }
@@ -137,24 +143,4 @@ public final class TimestampExtension implements Extension {
         }
         return out;
     }
-
-    /// Encodes an instant at the given unit.
-    ///
-    /// @param value instant
-    /// @param unit  resolution
-    /// @return epoch count in {@code unit}
-    /// @throws io.github.dfa1.vortex.core.VortexException if {@code unit} is {@link TimeUnit#Days}
-    public long encode(Instant value, TimeUnit unit) {
-        return switch (unit) {
-            case Seconds -> value.getEpochSecond();
-            case Milliseconds -> value.toEpochMilli();
-            case Microseconds -> Math.multiplyExact(value.getEpochSecond(), 1_000_000L)
-                    + value.getNano() / 1_000L;
-            case Nanoseconds -> Math.multiplyExact(value.getEpochSecond(), 1_000_000_000L)
-                    + value.getNano();
-            case Days -> throw new io.github.dfa1.vortex.core.VortexException(
-                    "Timestamp.encode: Days unit not valid");
-        };
-    }
-
 }

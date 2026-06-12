@@ -119,11 +119,11 @@ class JdbcImporterTest {
                     io.github.dfa1.vortex.reader.ReadRegistry.loadAll())) {
                 DType.Struct schema = (DType.Struct) reader.dtype();
                 assertThat(schema.fieldTypes().get(1))
-                        .isEqualTo(io.github.dfa1.vortex.extension.DateExtension.INSTANCE.dtype(false));
+                        .isEqualTo(io.github.dfa1.vortex.writer.encode.DateExtensionEncoder.INSTANCE.dtype(false));
                 assertThat(schema.fieldTypes().get(2))
-                        .isEqualTo(io.github.dfa1.vortex.extension.TimeExtension.INSTANCE.dtype(false));
+                        .isEqualTo(io.github.dfa1.vortex.writer.encode.TimeExtensionEncoder.INSTANCE.dtype(false));
                 assertThat(schema.fieldTypes().get(3))
-                        .isEqualTo(io.github.dfa1.vortex.extension.TimestampExtension.INSTANCE.dtype(false));
+                        .isEqualTo(io.github.dfa1.vortex.writer.encode.TimestampExtensionEncoder.INSTANCE.dtype(false));
 
                 // And — decoded values round-trip through the matching extension impl
                 try (ScanIterator iter = reader.scan(ScanOptions.all())) {
@@ -131,14 +131,14 @@ class JdbcImporterTest {
                     try (Chunk chunk = iter.next()) {
                         assertThat(chunk.rowCount()).isEqualTo(2);
 
-                        assertThat(io.github.dfa1.vortex.extension.DateExtension.INSTANCE
+                        assertThat(io.github.dfa1.vortex.reader.extension.DateExtensionDecoder.INSTANCE
                                 .decodeAll(chunk.column("D")))
                                 .containsExactly(
                                         java.time.LocalDate.of(1996, 2, 12),
                                         java.time.LocalDate.of(2026, 6, 10));
 
                         DType.Extension tsDtype = (DType.Extension) schema.fieldTypes().get(3);
-                        assertThat(io.github.dfa1.vortex.extension.TimestampExtension.INSTANCE
+                        assertThat(io.github.dfa1.vortex.reader.extension.TimestampExtensionDecoder.INSTANCE
                                 .decodeAll(tsDtype, chunk.column("TS")))
                                 .containsExactly(
                                         java.sql.Timestamp.valueOf("2026-06-10 12:00:00").toInstant(),
@@ -201,23 +201,23 @@ class JdbcImporterTest {
                         assertThat(dMasked.isValid(0)).isTrue();
                         assertThat(dMasked.isValid(1)).isFalse();
                         assertThat(dMasked.isValid(2)).isTrue();
-                        assertThat(io.github.dfa1.vortex.extension.DateExtension.INSTANCE.decode(dMasked, 0))
+                        assertThat(io.github.dfa1.vortex.reader.extension.DateExtensionDecoder.INSTANCE.decode(dMasked, 0))
                                 .isEqualTo(java.time.LocalDate.of(1996, 2, 12));
-                        assertThat(io.github.dfa1.vortex.extension.DateExtension.INSTANCE.decode(dMasked, 2))
+                        assertThat(io.github.dfa1.vortex.reader.extension.DateExtensionDecoder.INSTANCE.decode(dMasked, 2))
                                 .isEqualTo(java.time.LocalDate.of(2026, 6, 10));
 
                         DType.Extension tDtype = (DType.Extension) schema.fieldTypes().get(2);
                         io.github.dfa1.vortex.core.array.MaskedArray tMasked =
                                 (io.github.dfa1.vortex.core.array.MaskedArray) tCol;
                         assertThat(tMasked.isValid(1)).isFalse();
-                        assertThat(io.github.dfa1.vortex.extension.TimeExtension.INSTANCE.decode(tDtype, tMasked, 0))
+                        assertThat(io.github.dfa1.vortex.reader.extension.TimeExtensionDecoder.INSTANCE.decode(tDtype, tMasked, 0))
                                 .isEqualTo(java.time.LocalTime.of(1, 1, 1));
 
                         DType.Extension tsDtype = (DType.Extension) schema.fieldTypes().get(3);
                         io.github.dfa1.vortex.core.array.MaskedArray tsMasked =
                                 (io.github.dfa1.vortex.core.array.MaskedArray) tsCol;
                         assertThat(tsMasked.isValid(1)).isFalse();
-                        assertThat(io.github.dfa1.vortex.extension.TimestampExtension.INSTANCE.instant(tsDtype, tsMasked, 0))
+                        assertThat(io.github.dfa1.vortex.reader.extension.TimestampExtensionDecoder.INSTANCE.instant(tsDtype, tsMasked, 0))
                                 .isEqualTo(java.sql.Timestamp.valueOf("2026-06-10 12:00:00").toInstant());
 
                         io.github.dfa1.vortex.core.array.MaskedArray uMasked =
@@ -225,16 +225,16 @@ class JdbcImporterTest {
                         assertThat(uMasked.isValid(0)).isTrue();
                         assertThat(uMasked.isValid(1)).isFalse();
                         assertThat(uMasked.isValid(2)).isTrue();
-                        assertThat(io.github.dfa1.vortex.extension.UuidExtension.INSTANCE.decode(uMasked, 0))
+                        assertThat(io.github.dfa1.vortex.reader.extension.UuidExtensionDecoder.INSTANCE.decode(uMasked, 0))
                                 .isEqualTo(u1);
 
                         // And — decodeAll preserves nulls in the returned list at row 1
-                        assertThat(io.github.dfa1.vortex.extension.DateExtension.INSTANCE.decodeAll(dMasked))
+                        assertThat(io.github.dfa1.vortex.reader.extension.DateExtensionDecoder.INSTANCE.decodeAll(dMasked))
                                 .containsExactly(
                                         java.time.LocalDate.of(1996, 2, 12),
                                         null,
                                         java.time.LocalDate.of(2026, 6, 10));
-                        assertThat(io.github.dfa1.vortex.extension.UuidExtension.INSTANCE.decodeAll(uMasked))
+                        assertThat(io.github.dfa1.vortex.reader.extension.UuidExtensionDecoder.INSTANCE.decodeAll(uMasked))
                                 .containsExactly(u1, null, u1);
                     }
                 }
@@ -261,13 +261,13 @@ class JdbcImporterTest {
                     io.github.dfa1.vortex.reader.ReadRegistry.loadAll())) {
                 DType.Struct schema = (DType.Struct) reader.dtype();
                 assertThat(schema.fieldTypes().get(1))
-                        .isEqualTo(io.github.dfa1.vortex.extension.UuidExtension.INSTANCE.dtype(false));
+                        .isEqualTo(io.github.dfa1.vortex.writer.encode.UuidExtensionEncoder.INSTANCE.dtype(false));
 
                 try (ScanIterator iter = reader.scan(ScanOptions.all())) {
                     assertThat(iter.hasNext()).isTrue();
                     try (Chunk chunk = iter.next()) {
                         assertThat(chunk.rowCount()).isEqualTo(2);
-                        assertThat(io.github.dfa1.vortex.extension.UuidExtension.INSTANCE
+                        assertThat(io.github.dfa1.vortex.reader.extension.UuidExtensionDecoder.INSTANCE
                                 .decodeAll(chunk.column("U")))
                                 .containsExactly(u1, u2);
                     }

@@ -2,7 +2,6 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.extension.ExtensionEncoder;
 import io.github.dfa1.vortex.extension.ExtensionId;
 import io.github.dfa1.vortex.writer.encode.EncodingEncoder;
 
