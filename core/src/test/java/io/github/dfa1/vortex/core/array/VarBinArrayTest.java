@@ -13,13 +13,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class VarBinArrayTest {
 
     private static final DType UTF8 = new DType.Utf8(false);
 
-    private static VarBinArray of(String... values) {
+    private static VarBinArray.OffsetMode of(String... values) {
         byte[] allBytes = String.join("", values).getBytes(StandardCharsets.UTF_8);
         MemorySegment bytes = MemorySegment.ofArray(allBytes);
 
@@ -32,7 +31,7 @@ class VarBinArrayTest {
             bb.putInt(o);
         }
         MemorySegment offsetsSeg = MemorySegment.ofArray(bb.array());
-        return new VarBinArray(UTF8, values.length, bytes, offsetsSeg, PType.I32);
+        return new VarBinArray.OffsetMode(UTF8, values.length, bytes, offsetsSeg, PType.I32);
     }
 
     @Nested
@@ -113,7 +112,7 @@ class VarBinArrayTest {
         @Test
         void offsetsPtype_returnsOffsetType() {
             // Given
-            VarBinArray sut = of("a");
+            VarBinArray.OffsetMode sut = of("a");
 
             // When / Then
             assertThat(sut.offsetsPtype()).isNotNull();
@@ -183,14 +182,5 @@ class VarBinArrayTest {
             assertThat(lengths).containsExactly(3, 1, 3);
         }
 
-        @Test
-        void offsetsSegment_inDictMode_throws() {
-            // Given
-            VarBinArray sut = ofDict(new String[]{"x"}, new int[]{0});
-
-            // When / Then
-            assertThatThrownBy(() -> sut.offsetsSegment())
-                    .isInstanceOf(IllegalStateException.class);
-        }
     }
 }

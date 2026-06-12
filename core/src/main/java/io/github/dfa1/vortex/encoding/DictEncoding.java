@@ -487,7 +487,7 @@ public final class DictEncoding implements Encoding {
             MemorySegment codesBuf = ctx.decodeChildSegment(0, codesDtype, n);
 
             Array valuesArr = ctx.decodeChild(1, ctx.dtype(), dictSize);
-            VarBinArray varBinValues = (VarBinArray) valuesArr;
+            VarBinArray.OffsetMode varBinValues = (VarBinArray.OffsetMode) valuesArr;
             MemorySegment dictBytes = varBinValues.bytesSegment();
             MemorySegment dictOffsets = varBinValues.offsetsSegment();
 

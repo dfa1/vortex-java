@@ -37,7 +37,7 @@ public final class ArraySegments {
             case ByteArray a -> a.buffer();
             case BoolArray a -> a.buffer();
             case Float16Array a -> a.buffer();
-            case VarBinArray a -> a.buffer();
+            case VarBinArray a -> a.bytesSegment();
             case GenericArray a -> a.buffer(0);
             default -> throw new VortexException(data.getClass().getSimpleName() + " has no primary segment");
         };

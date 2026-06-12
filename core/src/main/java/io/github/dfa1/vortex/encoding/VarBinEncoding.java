@@ -142,7 +142,7 @@ public final class VarBinEncoding implements Encoding {
 
             MemorySegment bytes = ctx.buffer(0);
 
-            return new VarBinArray(ctx.dtype(), n, bytes, offsets, offsetsPtype);
+            return new VarBinArray.OffsetMode(ctx.dtype(), n, bytes, offsets, offsetsPtype);
         }
     }
 }

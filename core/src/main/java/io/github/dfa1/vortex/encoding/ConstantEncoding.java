@@ -236,7 +236,7 @@ public final class ConstantEncoding implements Encoding {
                 offsetsSeg.setAtIndex(PTypeIO.LE_INT, i, (int) (i * strLen));
             }
 
-            return new VarBinArray(ctx.dtype(), n, bytesSeg.asReadOnly(), offsetsSeg.asReadOnly(), PType.I32);
+            return new VarBinArray.OffsetMode(ctx.dtype(), n, bytesSeg.asReadOnly(), offsetsSeg.asReadOnly(), PType.I32);
         }
 
         private static long scalarToRawBits(ScalarValue scalar, PType ptype) {

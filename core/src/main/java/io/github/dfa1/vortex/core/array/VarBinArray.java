@@ -10,63 +10,50 @@ import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
 import java.util.function.IntConsumer;
 
-/// Concrete [Array] for variable-length binary / UTF-8 string columns.
+/// Sealed interface for variable-length binary / UTF-8 string columns.
 ///
-/// Holds a bytes segment and an offsets array; element {@code i} occupies
-/// {@code bytes[offsets[i]..offsets[i+1]]}. Provides zero-allocation
-/// {@link #getByteLength} and {@link #forEachByteLength} for callers that only
-/// need lengths, and allocating {@link #getBytes} for full value retrieval.
-///
-/// Dict mode: created via {@link #ofDict}. Stores dict values + codes directly;
-/// all accessors resolve through the dictionary without materializing strings.
-public final class VarBinArray implements Array {
+/// Two implementations: {@link OffsetMode} for standard offset-based layout and
+/// {@link DictMode} for dictionary-encoded strings. All accessors resolve
+/// transparently regardless of mode; only {@link OffsetMode} exposes
+/// {@link OffsetMode#offsetsSegment()} and {@link OffsetMode#offsetsPtype()}.
+public sealed interface VarBinArray extends Array
+        permits VarBinArray.OffsetMode, VarBinArray.DictMode {
 
-    private final DType dtype;
-    private final long length;
-    private final MemorySegment bytes;
-    private final MemorySegment offsetsSeg;
-    private final PType offsetsPtype;
-
-    // dict mode: non-null when this array lazily resolves through a dictionary
-    private final MemorySegment dictValOffsets;
-    private final PType dictValOffPType;
-    private final MemorySegment dictCodesSegs;
-    private final PType dictCodesPType;
-
-    /// Creates a new {@code VarBinArray} in offset mode.
+    /// Returns the concatenated raw bytes segment backing all elements.
     ///
-    /// @param dtype        logical type (Utf8 or Binary)
-    /// @param length       number of variable-length elements
-    /// @param bytes        concatenated raw byte data for all elements
-    /// @param offsetsSeg   offsets segment of length {@code length + 1}; {@code offsets[i]..offsets[i+1]} is element {@code i}
-    /// @param offsetsPtype physical type of the offsets values (I32/U32 or I64/U64)
-    public VarBinArray(DType dtype, long length, MemorySegment bytes, MemorySegment offsetsSeg, PType offsetsPtype) {
-        this.dtype = dtype;
-        this.length = length;
-        this.bytes = bytes;
-        this.offsetsSeg = offsetsSeg;
-        this.offsetsPtype = offsetsPtype;
-        this.dictValOffsets = null;
-        this.dictValOffPType = null;
-        this.dictCodesSegs = null;
-        this.dictCodesPType = null;
-    }
+    /// @return the bytes {@link MemorySegment}
+    MemorySegment bytesSegment();
 
-    private VarBinArray(DType dtype, long length,
-            MemorySegment dictValBytes, MemorySegment dictValOffsets, PType dictValOffPType,
-            MemorySegment dictCodesSegs, PType dictCodesPType) {
-        this.dtype = dtype;
-        this.length = length;
-        this.bytes = dictValBytes;
-        this.offsetsSeg = null;
-        this.offsetsPtype = null;
-        this.dictValOffsets = dictValOffsets;
-        this.dictValOffPType = dictValOffPType;
-        this.dictCodesSegs = dictCodesSegs;
-        this.dictCodesPType = dictCodesPType;
-    }
+    /// Returns a copy of the raw bytes for element {@code i}.
+    ///
+    /// @param i zero-based logical index (must be in {@code [0, length)})
+    /// @return a newly allocated byte array containing the raw bytes of element {@code i}
+    byte[] getBytes(long i);
 
-    /// Creates a dict-mode VarBinArray. Lengths and bytes are resolved via the
+    /// Returns the UTF-8 decoded string for element {@code i}.
+    ///
+    /// @param i zero-based logical index (must be in {@code [0, length)})
+    /// @return the UTF-8 string at position {@code i}
+    String getString(long i);
+
+    /// Returns the byte length of element {@code i} without copying the data.
+    ///
+    /// @param i zero-based logical index (must be in {@code [0, length)})
+    /// @return the number of bytes in element {@code i}
+    int getByteLength(long i);
+
+    /// Passes the byte length of each element to the given consumer in row order.
+    ///
+    /// @param c consumer called once per element with the byte length at each index
+    void forEachByteLength(IntConsumer c);
+
+    /// Returns a new {@code VarBinArray} containing only the first {@code rows} elements.
+    ///
+    /// @param rows number of rows to retain; if {@code rows >= length} returns this array unchanged
+    /// @return a {@code VarBinArray} containing the first {@code rows} elements
+    VarBinArray truncate(long rows);
+
+    /// Creates a dict-mode {@code VarBinArray}. Lengths and bytes are resolved via the
     /// dictionary on each access; no string materialization occurs at construction time.
     ///
     /// @param dtype           logical type (Utf8 or Binary)
@@ -77,163 +64,155 @@ public final class VarBinArray implements Array {
     /// @param dictCodesSegs   per-row dictionary code indices (length = n)
     /// @param dictCodesPType  physical type of the dictionary codes
     /// @return a new dict-mode {@code VarBinArray}
-    public static VarBinArray ofDict(DType dtype, long n,
+    static VarBinArray ofDict(DType dtype, long n,
             MemorySegment dictValBytes,
             MemorySegment dictValOffsets, PType dictValOffPType,
             MemorySegment dictCodesSegs, PType dictCodesPType) {
-        return new VarBinArray(dtype, n, dictValBytes, dictValOffsets, dictValOffPType,
+        return new DictMode(dtype, n, dictValBytes, dictValOffsets, dictValOffPType,
                 dictCodesSegs, dictCodesPType);
     }
 
-    @Override
-    public DType dtype() {
-        return dtype;
-    }
-
-    @Override
-    public long length() {
-        return length;
-    }
-
-    MemorySegment buffer() {
-        return bytes;
-    }
-
-    /// Returns the concatenated raw bytes segment backing all elements.
+    /// Standard offset-based {@code VarBinArray}.
     ///
-    /// @return the bytes {@link MemorySegment}
-    public MemorySegment bytesSegment() {
-        return bytes;
-    }
-
-    /// Returns the physical type of the offsets values.
+    /// Element {@code i} occupies {@code bytesSegment[offsetsSegment[i]..offsetsSegment[i+1]]}.
     ///
-    /// @return the {@link PType} used to encode the offsets array
-    /// @throws IllegalStateException if this array is in dict mode
-    public PType offsetsPtype() {
-        if (offsetsPtype == null) {
-            throw new IllegalStateException("offsetsPtype() not available in dict mode");
+    /// @param dtype          logical type (Utf8 or Binary)
+    /// @param length         number of variable-length elements
+    /// @param bytesSegment   concatenated raw byte data for all elements
+    /// @param offsetsSegment offsets segment of length {@code length + 1}
+    /// @param offsetsPtype   physical type of the offsets values (I32/U32 or I64/U64)
+    record OffsetMode(DType dtype, long length, MemorySegment bytesSegment,
+                      MemorySegment offsetsSegment, PType offsetsPtype)
+            implements VarBinArray {
+
+        @Override
+        public byte[] getBytes(long i) {
+            long start = readOffset(i);
+            long end = readOffset(i + 1);
+            byte[] out = new byte[(int) (end - start)];
+            MemorySegment.copy(bytesSegment, start, MemorySegment.ofArray(out), 0, end - start);
+            return out;
         }
-        return offsetsPtype;
-    }
 
-    /// Returns the offsets segment (length + 1 entries); each element {@code i} spans
-    /// {@code bytes[offsets[i]..offsets[i+1]]}.
-    ///
-    /// @return the offsets {@link MemorySegment}
-    /// @throws IllegalStateException if this array is in dict mode
-    public MemorySegment offsetsSegment() {
-        if (offsetsSeg == null) {
-            throw new IllegalStateException("offsetsSegment() not available in dict mode");
+        @Override
+        public String getString(long i) {
+            return new String(getBytes(i), StandardCharsets.UTF_8);
         }
-        return offsetsSeg;
+
+        @Override
+        public int getByteLength(long i) {
+            return (int) (readOffset(i + 1) - readOffset(i));
+        }
+
+        @Override
+        public void forEachByteLength(IntConsumer c) {
+            long n = length;
+            if (offsetsPtype == PType.I32 || offsetsPtype == PType.U32) {
+                for (long i = 0; i < n; i++) {
+                    c.accept(offsetsSegment.getAtIndex(PTypeIO.LE_INT, i + 1)
+                            - offsetsSegment.getAtIndex(PTypeIO.LE_INT, i));
+                }
+            } else {
+                for (long i = 0; i < n; i++) {
+                    c.accept((int) (offsetsSegment.getAtIndex(PTypeIO.LE_LONG, i + 1)
+                            - offsetsSegment.getAtIndex(PTypeIO.LE_LONG, i)));
+                }
+            }
+        }
+
+        @Override
+        public VarBinArray truncate(long rows) {
+            if (rows >= length) {
+                return this;
+            }
+            long byteEnd = readOffset(rows);
+            int offBytes = (offsetsPtype == PType.I32 || offsetsPtype == PType.U32)
+                    ? Integer.BYTES : Long.BYTES;
+            MemorySegment newOffsetsSeg = offsetsSegment.asSlice(0, (rows + 1) * offBytes);
+            return new OffsetMode(dtype, rows,
+                    bytesSegment.asSlice(0, byteEnd > 0 ? byteEnd : 0), newOffsetsSeg, offsetsPtype);
+        }
+
+        private long readOffset(long i) {
+            if (offsetsPtype == PType.I32 || offsetsPtype == PType.U32) {
+                return offsetsSegment.getAtIndex(PTypeIO.LE_INT, i);
+            }
+            return offsetsSegment.getAtIndex(PTypeIO.LE_LONG, i);
+        }
     }
 
-    /// Returns a copy of the raw bytes for element {@code i}.
+    /// Dictionary-encoded {@code VarBinArray}.
     ///
-    /// @param i zero-based logical index (must be in {@code [0, length)})
-    /// @return a newly allocated byte array containing the raw bytes of element {@code i}
-    public byte[] getBytes(long i) {
-        if (dictCodesSegs != null) {
+    /// Stores dictionary values and per-row codes; all accessors resolve through the
+    /// dictionary without materializing strings at construction time.
+    ///
+    /// @param dtype           logical type (Utf8 or Binary)
+    /// @param length          number of logical elements (rows)
+    /// @param bytesSegment    concatenated raw bytes for all dictionary values
+    /// @param dictValOffsets  offsets into {@code bytesSegment} for each dictionary entry (length = dictSize + 1)
+    /// @param dictValOffPType physical type of the dictionary value offsets
+    /// @param dictCodesSegs   per-row dictionary code indices (length = {@code length})
+    /// @param dictCodesPType  physical type of the dictionary codes
+    record DictMode(DType dtype, long length, MemorySegment bytesSegment,
+                    MemorySegment dictValOffsets, PType dictValOffPType,
+                    MemorySegment dictCodesSegs, PType dictCodesPType)
+            implements VarBinArray {
+
+        @Override
+        public byte[] getBytes(long i) {
             long code = dictReadCode(i);
             long start = dictReadOff(code);
             long end = dictReadOff(code + 1);
             byte[] out = new byte[(int) (end - start)];
-            MemorySegment.copy(bytes, start, MemorySegment.ofArray(out), 0, end - start);
+            MemorySegment.copy(bytesSegment, start, MemorySegment.ofArray(out), 0, end - start);
             return out;
         }
-        long start = readOffset(i);
-        long end = readOffset(i + 1);
-        byte[] out = new byte[(int) (end - start)];
-        MemorySegment.copy(bytes, start, MemorySegment.ofArray(out), 0, end - start);
-        return out;
-    }
 
-    /// Returns the UTF-8 decoded string for element {@code i}.
-    ///
-    /// @param i zero-based logical index (must be in {@code [0, length)})
-    /// @return the UTF-8 string at position {@code i}
-    public String getString(long i) {
-        return new String(getBytes(i), StandardCharsets.UTF_8);
-    }
+        @Override
+        public String getString(long i) {
+            return new String(getBytes(i), StandardCharsets.UTF_8);
+        }
 
-    /// Returns the byte length of element {@code i} without copying the data.
-    ///
-    /// @param i zero-based logical index (must be in {@code [0, length)})
-    /// @return the number of bytes in element {@code i}
-    public int getByteLength(long i) {
-        if (dictCodesSegs != null) {
+        @Override
+        public int getByteLength(long i) {
             long code = dictReadCode(i);
             return (int) (dictReadOff(code + 1) - dictReadOff(code));
         }
-        return (int) (readOffset(i + 1) - readOffset(i));
-    }
 
-    /// Passes the byte length of each element to the given consumer in row order.
-    ///
-    /// @param c consumer that receives the byte length of each element
-    public void forEachByteLength(IntConsumer c) {
-        if (dictCodesSegs != null) {
+        @Override
+        public void forEachByteLength(IntConsumer c) {
             for (long i = 0; i < length; i++) {
                 long code = dictReadCode(i);
                 c.accept((int) (dictReadOff(code + 1) - dictReadOff(code)));
             }
-            return;
         }
-        MemorySegment seg = offsetsSeg;
-        long n = length;
-        if (offsetsPtype == PType.I32 || offsetsPtype == PType.U32) {
-            for (long i = 0; i < n; i++) {
-                c.accept(seg.getAtIndex(PTypeIO.LE_INT, i + 1) - seg.getAtIndex(PTypeIO.LE_INT, i));
+
+        @Override
+        public VarBinArray truncate(long rows) {
+            if (rows >= length) {
+                return this;
             }
-        } else {
-            for (long i = 0; i < n; i++) {
-                c.accept((int) (seg.getAtIndex(PTypeIO.LE_LONG, i + 1) - seg.getAtIndex(PTypeIO.LE_LONG, i)));
-            }
-        }
-    }
-
-    private long readOffset(long i) {
-        if (offsetsPtype == PType.I32 || offsetsPtype == PType.U32) {
-            return offsetsSeg.getAtIndex(PTypeIO.LE_INT, i);
-        }
-        return offsetsSeg.getAtIndex(PTypeIO.LE_LONG, i);
-    }
-
-    private long dictReadCode(long i) {
-        return switch (dictCodesPType) {
-            case U8 -> Byte.toUnsignedLong(dictCodesSegs.get(ValueLayout.JAVA_BYTE, i));
-            case U16 -> Short.toUnsignedLong(dictCodesSegs.getAtIndex(PTypeIO.LE_SHORT, i));
-            case U32 -> Integer.toUnsignedLong(dictCodesSegs.getAtIndex(PTypeIO.LE_INT, i));
-            case I32 -> dictCodesSegs.getAtIndex(PTypeIO.LE_INT, i);
-            case I64, U64 -> dictCodesSegs.getAtIndex(PTypeIO.LE_LONG, i);
-            default -> throw new VortexException("unsupported codes ptype: " + dictCodesPType);
-        };
-    }
-
-    private long dictReadOff(long i) {
-        if (dictValOffPType == PType.I32 || dictValOffPType == PType.U32) {
-            return dictValOffsets.getAtIndex(PTypeIO.LE_INT, i);
-        }
-        return dictValOffsets.getAtIndex(PTypeIO.LE_LONG, i);
-    }
-
-    /// Returns a new VarBinArray containing only the first {@code rows} elements.
-    ///
-    /// @param rows number of rows to retain; if {@code rows >= length} returns this array unchanged
-    /// @return a {@code VarBinArray} containing the first {@code rows} elements
-    public VarBinArray truncate(long rows) {
-        if (rows >= length) {
-            return this;
-        }
-        if (dictCodesSegs != null) {
             int codeBytes = dictCodesPType.byteSize();
-            return VarBinArray.ofDict(dtype, rows, bytes, dictValOffsets, dictValOffPType,
+            return VarBinArray.ofDict(dtype, rows, bytesSegment, dictValOffsets, dictValOffPType,
                     dictCodesSegs.asSlice(0, rows * codeBytes), dictCodesPType);
         }
-        long byteEnd = readOffset(rows);
-        int offBytes = (offsetsPtype == PType.I32 || offsetsPtype == PType.U32) ? Integer.BYTES : Long.BYTES;
-        MemorySegment newOffsetsSeg = offsetsSeg.asSlice(0, (rows + 1) * offBytes);
-        return new VarBinArray(dtype, rows, bytes.asSlice(0, byteEnd > 0 ? byteEnd : 0), newOffsetsSeg, offsetsPtype);
+
+        private long dictReadCode(long i) {
+            return switch (dictCodesPType) {
+                case U8 -> Byte.toUnsignedLong(dictCodesSegs.get(ValueLayout.JAVA_BYTE, i));
+                case U16 -> Short.toUnsignedLong(dictCodesSegs.getAtIndex(PTypeIO.LE_SHORT, i));
+                case U32 -> Integer.toUnsignedLong(dictCodesSegs.getAtIndex(PTypeIO.LE_INT, i));
+                case I32 -> dictCodesSegs.getAtIndex(PTypeIO.LE_INT, i);
+                case I64, U64 -> dictCodesSegs.getAtIndex(PTypeIO.LE_LONG, i);
+                default -> throw new VortexException("unsupported codes ptype: " + dictCodesPType);
+            };
+        }
+
+        private long dictReadOff(long i) {
+            if (dictValOffPType == PType.I32 || dictValOffPType == PType.U32) {
+                return dictValOffsets.getAtIndex(PTypeIO.LE_INT, i);
+            }
+            return dictValOffsets.getAtIndex(PTypeIO.LE_LONG, i);
+        }
     }
 }

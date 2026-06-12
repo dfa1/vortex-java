@@ -178,7 +178,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     // ── Column map builder ────────────────────────────────────────────────────
 
     private static Array expandDictStrings(
-            VarBinArray values, MemorySegment codesSegs,
+            VarBinArray.OffsetMode values, MemorySegment codesSegs,
             PType codesPType, DType dtype,
             long n, SegmentAllocator arena
     ) {
@@ -212,7 +212,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             outOffsets.setAtIndex(LE_INT, i + 1, (int) bytePos);
         }
 
-        return new VarBinArray(dtype, n, outBytes.asReadOnly(), outOffsets.asReadOnly(), PType.I32);
+        return new VarBinArray.OffsetMode(dtype, n, outBytes.asReadOnly(), outOffsets.asReadOnly(), PType.I32);
     }
 
     // ── Flat segment decoding ─────────────────────────────────────────────────
@@ -509,7 +509,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                     "dict codes: layout row_count=" + n + " exceeds buffer capacity=" + bufferCodes);
         }
 
-        if (values instanceof VarBinArray vb) {
+        if (values instanceof VarBinArray.OffsetMode vb) {
             MemorySegment valOffsets = vb.offsetsSegment();
             PType valOffPType = vb.offsetsPtype();
             return VarBinArray.ofDict(dtype, n, vb.bytesSegment(), valOffsets, valOffPType,
@@ -519,7 +519,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             MemorySegment valBuf = ArraySegments.of(values);
             return expandDictPrimitive(valBuf, codesSeg, codesPType, pDtype, n, arena);
         }
-        return expandDictStrings((VarBinArray) values, codesSeg, codesPType, dtype, n, arena);
+        return expandDictStrings((VarBinArray.OffsetMode) values, codesSeg, codesPType, dtype, n, arena);
     }
 
     private static PType readDictLayoutCodesPType(ByteBuffer rawMeta) {

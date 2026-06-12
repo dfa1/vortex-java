@@ -153,7 +153,7 @@ public final class VarBinViewEncoding implements Encoding {
                 outOffsets.setAtIndex(PTypeIO.LE_LONG, i + 1, bytePos);
             }
 
-            return new VarBinArray(ctx.dtype(), n, outBytes.asReadOnly(), outOffsets, PType.I64);
+            return new VarBinArray.OffsetMode(ctx.dtype(), n, outBytes.asReadOnly(), outOffsets, PType.I64);
         }
     }
 }

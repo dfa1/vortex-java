@@ -287,7 +287,7 @@ public final class FsstEncoding implements Encoding {
                 outOffsets.setAtIndex(PTypeIO.LE_INT, i + 1, (int) outPos);
             }
 
-            return new VarBinArray(ctx.dtype(), n, outBytes.asReadOnly(), outOffsets.asReadOnly(), PType.I32);
+            return new VarBinArray.OffsetMode(ctx.dtype(), n, outBytes.asReadOnly(), outOffsets.asReadOnly(), PType.I32);
         }
 
         private static long decompressString(

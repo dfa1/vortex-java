@@ -269,12 +269,12 @@ public final class SparseEncoding implements Encoding {
             MemorySegment outOffsets = ctx.arena().allocate((n + 1) * 4L, 4);
             if (numPatches == 0) {
                 MemorySegment outBytes = ctx.arena().allocate(1);
-                return new VarBinArray(ctx.dtype(), n, outBytes, outOffsets, PType.I32);
+                return new VarBinArray.OffsetMode(ctx.dtype(), n, outBytes, outOffsets, PType.I32);
             }
 
             DType indicesDtype = new DType.Primitive(indicesPtype, false);
             MemorySegment idxSeg = ctx.decodeChildSegment(0, indicesDtype, numPatches);
-            VarBinArray varBin = (VarBinArray) ctx.decodeChild(1, ctx.dtype(), numPatches);
+            VarBinArray.OffsetMode varBin = (VarBinArray.OffsetMode) ctx.decodeChild(1, ctx.dtype(), numPatches);
             MemorySegment valBytes = varBin.bytesSegment();
             MemorySegment valOffsets = varBin.offsetsSegment();
             PType valOffPtype = varBin.offsetsPtype();
@@ -306,7 +306,7 @@ public final class SparseEncoding implements Encoding {
                 outOffsets.setAtIndex(PTypeIO.LE_INT, pos + 1, (int) bytePos);
             }
 
-            return new VarBinArray(ctx.dtype(), n, outBytes, outOffsets, PType.I32);
+            return new VarBinArray.OffsetMode(ctx.dtype(), n, outBytes, outOffsets, PType.I32);
         }
 
         private static long readVarBinOffset(MemorySegment seg, long i, PType ptype) {

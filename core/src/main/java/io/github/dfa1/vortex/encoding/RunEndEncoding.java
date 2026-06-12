@@ -159,7 +159,7 @@ public final class RunEndEncoding implements Encoding {
 
             if (ctx.dtype() instanceof DType.Utf8 || ctx.dtype() instanceof DType.Binary) {
                 Array valuesArr = ctx.decodeChild(1, ctx.dtype(), numRuns);
-                return expandStrings(endsArr, (VarBinArray) valuesArr, endsPtype, numRuns, offset, n, ctx.dtype(), ctx.arena());
+                return expandStrings(endsArr, (VarBinArray.OffsetMode) valuesArr, endsPtype, numRuns, offset, n, ctx.dtype(), ctx.arena());
             }
 
             if (ctx.dtype() instanceof DType.Bool) {
@@ -295,7 +295,7 @@ public final class RunEndEncoding implements Encoding {
         }
 
         private static Array expandStrings(
-                Array endsArr, VarBinArray valuesArr,
+                Array endsArr, VarBinArray.OffsetMode valuesArr,
                 PType endsPtype, long numRuns, long offset, long n,
                 DType dtype, SegmentAllocator arena
         ) {
@@ -344,7 +344,7 @@ public final class RunEndEncoding implements Encoding {
                 logicalPos = runEnd;
             }
 
-            return new VarBinArray(dtype, n, outBytes.asReadOnly(), outOffsets.asReadOnly(), PType.I32);
+            return new VarBinArray.OffsetMode(dtype, n, outBytes.asReadOnly(), outOffsets.asReadOnly(), PType.I32);
         }
 
         private static long readUnsigned(MemorySegment seg, long i, PType ptype) {

@@ -304,7 +304,7 @@ public final class ZstdEncoding implements Encoding {
                 offsets.setAtIndex(PTypeIO.LE_INT, i + 1, (int) dataPos);
             }
 
-            return new VarBinArray(dtype.withNullable(false), rowCount, values, offsets, PType.I32);
+            return new VarBinArray.OffsetMode(dtype.withNullable(false), rowCount, values, offsets, PType.I32);
         }
 
         private static MemorySegment decompressFramesWithDict(
@@ -411,7 +411,7 @@ public final class ZstdEncoding implements Encoding {
                 offsets.setAtIndex(PTypeIO.LE_INT, i + 1, (int) dataPos);
             }
 
-            return new VarBinArray(dtype, n, values, offsets, PType.I32);
+            return new VarBinArray.OffsetMode(dtype, n, values, offsets, PType.I32);
         }
     }
 }
