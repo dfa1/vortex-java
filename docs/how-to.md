@@ -284,7 +284,7 @@ returned as `UnknownArray` (opaque, not decodable, but the rest of the file is r
 
 ```java
 import io.github.dfa1.vortex.reader.ReadRegistry;
-import io.github.dfa1.vortex.core.array.UnknownArray;
+import io.github.dfa1.vortex.reader.array.UnknownArray;
 
 ReadRegistry registry = ReadRegistry.builder()
         .registerServiceLoaded()

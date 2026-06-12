@@ -103,8 +103,8 @@ The file is complete and readable as soon as `VortexWriter` is closed.
 ```java
 import io.github.dfa1.vortex.io.VortexReader;
 import io.github.dfa1.vortex.scan.ScanOptions;
-import io.github.dfa1.vortex.core.array.DoubleArray;
-import io.github.dfa1.vortex.core.array.LongArray;
+import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.LongArray;
 
 try (VortexReader vf = VortexReader.open(outPath);
      var iter = vf.scan(ScanOptions.all())) {

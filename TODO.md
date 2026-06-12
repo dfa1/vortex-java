@@ -225,14 +225,6 @@ relax for large fixtures.
 See [docs/compatibility.md](docs/compatibility.md) for the full encoding support table and S3 fixture status.
 
 ### Remaining gap (no-Zstd mode) — biggest to smallest:
-- [ ] **Nullable column handling** — `ParquetImporter` maps nulls to 0.0/0L (type defaults) for the 9 nullable F64
-  columns in the taxi dataset (`fare_amount`, `extra`, `mta_tax`, `tip_amount`, `tolls_amount`,
-  `improvement_surcharge`, `total_amount`, `congestion_surcharge`, `Airport_fee`). Rust uses `vortex.sparse`
-  or `vortex.masked` to store only valid values, then ALP on clean data. Java passes zero-polluted arrays to ALP.
-  Fix: add a `NullableData(double[] values, boolean[] validity)` wrapper; writer detects it, compacts valid values,
-  encodes validity as a Bool child. Requires API change to `VortexWriter.writeChunk` and corresponding
-  `ParquetImporter` changes.
-
 - [ ] **Global dict for F64 low-cardinality** — excluded from `isDictCandidate` because ALP/RLE were expected to
   win; but for columns like `mta_tax` (8 unique F64 values) and `Airport_fee` (4 unique), dict codes are
   ~same size as ALP+bitpack while Rust uses dict. Measure actual gain before implementing. Utf8 global dict
