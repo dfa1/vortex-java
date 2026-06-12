@@ -248,8 +248,17 @@ See [docs/compatibility.md](docs/compatibility.md) for the full encoding support
   using the 5-symbol generator from `OhlcEncodingInspectionIntegrationTest#writeOhlcMultiSymbol` and assert
   the global-dict file is smaller than the per-chunk-dict baseline.
 
-- [ ] **FSST in CASCADE_CODECS** — `FsstEncoding` exists but not in the cascade; Rust uses FSST for
-  `store_and_fwd_flag`. Small gain on taxi (~0.1 MB).
+- [ ] **FSST symbol-table builder: port `fsst-rs` Algorithm 3** —
+  `FsstEncoding.Encoder` is a single-pass, bigram-only top-K table. Rust's
+  `fsst-rs` (used by `vortex-fsst`) implements **Algorithm 3 from the FSST
+  paper**: 5 generations of iterative training, symbols up to 8 bytes long,
+  Lossy Perfect Hash Table for O(1) symbol lookup during compression. On the
+  high-cardinality random ASCII benchmark
+  (`FileSizeComparisonIntegrationTest#highCardinalityUtf8_javaVsJni`) the gap
+  is Java 1.75× raw vs Rust 1.18× raw — purely encoder quality, the wire
+  format and decoder are unchanged. Estimate: ~1 week of work.
+  Reference: <https://www.vldb.org/pvldb/vol13/p2649-boncz.pdf>,
+  <https://github.com/spiraldb/fsst/blob/develop/src/builder.rs>.
 
 ### `vortex.zstd` known limitations
 
