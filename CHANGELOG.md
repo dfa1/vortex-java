@@ -7,14 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.6.0] — Unreleased
 
-Two headline themes. The **proto-rewrite** drops `protobuf-java` in favour of an in-tree
+Three headline themes. The **proto-rewrite** drops `protobuf-java` in favour of an in-tree
 MemorySegment-native proto3 codec, generated from `.proto` schemas by a new `proto-gen`
 module — CLI uber-jar shrinks ~14% and the JDK 25 `sun.misc.Unsafe` stderr warning is
-gone. The **Extension API redesign** retires the prior sealed `core.Extension` hierarchy
-in favour of a service-loader `Extension` SPI on the `Registry`, adds writer auto-route
-from domain collections (`List<LocalDate>`, `List<UUID>`, ...), UUID extension support,
-JDBC import for SQL DATE/TIME/TIMESTAMP/UUID, nullable column round-trip, and
-`Chunk.as(name, Class)` typed access.
+gone. The **Extension API redesign** splits extension handling into `ExtensionDecoder`
+(reader) and `ExtensionEncoder` (writer), adds writer auto-route from domain collections
+(`List<LocalDate>`, `List<UUID>`, ...), UUID extension support, JDBC import for SQL
+DATE/TIME/TIMESTAMP/UUID, nullable column round-trip, and `Chunk.as(name, Class)` typed
+access. The **module boundary cleanup** moves all decode-output types (`Array` and
+subclasses) to `reader.array`, all writer-only data holders to `writer.encode`, and
+decode utilities to `reader.decode` — a writer process now pulls in only `writer + core`.
 
 ### Added
 
@@ -59,12 +61,23 @@ JDBC import for SQL DATE/TIME/TIMESTAMP/UUID, nullable column round-trip, and
 
 ### Breaking
 
-- **`EncodingRegistry` → `Registry`** — renamed; now holds both Encodings and Extensions.
-  ServiceLoader discovery unified via a single `registerServiceLoaded()` call on the
-  builder. (834d2f1, 2272fe4)
-- **`core.Extension` sealed hierarchy retired** — replaced by `extension.Extension`
-  interface + concrete impl classes (`DateExtension`, ...). Callers go through
-  `Extension.findKnown(dtype)` or `Registry.lookup(ExtensionId)`. (2a0ed93)
+- **`EncodingRegistry` → `ReadRegistry`** — renamed and moved to `io.github.dfa1.vortex.reader`.
+  Holds `EncodingDecoder` and `ExtensionDecoder` impls only (read side). ServiceLoader
+  discovery via `registerServiceLoaded()` on the builder. (834d2f1, 2272fe4, a560563)
+- **`core.Extension` sealed hierarchy retired** — replaced by `ExtensionDecoder`
+  (`io.github.dfa1.vortex.reader.ExtensionDecoder`) and `ExtensionEncoder`
+  (`io.github.dfa1.vortex.writer.ExtensionEncoder`). Register each independently with
+  `ReadRegistry` / `WriteRegistry`. (2a0ed93, a560563)
+- **`core.array.*` → `reader.array.*`** — all `Array` subtypes moved to
+  `io.github.dfa1.vortex.reader.array`. Update import paths. (286715c)
+- **`core.array.NullableData` → `writer.encode.NullableData`** — writer-side carrier
+  moved to `io.github.dfa1.vortex.writer.encode`. (286715c)
+- **Decode utilities moved to `reader.decode`** — `LeBitReader`, `PcoBin`,
+  `PcoTansDecoder`, `SegmentBroadcast` moved from `core.encoding` to
+  `io.github.dfa1.vortex.reader.decode`. (d514435)
+- **Encode data holders moved to `writer.encode`** — `ChunkedData`, `DateTimePartsData`,
+  `FixedSizeListData`, `ListData`, `ListViewData`, `StructData` moved from `core.encoding`
+  to `io.github.dfa1.vortex.writer.encode`. (d514435)
 - **Reader unwrap path removed** — `ExtEncoding` wraps + unwraps the storage child
   uniformly; the previous one-off unwrap shortcut in the registry is gone. (4d4ab34, 75d7b4b)
 
