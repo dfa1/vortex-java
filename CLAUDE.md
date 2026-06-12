@@ -116,27 +116,33 @@ Struct → Zoned(Stats) → Chunked → [Flat, Flat, ...]
 - **Zoned** (`vortex.stats`): wraps a child with per-chunk min/max statistics used for zone-map pruning
 - **Struct**: one child per column
 
-Encoding IDs are strings (e.g. `"vortex.flat"`, `"fastlanes.bitpacked"`). `Registry` maps IDs → `Encoding` impls
-via `ServiceLoader`. The registry is immutable after construction — register custom encodings on the builder:
-`Registry.builder().registerServiceLoaded().register(myEncoding).build()`.
+Encoding IDs are strings (e.g. `"vortex.flat"`, `"fastlanes.bitpacked"`). `ReadRegistry` maps IDs → `EncodingDecoder`
+impls via `ServiceLoader`. The registry is immutable after construction — register custom decoders on the builder:
+`ReadRegistry.builder().registerServiceLoaded().register(myDecoder).build()`.
 
-**Adding a new encoding:** three touch-points, always all three:
+**Adding a new encoding:** touch-points depend on read vs write:
 
-1. `EncodingId.java` — add enum constant `VORTEX_FOO("vortex.foo")`
-2. `AlpRdEncoding.java` (or `FooEncoding.java`) — implement `Encoding`
-3. `core/src/main/resources/META-INF/services/io.github.dfa1.vortex.encoding.Encoding` — add the fully-qualified class
-   name
+- **Decode side** (reader):
+  1. `EncodingId.java` — add enum constant `VORTEX_FOO("vortex.foo")`
+  2. `FooEncodingDecoder.java` — implement `EncodingDecoder` in `reader.decode`
+  3. `reader/src/main/resources/META-INF/services/io.github.dfa1.vortex.reader.decode.EncodingDecoder` — add the FQN
 
-**Adding a new extension type:** mirrors the encoding pattern — three touch-points:
+- **Encode side** (writer):
+  1. `EncodingId.java` — add enum constant (if not already added above)
+  2. `FooEncodingEncoder.java` — implement `EncodingEncoder` in `writer.encode`
+  3. `writer/src/main/resources/META-INF/services/io.github.dfa1.vortex.writer.encode.EncodingEncoder` — add the FQN
 
-1. `io.github.dfa1.vortex.extension.ExtensionId` — add enum constant `VORTEX_FOO("vortex.foo")`
-2. `FooExtension.java` — implement `Extension` (public no-arg ctor for ServiceLoader + `INSTANCE` singleton);
-   override `encodeAll(DType.Extension, Collection<?>)` for writer auto-routing
-3. `core/src/main/resources/META-INF/services/io.github.dfa1.vortex.extension.Extension` — add the fully-qualified class
-   name
+**Adding a new extension type:** split by side — implement `ExtensionDecoder` (reader), `ExtensionEncoder` (writer), or both:
 
-Writer's `Extension.findKnown` covers the four spec extensions inline; third-party extensions go through
-`Registry.lookup(ExtensionId)`.
+- **Decode side** (reader):
+  1. `ExtensionId.java` — add enum constant `VORTEX_FOO("vortex.foo")`
+  2. `FooExtensionDecoder.java` — implement `ExtensionDecoder` in `reader.extension`
+  3. `reader/src/main/resources/META-INF/services/io.github.dfa1.vortex.reader.ExtensionDecoder` — add the FQN
+
+- **Encode side** (writer):
+  1. `ExtensionId.java` — add enum constant (if not already added above)
+  2. `FooExtensionEncoder.java` — implement `ExtensionEncoder` in `writer.encode` (or `writer`)
+  3. `writer/src/main/resources/META-INF/services/io.github.dfa1.vortex.writer.ExtensionEncoder` — add the FQN
 
 ### Memory model
 

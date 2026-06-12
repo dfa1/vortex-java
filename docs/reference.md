@@ -59,8 +59,8 @@ all `Array` buffers obtained during scans become invalid.
 
 | Method                                | Returns                   | Notes                                         |
 |---------------------------------------|---------------------------|-----------------------------------------------|
-| `static open(Path)`                   | `VortexReader`            | Uses `Registry.loadAll()`             |
-| `static open(Path, Registry)` | `VortexReader`            | Custom registry (e.g. `allowUnknown()`)       |
+| `static open(Path)`                   | `VortexReader`            | Uses `ReadRegistry.loadAll()`                 |
+| `static open(Path, ReadRegistry)`     | `VortexReader`            | Custom registry (e.g. `allowUnknown()`)       |
 | `dtype()`                             | `DType`                   | Schema (typically `DType.Struct`)             |
 | `layout()`                            | `Layout`                  | Layout tree (Struct → Zoned → Chunked → Flat) |
 | `footer()`                            | `Footer`                  | Segment specs, encoding specs                 |
@@ -158,34 +158,31 @@ check (`IllegalStateException`).
 
 ## Encoding registry
 
-### `Registry` (`io.github.dfa1.vortex.encoding`)
+### `ReadRegistry` (`io.github.dfa1.vortex.reader`)
 
-Immutable after construction. Build via `Registry.builder()` or the static convenience factories.
+Immutable after construction. Build via `ReadRegistry.builder()` or the static convenience factories.
 
-| Method                    | Notes                                                                          |
-|---------------------------|--------------------------------------------------------------------------------|
-| `static builder()`        | Returns a fresh `Builder`                                                      |
-| `static loadAll()`        | Immutable registry populated via `ServiceLoader`                               |
-| `static empty()`          | Immutable empty registry (strict mode)                                         |
-| `static of(List<Encoding>)` | Immutable registry populated with the given encodings                        |
-| `hasEncoding(EncodingId)` | Lookup                                                                         |
-| `lookup(EncodingId)`      | Returns the registered `Encoding` or `null`                                    |
-| `lookup(ExtensionId)`     | Returns the registered `Extension` or `null`                                   |
-| `isAllowUnknown()`        | Predicate                                                                      |
+| Method                      | Notes                                                                        |
+|-----------------------------|------------------------------------------------------------------------------|
+| `static builder()`          | Returns a fresh `Builder`                                                    |
+| `static loadAll()`          | Immutable registry populated via `ServiceLoader`                             |
+| `static empty()`            | Immutable empty registry (strict mode)                                       |
+| `hasDecoder(EncodingId)`    | Lookup                                                                       |
+| `isAllowUnknown()`          | Predicate                                                                    |
 
-### `Registry.Builder`
+### `ReadRegistry.Builder`
 
 | Method                       | Notes                                                                                    |
 |------------------------------|------------------------------------------------------------------------------------------|
-| `register(Encoding)`         | Add a custom encoding; throws if already registered                                      |
-| `register(Extension)`        | Add a custom extension; throws if already registered                                     |
-| `registerServiceLoaded()`    | Add every `Encoding` and `Extension` discovered via `ServiceLoader`                      |
+| `register(EncodingDecoder)`  | Add a custom encoding decoder; throws if already registered                              |
+| `register(ExtensionDecoder)` | Add a custom extension decoder; throws if already registered                             |
+| `registerServiceLoaded()`    | Add every `EncodingDecoder` and `ExtensionDecoder` discovered via `ServiceLoader`        |
 | `allowUnknown()`             | Switch to passthrough mode — unknown nodes (and their children) decode as `UnknownArray` |
-| `build()`                    | Produce the immutable `Registry`                                                         |
+| `build()`                    | Produce the immutable `ReadRegistry`                                                     |
 
-Register custom encodings/extensions via `ServiceLoader` by adding the fully qualified
-class name to the matching service file under `META-INF/services/`
-(`io.github.dfa1.vortex.encoding.Encoding` or `io.github.dfa1.vortex.extension.Extension`).
+Register custom decoders via `ServiceLoader` by adding the fully qualified class name to
+`META-INF/services/io.github.dfa1.vortex.reader.decode.EncodingDecoder` or
+`META-INF/services/io.github.dfa1.vortex.reader.ExtensionDecoder`.
 
 ---
 
