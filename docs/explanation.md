@@ -336,12 +336,12 @@ their open child slots, and recursively picks the best inner encoding for
 every child. That recursion is what turns a per-encoding sales-pitch into
 real compression.
 
-Six representative columns, both paths. Reproduce with:
+Six representative columns, both paths. The same scenarios run as
+regression tests so the ratios below stay anchored:
 
 ```
-./mvnw verify -DskipTests
-java --enable-native-access=ALL-UNNAMED -cp "..." \
-     io.github.dfa1.vortex.performance.CompressionShowcase
+./mvnw verify -pl integration -am \
+  -Dit.test=CompressionShowcaseIntegrationTest
 ```
 
 Numbers below: 1 000 000 rows per column, JDK 25, vortex-java HEAD.
