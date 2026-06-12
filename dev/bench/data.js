@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1781215124171,
+  "lastUpdate": 1781299701602,
   "repoUrl": "https://github.com/dfa1/vortex-java",
   "entries": {
     "Benchmark": [
@@ -712,6 +712,88 @@ window.BENCHMARK_DATA = {
           {
             "name": "io.github.dfa1.vortex.performance.RustVsJavaWriteBenchmark.jniWrite",
             "value": 0.30496755632095424,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Davide Angelocola",
+            "username": "dfa1",
+            "email": "davide.angelocola@gmail.com"
+          },
+          "committer": {
+            "name": "Davide Angelocola",
+            "username": "dfa1",
+            "email": "davide.angelocola@gmail.com"
+          },
+          "id": "ea0f3f5b0b5ae377858a1a83e7e9d3e186af098d",
+          "message": "docs(claude): add module overview, fix stale refs\n\nAdd Module structure section with dep rule. Fix VortexFile →\nVortexReader. Correct ExtensionDecoder registration: no service\nfile, must register explicitly via ReadRegistry.builder().\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>",
+          "timestamp": "2026-06-12T19:45:32Z",
+          "url": "https://github.com/dfa1/vortex-java/commit/ea0f3f5b0b5ae377858a1a83e7e9d3e186af098d"
+        },
+        "date": 1781299701236,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.javaReadCascading",
+            "value": 36.7361221090079,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.javaReadClose",
+            "value": 27.958695422290436,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.javaReadSymbol",
+            "value": 37.94329599258365,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.javaReadVolume",
+            "value": 47.78527245272887,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.jniReadClose",
+            "value": 23.807398684523637,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.jniReadSymbol",
+            "value": 4.569361601582023,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaReadBenchmark.jniReadVolume",
+            "value": 25.40521108802461,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaWriteBenchmark.javaWrite",
+            "value": 0.6354021559419278,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaWriteBenchmark.javaWriteCascading",
+            "value": 0.21199241705142577,
+            "unit": "ops/s",
+            "extra": "iterations: 3\nforks: 1\nthreads: 1"
+          },
+          {
+            "name": "io.github.dfa1.vortex.performance.RustVsJavaWriteBenchmark.jniWrite",
+            "value": 0.319404847995715,
             "unit": "ops/s",
             "extra": "iterations: 3\nforks: 1\nthreads: 1"
           }
