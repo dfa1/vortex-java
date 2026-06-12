@@ -7,6 +7,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Java 25 native implementation of the [Vortex](https://github.com/vortex-data/vortex) columnar file format. Uses FFM (
 `MemorySegment`/`Arena`) instead of JNI or `sun.misc.Unsafe`.
 
+## Module structure
+
+```
+core    — DType, PType, VortexException, VortexFormat + generated fbs/proto + EncodingId/ExtensionId
+reader  — VortexReader, ReadRegistry, Array types (reader.array), decoders (reader.decode),
+          extension decoders (reader.extension), file-structure types (Footer, Layout, SegmentSpec, …)
+writer  — VortexWriter, WriteRegistry, encoders (writer.encode), NullableData, extension encoders
+```
+
+Dependency rule: `writer → core`, `reader → core`. Writer never depends on reader.
+`Array` and its subtypes are decode outputs — they live in `reader.array`, not `core`.
+
 ## Branching strategy
 
 Trunk-based development. PRs are fine but always squash or rebase — no merge commits.
@@ -137,7 +149,7 @@ impls via `ServiceLoader`. The registry is immutable after construction — regi
 - **Decode side** (reader):
   1. `ExtensionId.java` — add enum constant `VORTEX_FOO("vortex.foo")`
   2. `FooExtensionDecoder.java` — implement `ExtensionDecoder` in `reader.extension`
-  3. `reader/src/main/resources/META-INF/services/io.github.dfa1.vortex.reader.ExtensionDecoder` — add the FQN
+  3. Register via `ReadRegistry.builder().register(new FooExtensionDecoder())` — no service file; `registerServiceLoaded()` does not discover `ExtensionDecoder`.
 
 - **Encode side** (writer):
   1. `ExtensionId.java` — add enum constant (if not already added above)
@@ -146,8 +158,8 @@ impls via `ServiceLoader`. The registry is immutable after construction — regi
 
 ### Memory model
 
-`VortexFile` memory-maps the entire file into one `MemorySegment` (confined `Arena`). All `Array` buffers returned
-during scan are zero-copy slices of that segment — their lifetime is tied to the `VortexFile`. Close the file to release
+`VortexReader` memory-maps the entire file into one `MemorySegment` (confined `Arena`). All `Array` buffers returned
+during scan are zero-copy slices of that segment — their lifetime is tied to the `VortexReader`. Close the file to release
 the mapped region.
 
 **Encoding output allocation rule:** never allocate `byte[]` + wrap with `MemorySegment.ofArray()` for decode output.
