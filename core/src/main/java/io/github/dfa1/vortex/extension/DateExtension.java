@@ -2,13 +2,10 @@ package io.github.dfa1.vortex.extension;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
-import io.github.dfa1.vortex.core.array.NullableData;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 
 /// {@code vortex.date} — days since the Unix epoch, signed integer storage.
@@ -77,45 +74,4 @@ public final class DateExtension implements Extension {
         return Math.toIntExact(value.toEpochDay());
     }
 
-    /// Encodes a collection of dates into the storage layout the writer accepts
-    /// for an I32 column (a primitive {@code int[]} in row order).
-    ///
-    /// @param values dates to encode
-    /// @return packed {@code int[]} suitable for {@code writer.writeChunk}
-    /// @throws ArithmeticException if any date is too far from the epoch to fit in I32
-    public int[] encodeAll(Collection<LocalDate> values) {
-        int[] out = new int[values.size()];
-        int i = 0;
-        for (LocalDate v : values) {
-            out[i++] = encode(v);
-        }
-        return out;
-    }
-
-    @Override
-    @SuppressWarnings("unchecked")
-    public Object encodeAll(DType.Extension dtype, Collection<?> values) {
-        Collection<LocalDate> typed = (Collection<LocalDate>) values;
-        int n = typed.size();
-        int[] out = new int[n];
-        boolean[] validity = new boolean[n];
-        boolean anyNull = false;
-        int i = 0;
-        for (LocalDate v : typed) {
-            if (v == null) {
-                anyNull = true;
-            } else {
-                out[i] = encode(v);
-                validity[i] = true;
-            }
-            i++;
-        }
-        if (!anyNull) {
-            return out;
-        }
-        if (!dtype.nullable()) {
-            throw new VortexException("null element in non-nullable vortex.date column");
-        }
-        return new NullableData(out, validity);
-    }
 }

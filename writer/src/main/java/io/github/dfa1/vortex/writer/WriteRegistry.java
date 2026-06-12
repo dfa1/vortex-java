@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.extension.Extension;
+import io.github.dfa1.vortex.extension.ExtensionEncoder;
 import io.github.dfa1.vortex.extension.ExtensionId;
 import io.github.dfa1.vortex.writer.encode.EncodingEncoder;
 
@@ -11,7 +11,7 @@ import java.util.Map;
 import java.util.ServiceLoader;
 
 /// Write-side registry: maps {@link EncodingId} to {@link EncodingEncoder} implementations,
-/// and {@link ExtensionId} to {@link Extension} implementations.
+/// and {@link ExtensionId} to {@link ExtensionEncoder} implementations.
 ///
 /// <p>Instances are immutable after construction. Build one via {@link #builder()} or via the
 /// {@link #loadAll()} and {@link #empty()} convenience factories.
@@ -24,15 +24,15 @@ import java.util.ServiceLoader;
 public final class WriteRegistry {
 
     private final Map<EncodingId, EncodingEncoder> encoders;
-    private final Map<ExtensionId, Extension> extensions;
+    private final Map<ExtensionId, ExtensionEncoder> extensions;
 
     private WriteRegistry(Map<EncodingId, EncodingEncoder> encoders,
-            Map<ExtensionId, Extension> extensions) {
+            Map<ExtensionId, ExtensionEncoder> extensions) {
         this.encoders = Map.copyOf(encoders);
         this.extensions = Map.copyOf(extensions);
     }
 
-    /// Loads all service-discovered {@link EncodingEncoder} and {@link Extension} implementations.
+    /// Loads all service-discovered {@link EncodingEncoder} and {@link ExtensionEncoder} implementations.
     ///
     /// @return an immutable {@link WriteRegistry} populated with all service-loaded entries
     public static WriteRegistry loadAll() {
@@ -60,11 +60,11 @@ public final class WriteRegistry {
         return encoders;
     }
 
-    /// Returns the registered extension for {@code extensionId}, or {@code null} if not registered.
+    /// Returns the registered extension encoder for {@code extensionId}, or {@code null} if not registered.
     ///
     /// @param extensionId the extension id to look up
-    /// @return the registered {@link Extension}, or {@code null}
-    public Extension lookup(ExtensionId extensionId) {
+    /// @return the registered {@link ExtensionEncoder}, or {@code null}
+    public ExtensionEncoder lookup(ExtensionId extensionId) {
         return extensions.get(extensionId);
     }
 
@@ -74,7 +74,7 @@ public final class WriteRegistry {
     public static final class Builder {
 
         private final Map<EncodingId, EncodingEncoder> encoders = new HashMap<>();
-        private final Map<ExtensionId, Extension> extensions = new HashMap<>();
+        private final Map<ExtensionId, ExtensionEncoder> extensions = new HashMap<>();
 
         private Builder() {
         }
@@ -92,20 +92,20 @@ public final class WriteRegistry {
             return this;
         }
 
-        /// Registers an extension implementation.
+        /// Registers an extension encoder.
         ///
-        /// @param extension the {@link Extension} to register
+        /// @param extension the {@link ExtensionEncoder} to register
         /// @return this builder, for chaining
         /// @throws VortexException if an extension with the same id is already registered
-        public Builder register(Extension extension) {
-            Extension old = extensions.put(extension.extensionId(), extension);
+        public Builder register(ExtensionEncoder extension) {
+            ExtensionEncoder old = extensions.put(extension.extensionId(), extension);
             if (old != null) {
                 throw new VortexException("extension %s already registered".formatted(extension.extensionId()));
             }
             return this;
         }
 
-        /// Registers every {@link EncodingEncoder} and {@link Extension} discovered via
+        /// Registers every {@link EncodingEncoder} and {@link ExtensionEncoder} discovered via
         /// {@link ServiceLoader}.
         ///
         /// @return this builder, for chaining
@@ -114,7 +114,7 @@ public final class WriteRegistry {
             for (EncodingEncoder encoder : ServiceLoader.load(EncodingEncoder.class)) {
                 register(encoder);
             }
-            for (Extension extension : ServiceLoader.load(Extension.class)) {
+            for (ExtensionEncoder extension : ServiceLoader.load(ExtensionEncoder.class)) {
                 register(extension);
             }
             return this;

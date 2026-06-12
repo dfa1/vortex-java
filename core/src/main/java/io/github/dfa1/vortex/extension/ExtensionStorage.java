@@ -13,8 +13,8 @@ import io.github.dfa1.vortex.encoding.TimeUnit;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 
-/// Shared decode helpers for the {@link Extension} implementations in this package.
-final class ExtensionStorage {
+/// Low-level storage helpers shared by extension decode and encode paths.
+public final class ExtensionStorage {
 
     private ExtensionStorage() {
     }
@@ -27,7 +27,7 @@ final class ExtensionStorage {
     /// @param i       row index
     /// @return cell value as long
     /// @throws VortexException if storage isn't an integer primitive or the cell is null
-    static long epochInteger(Array storage, long i) {
+    public static long epochInteger(Array storage, long i) {
         return switch (storage) {
             case ByteArray a -> a.getByte(i);
             case ShortArray a -> a.getShort(i);
@@ -50,7 +50,7 @@ final class ExtensionStorage {
     /// @param ext declared extension dtype
     /// @return decoded time unit
     /// @throws VortexException if the metadata is missing
-    static TimeUnit readUnit(DType.Extension ext) {
+    public static TimeUnit readUnit(DType.Extension ext) {
         ByteBuffer meta = ext.metadata();
         if (meta == null || !meta.hasRemaining()) {
             throw new VortexException("missing TimeUnit metadata byte for " + ext.extensionId());
@@ -64,7 +64,7 @@ final class ExtensionStorage {
     /// @param unit time resolution; must not be {@link TimeUnit#Days}
     /// @return matching {@link Instant}
     /// @throws VortexException if {@code unit} is {@link TimeUnit#Days}
-    static Instant instantFromRaw(long raw, TimeUnit unit) {
+    public static Instant instantFromRaw(long raw, TimeUnit unit) {
         return switch (unit) {
             case Seconds -> Instant.ofEpochSecond(raw);
             case Milliseconds -> Instant.ofEpochMilli(raw);
@@ -86,7 +86,7 @@ final class ExtensionStorage {
     ///
     /// @param i      row index to check
     /// @param length array length
-    static void checkBounds(long i, long length) {
+    public static void checkBounds(long i, long length) {
         if (i < 0 || i >= length) {
             throw new IndexOutOfBoundsException("index " + i + " out of bounds for length " + length);
         }

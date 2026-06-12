@@ -8,7 +8,6 @@ import io.github.dfa1.vortex.core.array.ByteArray;
 import io.github.dfa1.vortex.core.array.FixedSizeListArray;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -110,59 +109,4 @@ public final class UuidExtension implements Extension {
         return out;
     }
 
-    /// Encodes a collection of UUIDs into a flat {@code byte[]} of size {@code 16 * n},
-    /// matching the {@code FixedSizeList(U8, 16)} storage layout.
-    ///
-    /// @param values UUIDs to encode
-    /// @return packed bytes; the writer slices it into 16-byte rows
-    public byte[] encodeAll(Collection<UUID> values) {
-        byte[] out = new byte[16 * values.size()];
-        int off = 0;
-        for (UUID v : values) {
-            long msb = v.getMostSignificantBits();
-            long lsb = v.getLeastSignificantBits();
-            for (int k = 0; k < 8; k++) {
-                out[off + k] = (byte) ((msb >> (56 - 8 * k)) & 0xff);
-                out[off + 8 + k] = (byte) ((lsb >> (56 - 8 * k)) & 0xff);
-            }
-            off += 16;
-        }
-        return out;
-    }
-
-    @Override
-    @SuppressWarnings("unchecked")
-    public Object encodeAll(DType.Extension dtype, Collection<?> values) {
-        Collection<UUID> typed = (Collection<UUID>) values;
-        int n = typed.size();
-        byte[] flat = new byte[16 * n];
-        boolean[] validity = new boolean[n];
-        boolean anyNull = false;
-        int row = 0;
-        for (UUID v : typed) {
-            if (v == null) {
-                anyNull = true;
-            } else {
-                long msb = v.getMostSignificantBits();
-                long lsb = v.getLeastSignificantBits();
-                int off = row * 16;
-                for (int k = 0; k < 8; k++) {
-                    flat[off + k] = (byte) ((msb >> (56 - 8 * k)) & 0xff);
-                    flat[off + 8 + k] = (byte) ((lsb >> (56 - 8 * k)) & 0xff);
-                }
-                validity[row] = true;
-            }
-            row++;
-        }
-        io.github.dfa1.vortex.encoding.FixedSizeListData storage =
-                new io.github.dfa1.vortex.encoding.FixedSizeListData(flat, n);
-        if (!anyNull) {
-            return storage;
-        }
-        if (!dtype.nullable()) {
-            throw new io.github.dfa1.vortex.core.VortexException(
-                    "null element in non-nullable vortex.uuid column");
-        }
-        return new io.github.dfa1.vortex.core.array.NullableData(storage, validity);
-    }
 }

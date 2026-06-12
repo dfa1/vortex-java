@@ -2,9 +2,7 @@ package io.github.dfa1.vortex.extension;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.array.Array;
-import io.github.dfa1.vortex.core.array.NullableData;
 import io.github.dfa1.vortex.encoding.TimeUnit;
 
 import java.nio.ByteBuffer;
@@ -14,7 +12,6 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -160,46 +157,4 @@ public final class TimestampExtension implements Extension {
         };
     }
 
-    /// Encodes a collection of instants into a packed {@code long[]} matching
-    /// the I64 storage layout the writer accepts.
-    ///
-    /// @param values instants to encode
-    /// @param unit   resolution
-    /// @return packed {@code long[]} suitable for {@code writer.writeChunk}
-    public long[] encodeAll(Collection<Instant> values, TimeUnit unit) {
-        long[] out = new long[values.size()];
-        int i = 0;
-        for (Instant v : values) {
-            out[i++] = encode(v, unit);
-        }
-        return out;
-    }
-
-    @Override
-    @SuppressWarnings("unchecked")
-    public Object encodeAll(DType.Extension dtype, Collection<?> values) {
-        TimeUnit unit = ExtensionStorage.readUnit(dtype);
-        Collection<Instant> typed = (Collection<Instant>) values;
-        int n = typed.size();
-        long[] out = new long[n];
-        boolean[] validity = new boolean[n];
-        boolean anyNull = false;
-        int i = 0;
-        for (Instant v : typed) {
-            if (v == null) {
-                anyNull = true;
-            } else {
-                out[i] = encode(v, unit);
-                validity[i] = true;
-            }
-            i++;
-        }
-        if (!anyNull) {
-            return out;
-        }
-        if (!dtype.nullable()) {
-            throw new VortexException("null element in non-nullable vortex.timestamp column");
-        }
-        return new NullableData(out, validity);
-    }
 }
