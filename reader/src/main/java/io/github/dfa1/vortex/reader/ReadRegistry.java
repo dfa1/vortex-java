@@ -1,9 +1,9 @@
 package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.core.array.Array;
-import io.github.dfa1.vortex.core.array.ArraySegments;
-import io.github.dfa1.vortex.core.array.UnknownArray;
+import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.ArraySegments;
+import io.github.dfa1.vortex.reader.array.UnknownArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
@@ -54,7 +54,7 @@ public final class ReadRegistry {
     /// Returns whether passthrough decode for unknown encoding ids is enabled.
     ///
     /// @return {@code true} if unknown encodings are silently wrapped as
-    ///         {@link io.github.dfa1.vortex.core.array.UnknownArray}
+    ///         {@link io.github.dfa1.vortex.reader.array.UnknownArray}
     public boolean isAllowUnknown() {
         return allowUnknown;
     }
@@ -170,7 +170,7 @@ public final class ReadRegistry {
         /// Enable passthrough decode for unknown encoding ids.
         ///
         /// <p>Default is strict: unknown ids throw {@link VortexException}. When enabled, unknown
-        /// nodes are wrapped as {@link io.github.dfa1.vortex.core.array.UnknownArray}.
+        /// nodes are wrapped as {@link io.github.dfa1.vortex.reader.array.UnknownArray}.
         /// Mirrors Rust {@code VortexSession::allow_unknown()}.
         ///
         /// @return this builder, for chaining

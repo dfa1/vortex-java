@@ -2,10 +2,10 @@ package io.github.dfa1.vortex.jdbc;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.core.array.BoolArray;
-import io.github.dfa1.vortex.core.array.DoubleArray;
-import io.github.dfa1.vortex.core.array.LongArray;
-import io.github.dfa1.vortex.core.array.VarBinArray;
+import io.github.dfa1.vortex.reader.array.BoolArray;
+import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ScanIterator;
@@ -187,17 +187,17 @@ class JdbcImporterTest {
                     try (Chunk chunk = iter.next()) {
                         assertThat(chunk.rowCount()).isEqualTo(3);
 
-                        io.github.dfa1.vortex.core.array.Array dCol = chunk.column("D");
-                        io.github.dfa1.vortex.core.array.Array tCol = chunk.column("T");
-                        io.github.dfa1.vortex.core.array.Array tsCol = chunk.column("TS");
-                        io.github.dfa1.vortex.core.array.Array uCol = chunk.column("U");
-                        assertThat(dCol).isInstanceOf(io.github.dfa1.vortex.core.array.MaskedArray.class);
-                        assertThat(tCol).isInstanceOf(io.github.dfa1.vortex.core.array.MaskedArray.class);
-                        assertThat(tsCol).isInstanceOf(io.github.dfa1.vortex.core.array.MaskedArray.class);
-                        assertThat(uCol).isInstanceOf(io.github.dfa1.vortex.core.array.MaskedArray.class);
+                        io.github.dfa1.vortex.reader.array.Array dCol = chunk.column("D");
+                        io.github.dfa1.vortex.reader.array.Array tCol = chunk.column("T");
+                        io.github.dfa1.vortex.reader.array.Array tsCol = chunk.column("TS");
+                        io.github.dfa1.vortex.reader.array.Array uCol = chunk.column("U");
+                        assertThat(dCol).isInstanceOf(io.github.dfa1.vortex.reader.array.MaskedArray.class);
+                        assertThat(tCol).isInstanceOf(io.github.dfa1.vortex.reader.array.MaskedArray.class);
+                        assertThat(tsCol).isInstanceOf(io.github.dfa1.vortex.reader.array.MaskedArray.class);
+                        assertThat(uCol).isInstanceOf(io.github.dfa1.vortex.reader.array.MaskedArray.class);
 
-                        io.github.dfa1.vortex.core.array.MaskedArray dMasked =
-                                (io.github.dfa1.vortex.core.array.MaskedArray) dCol;
+                        io.github.dfa1.vortex.reader.array.MaskedArray dMasked =
+                                (io.github.dfa1.vortex.reader.array.MaskedArray) dCol;
                         assertThat(dMasked.isValid(0)).isTrue();
                         assertThat(dMasked.isValid(1)).isFalse();
                         assertThat(dMasked.isValid(2)).isTrue();
@@ -207,21 +207,21 @@ class JdbcImporterTest {
                                 .isEqualTo(java.time.LocalDate.of(2026, 6, 10));
 
                         DType.Extension tDtype = (DType.Extension) schema.fieldTypes().get(2);
-                        io.github.dfa1.vortex.core.array.MaskedArray tMasked =
-                                (io.github.dfa1.vortex.core.array.MaskedArray) tCol;
+                        io.github.dfa1.vortex.reader.array.MaskedArray tMasked =
+                                (io.github.dfa1.vortex.reader.array.MaskedArray) tCol;
                         assertThat(tMasked.isValid(1)).isFalse();
                         assertThat(io.github.dfa1.vortex.reader.extension.TimeExtensionDecoder.INSTANCE.decode(tDtype, tMasked, 0))
                                 .isEqualTo(java.time.LocalTime.of(1, 1, 1));
 
                         DType.Extension tsDtype = (DType.Extension) schema.fieldTypes().get(3);
-                        io.github.dfa1.vortex.core.array.MaskedArray tsMasked =
-                                (io.github.dfa1.vortex.core.array.MaskedArray) tsCol;
+                        io.github.dfa1.vortex.reader.array.MaskedArray tsMasked =
+                                (io.github.dfa1.vortex.reader.array.MaskedArray) tsCol;
                         assertThat(tsMasked.isValid(1)).isFalse();
                         assertThat(io.github.dfa1.vortex.reader.extension.TimestampExtensionDecoder.INSTANCE.instant(tsDtype, tsMasked, 0))
                                 .isEqualTo(java.sql.Timestamp.valueOf("2026-06-10 12:00:00").toInstant());
 
-                        io.github.dfa1.vortex.core.array.MaskedArray uMasked =
-                                (io.github.dfa1.vortex.core.array.MaskedArray) uCol;
+                        io.github.dfa1.vortex.reader.array.MaskedArray uMasked =
+                                (io.github.dfa1.vortex.reader.array.MaskedArray) uCol;
                         assertThat(uMasked.isValid(0)).isTrue();
                         assertThat(uMasked.isValid(1)).isFalse();
                         assertThat(uMasked.isValid(2)).isTrue();
@@ -349,13 +349,13 @@ class JdbcImporterTest {
                 try (ScanIterator iter = reader.scan(ScanOptions.all())) {
                     assertThat(iter.hasNext()).isTrue();
                     try (Chunk chunk = iter.next()) {
-                        io.github.dfa1.vortex.core.array.Array nCol = chunk.column("N");
-                        io.github.dfa1.vortex.core.array.Array sCol = chunk.column("S");
-                        assertThat(nCol).isInstanceOf(io.github.dfa1.vortex.core.array.MaskedArray.class);
-                        assertThat(sCol).isInstanceOf(io.github.dfa1.vortex.core.array.MaskedArray.class);
+                        io.github.dfa1.vortex.reader.array.Array nCol = chunk.column("N");
+                        io.github.dfa1.vortex.reader.array.Array sCol = chunk.column("S");
+                        assertThat(nCol).isInstanceOf(io.github.dfa1.vortex.reader.array.MaskedArray.class);
+                        assertThat(sCol).isInstanceOf(io.github.dfa1.vortex.reader.array.MaskedArray.class);
 
-                        io.github.dfa1.vortex.core.array.MaskedArray nMasked =
-                                (io.github.dfa1.vortex.core.array.MaskedArray) nCol;
+                        io.github.dfa1.vortex.reader.array.MaskedArray nMasked =
+                                (io.github.dfa1.vortex.reader.array.MaskedArray) nCol;
                         assertThat(nMasked.isValid(0)).isFalse();
                         assertThat(nMasked.isValid(1)).isTrue();
                         assertThat(nMasked.isValid(2)).isTrue();
@@ -363,8 +363,8 @@ class JdbcImporterTest {
                         assertThat(nInner.getLong(1)).isEqualTo(0L);
                         assertThat(nInner.getLong(2)).isEqualTo(42L);
 
-                        io.github.dfa1.vortex.core.array.MaskedArray sMasked =
-                                (io.github.dfa1.vortex.core.array.MaskedArray) sCol;
+                        io.github.dfa1.vortex.reader.array.MaskedArray sMasked =
+                                (io.github.dfa1.vortex.reader.array.MaskedArray) sCol;
                         assertThat(sMasked.isValid(0)).isFalse();
                         assertThat(sMasked.isValid(1)).isTrue();
                         assertThat(sMasked.isValid(2)).isTrue();

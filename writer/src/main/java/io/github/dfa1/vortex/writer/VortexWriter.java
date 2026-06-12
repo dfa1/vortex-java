@@ -226,7 +226,7 @@ public final class VortexWriter implements Closeable {
             case ListViewData d -> d.outerLen();
             case DateTimePartsData d -> d.timestamps().length;
             case FixedSizeListData d -> d.outerLen();
-            case io.github.dfa1.vortex.core.array.NullableData d -> d.validity().length;
+            case io.github.dfa1.vortex.writer.encode.NullableData d -> d.validity().length;
             default -> throw new UnsupportedOperationException(
                     "unsupported data type: " + data.getClass());
         };
@@ -352,7 +352,7 @@ public final class VortexWriter implements Closeable {
             }
 
             if (!firstChunkSeen && options.globalDict()
-                    && !(data instanceof io.github.dfa1.vortex.core.array.NullableData)) {
+                    && !(data instanceof io.github.dfa1.vortex.writer.encode.NullableData)) {
                 // Global dict candidate detection inspects raw primitive/String arrays; nullable
                 // columns route through MaskedEncoding instead of DictEncoding.
                 boolean candidate = false;
@@ -421,7 +421,7 @@ public final class VortexWriter implements Closeable {
         // Extension columns route through ExtEncodingEncoder.encode which itself delegates to
         // MaskedEncodingEncoder when its storage data is NullableData — handled inside ExtEncoding.
         if (encodingOverride == null
-                && data instanceof io.github.dfa1.vortex.core.array.NullableData
+                && data instanceof io.github.dfa1.vortex.writer.encode.NullableData
                 && !(dtype instanceof DType.Extension)) {
             encodingOverride = new MaskedEncodingEncoder();
         }

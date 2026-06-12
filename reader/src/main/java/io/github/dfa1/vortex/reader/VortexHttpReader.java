@@ -218,7 +218,7 @@ public final class VortexHttpReader implements VortexHandle {
     // ── HTTP helpers ──────────────────────────────────────────────────────────
 
     @Override
-    public io.github.dfa1.vortex.core.array.Array decodeFlatSegment(
+    public io.github.dfa1.vortex.reader.array.Array decodeFlatSegment(
             io.github.dfa1.vortex.core.SegmentSpec spec,
             DType dtype, long rowCount,
             java.lang.foreign.SegmentAllocator arenaOut

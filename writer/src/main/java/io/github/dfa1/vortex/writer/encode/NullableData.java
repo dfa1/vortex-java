@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.core.array;
+package io.github.dfa1.vortex.writer.encode;
 
 /// Writer-side carrier for nullable column data: a packed values array paired with a
 /// per-row validity bitmap.
@@ -11,7 +11,7 @@ package io.github.dfa1.vortex.core.array;
 ///
 /// <p>The writer recognises this shape and emits the {@code vortex.masked}
 /// wire layout: a non-nullable child (the storage) plus an optional Bool
-/// validity child. Readers reconstruct a [MaskedArray].
+/// validity child. Readers reconstruct a [io.github.dfa1.vortex.reader.array.MaskedArray].
 ///
 /// <p>Invariant: {@code values} length (or storage row count) matches
 /// {@code validity.length}; placeholders at null positions must be zero so the

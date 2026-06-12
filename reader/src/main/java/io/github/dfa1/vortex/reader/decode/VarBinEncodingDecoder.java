@@ -3,8 +3,8 @@ package io.github.dfa1.vortex.reader.decode;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.core.array.Array;
-import io.github.dfa1.vortex.core.array.VarBinArray;
+import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.proto.VarBinMetadata;
 

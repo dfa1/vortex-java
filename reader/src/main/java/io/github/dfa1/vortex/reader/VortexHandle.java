@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.Footer;
 import io.github.dfa1.vortex.core.Layout;
 import io.github.dfa1.vortex.core.SegmentSpec;
-import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.reader.array.Array;
 
 import java.io.Closeable;
 import java.lang.foreign.MemorySegment;

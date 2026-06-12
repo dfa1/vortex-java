@@ -1,8 +1,8 @@
 package io.github.dfa1.vortex.writer;
 
-import io.github.dfa1.vortex.core.array.Array;
-import io.github.dfa1.vortex.core.array.ArraySegments;
-import io.github.dfa1.vortex.core.array.VarBinArray;
+import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.ArraySegments;
+import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
 

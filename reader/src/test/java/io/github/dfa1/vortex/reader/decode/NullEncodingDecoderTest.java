@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.reader.ReadRegistry;
 
-import io.github.dfa1.vortex.core.array.NullArray;
+import io.github.dfa1.vortex.reader.array.NullArray;
 import io.github.dfa1.vortex.encoding.DTypes;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import org.junit.jupiter.api.Test;

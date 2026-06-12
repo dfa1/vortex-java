@@ -1,32 +1,34 @@
-package io.github.dfa1.vortex.core.array;
+package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 
 import java.lang.foreign.MemorySegment;
-import java.util.function.IntBinaryOperator;
-import java.util.function.IntConsumer;
+import java.util.function.LongBinaryOperator;
+import java.util.function.LongConsumer;
 
-/// Concrete [Array] for I32/U32 primitive columns.
-public final class IntArray implements Array {
+/// Concrete [Array] for I64/U64 primitive columns.
+public final class LongArray implements Array {
 
     private final DType dtype;
     private final long length;
     private final MemorySegment buffer;
     // Pre-computed buffer capacity in elements. Equals `length` for normal arrays;
     // smaller for ConstantEncoding (1-element broadcast, length = logical row count).
+    // Hoisting it out of every hot-loop iteration is what makes the fast-path
+    // branch in fold/forEachLong unswitch-able and vectorizable.
     private final long elementCount;
 
-    /// Creates a new {@code IntArray} backed by the given memory segment.
+    /// Creates a new {@code LongArray} backed by the given memory segment.
     ///
-    /// @param dtype  logical type, must be I32 or U32
+    /// @param dtype  logical type, must be I64 or U64
     /// @param length number of elements
-    /// @param buffer little-endian int data (4 bytes per element)
-    public IntArray(DType dtype, long length, MemorySegment buffer) {
+    /// @param buffer little-endian long data (8 bytes per element)
+    public LongArray(DType dtype, long length, MemorySegment buffer) {
         this.dtype = dtype;
         this.length = length;
         this.buffer = buffer;
-        this.elementCount = buffer.byteSize() / PTypeIO.LE_INT.byteSize();
+        this.elementCount = buffer.byteSize() / PTypeIO.LE_LONG.byteSize();
     }
 
     @Override
@@ -44,27 +46,27 @@ public final class IntArray implements Array {
         return buffer;
     }
 
-    /// Returns the int value at the given index.
+    /// Returns the long value at the given index.
     ///
     /// @param i zero-based index (must be in {@code [0, length)})
-    /// @return the int value at position {@code i}
-    public int getInt(long i) {
-        return buffer.getAtIndex(PTypeIO.LE_INT, length == elementCount ? i : i % elementCount);
+    /// @return the long value at position {@code i}
+    public long getLong(long i) {
+        return buffer.getAtIndex(PTypeIO.LE_LONG, length == elementCount ? i : i % elementCount);
     }
 
     /// Passes each element to the given consumer in order.
     ///
-    /// @param c consumer that receives each int element
-    public void forEachInt(IntConsumer c) {
+    /// @param c consumer that receives each long element
+    public void forEachLong(LongConsumer c) {
         MemorySegment buf = buffer;
         long n = length;
         if (n == elementCount) {
             for (long i = 0; i < n; i++) {
-                c.accept(buf.getAtIndex(PTypeIO.LE_INT, i));
+                c.accept(buf.getAtIndex(PTypeIO.LE_LONG, i));
             }
         } else {
             for (long i = 0; i < n; i++) {
-                c.accept(buf.getAtIndex(PTypeIO.LE_INT, i % elementCount));
+                c.accept(buf.getAtIndex(PTypeIO.LE_LONG, i % elementCount));
             }
         }
     }
@@ -72,19 +74,19 @@ public final class IntArray implements Array {
     /// Folds all elements using the given binary operator and identity value.
     ///
     /// @param identity initial accumulator value
-    /// @param op       binary operator applied to the accumulator and each int element
+    /// @param op       binary operator applied to the accumulator and each long element
     /// @return the final accumulated result
-    public int fold(int identity, IntBinaryOperator op) {
+    public long fold(long identity, LongBinaryOperator op) {
         MemorySegment buf = buffer;
         long n = length;
-        int result = identity;
+        long result = identity;
         if (n == elementCount) {
             for (long i = 0; i < n; i++) {
-                result = op.applyAsInt(result, buf.getAtIndex(PTypeIO.LE_INT, i));
+                result = op.applyAsLong(result, buf.getAtIndex(PTypeIO.LE_LONG, i));
             }
         } else {
             for (long i = 0; i < n; i++) {
-                result = op.applyAsInt(result, buf.getAtIndex(PTypeIO.LE_INT, i % elementCount));
+                result = op.applyAsLong(result, buf.getAtIndex(PTypeIO.LE_LONG, i % elementCount));
             }
         }
         return result;

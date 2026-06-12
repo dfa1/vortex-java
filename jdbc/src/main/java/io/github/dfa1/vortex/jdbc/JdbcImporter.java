@@ -278,7 +278,7 @@ public final class JdbcImporter {
                         ? validity[c]
                         : Arrays.copyOf(validity[c], rows);
                 chunk.put(names.get(c),
-                        new io.github.dfa1.vortex.core.array.NullableData(trimmed, trimmedValidity));
+                        new io.github.dfa1.vortex.writer.encode.NullableData(trimmed, trimmedValidity));
             } else {
                 chunk.put(names.get(c), trimmed);
             }

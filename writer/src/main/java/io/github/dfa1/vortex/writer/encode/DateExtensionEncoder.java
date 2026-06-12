@@ -3,7 +3,6 @@ package io.github.dfa1.vortex.writer.encode;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.core.array.NullableData;
 import io.github.dfa1.vortex.extension.ExtensionId;
 import io.github.dfa1.vortex.writer.ExtensionEncoder;
 

@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 
 import java.lang.foreign.MemorySegment;

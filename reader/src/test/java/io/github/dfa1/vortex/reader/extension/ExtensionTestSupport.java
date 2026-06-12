@@ -2,8 +2,8 @@ package io.github.dfa1.vortex.reader.extension;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.core.array.IntArray;
-import io.github.dfa1.vortex.core.array.LongArray;
+import io.github.dfa1.vortex.reader.array.IntArray;
+import io.github.dfa1.vortex.reader.array.LongArray;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;

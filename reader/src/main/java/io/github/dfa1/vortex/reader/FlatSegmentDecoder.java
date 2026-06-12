@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.core.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.fbs.Buffer;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;

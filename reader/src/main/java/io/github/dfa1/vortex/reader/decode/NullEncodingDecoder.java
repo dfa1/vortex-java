@@ -1,8 +1,8 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.array.Array;
-import io.github.dfa1.vortex.core.array.NullArray;
+import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.NullArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
 
 /// Read-only decoder for {@code vortex.null} (all-null arrays).

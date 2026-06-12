@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.core.array.Array;
+import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.extension.ExtensionId;
 import io.github.dfa1.vortex.reader.extension.DateExtensionDecoder;
 import io.github.dfa1.vortex.reader.extension.TimeExtensionDecoder;

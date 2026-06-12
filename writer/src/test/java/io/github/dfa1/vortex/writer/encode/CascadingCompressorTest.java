@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.core.array.DoubleArray;
-import io.github.dfa1.vortex.core.array.LongArray;
+import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 import io.github.dfa1.vortex.encoding.DTypes;
 import io.github.dfa1.vortex.encoding.EncodingId;
@@ -164,8 +164,8 @@ class CascadingCompressorTest {
             ReadRegistry registry = ReadRegistry.loadAll();
             EncodeResult result = sut.encode(DTypes.I32, values, EncodeContext.ofDepth(1, Arena.ofAuto(), toRegistry(ALL_CODECS)));
             DecodeContext decodeCtx = DecodeTestHelper.toDecodeContext(result, values.length, DTypes.I32, registry);
-            io.github.dfa1.vortex.core.array.IntArray decoded =
-                    (io.github.dfa1.vortex.core.array.IntArray) registry.decode(decodeCtx);
+            io.github.dfa1.vortex.reader.array.IntArray decoded =
+                    (io.github.dfa1.vortex.reader.array.IntArray) registry.decode(decodeCtx);
 
             // Then
             for (int i = 0; i < values.length; i++) {

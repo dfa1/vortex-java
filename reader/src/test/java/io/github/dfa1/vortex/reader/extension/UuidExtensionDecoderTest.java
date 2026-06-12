@@ -3,10 +3,10 @@ package io.github.dfa1.vortex.reader.extension;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.core.array.BoolArray;
-import io.github.dfa1.vortex.core.array.ByteArray;
-import io.github.dfa1.vortex.core.array.FixedSizeListArray;
-import io.github.dfa1.vortex.core.array.MaskedArray;
+import io.github.dfa1.vortex.reader.array.BoolArray;
+import io.github.dfa1.vortex.reader.array.ByteArray;
+import io.github.dfa1.vortex.reader.array.FixedSizeListArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.extension.ExtensionId;
 import org.junit.jupiter.api.Test;
 

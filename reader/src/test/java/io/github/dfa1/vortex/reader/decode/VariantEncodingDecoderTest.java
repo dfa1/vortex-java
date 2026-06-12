@@ -4,9 +4,9 @@ import io.github.dfa1.vortex.reader.ReadRegistry;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.core.array.Array;
-import io.github.dfa1.vortex.core.array.NullArray;
-import io.github.dfa1.vortex.core.array.VariantArray;
+import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.NullArray;
+import io.github.dfa1.vortex.reader.array.VariantArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
 
 import io.github.dfa1.vortex.proto.Primitive;

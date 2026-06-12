@@ -1,14 +1,14 @@
 package io.github.dfa1.vortex.cli;
 
-import io.github.dfa1.vortex.core.array.Array;
-import io.github.dfa1.vortex.core.array.BoolArray;
-import io.github.dfa1.vortex.core.array.ByteArray;
-import io.github.dfa1.vortex.core.array.DoubleArray;
-import io.github.dfa1.vortex.core.array.FloatArray;
-import io.github.dfa1.vortex.core.array.IntArray;
-import io.github.dfa1.vortex.core.array.LongArray;
-import io.github.dfa1.vortex.core.array.ShortArray;
-import io.github.dfa1.vortex.core.array.VarBinArray;
+import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.BoolArray;
+import io.github.dfa1.vortex.reader.array.ByteArray;
+import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.FloatArray;
+import io.github.dfa1.vortex.reader.array.IntArray;
+import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.ShortArray;
+import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.csv.CsvExporter;
 import io.github.dfa1.vortex.csv.ExportOptions;
 import io.github.dfa1.vortex.csv.RowPredicate;

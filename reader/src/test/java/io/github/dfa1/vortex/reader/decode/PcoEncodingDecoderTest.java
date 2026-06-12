@@ -5,8 +5,8 @@ import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.core.array.LongArray;
-import io.github.dfa1.vortex.core.array.MaskedArray;
+import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
 
 import io.github.dfa1.vortex.proto.PcoChunkInfo;
@@ -327,8 +327,8 @@ class PcoEncodingDecoderTest {
             var result = SUT.decode(ctx);
 
             assertThat(result.length()).isEqualTo(2);
-            assertThat(((io.github.dfa1.vortex.core.array.IntArray) result).getInt(0)).isEqualTo(5);
-            assertThat(((io.github.dfa1.vortex.core.array.IntArray) result).getInt(1)).isZero();
+            assertThat(((io.github.dfa1.vortex.reader.array.IntArray) result).getInt(0)).isEqualTo(5);
+            assertThat(((io.github.dfa1.vortex.reader.array.IntArray) result).getInt(1)).isZero();
         }
     }
 

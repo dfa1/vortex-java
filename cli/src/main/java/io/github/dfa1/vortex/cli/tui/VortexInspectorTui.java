@@ -3,16 +3,16 @@ package io.github.dfa1.vortex.cli.tui;
 import io.github.dfa1.vortex.core.Layout;
 import io.github.dfa1.vortex.core.SegmentSpec;
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.array.Array;
-import io.github.dfa1.vortex.core.array.BoolArray;
-import io.github.dfa1.vortex.core.array.ByteArray;
-import io.github.dfa1.vortex.core.array.DoubleArray;
-import io.github.dfa1.vortex.core.array.FloatArray;
-import io.github.dfa1.vortex.core.array.GenericArray;
-import io.github.dfa1.vortex.core.array.IntArray;
-import io.github.dfa1.vortex.core.array.LongArray;
-import io.github.dfa1.vortex.core.array.ShortArray;
-import io.github.dfa1.vortex.core.array.VarBinArray;
+import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.BoolArray;
+import io.github.dfa1.vortex.reader.array.ByteArray;
+import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.FloatArray;
+import io.github.dfa1.vortex.reader.array.GenericArray;
+import io.github.dfa1.vortex.reader.array.IntArray;
+import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.ShortArray;
+import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.cli.tui.term.Ansi;
 import io.github.dfa1.vortex.cli.tui.term.Key;
 import io.github.dfa1.vortex.cli.tui.term.Terminal;
@@ -571,7 +571,7 @@ public final class VortexInspectorTui {
                 try (java.lang.foreign.Arena arena = java.lang.foreign.Arena.ofConfined()) {
                     int segIdx = values.segments().getFirst();
                     SegmentSpec spec = tree.segmentSpecs().get(segIdx);
-                    io.github.dfa1.vortex.core.array.Array arr =
+                    io.github.dfa1.vortex.reader.array.Array arr =
                             handle.decodeFlatSegment(spec, dtype, values.rowCount(), arena);
                     int n = (int) Math.min(arr.length(), DATA_PREVIEW_ROWS);
                     List<String> out = new ArrayList<>(n);
