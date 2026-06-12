@@ -63,9 +63,8 @@ public final class IntArray implements Array {
                 c.accept(buf.getAtIndex(PTypeIO.LE_INT, i));
             }
         } else {
-            long cap = elementCount;
             for (long i = 0; i < n; i++) {
-                c.accept(buf.getAtIndex(PTypeIO.LE_INT, i % cap));
+                c.accept(buf.getAtIndex(PTypeIO.LE_INT, i % elementCount));
             }
         }
     }
@@ -84,9 +83,8 @@ public final class IntArray implements Array {
                 result = op.applyAsInt(result, buf.getAtIndex(PTypeIO.LE_INT, i));
             }
         } else {
-            long cap = elementCount;
             for (long i = 0; i < n; i++) {
-                result = op.applyAsInt(result, buf.getAtIndex(PTypeIO.LE_INT, i % cap));
+                result = op.applyAsInt(result, buf.getAtIndex(PTypeIO.LE_INT, i % elementCount));
             }
         }
         return result;
