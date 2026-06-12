@@ -29,10 +29,6 @@ public record UnknownArray(
         Array[] children
 ) implements Array {
 
-    MemorySegment buffer(int i) {
-        return buffers[i];
-    }
-
     /// Returns the child array at position {@code i}.
     ///
     /// @param i child index
