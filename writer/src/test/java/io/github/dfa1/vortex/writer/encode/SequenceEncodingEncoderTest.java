@@ -11,8 +11,7 @@ import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.encoding.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
-import io.github.dfa1.vortex.encoding.EncodeResult;
-import io.github.dfa1.vortex.encoding.EncodeTestHelper;
+
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.proto.ScalarValue;

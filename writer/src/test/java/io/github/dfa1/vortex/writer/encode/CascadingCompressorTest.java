@@ -4,21 +4,16 @@ import io.github.dfa1.vortex.core.array.DoubleArray;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 import io.github.dfa1.vortex.encoding.DTypes;
-import io.github.dfa1.vortex.encoding.EncodeContext;
-import io.github.dfa1.vortex.encoding.EncodeNode;
-import io.github.dfa1.vortex.encoding.EncodeResult;
-import io.github.dfa1.vortex.encoding.EncodingEncoder;
-import io.github.dfa1.vortex.reader.decode.DecodeTestHelper;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import io.github.dfa1.vortex.writer.WriteRegistry;
+
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -29,16 +24,16 @@ class CascadingCompressorTest {
             new AlpEncodingEncoder(), new FrameOfReferenceEncodingEncoder(), new DictEncodingEncoder(),
             new BitpackedEncodingEncoder(), new PrimitiveEncodingEncoder());
 
-    private static Map<EncodingId, EncodingEncoder> toMap(List<EncodingEncoder> codecs) {
-        Map<EncodingId, EncodingEncoder> map = new HashMap<>();
+    private static WriteRegistry toRegistry(List<EncodingEncoder> codecs) {
+        WriteRegistry.Builder b = WriteRegistry.builder();
         for (EncodingEncoder enc : codecs) {
-            map.put(enc.encodingId(), enc);
+            b.register(enc);
         }
-        return Map.copyOf(map);
+        return b.build();
     }
 
     private static EncodeContext ctx(int depth) {
-        return EncodeContext.ofDepth(depth, Arena.ofAuto(), toMap(ALL_CODECS));
+        return EncodeContext.ofDepth(depth, Arena.ofAuto(), toRegistry(ALL_CODECS));
     }
 
     @Nested
@@ -87,7 +82,7 @@ class CascadingCompressorTest {
                 values[i] = i * 1.5;
             }
             EncodeContext encodeCtx = new EncodeContext(
-                    Arena.ofAuto(), toMap(ALL_CODECS),
+                    Arena.ofAuto(), toRegistry(ALL_CODECS),
                     1, Set.of(EncodingId.VORTEX_ALP), 42L, 64, 0.1);
             CascadingCompressor sut = new CascadingCompressor(ALL_CODECS);
 
@@ -125,7 +120,7 @@ class CascadingCompressorTest {
 
             // When
             ReadRegistry registry = ReadRegistry.loadAll();
-            EncodeResult result = sut.encode(DTypes.F64, values, EncodeContext.ofDepth(1, Arena.ofAuto(), toMap(ALL_CODECS)));
+            EncodeResult result = sut.encode(DTypes.F64, values, EncodeContext.ofDepth(1, Arena.ofAuto(), toRegistry(ALL_CODECS)));
             DecodeContext decodeCtx = DecodeTestHelper.toDecodeContext(result, values.length, DTypes.F64, registry);
             DoubleArray decoded = (DoubleArray) registry.decode(decodeCtx);
 
@@ -146,7 +141,7 @@ class CascadingCompressorTest {
 
             // When
             ReadRegistry registry = ReadRegistry.loadAll();
-            EncodeResult result = sut.encode(DTypes.I64, values, EncodeContext.ofDepth(1, Arena.ofAuto(), toMap(ALL_CODECS)));
+            EncodeResult result = sut.encode(DTypes.I64, values, EncodeContext.ofDepth(1, Arena.ofAuto(), toRegistry(ALL_CODECS)));
             DecodeContext decodeCtx = DecodeTestHelper.toDecodeContext(result, values.length, DTypes.I64, registry);
             LongArray decoded = (LongArray) registry.decode(decodeCtx);
 
@@ -167,7 +162,7 @@ class CascadingCompressorTest {
 
             // When
             ReadRegistry registry = ReadRegistry.loadAll();
-            EncodeResult result = sut.encode(DTypes.I32, values, EncodeContext.ofDepth(1, Arena.ofAuto(), toMap(ALL_CODECS)));
+            EncodeResult result = sut.encode(DTypes.I32, values, EncodeContext.ofDepth(1, Arena.ofAuto(), toRegistry(ALL_CODECS)));
             DecodeContext decodeCtx = DecodeTestHelper.toDecodeContext(result, values.length, DTypes.I32, registry);
             io.github.dfa1.vortex.core.array.IntArray decoded =
                     (io.github.dfa1.vortex.core.array.IntArray) registry.decode(decodeCtx);

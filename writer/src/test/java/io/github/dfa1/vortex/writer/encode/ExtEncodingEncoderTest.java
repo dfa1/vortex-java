@@ -4,12 +4,8 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.array.LongArray;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
-import io.github.dfa1.vortex.encoding.CascadeStep;
-import io.github.dfa1.vortex.encoding.ChildSlot;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
-import io.github.dfa1.vortex.encoding.EncodeNode;
-import io.github.dfa1.vortex.encoding.EncodeResult;
-import io.github.dfa1.vortex.encoding.EncodeTestHelper;
+
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;

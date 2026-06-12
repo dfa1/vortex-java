@@ -6,11 +6,7 @@ import io.github.dfa1.vortex.core.VortexException;
 
 
 import io.github.dfa1.vortex.encoding.ChunkedData;
-import io.github.dfa1.vortex.encoding.EncodeContext;
-import io.github.dfa1.vortex.encoding.EncodeNode;
-import io.github.dfa1.vortex.encoding.EncodeResult;
 
-import io.github.dfa1.vortex.encoding.EncodingEncoder;
 import io.github.dfa1.vortex.encoding.EncodingId;
 
 

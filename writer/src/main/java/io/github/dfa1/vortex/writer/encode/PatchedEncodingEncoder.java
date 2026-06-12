@@ -2,9 +2,6 @@ package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.encoding.EncodeContext;
-import io.github.dfa1.vortex.encoding.EncodeResult;
-import io.github.dfa1.vortex.encoding.EncodingEncoder;
 import io.github.dfa1.vortex.encoding.EncodingId;
 
 /// Write-only encoder for {@code vortex.patched} — currently throws (not implemented).

@@ -5,14 +5,13 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexFormat;
 import io.github.dfa1.vortex.encoding.DateTimePartsData;
-import io.github.dfa1.vortex.encoding.EncodeContext;
-import io.github.dfa1.vortex.encoding.EncodeNode;
-import io.github.dfa1.vortex.encoding.EncodeResult;
-import io.github.dfa1.vortex.encoding.EncodingEncoder;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.ListData;
 import io.github.dfa1.vortex.encoding.ListViewData;
-import io.github.dfa1.vortex.encoding.Registry;
+import io.github.dfa1.vortex.writer.encode.EncodeContext;
+import io.github.dfa1.vortex.writer.encode.EncodeNode;
+import io.github.dfa1.vortex.writer.encode.EncodeResult;
+import io.github.dfa1.vortex.writer.encode.EncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.AlpEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.BitpackedEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.BoolEncodingEncoder;
@@ -91,10 +90,9 @@ public final class VortexWriter implements Closeable {
     private final DType.Struct schema;
     private final WriteOptions options;
     private final List<EncodingEncoder> encodings;
-    private final Map<EncodingId, EncodingEncoder> defaultEncoders;
-    private final Registry extensionRegistry;
+    private final WriteRegistry defaultRegistry;
     private final List<EncodingEncoder> cascadeCodecs;
-    private final Map<EncodingId, EncodingEncoder> cascadeEncoders;
+    private final WriteRegistry cascadeRegistry;
     private final List<SegRef> segs = new ArrayList<>();
     private final Map<String, List<ChunkRef>> colChunks = new LinkedHashMap<>();
     private final Map<EncodingId, Integer> encodingIdx = new LinkedHashMap<>();
@@ -114,28 +112,20 @@ public final class VortexWriter implements Closeable {
         this.schema = schema;
         this.options = options;
         this.encodings = encodings;
-        this.defaultEncoders = buildEncoderMap(encodings);
-        this.extensionRegistry = buildExtensionRegistry();
+        this.defaultRegistry = buildRegistry(encodings);
         this.cascadeCodecs = buildCascadeCodecs(options);
-        this.cascadeEncoders = buildEncoderMap(this.cascadeCodecs);
+        this.cascadeRegistry = buildRegistry(this.cascadeCodecs);
         for (String name : schema.fieldNames()) {
             colChunks.put(name, new ArrayList<>());
         }
     }
 
-    /// Builds the encoder map from the given encoder list.
-    private static Map<EncodingId, EncodingEncoder> buildEncoderMap(List<EncodingEncoder> encoders) {
-        Map<EncodingId, EncodingEncoder> map = new java.util.HashMap<>();
+    /// Builds a {@link WriteRegistry} from the given encoder list plus all service-loaded extensions.
+    private static WriteRegistry buildRegistry(List<EncodingEncoder> encoders) {
+        WriteRegistry.Builder b = WriteRegistry.builder();
         for (EncodingEncoder e : encoders) {
-            map.put(e.encodingId(), e);
+            b.register(e);
         }
-        return Map.copyOf(map);
-    }
-
-    /// Builds a registry containing only service-loaded extensions, so {@code writeChunk}
-    /// can auto-route {@code Collection<DomainT>} inputs through the matching extension impl.
-    private static Registry buildExtensionRegistry() {
-        Registry.Builder b = Registry.builder();
         for (io.github.dfa1.vortex.extension.Extension ext :
                 java.util.ServiceLoader.load(io.github.dfa1.vortex.extension.Extension.class)) {
             b.register(ext);
@@ -192,9 +182,11 @@ public final class VortexWriter implements Closeable {
 
     /// Creates a {@link VortexWriter} with a custom encoder list.
     ///
-    /// @param channel  the channel to write to
-    /// @param schema   the struct schema for the file
-    /// @param options  write options
+    /// Creates a {@link VortexWriter} with a custom encoder list.
+    ///
+    /// @param channel   the channel to write to
+    /// @param schema    the struct schema for the file
+    /// @param options   write options
     /// @param encodings custom encoder list
     /// @return a new writer
     public static VortexWriter create(
@@ -203,6 +195,20 @@ public final class VortexWriter implements Closeable {
         // Custom encoding list: disable global dict — using DEFAULT_CODECS for values/codes behind the scenes
         // would violate the user's expectation that only their encoding list is used.
         return new VortexWriter(channel, schema, options.withGlobalDict(false), encodings);
+    }
+
+    /// Creates a {@link VortexWriter} with a custom {@link WriteRegistry}.
+    ///
+    /// @param channel  the channel to write to
+    /// @param schema   the struct schema for the file
+    /// @param options  write options
+    /// @param registry write registry supplying encoders and extensions
+    /// @return a new writer
+    public static VortexWriter create(
+            WritableByteChannel channel, DType.Struct schema, WriteOptions options, WriteRegistry registry
+    ) {
+        return new VortexWriter(channel, schema, options.withGlobalDict(false),
+                List.copyOf(registry.encoderMap().values()));
     }
 
     private static long arrayLength(Object data) {
@@ -337,7 +343,7 @@ public final class VortexWriter implements Closeable {
             if (colDtype instanceof DType.Extension extDtype && data instanceof java.util.Collection<?> coll) {
                 io.github.dfa1.vortex.extension.Extension impl =
                         io.github.dfa1.vortex.extension.ExtensionId.parse(extDtype.extensionId())
-                                .map(extensionRegistry::lookup)
+                                .map(defaultRegistry::lookup)
                                 .orElse(null);
                 if (impl != null) {
                     data = impl.encodeAll(extDtype, coll);
@@ -421,15 +427,15 @@ public final class VortexWriter implements Closeable {
         try (Arena arena = Arena.ofConfined()) {
             EncodeResult result;
             if (encodingOverride != null) {
-                EncodeContext encodeCtx = EncodeContext.of(arena, defaultEncoders);
+                EncodeContext encodeCtx = EncodeContext.of(arena, defaultRegistry);
                 result = encodingOverride.encode(dtype, data, encodeCtx);
             } else if (options.allowedCascading() > 0) {
-                EncodeContext encodeCtx = EncodeContext.ofDepth(options.allowedCascading(), arena, cascadeEncoders);
+                EncodeContext encodeCtx = EncodeContext.ofDepth(options.allowedCascading(), arena, cascadeRegistry);
                 CascadingCompressor compressor = new CascadingCompressor(cascadeCodecs);
                 result = compressor.encode(dtype, data, encodeCtx);
             } else {
                 EncodingEncoder encoder = findEncoder(dtype);
-                EncodeContext encodeCtx = EncodeContext.of(arena, defaultEncoders);
+                EncodeContext encodeCtx = EncodeContext.of(arena, defaultRegistry);
                 result = encoder.encode(dtype, data, encodeCtx);
             }
             // Register all encoding IDs found in the node tree

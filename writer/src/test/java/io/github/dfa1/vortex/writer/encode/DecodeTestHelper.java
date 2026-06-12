@@ -1,9 +1,9 @@
-package io.github.dfa1.vortex.reader.decode;
+package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.encoding.EncodeNode;
-import io.github.dfa1.vortex.encoding.EncodeResult;
 import io.github.dfa1.vortex.reader.ReadRegistry;
+import io.github.dfa1.vortex.reader.decode.ArrayNode;
+import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;

@@ -1,4 +1,6 @@
-package io.github.dfa1.vortex.encoding;
+package io.github.dfa1.vortex.writer.encode;
+
+import io.github.dfa1.vortex.encoding.EncodingId;
 
 import java.lang.foreign.MemorySegment;
 import java.util.List;

@@ -3,11 +3,7 @@ package io.github.dfa1.vortex.writer.encode;
 import io.github.dfa1.vortex.core.DType;
 
 
-import io.github.dfa1.vortex.encoding.EncodeContext;
-import io.github.dfa1.vortex.encoding.EncodeNode;
-import io.github.dfa1.vortex.encoding.EncodeResult;
 
-import io.github.dfa1.vortex.encoding.EncodingEncoder;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.FixedSizeListData;
 

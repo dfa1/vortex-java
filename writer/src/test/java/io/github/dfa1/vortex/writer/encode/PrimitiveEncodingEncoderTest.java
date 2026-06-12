@@ -9,9 +9,7 @@ import io.github.dfa1.vortex.core.array.IntArray;
 import io.github.dfa1.vortex.core.array.MaskedArray;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
-import io.github.dfa1.vortex.encoding.EncodeResult;
-import io.github.dfa1.vortex.encoding.EncodeTestHelper;
-import io.github.dfa1.vortex.reader.decode.DecodeTestHelper;
+
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.reader.ReadRegistry;
