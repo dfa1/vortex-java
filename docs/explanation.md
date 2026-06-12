@@ -328,19 +328,28 @@ Files with unrecognised IDs throw `VortexException` unless the builder enabled `
 
 ## Benchmarks
 
-JMH throughput (ops/s = full-file scans per second). Higher is better. Numbers
-re-measured 2026-06-08 against commit `051a794`.
+JMH throughput (ops/s = full-file scans per second). Higher is better.
 
-**Environment:** Apple M5, OpenJDK 25, 5 warmup × 3 s, 10 measurement × 5 s, fork 1.
+**Apples-to-apples.** The Java and JNI numbers in the OHLC and big-file tables
+below come from reading the **same on-disk file**, written once by `vortex-jni`
+(Rust-chosen encodings) and opened by both decoders. Differences are pure
+decoder cost — same bytes in, same row count out. See
+[`RustVsJavaReadBenchmark.@Setup`](../performance/src/main/java/io/github/dfa1/vortex/performance/RustVsJavaReadBenchmark.java)
+— `sharedBenchFile` is written by `writeJni(...)` and shared across every
+`jniRead*` and `javaRead*` method (`javaReadCascading` is the one exception:
+it reads a Java-written file with `WriteOptions.cascading(3)`).
+
+**Environment:** Apple M5, OpenJDK 25, 3 warmup × 3 s, 5 measurement × 5 s, fork 1.
+Numbers below re-measured 2026-06-11.
 
 ### OHLC read — 10 M rows, 58.9 MB (Rust-written file, single-column projection)
 
-| Benchmark           | Java (ops/s)  | JNI/Rust (ops/s) | Java speedup |
-|---------------------|---------------|------------------|--------------|
-| close (F64/ALP)     | 61.0 ± 5.8    | 47.9 ± 0.7       | **1.3×**     |
-| volume (I64/bitpacked) | 104.8 ± 5.1 | 48.4 ± 1.7      | **2.2×**     |
-| symbol (varbin)     | 97.8 ± 1.8    | 9.2 ± 0.4        | **10.6×**    |
-| cascading (depth 3, volume) | 80.9 ± 1.2 | n/a          | —            |
+| Benchmark                   | Java (ops/s)   | JNI/Rust (ops/s) | Java speedup |
+|-----------------------------|----------------|------------------|--------------|
+| close (F64/ALP)             | 68.8 ± 0.2     | 50.2 ± 1.2       | **1.4×**     |
+| volume (I64/bitpacked)      | 118.9 ± 0.9    | 50.1 ± 2.6       | **2.4×**     |
+| symbol (varbin)             | 104.8 ± 5.1    | 9.7 ± 0.5        | **10.8×**    |
+| cascading (depth 3, volume) | 86.7 ± 2.5     | n/a              | —            |
 
 ### OHLC write — 10 M rows
 
