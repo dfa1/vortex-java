@@ -98,8 +98,8 @@ public final class Chunk implements AutoCloseable {
     /// List<Instant>   ts    = chunk.as("events", Instant.class);
     /// ```
     ///
-    /// Third-party extensions go through {@link io.github.dfa1.vortex.encoding.Registry#lookup}
-    /// + the impl's own typed methods — this accessor is closed over the spec set.
+    /// Third-party extensions call the extension's own typed methods directly —
+    /// this accessor is closed over the spec set.
     ///
     /// @param name       column name as declared in the file's schema
     /// @param domainType the spec extension's Java domain type (e.g. {@link LocalDate} for
