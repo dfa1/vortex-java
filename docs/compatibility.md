@@ -24,11 +24,8 @@ A consumer that only needs to read Vortex files can depend on a strict subset:
 ```
 
 `./mvnw -pl core,reader,inspector verify` builds the read-only artifact set
-without the writer module on the classpath. None of the writer-side encoder
-implementations are loaded; `ServiceLoader<EncodingDecoder>` resolves only the
-standalone decoders in `reader`, falling back to the bifunctional `Encoding`
-implementations in `core` for encoding families not yet lifted (ADR 0001
-Phases 2–3).
+without the writer module on the classpath. `ServiceLoader<EncodingDecoder>`
+resolves only the standalone decoders in `reader`; no encoder class is loaded.
 
 ## Known wire-format gaps
 
@@ -41,42 +38,42 @@ Phases 2–3).
 
 ## Encodings
 
-| Encoding ID                 | Class                      | Decode | Encode | Notes                                                                 |
-|-----------------------------|----------------------------|--------|--------|-----------------------------------------------------------------------|
-| `vortex.primitive`          | `PrimitiveEncoding`        | ✅      | ✅      | All `PType` (I8–I64, U8–U64, F32, F64)                                |
-| `vortex.bool`               | `BoolEncoding`             | ✅      | ✅      | Bool (bit-packed)                                                     |
-| `vortex.null`               | `NullEncoding`             | ✅      | ✅      | Null                                                                  |
-| `vortex.bytebool`           | `ByteBoolEncoding`         | ✅      | ✅      | Bool (byte-per-element)                                               |
-| `vortex.zigzag`             | `ZigZagEncoding`           | ✅      | ✅      | Signed integer PTypes                                                 |
-| `vortex.constant`           | `ConstantEncoding`         | ✅      | ✅      | Primitive, Utf8, Binary, Bool, Null, Decimal, Extension               |
-| `vortex.ext`                | `ExtEncoding`              | ✅      | ✅      | Extension                                                             |
-| `vortex.runend`             | `RunEndEncoding`           | ✅      | ✅      | Primitive, Utf8/Binary, Bool                                          |
-| `vortex.varbin`             | `VarBinEncoding`           | ✅      | ✅      | Utf8, Binary                                                          |
-| `vortex.varbinview`         | `VarBinViewEncoding`       | ✅      | ✅      | Utf8, Binary                                                          |
-| `vortex.alp`                | `AlpEncoding`              | ✅      | ✅      | F64, F32                                                              |
-| `vortex.alprd`              | `AlpRdEncoding`            | ✅      | ✅      | F64, F32                                                              |
-| `vortex.dict`               | `DictEncoding`             | ✅      | ✅      | Primitive, Utf8/Binary                                                |
-| `vortex.sparse`             | `SparseEncoding`           | ✅      | ✅      | Primitive                                                             |
-| `vortex.sequence`           | `SequenceEncoding`         | ✅      | ✅      | Primitive                                                             |
-| `vortex.struct`             | `StructEncoding`           | ✅      | ✅      | Struct                                                                |
-| `vortex.chunked`            | `ChunkedEncoding`          | ✅      | ✅      | Primitive + Struct concat                                             |
-| `vortex.fsst`               | `FsstEncoding`             | ✅      | ✅      | Utf8, Binary                                                          |
-| `vortex.list`               | `ListEncoding`             | ✅      | ✅      |                                                                       |
-| `vortex.listview`           | `ListViewEncoding`         | ✅      | ✅      |                                                                       |
-| `vortex.fixed_size_list`    | `FixedSizeListEncoding`    | ✅      | ✅      |                                                                       |
-| `vortex.zstd`               | `ZstdEncoding`             | ✅      | ✅      | Primitive, Utf8, Binary                                               |
-| `vortex.masked`             | `MaskedEncoding`           | ✅      | ❌      | Encode not yet implemented                                            |
-| `vortex.decimal`            | `DecimalEncoding`          | ✅      | ✅      |                                                                       |
-| `vortex.decimal_byte_parts` | `DecimalBytePartsEncoding` | ✅      | ✅      |                                                                       |
-| `vortex.datetimeparts`      | `DateTimePartsEncoding`    | ✅      | ✅      |                                                                       |
-| `vortex.pco`                | `PcoEncoding`              | ✅      | ❌      | Decode: all modes; encode not yet implemented                         |
-| `fastlanes.bitpacked`       | `BitpackedEncoding`        | ✅      | ✅      | Unsigned integer PTypes                                               |
-| `fastlanes.delta`           | `DeltaEncoding`            | ✅      | ✅      | Integer PTypes                                                        |
-| `fastlanes.for`             | `FrameOfReferenceEncoding` | ✅      | ✅      | Integer PTypes                                                        |
-| `fastlanes.rle`             | `RleEncoding`              | ✅      | ✅      | Chunk-based RLE                                                       |
-| `vortex.patched`            | `PatchedEncoding`          | ✅      | ❌      | Primitive PTypes; encode not yet implemented                          |
-| `vortex.variant`            | `VariantEncoding`          | ✅      | ❌      | Decode (incl. shredded child); encode not yet implemented (Rust 0.73+) |
-| `vortex.onpair`             | _none_                     | ❌      | ❌      | Experimental in Rust 0.74.0; not yet ported                            |
+| Encoding ID                 | Decoder                          | Encoder                          | Decode | Encode | Notes                                                                 |
+|-----------------------------|----------------------------------|----------------------------------|--------|--------|-----------------------------------------------------------------------|
+| `vortex.primitive`          | `PrimitiveEncodingDecoder`       | `PrimitiveEncodingEncoder`       | ✅      | ✅      | All `PType` (I8–I64, U8–U64, F32, F64)                                |
+| `vortex.bool`               | `BoolEncodingDecoder`            | `BoolEncodingEncoder`            | ✅      | ✅      | Bool (bit-packed)                                                     |
+| `vortex.null`               | `NullEncodingDecoder`            | `NullEncodingEncoder`            | ✅      | ✅      | Null                                                                  |
+| `vortex.bytebool`           | `ByteBoolEncodingDecoder`        | `ByteBoolEncodingEncoder`        | ✅      | ✅      | Bool (byte-per-element)                                               |
+| `vortex.zigzag`             | `ZigZagEncodingDecoder`          | `ZigZagEncodingEncoder`          | ✅      | ✅      | Signed integer PTypes                                                 |
+| `vortex.constant`           | `ConstantEncodingDecoder`        | `ConstantEncodingEncoder`        | ✅      | ✅      | Primitive, Utf8, Binary, Bool, Null, Decimal, Extension               |
+| `vortex.ext`                | `ExtEncodingDecoder`             | `ExtEncodingEncoder`             | ✅      | ✅      | Extension                                                             |
+| `vortex.runend`             | `RunEndEncodingDecoder`          | `RunEndEncodingEncoder`          | ✅      | ✅      | Primitive, Utf8/Binary, Bool                                          |
+| `vortex.varbin`             | `VarBinEncodingDecoder`          | `VarBinEncodingEncoder`          | ✅      | ✅      | Utf8, Binary                                                          |
+| `vortex.varbinview`         | `VarBinViewEncodingDecoder`      | `VarBinViewEncodingEncoder`      | ✅      | ✅      | Utf8, Binary                                                          |
+| `vortex.alp`                | `AlpEncodingDecoder`             | `AlpEncodingEncoder`             | ✅      | ✅      | F64, F32                                                              |
+| `vortex.alprd`              | `AlpRdEncodingDecoder`           | `AlpRdEncodingEncoder`           | ✅      | ✅      | F64, F32                                                              |
+| `vortex.dict`               | `DictEncodingDecoder`            | `DictEncodingEncoder`            | ✅      | ✅      | Primitive, Utf8/Binary                                                |
+| `vortex.sparse`             | `SparseEncodingDecoder`          | `SparseEncodingEncoder`          | ✅      | ✅      | Primitive                                                             |
+| `vortex.sequence`           | `SequenceEncodingDecoder`        | `SequenceEncodingEncoder`        | ✅      | ✅      | Primitive                                                             |
+| `vortex.struct`             | `StructEncodingDecoder`          | `StructEncodingEncoder`          | ✅      | ✅      | Struct                                                                |
+| `vortex.chunked`            | `ChunkedEncodingDecoder`         | `ChunkedEncodingEncoder`         | ✅      | ✅      | Primitive + Struct concat                                             |
+| `vortex.fsst`               | `FsstEncodingDecoder`            | `FsstEncodingEncoder`            | ✅      | ✅      | Utf8, Binary                                                          |
+| `vortex.list`               | `ListEncodingDecoder`            | `ListEncodingEncoder`            | ✅      | ✅      |                                                                       |
+| `vortex.listview`           | `ListViewEncodingDecoder`        | `ListViewEncodingEncoder`        | ✅      | ✅      |                                                                       |
+| `vortex.fixed_size_list`    | `FixedSizeListEncodingDecoder`   | `FixedSizeListEncodingEncoder`   | ✅      | ✅      |                                                                       |
+| `vortex.zstd`               | `ZstdEncodingDecoder`            | `ZstdEncodingEncoder`            | ✅      | ✅      | Primitive, Utf8, Binary                                               |
+| `vortex.masked`             | `MaskedEncodingDecoder`          | `MaskedEncodingEncoder`          | ✅      | ❌      | Encode not yet implemented                                            |
+| `vortex.decimal`            | `DecimalEncodingDecoder`         | `DecimalEncodingEncoder`         | ✅      | ✅      |                                                                       |
+| `vortex.decimal_byte_parts` | `DecimalBytePartsEncodingDecoder`| `DecimalBytePartsEncodingEncoder`| ✅      | ✅      |                                                                       |
+| `vortex.datetimeparts`      | `DateTimePartsEncodingDecoder`   | `DateTimePartsEncodingEncoder`   | ✅      | ✅      |                                                                       |
+| `vortex.pco`                | `PcoEncodingDecoder`             | `PcoEncodingEncoder`             | ✅      | ❌      | Decode: all modes; encode not yet implemented                         |
+| `fastlanes.bitpacked`       | `BitpackedEncodingDecoder`       | `BitpackedEncodingEncoder`       | ✅      | ✅      | Unsigned integer PTypes                                               |
+| `fastlanes.delta`           | `DeltaEncodingDecoder`           | `DeltaEncodingEncoder`           | ✅      | ✅      | Integer PTypes                                                        |
+| `fastlanes.for`             | `FrameOfReferenceEncodingDecoder`| `FrameOfReferenceEncodingEncoder`| ✅      | ✅      | Integer PTypes                                                        |
+| `fastlanes.rle`             | `RleEncodingDecoder`             | `RleEncodingEncoder`             | ✅      | ✅      | Chunk-based RLE                                                       |
+| `vortex.patched`            | `PatchedEncodingDecoder`         | `PatchedEncodingEncoder`         | ✅      | ❌      | Primitive PTypes; encode not yet implemented                          |
+| `vortex.variant`            | `VariantEncodingDecoder`         | `VariantEncodingEncoder`         | ✅      | ❌      | Decode (incl. shredded child); encode not yet implemented (Rust 0.73+) |
+| `vortex.onpair`             | _none_                           | _none_                           | ❌      | ❌      | Experimental in Rust 0.74.0; not yet ported                            |
 
 ### Unknown encodings
 
@@ -84,7 +81,7 @@ Files containing unrecognised encoding IDs throw `VortexException` by default. O
 passthrough mode to read such files without failing:
 
 ```java
-Registry registry = Registry.builder()
+ReadRegistry registry = ReadRegistry.builder()
         .registerServiceLoaded()
         .allowUnknown()
         .build();
