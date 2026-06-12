@@ -63,9 +63,8 @@ public final class FloatArray implements Array {
                 result = op.applyAsDouble(result, buf.getAtIndex(PTypeIO.LE_FLOAT, i));
             }
         } else {
-            long cap = elementCount;
             for (long i = 0; i < n; i++) {
-                result = op.applyAsDouble(result, buf.getAtIndex(PTypeIO.LE_FLOAT, i % cap));
+                result = op.applyAsDouble(result, buf.getAtIndex(PTypeIO.LE_FLOAT, i % elementCount));
             }
         }
         return result;

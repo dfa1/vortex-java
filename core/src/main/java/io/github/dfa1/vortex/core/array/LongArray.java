@@ -65,9 +65,8 @@ public final class LongArray implements Array {
                 c.accept(buf.getAtIndex(PTypeIO.LE_LONG, i));
             }
         } else {
-            long cap = elementCount;
             for (long i = 0; i < n; i++) {
-                c.accept(buf.getAtIndex(PTypeIO.LE_LONG, i % cap));
+                c.accept(buf.getAtIndex(PTypeIO.LE_LONG, i % elementCount));
             }
         }
     }
@@ -86,9 +85,8 @@ public final class LongArray implements Array {
                 result = op.applyAsLong(result, buf.getAtIndex(PTypeIO.LE_LONG, i));
             }
         } else {
-            long cap = elementCount;
             for (long i = 0; i < n; i++) {
-                result = op.applyAsLong(result, buf.getAtIndex(PTypeIO.LE_LONG, i % cap));
+                result = op.applyAsLong(result, buf.getAtIndex(PTypeIO.LE_LONG, i % elementCount));
             }
         }
         return result;
