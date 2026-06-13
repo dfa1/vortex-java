@@ -72,19 +72,48 @@ class MalformedHttpResponseTest {
     @SuppressWarnings("unchecked")
     private static HttpResponse<byte[]> response206(String contentRange, byte[] body) {
         return new HttpResponse<>() {
-            @Override public int statusCode() { return 206; }
-            @Override public byte[] body() { return body; }
-            @Override public HttpHeaders headers() {
+            @Override
+            public int statusCode() {
+                return 206;
+            }
+
+            @Override
+            public byte[] body() {
+                return body;
+            }
+
+            @Override
+            public HttpHeaders headers() {
                 Map<String, List<String>> map = contentRange == null
                         ? Map.of()
                         : Map.of("content-range", List.of(contentRange));
                 return HttpHeaders.of(map, (k, v) -> true);
             }
-            @Override public HttpRequest request() { return null; }
-            @Override public Optional<HttpResponse<byte[]>> previousResponse() { return Optional.empty(); }
-            @Override public Optional<SSLSession> sslSession() { return Optional.empty(); }
-            @Override public java.net.URI uri() { return URI; }
-            @Override public HttpClient.Version version() { return HttpClient.Version.HTTP_1_1; }
+
+            @Override
+            public HttpRequest request() {
+                return null;
+            }
+
+            @Override
+            public Optional<HttpResponse<byte[]>> previousResponse() {
+                return Optional.empty();
+            }
+
+            @Override
+            public Optional<SSLSession> sslSession() {
+                return Optional.empty();
+            }
+
+            @Override
+            public java.net.URI uri() {
+                return URI;
+            }
+
+            @Override
+            public HttpClient.Version version() {
+                return HttpClient.Version.HTTP_1_1;
+            }
         };
     }
 }
