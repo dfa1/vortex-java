@@ -1454,6 +1454,23 @@ class JavaWritesRustReadsIntegrationTest {
         assertThat(decoded).containsExactly(data);
     }
 
+    @Test
+    void javaWriter_rustReader_pco_i64_intMult(@TempDir Path tmp) throws IOException {
+        // Given — values × 1000: triple-GCD detection picks base=1000 → mode=1
+        Path file = tmp.resolve("java_pco_i64_intmult.vtx");
+        long[] data = LongStream.range(0, 2000).map(i -> i * 1000L).toArray();
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.defaults(),
+                     List.of(new PcoEncodingEncoder()))) {
+            // When
+            sut.writeChunk(Map.of("ts", data));
+        }
+
+        // Then
+        long[] decoded = readLongColumn(file, "ts");
+        assertThat(decoded).containsExactly(data);
+    }
+
     static Stream<long[]> pcoSequentialI64ArrayProvider() {
         // Sequential arrays exercise the Consecutive delta path (stride-1 and stride-N)
         return Stream.of(

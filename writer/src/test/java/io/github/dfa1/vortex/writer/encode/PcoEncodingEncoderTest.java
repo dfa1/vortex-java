@@ -48,7 +48,11 @@ class PcoEncodingEncoderTest {
                 Arguments.of("stride-4", LongStream.range(0, 500).map(i -> i * 4).toArray()),
                 Arguments.of("sequential-negative", LongStream.range(-500, 0).toArray()),
                 // multi-chunk: crosses the 64K-element chunk boundary
-                Arguments.of("multi-chunk", LongStream.range(0, 150_000).toArray())
+                Arguments.of("multi-chunk", LongStream.range(0, 150_000).toArray()),
+                // IntMult: every value × 1000 — triple GCD detects base=1000
+                Arguments.of("int-mult-1000", LongStream.range(0, 5000).map(i -> i * 1000).toArray()),
+                // IntMult: prices × 100 with small random adjustments
+                Arguments.of("int-mult-prices", intMultPriceData(2000))
         );
     }
 
@@ -249,5 +253,15 @@ class PcoEncodingEncoderTest {
         for (int i = 0; i < data.length; i++) {
             assertThat(ArraySegments.of(result).get(PTypeIO.LE_DOUBLE, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
         }
+    }
+
+    /// IntMult-favorable data: base 100 + small random adjustment ([0,100)).
+    private static long[] intMultPriceData(int n) {
+        java.util.Random rng = new java.util.Random(42L);
+        long[] arr = new long[n];
+        for (int i = 0; i < n; i++) {
+            arr[i] = (10L + rng.nextInt(1000)) * 100L + rng.nextInt(100);
+        }
+        return arr;
     }
 }

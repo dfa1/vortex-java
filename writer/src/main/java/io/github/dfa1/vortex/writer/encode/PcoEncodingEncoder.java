@@ -14,15 +14,18 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.stream.IntStream;
 
 /// Write-only encoder for {@code vortex.pco}.
 ///
-/// <p>Classic mode (mode=0), one latent variable per chunk.
-/// Data is split into chunks of {@value #CHUNK_SIZE} elements; each chunk gets
-/// independently trained bins, quantized ANS weights, and a single page.
-/// Chooses between NoOp delta (deltaVariant=0) and Consecutive delta
-/// (deltaVariant=1, order=1) per chunk by comparing estimated bit cost.
+/// <p>Supports Classic mode (mode=0) and IntMult mode (mode=1).
+/// Each chunk independently chooses:
+/// <ul>
+///   <li>IntMult base (via triple-GCD detection) if integer data has a structural multiplier</li>
+///   <li>Otherwise Classic mode with NoOp or Consecutive delta (deltaVariant=0 or 1)</li>
+/// </ul>
+/// Data is split into chunks of {@value #CHUNK_SIZE} elements.
 public final class PcoEncodingEncoder implements EncodingEncoder {
 
     private static final byte PCO_FORMAT_MAJOR = 0x04;
@@ -62,6 +65,18 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
         private record ChunkResult(MemorySegment chunkMeta, MemorySegment page, int pageN) {
         }
 
+        // Per-stream encoded ANS state. Used for both single-stream (Classic) and dual-stream (IntMult) modes.
+        private record StreamData(
+                int[] symbols,
+                long[] offsets,
+                int[] binOffsetBits,
+                int ansSizeLog,
+                long[][] batchBits,
+                int[][] batchNumBits,
+                int[] initialStateIdxs
+        ) {
+        }
+
         static EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
             PType ptype = ((DType.Primitive) dtype).ptype();
             int dtypeSize = dtypeSize(ptype);
@@ -72,10 +87,6 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
                 return encodeEmpty(ctx.arena());
             }
 
-            // Buffer layout: all chunk metas first, then all pages.
-            // Rust vortex PcoArray.deserialize splits buffers as:
-            //   chunk_metas = buffers[0..n_chunks]
-            //   pages       = buffers[n_chunks..]
             List<MemorySegment> chunkMetas = new ArrayList<>();
             List<MemorySegment> pages = new ArrayList<>();
             List<PcoChunkInfo> chunks = new ArrayList<>();
@@ -84,7 +95,7 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             while (chunkStart < n) {
                 int chunkEnd = Math.min(chunkStart + CHUNK_SIZE, n);
                 long[] chunkLatents = Arrays.copyOfRange(allLatents, chunkStart, chunkEnd);
-                ChunkResult result = encodeChunk(chunkLatents, dtypeSize, ctx.arena());
+                ChunkResult result = encodeChunk(chunkLatents, ptype, dtypeSize, ctx.arena());
                 chunkMetas.add(result.chunkMeta());
                 pages.add(result.page());
                 chunks.add(new PcoChunkInfo(List.of(new PcoPageInfo(result.pageN()))));
@@ -99,7 +110,33 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             return new EncodeResult(node, buffers, null, null);
         }
 
-        private static ChunkResult encodeChunk(long[] latents, int dtypeSize, Arena arena) {
+        private static ChunkResult encodeChunk(long[] latents, PType ptype, int dtypeSize, Arena arena) {
+            int n = latents.length;
+
+            // Try IntMult mode for integer dtypes — split into (mult, adj) and check if it wins vs Classic.
+            if (isIntegerPtype(ptype) && n >= 10) {
+                OptionalLong baseOpt = PcoIntMultDetector.choose(latents, dtypeSize);
+                if (baseOpt.isPresent()) {
+                    ChunkResult intMult = tryEncodeIntMult(latents, baseOpt.getAsLong(), dtypeSize, arena);
+                    if (intMult != null) {
+                        return intMult;
+                    }
+                }
+            }
+
+            return encodeChunkClassic(latents, dtypeSize, arena);
+        }
+
+        private static boolean isIntegerPtype(PType ptype) {
+            return switch (ptype) {
+                case I16, U16, I32, U32, I64, U64 -> true;
+                default -> false;
+            };
+        }
+
+        // ── Classic mode (with NoOp or Consecutive delta) ─────────────────────
+
+        private static ChunkResult encodeChunkClassic(long[] latents, int dtypeSize, Arena arena) {
             int n = latents.length;
             long[] sortKeys = toSortKeys(latents);
 
@@ -140,17 +177,78 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
 
             if (useDelta) {
                 PcoAnsEncoder ansEncoder = PcoAnsEncoder.build(deltaQ.sizeLog(), deltaQ.weights());
-                chunkMetaSeg = buildChunkMeta(dtypeSize, deltaBins, deltaQ, 1, 1, arena);
-                pageSeg = buildPage(deltas, toSortKeys(deltas), deltaBins,
+                chunkMetaSeg = buildClassicChunkMeta(dtypeSize, deltaBins, deltaQ, 1, 1, arena);
+                pageSeg = buildClassicPage(deltas, toSortKeys(deltas), deltaBins,
                         deltaQ.sizeLog(), ansEncoder, dtypeSize, latents[0], true, arena);
             } else {
                 PcoAnsEncoder ansEncoder = PcoAnsEncoder.build(noOpQ.sizeLog(), noOpQ.weights());
-                chunkMetaSeg = buildChunkMeta(dtypeSize, noOpBins, noOpQ, 0, 0, arena);
-                pageSeg = buildPage(latents, sortKeys, noOpBins,
+                chunkMetaSeg = buildClassicChunkMeta(dtypeSize, noOpBins, noOpQ, 0, 0, arena);
+                pageSeg = buildClassicPage(latents, sortKeys, noOpBins,
                         noOpQ.sizeLog(), ansEncoder, dtypeSize, 0L, false, arena);
             }
 
             return new ChunkResult(chunkMetaSeg, pageSeg, n);
+        }
+
+        // ── IntMult mode (mode=1, NoOp delta on both streams) ─────────────────
+
+        // Returns null if IntMult fails to actually beat Classic after full bin optimization.
+        private static ChunkResult tryEncodeIntMult(long[] latents, long base, int dtypeSize, Arena arena) {
+            int n = latents.length;
+            long mask = typeMask(dtypeSize);
+            long[] mults = new long[n];
+            long[] adjs = new long[n];
+            for (int i = 0; i < n; i++) {
+                mults[i] = Long.divideUnsigned(latents[i], base);
+                adjs[i] = Long.remainderUnsigned(latents[i], base);
+            }
+
+            // Train bins for both streams independently.
+            int nLogCeil = n <= 1 ? 0 : 64 - Long.numberOfLeadingZeros(n - 1);
+            int nBinsLog = n == 1 ? 0 : Math.min(N_BINS_LOG, 64 - Long.numberOfLeadingZeros(n - 1));
+            int maxSizeLog = Math.min(Math.min(nBinsLog + 2, 12), nLogCeil);
+
+            long[] multSortKeys = toSortKeys(mults);
+            long[] multSorted = multSortKeys.clone();
+            Arrays.sort(multSorted);
+            List<PcoHistBin> multHist = buildHistogram(multSorted, n, nBinsLog);
+            List<PcoBinOptimizer.Bin> multBins = PcoBinOptimizer.optimize(multHist, maxSizeLog, dtypeSize);
+            PcoWeightQuantizer.Result multQ = quantize(multBins, n, maxSizeLog);
+
+            long[] adjSortKeys = toSortKeys(adjs);
+            long[] adjSorted = adjSortKeys.clone();
+            Arrays.sort(adjSorted);
+            List<PcoHistBin> adjHist = buildHistogram(adjSorted, n, nBinsLog);
+            List<PcoBinOptimizer.Bin> adjBins = PcoBinOptimizer.optimize(adjHist, maxSizeLog, dtypeSize);
+            PcoWeightQuantizer.Result adjQ = quantize(adjBins, n, maxSizeLog);
+
+            // Sanity: only use IntMult if combined cost actually beats Classic.
+            float classicEstCost = estimateClassicCost(latents, dtypeSize, maxSizeLog);
+            float intMultCost = dpCost(multBins, n) + dpCost(adjBins, n);
+            if (intMultCost >= classicEstCost) {
+                return null;
+            }
+
+            PcoAnsEncoder multAnsEncoder = PcoAnsEncoder.build(multQ.sizeLog(), multQ.weights());
+            PcoAnsEncoder adjAnsEncoder = PcoAnsEncoder.build(adjQ.sizeLog(), adjQ.weights());
+
+            MemorySegment chunkMetaSeg = buildIntMultChunkMeta(dtypeSize, base, multBins, multQ, adjBins, adjQ, arena);
+            MemorySegment pageSeg = buildIntMultPage(
+                    mults, multSortKeys, multBins, multQ.sizeLog(), multAnsEncoder,
+                    adjs, adjSortKeys, adjBins, adjQ.sizeLog(), adjAnsEncoder,
+                    arena);
+            return new ChunkResult(chunkMetaSeg, pageSeg, n);
+        }
+
+        private static float estimateClassicCost(long[] latents, int dtypeSize, int maxSizeLog) {
+            int n = latents.length;
+            long[] sortKeys = toSortKeys(latents);
+            long[] sorted = sortKeys.clone();
+            Arrays.sort(sorted);
+            int nBinsLog = n == 1 ? 0 : Math.min(N_BINS_LOG, 64 - Long.numberOfLeadingZeros(n - 1));
+            List<PcoHistBin> hist = buildHistogram(sorted, n, nBinsLog);
+            List<PcoBinOptimizer.Bin> bins = PcoBinOptimizer.optimize(hist, maxSizeLog, dtypeSize);
+            return dpCost(bins, n);
         }
 
         // ── histogram ─────────────────────────────────────────────────────────
@@ -175,19 +273,19 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             return bins;
         }
 
-        // ── chunk meta ────────────────────────────────────────────────────────
+        // ── Classic chunk meta ────────────────────────────────────────────────
 
-        private static MemorySegment buildChunkMeta(
+        private static MemorySegment buildClassicChunkMeta(
                 int dtypeSize, List<PcoBinOptimizer.Bin> bins, PcoWeightQuantizer.Result qw,
                 int deltaVariant, int deltaOrder, Arena arena) {
             int ansSizeLog = qw.sizeLog();
             int[] weights = qw.weights();
             LeBitWriter w = new LeBitWriter(64);
-            w.writeBits(0, 4);
-            w.writeBits(deltaVariant, 4);
+            w.writeBits(0, 4);            // mode = Classic
+            w.writeBits(deltaVariant, 4); // 0=NoOp or 1=Consecutive
             if (deltaVariant == 1) {
                 w.writeBits(deltaOrder, 3);
-                w.writeBits(0, 1);
+                w.writeBits(0, 1);        // secondaryUsesDelta=false (no secondary in Classic)
             }
             w.writeBits(ansSizeLog, 4);
             w.writeBits(bins.size(), 15);
@@ -202,32 +300,136 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             return w.toMemorySegment(arena);
         }
 
-        // ── page encoding ─────────────────────────────────────────────────────
+        // ── IntMult chunk meta ────────────────────────────────────────────────
 
-        private static MemorySegment buildPage(
+        private static MemorySegment buildIntMultChunkMeta(
+                int dtypeSize, long base,
+                List<PcoBinOptimizer.Bin> primaryBins, PcoWeightQuantizer.Result primaryQ,
+                List<PcoBinOptimizer.Bin> secondaryBins, PcoWeightQuantizer.Result secondaryQ,
+                Arena arena) {
+            int primaryAnsSizeLog = primaryQ.sizeLog();
+            int[] primaryWeights = primaryQ.weights();
+            int secondaryAnsSizeLog = secondaryQ.sizeLog();
+            int[] secondaryWeights = secondaryQ.weights();
+            int offsetBitsWidth = bitsToEncodeOffsetBits(dtypeSize);
+
+            LeBitWriter w = new LeBitWriter(128);
+            w.writeBits(1, 4);                 // mode = IntMult
+            w.writeBits(base, dtypeSize);      // base value
+            w.writeBits(0, 4);                 // deltaVariant = NoOp
+            // (no deltaOrder/secondaryUsesDelta bits when deltaVariant=0)
+
+            // Primary latent var meta
+            w.writeBits(primaryAnsSizeLog, 4);
+            w.writeBits(primaryBins.size(), 15);
+            for (int i = 0; i < primaryBins.size(); i++) {
+                PcoBinOptimizer.Bin bin = primaryBins.get(i);
+                w.writeBits(primaryWeights[i] - 1, primaryAnsSizeLog);
+                w.writeBits(bin.lowerLatent(), dtypeSize);
+                w.writeBits(bin.offsetBits(), offsetBitsWidth);
+            }
+
+            // Secondary latent var meta
+            w.writeBits(secondaryAnsSizeLog, 4);
+            w.writeBits(secondaryBins.size(), 15);
+            for (int i = 0; i < secondaryBins.size(); i++) {
+                PcoBinOptimizer.Bin bin = secondaryBins.get(i);
+                w.writeBits(secondaryWeights[i] - 1, secondaryAnsSizeLog);
+                w.writeBits(bin.lowerLatent(), dtypeSize);
+                w.writeBits(bin.offsetBits(), offsetBitsWidth);
+            }
+            w.alignToByte();
+            return w.toMemorySegment(arena);
+        }
+
+        // ── Classic page encoding ─────────────────────────────────────────────
+
+        private static MemorySegment buildClassicPage(
                 long[] values, long[] valueSortKeys,
                 List<PcoBinOptimizer.Bin> bins, int ansSizeLog,
                 PcoAnsEncoder ansEncoder, int dtypeSize,
                 long moment, boolean hasMoment, Arena arena) {
 
             int n = values.length;
+            StreamData stream = prepareStream(valueSortKeys, bins, ansSizeLog, ansEncoder);
 
+            long headerBits = (hasMoment ? dtypeSize : 0) + (long) ANS_INTERLEAVING * ansSizeLog;
+            long payloadBits = streamPayloadBits(stream);
+            long pageSizeBytes = (headerBits + payloadBits + 7) / 8 + 16;
+            LeBitWriter w = new LeBitWriter((int) Math.min(pageSizeBytes, Integer.MAX_VALUE));
+
+            if (hasMoment) {
+                w.writeBits(moment, dtypeSize);
+            }
+            for (int i = 0; i < ANS_INTERLEAVING; i++) {
+                w.writeBits(stream.initialStateIdxs()[i], ansSizeLog);
+            }
+            w.alignToByte();
+
+            writeStream(w, stream, n);
+            w.alignToByte();
+            return w.toMemorySegment(arena);
+        }
+
+        // ── IntMult page encoding ─────────────────────────────────────────────
+
+        private static MemorySegment buildIntMultPage(
+                long[] mults, long[] multSortKeys, List<PcoBinOptimizer.Bin> multBins,
+                int multAnsSizeLog, PcoAnsEncoder multAnsEncoder,
+                long[] adjs, long[] adjSortKeys, List<PcoBinOptimizer.Bin> adjBins,
+                int adjAnsSizeLog, PcoAnsEncoder adjAnsEncoder,
+                Arena arena) {
+
+            int n = mults.length;
+            StreamData primary = prepareStream(multSortKeys, multBins, multAnsSizeLog, multAnsEncoder);
+            StreamData secondary = prepareStream(adjSortKeys, adjBins, adjAnsSizeLog, adjAnsEncoder);
+
+            // Header: primary states (4), secondary states (4). No moments (deltaOrder=0 on both).
+            long headerBits = (long) ANS_INTERLEAVING * (multAnsSizeLog + adjAnsSizeLog);
+            long payloadBits = streamPayloadBits(primary) + streamPayloadBits(secondary);
+            long pageSizeBytes = (headerBits + payloadBits + 7) / 8 + 16;
+            LeBitWriter w = new LeBitWriter((int) Math.min(pageSizeBytes, Integer.MAX_VALUE));
+
+            // Primary moments: deltaOrder=0 → none
+            for (int i = 0; i < ANS_INTERLEAVING; i++) {
+                w.writeBits(primary.initialStateIdxs()[i], multAnsSizeLog);
+            }
+            // Secondary moments: secondaryDeltaOrder=0 → none
+            for (int i = 0; i < ANS_INTERLEAVING; i++) {
+                w.writeBits(secondary.initialStateIdxs()[i], adjAnsSizeLog);
+            }
+            w.alignToByte();
+
+            // Per-batch: primary ANS + primary offsets, then secondary ANS + secondary offsets.
+            int nBatches = (n + BATCH_N - 1) / BATCH_N;
+            for (int b = 0; b < nBatches; b++) {
+                int batchStart = b * BATCH_N;
+                int batchSize = Math.min(BATCH_N, n - batchStart);
+                writeBatch(w, primary, b, batchStart, batchSize);
+                writeBatch(w, secondary, b, batchStart, batchSize);
+            }
+            w.alignToByte();
+            return w.toMemorySegment(arena);
+        }
+
+        // ── Stream preparation: ANS encode LIFO, collect bits per batch ──────
+
+        private static StreamData prepareStream(
+                long[] sortKeys, List<PcoBinOptimizer.Bin> bins, int ansSizeLog, PcoAnsEncoder ansEncoder) {
+            int n = sortKeys.length;
             long[] binLowers = new long[bins.size()];
+            int[] binOffsetBits = new int[bins.size()];
             for (int i = 0; i < bins.size(); i++) {
                 binLowers[i] = bins.get(i).lowerSortKey();
+                binOffsetBits[i] = bins.get(i).offsetBits();
             }
 
             int[] symbols = new int[n];
             long[] offsets = new long[n];
             for (int i = 0; i < n; i++) {
-                int sym = findBin(valueSortKeys[i], binLowers);
+                int sym = findBin(sortKeys[i], binLowers);
                 symbols[i] = sym;
-                offsets[i] = valueSortKeys[i] - binLowers[sym];
-            }
-
-            int[] binOffsetBits = new int[bins.size()];
-            for (int i = 0; i < bins.size(); i++) {
-                binOffsetBits[i] = bins.get(i).offsetBits();
+                offsets[i] = sortKeys[i] - binLowers[sym];
             }
 
             int nBatches = (n + BATCH_N - 1) / BATCH_N;
@@ -240,7 +442,7 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             for (int i = n - 1; i >= 0; i--) {
                 int batch = i / BATCH_N;
                 int posInBatch = i % BATCH_N;
-                int stream = i % ANS_INTERLEAVING;
+                int strm = i % ANS_INTERLEAVING;
 
                 if (batchBits[batch] == null) {
                     int batchSize = Math.min(BATCH_N, n - batch * BATCH_N);
@@ -248,10 +450,10 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
                     batchNumBits[batch] = new int[batchSize];
                 }
 
-                PcoAnsEncoder.Step step = ansEncoder.encode(states[stream], symbols[i]);
+                PcoAnsEncoder.Step step = ansEncoder.encode(states[strm], symbols[i]);
                 batchBits[batch][posInBatch] = step.bits();
                 batchNumBits[batch][posInBatch] = step.numBits();
-                states[stream] = step.newState();
+                states[strm] = step.newState();
             }
 
             int[] initialStateIdxs = new int[ANS_INTERLEAVING];
@@ -259,37 +461,40 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
                 initialStateIdxs[i] = ansEncoder.toStateIdx(states[i]);
             }
 
-            long headerBits = (hasMoment ? dtypeSize : 0) + (long) ANS_INTERLEAVING * ansSizeLog;
-            long ansTotalBits = 0;
-            long offsetTotalBits = 0;
+            return new StreamData(symbols, offsets, binOffsetBits, ansSizeLog,
+                    batchBits, batchNumBits, initialStateIdxs);
+        }
+
+        private static long streamPayloadBits(StreamData s) {
+            long ansBits = 0;
+            long offsetBits = 0;
+            int n = s.symbols().length;
             for (int i = 0; i < n; i++) {
-                ansTotalBits += batchNumBits[i / BATCH_N][i % BATCH_N];
-                offsetTotalBits += binOffsetBits[symbols[i]];
+                ansBits += s.batchNumBits()[i / BATCH_N][i % BATCH_N];
+                offsetBits += s.binOffsetBits()[s.symbols()[i]];
             }
-            long pageSizeBytes = (headerBits + ansTotalBits + offsetTotalBits + 7) / 8 + 8;
-            LeBitWriter w = new LeBitWriter((int) Math.min(pageSizeBytes, Integer.MAX_VALUE));
+            return ansBits + offsetBits;
+        }
 
-            if (hasMoment) {
-                w.writeBits(moment, dtypeSize);
-            }
-            for (int i = 0; i < ANS_INTERLEAVING; i++) {
-                w.writeBits(initialStateIdxs[i], ansSizeLog);
-            }
-            w.alignToByte();
-
+        private static void writeStream(LeBitWriter w, StreamData s, int n) {
+            int nBatches = (n + BATCH_N - 1) / BATCH_N;
             for (int b = 0; b < nBatches; b++) {
                 int batchStart = b * BATCH_N;
                 int batchSize = Math.min(BATCH_N, n - batchStart);
-                for (int k = 0; k < batchSize; k++) {
-                    w.writeBits(batchBits[b][k], batchNumBits[b][k]);
-                }
-                for (int k = 0; k < batchSize; k++) {
-                    int i = batchStart + k;
-                    w.writeBits(offsets[i], binOffsetBits[symbols[i]]);
-                }
+                writeBatch(w, s, b, batchStart, batchSize);
             }
-            w.alignToByte();
-            return w.toMemorySegment(arena);
+        }
+
+        private static void writeBatch(LeBitWriter w, StreamData s, int batchIdx, int batchStart, int batchSize) {
+            // Phase 1: ANS bits in forward order
+            for (int k = 0; k < batchSize; k++) {
+                w.writeBits(s.batchBits()[batchIdx][k], s.batchNumBits()[batchIdx][k]);
+            }
+            // Phase 2: offset bits in forward order
+            for (int k = 0; k < batchSize; k++) {
+                int i = batchStart + k;
+                w.writeBits(s.offsets()[i], s.binOffsetBits()[s.symbols()[i]]);
+            }
         }
 
         private static int findBin(long sortKey, long[] binLowers) {

@@ -1,6 +1,6 @@
 # ADR 0007: Pure-Java `vortex.pco` encoder
 
-- **Status:** Accepted (E0 gate cleared — E1 is next)
+- **Status:** Implemented (E1-E5, E7-E9 done; E6 partial: IntMult only; FloatMult/FloatQuant deferred as marginal vs. existing Classic+ALP cascade)
 - **Date:** 2026-06-13
 - **Deciders:** project maintainer
 - **Supersedes:** —
