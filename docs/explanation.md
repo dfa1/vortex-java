@@ -329,18 +329,18 @@ Files with unrecognised IDs throw `VortexException` unless the builder enabled `
 ## Benchmarks
 
 JMH throughput (ops/s = full-file scans per second). Higher is better. Numbers
-re-measured 2026-06-08 against commit `051a794`.
+re-measured 2026-06-13 against commit `fea3aa29`.
 
-**Environment:** Apple M5, OpenJDK 25, 5 warmup × 3 s, 10 measurement × 5 s, fork 1.
+**Environment:** Apple M5, Azul Zulu JDK 25.0.2, 3 warmup iterations, 5 measurement iterations, 2 forks.
 
 ### OHLC read — 10 M rows, 58.9 MB (Rust-written file, single-column projection)
 
 | Benchmark           | Java (ops/s)  | JNI/Rust (ops/s) | Java speedup |
 |---------------------|---------------|------------------|--------------|
-| close (F64/ALP)     | 61.0 ± 5.8    | 47.9 ± 0.7       | **1.3×**     |
-| volume (I64/bitpacked) | 104.8 ± 5.1 | 48.4 ± 1.7      | **2.2×**     |
-| symbol (varbin)     | 97.8 ± 1.8    | 9.2 ± 0.4        | **10.6×**    |
-| cascading (depth 3, volume) | 80.9 ± 1.2 | n/a          | —            |
+| close (F64/ALP)     | 69.2 ± 0.1    | 50.6 ± 0.1       | **1.4×**     |
+| volume (I64/bitpacked) | 118.0 ± 0.3 | 51.3 ± 3.5      | **2.3×**     |
+| symbol (Utf8/varbin) | 106.5 ± 0.2  | 9.8 ± 0.1        | **10.9×**    |
+| cascading (depth 3, volume) | 83.1 ± 4.3 | n/a         | —            |
 
 ### OHLC write — 10 M rows
 

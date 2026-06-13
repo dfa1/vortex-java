@@ -50,6 +50,10 @@
 			<scope>compile</scope>
 		</dependency>
 		<dependency>
+			<groupId>io.airlift</groupId>
+			<artifactId>aircompressor-v3</artifactId>
+		</dependency>
+		<dependency>
 			<groupId>org.apache.arrow</groupId>
 			<artifactId>arrow-vector</artifactId>
 			<scope>compile</scope>
