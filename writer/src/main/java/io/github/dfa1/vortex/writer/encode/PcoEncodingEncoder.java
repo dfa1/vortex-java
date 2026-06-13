@@ -16,8 +16,9 @@ import java.util.List;
 /// Write-only encoder for {@code vortex.pco}.
 ///
 /// <p>Encodes integer and floating-point primitives using Classic mode with a single
-/// range bin and no delta encoding.  The result round-trips correctly with
-/// {@code PcoEncodingDecoder} for all supported ptypes.
+/// range bin.  Chooses between NoOp delta (deltaVariant=0) and Consecutive delta
+/// (deltaVariant=1, order=1) by comparing estimated bit cost; the cheaper path wins.
+/// The result round-trips correctly with {@code PcoEncodingDecoder} for all supported ptypes.
 public final class PcoEncodingEncoder implements EncodingEncoder {
 
     private static final byte PCO_FORMAT_MAJOR = 0x04;
@@ -60,26 +61,114 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
                 return encodeEmpty(ctx.arena());
             }
 
-            long minLatent = latents[0];
-            long maxLatent = latents[0];
-            for (long l : latents) {
-                if (Long.compareUnsigned(l, minLatent) < 0) {
-                    minLatent = l;
-                }
-                if (Long.compareUnsigned(l, maxLatent) > 0) {
-                    maxLatent = l;
-                }
+            long noOpMin = unsignedMin(latents);
+            long noOpMax = unsignedMax(latents);
+            int noOpOffsetBits = offsetBits(noOpMin, noOpMax);
+            long noOpCost = (long) n * noOpOffsetBits;
+
+            // Consecutive delta: only cheaper when n is large enough to amortise the moment
+            boolean useDelta = false;
+            long[] deltas = null;
+            long deltaMin = 0, deltaMax = 0;
+            int deltaOffsetBits = 0;
+
+            if (n > 1) {
+                deltas = consecutiveDeltas(latents, dtypeSize);
+                deltaMin = unsignedMin(deltas);
+                deltaMax = unsignedMax(deltas);
+                deltaOffsetBits = offsetBits(deltaMin, deltaMax);
+                long deltaCost = dtypeSize + (long) (n - 1) * deltaOffsetBits;
+                useDelta = deltaCost < noOpCost;
             }
 
-            long range = maxLatent - minLatent;
-            int offsetBits = range == 0 ? 0 : 64 - Long.numberOfLeadingZeros(range);
+            MemorySegment chunkMetaSeg;
+            MemorySegment pageSeg;
 
-            MemorySegment chunkMetaSeg = buildChunkMeta(dtypeSize, minLatent, offsetBits, ctx.arena());
-            MemorySegment pageSeg = buildPage(latents, n, minLatent, offsetBits, ctx.arena());
+            if (useDelta) {
+                chunkMetaSeg = buildChunkMeta(dtypeSize, deltaMin, deltaOffsetBits, 1, 1, ctx.arena());
+                pageSeg = buildPageDelta(latents[0], deltas, deltaMin, deltaOffsetBits, dtypeSize, ctx.arena());
+            } else {
+                chunkMetaSeg = buildChunkMeta(dtypeSize, noOpMin, noOpOffsetBits, 0, 0, ctx.arena());
+                pageSeg = buildPageNoOp(latents, n, noOpMin, noOpOffsetBits, ctx.arena());
+            }
+
             ByteBuffer metaBuf = buildMetadata(n);
             EncodeNode node = new EncodeNode(EncodingId.VORTEX_PCO, metaBuf, new EncodeNode[0], new int[]{0, 1});
             return new EncodeResult(node, List.of(chunkMetaSeg, pageSeg), null, null);
         }
+
+        // ── chunk meta ────────────────────────────────────────────────────────
+
+        private static MemorySegment buildChunkMeta(
+                int dtypeSize, long binLower, int binOffsetBits,
+                int deltaVariant, int deltaOrder, Arena arena) {
+            LeBitWriter w = new LeBitWriter(32);
+            w.writeBits(0, 4);            // mode = Classic (0)
+            w.writeBits(deltaVariant, 4); // deltaVariant: 0=NoOp, 1=Consecutive
+            if (deltaVariant == 1) {
+                w.writeBits(deltaOrder, 3); // deltaOrder (3 bits)
+                w.writeBits(0, 1);          // secondaryUsesDelta = false
+            }
+            // no deltaBins section (only present for deltaVariant=2 Lookback)
+            w.writeBits(0, 4);             // ansSizeLog = 0 → 1-state table
+            w.writeBits(1, 15);            // nBins = 1
+            // bin[0]: weight field = readBits(ansSizeLog=0) → 0 bits written
+            w.writeBits(binLower, dtypeSize);
+            w.writeBits(binOffsetBits, bitsToEncodeOffsetBits(dtypeSize));
+            // no secondary bins (only present for modes 1/2/3)
+            w.alignToByte();
+            return w.toMemorySegment(arena);
+        }
+
+        // ── page: NoOp delta ──────────────────────────────────────────────────
+
+        private static MemorySegment buildPageNoOp(
+                long[] latents, int n, long minLatent, int offsetBits, Arena arena) {
+            // Header: 0 moment bits (deltaOrder=0), 4×0 ANS state bits (ansSizeLog=0),
+            // alignToByte noop. Body: n×offsetBits offset values.
+            long pageSizeBytes = ((long) n * offsetBits + 7) / 8 + 4;
+            LeBitWriter w = new LeBitWriter((int) Math.min(pageSizeBytes, Integer.MAX_VALUE));
+            for (int i = 0; i < n; i++) {
+                w.writeBits(latents[i] - minLatent, offsetBits);
+            }
+            w.alignToByte();
+            return w.toMemorySegment(arena);
+        }
+
+        // ── page: Consecutive delta ───────────────────────────────────────────
+
+        private static MemorySegment buildPageDelta(
+                long moment, long[] deltas, long minDelta, int deltaOffsetBits,
+                int dtypeSize, Arena arena) {
+            // Header: moment[0] = first latent (dtypeSize bits), 4×0 ANS state bits,
+            // alignToByte (noop — dtypeSize is always a multiple of 8).
+            // Body: (n-1)×deltaOffsetBits offset values for the centered deltas.
+            long pageSizeBytes = ((long) dtypeSize + (long) deltas.length * deltaOffsetBits + 7) / 8 + 4;
+            LeBitWriter w = new LeBitWriter((int) Math.min(pageSizeBytes, Integer.MAX_VALUE));
+            w.writeBits(moment, dtypeSize);
+            w.alignToByte();
+            for (long delta : deltas) {
+                w.writeBits(delta - minDelta, deltaOffsetBits);
+            }
+            w.alignToByte();
+            return w.toMemorySegment(arena);
+        }
+
+        // ── delta computation ─────────────────────────────────────────────────
+
+        // Compute centered deltas: centeredDelta[i] = ((L[i+1] - L[i]) & mask) ^ mid.
+        // This is what the decoder's applyConsecutiveDelta expects in the ANS stream.
+        private static long[] consecutiveDeltas(long[] latents, int dtypeSize) {
+            long mid = typeMid(dtypeSize);
+            long mask = typeMask(dtypeSize);
+            long[] deltas = new long[latents.length - 1];
+            for (int i = 0; i < deltas.length; i++) {
+                deltas[i] = ((latents[i + 1] - latents[i]) & mask) ^ mid;
+            }
+            return deltas;
+        }
+
+        // ── metadata ──────────────────────────────────────────────────────────
 
         private static EncodeResult encodeEmpty(Arena arena) {
             byte[] header = {PCO_FORMAT_MAJOR, PCO_FORMAT_MINOR};
@@ -91,36 +180,12 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
 
         private static ByteBuffer buildMetadata(int n) {
             byte[] header = {PCO_FORMAT_MAJOR, PCO_FORMAT_MINOR};
-            PcoPageInfo pageInfo = new PcoPageInfo(n);
-            PcoChunkInfo chunkInfo = new PcoChunkInfo(List.of(pageInfo));
+            PcoChunkInfo chunkInfo = new PcoChunkInfo(List.of(new PcoPageInfo(n)));
             PcoMetadata meta = new PcoMetadata(header, List.of(chunkInfo));
             return ByteBuffer.wrap(meta.encode());
         }
 
-        private static MemorySegment buildChunkMeta(int dtypeSize, long minLatent, int offsetBits, Arena arena) {
-            LeBitWriter w = new LeBitWriter(32);
-            w.writeBits(0, 4);  // mode = Classic
-            w.writeBits(0, 4);  // deltaVariant = NoOp
-            w.writeBits(0, 4);  // ansSizeLog = 0 (1-state table)
-            w.writeBits(1, 15); // nBins = 1
-            // bin[0]: weight-1 = readBits(ansSizeLog=0) → 0 bits; lower; offsetBits
-            w.writeBits(minLatent, dtypeSize);
-            w.writeBits(offsetBits, bitsToEncodeOffsetBits(dtypeSize));
-            w.alignToByte();
-            return w.toMemorySegment(arena);
-        }
-
-        private static MemorySegment buildPage(long[] latents, int n, long minLatent, int offsetBits, Arena arena) {
-            // Header: 0 moment bits (deltaOrder=0), 4×0 initial ANS state bits (ansSizeLog=0), alignToByte noop.
-            // Body: for each batch of 256: phase-1 emits 0 ANS bits; phase-2 emits offsetBits per element.
-            long pageSizeBytes = ((long) n * offsetBits + 7) / 8 + 4;
-            LeBitWriter w = new LeBitWriter((int) Math.min(pageSizeBytes, Integer.MAX_VALUE));
-            for (int i = 0; i < n; i++) {
-                w.writeBits(latents[i] - minLatent, offsetBits);
-            }
-            w.alignToByte();
-            return w.toMemorySegment(arena);
-        }
+        // ── latent conversion ─────────────────────────────────────────────────
 
         private static long[] toLatents(PType ptype, Object data) {
             return switch (ptype) {
@@ -194,6 +259,33 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             };
         }
 
+        // ── bit-width helpers ─────────────────────────────────────────────────
+
+        private static long unsignedMin(long[] values) {
+            long min = values[0];
+            for (long v : values) {
+                if (Long.compareUnsigned(v, min) < 0) {
+                    min = v;
+                }
+            }
+            return min;
+        }
+
+        private static long unsignedMax(long[] values) {
+            long max = values[0];
+            for (long v : values) {
+                if (Long.compareUnsigned(v, max) > 0) {
+                    max = v;
+                }
+            }
+            return max;
+        }
+
+        private static int offsetBits(long min, long max) {
+            long range = max - min;
+            return range == 0 ? 0 : 64 - Long.numberOfLeadingZeros(range);
+        }
+
         private static int dtypeSize(PType ptype) {
             return switch (ptype) {
                 case I16, U16 -> 16;
@@ -208,6 +300,24 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
                 case 64 -> 7;
                 case 32 -> 6;
                 case 16 -> 5;
+                default -> throw new VortexException(EncodingId.VORTEX_PCO, "invalid dtypeSize: " + dtypeSize);
+            };
+        }
+
+        private static long typeMid(int dtypeSize) {
+            return switch (dtypeSize) {
+                case 64 -> Long.MIN_VALUE;
+                case 32 -> 0x80000000L;
+                case 16 -> 0x8000L;
+                default -> throw new VortexException(EncodingId.VORTEX_PCO, "invalid dtypeSize: " + dtypeSize);
+            };
+        }
+
+        private static long typeMask(int dtypeSize) {
+            return switch (dtypeSize) {
+                case 64 -> -1L;
+                case 32 -> 0xFFFFFFFFL;
+                case 16 -> 0xFFFFL;
                 default -> throw new VortexException(EncodingId.VORTEX_PCO, "invalid dtypeSize: " + dtypeSize);
             };
         }

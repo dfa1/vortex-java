@@ -14,6 +14,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.stream.LongStream;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -41,7 +42,11 @@ class PcoEncodingEncoderTest {
                 Arguments.of("all-same", new long[]{7L, 7L, 7L}),
                 Arguments.of("sequential", new long[]{0L, 1L, 2L, 3L, 4L, 5L}),
                 Arguments.of("negative", new long[]{-3L, -2L, -1L, 0L, 1L, 2L, 3L}),
-                Arguments.of("min-max", new long[]{Long.MIN_VALUE, Long.MAX_VALUE})
+                Arguments.of("min-max", new long[]{Long.MIN_VALUE, Long.MAX_VALUE}),
+                // delta path: large sequential ranges where delta beats noOp
+                Arguments.of("sequential-1k", LongStream.range(0, 1000).toArray()),
+                Arguments.of("stride-4", LongStream.range(0, 500).map(i -> i * 4).toArray()),
+                Arguments.of("sequential-negative", LongStream.range(-500, 0).toArray())
         );
     }
 
@@ -60,7 +65,8 @@ class PcoEncodingEncoderTest {
                 Arguments.of("single", new int[]{100}),
                 Arguments.of("all-same", new int[]{0, 0, 0}),
                 Arguments.of("sequential", new int[]{1, 2, 3, 4, 5}),
-                Arguments.of("negative", new int[]{Integer.MIN_VALUE, -1, 0, 1, Integer.MAX_VALUE})
+                Arguments.of("negative", new int[]{Integer.MIN_VALUE, -1, 0, 1, Integer.MAX_VALUE}),
+                Arguments.of("sequential-1k", LongStream.range(0, 1000).mapToInt(i -> (int) i).toArray())
         );
     }
 
