@@ -4,8 +4,6 @@
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.dfa1.vortex/vortex-reader.svg)](https://central.sonatype.com/artifact/io.github.dfa1.vortex/vortex-reader)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/license/Apache-2.0)
 
-> **Alpha** — not production-ready. APIs will change without notice.
-
 Pure-Java reader/writer for the [Vortex](https://github.com/vortex-data/vortex) columnar file format.
 100% Java, no JNI, no `sun.misc.Unsafe`. Uses the FFM API (`MemorySegment`/`Arena`, Java 25+)
 for zero-copy memory-mapped reads.
