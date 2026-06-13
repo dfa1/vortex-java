@@ -5,15 +5,10 @@
 - [ ] Move project to a dedicated organization
 - [ ] Create website
    - build something like hardwood.dev but for vortex files
-- [ ] Publish benchmarks — run `./bench` locally, push JMH JSON to gh-pages via `bench-publish` script, view at
-  `https://jmh.morethan.io/?source=https://dfa1.github.io/vortex-java/benchmark-result.json`; dated files for history
-  comparison via `?source=url1,url2`; then drop `.github/workflows/benchmark.yml`
+- [ ] **Benchmark publishing** — drop CI workflow, add `bench-publish` script; see [ADR-0006](docs/adr/0006-benchmark-publishing.md).
 
 ## Performance
 
-- [ ] Publish reproducible perf artifacts
-    - Capture JMH JSON + JFR profile alongside README table; cite hardware (CPU model), JDK build (`java -version`),
-      and benchmark commit SHA so numbers don't rot silently.
 - [ ] Performance tests must be peer reviewed
 - [ ] Run performance tests on other machines (I have access only to Apple M5)
 - [ ] Minimize `ctx.arena().allocate(...)` calls — prefer in-place decode when child buffer is writable (already done in
