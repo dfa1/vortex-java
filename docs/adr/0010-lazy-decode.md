@@ -121,6 +121,12 @@ Two observations:
 
 ### API gate — eager unless a filter is present
 
+> **Update (Phase 3 PoC):** measurement invalidated this gate. Lazy is
+> *strictly faster* than eager even on full-fold workloads because the
+> materialization pass disappears entirely. Keep this section for the
+> reasoning chain, but the final design drops the `hasFilter()` gate —
+> see the PoC findings under Phase 3.
+
 ```
 ScanOptions.hasFilter() == false  →  eager path (today), zero change
 ScanOptions.hasFilter() == true   →  lazy + compute pushdown
@@ -207,6 +213,11 @@ keeps third-party encodings on equal footing with built-in ones.
 
 ### Phase 2 — Lazy ALP variant + filter gate
 
+> **Update (Phase 3 PoC):** the `hasFilter()` gate is dropped in the
+> final design — `AlpDoubleArray` is returned unconditionally whenever
+> the encoded source is full-size writable and there are no patches.
+> Section preserved for the reasoning chain.
+
 Add the first lazy implementation:
 
 ```java
@@ -252,15 +263,71 @@ boolean signal.
 
 ### Phase 3 — compute pushdown
 
+#### The core trick — encode the threshold, integer-compare
+
+Pushdown works whenever the encoding is an **order-preserving
+invertible** function of one integer source. For ALP,
+`value = encoded * scale` with `scale > 0`, so:
+
+```
+value > threshold
+⇔ encoded * scale > threshold
+⇔ encoded > threshold / scale
+```
+
+Encode the threshold once, then the inner loop is pure integer compare
+on the source longs — no `cvt+mul` per rejected row. Decode happens
+only for matches:
+
+```java
+long enc_lo = (long) Math.floor(threshold / scale);
+for (long i = 0; i < n; i++) {
+    long lv = encoded.getAtIndex(LE_LONG, i);
+    if (lv > enc_lo) {
+        double v = (double) lv * scale;
+        if (v > threshold) {        // rare boundary check, see below
+            sum += v;
+        }
+    }
+}
+```
+
+The boundary check exists because `floor(threshold / scale) * scale`
+may not equal `threshold` exactly in FP — values whose encoded form is
+`enc_lo + 1` could decode to either side of the threshold. The check
+fires at most once per boundary and is effectively free.
+
+Patches break the encoding invariant: rows that ALP couldn't encode
+are stored as raw doubles. Either compare them separately (rare, small
+count) or fall back to full materialization when patches are present
+above some threshold.
+
+#### Per-encoding applicability
+
+| Encoding | Encoded form | Pushdown predicate | Order-preserving? |
+|----------|--------------|--------------------|-------------------|
+| ALP      | `int * scale` | `enc > floor(threshold / scale)` | yes (scale > 0) |
+| FoR      | `int + ref`   | `enc > threshold - ref` | yes |
+| Bitpacked| `int` in k bits | `enc > threshold` | yes |
+| Dict     | `index → values[index]` | resolve match-set of indices once, then `idx ∈ set` | yes (via indirection) |
+| ZigZag   | `(u >> 1) ^ -(u & 1)` | **no** — encoded order ≠ decoded order; decode required |
+| Pco / Zstd / FSST | compressed block | no — must decompress |
+
+**Composition.** `ALP(FoR(Bitpacked))` is the common chain in this
+project's OHLC data. The composed pushdown threshold is
+`enc_bp = floor(threshold / scale) - ref`, compared directly against the
+raw bitpacked output. Each step is monotonic invertible, so the chain
+composes — but only if every link supports pushdown.
+
+#### Kernel SPI
+
 `ScanIterator` routes `ScanOptions.rowFilter()` through a kernel SPI
 before falling back to materialization. Initial kernels:
 
-- `CompareKernel`: `compare(arr, scalar, op) → BoolArray`. For
-  `AlpDoubleArray`, encode the scalar to the int domain
-  (`enc = round(scalar / scale)`) and compare ints. For
-  `ForLongArray` (when it lands), subtract the reference and compare
-  ints. Falls back to materialization when the scalar does not
-  round-trip through the encoding.
+- `CompareKernel`: `compare(arr, scalar, op) → BoolArray`. Uses the
+  encoding-specific encoded-threshold formula. Falls back to
+  materialization when the threshold can't be encoded (NaN / Inf /
+  out-of-range / non-order-preserving encoding).
 - `BetweenKernel`: same approach for two scalars.
 - `TakeKernel`: `take(arr, indices)` — decode only the requested
   indices. Unblocks the take/slice/projection wins from phase 0.
@@ -284,6 +351,53 @@ intersecting selection vectors; `OR` unions them. Columns referenced
 only by the filter (not by projection) are decoded just enough to test
 and are not delivered to the consumer.
 
+#### PoC findings (worktree `lazy-alp-f64-poc`)
+
+A throwaway prototype on the `lazy-alp-f64-poc` worktree dropped
+`final` from `DoubleArray`, added `AlpDoubleArray extends DoubleArray`
+with overridden `getDouble` / `forEachDouble` / `fold` and a
+`sumWhereGt` pushdown method. ALP decoder returned the lazy variant
+unconditionally (no `hasFilter()` gate) whenever there were no patches
+and the source segment was full-size writable.
+
+Measured at 10M rows on the OHLC fixture:
+
+| Workload | Eager baseline | Lazy + ALP pushdown | Δ | JNI |
+|----------|---------------:|--------------------:|--:|----:|
+| `javaReadClose` (full fold, no filter) | 68.5 | **75.8** | **+10.6%** | 53 (Java already wins) |
+| `javaFilterClose` sel=0.001 | 96  | 110 | +15% | 363 |
+| `javaFilterClose` sel=0.01  | 96  | 107 | +11% | 347 |
+| `javaFilterClose` sel=0.1   | 49  | **98** | **+100%** | 196 |
+| `javaFilterClose` sel=1.0   | 82  | 87  | +6%  | 58 (Java wins) |
+
+**Takeaways:**
+
+1. Lazy on full fold is **strictly faster** than eager — eliminating
+   the materialization pass halves memory traffic. This invalidates
+   the earlier "gate lazy behind `hasFilter()`" rule from phase 2;
+   the gate is unnecessary and lazy can be the default.
+2. ALP-level pushdown captures a real win (especially the +100% at
+   sel=0.1), but **Bitpacked unpack is now the dominant cost** at low
+   selectivity (~24% of runnable time per JFR). It runs for every row
+   regardless of how selective the predicate is.
+3. The residual 2-3× JNI advantage at sel ≤ 0.01 is **SIMD bitpacked
+   unpack** in fastlanes, not the lack of more compute pushdown. To
+   close it the predicate must reach the bitpacked decoder *and* the
+   unpack must vectorize — which is the territory of
+   [ADR 0005](0005-vector-api-adoption.md), not this ADR.
+
+**Design implications carried forward to the final phases:**
+
+- Drop the `hasFilter()` gate. Lazy is the default for encodings that
+  support it; eager is just `LazyXxx.materialize(arena)`.
+- The pushdown method on `AlpDoubleArray` takes the predicate, not
+  just the threshold — `sumWhereGt` was a PoC shortcut. Production
+  shape is `compareGt(threshold) → BoolArray` or
+  `filterMap(pred, fn) → DoubleArray`.
+- The PoC subclass-with-buffer-field trick works fine in practice (no
+  field tax measured), but the public shape stays as the open
+  interface from phase 1 — the PoC just took the shortest path.
+
 ### Future — extend the lazy family
 
 Once ALP proves the shape, add (no API change, just new permits):
@@ -293,29 +407,6 @@ Once ALP proves the shape, add (no API change, just new permits):
 - `ZigZagLongArray`, `ZigZagIntArray` — XOR/shift on access
 - Composed: `AlpForBitpackedDoubleArray` fuses three transforms into
   one expression evaluated per access
-
-### Phase 2 — compute pushdown
-
-`ScanIterator` routes `ScanOptions.rowFilter()` through a kernel SPI
-before falling back to materialization. Initial kernels:
-
-- `CompareKernel`: `compare(arr, scalar, op) → BoolArray`. For ALP,
-  encode the scalar to the int domain (`enc = round(scalar / scale)`)
-  and compare ints. For FoR, subtract the reference and compare ints.
-  Falls back to materialization when the scalar does not round-trip
-  through the encoding (e.g. ALP threshold that is not representable as
-  `int * 10^(f-e)` exactly).
-- `BetweenKernel`: same approach for two scalars.
-- `TakeKernel`: `take(arr, indices)` — decode only the requested
-  indices. Unblocks the take/slice/projection wins from phase 0.
-- `SumKernel`, `MinKernel`, `MaxKernel`: deferred. `sum(ALP) =
-  sum(int) * scale + patch_correction` is straightforward but not on the
-  critical path.
-
-For multi-column filters: `AND` evaluates kernels in column order,
-intersecting selection vectors; `OR` unions them. Columns referenced
-only by the filter (not by projection) are decoded just enough to test
-and are not delivered to the consumer.
 
 ## Consequences
 
