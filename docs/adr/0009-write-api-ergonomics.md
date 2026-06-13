@@ -8,6 +8,24 @@
 
 ## Context
 
+### User personas
+
+Different callers have fundamentally different data representations and
+performance requirements. A single write API cannot serve all three well
+without overload stratification.
+
+| Persona | Data they hold | Priority |
+|---|---|---|
+| **Application developer** | Java arrays (`long[]`, `String[]`, …) produced by application logic or a JDBC cursor | Simplicity, type safety, no FFM knowledge required |
+| **Columnar pipeline / re-encoder** | `MemorySegment` buffers from a previous `VortexReader` scan, Arrow vector, or mmap region | Zero-copy — no heap allocation between read and write |
+| **Systems / native integrator** | Off-heap buffers from JNI, Panama `MemorySegment`, or a native library | Full control over memory layout, minimal overhead |
+
+These personas need different `.put()` overloads on the same `Chunk` API.
+The chunk builder is the common entry point; the overloads differ in what
+they accept, what they validate, and what they copy.
+
+### Problems in the current API
+
 The current write API has three independent ergonomic problems that compound
 each other when writing even a simple schema.
 
@@ -165,6 +183,52 @@ nullable-column case without an internal type leaking outward.
 The old `writeChunk(Map<String, Object>)` is retained as a deprecated
 method delegating to the new path, giving callers one release to migrate.
 
+### 4 — MemorySegment overload for zero-copy callers
+
+Add a second `put` overload on `Chunk` accepting a `MemorySegment` directly.
+Targets the columnar pipeline and native integrator personas — callers who
+already hold off-heap data and cannot afford a copy:
+
+```java
+// Re-encoding path: VortexReader → VortexWriter, zero heap allocation
+try (var reader = VortexReader.open(path)) {
+    for (Chunk chunk : reader.scan()) {
+        writer.writeChunk(wb -> wb
+            .put("timestamp", ((LongArray) chunk.column("timestamp")).buffer())
+            .put("symbol",    ((VarBinArray) chunk.column("symbol")).bytesSegment(), chunk.rowCount())
+            .put("price",     ((DoubleArray) chunk.column("price")).buffer())
+            .put("volume",    ((LongArray) chunk.column("volume")).buffer())
+        );
+    }
+}
+
+// Native / Arrow path:
+writer.writeChunk(wb -> wb
+    .put("timestamp", nativeTimestampSegment)   // byteSize == n * 8, LE layout
+    .put("price",     arrowDoubleBuffer)
+);
+```
+
+Validation for the `MemorySegment` overload:
+
+| Check | When | Error |
+|---|---|---|
+| Column name exists in schema | `.put()` | `IllegalArgumentException` |
+| `seg.byteSize() % elemBytes == 0` | `.put()` | `IllegalArgumentException` |
+| All columns produce same row count | `writeChunk` closes the lambda | `IllegalArgumentException` |
+
+The segment is consumed as-is — no copy, no type inference beyond size check.
+Callers are responsible for correct byte order (little-endian) and layout.
+No validity bitmap is inferred; nullable columns need an explicit mask segment:
+
+```java
+.put("volume", valueSegment, validitySegment)  // validity: 1 bit per row, LSB-first
+```
+
+The `MemorySegment` overload coexists with the Java array overload — callers
+can mix both within a single `writeChunk` call (e.g. one column from a native
+buffer, another from a freshly computed `long[]`).
+
 ## Consequences
 
 ### Positive
@@ -176,6 +240,9 @@ method delegating to the new path, giving callers one release to migrate.
 - Length mismatch caught before any bytes are written to disk.
 - `NullableData` no longer leaks from `writer.encode` into user code.
 - Nullable columns expressed naturally via boxed arrays (`Long[]`, `Double[]`).
+- All three personas served by one `Chunk` API: Java arrays, boxed arrays,
+  and `MemorySegment` overloads coexist on the same builder.
+- Re-encoding path (VortexReader → VortexWriter) becomes zero heap allocation.
 
 ### Negative
 
@@ -185,6 +252,9 @@ method delegating to the new path, giving callers one release to migrate.
 - Boxed arrays for nullable columns introduce GC pressure if the caller
   constructs them per-chunk from primitive data. A future `putNullable(name,
   long[], boolean[])` overload can address this without changing the design.
+- `MemorySegment` overload cannot validate byte order or element layout —
+  caller is trusted. A wrong-endian segment produces a valid file that decodes
+  to garbage. Document this explicitly in the overload's Javadoc.
 
 ### Risks to manage
 
@@ -195,6 +265,11 @@ method delegating to the new path, giving callers one release to migrate.
   Integration-test the full path for every (ptype, nullable) combination.
 
 ## Alternatives considered
+
+**Single unified `MemorySegment`-only API (no Java array overload).** Forces
+all callers to allocate off-heap and manage layouts manually. Removes the
+application-developer persona entirely. Rejected: most callers start with
+Java arrays; forcing FFM knowledge on them is unnecessary friction.
 
 **Row-oriented `addRow(Object...)` API.** Ergonomic for event-by-event streams
 (e.g. a JDBC cursor). Requires an internal column buffer, transpose step before
