@@ -97,7 +97,7 @@ public final class FrameOfReferenceEncodingDecoder implements EncodingDecoder {
 
     private static MemorySegment applyReference(MemorySegment src, long n, PType ptype, long ref, SegmentAllocator arena) {
         int wordBytes = ptype.byteSize();
-        MemorySegment dst = arena.allocate(n * wordBytes);
+        MemorySegment dst = src.isReadOnly() ? arena.allocate(n * wordBytes) : src;
         switch (ptype) {
             case I8, U8 -> {
                 for (long off = 0, end = n; off < end; off++) {
