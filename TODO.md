@@ -18,13 +18,7 @@
 - [ ] Run performance tests on other machines (I have access only to Apple M5)
 - [ ] Minimize `ctx.arena().allocate(...)` calls — prefer in-place decode when child buffer is writable (already done in
   ALP); audit all decoders for unnecessary off-heap allocs
-- [ ] **Evaluate Vector API (JEP 469+) for hot decode loops** — candidates: FastLanes bitpacked unpack,
-  FrameOfReference add-base, ZigZag decode, ALP F64 reconstruction, future pco offset+base loop. Measure
-  vs scalar baseline with JMH; only adopt where speedup is material and code stays readable. Pin against
-  a specific JDK build since Vector API is incubating until Valhalla lands.
-- [ ] Support for preview Vector API
-   - when JVM flag is activated, put in the Encode/Decode context the type SCALAR / VECTOR
-   - if flag is active, any encoder/decoder will switch to vectorized
+- [ ] **Vector API adoption** — deferred; see [ADR-0005](docs/adr/0005-vector-api-adoption.md) for adoption criteria and candidate loops.
 
 ## Security
 
@@ -68,16 +62,7 @@ Per-encoding gotchas:
 
 ### Resource caps
 
-Currently no limits; mmap pressure + decoder allocations are bounded only by file content.
-
-- [ ] Max file size (configurable; reject before `FileChannel.map`).
-- [ ] Max segment count.
-- [ ] Max children count per layout node.
-- [ ] Max row count per layout node (defence in depth on top of the zip-bomb fix).
-- [ ] Pco: max pages per chunk, max bins per page.
-
-Expose via a `ReadOptions.limits(...)` builder with sane defaults; integration tests can
-relax for large fixtures.
+- [ ] **Implement `ResourceLimits` + `ReadOptions`** — see [ADR-0004](docs/adr/0004-resource-caps-read-options.md) for design, defaults, and enforcement points. Also covers Pco page/bin caps.
 
 ### Fuzz infrastructure
 
