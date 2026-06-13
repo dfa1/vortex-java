@@ -240,6 +240,8 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             return new ChunkResult(chunkMetaSeg, pageSeg, n);
         }
 
+        // Estimates the best Classic-mode cost, considering both NoOp and Consecutive delta paths.
+        // IntMult should only win if it beats whichever Classic variant would be picked.
         private static float estimateClassicCost(long[] latents, int dtypeSize, int maxSizeLog) {
             int n = latents.length;
             long[] sortKeys = toSortKeys(latents);
@@ -248,7 +250,19 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             int nBinsLog = n == 1 ? 0 : Math.min(N_BINS_LOG, 64 - Long.numberOfLeadingZeros(n - 1));
             List<PcoHistBin> hist = buildHistogram(sorted, n, nBinsLog);
             List<PcoBinOptimizer.Bin> bins = PcoBinOptimizer.optimize(hist, maxSizeLog, dtypeSize);
-            return dpCost(bins, n);
+            float noOpCost = dpCost(bins, n);
+
+            if (n <= 1) {
+                return noOpCost;
+            }
+            long[] deltas = consecutiveDeltas(latents, dtypeSize);
+            long[] dSorted = toSortKeys(deltas).clone();
+            Arrays.sort(dSorted);
+            int dNBinsLog = Math.min(N_BINS_LOG, 64 - Long.numberOfLeadingZeros(n - 2));
+            List<PcoHistBin> dHist = buildHistogram(dSorted, n - 1, dNBinsLog);
+            List<PcoBinOptimizer.Bin> dBins = PcoBinOptimizer.optimize(dHist, maxSizeLog, dtypeSize);
+            float deltaCost = dtypeSize + dpCost(dBins, n - 1);
+            return Math.min(noOpCost, deltaCost);
         }
 
         // ── histogram ─────────────────────────────────────────────────────────

@@ -10,6 +10,7 @@ import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
+import io.github.dfa1.vortex.writer.encode.PcoEncodingEncoder;
 import org.apache.arrow.c.ArrowArray;
 import org.apache.arrow.c.ArrowSchema;
 import org.apache.arrow.c.Data;
@@ -236,6 +237,65 @@ class FileSizeComparisonIntegrationTest {
             iter.forEachRemaining(c -> totalRows.addAndGet(c.<LongArray>column("volume").length()));
         }
         assertThat(totalRows.get()).isEqualTo(TOTAL_ROWS);
+    }
+
+    @Test
+    void pco_i64_javaVsJni(@TempDir Path tmp) throws IOException {
+        // Given — three I64 patterns covering pco encoder paths:
+        //   sequential → Consecutive delta wins
+        //   intMult    → IntMult mode (mode=1) wins
+        //   random     → Classic NoOp delta
+        int n = 100_000;
+        long[] sequential = java.util.stream.LongStream.range(0, n).toArray();
+        long[] intMult = java.util.stream.LongStream.range(0, n).map(i -> i * 1000L).toArray();
+        java.util.Random rng = new java.util.Random(42L);
+        long[] random = new long[n];
+        for (int i = 0; i < n; i++) {
+            random[i] = rng.nextLong(1_000_000_000L);
+        }
+
+        DType.Struct javaSchema = new DType.Struct(
+                List.of("v"), List.of(new DType.Primitive(PType.I64, false)), false);
+        Schema jniSchema = new Schema(List.of(
+                Field.notNullable("v", new ArrowType.Int(64, true))));
+
+        System.out.println("[PcoI64Comparison] pattern  rows  JNI bytes  Java bytes  Java/JNI");
+        comparePcoI64(tmp, "sequential", sequential, javaSchema, jniSchema);
+        comparePcoI64(tmp, "intMult",    intMult,    javaSchema, jniSchema);
+        comparePcoI64(tmp, "random",     random,     javaSchema, jniSchema);
+    }
+
+    private static void comparePcoI64(Path dir, String name, long[] data,
+            DType.Struct javaSchema, Schema jniSchema) throws IOException {
+        Path javaFile = dir.resolve("pco-java-" + name + ".vtx");
+        try (FileChannel ch = FileChannel.open(javaFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             VortexWriter writer = VortexWriter.create(
+                     ch, javaSchema, WriteOptions.defaults(), List.of(new PcoEncodingEncoder()))) {
+            writer.writeChunk(Map.of("v", data));
+        }
+
+        Path jniFile = dir.resolve("pco-jni-" + name + ".vtx");
+        String jniUri = jniFile.toAbsolutePath().toUri().toString();
+        try (dev.vortex.api.VortexWriter writer = dev.vortex.api.VortexWriter.create(
+                SESSION, jniUri, jniSchema, new HashMap<>(), ALLOCATOR);
+             VectorSchemaRoot root = VectorSchemaRoot.create(jniSchema, ALLOCATOR)) {
+            BigIntVector vec = (BigIntVector) root.getVector("v");
+            vec.allocateNew(data.length);
+            for (int i = 0; i < data.length; i++) {
+                vec.setSafe(i, data[i]);
+            }
+            root.setRowCount(data.length);
+            try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
+                 ArrowSchema schema = ArrowSchema.allocateNew(ALLOCATOR)) {
+                Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, schema);
+                writer.writeBatch(arr.memoryAddress(), schema.memoryAddress());
+            }
+        }
+
+        long javaSize = Files.size(javaFile);
+        long jniSize = Files.size(jniFile);
+        System.out.printf("[PcoI64Comparison] %-10s %,d  %,9d  %,9d  %.2fx%n",
+                name, data.length, jniSize, javaSize, (double) javaSize / jniSize);
     }
 
     @Test
