@@ -75,8 +75,8 @@ import java.util.concurrent.TimeUnit;
 @State(Scope.Benchmark)
 @BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.SECONDS)
-@Warmup(iterations = 3, time = 3)
-@Measurement(iterations = 5, time = 5)
+@Warmup(iterations = 2, time = 3)
+@Measurement(iterations = 3, time = 5)
 @Fork(value = 1, jvmArgsAppend = {
         "--add-opens", "java.base/java.nio=ALL-UNNAMED",
         "--enable-native-access=ALL-UNNAMED",
@@ -84,8 +84,8 @@ import java.util.concurrent.TimeUnit;
 })
 public class RustVsJavaReadBenchmark {
 
-    private static final int TOTAL_ROWS = 10_000_000;
-    private static final int BATCH_SIZE = 50_000;   // 200 chunks
+    private static final int TOTAL_ROWS = Integer.getInteger("vortex.bench.ohlc.rows", 10_000_000);
+    private static final int BATCH_SIZE = 50_000;
     private static final ArrowType F64_TYPE = new ArrowType.FloatingPoint(FloatingPointPrecision.DOUBLE);
     private static final Schema JNI_SCHEMA = new Schema(List.of(
             Field.notNullable("date", new ArrowType.Date(DateUnit.DAY)),

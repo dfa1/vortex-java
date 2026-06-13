@@ -9,16 +9,16 @@ Pure-Java reader/writer for the [Vortex](https://github.com/vortex-data/vortex) 
 for zero-copy memory-mapped reads.
 This has good performance out of the box, without using native dependencies.
 JMH read throughput vs the Rust JNI reference implementation.
-10 M rows of OHLC trade data, single-column projection, Apple M5, Zulu JDK 25.0.2.
+80 M rows of OHLC trade data, single-column projection, Apple M5, Zulu JDK 25.0.2.
 
 | Column | Type | Java (ops/s) | JNI/Rust (ops/s) | Speedup |
 |--------|------|-------------|-----------------|---------|
-| volume | I64 / bitpacked | 118.0 | 51.3 | **2.3×** |
-| close  | F64 / ALP       | 69.2  | 50.6 | **1.4×** |
-| symbol | Utf8 / varbin   | 106.5 | 9.8  | **10.9×** |
+| volume | I64 / bitpacked | 14.1 | 6.4 | **2.2×** |
+| close  | F64 / ALP       | 8.3  | 6.2 | **1.3×** |
+| symbol | Utf8 / varbin   | 13.0 | 1.2 | **10.8×** |
 
 ops/s = complete file scans per second; higher is better.
-Measured 2026-06-13, commit `fea3aa29`. See [docs/explanation.md](docs/explanation.md#benchmarks) for full tables and methodology.
+Measured 2026-06-13, commit `a57ea70d`. See [docs/explanation.md](docs/explanation.md#benchmarks) for full tables and methodology.
 
 ## Who is this for
 
