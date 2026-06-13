@@ -241,6 +241,36 @@ In every module `pom.xml`, dependencies are grouped with comments:
 
 Omit a section if empty (e.g. integration module has no production deps; performance has no test deps).
 
+## Pluggability decisions
+
+### DType — already pluggable via Extension
+
+`DType` is a sealed interface. The sealed variants (Primitive, Utf8, Struct, …) are
+file-format primitives; downstream consumers **must not** add new variants. Instead use
+`DType.Extension`:
+
+```java
+// custom "ip.address" logical type over 4-byte I32 storage
+DType.Extension ipDtype = new DType.Extension("ip.address",
+        new DType.Primitive(PType.I32, false), null, false);
+```
+
+Register decoders via `ReadRegistry.builder().register(myDecoder)` and encoders via
+`ServiceLoader<ExtensionEncoder>` or `WriteRegistry.builder().register(myEncoder)`.
+This mirrors Rust exactly — `vortex.date`, `vortex.uuid`, etc. are all Extension types
+in Rust too. **No SPI for DType variants is planned.**
+
+### Layout — fixed set, no SPI
+
+`Layout` is a plain record with a `String encodingId`. `ScanIterator.decodeLayout()`
+dispatches on the four known IDs (flat/chunked/zoned/struct/dict) and throws for
+anything else. Custom layouts would require reader changes to traverse the tree,
+decode metadata, and handle child counts — no upstream Vortex format has shipped a
+custom layout that requires Java support.
+
+Decision: **keep the fixed set**. Revisit only when a concrete downstream use case
+arrives that cannot be addressed by choosing a different encoding for a flat segment.
+
 ## API design
 
 - Keep public interfaces as small as possible.
