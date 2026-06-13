@@ -57,7 +57,7 @@
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<!-- production -->
 		<aircompressor.version>3.6</aircompressor.version>
-		<zstd-jni.version>1.5.7-10</zstd-jni.version>
+
 		<flatbuffers.version>25.2.10</flatbuffers.version>
 		<fastcsv.version>4.3.0</fastcsv.version>
 		<hardwood.version>1.0.0.CR1</hardwood.version>
@@ -142,11 +142,7 @@
 				<artifactId>aircompressor-v3</artifactId>
 				<version>${aircompressor.version}</version>
 			</dependency>
-			<dependency>
-				<groupId>com.github.luben</groupId>
-				<artifactId>zstd-jni</artifactId>
-				<version>${zstd-jni.version}</version>
-			</dependency>
+
 			<dependency>
 				<groupId>com.google.flatbuffers</groupId>
 				<artifactId>flatbuffers-java</artifactId>
