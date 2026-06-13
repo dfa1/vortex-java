@@ -134,5 +134,5 @@ See [docs/compatibility.md](docs/compatibility.md) for the full encoding support
   compression. Encode the validity bitmap as a Bool child (child[0]) in the `EncodeNode`. Mirrors what Rust does: only
   valid values go into the compressed payload.
 
-- [ ] **`vortex.pco` encode** — E0 gate cleared; see [ADR-0007](docs/adr/0007-pco-encode.md) for phases, risks, and estimates. Start with E1 (`LeBitWriter`).
+- [ ] **`vortex.pco` encode — FloatMult / FloatQuant modes** — Classic + Consecutive delta + IntMult ship; FloatMult/FloatQuant deferred. Marginal gain over existing Classic+ALP cascade; significant complexity (approx pair-GCD, false position root finder, trailing-zero detector).
 
