@@ -1,6 +1,6 @@
 # ADR 0006: Benchmark publishing strategy
 
-- **Status:** Accepted — implementation pending
+- **Status:** Accepted — CI workflow deleted; `bench-publish` script pending
 - **Date:** 2026-06-13
 - **Deciders:** project maintainer
 - **Related:** [TODO.md §Performance](../../TODO.md),
@@ -121,9 +121,9 @@ cites the commit SHA and hardware so the numbers can be reproduced.
 
 ### What happens to `.github/workflows/benchmark.yml`
 
-Deleted. The `benchmark-action/github-action-benchmark` tool is removed
-from the project. The `gh-pages` branch retains its history; the
-`dev/bench` directory of CI-produced results is left in place but no
+Deleted (commit `eb6a2247` + follow-up). The `benchmark-action/github-action-benchmark`
+tool is removed from the project. The `gh-pages` branch retains its history;
+the `dev/bench` directory of CI-produced results is left in place but no
 longer updated.
 
 ## Consequences
