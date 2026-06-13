@@ -47,7 +47,8 @@ import java.util.List;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
-/// Big-file scan benchmark exercising the TODO #12 `SegmentSpec.length` = long fix.
+/// Big-file scan benchmark for files exceeding 2 GB ({@link io.github.dfa1.vortex.reader.SegmentSpec#length()}
+/// is {@code long}, so segments up to 4 GB are supported).
 ///
 /// <p>Setup: JNI writer produces a >2 GB Vortex file with 4 incompressible I64 columns
 /// (random longs defeat bit-packing / FoR so the segments stay large). Measurement: pure-Java
