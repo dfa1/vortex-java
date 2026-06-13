@@ -28,6 +28,7 @@
 			<groupId>io.airlift</groupId>
 			<artifactId>aircompressor-v3</artifactId>
 			<version>${aircompressor.version}</version>
+			<optional>true</optional>
 		</dependency>
 		<!-- testing -->
 		<!-- project-internal test deps -->
