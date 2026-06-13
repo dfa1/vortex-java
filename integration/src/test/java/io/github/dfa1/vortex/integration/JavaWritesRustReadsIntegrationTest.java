@@ -11,6 +11,7 @@ import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.writer.encode.BoolEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.PcoEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.ByteBoolEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.ConstantEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.DateExtensionEncoder;
@@ -68,6 +69,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.LongStream;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -1329,6 +1331,122 @@ class JavaWritesRustReadsIntegrationTest {
             }
         }
         assertThat(uuids).containsExactly(u0, null, u2);
+    }
+
+    // ── PCO (vortex.pco) Java→Rust tests ─────────────────────────────────────
+
+    @Test
+    void javaWriter_rustReader_pco_i64_noOp(@TempDir Path tmp) throws IOException {
+        // Given — non-sequential I64: NoOp delta wins (range compression only)
+        Path file = tmp.resolve("java_pco_i64_noop.vtx");
+        long[] data = {Long.MIN_VALUE, -1_000_000L, -1L, 0L, 1L, 1_000_000L, Long.MAX_VALUE};
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.defaults(),
+                     List.of(new PcoEncodingEncoder()))) {
+            // When
+            sut.writeChunk(Map.of("ts", data));
+        }
+
+        // Then
+        long[] decoded = readLongColumn(file, "ts");
+        assertThat(decoded).containsExactly(data);
+    }
+
+    @Test
+    void javaWriter_rustReader_pco_i64_consecutive(@TempDir Path tmp) throws IOException {
+        // Given — sequential I64: Consecutive delta wins (constant stride → 0 bits/element after moment)
+        Path file = tmp.resolve("java_pco_i64_consecutive.vtx");
+        long[] data = LongStream.range(1_700_000_000_000L, 1_700_000_001_000L).toArray();
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.defaults(),
+                     List.of(new PcoEncodingEncoder()))) {
+            // When
+            sut.writeChunk(Map.of("ts", data));
+        }
+
+        // Then
+        long[] decoded = readLongColumn(file, "ts");
+        assertThat(decoded).containsExactly(data);
+    }
+
+    @Test
+    void javaWriter_rustReader_pco_i32(@TempDir Path tmp) throws IOException {
+        // Given
+        Path file = tmp.resolve("java_pco_i32.vtx");
+        int[] data = {Integer.MIN_VALUE, -1_000, -1, 0, 1, 1_000, Integer.MAX_VALUE};
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults(),
+                     List.of(new PcoEncodingEncoder()))) {
+            // When
+            sut.writeChunk(Map.of("v", data));
+        }
+
+        // Then
+        int[] decoded = readIntColumn(file, "v");
+        assertThat(decoded).containsExactly(data);
+    }
+
+    @Test
+    void javaWriter_rustReader_pco_f64(@TempDir Path tmp) throws IOException {
+        // Given
+        Path file = tmp.resolve("java_pco_f64.vtx");
+        double[] data = {-1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, Math.PI, Math.E};
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, F64_SCHEMA, WriteOptions.defaults(),
+                     List.of(new PcoEncodingEncoder()))) {
+            // When
+            sut.writeChunk(Map.of("v", data));
+        }
+
+        // Then
+        double[] decoded = readDoubleColumn(file, "v");
+        assertBitwiseEqualsF64(decoded, data);
+    }
+
+    @Test
+    void javaWriter_rustReader_pco_f32(@TempDir Path tmp) throws IOException {
+        // Given
+        Path file = tmp.resolve("java_pco_f32.vtx");
+        float[] data = {-1.5f, -1.0f, -0.5f, 0.0f, 0.5f, 1.0f, 1.5f, (float) Math.PI};
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, F32_SCHEMA, WriteOptions.defaults(),
+                     List.of(new PcoEncodingEncoder()))) {
+            // When
+            sut.writeChunk(Map.of("v", data));
+        }
+
+        // Then
+        float[] decoded = readFloatColumn(file, "v");
+        assertBitwiseEqualsF32(decoded, data);
+    }
+
+    static Stream<long[]> pcoSequentialI64ArrayProvider() {
+        // Sequential arrays exercise the Consecutive delta path (stride-1 and stride-N)
+        return Stream.of(
+                LongStream.range(0, 500).toArray(),
+                LongStream.range(-250, 250).toArray(),
+                LongStream.range(0, 500).map(i -> i * 4).toArray(),
+                LongStream.range(1_700_000_000_000L, 1_700_000_000_500L).toArray()
+        );
+    }
+
+    /// PCO I64 consecutive delta: Java-encoded sequential arrays round-trip via Rust decoder.
+    @ParameterizedTest
+    @MethodSource("pcoSequentialI64ArrayProvider")
+    void prop_pco_i64_consecutive_roundTripsViaRust(long[] data) throws IOException {
+        Path tmp = Files.createTempDirectory("vortex-pbt-pco-i64");
+        try {
+            Path file = tmp.resolve("pbt_pco_i64.vtx");
+            try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                 var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.defaults(),
+                         List.of(new PcoEncodingEncoder()))) {
+                sut.writeChunk(Map.of("ts", data));
+            }
+            long[] decoded = readLongColumn(file, "ts");
+            assertThat(decoded).containsExactly(data);
+        } finally {
+            deleteDir(tmp);
+        }
     }
 
     private static UUID uuidFromBytes(byte[] b) {
