@@ -20,15 +20,6 @@
 			<groupId>com.google.flatbuffers</groupId>
 			<artifactId>flatbuffers-java</artifactId>
 		</dependency>
-		<dependency>
-			<groupId>io.airlift</groupId>
-			<artifactId>aircompressor-v3</artifactId>
-			<version>${aircompressor.version}</version>
-		</dependency>
-		<dependency>
-			<groupId>com.github.luben</groupId>
-			<artifactId>zstd-jni</artifactId>
-		</dependency>
 		<!-- testing -->
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>

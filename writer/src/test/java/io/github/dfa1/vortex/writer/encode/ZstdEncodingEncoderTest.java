@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import com.github.luben.zstd.ZstdCompressCtx;
 import io.airlift.compress.v3.zstd.ZstdCompressor;
 import io.airlift.compress.v3.zstd.ZstdJavaCompressor;
 import io.github.dfa1.vortex.core.DType;
@@ -113,30 +112,6 @@ class ZstdEncodingEncoderTest {
             return new DecodeContext(node, dtype, n, segments, ReadRegistry.empty(), Arena.ofAuto());
         }
 
-        private static byte[] makeDictFor(byte[]... samples) {
-            int total = 0;
-            for (byte[] s : samples) {
-                total += s.length;
-            }
-            int repeats = Math.max(1, 1024 / Math.max(total, 1));
-            byte[][] expanded = new byte[samples.length * repeats][];
-            for (int r = 0; r < repeats; r++) {
-                System.arraycopy(samples, 0, expanded, r * samples.length, samples.length);
-            }
-            byte[] dict = new byte[256];
-            com.github.luben.zstd.Zstd.trainFromBuffer(expanded, dict);
-            return dict;
-        }
-
-        private static byte[] compressWithDict(byte[] data, byte[] dictBytes) {
-            try (ZstdCompressCtx ctx = new ZstdCompressCtx()) {
-                ctx.loadDict(dictBytes);
-                return ctx.compress(data);
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        }
-
         private static DecodeContext makeNullableCtx(
                 byte[] meta, DType dtype, long n, boolean[] validityBits, byte[]... compressedFrames
         ) {
@@ -208,46 +183,18 @@ class ZstdEncodingEncoderTest {
         }
 
         @Test
-        void decode_withDictionary_utf8_roundTrips() {
-            String[] strings = {"hello", "world", "zstd"};
-            byte[] raw = toLengthPrefixed(strings);
-            byte[] dictBytes = makeDictFor(raw);
-            byte[] compressed = compressWithDict(raw, dictBytes);
-            byte[] meta = new ZstdMetadata(dictBytes.length,
-                    java.util.List.of(new ZstdFrameMetadata(raw.length, strings.length))).encode();
-            DecodeContext ctx = makeDictCtx(meta, DTypes.UTF8, strings.length, dictBytes, compressed);
+        void decode_withDictionary_throws() {
+            // Given — metadata with non-zero dictionary_size; pure-Java decoder doesn't support
+            // dictionary-compressed Zstd (no JNI dependency)
+            byte[] compressed = compress(toLeBytes(new int[]{1, 2, 3}));
+            byte[] meta = new ZstdMetadata(256,
+                    java.util.List.of(new ZstdFrameMetadata(12, 3))).encode();
+            DecodeContext ctx = makeDictCtx(meta, DTypes.I32, 3, new byte[256], compressed);
 
-            VarBinArray result = (VarBinArray) DECODER.decode(ctx);
-
-            assertThat(result.length()).isEqualTo(strings.length);
-            for (int i = 0; i < strings.length; i++) {
-                assertThat(result.getString(i)).as("index %d", i).isEqualTo(strings[i]);
-            }
-        }
-
-        @Test
-        void decode_withDictionary_multipleFrames_roundTrips() {
-            int[] frame0 = {1, 2, 3};
-            int[] frame1 = {4, 5};
-            byte[] raw0 = toLeBytes(frame0);
-            byte[] raw1 = toLeBytes(frame1);
-            byte[] dictBytes = makeDictFor(raw0, raw1);
-            byte[] comp0 = compressWithDict(raw0, dictBytes);
-            byte[] comp1 = compressWithDict(raw1, dictBytes);
-            byte[] meta = new ZstdMetadata(dictBytes.length, java.util.List.of(
-                    new ZstdFrameMetadata(raw0.length, frame0.length),
-                    new ZstdFrameMetadata(raw1.length, frame1.length))).encode();
-            DecodeContext ctx = makeDictCtx(meta, DTypes.I32, 5, dictBytes, comp0, comp1);
-
-            IntArray result = (IntArray) DECODER.decode(ctx);
-
-            assertThat(result.length()).isEqualTo(5);
-            for (int i = 0; i < 3; i++) {
-                assertThat(result.getInt(i)).isEqualTo(frame0[i]);
-            }
-            for (int i = 0; i < 2; i++) {
-                assertThat(result.getInt(3 + i)).isEqualTo(frame1[i]);
-            }
+            // When / Then
+            assertThatThrownBy(() -> DECODER.decode(ctx))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("dictionary");
         }
 
         @Test

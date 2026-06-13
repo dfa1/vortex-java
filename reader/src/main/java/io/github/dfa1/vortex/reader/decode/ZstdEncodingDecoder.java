@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.reader.decode;
 
-import com.github.luben.zstd.ZstdDecompressCtx;
 import io.airlift.compress.v3.zstd.ZstdDecompressor;
 import io.airlift.compress.v3.zstd.ZstdJavaDecompressor;
 import io.github.dfa1.vortex.core.DType;
@@ -56,7 +55,10 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
         } catch (IOException e) {
             throw new VortexException(EncodingId.VORTEX_ZSTD, "invalid metadata", e);
         }
-        boolean hasDictionary = meta.dictionary_size() != 0;
+        if (meta.dictionary_size() != 0) {
+            throw new VortexException(EncodingId.VORTEX_ZSTD,
+                    "dictionary-compressed Zstd segments are not supported (pure-Java decoder)");
+        }
 
         BoolArray validity = null;
         if (ctx.node().children().length > 0) {
@@ -74,9 +76,7 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
             totalUncompressed += meta.frames().get(i).uncompressed_size();
         }
 
-        MemorySegment decompressed = hasDictionary
-                                             ? decompressFramesWithDict(ctx, meta, frameCount, totalUncompressed)
-                                             : decompressFrames(ctx, meta, frameCount, totalUncompressed);
+        MemorySegment decompressed = decompressFrames(ctx, meta, frameCount, totalUncompressed);
 
         if (validity == null) {
             return buildArray(ctx.dtype(), ctx.rowCount(), decompressed, ctx);
@@ -146,37 +146,6 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
         }
 
         return new VarBinArray.OffsetMode(dtype.withNullable(false), rowCount, values, offsets, PType.I32);
-    }
-
-    private static MemorySegment decompressFramesWithDict(
-            DecodeContext ctx,
-            ZstdMetadata meta,
-            int frameCount,
-            long totalUncompressed
-    ) {
-        MemorySegment out = ctx.arena().allocate(totalUncompressed);
-        byte[] dictBytes = ctx.buffer(0).toArray(ValueLayout.JAVA_BYTE);
-        try (ZstdDecompressCtx zctx = new ZstdDecompressCtx()) {
-            zctx.loadDict(dictBytes);
-            long outOffset = 0;
-            for (int i = 0; i < frameCount; i++) {
-                byte[] compressed = ctx.buffer(i + 1).toArray(ValueLayout.JAVA_BYTE);
-                int uncompSize = (int) meta.frames().get(i).uncompressed_size();
-                byte[] temp = new byte[uncompSize];
-                int written = zctx.decompressByteArray(temp, 0, uncompSize, compressed, 0, compressed.length);
-                if (written != uncompSize) {
-                    throw new VortexException(EncodingId.VORTEX_ZSTD,
-                            "frame " + i + ": expected " + uncompSize + " bytes, got " + written);
-                }
-                MemorySegment.copy(MemorySegment.ofArray(temp), 0, out, outOffset, uncompSize);
-                outOffset += uncompSize;
-            }
-        } catch (VortexException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new VortexException(EncodingId.VORTEX_ZSTD, "dict decompression failed", e);
-        }
-        return out;
     }
 
     private static MemorySegment decompressFrames(

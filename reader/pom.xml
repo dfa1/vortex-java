@@ -24,6 +24,11 @@
 			<groupId>com.google.flatbuffers</groupId>
 			<artifactId>flatbuffers-java</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>io.airlift</groupId>
+			<artifactId>aircompressor-v3</artifactId>
+			<version>${aircompressor.version}</version>
+		</dependency>
 		<!-- testing -->
 		<!-- project-internal test deps -->
 		<dependency>
