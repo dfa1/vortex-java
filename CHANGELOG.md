@@ -7,162 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.6.0] — Unreleased
 
-Three headline themes. The **proto-rewrite** drops `protobuf-java` in favour of an in-tree
-MemorySegment-native proto3 codec, generated from `.proto` schemas by a new `proto-gen`
-module — CLI uber-jar shrinks ~14% and the JDK 25 `sun.misc.Unsafe` stderr warning is
-gone. The **Extension API redesign** splits extension handling into `ExtensionDecoder`
-(reader) and `ExtensionEncoder` (writer), adds writer auto-route from domain collections
-(`List<LocalDate>`, `List<UUID>`, ...), UUID extension support, JDBC import for SQL
-DATE/TIME/TIMESTAMP/UUID, nullable column round-trip, and `Chunk.as(name, Class)` typed
-access. The **module boundary cleanup** moves all decode-output types (`Array` and
-subclasses) to `reader.array`, all writer-only data holders to `writer.encode`, and
-decode utilities to `reader.decode` — a writer process now pulls in only `writer + core`.
+**proto-rewrite** (`protobuf-java` → in-tree MemorySegment-native codec, CLI −14%),
+**Extension API split** (`ExtensionDecoder` / `ExtensionEncoder` SPI, writer auto-route, UUID + nullable support, JDBC extension import),
+**module boundary cleanup** (`Array` subtypes → `reader.array`, encode data holders → `writer.encode`).
 
 ### Added
 
-- **`proto-gen` module** — build-time `.proto` to Java code generator. Lexer + parser +
-  type registry + emitter. Outputs one immutable Java `record` per message and one Java
-  `enum` per proto enum, each carrying a `@Generated("io.github.dfa1.vortex.protogen.CodeGen")`
-  annotation. Records expose `decode(MemorySegment, long, long)` static factories and
-  `encode()` instance methods that operate directly on a memory segment — zero `byte[]`
-  copy, no `protobuf-java` runtime. (ae6c46a, 743278d, b527f84)
-- **`ProtoReader` / `ProtoWriter`** — package-private proto3 wire-format primitives
-  under `io.github.dfa1.vortex.proto`. Reads varint / sint64 / fixed32 / fixed64 /
-  length-delimited / packed-repeated payloads, with bounds checks and a 10-byte cap on
-  varint length. 42 unit tests cover happy path + truncation + bounds. (ae6c46a, b527f84)
-- **Oneof factories** on generated records (e.g. `ScalarValue.ofInt64Value(123L)`) —
-  avoids the 11-arg constructor for `ScalarValue`'s oneof. (b527f84)
-- **`PatchedMetadata` / `VariantMetadata`** — added to `encodings.proto`. Previously
-  hand-parsed with `CodedInputStream`; now go through the generated record path. (743278d, b527f84)
-- **Nullable extension columns** — `vortex.date`, `vortex.time`, `vortex.timestamp`,
-  `vortex.uuid` round-trip null elements via the `ExtEncoding → MaskedEncoding → primitive`
-  layout. New `NullableData(values, validity)` carrier feeds the writer; `MaskedEncoding.encode`
-  splits storage + Bool validity child. `JdbcImporter` preserves SQL NULL end-to-end. (1015f9b)
-- **Null-preserving `decodeAll`** — `DateExtension`, `TimeExtension`, `TimestampExtension`,
-  `UuidExtension` `decodeAll(MaskedArray)` yields `List<T>` with `null` at invalid positions
-  instead of throwing on `epochInteger`. (24c64a9)
-- **`ExtensionDecoder` / `ExtensionEncoder` SPI** — `ExtensionId` enum + two focused
-  interfaces, ServiceLoader-discovered via separate manifests. Read-only consumers depend
-  only on `reader`; write-only consumers only on `writer`. (a560563)
-- **Spec extension decoders** — `DateExtensionDecoder`, `TimeExtensionDecoder`,
-  `TimestampExtensionDecoder`, `UuidExtensionDecoder` in `reader.extension`. Each carries
-  typed `decode` / `decodeAll` methods. (a560563)
-- **Spec extension encoders** — `DateExtensionEncoder`, `TimeExtensionEncoder`,
-  `TimestampExtensionEncoder`, `UuidExtensionEncoder` in `writer.encode`, each with a
-  public `dtype(unit, …, nullable)` overload for non-default settings. (a560563)
-- **Writer auto-route extension columns** — `writeChunk` accepts domain collections
-  (`List<LocalDate>`, `List<Instant>`, `List<UUID>`, ...) and routes through the matching
-  extension impl to produce `int[]` / `long[]` / `FixedSizeListData` storage. (1d54b57, bd6dbdc, 75d7b4b)
-- **`vortex.uuid` extension** — `FixedSizeList(U8, 16)` storage, big-endian byte layout.
-  Writer + reader + JDBC vendor-type-name detection (PostgreSQL `java.util.UUID`, H2
-  `BINARY(16)`, others via canonical string). (89a0a69, cce2d2d)
-- **JDBC import: extension types** — `Types.DATE` / `Types.TIME` / `Types.TIMESTAMP` /
-  vendor UUID columns map to `vortex.date` / `.time` / `.timestamp` / `.uuid`. (9f31d9e, cce2d2d)
-- **`Chunk.as(name, Class)`** — typed extension access without manual `Extension.findKnown`
-  + `decodeAll` boilerplate. (e5cefb0)
-- **ExtEncoding storage cascade-compress** — storage child goes through the cascading
-  compressor (`FoR` / `Bitpacked` / `ALP` / `RLE` / etc.) instead of bare `Primitive`. (33cf42e)
-- **Java → Rust nullable extension integration tests** — `javaWriter_rustReader_nullable_date`,
-  `_nullable_time`, `_nullable_timestamp` validate the `MaskedEncoding → ExtEncoding → primitive`
-  layout survives the cross-compat boundary. UUID variant is `@Disabled` pending a vortex-jni
-  upgrade (vortex-jni 0.74.0 `DType.to_arrow_schema()` does not support `vortex.uuid`). (bb7fcb07)
+- `proto-gen` module — build-time `.proto` → Java record/enum generator ([ae6c46a](https://github.com/dfa1/vortex-java/commit/ae6c46a), [743278d](https://github.com/dfa1/vortex-java/commit/743278d), [b527f84](https://github.com/dfa1/vortex-java/commit/b527f84))
+- `ProtoReader` / `ProtoWriter` — MemorySegment-native proto3 wire primitives ([ae6c46a](https://github.com/dfa1/vortex-java/commit/ae6c46a), [b527f84](https://github.com/dfa1/vortex-java/commit/b527f84))
+- Oneof factories on generated records, e.g. `ScalarValue.ofInt64Value(v)` ([b527f84](https://github.com/dfa1/vortex-java/commit/b527f84))
+- `PatchedMetadata` / `VariantMetadata` added to `encodings.proto` ([743278d](https://github.com/dfa1/vortex-java/commit/743278d), [b527f84](https://github.com/dfa1/vortex-java/commit/b527f84))
+- Nullable extension columns (`vortex.date/time/timestamp/uuid`) via `ExtEncoding → MaskedEncoding → primitive` ([1015f9b](https://github.com/dfa1/vortex-java/commit/1015f9b))
+- Null-preserving `decodeAll` on all extension decoders — `null` at invalid positions ([24c64a9](https://github.com/dfa1/vortex-java/commit/24c64a9))
+- `ExtensionDecoder` / `ExtensionEncoder` SPI with separate ServiceLoader manifests ([a560563](https://github.com/dfa1/vortex-java/commit/a560563))
+- Spec extension decoders: Date, Time, Timestamp, Uuid in `reader.extension` ([a560563](https://github.com/dfa1/vortex-java/commit/a560563))
+- Spec extension encoders: Date, Time, Timestamp, Uuid in `writer.encode` ([a560563](https://github.com/dfa1/vortex-java/commit/a560563))
+- Writer auto-routes `List<LocalDate>`, `List<Instant>`, `List<UUID>`, … to extension storage ([1d54b57](https://github.com/dfa1/vortex-java/commit/1d54b57), [75d7b4b](https://github.com/dfa1/vortex-java/commit/75d7b4b))
+- `vortex.uuid` extension — `FixedSizeList(U8, 16)`, big-endian, JDBC vendor detection ([89a0a69](https://github.com/dfa1/vortex-java/commit/89a0a69), [cce2d2d](https://github.com/dfa1/vortex-java/commit/cce2d2d))
+- JDBC import for `DATE` / `TIME` / `TIMESTAMP` / UUID columns ([9f31d9e](https://github.com/dfa1/vortex-java/commit/9f31d9e), [cce2d2d](https://github.com/dfa1/vortex-java/commit/cce2d2d))
+- `Chunk.as(name, Class)` — typed extension column access ([e5cefb0](https://github.com/dfa1/vortex-java/commit/e5cefb0))
+- ExtEncoding storage child cascade-compressed (FoR / Bitpacked / ALP / RLE / …) ([33cf42e](https://github.com/dfa1/vortex-java/commit/33cf42e))
+- Java → Rust nullable extension integration tests; UUID `@Disabled` pending vortex-jni upgrade ([bb7fcb0](https://github.com/dfa1/vortex-java/commit/bb7fcb0))
 
 ### Breaking
 
-- **`EncodingRegistry` → `ReadRegistry`** — renamed and moved to `io.github.dfa1.vortex.reader`.
-  Holds `EncodingDecoder` impls only (read side). ServiceLoader discovery via
-  `registerServiceLoaded()` on the builder. (834d2f1, 2272fe4, a560563)
-- **`core.Extension` and `core.ExtensionEncoder` retired** — replaced by `ExtensionDecoder`
-  (`io.github.dfa1.vortex.reader.ExtensionDecoder`) and `ExtensionEncoder`
-  (`io.github.dfa1.vortex.writer.ExtensionEncoder`). Register each independently with
-  `ReadRegistry` / `WriteRegistry`. `core.Registry` (extension lookup map) dropped;
-  `ExtensionStorage` moved to `reader.extension`. (2a0ed93, a560563)
-- **`VortexHttpReader`**: `open(URI, ReadRegistry)` still the default; new overload
-  `open(URI, ReadRegistry, HttpClient)` lets callers supply their own client (proxy,
-  custom TLS, per-request timeout). (235826f)
-- **`core.array.*` → `reader.array.*`** — all `Array` subtypes moved to
-  `io.github.dfa1.vortex.reader.array`. Update import paths. (286715c)
-- **`core.array.NullableData` → `writer.encode.NullableData`** — writer-side carrier
-  moved to `io.github.dfa1.vortex.writer.encode`. (286715c)
-- **Decode utilities moved to `reader.decode`** — `LeBitReader`, `PcoBin`,
-  `PcoTansDecoder`, `SegmentBroadcast` moved from `core.encoding` to
-  `io.github.dfa1.vortex.reader.decode`. (d514435)
-- **Encode data holders moved to `writer.encode`** — `ChunkedData`, `DateTimePartsData`,
-  `FixedSizeListData`, `ListData`, `ListViewData`, `StructData` moved from `core.encoding`
-  to `io.github.dfa1.vortex.writer.encode`. (d514435)
-- **Reader unwrap path removed** — `ExtEncoding` wraps + unwraps the storage child
-  uniformly; the previous one-off unwrap shortcut in the registry is gone. (4d4ab34, 75d7b4b)
-- **`ArrayNode.stats()` removed** — `KnownArrayNode` and `UnknownArrayNode` no longer
-  carry an `ArrayStats` field; `ArrayNode.of()` drops its `stats` parameter. Stats were
-  populated in `FlatSegmentDecoder` but never consumed by any decoder — the inspector
-  reads stats independently via `InspectorTree.peekFlatRoot`. Callers that passed
-  `ArrayStats.empty()` or `null` to `ArrayNode.of()` drop the argument. (dc3aa00f)
+- `EncodingRegistry` → `ReadRegistry` in `io.github.dfa1.vortex.reader` ([834d2f1](https://github.com/dfa1/vortex-java/commit/834d2f1), [a560563](https://github.com/dfa1/vortex-java/commit/a560563))
+- `core.Extension` / `core.ExtensionEncoder` → `reader.ExtensionDecoder` / `writer.ExtensionEncoder` ([2a0ed93](https://github.com/dfa1/vortex-java/commit/2a0ed93), [a560563](https://github.com/dfa1/vortex-java/commit/a560563))
+- `VortexHttpReader.open` gains `HttpClient` overload ([235826f](https://github.com/dfa1/vortex-java/commit/235826f))
+- `core.array.*` → `reader.array.*` — update import paths ([286715c](https://github.com/dfa1/vortex-java/commit/286715c))
+- `core.array.NullableData` → `writer.encode.NullableData` ([286715c](https://github.com/dfa1/vortex-java/commit/286715c))
+- Decode utilities (`LeBitReader`, `PcoBin`, `PcoTansDecoder`, `SegmentBroadcast`) → `reader.decode` ([d514435](https://github.com/dfa1/vortex-java/commit/d514435))
+- Encode data holders (`ChunkedData`, `DateTimePartsData`, `FixedSizeListData`, …) → `writer.encode` ([d514435](https://github.com/dfa1/vortex-java/commit/d514435))
+- `ExtEncoding` unwrap shortcut removed from registry ([4d4ab34](https://github.com/dfa1/vortex-java/commit/4d4ab34), [75d7b4b](https://github.com/dfa1/vortex-java/commit/75d7b4b))
+- `ArrayNode.stats()` / `ArrayNode.of(…, stats)` removed — was dead code in decode path ([dc3aa00](https://github.com/dfa1/vortex-java/commit/dc3aa00f))
 
 ### Changed
 
-- **Build-time tooling**: `regenerate-sources` profile no longer shells out to `protoc`.
-  Run `./mvnw compile -pl proto-gen` once, then
-  `./mvnw generate-sources -pl core -P regenerate-sources`. `brew install protobuf` is
-  no longer needed for normal development. (743278d)
-- **Encoding consumers**: 25 encoding classes (`ALP`, `Bitpacked`, `Dict`, `Rle`,
-  `Sparse`, `Sequence`, etc.) and 23 test files rewritten to use the new record API.
-  Constructor calls are positional; field accessors follow proto3 snake_case
-  (`meta.bit_width()`, not `meta.getBitWidth()`). (0132417, 68be6fc, 743278d)
+- `regenerate-sources` profile uses in-process proto-gen; `protoc` no longer needed ([743278d](https://github.com/dfa1/vortex-java/commit/743278d))
+- 25 encoding classes migrated to generated record API (`meta.bit_width()` style) ([0132417](https://github.com/dfa1/vortex-java/commit/0132417), [743278d](https://github.com/dfa1/vortex-java/commit/743278d))
 
 ### Fixed
 
-- **`VortexHttpReader` malformed response** — `fetchTail` and `fetchRange` now throw
-  `VortexException` when the HTTP server returns a body whose byte count doesn't match
-  the `Content-Range` header or requested range. Previously short bodies produced
-  `IndexOutOfBoundsException`; extra bytes were silently ignored. (235826f)
-- **`vortex.date` / `vortex.uuid` metadata** — dtype now includes the required TimeUnit
-  tag byte, fixing Java → Rust round-trips that previously failed because the Rust reader
-  expects the metadata field to be non-null. (bb7fcb0)
-- **`PostscriptParser`**: extension dtype `nullable` was hardcoded `false` on read; now
-  derived from the storage dtype, matching the Rust spec (`ext_dtype.storage_dtype()`
-  carries the column nullability). (1015f9b)
-- **`DType.Extension.metadata`** capped at 64 KiB during parse — prevents crafted
-  extension metadata from inflating memory on hostile input. (22a5f59)
-- **CLI startup**: silenced `dev.hardwood VectorSupport` INFO log on every cold start. (57a5a38)
+- `VortexHttpReader` throws `VortexException` on HTTP body length mismatch ([235826f](https://github.com/dfa1/vortex-java/commit/235826f))
+- `vortex.date` / `vortex.uuid` metadata presence fixes Java → Rust cross-compat ([bb7fcb0](https://github.com/dfa1/vortex-java/commit/bb7fcb0))
+- Extension dtype `nullable` derived from storage dtype, not hardcoded `false` ([1015f9b](https://github.com/dfa1/vortex-java/commit/1015f9b))
+- `DType.Extension.metadata` capped at 64 KiB on parse ([22a5f59](https://github.com/dfa1/vortex-java/commit/22a5f59))
+- CLI startup: silenced `dev.hardwood VectorSupport` INFO log ([57a5a38](https://github.com/dfa1/vortex-java/commit/57a5a38))
 
 ### Removed
 
-- **`vortex-reader` dependency from `vortex-parquet`** — `ParquetImporter` is write-only
-  (Parquet → Vortex); reader was never used. (eca40f4)
-- **`com.google.protobuf:protobuf-java`** dependency dropped from `core`, `reader`,
-  `writer`, and root `dependencyManagement`. The `protobuf.version` property is gone.
-  CLI uber-jar: **14 MB → 12 MB**. JDK 25 `sun.misc.Unsafe::arrayBaseOffset` stderr
-  warning emitted by `UnsafeUtil` on every cold start: **gone**. (743278d)
-- `protoc` no longer required by the build. `brew install flatbuffers` covers `.fbs`
-  edits; `.proto` edits use the in-process generator. (743278d)
+- `vortex-reader` dependency from `vortex-parquet` ([eca40f4](https://github.com/dfa1/vortex-java/commit/eca40f4))
+- `com.google.protobuf:protobuf-java` — CLI jar 14 MB → 12 MB; JDK 25 Unsafe warning gone ([743278d](https://github.com/dfa1/vortex-java/commit/743278d))
+- `protoc` build dependency ([743278d](https://github.com/dfa1/vortex-java/commit/743278d))
 
 ### Compatibility
 
-Wire-format compatibility with the Rust reference implementation is unchanged and is
-verified by the full integration suite:
-
-- `RustWritesJavaReadsIntegrationTest` (10 tests) — Rust writes, Java reads
-- `JavaWritesRustReadsIntegrationTest` (194 tests) — Java writes, JNI reads
-- `RustJavaReaderComparisonIntegrationTest` (25 tests) — both readers, same file
-- `ParquetImportIntegrationTest` (5 tests) — round-trip through ParquetImporter
-
-All 1046 unit + 248 integration tests pass on JDK 25 (2 skipped: UUID cross-compat blocked on vortex-jni 0.74.0).
+1046 unit + 248 integration tests, JDK 25 (2 skipped — UUID cross-compat blocked on vortex-jni 0.74.0).
 
 ### Performance
 
-No measurable change on bulk-read benchmarks (`RustVsJavaReadBenchmark.javaReadCascading`
-within 1% of main, stdev ±2 ops/s). Proto metadata parse is < 1% of work on multi-million-row
-scans; the win is architectural, not throughput.
-
-- **`ProtoWriter.varintSize`** — branchless via `Integer.numberOfLeadingZeros` (~3 cycles
-  vs 4-branch cascade). Hot on every length-delimited write. (42177ca)
-- **`ProtoWriter` backpatched length-delim writes** — eliminate the temp `ProtoWriter`
-  allocation per nested message. (c79611e)
+- `ProtoWriter.varintSize` branchless via `Integer.numberOfLeadingZeros` ([42177ca](https://github.com/dfa1/vortex-java/commit/42177ca))
+- `ProtoWriter` backpatched length-delim writes eliminate per-message temp allocation ([c79611e](https://github.com/dfa1/vortex-java/commit/c79611e))
 
 ### Documentation
 
-- Compatibility doc bumped to Rust reference v0.74.0; Union / onpair / Variant gaps
-  documented. (cf73887)
+- Compatibility doc bumped to Rust reference v0.74.0 ([cf73887](https://github.com/dfa1/vortex-java/commit/cf73887))
 
 [0.6.0]: https://github.com/dfa1/vortex-java/compare/v0.5.0...main
 
