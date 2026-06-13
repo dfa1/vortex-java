@@ -40,7 +40,7 @@ class PcoEncodingDecoderTest {
 
     private static DecodeContext ctxWith(ByteBuffer meta, DType dtype, long rowCount, MemorySegment[] buffers) {
         ArrayNode node = ArrayNode.of(EncodingId.VORTEX_PCO, meta, new ArrayNode[0],
-                bufferIndices(buffers.length), null);
+                bufferIndices(buffers.length));
         return new DecodeContext(node, dtype, rowCount, buffers, ReadRegistry.empty(), Arena.ofAuto());
     }
 
@@ -51,14 +51,14 @@ class PcoEncodingDecoderTest {
         System.arraycopy(pcoBuffers, 0, allBuffers, 1, pcoBuffers.length);
 
         ArrayNode validityNode = ArrayNode.of(EncodingId.VORTEX_BOOL, null, new ArrayNode[0],
-                new int[]{0}, null);
+                new int[]{0});
 
         int[] pcoBufferIndices = new int[pcoBuffers.length];
         for (int i = 0; i < pcoBuffers.length; i++) {
             pcoBufferIndices[i] = i + 1;
         }
         ArrayNode pcoNode = ArrayNode.of(EncodingId.VORTEX_PCO, meta, new ArrayNode[]{validityNode},
-                pcoBufferIndices, null);
+                pcoBufferIndices);
 
         ReadRegistry registry = TestRegistry.ofDecoders(new BoolEncodingDecoder());
         return new DecodeContext(pcoNode, dtype, rowCount, allBuffers, registry, Arena.ofAuto());

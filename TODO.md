@@ -98,12 +98,6 @@ Per-encoding gotchas:
     - See https://dfa1.github.io/articles/rethink-domain-primitives-with-valhalla
     - Candidates: `PType` integer kinds, buffer offsets, row indices, byte lengths
     - Goal: type-safety at zero cost (value class = no heap alloc, no boxing)
-- [ ] **Align `ArrayStats` with Rust lazy model** — Rust's `Array` trait exposes `statistics()`
-  returning `Option<ArrayStatistics>`; stats are lazy and optional, read from the FlatBuffer node
-  on demand. Java's `ArrayStats` was removed from decoded array objects (done) but `KnownArrayNode`
-  still stores them eagerly at parse time. Evaluate: expose stats on-demand via a `stats(ArrayNode)`
-  helper on `EncodingRegistry` or `DecodeContext`; surface them on `Array` only for types where
-  zone-map callers actually need it (today: only `ZonedEncoding`).
 
 ## Encodings
 

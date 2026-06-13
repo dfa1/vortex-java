@@ -18,7 +18,7 @@ class NullEncodingDecoderTest {
     void decode_nullArray_returnsNullArrayWithCorrectLength() {
         // Given
         long rowCount = 42L;
-        ArrayNode node = ArrayNode.of(EncodingId.VORTEX_NULL, null, new ArrayNode[0], new int[0], null);
+        ArrayNode node = ArrayNode.of(EncodingId.VORTEX_NULL, null, new ArrayNode[0], new int[0]);
         DecodeContext ctx = new DecodeContext(node, DTypes.NULL, rowCount, new MemorySegment[0],
                 ReadRegistry.empty(), Arena.ofAuto());
         var sut = new NullEncodingDecoder();

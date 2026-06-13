@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.reader.decode;
 
-import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.encoding.EncodingId;
 
 import java.nio.ByteBuffer;
@@ -17,15 +16,14 @@ public sealed interface ArrayNode permits KnownArrayNode, UnknownArrayNode {
     /// Mostly used by tests and helper code that converts an {@code EncodeNode} tree back into
     /// an {@code ArrayNode} tree.
     ///
-    /// @param encodingId   the well-known encoding identifier
-    /// @param metadata     encoding-specific metadata bytes, or {@code null}
-    /// @param children     child nodes
+    /// @param encodingId    the well-known encoding identifier
+    /// @param metadata      encoding-specific metadata bytes, or {@code null}
+    /// @param children      child nodes
     /// @param bufferIndices segment buffer indices for this node
-    /// @param stats        optional zone-map statistics
     /// @return a {@link KnownArrayNode} with the given fields
     static ArrayNode of(EncodingId encodingId, ByteBuffer metadata, ArrayNode[] children,
-            int[] bufferIndices, ArrayStats stats) {
-        return new KnownArrayNode(encodingId, metadata, children, bufferIndices, stats);
+            int[] bufferIndices) {
+        return new KnownArrayNode(encodingId, metadata, children, bufferIndices);
     }
 
     /// @return encoding-specific metadata bytes, or {@code null}
@@ -36,7 +34,4 @@ public sealed interface ArrayNode permits KnownArrayNode, UnknownArrayNode {
 
     /// @return segment buffer indices for this node
     int[] bufferIndices();
-
-    /// @return optional zone-map statistics
-    ArrayStats stats();
 }

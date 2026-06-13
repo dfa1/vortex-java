@@ -29,7 +29,7 @@ class ByteBoolEncodingDecoderTest {
 
     private static DecodeContext buildCtx(byte[] byteValues) {
         MemorySegment buf = MemorySegment.ofArray(byteValues);
-        ArrayNode node = ArrayNode.of(EncodingId.VORTEX_BYTEBOOL, null, new ArrayNode[0], new int[]{0}, null);
+        ArrayNode node = ArrayNode.of(EncodingId.VORTEX_BYTEBOOL, null, new ArrayNode[0], new int[]{0});
         ReadRegistry registry = TestRegistry.ofDecoders(new ByteBoolEncodingDecoder());
         return new DecodeContext(node, DTypes.BOOL, byteValues.length, new MemorySegment[]{buf}, registry,
                 Arena.ofAuto());

@@ -79,13 +79,13 @@ class PatchedEncodingDecoderTest {
 
         MemorySegment[] segments = {inner, laneOffsets, patchIndices, patchValues};
 
-        ArrayNode innerNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0}, null);
-        ArrayNode laneNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1}, null);
-        ArrayNode idxNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{2}, null);
-        ArrayNode valNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{3}, null);
+        ArrayNode innerNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
+        ArrayNode laneNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1});
+        ArrayNode idxNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{2});
+        ArrayNode valNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{3});
 
         ArrayNode patchedNode = ArrayNode.of(EncodingId.VORTEX_PATCHED, meta,
-                new ArrayNode[]{innerNode, laneNode, idxNode, valNode}, new int[]{}, null);
+                new ArrayNode[]{innerNode, laneNode, idxNode, valNode}, new int[]{});
 
         DecodeContext ctx = new DecodeContext(patchedNode, dtype, n, segments, REGISTRY, Arena.ofAuto());
         return SUT.decode(ctx);
@@ -153,9 +153,9 @@ class PatchedEncodingDecoderTest {
 
     @Test
     void decode_missingMetadata_throws() {
-        ArrayNode innerNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0}, null);
+        ArrayNode innerNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
         ArrayNode patchedNode = ArrayNode.of(EncodingId.VORTEX_PATCHED, null,
-                new ArrayNode[]{innerNode, innerNode, innerNode, innerNode}, new int[]{}, null);
+                new ArrayNode[]{innerNode, innerNode, innerNode, innerNode}, new int[]{});
         MemorySegment seg = i32Segment(1, 2, 3);
         DecodeContext ctx = new DecodeContext(patchedNode, new DType.Primitive(PType.I32, false), 3,
                 new MemorySegment[]{seg}, ReadRegistry.empty(), Arena.ofAuto());
