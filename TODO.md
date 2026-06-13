@@ -189,14 +189,6 @@ relax for large fixtures.
 
 ## API
 
-- [ ] **Java-writes / Rust-reads nullable extension columns** — Java-side
-  round-trip (write + read) is covered by
-  `JdbcImporterTest#roundTripsNullableExtensionColumns`. JNI cross-compat is
-  unverified: `JavaWritesRustReadsIntegrationTest` has no extension tests at
-  all today, so the new `ExtEncoding → MaskedEncoding → primitive` layout has
-  not been validated against the Rust reader. Add per-extension Java→Rust
-  tests once an extension test harness exists (Arrow DateDayVector /
-  TimeMilliVector / TimestampMilliVector / FixedSizeBinaryVector mapping).
 - [ ] Use domain primitives (`UInt32`, `UInt64`, etc.) as value classes via Project Valhalla instead of raw `long`/`int`
     - See https://dfa1.github.io/articles/rethink-domain-primitives-with-valhalla
     - Candidates: `PType` integer kinds, buffer offsets, row indices, byte lengths
