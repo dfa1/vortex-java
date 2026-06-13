@@ -199,18 +199,6 @@ relax for large fixtures.
   still stores them eagerly at parse time. Evaluate: expose stats on-demand via a `stats(ArrayNode)`
   helper on `EncodingRegistry` or `DecodeContext`; surface them on `Array` only for types where
   zone-map callers actually need it (today: only `ZonedEncoding`).
-- [ ] **Audit runtime pluggability vs Rust impl** — maintainer (2026-06-04) flagged that Rust supports
-  runtime registration for: Encodings, DTypes, Compute, Layouts. Java status:
-    - Encodings: ✅ `ServiceLoader` + `EncodingRegistry.Builder.register()`; ✅ `allowUnknown()` passthrough for
-      unregistered encodings (mirrors `VortexSession::allow_unknown()`). Runtime registration is build-time on a
-      fresh builder — the registry itself is immutable after `build()`.
-    - DTypes: ❌ sealed hierarchy — no user-extensible type. If a downstream consumer needs a custom
-      logical type (e.g. UUID, IP address) they can't register one. Decide: keep sealed (simpler) or
-      open via SPI mirroring `EncodingRegistry`.
-    - Layouts: ❌ fixed set (Flat/Chunked/Zoned/Struct). Same trade-off as DTypes.
-    - Compute: ❌ no compute layer yet. Out of scope until reader feature-complete.
-      Action: short design note weighing sealed-vs-pluggable for DType + Layout; revisit when Java impl
-      has a real downstream consumer asking for it. Don't pre-open these without a use case.
 
 ## Encodings
 
