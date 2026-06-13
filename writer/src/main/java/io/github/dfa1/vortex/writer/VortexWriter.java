@@ -323,7 +323,7 @@ public final class VortexWriter implements Closeable {
 
     // ── Segment encoding ─────────────────────────────────────────────────────
 
-    /// Write one chunk. Each column is encoded by the first registered [Encoding] that accepts its dtype.
+    /// Write one chunk. Each column is encoded by the first registered encoder that accepts its dtype.
     ///
     /// @param columns map from column name to typed array data
     /// @throws IOException if an I/O error occurs writing to the underlying channel

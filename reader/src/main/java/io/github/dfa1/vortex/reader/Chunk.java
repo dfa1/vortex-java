@@ -91,7 +91,7 @@ public final class Chunk implements AutoCloseable {
 
     /// Decodes an extension column into a typed `List<T>` of domain values.
     ///
-    /// Hides the {@link Extension#decodeAll} boilerplate for the four spec extensions:
+    /// Hides extension-decode boilerplate for the four spec extensions:
     ///
     /// ```java
     /// List<LocalDate> dates = chunk.as("birthdays", LocalDate.class);

@@ -15,7 +15,7 @@ package io.github.dfa1.vortex.writer.encode;
 ///
 /// <p>Invariant: {@code values} length (or storage row count) matches
 /// {@code validity.length}; placeholders at null positions must be zero so the
-/// {@link MaskedArray#inner()} child contains no semantic nulls.
+/// the validity child contains no semantic nulls.
 ///
 /// @param values   packed values array; concrete type depends on the column dtype
 /// @param validity per-row validity bitmap, parallel to {@code values}

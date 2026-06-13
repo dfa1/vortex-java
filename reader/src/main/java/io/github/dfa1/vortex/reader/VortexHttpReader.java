@@ -18,7 +18,7 @@ import java.nio.ByteOrder;
 /// Handle to a remote Vortex file read via HTTP Range requests.
 ///
 /// On open: fetches the last [#TAIL_SIZE] bytes to locate the trailer, postscript,
-/// and metadata blobs (footer, layout, dtype). Each [#slice] call fires a targeted
+/// and metadata blobs (footer, layout, dtype). Each [#rawSegment] call fires a targeted
 /// Range request; no full-file download occurs.
 ///
 /// All allocated buffers (segment bytes and encoding outputs) share a single

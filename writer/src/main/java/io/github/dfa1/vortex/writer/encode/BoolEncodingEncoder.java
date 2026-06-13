@@ -10,10 +10,7 @@ import java.lang.foreign.ValueLayout;
 
 /// Write-only encoder for {@code vortex.bool} (bit-packed boolean arrays, LSB first).
 ///
-/// <p>ADR 0001 Phase 3: first encoding lifted into a standalone {@link EncodingEncoder}
-/// implementation in the {@code writer} module. The corresponding read-side decode path
-/// lives on {@link io.github.dfa1.vortex.reader.decode.BoolEncodingDecoder} in
-/// {@code reader}.
+/// Write-side encoder for {@code vortex.bool}.
 public final class BoolEncodingEncoder implements EncodingEncoder {
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.

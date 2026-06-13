@@ -9,7 +9,7 @@ import java.nio.ByteBuffer;
 ///
 /// Sealed: a node is either [KnownArrayNode] (id resolves to an [EncodingId]) or
 /// [UnknownArrayNode] (id is an arbitrary string only meaningful for
-/// {@link ReadRegistry#isAllowUnknown()} passthrough decode).
+/// {@link io.github.dfa1.vortex.reader.ReadRegistry#isAllowUnknown()} passthrough decode).
 public sealed interface ArrayNode permits KnownArrayNode, UnknownArrayNode {
 
     /// Short factory for the common case: a node whose encoding id is well-known.

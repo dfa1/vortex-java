@@ -49,7 +49,7 @@ public interface VortexHandle extends Closeable {
     ///
     /// <p><strong>Internal escape hatch.</strong> Exposed for tooling
     /// (e.g. the inspector's dictionary preview) that needs to decode an
-    /// internal subtree node directly via {@link io.github.dfa1.vortex.encoding.FlatSegmentDecoder}.
+    /// internal subtree node directly via {@link io.github.dfa1.vortex.reader.FlatSegmentDecoder}.
     /// Not part of the supported stability contract; signatures may change
     /// without deprecation.
     ///
