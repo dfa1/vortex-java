@@ -2,11 +2,14 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ReadRegistry;
-import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
-import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.RowFilter;
 import io.github.dfa1.vortex.reader.ScanOptions;
+import io.github.dfa1.vortex.reader.VortexReader;
+import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -126,5 +129,75 @@ class ZoneMapPruningTest {
 
         // Then
         assertThat(rowCounts).hasSize(3);
+    }
+
+    /// Row-level filtering: within surviving chunks, only rows satisfying the predicate are collected.
+    /// Zone-map pruning reduces the chunk set; row-level loops must still check each element.
+    @Nested
+    class RowLevel {
+
+        @Test
+        void eq_onlyExactMatchCollected(@TempDir Path tmp) throws IOException {
+            // Given — id=75 lands in chunk 2 [51..100]; exactly one row matches
+            Path file = writeThreeChunks(tmp);
+            long predicate = 75L;
+            var opts = ScanOptions.columns("id").withFilter(RowFilter.eq("id", predicate));
+
+            // When
+            List<Long> matched = collectMatching(file, opts, v -> v == predicate);
+
+            // Then
+            assertThat(matched).hasSize(1).allSatisfy(v -> assertThat(v).isEqualTo(predicate));
+        }
+
+        @Test
+        void gte_allCollectedValuesAtOrAboveThreshold(@TempDir Path tmp) throws IOException {
+            // Given — threshold=75: chunks 2 and 3 survive zone-map; rows below 75 in chunk 2 must not appear
+            Path file = writeThreeChunks(tmp);
+            long threshold = 75L;
+            var opts = ScanOptions.columns("id").withFilter(RowFilter.gte("id", threshold));
+
+            // When
+            List<Long> matched = collectMatching(file, opts, v -> v >= threshold);
+
+            // Then — 76 matching rows: 75..100 (26) + 101..150 (50)
+            assertThat(matched).hasSize(76).allSatisfy(v -> assertThat(v).isGreaterThanOrEqualTo(threshold));
+        }
+
+        @Test
+        void and_allCollectedValuesInsideRange(@TempDir Path tmp) throws IOException {
+            // Given — AND(id>=60, id<=90): only chunk 2 survives zone-map; 31 rows match
+            Path file = writeThreeChunks(tmp);
+            long lo = 60L, hi = 90L;
+            var opts = ScanOptions.columns("id").withFilter(
+                    RowFilter.and(RowFilter.gte("id", lo), RowFilter.lte("id", hi)));
+
+            // When
+            List<Long> matched = collectMatching(file, opts, v -> v >= lo && v <= hi);
+
+            // Then
+            assertThat(matched).hasSize(31)
+                    .allSatisfy(v -> assertThat(v).isBetween(lo, hi));
+        }
+
+        private List<Long> collectMatching(Path file, ScanOptions opts, java.util.function.LongPredicate predicate)
+                throws IOException {
+            var result = new ArrayList<Long>();
+            try (VortexReader vf = VortexReader.open(file, primitiveRegistry());
+                 var iter = vf.scan(opts)) {
+                while (iter.hasNext()) {
+                    try (Chunk c = iter.next()) {
+                        LongArray col = c.column("id");
+                        for (long i = 0; i < col.length(); i++) {
+                            long v = col.getLong(i);
+                            if (predicate.test(v)) {
+                                result.add(v);
+                            }
+                        }
+                    }
+                }
+            }
+            return result;
+        }
     }
 }
