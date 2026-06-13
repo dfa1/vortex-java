@@ -99,9 +99,9 @@ like a regression on the only number we measure.
   iterate without touching `getDouble`. Measures decode cost paid for
   nothing. (TODO.)
 
-Keep the existing `javaReadClose` (full fold) as the **negative test**:
-neither phase may regress it (see the API gate below — eager path is
-preserved bit-for-bit).
+Keep the existing `javaReadClose` (full fold) as the **negative test**.
+No phase may regress it — the no-filter path stays bit-for-bit eager
+(see the API gate below).
 
 #### Phase 0 baseline (10M rows, OHLC, `close` column)
 
@@ -152,29 +152,132 @@ The filter is applied inside `ScanIterator.next()` *before* the chunk is
 returned. `close.length()` reports the matched row count for that chunk.
 Empty chunks are skipped inside `next()`.
 
-### Phase 1 — lazy materialization (gated path only)
+### Phase 1 — Array hierarchy refactor (no behavior change)
 
-When `hasFilter()` is true, `AlpEncodingDecoder.decode()` returns a
-`DoubleArray` view holding the encoded `MemorySegment` + `double scale`
-+ (optional) `PatchesIndex`. `getDouble(i)` becomes
-`(double) src.get(LE_LONG, i) * scale`, with O(1) patch lookup via
-bitmap.
+Today each primitive Array is a `public final class` with a
+`MemorySegment` buffer field. Lazy variants cannot extend it. Convert
+every numeric Array to a **sealed interface** with the current concrete
+record renamed to `Materialized*`:
 
-Two implementation options for the patch fast path:
+```java
+public sealed interface DoubleArray extends Array
+        permits MaterializedDoubleArray /*, AlpDoubleArray, ... */ {
+    double getDouble(long i);
+    void forEachDouble(DoubleConsumer c);
+    double fold(double identity, DoubleBinaryOperator op);
+
+    static DoubleArray of(DType dtype, long length, MemorySegment buffer) {
+        return new MaterializedDoubleArray(dtype, length, buffer);
+    }
+}
+
+public record MaterializedDoubleArray(DType dtype, long length, MemorySegment buffer)
+        implements DoubleArray { /* unchanged */ }
+```
+
+Scope: `DoubleArray`, `FloatArray`, `LongArray`, `IntArray`,
+`ShortArray`, `ByteArray`. Defer `BoolArray`, `VarBinArray`,
+`VarBinViewArray`, `MaskedArray` — different shapes, no lazy candidate
+encoding for them yet.
+
+Rewrite ~69 `new DoubleArray(...)` (and sibling) call sites in
+`reader.decode.*` and `ScanIterator` to use `Materialized*` directly
+or the `DoubleArray.of(...)` factory. Mechanical.
+
+**Behavior unchanged.** Every existing test, integration test, and
+benchmark sees `Materialized*` everywhere. JIT call sites stay
+monomorphic. Run `./mvnw verify` and `RustVsJavaReadBenchmark` to
+confirm zero regression before moving on.
+
+The `permits` clause carries no lazy variants in phase 1 — the
+hierarchy is just *ready* for them.
+
+### Phase 2 — Lazy ALP variant + filter gate
+
+Add the first lazy implementation:
+
+```java
+public record AlpDoubleArray(
+        DType dtype, long length,
+        MemorySegment encoded, double scale,
+        PatchesIndex patches  // null if no patches
+) implements DoubleArray {
+    public double getDouble(long i) {
+        if (patches != null && patches.has(i)) {
+            return patches.value(i);
+        }
+        return (double) encoded.getAtIndex(LE_LONG, i) * scale;
+    }
+    public DoubleArray compareGt(double threshold, Arena arena) { /* pushdown */ }
+    // forEachDouble / fold = lazy variants
+}
+```
+
+Add `AlpDoubleArray` to the `DoubleArray` permits clause.
+
+Patches index: two options for O(1) lookup:
 
 - **Sparse bitmap**: `BitSet` of `n` bits over patched indices. O(1)
   lookup. Memory: `n / 8` bytes per chunk. For 1M-row chunks: 125 KB.
 - **Sorted index array + binary search**: `long[] patchIdx`. O(log p)
-  per access. Memory: `p * 8` bytes. For p = 1% of n, this is `n / 12.5`
-  bytes — slightly larger than bitmap.
+  per access. Memory: `p * 8` bytes.
 
-For phase 1 use the bitmap. It costs more memory but is O(1) and
-predictable.
+Use the bitmap. Predictable per-access cost.
 
-`DoubleArray` becomes a sealed interface (`Direct` + `Alp`), but **only
-the filter path constructs the `Alp` variant.** No-filter code paths
-still see `Direct`, so existing call sites stay monomorphic at their
-hot spots.
+**Filter gate** in `AlpEncodingDecoder.decode`:
+
+```java
+return ctx.hasFilter()
+    ? new AlpDoubleArray(dtype, n, encoded, scale, patches)   // lazy
+    : MaterializedDoubleArray.of(...);                         // today's eager path
+```
+
+`DecodeContext` gains an `hasFilter()` hint propagated from
+`ScanOptions`. No `RowFilter` parsing inside the decoder — only the
+boolean signal.
+
+### Phase 3 — compute pushdown
+
+`ScanIterator` routes `ScanOptions.rowFilter()` through a kernel SPI
+before falling back to materialization. Initial kernels:
+
+- `CompareKernel`: `compare(arr, scalar, op) → BoolArray`. For
+  `AlpDoubleArray`, encode the scalar to the int domain
+  (`enc = round(scalar / scale)`) and compare ints. For
+  `ForLongArray` (when it lands), subtract the reference and compare
+  ints. Falls back to materialization when the scalar does not
+  round-trip through the encoding.
+- `BetweenKernel`: same approach for two scalars.
+- `TakeKernel`: `take(arr, indices)` — decode only the requested
+  indices. Unblocks the take/slice/projection wins from phase 0.
+- `SumKernel`, `MinKernel`, `MaxKernel`: deferred.
+  `sum(AlpDoubleArray) = sum(int) * scale + patch_correction` is
+  straightforward but not on the critical path.
+
+Pattern-match dispatch in `ScanIterator`:
+
+```java
+DoubleArray col = chunk.column("close");
+BoolArray sel = switch (col) {
+    case AlpDoubleArray alp -> alp.compareGt(threshold, arena);
+    case MaterializedDoubleArray m -> Filters.scalarGt(m, threshold);
+};
+```
+
+For multi-column filters: `AND` evaluates kernels in column order,
+intersecting selection vectors; `OR` unions them. Columns referenced
+only by the filter (not by projection) are decoded just enough to test
+and are not delivered to the consumer.
+
+### Future — extend the lazy family
+
+Once ALP proves the shape, add (no API change, just new permits):
+
+- `AlpRdDoubleArray` — same idea for ALP-RD
+- `ForLongArray`, `ForIntArray` — Frame-of-Reference, in-place lazy
+- `ZigZagLongArray`, `ZigZagIntArray` — XOR/shift on access
+- Composed: `AlpForBitpackedDoubleArray` fuses three transforms into
+  one expression evaluated per access
 
 ### Phase 2 — compute pushdown
 
@@ -217,18 +320,19 @@ and are not delivered to the consumer.
 
 ### Negative
 
-- **API surface grows.** `DoubleArray` becomes a sealed interface with
-  two variants (`Direct`, `Alp`). Same for `LongArray` once FoR/ZigZag
-  join. Downstream consumers that pattern-matched on the concrete type
-  need updates. (The `hasFilter()` gate keeps the no-filter call sites
-  monomorphic, so the dispatch cost only lands where the win does.)
+- **API surface grows.** Every numeric `*Array` becomes a sealed
+  interface with a `Materialized*` impl. Downstream consumers that
+  pattern-matched on the old concrete classes break — they must switch
+  on the sealed variants or call the new `Array.of(...)` factory.
+  (Phase 1 alone is mechanical; the lazy variants in phase 2+ only
+  appear in code paths that explicitly opt in via `hasFilter()`.)
 - **Patch lookup is per-access in the lazy path.** Today patches are
   applied once at decode time. Lazy needs an index structure (cost
   above) and pays per-row. Only the filter path triggers this.
 - **Kernel SPI is a non-trivial design.** Initial scope must be small:
   compare, between, take. Sum/min/max can wait.
 - **Filter semantics change.** Today `RowFilter` is a zone-map prune
-  hint; the consumer still re-checks every row. After phase 2 the chunk
+  hint; the consumer still re-checks every row. After phase 3 the chunk
   returned by `next()` is already filtered. This is a breaking change
   in the consumer contract for callers that set a filter today. Audit
   existing call sites before shipping.
