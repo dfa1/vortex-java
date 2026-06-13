@@ -41,11 +41,15 @@ decode utilities to `reader.decode` — a writer process now pulls in only `writ
 - **Null-preserving `decodeAll`** — `DateExtension`, `TimeExtension`, `TimestampExtension`,
   `UuidExtension` `decodeAll(MaskedArray)` yields `List<T>` with `null` at invalid positions
   instead of throwing on `epochInteger`. (24c64a9)
-- **Extension SPI** — `Extension` interface + `ExtensionId` enum, ServiceLoader-discovered,
-  registered on `Registry`. Third-party extensions register via the builder. (1af6f2a, 0d3815f, 834d2f1)
-- **Spec extension impls** — `DateExtension`, `TimeExtension`, `TimestampExtension`,
-  `UuidExtension`. Each carries `encode`, `decode`, `decodeAll`, polymorphic
-  `encodeAll(DType.Extension, Collection<?>)` for writer auto-routing. (0d3815f, bba49c7)
+- **`ExtensionDecoder` / `ExtensionEncoder` SPI** — `ExtensionId` enum + two focused
+  interfaces, ServiceLoader-discovered via separate manifests. Read-only consumers depend
+  only on `reader`; write-only consumers only on `writer`. (a560563)
+- **Spec extension decoders** — `DateExtensionDecoder`, `TimeExtensionDecoder`,
+  `TimestampExtensionDecoder`, `UuidExtensionDecoder` in `reader.extension`. Each carries
+  typed `decode` / `decodeAll` methods. (a560563)
+- **Spec extension encoders** — `DateExtensionEncoder`, `TimeExtensionEncoder`,
+  `TimestampExtensionEncoder`, `UuidExtensionEncoder` in `writer.encode`, each with a
+  public `dtype(unit, …, nullable)` overload for non-default settings. (a560563)
 - **Writer auto-route extension columns** — `writeChunk` accepts domain collections
   (`List<LocalDate>`, `List<Instant>`, `List<UUID>`, ...) and routes through the matching
   extension impl to produce `int[]` / `long[]` / `FixedSizeListData` storage. (1d54b57, bd6dbdc, 75d7b4b)
@@ -62,12 +66,16 @@ decode utilities to `reader.decode` — a writer process now pulls in only `writ
 ### Breaking
 
 - **`EncodingRegistry` → `ReadRegistry`** — renamed and moved to `io.github.dfa1.vortex.reader`.
-  Holds `EncodingDecoder` and `ExtensionDecoder` impls only (read side). ServiceLoader
-  discovery via `registerServiceLoaded()` on the builder. (834d2f1, 2272fe4, a560563)
-- **`core.Extension` sealed hierarchy retired** — replaced by `ExtensionDecoder`
+  Holds `EncodingDecoder` impls only (read side). ServiceLoader discovery via
+  `registerServiceLoaded()` on the builder. (834d2f1, 2272fe4, a560563)
+- **`core.Extension` and `core.ExtensionEncoder` retired** — replaced by `ExtensionDecoder`
   (`io.github.dfa1.vortex.reader.ExtensionDecoder`) and `ExtensionEncoder`
   (`io.github.dfa1.vortex.writer.ExtensionEncoder`). Register each independently with
-  `ReadRegistry` / `WriteRegistry`. (2a0ed93, a560563)
+  `ReadRegistry` / `WriteRegistry`. `core.Registry` (extension lookup map) dropped;
+  `ExtensionStorage` moved to `reader.extension`. (2a0ed93, a560563)
+- **`VortexHttpReader`**: `open(URI, ReadRegistry)` still the default; new overload
+  `open(URI, ReadRegistry, HttpClient)` lets callers supply their own client (proxy,
+  custom TLS, per-request timeout). (235826f)
 - **`core.array.*` → `reader.array.*`** — all `Array` subtypes moved to
   `io.github.dfa1.vortex.reader.array`. Update import paths. (286715c)
 - **`core.array.NullableData` → `writer.encode.NullableData`** — writer-side carrier
@@ -94,6 +102,13 @@ decode utilities to `reader.decode` — a writer process now pulls in only `writ
 
 ### Fixed
 
+- **`VortexHttpReader` malformed response** — `fetchTail` and `fetchRange` now throw
+  `VortexException` when the HTTP server returns a body whose byte count doesn't match
+  the `Content-Range` header or requested range. Previously short bodies produced
+  `IndexOutOfBoundsException`; extra bytes were silently ignored. (235826f)
+- **`vortex.date` / `vortex.uuid` metadata** — dtype now includes the required TimeUnit
+  tag byte, fixing Java → Rust round-trips that previously failed because the Rust reader
+  expects the metadata field to be non-null. (bb7fcb0)
 - **`PostscriptParser`**: extension dtype `nullable` was hardcoded `false` on read; now
   derived from the storage dtype, matching the Rust spec (`ext_dtype.storage_dtype()`
   carries the column nullability). (1015f9b)
@@ -103,6 +118,8 @@ decode utilities to `reader.decode` — a writer process now pulls in only `writ
 
 ### Removed
 
+- **`vortex-reader` dependency from `vortex-parquet`** — `ParquetImporter` is write-only
+  (Parquet → Vortex); reader was never used. (eca40f4)
 - **`com.google.protobuf:protobuf-java`** dependency dropped from `core`, `reader`,
   `writer`, and root `dependencyManagement`. The `protobuf.version` property is gone.
   CLI uber-jar: **14 MB → 12 MB**. JDK 25 `sun.misc.Unsafe::arrayBaseOffset` stderr
