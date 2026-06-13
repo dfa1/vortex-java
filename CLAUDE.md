@@ -10,10 +10,20 @@ Java 25 native implementation of the [Vortex](https://github.com/vortex-data/vor
 ## Module structure
 
 ```
-core    — DType, PType, VortexException, VortexFormat + generated fbs/proto + EncodingId/ExtensionId
-reader  — VortexReader, ReadRegistry, Array types (reader.array), decoders (reader.decode),
-          extension decoders (reader.extension), file-structure types (Footer, Layout, SegmentSpec, …)
-writer  — VortexWriter, WriteRegistry, encoders (writer.encode), NullableData, extension encoders
+core    — DType, PType, VortexException, VortexFormat + generated fbs/proto
+          encoding: EncodingId, TimeUnit, PTypeIO
+          extension: ExtensionId
+reader  — VortexReader, VortexHttpReader, VortexHandle, ReadRegistry, ExtensionDecoder,
+          Chunk, ArrayStats, ScanOptions, RowFilter
+          reader.array: Array and all subtypes (decode outputs)
+          reader.decode: EncodingDecoder, DecodeContext, ArrayNode + all *EncodingDecoder impls
+          reader.extension: DateExtensionDecoder, TimeExtensionDecoder,
+                            TimestampExtensionDecoder, UuidExtensionDecoder
+          (file-structure internals: Footer, Layout, SegmentSpec, Trailer, PostscriptParser, …)
+writer  — VortexWriter, WriteRegistry, WriteOptions, ExtensionEncoder
+          writer.encode: EncodingEncoder, EncodeContext, NullableData + all *EncodingEncoder impls,
+                         extension encoders (DateExtensionEncoder, TimeExtensionEncoder,
+                         TimestampExtensionEncoder, UuidExtensionEncoder)
 ```
 
 Dependency rule: `writer → core`, `reader → core`. Writer never depends on reader.
