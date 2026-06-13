@@ -156,23 +156,31 @@ Empty chunks are skipped inside `next()`.
 
 Today each primitive Array is a `public final class` with a
 `MemorySegment` buffer field. Lazy variants cannot extend it. Convert
-every numeric Array to a **sealed interface** with the current concrete
-record renamed to `Materialized*`:
+every numeric Array to an **open interface**; keep the current concrete
+behavior as a package-private default record exposed only via a static
+factory:
 
 ```java
-public sealed interface DoubleArray extends Array
-        permits MaterializedDoubleArray /*, AlpDoubleArray, ... */ {
+public interface DoubleArray extends Array {
     double getDouble(long i);
     void forEachDouble(DoubleConsumer c);
     double fold(double identity, DoubleBinaryOperator op);
 
+    /// Default impl backed by a materialized MemorySegment.
+    /// Clients never reference the concrete type.
     static DoubleArray of(DType dtype, long length, MemorySegment buffer) {
-        return new MaterializedDoubleArray(dtype, length, buffer);
+        return new BufferedDoubleArray(dtype, length, buffer);
     }
 }
 
-public record MaterializedDoubleArray(DType dtype, long length, MemorySegment buffer)
-        implements DoubleArray { /* unchanged */ }
+// package-private — name does not appear in the public API
+record BufferedDoubleArray(DType dtype, long length, MemorySegment buffer)
+        implements DoubleArray {
+    public double getDouble(long i) {
+        return buffer.getAtIndex(PTypeIO.LE_DOUBLE, i);
+    }
+    // forEachDouble, fold — same body as today's DoubleArray
+}
 ```
 
 Scope: `DoubleArray`, `FloatArray`, `LongArray`, `IntArray`,
@@ -181,16 +189,21 @@ Scope: `DoubleArray`, `FloatArray`, `LongArray`, `IntArray`,
 encoding for them yet.
 
 Rewrite ~69 `new DoubleArray(...)` (and sibling) call sites in
-`reader.decode.*` and `ScanIterator` to use `Materialized*` directly
-or the `DoubleArray.of(...)` factory. Mechanical.
+`reader.decode.*` and `ScanIterator` to use `DoubleArray.of(...)`.
+Pure textual change; the factory returns the same buffer-backed
+implementation as before.
 
 **Behavior unchanged.** Every existing test, integration test, and
-benchmark sees `Materialized*` everywhere. JIT call sites stay
-monomorphic. Run `./mvnw verify` and `RustVsJavaReadBenchmark` to
-confirm zero regression before moving on.
+benchmark sees `BufferedDoubleArray` everywhere via the interface. JIT
+call sites stay monomorphic until a second impl is introduced. Run
+`./mvnw verify` and `RustVsJavaReadBenchmark` to confirm zero
+regression before moving on.
 
-The `permits` clause carries no lazy variants in phase 1 — the
-hierarchy is just *ready* for them.
+**Not sealed.** Custom encoding-specific concretes (phase 2+) just
+`implements DoubleArray` — no permits edit, no exhaustive switch
+required in callers. Kernels use `instanceof` + `default` fallback so
+unknown impls degrade to the generic per-row path automatically. This
+keeps third-party encodings on equal footing with built-in ones.
 
 ### Phase 2 — Lazy ALP variant + filter gate
 
@@ -213,7 +226,8 @@ public record AlpDoubleArray(
 }
 ```
 
-Add `AlpDoubleArray` to the `DoubleArray` permits clause.
+`AlpDoubleArray` is a top-level `public record` that
+`implements DoubleArray`. No permits edit — the interface stays open.
 
 Patches index: two options for O(1) lookup:
 
@@ -254,13 +268,14 @@ before falling back to materialization. Initial kernels:
   `sum(AlpDoubleArray) = sum(int) * scale + patch_correction` is
   straightforward but not on the critical path.
 
-Pattern-match dispatch in `ScanIterator`:
+Pattern-match dispatch in `ScanIterator` with a `default` fallback —
+no exhaustiveness required, so unknown future impls degrade gracefully:
 
 ```java
 DoubleArray col = chunk.column("close");
 BoolArray sel = switch (col) {
     case AlpDoubleArray alp -> alp.compareGt(threshold, arena);
-    case MaterializedDoubleArray m -> Filters.scalarGt(m, threshold);
+    default                 -> Filters.scalarGt(col, threshold); // generic via getDouble
 };
 ```
 
@@ -320,12 +335,13 @@ and are not delivered to the consumer.
 
 ### Negative
 
-- **API surface grows.** Every numeric `*Array` becomes a sealed
-  interface with a `Materialized*` impl. Downstream consumers that
-  pattern-matched on the old concrete classes break — they must switch
-  on the sealed variants or call the new `Array.of(...)` factory.
-  (Phase 1 alone is mechanical; the lazy variants in phase 2+ only
-  appear in code paths that explicitly opt in via `hasFilter()`.)
+- **API surface grows minimally.** Every numeric `*Array` becomes an
+  open interface; the default buffer-backed impl is package-private,
+  accessed via `*Array.of(...)`. Downstream consumers that constructed
+  `new DoubleArray(...)` directly must switch to the factory; consumers
+  that only *receive* arrays from `Chunk.column(...)` see no change.
+  Encoding-specific concretes (`AlpDoubleArray`, etc.) become first-class
+  public types that kernels can pattern-match against.
 - **Patch lookup is per-access in the lazy path.** Today patches are
   applied once at decode time. Lazy needs an index structure (cost
   above) and pays per-row. Only the filter path triggers this.
