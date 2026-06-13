@@ -87,27 +87,78 @@ gates the work; phases 1 and 2 are sequential.
 Add benchmarks that reward laziness. Without these, phase 1 will look
 like a regression on the only number we measure.
 
-- `RustVsJavaReadBenchmark.javaFilterClose` — `WHERE close > X` with
-  selectivity sweeps at 0.1% / 1% / 10% / 100%. Reports rows-matched/s
-  *and* full-scan throughput as control.
+- `RustVsJavaFilterBenchmark.javaFilterClose` / `jniFilterClose` —
+  `WHERE close > X` with selectivity sweeps at 0.1% / 1% / 10% / 100%.
+  Threshold is computed in `@Setup` from a sampled quantile so each
+  selectivity maps to a real fraction of matching rows. **Already
+  landed** alongside this ADR.
 - `RustVsJavaReadBenchmark.javaTakeClose` — `take` with k random indices
-  for k ∈ {100, 10k, 1M}.
-- `RustVsJavaReadBenchmark.javaSliceClose` — `LIMIT 100` semantics.
+  for k ∈ {100, 10k, 1M}. (TODO — phase 1 unlocks the win.)
+- `RustVsJavaReadBenchmark.javaSliceClose` — `LIMIT 100` semantics. (TODO.)
 - `RustVsJavaReadBenchmark.javaProjectionClose` — request `close`,
   iterate without touching `getDouble`. Measures decode cost paid for
-  nothing.
+  nothing. (TODO.)
 
 Keep the existing `javaReadClose` (full fold) as the **negative test**:
-phase 1 must not regress it more than 10%, phase 2 must not regress it
-at all.
+neither phase may regress it (see the API gate below — eager path is
+preserved bit-for-bit).
 
-### Phase 1 — lazy materialization (no compute pushdown)
+#### Phase 0 baseline (10M rows, OHLC, `close` column)
 
-Change `AlpEncodingDecoder.decode()` to return a `DoubleArray` view that
-holds the encoded `MemorySegment` + `double scale` + (optional)
-`PatchesIndex`. `getDouble(i)` becomes `(double) src.get(LE_LONG, i) *
-scale`, with O(log p) patch lookup if patches exist (binary search the
-sorted patch indices for `i`).
+| Selectivity | Java ops/s | JNI ops/s | JNI/Java |
+|-------------|-----------:|----------:|---------:|
+| 0.1%        |       96   |      361  | **3.7×** |
+| 1%          |       96   |      348  | **3.6×** |
+| 10%         |       49   |      193  | **3.9×** |
+| 100%        |       82   |       53  | 0.65× (Java wins) |
+
+Two observations:
+1. Java loses 3.5–4× to JNI at low selectivity. The whole loss is eager
+   decode of rejected rows.
+2. Java *already* wins at 100% selectivity — JNI's per-batch Arrow
+   marshalling costs more than Java's tight fold. **This is the reason
+   to gate lazy on `hasFilter()` instead of making it the default.**
+
+### API gate — eager unless a filter is present
+
+```
+ScanOptions.hasFilter() == false  →  eager path (today), zero change
+ScanOptions.hasFilter() == true   →  lazy + compute pushdown
+```
+
+Consequences of the gate:
+
+- `javaReadClose` (no filter) is **untouched**. No `DoubleArray`
+  polymorphism, no virtual call, no patch-bitmap allocation. Eliminates
+  the "negative consequence" that worried earlier drafts.
+- `javaFilterClose` switches to the pushdown path. The user's loop does
+  not change: the chunk it receives is already **compacted** to matching
+  rows, so the per-row `if (v > threshold)` check goes away.
+
+```java
+// Today — user pays the per-row predicate check
+for (long i = 0; i < close.length(); i++) {
+    double v = close.getDouble(i);
+    if (v > threshold) sum += v;
+}
+
+// After phase 2 — chunk is pre-filtered, length = matched rows only
+for (long i = 0; i < close.length(); i++) {
+    sum += close.getDouble(i);
+}
+```
+
+The filter is applied inside `ScanIterator.next()` *before* the chunk is
+returned. `close.length()` reports the matched row count for that chunk.
+Empty chunks are skipped inside `next()`.
+
+### Phase 1 — lazy materialization (gated path only)
+
+When `hasFilter()` is true, `AlpEncodingDecoder.decode()` returns a
+`DoubleArray` view holding the encoded `MemorySegment` + `double scale`
++ (optional) `PatchesIndex`. `getDouble(i)` becomes
+`(double) src.get(LE_LONG, i) * scale`, with O(1) patch lookup via
+bitmap.
 
 Two implementation options for the patch fast path:
 
@@ -120,26 +171,33 @@ Two implementation options for the patch fast path:
 For phase 1 use the bitmap. It costs more memory but is O(1) and
 predictable.
 
-`DoubleArray` becomes a sealed interface; existing eager array is
-`DirectDoubleArray`, the lazy variant is `AlpDoubleArray`. Same for
-`LongArray` to support lazy FoR and ZigZag.
+`DoubleArray` becomes a sealed interface (`Direct` + `Alp`), but **only
+the filter path constructs the `Alp` variant.** No-filter code paths
+still see `Direct`, so existing call sites stay monomorphic at their
+hot spots.
 
 ### Phase 2 — compute pushdown
 
-Add a `Kernel` SPI that operates on encoded arrays. Initial kernels:
+`ScanIterator` routes `ScanOptions.rowFilter()` through a kernel SPI
+before falling back to materialization. Initial kernels:
 
 - `CompareKernel`: `compare(arr, scalar, op) → BoolArray`. For ALP,
-  encode the scalar to the int domain and compare ints. For FoR,
-  subtract the reference and compare ints. Falls back to materialization
-  when the scalar does not round-trip through the encoding.
-- `BetweenKernel`: `between(arr, lo, hi) → BoolArray`. Same approach.
+  encode the scalar to the int domain (`enc = round(scalar / scale)`)
+  and compare ints. For FoR, subtract the reference and compare ints.
+  Falls back to materialization when the scalar does not round-trip
+  through the encoding (e.g. ALP threshold that is not representable as
+  `int * 10^(f-e)` exactly).
+- `BetweenKernel`: same approach for two scalars.
 - `TakeKernel`: `take(arr, indices)` — decode only the requested
-  indices.
-- `SumKernel`, `MinKernel`, `MaxKernel`: `sum(ALP) = sum(int) * scale +
-  patch_correction`. Min/max derivable when `scale > 0`.
+  indices. Unblocks the take/slice/projection wins from phase 0.
+- `SumKernel`, `MinKernel`, `MaxKernel`: deferred. `sum(ALP) =
+  sum(int) * scale + patch_correction` is straightforward but not on the
+  critical path.
 
-`ScanIterator` already has a `RowFilter`; route it through the kernel
-SPI before falling back to materialization.
+For multi-column filters: `AND` evaluates kernels in column order,
+intersecting selection vectors; `OR` unions them. Columns referenced
+only by the filter (not by projection) are decoded just enough to test
+and are not delivered to the consumer.
 
 ## Consequences
 
@@ -159,20 +217,21 @@ SPI before falling back to materialization.
 
 ### Negative
 
-- **`javaReadClose` (full fold) will likely regress.** Per-element
-  access goes from `seg.getDouble(i)` to `(double) seg.getLong(i) *
-  scale`, plus a virtual call on the sealed-interface dispatch. Expect
-  5–10% regression. This is the price of laziness for workloads that
-  touch every row.
-- **API surface grows.** `DoubleArray` and `LongArray` become sealed
-  interfaces with multiple variants. Downstream consumers that
-  pattern-matched on the concrete type need updates.
-- **Patch lookup is now per-access.** Today patches are applied once at
-  decode time, then never touched. Lazy needs an index structure (cost
-  above) and pays per-row. For full fold over an ALP column with 1%
-  patches that's `n * O(1)` bitmap checks — measurable but small.
+- **API surface grows.** `DoubleArray` becomes a sealed interface with
+  two variants (`Direct`, `Alp`). Same for `LongArray` once FoR/ZigZag
+  join. Downstream consumers that pattern-matched on the concrete type
+  need updates. (The `hasFilter()` gate keeps the no-filter call sites
+  monomorphic, so the dispatch cost only lands where the win does.)
+- **Patch lookup is per-access in the lazy path.** Today patches are
+  applied once at decode time. Lazy needs an index structure (cost
+  above) and pays per-row. Only the filter path triggers this.
 - **Kernel SPI is a non-trivial design.** Initial scope must be small:
   compare, between, take. Sum/min/max can wait.
+- **Filter semantics change.** Today `RowFilter` is a zone-map prune
+  hint; the consumer still re-checks every row. After phase 2 the chunk
+  returned by `next()` is already filtered. This is a breaking change
+  in the consumer contract for callers that set a filter today. Audit
+  existing call sites before shipping.
 
 ### Risks to manage
 

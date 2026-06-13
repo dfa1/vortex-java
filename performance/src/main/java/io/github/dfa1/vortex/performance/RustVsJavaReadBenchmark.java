@@ -153,7 +153,15 @@ public class RustVsJavaReadBenchmark {
                 if (externalFile != null && !externalFile.isEmpty()) {
                     sharedBenchFile = Path.of(externalFile);
                     sharedOwnFile = false;
-                    System.out.printf("[RustVsJavaReadBenchmark] using external file: %s%n", sharedBenchFile);
+                    if (!Files.exists(sharedBenchFile) || Files.size(sharedBenchFile) == 0L) {
+                        System.out.printf("[RustVsJavaReadBenchmark] external file missing — writing %d OHLC rows via JNI to %s...%n",
+                                TOTAL_ROWS, sharedBenchFile);
+                        writeJni(sharedBenchFile);
+                        System.out.printf("[RustVsJavaReadBenchmark] file size: %.1f MB%n",
+                                Files.size(sharedBenchFile) / 1_048_576.0);
+                    } else {
+                        System.out.printf("[RustVsJavaReadBenchmark] using external file: %s%n", sharedBenchFile);
+                    }
                 } else {
                     sharedBenchFile = Files.createTempFile("ohlc-bench", ".vtx");
                     sharedOwnFile = true;
