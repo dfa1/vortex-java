@@ -13,6 +13,7 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.writer.encode.BoolEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.ByteBoolEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.ConstantEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.DateExtensionEncoder;
 import io.github.dfa1.vortex.writer.encode.FsstEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.ListData;
 import io.github.dfa1.vortex.writer.encode.ListEncodingEncoder;
@@ -22,6 +23,9 @@ import io.github.dfa1.vortex.writer.encode.NullEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.RleEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.RunEndEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.SparseEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.TimeExtensionEncoder;
+import io.github.dfa1.vortex.writer.encode.TimestampExtensionEncoder;
+import io.github.dfa1.vortex.writer.encode.UuidExtensionEncoder;
 import io.github.dfa1.vortex.writer.encode.VarBinEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.VarBinViewEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.ZigZagEncodingEncoder;
@@ -31,9 +35,13 @@ import io.github.dfa1.vortex.writer.WriteOptions;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.BitVector;
+import org.apache.arrow.vector.DateDayVector;
+import org.apache.arrow.vector.FixedSizeBinaryVector;
 import org.apache.arrow.vector.Float2Vector;
 import org.apache.arrow.vector.Float8Vector;
 import org.apache.arrow.vector.IntVector;
+import org.apache.arrow.vector.TimeMilliVector;
+import org.apache.arrow.vector.TimeStampMilliVector;
 import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.complex.ListVector;
@@ -51,11 +59,15 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -1174,5 +1186,158 @@ class JavaWritesRustReadsIntegrationTest {
         System.arraycopy(chunk2, 0, all, chunk1.length, chunk2.length);
         double[] decoded = readDoubleColumn(file, "v");
         assertThat(decoded).containsExactly(all);
+    }
+
+    @Test
+    void javaWriter_rustReader_nullable_date(@TempDir Path tmp) throws IOException {
+        // Given — nullable vortex.date column; row 1 is null.
+        // Validates MaskedEncoding → ExtEncoding → PrimitiveEncoding layout survives Java→Rust read.
+        Path file = tmp.resolve("java_nullable_date.vtx");
+        LocalDate d0 = LocalDate.of(1996, 2, 12);
+        LocalDate d2 = LocalDate.of(2026, 6, 10);
+        DType.Extension dateDtype = DateExtensionEncoder.INSTANCE.dtype(true);
+        DType.Struct schema = new DType.Struct(List.of("d"), List.of(dateDtype), false);
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            // When
+            sut.writeChunk(Map.of("d", Arrays.asList(d0, null, d2)));
+        }
+
+        // Then — Rust reads Date32 vector; row 1 null, rows 0/2 round-trip as epoch-day
+        String uri = file.toAbsolutePath().toUri().toString();
+        DataSource ds = DataSource.open(SESSION, uri);
+        Scan scan = ds.scan(ScanOptions.of());
+        var dates = new ArrayList<LocalDate>();
+        while (scan.hasNext()) {
+            Partition partition = scan.next();
+            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
+                while (reader.loadNextBatch()) {
+                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
+                    DateDayVector vec = (DateDayVector) root.getVector("d");
+                    for (int i = 0; i < root.getRowCount(); i++) {
+                        dates.add(vec.isNull(i) ? null : LocalDate.ofEpochDay(vec.get(i)));
+                    }
+                }
+            }
+        }
+        assertThat(dates).containsExactly(d0, null, d2);
+    }
+
+    @Test
+    void javaWriter_rustReader_nullable_time(@TempDir Path tmp) throws IOException {
+        // Given — nullable vortex.time(ms) column; row 1 is null.
+        // Default unit is milliseconds → int32 storage → Arrow Time32(ms) on read.
+        Path file = tmp.resolve("java_nullable_time.vtx");
+        LocalTime t0 = LocalTime.of(1, 1, 1);
+        LocalTime t2 = LocalTime.of(12, 30, 0);
+        DType.Extension timeDtype = TimeExtensionEncoder.INSTANCE.dtype(true);
+        DType.Struct schema = new DType.Struct(List.of("t"), List.of(timeDtype), false);
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            // When
+            sut.writeChunk(Map.of("t", Arrays.asList(t0, null, t2)));
+        }
+
+        // Then — Rust reads Time32(ms) vector; row 1 null, rows 0/2 round-trip as millis-of-day
+        String uri = file.toAbsolutePath().toUri().toString();
+        DataSource ds = DataSource.open(SESSION, uri);
+        Scan scan = ds.scan(ScanOptions.of());
+        var times = new ArrayList<LocalTime>();
+        while (scan.hasNext()) {
+            Partition partition = scan.next();
+            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
+                while (reader.loadNextBatch()) {
+                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
+                    TimeMilliVector vec = (TimeMilliVector) root.getVector("t");
+                    for (int i = 0; i < root.getRowCount(); i++) {
+                        times.add(vec.isNull(i) ? null : LocalTime.ofNanoOfDay((long) vec.get(i) * 1_000_000L));
+                    }
+                }
+            }
+        }
+        assertThat(times).containsExactly(t0, null, t2);
+    }
+
+    @Test
+    void javaWriter_rustReader_nullable_timestamp(@TempDir Path tmp) throws IOException {
+        // Given — nullable vortex.timestamp(ms, no tz) column; row 1 is null.
+        // Default unit is milliseconds → int64 storage → Arrow Timestamp(ms) on read.
+        Path file = tmp.resolve("java_nullable_timestamp.vtx");
+        Instant ts0 = Instant.ofEpochMilli(1_749_538_800_000L);
+        Instant ts2 = Instant.ofEpochMilli(0L);
+        DType.Extension tsDtype = TimestampExtensionEncoder.INSTANCE.dtype(true);
+        DType.Struct schema = new DType.Struct(List.of("ts"), List.of(tsDtype), false);
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            // When
+            sut.writeChunk(Map.of("ts", Arrays.asList(ts0, null, ts2)));
+        }
+
+        // Then — Rust reads Timestamp(ms) vector; row 1 null, rows 0/2 round-trip as epoch millis
+        String uri = file.toAbsolutePath().toUri().toString();
+        DataSource ds = DataSource.open(SESSION, uri);
+        Scan scan = ds.scan(ScanOptions.of());
+        var timestamps = new ArrayList<Instant>();
+        while (scan.hasNext()) {
+            Partition partition = scan.next();
+            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
+                while (reader.loadNextBatch()) {
+                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
+                    TimeStampMilliVector vec = (TimeStampMilliVector) root.getVector("ts");
+                    for (int i = 0; i < root.getRowCount(); i++) {
+                        timestamps.add(vec.isNull(i) ? null : Instant.ofEpochMilli(vec.get(i)));
+                    }
+                }
+            }
+        }
+        assertThat(timestamps).containsExactly(ts0, null, ts2);
+    }
+
+    @Test
+    @Disabled("vortex-jni 0.74.0 uses the non-plugin-aware DType.to_arrow_schema() which bails "
+            + "for any extension type other than parquet.variant — including vortex.uuid. "
+            + "Re-enable when the JNI is updated to use ArrowSession.to_arrow_schema().")
+    void javaWriter_rustReader_nullable_uuid(@TempDir Path tmp) throws IOException {
+        // Given — nullable vortex.uuid column; row 1 is null.
+        // UUID stored as big-endian 16-byte FixedSizeBinary → Arrow FixedSizeBinary(16) on read.
+        Path file = tmp.resolve("java_nullable_uuid.vtx");
+        UUID u0 = UUID.fromString("12345678-1234-5678-9abc-def012345678");
+        UUID u2 = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        DType.Extension uuidDtype = UuidExtensionEncoder.INSTANCE.dtype(true);
+        DType.Struct schema = new DType.Struct(List.of("u"), List.of(uuidDtype), false);
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            // When
+            sut.writeChunk(Map.of("u", Arrays.asList(u0, null, u2)));
+        }
+
+        // Then — Rust reads FixedSizeBinary(16) vector; row 1 null, rows 0/2 round-trip as UUID
+        String uri = file.toAbsolutePath().toUri().toString();
+        DataSource ds = DataSource.open(SESSION, uri);
+        Scan scan = ds.scan(ScanOptions.of());
+        var uuids = new ArrayList<UUID>();
+        while (scan.hasNext()) {
+            Partition partition = scan.next();
+            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
+                while (reader.loadNextBatch()) {
+                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
+                    FixedSizeBinaryVector vec = (FixedSizeBinaryVector) root.getVector("u");
+                    for (int i = 0; i < root.getRowCount(); i++) {
+                        uuids.add(vec.isNull(i) ? null : uuidFromBytes(vec.get(i)));
+                    }
+                }
+            }
+        }
+        assertThat(uuids).containsExactly(u0, null, u2);
+    }
+
+    private static UUID uuidFromBytes(byte[] b) {
+        long msb = 0;
+        long lsb = 0;
+        for (int k = 0; k < 8; k++) {
+            msb = (msb << 8) | (b[k] & 0xFFL);
+            lsb = (lsb << 8) | (b[8 + k] & 0xFFL);
+        }
+        return new UUID(msb, lsb);
     }
 }

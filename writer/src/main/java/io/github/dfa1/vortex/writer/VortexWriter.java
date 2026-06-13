@@ -290,7 +290,7 @@ public final class VortexWriter implements Closeable {
                 int idOff = fbb.createString(e.extensionId());
                 int storageDtypeOff = serializeDType(fbb, e.storageDType());
                 int metaOff = 0;
-                if (e.metadata() != null && e.metadata().remaining() > 0) {
+                if (e.metadata() != null) {
                     byte[] metaBytes = new byte[e.metadata().remaining()];
                     e.metadata().duplicate().get(metaBytes);
                     metaOff = Extension.createMetadataVector(fbb, metaBytes);

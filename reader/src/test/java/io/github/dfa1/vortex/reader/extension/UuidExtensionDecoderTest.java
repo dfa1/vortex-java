@@ -31,13 +31,15 @@ class UuidExtensionDecoderTest {
 
     @Test
     void dtype_isFixedSizeListOf16U8() {
-        // Given / When — UUID storage is canonically FixedSizeList<U8>(16); no extension metadata
+        // Given / When — UUID storage is canonically FixedSizeList<U8>(16); metadata is present
+        // but empty (0 bytes = "any UUID version") so the Rust reader's ok_or_else() check passes
         DType.Extension dtype = sut.dtype(true);
 
         // Then
         DType.Primitive u8 = new DType.Primitive(PType.U8, false);
         assertThat(dtype.storageDType()).isEqualTo(new DType.FixedSizeList(u8, 16, true));
-        assertThat(dtype.metadata()).isNull();
+        assertThat(dtype.metadata()).isNotNull();
+        assertThat(dtype.metadata().remaining()).isZero();
     }
 
     @Test

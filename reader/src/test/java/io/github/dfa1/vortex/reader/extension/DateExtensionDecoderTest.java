@@ -28,14 +28,17 @@ class DateExtensionDecoderTest {
     }
 
     @Test
-    void dtype_isI32StorageNoMetadata() {
-        // Given / When — Arrow's canonical Date type carries no metadata; days fit in I32 through year 5_881_580
+    void dtype_isI32StorageWithDaysMetadata() {
+        // Given / When — vortex.date requires a 1-byte TimeUnit tag (Days = 4) so the Rust reader
+        // can call deserialize_metadata without hitting its "metadata must not be empty" guard
         DType.Extension dtype = sut.dtype(false);
 
         // Then
         assertThat(dtype.extensionId()).isEqualTo("vortex.date");
         assertThat(dtype.storageDType()).isEqualTo(new DType.Primitive(PType.I32, false));
-        assertThat(dtype.metadata()).isNull();
+        assertThat(dtype.metadata()).isNotNull();
+        assertThat(dtype.metadata().remaining()).isEqualTo(1);
+        assertThat(dtype.metadata().duplicate().get()).isEqualTo((byte) 4); // TimeUnit.Days ordinal
     }
 
     @Test
