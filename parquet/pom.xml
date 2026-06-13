@@ -16,10 +16,6 @@
 		<!-- production -->
 		<dependency>
 			<groupId>io.github.dfa1.vortex</groupId>
-			<artifactId>vortex-reader</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>io.github.dfa1.vortex</groupId>
 			<artifactId>vortex-writer</artifactId>
 		</dependency>
 		<dependency>
