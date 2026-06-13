@@ -11,7 +11,12 @@ Each ADR is a Markdown file named `NNNN-short-title.md`. Use `template.md` as th
 
 ## Index
 
-| ADR  | Title                                    | Status    |
-|------|------------------------------------------|-----------|
-| 0001 | Split read and write runtimes out of core | Completed |
-| 0002 | Pluggable DType, Layout, and Compute      | Proposed  |
+| ADR  | Title                                         | Status    |
+|------|-----------------------------------------------|-----------|
+| 0001 | Split read and write runtimes out of core     | Completed |
+| 0002 | Pluggable DType, Layout, and Compute          | Proposed  |
+| 0003 | VortexException message sanitization          | Accepted  |
+| 0004 | ResourceLimits + ReadOptions                  | Accepted  |
+| 0005 | Vector API adoption                           | Accepted  |
+| 0006 | Benchmark publishing                          | Accepted  |
+| 0007 | Pure-Java vortex.pco encoder                  | Accepted  |
