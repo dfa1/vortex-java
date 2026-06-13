@@ -62,7 +62,7 @@ try (VortexReader vf = VortexReader.open(Path.of("data/example.vortex"));
 > [docs/explanation.md#memory-model](docs/explanation.md#memory-model).
 
 For more examples — writing, projection, filtering, custom encodings, and the CLI —
-see the documentation below.
+see the [tutorial](docs/tutorial.md).
 
 ## Documentation
 
