@@ -29,10 +29,6 @@ parser exception. Each entry below is either a known gap, a contract audit, or s
   must throw `VortexException` rather than the JDK's `IndexOutOfBoundsException`. Either wrap
   per call site, or route through an `IoBounds.slice(seg, off, len)` helper and add a
   Checkstyle rule rejecting raw `asSlice` in `io`/`scan`/`encoding` packages.
-- [ ] **HTTP-reader malformed-tail cases** — `VortexHttpReader.fetchBlob` does not validate
-  that the HTTP response length matches the requested `Range`. Server-returned short / extra
-  bytes should fail loudly. Add `MalformedHttpResponseTest` (mock `HttpClient`).
-
 ### Per-encoding adversarial tests
 
 Each encoding's `decode(DecodeContext)` should be exercised against:

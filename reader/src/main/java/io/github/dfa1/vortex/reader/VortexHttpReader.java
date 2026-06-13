@@ -35,6 +35,7 @@ public final class VortexHttpReader implements VortexHandle {
     private static final HttpClient CLIENT = HttpClient.newHttpClient();
 
     private final URI uri;
+    private final HttpClient client;
     private final Arena arena;
     private final long fileSize;
     private final int version;
@@ -44,11 +45,12 @@ public final class VortexHttpReader implements VortexHandle {
     private final ReadRegistry registry;
 
     private VortexHttpReader(
-        URI uri, long fileSize,
+        URI uri, HttpClient client, long fileSize,
         int version, Footer footer, DType dtype, Layout layout,
         ReadRegistry registry
     ) {
         this.uri = uri;
+        this.client = client;
         this.arena = Arena.ofConfined();
         this.fileSize = fileSize;
         this.version = version;
@@ -63,9 +65,23 @@ public final class VortexHttpReader implements VortexHandle {
     }
 
     public static VortexHttpReader open(URI uri, ReadRegistry registry) throws IOException {
+        return open(uri, registry, CLIENT);
+    }
+
+    /// Opens a remote Vortex file using a caller-supplied {@link HttpClient}.
+    ///
+    /// <p>Use this overload when the default shared client is unsuitable — e.g. to configure
+    /// a proxy, custom TLS context, or per-request timeout.
+    ///
+    /// @param uri      HTTP(S) URL of the Vortex file
+    /// @param registry decoding registry
+    /// @param client   HTTP client to use for all Range requests
+    /// @return an open handle to the remote file
+    /// @throws IOException if the file cannot be opened or parsed
+    public static VortexHttpReader open(URI uri, ReadRegistry registry, HttpClient client) throws IOException {
         // Single suffix Range request — Content-Range response header gives us fileSize.
         // Avoids a separate HEAD round trip.
-        TailFetch tf = fetchTail(uri);
+        TailFetch tf = fetchTail(uri, client);
         byte[] tail = tf.bytes();
         long tailStart = tf.start();
         long fileSize = tf.fileSize();
@@ -99,16 +115,16 @@ public final class VortexHttpReader implements VortexHandle {
         }
         var dtypeSpec = ps.dtype();
 
-        ByteBuffer footerBuf = fetchBlob(footerSpec.offset(), footerSpec.length(), tailStart, tail, uri);
-        ByteBuffer layoutBuf = fetchBlob(layoutSpec.offset(), layoutSpec.length(), tailStart, tail, uri);
+        ByteBuffer footerBuf = fetchBlob(footerSpec.offset(), footerSpec.length(), tailStart, tail, uri, client);
+        ByteBuffer layoutBuf = fetchBlob(layoutSpec.offset(), layoutSpec.length(), tailStart, tail, uri, client);
         ByteBuffer dtypeBuf = (dtypeSpec != null && dtypeSpec.length() > 0)
-                                  ? fetchBlob(dtypeSpec.offset(), dtypeSpec.length(), tailStart, tail, uri)
+                                  ? fetchBlob(dtypeSpec.offset(), dtypeSpec.length(), tailStart, tail, uri, client)
                                   : null;
 
         var parsed = PostscriptParser.parseBlobs(footerBuf, layoutBuf, dtypeBuf);
 
         return new VortexHttpReader(
-            uri, fileSize, trailer.version(),
+            uri, client, fileSize, trailer.version(),
             parsed.footer(), parsed.dtype(), parsed.layout(),
             registry
         );
@@ -117,14 +133,14 @@ public final class VortexHttpReader implements VortexHandle {
     /// Fetches the last [#TAIL_SIZE] bytes in one request.
     /// Parses `Content-Range: bytes start-end/total` to extract file size and tail offset,
     /// avoiding a separate HEAD round trip.
-    private static TailFetch fetchTail(URI uri) throws IOException {
+    private static TailFetch fetchTail(URI uri, HttpClient client) throws IOException {
         HttpRequest req = HttpRequest.newBuilder(uri)
                               .header("Range", "bytes=-" + TAIL_SIZE)
                               .GET()
                               .build();
         HttpResponse<byte[]> resp;
         try {
-            resp = CLIENT.send(req, HttpResponse.BodyHandlers.ofByteArray());
+            resp = client.send(req, HttpResponse.BodyHandlers.ofByteArray());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("interrupted fetching tail of " + uri, e);
@@ -141,6 +157,13 @@ public final class VortexHttpReader implements VortexHandle {
             int slash = spec.indexOf('/');
             long total = Long.parseLong(spec.substring(slash + 1));
             long start = Long.parseLong(spec.substring(0, spec.indexOf('-')));
+            long end = Long.parseLong(spec.substring(spec.indexOf('-') + 1, slash));
+            long expected = end - start + 1;
+            if (body.length != expected) {
+                throw new VortexException(
+                    "HTTP tail from %s: Content-Range declares %d bytes but body has %d"
+                        .formatted(uri, expected, body.length));
+            }
             return new TailFetch(body, start, total);
         }
 
@@ -152,18 +175,25 @@ public final class VortexHttpReader implements VortexHandle {
         throw new VortexException("HTTP " + status + " fetching tail of " + uri);
     }
 
-    private static byte[] fetchRange(URI uri, long from, long to) throws IOException {
+    private static byte[] fetchRange(URI uri, long from, long to, HttpClient client) throws IOException {
         HttpRequest req = HttpRequest.newBuilder(uri)
                               .header("Range", "bytes=" + from + "-" + to)
                               .GET()
                               .build();
         try {
-            HttpResponse<byte[]> resp = CLIENT.send(req, HttpResponse.BodyHandlers.ofByteArray());
+            HttpResponse<byte[]> resp = client.send(req, HttpResponse.BodyHandlers.ofByteArray());
             int status = resp.statusCode();
             if (status != 206 && status != 200) {
                 throw new VortexException("HTTP " + status + " fetching range from " + uri);
             }
-            return resp.body();
+            byte[] body = resp.body();
+            long expected = to - from + 1;
+            if (body.length != expected) {
+                throw new VortexException(
+                    "HTTP range [%d, %d] from %s: expected %d bytes, got %d"
+                        .formatted(from, to, uri, expected, body.length));
+            }
+            return body;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("interrupted fetching range from " + uri, e);
@@ -176,14 +206,14 @@ public final class VortexHttpReader implements VortexHandle {
     private static ByteBuffer fetchBlob(
         long offset, long length,
         long tailStart, byte[] tail,
-        URI uri
+        URI uri, HttpClient client
     ) throws IOException {
         if (offset >= tailStart) {
             int relOffset = (int) (offset - tailStart);
             return ByteBuffer.wrap(tail, relOffset, (int) length)
                        .slice().order(ByteOrder.LITTLE_ENDIAN);
         }
-        byte[] bytes = fetchRange(uri, offset, offset + length - 1);
+        byte[] bytes = fetchRange(uri, offset, offset + length - 1, client);
         return ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
     }
 
@@ -236,7 +266,7 @@ public final class VortexHttpReader implements VortexHandle {
         long length = spec.length();
         byte[] bytes;
         try {
-            bytes = fetchRange(uri, offset, offset + length - 1);
+            bytes = fetchRange(uri, offset, offset + length - 1, client);
         } catch (IOException e) {
             throw new VortexException(
                 "failed to fetch [%d, %d) from %s: %s".formatted(offset, offset + length, uri, e.getMessage()));
