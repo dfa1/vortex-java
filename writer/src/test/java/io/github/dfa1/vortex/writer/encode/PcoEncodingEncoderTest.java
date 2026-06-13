@@ -46,7 +46,9 @@ class PcoEncodingEncoderTest {
                 // delta path: large sequential ranges where delta beats noOp
                 Arguments.of("sequential-1k", LongStream.range(0, 1000).toArray()),
                 Arguments.of("stride-4", LongStream.range(0, 500).map(i -> i * 4).toArray()),
-                Arguments.of("sequential-negative", LongStream.range(-500, 0).toArray())
+                Arguments.of("sequential-negative", LongStream.range(-500, 0).toArray()),
+                // multi-chunk: crosses the 64K-element chunk boundary
+                Arguments.of("multi-chunk", LongStream.range(0, 150_000).toArray())
         );
     }
 

@@ -244,14 +244,15 @@ class PcoEncodingDecoderTest {
 
         @Test
         void decode_multiChunk_decodes() {
+            // Buffer layout: all chunk metas first, then all pages (matches Rust vortex PcoArray).
             PcoMetadata meta = new PcoMetadata(
                     new byte[]{PcoEncodingDecoder.PCO_FORMAT_MAJOR, PcoEncodingDecoder.PCO_FORMAT_MINOR},
                     java.util.List.of(
                             new PcoChunkInfo(java.util.List.of(new PcoPageInfo(1))),
                             new PcoChunkInfo(java.util.List.of(new PcoPageInfo(1)))));
             DecodeContext ctx = ctxWith(ByteBuffer.wrap(meta.encode()), new DType.Primitive(PType.U64, false), 2,
-                    new MemorySegment[]{chunkMetaConsecutive(1), pageWithMoments(100L),
-                            chunkMetaConsecutive(1), pageWithMoments(200L)});
+                    new MemorySegment[]{chunkMetaConsecutive(1), chunkMetaConsecutive(1),
+                            pageWithMoments(100L), pageWithMoments(200L)});
             var result = SUT.decode(ctx);
             assertThat(result.length()).isEqualTo(2);
             assertThat(((LongArray) result).getLong(0)).isEqualTo(100L);

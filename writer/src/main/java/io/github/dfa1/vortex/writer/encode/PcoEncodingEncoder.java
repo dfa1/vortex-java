@@ -14,21 +14,23 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.IntStream;
 
 /// Write-only encoder for {@code vortex.pco}.
 ///
-/// <p>Classic mode, 1 latent variable per chunk, single page.
-/// Chooses between NoOp delta (deltaVariant=0) and Consecutive delta (deltaVariant=1, order=1)
-/// by comparing estimated bit cost from the bin-optimization DP.
-/// Uses a histogram + DP to find optimal ANS bins, then encodes values with 4-way interleaved
-/// tANS + per-bin offset bits.
+/// <p>Classic mode (mode=0), one latent variable per chunk.
+/// Data is split into chunks of {@value #CHUNK_SIZE} elements; each chunk gets
+/// independently trained bins, quantized ANS weights, and a single page.
+/// Chooses between NoOp delta (deltaVariant=0) and Consecutive delta
+/// (deltaVariant=1, order=1) per chunk by comparing estimated bit cost.
 public final class PcoEncodingEncoder implements EncodingEncoder {
 
     private static final byte PCO_FORMAT_MAJOR = 0x04;
     private static final byte PCO_FORMAT_MINOR = 0x01;
     private static final int BATCH_N = 256;
     private static final int ANS_INTERLEAVING = 4;
-    private static final int N_BINS_LOG = 8; // up to 256 histogram buckets (compression level 8)
+    private static final int N_BINS_LOG = 8;
+    private static final int CHUNK_SIZE = 1 << 16; // 65 536 elements
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
     public PcoEncodingEncoder() {
@@ -57,19 +59,50 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
 
     private static final class Encoder {
 
+        private record ChunkResult(MemorySegment chunkMeta, MemorySegment page, int pageN) {
+        }
+
         static EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
             PType ptype = ((DType.Primitive) dtype).ptype();
             int dtypeSize = dtypeSize(ptype);
-            long[] latents = toLatents(ptype, data);
-            int n = latents.length;
+            long[] allLatents = toLatents(ptype, data);
+            int n = allLatents.length;
 
             if (n == 0) {
                 return encodeEmpty(ctx.arena());
             }
 
+            // Buffer layout: all chunk metas first, then all pages.
+            // Rust vortex PcoArray.deserialize splits buffers as:
+            //   chunk_metas = buffers[0..n_chunks]
+            //   pages       = buffers[n_chunks..]
+            List<MemorySegment> chunkMetas = new ArrayList<>();
+            List<MemorySegment> pages = new ArrayList<>();
+            List<PcoChunkInfo> chunks = new ArrayList<>();
+
+            int chunkStart = 0;
+            while (chunkStart < n) {
+                int chunkEnd = Math.min(chunkStart + CHUNK_SIZE, n);
+                long[] chunkLatents = Arrays.copyOfRange(allLatents, chunkStart, chunkEnd);
+                ChunkResult result = encodeChunk(chunkLatents, dtypeSize, ctx.arena());
+                chunkMetas.add(result.chunkMeta());
+                pages.add(result.page());
+                chunks.add(new PcoChunkInfo(List.of(new PcoPageInfo(result.pageN()))));
+                chunkStart = chunkEnd;
+            }
+
+            List<MemorySegment> buffers = new ArrayList<>(chunkMetas);
+            buffers.addAll(pages);
+            int[] allBufIdxs = IntStream.range(0, buffers.size()).toArray();
+            ByteBuffer metaBuf = buildMetadata(chunks);
+            EncodeNode node = new EncodeNode(EncodingId.VORTEX_PCO, metaBuf, new EncodeNode[0], allBufIdxs);
+            return new EncodeResult(node, buffers, null, null);
+        }
+
+        private static ChunkResult encodeChunk(long[] latents, int dtypeSize, Arena arena) {
+            int n = latents.length;
             long[] sortKeys = toSortKeys(latents);
 
-            // Build histogram on sorted latents
             long[] sortedKeys = sortKeys.clone();
             Arrays.sort(sortedKeys);
             int nBinsLog = n == 1 ? 0 : Math.min(N_BINS_LOG, 64 - Long.numberOfLeadingZeros(n - 1));
@@ -78,12 +111,10 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             int nLogCeil = n <= 1 ? 0 : 64 - Long.numberOfLeadingZeros(n - 1);
             int maxSizeLog = Math.min(Math.min(nBinsLog + 2, 12), nLogCeil);
 
-            // NoOp path
             List<PcoBinOptimizer.Bin> noOpBins = PcoBinOptimizer.optimize(histBins, maxSizeLog, dtypeSize);
             float noOpCost = dpCost(noOpBins, n);
             PcoWeightQuantizer.Result noOpQ = quantize(noOpBins, n, maxSizeLog);
 
-            // Consecutive delta path (only if n > 1)
             boolean useDelta = false;
             long[] deltas = null;
             List<PcoBinOptimizer.Bin> deltaBins = null;
@@ -91,8 +122,7 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
 
             if (n > 1) {
                 deltas = consecutiveDeltas(latents, dtypeSize);
-                long[] deltaSortKeys = toSortKeys(deltas);
-                long[] deltaSorted = deltaSortKeys.clone();
+                long[] deltaSorted = toSortKeys(deltas).clone();
                 Arrays.sort(deltaSorted);
                 int dNBinsLog = Math.min(N_BINS_LOG, 64 - Long.numberOfLeadingZeros(n - 2));
                 List<PcoHistBin> deltaHist = buildHistogram(deltaSorted, n - 1, dNBinsLog);
@@ -110,19 +140,17 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
 
             if (useDelta) {
                 PcoAnsEncoder ansEncoder = PcoAnsEncoder.build(deltaQ.sizeLog(), deltaQ.weights());
-                chunkMetaSeg = buildChunkMeta(dtypeSize, deltaBins, deltaQ, 1, 1, ctx.arena());
+                chunkMetaSeg = buildChunkMeta(dtypeSize, deltaBins, deltaQ, 1, 1, arena);
                 pageSeg = buildPage(deltas, toSortKeys(deltas), deltaBins,
-                        deltaQ.sizeLog(), ansEncoder, dtypeSize, latents[0], true, ctx.arena());
+                        deltaQ.sizeLog(), ansEncoder, dtypeSize, latents[0], true, arena);
             } else {
                 PcoAnsEncoder ansEncoder = PcoAnsEncoder.build(noOpQ.sizeLog(), noOpQ.weights());
-                chunkMetaSeg = buildChunkMeta(dtypeSize, noOpBins, noOpQ, 0, 0, ctx.arena());
+                chunkMetaSeg = buildChunkMeta(dtypeSize, noOpBins, noOpQ, 0, 0, arena);
                 pageSeg = buildPage(latents, sortKeys, noOpBins,
-                        noOpQ.sizeLog(), ansEncoder, dtypeSize, 0L, false, ctx.arena());
+                        noOpQ.sizeLog(), ansEncoder, dtypeSize, 0L, false, arena);
             }
 
-            ByteBuffer metaBuf = buildMetadata(n);
-            EncodeNode node = new EncodeNode(EncodingId.VORTEX_PCO, metaBuf, new EncodeNode[0], new int[]{0, 1});
-            return new EncodeResult(node, List.of(chunkMetaSeg, pageSeg), null, null);
+            return new ChunkResult(chunkMetaSeg, pageSeg, n);
         }
 
         // ── histogram ─────────────────────────────────────────────────────────
@@ -135,10 +163,8 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             List<PcoHistBin> bins = new ArrayList<>(nBins);
             int start = 0;
             for (int b = 0; b < nBins && start < n; b++) {
-                // ceiling of (b+1)*n/nBins
                 int targetEnd = (int) (((long) (b + 1) * n + nBins - 1) >> nBinsLog);
                 targetEnd = Math.min(targetEnd, n);
-                // extend past equal values at boundary to keep same value in one bin
                 while (targetEnd < n && sortedKeys[targetEnd] == sortedKeys[targetEnd - 1]) {
                     targetEnd++;
                 }
@@ -157,19 +183,18 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             int ansSizeLog = qw.sizeLog();
             int[] weights = qw.weights();
             LeBitWriter w = new LeBitWriter(64);
-            w.writeBits(0, 4);             // mode = Classic (0)
-            w.writeBits(deltaVariant, 4);  // 0=NoOp, 1=Consecutive
+            w.writeBits(0, 4);
+            w.writeBits(deltaVariant, 4);
             if (deltaVariant == 1) {
                 w.writeBits(deltaOrder, 3);
-                w.writeBits(0, 1);         // secondaryUsesDelta = false
+                w.writeBits(0, 1);
             }
             w.writeBits(ansSizeLog, 4);
             w.writeBits(bins.size(), 15);
-            int bitsForWeight = ansSizeLog;
             int offsetBitsWidth = bitsToEncodeOffsetBits(dtypeSize);
             for (int i = 0; i < bins.size(); i++) {
                 PcoBinOptimizer.Bin bin = bins.get(i);
-                w.writeBits(weights[i] - 1, bitsForWeight); // quantized ANS weight, not raw count
+                w.writeBits(weights[i] - 1, ansSizeLog);
                 w.writeBits(bin.lowerLatent(), dtypeSize);
                 w.writeBits(bin.offsetBits(), offsetBitsWidth);
             }
@@ -187,28 +212,24 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
 
             int n = values.length;
 
-            // Pre-compute bin lower sort keys for binary search
             long[] binLowers = new long[bins.size()];
             for (int i = 0; i < bins.size(); i++) {
                 binLowers[i] = bins.get(i).lowerSortKey();
             }
 
-            // Assign each value to a bin symbol and compute offset
             int[] symbols = new int[n];
             long[] offsets = new long[n];
             for (int i = 0; i < n; i++) {
                 int sym = findBin(valueSortKeys[i], binLowers);
                 symbols[i] = sym;
-                offsets[i] = valueSortKeys[i] - binLowers[sym]; // = latent - bin.lowerLatent
+                offsets[i] = valueSortKeys[i] - binLowers[sym];
             }
 
-            // Compute bin offsetBits per symbol
             int[] binOffsetBits = new int[bins.size()];
             for (int i = 0; i < bins.size(); i++) {
                 binOffsetBits[i] = bins.get(i).offsetBits();
             }
 
-            // ANS encode LIFO: process elements in reverse, collect (bits,numBits) per batch
             int nBatches = (n + BATCH_N - 1) / BATCH_N;
             long[][] batchBits = new long[nBatches][];
             int[][] batchNumBits = new int[nBatches][];
@@ -228,19 +249,16 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
                 }
 
                 PcoAnsEncoder.Step step = ansEncoder.encode(states[stream], symbols[i]);
-                // posInBatch counts within batch (already in reverse order, will be reversed below)
                 batchBits[batch][posInBatch] = step.bits();
                 batchNumBits[batch][posInBatch] = step.numBits();
                 states[stream] = step.newState();
             }
 
-            // Final encoder states → decoder initial state indices (written to page header)
             int[] initialStateIdxs = new int[ANS_INTERLEAVING];
             for (int i = 0; i < ANS_INTERLEAVING; i++) {
                 initialStateIdxs[i] = ansEncoder.toStateIdx(states[i]);
             }
 
-            // Estimate page size
             long headerBits = (hasMoment ? dtypeSize : 0) + (long) ANS_INTERLEAVING * ansSizeLog;
             long ansTotalBits = 0;
             long offsetTotalBits = 0;
@@ -251,7 +269,6 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             long pageSizeBytes = (headerBits + ansTotalBits + offsetTotalBits + 7) / 8 + 8;
             LeBitWriter w = new LeBitWriter((int) Math.min(pageSizeBytes, Integer.MAX_VALUE));
 
-            // Write page header
             if (hasMoment) {
                 w.writeBits(moment, dtypeSize);
             }
@@ -260,17 +277,12 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             }
             w.alignToByte();
 
-            // Write per-batch: ANS bits (reversed within batch) then offset bits
             for (int b = 0; b < nBatches; b++) {
                 int batchStart = b * BATCH_N;
                 int batchSize = Math.min(BATCH_N, n - batchStart);
-
-                // ANS bits were collected in reverse posInBatch order; write in forward order
-                // (posInBatch 0 was encoded last → bits[0] is the correct forward value)
                 for (int k = 0; k < batchSize; k++) {
                     w.writeBits(batchBits[b][k], batchNumBits[b][k]);
                 }
-                // Offset bits in forward order
                 for (int k = 0; k < batchSize; k++) {
                     int i = batchStart + k;
                     w.writeBits(offsets[i], binOffsetBits[symbols[i]]);
@@ -280,7 +292,6 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             return w.toMemorySegment(arena);
         }
 
-        // Binary search: find the bin whose range contains sortKey.
         private static int findBin(long sortKey, long[] binLowers) {
             int lo = 0;
             int hi = binLowers.length - 1;
@@ -297,7 +308,6 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
 
         // ── DP cost estimate ─────────────────────────────────────────────────
 
-        // Approximate total compressed bits from the bin optimizer output.
         private static float dpCost(List<PcoBinOptimizer.Bin> bins, int n) {
             if (bins.isEmpty()) {
                 return 0f;
@@ -325,7 +335,6 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
 
         // ── sort-key conversion ──────────────────────────────────────────────
 
-        // Latent → signed sort key so Arrays.sort gives unsigned latent order.
         private static long[] toSortKeys(long[] latents) {
             long[] keys = new long[latents.length];
             for (int i = 0; i < latents.length; i++) {
@@ -355,10 +364,9 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             return new EncodeResult(node, List.of(), null, null);
         }
 
-        private static ByteBuffer buildMetadata(int n) {
+        private static ByteBuffer buildMetadata(List<PcoChunkInfo> chunks) {
             byte[] header = {PCO_FORMAT_MAJOR, PCO_FORMAT_MINOR};
-            PcoChunkInfo chunkInfo = new PcoChunkInfo(List.of(new PcoPageInfo(n)));
-            PcoMetadata meta = new PcoMetadata(header, List.of(chunkInfo));
+            PcoMetadata meta = new PcoMetadata(header, chunks);
             return ByteBuffer.wrap(meta.encode());
         }
 

@@ -83,7 +83,10 @@ public final class PcoEncodingDecoder implements EncodingDecoder {
         MemorySegment rawLatents = ctx.arena().allocate(validCount * Long.BYTES);
 
         int nChunks = meta.chunks().size();
-        int bufIdx = 0;
+        // Buffer layout (matches Rust vortex PcoArray): all chunk metas first, then all pages.
+        // buffers[0..nChunks) = chunk metas; buffers[nChunks..) = pages (flattened).
+        int pagesBufOffset = nChunks;
+        int pageBufIdx = pagesBufOffset;
         long rawByteOffset = 0L;
 
         long[] batchLowers1 = new long[PcoTansDecoder.BATCH_N];
@@ -93,7 +96,7 @@ public final class PcoEncodingDecoder implements EncodingDecoder {
 
         for (int c = 0; c < nChunks; c++) {
             PcoChunkInfo chunkInfo = meta.chunks().get(c);
-            MemorySegment chunkMetaBuf = ctx.buffer(bufIdx++);
+            MemorySegment chunkMetaBuf = ctx.buffer(c); // chunk metas at indices 0..nChunks-1
             PcoChunkMeta chunkMeta = readChunkMeta(chunkMetaBuf, dtypeSize);
 
             int mode = chunkMeta.mode();
@@ -110,7 +113,7 @@ public final class PcoEncodingDecoder implements EncodingDecoder {
                         chunkMeta.ansSizeLog(), chunkMeta.bins());
                 for (int p = 0; p < chunkInfo.pages().size(); p++) {
                     int pageN = chunkInfo.pages().get(p).n_values();
-                    MemorySegment pageBuf = ctx.buffer(bufIdx++);
+                    MemorySegment pageBuf = ctx.buffer(pageBufIdx++);
                     rawByteOffset = decodeConv1Page(
                             primaryTans, chunkMeta.ansSizeLog(),
                             chunkMeta.conv1Weights().length,
@@ -135,7 +138,7 @@ public final class PcoEncodingDecoder implements EncodingDecoder {
                 long mask = typeMask(dtypeSize);
                 for (int p = 0; p < chunkInfo.pages().size(); p++) {
                     int pageN = chunkInfo.pages().get(p).n_values();
-                    MemorySegment pageBuf = ctx.buffer(bufIdx++);
+                    MemorySegment pageBuf = ctx.buffer(pageBufIdx++);
                     rawByteOffset = decodeLookbackPage(
                             deltaTans, chunkMeta.deltaAnsSizeLog(),
                             primaryTans, chunkMeta.ansSizeLog(),
@@ -150,7 +153,7 @@ public final class PcoEncodingDecoder implements EncodingDecoder {
                 PcoTansDecoder tans = PcoTansDecoder.build(chunkMeta.ansSizeLog(), chunkMeta.bins());
                 for (int p = 0; p < chunkInfo.pages().size(); p++) {
                     int pageN = chunkInfo.pages().get(p).n_values();
-                    MemorySegment pageBuf = ctx.buffer(bufIdx++);
+                    MemorySegment pageBuf = ctx.buffer(pageBufIdx++);
                     rawByteOffset = decodeClassicPage(tans, chunkMeta.ansSizeLog(),
                             chunkMeta.deltaOrder(), primaryDtypeSize,
                             pageBuf, pageN, rawLatents, rawByteOffset,
@@ -172,7 +175,7 @@ public final class PcoEncodingDecoder implements EncodingDecoder {
                 long adjByteOffset = 0L;
                 for (int p = 0; p < chunkInfo.pages().size(); p++) {
                     int pageN = chunkInfo.pages().get(p).n_values();
-                    MemorySegment pageBuf = ctx.buffer(bufIdx++);
+                    MemorySegment pageBuf = ctx.buffer(pageBufIdx++);
                     decodeIntMultPage(primaryTans, primaryAnsSizeLog, deltaOrder,
                             secondaryTans, secondaryAnsSizeLog, secondaryDeltaOrder,
                             dtypeSize, pageBuf, pageN,
