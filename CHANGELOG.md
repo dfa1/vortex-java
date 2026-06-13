@@ -62,6 +62,10 @@ decode utilities to `reader.decode` — a writer process now pulls in only `writ
   + `decodeAll` boilerplate. (e5cefb0)
 - **ExtEncoding storage cascade-compress** — storage child goes through the cascading
   compressor (`FoR` / `Bitpacked` / `ALP` / `RLE` / etc.) instead of bare `Primitive`. (33cf42e)
+- **Java → Rust nullable extension integration tests** — `javaWriter_rustReader_nullable_date`,
+  `_nullable_time`, `_nullable_timestamp` validate the `MaskedEncoding → ExtEncoding → primitive`
+  layout survives the cross-compat boundary. UUID variant is `@Disabled` pending a vortex-jni
+  upgrade (vortex-jni 0.74.0 `DType.to_arrow_schema()` does not support `vortex.uuid`). (bb7fcb07)
 
 ### Breaking
 
@@ -88,6 +92,11 @@ decode utilities to `reader.decode` — a writer process now pulls in only `writ
   to `io.github.dfa1.vortex.writer.encode`. (d514435)
 - **Reader unwrap path removed** — `ExtEncoding` wraps + unwraps the storage child
   uniformly; the previous one-off unwrap shortcut in the registry is gone. (4d4ab34, 75d7b4b)
+- **`ArrayNode.stats()` removed** — `KnownArrayNode` and `UnknownArrayNode` no longer
+  carry an `ArrayStats` field; `ArrayNode.of()` drops its `stats` parameter. Stats were
+  populated in `FlatSegmentDecoder` but never consumed by any decoder — the inspector
+  reads stats independently via `InspectorTree.peekFlatRoot`. Callers that passed
+  `ArrayStats.empty()` or `null` to `ArrayNode.of()` drop the argument. (dc3aa00f)
 
 ### Changed
 
@@ -137,7 +146,7 @@ verified by the full integration suite:
 - `RustJavaReaderComparisonIntegrationTest` (25 tests) — both readers, same file
 - `ParquetImportIntegrationTest` (5 tests) — round-trip through ParquetImporter
 
-All 872 unit + 243 integration tests pass on JDK 25.
+All 1046 unit + 248 integration tests pass on JDK 25 (2 skipped: UUID cross-compat blocked on vortex-jni 0.74.0).
 
 ### Performance
 
