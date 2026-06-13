@@ -108,7 +108,7 @@ class ZstdEncodingEncoderTest {
                 bufIndices[i + 1] = i + 1;
             }
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ZSTD, ByteBuffer.wrap(meta),
-                    new ArrayNode[0], bufIndices, null);
+                    new ArrayNode[0], bufIndices);
             return new DecodeContext(node, dtype, n, segments, ReadRegistry.empty(), Arena.ofAuto());
         }
 
@@ -129,7 +129,7 @@ class ZstdEncodingEncoderTest {
 
             ArrayNode validityNode = toArrayNode(remappedValidity);
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ZSTD, ByteBuffer.wrap(meta),
-                    new ArrayNode[]{validityNode}, bufIndices, null);
+                    new ArrayNode[]{validityNode}, bufIndices);
 
             ReadRegistry registry = TestRegistry.ofDecoders(new BoolEncodingDecoder());
 
@@ -142,7 +142,7 @@ class ZstdEncodingEncoderTest {
             for (int i = 0; i < children.length; i++) {
                 children[i] = toArrayNode(enc.children()[i]);
             }
-            return ArrayNode.of(enc.encodingId(), enc.metadata(), children, enc.bufferIndices(), null);
+            return ArrayNode.of(enc.encodingId(), enc.metadata(), children, enc.bufferIndices());
         }
 
         private static byte[] compress(byte[] input) {
@@ -260,7 +260,7 @@ class ZstdEncodingEncoderTest {
 
         @Test
         void decode_missingMetadata_throwsVortexException() {
-            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ZSTD, null, new ArrayNode[0], new int[0], null);
+            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ZSTD, null, new ArrayNode[0], new int[0]);
             DecodeContext ctx = new DecodeContext(node, DTypes.I32, 0, new MemorySegment[0],
                     ReadRegistry.empty(), Arena.ofAuto());
 

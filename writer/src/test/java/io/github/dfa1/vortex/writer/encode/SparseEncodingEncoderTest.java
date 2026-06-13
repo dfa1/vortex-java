@@ -54,11 +54,11 @@ class SparseEncodingEncoderTest {
             MemorySegment[] segments = bufs.toArray(new MemorySegment[0]);
 
             ArrayNode idxNode = ArrayNode.of(root.children()[0].encodingId(), null,
-                    new ArrayNode[0], root.children()[0].bufferIndices(), ArrayStats.empty());
+                    new ArrayNode[0], root.children()[0].bufferIndices());
             ArrayNode valNode = ArrayNode.of(root.children()[1].encodingId(), null,
-                    new ArrayNode[0], root.children()[1].bufferIndices(), ArrayStats.empty());
+                    new ArrayNode[0], root.children()[1].bufferIndices());
             ArrayNode sparseNode = ArrayNode.of(root.encodingId(), root.metadata(),
-                    new ArrayNode[]{idxNode, valNode}, root.bufferIndices(), ArrayStats.empty());
+                    new ArrayNode[]{idxNode, valNode}, root.bufferIndices());
 
             DecodeContext ctx = new DecodeContext(sparseNode, dtype, n, segments, REGISTRY, Arena.global());
             return DECODER.decode(ctx);
@@ -154,13 +154,13 @@ class SparseEncodingEncoderTest {
         private static DecodeContext buildCtx(DType dtype, long rowCount,
                 byte[] fillBytes, byte[] metaBytes, byte[] idxBuf, byte[] valBuf) {
             ArrayNode idxNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
-                    new ArrayNode[0], new int[]{1}, ArrayStats.empty());
+                    new ArrayNode[0], new int[]{1});
             ArrayNode valNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
-                    new ArrayNode[0], new int[]{2}, ArrayStats.empty());
+                    new ArrayNode[0], new int[]{2});
             ArrayNode sparseNode = ArrayNode.of(EncodingId.VORTEX_SPARSE,
                     ByteBuffer.wrap(metaBytes),
                     new ArrayNode[]{idxNode, valNode},
-                    new int[]{0}, ArrayStats.empty());
+                    new int[]{0});
 
             MemorySegment[] segments = {
                     MemorySegment.ofArray(fillBytes),
@@ -300,15 +300,15 @@ class SparseEncodingEncoderTest {
             byte[] varBinMeta = new VarBinMetadata(io.github.dfa1.vortex.proto.PType.fromValue(PType.I32.ordinal())).encode();
 
             ArrayNode offsetsNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
-                    new ArrayNode[0], new int[]{3}, ArrayStats.empty());
+                    new ArrayNode[0], new int[]{3});
             ArrayNode valNode = ArrayNode.of(EncodingId.VORTEX_VARBIN,
                     ByteBuffer.wrap(varBinMeta),
-                    new ArrayNode[]{offsetsNode}, new int[]{2}, ArrayStats.empty());
+                    new ArrayNode[]{offsetsNode}, new int[]{2});
             ArrayNode idxNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
-                    new ArrayNode[0], new int[]{1}, ArrayStats.empty());
+                    new ArrayNode[0], new int[]{1});
             ArrayNode sparseNode = ArrayNode.of(EncodingId.VORTEX_SPARSE,
                     ByteBuffer.wrap(meta),
-                    new ArrayNode[]{idxNode, valNode}, new int[]{0}, ArrayStats.empty());
+                    new ArrayNode[]{idxNode, valNode}, new int[]{0});
 
             ReadRegistry registry = TestRegistry.ofDecoders(DECODER, new PrimitiveEncodingDecoder(), new VarBinEncodingDecoder());
 
@@ -340,12 +340,12 @@ class SparseEncodingEncoderTest {
             byte[] boolBits = new byte[]{0b00000011};
 
             ArrayNode valNode = ArrayNode.of(EncodingId.VORTEX_BOOL, null,
-                    new ArrayNode[0], new int[]{2}, ArrayStats.empty());
+                    new ArrayNode[0], new int[]{2});
             ArrayNode idxNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
-                    new ArrayNode[0], new int[]{1}, ArrayStats.empty());
+                    new ArrayNode[0], new int[]{1});
             ArrayNode sparseNode = ArrayNode.of(EncodingId.VORTEX_SPARSE,
                     ByteBuffer.wrap(meta),
-                    new ArrayNode[]{idxNode, valNode}, new int[]{0}, ArrayStats.empty());
+                    new ArrayNode[]{idxNode, valNode}, new int[]{0});
 
             ReadRegistry registry = TestRegistry.ofDecoders(DECODER, new PrimitiveEncodingDecoder(), new BoolEncodingDecoder());
 

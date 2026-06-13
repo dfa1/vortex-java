@@ -24,6 +24,11 @@
 		</dependency>
 		<!-- testing -->
 		<dependency>
+			<groupId>io.airlift</groupId>
+			<artifactId>aircompressor-v3</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
 			<groupId>org.junit.jupiter</groupId>
 			<artifactId>junit-jupiter</artifactId>
 			<scope>test</scope>
