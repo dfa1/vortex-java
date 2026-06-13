@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -57,10 +56,10 @@ class FrameOfReferenceEncodingEncoderTest {
             }
 
             ArrayNode childNode = ArrayNode.of(
-                    EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0}, ArrayStats.empty());
+                    EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
             ArrayNode forNode = ArrayNode.of(
                     EncodingId.FASTLANES_FOR, ByteBuffer.wrap(metaBytes),
-                    new ArrayNode[]{childNode}, new int[0], ArrayStats.empty());
+                    new ArrayNode[]{childNode}, new int[0]);
 
             MemorySegment[] segments = {MemorySegment.ofArray(childBytes)};
             return new DecodeContext(forNode, dtype, residuals.length, segments, REGISTRY, java.lang.foreign.Arena.global());
@@ -133,12 +132,12 @@ class FrameOfReferenceEncodingEncoderTest {
             }
 
             ArrayNode validityNode = ArrayNode.of(
-                    EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{1}, ArrayStats.empty());
+                    EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{1});
             ArrayNode primNode = ArrayNode.of(
-                    EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[]{validityNode}, new int[]{0}, ArrayStats.empty());
+                    EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[]{validityNode}, new int[]{0});
             byte[] metaBytes = ScalarValue.ofInt64Value(reference).encode();
             ArrayNode forNode = ArrayNode.of(
-                    EncodingId.FASTLANES_FOR, ByteBuffer.wrap(metaBytes), new ArrayNode[]{primNode}, new int[0], ArrayStats.empty());
+                    EncodingId.FASTLANES_FOR, ByteBuffer.wrap(metaBytes), new ArrayNode[]{primNode}, new int[0]);
 
             ReadRegistry registry = TestRegistry.ofDecoders(
                     new FrameOfReferenceEncodingDecoder(), new PrimitiveEncodingDecoder(), new BoolEncodingDecoder());

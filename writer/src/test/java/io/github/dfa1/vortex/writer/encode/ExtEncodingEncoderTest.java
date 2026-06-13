@@ -72,7 +72,7 @@ class ExtEncodingEncoderTest {
             for (int i = 0; i < children.length; i++) {
                 children[i] = encodeNodeToArrayNode(n.children()[i]);
             }
-            return ArrayNode.of(n.encodingId(), n.metadata(), children, n.bufferIndices(), null);
+            return ArrayNode.of(n.encodingId(), n.metadata(), children, n.bufferIndices());
         }
     }
 
@@ -119,8 +119,8 @@ class ExtEncodingEncoderTest {
             DType storageDType = new DType.Primitive(PType.I64, false);
             DType extDType = new DType.Extension("vortex.timestamp", storageDType, null, false);
 
-            ArrayNode primitiveNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0}, null);
-            ArrayNode extNode = ArrayNode.of(EncodingId.VORTEX_EXT, null, new ArrayNode[]{primitiveNode}, new int[0], null);
+            ArrayNode primitiveNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
+            ArrayNode extNode = ArrayNode.of(EncodingId.VORTEX_EXT, null, new ArrayNode[]{primitiveNode}, new int[0]);
 
             DecodeContext ctx = new DecodeContext(
                     extNode, extDType, values.length, new MemorySegment[]{buf}, REGISTRY, Arena.ofAuto());

@@ -56,7 +56,7 @@ class VarBinViewEncodingEncoderTest {
             MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
             ArrayNode node = ArrayNode.of(
                     EncodingId.VORTEX_VARBINVIEW, null, new ArrayNode[0],
-                    result.rootNode().bufferIndices(), null);
+                    result.rootNode().bufferIndices());
             DecodeContext ctx = new DecodeContext(node, DTypes.UTF8, values.length, bufs, REGISTRY, arena);
             var decoded = (VarBinArray) DECODER.decode(ctx);
 
@@ -136,7 +136,7 @@ class VarBinViewEncodingEncoderTest {
             }
 
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_VARBINVIEW, null,
-                    new ArrayNode[0], bufIndices, null);
+                    new ArrayNode[0], bufIndices);
 
             DecodeContext ctx = new DecodeContext(node, DTypes.UTF8, n, segBufs, REGISTRY, arena);
 

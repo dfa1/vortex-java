@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ArraySegments;
@@ -39,7 +38,7 @@ class StructEncodingEncoderTest {
         for (int i = 0; i < children.length; i++) {
             children[i] = toArrayNode(node.children()[i]);
         }
-        return ArrayNode.of(node.encodingId(), node.metadata(), children, node.bufferIndices(), ArrayStats.empty());
+        return ArrayNode.of(node.encodingId(), node.metadata(), children, node.bufferIndices());
     }
 
     @Nested
@@ -106,12 +105,12 @@ class StructEncodingEncoderTest {
 
         private static ArrayNode primitiveNode(int bufferIdx) {
             return ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0],
-                    new int[]{bufferIdx}, ArrayStats.empty());
+                    new int[]{bufferIdx});
         }
 
         private static ArrayNode boolNode(int bufferIdx) {
             return ArrayNode.of(EncodingId.VORTEX_BOOL, null, new ArrayNode[0],
-                    new int[]{bufferIdx}, ArrayStats.empty());
+                    new int[]{bufferIdx});
         }
 
         @Test
@@ -120,7 +119,7 @@ class StructEncodingEncoderTest {
             MemorySegment seg = TestSegments.leLongs(data);
             ArrayNode valuesNode = primitiveNode(0);
             ArrayNode structNode = ArrayNode.of(EncodingId.VORTEX_STRUCT, null,
-                    new ArrayNode[]{valuesNode}, new int[0], ArrayStats.empty());
+                    new ArrayNode[]{valuesNode}, new int[0]);
 
             DecodeContext ctx = new DecodeContext(structNode, DTypes.I64, data.length,
                     new MemorySegment[]{seg}, REGISTRY, Arena.global());
@@ -141,7 +140,7 @@ class StructEncodingEncoderTest {
             ArrayNode validityNode = boolNode(0);
             ArrayNode valuesNode = primitiveNode(1);
             ArrayNode structNode = ArrayNode.of(EncodingId.VORTEX_STRUCT, null,
-                    new ArrayNode[]{validityNode, valuesNode}, new int[0], ArrayStats.empty());
+                    new ArrayNode[]{validityNode, valuesNode}, new int[0]);
 
             ReadRegistry registry = TestRegistry.ofDecoders(DECODER, new PrimitiveEncodingDecoder(), new BoolEncodingDecoder());
             DecodeContext ctx = new DecodeContext(

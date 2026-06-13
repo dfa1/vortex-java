@@ -119,7 +119,7 @@ class VarBinEncodingEncoderTest {
 
         @Test
         void decode_missingMetadata_throwsVortexException() {
-            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_VARBIN, null, new ArrayNode[0], new int[0], null);
+            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_VARBIN, null, new ArrayNode[0], new int[0]);
             DecodeContext ctx = new DecodeContext(node, DTypes.UTF8, 3, new MemorySegment[0],
                     ReadRegistry.empty(), Arena.ofAuto());
             assertThatThrownBy(() -> DECODER.decode(ctx))

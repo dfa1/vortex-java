@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -43,7 +42,7 @@ class RleEncodingEncoderTest {
         for (int i = 0; i < children.length; i++) {
             children[i] = toArrayNode(enc.children()[i]);
         }
-        return new KnownArrayNode(enc.encodingId(), enc.metadata(), children, enc.bufferIndices(), ArrayStats.empty());
+        return new KnownArrayNode(enc.encodingId(), enc.metadata(), children, enc.bufferIndices());
     }
 
     @Nested
@@ -219,14 +218,14 @@ class RleEncodingEncoderTest {
             KnownArrayNode origRoot = toArrayNode(encoded.rootNode());
             KnownArrayNode origIndices = (KnownArrayNode) origRoot.children()[1];
             ArrayNode validityNode = ArrayNode.of(
-                    EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{3}, ArrayStats.empty());
+                    EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{3});
             ArrayNode nullableIndices = ArrayNode.of(
                     origIndices.encodingId(), origIndices.metadata(),
-                    new ArrayNode[]{validityNode}, origIndices.bufferIndices(), ArrayStats.empty());
+                    new ArrayNode[]{validityNode}, origIndices.bufferIndices());
             ArrayNode root = ArrayNode.of(
                     origRoot.encodingId(), origRoot.metadata(),
                     new ArrayNode[]{origRoot.children()[0], nullableIndices, origRoot.children()[2]},
-                    origRoot.bufferIndices(), ArrayStats.empty());
+                    origRoot.bufferIndices());
 
             ReadRegistry reg = TestRegistry.ofDecoders(DECODER, new PrimitiveEncodingDecoder(), new BoolEncodingDecoder());
             DecodeContext ctx = new DecodeContext(root, dtype, data.length, segments, reg, Arena.ofAuto());

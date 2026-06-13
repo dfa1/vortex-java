@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.array.GenericArray;
@@ -52,7 +51,7 @@ class DateTimePartsEncodingEncoderTest {
         for (int i = 0; i < children.length; i++) {
             children[i] = toArrayNode(node.children()[i]);
         }
-        return ArrayNode.of(node.encodingId(), node.metadata(), children, node.bufferIndices(), ArrayStats.empty());
+        return ArrayNode.of(node.encodingId(), node.metadata(), children, node.bufferIndices());
     }
 
     @Nested

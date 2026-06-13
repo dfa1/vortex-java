@@ -44,7 +44,7 @@ class FsstEncodingEncoderTest {
             for (int i = 0; i < children.length; i++) {
                 children[i] = toArrayNode(node.children()[i]);
             }
-            return ArrayNode.of(node.encodingId(), node.metadata(), children, node.bufferIndices(), null);
+            return ArrayNode.of(node.encodingId(), node.metadata(), children, node.bufferIndices());
         }
 
         static Stream<Arguments> stringArrays() {
@@ -140,12 +140,12 @@ class FsstEncodingEncoderTest {
             byte[] metaBytes = new FSSTMetadata(io.github.dfa1.vortex.proto.PType.fromValue(PType.I32.ordinal()), io.github.dfa1.vortex.proto.PType.fromValue(PType.I32.ordinal())).encode();
 
             ArrayNode uncompLensNode = ArrayNode.of(
-                    EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{3}, null);
+                    EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{3});
             ArrayNode codesOffNode = ArrayNode.of(
-                    EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{4}, null);
+                    EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{4});
             ArrayNode root = ArrayNode.of(
                     EncodingId.VORTEX_FSST, ByteBuffer.wrap(metaBytes),
-                    new ArrayNode[]{uncompLensNode, codesOffNode}, new int[]{0, 1, 2}, null);
+                    new ArrayNode[]{uncompLensNode, codesOffNode}, new int[]{0, 1, 2});
 
             return new DecodeContext(root, DTypes.UTF8, n, segs, REGISTRY, arena);
         }
@@ -195,7 +195,7 @@ class FsstEncodingEncoderTest {
 
         @Test
         void decode_missingMetadata_throwsVortexException() {
-            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_FSST, null, new ArrayNode[0], new int[0], null);
+            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_FSST, null, new ArrayNode[0], new int[0]);
             DecodeContext ctx = new DecodeContext(node, DTypes.UTF8, 0, new MemorySegment[0], REGISTRY, Arena.ofAuto());
             assertThatThrownBy(() -> DECODER.decode(ctx)).isInstanceOf(VortexException.class);
         }

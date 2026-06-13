@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -130,9 +129,9 @@ class PrimitiveEncodingEncoderTest {
             MemorySegment validitySeg = MemorySegment.ofArray(new byte[]{0x05});
 
             ArrayNode validityNode = ArrayNode.of(
-                    EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{1}, ArrayStats.empty());
+                    EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{1});
             ArrayNode primNode = ArrayNode.of(
-                    EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[]{validityNode}, new int[]{0}, ArrayStats.empty());
+                    EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[]{validityNode}, new int[]{0});
 
             ReadRegistry registry = TestRegistry.ofDecoders(new PrimitiveEncodingDecoder(), new BoolEncodingDecoder());
 
@@ -162,7 +161,7 @@ class PrimitiveEncodingEncoderTest {
             MemorySegment valuesSeg = TestSegments.leInts(raw);
 
             ArrayNode primNode = ArrayNode.of(
-                    EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0}, ArrayStats.empty());
+                    EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
 
             DType dtype = new DType.Primitive(PType.I32, false);
             DecodeContext ctx = new DecodeContext(

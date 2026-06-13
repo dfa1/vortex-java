@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -48,13 +47,13 @@ class RunEndEncodingEncoderTest {
             byte[] valBuf = toLEBytes(values, PType.I64);
 
             ArrayNode endsNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
-                    new ArrayNode[0], new int[]{0}, ArrayStats.empty());
+                    new ArrayNode[0], new int[]{0});
             ArrayNode valsNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
-                    new ArrayNode[0], new int[]{1}, ArrayStats.empty());
+                    new ArrayNode[0], new int[]{1});
             ArrayNode reNode = ArrayNode.of(EncodingId.VORTEX_RUNEND,
                     ByteBuffer.wrap(metaBytes),
                     new ArrayNode[]{endsNode, valsNode},
-                    new int[0], ArrayStats.empty());
+                    new int[0]);
 
             MemorySegment[] segments = {
                     MemorySegment.ofArray(endsBuf),

@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.reader.array.FixedSizeListArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
@@ -33,7 +32,7 @@ class FixedSizeListEncodingEncoderTest {
         for (int i = 0; i < children.length; i++) {
             children[i] = toArrayNode(node.children()[i]);
         }
-        return ArrayNode.of(node.encodingId(), node.metadata(), children, node.bufferIndices(), ArrayStats.empty());
+        return ArrayNode.of(node.encodingId(), node.metadata(), children, node.bufferIndices());
     }
 
     @Nested
@@ -111,7 +110,7 @@ class FixedSizeListEncodingEncoderTest {
         @Test
         void decode_wrongDtype_throws() {
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_FIXED_SIZE_LIST, null,
-                    new ArrayNode[0], new int[0], ArrayStats.empty());
+                    new ArrayNode[0], new int[0]);
             DecodeContext ctx = new DecodeContext(node, DTypes.I32, 0, new MemorySegment[0], REGISTRY, Arena.global());
 
             assertThatThrownBy(() -> DECODER.decode(ctx))

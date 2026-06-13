@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.ListViewArray;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
@@ -34,7 +33,7 @@ class ListViewEncodingEncoderTest {
         for (int i = 0; i < children.length; i++) {
             children[i] = toArrayNode(node.children()[i]);
         }
-        return ArrayNode.of(node.encodingId(), node.metadata(), children, node.bufferIndices(), ArrayStats.empty());
+        return ArrayNode.of(node.encodingId(), node.metadata(), children, node.bufferIndices());
     }
 
     @Nested
@@ -136,7 +135,7 @@ class ListViewEncodingEncoderTest {
         @Test
         void decode_wrongDtype_throws() {
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_LISTVIEW, null,
-                    new ArrayNode[0], new int[0], ArrayStats.empty());
+                    new ArrayNode[0], new int[0]);
             DecodeContext ctx = TestDecodeContexts.of(node, DTypes.I32).registry(REGISTRY).build();
 
             assertThatThrownBy(() -> DECODER.decode(ctx)).hasMessageContaining("DType.List");
@@ -145,10 +144,10 @@ class ListViewEncodingEncoderTest {
         @Test
         void decode_wrongChildCount_throws() {
             ArrayNode child = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
-                    new ArrayNode[0], new int[0], ArrayStats.empty());
+                    new ArrayNode[0], new int[0]);
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_LISTVIEW,
                     java.nio.ByteBuffer.wrap(new byte[0]),
-                    new ArrayNode[]{child}, new int[0], ArrayStats.empty());
+                    new ArrayNode[]{child}, new int[0]);
             DecodeContext ctx = TestDecodeContexts.of(node, DTypes.LIST_I32).registry(REGISTRY).build();
 
             assertThatThrownBy(() -> DECODER.decode(ctx)).hasMessageContaining("expected 3 or 4 children");
