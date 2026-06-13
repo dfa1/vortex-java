@@ -5,7 +5,7 @@ All notable changes to **vortex-java** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.6.0] — Unreleased
+## [0.6.0] — 2026-06-13
 
 **proto-rewrite** (`protobuf-java` → in-tree MemorySegment-native codec, CLI −14%),
 **Extension API split** (`ExtensionDecoder` / `ExtensionEncoder` SPI, writer auto-route, UUID + nullable support, JDBC extension import),
@@ -73,7 +73,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Compatibility doc bumped to Rust reference v0.74.0 ([cf73887](https://github.com/dfa1/vortex-java/commit/cf73887))
 
-[0.6.0]: https://github.com/dfa1/vortex-java/compare/v0.5.0...main
+[0.6.0]: https://github.com/dfa1/vortex-java/compare/v0.5.0...v0.6.0
 
 ## [0.5.0] — 2026-06-09
 
