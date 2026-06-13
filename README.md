@@ -7,12 +7,18 @@
 Pure-Java reader/writer for the [Vortex](https://github.com/vortex-data/vortex) columnar file format.
 100% Java, no JNI, no `sun.misc.Unsafe`. Uses the FFM API (`MemorySegment`/`Arena`, Java 25+)
 for zero-copy memory-mapped reads.
+This has good performance out of the box, without using native dependencies.
+JMH read throughput vs the Rust JNI reference implementation.
+10 M rows of OHLC trade data, single-column projection, Apple M5, Zulu JDK 25.0.2.
 
-| Project                                                             | Language | Notes                                   |
-|---------------------------------------------------------------------|----------|-----------------------------------------|
-| [vortex-data/vortex](https://github.com/vortex-data/vortex)         | Rust     | Reference implementation + JNI bindings |
-| [LaurieRhodes/vortex-go](https://github.com/LaurieRhodes/vortex-go) | Go       | Pure-language port                      |
-| **dfa1/vortex-java**                                                | **Java** | **This library**                        |
+| Column | Type | Java (ops/s) | JNI/Rust (ops/s) | Speedup |
+|--------|------|-------------|-----------------|---------|
+| volume | I64 / bitpacked | 118.0 | 51.3 | **2.3×** |
+| close  | F64 / ALP       | 69.2  | 50.6 | **1.4×** |
+| symbol | Utf8 / varbin   | 106.5 | 9.8  | **10.9×** |
+
+ops/s = complete file scans per second; higher is better.
+Measured 2026-06-13, commit `fea3aa29`. See [docs/explanation.md](docs/explanation.md#benchmarks) for full tables and methodology.
 
 ## Who is this for
 
@@ -70,19 +76,13 @@ Docs follow the [Diátaxis](https://diataxis.fr/) framework.
 | [docs/compatibility.md](docs/compatibility.md) | Reference   | Encoding support table, S3 fixture status                               |
 | [docs/explanation.md](docs/explanation.md)     | Explanation | Design rationale, memory model, testing strategy, benchmarks            |
 
-## Performance
+## Vortex implementations
 
-JMH read throughput vs the Rust JNI reference implementation.
-10 M rows of OHLC trade data, single-column projection, Apple M5, Zulu JDK 25.0.2.
-
-| Column | Type | Java (ops/s) | JNI/Rust (ops/s) | Speedup |
-|--------|------|-------------|-----------------|---------|
-| volume | I64 / bitpacked | 118.0 | 51.3 | **2.3×** |
-| close  | F64 / ALP       | 69.2  | 50.6 | **1.4×** |
-| symbol | Utf8 / varbin   | 106.5 | 9.8  | **10.9×** |
-
-ops/s = complete file scans per second; higher is better.
-Measured 2026-06-13, commit `fea3aa29`. See [docs/explanation.md](docs/explanation.md#benchmarks) for full tables and methodology.
+| Project                                                             | Language | Notes                                   |
+|---------------------------------------------------------------------|----------|-----------------------------------------|
+| [vortex-data/vortex](https://github.com/vortex-data/vortex)         | Rust     | Reference implementation + JNI bindings |
+| [LaurieRhodes/vortex-go](https://github.com/LaurieRhodes/vortex-go) | Go       | Pure-language port                      |
+| **dfa1/vortex-java**                                                | **Java** | **This library**                        |
 
 ## Contributing
 
