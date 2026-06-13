@@ -3,6 +3,7 @@
 ## Project
 
 - [ ] Move project to a dedicated organization
+- [ ] Review documentation for new joiners
 - [ ] Create website
    - build something like hardwood.dev but for vortex files
 - [ ] **Benchmark publishing** — drop CI workflow, add `bench-publish` script; see [ADR-0006](docs/adr/0006-benchmark-publishing.md).
@@ -73,22 +74,11 @@ Per-encoding gotchas:
 - [ ] **OSS-Fuzz submission** — Jazzer is a first-class OSS-Fuzz engine; submit the project
   once the corpus + targets stabilise. Free continuous fuzzing.
 
-### Process
-
-- [ ] **Error messages — structural sanitization of `VortexException`** —
-  see [ADR-0003](docs/adr/0003-vortex-exception-sanitization.md) for design and phasing.
-
 ## Build
 
 - [ ] switch back to module-path, but keep in mind these 2 blockers:
 -    [ ] 'dfa1' in package name is rejected by maven central
 -    [ ] automatic module names for flatbuffers is rejected by maven central
-
-## Documentation
-
-- [ ] Format specification: byte-exact diagrams for file layout and each encoding, with annotated examples (Arrow spec
-  style)
-- [ ] Review documentation for new joiners
 
 ## Tooling
 
@@ -102,6 +92,8 @@ Per-encoding gotchas:
 
 ## API
 
+- [ ] **Error messages — structural sanitization of `VortexException`** —
+  see [ADR-0003](docs/adr/0003-vortex-exception-sanitization.md) for design and phasing.
 - [ ] Use domain primitives (`UInt32`, `UInt64`, etc.) as value classes via Project Valhalla instead of raw `long`/`int`
     - See https://dfa1.github.io/articles/rethink-domain-primitives-with-valhalla
     - Candidates: `PType` integer kinds, buffer offsets, row indices, byte lengths
