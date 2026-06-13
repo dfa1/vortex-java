@@ -17,6 +17,13 @@
 
 	<dependencyManagement>
 		<dependencies>
+			<!-- optional transitive deps: consumers who use vortex.zstd must declare
+			     aircompressor explicitly; the BOM pins the tested version. -->
+			<dependency>
+				<groupId>io.airlift</groupId>
+				<artifactId>aircompressor-v3</artifactId>
+				<version>${aircompressor.version}</version>
+			</dependency>
 			<dependency>
 				<groupId>io.github.dfa1.vortex</groupId>
 				<artifactId>vortex-core</artifactId>
