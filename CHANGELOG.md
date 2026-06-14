@@ -7,18 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-06-14
+
+**pco encoder** (Classic + Consecutive delta + IntMult mode, 4-way tANS, multi-chunk, all 8 ptypes),
+**writer compression** (~93% Rust JNI parity on NYC Yellow Taxi: 47.0 MB → 43.4 MB; stratified sampling, stats-driven cascade, sparse-cascade idx/val children, patched bitpacking),
+**lazy decode** (ALP / FoR / ZigZag defer transform until access — ADR 0010),
+**write API ergonomics** (`DType` static factories, `structBuilder`, typed `writeChunk(Consumer<Chunk>)` — ADR 0009).
+
 ### Added
 
 - `vortex.pco` encoder (`PcoEncodingEncoder`) — Classic mode + Consecutive delta + IntMult mode (mode=1); 4-way interleaved tANS; histogram + bin-optimization DP; multi-chunk (64K-element chunks); all 8 supported ptypes (I16/U16/I32/U32/F32/I64/U64/F64) ([1bb14ab](https://github.com/dfa1/vortex-java/commit/1bb14ab), [086aa52](https://github.com/dfa1/vortex-java/commit/086aa52), [30579ed](https://github.com/dfa1/vortex-java/commit/30579ed), [7219974](https://github.com/dfa1/vortex-java/commit/7219974), [f856559](https://github.com/dfa1/vortex-java/commit/f856559))
 - `LeBitWriter` — LSB-first bit writer, symmetric to `LeBitReader`; reusable for future bit-oriented encoders ([1bb14ab](https://github.com/dfa1/vortex-java/commit/1bb14ab))
-- ADR 0009 — write API ergonomics (DType factories, `structBuilder`, typed `Chunk` builder, `MemorySegment` zero-copy overload) ([d9c4b99](https://github.com/dfa1/vortex-java/commit/d9c4b99), [a57ea70](https://github.com/dfa1/vortex-java/commit/a57ea70))
-- Writer compression closes ~93% of the Java↔Rust file-size gap on NYC Yellow Taxi 2024-01 (2.96M rows, 19 cols): **47.0 MB → 43.4 MB**; Rust JNI baseline 42.8 MB. Five coordinated changes ported from `vortex-compressor`:
+- ADR 0009 — write API ergonomics: `DType` static factories + `asNullable()` ([0e9d6703](https://github.com/dfa1/vortex-java/commit/0e9d6703)), `DType.structBuilder()` ([63d66eef](https://github.com/dfa1/vortex-java/commit/63d66eef)), typed `writeChunk(Consumer<Chunk>)` builder ([ddb3e21a](https://github.com/dfa1/vortex-java/commit/ddb3e21a)); design doc ([d9c4b99](https://github.com/dfa1/vortex-java/commit/d9c4b99), [a57ea70](https://github.com/dfa1/vortex-java/commit/a57ea70)); `MemorySegment` zero-copy overload split to ADR 0011 ([6367eb37](https://github.com/dfa1/vortex-java/commit/6367eb37))
+- ADR 0010 — lazy decode for 1:1 transform encodings: `LazyAlpFloatArray`, lazy `FoR` / `ZigZag` arrays defer the transform until first element access ([cff3acb5](https://github.com/dfa1/vortex-java/commit/cff3acb5), [c47c055c](https://github.com/dfa1/vortex-java/commit/c47c055c), [c3ca6951](https://github.com/dfa1/vortex-java/commit/c3ca6951))
+- Writer compression closes ~93% of the Java↔Rust file-size gap on NYC Yellow Taxi 2024-01 (2.96M rows, 19 cols): **47.0 MB → 43.4 MB**; Rust JNI baseline 42.8 MB. Four coordinated changes ported from `vortex-compressor`:
   - Global dictionary encoding admitted for F64 columns. Codes assigned in frequency-descending order so the dominant value maps to code 0, which lets `SparseEncodingEncoder` (fill = 0) compress the codes child. Mirrors Rust `FloatDictScheme`. Also: `FrameOfReferenceEncodingEncoder` skips cascade when `ref == 0` and ptype is unsigned (residuals == input, FoR adds wrapper overhead for zero benefit) ([01fbaa6](https://github.com/dfa1/vortex-java/commit/01fbaa6))
   - Stratified sampling in `CascadingCompressor`: 32 contiguous strides at evenly-partitioned, non-overlapping offsets. Preserves local run structure so `RunEnd`/`RLE` can win on dict codes while covering breadth so cardinality-based encoders see realistic distinct counts. Matches `vortex-compressor::sample::stratified_slices` ([715a697](https://github.com/dfa1/vortex-java/commit/715a697), [da16f0d](https://github.com/dfa1/vortex-java/commit/da16f0d))
   - Stats-driven cascade selection. Single-pass `ArrayStats` (distinct count, top-frequency value + count) shared across all eligible encoders via merged `StatsOptions`. New `Estimate` sealed hierarchy (`Skip` / `AlwaysUse` / `Ratio`) lets encoders short-circuit the cascade without paying the sample-encode cost. `ConstantEncodingEncoder.AlwaysUse` when distinct == 1; `DictEncodingEncoder.Skip` when distinct > n/2 (Rust `FloatDictScheme`/`IntDictScheme` rule); `SparseEncodingEncoder.Skip` unless dominant-value bits == 0 and `topFreq * 2 >= n`; `RunEndEncodingEncoder.Skip` when every value is distinct. Mirrors `vortex-compressor::estimate::EstimateVerdict` ([2e31265](https://github.com/dfa1/vortex-java/commit/2e31265))
   - `SparseEncodingEncoder.encodeCascade` exposes patch-index and patch-value buffers as `ChildSlot` entries so the cascade further bitpacks them — biggest single lever (~1.7 MB on dict-coded F64 columns: tolls_amount, Airport_fee, congestion_surcharge, mta_tax, RatecodeID, improvement_surcharge) ([2ad275c](https://github.com/dfa1/vortex-java/commit/2ad275c))
+- Patched bitpacking — `BitpackedEncodingEncoder` picks the best `bit_width` and stores overflow as sparse patches; on `trip_distance`-style columns Java is 1.8 MB ahead of Rust JNI ([007e6c47](https://github.com/dfa1/vortex-java/commit/007e6c47))
+- Per-chunk zone-map stats shown in the TUI inspector ([5e24fb62](https://github.com/dfa1/vortex-java/commit/5e24fb62))
+- Per-chunk column row-count consistency validation in the writer ([c54c8dab](https://github.com/dfa1/vortex-java/commit/c54c8dab))
 - `GlobalDictF64Test` — round-trip + dict cardinality + sparse-codes-child verification on dominant-F64 columns ([01fbaa6](https://github.com/dfa1/vortex-java/commit/01fbaa6))
 - `TaxiColumnByteDiff` — per-column byte attribution diagnostic. Walks the layout tree, prints Java vs JNI bytes side-by-side. Used to locate the sparse-cascade gap that the global file size hid ([2ad275c](https://github.com/dfa1/vortex-java/commit/2ad275c))
+- `TaxiCsvSize` diagnostic — reports CSV / CSV.gz sizes for the taxi corpus ([7f851557](https://github.com/dfa1/vortex-java/commit/7f851557), [5ba2ae30](https://github.com/dfa1/vortex-java/commit/5ba2ae30))
+- ADR 0008 — domain primitives and unsigned integer representation ([806f52f2](https://github.com/dfa1/vortex-java/commit/806f52f2))
+
+### Changed
+
+- Primitive `Array` types are non-sealed interfaces; `fold` / `forEach` are default methods ([aec4d813](https://github.com/dfa1/vortex-java/commit/aec4d813), [f500afe3](https://github.com/dfa1/vortex-java/commit/f500afe3))
+- `FoR` decode writes in-place when the source segment is writable; `applyReference` always allocates from the arena ([b1906a08](https://github.com/dfa1/vortex-java/commit/b1906a08), [9955a39f](https://github.com/dfa1/vortex-java/commit/9955a39f))
+- ALP eager fallback collapsed to a single allocate + transform pass ([e3a6c21a](https://github.com/dfa1/vortex-java/commit/e3a6c21a))
+- Arena lifted out of lazy array records into `ArraySegments.of` ([8d6fe4f0](https://github.com/dfa1/vortex-java/commit/8d6fe4f0))
+- OHLC read benchmarks re-run at 80M rows; `-Dvortex.bench.ohlc.rows` override added ([9b7fd61f](https://github.com/dfa1/vortex-java/commit/9b7fd61f))
+- `dev.vortex:vortex-jni` 0.74.0 → 0.75.0 ([2f55f1c1](https://github.com/dfa1/vortex-java/commit/2f55f1c1)); `hardwood-core` and `zstd-jni` bumped ([ff5fe4b3](https://github.com/dfa1/vortex-java/commit/ff5fe4b3), [2c885d3b](https://github.com/dfa1/vortex-java/commit/2c885d3b))
+
+### Fixed
+
+- CLI: terminal mode restored on TUI exit ([60cda920](https://github.com/dfa1/vortex-java/commit/60cda920))
+- CLI: `aircompressor` bundled in the uber-jar so the zstd decoder loads ([e96c5968](https://github.com/dfa1/vortex-java/commit/e96c5968))
 
 ### Notes
 
