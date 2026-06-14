@@ -214,6 +214,22 @@ public final class VortexWriter implements Closeable {
                 List.copyOf(registry.encoderMap().values()));
     }
 
+    /// Counts rows for the length-consistency check in {@link #writeChunk}. Accepts the
+    /// same shapes the writer takes plus pre-conversion {@link java.util.Collection}s
+    /// from the extension-column auto-route path.
+    private static long rowCountForValidation(String colName, Object data) {
+        if (data instanceof java.util.Collection<?> coll) {
+            return coll.size();
+        }
+        try {
+            return arrayLength(data);
+        } catch (UnsupportedOperationException e) {
+            throw new IllegalArgumentException(
+                    "column '" + colName + "' has unsupported data type: "
+                            + data.getClass().getSimpleName());
+        }
+    }
+
     private static long arrayLength(Object data) {
         return switch (data) {
             case byte[] a -> a.length;
@@ -349,18 +365,37 @@ public final class VortexWriter implements Closeable {
     /// Write one chunk. Each column is encoded by the first registered encoder that accepts its dtype.
     ///
     /// @param columns map from column name to typed array data
-    /// @throws IOException if an I/O error occurs writing to the underlying channel
-    /// @deprecated use {@link #writeChunk(java.util.function.Consumer)} for compile-time
-    ///         column name + array type validation
-    @Deprecated(since = "0.7.0")
+    /// @throws IOException              if an I/O error occurs writing to the underlying channel
+    /// @throws IllegalArgumentException if a schema column is missing from {@code columns},
+    ///         or if column arrays disagree on row count
     public void writeChunk(Map<String, Object> columns) throws IOException {
+        // Pre-validate row counts so a length mismatch is rejected with a clear error
+        // before any data is serialised. Without this check, the writer would produce a
+        // file whose column chunks claim different row counts — readable but logically
+        // inconsistent.
+        long expectedLen = -1L;
+        String expectedFrom = null;
         for (int i = 0; i < schema.fieldNames().size(); i++) {
             String colName = schema.fieldNames().get(i);
-            DType colDtype = schema.fieldTypes().get(i);
             Object data = columns.get(colName);
             if (data == null) {
                 throw new IllegalArgumentException("missing column: " + colName);
             }
+            long len = rowCountForValidation(colName, columns.get(colName));
+            if (expectedLen < 0) {
+                expectedLen = len;
+                expectedFrom = colName;
+            } else if (len != expectedLen) {
+                throw new IllegalArgumentException(
+                        "column '" + colName + "' has " + len + " rows but column '"
+                                + expectedFrom + "' has " + expectedLen);
+            }
+        }
+
+        for (int i = 0; i < schema.fieldNames().size(); i++) {
+            String colName = schema.fieldNames().get(i);
+            DType colDtype = schema.fieldTypes().get(i);
+            Object data = columns.get(colName);
 
             // Auto-route extension columns: callers can pass List<LocalDate>, List<Instant>,
             // etc., and we route through the matching spec extension to produce the int[] /

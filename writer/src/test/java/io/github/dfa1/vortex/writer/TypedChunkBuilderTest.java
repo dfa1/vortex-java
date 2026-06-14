@@ -141,4 +141,22 @@ class TypedChunkBuilderTest {
                     .hasMessageContaining("timestamp");
         }
     }
+
+    @Test
+    void columnLengthMismatch_throws(@TempDir Path tmp) throws IOException {
+        // Given
+        Path file = tmp.resolve("err.vortex");
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
+            // When / Then — timestamp has 2 rows, symbol has 3, price has 2
+            assertThatThrownBy(() -> sut.writeChunk(c -> c
+                    .put("timestamp", new long[]{1L, 2L})
+                    .put("symbol", new String[]{"A", "B", "C"})
+                    .put("price", new double[]{1.0, 2.0})))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("symbol")
+                    .hasMessageContaining("3 rows")
+                    .hasMessageContaining("2");
+        }
+    }
 }
