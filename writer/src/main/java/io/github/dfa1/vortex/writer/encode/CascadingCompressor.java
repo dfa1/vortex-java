@@ -98,18 +98,28 @@ public final class CascadingCompressor {
         void copy(int srcOff, int dstOff, int len);
     }
 
+    /// Rust-style partitioned stratified sample (vortex-compressor::sample::stratified_slices):
+    /// divide [0, n) into {@code strideCount} contiguous partitions, draw one random contiguous
+    /// slice from each. Strides cannot overlap or cluster — every region is represented.
     private static void forEachStride(int n, int sampleSize, long seed, StrideCopy copier) {
         int strideCount = Math.min(STRIDE_COUNT, sampleSize);
-        int strideLen = sampleSize / strideCount;
-        int remainder = sampleSize - strideLen * strideCount;
         Random rng = new Random(seed);
         int dstOff = 0;
+        int partRemainder = n % strideCount;
+        int partShortStep = n / strideCount;
+        int partLongStep = partShortStep + 1;
+        int sampleRemainder = sampleSize % strideCount;
+        int sampleShortStep = sampleSize / strideCount;
+        int sampleLongStep = sampleShortStep + 1;
         for (int s = 0; s < strideCount; s++) {
-            int len = strideLen + (s < remainder ? 1 : 0);
-            int maxStart = Math.max(0, n - len);
-            int srcOff = maxStart == 0 ? 0 : rng.nextInt(maxStart + 1);
-            copier.copy(srcOff, dstOff, len);
-            dstOff += len;
+            int partStart = s * partShortStep + Math.min(s, partRemainder);
+            int partLen = s < partRemainder ? partLongStep : partShortStep;
+            int sampleLen = s < sampleRemainder ? sampleLongStep : sampleShortStep;
+            int maxStart = Math.max(0, partLen - sampleLen);
+            int offsetInPart = maxStart == 0 ? 0 : rng.nextInt(maxStart + 1);
+            int srcOff = partStart + offsetInPart;
+            copier.copy(srcOff, dstOff, sampleLen);
+            dstOff += sampleLen;
         }
     }
 
