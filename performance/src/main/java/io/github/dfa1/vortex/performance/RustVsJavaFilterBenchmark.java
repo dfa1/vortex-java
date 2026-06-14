@@ -12,7 +12,9 @@ import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.RowFilter;
 import io.github.dfa1.vortex.reader.VortexReader;
+import io.github.dfa1.vortex.reader.array.AlpDoubleArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.FusedAlpForBitpackedDoubleArray;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.Float8Vector;
 import org.apache.arrow.vector.VectorSchemaRoot;
@@ -158,6 +160,40 @@ public class RustVsJavaFilterBenchmark {
                         double v = close.getDouble(i);
                         if (v > threshold) {
                             sum += v;
+                        }
+                    }
+                }
+            }
+        }
+        return sum;
+    }
+
+    /// Java read with encoded-domain pushdown: when the column is an
+    /// {@link AlpDoubleArray}, scan encoded longs and decode only matches.
+    /// Otherwise fall back to the per-row predicate.
+    @Benchmark
+    public double javaFilterClosePushdown() throws IOException {
+        RowFilter filter = RowFilter.gt("close", threshold);
+        var opts = io.github.dfa1.vortex.reader.ScanOptions.columns("close")
+                .withFilter(filter);
+
+        double sum = 0.0;
+        try (VortexReader vf = VortexReader.open(benchFile, registry);
+             var iter = vf.scan(opts)) {
+            while (iter.hasNext()) {
+                try (Chunk c = iter.next()) {
+                    DoubleArray close = c.column("close");
+                    if (close instanceof FusedAlpForBitpackedDoubleArray fused) {
+                        sum += fused.sumWhereGt(threshold);
+                    } else if (close instanceof AlpDoubleArray alp) {
+                        sum += alp.sumWhereGt(threshold);
+                    } else {
+                        long n = close.length();
+                        for (long i = 0; i < n; i++) {
+                            double v = close.getDouble(i);
+                            if (v > threshold) {
+                                sum += v;
+                            }
                         }
                     }
                 }

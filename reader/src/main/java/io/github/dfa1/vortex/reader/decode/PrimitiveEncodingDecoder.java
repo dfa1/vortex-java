@@ -6,7 +6,7 @@ import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
-import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
 import io.github.dfa1.vortex.reader.array.Float16Array;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
@@ -43,7 +43,7 @@ public final class PrimitiveEncodingDecoder implements EncodingDecoder {
         Array values = switch (ptype) {
             case I64, U64 -> new LongArray(dt, n, buf);
             case I32, U32 -> new IntArray(dt, n, buf);
-            case F64 -> new DoubleArray(dt, n, buf);
+            case F64 -> new MaterializedDoubleArray(dt, n, buf);
             case F32 -> new FloatArray(dt, n, buf);
             case I16, U16 -> new ShortArray(dt, n, buf);
             case I8, U8 -> new ByteArray(dt, n, buf);

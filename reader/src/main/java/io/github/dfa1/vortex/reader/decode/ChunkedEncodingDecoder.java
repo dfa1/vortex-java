@@ -6,7 +6,7 @@ import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.reader.array.ByteArray;
-import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
@@ -98,7 +98,7 @@ public final class ChunkedEncodingDecoder implements EncodingDecoder {
         return switch (ptype) {
             case I64, U64 -> new LongArray(dtype, totalRows, ro);
             case I32, U32 -> new IntArray(dtype, totalRows, ro);
-            case F64 -> new DoubleArray(dtype, totalRows, ro);
+            case F64 -> new MaterializedDoubleArray(dtype, totalRows, ro);
             case F32 -> new FloatArray(dtype, totalRows, ro);
             case I16, U16 -> new ShortArray(dtype, totalRows, ro);
             case I8, U8 -> new ByteArray(dtype, totalRows, ro);

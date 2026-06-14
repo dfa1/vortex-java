@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
 import io.github.dfa1.vortex.reader.array.EmptyArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.GenericArray;
@@ -161,7 +162,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         return switch (ptype) {
             case I32, U32 -> new IntArray(dtype, n, out.asReadOnly());
             case I64, U64 -> new LongArray(dtype, n, out.asReadOnly());
-            case F64 -> new DoubleArray(dtype, n, out.asReadOnly());
+            case F64 -> new MaterializedDoubleArray(dtype, n, out.asReadOnly());
             case F32 -> new FloatArray(dtype, n, out.asReadOnly());
             case I16, U16 -> new ShortArray(dtype, n, out.asReadOnly());
             case I8, U8 -> new ByteArray(dtype, n, out.asReadOnly());
@@ -243,7 +244,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             case IntArray a ->
                     new IntArray(a.dtype(), rows, ArraySegments.of(a).asSlice(0, rows * Integer.BYTES));
             case DoubleArray a ->
-                    new DoubleArray(a.dtype(), rows, ArraySegments.of(a).asSlice(0, rows * Double.BYTES));
+                    new MaterializedDoubleArray(a.dtype(), rows, ArraySegments.of(a).asSlice(0, rows * Double.BYTES));
             case FloatArray a ->
                     new FloatArray(a.dtype(), rows, ArraySegments.of(a).asSlice(0, rows * Float.BYTES));
             case ShortArray a ->
@@ -457,7 +458,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         return switch (ptype) {
             case I64, U64 -> new LongArray(dtype, totalRows, ro);
             case I32, U32 -> new IntArray(dtype, totalRows, ro);
-            case F64 -> new DoubleArray(dtype, totalRows, ro);
+            case F64 -> new MaterializedDoubleArray(dtype, totalRows, ro);
             case F32 -> new FloatArray(dtype, totalRows, ro);
             case I16, U16 -> new ShortArray(dtype, totalRows, ro);
             case I8, U8 -> new ByteArray(dtype, totalRows, ro);

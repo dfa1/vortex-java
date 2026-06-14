@@ -31,7 +31,8 @@ public final class ArraySegments {
         return switch (data) {
             case IntArray a -> a.buffer();
             case LongArray a -> a.buffer();
-            case DoubleArray a -> a.buffer();
+            case MaterializedDoubleArray a -> a.buffer();
+            case AlpDoubleArray a -> a.materialize();
             case FloatArray a -> a.buffer();
             case ShortArray a -> a.buffer();
             case ByteArray a -> a.buffer();

@@ -3,13 +3,17 @@ package io.github.dfa1.vortex.reader.decode;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.reader.array.AlpDoubleArray;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
+import io.github.dfa1.vortex.reader.array.FusedAlpForBitpackedDoubleArray;
+import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.proto.ALPMetadata;
+import io.github.dfa1.vortex.proto.BitPackedMetadata;
 import io.github.dfa1.vortex.proto.PatchesMetadata;
+import io.github.dfa1.vortex.proto.ScalarValue;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -74,25 +78,45 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
     }
 
     private static Array decodeF64(DecodeContext ctx, ALPMetadata meta, int expE, int expF, long n) {
-        double df = F10_F64[expF];
-        double de = IF10_F64[expE];
+        double scale = F10_F64[expF] * IF10_F64[expE];
+
+        if (meta.patches() == null) {
+            // Fused path: chain is ALP(FoR(Bitpacked)) and Bitpacked has no
+            // patches. Hold the raw packed buffer + chain params so
+            // sumWhereGt skips the FoR add and ALP buffer entirely.
+            FusedAlpForBitpackedDoubleArray fused = tryDetectFusedChain(ctx, n, scale);
+            if (fused != null) {
+                return fused;
+            }
+        }
 
         MemorySegment src = ctx.decodeChildSegment(0, I64_DTYPE, n);
+
+        // Lazy path: full-size writable source, no patches. Fallback for
+        // chains the fused detector did not match.
+        if (meta.patches() == null
+                && !src.isReadOnly()
+                && SegmentBroadcast.capacity(src, 8) == n) {
+            return new AlpDoubleArray(ctx.dtype(), n, src, scale);
+        }
+
+        // Fallback: materialise into a buffer. Required for read-only mmap
+        // sources, broadcast (ConstantEncoding) sources, and patched chunks.
         MemorySegment buf = src.isReadOnly() ? ctx.arena().allocate(n * 8, 8) : src;
         if (src.isReadOnly()) {
             long srcCap = SegmentBroadcast.capacity(src, 8);
             if (srcCap == n) {
                 for (long i = 0; i < n; i++) {
-                    buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) src.getAtIndex(PTypeIO.LE_LONG, i) * df * de);
+                    buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) src.getAtIndex(PTypeIO.LE_LONG, i) * scale);
                 }
             } else {
                 for (long i = 0; i < n; i++) {
-                    buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) src.getAtIndex(PTypeIO.LE_LONG, i % srcCap) * df * de);
+                    buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) src.getAtIndex(PTypeIO.LE_LONG, i % srcCap) * scale);
                 }
             }
         } else {
             for (long i = 0; i < n; i++) {
-                buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) buf.getAtIndex(PTypeIO.LE_LONG, i) * df * de);
+                buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) buf.getAtIndex(PTypeIO.LE_LONG, i) * scale);
             }
         }
 
@@ -100,7 +124,7 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
             applyPatches(ctx, meta.patches(), buf, 8);
         }
 
-        return new DoubleArray(ctx.dtype(), n, buf.asReadOnly());
+        return new MaterializedDoubleArray(ctx.dtype(), n, buf.asReadOnly());
     }
 
     private static Array decodeF32(DecodeContext ctx, ALPMetadata meta, int expE, int expF, long n) {
@@ -131,6 +155,59 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
         }
 
         return new FloatArray(ctx.dtype(), n, buf32.asReadOnly());
+    }
+
+    /// Detects the ALP(FoR(Bitpacked)) chain on the encode tree and, when
+    /// matched, returns a [FusedAlpForBitpackedDoubleArray] that holds the
+    /// raw bitpacked buffer plus the chain parameters. Returns {@code null}
+    /// when the chain does not match or required metadata is unavailable.
+    private static FusedAlpForBitpackedDoubleArray tryDetectFusedChain(DecodeContext ctx, long n, double scale) {
+        ArrayNode[] alpChildren = ctx.node().children();
+        if (alpChildren.length == 0 || !(alpChildren[0] instanceof KnownArrayNode forNode)
+                || forNode.encodingId() != EncodingId.FASTLANES_FOR) {
+            return null;
+        }
+        if (forNode.children().length == 0 || !(forNode.children()[0] instanceof KnownArrayNode bpNode)
+                || bpNode.encodingId() != EncodingId.FASTLANES_BITPACKED) {
+            return null;
+        }
+
+        ByteBuffer forMeta = forNode.metadata();
+        if (forMeta == null || !forMeta.hasRemaining()) {
+            return null;
+        }
+        long ref;
+        try {
+            MemorySegment metaSeg = MemorySegment.ofBuffer(forMeta.duplicate());
+            ScalarValue scalar = ScalarValue.decode(metaSeg, 0, metaSeg.byteSize());
+            ref = scalar.int64_value() != null ? scalar.int64_value()
+                    : scalar.uint64_value() != null ? scalar.uint64_value()
+                    : 0L;
+        } catch (IOException e) {
+            return null;
+        }
+
+        ByteBuffer bpMeta = bpNode.metadata();
+        BitPackedMetadata bp;
+        if (bpMeta == null || !bpMeta.hasRemaining()) {
+            bp = new BitPackedMetadata(0, 0, null);
+        } else {
+            try {
+                MemorySegment metaSeg = MemorySegment.ofBuffer(bpMeta.duplicate());
+                bp = BitPackedMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            } catch (IOException e) {
+                return null;
+            }
+        }
+        if (bp.bit_width() == 0 || bp.patches() != null) {
+            return null;
+        }
+        if (bpNode.bufferIndices().length == 0) {
+            return null;
+        }
+        MemorySegment packed = ctx.segmentBuffers()[bpNode.bufferIndices()[0]];
+        return new FusedAlpForBitpackedDoubleArray(
+                ctx.dtype(), n, packed, bp.bit_width(), bp.offset(), ref, scale);
     }
 
     private static void applyPatches(DecodeContext ctx, PatchesMetadata pm, MemorySegment out, int elemBytes) {

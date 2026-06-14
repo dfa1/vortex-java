@@ -25,7 +25,7 @@ class DoubleArrayTest {
             seg.setAtIndex(LE_DOUBLE, i, values[i]);
         }
         DType dtype = new DType.Primitive(PType.F64, false);
-        return new DoubleArray(dtype, values.length, seg);
+        return new MaterializedDoubleArray(dtype, values.length, seg);
     }
 
     @Nested
@@ -75,7 +75,7 @@ class DoubleArrayTest {
             // Given — constant-encoding: 1-element buffer, logical length 3; all 3 visits yield same value
             MemorySegment seg = Arena.ofAuto().allocate(8, 8);
             seg.setAtIndex(LE_DOUBLE, 0, 2.71);
-            DoubleArray sut = new DoubleArray(new DType.Primitive(PType.F64, false), 3, seg);
+            DoubleArray sut = new MaterializedDoubleArray(new DType.Primitive(PType.F64, false), 3, seg);
             List<Double> collected = new ArrayList<>();
 
             // When

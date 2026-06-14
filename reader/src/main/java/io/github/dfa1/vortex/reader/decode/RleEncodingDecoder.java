@@ -7,7 +7,7 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
-import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
 import io.github.dfa1.vortex.reader.array.Float16Array;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
@@ -150,7 +150,7 @@ public final class RleEncodingDecoder implements EncodingDecoder {
             case I32, U32 -> new IntArray(dtype, n, seg);
             case I16, U16 -> new ShortArray(dtype, n, seg);
             case I8, U8 -> new ByteArray(dtype, n, seg);
-            case F64 -> new DoubleArray(dtype, n, seg);
+            case F64 -> new MaterializedDoubleArray(dtype, n, seg);
             case F32 -> new FloatArray(dtype, n, seg);
             case F16 -> new Float16Array(dtype, n, seg);
         };

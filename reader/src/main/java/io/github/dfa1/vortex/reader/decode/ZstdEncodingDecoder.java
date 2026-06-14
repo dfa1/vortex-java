@@ -8,7 +8,7 @@ import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
-import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
 import io.github.dfa1.vortex.reader.array.Float16Array;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
@@ -188,7 +188,7 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
         return switch (ptype) {
             case I64, U64 -> new LongArray(dt, n, decompressed);
             case I32, U32 -> new IntArray(dt, n, decompressed);
-            case F64 -> new DoubleArray(dt, n, decompressed);
+            case F64 -> new MaterializedDoubleArray(dt, n, decompressed);
             case F32 -> new FloatArray(dt, n, decompressed);
             case I16, U16 -> new ShortArray(dt, n, decompressed);
             case I8, U8 -> new ByteArray(dt, n, decompressed);

@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ByteArray;
-import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
@@ -391,7 +391,7 @@ public final class DictEncodingDecoder implements EncodingDecoder {
         return switch (ptype) {
             case I64, U64 -> new LongArray(dtype, n, seg);
             case I32, U32 -> new IntArray(dtype, n, seg);
-            case F64 -> new DoubleArray(dtype, n, seg);
+            case F64 -> new MaterializedDoubleArray(dtype, n, seg);
             case F32 -> new FloatArray(dtype, n, seg);
             case I16, U16 -> new ShortArray(dtype, n, seg);
             case I8, U8 -> new ByteArray(dtype, n, seg);

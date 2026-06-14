@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
@@ -83,7 +83,7 @@ public final class AlpRdEncodingDecoder implements EncodingDecoder {
             applyPatchesF64(ctx, meta.patches(), out, rightSeg, rightCap, rightBitWidth);
         }
 
-        return new DoubleArray(ctx.dtype(), n, out.asReadOnly());
+        return new MaterializedDoubleArray(ctx.dtype(), n, out.asReadOnly());
     }
 
     private static Array decodeF32(DecodeContext ctx, ALPRDMetadata meta, short[] dict, int rightBitWidth, long n) {

@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ByteArray;
-import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
 import io.github.dfa1.vortex.reader.array.Float16Array;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
@@ -110,7 +110,7 @@ public final class SequenceEncodingDecoder implements EncodingDecoder {
         for (long i = 0; i < n; i++) {
             seg.setAtIndex(PTypeIO.LE_DOUBLE, i, base + i * mul);
         }
-        return new DoubleArray(dtype, n, seg);
+        return new MaterializedDoubleArray(dtype, n, seg);
     }
 
     private static Array decodeF16(SequenceMetadata meta, long n, DType dtype, SegmentAllocator arena) {

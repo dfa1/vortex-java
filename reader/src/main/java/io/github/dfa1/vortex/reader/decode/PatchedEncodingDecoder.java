@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ByteArray;
-import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
@@ -90,7 +90,7 @@ public final class PatchedEncodingDecoder implements EncodingDecoder {
             case I32, U32 -> new IntArray(ctx.dtype(), n, out);
             case I64, U64 -> new LongArray(ctx.dtype(), n, out);
             case F32 -> new FloatArray(ctx.dtype(), n, out);
-            case F64 -> new DoubleArray(ctx.dtype(), n, out);
+            case F64 -> new MaterializedDoubleArray(ctx.dtype(), n, out);
             default -> throw new VortexException(EncodingId.VORTEX_PATCHED,
                     "unsupported ptype: " + ptype);
         };
