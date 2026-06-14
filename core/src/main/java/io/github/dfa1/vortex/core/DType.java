@@ -1,6 +1,8 @@
 package io.github.dfa1.vortex.core;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 
 /// Vortex logical data type. Strictly logical — defines value domain, not physical storage.
 ///
@@ -142,6 +144,64 @@ public sealed interface DType
     /// @return non-nullable {@link Decimal}
     static Decimal decimal(int precision, int scale) {
         return new Decimal((byte) precision, (byte) scale, false);
+    }
+
+    /// Returns a fresh {@link StructBuilder} for assembling a {@link Struct} dtype with
+    /// name+type pairs declared together at the call site.
+    ///
+    /// ```java
+    /// DType.Struct schema = DType.structBuilder()
+    ///     .field("timestamp", DType.i64())
+    ///     .field("symbol",    DType.utf8())
+    ///     .field("price",     DType.f64())
+    ///     .field("volume",    DType.i64().asNullable())
+    ///     .build();
+    /// ```
+    ///
+    /// @return a new {@link StructBuilder}
+    static StructBuilder structBuilder() {
+        return new StructBuilder();
+    }
+
+    /// Fluent builder for {@link Struct} dtypes. Use {@link #structBuilder()} to obtain one.
+    /// Preserves insertion order and rejects duplicate field names at {@link #build()}.
+    final class StructBuilder {
+        private final LinkedHashMap<String, DType> fields = new LinkedHashMap<>();
+        private boolean nullable;
+
+        private StructBuilder() {
+        }
+
+        /// Adds a named field to the struct under construction.
+        ///
+        /// @param name the field name; must be non-{@code null} and not previously added
+        /// @param type the field type
+        /// @return this builder
+        /// @throws IllegalArgumentException if {@code name} duplicates a previously added field
+        public StructBuilder field(String name, DType type) {
+            if (fields.putIfAbsent(name, type) != null) {
+                throw new IllegalArgumentException("duplicate field name: " + name);
+            }
+            return this;
+        }
+
+        /// Marks the resulting struct itself as nullable.
+        ///
+        /// @return this builder
+        public StructBuilder asNullable() {
+            this.nullable = true;
+            return this;
+        }
+
+        /// Builds the {@link Struct} dtype.
+        ///
+        /// @return a new {@link Struct} reflecting every field added so far
+        public Struct build() {
+            return new Struct(
+                    java.util.List.copyOf(fields.keySet()),
+                    java.util.List.copyOf(new ArrayList<>(fields.values())),
+                    nullable);
+        }
     }
 
     // ── Records ─────────────────────────────────────────────────────────────
