@@ -17,10 +17,12 @@ import io.github.dfa1.vortex.cli.tui.term.Ansi;
 import io.github.dfa1.vortex.cli.tui.term.Key;
 import io.github.dfa1.vortex.cli.tui.term.Terminal;
 import io.github.dfa1.vortex.inspect.InspectorTree;
+import io.github.dfa1.vortex.inspect.ZonedStatsSchema;
 import io.github.dfa1.vortex.reader.VortexHandle;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ScanIterator;
 import io.github.dfa1.vortex.reader.ScanOptions;
+import io.github.dfa1.vortex.reader.array.StructArray;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -126,9 +128,15 @@ public final class VortexInspectorTui {
         private final ConcurrentMap<String, DataState> dataCache = new ConcurrentHashMap<>();
         private final Map<InspectorTree.Node, DataState> dictCache =
                 Collections.synchronizedMap(new IdentityHashMap<>());
+        private final Map<InspectorTree.Node, DataState> statsCache =
+                Collections.synchronizedMap(new IdentityHashMap<>());
         private final Map<InspectorTree.Node, String> columnOf = new IdentityHashMap<>();
         private final Set<InspectorTree.Node> statsChildren =
                 Collections.newSetFromMap(new IdentityHashMap<>());
+        /// Maps each stats-payload child Node to the parent Zoned/Chunked Node so we
+        /// can recover the column dtype + layout metadata needed for stats decode.
+        private final Map<InspectorTree.Node, InspectorTree.Node> statsParentOf =
+                new IdentityHashMap<>();
         private volatile String lastError;
         private long tick;
         private int selected;
@@ -161,10 +169,14 @@ public final class VortexInspectorTui {
             Layout layout = node.layout();
             if (layout.isZoned() && node.children().size() >= 2) {
                 // Zoned: child[0] = data, child[1] = per-chunk stats payload
-                statsChildren.add(node.children().get(1));
+                InspectorTree.Node statsChild = node.children().get(1);
+                statsChildren.add(statsChild);
+                statsParentOf.put(statsChild, node);
             } else if (layout.isChunked() && hasLeadingStats(layout) && !node.children().isEmpty()) {
                 // Chunked with metadata[0] == 1: child[0] is the stats payload
-                statsChildren.add(node.children().get(0));
+                InspectorTree.Node statsChild = node.children().get(0);
+                statsChildren.add(statsChild);
+                statsParentOf.put(statsChild, node);
             }
             for (InspectorTree.Node child : node.children()) {
                 indexStatsChildren(child);
@@ -477,16 +489,11 @@ public final class VortexInspectorTui {
             } else {
                 lines.add("Segments:  0");
             }
-            if (p.stats().min() != null || p.stats().max() != null) {
-                lines.add("");
-                lines.add("Stats:");
-                if (p.stats().min() != null) {
-                    lines.add("  min: " + p.stats().min());
-                }
-                if (p.stats().max() != null) {
-                    lines.add("  max: " + p.stats().max());
-                }
-            }
+            // ArrayNode.stats deliberately not shown: many encodings (ALP, FOR,
+            // bitpacked) leave min/max at zero in the FlatBuffer because real
+            // stats live in encoding-specific metadata or in the zone-map.
+            // Displaying them as a "Stats" block was misleading. Per-chunk
+            // zone-map stats are rendered below when present.
             if (layout.isDict() && layout.children().size() >= 1) {
                 DataState dictState = loadDictPreview(node);
                 lines.add("");
@@ -499,6 +506,27 @@ public final class VortexInspectorTui {
                         lines.add("Dictionary (" + values.size() + " entries):");
                         for (int i = 0; i < values.size(); i++) {
                             lines.add(String.format("  [%2d] %s", i, values.get(i)));
+                        }
+                    }
+                }
+            }
+            // Per-zone stats — show when the selected node carries a zone-map (Zoned
+            // or Chunked-with-leading-stats) or when the selected node is itself the
+            // stats-payload child of one. Decoded asynchronously to keep nav snappy.
+            InspectorTree.Node zoneAnchor = zoneStatsAnchor(node);
+            if (zoneAnchor != null) {
+                DataState zoneState = loadStatsPreview(zoneAnchor);
+                lines.add("");
+                switch (zoneState) {
+                    case DataState.Pending ignored ->
+                            lines.add("Per-chunk stats:  "
+                                    + SPINNER[(int) (tick % SPINNER.length)] + " loading...");
+                    case DataState.Failed(String msg) ->
+                            lines.add("Per-chunk stats:  ! " + msg);
+                    case DataState.Loaded(List<String> rows) -> {
+                        lines.add("Per-chunk stats (" + rows.size() + " chunks):");
+                        for (int i = 0; i < rows.size(); i++) {
+                            lines.add(String.format("  [%2d] %s", i, rows.get(i)));
                         }
                     }
                 }
@@ -584,6 +612,148 @@ public final class VortexInspectorTui {
                 dictCache.put(dictNode, new DataState.Failed(messageOf(e)));
                 lastError = "dict: " + messageOf(e);
             }
+        }
+
+        /// Returns the Zoned/Chunked-with-leading-stats parent whose per-zone stats
+        /// table we want to render when the given node is selected, or {@code null}
+        /// when no zone-map is associated with the node.
+        ///
+        /// Selecting either the parent (Zoned or Chunked-with-leading-stats) or the
+        /// stats-payload child surfaces the same table — both selections land here.
+        private InspectorTree.Node zoneStatsAnchor(InspectorTree.Node node) {
+            if (statsChildren.contains(node)) {
+                return statsParentOf.get(node);
+            }
+            Layout layout = node.layout();
+            if (layout.isZoned() && node.children().size() >= 2) {
+                return node;
+            }
+            if (layout.isChunked() && hasLeadingStats(layout) && !node.children().isEmpty()) {
+                return node;
+            }
+            return null;
+        }
+
+        private DataState loadStatsPreview(InspectorTree.Node anchor) {
+            DataState existing = statsCache.get(anchor);
+            if (existing != null) {
+                return existing;
+            }
+            if (statsCache.putIfAbsent(anchor, DataState.PENDING) != null) {
+                return statsCache.get(anchor);
+            }
+            if (worker == null) {
+                runStatsLoad(anchor);
+            } else {
+                worker.submit(() -> runStatsLoad(anchor));
+            }
+            return statsCache.getOrDefault(anchor, DataState.PENDING);
+        }
+
+        private void runStatsLoad(InspectorTree.Node anchor) {
+            try {
+                Layout anchorLayout = anchor.layout();
+                int statsChildIdx = anchorLayout.isZoned() ? 1 : 0;
+                if (anchor.children().size() <= statsChildIdx) {
+                    statsCache.put(anchor, new DataState.Loaded(List.of()));
+                    return;
+                }
+                InspectorTree.Node statsChild = anchor.children().get(statsChildIdx);
+                Layout statsLayout = statsChild.layout();
+                DType columnDtype = columnDtypeFor(anchor);
+                if (columnDtype == null) {
+                    statsCache.put(anchor, new DataState.Failed("no column dtype"));
+                    return;
+                }
+                DType.Struct statsDtype = ZonedStatsSchema.statsTableDtype(
+                        columnDtype, anchorLayout.metadata());
+                if (statsDtype.fieldNames().isEmpty()) {
+                    statsCache.put(anchor, new DataState.Failed("no stats present in metadata"));
+                    return;
+                }
+                try (java.lang.foreign.Arena arena = java.lang.foreign.Arena.ofConfined()) {
+                    List<String> rows = decodeStatsLayout(statsLayout, statsDtype, arena);
+                    statsCache.put(anchor, new DataState.Loaded(List.copyOf(rows)));
+                }
+            } catch (RuntimeException e) {
+                statsCache.put(anchor, new DataState.Failed(messageOf(e)));
+                lastError = "stats: " + messageOf(e);
+            }
+        }
+
+        /// Decodes a stats-payload subtree into one display row per zone.
+        ///
+        /// Only Flat and Chunked-of-Flat shapes are supported — anything else
+        /// (Struct, Zoned, Dict) reports an explanatory error rather than
+        /// throwing, since stats payloads in the wild are overwhelmingly Flat.
+        private List<String> decodeStatsLayout(
+                Layout statsLayout, DType.Struct statsDtype, java.lang.foreign.Arena arena) {
+            if (statsLayout.isFlat()) {
+                return decodeStatsFlat(statsLayout, statsDtype, arena);
+            }
+            if (statsLayout.isChunked()) {
+                // Skip a leading stats-of-stats child if present; otherwise traverse all children.
+                int start = hasLeadingStats(statsLayout) ? 1 : 0;
+                List<String> all = new ArrayList<>();
+                for (int i = start; i < statsLayout.children().size(); i++) {
+                    Layout child = statsLayout.children().get(i);
+                    if (!child.isFlat()) {
+                        throw new IllegalStateException(
+                                "non-flat stats chunk: " + child.encodingId());
+                    }
+                    all.addAll(decodeStatsFlat(child, statsDtype, arena));
+                }
+                return all;
+            }
+            throw new IllegalStateException(
+                    "unsupported stats layout: " + statsLayout.encodingId());
+        }
+
+        private List<String> decodeStatsFlat(
+                Layout flat, DType.Struct statsDtype, java.lang.foreign.Arena arena) {
+            if (flat.segments().isEmpty()) {
+                return List.of();
+            }
+            int segIdx = flat.segments().getFirst();
+            SegmentSpec spec = tree.segmentSpecs().get(segIdx);
+            Array arr = handle.decodeFlatSegment(spec, statsDtype, flat.rowCount(), arena);
+            return formatStatsArray(arr, statsDtype);
+        }
+
+        private static List<String> formatStatsArray(Array arr, DType.Struct statsDtype) {
+            Array unwrapped = arr instanceof io.github.dfa1.vortex.reader.array.MaskedArray m
+                    ? m.inner()
+                    : arr;
+            if (!(unwrapped instanceof StructArray sa)) {
+                throw new IllegalStateException(
+                        "stats array is not a struct: " + arr.getClass().getSimpleName());
+            }
+            int n = (int) sa.length();
+            List<String> rows = new ArrayList<>(n);
+            for (int row = 0; row < n; row++) {
+                StringBuilder sb = new StringBuilder();
+                for (int f = 0; f < sa.fieldCount(); f++) {
+                    if (f > 0) {
+                        sb.append(", ");
+                    }
+                    String name = statsDtype.fieldNames().get(f);
+                    DType fdtype = statsDtype.fieldTypes().get(f);
+                    Array field = sa.field(f);
+                    sb.append(name).append('=').append(formatStatsCell(field, row, fdtype));
+                }
+                rows.add(sb.toString());
+            }
+            return rows;
+        }
+
+        private static String formatStatsCell(Array field, int row, DType declared) {
+            if (field instanceof io.github.dfa1.vortex.reader.array.MaskedArray m) {
+                if (!m.isValid(row)) {
+                    return "null";
+                }
+                return formatValue(m.inner(), row, declared);
+            }
+            return formatValue(field, row, declared);
         }
 
         private DType columnDtypeFor(InspectorTree.Node node) {

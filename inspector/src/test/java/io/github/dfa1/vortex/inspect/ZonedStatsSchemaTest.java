@@ -1,0 +1,253 @@
+package io.github.dfa1.vortex.inspect;
+
+import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.PType;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.EnumSet;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class ZonedStatsSchemaTest {
+
+    @Nested
+    class ZoneLength {
+        @Test
+        void readsLittleEndianU32() {
+            // Given — 8192 = 0x2000 stored as LE u32
+            ByteBuffer meta = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
+            meta.putInt(0, 8192);
+
+            // When
+            long zoneLen = ZonedStatsSchema.zoneLength(meta);
+
+            // Then
+            assertThat(zoneLen).isEqualTo(8192L);
+        }
+
+        @Test
+        void returnsZeroForNullMetadata() {
+            // Given / When
+            long zoneLen = ZonedStatsSchema.zoneLength(null);
+
+            // Then — nothing to decode; caller treats as "no zones"
+            assertThat(zoneLen).isZero();
+        }
+
+        @Test
+        void returnsZeroForShortMetadata() {
+            // Given — only 2 bytes (insufficient for a u32)
+            ByteBuffer meta = ByteBuffer.allocate(2);
+
+            // When
+            long zoneLen = ZonedStatsSchema.zoneLength(meta);
+
+            // Then — defensively zero rather than throwing
+            assertThat(zoneLen).isZero();
+        }
+    }
+
+    @Nested
+    class PresentStats {
+        @Test
+        void decodesBitsetLsbFirst() {
+            // Given — bits for Min (4) and Max (3) set: 0b0001_1000 = 0x18
+            ByteBuffer meta = metaWithBitset(8192, 0x18);
+
+            // When
+            List<ZonedStatsSchema.Stat> stats = ZonedStatsSchema.presentStats(meta);
+
+            // Then — Max (ord 3) comes before Min (ord 4) since iteration is ordinal-ascending
+            assertThat(stats).containsExactly(ZonedStatsSchema.Stat.MAX, ZonedStatsSchema.Stat.MIN);
+        }
+
+        @Test
+        void decodesMultiByteBitset() {
+            // Given — set bits for MAX (3), MIN (4), NULL_COUNT (6), NAN_COUNT (8)
+            // byte 0: 0b0101_1000 = 0x58 (bits 3,4,6)
+            // byte 1: 0b0000_0001 = 0x01 (bit 8 → bit 0 of second byte)
+            ByteBuffer meta = ByteBuffer.allocate(4 + 2).order(ByteOrder.LITTLE_ENDIAN);
+            meta.putInt(0, 8192);
+            meta.put(4, (byte) 0x58);
+            meta.put(5, (byte) 0x01);
+
+            // When
+            List<ZonedStatsSchema.Stat> stats = ZonedStatsSchema.presentStats(meta);
+
+            // Then
+            assertThat(stats).containsExactly(
+                    ZonedStatsSchema.Stat.MAX,
+                    ZonedStatsSchema.Stat.MIN,
+                    ZonedStatsSchema.Stat.NULL_COUNT,
+                    ZonedStatsSchema.Stat.NAN_COUNT);
+        }
+
+        @Test
+        void returnsEmptyWhenMetadataHasNoBitset() {
+            // Given — exactly 4 bytes (zone length only, no bitset trailer)
+            ByteBuffer meta = ByteBuffer.allocate(4);
+
+            // When
+            List<ZonedStatsSchema.Stat> stats = ZonedStatsSchema.presentStats(meta);
+
+            // Then
+            assertThat(stats).isEmpty();
+        }
+
+        @Test
+        void ignoresFutureStatBits() {
+            // Given — bit 31 set (beyond any known stat) plus MAX/MIN
+            // byte 0: 0x18 (MAX|MIN), bytes 1-2: 0, byte 3: 0x80 (bit 31)
+            ByteBuffer meta = ByteBuffer.allocate(4 + 4).order(ByteOrder.LITTLE_ENDIAN);
+            meta.putInt(0, 8192);
+            meta.put(4, (byte) 0x18);
+            meta.put(7, (byte) 0x80);
+
+            // When
+            List<ZonedStatsSchema.Stat> stats = ZonedStatsSchema.presentStats(meta);
+
+            // Then — forward-compat: drop unknown stats rather than throw
+            assertThat(stats).containsExactly(ZonedStatsSchema.Stat.MAX, ZonedStatsSchema.Stat.MIN);
+        }
+    }
+
+    @Nested
+    class StatsTableDtype {
+        @Test
+        void buildsStructWithMinMaxAndTruncationFlags() {
+            // Given — i64 column with Min, Max, Sum
+            DType columnDtype = new DType.Primitive(PType.I64, false);
+            List<ZonedStatsSchema.Stat> present = List.of(
+                    ZonedStatsSchema.Stat.MAX,
+                    ZonedStatsSchema.Stat.MIN,
+                    ZonedStatsSchema.Stat.SUM);
+
+            // When
+            DType.Struct schema = ZonedStatsSchema.statsTableDtype(columnDtype, present);
+
+            // Then — matches Rust's stats_table_dtype ordering exactly
+            assertThat(schema.fieldNames()).containsExactly(
+                    "max", "max_is_truncated",
+                    "min", "min_is_truncated",
+                    "sum");
+            // i64 sum widens to nullable i64; min/max stay i64 but nullable; truncation flags are non-null Bool
+            assertThat(schema.fieldTypes()).containsExactly(
+                    new DType.Primitive(PType.I64, true),
+                    new DType.Bool(false),
+                    new DType.Primitive(PType.I64, true),
+                    new DType.Bool(false),
+                    new DType.Primitive(PType.I64, true));
+            assertThat(schema.nullable()).isFalse();
+        }
+
+        @Test
+        void dropsMaxAndMinForDTypeNull() {
+            // Given — DType.Null has no value domain; min/max are dropped
+            List<ZonedStatsSchema.Stat> present = List.of(
+                    ZonedStatsSchema.Stat.MAX,
+                    ZonedStatsSchema.Stat.MIN,
+                    ZonedStatsSchema.Stat.NULL_COUNT);
+
+            // When
+            DType.Struct schema = ZonedStatsSchema.statsTableDtype(new DType.Null(true), present);
+
+            // Then — only null_count survives; truncation flags drop with their parent stat
+            assertThat(schema.fieldNames()).containsExactly("null_count");
+            assertThat(schema.fieldTypes()).containsExactly(new DType.Primitive(PType.U64, true));
+        }
+
+        @Test
+        void dropsSumForUnsupportedColumnDtype() {
+            // Given — Utf8 column has no sum (Rust returns None)
+            DType columnDtype = new DType.Utf8(false);
+            List<ZonedStatsSchema.Stat> present = List.of(
+                    ZonedStatsSchema.Stat.MIN,
+                    ZonedStatsSchema.Stat.SUM,
+                    ZonedStatsSchema.Stat.NULL_COUNT);
+
+            // When
+            DType.Struct schema = ZonedStatsSchema.statsTableDtype(columnDtype, present);
+
+            // Then
+            assertThat(schema.fieldNames()).containsExactly("min", "min_is_truncated", "null_count");
+        }
+
+        @Test
+        void dropsNanCountForNonFloatColumn() {
+            // Given — nan_count only makes sense for floats
+            DType columnDtype = new DType.Primitive(PType.I32, false);
+            List<ZonedStatsSchema.Stat> present = List.of(
+                    ZonedStatsSchema.Stat.MAX,
+                    ZonedStatsSchema.Stat.NAN_COUNT,
+                    ZonedStatsSchema.Stat.NULL_COUNT);
+
+            // When
+            DType.Struct schema = ZonedStatsSchema.statsTableDtype(columnDtype, present);
+
+            // Then
+            assertThat(schema.fieldNames()).containsExactly("max", "max_is_truncated", "null_count");
+        }
+
+        @Test
+        void keepsNanCountForFloatColumn() {
+            // Given — float column → nan_count is u64
+            DType columnDtype = new DType.Primitive(PType.F64, false);
+            List<ZonedStatsSchema.Stat> present = List.of(
+                    ZonedStatsSchema.Stat.MAX, ZonedStatsSchema.Stat.NAN_COUNT);
+
+            // When
+            DType.Struct schema = ZonedStatsSchema.statsTableDtype(columnDtype, present);
+
+            // Then
+            assertThat(schema.fieldNames()).containsExactly("max", "max_is_truncated", "nan_count");
+            assertThat(schema.fieldTypes()).element(2).isEqualTo(new DType.Primitive(PType.U64, true));
+        }
+
+        @Test
+        void resolvesExtensionViaStorageDType() {
+            // Given — ext over i32 storage; sum should widen using storage dtype (i32 → i64)
+            DType columnDtype = new DType.Extension("ip.address",
+                    new DType.Primitive(PType.I32, false), null, false);
+            List<ZonedStatsSchema.Stat> present = List.of(
+                    ZonedStatsSchema.Stat.MIN, ZonedStatsSchema.Stat.SUM);
+
+            // When
+            DType.Struct schema = ZonedStatsSchema.statsTableDtype(columnDtype, present);
+
+            // Then — min keeps extension dtype, sum widens to i64 via storage
+            assertThat(schema.fieldNames()).containsExactly("min", "min_is_truncated", "sum");
+            assertThat(schema.fieldTypes().get(0)).isEqualTo(columnDtype.withNullable(true));
+            assertThat(schema.fieldTypes().get(2)).isEqualTo(new DType.Primitive(PType.I64, true));
+        }
+
+        @Test
+        void allStatsTogetherForI32() {
+            // Given — sanity that every stat slots correctly into i32 column
+            DType columnDtype = new DType.Primitive(PType.I32, false);
+            List<ZonedStatsSchema.Stat> present = List.copyOf(EnumSet.allOf(ZonedStatsSchema.Stat.class));
+
+            // When
+            DType.Struct schema = ZonedStatsSchema.statsTableDtype(columnDtype, present);
+
+            // Then — nan_count is dropped (i32 not float); everything else present.
+            assertThat(schema.fieldNames()).containsExactly(
+                    "is_constant", "is_sorted", "is_strict_sorted",
+                    "max", "max_is_truncated",
+                    "min", "min_is_truncated",
+                    "sum",
+                    "null_count",
+                    "uncompressed_size_in_bytes");
+        }
+    }
+
+    private static ByteBuffer metaWithBitset(int zoneLen, int firstByte) {
+        ByteBuffer meta = ByteBuffer.allocate(4 + 1).order(ByteOrder.LITTLE_ENDIAN);
+        meta.putInt(0, zoneLen);
+        meta.put(4, (byte) firstByte);
+        return meta;
+    }
+}
