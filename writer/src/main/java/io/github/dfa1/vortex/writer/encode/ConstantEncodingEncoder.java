@@ -26,6 +26,25 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
     }
 
     @Override
+    public StatsOptions statsOptions() {
+        return new StatsOptions(true, false);
+    }
+
+    @Override
+    public Estimate expectedRatio(DType dtype, Object data, ArrayStats stats) {
+        if (stats.valueCount() == 0) {
+            return Estimate.alwaysUse();
+        }
+        if (!stats.hasDistinctCount()) {
+            return null;
+        }
+        if (stats.distinctCount() == 1) {
+            return Estimate.alwaysUse();
+        }
+        return Estimate.skip();
+    }
+
+    @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
         if (!(dtype instanceof DType.Primitive p)) {
             throw new VortexException(EncodingId.VORTEX_CONSTANT, "encode only supports Primitive dtype, got " + dtype);

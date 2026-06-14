@@ -30,6 +30,30 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
     }
 
     @Override
+    public StatsOptions statsOptions() {
+        return new StatsOptions(true, true);
+    }
+
+    @Override
+    public Estimate expectedRatio(DType dtype, Object data, ArrayStats stats) {
+        if (!(dtype instanceof DType.Primitive) || !stats.hasDistinctCount()) {
+            return null;
+        }
+        long n = stats.valueCount();
+        long distinct = stats.distinctCount();
+        if (n == 0) {
+            return Estimate.skip();
+        }
+        // Skip rule: if every value is distinct, each row is its own run — pure overhead.
+        // Defer to the sample-encoded path otherwise; RunEnd's actual compression depends
+        // on run-length distribution which is not summarised by distinct count alone.
+        if (distinct >= n) {
+            return Estimate.skip();
+        }
+        return null;
+    }
+
+    @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
         if (!(dtype instanceof DType.Primitive p)) {
             throw new VortexException(EncodingId.VORTEX_RUNEND, "encode only supports Primitive dtype, got " + dtype);

@@ -37,4 +37,25 @@ public interface EncodingEncoder {
     default CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
         return CascadeStep.terminal(encode(dtype, data, ctx));
     }
+
+    /// Stats this encoder needs from the cascade compressor's single-pass scan to evaluate
+    /// {@link #expectedRatio}. Returned options are merged across all eligible encoders so
+    /// one scan satisfies every consumer.
+    ///
+    /// @return stats requested for cascade selection; default is no stats
+    default StatsOptions statsOptions() {
+        return StatsOptions.NONE;
+    }
+
+    /// Estimate compression effectiveness on {@code data} given pre-computed [ArrayStats].
+    /// Returning a verdict lets the cascade skip the expensive sample-encode probe.
+    ///
+    /// @param dtype the logical type of the data
+    /// @param data  the input data
+    /// @param stats pre-computed stats reflecting the merged [StatsOptions]
+    /// @return [Estimate.Skip] / [Estimate.AlwaysUse] / [Estimate.Ratio], or {@code null} to
+    ///         defer to the sample-encoded selection path
+    default Estimate expectedRatio(DType dtype, Object data, ArrayStats stats) {
+        return null;
+    }
 }

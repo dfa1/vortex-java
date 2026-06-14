@@ -154,9 +154,43 @@ public final class CascadingCompressor {
         // excluded set so spliceResult's notApplicable retry can rotate to the next
         // accepting encoding (e.g. DateTimePartsEncoding → ExtEncoding when the input
         // is raw storage rather than DateTimePartsData).
-        if (!(dtype instanceof DType.Primitive)) {
+        if (!(dtype instanceof DType.Primitive p)) {
             return spliceResult(findPrimitiveEncoding(dtype, ctx.excluded()), dtype, data, ctx);
         }
+
+        // Stats-first selection (Rust vortex-compressor pattern): merge every eligible
+        // encoder's StatsOptions, compute stats in one pass, query each encoder's
+        // expectedRatio(). AlwaysUse short-circuits; Skip excludes; Ratio competes;
+        // null defers to the sample-encoded path below.
+        StatsOptions merged = StatsOptions.NONE;
+        for (EncodingEncoder enc : encodings) {
+            if (enc.accepts(dtype) && !ctx.excluded().contains(enc.encodingId())) {
+                merged = StatsOptions.merge(merged, enc.statsOptions());
+            }
+        }
+        ArrayStats stats = merged == StatsOptions.NONE
+                                   ? ArrayStats.EMPTY
+                                   : ArrayStats.compute(p.ptype(), data, merged);
+
+        // First sweep: stats verdicts. AlwaysUse short-circuits; Skip excludes from
+        // sample-encoded competition below; Ratio acts as a Skip hint (rough estimate,
+        // not directly comparable to cascade-aware sample bytes); null defers.
+        boolean[] skipMask = new boolean[encodings.size()];
+        for (int i = 0; i < encodings.size(); i++) {
+            EncodingEncoder enc = encodings.get(i);
+            if (!enc.accepts(dtype) || ctx.excluded().contains(enc.encodingId())) {
+                skipMask[i] = true;
+                continue;
+            }
+            Estimate est = enc.expectedRatio(dtype, data, stats);
+            if (est instanceof Estimate.AlwaysUse) {
+                return spliceResult(enc, dtype, data, ctx);
+            }
+            if (est instanceof Estimate.Skip) {
+                skipMask[i] = true;
+            }
+        }
+
         int n = dataLength(data);
 
         // Build sample
@@ -167,10 +201,11 @@ public final class CascadingCompressor {
         long bestSampleSize = primitiveBytes(dtype, sampleSize);
         EncodingEncoder winner = null;
 
-        for (EncodingEncoder enc : encodings) {
-            if (!enc.accepts(dtype) || ctx.excluded().contains(enc.encodingId())) {
+        for (int i = 0; i < encodings.size(); i++) {
+            if (skipMask[i]) {
                 continue;
             }
+            EncodingEncoder enc = encodings.get(i);
             CascadeStep step = enc.encodeCascade(dtype, sample, ctx);
 
             // At depth 0, skip encodings that require cascade

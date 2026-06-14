@@ -35,6 +35,32 @@ public final class DictEncodingEncoder implements EncodingEncoder {
     }
 
     @Override
+    public StatsOptions statsOptions() {
+        return new StatsOptions(true, false);
+    }
+
+    @Override
+    public Estimate expectedRatio(DType dtype, Object data, ArrayStats stats) {
+        // Stats path only covers Primitive (Utf8 still uses sample-encoded selection).
+        if (!(dtype instanceof DType.Primitive) || !stats.hasDistinctCount()) {
+            return null;
+        }
+        long n = stats.valueCount();
+        long distinct = stats.distinctCount();
+        if (n == 0) {
+            return Estimate.skip();
+        }
+        // Rust FloatDictScheme / IntDictScheme skip rule. Skip-only: the raw dict cost
+        // ignores cascade bitpacking on the codes child, so a raw ratio over-estimates
+        // dict's effectiveness vs encoders like ALP whose sample measure includes cascade.
+        // Defer to the sample-encoded path for the actual win.
+        if (distinct * 2 > n) {
+            return Estimate.skip();
+        }
+        return null;
+    }
+
+    @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
         if (dtype instanceof DType.Utf8) {
             return encodeUtf8((String[]) data, ctx);
