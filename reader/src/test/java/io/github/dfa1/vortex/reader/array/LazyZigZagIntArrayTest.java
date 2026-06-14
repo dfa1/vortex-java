@@ -21,12 +21,11 @@ class LazyZigZagIntArrayTest {
     private static final DType I32 = new DType.Primitive(PType.I32, false);
 
     private static LazyZigZagIntArray of(int... encoded) {
-        Arena arena = Arena.ofAuto();
-        MemorySegment seg = arena.allocate((long) encoded.length * 4, 4);
+        MemorySegment seg = Arena.ofAuto().allocate((long) encoded.length * 4, 4);
         for (int i = 0; i < encoded.length; i++) {
             seg.setAtIndex(LE_INT, i, encoded[i]);
         }
-        return new LazyZigZagIntArray(I32, encoded.length, seg, arena);
+        return new LazyZigZagIntArray(I32, encoded.length, seg);
     }
 
     @Test

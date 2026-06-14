@@ -1,13 +1,13 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.ArraySegments;
+import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.encoding.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.proto.ALPMetadata;
@@ -108,9 +108,9 @@ class AlpEncodingEncoderTest {
             Array result = DECODER.decode(ctx);
 
             assertThat(result.length()).isEqualTo(encoded.length);
+            DoubleArray arr = (DoubleArray) result;
             for (int i = 0; i < expected.length; i++) {
-                assertThat(ArraySegments.of(result).get(PTypeIO.LE_DOUBLE, (long) i * 8))
-                        .as("index %d", i).isCloseTo(expected[i], within(1e-9));
+                assertThat(arr.getDouble(i)).as("index %d", i).isCloseTo(expected[i], within(1e-9));
             }
         }
 
@@ -122,13 +122,13 @@ class AlpEncodingEncoderTest {
             double[] patchValues = {Double.NaN, Double.POSITIVE_INFINITY};
 
             DecodeContext ctx = buildAlpCtxF64(expE, expF, encoded, patchIndices, patchValues);
-            Array result = DECODER.decode(ctx);
+            DoubleArray result = (DoubleArray) DECODER.decode(ctx);
 
-            assertThat(ArraySegments.of(result).get(PTypeIO.LE_DOUBLE, 0L)).isCloseTo(1.0, within(1e-9));
-            assertThat(ArraySegments.of(result).get(PTypeIO.LE_DOUBLE, 8L)).isNaN();
-            assertThat(ArraySegments.of(result).get(PTypeIO.LE_DOUBLE, 16L)).isCloseTo(2.0, within(1e-9));
-            assertThat(ArraySegments.of(result).get(PTypeIO.LE_DOUBLE, 24L)).isInfinite();
-            assertThat(ArraySegments.of(result).get(PTypeIO.LE_DOUBLE, 32L)).isCloseTo(3.0, within(1e-9));
+            assertThat(result.getDouble(0)).isCloseTo(1.0, within(1e-9));
+            assertThat(result.getDouble(1)).isNaN();
+            assertThat(result.getDouble(2)).isCloseTo(2.0, within(1e-9));
+            assertThat(result.getDouble(3)).isInfinite();
+            assertThat(result.getDouble(4)).isCloseTo(3.0, within(1e-9));
         }
 
         @ParameterizedTest
@@ -143,8 +143,7 @@ class AlpEncodingEncoderTest {
             DecodeContext ctx = buildAlpCtxF64(expE, expF, encoded, null, null);
             Array result = DECODER.decode(ctx);
 
-            double decoded = ArraySegments.of(result).get(PTypeIO.LE_DOUBLE, 0L);
-            assertThat(decoded).isCloseTo(value, within(1e-6));
+            assertThat(((DoubleArray) result).getDouble(0)).isCloseTo(value, within(1e-6));
         }
 
         @Test
@@ -154,11 +153,10 @@ class AlpEncodingEncoderTest {
             float[] expected = {1.0f, 2.5f, 10.0f};
 
             DecodeContext ctx = buildAlpCtxF32(expE, expF, encoded);
-            Array result = DECODER.decode(ctx);
+            FloatArray result = (FloatArray) DECODER.decode(ctx);
 
             for (int i = 0; i < expected.length; i++) {
-                assertThat(ArraySegments.of(result).get(PTypeIO.LE_FLOAT, (long) i * 4))
-                        .as("index %d", i).isCloseTo(expected[i], within(1e-6f));
+                assertThat(result.getFloat(i)).as("index %d", i).isCloseTo(expected[i], within(1e-6f));
             }
         }
     }
@@ -174,9 +172,9 @@ class AlpEncodingEncoderTest {
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, values.length, DTypes.F32, REGISTRY);
             Array result = DECODER.decode(ctx);
 
+            FloatArray arr = (FloatArray) result;
             for (int i = 0; i < values.length; i++) {
-                assertThat(ArraySegments.of(result).get(PTypeIO.LE_FLOAT, (long) i * 4))
-                        .as("index %d", i).isCloseTo(values[i], within(1e-6f));
+                assertThat(arr.getFloat(i)).as("index %d", i).isCloseTo(values[i], within(1e-6f));
             }
         }
 
@@ -186,13 +184,13 @@ class AlpEncodingEncoderTest {
 
             EncodeResult encoded = ENCODER.encode(DTypes.F32, values, EncodeTestHelper.testCtx());
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, values.length, DTypes.F32, REGISTRY);
-            Array result = DECODER.decode(ctx);
+            FloatArray result = (FloatArray) DECODER.decode(ctx);
 
-            assertThat(ArraySegments.of(result).get(PTypeIO.LE_FLOAT, 0L)).isCloseTo(1.0f, within(1e-6f));
-            assertThat(ArraySegments.of(result).get(PTypeIO.LE_FLOAT, 4L)).isNaN();
-            assertThat(ArraySegments.of(result).get(PTypeIO.LE_FLOAT, 8L)).isCloseTo(2.5f, within(1e-6f));
-            assertThat(ArraySegments.of(result).get(PTypeIO.LE_FLOAT, 12L)).isInfinite();
-            assertThat(ArraySegments.of(result).get(PTypeIO.LE_FLOAT, 16L)).isCloseTo(3.0f, within(1e-6f));
+            assertThat(result.getFloat(0)).isCloseTo(1.0f, within(1e-6f));
+            assertThat(result.getFloat(1)).isNaN();
+            assertThat(result.getFloat(2)).isCloseTo(2.5f, within(1e-6f));
+            assertThat(result.getFloat(3)).isInfinite();
+            assertThat(result.getFloat(4)).isCloseTo(3.0f, within(1e-6f));
         }
 
         @Test
@@ -203,9 +201,9 @@ class AlpEncodingEncoderTest {
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, values.length, DTypes.F64, REGISTRY);
             Array result = DECODER.decode(ctx);
 
+            DoubleArray arr = (DoubleArray) result;
             for (int i = 0; i < values.length; i++) {
-                assertThat(ArraySegments.of(result).get(PTypeIO.LE_DOUBLE, (long) i * 8))
-                        .as("index %d", i).isCloseTo(values[i], within(1e-9));
+                assertThat(arr.getDouble(i)).as("index %d", i).isCloseTo(values[i], within(1e-9));
             }
         }
 

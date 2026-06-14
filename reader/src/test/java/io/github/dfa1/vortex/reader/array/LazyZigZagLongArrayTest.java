@@ -21,12 +21,11 @@ class LazyZigZagLongArrayTest {
     private static final DType I64 = new DType.Primitive(PType.I64, false);
 
     private static LazyZigZagLongArray of(long... encoded) {
-        Arena arena = Arena.ofAuto();
-        MemorySegment seg = arena.allocate((long) encoded.length * 8, 8);
+        MemorySegment seg = Arena.ofAuto().allocate((long) encoded.length * 8, 8);
         for (int i = 0; i < encoded.length; i++) {
             seg.setAtIndex(LE_LONG, i, encoded[i]);
         }
-        return new LazyZigZagLongArray(I64, encoded.length, seg, arena);
+        return new LazyZigZagLongArray(I64, encoded.length, seg);
     }
 
     @Test

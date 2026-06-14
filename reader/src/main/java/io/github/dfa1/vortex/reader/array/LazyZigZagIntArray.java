@@ -4,7 +4,6 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.SegmentAllocator;
 
 /// Lazy [IntArray] backed by the {@code vortex.zigzag} encoded {@code u32} child segment.
 ///
@@ -15,9 +14,7 @@ import java.lang.foreign.SegmentAllocator;
 /// @param dtype   logical I32 type
 /// @param length  number of logical elements
 /// @param encoded backing {@code u32} segment (one int per row, zigzag bit pattern)
-/// @param arena   chunk-scoped allocator used for on-demand materialisation
-public record LazyZigZagIntArray(DType dtype, long length, MemorySegment encoded,
-                                 SegmentAllocator arena)
+public record LazyZigZagIntArray(DType dtype, long length, MemorySegment encoded)
         implements IntArray {
 
     @Override

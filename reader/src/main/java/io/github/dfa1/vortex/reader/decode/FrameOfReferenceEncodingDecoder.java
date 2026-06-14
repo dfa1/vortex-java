@@ -74,8 +74,8 @@ public final class FrameOfReferenceEncodingDecoder implements EncodingDecoder {
         MemorySegment src = ArraySegments.of(rawEncoded);
         long n = ctx.rowCount();
         Array result = switch (p.ptype()) {
-            case I64, U64 -> new LazyForLongArray(ctx.dtype(), n, src, ref, ctx.arena());
-            case I32, U32 -> new LazyForIntArray(ctx.dtype(), n, src, (int) ref, ctx.arena());
+            case I64, U64 -> new LazyForLongArray(ctx.dtype(), n, src, ref);
+            case I32, U32 -> new LazyForIntArray(ctx.dtype(), n, src, (int) ref);
             default -> materialiseEager(ctx, src, n, p.ptype(), ref);
         };
         return validity != null ? new MaskedArray(result, validity) : result;

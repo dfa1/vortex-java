@@ -101,7 +101,7 @@ public final class ReadRegistry {
             case UnknownArrayNode _ -> null;
         };
         if (decoder != null) {
-            return ArraySegments.of(decoder.decode(ctx));
+            return ArraySegments.of(decoder.decode(ctx), ctx.arena());
         }
         String id = switch (node) {
             case KnownArrayNode k -> k.encodingId().id();

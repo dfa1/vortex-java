@@ -4,7 +4,6 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.SegmentAllocator;
 
 /// Lazy [IntArray] backed by the {@code fastlanes.for} encoded {@code i32} child segment.
 ///
@@ -16,9 +15,7 @@ import java.lang.foreign.SegmentAllocator;
 /// @param length  number of logical elements
 /// @param encoded backing {@code i32} segment (one int per row)
 /// @param ref     reference value added to each encoded element
-/// @param arena   chunk-scoped allocator used for on-demand materialisation
-public record LazyForIntArray(DType dtype, long length, MemorySegment encoded, int ref,
-                              SegmentAllocator arena)
+public record LazyForIntArray(DType dtype, long length, MemorySegment encoded, int ref)
         implements IntArray {
 
     @Override

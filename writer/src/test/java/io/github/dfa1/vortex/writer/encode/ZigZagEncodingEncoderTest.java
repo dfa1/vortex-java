@@ -1,14 +1,13 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.reader.array.IntArray;
+import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.encoding.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
@@ -68,10 +67,9 @@ class ZigZagEncodingEncoderTest {
 
             assertThat(result).isInstanceOf(IntArray.class);
             assertThat(result.length()).isEqualTo(expected.length);
-            MemorySegment seg = ArraySegments.of(result);
+            IntArray arr = (IntArray) result;
             for (int i = 0; i < expected.length; i++) {
-                assertThat(seg.get(PTypeIO.LE_INT, (long) i * 4))
-                        .as("index %d", i).isEqualTo(expected[i]);
+                assertThat(arr.getInt(i)).as("index %d", i).isEqualTo(expected[i]);
             }
         }
 
@@ -113,8 +111,9 @@ class ZigZagEncodingEncoderTest {
             Array result = DECODER.decode(ctx);
 
             assertThat(result.length()).isEqualTo(data.length);
+            IntArray arr = (IntArray) result;
             for (int i = 0; i < data.length; i++) {
-                assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
+                assertThat(arr.getInt(i)).as("index %d", i).isEqualTo(data[i]);
             }
         }
 
@@ -126,8 +125,9 @@ class ZigZagEncodingEncoderTest {
             Array result = DECODER.decode(ctx);
 
             assertThat(result.length()).isEqualTo(data.length);
+            LongArray arr = (LongArray) result;
             for (int i = 0; i < data.length; i++) {
-                assertThat(ArraySegments.of(result).get(PTypeIO.LE_LONG, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
+                assertThat(arr.getLong(i)).as("index %d", i).isEqualTo(data[i]);
             }
         }
     }

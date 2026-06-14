@@ -4,7 +4,6 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.SegmentAllocator;
 
 /// Lazy [DoubleArray] backed by the {@code vortex.alp} encoded {@code i64} child segment.
 ///
@@ -21,9 +20,7 @@ import java.lang.foreign.SegmentAllocator;
 /// @param length  number of logical elements
 /// @param encoded backing {@code i64} segment (one long per row)
 /// @param scale   combined ALP scale ({@code 10^exp_f * 10^(-exp_e)})
-/// @param arena   chunk-scoped allocator used for on-demand materialisation
-public record LazyAlpDoubleArray(DType dtype, long length, MemorySegment encoded, double scale,
-                                 SegmentAllocator arena)
+public record LazyAlpDoubleArray(DType dtype, long length, MemorySegment encoded, double scale)
         implements DoubleArray {
 
     @Override

@@ -2,8 +2,6 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -13,9 +11,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
-import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -324,17 +319,15 @@ class VortexWriterTest {
 
         // Then
         var registry = primitiveRegistry();
-        var layout = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
         try (var vf = VortexReader.open(file, registry);
              var iter = vf.scan(ScanOptions.all())) {
             assertThat(iter.hasNext()).isTrue();
             try (Chunk chunk = iter.next()) {
-                Array idArray = chunk.columns().get("id");
+                LongArray idArray = (LongArray) chunk.columns().get("id");
                 assertThat(idArray.length()).isEqualTo(3L);
-                MemorySegment buf = ArraySegments.of(idArray);
-                assertThat(buf.get(layout, 0)).isEqualTo(42L);
-                assertThat(buf.get(layout, 8)).isEqualTo(100L);
-                assertThat(buf.get(layout, 16)).isEqualTo(-1L);
+                assertThat(idArray.getLong(0)).isEqualTo(42L);
+                assertThat(idArray.getLong(1)).isEqualTo(100L);
+                assertThat(idArray.getLong(2)).isEqualTo(-1L);
             }
             assertThat(iter.hasNext()).isFalse();
         }

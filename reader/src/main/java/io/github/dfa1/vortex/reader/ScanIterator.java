@@ -232,38 +232,39 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
 
     // ── Zone-map pruning ──────────────────────────────────────────────────────
 
-    private static Map<String, Array> truncateColumns(Map<String, Array> columns, long rows) {
+    private static Map<String, Array> truncateColumns(Map<String, Array> columns, long rows,
+                                                       SegmentAllocator arena) {
         var result = new LinkedHashMap<String, Array>(columns.size());
         for (var entry : columns.entrySet()) {
-            result.put(entry.getKey(), truncateArray(entry.getValue(), rows));
+            result.put(entry.getKey(), truncateArray(entry.getValue(), rows, arena));
         }
         return Map.copyOf(result);
     }
 
-    private static Array truncateArray(Array arr, long rows) {
+    private static Array truncateArray(Array arr, long rows, SegmentAllocator arena) {
         if (arr.length() <= rows) {
             return arr;
         }
         return switch (arr) {
             case LongArray a ->
-                    new MaterializedLongArray(a.dtype(), rows, ArraySegments.of(a).asSlice(0, rows * Long.BYTES));
+                    new MaterializedLongArray(a.dtype(), rows, ArraySegments.of(a, arena).asSlice(0, rows * Long.BYTES));
             case IntArray a ->
-                    new MaterializedIntArray(a.dtype(), rows, ArraySegments.of(a).asSlice(0, rows * Integer.BYTES));
+                    new MaterializedIntArray(a.dtype(), rows, ArraySegments.of(a, arena).asSlice(0, rows * Integer.BYTES));
             case DoubleArray a ->
-                    new MaterializedDoubleArray(a.dtype(), rows, ArraySegments.of(a).asSlice(0, rows * Double.BYTES));
+                    new MaterializedDoubleArray(a.dtype(), rows, ArraySegments.of(a, arena).asSlice(0, rows * Double.BYTES));
             case FloatArray a ->
-                    new MaterializedFloatArray(a.dtype(), rows, ArraySegments.of(a).asSlice(0, rows * Float.BYTES));
+                    new MaterializedFloatArray(a.dtype(), rows, ArraySegments.of(a, arena).asSlice(0, rows * Float.BYTES));
             case ShortArray a ->
-                    new MaterializedShortArray(a.dtype(), rows, ArraySegments.of(a).asSlice(0, rows * Short.BYTES));
-            case ByteArray a -> new MaterializedByteArray(a.dtype(), rows, ArraySegments.of(a).asSlice(0, rows));
+                    new MaterializedShortArray(a.dtype(), rows, ArraySegments.of(a, arena).asSlice(0, rows * Short.BYTES));
+            case ByteArray a -> new MaterializedByteArray(a.dtype(), rows, ArraySegments.of(a, arena).asSlice(0, rows));
             case BoolArray a ->
-                    new MaterializedBoolArray(a.dtype(), rows, ArraySegments.of(a).asSlice(0, (rows + 7) / 8));
+                    new MaterializedBoolArray(a.dtype(), rows, ArraySegments.of(a, arena).asSlice(0, (rows + 7) / 8));
             case NullArray a -> new NullArray(a.dtype(), rows);
             case VarBinArray a -> a.truncate(rows);
             case MaskedArray a -> {
-                Array truncChild = truncateArray(a.inner(), rows);
+                Array truncChild = truncateArray(a.inner(), rows, arena);
                 BoolArray v = a.validity();
-                BoolArray truncValidity = (v != null) ? (BoolArray) truncateArray(v, rows) : null;
+                BoolArray truncValidity = (v != null) ? (BoolArray) truncateArray(v, rows, arena) : null;
                 yield new MaskedArray(truncChild, truncValidity);
             }
             case EmptyArray a -> a;
@@ -319,7 +320,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         try {
             Map<String, Array> columns = buildColumnMap(spec, arena);
             if (chunkRows < spec.rowCount()) {
-                columns = truncateColumns(columns, chunkRows);
+                columns = truncateColumns(columns, chunkRows, arena);
             }
             rowsReturned += chunkRows;
             Map<String, DType> chunkDtypes = new java.util.LinkedHashMap<>();
@@ -456,7 +457,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         for (Layout flat : flats) {
             Array chunk = decodeFlat(flat, dtype, arena);
             Array chunkData = chunk instanceof MaskedArray m ? m.inner() : chunk;
-            MemorySegment src = ArraySegments.of(chunkData);
+            MemorySegment src = ArraySegments.of(chunkData, arena);
             MemorySegment.copy(src, 0, combined, byteOffset, src.byteSize());
             byteOffset += src.byteSize();
         }
@@ -497,7 +498,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         Array values = decodeLayout(valuesLayout, dtype, arena);
         Array codes = decodeLayout(codesLayout, new DType.Primitive(codesPType, false), arena);
 
-        MemorySegment codesSeg = ArraySegments.of(codes);
+        MemorySegment codesSeg = ArraySegments.of(codes, arena);
 
         // Zip-bomb guard: for direct-mapped encodings (e.g. vortex.primitive), the codes
         // buffer is mmap-bounded and can be much smaller than the claimed rowCount. Reject
@@ -517,7 +518,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                     codesSeg, codesPType);
         }
         if (dtype instanceof DType.Primitive pDtype) {
-            MemorySegment valBuf = ArraySegments.of(values);
+            MemorySegment valBuf = ArraySegments.of(values, arena);
             return expandDictPrimitive(valBuf, codesSeg, codesPType, pDtype, n, arena);
         }
         return expandDictStrings((VarBinArray.OffsetMode) values, codesSeg, codesPType, dtype, n, arena);

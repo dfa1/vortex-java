@@ -23,12 +23,11 @@ class LazyAlpDoubleArrayTest {
     private static final DType F64 = new DType.Primitive(PType.F64, false);
 
     private static LazyAlpDoubleArray of(double scale, long... encoded) {
-        Arena arena = Arena.ofAuto();
-        MemorySegment seg = arena.allocate((long) encoded.length * 8, 8);
+        MemorySegment seg = Arena.ofAuto().allocate((long) encoded.length * 8, 8);
         for (int i = 0; i < encoded.length; i++) {
             seg.setAtIndex(LE_LONG, i, encoded[i]);
         }
-        return new LazyAlpDoubleArray(F64, encoded.length, seg, scale, arena);
+        return new LazyAlpDoubleArray(F64, encoded.length, seg, scale);
     }
 
     @Nested

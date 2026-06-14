@@ -3,14 +3,14 @@ package io.github.dfa1.vortex.writer.encode;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.ArraySegments;
+import io.github.dfa1.vortex.reader.array.IntArray;
+import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.encoding.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.proto.ScalarValue;
@@ -75,9 +75,9 @@ class FrameOfReferenceEncodingEncoderTest {
             Array result = DECODER.decode(ctx);
 
             assertThat(result.length()).isEqualTo(residuals.length);
+            LongArray arr = (LongArray) result;
             for (int i = 0; i < expected.length; i++) {
-                assertThat(ArraySegments.of(result).get(PTypeIO.LE_LONG, (long) i * 8))
-                        .as("index %d", i).isEqualTo(expected[i]);
+                assertThat(arr.getLong(i)).as("index %d", i).isEqualTo(expected[i]);
             }
         }
 
@@ -91,9 +91,9 @@ class FrameOfReferenceEncodingEncoderTest {
             Array result = DECODER.decode(ctx);
 
             assertThat(result.length()).isEqualTo(residuals.length);
+            IntArray arr = (IntArray) result;
             for (int i = 0; i < expected.length; i++) {
-                assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, (long) i * 4))
-                        .as("index %d", i).isEqualTo(expected[i]);
+                assertThat(arr.getInt(i)).as("index %d", i).isEqualTo(expected[i]);
             }
         }
 
@@ -103,8 +103,9 @@ class FrameOfReferenceEncodingEncoderTest {
             DecodeContext ctx = buildForContext(DTypes.I64, 0L, residuals, PType.I64);
             Array result = DECODER.decode(ctx);
 
+            LongArray arr = (LongArray) result;
             for (int i = 0; i < residuals.length; i++) {
-                assertThat(ArraySegments.of(result).get(PTypeIO.LE_LONG, (long) i * 8)).isEqualTo(residuals[i]);
+                assertThat(arr.getLong(i)).isEqualTo(residuals[i]);
             }
         }
 
@@ -115,8 +116,7 @@ class FrameOfReferenceEncodingEncoderTest {
             DecodeContext ctx = buildForContext(DTypes.I64, reference, residuals, PType.I64);
             Array result = DECODER.decode(ctx);
 
-            long got = ArraySegments.of(result).get(PTypeIO.LE_LONG, 0L);
-            assertThat(got).isEqualTo(residuals[0] + reference);
+            assertThat(((LongArray) result).getLong(0)).isEqualTo(residuals[0] + reference);
         }
 
         @Test
@@ -154,8 +154,8 @@ class FrameOfReferenceEncodingEncoderTest {
             assertThat(masked.isValid(1)).isFalse();
             assertThat(masked.isValid(2)).isTrue();
             assertThat(masked.isValid(3)).isFalse();
-            assertThat(ArraySegments.of(masked.inner()).get(PTypeIO.LE_INT, 0L)).isEqualTo(100);
-            assertThat(ArraySegments.of(masked.inner()).get(PTypeIO.LE_INT, 8L)).isEqualTo(105);
+            assertThat(((IntArray) masked.inner()).getInt(0)).isEqualTo(100);
+            assertThat(((IntArray) masked.inner()).getInt(2)).isEqualTo(105);
         }
     }
 
@@ -189,8 +189,9 @@ class FrameOfReferenceEncodingEncoderTest {
             Array result = DECODER.decode(ctx);
 
             assertThat(result.length()).isEqualTo(data.length);
+            LongArray arr = (LongArray) result;
             for (int i = 0; i < data.length; i++) {
-                assertThat(ArraySegments.of(result).get(PTypeIO.LE_LONG, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
+                assertThat(arr.getLong(i)).as("index %d", i).isEqualTo(data[i]);
             }
         }
 
@@ -202,8 +203,9 @@ class FrameOfReferenceEncodingEncoderTest {
             Array result = DECODER.decode(ctx);
 
             assertThat(result.length()).isEqualTo(data.length);
+            IntArray arr = (IntArray) result;
             for (int i = 0; i < data.length; i++) {
-                assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
+                assertThat(arr.getInt(i)).as("index %d", i).isEqualTo(data[i]);
             }
         }
     }

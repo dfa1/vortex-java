@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 
 /// Utility for extracting the primary {@link MemorySegment} from any {@link Array}.
 ///
@@ -22,12 +23,12 @@ public final class ArraySegments {
     private ArraySegments() {
     }
 
-    /// Returns the primary backing segment of {@code arr}, materialising lazy variants through
-    /// their chunk-scoped allocator on demand.
+    /// Returns the primary backing segment of {@code arr}.
     ///
     /// @param arr the array whose segment is needed
     /// @return the primary {@link MemorySegment}
-    /// @throws VortexException if the array type has no primary segment
+    /// @throws VortexException if the array type has no primary segment (e.g. lazy variants — use
+    ///                         {@link #of(Array, SegmentAllocator)} instead)
     public static MemorySegment of(Array arr) {
         Array data = arr instanceof MaskedArray m ? m.inner() : arr;
         return switch (data) {
@@ -39,21 +40,39 @@ public final class ArraySegments {
             case MaterializedByteArray a -> a.buffer();
             case MaterializedBoolArray a -> a.buffer();
             case MaterializedFloat16Array a -> a.buffer();
-            case LazyAlpDoubleArray a -> materialise(a);
-            case LazyAlpFloatArray a -> materialise(a);
-            case LazyForLongArray a -> materialise(a);
-            case LazyForIntArray a -> materialise(a);
-            case LazyZigZagLongArray a -> materialise(a);
-            case LazyZigZagIntArray a -> materialise(a);
             case VarBinArray a -> a.bytesSegment();
             case GenericArray a -> a.buffer(0);
             default -> throw new VortexException(data.getClass().getSimpleName() + " has no primary segment");
         };
     }
 
-    private static MemorySegment materialise(LazyAlpDoubleArray a) {
+    /// Returns the primary backing segment of {@code arr}, materialising lazy variants into a
+    /// fresh segment allocated from {@code arena}.
+    ///
+    /// Use this overload when the caller already holds a chunk-scoped allocator (e.g.
+    /// {@link io.github.dfa1.vortex.reader.ReadRegistry#decodeAsSegment}) so lazy array types
+    /// do not need to carry the arena as a record component.
+    ///
+    /// @param arr   the array whose segment is needed
+    /// @param arena allocator used to materialise lazy variants
+    /// @return the primary {@link MemorySegment}
+    /// @throws VortexException if the array type has no primary segment
+    public static MemorySegment of(Array arr, SegmentAllocator arena) {
+        Array data = arr instanceof MaskedArray m ? m.inner() : arr;
+        return switch (data) {
+            case LazyAlpDoubleArray a -> materialise(a, arena);
+            case LazyAlpFloatArray a -> materialise(a, arena);
+            case LazyForLongArray a -> materialise(a, arena);
+            case LazyForIntArray a -> materialise(a, arena);
+            case LazyZigZagLongArray a -> materialise(a, arena);
+            case LazyZigZagIntArray a -> materialise(a, arena);
+            default -> of(arr);
+        };
+    }
+
+    private static MemorySegment materialise(LazyAlpDoubleArray a, SegmentAllocator arena) {
         long n = a.length();
-        MemorySegment dst = a.arena().allocate(n * 8L, 8);
+        MemorySegment dst = arena.allocate(n * 8L, 8);
         double scale = a.scale();
         MemorySegment src = a.encoded();
         for (long i = 0; i < n; i++) {
@@ -62,9 +81,9 @@ public final class ArraySegments {
         return dst;
     }
 
-    private static MemorySegment materialise(LazyAlpFloatArray a) {
+    private static MemorySegment materialise(LazyAlpFloatArray a, SegmentAllocator arena) {
         long n = a.length();
-        MemorySegment dst = a.arena().allocate(n * 4L, 4);
+        MemorySegment dst = arena.allocate(n * 4L, 4);
         float scale = a.scale();
         MemorySegment src = a.encoded();
         for (long i = 0; i < n; i++) {
@@ -73,9 +92,9 @@ public final class ArraySegments {
         return dst;
     }
 
-    private static MemorySegment materialise(LazyForLongArray a) {
+    private static MemorySegment materialise(LazyForLongArray a, SegmentAllocator arena) {
         long n = a.length();
-        MemorySegment dst = a.arena().allocate(n * 8L, 8);
+        MemorySegment dst = arena.allocate(n * 8L, 8);
         long ref = a.ref();
         MemorySegment src = a.encoded();
         for (long i = 0; i < n; i++) {
@@ -84,9 +103,9 @@ public final class ArraySegments {
         return dst;
     }
 
-    private static MemorySegment materialise(LazyForIntArray a) {
+    private static MemorySegment materialise(LazyForIntArray a, SegmentAllocator arena) {
         long n = a.length();
-        MemorySegment dst = a.arena().allocate(n * 4L, 4);
+        MemorySegment dst = arena.allocate(n * 4L, 4);
         int ref = a.ref();
         MemorySegment src = a.encoded();
         for (long i = 0; i < n; i++) {
@@ -95,9 +114,9 @@ public final class ArraySegments {
         return dst;
     }
 
-    private static MemorySegment materialise(LazyZigZagLongArray a) {
+    private static MemorySegment materialise(LazyZigZagLongArray a, SegmentAllocator arena) {
         long n = a.length();
-        MemorySegment dst = a.arena().allocate(n * 8L, 8);
+        MemorySegment dst = arena.allocate(n * 8L, 8);
         MemorySegment src = a.encoded();
         for (long i = 0; i < n; i++) {
             long u = src.getAtIndex(PTypeIO.LE_LONG, i);
@@ -106,9 +125,9 @@ public final class ArraySegments {
         return dst;
     }
 
-    private static MemorySegment materialise(LazyZigZagIntArray a) {
+    private static MemorySegment materialise(LazyZigZagIntArray a, SegmentAllocator arena) {
         long n = a.length();
-        MemorySegment dst = a.arena().allocate(n * 4L, 4);
+        MemorySegment dst = arena.allocate(n * 4L, 4);
         MemorySegment src = a.encoded();
         for (long i = 0; i < n; i++) {
             int u = src.getAtIndex(PTypeIO.LE_INT, i);

@@ -53,10 +53,10 @@ public final class ZigZagEncodingDecoder implements EncodingDecoder {
         if (srcCap >= n) {
             switch (signed) {
                 case I32 -> {
-                    return new LazyZigZagIntArray(ctx.dtype(), n, src, ctx.arena());
+                    return new LazyZigZagIntArray(ctx.dtype(), n, src);
                 }
                 case I64 -> {
-                    return new LazyZigZagLongArray(ctx.dtype(), n, src, ctx.arena());
+                    return new LazyZigZagLongArray(ctx.dtype(), n, src);
                 }
                 default -> {
                 }

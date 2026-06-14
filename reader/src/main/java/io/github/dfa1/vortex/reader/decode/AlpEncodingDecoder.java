@@ -81,7 +81,7 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
         long srcCap = SegmentBroadcast.capacity(src, 8);
 
         if (meta.patches() == null && srcCap >= n) {
-            return new LazyAlpDoubleArray(ctx.dtype(), n, src, scale, ctx.arena());
+            return new LazyAlpDoubleArray(ctx.dtype(), n, src, scale);
         }
 
         MemorySegment buf = ctx.arena().allocate(n * 8, 8);
@@ -106,7 +106,7 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
         long srcCap = SegmentBroadcast.capacity(src, 4);
 
         if (meta.patches() == null && srcCap >= n) {
-            return new LazyAlpFloatArray(ctx.dtype(), n, src, scale, ctx.arena());
+            return new LazyAlpFloatArray(ctx.dtype(), n, src, scale);
         }
 
         MemorySegment buf = ctx.arena().allocate(n * 4, 4);

@@ -22,12 +22,11 @@ class LazyForLongArrayTest {
     private static final DType I64 = new DType.Primitive(PType.I64, false);
 
     private static LazyForLongArray of(long ref, long... encoded) {
-        Arena arena = Arena.ofAuto();
-        MemorySegment seg = arena.allocate((long) encoded.length * 8, 8);
+        MemorySegment seg = Arena.ofAuto().allocate((long) encoded.length * 8, 8);
         for (int i = 0; i < encoded.length; i++) {
             seg.setAtIndex(LE_LONG, i, encoded[i]);
         }
-        return new LazyForLongArray(I64, encoded.length, seg, ref, arena);
+        return new LazyForLongArray(I64, encoded.length, seg, ref);
     }
 
     @Nested

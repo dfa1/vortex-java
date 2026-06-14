@@ -1,13 +1,12 @@
 package io.github.dfa1.vortex.writer;
 
-import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.ArraySegments;
+import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.IntArray;
+import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
 
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -16,13 +15,6 @@ import java.util.List;
 /// returned arrays/lists outlive the scan lifecycle.
 final class VortexReads {
 
-    private static final ValueLayout.OfInt LE_INT =
-            ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-    private static final ValueLayout.OfLong LE_LONG =
-            ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-    private static final ValueLayout.OfDouble LE_DOUBLE =
-            ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-
     private VortexReads() {
     }
 
@@ -30,10 +22,7 @@ final class VortexReads {
         var collected = new ArrayList<Integer>();
         try (var iter = vf.scan(ScanOptions.all())) {
             iter.forEachRemaining(c -> {
-                Array arr = c.column(col);
-                for (long i = 0; i < arr.length(); i++) {
-                    collected.add(ArraySegments.of(arr).get(LE_INT, i * Integer.BYTES));
-                }
+                ((IntArray) c.column(col)).forEachInt(collected::add);
             });
         }
         return collected.stream().mapToInt(Integer::intValue).toArray();
@@ -43,10 +32,7 @@ final class VortexReads {
         var collected = new ArrayList<Long>();
         try (var iter = vf.scan(ScanOptions.all())) {
             iter.forEachRemaining(c -> {
-                Array arr = c.column(col);
-                for (long i = 0; i < arr.length(); i++) {
-                    collected.add(ArraySegments.of(arr).get(LE_LONG, i * Long.BYTES));
-                }
+                ((LongArray) c.column(col)).forEachLong(collected::add);
             });
         }
         return collected.stream().mapToLong(Long::longValue).toArray();
@@ -56,10 +42,8 @@ final class VortexReads {
         var collected = new ArrayList<Double>();
         try (var iter = vf.scan(ScanOptions.all())) {
             iter.forEachRemaining(c -> {
-                Array arr = c.column(col);
-                for (long i = 0; i < arr.length(); i++) {
-                    collected.add(ArraySegments.of(arr).get(LE_DOUBLE, i * Double.BYTES));
-                }
+                DoubleArray arr = (DoubleArray) c.column(col);
+                arr.forEachDouble(collected::add);
             });
         }
         return collected.stream().mapToDouble(Double::doubleValue).toArray();
