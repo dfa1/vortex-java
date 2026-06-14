@@ -100,8 +100,10 @@ like a regression on the only number we measure.
   nothing. (TODO.)
 
 Keep the existing `javaReadClose` (full fold) as the **negative test**.
-No phase may regress it — the no-filter path stays bit-for-bit eager
-(see the API gate below).
+Initial fear was that lazy-by-default would regress it; the PoC
+proposed in PR #35 measured the opposite (+9.5% on `javaReadClose`
+against the OHLC chain), so the "gate on `hasFilter()`" idea is
+dropped — see Phase 2.
 
 #### Phase 0 baseline (10M rows, OHLC, `close` column)
 
@@ -115,207 +117,293 @@ No phase may regress it — the no-filter path stays bit-for-bit eager
 Two observations:
 1. Java loses 3.5–4× to JNI at low selectivity. The whole loss is eager
    decode of rejected rows.
-2. Java *already* wins at 100% selectivity — JNI's per-batch Arrow
-   marshalling costs more than Java's tight fold. **This is the reason
-   to gate lazy on `hasFilter()` instead of making it the default.**
+2. Java *already* wins at 100% selectivity — JNI pays a copy from
+   Rust Arrow buffers into Java for every batch, and that copy costs
+   more than the tight Java fold over the same rows.
 
-### API gate — eager unless a filter is present
+Initial reading was "gate lazy behind `hasFilter()` so the full-fold
+path stays eager and the filter path switches to lazy." Measurement
+rejected the gate (see below — lazy is faster on both paths).
+
+### API gate (rejected by PoC measurement)
+
+Early draft proposed gating lazy decode behind
+`ScanOptions.hasFilter()` so the no-filter path stayed bit-for-bit
+eager:
 
 ```
 ScanOptions.hasFilter() == false  →  eager path (today), zero change
 ScanOptions.hasFilter() == true   →  lazy + compute pushdown
 ```
 
-Consequences of the gate:
+The motivation was protecting `javaReadClose` (the README full-fold
+bench) from any regression caused by the extra method-call cost of
+going through an interface to reach the lazy variant.
 
-- `javaReadClose` (no filter) is **untouched**. No `DoubleArray`
-  polymorphism, no virtual call, no patch-bitmap allocation. Eliminates
-  the "negative consequence" that worried earlier drafts.
-- `javaFilterClose` switches to the pushdown path. The user's loop does
-  not change: the chunk it receives is already **compacted** to matching
-  rows, so the per-row `if (v > threshold)` check goes away.
-
-```java
-// Today — user pays the per-row predicate check
-for (long i = 0; i < close.length(); i++) {
-    double v = close.getDouble(i);
-    if (v > threshold) sum += v;
-}
-
-// After phase 2 — chunk is pre-filtered, length = matched rows only
-for (long i = 0; i < close.length(); i++) {
-    sum += close.getDouble(i);
-}
-```
-
-The filter is applied inside `ScanIterator.next()` *before* the chunk is
-returned. `close.length()` reports the matched row count for that chunk.
-Empty chunks are skipped inside `next()`.
+**PoC measurement rejected this gate.** Lazy decode is *strictly
+faster* than eager on full fold (+9.5% on `javaReadClose`) because
+the materialisation write/read intermediate buffer disappears — the
+lazy variant returns the encoded segment directly and applies the
+transform on access; the fused variant unpacks bitpacked → double in
+one pass. Net halving of memory traffic on the OHLC chain. The gate
+is dropped; lazy is the default whenever the chain pattern matches.
 
 ### Phase 1 — Array hierarchy refactor (no behavior change)
 
 Today each primitive Array is a `public final class` with a
 `MemorySegment` buffer field. Lazy variants cannot extend it. Convert
-every numeric Array to an **open interface**; keep the current concrete
-behavior as a package-private default record exposed only via a static
-factory:
+every numeric and bool Array to a **non-sealed interface** and move
+the current behaviour into a **public** `MaterializedXxxArray` record.
+No static factory on the interface — encoders construct
+`new MaterializedXxxArray(...)` directly, keeping the interface a
+pure contract:
 
 ```java
-public interface DoubleArray extends Array {
+public non-sealed interface DoubleArray extends Array {
     double getDouble(long i);
     void forEachDouble(DoubleConsumer c);
     double fold(double identity, DoubleBinaryOperator op);
-
-    /// Default impl backed by a materialized MemorySegment.
-    /// Clients never reference the concrete type.
-    static DoubleArray of(DType dtype, long length, MemorySegment buffer) {
-        return new BufferedDoubleArray(dtype, length, buffer);
-    }
 }
 
-// package-private — name does not appear in the public API
-record BufferedDoubleArray(DType dtype, long length, MemorySegment buffer)
-        implements DoubleArray {
-    public double getDouble(long i) {
-        return buffer.getAtIndex(PTypeIO.LE_DOUBLE, i);
-    }
-    // forEachDouble, fold — same body as today's DoubleArray
+public final class MaterializedDoubleArray implements DoubleArray {
+    public MaterializedDoubleArray(DType dtype, long length, MemorySegment buffer) { ... }
+    @Override public double getDouble(long i) { ... }       // existing body
+    @Override public void forEachDouble(DoubleConsumer c) { ... }
+    @Override public double fold(double identity, DoubleBinaryOperator op) { ... }
 }
 ```
 
-Scope: `DoubleArray`, `FloatArray`, `LongArray`, `IntArray`,
-`ShortArray`, `ByteArray`. Defer `BoolArray`, `VarBinArray`,
-`VarBinViewArray`, `MaskedArray` — different shapes, no lazy candidate
-encoding for them yet.
+Scope: `BoolArray`, `ByteArray`, `ShortArray`, `IntArray`, `LongArray`,
+`Float16Array`, `FloatArray`, `DoubleArray`. Defer `VarBinArray`,
+`VarBinViewArray`, `NullArray`, `EmptyArray` — no lazy candidate
+encoding for them yet. Container types (`StructArray`, `MaskedArray`,
+`ListArray`, etc.) stay `final class` — not lazy candidates.
 
-Rewrite ~69 `new DoubleArray(...)` (and sibling) call sites in
-`reader.decode.*` and `ScanIterator` to use `DoubleArray.of(...)`.
-Pure textual change; the factory returns the same buffer-backed
-implementation as before.
+Rewrite all `new XxxArray(...)` call sites (~115 across reader,
+writer, integration, performance, core tests) to
+`new MaterializedXxxArray(...)`. Pure textual change.
+`ArraySegments` pattern matches resolve to the concrete
+`MaterializedXxxArray` so its `buffer()` accessor stays
+package-private.
 
 **Behavior unchanged.** Every existing test, integration test, and
-benchmark sees `BufferedDoubleArray` everywhere via the interface. JIT
-call sites stay monomorphic until a second impl is introduced. Run
-`./mvnw verify` and `RustVsJavaReadBenchmark` to confirm zero
-regression before moving on.
+benchmark sees `MaterializedXxxArray` everywhere via the interface.
+While only one class implements the interface, the JVM can still
+treat `getDouble` / `fold` calls as direct calls — the same speed
+as today's `final class`.
 
 **Not sealed.** Custom encoding-specific concretes (phase 2+) just
-`implements DoubleArray` — no permits edit, no exhaustive switch
-required in callers. Kernels use `instanceof` + `default` fallback so
-unknown impls degrade to the generic per-row path automatically. This
-keeps third-party encodings on equal footing with built-in ones.
+`implements XxxArray` — no `permits` clause to edit, no exhaustive
+`switch` required in callers. Callers that need a fast path use
+`instanceof` plus a `default` branch, so unknown implementations
+automatically fall back to the generic per-row path. Third-party
+encodings end up on equal footing with the built-in ones.
 
-### Phase 2 — Lazy ALP variant + filter gate
+**No `static of(...)` on the interface.** An earlier draft added a
+factory returning a (then package-private) buffer-backed default.
+That coupled the interface to its concrete and proved unused once
+decoders were rewritten to call `new MaterializedXxxArray(...)`
+directly. The interface stays a pure contract.
+
+#### Possible follow-up: kernel-based MaterializedXxxArray
+
+Every encoding's eager decode is the same pattern: allocate a buffer,
+loop over rows, write `kernel(i)`. Generalising would let the
+constructor own the loop:
+
+```java
+public MaterializedDoubleArray(DType dtype, long length,
+                                LongToDoubleFunction kernel, Arena arena) {
+    MemorySegment dst = arena.allocate(length * 8, 8);
+    for (long i = 0; i < length; i++) {
+        dst.setAtIndex(LE_DOUBLE, i, kernel.applyAsDouble(i));
+    }
+    // store dst
+}
+```
+
+Then `AlpEncodingDecoder.decodeF64` shrinks to ~4 lines:
+
+```java
+return new MaterializedDoubleArray(dtype, n,
+        i -> (double) src.getAtIndex(LE_LONG, i) * scale, arena);
+```
+
+Trade-offs:
+
+- **Win:** dedup. Every eager decoder collapses to one expression +
+  one constructor call.
+- **Cost — per-row indirect call.** The JVM compiles the
+  constructor body once and shares it across every decoder that
+  calls it. The `kernel.applyAsDouble(i)` call inside that shared
+  loop therefore sees *every* lambda that ever passes through.
+  With one decoder calling it, the JVM can inline the kernel and
+  keep the loop tight. With two, it can still inline both but the
+  call is no longer a single direct jump. With three or more, the
+  JVM gives up inlining and every row pays a real method-call cost.
+  Options when that ceiling hurts: accept it, give each decoder its
+  own copy of the constructor (defeats the dedup), or fall back to
+  the existing buffer constructor for the slowest decoders.
+- **Lost flexibility.** Encoding-specific tricks — `i % srcCap`
+  branch-split, broadcast-cap branches, in-place writes when source
+  is writable — don't fit a pure kernel. Forcing them into the kernel
+  means a per-row `cap` check (banned by the hot-loop rule); keeping
+  them out means the kernel constructor only covers the boring case.
+
+Add the kernel constructor *alongside* the existing buffer
+constructor. Decoders that want the loop dedup opt in; decoders with
+quirky paths keep their own loop. Tracked as a follow-up; not part of
+this phase.
+
+### Phase 2 — Lazy ALP + fused chain
 
 Add the first lazy implementation:
 
 ```java
 public record AlpDoubleArray(
         DType dtype, long length,
-        MemorySegment encoded, double scale,
-        PatchesIndex patches  // null if no patches
+        MemorySegment encoded, double scale
 ) implements DoubleArray {
     public double getDouble(long i) {
-        if (patches != null && patches.has(i)) {
-            return patches.value(i);
-        }
         return (double) encoded.getAtIndex(LE_LONG, i) * scale;
     }
-    public DoubleArray compareGt(double threshold, Arena arena) { /* pushdown */ }
+    public double sumWhereGt(double threshold) { /* pushdown */ }
     // forEachDouble / fold = lazy variants
 }
 ```
 
 `AlpDoubleArray` is a top-level `public record` that
-`implements DoubleArray`. No permits edit — the interface stays open.
+`implements DoubleArray`. No `permits` clause to edit — the
+interface stays open.
 
-Patches index: two options for O(1) lookup:
+**Patches are not handled by the lazy variant.** Patched chunks fall
+back to `MaterializedDoubleArray` (see the fused-chain subsection
+below). Checking a patch bitmap or a sorted patch-index on every
+access would add a per-row branch inside `getDouble`, which the
+codebase's hot-loop rule (see CLAUDE.md) bans because it kills
+auto-vectorisation in the million-row inner loops. Patched chunks
+are the majority of the OHLC dataset today, so eager materialisation
+for them stays the dominant cost; "Extended fusion" in the Future
+section is the path to recover it without paying the per-row branch.
 
-- **Sparse bitmap**: `BitSet` of `n` bits over patched indices. O(1)
-  lookup. Memory: `n / 8` bytes per chunk. For 1M-row chunks: 125 KB.
-- **Sorted index array + binary search**: `long[] patchIdx`. O(log p)
-  per access. Memory: `p * 8` bytes.
-
-Use the bitmap. Predictable per-access cost.
-
-**Filter gate** in `AlpEncodingDecoder.decode`:
+**No filter gate.** The PoC measurement showed lazy is *strictly
+faster* than the eager path even on full-fold workloads (+9.5% on
+`javaReadClose`, OHLC chain), because the materialisation write/read
+intermediate buffer is skipped entirely. The earlier "gate lazy behind
+`hasFilter()`" idea is dropped in the final design — lazy is the
+default whenever the chain pattern matches:
 
 ```java
-return ctx.hasFilter()
-    ? new AlpDoubleArray(dtype, n, encoded, scale, patches)   // lazy
-    : MaterializedDoubleArray.of(...);                         // today's eager path
+return new AlpDoubleArray(dtype, n, encoded, scale);             // always lazy
+// fallback to: new MaterializedDoubleArray(...) when not lazy-eligible
+// (read-only source, broadcast source, patched chunk)
 ```
 
-`DecodeContext` gains an `hasFilter()` hint propagated from
-`ScanOptions`. No `RowFilter` parsing inside the decoder — only the
-boolean signal.
+No `DecodeContext.hasFilter()` plumbing is needed — the gate is gone.
+
+#### Fused chain detection
+
+When the ALP child layout is `FoR(Bitpacked)` (or `Bitpacked` directly
+when the writer dropped FoR for `ref==0`), the decoder skips the
+intermediate FoR/ALP buffers entirely and returns a
+`FusedAlpForBitpackedDoubleArray` that holds the raw packed buffer +
+`(bitWidth, offset, ref, scale)`. Public surface is `compareGt`:
+unpack each row, apply `+ref`, compare against the threshold in the
+encoded int domain, emit a bit into the result `BoolArray`. The full
+double materialisation is deferred to `sumMasked` (or any other
+generic reduction) which only touches the matching rows. The
+full-fold path (`getDouble`/`fold`/`forEachDouble`) lazily
+materialises through one pass that writes doubles directly from the
+bitpacked unpack — halving the memory traffic vs the old eager chain
+(one decode pass instead of bitpacked→FoR→ALP). The class keeps a
+package-private fused `sumWhereGt` for the hot
+`sumMasked(compareGt(t))` path so the unpack and the accumulate stay
+in one loop.
+
+`AlpEncodingDecoder` walks the `ArrayNode` tree to detect the chain
+(no decoding cost to peek). Falls back to `AlpDoubleArray` for the
+bare-ALP case, `MaterializedDoubleArray` for patched chunks.
 
 ### Phase 3 — compute pushdown
 
-`ScanIterator` routes `ScanOptions.rowFilter()` through a kernel SPI
-before falling back to materialization. Initial kernels:
-
-- `CompareKernel`: `compare(arr, scalar, op) → BoolArray`. For
-  `AlpDoubleArray`, encode the scalar to the int domain
-  (`enc = round(scalar / scale)`) and compare ints. For
-  `ForLongArray` (when it lands), subtract the reference and compare
-  ints. Falls back to materialization when the scalar does not
-  round-trip through the encoding.
-- `BetweenKernel`: same approach for two scalars.
-- `TakeKernel`: `take(arr, indices)` — decode only the requested
-  indices. Unblocks the take/slice/projection wins from phase 0.
-- `SumKernel`, `MinKernel`, `MaxKernel`: deferred.
-  `sum(AlpDoubleArray) = sum(int) * scale + patch_correction` is
-  straightforward but not on the critical path.
-
-Pattern-match dispatch in `ScanIterator` with a `default` fallback —
-no exhaustiveness required, so unknown future impls degrade gracefully:
+**Factor compute as `compare → BoolArray` per encoding, plus a
+generic reduction over the masked array.** Fused operators
+(`sumWhereGt`, `minWhereBetween`, …) blow up the method count:
+`{sum, min, max, count, avg} × {gt, lt, ge, le, eq, between}
+× {Alp, AlpRd, For, ZigZag, Fused×N}` is hundreds of methods per
+class, and the count multiplies with every new encoding or new
+reducer. Cap the blow-up by exposing the *predicate* on the
+encoding-specific class and keeping the *reduction* generic:
 
 ```java
 DoubleArray col = chunk.column("close");
 BoolArray sel = switch (col) {
-    case AlpDoubleArray alp -> alp.compareGt(threshold, arena);
-    default                 -> Filters.scalarGt(col, threshold); // generic via getDouble
+    case FusedAlpForBitpackedDoubleArray fused -> fused.compareGt(threshold);
+    case AlpDoubleArray alp                    -> alp.compareGt(threshold);
+    default                                     -> Filters.scalarGt(col, threshold);
 };
+double sum = col.sumMasked(sel);   // generic over DoubleArray
 ```
 
-For multi-column filters: `AND` evaluates kernels in column order,
-intersecting selection vectors; `OR` unions them. Columns referenced
-only by the filter (not by projection) are decoded just enough to test
-and are not delivered to the consumer.
+Each encoding ships **one** primary pushdown shape — `compare`
+(and `between`, which is just compare with two bounds). Reductions
+(`sum` / `min` / `max` / `count`) live on the `DoubleArray`
+interface and read from the encoded form through the same per-row
+`getDouble`; selective masks skip most rows. The method count
+drops from `(reducers × predicates × encodings)` to
+`reducers + (predicates × encodings)` — a handful of generic
+reducers plus a small predicate set per encoding.
+
+`sumWhereGt` survives as a **private** fused method inside
+`FusedAlpForBitpackedDoubleArray` (and only there) because the PoC
+showed a single-pass unpack-compare-accumulate is materially faster
+than two passes on the bitpacked chain. The fused class can choose
+to short-circuit `sumMasked(compareGt(t))` to that private path; no
+other encoding pays the cost of the extra method and no other
+encoding has to mirror its shape.
+
+The earlier "Kernel SPI" idea — a pluggable
+`CompareKernel`/`TakeKernel` interface registered per encoding — is
+**deferred** until a second encoding (FoR, ZigZag, AlpRd) ships its
+own `compareXxx` and we actually see duplication worth factoring
+out. Until then, a plain method on the concrete class is easier to
+read, the JVM has a direct call to inline (no extra indirection
+through a registry), and each encoding can pick the predicates that
+make sense for its math.
+
+Per-encoding predicate math:
+
+- **`AlpDoubleArray.compareGt(threshold)`** — encode the scalar to
+  the ALP integer domain (`enc = floor(threshold / scale)`) and
+  compare ints. Falls back to materialization when the scalar does
+  not round-trip through the encoding.
+- **`ForLongArray.compareGt(threshold)` (when it lands)** — subtract
+  the reference once and compare ints.
+- **`take(indices)`** — decode only the requested indices.
+  Unblocks the take/slice/projection wins from phase 0; same
+  `compare`-shaped story, different input.
+
+For multi-column filters: `AND` evaluates the predicates in column
+order and intersects the resulting `BoolArray` masks; `OR` unions
+them. Columns referenced only by the filter (not by projection) are
+decoded just enough to test and are not delivered to the consumer.
 
 ### Future — extend the lazy family
 
-Once ALP proves the shape, add (no API change, just new permits):
+Once ALP proves the shape (PR #35 PoC), apply the same pattern per
+encoding. No interface change — each new variant is just another
+`implements DoubleArray` (or `LongArray`, `IntArray`):
 
 - `AlpRdDoubleArray` — same idea for ALP-RD
-- `ForLongArray`, `ForIntArray` — Frame-of-Reference, in-place lazy
-- `ZigZagLongArray`, `ZigZagIntArray` — XOR/shift on access
-- Composed: `AlpForBitpackedDoubleArray` fuses three transforms into
-  one expression evaluated per access
-
-### Phase 2 — compute pushdown
-
-`ScanIterator` routes `ScanOptions.rowFilter()` through a kernel SPI
-before falling back to materialization. Initial kernels:
-
-- `CompareKernel`: `compare(arr, scalar, op) → BoolArray`. For ALP,
-  encode the scalar to the int domain (`enc = round(scalar / scale)`)
-  and compare ints. For FoR, subtract the reference and compare ints.
-  Falls back to materialization when the scalar does not round-trip
-  through the encoding (e.g. ALP threshold that is not representable as
-  `int * 10^(f-e)` exactly).
-- `BetweenKernel`: same approach for two scalars.
-- `TakeKernel`: `take(arr, indices)` — decode only the requested
-  indices. Unblocks the take/slice/projection wins from phase 0.
-- `SumKernel`, `MinKernel`, `MaxKernel`: deferred. `sum(ALP) =
-  sum(int) * scale + patch_correction` is straightforward but not on the
-  critical path.
-
-For multi-column filters: `AND` evaluates kernels in column order,
-intersecting selection vectors; `OR` unions them. Columns referenced
-only by the filter (not by projection) are decoded just enough to test
-and are not delivered to the consumer.
+- `ForLongArray`, `ForIntArray` — Frame-of-Reference, lazy
+- `ZigZagLongArray`, `ZigZagIntArray` — XOR/shift on access (order
+  not preserved, so no pushdown — but lazy still skips the
+  materialisation pass)
+- Additional fused classes for other common chains, modelled on
+  `FusedAlpForBitpackedDoubleArray` from the Phase 2 PoC
+- Extended fusion: handle bitpacked patches inside the fused kernel,
+  closing the patched-chunk path that today falls back to
+  `MaterializedDoubleArray`
 
 ## Consequences
 
@@ -335,18 +423,33 @@ and are not delivered to the consumer.
 
 ### Negative
 
-- **API surface grows minimally.** Every numeric `*Array` becomes an
-  open interface; the default buffer-backed impl is package-private,
-  accessed via `*Array.of(...)`. Downstream consumers that constructed
-  `new DoubleArray(...)` directly must switch to the factory; consumers
-  that only *receive* arrays from `Chunk.column(...)` see no change.
-  Encoding-specific concretes (`AlpDoubleArray`, etc.) become first-class
-  public types that kernels can pattern-match against.
-- **Patch lookup is per-access in the lazy path.** Today patches are
-  applied once at decode time. Lazy needs an index structure (cost
-  above) and pays per-row. Only the filter path triggers this.
-- **Kernel SPI is a non-trivial design.** Initial scope must be small:
-  compare, between, take. Sum/min/max can wait.
+- **API surface grows.** Every numeric `*Array` becomes a
+  `non-sealed interface`. The default buffer-backed impl becomes a
+  public `MaterializedXxxArray` record. Downstream consumers that
+  constructed `new DoubleArray(...)` directly must switch to
+  `new MaterializedDoubleArray(...)`; consumers that only *receive*
+  arrays from `Chunk.column(...)` see no change. Encoding-specific
+  concretes (`AlpDoubleArray`, `FusedAlpForBitpackedDoubleArray`,
+  etc.) are first-class public types that callers pattern-match
+  against. The interface stays a pure contract — no `static of(...)`
+  factory, no permits, no encoder coupling.
+- **Patched chunks lose the lazy win.** Lazy `AlpDoubleArray` does
+  not carry a patch index — adding one would force a per-row branch
+  inside `getDouble`, which the codebase's hot-loop rule bans for
+  vectorisation reasons. So patched chunks fall back to
+  `MaterializedDoubleArray` and pay the full eager decode. Patched
+  chunks dominate the OHLC dataset today; closing this gap needs the
+  "Extended fusion" follow-up that handles patches inside the
+  fused-chain unpack.
+- **Compute pushdown lives as `compare → BoolArray` methods on the
+  encoding-specific concrete; reductions stay generic on the
+  interface.** No Kernel SPI yet — `AlpDoubleArray.compareGt(...)`
+  is a direct public method; `DoubleArray.sumMasked(BoolArray)` is
+  the generic reducer. Fused single-pass paths (e.g.
+  `FusedAlpForBitpackedDoubleArray.sumWhereGt`) stay package-private
+  and are reached by short-circuiting inside the fused class, not
+  by being added to the public surface. SPI lands when a second
+  encoding's `compareXxx` proves the shape repeats.
 - **Filter semantics change.** Today `RowFilter` is a zone-map prune
   hint; the consumer still re-checks every row. After phase 3 the chunk
   returned by `next()` is already filtered. This is a breaking change
@@ -355,14 +458,26 @@ and are not delivered to the consumer.
 
 ### Risks to manage
 
-- **Bimorphic dispatch.** With two `DoubleArray` impls (direct, alp), C2
-  inlines both at bimorphic call sites. Adding a third (FoR-on-long-via-
-  cast? dict-decoded?) makes it megamorphic and slow. Cap the
-  implementations at two unless evidence forces more.
-- **Patches edge case.** Patch handling in kernels is the hard part:
-  filter must AND in patch presence/value correctness. Easy to get
-  wrong. Integration tests against Rust output are mandatory before
-  shipping phase 2.
+- **Too many implementations slow every call.** Phase 2 introduces
+  three classes behind `DoubleArray`: `MaterializedDoubleArray`,
+  `AlpDoubleArray`, `FusedAlpForBitpackedDoubleArray`. The JVM can
+  still inline `getDouble` / `fold` with three implementations in
+  play, but a fourth pushes it over the edge — at that point every
+  call through the interface turns into a real method-call lookup,
+  and the per-row inner loops slow down across the board. Cap the
+  broadly-used implementations at three unless a measured win on
+  the filter benchmark forces another. Encoding-specific classes
+  that callers pattern-match on directly (and never reach through
+  the interface) don't count against this cap, because the call is
+  resolved at the `case` arm and goes straight to the concrete
+  method.
+- **Patched-vs-bare chunk routing.** `AlpEncodingDecoder` picks
+  between `MaterializedDoubleArray` (patched), `AlpDoubleArray`
+  (bare ALP), and `FusedAlpForBitpackedDoubleArray` (bare ALP over
+  `FoR(Bitpacked)`). Misclassifying a patched chunk as bare returns
+  wrong values silently. Integration tests against Rust output for
+  patched/unpatched/fused combinations are mandatory before shipping
+  Phase 2.
 - **Lifetime tangle.** Lazy array holds an encoded segment from a child
   decoder. That segment lives on the chunk arena. If the array escapes
   the chunk's `try-with-resources`, it dereferences freed memory. The
@@ -405,7 +520,7 @@ cheaper than three separate one-off lazy implementations.
 ### C — Compute pushdown without lazy materialization
 
 Add kernels (filter, take, sum) that re-decode internally when called.
-Skip the `DoubleArray` polymorphism.
+Keep `DoubleArray` as a single concrete class.
 
 Pros: no API change.
 Cons: re-decoding internally means the chunk got eagerly decoded once
