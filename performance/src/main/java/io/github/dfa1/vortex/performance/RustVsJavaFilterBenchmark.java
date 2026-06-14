@@ -86,7 +86,6 @@ public class RustVsJavaFilterBenchmark {
     private ReadRegistry registry;
     private BufferAllocator allocator;
     private double threshold;
-    private java.util.concurrent.ConcurrentHashMap<String, Integer> chunkTypeCounts = new java.util.concurrent.ConcurrentHashMap<>();
 
     @Setup(Level.Trial)
     public void setup() throws IOException {
@@ -107,12 +106,6 @@ public class RustVsJavaFilterBenchmark {
         threshold = computeThreshold(selectivity);
         System.out.printf("[RustVsJavaFilterBenchmark] selectivity=%.4f → threshold=%.4f%n",
                 selectivity, threshold);
-        chunkTypeCounts.clear();
-    }
-
-    @org.openjdk.jmh.annotations.TearDown(org.openjdk.jmh.annotations.Level.Trial)
-    public void reportChunkTypes() {
-        System.out.printf("[RustVsJavaFilterBenchmark] chunk type counts: %s%n", chunkTypeCounts);
     }
 
     /// JNI read: native filter pushdown via Expression; sum surviving "close".
@@ -190,8 +183,6 @@ public class RustVsJavaFilterBenchmark {
             while (iter.hasNext()) {
                 try (Chunk c = iter.next()) {
                     DoubleArray close = c.column("close");
-                    String klass = close.getClass().getSimpleName();
-                    chunkTypeCounts.merge(klass, 1, Integer::sum);
                     if (close instanceof FusedAlpForBitpackedDoubleArray fused) {
                         sum += fused.sumWhereGt(threshold);
                     } else if (close instanceof AlpDoubleArray alp) {
