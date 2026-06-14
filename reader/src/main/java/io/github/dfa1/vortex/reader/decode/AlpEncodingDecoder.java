@@ -157,33 +157,51 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
         return new FloatArray(ctx.dtype(), n, buf32.asReadOnly());
     }
 
-    /// Detects the ALP(FoR(Bitpacked)) chain on the encode tree and, when
-    /// matched, returns a [FusedAlpForBitpackedDoubleArray] that holds the
-    /// raw bitpacked buffer plus the chain parameters. Returns {@code null}
-    /// when the chain does not match or required metadata is unavailable.
+    /// Detects supported fused chains on the encoding tree and, when matched,
+    /// returns a [FusedAlpForBitpackedDoubleArray] that holds the raw
+    /// bitpacked buffer plus the chain parameters. Supported chains are
+    /// {@code ALP(FoR(Bitpacked))} and {@code ALP(Bitpacked)} (the writer
+    /// drops the FoR layer when its reference value is zero). Returns
+    /// {@code null} when the chain does not match, the bitpacked layer has
+    /// patches, the bit width is zero (constant residual), or any required
+    /// metadata is unavailable.
+    ///
+    /// Patched bitpacked layers cover the majority of OHLC chunks today;
+    /// extending fusion to them is left for follow-up work — they currently
+    /// fall back to the lazy AlpDoubleArray path.
     private static FusedAlpForBitpackedDoubleArray tryDetectFusedChain(DecodeContext ctx, long n, double scale) {
         ArrayNode[] alpChildren = ctx.node().children();
-        if (alpChildren.length == 0 || !(alpChildren[0] instanceof KnownArrayNode forNode)
-                || forNode.encodingId() != EncodingId.FASTLANES_FOR) {
-            return null;
-        }
-        if (forNode.children().length == 0 || !(forNode.children()[0] instanceof KnownArrayNode bpNode)
-                || bpNode.encodingId() != EncodingId.FASTLANES_BITPACKED) {
+        if (alpChildren.length == 0 || !(alpChildren[0] instanceof KnownArrayNode firstChild)) {
             return null;
         }
 
-        ByteBuffer forMeta = forNode.metadata();
-        if (forMeta == null || !forMeta.hasRemaining()) {
-            return null;
-        }
+        KnownArrayNode bpNode;
         long ref;
-        try {
-            MemorySegment metaSeg = MemorySegment.ofBuffer(forMeta.duplicate());
-            ScalarValue scalar = ScalarValue.decode(metaSeg, 0, metaSeg.byteSize());
-            ref = scalar.int64_value() != null ? scalar.int64_value()
-                    : scalar.uint64_value() != null ? scalar.uint64_value()
-                    : 0L;
-        } catch (IOException e) {
+        if (firstChild.encodingId() == EncodingId.FASTLANES_FOR) {
+            if (firstChild.children().length == 0
+                    || !(firstChild.children()[0] instanceof KnownArrayNode innerBp)
+                    || innerBp.encodingId() != EncodingId.FASTLANES_BITPACKED) {
+                return null;
+            }
+            ByteBuffer forMeta = firstChild.metadata();
+            if (forMeta == null || !forMeta.hasRemaining()) {
+                return null;
+            }
+            try {
+                MemorySegment metaSeg = MemorySegment.ofBuffer(forMeta.duplicate());
+                ScalarValue scalar = ScalarValue.decode(metaSeg, 0, metaSeg.byteSize());
+                ref = scalar.int64_value() != null ? scalar.int64_value()
+                        : scalar.uint64_value() != null ? scalar.uint64_value()
+                        : 0L;
+            } catch (IOException e) {
+                return null;
+            }
+            bpNode = innerBp;
+        } else if (firstChild.encodingId() == EncodingId.FASTLANES_BITPACKED) {
+            // ALP(Bitpacked): writer dropped FoR when reference value was zero
+            ref = 0L;
+            bpNode = firstChild;
+        } else {
             return null;
         }
 
@@ -199,10 +217,7 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
                 return null;
             }
         }
-        if (bp.bit_width() == 0 || bp.patches() != null) {
-            return null;
-        }
-        if (bpNode.bufferIndices().length == 0) {
+        if (bp.bit_width() == 0 || bp.patches() != null || bpNode.bufferIndices().length == 0) {
             return null;
         }
         MemorySegment packed = ctx.segmentBuffers()[bpNode.bufferIndices()[0]];
