@@ -109,9 +109,14 @@ Taxi 2024-01: Java 43.4 MB vs Rust JNI 42.8 MB (gap 0.6 MB / 1.4%). Top contribu
 `TaxiColumnByteDiff`: trip_distance (+540 KB), PULocationID (+250 KB), tpep_dropoff_datetime (+64 KB).
 
 - [ ] **trip_distance per-chunk ALP overhead** — Rust pure ALP achieves ~190 KB / chunk; Java's
-  ALP+dict cascade reaches ~213 KB / chunk. +23 KB × 23 chunks = +540 KB total. Investigate ALP
-  exponent search quality on stratified sample of full-chunk data (current `findExponentsF64` uses
-  evenly-strided 512 samples — Rust uses all values it has stats for).
+  ALP+dict cascade reaches ~213 KB / chunk. +23 KB × 23 chunks = +540 KB total. Root cause:
+  Java's `BitpackedEncodingEncoder` uses a **single global `bit_width`** = `ceil(log2(maxUnsigned))`,
+  but Rust's `fastlanes.bitpacked` uses **per-1024-row block bit widths** (FoR within each block,
+  then bitpack at block-local width). On ALP mantissas with `expE=14`, global range hits 60 bits
+  but per-block ranges are 10–13 bits. Dict-on-mantissas (~2-7k distinct per chunk) currently
+  hides this by partly compressing the codes, but it still loses to Rust's per-block pack by
+  ~23 KB / chunk. Implement per-block FoR + per-block bit_width in `packFastLanes`; matches
+  vortex spec `fastlanes.bitpacked`.
 
 - [ ] **PULocationID dict-codes layout** — +250 KB vs Rust. Both use dict; Java codes use
   bitpack-only, Rust uses dict-codes-of-dict (inner dict over already-bitpacked codes). Mirror
