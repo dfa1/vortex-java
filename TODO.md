@@ -105,18 +105,17 @@ See [docs/compatibility.md](docs/compatibility.md) for the full encoding support
 
 ### Remaining gap (no-Zstd mode) — biggest to smallest:
 
-Taxi 2024-01: Java 43.4 MB vs Rust JNI 42.8 MB (gap 0.6 MB / 1.4%). Top contributors per
-`TaxiColumnByteDiff`: trip_distance (+540 KB), PULocationID (+250 KB), tpep_dropoff_datetime (+64 KB).
+Taxi 2024-01: **Java 41.0 MB vs Rust JNI 42.8 MB — Java is 1.8 MB smaller (4.2%)**.
+A few columns are still slightly larger in Java per `TaxiColumnByteDiff`: trip_distance
+(+354 KB), total_amount (+146 KB), mta_tax (+16 KB), tpep_dropoff_datetime (+71 KB).
 
-- [ ] **trip_distance per-chunk ALP overhead** — Rust pure ALP achieves ~190 KB / chunk; Java's
-  ALP+dict cascade reaches ~213 KB / chunk. +23 KB × 23 chunks = +540 KB total. Root cause:
-  Java's `BitpackedEncodingEncoder` uses a **single global `bit_width`** = `ceil(log2(maxUnsigned))`,
-  but Rust's `fastlanes.bitpacked` uses **per-1024-row block bit widths** (FoR within each block,
-  then bitpack at block-local width). On ALP mantissas with `expE=14`, global range hits 60 bits
-  but per-block ranges are 10–13 bits. Dict-on-mantissas (~2-7k distinct per chunk) currently
-  hides this by partly compressing the codes, but it still loses to Rust's per-block pack by
-  ~23 KB / chunk. Implement per-block FoR + per-block bit_width in `packFastLanes`; matches
-  vortex spec `fastlanes.bitpacked`.
+- [ ] **trip_distance remaining +354 KB after patched bitpacking** — patched bitpacking
+  (commit `007e6c4`) closed most of the gap and Java now beats Rust JNI overall (41.0 MB vs
+  42.8 MB on taxi-2024-01). trip_distance, total_amount, mta_tax are still slightly larger
+  than JNI. Hypothesis: Rust's `fastlanes.bitpacked` uses per-1024-row FoR-then-bitpack
+  (block-local widths) which keeps the wide ALP mantissa exponents from forcing global
+  fallback. Java currently picks a single histogram-best width across the chunk. Implement
+  per-block FoR + per-block bit_width in `packFastLanes` if further reduction is wanted.
 
 - [ ] **PULocationID dict-codes layout** — +250 KB vs Rust. Both use dict; Java codes use
   bitpack-only, Rust uses dict-codes-of-dict (inner dict over already-bitpacked codes). Mirror
