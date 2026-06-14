@@ -33,12 +33,11 @@
 			<groupId>io.github.dfa1.vortex</groupId>
 			<artifactId>vortex-inspector</artifactId>
 		</dependency>
-		<!-- testing -->
 		<dependency>
 			<groupId>io.airlift</groupId>
 			<artifactId>aircompressor-v3</artifactId>
-			<scope>test</scope>
 		</dependency>
+		<!-- testing -->
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>
 			<artifactId>junit-jupiter</artifactId>
