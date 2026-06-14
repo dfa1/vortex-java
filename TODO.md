@@ -126,8 +126,6 @@ Taxi 2024-01: Java 43.4 MB vs Rust JNI 42.8 MB (gap 0.6 MB / 1.4%). Top contribu
   using the 5-symbol generator from `OhlcEncodingInspectionIntegrationTest#writeOhlcMultiSymbol` and assert
   the global-dict file is smaller than the per-chunk-dict baseline.
 
-- [ ] **FSST in CASCADE_CODECS** — `FsstEncoding` exists but not in the cascade; Rust uses FSST for
-  `store_and_fwd_flag`. Small gain on taxi (~0.1 MB).
 
 ### `vortex.zstd` known limitations
 
