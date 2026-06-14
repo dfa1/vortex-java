@@ -61,8 +61,34 @@ try (VortexReader vf = VortexReader.open(Path.of("data/example.vortex"));
 > `iter.forEachRemaining(c -> ...)` which closes each chunk for you. See
 > [docs/explanation.md#memory-model](docs/explanation.md#memory-model).
 
-For more examples — writing, projection, filtering, custom encodings, and the CLI —
-see the [tutorial](docs/tutorial.md).
+### Minimal write example
+
+```java
+DType.Struct schema = DType.structBuilder()
+        .field("timestamp", DType.i64())
+        .field("symbol",    DType.utf8())
+        .field("price",     DType.f64())
+        .field("volume",    DType.i64().asNullable())  // boxed Long[] → nullable
+        .build();
+
+try (var ch = FileChannel.open(Path.of("data/example.vortex"),
+                               StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+     var writer = VortexWriter.create(ch, schema, WriteOptions.cascading(3))) {
+    writer.writeChunk(c -> c
+            .put("timestamp", new long[]   {1_700_000_000_000L, 1_700_000_001_000L})
+            .put("symbol",    new String[] {"AAPL", "AAPL"})
+            .put("price",     new double[] {189.95, 190.10})
+            .put("volume",    new Long[]   {100L, null}));  // null in nullable col
+}
+```
+
+> Each `.put` is validated at the call site: unknown column names, mismatched
+> array types, and boxed arrays for non-nullable columns throw
+> `IllegalArgumentException` immediately. Missing columns surface as
+> `IllegalStateException` when the lambda returns.
+
+For more examples — projection, filtering, custom encodings, and the CLI — see
+the [tutorial](docs/tutorial.md).
 
 ## Documentation
 

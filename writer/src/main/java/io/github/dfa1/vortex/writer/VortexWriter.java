@@ -325,10 +325,34 @@ public final class VortexWriter implements Closeable {
 
     // ── Segment encoding ─────────────────────────────────────────────────────
 
+    /// Write one chunk via the typed {@link Chunk} builder. Each {@code .put} is validated
+    /// against the writer's schema (name exists, array type matches dtype, boxed arrays for
+    /// nullable columns); after the consumer returns, every schema column must have been
+    /// supplied and all column arrays must share the same length.
+    ///
+    /// ```java
+    /// writer.writeChunk(c -> c
+    ///     .put("timestamp", new long[]   {1_700_000_000_000L, 1_700_000_001_000L})
+    ///     .put("symbol",    new String[] {"AAPL", "AAPL"})
+    ///     .put("price",     new double[] {189.95, 190.10})
+    ///     .put("volume",    new Long[]   {100L, null}));  // boxed → nullable
+    /// ```
+    ///
+    /// @param builder consumer that populates a {@link Chunk} with all schema columns
+    /// @throws IOException if an I/O error occurs writing to the underlying channel
+    public void writeChunk(java.util.function.Consumer<Chunk> builder) throws IOException {
+        var impl = new io.github.dfa1.vortex.writer.ChunkImpl(schema);
+        builder.accept(impl);
+        writeChunk(impl.finish());
+    }
+
     /// Write one chunk. Each column is encoded by the first registered encoder that accepts its dtype.
     ///
     /// @param columns map from column name to typed array data
     /// @throws IOException if an I/O error occurs writing to the underlying channel
+    /// @deprecated use {@link #writeChunk(java.util.function.Consumer)} for compile-time
+    ///         column name + array type validation
+    @Deprecated(since = "0.7.0")
     public void writeChunk(Map<String, Object> columns) throws IOException {
         for (int i = 0; i < schema.fieldNames().size(); i++) {
             String colName = schema.fieldNames().get(i);
