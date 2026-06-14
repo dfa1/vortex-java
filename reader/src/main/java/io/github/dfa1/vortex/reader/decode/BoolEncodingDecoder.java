@@ -1,9 +1,9 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
+import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
 
 /// Read-only decoder for {@code vortex.bool} (bit-packed boolean arrays, LSB first).
 ///
@@ -26,6 +26,6 @@ public final class BoolEncodingDecoder implements EncodingDecoder {
 
     @Override
     public Array decode(DecodeContext ctx) {
-        return new BoolArray(ctx.dtype(), ctx.rowCount(), ctx.buffer(0));
+        return new MaterializedBoolArray(ctx.dtype(), ctx.rowCount(), ctx.buffer(0));
     }
 }

@@ -2,10 +2,13 @@ package io.github.dfa1.vortex.reader.extension;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.extension.ExtensionId;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
-import io.github.dfa1.vortex.extension.ExtensionId;
+import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
+import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
+
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
@@ -15,6 +18,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 import static io.github.dfa1.vortex.reader.extension.ExtensionTestSupport.I32;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 class DateExtensionDecoderTest {
@@ -47,7 +51,7 @@ class DateExtensionDecoderTest {
         try (Arena arena = Arena.ofConfined()) {
             MemorySegment buf = arena.allocate(4);
             buf.set(ValueLayout.JAVA_INT_UNALIGNED, 0, 9538);
-            IntArray storage = new IntArray(I32, 1, buf);
+            IntArray storage = new MaterializedIntArray(I32, 1, buf);
 
             // When / Then
             assertThat(sut.decode(storage, 0)).isEqualTo(LocalDate.of(1996, 2, 12));
@@ -60,7 +64,7 @@ class DateExtensionDecoderTest {
         try (Arena arena = Arena.ofConfined()) {
             MemorySegment buf = arena.allocate(4);
             buf.set(ValueLayout.JAVA_INT_UNALIGNED, 0, -1);
-            IntArray storage = new IntArray(I32, 1, buf);
+            IntArray storage = new MaterializedIntArray(I32, 1, buf);
 
             // When / Then
             assertThat(sut.decode(storage, 0)).isEqualTo(LocalDate.of(1969, 12, 31));
@@ -77,10 +81,10 @@ class DateExtensionDecoderTest {
             buf.set(ValueLayout.JAVA_INT_UNALIGNED, 0, (int) LocalDate.of(2026, 1, 1).toEpochDay());
             buf.set(ValueLayout.JAVA_INT_UNALIGNED, 4, 0);
             buf.set(ValueLayout.JAVA_INT_UNALIGNED, 8, (int) LocalDate.of(2026, 1, 3).toEpochDay());
-            IntArray inner = new IntArray(I32, 3, buf);
+            IntArray inner = new MaterializedIntArray(I32, 3, buf);
             MemorySegment validityBuf = arena.allocate(1);
             validityBuf.set(ValueLayout.JAVA_BYTE, 0, (byte) 0b0000_0101);
-            BoolArray validity = new BoolArray(new DType.Bool(false), 3, validityBuf);
+            BoolArray validity = new MaterializedBoolArray(new DType.Bool(false), 3, validityBuf);
 
             // When
             List<LocalDate> out = sut.decodeAll(new MaskedArray(inner, validity));

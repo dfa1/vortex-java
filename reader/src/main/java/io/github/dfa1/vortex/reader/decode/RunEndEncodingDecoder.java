@@ -3,17 +3,18 @@ package io.github.dfa1.vortex.reader.decode;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.ArraySegments;
-import io.github.dfa1.vortex.reader.array.BoolArray;
-import io.github.dfa1.vortex.reader.array.ByteArray;
-import io.github.dfa1.vortex.reader.array.IntArray;
-import io.github.dfa1.vortex.reader.array.LongArray;
-import io.github.dfa1.vortex.reader.array.ShortArray;
-import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.proto.RunEndMetadata;
+import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.ArraySegments;
+import io.github.dfa1.vortex.reader.array.BoolArray;
+import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
+import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
+import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
+import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
+import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
+import io.github.dfa1.vortex.reader.array.VarBinArray;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -96,10 +97,10 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
         }
         MemorySegment ro = out.asReadOnly();
         return switch (valuePtype) {
-            case I64, U64 -> new LongArray(dtype, n, ro);
-            case I32, U32 -> new IntArray(dtype, n, ro);
-            case I16, U16 -> new ShortArray(dtype, n, ro);
-            case I8, U8 -> new ByteArray(dtype, n, ro);
+            case I64, U64 -> new MaterializedLongArray(dtype, n, ro);
+            case I32, U32 -> new MaterializedIntArray(dtype, n, ro);
+            case I16, U16 -> new MaterializedShortArray(dtype, n, ro);
+            case I8, U8 -> new MaterializedByteArray(dtype, n, ro);
             default -> throw new VortexException(EncodingId.VORTEX_RUNEND, "unsupported ptype " + valuePtype);
         };
     }
@@ -194,7 +195,7 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
             }
             logicalPos = runEnd;
         }
-        return new BoolArray(dtype, n, out.asReadOnly());
+        return new MaterializedBoolArray(dtype, n, out.asReadOnly());
     }
 
     private static Array expandStrings(

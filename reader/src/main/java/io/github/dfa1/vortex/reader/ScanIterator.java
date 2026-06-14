@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.reader;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.reader.array.BoolArray;
@@ -14,11 +15,17 @@ import io.github.dfa1.vortex.reader.array.GenericArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
+import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
+import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
+import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
+import io.github.dfa1.vortex.reader.array.MaterializedFloatArray;
+import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
+import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
+import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
 import io.github.dfa1.vortex.reader.array.NullArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.StructArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
-import io.github.dfa1.vortex.encoding.EncodingId;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -159,12 +166,12 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             MemorySegment.copy(valBuf, code * elemBytes, out, i * elemBytes, elemBytes);
         }
         return switch (ptype) {
-            case I32, U32 -> new IntArray(dtype, n, out.asReadOnly());
-            case I64, U64 -> new LongArray(dtype, n, out.asReadOnly());
-            case F64 -> new DoubleArray(dtype, n, out.asReadOnly());
-            case F32 -> new FloatArray(dtype, n, out.asReadOnly());
-            case I16, U16 -> new ShortArray(dtype, n, out.asReadOnly());
-            case I8, U8 -> new ByteArray(dtype, n, out.asReadOnly());
+            case I32, U32 -> new MaterializedIntArray(dtype, n, out.asReadOnly());
+            case I64, U64 -> new MaterializedLongArray(dtype, n, out.asReadOnly());
+            case F64 -> new MaterializedDoubleArray(dtype, n, out.asReadOnly());
+            case F32 -> new MaterializedFloatArray(dtype, n, out.asReadOnly());
+            case I16, U16 -> new MaterializedShortArray(dtype, n, out.asReadOnly());
+            case I8, U8 -> new MaterializedByteArray(dtype, n, out.asReadOnly());
             default -> throw new VortexException(EncodingId.VORTEX_DICT,
                     "layout: unsupported ptype for dict expansion: " + ptype);
         };
@@ -239,18 +246,18 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         }
         return switch (arr) {
             case LongArray a ->
-                    new LongArray(a.dtype(), rows, ArraySegments.of(a).asSlice(0, rows * Long.BYTES));
+                    new MaterializedLongArray(a.dtype(), rows, ArraySegments.of(a).asSlice(0, rows * Long.BYTES));
             case IntArray a ->
-                    new IntArray(a.dtype(), rows, ArraySegments.of(a).asSlice(0, rows * Integer.BYTES));
+                    new MaterializedIntArray(a.dtype(), rows, ArraySegments.of(a).asSlice(0, rows * Integer.BYTES));
             case DoubleArray a ->
-                    new DoubleArray(a.dtype(), rows, ArraySegments.of(a).asSlice(0, rows * Double.BYTES));
+                    new MaterializedDoubleArray(a.dtype(), rows, ArraySegments.of(a).asSlice(0, rows * Double.BYTES));
             case FloatArray a ->
-                    new FloatArray(a.dtype(), rows, ArraySegments.of(a).asSlice(0, rows * Float.BYTES));
+                    new MaterializedFloatArray(a.dtype(), rows, ArraySegments.of(a).asSlice(0, rows * Float.BYTES));
             case ShortArray a ->
-                    new ShortArray(a.dtype(), rows, ArraySegments.of(a).asSlice(0, rows * Short.BYTES));
-            case ByteArray a -> new ByteArray(a.dtype(), rows, ArraySegments.of(a).asSlice(0, rows));
+                    new MaterializedShortArray(a.dtype(), rows, ArraySegments.of(a).asSlice(0, rows * Short.BYTES));
+            case ByteArray a -> new MaterializedByteArray(a.dtype(), rows, ArraySegments.of(a).asSlice(0, rows));
             case BoolArray a ->
-                    new BoolArray(a.dtype(), rows, ArraySegments.of(a).asSlice(0, (rows + 7) / 8));
+                    new MaterializedBoolArray(a.dtype(), rows, ArraySegments.of(a).asSlice(0, (rows + 7) / 8));
             case NullArray a -> new NullArray(a.dtype(), rows);
             case VarBinArray a -> a.truncate(rows);
             case MaskedArray a -> {
@@ -455,12 +462,12 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         }
         MemorySegment ro = combined.asReadOnly();
         return switch (ptype) {
-            case I64, U64 -> new LongArray(dtype, totalRows, ro);
-            case I32, U32 -> new IntArray(dtype, totalRows, ro);
-            case F64 -> new DoubleArray(dtype, totalRows, ro);
-            case F32 -> new FloatArray(dtype, totalRows, ro);
-            case I16, U16 -> new ShortArray(dtype, totalRows, ro);
-            case I8, U8 -> new ByteArray(dtype, totalRows, ro);
+            case I64, U64 -> new MaterializedLongArray(dtype, totalRows, ro);
+            case I32, U32 -> new MaterializedIntArray(dtype, totalRows, ro);
+            case F64 -> new MaterializedDoubleArray(dtype, totalRows, ro);
+            case F32 -> new MaterializedFloatArray(dtype, totalRows, ro);
+            case I16, U16 -> new MaterializedShortArray(dtype, totalRows, ro);
+            case I8, U8 -> new MaterializedByteArray(dtype, totalRows, ro);
             default -> throw new VortexException("unsupported ptype for concat: " + ptype);
         };
     }

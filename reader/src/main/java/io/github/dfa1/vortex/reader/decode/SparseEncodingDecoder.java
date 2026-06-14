@@ -3,20 +3,21 @@ package io.github.dfa1.vortex.reader.decode;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.BoolArray;
-import io.github.dfa1.vortex.reader.array.ByteArray;
-import io.github.dfa1.vortex.reader.array.DoubleArray;
-import io.github.dfa1.vortex.reader.array.FloatArray;
-import io.github.dfa1.vortex.reader.array.IntArray;
-import io.github.dfa1.vortex.reader.array.LongArray;
-import io.github.dfa1.vortex.reader.array.ShortArray;
-import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.proto.PatchesMetadata;
 import io.github.dfa1.vortex.proto.ScalarValue;
 import io.github.dfa1.vortex.proto.SparseMetadata;
+import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.BoolArray;
+import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
+import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
+import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
+import io.github.dfa1.vortex.reader.array.MaterializedFloatArray;
+import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
+import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
+import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
+import io.github.dfa1.vortex.reader.array.VarBinArray;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -96,12 +97,12 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
         }
 
         return switch (valuePtype) {
-            case I64, U64 -> new LongArray(ctx.dtype(), n, out);
-            case I32, U32 -> new IntArray(ctx.dtype(), n, out);
-            case F64 -> new DoubleArray(ctx.dtype(), n, out);
-            case F32 -> new FloatArray(ctx.dtype(), n, out);
-            case I16, U16 -> new ShortArray(ctx.dtype(), n, out);
-            case I8, U8 -> new ByteArray(ctx.dtype(), n, out);
+            case I64, U64 -> new MaterializedLongArray(ctx.dtype(), n, out);
+            case I32, U32 -> new MaterializedIntArray(ctx.dtype(), n, out);
+            case F64 -> new MaterializedDoubleArray(ctx.dtype(), n, out);
+            case F32 -> new MaterializedFloatArray(ctx.dtype(), n, out);
+            case I16, U16 -> new MaterializedShortArray(ctx.dtype(), n, out);
+            case I8, U8 -> new MaterializedByteArray(ctx.dtype(), n, out);
             default -> throw new VortexException(EncodingId.VORTEX_SPARSE, "unsupported ptype " + valuePtype);
         };
     }
@@ -125,7 +126,7 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
                 }
             }
         }
-        return new BoolArray(ctx.dtype(), n, out);
+        return new MaterializedBoolArray(ctx.dtype(), n, out);
     }
 
     private static Array decodeVarBin(

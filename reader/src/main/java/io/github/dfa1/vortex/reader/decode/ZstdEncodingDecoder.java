@@ -1,24 +1,25 @@
 package io.github.dfa1.vortex.reader.decode;
 
-import io.airlift.compress.v3.zstd.ZstdDecompressor;
-import io.airlift.compress.v3.zstd.ZstdJavaDecompressor;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.BoolArray;
-import io.github.dfa1.vortex.reader.array.ByteArray;
-import io.github.dfa1.vortex.reader.array.DoubleArray;
-import io.github.dfa1.vortex.reader.array.Float16Array;
-import io.github.dfa1.vortex.reader.array.FloatArray;
-import io.github.dfa1.vortex.reader.array.IntArray;
-import io.github.dfa1.vortex.reader.array.LongArray;
-import io.github.dfa1.vortex.reader.array.MaskedArray;
-import io.github.dfa1.vortex.reader.array.ShortArray;
-import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.proto.ZstdMetadata;
+import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.BoolArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
+import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
+import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
+import io.github.dfa1.vortex.reader.array.MaterializedFloat16Array;
+import io.github.dfa1.vortex.reader.array.MaterializedFloatArray;
+import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
+import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
+import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
+import io.github.dfa1.vortex.reader.array.VarBinArray;
+
+import io.airlift.compress.v3.zstd.ZstdDecompressor;
+import io.airlift.compress.v3.zstd.ZstdJavaDecompressor;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -186,13 +187,13 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
     private static Array buildPrimitive(DType.Primitive dt, long n, MemorySegment decompressed) {
         PType ptype = dt.ptype();
         return switch (ptype) {
-            case I64, U64 -> new LongArray(dt, n, decompressed);
-            case I32, U32 -> new IntArray(dt, n, decompressed);
-            case F64 -> new DoubleArray(dt, n, decompressed);
-            case F32 -> new FloatArray(dt, n, decompressed);
-            case I16, U16 -> new ShortArray(dt, n, decompressed);
-            case I8, U8 -> new ByteArray(dt, n, decompressed);
-            case F16 -> new Float16Array(dt, n, decompressed);
+            case I64, U64 -> new MaterializedLongArray(dt, n, decompressed);
+            case I32, U32 -> new MaterializedIntArray(dt, n, decompressed);
+            case F64 -> new MaterializedDoubleArray(dt, n, decompressed);
+            case F32 -> new MaterializedFloatArray(dt, n, decompressed);
+            case I16, U16 -> new MaterializedShortArray(dt, n, decompressed);
+            case I8, U8 -> new MaterializedByteArray(dt, n, decompressed);
+            case F16 -> new MaterializedFloat16Array(dt, n, decompressed);
         };
     }
 

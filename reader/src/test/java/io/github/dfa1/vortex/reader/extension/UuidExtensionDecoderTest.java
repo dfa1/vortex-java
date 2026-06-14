@@ -3,11 +3,14 @@ package io.github.dfa1.vortex.reader.extension;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.extension.ExtensionId;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.FixedSizeListArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
-import io.github.dfa1.vortex.extension.ExtensionId;
+import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
+import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
+
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
@@ -17,6 +20,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static io.github.dfa1.vortex.reader.extension.ExtensionTestSupport.U8;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -54,7 +58,7 @@ class UuidExtensionDecoderTest {
                 buf.set(ValueLayout.JAVA_BYTE, k, (byte) ((msb >> (56 - 8 * k)) & 0xff));
                 buf.set(ValueLayout.JAVA_BYTE, 8 + k, (byte) ((lsb >> (56 - 8 * k)) & 0xff));
             }
-            ByteArray inner = new ByteArray(U8, 16, buf);
+            ByteArray inner = new MaterializedByteArray(U8, 16, buf);
             FixedSizeListArray storage = new FixedSizeListArray(
                     new DType.FixedSizeList(U8, 16, false), 1, inner);
 
@@ -71,7 +75,7 @@ class UuidExtensionDecoderTest {
             for (int k = 0; k < 16; k++) {
                 buf.set(ValueLayout.JAVA_BYTE, k, (byte) 0xff);
             }
-            ByteArray inner = new ByteArray(U8, 16, buf);
+            ByteArray inner = new MaterializedByteArray(U8, 16, buf);
             FixedSizeListArray storage = new FixedSizeListArray(
                     new DType.FixedSizeList(U8, 16, false), 1, inner);
 
@@ -97,12 +101,12 @@ class UuidExtensionDecoderTest {
             for (int i = 0; i < flat.length; i++) {
                 buf.set(ValueLayout.JAVA_BYTE, i, flat[i]);
             }
-            ByteArray innerBytes = new ByteArray(U8, flat.length, buf);
+            ByteArray innerBytes = new MaterializedByteArray(U8, flat.length, buf);
             FixedSizeListArray innerFsl = new FixedSizeListArray(
                     new DType.FixedSizeList(U8, 16, false), 2, innerBytes);
             MemorySegment validityBuf = arena.allocate(1);
             validityBuf.set(ValueLayout.JAVA_BYTE, 0, (byte) 0b0000_0001);
-            BoolArray validity = new BoolArray(new DType.Bool(false), 2, validityBuf);
+            BoolArray validity = new MaterializedBoolArray(new DType.Bool(false), 2, validityBuf);
 
             // When
             List<UUID> out = sut.decodeAll(new MaskedArray(innerFsl, validity));
@@ -116,7 +120,7 @@ class UuidExtensionDecoderTest {
     void decode_wrongFixedSize_throws() {
         // Given — 8 != 16; reject up front
         try (Arena arena = Arena.ofConfined()) {
-            ByteArray inner = new ByteArray(U8, 8, arena.allocate(8));
+            ByteArray inner = new MaterializedByteArray(U8, 8, arena.allocate(8));
             FixedSizeListArray storage = new FixedSizeListArray(
                     new DType.FixedSizeList(U8, 8, false), 1, inner);
 

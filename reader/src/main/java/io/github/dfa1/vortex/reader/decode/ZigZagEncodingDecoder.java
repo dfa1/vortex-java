@@ -3,13 +3,13 @@ package io.github.dfa1.vortex.reader.decode;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.ByteArray;
-import io.github.dfa1.vortex.reader.array.IntArray;
-import io.github.dfa1.vortex.reader.array.LongArray;
-import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
+import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
+import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
+import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
+import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -55,28 +55,28 @@ public final class ZigZagEncodingDecoder implements EncodingDecoder {
                     int u = Byte.toUnsignedInt(src.get(ValueLayout.JAVA_BYTE, i % srcCap));
                     dst.set(ValueLayout.JAVA_BYTE, i, (byte) ((u >>> 1) ^ -(u & 1)));
                 }
-                yield new ByteArray(ctx.dtype(), n, dst);
+                yield new MaterializedByteArray(ctx.dtype(), n, dst);
             }
             case I16 -> {
                 for (long i = 0; i < n; i++) {
                     int u = Short.toUnsignedInt(src.get(PTypeIO.LE_SHORT, (i % srcCap) * 2));
                     dst.set(PTypeIO.LE_SHORT, i * 2, (short) ((u >>> 1) ^ -(u & 1)));
                 }
-                yield new ShortArray(ctx.dtype(), n, dst);
+                yield new MaterializedShortArray(ctx.dtype(), n, dst);
             }
             case I32 -> {
                 for (long i = 0; i < n; i++) {
                     int u = src.get(PTypeIO.LE_INT, (i % srcCap) * 4);
                     dst.set(PTypeIO.LE_INT, i * 4, (u >>> 1) ^ -(u & 1));
                 }
-                yield new IntArray(ctx.dtype(), n, dst);
+                yield new MaterializedIntArray(ctx.dtype(), n, dst);
             }
             case I64 -> {
                 for (long i = 0; i < n; i++) {
                     long u = src.get(PTypeIO.LE_LONG, (i % srcCap) * 8);
                     dst.set(PTypeIO.LE_LONG, i * 8, (u >>> 1) ^ -(u & 1));
                 }
-                yield new LongArray(ctx.dtype(), n, dst);
+                yield new MaterializedLongArray(ctx.dtype(), n, dst);
             }
             default -> throw new VortexException(EncodingId.VORTEX_ZIGZAG, "unreachable");
         };
