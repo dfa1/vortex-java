@@ -104,11 +104,18 @@ Per-encoding gotchas:
 See [docs/compatibility.md](docs/compatibility.md) for the full encoding support table and S3 fixture status.
 
 ### Remaining gap (no-Zstd mode) — biggest to smallest:
-- [ ] **Global dict for F64 low-cardinality** — excluded from `isDictCandidate` because ALP/RLE were expected to
-  win; but for columns like `mta_tax` (8 unique F64 values) and `Airport_fee` (4 unique), dict codes are
-  ~same size as ALP+bitpack while Rust uses dict. Measure actual gain before implementing. Utf8 global dict
-  plumbing already in place (see `writeGlobalDictUtf8Column`); the F64 case is a relaxation of one branch in
-  `isDictCandidate` plus its own value-array materializer.
+
+Taxi 2024-01: Java 43.4 MB vs Rust JNI 42.8 MB (gap 0.6 MB / 1.4%). Top contributors per
+`TaxiColumnByteDiff`: trip_distance (+540 KB), PULocationID (+250 KB), tpep_dropoff_datetime (+64 KB).
+
+- [ ] **trip_distance per-chunk ALP overhead** — Rust pure ALP achieves ~190 KB / chunk; Java's
+  ALP+dict cascade reaches ~213 KB / chunk. +23 KB × 23 chunks = +540 KB total. Investigate ALP
+  exponent search quality on stratified sample of full-chunk data (current `findExponentsF64` uses
+  evenly-strided 512 samples — Rust uses all values it has stats for).
+
+- [ ] **PULocationID dict-codes layout** — +250 KB vs Rust. Both use dict; Java codes use
+  bitpack-only, Rust uses dict-codes-of-dict (inner dict over already-bitpacked codes). Mirror
+  Rust's `IntDictScheme` cascade child rule.
 
 - [ ] **Global dict for `Binary` dtype** — `DictEncoding.accepts` already covers `Utf8` and `Binary`-ish bytes,
   but the writer's candidate scan only handles `DType.Primitive` + `DType.Utf8`. Mirror the Utf8 path for
