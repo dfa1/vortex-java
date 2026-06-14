@@ -20,6 +20,8 @@ final class VortexReads {
             ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
     private static final ValueLayout.OfLong LE_LONG =
             ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+    private static final ValueLayout.OfDouble LE_DOUBLE =
+            ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     private VortexReads() {
     }
@@ -48,6 +50,19 @@ final class VortexReads {
             });
         }
         return collected.stream().mapToLong(Long::longValue).toArray();
+    }
+
+    static double[] readAllDoubles(VortexReader vf, String col) {
+        var collected = new ArrayList<Double>();
+        try (var iter = vf.scan(ScanOptions.all())) {
+            iter.forEachRemaining(c -> {
+                Array arr = c.column(col);
+                for (long i = 0; i < arr.length(); i++) {
+                    collected.add(ArraySegments.of(arr).get(LE_DOUBLE, i * Double.BYTES));
+                }
+            });
+        }
+        return collected.stream().mapToDouble(Double::doubleValue).toArray();
     }
 
     static List<String> readAllStrings(VortexReader vf, String col) {

@@ -31,6 +31,37 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
         return dtype instanceof DType.Primitive;
     }
 
+    /// Cascade gate: skip unless analytic sparse size beats raw-bitpacked size.
+    /// Sparse stores fill scalar + index buffer (n*idx_bytes) + value buffer (k*elem_bytes)
+    /// where k = non-zero count. Bitpacked alternative ≈ n*elem_bytes (worst case raw).
+    /// Apply when k * (idx_bytes + elem_bytes) < n * elem_bytes / 2 — i.e. sparse halves
+    /// the size at least. Avoids sample-time wins that lose on full data.
+    @Override
+    public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
+        if (!(dtype instanceof DType.Primitive p)) {
+            return CascadeStep.notApplicable();
+        }
+        PType ptype = p.ptype();
+        int n = arrayLength(data, ptype);
+        if (n == 0) {
+            return CascadeStep.notApplicable();
+        }
+        int elemBytes = ptype.byteSize();
+        int idxBytes = chooseIdxPtype(n).byteSize();
+        int patchCost = idxBytes + elemBytes;
+        int maxPatches = (int) Math.min(Integer.MAX_VALUE, ((long) n * elemBytes / 2L) / patchCost);
+        int nonZero = 0;
+        for (int i = 0; i < n; i++) {
+            if (readBits(data, ptype, i) != 0L) {
+                nonZero++;
+                if (nonZero > maxPatches) {
+                    return CascadeStep.notApplicable();
+                }
+            }
+        }
+        return CascadeStep.terminal(encode(dtype, data, ctx));
+    }
+
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
         if (!(dtype instanceof DType.Primitive p)) {

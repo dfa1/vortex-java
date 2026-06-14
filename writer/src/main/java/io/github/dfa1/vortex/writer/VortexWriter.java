@@ -28,6 +28,7 @@ import io.github.dfa1.vortex.writer.encode.MaskedEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.PrimitiveEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.RleEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.RunEndEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.SparseEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.VarBinEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.ZstdEncodingEncoder;
 import io.github.dfa1.vortex.fbs.ArraySpec;
@@ -152,6 +153,7 @@ public final class VortexWriter implements Closeable {
         codecs.add(new FrameOfReferenceEncodingEncoder());
         codecs.add(new RunEndEncodingEncoder());
         codecs.add(new RleEncodingEncoder());
+        codecs.add(new SparseEncodingEncoder());
         codecs.add(new DictEncodingEncoder());
         codecs.add(new BitpackedEncodingEncoder());
         // FsstEncodingEncoder sits between Dict and VarBin. Today's non-primitive dispatch
@@ -705,14 +707,24 @@ public final class VortexWriter implements Closeable {
             throws IOException {
         PType ptype = dtype.ptype();
 
-        // Build global value map across all chunks
-        var valueMap = new LinkedHashMap<Object, Integer>();
+        // Count occurrences per distinct value across all chunks, then assign codes in
+        // frequency-descending order so the dominant value gets code 0. This lets
+        // SparseEncodingEncoder (fill=0) compress the codes child when one value dominates —
+        // matches Rust's FloatDictScheme path that powers the dict+sparse layout on taxi
+        // mta_tax/Airport_fee/extra columns.
+        var counts = new LinkedHashMap<Object, Long>();
         for (Object chunk : chunks) {
             int len = primitiveArrayLen(chunk, ptype);
             for (int i = 0; i < len; i++) {
                 Object v = readPrimitiveElement(chunk, ptype, i);
-                valueMap.computeIfAbsent(v, _ -> valueMap.size());
+                counts.merge(v, 1L, Long::sum);
             }
+        }
+        List<Map.Entry<Object, Long>> sorted = new ArrayList<>(counts.entrySet());
+        sorted.sort(Map.Entry.<Object, Long>comparingByValue().reversed());
+        var valueMap = new LinkedHashMap<Object, Integer>();
+        for (Map.Entry<Object, Long> entry : sorted) {
+            valueMap.put(entry.getKey(), valueMap.size());
         }
 
         int dictSize = valueMap.size();
@@ -832,10 +844,11 @@ public final class VortexWriter implements Closeable {
     }
 
     private static boolean isDictCandidate(PType ptype, Object data) {
-        // Float types: ALP/RLE compress repeated F64 values far better than dict codes.
-        // E.g. a near-constant congestion_surcharge column costs ~0 bytes with RLE,
-        // but ~1 MB with global dict U8 codes even after bitpacking.
-        if (ptype == PType.F16 || ptype == PType.F32 || ptype == PType.F64) {
+        // F16/F32 excluded: no measured workload; ALP usually wins. F64 admitted: low-card
+        // F64 columns (taxi mta_tax/Airport_fee/extra) compress better via global dict +
+        // sparse-coded codes (matches Rust FloatDictScheme). Skip rule (cardinality / 2
+        // below) mirrors Rust's >50%-distinct skip.
+        if (ptype == PType.F16 || ptype == PType.F32) {
             return false;
         }
         int n = primitiveArrayLen(data, ptype);
