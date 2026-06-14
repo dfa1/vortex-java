@@ -6,6 +6,7 @@
 - **Supersedes:** —
 - **Superseded by:** —
 - **Related:** [ADR 0005 — Vector API adoption](0005-vector-api-adoption.md),
+  [ADR 0012 — Zero-copy layout decoding: lazy Chunked / Dict](0012-zero-copy-layout-decoding.md),
   [CLAUDE.md §Memory model](../../CLAUDE.md)
 
 ## Context
@@ -388,6 +389,73 @@ order and intersects the resulting `BoolArray` masks; `OR` unions
 them. Columns referenced only by the filter (not by projection) are
 decoded just enough to test and are not delivered to the consumer.
 
+#### Filter operator: `filter(BoolArray) → Array`
+
+`compareXxx` produces the mask. A second primitive consumes it:
+`Array.filter(BoolArray mask)` returns a filtered array — also lazy
+where possible. This is the half of compute pushdown that Rust calls
+the "filter kernel" (`vortex-array/src/arrays/filter/kernel.rs`);
+keeping it separate from `compareXxx` matches the Rust shape and
+lets the framework decide how to materialise.
+
+The Rust experience to reuse: most encodings can answer **without
+reading buffers** (metadata-only). Frame the operator so they
+short-circuit before any allocation:
+
+- **Constant fast path.** `Constant(v, n).filter(m) = Constant(v, m.trueCount())`.
+  No buffer read, no allocation beyond the new length.
+- **Chunked rewrite** (needs ADR 0012 first-class `Chunked*Array`).
+  Walk the mask once with `find_chunk_idx`, classify each chunk as
+  `All` / `None` / `Slices(...)`. Fully-true chunks pass through by
+  reference (zero copy), fully-false chunks vanish, partial chunks
+  recurse with a sub-mask. Mirrors
+  `vortex-array/src/arrays/chunked/compute/filter.rs`.
+- **Dict push-through.**
+  `Dict(values, codes).filter(m) = Dict(values, codes.filter(m))`.
+  Dictionary reused by reference; only the codes child is filtered
+  (which itself recurses — often into a bitpacked or flat int array).
+- **Sparse push-through.** Filter the `(indices, patches)` pair and
+  re-emit Sparse with the original fill value. AllFalse on the patches
+  collapses back to a Constant fill.
+- **Transform push-through** (the lazy variants this ADR introduces).
+  `ForLongArray(ref, encoded).filter(m) = ForLongArray(ref, encoded.filter(m))`.
+  Same for `LazyAlpFloatArray`, `LazyZigZagLongArray`. Reference / scale
+  / exponent metadata reused; the encoded child filter recurses.
+
+Encodings that need buffers stay buffer-reading: `Bitpacked`, `Pco`,
+`Flat`, `Bool`. For those, the cursor over the mask is
+selectivity-dependent — high selectivity → contiguous-slice memcpy,
+low selectivity → per-index gather. Rust uses a 0.8 threshold
+(`FILTER_SLICES_SELECTIVITY_THRESHOLD` in arrow-rs / vortex-rs).
+We adopt 0.8 as the default and expose
+`-Dvortex.compute.filter.sliceThreshold` for tuning.
+
+Two precondition fast paths run inside the framework, once per call,
+before any encoding-specific code:
+
+1. `mask.trueCount() == 0` → empty canonical array (matches dtype).
+2. `mask.trueCount() == mask.length()` → original array unchanged.
+
+`BoolArray` already carries the mask type from `compareXxx`; the
+operator stays a method on `Array` (pattern-matched per concrete type
+exactly like `compareXxx`). No registry. The Kernel SPI deferral
+note above still applies — if a second encoding's `filter` proves
+the shape repeats, lift to a kernel interface; until then, direct
+methods on concrete types.
+
+#### Composition with ADR 0012
+
+`Chunked.filter` is what gives the multi-chunk wins. It depends on
+ADR 0012's `Chunked*Array` being first-class — without it the filter
+operator runs after concat and the per-chunk slice-rewrite trick is
+unavailable. ADR 0012 and Phase 3 of this ADR therefore sequence
+together: 0012 lands the storage, Phase 3 lands the operators that
+exploit it.
+
+`Dict.filter` similarly needs ADR 0012's `Dict*Array`. Both
+push-through patterns are noise without lazy layout substrate
+underneath.
+
 ### Future — extend the lazy family
 
 Once ALP proves the shape (PR #35 PoC), apply the same pattern per
@@ -450,6 +518,14 @@ encoding. No interface change — each new variant is just another
   and are reached by short-circuiting inside the fused class, not
   by being added to the public surface. SPI lands when a second
   encoding's `compareXxx` proves the shape repeats.
+- **`filter(BoolArray) → Array` ships alongside `compareXxx` as a
+  per-encoding method, not as a registry SPI.** Same Kernel-SPI
+  deferral: if a second encoding's `filter` mirrors a first, lift
+  later. Metadata-only push-throughs (Constant / Chunked / Dict /
+  Sparse / FoR / ALP / ZigZag) inherit the lazy substrate from ADR
+  0012 and never canonicalise; buffer-reading encodings dispatch on
+  selectivity (0.8 default, tunable via
+  `-Dvortex.compute.filter.sliceThreshold`).
 - **Filter semantics change.** Today `RowFilter` is a zone-map prune
   hint; the consumer still re-checks every row. After phase 3 the chunk
   returned by `next()` is already filtered. This is a breaking change
