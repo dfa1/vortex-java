@@ -5,8 +5,6 @@ import io.github.dfa1.vortex.encoding.PTypeIO;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
-import java.util.function.DoubleBinaryOperator;
-import java.util.function.DoubleConsumer;
 
 /// Lazy [DoubleArray] backed by the {@code vortex.alp} encoded {@code i64} child segment.
 ///
@@ -31,27 +29,5 @@ public record LazyAlpDoubleArray(DType dtype, long length, MemorySegment encoded
     @Override
     public double getDouble(long i) {
         return (double) encoded.getAtIndex(PTypeIO.LE_LONG, i) * scale;
-    }
-
-    @Override
-    public void forEachDouble(DoubleConsumer c) {
-        MemorySegment src = encoded;
-        double s = scale;
-        long n = length;
-        for (long i = 0; i < n; i++) {
-            c.accept((double) src.getAtIndex(PTypeIO.LE_LONG, i) * s);
-        }
-    }
-
-    @Override
-    public double fold(double identity, DoubleBinaryOperator op) {
-        MemorySegment src = encoded;
-        double s = scale;
-        long n = length;
-        double result = identity;
-        for (long i = 0; i < n; i++) {
-            result = op.applyAsDouble(result, (double) src.getAtIndex(PTypeIO.LE_LONG, i) * s);
-        }
-        return result;
     }
 }

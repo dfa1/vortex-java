@@ -5,8 +5,6 @@ import io.github.dfa1.vortex.encoding.PTypeIO;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
-import java.util.function.IntBinaryOperator;
-import java.util.function.IntConsumer;
 
 /// Lazy [IntArray] backed by the {@code vortex.zigzag} encoded {@code u32} child segment.
 ///
@@ -26,27 +24,5 @@ public record LazyZigZagIntArray(DType dtype, long length, MemorySegment encoded
     public int getInt(long i) {
         int u = encoded.getAtIndex(PTypeIO.LE_INT, i);
         return (u >>> 1) ^ -(u & 1);
-    }
-
-    @Override
-    public void forEachInt(IntConsumer c) {
-        MemorySegment src = encoded;
-        long n = length;
-        for (long i = 0; i < n; i++) {
-            int u = src.getAtIndex(PTypeIO.LE_INT, i);
-            c.accept((u >>> 1) ^ -(u & 1));
-        }
-    }
-
-    @Override
-    public int fold(int identity, IntBinaryOperator op) {
-        MemorySegment src = encoded;
-        long n = length;
-        int result = identity;
-        for (long i = 0; i < n; i++) {
-            int u = src.getAtIndex(PTypeIO.LE_INT, i);
-            result = op.applyAsInt(result, (u >>> 1) ^ -(u & 1));
-        }
-        return result;
     }
 }

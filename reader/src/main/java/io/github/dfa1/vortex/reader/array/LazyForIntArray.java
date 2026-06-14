@@ -5,8 +5,6 @@ import io.github.dfa1.vortex.encoding.PTypeIO;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
-import java.util.function.IntBinaryOperator;
-import java.util.function.IntConsumer;
 
 /// Lazy [IntArray] backed by the {@code fastlanes.for} encoded {@code i32} child segment.
 ///
@@ -26,27 +24,5 @@ public record LazyForIntArray(DType dtype, long length, MemorySegment encoded, i
     @Override
     public int getInt(long i) {
         return encoded.getAtIndex(PTypeIO.LE_INT, i) + ref;
-    }
-
-    @Override
-    public void forEachInt(IntConsumer c) {
-        MemorySegment src = encoded;
-        int r = ref;
-        long n = length;
-        for (long i = 0; i < n; i++) {
-            c.accept(src.getAtIndex(PTypeIO.LE_INT, i) + r);
-        }
-    }
-
-    @Override
-    public int fold(int identity, IntBinaryOperator op) {
-        MemorySegment src = encoded;
-        int r = ref;
-        long n = length;
-        int result = identity;
-        for (long i = 0; i < n; i++) {
-            result = op.applyAsInt(result, src.getAtIndex(PTypeIO.LE_INT, i) + r);
-        }
-        return result;
     }
 }

@@ -21,5 +21,12 @@ public non-sealed interface FloatArray extends Array {
     /// @param identity initial accumulator value
     /// @param op       binary operator applied to the accumulator and each float element (widened to double)
     /// @return the final accumulated result
-    double fold(double identity, DoubleBinaryOperator op);
+    default double fold(double identity, DoubleBinaryOperator op) {
+        long n = length();
+        double result = identity;
+        for (long i = 0; i < n; i++) {
+            result = op.applyAsDouble(result, getFloat(i));
+        }
+        return result;
+    }
 }

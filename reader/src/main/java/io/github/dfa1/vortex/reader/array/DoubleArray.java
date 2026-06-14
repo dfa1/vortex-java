@@ -20,12 +20,24 @@ public non-sealed interface DoubleArray extends Array {
     /// Invokes the consumer for each element in order.
     ///
     /// @param c consumer called once per element with the double value at each index
-    void forEachDouble(DoubleConsumer c);
+    default void forEachDouble(DoubleConsumer c) {
+        long n = length();
+        for (long i = 0; i < n; i++) {
+            c.accept(getDouble(i));
+        }
+    }
 
     /// Reduces all elements to a single double using the supplied operator.
     ///
     /// @param identity initial accumulator value
     /// @param op       binary operator applied to accumulator and each element in order
     /// @return the final accumulated value
-    double fold(double identity, DoubleBinaryOperator op);
+    default double fold(double identity, DoubleBinaryOperator op) {
+        long n = length();
+        double result = identity;
+        for (long i = 0; i < n; i++) {
+            result = op.applyAsDouble(result, getDouble(i));
+        }
+        return result;
+    }
 }

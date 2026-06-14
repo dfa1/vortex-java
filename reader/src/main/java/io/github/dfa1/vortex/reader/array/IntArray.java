@@ -20,12 +20,24 @@ public non-sealed interface IntArray extends Array {
     /// Passes each element to the given consumer in order.
     ///
     /// @param c consumer that receives each int element
-    void forEachInt(IntConsumer c);
+    default void forEachInt(IntConsumer c) {
+        long n = length();
+        for (long i = 0; i < n; i++) {
+            c.accept(getInt(i));
+        }
+    }
 
     /// Folds all elements using the given binary operator and identity value.
     ///
     /// @param identity initial accumulator value
     /// @param op       binary operator applied to the accumulator and each int element
     /// @return the final accumulated result
-    int fold(int identity, IntBinaryOperator op);
+    default int fold(int identity, IntBinaryOperator op) {
+        long n = length();
+        int result = identity;
+        for (long i = 0; i < n; i++) {
+            result = op.applyAsInt(result, getInt(i));
+        }
+        return result;
+    }
 }

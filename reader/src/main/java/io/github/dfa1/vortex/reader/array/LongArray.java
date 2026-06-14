@@ -20,12 +20,24 @@ public non-sealed interface LongArray extends Array {
     /// Passes each element to the given consumer in order.
     ///
     /// @param c consumer that receives each long element
-    void forEachLong(LongConsumer c);
+    default void forEachLong(LongConsumer c) {
+        long n = length();
+        for (long i = 0; i < n; i++) {
+            c.accept(getLong(i));
+        }
+    }
 
     /// Folds all elements using the given binary operator and identity value.
     ///
     /// @param identity initial accumulator value
     /// @param op       binary operator applied to the accumulator and each long element
     /// @return the final accumulated result
-    long fold(long identity, LongBinaryOperator op);
+    default long fold(long identity, LongBinaryOperator op) {
+        long n = length();
+        long result = identity;
+        for (long i = 0; i < n; i++) {
+            result = op.applyAsLong(result, getLong(i));
+        }
+        return result;
+    }
 }

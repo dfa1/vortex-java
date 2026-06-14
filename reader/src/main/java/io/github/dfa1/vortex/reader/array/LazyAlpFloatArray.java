@@ -5,7 +5,6 @@ import io.github.dfa1.vortex.encoding.PTypeIO;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
-import java.util.function.DoubleBinaryOperator;
 
 /// Lazy [FloatArray] backed by the {@code vortex.alp} encoded {@code i32} child segment.
 ///
@@ -25,17 +24,5 @@ public record LazyAlpFloatArray(DType dtype, long length, MemorySegment encoded,
     @Override
     public float getFloat(long i) {
         return (float) encoded.getAtIndex(PTypeIO.LE_INT, i) * scale;
-    }
-
-    @Override
-    public double fold(double identity, DoubleBinaryOperator op) {
-        MemorySegment src = encoded;
-        float s = scale;
-        long n = length;
-        double result = identity;
-        for (long i = 0; i < n; i++) {
-            result = op.applyAsDouble(result, (double) ((float) src.getAtIndex(PTypeIO.LE_INT, i) * s));
-        }
-        return result;
     }
 }
