@@ -76,10 +76,7 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
     }
 
     private static Array decodeF64(DecodeContext ctx, ALPMetadata meta, int expE, int expF, long n) {
-        double df = F10_F64[expF];
-        double de = IF10_F64[expE];
-        double scale = df * de;
-
+        double scale = F10_F64[expF] * IF10_F64[expE];
         MemorySegment src = ctx.decodeChildSegment(0, I64_DTYPE, n);
         long srcCap = SegmentBroadcast.capacity(src, 8);
 
@@ -87,64 +84,45 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
             return new LazyAlpDoubleArray(ctx.dtype(), n, src, scale, ctx.arena());
         }
 
-        MemorySegment buf = src.isReadOnly() ? ctx.arena().allocate(n * 8, 8) : src;
-        if (src.isReadOnly()) {
-            if (srcCap == n) {
-                for (long i = 0; i < n; i++) {
-                    buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) src.getAtIndex(PTypeIO.LE_LONG, i) * scale);
-                }
-            } else {
-                for (long i = 0; i < n; i++) {
-                    buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) src.getAtIndex(PTypeIO.LE_LONG, i % srcCap) * scale);
-                }
+        MemorySegment buf = ctx.arena().allocate(n * 8, 8);
+        if (srcCap == n) {
+            for (long i = 0; i < n; i++) {
+                buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) src.getAtIndex(PTypeIO.LE_LONG, i) * scale);
             }
         } else {
             for (long i = 0; i < n; i++) {
-                buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) buf.getAtIndex(PTypeIO.LE_LONG, i) * scale);
+                buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) src.getAtIndex(PTypeIO.LE_LONG, i % srcCap) * scale);
             }
         }
-
         if (meta.patches() != null) {
             applyPatches(ctx, meta.patches(), buf, 8);
         }
-
         return new MaterializedDoubleArray(ctx.dtype(), n, buf.asReadOnly());
     }
 
     private static Array decodeF32(DecodeContext ctx, ALPMetadata meta, int expE, int expF, long n) {
-        float df = F10_F32[expF];
-        float de = IF10_F32[expE];
-        float scale = df * de;
-
-        MemorySegment src32 = ctx.decodeChildSegment(0, I32_DTYPE, n);
-        long srcCap = SegmentBroadcast.capacity(src32, 4);
+        float scale = F10_F32[expF] * IF10_F32[expE];
+        MemorySegment src = ctx.decodeChildSegment(0, I32_DTYPE, n);
+        long srcCap = SegmentBroadcast.capacity(src, 4);
 
         if (meta.patches() == null && srcCap >= n) {
-            return new LazyAlpFloatArray(ctx.dtype(), n, src32, scale, ctx.arena());
+            return new LazyAlpFloatArray(ctx.dtype(), n, src, scale, ctx.arena());
         }
 
-        MemorySegment buf32 = src32.isReadOnly() ? ctx.arena().allocate(n * 4, 4) : src32;
-        if (src32.isReadOnly()) {
-            if (srcCap == n) {
-                for (long i = 0; i < n; i++) {
-                    buf32.setAtIndex(PTypeIO.LE_FLOAT, i, (float) src32.getAtIndex(PTypeIO.LE_INT, i) * scale);
-                }
-            } else {
-                for (long i = 0; i < n; i++) {
-                    buf32.setAtIndex(PTypeIO.LE_FLOAT, i, (float) src32.getAtIndex(PTypeIO.LE_INT, i % srcCap) * scale);
-                }
+        MemorySegment buf = ctx.arena().allocate(n * 4, 4);
+        if (srcCap == n) {
+            for (long i = 0; i < n; i++) {
+                buf.setAtIndex(PTypeIO.LE_FLOAT, i, (float) src.getAtIndex(PTypeIO.LE_INT, i) * scale);
             }
         } else {
             for (long i = 0; i < n; i++) {
-                buf32.setAtIndex(PTypeIO.LE_FLOAT, i, (float) buf32.getAtIndex(PTypeIO.LE_INT, i) * scale);
+                buf.setAtIndex(PTypeIO.LE_FLOAT, i, (float) src.getAtIndex(PTypeIO.LE_INT, i % srcCap) * scale);
             }
         }
-
         if (meta.patches() != null) {
-            applyPatches(ctx, meta.patches(), buf32, 4);
+            applyPatches(ctx, meta.patches(), buf, 4);
         }
-
-        return new MaterializedFloatArray(ctx.dtype(), n, buf32.asReadOnly());
+        return new MaterializedFloatArray(ctx.dtype(), n, buf.asReadOnly());
     }
 
     private static void applyPatches(DecodeContext ctx, PatchesMetadata pm, MemorySegment out, int elemBytes) {
