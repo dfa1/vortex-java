@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.proto.ALPMetadata;
 import io.github.dfa1.vortex.proto.PatchesMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.LazyAlpDoubleArray;
 import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
 import io.github.dfa1.vortex.reader.array.MaterializedFloatArray;
 
@@ -76,23 +77,29 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
     private static Array decodeF64(DecodeContext ctx, ALPMetadata meta, int expE, int expF, long n) {
         double df = F10_F64[expF];
         double de = IF10_F64[expE];
+        double scale = df * de;
 
         MemorySegment src = ctx.decodeChildSegment(0, I64_DTYPE, n);
+        long srcCap = SegmentBroadcast.capacity(src, 8);
+
+        if (meta.patches() == null && srcCap >= n) {
+            return new LazyAlpDoubleArray(ctx.dtype(), n, src, scale, ctx.arena());
+        }
+
         MemorySegment buf = src.isReadOnly() ? ctx.arena().allocate(n * 8, 8) : src;
         if (src.isReadOnly()) {
-            long srcCap = SegmentBroadcast.capacity(src, 8);
             if (srcCap == n) {
                 for (long i = 0; i < n; i++) {
-                    buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) src.getAtIndex(PTypeIO.LE_LONG, i) * df * de);
+                    buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) src.getAtIndex(PTypeIO.LE_LONG, i) * scale);
                 }
             } else {
                 for (long i = 0; i < n; i++) {
-                    buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) src.getAtIndex(PTypeIO.LE_LONG, i % srcCap) * df * de);
+                    buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) src.getAtIndex(PTypeIO.LE_LONG, i % srcCap) * scale);
                 }
             }
         } else {
             for (long i = 0; i < n; i++) {
-                buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) buf.getAtIndex(PTypeIO.LE_LONG, i) * df * de);
+                buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) buf.getAtIndex(PTypeIO.LE_LONG, i) * scale);
             }
         }
 

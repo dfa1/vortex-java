@@ -6,6 +6,8 @@ import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.LazyZigZagIntArray;
+import io.github.dfa1.vortex.reader.array.LazyZigZagLongArray;
 import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
 import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
 import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
@@ -47,6 +49,20 @@ public final class ZigZagEncodingDecoder implements EncodingDecoder {
         MemorySegment src = ctx.decodeChildSegment(0, new DType.Primitive(unsigned, false), n);
         int elemBytes = signed.byteSize();
         long srcCap = SegmentBroadcast.capacity(src, elemBytes);
+
+        if (srcCap >= n) {
+            switch (signed) {
+                case I32 -> {
+                    return new LazyZigZagIntArray(ctx.dtype(), n, src, ctx.arena());
+                }
+                case I64 -> {
+                    return new LazyZigZagLongArray(ctx.dtype(), n, src, ctx.arena());
+                }
+                default -> {
+                }
+            }
+        }
+
         MemorySegment dst = ctx.arena().allocate(n * elemBytes);
 
         return switch (signed) {

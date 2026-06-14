@@ -1,0 +1,69 @@
+package io.github.dfa1.vortex.reader.array;
+
+import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.PType;
+import org.junit.jupiter.api.Test;
+
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import java.nio.ByteOrder;
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class LazyZigZagLongArrayTest {
+
+    private static final ValueLayout.OfLong LE_LONG =
+            ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+
+    private static final DType I64 = new DType.Primitive(PType.I64, false);
+
+    private static LazyZigZagLongArray of(long... encoded) {
+        Arena arena = Arena.ofAuto();
+        MemorySegment seg = arena.allocate((long) encoded.length * 8, 8);
+        for (int i = 0; i < encoded.length; i++) {
+            seg.setAtIndex(LE_LONG, i, encoded[i]);
+        }
+        return new LazyZigZagLongArray(I64, encoded.length, seg, arena);
+    }
+
+    @Test
+    void getLongAppliesZigzagDecode() {
+        // Given — zigzag(0)=0, zigzag(-1)=1, zigzag(1)=2, zigzag(-2)=3, zigzag(2)=4
+        LazyZigZagLongArray sut = of(0L, 1L, 2L, 3L, 4L);
+
+        // When + Then
+        assertThat(sut.getLong(0)).isEqualTo(0L);
+        assertThat(sut.getLong(1)).isEqualTo(-1L);
+        assertThat(sut.getLong(2)).isEqualTo(1L);
+        assertThat(sut.getLong(3)).isEqualTo(-2L);
+        assertThat(sut.getLong(4)).isEqualTo(2L);
+    }
+
+    @Test
+    void forEachLongVisitsAll() {
+        // Given
+        LazyZigZagLongArray sut = of(2L, 3L);
+        List<Long> got = new ArrayList<>();
+
+        // When
+        sut.forEachLong(got::add);
+
+        // Then
+        assertThat(got).containsExactly(1L, -2L);
+    }
+
+    @Test
+    void foldSumApplies() {
+        // Given — encoded [0,1,2,3,4] decodes [0,-1,1,-2,2] → sum 0
+        LazyZigZagLongArray sut = of(0L, 1L, 2L, 3L, 4L);
+
+        // When
+        long sum = sut.fold(0L, Long::sum);
+
+        // Then
+        assertThat(sum).isEqualTo(0L);
+    }
+}

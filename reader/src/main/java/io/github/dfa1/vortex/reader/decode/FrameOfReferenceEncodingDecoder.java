@@ -9,11 +9,11 @@ import io.github.dfa1.vortex.proto.ScalarValue;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.reader.array.BoolArray;
+import io.github.dfa1.vortex.reader.array.LazyForIntArray;
+import io.github.dfa1.vortex.reader.array.LazyForLongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
 import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
-import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
-import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
 import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
 
 import java.io.IOException;
@@ -73,16 +73,22 @@ public final class FrameOfReferenceEncodingDecoder implements EncodingDecoder {
 
         MemorySegment src = ArraySegments.of(rawEncoded);
         long n = ctx.rowCount();
-        MemorySegment dst = applyReference(src, n, p.ptype(), ref, ctx.arena());
         Array result = switch (p.ptype()) {
-            case I64, U64 -> new MaterializedLongArray(ctx.dtype(), n, dst);
-            case I32, U32 -> new MaterializedIntArray(ctx.dtype(), n, dst);
+            case I64, U64 -> new LazyForLongArray(ctx.dtype(), n, src, ref, ctx.arena());
+            case I32, U32 -> new LazyForIntArray(ctx.dtype(), n, src, (int) ref, ctx.arena());
+            default -> materialiseEager(ctx, src, n, p.ptype(), ref);
+        };
+        return validity != null ? new MaskedArray(result, validity) : result;
+    }
+
+    private static Array materialiseEager(DecodeContext ctx, MemorySegment src, long n, PType ptype, long ref) {
+        MemorySegment dst = applyReference(src, n, ptype, ref, ctx.arena());
+        return switch (ptype) {
             case F64 -> new MaterializedDoubleArray(ctx.dtype(), n, dst);
             case I16, U16 -> new MaterializedShortArray(ctx.dtype(), n, dst);
             case I8, U8 -> new MaterializedByteArray(ctx.dtype(), n, dst);
-            default -> throw new VortexException(EncodingId.FASTLANES_FOR, "unsupported ptype " + p.ptype());
+            default -> throw new VortexException(EncodingId.FASTLANES_FOR, "unsupported ptype " + ptype);
         };
-        return validity != null ? new MaskedArray(result, validity) : result;
     }
 
     private static long referenceValue(ScalarValue scalar) {

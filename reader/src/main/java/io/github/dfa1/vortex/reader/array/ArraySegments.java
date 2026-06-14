@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.encoding.PTypeIO;
 
 import java.lang.foreign.MemorySegment;
 
@@ -21,7 +22,8 @@ public final class ArraySegments {
     private ArraySegments() {
     }
 
-    /// Returns the primary backing segment of {@code arr}.
+    /// Returns the primary backing segment of {@code arr}, materialising lazy variants through
+    /// their chunk-scoped allocator on demand.
     ///
     /// @param arr the array whose segment is needed
     /// @return the primary {@link MemorySegment}
@@ -37,9 +39,69 @@ public final class ArraySegments {
             case MaterializedByteArray a -> a.buffer();
             case MaterializedBoolArray a -> a.buffer();
             case MaterializedFloat16Array a -> a.buffer();
+            case LazyAlpDoubleArray a -> materialise(a);
+            case LazyForLongArray a -> materialise(a);
+            case LazyForIntArray a -> materialise(a);
+            case LazyZigZagLongArray a -> materialise(a);
+            case LazyZigZagIntArray a -> materialise(a);
             case VarBinArray a -> a.bytesSegment();
             case GenericArray a -> a.buffer(0);
             default -> throw new VortexException(data.getClass().getSimpleName() + " has no primary segment");
         };
+    }
+
+    private static MemorySegment materialise(LazyAlpDoubleArray a) {
+        long n = a.length();
+        MemorySegment dst = a.arena().allocate(n * 8L, 8);
+        double scale = a.scale();
+        MemorySegment src = a.encoded();
+        for (long i = 0; i < n; i++) {
+            dst.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) src.getAtIndex(PTypeIO.LE_LONG, i) * scale);
+        }
+        return dst;
+    }
+
+    private static MemorySegment materialise(LazyForLongArray a) {
+        long n = a.length();
+        MemorySegment dst = a.arena().allocate(n * 8L, 8);
+        long ref = a.ref();
+        MemorySegment src = a.encoded();
+        for (long i = 0; i < n; i++) {
+            dst.setAtIndex(PTypeIO.LE_LONG, i, src.getAtIndex(PTypeIO.LE_LONG, i) + ref);
+        }
+        return dst;
+    }
+
+    private static MemorySegment materialise(LazyForIntArray a) {
+        long n = a.length();
+        MemorySegment dst = a.arena().allocate(n * 4L, 4);
+        int ref = a.ref();
+        MemorySegment src = a.encoded();
+        for (long i = 0; i < n; i++) {
+            dst.setAtIndex(PTypeIO.LE_INT, i, src.getAtIndex(PTypeIO.LE_INT, i) + ref);
+        }
+        return dst;
+    }
+
+    private static MemorySegment materialise(LazyZigZagLongArray a) {
+        long n = a.length();
+        MemorySegment dst = a.arena().allocate(n * 8L, 8);
+        MemorySegment src = a.encoded();
+        for (long i = 0; i < n; i++) {
+            long u = src.getAtIndex(PTypeIO.LE_LONG, i);
+            dst.setAtIndex(PTypeIO.LE_LONG, i, (u >>> 1) ^ -(u & 1L));
+        }
+        return dst;
+    }
+
+    private static MemorySegment materialise(LazyZigZagIntArray a) {
+        long n = a.length();
+        MemorySegment dst = a.arena().allocate(n * 4L, 4);
+        MemorySegment src = a.encoded();
+        for (long i = 0; i < n; i++) {
+            int u = src.getAtIndex(PTypeIO.LE_INT, i);
+            dst.setAtIndex(PTypeIO.LE_INT, i, (u >>> 1) ^ -(u & 1));
+        }
+        return dst;
     }
 }
