@@ -5,8 +5,8 @@ import io.github.dfa1.vortex.encoding.EncodingId;
 
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
+import java.util.Random;
 import java.util.Set;
 
 /// Cascading compressor: evaluates multiple encodings on a sample and picks the one
@@ -40,20 +40,77 @@ public final class CascadingCompressor {
         };
     }
 
-    private static Object sliceSample(Object data, int n) {
+    private static final int STRIDE_COUNT = 32;
+
+    /// Build a stratified sample: pick {@code STRIDE_COUNT} contiguous strides at random
+    /// offsets, concatenated. Preserves local run structure (so RunEnd/RLE can win)
+    /// while covering breadth (so cardinality-based encoders see realistic distinct counts).
+    /// Falls back to first-N when the data is short enough for one stride to span it.
+    private static Object stratifiedSample(Object data, int sampleSize, long seed) {
         return switch (data) {
             case StructData sd -> {
-                List<Object> sliced = sd.fieldArrays().stream().map(f -> sliceSample(f, n)).toList();
+                List<Object> sliced = sd.fieldArrays().stream()
+                        .map(f -> stratifiedSample(f, sampleSize, seed)).toList();
                 yield new StructData(sliced);
             }
-            case byte[] a -> Arrays.copyOf(a, n);
-            case short[] a -> Arrays.copyOf(a, n);
-            case int[] a -> Arrays.copyOf(a, n);
-            case long[] a -> Arrays.copyOf(a, n);
-            case float[] a -> Arrays.copyOf(a, n);
-            case double[] a -> Arrays.copyOf(a, n);
+            case byte[] a -> {
+                byte[] out = new byte[sampleSize];
+                forEachStride(a.length, sampleSize, seed, (srcOff, dstOff, len) ->
+                        System.arraycopy(a, srcOff, out, dstOff, len));
+                yield out;
+            }
+            case short[] a -> {
+                short[] out = new short[sampleSize];
+                forEachStride(a.length, sampleSize, seed, (srcOff, dstOff, len) ->
+                        System.arraycopy(a, srcOff, out, dstOff, len));
+                yield out;
+            }
+            case int[] a -> {
+                int[] out = new int[sampleSize];
+                forEachStride(a.length, sampleSize, seed, (srcOff, dstOff, len) ->
+                        System.arraycopy(a, srcOff, out, dstOff, len));
+                yield out;
+            }
+            case long[] a -> {
+                long[] out = new long[sampleSize];
+                forEachStride(a.length, sampleSize, seed, (srcOff, dstOff, len) ->
+                        System.arraycopy(a, srcOff, out, dstOff, len));
+                yield out;
+            }
+            case float[] a -> {
+                float[] out = new float[sampleSize];
+                forEachStride(a.length, sampleSize, seed, (srcOff, dstOff, len) ->
+                        System.arraycopy(a, srcOff, out, dstOff, len));
+                yield out;
+            }
+            case double[] a -> {
+                double[] out = new double[sampleSize];
+                forEachStride(a.length, sampleSize, seed, (srcOff, dstOff, len) ->
+                        System.arraycopy(a, srcOff, out, dstOff, len));
+                yield out;
+            }
             default -> throw new IllegalArgumentException("unsupported data type: " + data.getClass());
         };
+    }
+
+    @FunctionalInterface
+    private interface StrideCopy {
+        void copy(int srcOff, int dstOff, int len);
+    }
+
+    private static void forEachStride(int n, int sampleSize, long seed, StrideCopy copier) {
+        int strideCount = Math.min(STRIDE_COUNT, sampleSize);
+        int strideLen = sampleSize / strideCount;
+        int remainder = sampleSize - strideLen * strideCount;
+        Random rng = new Random(seed);
+        int dstOff = 0;
+        for (int s = 0; s < strideCount; s++) {
+            int len = strideLen + (s < remainder ? 1 : 0);
+            int maxStart = Math.max(0, n - len);
+            int srcOff = maxStart == 0 ? 0 : rng.nextInt(maxStart + 1);
+            copier.copy(srcOff, dstOff, len);
+            dstOff += len;
+        }
     }
 
     private static long primitiveBytes(DType dtype, int n) {
@@ -95,7 +152,7 @@ public final class CascadingCompressor {
         // Build sample
         int sampleSize = (int) Math.max(ctx.minSampleSize(), Math.ceil(n * ctx.sampleFraction()));
         sampleSize = Math.min(sampleSize, n);
-        Object sample = (sampleSize < n) ? sliceSample(data, sampleSize) : data;
+        Object sample = (sampleSize < n) ? stratifiedSample(data, sampleSize, ctx.sampleSeed()) : data;
 
         long bestSampleSize = primitiveBytes(dtype, sampleSize);
         EncodingEncoder winner = null;
