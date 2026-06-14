@@ -3,18 +3,18 @@ package io.github.dfa1.vortex.reader.decode;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.ByteArray;
-import io.github.dfa1.vortex.reader.array.DoubleArray;
-import io.github.dfa1.vortex.reader.array.Float16Array;
-import io.github.dfa1.vortex.reader.array.FloatArray;
-import io.github.dfa1.vortex.reader.array.IntArray;
-import io.github.dfa1.vortex.reader.array.LongArray;
-import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.proto.ScalarValue;
 import io.github.dfa1.vortex.proto.SequenceMetadata;
+import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
+import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
+import io.github.dfa1.vortex.reader.array.MaterializedFloat16Array;
+import io.github.dfa1.vortex.reader.array.MaterializedFloatArray;
+import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
+import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
+import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -85,10 +85,10 @@ public final class SequenceEncodingDecoder implements EncodingDecoder {
             }
         }
         return switch (pt) {
-            case I64, U64 -> new LongArray(dtype, n, seg);
-            case I32, U32 -> new IntArray(dtype, n, seg);
-            case I16, U16 -> new ShortArray(dtype, n, seg);
-            case I8, U8 -> new ByteArray(dtype, n, seg);
+            case I64, U64 -> new MaterializedLongArray(dtype, n, seg);
+            case I32, U32 -> new MaterializedIntArray(dtype, n, seg);
+            case I16, U16 -> new MaterializedShortArray(dtype, n, seg);
+            case I8, U8 -> new MaterializedByteArray(dtype, n, seg);
             default -> throw new VortexException(EncodingId.VORTEX_SEQUENCE, "unsupported ptype " + pt);
         };
     }
@@ -100,7 +100,7 @@ public final class SequenceEncodingDecoder implements EncodingDecoder {
         for (long i = 0; i < n; i++) {
             seg.setAtIndex(PTypeIO.LE_FLOAT, i, base + i * mul);
         }
-        return new FloatArray(dtype, n, seg);
+        return new MaterializedFloatArray(dtype, n, seg);
     }
 
     private static Array decodeF64(SequenceMetadata meta, long n, DType dtype, SegmentAllocator arena) {
@@ -110,7 +110,7 @@ public final class SequenceEncodingDecoder implements EncodingDecoder {
         for (long i = 0; i < n; i++) {
             seg.setAtIndex(PTypeIO.LE_DOUBLE, i, base + i * mul);
         }
-        return new DoubleArray(dtype, n, seg);
+        return new MaterializedDoubleArray(dtype, n, seg);
     }
 
     private static Array decodeF16(SequenceMetadata meta, long n, DType dtype, SegmentAllocator arena) {
@@ -122,7 +122,7 @@ public final class SequenceEncodingDecoder implements EncodingDecoder {
         for (long i = 0; i < n; i++) {
             seg.setAtIndex(PTypeIO.LE_SHORT, i, Float.floatToFloat16(base + i * mul));
         }
-        return new Float16Array(dtype, n, seg);
+        return new MaterializedFloat16Array(dtype, n, seg);
     }
 
     private static long signedValue(ScalarValue sv) {

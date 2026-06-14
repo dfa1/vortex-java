@@ -3,11 +3,14 @@ package io.github.dfa1.vortex.reader.extension;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.encoding.TimeUnit;
+import io.github.dfa1.vortex.extension.ExtensionId;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
-import io.github.dfa1.vortex.encoding.TimeUnit;
-import io.github.dfa1.vortex.extension.ExtensionId;
+import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
+import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
+
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
@@ -25,6 +28,7 @@ import static io.github.dfa1.vortex.reader.extension.ExtensionTestSupport.I64;
 import static io.github.dfa1.vortex.reader.extension.ExtensionTestSupport.ext;
 import static io.github.dfa1.vortex.reader.extension.ExtensionTestSupport.i64;
 import static io.github.dfa1.vortex.reader.extension.ExtensionTestSupport.tzMeta;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -129,10 +133,10 @@ class TimestampExtensionDecoderTest {
             MemorySegment buf = arena.allocate(16);
             buf.set(ValueLayout.JAVA_LONG_UNALIGNED, 0, 1_000L);
             buf.set(ValueLayout.JAVA_LONG_UNALIGNED, 8, 0L);
-            LongArray inner = new LongArray(I64, 2, buf);
+            LongArray inner = new MaterializedLongArray(I64, 2, buf);
             MemorySegment validityBuf = arena.allocate(1);
             validityBuf.set(ValueLayout.JAVA_BYTE, 0, (byte) 0b0000_0001);
-            BoolArray validity = new BoolArray(new DType.Bool(false), 2, validityBuf);
+            BoolArray validity = new MaterializedBoolArray(new DType.Bool(false), 2, validityBuf);
             DType.Extension dtype = sut.dtype(true);
 
             // When

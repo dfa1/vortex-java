@@ -29,14 +29,14 @@ public final class ArraySegments {
     public static MemorySegment of(Array arr) {
         Array data = arr instanceof MaskedArray m ? m.inner() : arr;
         return switch (data) {
-            case IntArray a -> a.buffer();
-            case LongArray a -> a.buffer();
-            case DoubleArray a -> a.buffer();
-            case FloatArray a -> a.buffer();
-            case ShortArray a -> a.buffer();
-            case ByteArray a -> a.buffer();
-            case BoolArray a -> a.buffer();
-            case Float16Array a -> a.buffer();
+            case MaterializedIntArray a -> a.buffer();
+            case MaterializedLongArray a -> a.buffer();
+            case MaterializedDoubleArray a -> a.buffer();
+            case MaterializedFloatArray a -> a.buffer();
+            case MaterializedShortArray a -> a.buffer();
+            case MaterializedByteArray a -> a.buffer();
+            case MaterializedBoolArray a -> a.buffer();
+            case MaterializedFloat16Array a -> a.buffer();
             case VarBinArray a -> a.bytesSegment();
             case GenericArray a -> a.buffer(0);
             default -> throw new VortexException(data.getClass().getSimpleName() + " has no primary segment");

@@ -1,92 +1,31 @@
 package io.github.dfa1.vortex.reader.array;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.encoding.PTypeIO;
 
-import java.lang.foreign.MemorySegment;
 import java.util.function.IntBinaryOperator;
 import java.util.function.IntConsumer;
 
-/// Concrete [Array] for I32/U32 primitive columns.
-public final class IntArray implements Array {
-
-    private final DType dtype;
-    private final long length;
-    private final MemorySegment buffer;
-    // Pre-computed buffer capacity in elements. Equals `length` for normal arrays;
-    // smaller for ConstantEncoding (1-element broadcast, length = logical row count).
-    private final long elementCount;
-
-    /// Creates a new {@code IntArray} backed by the given memory segment.
-    ///
-    /// @param dtype  logical type, must be I32 or U32
-    /// @param length number of elements
-    /// @param buffer little-endian int data (4 bytes per element)
-    public IntArray(DType dtype, long length, MemorySegment buffer) {
-        this.dtype = dtype;
-        this.length = length;
-        this.buffer = buffer;
-        this.elementCount = buffer.byteSize() / PTypeIO.LE_INT.byteSize();
-    }
-
-    @Override
-    public DType dtype() {
-        return dtype;
-    }
-
-    @Override
-    public long length() {
-        return length;
-    }
-
-
-    MemorySegment buffer() {
-        return buffer;
-    }
+/// [Array] for I32/U32 primitive columns.
+///
+/// The default impl is [MaterializedIntArray], a buffer-backed record
+/// returned when an encoding decoder either materialises values eagerly or
+/// has no lazy variant of its own.
+public non-sealed interface IntArray extends Array {
 
     /// Returns the int value at the given index.
     ///
-    /// @param i zero-based index (must be in {@code [0, length)})
+    /// @param i zero-based index (must be in {@code [0, length())})
     /// @return the int value at position {@code i}
-    public int getInt(long i) {
-        return buffer.getAtIndex(PTypeIO.LE_INT, length == elementCount ? i : i % elementCount);
-    }
+    int getInt(long i);
 
     /// Passes each element to the given consumer in order.
     ///
     /// @param c consumer that receives each int element
-    public void forEachInt(IntConsumer c) {
-        MemorySegment buf = buffer;
-        long n = length;
-        if (n == elementCount) {
-            for (long i = 0; i < n; i++) {
-                c.accept(buf.getAtIndex(PTypeIO.LE_INT, i));
-            }
-        } else {
-            for (long i = 0; i < n; i++) {
-                c.accept(buf.getAtIndex(PTypeIO.LE_INT, i % elementCount));
-            }
-        }
-    }
+    void forEachInt(IntConsumer c);
 
     /// Folds all elements using the given binary operator and identity value.
     ///
     /// @param identity initial accumulator value
     /// @param op       binary operator applied to the accumulator and each int element
     /// @return the final accumulated result
-    public int fold(int identity, IntBinaryOperator op) {
-        MemorySegment buf = buffer;
-        long n = length;
-        int result = identity;
-        if (n == elementCount) {
-            for (long i = 0; i < n; i++) {
-                result = op.applyAsInt(result, buf.getAtIndex(PTypeIO.LE_INT, i));
-            }
-        } else {
-            for (long i = 0; i < n; i++) {
-                result = op.applyAsInt(result, buf.getAtIndex(PTypeIO.LE_INT, i % elementCount));
-            }
-        }
-        return result;
-    }
+    int fold(int identity, IntBinaryOperator op);
 }

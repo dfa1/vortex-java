@@ -3,13 +3,13 @@ package io.github.dfa1.vortex.reader.decode;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.DoubleArray;
-import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.proto.ALPMetadata;
 import io.github.dfa1.vortex.proto.PatchesMetadata;
+import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
+import io.github.dfa1.vortex.reader.array.MaterializedFloatArray;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -100,7 +100,7 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
             applyPatches(ctx, meta.patches(), buf, 8);
         }
 
-        return new DoubleArray(ctx.dtype(), n, buf.asReadOnly());
+        return new MaterializedDoubleArray(ctx.dtype(), n, buf.asReadOnly());
     }
 
     private static Array decodeF32(DecodeContext ctx, ALPMetadata meta, int expE, int expF, long n) {
@@ -130,7 +130,7 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
             applyPatches(ctx, meta.patches(), buf32, 4);
         }
 
-        return new FloatArray(ctx.dtype(), n, buf32.asReadOnly());
+        return new MaterializedFloatArray(ctx.dtype(), n, buf32.asReadOnly());
     }
 
     private static void applyPatches(DecodeContext ctx, PatchesMetadata pm, MemorySegment out, int elemBytes) {

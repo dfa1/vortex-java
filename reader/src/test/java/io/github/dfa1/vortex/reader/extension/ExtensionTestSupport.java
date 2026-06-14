@@ -4,6 +4,8 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
+import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -46,12 +48,12 @@ final class ExtensionTestSupport {
     static IntArray i32(Arena arena, int value) {
         MemorySegment buf = arena.allocate(4);
         buf.set(ValueLayout.JAVA_INT_UNALIGNED, 0, value);
-        return new IntArray(I32, 1, buf);
+        return new MaterializedIntArray(I32, 1, buf);
     }
 
     static LongArray i64(Arena arena, long value) {
         MemorySegment buf = arena.allocate(8);
         buf.set(ValueLayout.JAVA_LONG_UNALIGNED, 0, value);
-        return new LongArray(I64, 1, buf);
+        return new MaterializedLongArray(I64, 1, buf);
     }
 }

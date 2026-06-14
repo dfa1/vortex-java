@@ -3,15 +3,15 @@ package io.github.dfa1.vortex.reader.decode;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.ByteArray;
-import io.github.dfa1.vortex.reader.array.IntArray;
-import io.github.dfa1.vortex.reader.array.LongArray;
-import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.proto.BitPackedMetadata;
 import io.github.dfa1.vortex.proto.PatchesMetadata;
+import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
+import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
+import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
+import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -76,10 +76,10 @@ public final class BitpackedEncodingDecoder implements EncodingDecoder {
         }
 
         return switch (ptype) {
-            case I64, U64 -> new LongArray(ctx.dtype(), rowCount, output);
-            case I32, U32 -> new IntArray(ctx.dtype(), rowCount, output);
-            case I16, U16 -> new ShortArray(ctx.dtype(), rowCount, output);
-            case I8, U8 -> new ByteArray(ctx.dtype(), rowCount, output);
+            case I64, U64 -> new MaterializedLongArray(ctx.dtype(), rowCount, output);
+            case I32, U32 -> new MaterializedIntArray(ctx.dtype(), rowCount, output);
+            case I16, U16 -> new MaterializedShortArray(ctx.dtype(), rowCount, output);
+            case I8, U8 -> new MaterializedByteArray(ctx.dtype(), rowCount, output);
             default -> throw new VortexException(EncodingId.FASTLANES_BITPACKED, "unsupported ptype " + ptype);
         };
     }

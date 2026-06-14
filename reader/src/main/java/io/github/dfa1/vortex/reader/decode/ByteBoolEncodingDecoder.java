@@ -1,9 +1,9 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
+import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -39,6 +39,6 @@ public final class ByteBoolEncodingDecoder implements EncodingDecoder {
                 packed.set(ValueLayout.JAVA_BYTE, byteIdx, (byte) (cur | (1 << (i & 7))));
             }
         }
-        return new BoolArray(ctx.dtype(), n, packed);
+        return new MaterializedBoolArray(ctx.dtype(), n, packed);
     }
 }

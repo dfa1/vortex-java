@@ -1,5 +1,7 @@
 package io.github.dfa1.vortex.reader.array;
 
+
+
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -130,7 +132,7 @@ class GenericArrayTest {
             mspBuf.set(ValueLayout.JAVA_LONG_UNALIGNED, 0, 4321L);
             mspBuf.set(ValueLayout.JAVA_LONG_UNALIGNED, 8, -100L);
             mspBuf.set(ValueLayout.JAVA_LONG_UNALIGNED, 16, 0L);
-            LongArray msp = new LongArray(new DType.Primitive(PType.I64, false), 3, mspBuf);
+            LongArray msp = new MaterializedLongArray(new DType.Primitive(PType.I64, false), 3, mspBuf);
             DType.Decimal dec = new DType.Decimal((byte) 15, (byte) 2, false);
             GenericArray sut = new GenericArray(dec, 3, new MemorySegment[0], new Array[]{msp});
 
@@ -250,12 +252,12 @@ class GenericArrayTest {
             MemorySegment mspBuf = arena.allocate(16);
             mspBuf.set(ValueLayout.JAVA_LONG_UNALIGNED, 0, 1234L);
             mspBuf.set(ValueLayout.JAVA_LONG_UNALIGNED, 8, 9999L);
-            LongArray msp = new LongArray(new DType.Primitive(PType.I64, false), 2, mspBuf);
+            LongArray msp = new MaterializedLongArray(new DType.Primitive(PType.I64, false), 2, mspBuf);
 
             MemorySegment validityBuf = arena.allocate(1);
             // bit 0 set = index 0 valid; bit 1 clear = index 1 null
             validityBuf.set(ValueLayout.JAVA_BYTE, 0, (byte) 0b0000_0001);
-            BoolArray validity = new BoolArray(new DType.Bool(false), 2, validityBuf);
+            BoolArray validity = new MaterializedBoolArray(new DType.Bool(false), 2, validityBuf);
 
             MaskedArray masked = new MaskedArray(msp, validity);
             DType.Decimal dec = new DType.Decimal((byte) 15, (byte) 2, true);
