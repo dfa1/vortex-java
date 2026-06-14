@@ -6,12 +6,14 @@ import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.proto.BitPackedMetadata;
+import io.github.dfa1.vortex.proto.PatchesMetadata;
 import io.github.dfa1.vortex.proto.ScalarValue;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.List;
 
 /// Write-only encoder for {@code fastlanes.bitpacked}.
@@ -49,8 +51,8 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
 
         long signedMin = 0L;
         long signedMax = 0L;
-        long maxUnsigned = 0L;
-        int bitWidth = 0;
+        int[] bitWidthFreq = new int[typeBits + 1];
+        boolean hasNegative = false;
 
         if (n > 0) {
             signedMin = longs[0];
@@ -62,24 +64,130 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
                 if (unsign ? Long.compareUnsigned(v, signedMax) > 0 : v > signedMax) {
                     signedMax = v;
                 }
-                long uv = v & typeMask;
-                if (Long.compareUnsigned(uv, maxUnsigned) > 0) {
-                    maxUnsigned = uv;
+                if (!unsign && v < 0) {
+                    hasNegative = true;
                 }
+                long uv = v & typeMask;
+                int width = uv == 0L ? 0 : Long.SIZE - Long.numberOfLeadingZeros(uv);
+                bitWidthFreq[width]++;
             }
-            bitWidth = maxUnsigned == 0L ? 0 : (Long.SIZE - Long.numberOfLeadingZeros(maxUnsigned));
         }
 
-        MemorySegment packed = packFastLanes(longs, n, bitWidth, typeBits, ctx.arena());
+        // Match Rust's bitpack_encode: refuse signed arrays with negatives. The cascade is
+        // expected to FoR-shift them to non-negative first. Fall back to full type width here
+        // so callers without FoR still produce a valid (un-compressed) result.
+        if (hasNegative) {
+            int wideBitWidth = typeBits;
+            MemorySegment widePacked = packFastLanes(longs, n, wideBitWidth, typeBits, ctx.arena());
+            byte[] wideMeta = new BitPackedMetadata(wideBitWidth, 0, null).encode();
+            byte[] wideMin = statsBytes(ptype, signedMin);
+            byte[] wideMax = statsBytes(ptype, signedMax);
+            EncodeNode wideRoot = new EncodeNode(EncodingId.FASTLANES_BITPACKED,
+                    ByteBuffer.wrap(wideMeta), new EncodeNode[0], new int[]{0});
+            return new EncodeResult(wideRoot, List.of(widePacked), wideMin, wideMax);
+        }
 
-        byte[] metaBytes = new BitPackedMetadata(bitWidth, 0, null).encode();
+        int bitWidth = bestBitWidth(bitWidthFreq, ptype.byteSize() + 4, n);
+
+        MemorySegment packed = packFastLanes(longs, n, bitWidth, typeBits, ctx.arena());
 
         byte[] statsMin = n > 0 ? statsBytes(ptype, signedMin) : null;
         byte[] statsMax = n > 0 ? statsBytes(ptype, signedMax) : null;
 
+        if (bitWidth >= typeBits) {
+            // Packed width covers full type range — no overflow possible, no patches needed.
+            byte[] metaBytes = new BitPackedMetadata(bitWidth, 0, null).encode();
+            EncodeNode root = new EncodeNode(EncodingId.FASTLANES_BITPACKED, ByteBuffer.wrap(metaBytes),
+                    new EncodeNode[0], new int[]{0});
+            return new EncodeResult(root, List.of(packed), statsMin, statsMax);
+        }
+
+        long packCap = 1L << bitWidth;
+        var patchIdx = new ArrayList<Integer>();
+        var patchVal = new ArrayList<Long>();
+        for (int i = 0; i < n; i++) {
+            long uv = longs[i] & typeMask;
+            if (Long.compareUnsigned(uv, packCap) >= 0) {
+                patchIdx.add(i);
+                patchVal.add(longs[i]);
+            }
+        }
+
+        if (patchIdx.isEmpty()) {
+            byte[] metaBytes = new BitPackedMetadata(bitWidth, 0, null).encode();
+            EncodeNode root = new EncodeNode(EncodingId.FASTLANES_BITPACKED, ByteBuffer.wrap(metaBytes),
+                    new EncodeNode[0], new int[]{0});
+            return new EncodeResult(root, List.of(packed), statsMin, statsMax);
+        }
+
+        int numPatches = patchIdx.size();
+        PType idxPtype = chooseIdxPtype(n);
+        MemorySegment idxBuf = buildPatchIdxBuf(patchIdx, idxPtype, ctx.arena());
+        MemorySegment valBuf = buildPatchValBuf(patchVal, ptype, ctx.arena());
+
+        PatchesMetadata patches = new PatchesMetadata(
+                numPatches, 0L,
+                io.github.dfa1.vortex.proto.PType.fromValue(idxPtype.ordinal()),
+                null, null, null);
+        byte[] metaBytes = new BitPackedMetadata(bitWidth, 0, patches).encode();
+
+        EncodeNode idxNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
+        EncodeNode valNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
         EncodeNode root = new EncodeNode(EncodingId.FASTLANES_BITPACKED, ByteBuffer.wrap(metaBytes),
-                new EncodeNode[0], new int[]{0});
-        return new EncodeResult(root, List.of(packed), statsMin, statsMax);
+                new EncodeNode[]{idxNode, valNode}, new int[]{0});
+        return new EncodeResult(root, List.of(packed, idxBuf, valBuf), statsMin, statsMax);
+    }
+
+    /// Picks the bit-width that minimises {@code packed_bytes + exceptions_bytes}.
+    /// Mirrors {@code vortex-fastlanes::bitpack_compress::best_bit_width}.
+    private static int bestBitWidth(int[] bitWidthFreq, int bytesPerException, int n) {
+        if (n == 0) {
+            return 0;
+        }
+        long bestCost = (long) n * bytesPerException;
+        int bestWidth = 0;
+        long numPacked = 0;
+        for (int width = 0; width < bitWidthFreq.length; width++) {
+            long packedCost = ((long) width * n + 7L) / 8L;
+            numPacked += bitWidthFreq[width];
+            long exceptionsCost = ((long) n - numPacked) * bytesPerException;
+            long cost = packedCost + exceptionsCost;
+            if (cost < bestCost) {
+                bestCost = cost;
+                bestWidth = width;
+            }
+        }
+        return bestWidth;
+    }
+
+    private static PType chooseIdxPtype(int n) {
+        if (n <= 0xFF) {
+            return PType.U8;
+        }
+        if (n <= 0xFFFF) {
+            return PType.U16;
+        }
+        return PType.U32;
+    }
+
+    private static MemorySegment buildPatchIdxBuf(List<Integer> idx, PType idxPtype, Arena arena) {
+        int numPatches = idx.size();
+        int elemBytes = idxPtype.byteSize();
+        MemorySegment seg = arena.allocate(Math.max(1L, (long) numPatches * elemBytes), elemBytes);
+        for (int i = 0; i < numPatches; i++) {
+            PTypeIO.set(seg, (long) i * elemBytes, idxPtype, idx.get(i));
+        }
+        return seg;
+    }
+
+    private static MemorySegment buildPatchValBuf(List<Long> val, PType ptype, Arena arena) {
+        int numPatches = val.size();
+        int elemBytes = ptype.byteSize();
+        MemorySegment seg = arena.allocate(Math.max(1L, (long) numPatches * elemBytes), elemBytes);
+        for (int i = 0; i < numPatches; i++) {
+            PTypeIO.set(seg, (long) i * elemBytes, ptype, val.get(i));
+        }
+        return seg;
     }
 
     private static MemorySegment packFastLanes(long[] values, int n, int bitWidth, int typeBits, Arena arena) {
@@ -90,6 +198,9 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
         int wordBytes = typeBits / 8;
         int blockCount = (n + 1023) / 1024;
         long typeMask = typeMask(typeBits);
+        // Mask values to the chosen bit width so over-cap entries (handled separately as
+        // patches) don't spill into the next row's region in the packed layout.
+        long widthMask = bitWidth >= 64 ? -1L : (1L << bitWidth) - 1L;
         MemorySegment seg = arena.allocate((long) blockCount * 128 * bitWidth);
 
         for (int block = 0; block < blockCount; block++) {
@@ -107,7 +218,7 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
                     int o = row / 8;
                     int s = row % 8;
                     int logicalIdx = blockStart + FL_ORDER[o] * 16 + s * 128 + lane;
-                    long value = (logicalIdx < n) ? (values[logicalIdx] & typeMask) : 0L;
+                    long value = (logicalIdx < n) ? (values[logicalIdx] & widthMask) : 0L;
 
                     int wordOff = blockByteOff + (lanes * currWord + lane) * wordBytes;
                     long existing = readWordFromSeg(seg, wordOff, typeBits);

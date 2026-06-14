@@ -78,4 +78,44 @@ class BitpackedEncodingPatchesTest {
             assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, 16L)).isEqualTo(50);
         }
     }
+
+    @Nested
+    class Encode {
+
+        @Test
+        void encode_thenDecode_roundTripsWithPatches() {
+            // U8 codes mostly zero with one outlier — encoder picks bit_width=0 + 1 patch.
+            byte[] codes = new byte[1000];
+            codes[42] = 7;
+
+            EncodeResult res = ENCODER.encode(DTypes.U8, codes, EncodeTestHelper.testCtx());
+
+            assertThat(res.buffers()).hasSize(3); // packed (0 B) + idx + val
+            assertThat(res.rootNode().children()).hasSize(2);
+
+            MemorySegment[] segments = {
+                    res.buffers().get(0),
+                    res.buffers().get(1),
+                    res.buffers().get(2)
+            };
+            ArrayNode idxNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
+                    new ArrayNode[0], new int[]{1});
+            ArrayNode valNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
+                    new ArrayNode[0], new int[]{2});
+            ArrayNode bpNode = ArrayNode.of(EncodingId.FASTLANES_BITPACKED,
+                    res.rootNode().metadata(),
+                    new ArrayNode[]{idxNode, valNode},
+                    new int[]{0});
+
+            DecodeContext ctx = new DecodeContext(
+                    bpNode, DTypes.U8, codes.length, segments, REGISTRY, Arena.global());
+            Array decoded = DECODER.decode(ctx);
+
+            assertThat(decoded.length()).isEqualTo(codes.length);
+            for (int i = 0; i < codes.length; i++) {
+                byte got = ArraySegments.of(decoded).get(java.lang.foreign.ValueLayout.JAVA_BYTE, i);
+                assertThat(got).as("idx " + i).isEqualTo(codes[i]);
+            }
+        }
+    }
 }
