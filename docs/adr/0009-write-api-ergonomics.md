@@ -1,10 +1,17 @@
 # ADR 0009: Write API ergonomics — DType factories and typed chunk builder
 
-- **Status:** Proposed
+- **Status:** Completed (parts 1-3 shipped 2026-06-14; part 4 split out to ADR 0011)
 - **Date:** 2026-06-13
 - **Deciders:** project maintainer
 - **Supersedes:** —
 - **Superseded by:** —
+
+## Implementation status
+
+- ✅ **Part 1** — `DType` static factories (`i8()`/`i16()`/…/`utf8()`/`bool_()`/`decimal()`) plus `asNullable()` shortcut (renamed from `nullable()` to avoid clashing with the existing boolean accessor) — commit `0e9d6703`.
+- ✅ **Part 2** — `DType.structBuilder()` + `DType.StructBuilder` — commit `63d66eef`.
+- ✅ **Part 3** — `VortexWriter.writeChunk(Consumer<Chunk>)` with the typed `Chunk` builder; per-`put` validation; boxed nullable arrays auto-converted to `NullableData`; old `writeChunk(Map<String, Object>)` deprecated — commit `ddb3e21a`.
+- 🔀 **Part 4** — `chunk.put(String, MemorySegment)` zero-copy overload split into [ADR 0011](0011-writer-memorysegment-overload.md). Narrow persona (re-encode pipelines and native integrators), invasive across ~15 encoders; deferred until a concrete downstream use case shows up.
 
 ## Context
 
