@@ -17,6 +17,10 @@ Each ADR is a Markdown file named `NNNN-short-title.md`. Use `template.md` as th
 | 0002 | Pluggable DType, Layout, and Compute          | Proposed  |
 | 0003 | VortexException message sanitization          | Accepted  |
 | 0004 | ResourceLimits + ReadOptions                  | Accepted  |
-| 0005 | Vector API adoption                           | Accepted  |
+| 0005 | Vector API adoption                           | Deferred  |
 | 0006 | Benchmark publishing                          | Accepted  |
-| 0007 | Pure-Java vortex.pco encoder                  | Accepted  |
+| 0007 | Pure-Java vortex.pco encoder                  | Implemented |
+| 0008 | Domain primitives for unsigned integers       | Proposed  |
+| 0009 | Write API ergonomics                          | Completed |
+| 0010 | Lazy decode                                   | Proposed  |
+| 0011 | Writer zero-copy MemorySegment overload       | Deferred  |
