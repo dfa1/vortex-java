@@ -22,6 +22,15 @@ public sealed interface DType
     /// @return {@code true} if null values are permitted
     boolean nullable();
 
+    /// Returns a copy of this type marked nullable. Sugar over
+    /// {@link #withNullable(boolean)} so call sites read as a fluent adjective:
+    /// {@code DType.i64().asNullable()}.
+    ///
+    /// @return a new {@link DType} identical to this one but with {@code nullable = true}
+    default DType asNullable() {
+        return withNullable(true);
+    }
+
     /// Returns a copy of this type with the given nullability.
     ///
     /// @param nullable the desired nullability for the returned type
@@ -41,6 +50,101 @@ public sealed interface DType
             case Variant _ -> new Variant(nullable);
         };
     }
+
+    // ── Static factories ────────────────────────────────────────────────────
+    //
+    // Convenience entry points returning non-nullable instances. Combine with
+    // [#nullable()] for nullable columns. The underlying records are unchanged
+    // and remain usable directly (pattern matching, proto serialization, tests).
+
+    /// @return non-nullable {@link Bool}
+    static Bool bool_() {
+        return new Bool(false);
+    }
+
+    /// @return non-nullable {@link Utf8}
+    static Utf8 utf8() {
+        return new Utf8(false);
+    }
+
+    /// @return non-nullable {@link Binary}
+    static Binary binary() {
+        return new Binary(false);
+    }
+
+    /// @return non-nullable {@link Null}
+    static Null null_() {
+        return new Null(false);
+    }
+
+    /// @return non-nullable {@link Variant}
+    static Variant variant() {
+        return new Variant(false);
+    }
+
+    /// @return non-nullable {@link Primitive} of {@link PType#I8}
+    static Primitive i8() {
+        return new Primitive(PType.I8, false);
+    }
+
+    /// @return non-nullable {@link Primitive} of {@link PType#I16}
+    static Primitive i16() {
+        return new Primitive(PType.I16, false);
+    }
+
+    /// @return non-nullable {@link Primitive} of {@link PType#I32}
+    static Primitive i32() {
+        return new Primitive(PType.I32, false);
+    }
+
+    /// @return non-nullable {@link Primitive} of {@link PType#I64}
+    static Primitive i64() {
+        return new Primitive(PType.I64, false);
+    }
+
+    /// @return non-nullable {@link Primitive} of {@link PType#U8}
+    static Primitive u8() {
+        return new Primitive(PType.U8, false);
+    }
+
+    /// @return non-nullable {@link Primitive} of {@link PType#U16}
+    static Primitive u16() {
+        return new Primitive(PType.U16, false);
+    }
+
+    /// @return non-nullable {@link Primitive} of {@link PType#U32}
+    static Primitive u32() {
+        return new Primitive(PType.U32, false);
+    }
+
+    /// @return non-nullable {@link Primitive} of {@link PType#U64}
+    static Primitive u64() {
+        return new Primitive(PType.U64, false);
+    }
+
+    /// @return non-nullable {@link Primitive} of {@link PType#F16}
+    static Primitive f16() {
+        return new Primitive(PType.F16, false);
+    }
+
+    /// @return non-nullable {@link Primitive} of {@link PType#F32}
+    static Primitive f32() {
+        return new Primitive(PType.F32, false);
+    }
+
+    /// @return non-nullable {@link Primitive} of {@link PType#F64}
+    static Primitive f64() {
+        return new Primitive(PType.F64, false);
+    }
+
+    /// @param precision total number of significant decimal digits
+    /// @param scale     number of digits to the right of the decimal point
+    /// @return non-nullable {@link Decimal}
+    static Decimal decimal(int precision, int scale) {
+        return new Decimal((byte) precision, (byte) scale, false);
+    }
+
+    // ── Records ─────────────────────────────────────────────────────────────
 
     /// The SQL {@code NULL} type — no values, always nullable.
     ///
