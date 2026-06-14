@@ -110,9 +110,10 @@ List<LocalDate> values = DateExtension.INSTANCE.decodeAll(chunk.column("birthday
 End-to-end round-trip — write a `List<LocalDate>`, read it back:
 
 ```java
-var schema = new DType.Struct(List.of("birthdays"),
-                              List.of(DateExtension.INSTANCE.dtype(false)), false);
-writer.writeChunk(Map.of("birthdays", dates));                  // Collection auto-routed
+var schema = DType.structBuilder()
+        .field("birthdays", DateExtension.INSTANCE.dtype(false))
+        .build();
+writer.writeChunk(c -> c.put("birthdays", dates));              // Collection auto-routed
 
 try (var iter = reader.scan(ScanOptions.all());
      Chunk chunk = iter.next()) {

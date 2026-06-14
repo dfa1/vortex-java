@@ -33,20 +33,25 @@ Methods: `byteSize()`, `isFloating()`, `isSigned()`.
 
 Sealed logical type. All variants take a trailing `boolean nullable`.
 
-| Record                | Constructor                                                 |
-|-----------------------|-------------------------------------------------------------|
-| `DType.Null`          | `new DType.Null(nullable)`                                  |
-| `DType.Bool`          | `new DType.Bool(nullable)`                                  |
-| `DType.Primitive`     | `new DType.Primitive(PType, nullable)`                      |
-| `DType.Decimal`       | `new DType.Decimal(precision, scale, nullable)`             |
-| `DType.Utf8`          | `new DType.Utf8(nullable)`                                  |
-| `DType.Binary`        | `new DType.Binary(nullable)`                                |
-| `DType.Struct`        | `new DType.Struct(fieldNames, fieldTypes, nullable)`        |
-| `DType.List`          | `new DType.List(elementType, nullable)`                     |
-| `DType.FixedSizeList` | `new DType.FixedSizeList(elementType, fixedSize, nullable)` |
-| `DType.Extension`     | `new DType.Extension(id, storageDType, metadata, nullable)` |
+Each `DType` variant is a record. Prefer the static factories for new code — the
+record constructors stay available for pattern matching and tests.
 
-Helpers: `nullable()`, `withNullable(boolean)`, `DType.Struct.field(name)`.
+| Record                | Factory                                                | Record constructor                                          |
+|-----------------------|--------------------------------------------------------|-------------------------------------------------------------|
+| `DType.Null`          | `DType.null_()`                                        | `new DType.Null(nullable)`                                  |
+| `DType.Bool`          | `DType.bool_()`                                        | `new DType.Bool(nullable)`                                  |
+| `DType.Primitive`     | `DType.i8()` … `DType.i64()`, `DType.u8()` … `DType.u64()`, `DType.f16()`, `DType.f32()`, `DType.f64()` | `new DType.Primitive(PType, nullable)`                      |
+| `DType.Decimal`       | `DType.decimal(precision, scale)`                      | `new DType.Decimal(precision, scale, nullable)`             |
+| `DType.Utf8`          | `DType.utf8()`                                         | `new DType.Utf8(nullable)`                                  |
+| `DType.Binary`        | `DType.binary()`                                       | `new DType.Binary(nullable)`                                |
+| `DType.Variant`       | `DType.variant()`                                      | `new DType.Variant(nullable)`                               |
+| `DType.Struct`        | `DType.structBuilder().field(name, type)…build()`      | `new DType.Struct(fieldNames, fieldTypes, nullable)`        |
+| `DType.List`          | —                                                      | `new DType.List(elementType, nullable)`                     |
+| `DType.FixedSizeList` | —                                                      | `new DType.FixedSizeList(elementType, fixedSize, nullable)` |
+| `DType.Extension`     | —                                                      | `new DType.Extension(id, storageDType, metadata, nullable)` |
+
+Helpers: `nullable()` (boolean accessor on every record), `asNullable()` (fluent
+shortcut returning a nullable copy), `withNullable(boolean)`, `DType.Struct.field(name)`.
 
 ---
 
@@ -83,8 +88,31 @@ Writes a Vortex file. Implements `Closeable`. The file is complete and readable 
 |----------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------|
 | `static create(WritableByteChannel, DType.Struct, WriteOptions)`                 | Default codec set                                                                                                |
 | `static create(WritableByteChannel, DType.Struct, WriteOptions, List<Encoding>)` | Custom codec set                                                                                                 |
-| `writeChunk(Map<String, Object>)`                                                | One batch of rows; each value = `long[]`, `double[]`, `String[]`, `boolean[]`, etc., matching the column `DType` |
+| `writeChunk(Consumer<Chunk>)`                                                    | One batch of rows. The typed `Chunk` builder validates column names + array types at each `.put` against the schema; missing columns throw `IllegalStateException` when the lambda returns. |
+| `writeChunk(Map<String, Object>)`                                                | **Deprecated.** Untyped legacy entry point; failures surface deep in the encoder. Prefer `writeChunk(Consumer<Chunk>)`. |
 | `close()`                                                                        | Finalizes file (footer, postscript, trailer)                                                                     |
+
+### `Chunk` (`io.github.dfa1.vortex.writer.Chunk`)
+
+Builder handed to the `writeChunk(Consumer<Chunk>)` lambda. Validates each `.put`
+at the call site.
+
+| Method                          | Notes                                                              |
+|---------------------------------|--------------------------------------------------------------------|
+| `put(String column, Object data)` | Adds one column; returns `this` for chaining                       |
+
+Accepted array types per column `DType`:
+
+| `DType`                       | Non-nullable array | Nullable array     |
+|-------------------------------|--------------------|--------------------|
+| `Primitive(I8/U8)`            | `byte[]`           | `Byte[]`           |
+| `Primitive(I16/U16)`          | `short[]`          | `Short[]`          |
+| `Primitive(I32/U32)`          | `int[]`            | `Integer[]`        |
+| `Primitive(I64/U64)`          | `long[]`           | `Long[]`           |
+| `Primitive(F32)`              | `float[]`          | `Float[]`          |
+| `Primitive(F64)`              | `double[]`         | `Double[]`         |
+| `Utf8`                        | `String[]`         | `String[]` (nulls allowed) |
+| `Bool`                        | `boolean[]`        | `Boolean[]`        |
 
 ### `WriteOptions` (`io.github.dfa1.vortex.writer.WriteOptions`)
 

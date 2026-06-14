@@ -46,23 +46,18 @@ A Vortex file is a typed struct — every column has a declared type before any 
 
 ```java
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
-import java.util.List;
 
-DType.Struct schema = new DType.Struct(
-    List.of("timestamp", "symbol", "price", "volume"),
-    List.of(
-        new DType.Primitive(PType.I64, false),   // unix epoch millis, non-nullable
-        new DType.Utf8(false),                    // ticker symbol
-        new DType.Primitive(PType.F64, false),   // trade price
-        new DType.Primitive(PType.I64, false)    // shares traded
-    ),
-    false  // the struct itself is non-nullable
-);
+DType.Struct schema = DType.structBuilder()
+    .field("timestamp", DType.i64())                   // unix epoch millis
+    .field("symbol",    DType.utf8())                  // ticker symbol
+    .field("price",     DType.f64())                   // trade price
+    .field("volume",    DType.i64().asNullable())      // shares traded, may be null
+    .build();
 ```
 
-Passing `true` as the trailing argument makes the column nullable.
-See [reference.md#core-types](reference.md#core-types) for the full `DType` / `PType` list.
+`DType.i64()`, `DType.utf8()`, `DType.f64()`, etc. return non-nullable types by default.
+Chain `.asNullable()` to opt into nulls.
+See [reference.md#core-types](reference.md#core-types) for the full factory list.
 
 ---
 
@@ -73,7 +68,6 @@ import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
-import java.util.Map;
 import static java.nio.file.StandardOpenOption.*;
 
 Path outPath = Path.of("trades.vortex");
@@ -81,14 +75,18 @@ Path outPath = Path.of("trades.vortex");
 try (FileChannel ch = FileChannel.open(outPath, CREATE, WRITE, TRUNCATE_EXISTING);
      VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
 
-    writer.writeChunk(Map.of(
-        "timestamp", new long[]   {1_700_000_000_000L, 1_700_000_001_000L, 1_700_000_002_000L},
-        "symbol",    new String[]  {"AAPL", "AAPL", "MSFT"},
-        "price",     new double[]  {189.95, 190.10, 374.20},
-        "volume",    new long[]    {100L,   250L,   175L}
-    ));
+    writer.writeChunk(c -> c
+        .put("timestamp", new long[]   {1_700_000_000_000L, 1_700_000_001_000L, 1_700_000_002_000L})
+        .put("symbol",    new String[] {"AAPL", "AAPL", "MSFT"})
+        .put("price",     new double[] {189.95, 190.10, 374.20})
+        .put("volume",    new Long[]   {100L, null, 175L}));   // boxed → nullable column
 }
 ```
+
+Each `.put` validates the column name and array type against the schema at the call
+site — unknown columns, wrong array types, and boxed arrays for non-nullable columns
+all throw `IllegalArgumentException` immediately. Missing columns surface as
+`IllegalStateException` when the lambda returns.
 
 `writeChunk` takes one batch of rows. Call it multiple times to write multiple chunks —
 each chunk is compressed independently and can be skipped during a scan if zone-map

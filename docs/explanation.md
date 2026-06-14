@@ -298,7 +298,7 @@ after which any reference into it raises FFM's scope check.
 ```
 VortexWriter.create(channel, schema, opts)
 
-writer.writeChunk(Map<String, data[]>)
+writer.writeChunk(c -> c.put(column, data[]).put(...))
   └─ per column:
        CascadingCompressor.compress(dtype, values)
          ├─ try structural encodings in order: Dict → RunEnd → RLE → Constant → …
