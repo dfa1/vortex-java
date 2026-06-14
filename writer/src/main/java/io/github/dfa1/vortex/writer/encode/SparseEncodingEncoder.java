@@ -52,10 +52,11 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
     }
 
     /// Cascade gate: skip unless analytic sparse size beats raw-bitpacked size.
-    /// Sparse stores fill scalar + index buffer (n*idx_bytes) + value buffer (k*elem_bytes)
-    /// where k = non-zero count. Bitpacked alternative ≈ n*elem_bytes (worst case raw).
-    /// Apply when k * (idx_bytes + elem_bytes) < n * elem_bytes / 2 — i.e. sparse halves
-    /// the size at least. Avoids sample-time wins that lose on full data.
+    /// Cascade variant: exposes patch-index and patch-value buffers as ChildSlot so the
+    /// cascade can further compress them (bitpack on small-range U16/U32 indices, bitpack
+    /// on small-range mantissa values). Matches Rust which stacks bitpack on Sparse's
+    /// children and produces ~50% smaller dict-code segments on taxi tolls_amount /
+    /// Airport_fee / congestion_surcharge.
     @Override
     public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
         if (!(dtype instanceof DType.Primitive p)) {
@@ -67,19 +68,125 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
             return CascadeStep.notApplicable();
         }
         int elemBytes = ptype.byteSize();
-        int idxBytes = chooseIdxPtype(n).byteSize();
+        PType idxPtype = chooseIdxPtype(n);
+        int idxBytes = idxPtype.byteSize();
         int patchCost = idxBytes + elemBytes;
         int maxPatches = (int) Math.min(Integer.MAX_VALUE, ((long) n * elemBytes / 2L) / patchCost);
-        int nonZero = 0;
+        List<Integer> patchIdx = new ArrayList<>();
+        List<Long> patchBits = new ArrayList<>();
         for (int i = 0; i < n; i++) {
-            if (readBits(data, ptype, i) != 0L) {
-                nonZero++;
-                if (nonZero > maxPatches) {
+            long bits = readBits(data, ptype, i);
+            if (bits != 0L) {
+                if (patchIdx.size() >= maxPatches) {
                     return CascadeStep.notApplicable();
                 }
+                patchIdx.add(i);
+                patchBits.add(bits);
             }
         }
-        return CascadeStep.terminal(encode(dtype, data, ctx));
+        int numPatches = patchIdx.size();
+
+        // Owned buffers: fill scalar. idx and val moved to ChildSlot so cascade can bitpack.
+        ScalarValue fillScalar = zeroScalar(ptype);
+        byte[] fillBytes = fillScalar.encode();
+        MemorySegment fillBuf = ctx.arena().allocate(fillBytes.length);
+        MemorySegment.copy(MemorySegment.ofArray(fillBytes), 0, fillBuf, 0, fillBytes.length);
+
+        Object idxArr = idxArr(patchIdx, idxPtype);
+        Object valArr = valArr(patchBits, ptype);
+
+        PatchesMetadata patchesMeta = new PatchesMetadata(
+                numPatches,
+                0L,
+                io.github.dfa1.vortex.proto.PType.fromValue(idxPtype.ordinal()),
+                null,
+                null,
+                null
+        );
+        byte[] metaBytes = new SparseMetadata(patchesMeta).encode();
+        EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_SPARSE,
+                ByteBuffer.wrap(metaBytes),
+                new EncodeNode[]{null, null}, new int[]{0});
+        DType idxDtype = new DType.Primitive(idxPtype, false);
+        ChildSlot idxSlot = new ChildSlot(idxDtype, idxArr, 0);
+        ChildSlot valSlot = new ChildSlot(dtype, valArr, 1);
+        return new CascadeStep(partialRoot, List.of(fillBuf), List.of(idxSlot, valSlot), null, null, true);
+    }
+
+    private static Object idxArr(List<Integer> patchIdx, PType idxPtype) {
+        int n = patchIdx.size();
+        return switch (idxPtype) {
+            case U8 -> {
+                byte[] a = new byte[n];
+                for (int i = 0; i < n; i++) {
+                    a[i] = patchIdx.get(i).byteValue();
+                }
+                yield a;
+            }
+            case U16 -> {
+                short[] a = new short[n];
+                for (int i = 0; i < n; i++) {
+                    a[i] = patchIdx.get(i).shortValue();
+                }
+                yield a;
+            }
+            default -> {
+                int[] a = new int[n];
+                for (int i = 0; i < n; i++) {
+                    a[i] = patchIdx.get(i);
+                }
+                yield a;
+            }
+        };
+    }
+
+    private static Object valArr(List<Long> patchBits, PType ptype) {
+        int n = patchBits.size();
+        return switch (ptype) {
+            case I8, U8 -> {
+                byte[] a = new byte[n];
+                for (int i = 0; i < n; i++) {
+                    a[i] = patchBits.get(i).byteValue();
+                }
+                yield a;
+            }
+            case I16, U16 -> {
+                short[] a = new short[n];
+                for (int i = 0; i < n; i++) {
+                    a[i] = patchBits.get(i).shortValue();
+                }
+                yield a;
+            }
+            case I32, U32 -> {
+                int[] a = new int[n];
+                for (int i = 0; i < n; i++) {
+                    a[i] = patchBits.get(i).intValue();
+                }
+                yield a;
+            }
+            case I64, U64 -> {
+                long[] a = new long[n];
+                for (int i = 0; i < n; i++) {
+                    a[i] = patchBits.get(i);
+                }
+                yield a;
+            }
+            case F32 -> {
+                float[] a = new float[n];
+                for (int i = 0; i < n; i++) {
+                    a[i] = Float.intBitsToFloat(patchBits.get(i).intValue());
+                }
+                yield a;
+            }
+            case F64 -> {
+                double[] a = new double[n];
+                for (int i = 0; i < n; i++) {
+                    a[i] = Double.longBitsToDouble(patchBits.get(i));
+                }
+                yield a;
+            }
+            default -> throw new VortexException(EncodingId.VORTEX_SPARSE, "unsupported ptype: " + ptype);
+        };
     }
 
     @Override

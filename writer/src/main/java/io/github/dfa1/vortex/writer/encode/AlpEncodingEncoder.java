@@ -63,7 +63,16 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
     }
 
     private static int[] findExponentsF64(double[] values) {
-        int sampleLen = Math.min(SAMPLE_SIZE, values.length);
+        int n = values.length;
+        int sampleLen = Math.min(SAMPLE_SIZE, n);
+        // Stratified sample: pick SAMPLE_SIZE values spaced evenly across the input rather than
+        // the leading prefix. Leading rows are often biased (sorted by timestamp / region) and
+        // produce a bad (expE, expF) choice that inflates exceptions on the full data.
+        double[] sample = new double[sampleLen];
+        long stride = Math.max(1, (long) n / sampleLen);
+        for (int i = 0; i < sampleLen; i++) {
+            sample[i] = values[(int) Math.min(i * stride, n - 1)];
+        }
         int bestExpE = 0, bestExpF = 0, bestExceptions = sampleLen + 1;
 
         outer:
@@ -75,8 +84,8 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
                 double de = IF10_F64[expE];
                 int exceptions = 0;
                 for (int i = 0; i < sampleLen; i++) {
-                    double enc = values[i] * ef * iff;
-                    if (!Double.isFinite(enc) || (double) Math.round(enc) * df * de != values[i]) {
+                    double enc = sample[i] * ef * iff;
+                    if (!Double.isFinite(enc) || (double) Math.round(enc) * df * de != sample[i]) {
                         exceptions++;
                     }
                 }
@@ -199,7 +208,14 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
     }
 
     private static int[] findExponentsF32(float[] values) {
-        int sampleLen = Math.min(SAMPLE_SIZE, values.length);
+        int n = values.length;
+        int sampleLen = Math.min(SAMPLE_SIZE, n);
+        // Stratified sample: see findExponentsF64 for rationale.
+        float[] sample = new float[sampleLen];
+        long stride = Math.max(1, (long) n / sampleLen);
+        for (int i = 0; i < sampleLen; i++) {
+            sample[i] = values[(int) Math.min(i * stride, n - 1)];
+        }
         int bestExpE = 0, bestExpF = 0, bestExceptions = sampleLen + 1;
 
         outer:
@@ -211,8 +227,8 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
                 float de = IF10_F32[expE];
                 int exceptions = 0;
                 for (int i = 0; i < sampleLen; i++) {
-                    float enc = values[i] * ef * iff;
-                    if (!Float.isFinite(enc) || (float) Math.round(enc) * df * de != values[i]) {
+                    float enc = sample[i] * ef * iff;
+                    if (!Float.isFinite(enc) || (float) Math.round(enc) * df * de != sample[i]) {
                         exceptions++;
                     }
                 }
