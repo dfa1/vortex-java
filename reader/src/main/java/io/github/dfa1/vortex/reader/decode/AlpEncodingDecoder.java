@@ -9,6 +9,7 @@ import io.github.dfa1.vortex.proto.ALPMetadata;
 import io.github.dfa1.vortex.proto.PatchesMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LazyAlpDoubleArray;
+import io.github.dfa1.vortex.reader.array.LazyAlpFloatArray;
 import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
 import io.github.dfa1.vortex.reader.array.MaterializedFloatArray;
 
@@ -113,23 +114,29 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
     private static Array decodeF32(DecodeContext ctx, ALPMetadata meta, int expE, int expF, long n) {
         float df = F10_F32[expF];
         float de = IF10_F32[expE];
+        float scale = df * de;
 
         MemorySegment src32 = ctx.decodeChildSegment(0, I32_DTYPE, n);
+        long srcCap = SegmentBroadcast.capacity(src32, 4);
+
+        if (meta.patches() == null && srcCap >= n) {
+            return new LazyAlpFloatArray(ctx.dtype(), n, src32, scale, ctx.arena());
+        }
+
         MemorySegment buf32 = src32.isReadOnly() ? ctx.arena().allocate(n * 4, 4) : src32;
         if (src32.isReadOnly()) {
-            long srcCap = SegmentBroadcast.capacity(src32, 4);
             if (srcCap == n) {
                 for (long i = 0; i < n; i++) {
-                    buf32.setAtIndex(PTypeIO.LE_FLOAT, i, (float) src32.getAtIndex(PTypeIO.LE_INT, i) * df * de);
+                    buf32.setAtIndex(PTypeIO.LE_FLOAT, i, (float) src32.getAtIndex(PTypeIO.LE_INT, i) * scale);
                 }
             } else {
                 for (long i = 0; i < n; i++) {
-                    buf32.setAtIndex(PTypeIO.LE_FLOAT, i, (float) src32.getAtIndex(PTypeIO.LE_INT, i % srcCap) * df * de);
+                    buf32.setAtIndex(PTypeIO.LE_FLOAT, i, (float) src32.getAtIndex(PTypeIO.LE_INT, i % srcCap) * scale);
                 }
             }
         } else {
             for (long i = 0; i < n; i++) {
-                buf32.setAtIndex(PTypeIO.LE_FLOAT, i, (float) buf32.getAtIndex(PTypeIO.LE_INT, i) * df * de);
+                buf32.setAtIndex(PTypeIO.LE_FLOAT, i, (float) buf32.getAtIndex(PTypeIO.LE_INT, i) * scale);
             }
         }
 

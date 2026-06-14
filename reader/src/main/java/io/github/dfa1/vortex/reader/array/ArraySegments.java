@@ -40,6 +40,7 @@ public final class ArraySegments {
             case MaterializedBoolArray a -> a.buffer();
             case MaterializedFloat16Array a -> a.buffer();
             case LazyAlpDoubleArray a -> materialise(a);
+            case LazyAlpFloatArray a -> materialise(a);
             case LazyForLongArray a -> materialise(a);
             case LazyForIntArray a -> materialise(a);
             case LazyZigZagLongArray a -> materialise(a);
@@ -57,6 +58,17 @@ public final class ArraySegments {
         MemorySegment src = a.encoded();
         for (long i = 0; i < n; i++) {
             dst.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) src.getAtIndex(PTypeIO.LE_LONG, i) * scale);
+        }
+        return dst;
+    }
+
+    private static MemorySegment materialise(LazyAlpFloatArray a) {
+        long n = a.length();
+        MemorySegment dst = a.arena().allocate(n * 4L, 4);
+        float scale = a.scale();
+        MemorySegment src = a.encoded();
+        for (long i = 0; i < n; i++) {
+            dst.setAtIndex(PTypeIO.LE_FLOAT, i, (float) src.getAtIndex(PTypeIO.LE_INT, i) * scale);
         }
         return dst;
     }
