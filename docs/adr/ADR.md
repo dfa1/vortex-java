@@ -7,14 +7,14 @@ This directory contains ADRs following the
 
 Each ADR is a Markdown file named `NNNN-short-title.md`. Use `template.md` as the starting point.
 
-**Status values:** Proposed → Accepted → Completed | Deprecated | Superseded
+**Status values:** Proposed → Accepted → Implemented → Completed | Deferred | Deprecated | Superseded
 
 ## Index
 
 | ADR  | Title                                         | Status    |
 |------|-----------------------------------------------|-----------|
 | 0001 | Split read and write runtimes out of core     | Completed |
-| 0002 | Pluggable DType, Layout, and Compute          | Proposed  |
+| 0002 | Pluggable DType, Layout, and Compute          | Deferred  |
 | 0003 | VortexException message sanitization          | Accepted  |
 | 0004 | ResourceLimits + ReadOptions                  | Accepted  |
 | 0005 | Vector API adoption                           | Deferred  |
