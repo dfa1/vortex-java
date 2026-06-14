@@ -167,7 +167,8 @@ public final class PosixTerminal implements Terminal {
             out.print(Ansi.EXIT_ALT_SCREEN);
             out.print(Ansi.RESET);
             out.flush();
-            TCSETATTR.invokeExact(STDIN_FD, TCSANOW, savedTermios);
+            @SuppressWarnings("unused")
+            int rc = (int) TCSETATTR.invokeExact(STDIN_FD, TCSANOW, savedTermios);
         } catch (Throwable ignored) {
             // Best-effort: JVM is exiting; nothing useful to do.
         }
