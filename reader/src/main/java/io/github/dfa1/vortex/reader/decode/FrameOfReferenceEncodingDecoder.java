@@ -103,30 +103,16 @@ public final class FrameOfReferenceEncodingDecoder implements EncodingDecoder {
 
     private static MemorySegment applyReference(MemorySegment src, long n, PType ptype, long ref, SegmentAllocator arena) {
         int wordBytes = ptype.byteSize();
-        MemorySegment dst = src.isReadOnly() ? arena.allocate(n * wordBytes) : src;
+        MemorySegment dst = arena.allocate(n * wordBytes);
         switch (ptype) {
             case I8, U8 -> {
                 for (long off = 0, end = n; off < end; off++) {
-                    byte v = src.get(ValueLayout.JAVA_BYTE, off);
-                    dst.set(ValueLayout.JAVA_BYTE, off, (byte) (v + (byte) ref));
+                    dst.set(ValueLayout.JAVA_BYTE, off, (byte) (src.get(ValueLayout.JAVA_BYTE, off) + (byte) ref));
                 }
             }
             case I16, U16 -> {
                 for (long off = 0, end = n * 2; off < end; off += 2) {
-                    short v = src.get(PTypeIO.LE_SHORT, off);
-                    dst.set(PTypeIO.LE_SHORT, off, (short) (v + (short) ref));
-                }
-            }
-            case I32, U32 -> {
-                for (long off = 0, end = n * 4; off < end; off += 4) {
-                    int v = src.get(PTypeIO.LE_INT, off);
-                    dst.set(PTypeIO.LE_INT, off, v + (int) ref);
-                }
-            }
-            case I64, U64 -> {
-                for (long off = 0, end = n * 8; off < end; off += 8) {
-                    long v = src.get(PTypeIO.LE_LONG, off);
-                    dst.set(PTypeIO.LE_LONG, off, v + ref);
+                    dst.set(PTypeIO.LE_SHORT, off, (short) (src.get(PTypeIO.LE_SHORT, off) + (short) ref));
                 }
             }
             default -> throw new VortexException(EncodingId.FASTLANES_FOR, "unsupported ptype " + ptype);
