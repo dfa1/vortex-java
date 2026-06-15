@@ -18,6 +18,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          # Sonar needs full history for line-level blame / new-code computation.
+          fetch-depth: ${{ (matrix.os == 'ubuntu-latest' && matrix.java-version == '25') && 0 || 1 }}
 
       - name: Set up Azul Zulu JDK ${{ matrix.java-version }}
         uses: actions/setup-java@v5
@@ -33,6 +36,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
+      - name: Cache SonarCloud packages
+        if: matrix.os == 'ubuntu-latest' && matrix.java-version == '25'
+        uses: actions/cache@v5
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
       # vortex-jni 0.74.0 ships native libs for darwin-aarch64 + linux-aarch64
       # + linux-amd64 only. No Windows binary, so the modules that pull vortex-jni
       # (integration, performance) are skipped on Windows. Being the only Vortex
@@ -40,9 +51,17 @@ jobs:
       # see README "Who is this for".
       # JaCoCo coverage is collected only on the Ubuntu + Java 25 entry — running it on
       # every matrix entry would produce redundant reports and slow the build.
-      - name: Build and test (Linux + macOS) with coverage
-        if: runner.os != 'Windows' && matrix.os == 'ubuntu-latest' && matrix.java-version == '25'
-        run: ./mvnw verify -P coverage
+      - name: Build, test, and Sonar analysis (Linux)
+        if: matrix.os == 'ubuntu-latest' && matrix.java-version == '25'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          ./mvnw verify -P coverage \
+            org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+            -Dsonar.projectKey=dfa1_vortex-java \
+            -Dsonar.organization=dfa1 \
+            -Dsonar.host.url=https://sonarcloud.io
 
       - name: Build and test (Linux + macOS) without coverage
         if: runner.os != 'Windows' && !(matrix.os == 'ubuntu-latest' && matrix.java-version == '25')
@@ -52,11 +71,3 @@ jobs:
         if: runner.os == 'Windows'
         shell: bash
         run: ./mvnw verify -pl '!integration,!performance'
-
-      - name: Upload coverage to Codecov
-        if: matrix.os == 'ubuntu-latest' && matrix.java-version == '25'
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: false
-          files: ./**/target/site/jacoco/jacoco.xml
