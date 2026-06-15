@@ -8,10 +8,13 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
+import io.github.dfa1.vortex.reader.array.ChunkedBoolArray;
+import io.github.dfa1.vortex.reader.array.ChunkedByteArray;
 import io.github.dfa1.vortex.reader.array.ChunkedDoubleArray;
 import io.github.dfa1.vortex.reader.array.ChunkedFloatArray;
 import io.github.dfa1.vortex.reader.array.ChunkedIntArray;
 import io.github.dfa1.vortex.reader.array.ChunkedLongArray;
+import io.github.dfa1.vortex.reader.array.ChunkedShortArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.EmptyArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
@@ -443,50 +446,36 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         if (layout.isChunked()) {
             var flats = new ArrayList<Layout>();
             collectFlats(layout, flats);
-            return decodeConcatPrimitive(flats, dtype, layout.rowCount(), arena);
+            return decodeChunkedLayout(flats, dtype, layout.rowCount(), arena);
         }
         throw new VortexException("cannot decode layout " + layout.encodingId());
     }
 
-    private Array decodeConcatPrimitive(List<Layout> flats, DType dtype, long totalRows, SegmentAllocator arena) {
+    private Array decodeChunkedLayout(List<Layout> flats, DType dtype, long totalRows, SegmentAllocator arena) {
         if (flats.isEmpty()) {
             throw new VortexException(EncodingId.VORTEX_CHUNKED, "no flat children");
         }
         if (flats.size() == 1) {
             return decodeFlat(flats.getFirst(), dtype, arena);
         }
-        PType ptype = ((DType.Primitive) dtype).ptype();
-        // ADR 0012: 4 primary numeric ptypes get the zero-copy ChunkedXxxArray record.
-        // I8/I16 (and Bool which is decoded elsewhere) fall back to the concat path.
-        if (ptype == PType.I64 || ptype == PType.U64
-                || ptype == PType.I32 || ptype == PType.U32
-                || ptype == PType.F64 || ptype == PType.F32) {
-            var chunkArrays = new ArrayList<Array>(flats.size());
-            for (Layout flat : flats) {
-                chunkArrays.add(decodeFlat(flat, dtype, arena));
-            }
-            return switch (ptype) {
-                case I64, U64 -> ChunkedLongArray.of(dtype, totalRows, chunkArrays);
-                case I32, U32 -> ChunkedIntArray.of(dtype, totalRows, chunkArrays);
-                case F64 -> ChunkedDoubleArray.of(dtype, totalRows, chunkArrays);
-                case F32 -> ChunkedFloatArray.of(dtype, totalRows, chunkArrays);
-                default -> throw new IllegalStateException();
-            };
-        }
-        MemorySegment combined = arena.allocate(totalRows * ptype.byteSize());
-        long byteOffset = 0;
+        // ADR 0012: every primitive ptype gets the zero-copy ChunkedXxxArray shape.
+        // The concat path is gone.
+        var chunkArrays = new ArrayList<Array>(flats.size());
         for (Layout flat : flats) {
-            Array chunk = decodeFlat(flat, dtype, arena);
-            Array chunkData = chunk instanceof MaskedArray m ? m.inner() : chunk;
-            MemorySegment src = ArraySegments.of(chunkData, arena);
-            MemorySegment.copy(src, 0, combined, byteOffset, src.byteSize());
-            byteOffset += src.byteSize();
+            chunkArrays.add(decodeFlat(flat, dtype, arena));
         }
-        MemorySegment ro = combined.asReadOnly();
+        if (dtype instanceof DType.Bool) {
+            return ChunkedBoolArray.of(dtype, totalRows, chunkArrays);
+        }
+        PType ptype = ((DType.Primitive) dtype).ptype();
         return switch (ptype) {
-            case I16, U16 -> new MaterializedShortArray(dtype, totalRows, ro);
-            case I8, U8 -> new MaterializedByteArray(dtype, totalRows, ro);
-            default -> throw new VortexException("unsupported ptype for concat: " + ptype);
+            case I64, U64 -> ChunkedLongArray.of(dtype, totalRows, chunkArrays);
+            case I32, U32 -> ChunkedIntArray.of(dtype, totalRows, chunkArrays);
+            case F64 -> ChunkedDoubleArray.of(dtype, totalRows, chunkArrays);
+            case F32 -> ChunkedFloatArray.of(dtype, totalRows, chunkArrays);
+            case I16, U16 -> ChunkedShortArray.of(dtype, totalRows, chunkArrays);
+            case I8, U8 -> ChunkedByteArray.of(dtype, totalRows, chunkArrays);
+            default -> throw new VortexException("unsupported ptype for chunked layout: " + ptype);
         };
     }
 
