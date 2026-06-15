@@ -15,6 +15,12 @@
 	<properties>
 		<maven.deploy.skip>true</maven.deploy.skip>
 		<skipShade>true</skipShade>
+		<!-- This module is diagnostic CLI tooling (JMH benchmarks + ad-hoc taxi-data inspectors),
+		     not shipped library code. By-design uses of {@code System.out}, {@code System.err},
+		     {@code java.io.tmpdir}, and {@code main(String[] args)} dominate the Sonar findings
+		     and have no library-quality signal. Excluded from analysis to keep the dashboard
+		     focused on library modules. -->
+		<sonar.skip>true</sonar.skip>
 	</properties>
 
 	<dependencies>
