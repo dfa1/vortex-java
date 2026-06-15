@@ -336,6 +336,8 @@ class FileSizeComparisonIntegrationTest {
         long jniSize = Files.size(jniFile);
         System.out.printf("[PcoI64Comparison] %-10s %,d  %,9d  %,9d  %.2fx%n",
                 name, data.length, jniSize, javaSize, (double) javaSize / jniSize);
+        assertThat(javaSize).as("Java pco file for pattern '%s' must be non-empty", name).isGreaterThan(0);
+        assertThat(jniSize).as("JNI pco file for pattern '%s' must be non-empty", name).isGreaterThan(0);
     }
 
     @Test

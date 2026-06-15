@@ -82,6 +82,7 @@ public sealed interface VarBinArray extends Array
     /// @param bytesSegment   concatenated raw byte data for all elements
     /// @param offsetsSegment offsets segment of length {@code length + 1}
     /// @param offsetsPtype   physical type of the offsets values (I32/U32 or I64/U64)
+    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     record OffsetMode(DType dtype, long length, MemorySegment bytesSegment,
                       MemorySegment offsetsSegment, PType offsetsPtype)
             implements VarBinArray {
@@ -154,6 +155,7 @@ public sealed interface VarBinArray extends Array
     /// @param dictValOffPType physical type of the dictionary value offsets
     /// @param dictCodesSegs   per-row dictionary code indices (length = {@code length})
     /// @param dictCodesPType  physical type of the dictionary codes
+    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     record DictMode(DType dtype, long length, MemorySegment bytesSegment,
                     MemorySegment dictValOffsets, PType dictValOffPType,
                     MemorySegment dictCodesSegs, PType dictCodesPType)
@@ -230,6 +232,7 @@ public sealed interface VarBinArray extends Array
     /// @param length   total logical row count
     /// @param children chunk arrays in scan order; each is itself a {@link VarBinArray}
     /// @param offsets  cumulative row counts; length = {@code children.length + 1}
+    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     record ChunkedMode(DType dtype, long length, VarBinArray[] children, long[] offsets)
             implements VarBinArray {
 

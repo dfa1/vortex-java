@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /// Phase 0 scoping for `vortex.pco` decode port.
@@ -333,6 +334,7 @@ class PcoFixtureInspectionIntegrationTest {
             report.append('\n');
         }
         System.out.println(report);
+        assertThat(report.toString()).isNotEmpty();
     }
 
     private static final class PcoStats {

@@ -27,6 +27,7 @@ import java.util.Random;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PcoEncodingDecoderTest {
@@ -447,10 +448,13 @@ class PcoEncodingDecoderTest {
         void randomChunkMetaBytes_neverThrowsJvmException(byte[] chunkMetaBytes) {
             DecodeContext ctx = ctxWith(metaWithOneChunk(1), new DType.Primitive(PType.U64, false), 1,
                     new MemorySegment[]{segmentOf(chunkMetaBytes), segmentOf((byte) 0x00)});
-            try {
-                SUT.decode(ctx);
-            } catch (VortexException ignored) {
-            }
+            // VortexException is acceptable; NPE/AIOOBE/etc. are not
+            assertThatCode(() -> {
+                try {
+                    SUT.decode(ctx);
+                } catch (VortexException ignored) {
+                }
+            }).doesNotThrowAnyException();
         }
 
         @ParameterizedTest
@@ -459,10 +463,13 @@ class PcoEncodingDecoderTest {
             DecodeContext ctx = ctxWith(metaWithOneChunk(1), new DType.Primitive(PType.U64, false), 1,
                     new MemorySegment[]{segmentOf((byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00),
                             segmentOf(pageBytes)});
-            try {
-                SUT.decode(ctx);
-            } catch (VortexException ignored) {
-            }
+            // VortexException is acceptable; NPE/AIOOBE/etc. are not
+            assertThatCode(() -> {
+                try {
+                    SUT.decode(ctx);
+                } catch (VortexException ignored) {
+                }
+            }).doesNotThrowAnyException();
         }
 
         @ParameterizedTest
