@@ -105,17 +105,10 @@ See [docs/compatibility.md](docs/compatibility.md) for the full encoding support
 
 ### Remaining gap (no-Zstd mode) — biggest to smallest:
 
-Taxi 2024-01: **Java 41.0 MB vs Rust JNI 42.8 MB — Java is 1.8 MB smaller (4.2%)**.
-A few columns are still slightly larger in Java per `TaxiColumnByteDiff`: trip_distance
-(+354 KB), total_amount (+146 KB), mta_tax (+16 KB), tpep_dropoff_datetime (+71 KB).
-
-- [ ] **trip_distance remaining +354 KB after patched bitpacking** — patched bitpacking
-  (commit `007e6c4`) closed most of the gap and Java now beats Rust JNI overall (41.0 MB vs
-  42.8 MB on taxi-2024-01). trip_distance, total_amount, mta_tax are still slightly larger
-  than JNI. Hypothesis: Rust's `fastlanes.bitpacked` uses per-1024-row FoR-then-bitpack
-  (block-local widths) which keeps the wide ALP mantissa exponents from forcing global
-  fallback. Java currently picks a single histogram-best width across the chunk. Implement
-  per-block FoR + per-block bit_width in `packFastLanes` if further reduction is wanted.
+Taxi 2024-01: **Java 40.7 MB vs Rust JNI 42.8 MB — Java is 2.07 MB smaller (4.9%)**.
+After porting Rust's size-based ALP exponent search + two-step decode, trip_distance now
+beats JNI by ~15 KB. Remaining per-column deltas vs JNI: total_amount (+202 KB),
+tpep_dropoff_datetime (+71 KB), mta_tax (+16 KB).
 
 - [ ] **PULocationID dict-codes layout** — +250 KB vs Rust. Both use dict; Java codes use
   bitpack-only, Rust uses dict-codes-of-dict (inner dict over already-bitpacked codes). Mirror

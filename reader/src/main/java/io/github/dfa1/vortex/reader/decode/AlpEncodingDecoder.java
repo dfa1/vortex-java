@@ -76,22 +76,27 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
     }
 
     private static Array decodeF64(DecodeContext ctx, ALPMetadata meta, int expE, int expF, long n) {
-        double scale = F10_F64[expF] * IF10_F64[expE];
+        // Decode formula mirrors the Rust reference (`ALPFloat::decode_single`): two-step
+        // {@code encoded * F10[f] * IF10[e]}. A pre-multiplied {@code scale = F10[f] * IF10[e]}
+        // gives different IEEE rounding for non-trivial {@code expF}, breaking round-trip with
+        // the encoder's verify step.
+        double df = F10_F64[expF];
+        double de = IF10_F64[expE];
         MemorySegment src = ctx.decodeChildSegment(0, I64_DTYPE, n);
         long srcCap = SegmentBroadcast.capacity(src, 8);
 
         if (meta.patches() == null && srcCap >= n) {
-            return new LazyAlpDoubleArray(ctx.dtype(), n, src, scale);
+            return new LazyAlpDoubleArray(ctx.dtype(), n, src, df, de);
         }
 
         MemorySegment buf = ctx.arena().allocate(n * 8, 8);
         if (srcCap == n) {
             for (long i = 0; i < n; i++) {
-                buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) src.getAtIndex(PTypeIO.LE_LONG, i) * scale);
+                buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) src.getAtIndex(PTypeIO.LE_LONG, i) * df * de);
             }
         } else {
             for (long i = 0; i < n; i++) {
-                buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) src.getAtIndex(PTypeIO.LE_LONG, i % srcCap) * scale);
+                buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) src.getAtIndex(PTypeIO.LE_LONG, i % srcCap) * df * de);
             }
         }
         if (meta.patches() != null) {
@@ -101,22 +106,23 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
     }
 
     private static Array decodeF32(DecodeContext ctx, ALPMetadata meta, int expE, int expF, long n) {
-        float scale = F10_F32[expF] * IF10_F32[expE];
+        float df = F10_F32[expF];
+        float de = IF10_F32[expE];
         MemorySegment src = ctx.decodeChildSegment(0, I32_DTYPE, n);
         long srcCap = SegmentBroadcast.capacity(src, 4);
 
         if (meta.patches() == null && srcCap >= n) {
-            return new LazyAlpFloatArray(ctx.dtype(), n, src, scale);
+            return new LazyAlpFloatArray(ctx.dtype(), n, src, df, de);
         }
 
         MemorySegment buf = ctx.arena().allocate(n * 4, 4);
         if (srcCap == n) {
             for (long i = 0; i < n; i++) {
-                buf.setAtIndex(PTypeIO.LE_FLOAT, i, (float) src.getAtIndex(PTypeIO.LE_INT, i) * scale);
+                buf.setAtIndex(PTypeIO.LE_FLOAT, i, (float) src.getAtIndex(PTypeIO.LE_INT, i) * df * de);
             }
         } else {
             for (long i = 0; i < n; i++) {
-                buf.setAtIndex(PTypeIO.LE_FLOAT, i, (float) src.getAtIndex(PTypeIO.LE_INT, i % srcCap) * scale);
+                buf.setAtIndex(PTypeIO.LE_FLOAT, i, (float) src.getAtIndex(PTypeIO.LE_INT, i % srcCap) * df * de);
             }
         }
         if (meta.patches() != null) {

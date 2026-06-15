@@ -24,7 +24,7 @@ class LazyAlpFloatArrayTest {
         for (int i = 0; i < encoded.length; i++) {
             seg.setAtIndex(LE_INT, i, encoded[i]);
         }
-        return new LazyAlpFloatArray(F32, encoded.length, seg, scale);
+        return new LazyAlpFloatArray(F32, encoded.length, seg, scale, 1.0f);
     }
 
     @Test
@@ -58,6 +58,7 @@ class LazyAlpFloatArrayTest {
         // When + Then
         assertThat(sut.length()).isEqualTo(3);
         assertThat(sut.dtype()).isEqualTo(F32);
-        assertThat(sut.scale()).isEqualTo(0.5f);
+        assertThat(sut.factorF()).isEqualTo(0.5f);
+        assertThat(sut.factorE()).isEqualTo(1.0f);
     }
 }

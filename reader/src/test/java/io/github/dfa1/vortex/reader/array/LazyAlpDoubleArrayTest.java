@@ -27,7 +27,7 @@ class LazyAlpDoubleArrayTest {
         for (int i = 0; i < encoded.length; i++) {
             seg.setAtIndex(LE_LONG, i, encoded[i]);
         }
-        return new LazyAlpDoubleArray(F64, encoded.length, seg, scale);
+        return new LazyAlpDoubleArray(F64, encoded.length, seg, scale, 1.0);
     }
 
     @Nested
@@ -123,7 +123,8 @@ class LazyAlpDoubleArrayTest {
             // When + Then
             assertThat(sut.length()).isEqualTo(3);
             assertThat(sut.dtype()).isEqualTo(F64);
-            assertThat(sut.scale()).isEqualTo(0.5);
+            assertThat(sut.factorF()).isEqualTo(0.5);
+            assertThat(sut.factorE()).isEqualTo(1.0);
         }
     }
 }

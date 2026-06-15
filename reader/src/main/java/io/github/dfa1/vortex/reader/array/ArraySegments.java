@@ -73,10 +73,11 @@ public final class ArraySegments {
     private static MemorySegment materialise(LazyAlpDoubleArray a, SegmentAllocator arena) {
         long n = a.length();
         MemorySegment dst = arena.allocate(n * 8L, 8);
-        double scale = a.scale();
+        double df = a.factorF();
+        double de = a.factorE();
         MemorySegment src = a.encoded();
         for (long i = 0; i < n; i++) {
-            dst.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) src.getAtIndex(PTypeIO.LE_LONG, i) * scale);
+            dst.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) src.getAtIndex(PTypeIO.LE_LONG, i) * df * de);
         }
         return dst;
     }
@@ -84,10 +85,11 @@ public final class ArraySegments {
     private static MemorySegment materialise(LazyAlpFloatArray a, SegmentAllocator arena) {
         long n = a.length();
         MemorySegment dst = arena.allocate(n * 4L, 4);
-        float scale = a.scale();
+        float df = a.factorF();
+        float de = a.factorE();
         MemorySegment src = a.encoded();
         for (long i = 0; i < n; i++) {
-            dst.setAtIndex(PTypeIO.LE_FLOAT, i, (float) src.getAtIndex(PTypeIO.LE_INT, i) * scale);
+            dst.setAtIndex(PTypeIO.LE_FLOAT, i, (float) src.getAtIndex(PTypeIO.LE_INT, i) * df * de);
         }
         return dst;
     }

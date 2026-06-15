@@ -24,6 +24,10 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
 
     private static final int MAX_EXPONENT_F64 = 18;
     private static final int MAX_EXPONENT_F32 = 10;
+    // Wider than Rust's SAMPLE_SIZE=32: at small samples, IEEE precision drift at high
+    // {@code (expE, expF)} can hide as a 0-patch tie in the size estimate, then explode into
+    // thousands of patches when the full chunk is encoded. A larger sample is more likely to
+    // include drift-triggering values, letting the search penalise such combinations correctly.
     private static final int SAMPLE_SIZE = 512;
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
@@ -62,44 +66,91 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         return CascadeStep.terminal(encode(dtype, data, ctx));
     }
 
+    /// Picks {@code (expE, expF)} by minimising the estimated post-cascade byte size
+    /// (FoR + bitpack on the encoded integers, plus per-exception patch overhead) on a
+    /// stratified sample, breaking ties in favour of the smaller {@code e - f} gap.
+    /// Mirrors Rust's {@code ALPFloat::find_best_exponents}.
+    ///
+    /// <p>The previous heuristic (minimise exception count) picked combinations like
+    /// {@code (e=14, f=0)} that produced few exceptions but huge encoded mantissas, forcing
+    /// the cascade into Dict+FoR+BitPacked instead of a clean ALP→BitPacked chain.
     private static int[] findExponentsF64(double[] values) {
         int n = values.length;
         int sampleLen = Math.min(SAMPLE_SIZE, n);
-        // Stratified sample: pick SAMPLE_SIZE values spaced evenly across the input rather than
-        // the leading prefix. Leading rows are often biased (sorted by timestamp / region) and
-        // produce a bad (expE, expF) choice that inflates exceptions on the full data.
         double[] sample = new double[sampleLen];
         long stride = Math.max(1, (long) n / sampleLen);
         for (int i = 0; i < sampleLen; i++) {
             sample[i] = values[(int) Math.min(i * stride, n - 1)];
         }
-        int bestExpE = 0, bestExpF = 0, bestExceptions = sampleLen + 1;
 
-        outer:
-        for (int expE = 0; expE <= MAX_EXPONENT_F64; expE++) {
-            for (int expF = 0; expF <= MAX_EXPONENT_F64; expF++) {
-                double ef = F10_F64[expE];
-                double iff = IF10_F64[expF];
-                double df = F10_F64[expF];
-                double de = IF10_F64[expE];
-                int exceptions = 0;
-                for (int i = 0; i < sampleLen; i++) {
-                    double enc = sample[i] * ef * iff;
-                    if (!Double.isFinite(enc) || (double) Math.round(enc) * df * de != sample[i]) {
-                        exceptions++;
-                    }
-                }
-                if (exceptions < bestExceptions) {
-                    bestExceptions = exceptions;
+        int bestExpE = 0;
+        int bestExpF = 0;
+        long bestSize = Long.MAX_VALUE;
+        long[] encoded = new long[sampleLen];
+
+        // Iterate e ascending and f ascending so the first-encountered minimum has the smallest
+        // e (and smallest e-f for that e). With strict less-than replacement, ties resolve to
+        // the smaller exponent — important because IEEE precision of {@code F10[f] * IF10[e]}
+        // tends to drift at high (e, f), and Rust's sample-of-32 sometimes detects this drift
+        // as exceptions while ours does not (sample bias). Preferring smaller e protects us.
+        for (int expE = 1; expE < MAX_EXPONENT_F64; expE++) {
+            for (int expF = 0; expF < expE; expF++) {
+                long size = estimateEncodedSizeF64(sample, expE, expF, encoded);
+                if (size < bestSize) {
+                    bestSize = size;
                     bestExpE = expE;
                     bestExpF = expF;
-                    if (bestExceptions == 0) {
-                        break outer;
-                    }
                 }
             }
         }
         return new int[]{bestExpE, bestExpF};
+    }
+
+    /// Estimates the post-cascade byte cost of encoding {@code sample} at {@code (expE, expF)}.
+    /// Cost model matches Rust: encoded = FoR + bitpack at {@code ceil(log2(range)+1)} bits/value,
+    /// plus {@code patchCount * (8 bytes value + 2 bytes index)} for exceptions.
+    ///
+    /// <p>Encoded byte count is computed over the full sample length (not just the cleanly encoded
+    /// values) to mirror Rust's {@code estimate_encoded_size}: patch positions are filled with the
+    /// first non-patched encoded value, so they still consume bitpacked space.
+    private static long estimateEncodedSizeF64(double[] sample, int expE, int expF, long[] encoded) {
+        double ef = F10_F64[expE];
+        double iff = IF10_F64[expF];
+        double df = F10_F64[expF];
+        double de = IF10_F64[expE];
+        long minEnc = Long.MAX_VALUE;
+        long maxEnc = Long.MIN_VALUE;
+        int patchCount = 0;
+        int encodedCount = 0;
+        for (double v : sample) {
+            double enc = v * ef * iff;
+            if (!Double.isFinite(enc)) {
+                patchCount++;
+                continue;
+            }
+            long e = Math.round(enc);
+            if ((double) e * df * de != v) {
+                patchCount++;
+                continue;
+            }
+            encoded[encodedCount++] = e;
+            if (e < minEnc) {
+                minEnc = e;
+            }
+            if (e > maxEnc) {
+                maxEnc = e;
+            }
+        }
+        int bitsPerEncoded;
+        if (encodedCount == 0) {
+            bitsPerEncoded = 64;
+        } else {
+            long range = maxEnc - minEnc;
+            bitsPerEncoded = range <= 0 ? 0 : (64 - Long.numberOfLeadingZeros(range));
+        }
+        long encodedBytes = ((long) sample.length * bitsPerEncoded + 7L) / 8L;
+        long patchBytes = (long) patchCount * (Double.BYTES + Short.BYTES);
+        return encodedBytes + patchBytes;
     }
 
     private static AlpF64Data computeF64(double[] values) {
@@ -207,42 +258,72 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         return new CascadeStep(partialRoot, List.of(idxBuf, valBuf), List.of(slot), d.statsMin(), d.statsMax(), true);
     }
 
+    /// Size-based exponent search for F32. See [#findExponentsF64(double[])] for cost model.
     private static int[] findExponentsF32(float[] values) {
         int n = values.length;
         int sampleLen = Math.min(SAMPLE_SIZE, n);
-        // Stratified sample: see findExponentsF64 for rationale.
         float[] sample = new float[sampleLen];
         long stride = Math.max(1, (long) n / sampleLen);
         for (int i = 0; i < sampleLen; i++) {
             sample[i] = values[(int) Math.min(i * stride, n - 1)];
         }
-        int bestExpE = 0, bestExpF = 0, bestExceptions = sampleLen + 1;
 
-        outer:
-        for (int expE = 0; expE <= MAX_EXPONENT_F32; expE++) {
-            for (int expF = 0; expF <= MAX_EXPONENT_F32; expF++) {
-                float ef = F10_F32[expE];
-                float iff = IF10_F32[expF];
-                float df = F10_F32[expF];
-                float de = IF10_F32[expE];
-                int exceptions = 0;
-                for (int i = 0; i < sampleLen; i++) {
-                    float enc = sample[i] * ef * iff;
-                    if (!Float.isFinite(enc) || (float) Math.round(enc) * df * de != sample[i]) {
-                        exceptions++;
-                    }
-                }
-                if (exceptions < bestExceptions) {
-                    bestExceptions = exceptions;
+        int bestExpE = 0;
+        int bestExpF = 0;
+        long bestSize = Long.MAX_VALUE;
+        int[] encoded = new int[sampleLen];
+
+        for (int expE = 1; expE < MAX_EXPONENT_F32; expE++) {
+            for (int expF = 0; expF < expE; expF++) {
+                long size = estimateEncodedSizeF32(sample, expE, expF, encoded);
+                if (size < bestSize) {
+                    bestSize = size;
                     bestExpE = expE;
                     bestExpF = expF;
-                    if (bestExceptions == 0) {
-                        break outer;
-                    }
                 }
             }
         }
         return new int[]{bestExpE, bestExpF};
+    }
+
+    private static long estimateEncodedSizeF32(float[] sample, int expE, int expF, int[] encoded) {
+        float ef = F10_F32[expE];
+        float iff = IF10_F32[expF];
+        float df = F10_F32[expF];
+        float de = IF10_F32[expE];
+        int minEnc = Integer.MAX_VALUE;
+        int maxEnc = Integer.MIN_VALUE;
+        int patchCount = 0;
+        int encodedCount = 0;
+        for (float v : sample) {
+            float enc = v * ef * iff;
+            if (!Float.isFinite(enc)) {
+                patchCount++;
+                continue;
+            }
+            int e = Math.round(enc);
+            if ((float) e * df * de != v) {
+                patchCount++;
+                continue;
+            }
+            encoded[encodedCount++] = e;
+            if (e < minEnc) {
+                minEnc = e;
+            }
+            if (e > maxEnc) {
+                maxEnc = e;
+            }
+        }
+        int bitsPerEncoded;
+        if (encodedCount == 0) {
+            bitsPerEncoded = 32;
+        } else {
+            int range = maxEnc - minEnc;
+            bitsPerEncoded = range <= 0 ? 0 : (32 - Integer.numberOfLeadingZeros(range));
+        }
+        long encodedBytes = ((long) sample.length * bitsPerEncoded + 7L) / 8L;
+        long patchBytes = (long) patchCount * (Float.BYTES + Short.BYTES);
+        return encodedBytes + patchBytes;
     }
 
     private static EncodeResult encodeF32(float[] values, EncodeContext ctx) {
