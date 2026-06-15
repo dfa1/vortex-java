@@ -258,7 +258,7 @@ java -jar cli/target/vortex-cli-*-all.jar <subcommand> [args]
 | `export`   | `export <file.vortex>`                         | All columns to CSV on stdout                     |
 | `select`   | `select <file.vortex> <col> [col2 ...]`        | Project columns to CSV                           |
 | `filter`   | `filter <file.vortex> "<expr>"`                | Filter rows to CSV                               |
-| `import`   | `import <file.csv\|file.parquet> [out.vortex]` | Convert CSV or Parquet to Vortex                 |
+| `import`   | `import [--delimiter <char>] <file.csv\|file.parquet> [out.vortex]` | Convert CSV or Parquet to Vortex                 |
 
 ### `filter` expression syntax
 
