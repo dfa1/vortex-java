@@ -122,7 +122,7 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
                     long pos = readUnsignedIdx(idxSeg, SegmentBroadcast.elementOffset(idxSeg, i, idxBytes), indicesPtype) - offset;
                     long byteIdx = pos >>> 3;
                     byte cur = out.get(ValueLayout.JAVA_BYTE, byteIdx);
-                    out.set(ValueLayout.JAVA_BYTE, byteIdx, (byte) (cur | (1 << (pos & 7))));
+                    out.set(ValueLayout.JAVA_BYTE, byteIdx, (byte) ((cur & 0xff) | (1 << (pos & 7))));
                 }
             }
         }

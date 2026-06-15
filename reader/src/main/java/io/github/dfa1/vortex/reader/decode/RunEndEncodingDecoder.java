@@ -190,7 +190,7 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
                 if (val) {
                     long byteIdx = outIdx >>> 3;
                     byte cur = out.get(ValueLayout.JAVA_BYTE, byteIdx);
-                    out.set(ValueLayout.JAVA_BYTE, byteIdx, (byte) (cur | (1 << (outIdx & 7))));
+                    out.set(ValueLayout.JAVA_BYTE, byteIdx, (byte) ((cur & 0xff) | (1 << (outIdx & 7))));
                 }
             }
             logicalPos = runEnd;

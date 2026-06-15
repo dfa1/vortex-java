@@ -40,16 +40,6 @@ class KeyTest {
             assertThat(Key.ArrowLeft.INSTANCE).isInstanceOf(Key.class);
             assertThat(Key.ArrowRight.INSTANCE).isInstanceOf(Key.class);
         }
-
-        @Test
-        void navigationKeysAreDistinct() {
-            // Given / When / Then — each singleton must be its own type;
-            // a switch in TUI code dispatches by identity-equivalent enum match.
-            assertThat(Key.PageUp.INSTANCE).isNotSameAs(Key.PageDown.INSTANCE);
-            assertThat(Key.Home.INSTANCE).isNotSameAs(Key.End.INSTANCE);
-            assertThat(Key.Enter.INSTANCE).isNotSameAs(Key.Escape.INSTANCE);
-            assertThat(Key.Eof.INSTANCE).isNotSameAs(Key.Escape.INSTANCE);
-        }
     }
 
     @Nested

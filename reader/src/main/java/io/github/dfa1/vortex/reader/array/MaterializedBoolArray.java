@@ -42,6 +42,6 @@ public final class MaterializedBoolArray implements BoolArray {
     @Override
     public boolean getBoolean(long i) {
         byte b = buffer.get(ValueLayout.JAVA_BYTE, i >>> 3);
-        return (b & (1 << (i & 7))) != 0;
+        return ((b & 0xff) & (1 << (i & 7))) != 0;
     }
 }

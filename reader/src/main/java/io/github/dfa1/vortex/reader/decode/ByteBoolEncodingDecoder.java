@@ -36,7 +36,7 @@ public final class ByteBoolEncodingDecoder implements EncodingDecoder {
             if (bytes.get(ValueLayout.JAVA_BYTE, i) != 0) {
                 long byteIdx = i >>> 3;
                 byte cur = packed.get(ValueLayout.JAVA_BYTE, byteIdx);
-                packed.set(ValueLayout.JAVA_BYTE, byteIdx, (byte) (cur | (1 << (i & 7))));
+                packed.set(ValueLayout.JAVA_BYTE, byteIdx, (byte) ((cur & 0xff) | (1 << (i & 7))));
             }
         }
         return new MaterializedBoolArray(ctx.dtype(), n, packed);

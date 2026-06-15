@@ -110,7 +110,7 @@ public final class ZonedStatsSchema {
         while (mb.hasRemaining()) {
             byte b = mb.get();
             for (int bit = 0; bit < 8; bit++) {
-                if ((b & (1 << bit)) != 0 && bitIndex < all.length) {
+                if (((b & 0xff) & (1 << bit)) != 0 && bitIndex < all.length) {
                     out.add(all[bitIndex]);
                 }
                 bitIndex++;

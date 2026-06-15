@@ -131,7 +131,7 @@ public final class RleEncodingDecoder implements EncodingDecoder {
             if (indicesValidity.getBoolean(offset + j)) {
                 int byteIdx = (int) (j >>> 3);
                 byte current = validityBuf.get(ValueLayout.JAVA_BYTE, byteIdx);
-                validityBuf.set(ValueLayout.JAVA_BYTE, byteIdx, (byte) (current | (1 << (j & 7))));
+                validityBuf.set(ValueLayout.JAVA_BYTE, byteIdx, (byte) ((current & 0xff) | (1 << (j & 7))));
             }
         }
         BoolArray outputValidity = new MaterializedBoolArray(new DType.Bool(false), rowCount, validityBuf);

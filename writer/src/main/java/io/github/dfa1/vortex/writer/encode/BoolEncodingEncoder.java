@@ -27,7 +27,7 @@ public final class BoolEncodingEncoder implements EncodingEncoder {
             if (data[i]) {
                 long byteIdx = i / 8;
                 byte cur = seg.get(ValueLayout.JAVA_BYTE, byteIdx);
-                seg.set(ValueLayout.JAVA_BYTE, byteIdx, (byte) (cur | (1 << (i % 8))));
+                seg.set(ValueLayout.JAVA_BYTE, byteIdx, (byte) ((cur & 0xff) | (1 << (i % 8))));
             }
         }
         return seg;
