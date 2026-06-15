@@ -1,10 +1,8 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.encoding.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
-import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.proto.ALPRDMetadata;
@@ -33,7 +31,7 @@ class AlpRdEncodingEncoderTest {
 
         // Then
         for (int i = 0; i < values.length; i++) {
-            assertThat(ArraySegments.of(result).get(PTypeIO.LE_DOUBLE, (long) i * 8))
+            assertThat(((io.github.dfa1.vortex.reader.array.DoubleArray) result).getDouble(i))
                     .as("index %d", i).isCloseTo(values[i], within(1e-9));
         }
     }
