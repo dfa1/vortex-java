@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.DoubleBinaryOperator;
 
@@ -45,9 +46,7 @@ public record ChunkedFloatArray(DType dtype, long length, FloatArray[] children,
     private static void flatten(Array chunk, List<FloatArray> out) {
         Array data = chunk instanceof MaskedArray m ? m.inner() : chunk;
         if (data instanceof ChunkedFloatArray nested) {
-            for (FloatArray child : nested.children) {
-                out.add(child);
-            }
+            Collections.addAll(out, nested.children);
         } else if (data instanceof FloatArray fa) {
             out.add(fa);
         } else {

@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /// Multi-chunk {@link BoolArray} record. ADR 0012 shape.
@@ -48,9 +49,7 @@ public record ChunkedBoolArray(DType dtype, long length, BoolArray[] children, l
     private static void flatten(Array chunk, List<BoolArray> out) {
         Array data = chunk instanceof MaskedArray m ? m.inner() : chunk;
         if (data instanceof ChunkedBoolArray nested) {
-            for (BoolArray child : nested.children) {
-                out.add(child);
-            }
+            Collections.addAll(out, nested.children);
         } else if (data instanceof BoolArray ba) {
             out.add(ba);
         } else {

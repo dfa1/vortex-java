@@ -18,6 +18,8 @@ import java.lang.foreign.SegmentAllocator;
 /// should prefer the typed accessors on concrete subtypes — {@link LongArray#getLong(long)},
 /// {@link IntArray#getInt(long)}, {@link DoubleArray#getDouble(long)}, and friends — and treat
 /// {@code ArraySegments} as a Vortex-internal escape hatch.
+/// @deprecated this class should be removed gradually
+@Deprecated
 public final class ArraySegments {
 
     private ArraySegments() {
