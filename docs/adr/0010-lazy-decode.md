@@ -1,7 +1,8 @@
 # ADR 0010: Lazy decode for 1:1 transform encodings
 
-- **Status:** Proposed
+- **Status:** Implemented
 - **Date:** 2026-06-13
+- **Implemented:** 2026-06-14 — 2026-06-15
 - **Deciders:** project maintainer
 - **Supersedes:** —
 - **Superseded by:** —
@@ -605,6 +606,37 @@ Net negative.
 
 Rejected: only works if scan does not eagerly decode — which is exactly
 phase 1.
+
+## Outcome
+
+Phases 0/1/2 (lazy decode for the 1:1 transforms) shipped over 2026-06-14 — 2026-06-15:
+
+- **Phase 1 — Array hierarchy refactor.** Primitive `Array` interfaces (`LongArray`,
+  `IntArray`, `DoubleArray`, …) converted to non-sealed so new lazy variants can implement
+  them without touching the hierarchy.
+- **Phase 2 — Lazy ALP / FoR / ZigZag.** `LazyAlpDoubleArray`, `LazyAlpFloatArray`,
+  `LazyForLongArray`, `LazyForIntArray`, `LazyZigZagLongArray`, `LazyZigZagIntArray`
+  shipped. Each holds the encoded child + transform parameters; per-row dispatch applies
+  the transform on demand. `ArraySegments.of(arr, arena)` materialises into a fresh segment
+  only when a downstream caller demands a contiguous buffer.
+
+The lazy-storage pattern generalised beyond the 1:1 transform scope of this ADR. Adjacent
+encodings adopted the same top-level record shape:
+
+- [ADR 0012 — Lazy Chunked / Dict / VarBin layouts](0012-zero-copy-layout-decoding.md).
+- `vortex.runend`, `vortex.sparse`, `fastlanes.rle` (lazy lookup tables; not 1:1 transforms
+  but the same lazy-record + `ArraySegments` materialise pattern; see
+  `LazyRunEndXxxArray`, `LazySparseXxxArray`, `LazyRleXxxArray` in `reader.array`).
+
+`docs/compatibility.md` Decode shape table tracks per-encoding status.
+
+### Phase 3 — superseded
+
+The compute-pushdown phase (per-encoding `compareXxx` / `take` / `filter` operating on the
+encoded form) is **superseded by [ADR 0013 — Compute primitives: masks, kernels,
+no-materialise](0013-compute-primitives.md)**. ADR 0013 lands the masks-and-kernels
+framework that Phase 3 sketched, plus the wider design needed to make pushdown compose
+across the lazy storage types from ADRs 0010 and 0012.
 
 ## References
 
