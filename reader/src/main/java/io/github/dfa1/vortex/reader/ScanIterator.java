@@ -84,7 +84,6 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     private static final ValueLayout.OfLong LE_LONG = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     private final VortexHandle file;
-    private final ReadRegistry registry;
     private final ScanOptions options;
 
     private List<ChunkSpec> chunks;
@@ -96,9 +95,8 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     private Chunk openChunk;
     private boolean closed;
 
-    public ScanIterator(VortexHandle file, ReadRegistry registry, ScanOptions options) {
+    public ScanIterator(VortexHandle file, ScanOptions options) {
         this.file = file;
-        this.registry = registry;
         this.options = options;
     }
 
