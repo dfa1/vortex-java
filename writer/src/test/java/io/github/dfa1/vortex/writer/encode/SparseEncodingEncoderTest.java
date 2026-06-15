@@ -4,6 +4,8 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
+import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.encoding.DTypes;
@@ -85,9 +87,9 @@ class SparseEncodingEncoderTest {
             EncodeResult encoded = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
             Array decoded = decodeResult(encoded, DTypes.I64, data.length);
 
+            LongArray la = (LongArray) decoded;
             for (int i = 0; i < data.length; i++) {
-                assertThat(((io.github.dfa1.vortex.reader.array.LongArray) decoded).getLong(i))
-                        .as("index %d", i).isEqualTo(data[i]);
+                assertThat(la.getLong(i)).as("index %d", i).isEqualTo(data[i]);
             }
         }
 
@@ -97,9 +99,9 @@ class SparseEncodingEncoderTest {
             EncodeResult encoded = ENCODER.encode(DTypes.F64, data, EncodeTestHelper.testCtx());
             Array decoded = decodeResult(encoded, DTypes.F64, data.length);
 
+            DoubleArray da = (DoubleArray) decoded;
             for (int i = 0; i < data.length; i++) {
-                assertThat(((io.github.dfa1.vortex.reader.array.DoubleArray) decoded).getDouble(i))
-                        .as("index %d", i).isEqualTo(data[i]);
+                assertThat(da.getDouble(i)).as("index %d", i).isEqualTo(data[i]);
             }
         }
 
@@ -214,9 +216,9 @@ class SparseEncodingEncoderTest {
             Array result = DECODER.decode(ctx);
 
             assertThat(result.length()).isEqualTo(5L);
+            LongArray la = (LongArray) result;
             for (int i = 0; i < 5; i++) {
-                assertThat(((io.github.dfa1.vortex.reader.array.LongArray) result).getLong(i))
-                        .as("index %d", i).isEqualTo(fill);
+                assertThat(la.getLong(i)).as("index %d", i).isEqualTo(fill);
             }
         }
 
@@ -229,9 +231,9 @@ class SparseEncodingEncoderTest {
             Array result = DECODER.decode(ctx);
 
             long[] expected = {0, 10, 0, 0, 0, 50, 0, 0};
+            LongArray la = (LongArray) result;
             for (int i = 0; i < expected.length; i++) {
-                assertThat(((io.github.dfa1.vortex.reader.array.LongArray) result).getLong(i))
-                        .as("index %d", i).isEqualTo(expected[i]);
+                assertThat(la.getLong(i)).as("index %d", i).isEqualTo(expected[i]);
             }
         }
 
@@ -242,10 +244,11 @@ class SparseEncodingEncoderTest {
             DecodeContext ctx = buildSparseCtxF64(DTypes.F64, 4, fillVal, new long[]{2L}, new double[]{patchVal});
             Array result = DECODER.decode(ctx);
 
-            assertThat(((io.github.dfa1.vortex.reader.array.DoubleArray) result).getDouble(0)).isNaN();
-            assertThat(((io.github.dfa1.vortex.reader.array.DoubleArray) result).getDouble(1)).isNaN();
-            assertThat(((io.github.dfa1.vortex.reader.array.DoubleArray) result).getDouble(2)).isEqualTo(3.14);
-            assertThat(((io.github.dfa1.vortex.reader.array.DoubleArray) result).getDouble(3)).isNaN();
+            DoubleArray da = (DoubleArray) result;
+            assertThat(da.getDouble(0)).isNaN();
+            assertThat(da.getDouble(1)).isNaN();
+            assertThat(da.getDouble(2)).isEqualTo(3.14);
+            assertThat(da.getDouble(3)).isNaN();
         }
 
         @Test
@@ -255,7 +258,7 @@ class SparseEncodingEncoderTest {
             DecodeContext ctx = buildSparseCtxWithOffset(DTypes.I64, 5, 0L, PType.U32, patchIndices, patchValues, 10L);
             Array result = DECODER.decode(ctx);
 
-            assertThat(((io.github.dfa1.vortex.reader.array.LongArray) result).getLong(2)).isEqualTo(777L);
+            assertThat(((LongArray) result).getLong(2)).isEqualTo(777L);
         }
 
         @Test
@@ -265,8 +268,9 @@ class SparseEncodingEncoderTest {
             DecodeContext ctx = buildCtx(DTypes.I64, 4, nullFill, meta, new byte[0], new byte[0]);
             Array result = DECODER.decode(ctx);
 
+            LongArray la = (LongArray) result;
             for (int i = 0; i < 4; i++) {
-                assertThat(((io.github.dfa1.vortex.reader.array.LongArray) result).getLong(i)).as("index %d", i).isZero();
+                assertThat(la.getLong(i)).as("index %d", i).isZero();
             }
         }
 

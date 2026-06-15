@@ -20,12 +20,21 @@ public record LazySparseDoubleArray(
 
     @Override
     public double getDouble(long i) {
+        if (patchValues == null) {
+            return fillValue;
+        }
         int p = SparseArrays.findPatch(patchIndices, patchValues.length(), i + offset);
         return p >= 0 ? patchValues.getDouble(p) : fillValue;
     }
 
     @Override
     public void forEachDouble(DoubleConsumer c) {
+        if (patchValues == null) {
+            for (long r = 0; r < length; r++) {
+                c.accept(fillValue);
+            }
+            return;
+        }
         long numPatches = patchValues.length();
         long absStart = offset;
         long absEnd = offset + length;

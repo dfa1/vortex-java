@@ -20,12 +20,18 @@ public record LazySparseShortArray(
 
     @Override
     public short getShort(long i) {
+        if (patchValues == null) {
+            return fillValue;
+        }
         int p = SparseArrays.findPatch(patchIndices, patchValues.length(), i + offset);
         return p >= 0 ? patchValues.getShort(p) : fillValue;
     }
 
     @Override
     public int getInt(long i) {
+        if (patchValues == null) {
+            return fillInt;
+        }
         int p = SparseArrays.findPatch(patchIndices, patchValues.length(), i + offset);
         return p >= 0 ? patchValues.getInt(p) : fillInt;
     }
@@ -33,6 +39,12 @@ public record LazySparseShortArray(
     @Override
     public long fold(long identity, LongBinaryOperator op) {
         long[] acc = {identity};
+        if (patchValues == null) {
+            for (long r = 0; r < length; r++) {
+                acc[0] = op.applyAsLong(acc[0], fillInt);
+            }
+            return acc[0];
+        }
         long numPatches = patchValues.length();
         long absStart = offset;
         long absEnd = offset + length;

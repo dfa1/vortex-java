@@ -19,6 +19,9 @@ public record LazySparseFloatArray(
 
     @Override
     public float getFloat(long i) {
+        if (patchValues == null) {
+            return fillValue;
+        }
         int p = SparseArrays.findPatch(patchIndices, patchValues.length(), i + offset);
         return p >= 0 ? patchValues.getFloat(p) : fillValue;
     }
@@ -26,6 +29,12 @@ public record LazySparseFloatArray(
     @Override
     public double fold(double identity, DoubleBinaryOperator op) {
         double[] acc = {identity};
+        if (patchValues == null) {
+            for (long r = 0; r < length; r++) {
+                acc[0] = op.applyAsDouble(acc[0], fillValue);
+            }
+            return acc[0];
+        }
         long numPatches = patchValues.length();
         long absStart = offset;
         long absEnd = offset + length;
