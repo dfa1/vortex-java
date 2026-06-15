@@ -9,11 +9,16 @@ import io.github.dfa1.vortex.proto.RunEndMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.reader.array.BoolArray;
+import io.github.dfa1.vortex.reader.array.ByteArray;
+import io.github.dfa1.vortex.reader.array.IntArray;
+import io.github.dfa1.vortex.reader.array.LazyRunEndByteArray;
+import io.github.dfa1.vortex.reader.array.LazyRunEndIntArray;
+import io.github.dfa1.vortex.reader.array.LazyRunEndLongArray;
+import io.github.dfa1.vortex.reader.array.LazyRunEndShortArray;
+import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
-import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
-import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
-import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
-import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
+import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 
 import java.io.IOException;
@@ -77,96 +82,19 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
         }
         PType valuePtype = p.ptype();
 
-        return expand(ArraySegments.of(endsArr), ctx.decodeChildSegment(1, ctx.dtype(), numRuns),
-                endsPtype, valuePtype, numRuns, offset, n, ctx.dtype(), ctx.arena());
-    }
-
-    private static Array expand(
-            MemorySegment endsSeg, MemorySegment valuesSeg,
-            PType endsPtype, PType valuePtype,
-            long numRuns, long offset, long n,
-            DType dtype, SegmentAllocator arena
-    ) {
-        MemorySegment out = arena.allocate(n * valuePtype.byteSize());
-        switch (valuePtype) {
-            case I8, U8 -> expandByte(endsSeg, valuesSeg, endsPtype, numRuns, offset, n, out);
-            case I16, U16 -> expandShort(endsSeg, valuesSeg, endsPtype, numRuns, offset, n, out);
-            case I32, U32 -> expandInt(endsSeg, valuesSeg, endsPtype, numRuns, offset, n, out);
-            case I64, U64 -> expandLong(endsSeg, valuesSeg, endsPtype, numRuns, offset, n, out);
-            default -> throw new VortexException(EncodingId.VORTEX_RUNEND, "unsupported ptype " + valuePtype);
-        }
-        MemorySegment ro = out.asReadOnly();
+        // Lazy path: wrap values + ends without expanding into an n-sized buffer.
+        // Bool and VarBin keep the eager path above (different shapes — bit-packing
+        // and offset rebasing don't trivially express as a binary-search-on-read).
+        Array valuesArr = ctx.decodeChild(1, ctx.dtype(), numRuns);
+        Array valuesData = valuesArr instanceof MaskedArray m ? m.inner() : valuesArr;
+        Array endsData = endsArr instanceof MaskedArray m ? m.inner() : endsArr;
         return switch (valuePtype) {
-            case I64, U64 -> new MaterializedLongArray(dtype, n, ro);
-            case I32, U32 -> new MaterializedIntArray(dtype, n, ro);
-            case I16, U16 -> new MaterializedShortArray(dtype, n, ro);
-            case I8, U8 -> new MaterializedByteArray(dtype, n, ro);
+            case I64, U64 -> new LazyRunEndLongArray(ctx.dtype(), n, (LongArray) valuesData, endsData, offset);
+            case I32, U32 -> new LazyRunEndIntArray(ctx.dtype(), n, (IntArray) valuesData, endsData, offset);
+            case I16, U16 -> new LazyRunEndShortArray(ctx.dtype(), n, (ShortArray) valuesData, endsData, offset);
+            case I8, U8 -> new LazyRunEndByteArray(ctx.dtype(), n, (ByteArray) valuesData, endsData, offset);
             default -> throw new VortexException(EncodingId.VORTEX_RUNEND, "unsupported ptype " + valuePtype);
         };
-    }
-
-    private static void expandByte(MemorySegment endsSeg, MemorySegment valuesSeg,
-            PType endsPtype, long numRuns, long offset, long n, MemorySegment out) {
-        long endsCap = SegmentBroadcast.capacity(endsSeg, endsPtype.byteSize());
-        long valCap = SegmentBroadcast.capacity(valuesSeg, 1);
-        long logicalPos = 0L, outPos = 0L;
-        for (long run = 0; run < numRuns && outPos < n; run++) {
-            long runEnd = readUnsigned(endsSeg, run % endsCap, endsPtype);
-            byte rawValue = valuesSeg.get(ValueLayout.JAVA_BYTE, run % valCap);
-            long writeEnd = Math.min(runEnd, offset + n);
-            for (long lp = Math.max(logicalPos, offset); lp < writeEnd; lp++, outPos++) {
-                out.set(ValueLayout.JAVA_BYTE, outPos, rawValue);
-            }
-            logicalPos = runEnd;
-        }
-    }
-
-    private static void expandShort(MemorySegment endsSeg, MemorySegment valuesSeg,
-            PType endsPtype, long numRuns, long offset, long n, MemorySegment out) {
-        long endsCap = SegmentBroadcast.capacity(endsSeg, endsPtype.byteSize());
-        long valCap = SegmentBroadcast.capacity(valuesSeg, 2);
-        long logicalPos = 0L, outPos = 0L;
-        for (long run = 0; run < numRuns && outPos < n; run++) {
-            long runEnd = readUnsigned(endsSeg, run % endsCap, endsPtype);
-            short rawValue = valuesSeg.get(PTypeIO.LE_SHORT, (run % valCap) * 2);
-            long writeEnd = Math.min(runEnd, offset + n);
-            for (long lp = Math.max(logicalPos, offset); lp < writeEnd; lp++, outPos++) {
-                out.set(PTypeIO.LE_SHORT, outPos * 2, rawValue);
-            }
-            logicalPos = runEnd;
-        }
-    }
-
-    private static void expandInt(MemorySegment endsSeg, MemorySegment valuesSeg,
-            PType endsPtype, long numRuns, long offset, long n, MemorySegment out) {
-        long endsCap = SegmentBroadcast.capacity(endsSeg, endsPtype.byteSize());
-        long valCap = SegmentBroadcast.capacity(valuesSeg, 4);
-        long logicalPos = 0L, outPos = 0L;
-        for (long run = 0; run < numRuns && outPos < n; run++) {
-            long runEnd = readUnsigned(endsSeg, run % endsCap, endsPtype);
-            int rawValue = valuesSeg.get(PTypeIO.LE_INT, (run % valCap) * 4);
-            long writeEnd = Math.min(runEnd, offset + n);
-            for (long lp = Math.max(logicalPos, offset); lp < writeEnd; lp++, outPos++) {
-                out.set(PTypeIO.LE_INT, outPos * 4, rawValue);
-            }
-            logicalPos = runEnd;
-        }
-    }
-
-    private static void expandLong(MemorySegment endsSeg, MemorySegment valuesSeg,
-            PType endsPtype, long numRuns, long offset, long n, MemorySegment out) {
-        long endsCap = SegmentBroadcast.capacity(endsSeg, endsPtype.byteSize());
-        long valCap = SegmentBroadcast.capacity(valuesSeg, 8);
-        long logicalPos = 0L, outPos = 0L;
-        for (long run = 0; run < numRuns && outPos < n; run++) {
-            long runEnd = readUnsigned(endsSeg, run % endsCap, endsPtype);
-            long rawValue = valuesSeg.get(PTypeIO.LE_LONG, (run % valCap) * 8);
-            long writeEnd = Math.min(runEnd, offset + n);
-            for (long lp = Math.max(logicalPos, offset); lp < writeEnd; lp++, outPos++) {
-                out.set(PTypeIO.LE_LONG, outPos * 8, rawValue);
-            }
-            logicalPos = runEnd;
-        }
     }
 
     private static Array expandBool(
