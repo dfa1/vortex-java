@@ -66,8 +66,64 @@ public final class ArraySegments {
             case LazyForIntArray a -> materialise(a, arena);
             case LazyZigZagLongArray a -> materialise(a, arena);
             case LazyZigZagIntArray a -> materialise(a, arena);
+            case ChunkedLongArray a -> materialiseChunkedLong(a, arena);
+            case ChunkedIntArray a -> materialiseChunkedInt(a, arena);
+            case ChunkedDoubleArray a -> materialiseChunkedDouble(a, arena);
+            case ChunkedFloatArray a -> materialiseChunkedFloat(a, arena);
             default -> of(arr);
         };
+    }
+
+    private static MemorySegment materialiseChunkedLong(ChunkedLongArray a, SegmentAllocator arena) {
+        long n = a.length();
+        MemorySegment dst = arena.allocate(n * 8L, 8);
+        long byteOffset = 0;
+        for (LongArray child : a.children()) {
+            MemorySegment src = of((Array) child, arena);
+            long bytes = child.length() * 8L;
+            MemorySegment.copy(src, 0, dst, byteOffset, bytes);
+            byteOffset += bytes;
+        }
+        return dst.asReadOnly();
+    }
+
+    private static MemorySegment materialiseChunkedInt(ChunkedIntArray a, SegmentAllocator arena) {
+        long n = a.length();
+        MemorySegment dst = arena.allocate(n * 4L, 4);
+        long byteOffset = 0;
+        for (IntArray child : a.children()) {
+            MemorySegment src = of((Array) child, arena);
+            long bytes = child.length() * 4L;
+            MemorySegment.copy(src, 0, dst, byteOffset, bytes);
+            byteOffset += bytes;
+        }
+        return dst.asReadOnly();
+    }
+
+    private static MemorySegment materialiseChunkedDouble(ChunkedDoubleArray a, SegmentAllocator arena) {
+        long n = a.length();
+        MemorySegment dst = arena.allocate(n * 8L, 8);
+        long byteOffset = 0;
+        for (DoubleArray child : a.children()) {
+            MemorySegment src = of((Array) child, arena);
+            long bytes = child.length() * 8L;
+            MemorySegment.copy(src, 0, dst, byteOffset, bytes);
+            byteOffset += bytes;
+        }
+        return dst.asReadOnly();
+    }
+
+    private static MemorySegment materialiseChunkedFloat(ChunkedFloatArray a, SegmentAllocator arena) {
+        long n = a.length();
+        MemorySegment dst = arena.allocate(n * 4L, 4);
+        long byteOffset = 0;
+        for (FloatArray child : a.children()) {
+            MemorySegment src = of((Array) child, arena);
+            long bytes = child.length() * 4L;
+            MemorySegment.copy(src, 0, dst, byteOffset, bytes);
+            byteOffset += bytes;
+        }
+        return dst.asReadOnly();
     }
 
     private static MemorySegment materialise(LazyAlpDoubleArray a, SegmentAllocator arena) {

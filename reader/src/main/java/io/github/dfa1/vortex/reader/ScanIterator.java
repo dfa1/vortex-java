@@ -8,6 +8,10 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
+import io.github.dfa1.vortex.reader.array.ChunkedDoubleArray;
+import io.github.dfa1.vortex.reader.array.ChunkedFloatArray;
+import io.github.dfa1.vortex.reader.array.ChunkedIntArray;
+import io.github.dfa1.vortex.reader.array.ChunkedLongArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.EmptyArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
@@ -452,6 +456,23 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             return decodeFlat(flats.getFirst(), dtype, arena);
         }
         PType ptype = ((DType.Primitive) dtype).ptype();
+        // ADR 0012: 4 primary numeric ptypes get the zero-copy ChunkedXxxArray record.
+        // I8/I16 (and Bool which is decoded elsewhere) fall back to the concat path.
+        if (ptype == PType.I64 || ptype == PType.U64
+                || ptype == PType.I32 || ptype == PType.U32
+                || ptype == PType.F64 || ptype == PType.F32) {
+            var chunkArrays = new ArrayList<Array>(flats.size());
+            for (Layout flat : flats) {
+                chunkArrays.add(decodeFlat(flat, dtype, arena));
+            }
+            return switch (ptype) {
+                case I64, U64 -> ChunkedLongArray.of(dtype, totalRows, chunkArrays);
+                case I32, U32 -> ChunkedIntArray.of(dtype, totalRows, chunkArrays);
+                case F64 -> ChunkedDoubleArray.of(dtype, totalRows, chunkArrays);
+                case F32 -> ChunkedFloatArray.of(dtype, totalRows, chunkArrays);
+                default -> throw new IllegalStateException();
+            };
+        }
         MemorySegment combined = arena.allocate(totalRows * ptype.byteSize());
         long byteOffset = 0;
         for (Layout flat : flats) {
@@ -463,10 +484,6 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         }
         MemorySegment ro = combined.asReadOnly();
         return switch (ptype) {
-            case I64, U64 -> new MaterializedLongArray(dtype, totalRows, ro);
-            case I32, U32 -> new MaterializedIntArray(dtype, totalRows, ro);
-            case F64 -> new MaterializedDoubleArray(dtype, totalRows, ro);
-            case F32 -> new MaterializedFloatArray(dtype, totalRows, ro);
             case I16, U16 -> new MaterializedShortArray(dtype, totalRows, ro);
             case I8, U8 -> new MaterializedByteArray(dtype, totalRows, ro);
             default -> throw new VortexException("unsupported ptype for concat: " + ptype);
