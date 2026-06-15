@@ -12,12 +12,13 @@ import java.util.function.IntConsumer;
 
 /// Sealed interface for variable-length binary / UTF-8 string columns.
 ///
-/// Two implementations: {@link OffsetMode} for standard offset-based layout and
-/// {@link DictMode} for dictionary-encoded strings. All accessors resolve
-/// transparently regardless of mode; only {@link OffsetMode} exposes
-/// {@link OffsetMode#offsetsSegment()} and {@link OffsetMode#offsetsPtype()}.
+/// Three implementations: {@link OffsetMode} for standard offset-based layout,
+/// {@link DictMode} for dictionary-encoded strings, and {@link ChunkedMode} for
+/// multi-chunk columns. All accessors resolve transparently regardless of mode;
+/// only {@link OffsetMode} exposes {@link OffsetMode#offsetsSegment()} and
+/// {@link OffsetMode#offsetsPtype()}.
 public sealed interface VarBinArray extends Array
-        permits VarBinArray.OffsetMode, VarBinArray.DictMode {
+        permits VarBinArray.OffsetMode, VarBinArray.DictMode, VarBinArray.ChunkedMode {
 
     /// Returns the concatenated raw bytes segment backing all elements.
     ///
@@ -213,6 +214,119 @@ public sealed interface VarBinArray extends Array
                 return dictValOffsets.getAtIndex(PTypeIO.LE_INT, i);
             }
             return dictValOffsets.getAtIndex(PTypeIO.LE_LONG, i);
+        }
+    }
+
+    /// Multi-chunk {@code VarBinArray} — wraps a list of child {@code VarBinArray}s plus
+    /// cumulative row offsets. Per-row accessors binary-search {@code offsets} to find the
+    /// owning chunk and delegate. Per ADR 0012, preserves zero-copy on multi-chunk Utf8 /
+    /// Binary columns: each chunk's underlying segments stay live (mmap slices); no concat.
+    ///
+    /// {@link #bytesSegment()} is the {@link MemorySegment#NULL} sentinel — chunked
+    /// arrays have no single contiguous bytes segment. Callers that need contiguous
+    /// bytes must materialise via the chunked children.
+    ///
+    /// @param dtype    logical element type (Utf8 or Binary)
+    /// @param length   total logical row count
+    /// @param children chunk arrays in scan order; each is itself a {@link VarBinArray}
+    /// @param offsets  cumulative row counts; length = {@code children.length + 1}
+    record ChunkedMode(DType dtype, long length, VarBinArray[] children, long[] offsets)
+            implements VarBinArray {
+
+        /// Builds a {@code ChunkedMode} from a list of chunk arrays.
+        ///
+        /// @param dtype     logical element type
+        /// @param totalRows expected total row count
+        /// @param chunks    non-empty list of {@link VarBinArray} chunks
+        /// @return a new {@code ChunkedMode}
+        /// @throws VortexException on empty input, non-{@link VarBinArray} chunks, or row-count mismatch
+        public static ChunkedMode of(DType dtype, long totalRows,
+                java.util.List<? extends Array> chunks) {
+            if (chunks.isEmpty()) {
+                throw new VortexException("VarBinArray.ChunkedMode: empty chunk list");
+            }
+            var typed = new java.util.ArrayList<VarBinArray>(chunks.size());
+            for (Array c : chunks) {
+                Array data = c instanceof MaskedArray m ? m.inner() : c;
+                if (data instanceof ChunkedMode nested) {
+                    java.util.Collections.addAll(typed, nested.children);
+                } else if (data instanceof VarBinArray vb) {
+                    typed.add(vb);
+                } else {
+                    throw new VortexException("VarBinArray.ChunkedMode: chunk is not a VarBinArray: "
+                            + data.getClass().getSimpleName());
+                }
+            }
+            long[] off = new long[typed.size() + 1];
+            for (int i = 0; i < typed.size(); i++) {
+                off[i + 1] = off[i] + typed.get(i).length();
+            }
+            if (off[off.length - 1] != totalRows) {
+                throw new VortexException("VarBinArray.ChunkedMode: chunk rows sum to "
+                        + off[off.length - 1] + ", expected " + totalRows);
+            }
+            return new ChunkedMode(dtype, totalRows, typed.toArray(VarBinArray[]::new), off);
+        }
+
+        private int findChunk(long i) {
+            int hit = java.util.Arrays.binarySearch(offsets, i);
+            int idx = hit >= 0 ? hit : -hit - 2;
+            if (idx >= children.length) {
+                idx = children.length - 1;
+            }
+            return idx;
+        }
+
+        @Override
+        public MemorySegment bytesSegment() {
+            return MemorySegment.NULL;
+        }
+
+        @Override
+        public byte[] getBytes(long i) {
+            int c = findChunk(i);
+            return children[c].getBytes(i - offsets[c]);
+        }
+
+        @Override
+        public String getString(long i) {
+            int c = findChunk(i);
+            return children[c].getString(i - offsets[c]);
+        }
+
+        @Override
+        public int getByteLength(long i) {
+            int c = findChunk(i);
+            return children[c].getByteLength(i - offsets[c]);
+        }
+
+        @Override
+        public void forEachByteLength(IntConsumer c) {
+            for (VarBinArray child : children) {
+                child.forEachByteLength(c);
+            }
+        }
+
+        @Override
+        public VarBinArray truncate(long rows) {
+            if (rows >= length) {
+                return this;
+            }
+            // Keep full children that fit, recursively truncate the boundary child.
+            var kept = new java.util.ArrayList<Array>(children.length);
+            for (int i = 0; i < children.length; i++) {
+                long start = offsets[i];
+                long end = offsets[i + 1];
+                if (start >= rows) {
+                    break;
+                }
+                if (end <= rows) {
+                    kept.add(children[i]);
+                } else {
+                    kept.add(children[i].truncate(rows - start));
+                }
+            }
+            return ChunkedMode.of(dtype, rows, kept);
         }
     }
 }

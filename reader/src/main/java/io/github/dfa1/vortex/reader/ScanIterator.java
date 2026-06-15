@@ -529,6 +529,9 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         if (dtype instanceof DType.Bool) {
             return ChunkedBoolArray.of(dtype, totalRows, chunkArrays);
         }
+        if (dtype instanceof DType.Utf8 || dtype instanceof DType.Binary) {
+            return VarBinArray.ChunkedMode.of(dtype, totalRows, chunkArrays);
+        }
         PType ptype = ((DType.Primitive) dtype).ptype();
         return switch (ptype) {
             case I64, U64 -> ChunkedLongArray.of(dtype, totalRows, chunkArrays);
@@ -566,8 +569,8 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         Array values = decodeLayout(valuesLayout, dtype, arena);
         Array codes = decodeLayout(codesLayout, new DType.Primitive(codesPType, false), arena);
 
-        // VarBin (string) dict: still expand into offsets/bytes — VarBin lazy dict
-        // is out of scope for ADR 0012 (needs a VarBinArray interface refactor).
+        // VarBin (string) dict: VarBinArray is a sealed interface; ofDict returns the
+        // lazy DictMode record (no eager expansion into per-row offsets/bytes).
         if (values instanceof VarBinArray.OffsetMode vb) {
             // Zip-bomb guard: read the codes as a segment so we can validate the buffer
             // before allocating the expansion output. For direct-mapped encodings (e.g.
