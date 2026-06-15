@@ -16,6 +16,7 @@ import java.util.function.LongBinaryOperator;
 /// @param numChunks         number of FastLanes chunks covered
 /// @param offset            starting absolute position
 /// @param unsigned          {@code true} when the dtype is U8 (affects {@link #getInt(long)} widening)
+@SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record LazyRleByteArray(
         DType dtype, long length, byte[] values, int[] indices,
         long[] valuesIdxOffsets, long firstOffset, long valuesLen,
@@ -57,31 +58,38 @@ public record LazyRleByteArray(
         int absRow = offset;
         int startChunk = absRow >>> RleArrays.FL_LOG2;
         for (int chunkIdx = startChunk; chunkIdx < numChunks && emitted < n; chunkIdx++) {
-            int chunkBase = chunkIdx * RleArrays.FL_CHUNK_SIZE;
-            int rowInChunk = absRow - chunkBase;
-            long valueIdxOffset = valuesIdxOffsets[chunkIdx] - firstOffset;
-            int numChunkValues = RleArrays.chunkValueCount(chunkIdx, numChunks, valuesIdxOffsets, firstOffset, valuesLen);
+            int rowInChunk = absRow - chunkIdx * RleArrays.FL_CHUNK_SIZE;
             int end = Math.min(RleArrays.FL_CHUNK_SIZE, rowInChunk + (int) (n - emitted));
-            if (numChunkValues <= 1) {
-                byte v = numChunkValues == 1 ? values[(int) valueIdxOffset] : (byte) 0;
-                long widened = unsigned ? Byte.toUnsignedInt(v) : v;
-                for (int r = rowInChunk; r < end; r++) {
-                    acc = op.applyAsLong(acc, widened);
-                }
-            } else {
-                for (int r = rowInChunk; r < end; r++) {
-                    int localIdx = indices[chunkBase + r];
-                    if (localIdx >= numChunkValues) {
-                        localIdx = numChunkValues - 1;
-                    }
-                    byte v = values[(int) valueIdxOffset + localIdx];
-                    long widened = unsigned ? Byte.toUnsignedInt(v) : v;
-                    acc = op.applyAsLong(acc, widened);
-                }
-            }
+            acc = foldChunk(chunkIdx, rowInChunk, end, acc, op);
             int count = end - rowInChunk;
             emitted += count;
             absRow += count;
+        }
+        return acc;
+    }
+
+    private long widen(byte v) {
+        return unsigned ? Byte.toUnsignedInt(v) : v;
+    }
+
+    private long foldChunk(int chunkIdx, int rowInChunk, int end, long acc, LongBinaryOperator op) {
+        int chunkBase = chunkIdx * RleArrays.FL_CHUNK_SIZE;
+        long valueIdxOffset = valuesIdxOffsets[chunkIdx] - firstOffset;
+        int numChunkValues = RleArrays.chunkValueCount(chunkIdx, numChunks, valuesIdxOffsets, firstOffset, valuesLen);
+        if (numChunkValues <= 1) {
+            byte v = numChunkValues == 1 ? values[(int) valueIdxOffset] : (byte) 0;
+            long widened = widen(v);
+            for (int r = rowInChunk; r < end; r++) {
+                acc = op.applyAsLong(acc, widened);
+            }
+        } else {
+            for (int r = rowInChunk; r < end; r++) {
+                int localIdx = indices[chunkBase + r];
+                if (localIdx >= numChunkValues) {
+                    localIdx = numChunkValues - 1;
+                }
+                acc = op.applyAsLong(acc, widen(values[(int) valueIdxOffset + localIdx]));
+            }
         }
         return acc;
     }

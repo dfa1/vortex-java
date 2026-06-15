@@ -305,7 +305,7 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             int offsetBitsWidth = bitsToEncodeOffsetBits(dtypeSize);
             for (int i = 0; i < bins.size(); i++) {
                 PcoBinOptimizer.Bin bin = bins.get(i);
-                w.writeBits((long) weights[i] - 1L, ansSizeLog);
+                w.writeBits(weights[i] - 1L, ansSizeLog);
                 w.writeBits(bin.lowerLatent(), dtypeSize);
                 w.writeBits(bin.offsetBits(), offsetBitsWidth);
             }
@@ -337,7 +337,7 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             w.writeBits(primaryBins.size(), 15);
             for (int i = 0; i < primaryBins.size(); i++) {
                 PcoBinOptimizer.Bin bin = primaryBins.get(i);
-                w.writeBits((long) primaryWeights[i] - 1L, primaryAnsSizeLog);
+                w.writeBits(primaryWeights[i] - 1L, primaryAnsSizeLog);
                 w.writeBits(bin.lowerLatent(), dtypeSize);
                 w.writeBits(bin.offsetBits(), offsetBitsWidth);
             }
@@ -347,7 +347,7 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             w.writeBits(secondaryBins.size(), 15);
             for (int i = 0; i < secondaryBins.size(); i++) {
                 PcoBinOptimizer.Bin bin = secondaryBins.get(i);
-                w.writeBits((long) secondaryWeights[i] - 1L, secondaryAnsSizeLog);
+                w.writeBits(secondaryWeights[i] - 1L, secondaryAnsSizeLog);
                 w.writeBits(bin.lowerLatent(), dtypeSize);
                 w.writeBits(bin.offsetBits(), offsetBitsWidth);
             }

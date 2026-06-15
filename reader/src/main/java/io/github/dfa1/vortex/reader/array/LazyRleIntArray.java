@@ -16,6 +16,7 @@ import java.util.function.IntConsumer;
 /// @param valuesLen         total values pool length
 /// @param numChunks         number of FastLanes chunks covered
 /// @param offset            starting absolute position
+@SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record LazyRleIntArray(
         DType dtype, long length, int[] values, int[] indices,
         long[] valuesIdxOffsets, long firstOffset, long valuesLen,
@@ -46,28 +47,32 @@ public record LazyRleIntArray(
         int absRow = offset;
         int startChunk = absRow >>> RleArrays.FL_LOG2;
         for (int chunkIdx = startChunk; chunkIdx < numChunks && emitted < n; chunkIdx++) {
-            int chunkBase = chunkIdx * RleArrays.FL_CHUNK_SIZE;
-            int rowInChunk = absRow - chunkBase;
-            long valueIdxOffset = valuesIdxOffsets[chunkIdx] - firstOffset;
-            int numChunkValues = RleArrays.chunkValueCount(chunkIdx, numChunks, valuesIdxOffsets, firstOffset, valuesLen);
+            int rowInChunk = absRow - chunkIdx * RleArrays.FL_CHUNK_SIZE;
             int end = Math.min(RleArrays.FL_CHUNK_SIZE, rowInChunk + (int) (n - emitted));
-            if (numChunkValues <= 1) {
-                int v = numChunkValues == 1 ? values[(int) valueIdxOffset] : 0;
-                for (int r = rowInChunk; r < end; r++) {
-                    c.accept(v);
-                }
-            } else {
-                for (int r = rowInChunk; r < end; r++) {
-                    int localIdx = indices[chunkBase + r];
-                    if (localIdx >= numChunkValues) {
-                        localIdx = numChunkValues - 1;
-                    }
-                    c.accept(values[(int) valueIdxOffset + localIdx]);
-                }
-            }
+            processChunk(chunkIdx, rowInChunk, end, c);
             int count = end - rowInChunk;
             emitted += count;
             absRow += count;
+        }
+    }
+
+    private void processChunk(int chunkIdx, int rowInChunk, int end, IntConsumer c) {
+        int chunkBase = chunkIdx * RleArrays.FL_CHUNK_SIZE;
+        long valueIdxOffset = valuesIdxOffsets[chunkIdx] - firstOffset;
+        int numChunkValues = RleArrays.chunkValueCount(chunkIdx, numChunks, valuesIdxOffsets, firstOffset, valuesLen);
+        if (numChunkValues <= 1) {
+            int v = numChunkValues == 1 ? values[(int) valueIdxOffset] : 0;
+            for (int r = rowInChunk; r < end; r++) {
+                c.accept(v);
+            }
+        } else {
+            for (int r = rowInChunk; r < end; r++) {
+                int localIdx = indices[chunkBase + r];
+                if (localIdx >= numChunkValues) {
+                    localIdx = numChunkValues - 1;
+                }
+                c.accept(values[(int) valueIdxOffset + localIdx]);
+            }
         }
     }
 
