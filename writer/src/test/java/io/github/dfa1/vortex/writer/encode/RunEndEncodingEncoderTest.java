@@ -3,13 +3,11 @@ package io.github.dfa1.vortex.writer.encode;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.encoding.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.proto.RunEndMetadata;
@@ -88,7 +86,7 @@ class RunEndEncodingEncoderTest {
 
             assertThat(result.length()).isEqualTo(5L);
             for (int i = 0; i < 5; i++) {
-                assertThat(ArraySegments.of(result).get(PTypeIO.LE_LONG, (long) i * 8)).isEqualTo(42L);
+                assertThat(((io.github.dfa1.vortex.reader.array.LongArray) result).getLong(i)).isEqualTo(42L);
             }
         }
 
@@ -101,7 +99,7 @@ class RunEndEncodingEncoderTest {
 
             long[] expected = {10, 10, 20, 20, 20, 30, 30};
             for (int i = 0; i < expected.length; i++) {
-                assertThat(ArraySegments.of(result).get(PTypeIO.LE_LONG, (long) i * 8))
+                assertThat(((io.github.dfa1.vortex.reader.array.LongArray) result).getLong(i))
                         .as("index %d", i).isEqualTo(expected[i]);
             }
         }
@@ -115,7 +113,7 @@ class RunEndEncodingEncoderTest {
 
             long[] expected = {10L, 20L, 20L};
             for (int i = 0; i < expected.length; i++) {
-                assertThat(ArraySegments.of(result).get(PTypeIO.LE_LONG, (long) i * 8))
+                assertThat(((io.github.dfa1.vortex.reader.array.LongArray) result).getLong(i))
                         .as("index %d", i).isEqualTo(expected[i]);
             }
         }
@@ -143,7 +141,7 @@ class RunEndEncodingEncoderTest {
 
             assertThat(result.length()).isEqualTo(data.length);
             for (int i = 0; i < data.length; i++) {
-                assertThat(ArraySegments.of(result).get(PTypeIO.LE_LONG, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
+                assertThat(((io.github.dfa1.vortex.reader.array.LongArray) result).getLong(i)).as("index %d", i).isEqualTo(data[i]);
             }
         }
 
