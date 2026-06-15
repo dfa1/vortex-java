@@ -34,21 +34,6 @@ Dependency rule: `writer → core`, `reader → core`. Writer never depends on r
 Trunk-based development. PRs are fine but always squash or rebase — no merge commits.
 Keep commits small and `main` always green.
 
-## Commit conventions
-
-Conventional Commits format throughout. Use the **`[SONAR]` prefix** on commits whose
-primary motivation is to address SonarCloud findings (issues, hotspots, coverage gaps,
-or analysis config). It comes before the type, e.g.:
-
-```
-[SONAR] fix(cli): scan-based filter parser to avoid regex backtracking
-[SONAR] chore(performance): exclude module from analysis
-[SONAR] test(cli): cover ExitStatus + CountCommand + SchemaCommand
-```
-
-The prefix lets a `git log --grep '\[SONAR\]'` survey what tightening Sonar drove,
-and keeps non-Sonar history easy to scan when the dashboard isn't the focus.
-
 ## Commands
 
 Never use `mvn install` or `./mvwn install`.
