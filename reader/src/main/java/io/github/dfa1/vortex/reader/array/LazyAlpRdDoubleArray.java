@@ -19,7 +19,7 @@ import java.util.function.DoubleConsumer;
 /// @param dtype            logical element type
 /// @param length           total logical row count
 /// @param dict             small u16 dictionary lookup table (length typically ≤ 16)
-/// @param rightBitWidth    bit width of the right payload
+/// @param rightBitWidth    a bit width of the right payload
 /// @param leftArr          per-row u16 dict codes
 /// @param rightArr         per-row u64 right payloads (raw bits)
 /// @param patchIndices     sorted absolute indices of patched rows (or {@code null} when no patches)
@@ -43,8 +43,7 @@ public record LazyAlpRdDoubleArray(
 
     @Override
     public void forEachDouble(DoubleConsumer c) {
-        long n = length;
-        for (long i = 0; i < n; i++) {
+        for (long i = 0; i < length; i++) {
             c.accept(getDouble(i));
         }
     }
@@ -52,8 +51,7 @@ public record LazyAlpRdDoubleArray(
     @Override
     public double fold(double identity, DoubleBinaryOperator op) {
         double acc = identity;
-        long n = length;
-        for (long i = 0; i < n; i++) {
+        for (long i = 0; i < length; i++) {
             acc = op.applyAsDouble(acc, getDouble(i));
         }
         return acc;

@@ -91,6 +91,7 @@ public final class AlpRdEncodingDecoder implements EncodingDecoder {
 
     /// Decoded patches: sorted absolute indices (as a typed Array for in-place lookup)
     /// plus the actual left u16 values pulled into a short[].
+    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     private record Patches(Array indices, short[] leftValues, long offset) {
         static final Patches EMPTY = new Patches(null, new short[0], 0L);
     }

@@ -64,15 +64,16 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
         }
 
         // Per-stream encoded ANS state. Used for both single-stream (Classic) and dual-stream (IntMult) modes.
-        @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
+        @SuppressWarnings("java:S6218")
+        // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
         private record StreamData(
-                int[] symbols,
-                long[] offsets,
-                int[] binOffsetBits,
-                int ansSizeLog,
-                long[][] batchBits,
-                int[][] batchNumBits,
-                int[] initialStateIdxs
+            int[] symbols,
+            long[] offsets,
+            int[] binOffsetBits,
+            int ansSizeLog,
+            long[][] batchBits,
+            int[][] batchNumBits,
+            int[] initialStateIdxs
         ) {
         }
 
@@ -83,7 +84,7 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             int n = allLatents.length;
 
             if (n == 0) {
-                return encodeEmpty(ctx.arena());
+                return encodeEmpty();
             }
 
             List<MemorySegment> chunkMetas = new ArrayList<>();
@@ -178,12 +179,12 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
                 PcoAnsEncoder ansEncoder = PcoAnsEncoder.build(deltaQ.sizeLog(), deltaQ.weights());
                 chunkMetaSeg = buildClassicChunkMeta(dtypeSize, deltaBins, deltaQ, 1, 1, arena);
                 pageSeg = buildClassicPage(deltas, toSortKeys(deltas), deltaBins,
-                        deltaQ.sizeLog(), ansEncoder, dtypeSize, latents[0], true, arena);
+                    deltaQ.sizeLog(), ansEncoder, dtypeSize, latents[0], true, arena);
             } else {
                 PcoAnsEncoder ansEncoder = PcoAnsEncoder.build(noOpQ.sizeLog(), noOpQ.weights());
                 chunkMetaSeg = buildClassicChunkMeta(dtypeSize, noOpBins, noOpQ, 0, 0, arena);
                 pageSeg = buildClassicPage(latents, sortKeys, noOpBins,
-                        noOpQ.sizeLog(), ansEncoder, dtypeSize, 0L, false, arena);
+                    noOpQ.sizeLog(), ansEncoder, dtypeSize, 0L, false, arena);
             }
 
             return new ChunkResult(chunkMetaSeg, pageSeg, n);
@@ -194,7 +195,6 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
         // Returns null if IntMult fails to actually beat Classic after full bin optimization.
         private static ChunkResult tryEncodeIntMult(long[] latents, long base, int dtypeSize, Arena arena) {
             int n = latents.length;
-            long mask = typeMask(dtypeSize);
             long[] mults = new long[n];
             long[] adjs = new long[n];
             for (int i = 0; i < n; i++) {
@@ -233,9 +233,9 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
 
             MemorySegment chunkMetaSeg = buildIntMultChunkMeta(dtypeSize, base, multBins, multQ, adjBins, adjQ, arena);
             MemorySegment pageSeg = buildIntMultPage(
-                    mults, multSortKeys, multBins, multQ.sizeLog(), multAnsEncoder,
-                    adjs, adjSortKeys, adjBins, adjQ.sizeLog(), adjAnsEncoder,
-                    arena);
+                mults, multSortKeys, multBins, multQ.sizeLog(), multAnsEncoder,
+                adjSortKeys, adjBins, adjQ.sizeLog(), adjAnsEncoder,
+                arena);
             return new ChunkResult(chunkMetaSeg, pageSeg, n);
         }
 
@@ -280,7 +280,7 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
                     targetEnd++;
                 }
                 int end = Math.min(targetEnd, n);
-                bins.add(new PcoHistBin(sortedKeys[start], sortedKeys[end - 1], end - start));
+                bins.add(new PcoHistBin(sortedKeys[start], sortedKeys[end - 1], (long) end - start));
                 start = end;
             }
             return bins;
@@ -289,8 +289,8 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
         // ── Classic chunk meta ────────────────────────────────────────────────
 
         private static MemorySegment buildClassicChunkMeta(
-                int dtypeSize, List<PcoBinOptimizer.Bin> bins, PcoWeightQuantizer.Result qw,
-                int deltaVariant, int deltaOrder, Arena arena) {
+            int dtypeSize, List<PcoBinOptimizer.Bin> bins, PcoWeightQuantizer.Result qw,
+            int deltaVariant, int deltaOrder, Arena arena) {
             int ansSizeLog = qw.sizeLog();
             int[] weights = qw.weights();
             LeBitWriter w = new LeBitWriter(64);
@@ -316,10 +316,10 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
         // ── IntMult chunk meta ────────────────────────────────────────────────
 
         private static MemorySegment buildIntMultChunkMeta(
-                int dtypeSize, long base,
-                List<PcoBinOptimizer.Bin> primaryBins, PcoWeightQuantizer.Result primaryQ,
-                List<PcoBinOptimizer.Bin> secondaryBins, PcoWeightQuantizer.Result secondaryQ,
-                Arena arena) {
+            int dtypeSize, long base,
+            List<PcoBinOptimizer.Bin> primaryBins, PcoWeightQuantizer.Result primaryQ,
+            List<PcoBinOptimizer.Bin> secondaryBins, PcoWeightQuantizer.Result secondaryQ,
+            Arena arena) {
             int primaryAnsSizeLog = primaryQ.sizeLog();
             int[] primaryWeights = primaryQ.weights();
             int secondaryAnsSizeLog = secondaryQ.sizeLog();
@@ -358,10 +358,10 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
         // ── Classic page encoding ─────────────────────────────────────────────
 
         private static MemorySegment buildClassicPage(
-                long[] values, long[] valueSortKeys,
-                List<PcoBinOptimizer.Bin> bins, int ansSizeLog,
-                PcoAnsEncoder ansEncoder, int dtypeSize,
-                long moment, boolean hasMoment, Arena arena) {
+            long[] values, long[] valueSortKeys,
+            List<PcoBinOptimizer.Bin> bins, int ansSizeLog,
+            PcoAnsEncoder ansEncoder, int dtypeSize,
+            long moment, boolean hasMoment, Arena arena) {
 
             int n = values.length;
             StreamData stream = prepareStream(valueSortKeys, bins, ansSizeLog, ansEncoder);
@@ -387,11 +387,11 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
         // ── IntMult page encoding ─────────────────────────────────────────────
 
         private static MemorySegment buildIntMultPage(
-                long[] mults, long[] multSortKeys, List<PcoBinOptimizer.Bin> multBins,
-                int multAnsSizeLog, PcoAnsEncoder multAnsEncoder,
-                long[] adjs, long[] adjSortKeys, List<PcoBinOptimizer.Bin> adjBins,
-                int adjAnsSizeLog, PcoAnsEncoder adjAnsEncoder,
-                Arena arena) {
+            long[] mults, long[] multSortKeys, List<PcoBinOptimizer.Bin> multBins,
+            int multAnsSizeLog, PcoAnsEncoder multAnsEncoder,
+            long[] adjSortKeys, List<PcoBinOptimizer.Bin> adjBins,
+            int adjAnsSizeLog, PcoAnsEncoder adjAnsEncoder,
+            Arena arena) {
 
             int n = mults.length;
             StreamData primary = prepareStream(multSortKeys, multBins, multAnsSizeLog, multAnsEncoder);
@@ -428,7 +428,7 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
         // ── Stream preparation: ANS encode LIFO, collect bits per batch ──────
 
         private static StreamData prepareStream(
-                long[] sortKeys, List<PcoBinOptimizer.Bin> bins, int ansSizeLog, PcoAnsEncoder ansEncoder) {
+            long[] sortKeys, List<PcoBinOptimizer.Bin> bins, int ansSizeLog, PcoAnsEncoder ansEncoder) {
             int n = sortKeys.length;
             long[] binLowers = new long[bins.size()];
             int[] binOffsetBits = new int[bins.size()];
@@ -475,7 +475,7 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             }
 
             return new StreamData(symbols, offsets, binOffsetBits, ansSizeLog,
-                    batchBits, batchNumBits, initialStateIdxs);
+                batchBits, batchNumBits, initialStateIdxs);
         }
 
         private static long streamPayloadBits(StreamData s) {
@@ -564,7 +564,7 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
         // ── weight quantization ───────────────────────────────────────────────
 
         private static PcoWeightQuantizer.Result quantize(
-                List<PcoBinOptimizer.Bin> bins, int totalCount, int maxSizeLog) {
+            List<PcoBinOptimizer.Bin> bins, int totalCount, int maxSizeLog) {
             int[] counts = new int[bins.size()];
             for (int i = 0; i < counts.length; i++) {
                 counts[i] = bins.get(i).weight();
@@ -574,7 +574,7 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
 
         // ── metadata ─────────────────────────────────────────────────────────
 
-        private static EncodeResult encodeEmpty(Arena arena) {
+        private static EncodeResult encodeEmpty() {
             byte[] header = {PCO_FORMAT_MAJOR, PCO_FORMAT_MINOR};
             PcoMetadata meta = new PcoMetadata(header, List.of());
             ByteBuffer metaBuf = ByteBuffer.wrap(meta.encode());
@@ -644,8 +644,8 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
                     for (int i = 0; i < arr.length; i++) {
                         int bits = Float.floatToRawIntBits(arr[i]);
                         l[i] = (bits & 0x80000000) != 0
-                                ? (~bits) & 0xFFFFFFFFL
-                                : (bits ^ 0x80000000) & 0xFFFFFFFFL;
+                                   ? (~bits) & 0xFFFFFFFFL
+                                   : (bits ^ 0x80000000) & 0xFFFFFFFFL;
                     }
                     yield l;
                 }
