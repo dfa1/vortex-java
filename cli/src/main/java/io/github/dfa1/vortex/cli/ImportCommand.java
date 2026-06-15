@@ -7,29 +7,37 @@ import io.github.dfa1.vortex.parquet.ParquetImporter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 final class ImportCommand {
+
+    private record ParsedArgs(Path inputPath, Path outputPath, Character delimiter) {
+    }
 
     private ImportCommand() {
     }
 
     static int run(String[] args) {
-        if (args.length < 2 || args.length > 3) {
-            System.err.println("usage: import <file.csv|file.parquet> [out.vortex]");
+        ParsedArgs parsedArgs;
+        try {
+            parsedArgs = parseArgs(args);
+        } catch (IllegalArgumentException e) {
+            System.err.println(e.getMessage());
+            System.err.println("usage: import [--delimiter <char>] <file.csv|file.parquet> [out.vortex]");
             return ExitStatus.USAGE_ERROR;
         }
-        Path inputPath = Path.of(args[1]);
+        Path inputPath = parsedArgs.inputPath();
         if (!Files.exists(inputPath)) {
             System.err.println("file not found: " + inputPath);
             return ExitStatus.FILE_NOT_FOUND;
         }
-        Path vortexPath = args.length == 3 ? Path.of(args[2]) : deriveOutputPath(inputPath);
         try {
             String name = inputPath.getFileName().toString();
             if (name.endsWith(".parquet")) {
-                return runParquet(inputPath, vortexPath);
+                return runParquet(inputPath, parsedArgs.outputPath());
             } else {
-                return runCsv(inputPath, vortexPath);
+                return runCsv(inputPath, parsedArgs.outputPath(), parsedArgs.delimiter());
             }
         } catch (IOException e) {
             clearProgress();
@@ -38,9 +46,41 @@ final class ImportCommand {
         }
     }
 
-    private static int runCsv(Path csvPath, Path vortexPath) throws IOException {
+    private static ParsedArgs parseArgs(String[] args) {
+        if (args.length < 2) {
+            throw new IllegalArgumentException("missing import arguments");
+        }
+        List<String> positional = new ArrayList<>();
+        Character delimiter = null;
+        for (int i = 1; i < args.length; i++) {
+            String arg = args[i];
+            if ("--delimiter".equals(arg)) {
+                if (i + 1 >= args.length) {
+                    throw new IllegalArgumentException("missing value for --delimiter");
+                }
+                String value = args[++i];
+                if (value.length() != 1) {
+                    throw new IllegalArgumentException("--delimiter must be exactly one character");
+                }
+                delimiter = value.charAt(0);
+                continue;
+            }
+            positional.add(arg);
+        }
+        if (positional.size() < 1 || positional.size() > 2) {
+            throw new IllegalArgumentException("expected input path and optional output path");
+        }
+        Path inputPath = Path.of(positional.getFirst());
+        Path outputPath = positional.size() == 2 ? Path.of(positional.get(1)) : deriveOutputPath(inputPath);
+        return new ParsedArgs(inputPath, outputPath, delimiter);
+    }
+
+    private static int runCsv(Path csvPath, Path vortexPath, Character delimiter) throws IOException {
         ImportOptions options = ImportOptions.defaults()
                                         .withProgressListener(ImportCommand::renderProgress);
+        if (delimiter != null) {
+            options = options.withDelimiter(delimiter);
+        }
         CsvImporter.importCsv(csvPath, vortexPath, options);
         clearProgress();
         printResult(csvPath, vortexPath, options.writeOptions().allowedCascading());

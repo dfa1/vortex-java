@@ -22,6 +22,10 @@ public record ImportOptions(
         return new ImportOptions(delimiter, chunkSize, hasHeader, overrideSchema, progressListener, writeOptions);
     }
 
+    public ImportOptions withDelimiter(char separator) {
+        return new ImportOptions(separator, chunkSize, hasHeader, schema, progressListener, writeOptions);
+    }
+
     public ImportOptions withProgressListener(ProgressListener listener) {
         return new ImportOptions(delimiter, chunkSize, hasHeader, schema, listener, writeOptions);
     }
