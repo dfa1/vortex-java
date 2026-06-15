@@ -135,7 +135,7 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         for (int i = 0; i < dictSize; i++) {
             MemorySegment.copy(MemorySegment.ofArray(dictByteArrays[i]), 0, dictBytesBuf, pos, dictByteArrays[i].length);
             pos += dictByteArrays[i].length;
-            dictOffsetsBuf.setAtIndex(PTypeIO.LE_LONG, i + 1, pos);
+            dictOffsetsBuf.setAtIndex(PTypeIO.LE_LONG, (long) i + 1, pos);
         }
 
         MemorySegment codesBuf = arena.allocate((long) n * codeBytes);

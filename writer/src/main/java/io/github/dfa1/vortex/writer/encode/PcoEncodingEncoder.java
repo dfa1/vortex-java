@@ -143,10 +143,10 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
 
             long[] sortedKeys = sortKeys.clone();
             Arrays.sort(sortedKeys);
-            int nBinsLog = n == 1 ? 0 : Math.min(N_BINS_LOG, 64 - Long.numberOfLeadingZeros(n - 1));
+            int nBinsLog = n == 1 ? 0 : Math.min(N_BINS_LOG, 64 - Long.numberOfLeadingZeros((long) n - 1));
             List<PcoHistBin> histBins = buildHistogram(sortedKeys, n, nBinsLog);
 
-            int nLogCeil = n <= 1 ? 0 : 64 - Long.numberOfLeadingZeros(n - 1);
+            int nLogCeil = n <= 1 ? 0 : 64 - Long.numberOfLeadingZeros((long) n - 1);
             int maxSizeLog = Math.min(Math.min(nBinsLog + 2, 12), nLogCeil);
 
             List<PcoBinOptimizer.Bin> noOpBins = PcoBinOptimizer.optimize(histBins, maxSizeLog, dtypeSize);
@@ -162,7 +162,7 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
                 deltas = consecutiveDeltas(latents, dtypeSize);
                 long[] deltaSorted = toSortKeys(deltas).clone();
                 Arrays.sort(deltaSorted);
-                int dNBinsLog = Math.min(N_BINS_LOG, 64 - Long.numberOfLeadingZeros(n - 2));
+                int dNBinsLog = Math.min(N_BINS_LOG, 64 - Long.numberOfLeadingZeros((long) n - 2));
                 List<PcoHistBin> deltaHist = buildHistogram(deltaSorted, n - 1, dNBinsLog);
                 int dMaxSizeLog = Math.min(Math.min(dNBinsLog + 2, 12), nLogCeil);
                 deltaBins = PcoBinOptimizer.optimize(deltaHist, dMaxSizeLog, dtypeSize);
@@ -205,8 +205,8 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             }
 
             // Train bins for both streams independently.
-            int nLogCeil = n <= 1 ? 0 : 64 - Long.numberOfLeadingZeros(n - 1);
-            int nBinsLog = n == 1 ? 0 : Math.min(N_BINS_LOG, 64 - Long.numberOfLeadingZeros(n - 1));
+            int nLogCeil = n <= 1 ? 0 : 64 - Long.numberOfLeadingZeros((long) n - 1);
+            int nBinsLog = n == 1 ? 0 : Math.min(N_BINS_LOG, 64 - Long.numberOfLeadingZeros((long) n - 1));
             int maxSizeLog = Math.min(Math.min(nBinsLog + 2, 12), nLogCeil);
 
             long[] multSortKeys = toSortKeys(mults);
@@ -248,7 +248,7 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             long[] sortKeys = toSortKeys(latents);
             long[] sorted = sortKeys.clone();
             Arrays.sort(sorted);
-            int nBinsLog = n == 1 ? 0 : Math.min(N_BINS_LOG, 64 - Long.numberOfLeadingZeros(n - 1));
+            int nBinsLog = n == 1 ? 0 : Math.min(N_BINS_LOG, 64 - Long.numberOfLeadingZeros((long) n - 1));
             List<PcoHistBin> hist = buildHistogram(sorted, n, nBinsLog);
             List<PcoBinOptimizer.Bin> bins = PcoBinOptimizer.optimize(hist, maxSizeLog, dtypeSize);
             float noOpCost = dpCost(bins, n);
@@ -259,7 +259,7 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             long[] deltas = consecutiveDeltas(latents, dtypeSize);
             long[] dSorted = toSortKeys(deltas).clone();
             Arrays.sort(dSorted);
-            int dNBinsLog = Math.min(N_BINS_LOG, 64 - Long.numberOfLeadingZeros(n - 2));
+            int dNBinsLog = Math.min(N_BINS_LOG, 64 - Long.numberOfLeadingZeros((long) n - 2));
             List<PcoHistBin> dHist = buildHistogram(dSorted, n - 1, dNBinsLog);
             List<PcoBinOptimizer.Bin> dBins = PcoBinOptimizer.optimize(dHist, maxSizeLog, dtypeSize);
             float deltaCost = dtypeSize + dpCost(dBins, n - 1);
@@ -307,7 +307,7 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             int offsetBitsWidth = bitsToEncodeOffsetBits(dtypeSize);
             for (int i = 0; i < bins.size(); i++) {
                 PcoBinOptimizer.Bin bin = bins.get(i);
-                w.writeBits(weights[i] - 1, ansSizeLog);
+                w.writeBits((long) weights[i] - 1, ansSizeLog);
                 w.writeBits(bin.lowerLatent(), dtypeSize);
                 w.writeBits(bin.offsetBits(), offsetBitsWidth);
             }
@@ -339,7 +339,7 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             w.writeBits(primaryBins.size(), 15);
             for (int i = 0; i < primaryBins.size(); i++) {
                 PcoBinOptimizer.Bin bin = primaryBins.get(i);
-                w.writeBits(primaryWeights[i] - 1, primaryAnsSizeLog);
+                w.writeBits((long) primaryWeights[i] - 1, primaryAnsSizeLog);
                 w.writeBits(bin.lowerLatent(), dtypeSize);
                 w.writeBits(bin.offsetBits(), offsetBitsWidth);
             }
@@ -349,7 +349,7 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             w.writeBits(secondaryBins.size(), 15);
             for (int i = 0; i < secondaryBins.size(); i++) {
                 PcoBinOptimizer.Bin bin = secondaryBins.get(i);
-                w.writeBits(secondaryWeights[i] - 1, secondaryAnsSizeLog);
+                w.writeBits((long) secondaryWeights[i] - 1, secondaryAnsSizeLog);
                 w.writeBits(bin.lowerLatent(), dtypeSize);
                 w.writeBits(bin.offsetBits(), offsetBitsWidth);
             }

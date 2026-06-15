@@ -290,8 +290,8 @@ public final class PcoEncodingDecoder implements EncodingDecoder {
 
         while (nRemaining > 0) {
             int batchN = Math.min(nRemaining, PcoTansDecoder.BATCH_N);
-            int primaryPreDeltaN = Math.clamp(nRemaining - deltaOrder, 0, batchN);
-            int secondaryPreDeltaN = Math.clamp(nRemaining - secondaryDeltaOrder, 0, batchN);
+            int primaryPreDeltaN = (int) Math.clamp((long) nRemaining - deltaOrder, 0, batchN);
+            int secondaryPreDeltaN = (int) Math.clamp((long) nRemaining - secondaryDeltaOrder, 0, batchN);
 
             primaryTans.decodeBatch(pageReader, primaryStateIdxs, primaryPreDeltaN,
                     batchLowersP, batchOffsetBitsP, rawMults, primaryPos);

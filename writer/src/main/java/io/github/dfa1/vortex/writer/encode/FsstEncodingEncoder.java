@@ -110,7 +110,7 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
         codesOffBuf.setAtIndex(PTypeIO.LE_INT, 0, 0);
         for (int i = 0; i < n; i++) {
             off += compressed[i].length;
-            codesOffBuf.setAtIndex(PTypeIO.LE_INT, i + 1, (int) off);
+            codesOffBuf.setAtIndex(PTypeIO.LE_INT, (long) i + 1, (int) off);
         }
 
         byte[] metaBytes = new FSSTMetadata(

@@ -80,7 +80,7 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         double[] sample = new double[sampleLen];
         long stride = Math.max(1, (long) n / sampleLen);
         for (int i = 0; i < sampleLen; i++) {
-            sample[i] = values[(int) Math.min(i * stride, n - 1)];
+            sample[i] = values[(int) Math.min(i * stride, (long) n - 1)];
         }
 
         int bestExpE = 0;
@@ -265,7 +265,7 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         float[] sample = new float[sampleLen];
         long stride = Math.max(1, (long) n / sampleLen);
         for (int i = 0; i < sampleLen; i++) {
-            sample[i] = values[(int) Math.min(i * stride, n - 1)];
+            sample[i] = values[(int) Math.min(i * stride, (long) n - 1)];
         }
 
         int bestExpE = 0;

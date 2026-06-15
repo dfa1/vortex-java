@@ -51,7 +51,7 @@ public final class VarBinEncodingEncoder implements EncodingEncoder {
         for (int i = 0; i < n; i++) {
             MemorySegment.copy(MemorySegment.ofArray(byteArrays[i]), 0, bytesBuf, pos, byteArrays[i].length);
             pos += byteArrays[i].length;
-            offsetsBuf.setAtIndex(PTypeIO.LE_LONG, i + 1, pos);
+            offsetsBuf.setAtIndex(PTypeIO.LE_LONG, (long) i + 1, pos);
         }
 
         byte[] metaBytes = new VarBinMetadata(io.github.dfa1.vortex.proto.PType.fromValue(PType.I64.ordinal())).encode();

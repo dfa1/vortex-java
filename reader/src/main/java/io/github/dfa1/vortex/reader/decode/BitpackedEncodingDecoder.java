@@ -128,7 +128,7 @@ public final class BitpackedEncodingDecoder implements EncodingDecoder {
             nextWordByteBase[row] = rem > 0 ? (long) lanes * nextWord : 0L;
             int o = row / 8;
             int s = row % 8;
-            outRowByteOff[row] = FL_ORDER[o] * 16 + s * 128;
+            outRowByteOff[row] = (long) FL_ORDER[o] * 16 + (long) s * 128;
         }
 
         long blockByteOff = 0L;

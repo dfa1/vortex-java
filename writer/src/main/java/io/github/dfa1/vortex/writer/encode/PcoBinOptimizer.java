@@ -38,7 +38,7 @@ final class PcoBinOptimizer {
             return List.of();
         }
         int n = histBins.size();
-        float binMetaCost = ansSizeLog + dtypeSize + bitsToEncodeOffsetBits(dtypeSize);
+        float binMetaCost = (float) ansSizeLog + dtypeSize + bitsToEncodeOffsetBits(dtypeSize);
 
         long total = 0;
         for (PcoHistBin b : histBins) {
