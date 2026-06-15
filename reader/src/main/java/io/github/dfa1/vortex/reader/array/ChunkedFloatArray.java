@@ -13,6 +13,7 @@ import java.util.function.DoubleBinaryOperator;
 /// @param length   total logical row count
 /// @param children chunk arrays
 /// @param offsets  cumulative row counts
+@SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record ChunkedFloatArray(DType dtype, long length, FloatArray[] children, long[] offsets) implements FloatArray {
 
     /// Builds a {@link ChunkedFloatArray}.

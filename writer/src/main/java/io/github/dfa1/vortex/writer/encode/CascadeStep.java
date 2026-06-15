@@ -21,6 +21,7 @@ import java.util.List;
 /// @param statsMin     serialised minimum stat bytes, or {@code null}
 /// @param statsMax     serialised maximum stat bytes, or {@code null}
 /// @param applicable   {@code false} if this encoding cannot handle the input data
+@SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record CascadeStep(
         EncodeNode partialRoot,
         List<MemorySegment> ownedBuffers,

@@ -9,6 +9,7 @@ import java.util.List;
 ///
 /// @param chunks       list of raw chunk data in the format the inner encoding expects
 /// @param chunkLengths row count for each chunk; must have the same length as {@code chunks}
+@SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record ChunkedData(List<Object> chunks, long[] chunkLengths) {
     /// Validates that {@code chunks} and {@code chunkLengths} have the same size,
     /// then makes defensive copies of both.

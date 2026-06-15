@@ -11,6 +11,7 @@ import java.util.List;
 /// @param buffers  flat list of data buffers in the order referenced by {@code rootNode}
 /// @param statsMin serialised minimum value bytes for zone-map pruning, or {@code null}
 /// @param statsMax serialised maximum value bytes for zone-map pruning, or {@code null}
+@SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record EncodeResult(
         EncodeNode rootNode,
         List<MemorySegment> buffers,

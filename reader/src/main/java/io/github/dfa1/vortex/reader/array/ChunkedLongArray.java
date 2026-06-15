@@ -23,6 +23,7 @@ import java.util.function.LongConsumer;
 /// @param children chunk arrays in scan order
 /// @param offsets  cumulative row counts; {@code offsets[i] = sum of children[0..i).length()}
 ///                 with {@code offsets[0] = 0} and {@code offsets[children.length] = length}
+@SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record ChunkedLongArray(DType dtype, long length, LongArray[] children, long[] offsets) implements LongArray {
 
     /// Builds a {@link ChunkedLongArray} from a list of chunk arrays. Nested

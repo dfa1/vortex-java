@@ -19,5 +19,6 @@ package io.github.dfa1.vortex.writer.encode;
 ///
 /// @param values   packed values array; concrete type depends on the column dtype
 /// @param validity per-row validity bitmap, parallel to {@code values}
+@SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record NullableData(Object values, boolean[] validity) {
 }

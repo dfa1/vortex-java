@@ -14,6 +14,7 @@ import java.util.function.IntConsumer;
 /// @param length   total logical row count
 /// @param children chunk arrays
 /// @param offsets  cumulative row counts
+@SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record ChunkedIntArray(DType dtype, long length, IntArray[] children, long[] offsets) implements IntArray {
 
     /// Builds a {@link ChunkedIntArray}.

@@ -10,6 +10,7 @@ import java.nio.ByteBuffer;
 /// @param metadata      encoding-specific metadata bytes, or {@code null}
 /// @param children      child nodes
 /// @param bufferIndices segment buffer indices
+@SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record KnownArrayNode(
         EncodingId encodingId,
         ByteBuffer metadata,

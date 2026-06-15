@@ -776,6 +776,7 @@ public final class PcoEncodingDecoder implements EncodingDecoder {
         }
     }
 
+    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     private record PcoChunkMeta(int mode, long base, int quantizeK, long[] dict,
                                 int deltaVariant, int deltaOrder, boolean secondaryUsesDelta,
                                 int windowNLog, int stateNLog, int deltaAnsSizeLog, PcoBin[] deltaBins,

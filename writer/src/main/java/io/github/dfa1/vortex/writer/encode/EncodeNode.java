@@ -11,6 +11,7 @@ import java.nio.ByteBuffer;
 /// @param metadata      optional encoding-specific metadata bytes, or {@code null}
 /// @param children      child encode nodes (empty for leaf nodes)
 /// @param bufferIndices indices into the flat buffer list for data owned by this node
+@SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record EncodeNode(
         EncodingId encodingId,
         ByteBuffer metadata,

@@ -316,9 +316,11 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
         return new EncodeResult(root, List.copyOf(allBuffers), null, null);
     }
 
+    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     private record Dictionary64(short[] dict, int rightBitWidth) {
     }
 
+    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     private record Dictionary32(short[] dict, int rightBitWidth) {
     }
 }

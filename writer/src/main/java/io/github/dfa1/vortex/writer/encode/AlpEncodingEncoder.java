@@ -416,6 +416,7 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         return ScalarValue.ofF32Value(v).encode();
     }
 
+    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     private record AlpF64Data(int expE, int expF, long[] encodedArr,
                               List<Integer> patchIndices, List<Double> patchValues,
                               byte[] statsMin, byte[] statsMax) {

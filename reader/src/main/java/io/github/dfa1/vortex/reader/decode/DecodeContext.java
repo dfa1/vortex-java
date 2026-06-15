@@ -21,6 +21,7 @@ import java.nio.ByteBuffer;
 /// @param segmentBuffers all segment buffers for the current flat segment, indexed by segment position
 /// @param registry       read registry used for recursive child decoding
 /// @param arena          allocator for decode output; lifetime matches the current chunk epoch
+@SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record DecodeContext(
         ArrayNode node,
         DType dtype,

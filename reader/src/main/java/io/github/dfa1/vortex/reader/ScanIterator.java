@@ -776,6 +776,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
 
     // ── Internal record ───────────────────────────────────────────────────────
 
+    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     private record ChunkSpec(long rowCount, String[] columnNames, Layout[] columnLayouts) {
         Layout layoutFor(String col) {
             for (int i = 0; i < columnNames.length; i++) {

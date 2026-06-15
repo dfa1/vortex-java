@@ -20,6 +20,7 @@ import java.nio.ByteBuffer;
 /// @param metadata   raw encoding metadata bytes, or {@code null}
 /// @param buffers    raw data buffers owned by this node
 /// @param children   decoded child arrays (also wrapped as unknown)
+@SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record UnknownArray(
         String encodingId,
         DType dtype,

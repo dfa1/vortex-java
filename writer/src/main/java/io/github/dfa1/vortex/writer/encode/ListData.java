@@ -9,5 +9,6 @@ package io.github.dfa1.vortex.writer.encode;
 /// @param elements flat array of all concatenated inner values
 /// @param offsets  offset array of length {@code outerLen + 1}; {@code offsets[0]} must be 0
 /// @param outerLen number of outer list elements
+@SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record ListData(Object elements, long[] offsets, long outerLen) {
 }

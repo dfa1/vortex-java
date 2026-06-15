@@ -291,6 +291,7 @@ public final class VortexHttpReader implements VortexHandle {
         arena.close();
     }
 
+    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     private record TailFetch(byte[] bytes, long start, long fileSize) {
     }
 }

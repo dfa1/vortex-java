@@ -14,6 +14,7 @@ import java.util.function.LongBinaryOperator;
 /// @param length   total logical row count
 /// @param children chunk arrays in scan order
 /// @param offsets  cumulative row counts; length = {@code children.length + 1}
+@SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record ChunkedShortArray(DType dtype, long length, ShortArray[] children, long[] offsets) implements ShortArray {
 
     /// Builds a {@link ChunkedShortArray}.
