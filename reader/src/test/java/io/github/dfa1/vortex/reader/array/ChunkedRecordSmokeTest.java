@@ -177,6 +177,142 @@ class ChunkedRecordSmokeTest {
         }
     }
 
+    @Nested
+    class ChunkedShort {
+
+        private static final DType I16 = new DType.Primitive(PType.I16, false);
+
+        @Test
+        void getShortDispatchesAcrossChunks() {
+            try (Arena arena = Arena.ofConfined()) {
+                ShortArray c0 = shortChunk(arena, (short) 10, (short) 11);
+                ShortArray c1 = shortChunk(arena, (short) 20, (short) 21);
+                ChunkedShortArray sut = ChunkedShortArray.of(I16, 4, List.of(c0, c1));
+
+                assertThat(sut.getShort(0)).isEqualTo((short) 10);
+                assertThat(sut.getShort(2)).isEqualTo((short) 20);
+                assertThat(sut.getShort(3)).isEqualTo((short) 21);
+            }
+        }
+
+        @Test
+        void getIntWidens() {
+            try (Arena arena = Arena.ofConfined()) {
+                ShortArray c0 = shortChunk(arena, (short) -1, (short) 2);
+                ShortArray c1 = shortChunk(arena, (short) 3);
+                ChunkedShortArray sut = ChunkedShortArray.of(I16, 3, List.of(c0, c1));
+
+                // I16 is signed - sign-extends.
+                assertThat(sut.getInt(0)).isEqualTo(-1);
+                assertThat(sut.getInt(2)).isEqualTo(3);
+            }
+        }
+
+        @Test
+        void foldIteratesChildren() {
+            try (Arena arena = Arena.ofConfined()) {
+                ShortArray c0 = shortChunk(arena, (short) 1, (short) 2);
+                ShortArray c1 = shortChunk(arena, (short) 3);
+                ChunkedShortArray sut = ChunkedShortArray.of(I16, 3, List.of(c0, c1));
+
+                long sum = sut.fold(0L, Long::sum);
+
+                assertThat(sum).isEqualTo(6L);
+            }
+        }
+
+        @Test
+        void emptyRejected() {
+            assertThatThrownBy(() -> ChunkedShortArray.of(I16, 0, List.of()))
+                    .isInstanceOf(VortexException.class);
+        }
+    }
+
+    @Nested
+    class ChunkedByte {
+
+        private static final DType I8 = new DType.Primitive(PType.I8, false);
+
+        @Test
+        void getByteDispatchesAcrossChunks() {
+            try (Arena arena = Arena.ofConfined()) {
+                ByteArray c0 = byteChunk(arena, (byte) 1, (byte) 2);
+                ByteArray c1 = byteChunk(arena, (byte) 3, (byte) 4);
+                ChunkedByteArray sut = ChunkedByteArray.of(I8, 4, List.of(c0, c1));
+
+                assertThat(sut.getByte(0)).isEqualTo((byte) 1);
+                assertThat(sut.getByte(2)).isEqualTo((byte) 3);
+                assertThat(sut.getByte(3)).isEqualTo((byte) 4);
+            }
+        }
+
+        @Test
+        void foldIteratesChildren() {
+            try (Arena arena = Arena.ofConfined()) {
+                ByteArray c0 = byteChunk(arena, (byte) 10, (byte) 20);
+                ByteArray c1 = byteChunk(arena, (byte) 30);
+                ChunkedByteArray sut = ChunkedByteArray.of(I8, 3, List.of(c0, c1));
+
+                long sum = sut.fold(0L, Long::sum);
+
+                assertThat(sum).isEqualTo(60L);
+            }
+        }
+
+        @Test
+        void rowMismatchRejected() {
+            try (Arena arena = Arena.ofConfined()) {
+                ByteArray c0 = byteChunk(arena, (byte) 1, (byte) 2);
+                assertThatThrownBy(() -> ChunkedByteArray.of(I8, 99, List.of(c0)))
+                        .isInstanceOf(VortexException.class);
+            }
+        }
+    }
+
+    @Nested
+    class ChunkedBool {
+
+        private static final DType BOOL = new DType.Bool(false);
+
+        @Test
+        void getBooleanDispatchesAcrossChunks() {
+            try (Arena arena = Arena.ofConfined()) {
+                // chunk 0: true, false, true (3 bits, fits 1 byte)
+                BoolArray c0 = boolChunk(arena, true, false, true);
+                // chunk 1: false, true (2 bits)
+                BoolArray c1 = boolChunk(arena, false, true);
+                ChunkedBoolArray sut = ChunkedBoolArray.of(BOOL, 5, List.of(c0, c1));
+
+                assertThat(sut.getBoolean(0)).isTrue();
+                assertThat(sut.getBoolean(1)).isFalse();
+                assertThat(sut.getBoolean(2)).isTrue();
+                assertThat(sut.getBoolean(3)).isFalse();
+                assertThat(sut.getBoolean(4)).isTrue();
+            }
+        }
+
+        @Test
+        void nestedFlattens() {
+            try (Arena arena = Arena.ofConfined()) {
+                BoolArray leaf0 = boolChunk(arena, true);
+                BoolArray leaf1 = boolChunk(arena, false);
+                ChunkedBoolArray nested = ChunkedBoolArray.of(BOOL, 2, List.of(leaf0, leaf1));
+                BoolArray leaf2 = boolChunk(arena, true);
+
+                ChunkedBoolArray sut = ChunkedBoolArray.of(BOOL, 3, List.of(nested, leaf2));
+
+                assertThat(sut.children()).hasSize(3);
+                assertThat(sut.getBoolean(2)).isTrue();
+            }
+        }
+
+        @Test
+        void emptyRejected() {
+            assertThatThrownBy(() -> ChunkedBoolArray.of(BOOL, 0, List.of()))
+                    .isInstanceOf(VortexException.class);
+        }
+    }
+
     private static LongArray longChunk(Arena arena, long... values) {
         MemorySegment seg = arena.allocate(values.length * 8L);
         for (int i = 0; i < values.length; i++) {
@@ -207,5 +343,35 @@ class ChunkedRecordSmokeTest {
             seg.setAtIndex(java.lang.foreign.ValueLayout.JAVA_FLOAT, i, values[i]);
         }
         return new MaterializedFloatArray(F32, values.length, seg.asReadOnly());
+    }
+
+    private static ShortArray shortChunk(Arena arena, short... values) {
+        MemorySegment seg = arena.allocate(values.length * 2L);
+        for (int i = 0; i < values.length; i++) {
+            seg.setAtIndex(java.lang.foreign.ValueLayout.JAVA_SHORT, i, values[i]);
+        }
+        return new MaterializedShortArray(new DType.Primitive(PType.I16, false), values.length, seg.asReadOnly());
+    }
+
+    private static ByteArray byteChunk(Arena arena, byte... values) {
+        MemorySegment seg = arena.allocate(values.length);
+        for (int i = 0; i < values.length; i++) {
+            seg.set(java.lang.foreign.ValueLayout.JAVA_BYTE, i, values[i]);
+        }
+        return new MaterializedByteArray(new DType.Primitive(PType.I8, false), values.length, seg.asReadOnly());
+    }
+
+    private static BoolArray boolChunk(Arena arena, boolean... values) {
+        int nBytes = (values.length + 7) / 8;
+        MemorySegment seg = arena.allocate(nBytes);
+        for (int i = 0; i < values.length; i++) {
+            if (values[i]) {
+                int byteIdx = i >>> 3;
+                int bitIdx = i & 7;
+                byte cur = seg.get(java.lang.foreign.ValueLayout.JAVA_BYTE, byteIdx);
+                seg.set(java.lang.foreign.ValueLayout.JAVA_BYTE, byteIdx, (byte) (cur | (1 << bitIdx)));
+            }
+        }
+        return new MaterializedBoolArray(new DType.Bool(false), values.length, seg.asReadOnly());
     }
 }

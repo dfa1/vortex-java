@@ -252,7 +252,19 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         if (arr.length() <= rows) {
             return arr;
         }
+        // Chunked* cases must precede the LongArray/IntArray/etc catch-alls below — a
+        // ChunkedLongArray IS a LongArray, but slicing it via ArraySegments.of would
+        // materialise the entire column before slicing (defeating the zero-copy win
+        // we just added). Instead, keep the prefix children intact and recursively
+        // truncate the boundary child.
         return switch (arr) {
+            case ChunkedLongArray a -> truncateChunkedLong(a, rows, arena);
+            case ChunkedIntArray a -> truncateChunkedInt(a, rows, arena);
+            case ChunkedDoubleArray a -> truncateChunkedDouble(a, rows, arena);
+            case ChunkedFloatArray a -> truncateChunkedFloat(a, rows, arena);
+            case ChunkedShortArray a -> truncateChunkedShort(a, rows, arena);
+            case ChunkedByteArray a -> truncateChunkedByte(a, rows, arena);
+            case ChunkedBoolArray a -> truncateChunkedBool(a, rows, arena);
             case LongArray a ->
                     new MaterializedLongArray(a.dtype(), rows, ArraySegments.of(a, arena).asSlice(0, rows * Long.BYTES));
             case IntArray a ->
@@ -279,6 +291,63 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             default ->
                     throw new VortexException("limit: truncation not supported for " + arr.getClass().getSimpleName());
         };
+    }
+
+    /// Truncates a {@code ChunkedXxxArray} by keeping full children that fit within
+    /// {@code rows} and recursively truncating the boundary child. Avoids the
+    /// full-column materialisation that the {@link LongArray}/{@link IntArray}/etc.
+    /// catch-all cases would trigger via {@link ArraySegments#of(Array, SegmentAllocator)}.
+    private static Array truncateChunkedLong(ChunkedLongArray arr, long rows, SegmentAllocator arena) {
+        List<Array> kept = collectTruncatedChildren(arr.children(), arr.offsets(), rows, arena);
+        return ChunkedLongArray.of(arr.dtype(), rows, kept);
+    }
+
+    private static Array truncateChunkedInt(ChunkedIntArray arr, long rows, SegmentAllocator arena) {
+        List<Array> kept = collectTruncatedChildren(arr.children(), arr.offsets(), rows, arena);
+        return ChunkedIntArray.of(arr.dtype(), rows, kept);
+    }
+
+    private static Array truncateChunkedDouble(ChunkedDoubleArray arr, long rows, SegmentAllocator arena) {
+        List<Array> kept = collectTruncatedChildren(arr.children(), arr.offsets(), rows, arena);
+        return ChunkedDoubleArray.of(arr.dtype(), rows, kept);
+    }
+
+    private static Array truncateChunkedFloat(ChunkedFloatArray arr, long rows, SegmentAllocator arena) {
+        List<Array> kept = collectTruncatedChildren(arr.children(), arr.offsets(), rows, arena);
+        return ChunkedFloatArray.of(arr.dtype(), rows, kept);
+    }
+
+    private static Array truncateChunkedShort(ChunkedShortArray arr, long rows, SegmentAllocator arena) {
+        List<Array> kept = collectTruncatedChildren(arr.children(), arr.offsets(), rows, arena);
+        return ChunkedShortArray.of(arr.dtype(), rows, kept);
+    }
+
+    private static Array truncateChunkedByte(ChunkedByteArray arr, long rows, SegmentAllocator arena) {
+        List<Array> kept = collectTruncatedChildren(arr.children(), arr.offsets(), rows, arena);
+        return ChunkedByteArray.of(arr.dtype(), rows, kept);
+    }
+
+    private static Array truncateChunkedBool(ChunkedBoolArray arr, long rows, SegmentAllocator arena) {
+        List<Array> kept = collectTruncatedChildren(arr.children(), arr.offsets(), rows, arena);
+        return ChunkedBoolArray.of(arr.dtype(), rows, kept);
+    }
+
+    private static List<Array> collectTruncatedChildren(Array[] children, long[] offsets,
+                                                        long rows, SegmentAllocator arena) {
+        var kept = new ArrayList<Array>(children.length);
+        for (int i = 0; i < children.length; i++) {
+            long start = offsets[i];
+            long end = offsets[i + 1];
+            if (start >= rows) {
+                break;
+            }
+            if (end <= rows) {
+                kept.add(children[i]);
+            } else {
+                kept.add(truncateArray(children[i], rows - start, arena));
+            }
+        }
+        return kept;
     }
 
     @Override
