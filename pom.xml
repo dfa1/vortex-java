@@ -268,9 +268,17 @@
 						<!-- {@code @{argLine}} expands to the JaCoCo agent arguments set by
 						     {@code jacoco:prepare-agent} when the {@code coverage} profile is active.
 						     Without {@code @{argLine}} the JaCoCo agent isn't attached and no
-						     coverage data is collected. -->
-						<argLine>@{argLine} --sun-misc-unsafe-memory-access=allow --enable-native-access=ALL-UNNAMED</argLine>
+						     coverage data is collected.
+						     {@code net.bytebuddy:byte-buddy-agent:jar} is resolved to an absolute path
+						     by {@code maven-dependency-plugin:properties} (declared in build/plugins);
+						     loading it as a javaagent suppresses the Mockito self-attach warning. -->
+						<argLine>@{argLine} -javaagent:${net.bytebuddy:byte-buddy-agent:jar} --sun-misc-unsafe-memory-access=allow --enable-native-access=ALL-UNNAMED</argLine>
 					</configuration>
+				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-dependency-plugin</artifactId>
+					<version>3.7.0</version>
 				</plugin>
 				<plugin>
 					<groupId>org.codehaus.mojo</groupId>
@@ -357,6 +365,20 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-checkstyle-plugin</artifactId>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-dependency-plugin</artifactId>
+				<executions>
+					<execution>
+						<!-- Resolves ${net.bytebuddy:byte-buddy-agent:jar} so surefire can load it
+						     as a javaagent — eliminates the Mockito inline-mock-maker self-attach warning. -->
+						<id>locate-byte-buddy-agent</id>
+						<goals>
+							<goal>properties</goal>
+						</goals>
+					</execution>
+				</executions>
 			</plugin>
 		</plugins>
 	</build>
