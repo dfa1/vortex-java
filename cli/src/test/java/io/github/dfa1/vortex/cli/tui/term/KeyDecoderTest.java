@@ -118,6 +118,72 @@ class KeyDecoderTest {
         assertThat(((Key.Char) second).value()).isEqualTo('x');
     }
 
+    @Test
+    void next_ss3SequenceVariant_decodesArrows() throws IOException {
+        // Given — DEC keypad / VT100 application-cursor mode uses {@code ESC O A}
+        // instead of {@code ESC [ A}. KeyDecoder must accept both prefixes so the
+        // TUI works under tmux / screen / putty configurations that ship SS3.
+        assertThat(KeyDecoder.next(bytes(0x1B, 'O', 'A'))).isEqualTo(Key.ArrowUp.INSTANCE);
+        assertThat(KeyDecoder.next(bytes(0x1B, 'O', 'D'))).isEqualTo(Key.ArrowLeft.INSTANCE);
+        assertThat(KeyDecoder.next(bytes(0x1B, 'O', 'F'))).isEqualTo(Key.End.INSTANCE);
+        assertThat(KeyDecoder.next(bytes(0x1B, 'O', 'H'))).isEqualTo(Key.Home.INSTANCE);
+    }
+
+    @Test
+    void next_unknownEscapePrefix_yieldsEscape() throws IOException {
+        // Given — {@code ESC X} (X is neither '[' nor 'O') is not a recognised
+        // CSI or SS3 sequence. Must return Escape rather than try to decode further.
+        ByteArrayInputStream in = bytes(0x1B, 'X', 'A');
+
+        // When
+        Key sut = KeyDecoder.next(in);
+
+        // Then
+        assertThat(sut).isEqualTo(Key.Escape.INSTANCE);
+    }
+
+    @Test
+    void next_eofMidTildeSequence_returnsEof() throws IOException {
+        // Given — partial {@code ESC [ 5} with no trailing tilde / digit
+        ByteArrayInputStream in = bytes(0x1B, '[', '5');
+
+        // When
+        Key sut = KeyDecoder.next(in);
+
+        // Then — propagating Eof prevents the TUI from spinning on a truncated stream
+        assertThat(sut).isEqualTo(Key.Eof.INSTANCE);
+    }
+
+    @Test
+    void next_tildeWithoutTrailingTildeChar_yieldsEscape() throws IOException {
+        // Given — {@code ESC [ 5 x}: digit followed by a non-tilde non-digit.
+        // The trailing character must be re-yielded by the next call, not lost.
+        ByteArrayInputStream in = bytes(0x1B, '[', '5', 'x', 'y');
+
+        // When
+        Key first = KeyDecoder.next(in);
+        Key second = KeyDecoder.next(in);
+
+        // Then — 'x' is consumed as the terminator marker and dropped; 'y' is the next Char.
+        assertThat(first).isEqualTo(Key.Escape.INSTANCE);
+        assertThat(second).isInstanceOf(Key.Char.class);
+        assertThat(((Key.Char) second).value()).isEqualTo('y');
+    }
+
+    @Test
+    void next_controlByte_returnsCharWithRawValue() throws IOException {
+        // Given — Ctrl-C is 0x03, no special handling — surfaced as Char so the
+        // TUI's keymap can match it via {@code Key.Char(3)} if needed.
+        ByteArrayInputStream in = bytes(0x03);
+
+        // When
+        Key sut = KeyDecoder.next(in);
+
+        // Then
+        assertThat(sut).isInstanceOf(Key.Char.class);
+        assertThat(((Key.Char) sut).value()).isEqualTo((char) 0x03);
+    }
+
     private static ByteArrayInputStream bytes(int... bs) {
         byte[] out = new byte[bs.length];
         for (int i = 0; i < bs.length; i++) {
