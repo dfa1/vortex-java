@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.ArraySegments;
+import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
@@ -18,17 +18,12 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ChunkedEncodingEncoderTest {
-
-    private static final ValueLayout.OfLong LE_LONG =
-            ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     private static final ChunkedEncodingEncoder ENCODER = new ChunkedEncodingEncoder();
     private static final ChunkedEncodingDecoder DECODER = new ChunkedEncodingDecoder();
@@ -61,12 +56,13 @@ class ChunkedEncodingEncoderTest {
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, 5L, i64, REGISTRY);
             Array result = DECODER.decode(ctx);
 
-            assertThat(result.length()).isEqualTo(5);
-            assertThat(ArraySegments.of(result).get(LE_LONG, 0L)).isEqualTo(10L);
-            assertThat(ArraySegments.of(result).get(LE_LONG, 8L)).isEqualTo(20L);
-            assertThat(ArraySegments.of(result).get(LE_LONG, 16L)).isEqualTo(30L);
-            assertThat(ArraySegments.of(result).get(LE_LONG, 24L)).isEqualTo(40L);
-            assertThat(ArraySegments.of(result).get(LE_LONG, 32L)).isEqualTo(50L);
+            LongArray la = (LongArray) result;
+            assertThat(la.length()).isEqualTo(5);
+            assertThat(la.getLong(0)).isEqualTo(10L);
+            assertThat(la.getLong(1)).isEqualTo(20L);
+            assertThat(la.getLong(2)).isEqualTo(30L);
+            assertThat(la.getLong(3)).isEqualTo(40L);
+            assertThat(la.getLong(4)).isEqualTo(50L);
         }
 
         @Test
@@ -120,12 +116,13 @@ class ChunkedEncodingEncoderTest {
             DecodeContext ctx = new DecodeContext(root, i64, 5L, allBufs, REGISTRY, Arena.ofAuto());
             Array result = DECODER.decode(ctx);
 
-            assertThat(result.length()).isEqualTo(5);
-            assertThat(ArraySegments.of(result).get(LE_LONG, 0L)).isEqualTo(10L);
-            assertThat(ArraySegments.of(result).get(LE_LONG, 8L)).isEqualTo(20L);
-            assertThat(ArraySegments.of(result).get(LE_LONG, 16L)).isEqualTo(30L);
-            assertThat(ArraySegments.of(result).get(LE_LONG, 24L)).isEqualTo(40L);
-            assertThat(ArraySegments.of(result).get(LE_LONG, 32L)).isEqualTo(50L);
+            LongArray la = (LongArray) result;
+            assertThat(la.length()).isEqualTo(5);
+            assertThat(la.getLong(0)).isEqualTo(10L);
+            assertThat(la.getLong(1)).isEqualTo(20L);
+            assertThat(la.getLong(2)).isEqualTo(30L);
+            assertThat(la.getLong(3)).isEqualTo(40L);
+            assertThat(la.getLong(4)).isEqualTo(50L);
         }
 
         @Test
@@ -150,9 +147,10 @@ class ChunkedEncodingEncoderTest {
             DecodeContext ctx = new DecodeContext(root, i64, 3L, allBufs, REGISTRY, Arena.ofAuto());
             Array result = DECODER.decode(ctx);
 
-            assertThat(result.length()).isEqualTo(3);
+            LongArray la = (LongArray) result;
+            assertThat(la.length()).isEqualTo(3);
             for (int i = 0; i < 3; i++) {
-                assertThat(ArraySegments.of(result).get(LE_LONG, (long) i * 8)).isEqualTo(data[i]);
+                assertThat(la.getLong(i)).isEqualTo(data[i]);
             }
         }
 
