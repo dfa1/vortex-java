@@ -6,19 +6,21 @@ import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
 import java.util.function.IntConsumer;
 
 /// Sealed interface for variable-length binary / UTF-8 string columns.
 ///
-/// Three implementations: {@link OffsetMode} for standard offset-based layout,
-/// {@link DictMode} for dictionary-encoded strings, and {@link ChunkedMode} for
-/// multi-chunk columns. All accessors resolve transparently regardless of mode;
-/// only {@link OffsetMode} exposes {@link OffsetMode#offsetsSegment()} and
-/// {@link OffsetMode#offsetsPtype()}.
+/// Four implementations: {@link OffsetMode} for standard offset-based layout,
+/// {@link DictMode} for dictionary-encoded strings, {@link ChunkedMode} for
+/// multi-chunk columns, and {@link ViewMode} for Arrow StringView / BinaryView
+/// layout (16-byte view per row + zero or more shared data buffers). All
+/// accessors resolve transparently regardless of mode; only {@link OffsetMode}
+/// exposes {@link OffsetMode#offsetsSegment()} and {@link OffsetMode#offsetsPtype()}.
 public sealed interface VarBinArray extends Array
-        permits VarBinArray.OffsetMode, VarBinArray.DictMode, VarBinArray.ChunkedMode {
+        permits VarBinArray.OffsetMode, VarBinArray.DictMode, VarBinArray.ChunkedMode, VarBinArray.ViewMode {
 
     /// Returns the concatenated raw bytes segment backing all elements.
     ///
@@ -53,6 +55,38 @@ public sealed interface VarBinArray extends Array
     /// @param rows number of rows to retain; if {@code rows >= length} returns this array unchanged
     /// @return a {@code VarBinArray} containing the first {@code rows} elements
     VarBinArray truncate(long rows);
+
+    /// Materialises any {@code VarBinArray} into a flat {@link OffsetMode}. The fast path
+    /// returns {@code src} unchanged when it is already an {@link OffsetMode}. Other modes
+    /// (ViewMode in particular) walk every row through the typed accessors, copy the bytes
+    /// into a fresh contiguous segment allocated from {@code arena}, and build an I64
+    /// offsets table. Used by parent decoders (dict, sparse, runend) whose downstream code
+    /// depends on the bytes-plus-offsets shape.
+    ///
+    /// @param src   any VarBinArray
+    /// @param arena allocator for the materialised bytes and offsets segments
+    /// @return an OffsetMode view over the same logical content
+    static OffsetMode toOffsetMode(VarBinArray src, SegmentAllocator arena) {
+        if (src instanceof OffsetMode om) {
+            return om;
+        }
+        long n = src.length();
+        long totalBytes = 0;
+        for (long i = 0; i < n; i++) {
+            totalBytes += src.getByteLength(i);
+        }
+        MemorySegment outBytes = arena.allocate(totalBytes > 0 ? totalBytes : 1);
+        MemorySegment outOffsets = arena.allocate((n + 1) * Long.BYTES, Long.BYTES);
+        outOffsets.setAtIndex(PTypeIO.LE_LONG, 0, 0L);
+        long bytePos = 0;
+        for (long i = 0; i < n; i++) {
+            byte[] b = src.getBytes(i);
+            MemorySegment.copy(MemorySegment.ofArray(b), 0, outBytes, bytePos, b.length);
+            bytePos += b.length;
+            outOffsets.setAtIndex(PTypeIO.LE_LONG, i + 1, bytePos);
+        }
+        return new OffsetMode(src.dtype(), n, outBytes.asReadOnly(), outOffsets, PType.I64);
+    }
 
     /// Creates a dict-mode {@code VarBinArray}. Lengths and bytes are resolved via the
     /// dictionary on each access; no string materialization occurs at construction time.
@@ -330,6 +364,77 @@ public sealed interface VarBinArray extends Array
                 }
             }
             return ChunkedMode.of(dtype, rows, kept);
+        }
+    }
+
+    /// Arrow StringView / BinaryView {@code VarBinArray}.
+    ///
+    /// Each row is a 16-byte view in {@code views}: bytes 0-3 are the u32 size; for
+    /// sizes ≤ 12 bytes the data is inlined in bytes 4..15; for sizes > 12 bytes
+    /// bytes 4-7 hold a 4-byte prefix (ignored on read), bytes 8-11 the u32 buffer
+    /// index into {@code dataBufs}, and bytes 12-15 the u32 offset within that
+    /// buffer. Per-row accessors resolve the view on demand — no concat or
+    /// materialisation at construction time.
+    ///
+    /// {@link #bytesSegment()} returns {@link MemorySegment#NULL} because there is
+    /// no single contiguous bytes segment; callers needing one must materialise via
+    /// the typed accessors.
+    ///
+    /// @param dtype    logical element type (Utf8 or Binary)
+    /// @param length   total logical row count
+    /// @param views    16-byte view per row; length must be ≥ {@code length * 16}
+    /// @param dataBufs zero or more shared data buffers referenced by long views
+    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable refs that flow through pipelines without ever being compared.
+    record ViewMode(DType dtype, long length, MemorySegment views, MemorySegment[] dataBufs)
+            implements VarBinArray {
+
+        private static final int VIEW_SIZE = 16;
+        private static final int MAX_INLINED_SIZE = 12;
+
+        @Override
+        public MemorySegment bytesSegment() {
+            return MemorySegment.NULL;
+        }
+
+        @Override
+        public int getByteLength(long i) {
+            return views.get(PTypeIO.LE_INT, i * VIEW_SIZE);
+        }
+
+        @Override
+        public byte[] getBytes(long i) {
+            long viewOff = i * VIEW_SIZE;
+            int size = views.get(PTypeIO.LE_INT, viewOff);
+            byte[] out = new byte[size];
+            if (size <= MAX_INLINED_SIZE) {
+                MemorySegment.copy(views, viewOff + 4, MemorySegment.ofArray(out), 0, size);
+            } else {
+                int bufferIndex = views.get(PTypeIO.LE_INT, viewOff + 8);
+                long srcOffset = Integer.toUnsignedLong(views.get(PTypeIO.LE_INT, viewOff + 12));
+                MemorySegment.copy(dataBufs[bufferIndex], srcOffset, MemorySegment.ofArray(out), 0, size);
+            }
+            return out;
+        }
+
+        @Override
+        public String getString(long i) {
+            return new String(getBytes(i), StandardCharsets.UTF_8);
+        }
+
+        @Override
+        public void forEachByteLength(IntConsumer c) {
+            long n = length;
+            for (long i = 0; i < n; i++) {
+                c.accept(views.get(PTypeIO.LE_INT, i * VIEW_SIZE));
+            }
+        }
+
+        @Override
+        public VarBinArray truncate(long rows) {
+            if (rows >= length) {
+                return this;
+            }
+            return new ViewMode(dtype, rows, views.asSlice(0, rows * VIEW_SIZE), dataBufs);
         }
     }
 }

@@ -158,13 +158,11 @@ public final class DictEncodingDecoder implements EncodingDecoder {
         DType codesDtype = new DType.Primitive(codePType, false);
         MemorySegment codesBuf = ctx.decodeChildSegment(0, codesDtype, n);
 
-        Array valuesArr = ctx.decodeChild(1, ctx.dtype(), dictSize);
-        VarBinArray.OffsetMode varBinValues = (VarBinArray.OffsetMode) valuesArr;
-        MemorySegment dictBytes = varBinValues.bytesSegment();
-        MemorySegment dictOffsets = varBinValues.offsetsSegment();
+        VarBinArray valuesArr = (VarBinArray) ctx.decodeChild(1, ctx.dtype(), dictSize);
+        VarBinArray.OffsetMode dictValues = VarBinArray.toOffsetMode(valuesArr, ctx.arena());
 
         return VarBinArray.ofDict(ctx.dtype(), n,
-                dictBytes, dictOffsets, PType.I64,
+                dictValues.bytesSegment(), dictValues.offsetsSegment(), PType.I64,
                 codesBuf, codePType);
     }
 

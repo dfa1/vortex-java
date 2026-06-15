@@ -154,7 +154,8 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
 
         DType indicesDtype = new DType.Primitive(indicesPtype, false);
         MemorySegment idxSeg = ctx.decodeChildSegment(0, indicesDtype, numPatches);
-        VarBinArray.OffsetMode varBin = (VarBinArray.OffsetMode) ctx.decodeChild(1, ctx.dtype(), numPatches);
+        VarBinArray rawValues = (VarBinArray) ctx.decodeChild(1, ctx.dtype(), numPatches);
+        VarBinArray.OffsetMode varBin = VarBinArray.toOffsetMode(rawValues, ctx.arena());
         MemorySegment valBytes = varBin.bytesSegment();
         MemorySegment valOffsets = varBin.offsetsSegment();
         PType valOffPtype = varBin.offsetsPtype();
@@ -222,4 +223,5 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
         }
         return 0L;
     }
+
 }
