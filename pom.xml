@@ -81,6 +81,12 @@
 			**/fbs/**,
 			**/proto/**
 		</sonar.coverage.exclusions>
+		<!-- Both surefire (jacoco.xml) and failsafe (jacoco-it.xml) reports sent to Sonar.
+		     The failsafe report is produced by the report-integration execution in the coverage profile. -->
+		<sonar.coverage.jacoco.xmlReportPaths>
+			${project.build.directory}/site/jacoco/jacoco.xml,
+			${project.build.directory}/site/jacoco-it/jacoco.xml
+		</sonar.coverage.jacoco.xmlReportPaths>
 		<!-- Default for the {@code @{argLine}} placeholder in surefire/failsafe configs. JaCoCo's
 		     {@code prepare-agent} goal overwrites this with the agent arguments when active; if
 		     the {@code coverage} profile is not enabled the empty default ensures surefire
@@ -385,6 +391,13 @@
 								<phase>verify</phase>
 								<goals>
 									<goal>report</goal>
+								</goals>
+							</execution>
+							<execution>
+								<id>report-integration</id>
+								<phase>post-integration-test</phase>
+								<goals>
+									<goal>report-integration</goal>
 								</goals>
 							</execution>
 						</executions>
