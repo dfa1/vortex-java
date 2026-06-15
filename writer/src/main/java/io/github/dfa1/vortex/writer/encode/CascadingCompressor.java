@@ -101,6 +101,9 @@ public final class CascadingCompressor {
     /// Rust-style partitioned stratified sample (vortex-compressor::sample::stratified_slices):
     /// divide [0, n) into {@code strideCount} contiguous partitions, draw one random contiguous
     /// slice from each. Strides cannot overlap or cluster — every region is represented.
+    @SuppressWarnings("java:S2245") // Deterministic PRNG is the contract: stratified sampling
+                                    // must be reproducible across builds for stable compression
+                                    // heuristics. No security boundary — output is sample indices.
     private static void forEachStride(int n, int sampleSize, long seed, StrideCopy copier) {
         int strideCount = Math.min(STRIDE_COUNT, sampleSize);
         Random rng = new Random(seed);

@@ -28,8 +28,11 @@ import java.util.regex.Pattern;
 
 final class FilterCommand {
 
+    // Greedy {@code \w[\w.]*}: operator chars {@code (!, =, >, <)} cannot appear inside the
+    // column-name character class, so no backtracking is required. A reluctant quantifier
+    // here was a regex-DoS hazard (Sonar S5852) without any matching benefit.
     private static final Pattern EXPR = Pattern.compile(
-            "^(\\w[\\w.]*?)\\s*(!=|>=|<=|==|>|<|=)\\s*(.+)$");
+            "^(\\w[\\w.]*)\\s*(!=|>=|<=|==|>|<|=)\\s*(.+)$");
 
     private FilterCommand() {
     }

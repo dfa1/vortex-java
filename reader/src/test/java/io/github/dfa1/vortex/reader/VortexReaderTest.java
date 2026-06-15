@@ -201,7 +201,7 @@ class VortexReaderTest {
                 for (Array column : chunk.columns().values()) {
                     assertThat(column).isInstanceOf(UnknownArray.class);
                     UnknownArray foreign = (UnknownArray) column;
-                    assertThat(foreign.encodingId()).startsWith("vortex.").describedAs(name);
+                    assertThat(foreign.encodingId()).describedAs(name).startsWith("vortex.");
                 }
             }
         }
