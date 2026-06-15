@@ -603,7 +603,8 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             throw new VortexException(EncodingId.VORTEX_DICT,
                     "dict codes: layout row_count=" + n + " exceeds buffer capacity=" + bufferCodesFallback);
         }
-        return expandDictStrings((VarBinArray.OffsetMode) values, codesSegFallback, codesPType, dtype, n, arena);
+        return expandDictStrings(VarBinArray.toOffsetMode((VarBinArray) values, arena),
+                codesSegFallback, codesPType, dtype, n, arena);
     }
 
     /// Lazy-path zip-bomb guard. Inspects {@code codes}'s primary segment when available

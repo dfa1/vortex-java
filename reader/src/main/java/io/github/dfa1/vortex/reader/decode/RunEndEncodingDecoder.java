@@ -68,8 +68,8 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
         Array endsArr = ctx.decodeChild(0, endsDtype, numRuns);
 
         if (ctx.dtype() instanceof DType.Utf8 || ctx.dtype() instanceof DType.Binary) {
-            Array valuesArr = ctx.decodeChild(1, ctx.dtype(), numRuns);
-            return expandStrings(endsArr, (VarBinArray.OffsetMode) valuesArr, endsPtype, numRuns, offset, n, ctx.dtype(), ctx.arena());
+            VarBinArray valuesArr = (VarBinArray) ctx.decodeChild(1, ctx.dtype(), numRuns);
+            return expandStrings(endsArr, VarBinArray.toOffsetMode(valuesArr, ctx.arena()), endsPtype, numRuns, offset, n, ctx.dtype(), ctx.arena());
         }
 
         if (ctx.dtype() instanceof DType.Bool) {
