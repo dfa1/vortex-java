@@ -75,4 +75,11 @@ public record ChunkedByteArray(DType dtype, long length, ByteArray[] children, l
         }
         return result;
     }
+
+    @Override
+    public void forEachByte(ByteConsumer c) {
+        for (ByteArray child : children) {
+            child.forEachByte(c);
+        }
+    }
 }

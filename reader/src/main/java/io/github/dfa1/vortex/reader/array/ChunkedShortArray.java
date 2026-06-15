@@ -76,4 +76,11 @@ public record ChunkedShortArray(DType dtype, long length, ShortArray[] children,
         }
         return result;
     }
+
+    @Override
+    public void forEachShort(ShortConsumer c) {
+        for (ShortArray child : children) {
+            child.forEachShort(c);
+        }
+    }
 }

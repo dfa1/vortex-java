@@ -63,4 +63,11 @@ public record ChunkedBoolArray(DType dtype, long length, BoolArray[] children, l
         int c = ChunkedLongArray.findChunk(offsets, i);
         return children[c].getBoolean(i - offsets[c]);
     }
+
+    @Override
+    public void forEachBoolean(BooleanConsumer c) {
+        for (BoolArray child : children) {
+            child.forEachBoolean(c);
+        }
+    }
 }

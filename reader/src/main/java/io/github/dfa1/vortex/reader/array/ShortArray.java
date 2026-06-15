@@ -29,4 +29,14 @@ public non-sealed interface ShortArray extends Array {
     /// @param op       binary operator
     /// @return the final accumulated result
     long fold(long identity, LongBinaryOperator op);
+
+    /// Passes each {@code short} element to the given consumer in order.
+    ///
+    /// @param c consumer that receives each short element
+    default void forEachShort(ShortConsumer c) {
+        long n = length();
+        for (long i = 0; i < n; i++) {
+            c.accept(getShort(i));
+        }
+    }
 }
