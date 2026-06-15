@@ -1,6 +1,7 @@
 # vortex-java
 
 [![CI](https://github.com/dfa1/vortex-java/actions/workflows/ci.yml/badge.svg)](https://github.com/dfa1/vortex-java/actions)
+[![codecov](https://codecov.io/gh/dfa1/vortex-java/branch/main/graph/badge.svg)](https://codecov.io/gh/dfa1/vortex-java)
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.dfa1.vortex/vortex-reader.svg)](https://central.sonatype.com/artifact/io.github.dfa1.vortex/vortex-reader)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/license/Apache-2.0)
 

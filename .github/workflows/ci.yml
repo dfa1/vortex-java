@@ -38,11 +38,25 @@ jobs:
       # (integration, performance) are skipped on Windows. Being the only Vortex
       # impl that runs on Windows JVMs is one of vortex-java's selling points —
       # see README "Who is this for".
-      - name: Build and test (Linux + macOS)
-        if: runner.os != 'Windows'
+      # JaCoCo coverage is collected only on the Ubuntu + Java 25 entry — running it on
+      # every matrix entry would produce redundant reports and slow the build.
+      - name: Build and test (Linux + macOS) with coverage
+        if: runner.os != 'Windows' && matrix.os == 'ubuntu-latest' && matrix.java-version == '25'
+        run: ./mvnw verify -P coverage
+
+      - name: Build and test (Linux + macOS) without coverage
+        if: runner.os != 'Windows' && !(matrix.os == 'ubuntu-latest' && matrix.java-version == '25')
         run: ./mvnw verify
 
       - name: Build and test (Windows)
         if: runner.os == 'Windows'
         shell: bash
         run: ./mvnw verify -pl '!integration,!performance'
+
+      - name: Upload coverage to Codecov
+        if: matrix.os == 'ubuntu-latest' && matrix.java-version == '25'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+          files: ./**/target/site/jacoco/jacoco.xml
