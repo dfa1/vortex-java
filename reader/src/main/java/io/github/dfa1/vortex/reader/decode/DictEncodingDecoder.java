@@ -22,16 +22,16 @@ import java.nio.ByteBuffer;
 
 /// Read-only decoder for {@code vortex.dict}.
 ///
-/// TODO(ADR 0012): the primitive-value paths here ({@code decodeRustProto},
-/// {@code decodeLegacyJava}) still expand {@code codes} and {@code values} into a
-/// single contiguous output segment via {@code expandU8/U16/U32}. That mirrors the
-/// broadcast-aware scatter loop with {@code SegmentBroadcast.capacity}
-/// (ConstantEncoding fan-out), so converting to lazy {@code DictXxxArray} is more
-/// involved than the layout-level path in {@code ScanIterator.decodeDictLayout}.
-/// The layout-level path is the primary scan entry point and is now lazy; this
-/// encoding-level path runs only when a parent decoder explicitly calls
-/// {@code decodeChild} on a {@code vortex.dict} segment, which is rarer and
-/// downstream-flat-segment-dependent. Refactor follow-up.
+/// The primitive-value paths ({@code decodeRustProto}, {@code decodeLegacyJava})
+/// eagerly expand {@code codes} and {@code values} into a contiguous output segment
+/// via {@code expandU8/U16/U32} — these mirror the broadcast-aware scatter loop
+/// with {@code SegmentBroadcast.capacity} (ConstantEncoding fan-out), so the
+/// output is materialised at decode time. ADR 0012's lazy-dict scope is the
+/// layout-level path in {@code ScanIterator.decodeDictLayout}, which is now lazy
+/// via {@code DictXxxArray}; this encoding-level path runs only when a parent
+/// decoder explicitly calls {@code decodeChild} on a {@code vortex.dict} segment,
+/// which is rarer and downstream-flat-segment-dependent. The broadcast semantics
+/// make lazy wrapping non-trivial here — kept eager by design.
 public final class DictEncodingDecoder implements EncodingDecoder {
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.

@@ -104,11 +104,11 @@ decoder falls into one of three shapes:
 | `vortex.varbinview`         | Materialized  | TBD           | currently converts to `varbin` shape                                     |
 | `vortex.alp`                | Lazy          | Lazy          | `LazyAlpDoubleArray`/`LazyAlpFloatArray`, ADR 0010                       |
 | `vortex.alprd`              | Materialized  | TBD           | reassembles left/right + patches                                         |
-| `vortex.dict`               | Materialized  | Lazy          | ADR 0012 Dict\*Array, **NOT YET IMPLEMENTED**                            |
+| `vortex.dict`               | Lazy          | Lazy          | `DictXxxArray` (numeric) + `VarBinArray.DictMode` (string), ADR 0012      |
 | `vortex.sparse`             | Materialized  | Lazy          | patches view over default fill                                           |
 | `vortex.sequence`           | Zero-copy     | Zero-copy     | synthetic (no data)                                                      |
 | `vortex.struct`             | Zero-copy     | Zero-copy     | `StructArray` wraps fields                                               |
-| `vortex.chunked`            | Lazy          | Lazy          | `ChunkedXxxArray`, ADR 0012 (PR #38)                                     |
+| `vortex.chunked`            | Lazy          | Lazy          | `ChunkedXxxArray` (primitive/Bool) + `VarBinArray.ChunkedMode` (Utf8/Binary), ADR 0012 |
 | `vortex.fsst`               | Materialized  | Materialized  | symbol-table decompression                                               |
 | `vortex.list`               | Materialized  | TBD           | offsets handling                                                         |
 | `vortex.listview`           | Materialized  | TBD           | similar to list                                                          |
