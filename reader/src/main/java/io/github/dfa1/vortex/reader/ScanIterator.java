@@ -15,6 +15,10 @@ import io.github.dfa1.vortex.reader.array.ChunkedFloatArray;
 import io.github.dfa1.vortex.reader.array.ChunkedIntArray;
 import io.github.dfa1.vortex.reader.array.ChunkedLongArray;
 import io.github.dfa1.vortex.reader.array.ChunkedShortArray;
+import io.github.dfa1.vortex.reader.array.DictDoubleArray;
+import io.github.dfa1.vortex.reader.array.DictFloatArray;
+import io.github.dfa1.vortex.reader.array.DictIntArray;
+import io.github.dfa1.vortex.reader.array.DictLongArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.EmptyArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
@@ -160,30 +164,6 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         return Map.copyOf(map);
     }
 
-    private static Array expandDictPrimitive(
-            MemorySegment valBuf, MemorySegment codesBuf,
-            PType codesPType, DType.Primitive dtype,
-            long n, SegmentAllocator arena
-    ) {
-        PType ptype = dtype.ptype();
-        int elemBytes = ptype.byteSize();
-        MemorySegment out = arena.allocate(n * elemBytes, elemBytes);
-        for (long i = 0; i < n; i++) {
-            long code = readUnsigned(codesBuf, i, codesPType);
-            MemorySegment.copy(valBuf, code * elemBytes, out, i * elemBytes, elemBytes);
-        }
-        return switch (ptype) {
-            case I32, U32 -> new MaterializedIntArray(dtype, n, out.asReadOnly());
-            case I64, U64 -> new MaterializedLongArray(dtype, n, out.asReadOnly());
-            case F64 -> new MaterializedDoubleArray(dtype, n, out.asReadOnly());
-            case F32 -> new MaterializedFloatArray(dtype, n, out.asReadOnly());
-            case I16, U16 -> new MaterializedShortArray(dtype, n, out.asReadOnly());
-            case I8, U8 -> new MaterializedByteArray(dtype, n, out.asReadOnly());
-            default -> throw new VortexException(EncodingId.VORTEX_DICT,
-                    "layout: unsupported ptype for dict expansion: " + ptype);
-        };
-    }
-
     // ── Column map builder ────────────────────────────────────────────────────
 
     private static Array expandDictStrings(
@@ -265,6 +245,19 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             case ChunkedShortArray a -> truncateChunkedShort(a, rows, arena);
             case ChunkedByteArray a -> truncateChunkedByte(a, rows, arena);
             case ChunkedBoolArray a -> truncateChunkedBool(a, rows, arena);
+            // Dict* cases must precede the LongArray/etc catch-alls below: a DictLongArray
+            // IS a LongArray, but the catch-all materialises via ArraySegments.of which
+            // would scatter the entire column to truncate. Instead keep the values
+            // dictionary intact and just truncate the codes — codes are a primitive Array
+            // that recursively flows through this same switch.
+            case DictLongArray a ->
+                    DictLongArray.of(a.dtype(), rows, a.values(), truncateArray(a.codes(), rows, arena));
+            case DictIntArray a ->
+                    DictIntArray.of(a.dtype(), rows, a.values(), truncateArray(a.codes(), rows, arena));
+            case DictDoubleArray a ->
+                    DictDoubleArray.of(a.dtype(), rows, a.values(), truncateArray(a.codes(), rows, arena));
+            case DictFloatArray a ->
+                    DictFloatArray.of(a.dtype(), rows, a.values(), truncateArray(a.codes(), rows, arena));
             case LongArray a ->
                     new MaterializedLongArray(a.dtype(), rows, ArraySegments.of(a, arena).asSlice(0, rows * Long.BYTES));
             case IntArray a ->
@@ -573,30 +566,87 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         Array values = decodeLayout(valuesLayout, dtype, arena);
         Array codes = decodeLayout(codesLayout, new DType.Primitive(codesPType, false), arena);
 
-        MemorySegment codesSeg = ArraySegments.of(codes, arena);
-
-        // Zip-bomb guard: for direct-mapped encodings (e.g. vortex.primitive), the codes
-        // buffer is mmap-bounded and can be much smaller than the claimed rowCount. Reject
-        // before any O(n) allocation so an inflated layout row_count cannot trigger OOM.
-        // Full-decode encodings (e.g. bitpacked) write n * elemBytes to the arena during
-        // decodeLayout above, so their buffer will already match n — check passes for them.
-        long bufferCodes = codesSeg.byteSize() / (long) codesPType.byteSize();
-        if (bufferCodes < n) {
-            throw new VortexException(EncodingId.VORTEX_DICT,
-                    "dict codes: layout row_count=" + n + " exceeds buffer capacity=" + bufferCodes);
-        }
-
+        // VarBin (string) dict: still expand into offsets/bytes — VarBin lazy dict
+        // is out of scope for ADR 0012 (needs a VarBinArray interface refactor).
         if (values instanceof VarBinArray.OffsetMode vb) {
+            // Zip-bomb guard: read the codes as a segment so we can validate the buffer
+            // before allocating the expansion output. For direct-mapped encodings (e.g.
+            // vortex.primitive), the codes buffer is mmap-bounded and can be much smaller
+            // than the claimed rowCount. Full-decode encodings (e.g. bitpacked) already
+            // wrote n * elemBytes to the arena during decodeLayout above, so their buffer
+            // matches n.
+            MemorySegment codesSeg = ArraySegments.of(codes, arena);
+            long bufferCodes = codesSeg.byteSize() / (long) codesPType.byteSize();
+            if (bufferCodes < n) {
+                throw new VortexException(EncodingId.VORTEX_DICT,
+                        "dict codes: layout row_count=" + n + " exceeds buffer capacity=" + bufferCodes);
+            }
             MemorySegment valOffsets = vb.offsetsSegment();
             PType valOffPType = vb.offsetsPtype();
             return VarBinArray.ofDict(dtype, n, vb.bytesSegment(), valOffsets, valOffPType,
                     codesSeg, codesPType);
         }
         if (dtype instanceof DType.Primitive pDtype) {
-            MemorySegment valBuf = ArraySegments.of(values, arena);
-            return expandDictPrimitive(valBuf, codesSeg, codesPType, pDtype, n, arena);
+            // Zip-bomb guard (lazy path): the codes Array has already been decoded above;
+            // its length() reflects the claimed rowCount but its backing buffer may be
+            // mmap-bounded. Validate by inspecting the underlying segment without forcing
+            // materialisation of non-segment-backed codes (lazy variants).
+            validateDictCodesCapacity(codes, codesPType, n);
+            return buildLazyDictPrimitive(pDtype, n, values, codes);
         }
-        return expandDictStrings((VarBinArray.OffsetMode) values, codesSeg, codesPType, dtype, n, arena);
+        // Non-Utf8, non-Primitive dict — e.g. extension types backed by VarBin. Fall through
+        // to the existing string expansion for compatibility.
+        MemorySegment codesSegFallback = ArraySegments.of(codes, arena);
+        long bufferCodesFallback = codesSegFallback.byteSize() / (long) codesPType.byteSize();
+        if (bufferCodesFallback < n) {
+            throw new VortexException(EncodingId.VORTEX_DICT,
+                    "dict codes: layout row_count=" + n + " exceeds buffer capacity=" + bufferCodesFallback);
+        }
+        return expandDictStrings((VarBinArray.OffsetMode) values, codesSegFallback, codesPType, dtype, n, arena);
+    }
+
+    /// Lazy-path zip-bomb guard. Inspects {@code codes}'s primary segment when available
+    /// (segment-backed encodings can be mmap-bounded and undersized); skips validation
+    /// for non-segment variants whose own decoder has already enforced length.
+    ///
+    /// @param codes      the decoded codes array
+    /// @param codesPType code ptype reported by the dict layout metadata
+    /// @param n          claimed dict row count
+    private static void validateDictCodesCapacity(Array codes, PType codesPType, long n) {
+        MemorySegment seg;
+        try {
+            seg = ArraySegments.of(codes);
+        } catch (VortexException e) {
+            return;
+        }
+        long bufferCodes = seg.byteSize() / (long) codesPType.byteSize();
+        if (bufferCodes < n) {
+            throw new VortexException(EncodingId.VORTEX_DICT,
+                    "dict codes: layout row_count=" + n + " exceeds buffer capacity=" + bufferCodes);
+        }
+    }
+
+    /// Builds the matching {@code DictXxxArray} for a primitive dictionary, unwrapping
+    /// any {@link MaskedArray} layer on either side — dictionary lookups are keyed by code
+    /// so value-side validity is meaningless at this layer.
+    ///
+    /// @param dtype  primitive logical type of dict values
+    /// @param n      total logical row count
+    /// @param values dictionary values
+    /// @param codes  per-row codes into {@code values}
+    /// @return a lazy {@code DictXxxArray} matching the value ptype
+    private static Array buildLazyDictPrimitive(DType.Primitive dtype, long n, Array values, Array codes) {
+        Array valuesData = values instanceof MaskedArray mv ? mv.inner() : values;
+        Array codesData = codes instanceof MaskedArray mc ? mc.inner() : codes;
+        PType ptype = dtype.ptype();
+        return switch (ptype) {
+            case I64, U64 -> DictLongArray.of(dtype, n, (LongArray) valuesData, codesData);
+            case I32, U32 -> DictIntArray.of(dtype, n, (IntArray) valuesData, codesData);
+            case F64 -> DictDoubleArray.of(dtype, n, (DoubleArray) valuesData, codesData);
+            case F32 -> DictFloatArray.of(dtype, n, (FloatArray) valuesData, codesData);
+            default -> throw new VortexException(EncodingId.VORTEX_DICT,
+                    "layout: unsupported ptype for lazy dict: " + ptype);
+        };
     }
 
     private static PType readDictLayoutCodesPType(ByteBuffer rawMeta) {

@@ -72,6 +72,10 @@ public final class ArraySegments {
             case ChunkedFloatArray a -> materialiseChunkedFloat(a, arena);
             case ChunkedShortArray a -> materialiseChunkedShort(a, arena);
             case ChunkedByteArray a -> materialiseChunkedByte(a, arena);
+            case DictLongArray a -> materialiseDictLong(a, arena);
+            case DictIntArray a -> materialiseDictInt(a, arena);
+            case DictDoubleArray a -> materialiseDictDouble(a, arena);
+            case DictFloatArray a -> materialiseDictFloat(a, arena);
             default -> of(arr);
         };
     }
@@ -218,6 +222,134 @@ public final class ArraySegments {
             long bytes = child.length();
             MemorySegment.copy(src, 0, dst, byteOffset, bytes);
             byteOffset += bytes;
+        }
+        return dst.asReadOnly();
+    }
+
+    private static MemorySegment materialiseDictLong(DictLongArray a, SegmentAllocator arena) {
+        long n = a.length();
+        MemorySegment dst = arena.allocate(n * 8L, 8);
+        LongArray vals = a.values();
+        Array codes = a.codes();
+        switch (codes) {
+            case ByteArray ba -> {
+                for (long i = 0; i < n; i++) {
+                    dst.setAtIndex(PTypeIO.LE_LONG, i, vals.getLong(Byte.toUnsignedLong(ba.getByte(i))));
+                }
+            }
+            case ShortArray sa -> {
+                for (long i = 0; i < n; i++) {
+                    dst.setAtIndex(PTypeIO.LE_LONG, i, vals.getLong(Short.toUnsignedLong(sa.getShort(i))));
+                }
+            }
+            case IntArray ia -> {
+                for (long i = 0; i < n; i++) {
+                    dst.setAtIndex(PTypeIO.LE_LONG, i, vals.getLong(Integer.toUnsignedLong(ia.getInt(i))));
+                }
+            }
+            case LongArray la -> {
+                for (long i = 0; i < n; i++) {
+                    dst.setAtIndex(PTypeIO.LE_LONG, i, vals.getLong(la.getLong(i)));
+                }
+            }
+            default -> throw new VortexException("DictLongArray: invalid codes type: "
+                    + codes.getClass().getSimpleName());
+        }
+        return dst.asReadOnly();
+    }
+
+    private static MemorySegment materialiseDictInt(DictIntArray a, SegmentAllocator arena) {
+        long n = a.length();
+        MemorySegment dst = arena.allocate(n * 4L, 4);
+        IntArray vals = a.values();
+        Array codes = a.codes();
+        switch (codes) {
+            case ByteArray ba -> {
+                for (long i = 0; i < n; i++) {
+                    dst.setAtIndex(PTypeIO.LE_INT, i, vals.getInt(Byte.toUnsignedLong(ba.getByte(i))));
+                }
+            }
+            case ShortArray sa -> {
+                for (long i = 0; i < n; i++) {
+                    dst.setAtIndex(PTypeIO.LE_INT, i, vals.getInt(Short.toUnsignedLong(sa.getShort(i))));
+                }
+            }
+            case IntArray ia -> {
+                for (long i = 0; i < n; i++) {
+                    dst.setAtIndex(PTypeIO.LE_INT, i, vals.getInt(Integer.toUnsignedLong(ia.getInt(i))));
+                }
+            }
+            case LongArray la -> {
+                for (long i = 0; i < n; i++) {
+                    dst.setAtIndex(PTypeIO.LE_INT, i, vals.getInt(la.getLong(i)));
+                }
+            }
+            default -> throw new VortexException("DictIntArray: invalid codes type: "
+                    + codes.getClass().getSimpleName());
+        }
+        return dst.asReadOnly();
+    }
+
+    private static MemorySegment materialiseDictDouble(DictDoubleArray a, SegmentAllocator arena) {
+        long n = a.length();
+        MemorySegment dst = arena.allocate(n * 8L, 8);
+        DoubleArray vals = a.values();
+        Array codes = a.codes();
+        switch (codes) {
+            case ByteArray ba -> {
+                for (long i = 0; i < n; i++) {
+                    dst.setAtIndex(PTypeIO.LE_DOUBLE, i, vals.getDouble(Byte.toUnsignedLong(ba.getByte(i))));
+                }
+            }
+            case ShortArray sa -> {
+                for (long i = 0; i < n; i++) {
+                    dst.setAtIndex(PTypeIO.LE_DOUBLE, i, vals.getDouble(Short.toUnsignedLong(sa.getShort(i))));
+                }
+            }
+            case IntArray ia -> {
+                for (long i = 0; i < n; i++) {
+                    dst.setAtIndex(PTypeIO.LE_DOUBLE, i, vals.getDouble(Integer.toUnsignedLong(ia.getInt(i))));
+                }
+            }
+            case LongArray la -> {
+                for (long i = 0; i < n; i++) {
+                    dst.setAtIndex(PTypeIO.LE_DOUBLE, i, vals.getDouble(la.getLong(i)));
+                }
+            }
+            default -> throw new VortexException("DictDoubleArray: invalid codes type: "
+                    + codes.getClass().getSimpleName());
+        }
+        return dst.asReadOnly();
+    }
+
+    private static MemorySegment materialiseDictFloat(DictFloatArray a, SegmentAllocator arena) {
+        long n = a.length();
+        MemorySegment dst = arena.allocate(n * 4L, 4);
+        FloatArray vals = a.values();
+        Array codes = a.codes();
+        switch (codes) {
+            case ByteArray ba -> {
+                for (long i = 0; i < n; i++) {
+                    dst.setAtIndex(PTypeIO.LE_FLOAT, i, vals.getFloat(Byte.toUnsignedLong(ba.getByte(i))));
+                }
+            }
+            case ShortArray sa -> {
+                for (long i = 0; i < n; i++) {
+                    dst.setAtIndex(PTypeIO.LE_FLOAT, i, vals.getFloat(Short.toUnsignedLong(sa.getShort(i))));
+                }
+            }
+            case IntArray ia -> {
+                for (long i = 0; i < n; i++) {
+                    dst.setAtIndex(PTypeIO.LE_FLOAT, i, vals.getFloat(Integer.toUnsignedLong(ia.getInt(i))));
+                }
+            }
+            case LongArray la -> {
+                for (long i = 0; i < n; i++) {
+                    dst.setAtIndex(PTypeIO.LE_FLOAT, i, vals.getFloat(la.getLong(i)));
+                }
+            }
+            default -> throw new VortexException("DictFloatArray: invalid codes type: "
+                    + codes.getClass().getSimpleName());
         }
         return dst.asReadOnly();
     }
