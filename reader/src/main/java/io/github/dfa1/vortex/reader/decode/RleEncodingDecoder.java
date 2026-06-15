@@ -9,19 +9,19 @@ import io.github.dfa1.vortex.proto.RLEMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.reader.array.BoolArray;
+import io.github.dfa1.vortex.reader.array.LazyRleByteArray;
+import io.github.dfa1.vortex.reader.array.LazyRleIntArray;
+import io.github.dfa1.vortex.reader.array.LazyRleLongArray;
+import io.github.dfa1.vortex.reader.array.LazyRleShortArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
 import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
-import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
-import io.github.dfa1.vortex.reader.array.MaterializedFloat16Array;
-import io.github.dfa1.vortex.reader.array.MaterializedFloatArray;
 import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
 import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
 import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 
@@ -85,43 +85,31 @@ public final class RleEncodingDecoder implements EncodingDecoder {
             indicesValidity = masked.validity();
         }
 
-        long[] values = readLongs(ctx.decodeChildSegment(0, valuesDtype, valuesLen), (int) valuesLen, ptype);
         int[] indices = readIndices(ArraySegments.of(indicesArr), (int) indicesLen, indicesPtype);
-        long[] valuesIdxOffsets = readUnsignedLongs(ctx.decodeChildSegment(2, offsetsDtype, offsetsLen), (int) offsetsLen, offsetsPtype);
-
+        long[] valuesIdxOffsets = readUnsignedLongs(
+                ctx.decodeChildSegment(2, offsetsDtype, offsetsLen), (int) offsetsLen, offsetsPtype);
+        long firstOffset = valuesLen > 0 && valuesIdxOffsets.length > 0 ? valuesIdxOffsets[0] : 0L;
         int numChunks = (int) (indicesLen / FL_CHUNK_SIZE);
-        int chunkEnd = (int) ((offset + rowCount + FL_CHUNK_SIZE - 1) / FL_CHUNK_SIZE);
-        chunkEnd = Math.min(chunkEnd, numChunks);
 
-        long[] decoded = new long[chunkEnd * FL_CHUNK_SIZE];
-        long firstOffset = valuesLen > 0 ? valuesIdxOffsets[0] : 0L;
+        MemorySegment valuesSeg = ctx.decodeChildSegment(0, valuesDtype, valuesLen);
+        Array result = switch (ptype) {
+            case I64, U64 -> new LazyRleLongArray(ctx.dtype(), rowCount,
+                    readLongs(valuesSeg, (int) valuesLen, ptype),
+                    indices, valuesIdxOffsets, firstOffset, valuesLen, numChunks, offset);
+            case I32, U32 -> new LazyRleIntArray(ctx.dtype(), rowCount,
+                    readInts(valuesSeg, (int) valuesLen, ptype),
+                    indices, valuesIdxOffsets, firstOffset, valuesLen, numChunks, offset);
+            case I16, U16 -> new LazyRleShortArray(ctx.dtype(), rowCount,
+                    readShorts(valuesSeg, (int) valuesLen, ptype),
+                    indices, valuesIdxOffsets, firstOffset, valuesLen, numChunks, offset,
+                    ptype == PType.U16);
+            case I8, U8 -> new LazyRleByteArray(ctx.dtype(), rowCount,
+                    readBytes(valuesSeg, (int) valuesLen),
+                    indices, valuesIdxOffsets, firstOffset, valuesLen, numChunks, offset,
+                    ptype == PType.U8);
+            default -> throw new VortexException(EncodingId.FASTLANES_RLE, "unsupported ptype " + ptype);
+        };
 
-        for (int chunkIdx = 0; chunkIdx < chunkEnd; chunkIdx++) {
-            long valueIdxOffset = valuesIdxOffsets[chunkIdx] - firstOffset;
-            long nextValueIdxOffset = (chunkIdx + 1 < numChunks)
-                                              ? (valuesIdxOffsets[chunkIdx + 1] - firstOffset)
-                                              : valuesLen;
-            int numChunkValues = (int) (nextValueIdxOffset - valueIdxOffset);
-
-            int chunkBase = chunkIdx * FL_CHUNK_SIZE;
-            if (numChunkValues <= 1) {
-                long fillVal = numChunkValues == 1 ? values[(int) valueIdxOffset] : 0L;
-                for (int i = 0; i < FL_CHUNK_SIZE; i++) {
-                    decoded[chunkBase + i] = fillVal;
-                }
-            } else {
-                for (int i = 0; i < FL_CHUNK_SIZE; i++) {
-                    int idx = indices[chunkBase + i];
-                    if (idx >= numChunkValues) {
-                        idx = numChunkValues - 1;
-                    }
-                    decoded[chunkBase + i] = values[(int) valueIdxOffset + idx];
-                }
-            }
-        }
-
-        MemorySegment seg = fromLongs(decoded, offset, (int) rowCount, ptype, ctx.arena());
-        Array result = toArray(ctx.dtype(), rowCount, seg, ptype);
         if (indicesValidity == null) {
             return result;
         }
@@ -142,18 +130,12 @@ public final class RleEncodingDecoder implements EncodingDecoder {
         MemorySegment empty = ctx.arena().allocate(0);
         DType dt = ctx.dtype();
         PType ptype = ((DType.Primitive) dt).ptype();
-        return toArray(dt, 0L, empty, ptype);
-    }
-
-    private static Array toArray(DType dtype, long n, MemorySegment seg, PType ptype) {
         return switch (ptype) {
-            case I64, U64 -> new MaterializedLongArray(dtype, n, seg);
-            case I32, U32 -> new MaterializedIntArray(dtype, n, seg);
-            case I16, U16 -> new MaterializedShortArray(dtype, n, seg);
-            case I8, U8 -> new MaterializedByteArray(dtype, n, seg);
-            case F64 -> new MaterializedDoubleArray(dtype, n, seg);
-            case F32 -> new MaterializedFloatArray(dtype, n, seg);
-            case F16 -> new MaterializedFloat16Array(dtype, n, seg);
+            case I64, U64 -> new MaterializedLongArray(dt, 0L, empty);
+            case I32, U32 -> new MaterializedIntArray(dt, 0L, empty);
+            case I16, U16 -> new MaterializedShortArray(dt, 0L, empty);
+            case I8, U8 -> new MaterializedByteArray(dt, 0L, empty);
+            default -> throw new VortexException(EncodingId.FASTLANES_RLE, "unsupported ptype " + ptype);
         };
     }
 
@@ -164,16 +146,41 @@ public final class RleEncodingDecoder implements EncodingDecoder {
         for (int i = 0; i < count; i++) {
             long off = (i % cap) * elemSize;
             out[i] = switch (ptype) {
-                case I8 -> buf.get(ValueLayout.JAVA_BYTE, off);
-                case U8 -> Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, off));
-                case I16 -> buf.get(PTypeIO.LE_SHORT, off);
-                case U16, F16 -> Short.toUnsignedLong(buf.get(PTypeIO.LE_SHORT, off));
-                case I32 -> buf.get(PTypeIO.LE_INT, off);
-                case U32 -> Integer.toUnsignedLong(buf.get(PTypeIO.LE_INT, off));
-                case I64, U64 -> buf.get(PTypeIO.LE_LONG, off);
-                case F32 -> Integer.toUnsignedLong(buf.get(PTypeIO.LE_INT, off));
-                case F64 -> buf.get(PTypeIO.LE_LONG, off);
+                case I64 -> buf.get(PTypeIO.LE_LONG, off);
+                case U64 -> buf.get(PTypeIO.LE_LONG, off);
+                default -> throw new VortexException(EncodingId.FASTLANES_RLE, "expected I64/U64, got " + ptype);
             };
+        }
+        return out;
+    }
+
+    private static int[] readInts(MemorySegment buf, int count, PType ptype) {
+        int[] out = new int[count];
+        int elemSize = ptype.byteSize();
+        long cap = SegmentBroadcast.capacity(buf, elemSize);
+        for (int i = 0; i < count; i++) {
+            long off = (i % cap) * elemSize;
+            out[i] = buf.get(PTypeIO.LE_INT, off);
+        }
+        return out;
+    }
+
+    private static short[] readShorts(MemorySegment buf, int count, PType ptype) {
+        short[] out = new short[count];
+        int elemSize = ptype.byteSize();
+        long cap = SegmentBroadcast.capacity(buf, elemSize);
+        for (int i = 0; i < count; i++) {
+            long off = (i % cap) * elemSize;
+            out[i] = buf.get(PTypeIO.LE_SHORT, off);
+        }
+        return out;
+    }
+
+    private static byte[] readBytes(MemorySegment buf, int count) {
+        byte[] out = new byte[count];
+        long cap = SegmentBroadcast.capacity(buf, 1);
+        for (int i = 0; i < count; i++) {
+            out[i] = buf.get(ValueLayout.JAVA_BYTE, i % cap);
         }
         return out;
     }
@@ -215,14 +222,5 @@ public final class RleEncodingDecoder implements EncodingDecoder {
             };
         }
         return out;
-    }
-
-    private static MemorySegment fromLongs(long[] decoded, int offset, int count, PType ptype, SegmentAllocator arena) {
-        int elemSize = ptype.byteSize();
-        MemorySegment seg = arena.allocate((long) count * elemSize);
-        for (int i = 0; i < count; i++) {
-            PTypeIO.set(seg, (long) i * elemSize, ptype, decoded[offset + i]);
-        }
-        return seg;
     }
 }

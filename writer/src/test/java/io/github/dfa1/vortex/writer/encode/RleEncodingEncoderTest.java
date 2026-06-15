@@ -3,7 +3,6 @@ package io.github.dfa1.vortex.writer.encode;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
@@ -12,7 +11,6 @@ import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.reader.decode.KnownArrayNode;
-import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.proto.RLEMetadata;
@@ -65,7 +63,7 @@ class RleEncodingEncoderTest {
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, dtype, REGISTRY);
             Array result = DECODER.decode(ctx);
             assertThat(result.length()).isEqualTo(1);
-            assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, 0)).isEqualTo(42);
+            assertThat(((io.github.dfa1.vortex.reader.array.IntArray) result).getInt(0)).isEqualTo(42);
         }
 
         @Test
@@ -81,7 +79,7 @@ class RleEncodingEncoderTest {
             Array result = DECODER.decode(ctx);
             assertThat(result.length()).isEqualTo(n);
             for (int i = 0; i < n; i++) {
-                assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(99);
+                assertThat(((io.github.dfa1.vortex.reader.array.IntArray) result).getInt(i)).as("index %d", i).isEqualTo(99);
             }
         }
 
@@ -93,7 +91,7 @@ class RleEncodingEncoderTest {
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, dtype, REGISTRY);
             Array result = DECODER.decode(ctx);
             for (int i = 0; i < data.length; i++) {
-                assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
+                assertThat(((io.github.dfa1.vortex.reader.array.IntArray) result).getInt(i)).as("index %d", i).isEqualTo(data[i]);
             }
         }
 
@@ -110,7 +108,7 @@ class RleEncodingEncoderTest {
             Array result = DECODER.decode(ctx);
             assertThat(result.length()).isEqualTo(n);
             for (int i = 0; i < n; i++) {
-                assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(i / 100);
+                assertThat(((io.github.dfa1.vortex.reader.array.IntArray) result).getInt(i)).as("index %d", i).isEqualTo(i / 100);
             }
         }
 
@@ -122,7 +120,7 @@ class RleEncodingEncoderTest {
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, dtype, REGISTRY);
             Array result = DECODER.decode(ctx);
             for (int i = 0; i < data.length; i++) {
-                assertThat(ArraySegments.of(result).get(PTypeIO.LE_LONG, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
+                assertThat(((io.github.dfa1.vortex.reader.array.LongArray) result).getLong(i)).as("index %d", i).isEqualTo(data[i]);
             }
         }
 
@@ -139,7 +137,7 @@ class RleEncodingEncoderTest {
             Array result = DECODER.decode(ctx);
             assertThat(result.length()).isEqualTo(n);
             for (int i = 0; i < n; i++) {
-                assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(i / 50);
+                assertThat(((io.github.dfa1.vortex.reader.array.IntArray) result).getInt(i)).as("index %d", i).isEqualTo(i / 50);
             }
         }
 
@@ -154,7 +152,7 @@ class RleEncodingEncoderTest {
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, dtype, REGISTRY);
             Array result = DECODER.decode(ctx);
             for (int i = 0; i < data.length; i++) {
-                assertThat(Short.toUnsignedInt(ArraySegments.of(result).get(PTypeIO.LE_SHORT, (long) i * 2)))
+                assertThat(Short.toUnsignedInt(((io.github.dfa1.vortex.reader.array.ShortArray) result).getShort(i)))
                         .as("index %d", i).isEqualTo(i);
             }
         }
@@ -167,7 +165,7 @@ class RleEncodingEncoderTest {
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, dtype, REGISTRY);
             Array result = DECODER.decode(ctx);
             for (int i = 0; i < data.length; i++) {
-                assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
+                assertThat(((io.github.dfa1.vortex.reader.array.IntArray) result).getInt(i)).as("index %d", i).isEqualTo(data[i]);
             }
         }
     }
@@ -200,7 +198,7 @@ class RleEncodingEncoderTest {
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, n, dtype, REGISTRY);
             Array result = DECODER.decode(ctx);
             for (int i = 1000; i < 1048; i++) {
-                assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(i / 100);
+                assertThat(((io.github.dfa1.vortex.reader.array.IntArray) result).getInt(i)).as("index %d", i).isEqualTo(i / 100);
             }
         }
 
@@ -256,7 +254,7 @@ class RleEncodingEncoderTest {
             Array result = DECODER.decode(ctx);
             assertThat(result.length()).isEqualTo(n);
             for (int i = 0; i < n; i++) {
-                assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(i / 100);
+                assertThat(((io.github.dfa1.vortex.reader.array.IntArray) result).getInt(i)).as("index %d", i).isEqualTo(i / 100);
             }
         }
 
