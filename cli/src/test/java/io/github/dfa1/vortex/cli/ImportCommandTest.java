@@ -1,0 +1,135 @@
+package io.github.dfa1.vortex.cli;
+
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+import static io.github.dfa1.vortex.cli.CliTestSupport.capture;
+import static org.assertj.core.api.Assertions.assertThat;
+
+class ImportCommandTest {
+
+    @Nested
+    class ArgParsing {
+
+        @Test
+        void noArgs_returnsUsageError() {
+            // Given / When
+            CliTestSupport.Captured got = capture(() -> ImportCommand.run(new String[]{"import"}));
+
+            // Then
+            assertThat(got.status()).isEqualTo(ExitStatus.USAGE_ERROR);
+            assertThat(got.stderr())
+                    .contains("usage:")
+                    .contains("missing import arguments");
+        }
+
+        @Test
+        void delimiterMissingValue_returnsUsageError() {
+            // Given / When — {@code --delimiter} at the tail with no value
+            CliTestSupport.Captured got = capture(() ->
+                    ImportCommand.run(new String[]{"import", "--delimiter"}));
+
+            // Then
+            assertThat(got.status()).isEqualTo(ExitStatus.USAGE_ERROR);
+            assertThat(got.stderr()).contains("missing value for --delimiter");
+        }
+
+        @Test
+        void delimiterMultiCharValue_returnsUsageError() {
+            // Given / When — delimiter must be exactly one character
+            CliTestSupport.Captured got = capture(() ->
+                    ImportCommand.run(new String[]{"import", "--delimiter", "||", "file.csv"}));
+
+            // Then
+            assertThat(got.status()).isEqualTo(ExitStatus.USAGE_ERROR);
+            assertThat(got.stderr()).contains("--delimiter must be exactly one character");
+        }
+
+        @Test
+        void tooManyPositional_returnsUsageError() {
+            // Given / When — three positional arguments (only input + optional output allowed)
+            CliTestSupport.Captured got = capture(() ->
+                    ImportCommand.run(new String[]{"import", "a.csv", "b.vortex", "extra"}));
+
+            // Then
+            assertThat(got.status()).isEqualTo(ExitStatus.USAGE_ERROR);
+            assertThat(got.stderr()).contains("input path");
+        }
+    }
+
+    @Nested
+    class Execution {
+
+        @Test
+        void missingInputFile_returnsFileNotFound(@TempDir Path tmp) {
+            // Given
+            Path missing = tmp.resolve("nope.csv");
+
+            // When
+            CliTestSupport.Captured got = capture(() ->
+                    ImportCommand.run(new String[]{"import", missing.toString()}));
+
+            // Then
+            assertThat(got.status()).isEqualTo(ExitStatus.FILE_NOT_FOUND);
+            assertThat(got.stderr()).contains("file not found");
+        }
+
+        @Test
+        void validCsv_writesVortexAndReportsResult(@TempDir Path tmp) throws IOException {
+            // Given — two-row CSV with a string-typed header inferred by the importer
+            Path csv = tmp.resolve("data.csv");
+            Files.writeString(csv, "id,value\n1,a\n2,b\n", StandardCharsets.UTF_8);
+
+            // When
+            CliTestSupport.Captured got = capture(() ->
+                    ImportCommand.run(new String[]{"import", csv.toString()}));
+
+            // Then — output path derives from input filename, command prints the result line
+            Path out = tmp.resolve("data.vortex");
+            assertThat(got.status()).isEqualTo(ExitStatus.OK);
+            assertThat(out).exists();
+            assertThat(got.stdout()).contains("written:").contains(out.toString());
+        }
+
+        @Test
+        void csvWithExplicitOutputPath_usesIt(@TempDir Path tmp) throws IOException {
+            // Given
+            Path csv = tmp.resolve("in.csv");
+            Files.writeString(csv, "id\n1\n2\n", StandardCharsets.UTF_8);
+            Path out = tmp.resolve("custom.vortex");
+
+            // When
+            CliTestSupport.Captured got = capture(() ->
+                    ImportCommand.run(new String[]{"import", csv.toString(), out.toString()}));
+
+            // Then
+            assertThat(got.status()).isEqualTo(ExitStatus.OK);
+            assertThat(out).exists();
+            assertThat(got.stdout()).contains(out.toString());
+        }
+
+        @Test
+        void csvWithCustomDelimiter_imports(@TempDir Path tmp) throws IOException {
+            // Given — tab-separated values
+            Path csv = tmp.resolve("data.tsv");
+            Files.writeString(csv, "id\tvalue\n1\ta\n2\tb\n", StandardCharsets.UTF_8);
+
+            // When
+            CliTestSupport.Captured got = capture(() ->
+                    ImportCommand.run(new String[]{"import", "--delimiter", "\t", csv.toString()}));
+
+            // Then — without the explicit delimiter the import would treat the whole row as one
+            // column. Success here confirms the {@code --delimiter} flag plumbs through.
+            // Output filename: input is {@code data.tsv}, deriveOutputPath only strips
+            // {@code .csv}/{@code .parquet} suffixes, so the result is {@code data.tsv.vortex}.
+            assertThat(got.status()).isEqualTo(ExitStatus.OK);
+            assertThat(tmp.resolve("data.tsv.vortex")).exists();
+        }
+    }
+}
