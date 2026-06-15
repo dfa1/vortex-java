@@ -10,13 +10,20 @@ import io.github.dfa1.vortex.proto.ScalarValue;
 import io.github.dfa1.vortex.proto.SparseMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
+import io.github.dfa1.vortex.reader.array.ByteArray;
+import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.FloatArray;
+import io.github.dfa1.vortex.reader.array.IntArray;
+import io.github.dfa1.vortex.reader.array.LazySparseByteArray;
+import io.github.dfa1.vortex.reader.array.LazySparseDoubleArray;
+import io.github.dfa1.vortex.reader.array.LazySparseFloatArray;
+import io.github.dfa1.vortex.reader.array.LazySparseIntArray;
+import io.github.dfa1.vortex.reader.array.LazySparseLongArray;
+import io.github.dfa1.vortex.reader.array.LazySparseShortArray;
+import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
-import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
-import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
-import io.github.dfa1.vortex.reader.array.MaterializedFloatArray;
-import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
-import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
-import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
+import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 
 import java.io.IOException;
@@ -83,26 +90,36 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
         } catch (IOException e) {
             throw new VortexException(EncodingId.VORTEX_SPARSE, "invalid fill value", e);
         }
+        long fillBits = scalarToLong(fillScalar);
 
-        int elemBytes = valuePtype.byteSize();
-        MemorySegment out = ctx.arena().allocate(n * elemBytes);
-        fillSegment(out, n, valuePtype, fillScalar);
-
-        if (numPatches > 0) {
-            DType indicesDtype = new DType.Primitive(indicesPtype, false);
-            applyPatches(out, n, valuePtype,
-                    ctx.decodeChildSegment(0, indicesDtype, numPatches),
-                    ctx.decodeChildSegment(1, ctx.dtype(), numPatches),
-                    indicesPtype, numPatches, offset);
-        }
+        // Lazy path: keep fill bits + decoded patches; no n-sized buffer allocated.
+        DType indicesDtype = new DType.Primitive(indicesPtype, false);
+        Array patchIndices = numPatches > 0
+                ? ctx.decodeChild(0, indicesDtype, numPatches)
+                : null;
+        Array patchValues = numPatches > 0
+                ? ctx.decodeChild(1, ctx.dtype(), numPatches)
+                : null;
+        Array idxData = patchIndices instanceof MaskedArray m ? m.inner() : patchIndices;
+        Array valData = patchValues instanceof MaskedArray m ? m.inner() : patchValues;
 
         return switch (valuePtype) {
-            case I64, U64 -> new MaterializedLongArray(ctx.dtype(), n, out);
-            case I32, U32 -> new MaterializedIntArray(ctx.dtype(), n, out);
-            case F64 -> new MaterializedDoubleArray(ctx.dtype(), n, out);
-            case F32 -> new MaterializedFloatArray(ctx.dtype(), n, out);
-            case I16, U16 -> new MaterializedShortArray(ctx.dtype(), n, out);
-            case I8, U8 -> new MaterializedByteArray(ctx.dtype(), n, out);
+            case I64, U64 -> new LazySparseLongArray(ctx.dtype(), n, fillBits,
+                    (LongArray) valData, idxData, offset);
+            case I32, U32 -> new LazySparseIntArray(ctx.dtype(), n, (int) fillBits,
+                    (IntArray) valData, idxData, offset);
+            case F64 -> new LazySparseDoubleArray(ctx.dtype(), n, Double.longBitsToDouble(fillBits),
+                    (DoubleArray) valData, idxData, offset);
+            case F32 -> new LazySparseFloatArray(ctx.dtype(), n, Float.intBitsToFloat((int) fillBits),
+                    (FloatArray) valData, idxData, offset);
+            case I16 -> new LazySparseShortArray(ctx.dtype(), n, (short) fillBits, (short) fillBits,
+                    (ShortArray) valData, idxData, offset);
+            case U16 -> new LazySparseShortArray(ctx.dtype(), n, (short) fillBits, (int) (fillBits & 0xFFFFL),
+                    (ShortArray) valData, idxData, offset);
+            case I8 -> new LazySparseByteArray(ctx.dtype(), n, (byte) fillBits, (byte) fillBits,
+                    (ByteArray) valData, idxData, offset);
+            case U8 -> new LazySparseByteArray(ctx.dtype(), n, (byte) fillBits, (int) (fillBits & 0xFFL),
+                    (ByteArray) valData, idxData, offset);
             default -> throw new VortexException(EncodingId.VORTEX_SPARSE, "unsupported ptype " + valuePtype);
         };
     }
@@ -183,34 +200,6 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
         };
     }
 
-    private static void fillSegment(MemorySegment out, long n, PType ptype, ScalarValue scalar) {
-        long fillLong = scalarToLong(scalar);
-        ByteBuffer bb = out.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
-        for (long i = 0; i < n; i++) {
-            writeElem(bb, ptype, fillLong);
-        }
-    }
-
-    private static void applyPatches(
-            MemorySegment out, long n, PType valuePtype,
-            MemorySegment idxSeg, MemorySegment valSeg,
-            PType idxPtype, long numPatches, long offset
-    ) {
-        int elemBytes = valuePtype.byteSize();
-        int idxBytes = idxPtype.byteSize();
-        ByteBuffer outBuf = out.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
-        for (long i = 0; i < numPatches; i++) {
-            long idx = readUnsignedIdx(idxSeg, SegmentBroadcast.elementOffset(idxSeg, i, idxBytes), idxPtype) - offset;
-            if (idx < 0 || idx >= n) {
-                throw new VortexException(EncodingId.VORTEX_SPARSE,
-                        "patch index " + idx + " out of range [0," + n + ")");
-            }
-            long val = readElem(valSeg, SegmentBroadcast.elementOffset(valSeg, i, elemBytes), valuePtype);
-            outBuf.position((int) (idx * elemBytes));
-            writeElem(outBuf, valuePtype, val);
-        }
-    }
-
     private static long readUnsignedIdx(MemorySegment seg, long off, PType ptype) {
         return switch (ptype) {
             case U8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, off));
@@ -219,26 +208,6 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
             case U64 -> seg.get(PTypeIO.LE_LONG, off);
             default -> throw new VortexException(EncodingId.VORTEX_SPARSE, "non-unsigned index ptype " + ptype);
         };
-    }
-
-    private static long readElem(MemorySegment seg, long off, PType ptype) {
-        return switch (ptype) {
-            case I8, U8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, off));
-            case I16, U16 -> Short.toUnsignedLong(seg.get(PTypeIO.LE_SHORT, off));
-            case I32, U32 -> Integer.toUnsignedLong(seg.get(PTypeIO.LE_INT, off));
-            case I64, U64, F32, F64 -> seg.get(PTypeIO.LE_LONG, off);
-            default -> throw new UnsupportedOperationException("vortex.sparse: unsupported ptype " + ptype);
-        };
-    }
-
-    private static void writeElem(ByteBuffer bb, PType ptype, long bits) {
-        switch (ptype) {
-            case I8, U8 -> bb.put((byte) bits);
-            case I16, U16 -> bb.putShort((short) bits);
-            case I32, U32 -> bb.putInt((int) bits);
-            case I64, U64, F32, F64 -> bb.putLong(bits);
-            default -> throw new UnsupportedOperationException("vortex.sparse: unsupported ptype " + ptype);
-        }
     }
 
     private static long scalarToLong(ScalarValue scalar) {

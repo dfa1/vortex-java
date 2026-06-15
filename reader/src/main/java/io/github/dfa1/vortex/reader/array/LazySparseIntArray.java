@@ -1,0 +1,57 @@
+package io.github.dfa1.vortex.reader.array;
+
+import io.github.dfa1.vortex.core.DType;
+
+import java.util.function.IntBinaryOperator;
+import java.util.function.IntConsumer;
+
+/// Lazy Sparse-encoded {@link IntArray}. See {@link LazySparseLongArray} for semantics.
+///
+/// @param dtype         logical element type
+/// @param length        total logical row count
+/// @param fillValue     value at every unpatched position
+/// @param patchValues   values for patched positions
+/// @param patchIndices  sorted absolute positions of patches
+/// @param offset        starting absolute position
+public record LazySparseIntArray(
+        DType dtype, long length, int fillValue,
+        IntArray patchValues, Array patchIndices, long offset)
+        implements IntArray {
+
+    @Override
+    public int getInt(long i) {
+        int p = SparseArrays.findPatch(patchIndices, patchValues.length(), i + offset);
+        return p >= 0 ? patchValues.getInt(p) : fillValue;
+    }
+
+    @Override
+    public void forEachInt(IntConsumer c) {
+        long numPatches = patchValues.length();
+        long absStart = offset;
+        long absEnd = offset + length;
+        int p = SparseArrays.findFirstAtOrAfter(patchIndices, numPatches, absStart);
+        long pos = absStart;
+        while (pos < absEnd && p < numPatches) {
+            long patchAbs = SparseArrays.readPatchIdx(patchIndices, p);
+            if (patchAbs >= absEnd) {
+                break;
+            }
+            for (long r = pos; r < patchAbs; r++) {
+                c.accept(fillValue);
+            }
+            c.accept(patchValues.getInt(p));
+            pos = patchAbs + 1;
+            p++;
+        }
+        for (long r = pos; r < absEnd; r++) {
+            c.accept(fillValue);
+        }
+    }
+
+    @Override
+    public int fold(int identity, IntBinaryOperator op) {
+        int[] acc = {identity};
+        forEachInt(v -> acc[0] = op.applyAsInt(acc[0], v));
+        return acc[0];
+    }
+}
