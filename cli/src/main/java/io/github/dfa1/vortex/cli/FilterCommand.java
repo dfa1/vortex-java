@@ -23,16 +23,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 final class FilterCommand {
-
-    // Greedy {@code \w[\w.]*}: operator chars {@code (!, =, >, <)} cannot appear inside the
-    // column-name character class, so no backtracking is required. A reluctant quantifier
-    // here was a regex-DoS hazard (Sonar S5852) without any matching benefit.
-    private static final Pattern EXPR = Pattern.compile(
-            "^(\\w[\\w.]*)\\s*(!=|>=|<=|==|>|<|=)\\s*(.+)$");
 
     private FilterCommand() {
     }
@@ -62,29 +54,78 @@ final class FilterCommand {
             CsvExporter.exportCsvFiltered(path, stdout, ExportOptions.defaults(), scanOptions, rowPred);
             stdout.flush();
             return ExitStatus.OK;
-        } catch (IOException e) {
+        } catch (IOException | io.github.dfa1.vortex.core.VortexException e) {
+            // VortexException is unchecked but surfaces user-facing failures (e.g. unknown
+            // column on a typo'd filter); catching it here keeps the CLI from dumping a
+            // stack trace and lets shell pipelines branch on the exit code.
             System.err.println("error: " + e.getMessage());
             return ExitStatus.ERROR;
         }
     }
 
     private static RowFilter parseFilter(String expr) {
-        Matcher m = EXPR.matcher(expr.trim());
-        if (!m.matches()) {
-            throw new IllegalArgumentException("invalid filter expression: \"" + expr
-                                                       + "\"  expected: col op value  (op: >, >=, <, <=, =, ==, !=)");
+        String trimmed = expr.trim();
+        int opStart = indexOfOperator(trimmed);
+        if (opStart <= 0) {
+            throw invalid(expr);
         }
-        String col = m.group(1);
-        Comparable<?> value = parseValue(m.group(3).trim());
-        return switch (m.group(2)) {
+        int opEnd = operatorEnd(trimmed, opStart);
+        String op = trimmed.substring(opStart, opEnd);
+        String col = trimmed.substring(0, opStart).stripTrailing();
+        String rawValue = trimmed.substring(opEnd).stripLeading();
+        if (col.isEmpty() || !isValidColumnName(col) || rawValue.isEmpty()) {
+            throw invalid(expr);
+        }
+        Comparable<?> value = parseValue(rawValue);
+        return switch (op) {
             case ">" -> RowFilter.gt(col, value);
             case ">=" -> RowFilter.gte(col, value);
             case "<" -> RowFilter.lt(col, value);
             case "<=" -> RowFilter.lte(col, value);
             case "=", "==" -> RowFilter.eq(col, value);
             case "!=" -> RowFilter.neq(col, value);
-            default -> throw new IllegalArgumentException("unknown operator: " + m.group(2));
+            default -> throw new IllegalArgumentException("unknown operator: " + op);
         };
+    }
+
+    /// Scan-based parsing replaces the previous regex
+    /// {@code ^(\w[\w.]*)\s*(!=|>=|<=|==|>|<|=)\s*(.+)$} which Sonar flagged as a
+    /// potential regex-DoS (S5852). Linear scan, no backtracking, no engine surface.
+    private static int indexOfOperator(String s) {
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '!' || c == '=' || c == '>' || c == '<') {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /// Returns the index one past the operator: 2 chars for {@code !=, >=, <=, ==},
+    /// 1 char for the single-character operators {@code >, <, =}.
+    private static int operatorEnd(String s, int start) {
+        if (start + 1 < s.length() && s.charAt(start + 1) == '=') {
+            return start + 2;
+        }
+        return start + 1;
+    }
+
+    private static boolean isValidColumnName(String s) {
+        if (!Character.isLetterOrDigit(s.charAt(0)) && s.charAt(0) != '_') {
+            return false;
+        }
+        for (int i = 1; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (!Character.isLetterOrDigit(c) && c != '_' && c != '.') {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static IllegalArgumentException invalid(String expr) {
+        return new IllegalArgumentException("invalid filter expression: \"" + expr
+                + "\"  expected: col op value  (op: >, >=, <, <=, =, ==, !=)");
     }
 
     private static Comparable<?> parseValue(String raw) {
