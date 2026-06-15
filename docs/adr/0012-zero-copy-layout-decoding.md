@@ -1,7 +1,8 @@
 # ADR 0012: Zero-copy layout decoding — lazy Chunked and Dict arrays
 
-- **Status:** Proposed
+- **Status:** Implemented
 - **Date:** 2026-06-14
+- **Implemented:** 2026-06-15 (PRs #38, #39, #42)
 - **Deciders:** project maintainer
 - **Supersedes:** —
 - **Superseded by:** —
@@ -303,6 +304,66 @@ The implementation PR resolves these; recorded here so the trail is clear:
    Both target OHLC; fused chain fixes ALP(FoR(Bitpacked)) materialisation
    inside one chunk, Chunked fixes the cross-chunk concat. They compose
    but order matters for measurement.
+
+## Outcome
+
+Shipped across three PRs against `main`:
+
+- **PR #38 — Chunked half.** `ChunkedLongArray`/`IntArray`/`DoubleArray`/`FloatArray` records as proposed, plus
+  `ChunkedShortArray`/`ByteArray`/`BoolArray` (scope expanded — adding them was free since each new type only
+  pushed those interfaces from 1 to 2 impls, well under the JIT inline budget). `ScanIterator.decodeConcatPrimitive`
+  renamed to `decodeChunkedLayout` and rewritten to construct `ChunkedXxxArray` directly; the alloc + memcpy loop
+  deleted. `ChunkedEncodingDecoder.decode` rewritten the same way (`wrap`/`wrapPrimitive`/`wrapStruct` replaces
+  `concat`/`concatPrimitive`/`concatStruct`). `ArraySegments.of(arr, arena)` gained the chunked materialise cases
+  per §"Materialisation fallback". Bench gate passed: `RustVsJavaReadBenchmark` showed no statistically significant
+  delta vs the previously-considered sticky-cache class shape; record shape chosen on architecture grounds
+  (immutable, thread-safe, idiomatic Java). `forEach*` overrides iterate children directly so sequential scans
+  bypass the per-row binary search.
+
+- **PR #39 — Dict half.** `DictLongArray`/`IntArray`/`DoubleArray`/`FloatArray` records as proposed.
+  Codes ptype variance (U8/U16/U32/U64 = Byte/Short/Int/Long Array) handled via centralised
+  `DictArrays.readCode(codes, i)` plus per-method codes-type switches hoisted outside the inner loops per the
+  CLAUDE.md hot-loop rule. `ScanIterator.expandDictPrimitive` deleted; the primitive dict-layout branch
+  returns the matching `DictXxxArray`. `ArraySegments.of(arr, arena)` gained the four dict materialise cases.
+  `truncateArray` got Dict cases before the per-interface catch-all so LIMIT keeps the dictionary and just
+  slices codes.
+
+- **PR #42 — Multi-chunk Utf8/Binary + ADR closeout.** `VarBinArray` gained a `ChunkedMode` record alongside the
+  pre-existing `OffsetMode` and `DictMode`. `ScanIterator.decodeChunkedLayout` routes Utf8/Binary to
+  `ChunkedMode.of`. The previously-stale TODO on `DictEncodingDecoder` is replaced with a "kept eager by design"
+  note: the encoding-level path uses `SegmentBroadcast.capacity`-aware scatter for ConstantEncoding fan-out, which
+  doesn't trivially wrap as a lazy `Array`; the layout-level path (the primary scan entry point) is fully lazy.
+  `docs/compatibility.md` Decode shape table updated.
+
+Resolutions to the open questions:
+
+1. **Scope:** Chunked first (PR #38), Dict second (PR #39). Bench between confirmed Chunked was net positive
+   before adding Dict polymorphism.
+2. **Megamorphic mitigation:** accepted the 5-impl dispatch cost on `LongArray`/`IntArray` (Materialized + LazyFor +
+   LazyZigZag + Chunked + Dict). `RustVsJavaReadBenchmark` between PRs showed no measurable regression because
+   sequential reads use `forEach*` (single impl per call site) and the polymorphic `getXxx(i)` site isn't the
+   benchmark's hot path. Re-evaluate if a real workload surfaces the cost.
+3. **Fallback policy:** relaxed — `ArraySegments.of(arr, arena)` materialises Chunked and Dict variants on
+   demand. Used internally by `decodeDictLayout` for string dict expansion (the codes side) and reserved for
+   future decoders that genuinely need a contiguous segment.
+4. **Sequencing vs ADR 0010 §Phase 2:** Chunked + Dict lazy decoding landed first. Phase 2 (fused chain) is
+   still open and now composes against a fully lazy multi-chunk + dict-encoded pipeline.
+
+What was **not** shipped (intentional):
+
+- **`DictEncodingDecoder.decode` (encoding-level dict).** Not in the ADR's §"Decoder wiring" scope. Its
+  `SegmentBroadcast.capacity`-aware scatter for ConstantEncoding fan-out makes lazy wrapping non-trivial;
+  the layout-level path is the common case and is lazy. Documented in the decoder's class-level Javadoc.
+- **`DictVarBinArray` as a fifth record.** Turned out unnecessary: `VarBinArray.DictMode` was already a lazy
+  dict record (pre-dating this ADR). The ADR's §Scope mention of `DictVarBinArray` is satisfied by the
+  pre-existing `DictMode`.
+- **Bench fixture for column-level chunked Utf8.** The current writer doesn't produce a column-level Chunked
+  layout for Utf8 — multi-batch Utf8 writes surface as one scan-`Chunk` per writer batch, with leaf
+  `VarBinArray` columns inside. `VarBinArray.ChunkedMode` is therefore defensive: it fixes a pre-existing
+  crash (`decodeChunkedLayout` threw on Utf8 dtype cast) but the bug only fires on files whose layout
+  explicitly carries column-level Chunked Utf8. Unit-tested in `VarBinChunkedModeTest`; round-trip-tested in
+  `MultiChunkUtf8RoundTripTest`. When a future writer change produces column-level chunked Utf8, the test
+  assertion should flip to require `sawChunkedMode == true`.
 
 ## References
 
