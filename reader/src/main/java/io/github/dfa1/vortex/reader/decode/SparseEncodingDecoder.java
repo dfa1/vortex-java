@@ -30,7 +30,6 @@ import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 
 /// Read-only decoder for {@code vortex.sparse}.
 public final class SparseEncodingDecoder implements EncodingDecoder {
@@ -93,13 +92,11 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
         long fillBits = scalarToLong(fillScalar);
 
         // Lazy path: keep fill bits + decoded patches; no n-sized buffer allocated.
+        // When numPatches == 0 we still decode zero-length children so the record's
+        // patchValues.length() and findPatch can rely on real (empty) Array instances.
         DType indicesDtype = new DType.Primitive(indicesPtype, false);
-        Array patchIndices = numPatches > 0
-                ? ctx.decodeChild(0, indicesDtype, numPatches)
-                : null;
-        Array patchValues = numPatches > 0
-                ? ctx.decodeChild(1, ctx.dtype(), numPatches)
-                : null;
+        Array patchIndices = ctx.decodeChild(0, indicesDtype, numPatches);
+        Array patchValues = ctx.decodeChild(1, ctx.dtype(), numPatches);
         Array idxData = patchIndices instanceof MaskedArray m ? m.inner() : patchIndices;
         Array valData = patchValues instanceof MaskedArray m ? m.inner() : patchValues;
 
