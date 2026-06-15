@@ -29,4 +29,14 @@ public non-sealed interface ByteArray extends Array {
     /// @param op       binary operator applied to accumulator and each element in order
     /// @return the final accumulated value
     long fold(long identity, LongBinaryOperator op);
+
+    /// Passes each {@code byte} element to the given consumer in order.
+    ///
+    /// @param c consumer that receives each byte element
+    default void forEachByte(ByteConsumer c) {
+        long n = length();
+        for (long i = 0; i < n; i++) {
+            c.accept(getByte(i));
+        }
+    }
 }

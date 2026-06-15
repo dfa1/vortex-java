@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -226,6 +227,20 @@ class ChunkedRecordSmokeTest {
             assertThatThrownBy(() -> ChunkedShortArray.of(I16, 0, List.of()))
                     .isInstanceOf(VortexException.class);
         }
+
+        @Test
+        void forEachShortIteratesChildren() {
+            try (Arena arena = Arena.ofConfined()) {
+                ShortArray c0 = shortChunk(arena, (short) 1, (short) 2);
+                ShortArray c1 = shortChunk(arena, (short) 3);
+                ChunkedShortArray sut = ChunkedShortArray.of(I16, 3, List.of(c0, c1));
+
+                var seen = new ArrayList<Short>();
+                sut.forEachShort(seen::add);
+
+                assertThat(seen).containsExactly((short) 1, (short) 2, (short) 3);
+            }
+        }
     }
 
     @Nested
@@ -265,6 +280,20 @@ class ChunkedRecordSmokeTest {
                 ByteArray c0 = byteChunk(arena, (byte) 1, (byte) 2);
                 assertThatThrownBy(() -> ChunkedByteArray.of(I8, 99, List.of(c0)))
                         .isInstanceOf(VortexException.class);
+            }
+        }
+
+        @Test
+        void forEachByteIteratesChildren() {
+            try (Arena arena = Arena.ofConfined()) {
+                ByteArray c0 = byteChunk(arena, (byte) 10, (byte) 20);
+                ByteArray c1 = byteChunk(arena, (byte) 30);
+                ChunkedByteArray sut = ChunkedByteArray.of(I8, 3, List.of(c0, c1));
+
+                var seen = new ArrayList<Byte>();
+                sut.forEachByte(seen::add);
+
+                assertThat(seen).containsExactly((byte) 10, (byte) 20, (byte) 30);
             }
         }
     }
@@ -310,6 +339,20 @@ class ChunkedRecordSmokeTest {
         void emptyRejected() {
             assertThatThrownBy(() -> ChunkedBoolArray.of(BOOL, 0, List.of()))
                     .isInstanceOf(VortexException.class);
+        }
+
+        @Test
+        void forEachBooleanIteratesChildren() {
+            try (Arena arena = Arena.ofConfined()) {
+                BoolArray c0 = boolChunk(arena, true, false);
+                BoolArray c1 = boolChunk(arena, true);
+                ChunkedBoolArray sut = ChunkedBoolArray.of(BOOL, 3, List.of(c0, c1));
+
+                var seen = new ArrayList<Boolean>();
+                sut.forEachBoolean(seen::add);
+
+                assertThat(seen).containsExactly(true, false, true);
+            }
         }
     }
 

@@ -1,0 +1,11 @@
+package io.github.dfa1.vortex.reader.array;
+
+/// Consumer of {@code boolean} values. Used by {@link BoolArray#forEachBoolean(BooleanConsumer)}.
+@FunctionalInterface
+public interface BooleanConsumer {
+
+    /// Accepts a boolean value.
+    ///
+    /// @param value the boolean value to consume
+    void accept(boolean value);
+}
