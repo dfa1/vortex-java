@@ -10,7 +10,7 @@ import java.nio.ByteBuffer;
 
 /// Decoding context passed to each {@link EncodingDecoder}.
 ///
-/// <p>Buffers are {@link MemorySegment} slices materialized from the file's segment table;
+/// Buffers are {@link MemorySegment} slices materialized from the file's segment table;
 /// children are decoded recursively via {@link #decodeChild(int)}.
 /// The arena is scoped to one chunk epoch — all decode output allocated from it is
 /// valid until the next chunk is opened.
@@ -43,7 +43,7 @@ public record DecodeContext(
 
     /// Recursively decode child {@code i} with an explicit dtype and row count.
     ///
-    /// <p>Use this overload when the child has a different logical type or length
+    /// Use this overload when the child has a different logical type or length
     /// than the parent (e.g. run-end arrays, patch children, validity bitmaps).
     ///
     /// @param i        zero-based child index within this node's children array

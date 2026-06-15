@@ -50,16 +50,16 @@ import java.util.concurrent.TimeUnit;
 /// Big-file scan benchmark for files exceeding 2 GB ({@link io.github.dfa1.vortex.reader.SegmentSpec#length()}
 /// is {@code long}, so segments up to 4 GB are supported).
 ///
-/// <p>Setup: JNI writer produces a >2 GB Vortex file with 4 incompressible I64 columns
+/// Setup: JNI writer produces a >2 GB Vortex file with 4 incompressible I64 columns
 /// (random longs defeat bit-packing / FoR so the segments stay large). Measurement: pure-Java
 /// `VortexReader` scans every column and sums the first column.
 ///
-/// <p>The trial setup writes ~3 GB to disk and takes tens of seconds, so this benchmark is
+/// The trial setup writes ~3 GB to disk and takes tens of seconds, so this benchmark is
 /// intended for occasional runs (e.g. before tagging a release). To skip the JNI write, pass
 /// {@code -Dvortex.bench.bigfile=/path/to/existing.vtx} — useful when iterating on the read
 /// path against the same fixture.
 ///
-/// <p>Run: {@code java -jar performance/target/benchmarks.jar RustWritesJavaReadsBigFileBenchmark.javaScan}
+/// Run: {@code java -jar performance/target/benchmarks.jar RustWritesJavaReadsBigFileBenchmark.javaScan}
 @State(Scope.Benchmark)
 @BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.SECONDS)

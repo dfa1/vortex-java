@@ -70,7 +70,7 @@ public final class VortexHttpReader implements VortexHandle {
 
     /// Opens a remote Vortex file using a caller-supplied {@link HttpClient}.
     ///
-    /// <p>Use this overload when the default shared client is unsuitable — e.g. to configure
+    /// Use this overload when the default shared client is unsuitable — e.g. to configure
     /// a proxy, custom TLS context, or per-request timeout.
     ///
     /// @param uri      HTTP(S) URL of the Vortex file

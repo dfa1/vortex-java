@@ -71,7 +71,7 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
     /// stratified sample, breaking ties in favour of the smaller {@code e - f} gap.
     /// Mirrors Rust's {@code ALPFloat::find_best_exponents}.
     ///
-    /// <p>The previous heuristic (minimise exception count) picked combinations like
+    /// The previous heuristic (minimise exception count) picked combinations like
     /// {@code (e=14, f=0)} that produced few exceptions but huge encoded mantissas, forcing
     /// the cascade into Dict+FoR+BitPacked instead of a clean ALP→BitPacked chain.
     private static int[] findExponentsF64(double[] values) {
@@ -110,7 +110,7 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
     /// Cost model matches Rust: encoded = FoR + bitpack at {@code ceil(log2(range)+1)} bits/value,
     /// plus {@code patchCount * (8 bytes value + 2 bytes index)} for exceptions.
     ///
-    /// <p>Encoded byte count is computed over the full sample length (not just the cleanly encoded
+    /// Encoded byte count is computed over the full sample length (not just the cleanly encoded
     /// values) to mirror Rust's {@code estimate_encoded_size}: patch positions are filled with the
     /// first non-patched encoded value, so they still consume bitpacked space.
     private static long estimateEncodedSizeF64(double[] sample, int expE, int expF, long[] encoded) {

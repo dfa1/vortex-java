@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.core.VortexException;
 
 /// Decoded variable-length list array.
 ///
-/// <p>List {@code i} covers {@code elements[offsets[i]..offsets[i+1])}.
+/// List {@code i} covers {@code elements[offsets[i]..offsets[i+1])}.
 /// {@code offsets} has length {@code outerLen + 1}.
 public final class ListArray implements Array {
 

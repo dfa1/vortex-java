@@ -6,12 +6,12 @@ import java.util.Optional;
 
 /// Unrecoverable Vortex error: malformed file, unsupported feature, or encoding failure.
 ///
-/// <p><strong>Non-recoverable contract:</strong> once thrown, the underlying file or stream is
+/// **Non-recoverable contract:** once thrown, the underlying file or stream is
 /// in an indeterminate state. Callers must propagate this exception — do not catch-and-swallow,
 /// do not retry on the same input. The correct response is to abort the read, surface the error,
 /// and close the {@code VortexFile}.
 ///
-/// <p>Carries an optional {@link EncodingId} for diagnostic attribution; it is not intended
+/// Carries an optional {@link EncodingId} for diagnostic attribution; it is not intended
 /// for recovery logic.
 public final class VortexException extends RuntimeException {
 

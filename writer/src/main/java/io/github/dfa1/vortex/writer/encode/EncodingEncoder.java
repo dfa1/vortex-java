@@ -8,7 +8,7 @@ import io.github.dfa1.vortex.core.DType;
 /// encoder for a dtype and the {@link #encode(DType, Object, EncodeContext)} entry
 /// point itself.
 ///
-/// <p>Encoder implementations live in the {@code writer} module and are registered via
+/// Encoder implementations live in the {@code writer} module and are registered via
 /// {@link java.util.ServiceLoader}.
 public interface EncodingEncoder {
 

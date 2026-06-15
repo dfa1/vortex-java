@@ -18,10 +18,10 @@ import java.util.List;
 /// Parses a flat segment from the memory-mapped file region and dispatches to the
 /// appropriate decoder via the {@link ReadRegistry}.
 ///
-/// <p>Flat segment wire format:
+/// Flat segment wire format:
 /// {@code buffer_data... | FlatBuffer(Array) | u32 LE = FlatBuffer byte length}
 ///
-/// <p>{@link ReadRegistry} is pure dispatch; this class owns all file-format knowledge:
+/// {@link ReadRegistry} is pure dispatch; this class owns all file-format knowledge:
 /// FlatBuffer parsing, buffer-offset arithmetic, and encoding-spec lookup.
 public final class FlatSegmentDecoder {
 

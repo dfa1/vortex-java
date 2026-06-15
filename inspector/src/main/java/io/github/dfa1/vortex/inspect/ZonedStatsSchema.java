@@ -10,25 +10,23 @@ import java.util.List;
 /// Reconstructs the per-zone statistics-table {@link DType} for a
 /// {@code vortex.stats} (Zoned) layout.
 ///
-/// <p>The shape is sourced from the Rust reference implementation:
-/// <ul>
-///   <li>Metadata format
+/// The shape is sourced from the Rust reference implementation:
+/// - Metadata format
 ///       (<a href="https://github.com/spiraldb/vortex/blob/develop/vortex-layout/src/layouts/zoned/mod.rs">
 ///       vortex-layout/src/layouts/zoned/mod.rs</a> — {@code ZonedMetadata}):
 ///       bytes [0..4) are the zone length as a little-endian {@code u32};
 ///       remaining bytes form a {@code Stat} bitset (LSB-first per byte). Each
 ///       set bit at index {@code i} indicates that the {@link Stat} with that
-///       ordinal is present in the auxiliary stats table.</li>
-///   <li>Schema construction
+///       ordinal is present in the auxiliary stats table.
+/// - Schema construction
 ///       (<a href="https://github.com/spiraldb/vortex/blob/develop/vortex-layout/src/layouts/zoned/schema.rs">
 ///       vortex-layout/src/layouts/zoned/schema.rs</a> — {@code stats_table_dtype}):
 ///       for each present stat in ordinal order, append a struct field with the
 ///       stat's name and the stat's nullable dtype. {@code Max} and {@code Min}
 ///       each get an extra trailing field {@code max_is_truncated} /
-///       {@code min_is_truncated} of type {@code Bool} (non-nullable).</li>
-/// </ul>
+///       {@code min_is_truncated} of type {@code Bool} (non-nullable).
 ///
-/// <p>{@code Sum} widening rules and Decimal handling are not yet implemented —
+/// {@code Sum} widening rules and Decimal handling are not yet implemented —
 /// when the column dtype has no resolvable stat dtype the stat is skipped so
 /// the inspector degrades to "no schema" rather than failing.
 public final class ZonedStatsSchema {
@@ -92,7 +90,7 @@ public final class ZonedStatsSchema {
 
     /// Returns the stats present in the layout metadata bitset, in ordinal order.
     ///
-    /// <p>Unknown bits (set at an index past {@link Stat#values()}'s length, which
+    /// Unknown bits (set at an index past {@link Stat#values()}'s length, which
     /// would mean a newer Vortex writer) are silently skipped — matching the Rust
     /// reader's forward-compatibility behaviour.
     ///
@@ -122,12 +120,12 @@ public final class ZonedStatsSchema {
     /// Reconstructs the per-zone stats-table dtype for the given column dtype
     /// and metadata.
     ///
-    /// <p>The result is a {@link io.github.dfa1.vortex.core.DType.Struct} mirroring
+    /// The result is a {@link io.github.dfa1.vortex.core.DType.Struct} mirroring
     /// the order produced by Rust's {@code stats_table_dtype}: for every present stat
     /// in ordinal order, append a {@code (name, nullable dtype)} field; Max/Min each
     /// add a trailing {@code _is_truncated} Bool (non-nullable) flag.
     ///
-    /// <p>If a stat has no resolvable dtype for the given column (e.g. {@code Sum}
+    /// If a stat has no resolvable dtype for the given column (e.g. {@code Sum}
     /// over an extension type without storage), it is omitted from the struct.
     ///
     /// @param columnDtype the column's logical dtype (the {@code data} child's dtype)
@@ -168,21 +166,19 @@ public final class ZonedStatsSchema {
     /// dtype, or {@code null} if the stat has no defined dtype for that column
     /// (in which case it is dropped from the stats table).
     ///
-    /// <p>Mirrors Rust's {@code Stat::dtype(&DType)} plus the aggregate-function
+    /// Mirrors Rust's {@code Stat::dtype(&DType)} plus the aggregate-function
     /// return-type rules (see
     /// <a href="https://github.com/spiraldb/vortex/blob/develop/vortex-array/src/aggregate_fn/fns">
     /// vortex-array/src/aggregate_fn/fns</a>):
-    /// <ul>
-    ///   <li>min/max → same dtype as column (except DType.Null → null);</li>
-    ///   <li>is_constant/is_sorted/is_strict_sorted → non-nullable Bool;</li>
-    ///   <li>null_count → non-nullable U64;</li>
-    ///   <li>uncompressed_size_in_bytes → non-nullable U64;</li>
-    ///   <li>nan_count → non-nullable U64 (only for float columns);</li>
-    ///   <li>sum → nullable U64 / I64 / F64 depending on column ptype; null for
-    ///       unsupported column dtypes.</li>
-    /// </ul>
+    /// - min/max → same dtype as column (except DType.Null → null);
+    /// - is_constant/is_sorted/is_strict_sorted → non-nullable Bool;
+    /// - null_count → non-nullable U64;
+    /// - uncompressed_size_in_bytes → non-nullable U64;
+    /// - nan_count → non-nullable U64 (only for float columns);
+    /// - sum → nullable U64 / I64 / F64 depending on column ptype; null for
+    ///       unsupported column dtypes.
     ///
-    /// <p>For Extension column dtypes, the storage dtype is consulted as a backward-compat
+    /// For Extension column dtypes, the storage dtype is consulted as a backward-compat
     /// fallback (matching the {@code or_else} branch in Rust's
     /// {@code stats_table_dtype}).
     ///

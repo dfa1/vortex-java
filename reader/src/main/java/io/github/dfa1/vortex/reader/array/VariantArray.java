@@ -4,13 +4,11 @@ import io.github.dfa1.vortex.core.DType;
 
 /// Decoded {@code vortex.variant} array: semi-structured data with a logical variant dtype.
 ///
-/// <p>Wire format:
-/// <ul>
-///   <li>Metadata: proto {@code VariantMetadataProto} with optional {@code shredded_dtype}.</li>
-///   <li>Buffers: none.</li>
-///   <li>Child 0: {@code core_storage} — logical variant array preserving the full value per row.</li>
-///   <li>Child 1 (optional): {@code shredded} — row-aligned typed array for selected paths.</li>
-/// </ul>
+/// Wire format:
+/// - Metadata: proto {@code VariantMetadataProto} with optional {@code shredded_dtype}.
+/// - Buffers: none.
+/// - Child 0: {@code core_storage} — logical variant array preserving the full value per row.
+/// - Child 1 (optional): {@code shredded} — row-aligned typed array for selected paths.
 public final class VariantArray implements Array {
 
     private final DType dtype;

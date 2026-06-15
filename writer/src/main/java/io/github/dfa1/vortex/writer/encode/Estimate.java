@@ -3,11 +3,9 @@ package io.github.dfa1.vortex.writer.encode;
 /// Compression estimate returned by an [EncodingEncoder] given pre-computed [ArrayStats].
 ///
 /// Three terminal verdicts:
-/// <ul>
-///   <li>[Skip] — encoder is incompatible with this input; do not consider.</li>
-///   <li>[AlwaysUse] — encoder is provably the best choice; pick immediately.</li>
-///   <li>[Ratio] — encoder estimates this compression ratio; compete against other ratios.</li>
-/// </ul>
+/// - [Skip] — encoder is incompatible with this input; do not consider.
+/// - [AlwaysUse] — encoder is provably the best choice; pick immediately.
+/// - [Ratio] — encoder estimates this compression ratio; compete against other ratios.
 ///
 /// Mirrors {@code vortex-compressor::estimate::EstimateVerdict}.
 public sealed interface Estimate {

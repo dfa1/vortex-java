@@ -13,12 +13,12 @@ import java.util.Set;
 /// Encoding context passed to every {@link EncodingEncoder#encode} and
 /// {@link EncodingEncoder#encodeCascade} call.
 ///
-/// <p>Carries a caller-scoped {@link Arena} for encode output buffers, a
+/// Carries a caller-scoped {@link Arena} for encode output buffers, a
 /// {@link WriteRegistry} for cross-encoder delegation and extension lookup,
 /// and cascading compression parameters (depth, exclusions, sampling) used by the
 /// {@link CascadingCompressor}.
 ///
-/// <p>In non-cascading paths, use {@link #of(Arena, WriteRegistry)} — cascade parameters
+/// In non-cascading paths, use {@link #of(Arena, WriteRegistry)} — cascade parameters
 /// default to depth 0 with no exclusions.
 /// In cascading paths, use {@link #ofDepth(int, Arena, WriteRegistry)} and let
 /// {@link CascadingCompressor} derive child contexts via {@link #withDecrementedDepth()}

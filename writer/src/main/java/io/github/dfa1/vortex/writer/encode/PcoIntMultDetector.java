@@ -7,11 +7,11 @@ import java.util.SplittableRandom;
 
 /// IntMult base detector — port of {@code pco/src/mode/int_mult.rs} choose_base.
 ///
-/// <p>Samples the input, computes triple-GCDs over disjoint triples, finds the most
+/// Samples the input, computes triple-GCDs over disjoint triples, finds the most
 /// statistically prominent GCD (z-score > 3 vs. the null hypothesis of uniform mod GCD),
 /// then verifies the candidate saves &gt; 0.5 bits/element vs. Classic mode.
 ///
-/// <p>If a base is found, the encoder splits each latent as
+/// If a base is found, the encoder splits each latent as
 /// {@code mult = latent / base; adj = latent % base} and encodes both as separate
 /// ANS streams under mode=1.
 final class PcoIntMultDetector {

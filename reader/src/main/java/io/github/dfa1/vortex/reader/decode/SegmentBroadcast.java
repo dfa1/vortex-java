@@ -6,13 +6,13 @@ import java.lang.foreign.MemorySegment;
 
 /// Element-offset helper for child segments returned by DecodeContext#decodeChildSegment.
 ///
-/// <p>ConstantEncodingEncoder deliberately stores a single element regardless of the array's
+/// ConstantEncodingEncoder deliberately stores a single element regardless of the array's
 /// declared {@code rowCount} (zip-bomb defense). Consumers that bulk-read child segments by
 /// raw byte offset (e.g. {@code seg.get(LE_LONG, i * 8)} or
 /// {@code MemorySegment.copy(seg, i * elemBytes, ...)}) must replicate the lone element across
 /// every logical index instead of running off the end.
 ///
-/// <p>{@link io.github.dfa1.vortex.reader.array.LongArray#getLong(long)} and the sibling typed
+/// {@link io.github.dfa1.vortex.reader.array.LongArray#getLong(long)} and the sibling typed
 /// accessors already wrap around with {@code i % cap}; this helper exposes the same arithmetic
 /// to call sites that work with raw segments.
 public final class SegmentBroadcast {
@@ -40,7 +40,7 @@ public final class SegmentBroadcast {
 
     /// Returns the number of elements physically present in {@code seg} (≥ 1 for non-empty).
     ///
-    /// <p>Used by callers that want to detect the constant case explicitly — e.g. to hoist
+    /// Used by callers that want to detect the constant case explicitly — e.g. to hoist
     /// a single read out of a hot loop.
     ///
     /// @param seg       segment returned by DecodeContext#decodeChildSegment

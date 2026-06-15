@@ -33,14 +33,12 @@ import java.util.Map;
 /// 0 for numeric types, {@code false} for bool, {@code ""} for strings.
 ///
 /// Supported Parquet physical types:
-/// <ul>
-///   <li>BOOLEAN → Bool</li>
-///   <li>INT32 (no annotation / IntType 8/16/32, signed or unsigned) → I8/U8/I16/U16/I32/U32</li>
-///   <li>INT64 (no annotation / IntType 64, signed or unsigned) → I64/U64</li>
-///   <li>FLOAT → F32</li>
-///   <li>DOUBLE → F64</li>
-///   <li>BYTE_ARRAY annotated STRING, ENUM, or JSON → Utf8</li>
-/// </ul>
+/// - BOOLEAN → Bool
+/// - INT32 (no annotation / IntType 8/16/32, signed or unsigned) → I8/U8/I16/U16/I32/U32
+/// - INT64 (no annotation / IntType 64, signed or unsigned) → I64/U64
+/// - FLOAT → F32
+/// - DOUBLE → F64
+/// - BYTE_ARRAY annotated STRING, ENUM, or JSON → Utf8
 ///
 /// All other physical types (INT96, FIXED_LEN_BYTE_ARRAY, unannotated BYTE_ARRAY, DECIMAL,
 /// DATE, TIME, TIMESTAMP) throw {@link UnsupportedOperationException}.

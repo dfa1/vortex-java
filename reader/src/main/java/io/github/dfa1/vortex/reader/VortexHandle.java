@@ -35,7 +35,7 @@ public interface VortexHandle extends Closeable {
     /// Returns a read-only view of the bytes backing the given segment spec.
     /// Writes through the returned segment throw {@code UnsupportedOperationException}.
     ///
-    /// <p>On memory-mapped handles this is a zero-copy slice of the mapped region.
+    /// On memory-mapped handles this is a zero-copy slice of the mapped region.
     /// On HTTP handles this fires a targeted range request.
     ///
     /// @param spec the segment to read
@@ -47,7 +47,7 @@ public interface VortexHandle extends Closeable {
 
     /// Returns the {@link ReadRegistry} this handle was opened with.
     ///
-    /// <p><strong>Internal escape hatch.</strong> Exposed for tooling
+    /// **Internal escape hatch.** Exposed for tooling
     /// (e.g. the inspector's dictionary preview) that needs to decode an
     /// internal subtree node directly via {@link io.github.dfa1.vortex.reader.FlatSegmentDecoder}.
     /// Not part of the supported stability contract; signatures may change

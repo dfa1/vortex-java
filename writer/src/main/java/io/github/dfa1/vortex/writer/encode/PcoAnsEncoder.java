@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.writer.encode;
 
 /// tANS encode table — port of {@code pco/src/ans/encoding.rs} and {@code spec.rs}.
 ///
-/// <p>State is kept in Rust convention: {@code state ∈ [tableSize, 2*tableSize)}.
+/// State is kept in Rust convention: {@code state ∈ [tableSize, 2*tableSize)}.
 /// The page header stores {@code state - tableSize} as the decoder initial state index.
 final class PcoAnsEncoder {
 

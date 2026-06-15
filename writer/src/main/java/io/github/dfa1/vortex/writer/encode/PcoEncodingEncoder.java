@@ -19,12 +19,10 @@ import java.util.stream.IntStream;
 
 /// Write-only encoder for {@code vortex.pco}.
 ///
-/// <p>Supports Classic mode (mode=0) and IntMult mode (mode=1).
+/// Supports Classic mode (mode=0) and IntMult mode (mode=1).
 /// Each chunk independently chooses:
-/// <ul>
-///   <li>IntMult base (via triple-GCD detection) if integer data has a structural multiplier</li>
-///   <li>Otherwise Classic mode with NoOp or Consecutive delta (deltaVariant=0 or 1)</li>
-/// </ul>
+/// - IntMult base (via triple-GCD detection) if integer data has a structural multiplier
+/// - Otherwise Classic mode with NoOp or Consecutive delta (deltaVariant=0 or 1)
 /// Data is split into chunks of {@value #CHUNK_SIZE} elements.
 public final class PcoEncodingEncoder implements EncodingEncoder {
 

@@ -7,7 +7,7 @@ import java.util.List;
 
 /// Decoded struct array: holds one [Array] per field, keyed by position.
 ///
-/// <p>Returned by [io.github.dfa1.vortex.encoding.StructEncoding] when decoding a
+/// Returned by [io.github.dfa1.vortex.encoding.StructEncoding] when decoding a
 /// multi-field {@code vortex.struct} segment (all columns packed into one flat).
 public final class StructArray implements Array {
 

@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 
 /// Decoded fixed-size list array: holds a flat elements [Array] of length {@code outerLen * fixedSize}.
 ///
-/// <p>List {@code i} covers elements {@code [i*fixedSize, (i+1)*fixedSize)}.
+/// List {@code i} covers elements {@code [i*fixedSize, (i+1)*fixedSize)}.
 public final class FixedSizeListArray implements Array {
 
     private final DType.FixedSizeList dtype;

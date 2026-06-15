@@ -59,7 +59,7 @@ public enum PType {
     /// Returns the {@link PType} for the given enum ordinal — the integer value the wire format
     /// uses to identify a physical type.
     ///
-    /// <p>Unlike {@code PType.values()[ordinal]}, this method validates the ordinal against the
+    /// Unlike {@code PType.values()[ordinal]}, this method validates the ordinal against the
     /// declared range and throws {@link VortexException} for crafted out-of-range values rather
     /// than the JDK's {@link ArrayIndexOutOfBoundsException}. Use this at every decode site that
     /// reads a ptype from untrusted metadata.

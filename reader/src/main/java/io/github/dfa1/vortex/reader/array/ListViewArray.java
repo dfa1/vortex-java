@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.core.VortexException;
 
 /// Decoded variable-length list-view array (Arrow ListView layout).
 ///
-/// <p>Unlike {@link ListArray}, offsets and sizes are independent per row:
+/// Unlike {@link ListArray}, offsets and sizes are independent per row:
 /// {@code list[i] = elements[offsets[i] .. offsets[i] + sizes[i]]}.
 /// Both {@code offsets} and {@code sizes} have length {@code outerLen} (not outerLen+1).
 public final class ListViewArray implements Array {

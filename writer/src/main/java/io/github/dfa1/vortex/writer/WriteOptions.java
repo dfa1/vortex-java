@@ -8,7 +8,7 @@ package io.github.dfa1.vortex.writer;
 /// @param allowedCascading          maximum recursive cascade depth; 0 = no cascading
 /// @param globalDict                build one shared dictionary across all chunks for low-cardinality columns
 /// @param enableZstd                add Zstandard to the cascade codec list
-///                                  <p>When {@code true}, Zstd competes with structural encodings (ALP, bitpack, etc.)
+///                                  When {@code true}, Zstd competes with structural encodings (ALP, bitpack, etc.)
 ///                                  on every chunk and wins when it produces smaller output — typically reducing
 ///                                  file size by 10–15% on real-world datasets compared to ALP+bitpack alone.
 ///                                  Trade-off: Zstd decompression is ~6× slower than ALP decode;
@@ -47,11 +47,11 @@ public record WriteOptions(
 
     /// Returns a copy of these options with Zstandard compression set to {@code enabled}.
     ///
-    /// <p>When enabled, Zstd is added to the cascade codec list and competes with structural encodings
+    /// When enabled, Zstd is added to the cascade codec list and competes with structural encodings
     /// (ALP, bitpack, FOR, etc.) on every chunk. Zstd typically wins on high-cardinality numeric columns
     /// (e.g. {@code fare_amount}, {@code total_amount}), reducing file size by 10–15%.
     ///
-    /// <p>Trade-off: Zstd decompression is ~6× slower than ALP reconstruction or bitpack unpack.
+    /// Trade-off: Zstd decompression is ~6× slower than ALP reconstruction or bitpack unpack.
     /// Use {@code false} (the default) for read-heavy or latency-sensitive workloads.
     ///
     /// @param enabled {@code true} to enable Zstd in the compression cascade

@@ -4,10 +4,10 @@ import io.github.dfa1.vortex.core.DType;
 
 /// Decoded {@code vortex.masked} array: a non-nullable child paired with an optional validity bitmap.
 ///
-/// <p>Invariant: {@code child} has no actual nulls — nullability is expressed solely via
+/// Invariant: {@code child} has no actual nulls — nullability is expressed solely via
 /// {@code validity}. When {@code validity} is {@code null} all positions are valid.
 ///
-/// <p>Use {@link #inner()} to access the payload and {@link #isValid(long)} to check validity
+/// Use {@link #inner()} to access the payload and {@link #isValid(long)} to check validity
 /// before trusting a value.
 public final class MaskedArray implements Array {
 

@@ -12,14 +12,14 @@ import java.util.ServiceLoader;
 /// Write-side registry: maps {@link EncodingId} to {@link EncodingEncoder} implementations,
 /// and {@link ExtensionId} to {@link ExtensionEncoder} implementations.
 ///
-/// <p>Instances are immutable after construction. Build one via {@link #builder()} or via the
+/// Instances are immutable after construction. Build one via {@link #builder()} or via the
 /// {@link #loadAll()} and {@link #empty()} convenience factories.
 ///
-/// <p>Usage:
-/// <pre>{@code
+/// Usage:
+/// ```java
 /// WriteRegistry wr = WriteRegistry.builder().registerServiceLoaded().build();
 /// VortexWriter.create(channel, schema, WriteOptions.defaults(), wr);
-/// }</pre>
+/// ```
 public final class WriteRegistry {
 
     private final Map<EncodingId, EncodingEncoder> encoders;

@@ -3,28 +3,25 @@ package io.github.dfa1.vortex.writer;
 /// Typed chunk builder for {@link VortexWriter#writeChunk(java.util.function.Consumer)}.
 ///
 /// Validates each `put` against the writer's schema:
-/// <ul>
-///   <li>Column name must exist in the schema.</li>
-///   <li>Array type must match the column [DType].</li>
-///   <li>Non-nullable columns reject boxed arrays containing {@code null}.</li>
-/// </ul>
+/// - Column name must exist in the schema.
+/// - Array type must match the column [DType].
+/// - Non-nullable columns reject boxed arrays containing {@code null}.
 ///
 /// All schema columns must be supplied before the consumer returns; all column
 /// arrays must share the same length. The writer enforces both at lambda close.
 ///
 /// Type mapping:
 ///
-/// <table>
-///   <tr><th>DType</th><th>Non-nullable array</th><th>Nullable array</th></tr>
-///   <tr><td>Primitive(I8/U8)</td><td>{@code byte[]}</td><td>{@code Byte[]}</td></tr>
-///   <tr><td>Primitive(I16/U16)</td><td>{@code short[]}</td><td>{@code Short[]}</td></tr>
-///   <tr><td>Primitive(I32/U32)</td><td>{@code int[]}</td><td>{@code Integer[]}</td></tr>
-///   <tr><td>Primitive(I64/U64)</td><td>{@code long[]}</td><td>{@code Long[]}</td></tr>
-///   <tr><td>Primitive(F32)</td><td>{@code float[]}</td><td>{@code Float[]}</td></tr>
-///   <tr><td>Primitive(F64)</td><td>{@code double[]}</td><td>{@code Double[]}</td></tr>
-///   <tr><td>Utf8</td><td>{@code String[]}</td><td>{@code String[]} (nulls allowed)</td></tr>
-///   <tr><td>Bool</td><td>{@code boolean[]}</td><td>{@code Boolean[]}</td></tr>
-/// </table>
+/// | DType | Non-nullable array | Nullable array |
+/// |---|---|---|
+/// | Primitive(I8/U8) | {@code byte[]} | {@code Byte[]} |
+/// | Primitive(I16/U16) | {@code short[]} | {@code Short[]} |
+/// | Primitive(I32/U32) | {@code int[]} | {@code Integer[]} |
+/// | Primitive(I64/U64) | {@code long[]} | {@code Long[]} |
+/// | Primitive(F32) | {@code float[]} | {@code Float[]} |
+/// | Primitive(F64) | {@code double[]} | {@code Double[]} |
+/// | Utf8 | {@code String[]} | {@code String[]} (nulls allowed) |
+/// | Bool | {@code boolean[]} | {@code Boolean[]} |
 public interface Chunk {
 
     /// Adds a column's data to the chunk.

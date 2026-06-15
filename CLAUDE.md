@@ -290,6 +290,10 @@ arrives that cannot be addressed by choosing a different encoding for a flat seg
 
 - indents are 4 spaces, enforced by checkstyle
 - Zero SonarQube bugs/smells policy.
+- **Javadoc style:** all `///` Markdown Javadoc — no HTML tags. Use Markdown syntax:
+  blank `///` line for paragraph break, `- item` for lists, ` ```java ``` ` for code
+  blocks, `**text**` for bold. Checkstyle enforces this (`RegexpSingleline` rule in
+  `checkstyle.xml` blocks `<p>`, `<ul>`, `<li>`, `<strong>`, `<pre>`, `<table>`, etc.).
 - No `sun.misc.Unsafe` or internal JDK APIs.
 - Prefer explicit over clever. Fail fast on unhandled cases.
 - Always prefer idiomatic modern Java. Reuse the standard library and language

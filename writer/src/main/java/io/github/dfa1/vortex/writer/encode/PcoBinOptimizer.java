@@ -6,7 +6,7 @@ import java.util.List;
 
 /// Bin optimization DP — port of {@code pco/src/bin_optimization.rs}.
 ///
-/// <p>Input: equal-count histogram bins (sorted by value). Output: merged bins that
+/// Input: equal-count histogram bins (sorted by value). Output: merged bins that
 /// minimize total bit cost = Σ bin_meta_cost + (ans_cost + offset_cost) × count.
 final class PcoBinOptimizer {
 

@@ -8,10 +8,10 @@ import java.lang.foreign.SegmentAllocator;
 
 /// Utility for extracting the primary {@link MemorySegment} from any {@link Array}.
 ///
-/// <p>If {@code arr} is a {@link MaskedArray}, the inner (data) segment is returned;
+/// If {@code arr} is a {@link MaskedArray}, the inner (data) segment is returned;
 /// the validity mask is not surfaced here — callers that need validity must unwrap manually.
 ///
-/// <p><strong>Internal utility.</strong> This class is {@code public} only because the
+/// **Internal utility.** This class is {@code public} only because the
 /// vortex-java reader, writer, and encoding implementations live in separate Maven modules and
 /// need cross-package access to the raw backing segment of typed arrays. It is not part of the
 /// supported public API: signatures may change without a deprecation cycle. Application code

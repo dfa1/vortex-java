@@ -18,7 +18,7 @@ import java.util.ServiceLoader;
 
 /// Read-side registry: maps {@link EncodingId} to {@link EncodingDecoder} implementations.
 ///
-/// <p>Instances are immutable after construction. Build one via {@link #builder()} or
+/// Instances are immutable after construction. Build one via {@link #builder()} or
 /// via the {@link #loadAll()} and {@link #empty()} convenience factories.
 public final class ReadRegistry {
 
@@ -169,7 +169,7 @@ public final class ReadRegistry {
 
         /// Enable passthrough decode for unknown encoding ids.
         ///
-        /// <p>Default is strict: unknown ids throw {@link VortexException}. When enabled, unknown
+        /// Default is strict: unknown ids throw {@link VortexException}. When enabled, unknown
         /// nodes are wrapped as {@link io.github.dfa1.vortex.reader.array.UnknownArray}.
         /// Mirrors Rust {@code VortexSession::allow_unknown()}.
         ///
