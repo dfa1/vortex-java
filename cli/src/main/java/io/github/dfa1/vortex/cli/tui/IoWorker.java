@@ -39,7 +39,10 @@ public final class IoWorker implements AutoCloseable {
             return;
         }
         pending.incrementAndGet();
-        queue.offer(() -> {
+        // Unbounded {@link LinkedBlockingQueue} never rejects on capacity; {@code add} is the
+        // right idiom (throws {@code IllegalStateException} on the impossible case) so we don't
+        // silently drop tasks if anyone ever swaps in a bounded queue.
+        queue.add(() -> {
             try {
                 task.run();
             } finally {
