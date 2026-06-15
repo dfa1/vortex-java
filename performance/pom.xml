@@ -53,6 +53,11 @@
 			<groupId>io.airlift</groupId>
 			<artifactId>aircompressor-v3</artifactId>
 		</dependency>
+		<!-- hardwood (Parquet reader) requires zstd-jni to decompress ZSTD-compressed Parquet pages -->
+		<dependency>
+			<groupId>com.github.luben</groupId>
+			<artifactId>zstd-jni</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.apache.arrow</groupId>
 			<artifactId>arrow-vector</artifactId>
