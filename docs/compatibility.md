@@ -75,6 +75,63 @@ resolves only the standalone decoders in `reader`; no encoder class is loaded.
 | `vortex.variant`            | `VariantEncodingDecoder`         | `VariantEncodingEncoder`         | ✅      | ❌      | Decode (incl. shredded child); encode not yet implemented (Rust 0.73+) |
 | `vortex.onpair`             | _none_                           | _none_                           | ❌      | ❌      | Experimental in Rust 0.74.0; not yet ported                            |
 
+### Decode shape
+
+Per [ADR 0010](adr/0010-lazy-decode.md) and [ADR 0012](adr/0012-zero-copy-layout-decoding.md), each
+decoder falls into one of three shapes:
+
+- **Zero-copy** — output is a view over the memory-mapped file (or a wrapper over child arrays).
+  No arena allocation, no per-element copy.
+- **Lazy** — output is a `LazyXxxArray` / `ChunkedXxxArray` record that holds the encoded child
+  plus the transform parameters. Per-row `getXxx(i)` applies the transform on demand. No
+  output buffer is allocated unless a caller explicitly materialises via
+  `ArraySegments.of(arr, arena)`.
+- **Materialized** — output is a buffer allocated from `ctx.arena()` populated during `decode()`.
+  Required for decompression-style encodings (Bitpacked, Pco, Zstd, etc.) where reading element
+  `i` would require decoding a window.
+
+| Encoding ID                 | Now           | Target        | Notes                                                                    |
+|-----------------------------|---------------|---------------|--------------------------------------------------------------------------|
+| `vortex.primitive`          | Zero-copy     | Zero-copy     | mmap slice                                                               |
+| `vortex.bool`               | Zero-copy     | Zero-copy     | mmap slice (bit-packed)                                                  |
+| `vortex.null`               | n/a           | n/a           | no per-row data                                                          |
+| `vortex.bytebool`           | Zero-copy     | Zero-copy     | mmap slice                                                               |
+| `vortex.zigzag`             | Lazy          | Lazy          | `LazyZigZagXxxArray`, ADR 0010                                           |
+| `vortex.constant`           | Zero-copy     | Zero-copy     | single-element broadcast wrapper                                         |
+| `vortex.ext`                | Zero-copy     | Zero-copy     | wraps storage                                                            |
+| `vortex.runend`             | Materialized  | Lazy          | could expose run-locating accessor (similar to Dict)                     |
+| `vortex.varbin`             | Zero-copy     | Zero-copy     | bytes + offsets slices                                                   |
+| `vortex.varbinview`         | Materialized  | TBD           | currently converts to `varbin` shape                                     |
+| `vortex.alp`                | Lazy          | Lazy          | `LazyAlpDoubleArray`/`LazyAlpFloatArray`, ADR 0010                       |
+| `vortex.alprd`              | Materialized  | TBD           | reassembles left/right + patches                                         |
+| `vortex.dict`               | Materialized  | Lazy          | ADR 0012 Dict\*Array, **NOT YET IMPLEMENTED**                            |
+| `vortex.sparse`             | Materialized  | Lazy          | patches view over default fill                                           |
+| `vortex.sequence`           | Zero-copy     | Zero-copy     | synthetic (no data)                                                      |
+| `vortex.struct`             | Zero-copy     | Zero-copy     | `StructArray` wraps fields                                               |
+| `vortex.chunked`            | Lazy          | Lazy          | `ChunkedXxxArray`, ADR 0012 (PR #38)                                     |
+| `vortex.fsst`               | Materialized  | Materialized  | symbol-table decompression                                               |
+| `vortex.list`               | Materialized  | TBD           | offsets handling                                                         |
+| `vortex.listview`           | Materialized  | TBD           | similar to list                                                          |
+| `vortex.fixed_size_list`    | Materialized  | TBD           | inline elements                                                          |
+| `vortex.zstd`               | Materialized  | Materialized  | block decompression                                                      |
+| `vortex.masked`             | Zero-copy     | Zero-copy     | wraps inner + validity                                                   |
+| `vortex.decimal`            | Materialized  | TBD           | converts to `BigDecimal`                                                 |
+| `vortex.decimal_byte_parts` | Materialized  | TBD           | reassembles byte parts                                                   |
+| `vortex.datetimeparts`      | Materialized  | TBD           | reassembles parts                                                        |
+| `vortex.pco`                | Materialized  | Materialized  | range-encoded decompression                                              |
+| `fastlanes.bitpacked`       | Materialized  | Materialized  | window unpacks bits                                                      |
+| `fastlanes.delta`           | Materialized  | Materialized  | cumulative sum requires sequential decode                                |
+| `fastlanes.for`             | Lazy          | Lazy          | `LazyForLongArray`/`LazyForIntArray`, ADR 0010                           |
+| `fastlanes.rle`             | Materialized  | Lazy          | run-locating accessor possible                                           |
+| `vortex.patched`            | Materialized  | TBD           | scatter patches                                                          |
+| `vortex.variant`            | Materialized  | TBD           | shredded child reassembly                                                |
+| `vortex.onpair`             | n/a           | n/a           | not ported                                                               |
+
+Decompression-style encodings (Bitpacked / Pco / Zstd / Fsst / Delta) stay Materialized by design
+— element-at-`i` requires decoding a window, so they must allocate output (ADR 0010 §"Decompression
+encodings stay eager"). Their output can itself be wrapped in a 1:1 lazy transform (e.g. ALP over
+Bitpacked produces `LazyAlp(MaterializedXxx)`).
+
 ### Unknown encodings
 
 Files containing unrecognised encoding IDs throw `VortexException` by default. Opt in to
