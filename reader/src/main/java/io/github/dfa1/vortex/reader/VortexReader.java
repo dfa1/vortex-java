@@ -153,7 +153,7 @@ public final class VortexReader implements VortexHandle {
 
     @Override
     public ScanIterator scan(ScanOptions options) {
-        return new ScanIterator(this, registry, options);
+        return new ScanIterator(this, options);
     }
 
     @Override
