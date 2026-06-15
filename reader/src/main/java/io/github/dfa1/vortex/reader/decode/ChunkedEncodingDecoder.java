@@ -5,17 +5,16 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.ArraySegments;
-import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
-import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
-import io.github.dfa1.vortex.reader.array.MaterializedFloatArray;
-import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
-import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
-import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
+import io.github.dfa1.vortex.reader.array.ChunkedBoolArray;
+import io.github.dfa1.vortex.reader.array.ChunkedByteArray;
+import io.github.dfa1.vortex.reader.array.ChunkedDoubleArray;
+import io.github.dfa1.vortex.reader.array.ChunkedFloatArray;
+import io.github.dfa1.vortex.reader.array.ChunkedIntArray;
+import io.github.dfa1.vortex.reader.array.ChunkedLongArray;
+import io.github.dfa1.vortex.reader.array.ChunkedShortArray;
 import io.github.dfa1.vortex.reader.array.StructArray;
 
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
@@ -38,7 +37,9 @@ public final class ChunkedEncodingDecoder implements EncodingDecoder {
 
     @Override
     public boolean accepts(DType dtype) {
-        return dtype instanceof DType.Primitive || dtype instanceof DType.Struct;
+        return dtype instanceof DType.Primitive
+                || dtype instanceof DType.Bool
+                || dtype instanceof DType.Struct;
     }
 
     @Override
@@ -58,7 +59,7 @@ public final class ChunkedEncodingDecoder implements EncodingDecoder {
             chunks.add(ctx.decodeChild(i + 1, dtype, chunkLen));
         }
 
-        return concat(chunks, dtype, ctx.rowCount(), ctx.arena());
+        return wrap(chunks, dtype, ctx.rowCount());
     }
 
     private static long[] readOffsets(DecodeContext ctx, int nchunks) {
@@ -72,54 +73,50 @@ public final class ChunkedEncodingDecoder implements EncodingDecoder {
         return offsets;
     }
 
-    private static Array concat(List<Array> chunks, DType dtype, long totalRows, SegmentAllocator arena) {
+    /// Wraps the decoded chunk children in a zero-copy view: a {@code ChunkedXxxArray}
+    /// for primitives and Bool, a {@link StructArray} of per-field chunked views for
+    /// {@link DType.Struct}. No concat / no per-row materialise.
+    private static Array wrap(List<Array> chunks, DType dtype, long totalRows) {
         if (dtype instanceof DType.Primitive pt) {
-            return concatPrimitive(chunks, pt, dtype, totalRows, arena);
+            return wrapPrimitive(chunks, pt, dtype, totalRows);
+        }
+        if (dtype instanceof DType.Bool) {
+            return ChunkedBoolArray.of(dtype, totalRows, chunks);
         }
         if (dtype instanceof DType.Struct struct) {
-            return concatStruct(chunks, struct, totalRows, arena);
+            return wrapStruct(chunks, struct, totalRows);
         }
         throw new VortexException(EncodingId.VORTEX_CHUNKED,
-                "concat not supported for dtype: " + dtype);
+                "chunked not supported for dtype: " + dtype);
     }
 
-    private static Array concatPrimitive(
-            List<Array> chunks, DType.Primitive pt, DType dtype, long totalRows, SegmentAllocator arena
+    private static Array wrapPrimitive(
+            List<Array> chunks, DType.Primitive pt, DType dtype, long totalRows
     ) {
         PType ptype = pt.ptype();
-        MemorySegment combined = arena.allocate(totalRows * ptype.byteSize());
-        long byteOffset = 0;
-        for (Array chunk : chunks) {
-            MemorySegment src = ArraySegments.of(chunk);
-            MemorySegment.copy(src, 0, combined, byteOffset, src.byteSize());
-            byteOffset += src.byteSize();
-        }
-        MemorySegment ro = combined.asReadOnly();
         return switch (ptype) {
-            case I64, U64 -> new MaterializedLongArray(dtype, totalRows, ro);
-            case I32, U32 -> new MaterializedIntArray(dtype, totalRows, ro);
-            case F64 -> new MaterializedDoubleArray(dtype, totalRows, ro);
-            case F32 -> new MaterializedFloatArray(dtype, totalRows, ro);
-            case I16, U16 -> new MaterializedShortArray(dtype, totalRows, ro);
-            case I8, U8 -> new MaterializedByteArray(dtype, totalRows, ro);
+            case I64, U64 -> ChunkedLongArray.of(dtype, totalRows, chunks);
+            case I32, U32 -> ChunkedIntArray.of(dtype, totalRows, chunks);
+            case F64 -> ChunkedDoubleArray.of(dtype, totalRows, chunks);
+            case F32 -> ChunkedFloatArray.of(dtype, totalRows, chunks);
+            case I16, U16 -> ChunkedShortArray.of(dtype, totalRows, chunks);
+            case I8, U8 -> ChunkedByteArray.of(dtype, totalRows, chunks);
             default -> throw new VortexException(EncodingId.VORTEX_CHUNKED,
-                    "unsupported ptype for concat: " + ptype);
+                    "unsupported ptype for chunked: " + ptype);
         };
     }
 
-    private static StructArray concatStruct(
-            List<Array> chunks, DType.Struct struct, long totalRows, SegmentAllocator arena
-    ) {
+    private static StructArray wrapStruct(List<Array> chunks, DType.Struct struct, long totalRows) {
         int nfields = struct.fieldTypes().size();
-        List<Array> concatFields = new ArrayList<>(nfields);
+        List<Array> wrappedFields = new ArrayList<>(nfields);
         for (int f = 0; f < nfields; f++) {
             DType fieldDtype = struct.fieldTypes().get(f);
             List<Array> fieldChunks = new ArrayList<>(chunks.size());
             for (Array chunk : chunks) {
                 fieldChunks.add(((StructArray) chunk).field(f));
             }
-            concatFields.add(concat(fieldChunks, fieldDtype, totalRows, arena));
+            wrappedFields.add(wrap(fieldChunks, fieldDtype, totalRows));
         }
-        return new StructArray(struct, totalRows, concatFields);
+        return new StructArray(struct, totalRows, wrappedFields);
     }
 }
