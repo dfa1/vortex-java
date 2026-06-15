@@ -125,10 +125,6 @@ A few columns are still slightly larger in Java per `TaxiColumnByteDiff`: trip_d
   but the writer's candidate scan only handles `DType.Primitive` + `DType.Utf8`. Mirror the Utf8 path for
   binary columns once a real workload surfaces.
 
-- [ ] **Multi-symbol size comparison test** — `FileSizeComparisonIntegrationTest` writes a single ticker
-  symbol ("ACME" × N), so the global-dict-Utf8 path is not exercised in size measurement. Add a variant
-  using the 5-symbol generator from `OhlcEncodingInspectionIntegrationTest#writeOhlcMultiSymbol` and assert
-  the global-dict file is smaller than the per-chunk-dict baseline.
 
 
 ### `vortex.zstd` known limitations

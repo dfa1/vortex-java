@@ -107,6 +107,12 @@ class FileSizeComparisonIntegrationTest {
         return writeJava(dir, "ohlc-java-zstd.vtx", WriteOptions.cascading(3).withZstd(true), batches);
     }
 
+    private static Path writeJavaGlobalDict(Path dir, boolean globalDict,
+            List<OhlcGenerator.OhlcBatch> batches) throws IOException {
+        String name = globalDict ? "ohlc-java-globaldict.vtx" : "ohlc-java-perchunkdict.vtx";
+        return writeJava(dir, name, WriteOptions.cascading(3).withGlobalDict(globalDict), batches);
+    }
+
     private static Path writeJava(Path dir, String filename, WriteOptions opts,
             List<OhlcGenerator.OhlcBatch> batches) throws IOException {
         Path file = dir.resolve(filename);
@@ -237,6 +243,40 @@ class FileSizeComparisonIntegrationTest {
             iter.forEachRemaining(c -> totalRows.addAndGet(c.<LongArray>column("volume").length()));
         }
         assertThat(totalRows.get()).isEqualTo(TOTAL_ROWS);
+    }
+
+    @Test
+    void globalDict_multiSymbol_smallerThanPerChunkDict(@TempDir Path tmp) throws IOException {
+        // Given — multi-symbol OHLC (30 tickers from OhlcGenerator) split across multiple chunks
+        // so per-chunk-dict mode emits the same ticker dictionary in every chunk while global-dict
+        // mode emits it once. Small chunkSize amplifies the saving.
+        int rows = 200_000;
+        int batch = 20_000;
+        List<OhlcGenerator.OhlcBatch> batches = OhlcGenerator.generate(rows, batch);
+
+        // When
+        Path globalDictFile = writeJavaGlobalDict(tmp, true, batches);
+        Path perChunkDictFile = writeJavaGlobalDict(tmp, false, batches);
+
+        long globalDictSize = Files.size(globalDictFile);
+        long perChunkDictSize = Files.size(perChunkDictFile);
+
+        // Then — report
+        System.out.printf(
+                "[GlobalDictComparison] %,d rows  %d chunks  globalDict=%,d bytes  perChunkDict=%,d bytes  saving=%.2f%%%n",
+                rows, batches.size(), globalDictSize, perChunkDictSize,
+                100.0 * (perChunkDictSize - globalDictSize) / perChunkDictSize);
+
+        // Then — global dict file is strictly smaller than per-chunk dict baseline
+        assertThat(globalDictSize).isLessThan(perChunkDictSize);
+
+        // Then — global dict file readable, row count matches
+        var totalRows = new java.util.concurrent.atomic.AtomicLong();
+        try (VortexReader reader = VortexReader.open(globalDictFile, ReadRegistry.loadAll());
+             var iter = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("symbol"))) {
+            iter.forEachRemaining(c -> totalRows.addAndGet(c.column("symbol").length()));
+        }
+        assertThat(totalRows.get()).isEqualTo(rows);
     }
 
     @Test
