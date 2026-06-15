@@ -70,6 +70,8 @@ public final class ArraySegments {
             case ChunkedIntArray a -> materialiseChunkedInt(a, arena);
             case ChunkedDoubleArray a -> materialiseChunkedDouble(a, arena);
             case ChunkedFloatArray a -> materialiseChunkedFloat(a, arena);
+            case ChunkedShortArray a -> materialiseChunkedShort(a, arena);
+            case ChunkedByteArray a -> materialiseChunkedByte(a, arena);
             default -> of(arr);
         };
     }
@@ -192,5 +194,31 @@ public final class ArraySegments {
             dst.setAtIndex(PTypeIO.LE_INT, i, (u >>> 1) ^ -(u & 1));
         }
         return dst;
+    }
+
+    private static MemorySegment materialiseChunkedShort(ChunkedShortArray a, SegmentAllocator arena) {
+        long n = a.length();
+        MemorySegment dst = arena.allocate(n * 2L, 2);
+        long byteOffset = 0;
+        for (ShortArray child : a.children()) {
+            MemorySegment src = of((Array) child, arena);
+            long bytes = child.length() * 2L;
+            MemorySegment.copy(src, 0, dst, byteOffset, bytes);
+            byteOffset += bytes;
+        }
+        return dst.asReadOnly();
+    }
+
+    private static MemorySegment materialiseChunkedByte(ChunkedByteArray a, SegmentAllocator arena) {
+        long n = a.length();
+        MemorySegment dst = arena.allocate(n);
+        long byteOffset = 0;
+        for (ByteArray child : a.children()) {
+            MemorySegment src = of((Array) child, arena);
+            long bytes = child.length();
+            MemorySegment.copy(src, 0, dst, byteOffset, bytes);
+            byteOffset += bytes;
+        }
+        return dst.asReadOnly();
     }
 }
