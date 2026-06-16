@@ -78,8 +78,71 @@ public final class ArraySegments {
             case DictIntArray a -> materialiseDictInt(a, arena);
             case DictDoubleArray a -> materialiseDictDouble(a, arena);
             case DictFloatArray a -> materialiseDictFloat(a, arena);
+            // Generic typed-accessor fallback: any LongArray/IntArray/.../etc. that
+            // is not segment-backed (e.g. LazyRle*, LazyRunEnd*, LazySparse*, LazyAlpRd*)
+            // can be materialised via its public typed accessor without a special case.
+            case LongArray a -> materialiseLong(a, arena);
+            case IntArray a -> materialiseInt(a, arena);
+            case DoubleArray a -> materialiseDouble(a, arena);
+            case FloatArray a -> materialiseFloat(a, arena);
+            case ShortArray a -> materialiseShort(a, arena);
+            case ByteArray a -> materialiseByte(a, arena);
             default -> of(arr);
         };
+    }
+
+    private static MemorySegment materialiseLong(LongArray a, SegmentAllocator arena) {
+        long n = a.length();
+        MemorySegment dst = arena.allocate(n * 8L, 8);
+        for (long i = 0; i < n; i++) {
+            dst.setAtIndex(PTypeIO.LE_LONG, i, a.getLong(i));
+        }
+        return dst;
+    }
+
+    private static MemorySegment materialiseInt(IntArray a, SegmentAllocator arena) {
+        long n = a.length();
+        MemorySegment dst = arena.allocate(n * 4L, 4);
+        for (long i = 0; i < n; i++) {
+            dst.setAtIndex(PTypeIO.LE_INT, i, a.getInt(i));
+        }
+        return dst;
+    }
+
+    private static MemorySegment materialiseDouble(DoubleArray a, SegmentAllocator arena) {
+        long n = a.length();
+        MemorySegment dst = arena.allocate(n * 8L, 8);
+        for (long i = 0; i < n; i++) {
+            dst.setAtIndex(PTypeIO.LE_DOUBLE, i, a.getDouble(i));
+        }
+        return dst;
+    }
+
+    private static MemorySegment materialiseFloat(FloatArray a, SegmentAllocator arena) {
+        long n = a.length();
+        MemorySegment dst = arena.allocate(n * 4L, 4);
+        for (long i = 0; i < n; i++) {
+            dst.setAtIndex(PTypeIO.LE_FLOAT, i, a.getFloat(i));
+        }
+        return dst;
+    }
+
+    private static MemorySegment materialiseShort(ShortArray a, SegmentAllocator arena) {
+        long n = a.length();
+        MemorySegment dst = arena.allocate(n * 2L, 2);
+        for (long i = 0; i < n; i++) {
+            dst.setAtIndex(PTypeIO.LE_SHORT, i, a.getShort(i));
+        }
+        return dst;
+    }
+
+    private static MemorySegment materialiseByte(ByteArray a, SegmentAllocator arena) {
+        long n = a.length();
+        MemorySegment dst = arena.allocate(n);
+        for (long i = 0; i < n; i++) {
+            dst.set(java.lang.foreign.ValueLayout.JAVA_BYTE, i, a.getByte(i));
+        }
+        return dst;
     }
 
     private static MemorySegment materialiseChunkedLong(ChunkedLongArray a, SegmentAllocator arena) {
