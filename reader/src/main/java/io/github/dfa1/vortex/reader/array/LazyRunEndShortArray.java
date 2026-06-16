@@ -4,12 +4,12 @@ import io.github.dfa1.vortex.core.DType;
 
 import java.util.function.LongBinaryOperator;
 
-/// Lazy RunEnd-encoded {@link ShortArray}. See {@link LazyRunEndLongArray} for semantics.
+/// Lazy RunEnd-encoded [ShortArray]. See [LazyRunEndLongArray] for semantics.
 ///
 /// @param dtype   logical element type
 /// @param length  total logical row count
 /// @param values  values per run
-/// @param runEnds cumulative run-end positions (absolute, before {@code offset})
+/// @param runEnds cumulative run-end positions (absolute, before `offset`)
 /// @param offset  starting absolute position
 public record LazyRunEndShortArray(DType dtype, long length, ShortArray values, Array runEnds, long offset)
         implements ShortArray {

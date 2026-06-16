@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.core.DType;
 import java.util.function.IntBinaryOperator;
 import java.util.function.IntConsumer;
 
-/// Lazy FastLanes-RLE-encoded {@link IntArray}. See {@link LazyRleLongArray} for semantics.
+/// Lazy FastLanes-RLE-encoded [IntArray]. See [LazyRleLongArray] for semantics.
 ///
 /// @param dtype             logical element type
 /// @param length            total logical row count

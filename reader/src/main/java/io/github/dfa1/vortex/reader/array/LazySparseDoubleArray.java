@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.core.DType;
 import java.util.function.DoubleBinaryOperator;
 import java.util.function.DoubleConsumer;
 
-/// Lazy Sparse-encoded {@link DoubleArray}. See {@link LazySparseLongArray} for semantics.
+/// Lazy Sparse-encoded [DoubleArray]. See [LazySparseLongArray] for semantics.
 ///
 /// @param dtype         logical element type
 /// @param length        total logical row count

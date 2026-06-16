@@ -5,21 +5,21 @@ import io.github.dfa1.vortex.core.DType;
 import java.util.function.LongBinaryOperator;
 import java.util.function.LongConsumer;
 
-/// Lazy RunEnd-encoded {@link LongArray}. {@code getLong(i) = values.getLong(findRun(i + offset))}.
-/// {@code forEachLong} / {@code fold} walk runs (one binary search at start, then per-run loops)
+/// Lazy RunEnd-encoded [LongArray]. `getLong(i) = values.getLong(findRun(i + offset))`.
+/// `forEachLong` / `fold` walk runs (one binary search at start, then per-run loops)
 /// so sequential reads are O(numRuns) work plus length emissions.
 ///
-/// The {@code runEnds} array is typed as {@link Array} because the run-ends ptype varies with
-/// the longest-run count — backed by one of {@link ByteArray}, {@link ShortArray},
-/// {@link IntArray}, {@link LongArray}.
+/// The `runEnds` array is typed as [Array] because the run-ends ptype varies with
+/// the longest-run count — backed by one of [ByteArray], [ShortArray],
+/// [IntArray], [LongArray].
 ///
 /// @param dtype   logical element type
 /// @param length  total logical row count
-/// @param values  values per run; length = {@code numRuns}
-/// @param runEnds cumulative run-end positions (absolute, before {@code offset});
-///                length = {@code numRuns}
-/// @param offset  starting absolute position; logical row {@code i} maps to
-///                absolute {@code i + offset}
+/// @param values  values per run; length = `numRuns`
+/// @param runEnds cumulative run-end positions (absolute, before `offset`);
+///                length = `numRuns`
+/// @param offset  starting absolute position; logical row `i` maps to
+///                absolute `i + offset`
 public record LazyRunEndLongArray(DType dtype, long length, LongArray values, Array runEnds, long offset)
         implements LongArray {
 

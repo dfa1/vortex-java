@@ -4,9 +4,9 @@ import io.github.dfa1.vortex.core.DType;
 
 import java.util.function.DoubleBinaryOperator;
 
-/// Lazy ALP-RD-encoded {@link FloatArray}. See {@link LazyAlpRdDoubleArray} for the
+/// Lazy ALP-RD-encoded [FloatArray]. See [LazyAlpRdDoubleArray] for the
 /// dict + right + patches reconstruction model. The right payload is u32 instead of
-/// u64 and the result is reinterpreted via {@link Float#intBitsToFloat}.
+/// u64 and the result is reinterpreted via [Float#intBitsToFloat].
 ///
 /// @param dtype            logical element type
 /// @param length           total logical row count
@@ -14,9 +14,10 @@ import java.util.function.DoubleBinaryOperator;
 /// @param rightBitWidth    bit width of the right payload
 /// @param leftArr          per-row u16 dict codes
 /// @param rightArr         per-row u32 right payloads (raw bits)
-/// @param patchIndices     sorted absolute indices of patched rows (or {@code null})
+/// @param patchIndices     sorted absolute indices of patched rows (or `null`)
 /// @param patchLeftValues  actual left u16 values for patched rows
 /// @param patchOffset      absolute origin subtracted from row positions before patch lookup
+@SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record LazyAlpRdFloatArray(
         DType dtype, long length,
         short[] dict, int rightBitWidth,

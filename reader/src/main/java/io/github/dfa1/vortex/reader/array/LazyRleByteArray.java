@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 
 import java.util.function.LongBinaryOperator;
 
-/// Lazy FastLanes-RLE-encoded {@link ByteArray}. See {@link LazyRleLongArray} for semantics.
+/// Lazy FastLanes-RLE-encoded [ByteArray]. See [LazyRleLongArray] for semantics.
 ///
 /// @param dtype             logical element type
 /// @param length            total logical row count
@@ -15,7 +15,7 @@ import java.util.function.LongBinaryOperator;
 /// @param valuesLen         total values pool length
 /// @param numChunks         number of FastLanes chunks covered
 /// @param offset            starting absolute position
-/// @param unsigned          {@code true} when the dtype is U8 (affects {@link #getInt(long)} widening)
+/// @param unsigned          `true` when the dtype is U8 (affects [#getInt(long)] widening)
 @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record LazyRleByteArray(
         DType dtype, long length, byte[] values, int[] indices,

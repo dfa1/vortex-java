@@ -17,7 +17,7 @@ import java.util.ArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// Unit tests for the lazy run-end records nested in {@link RunEndEncodingDecoder}.
+/// Unit tests for the lazy run-end records nested in [RunEndEncodingDecoder].
 /// Covers scalar dispatch via binary-search-on-runEnds, forEach run-walking,
 /// fold reduction, and the offset slicing semantics.
 class LazyRunEndArrayTest {

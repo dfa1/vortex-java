@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.core.DType;
 import java.util.function.DoubleBinaryOperator;
 import java.util.function.DoubleConsumer;
 
-/// Lazy ALP-RD-encoded {@link DoubleArray}.
+/// Lazy ALP-RD-encoded [DoubleArray].
 ///
 /// ALP-RD splits each f64 into a "left" u16 dictionary code and a "right" u64 payload
 /// (the low `rightBitWidth` bits of the original bit pattern). Reconstruction is
@@ -13,19 +13,20 @@ import java.util.function.DoubleConsumer;
 /// patches table overrides the dict lookup at specific absolute indices for outlier
 /// values that don't compress through the dictionary.
 ///
-/// {@code getDouble(i)} resolves on demand: read left/right children, dispatch through
+/// `getDouble(i)` resolves on demand: read left/right children, dispatch through
 /// dict (or patch if `i + patchOffset` hits a patch index), shift+or, then bits-to-double.
 ///
 /// @param dtype            logical element type
 /// @param length           total logical row count
 /// @param dict             small u16 dictionary lookup table (length typically ≤ 16)
-/// @param rightBitWidth    a bit width of the right payload
+/// @param rightBitWidth    bit width of the right payload
 /// @param leftArr          per-row u16 dict codes
 /// @param rightArr         per-row u64 right payloads (raw bits)
-/// @param patchIndices     sorted absolute indices of patched rows (or {@code null} when no patches)
+/// @param patchIndices     sorted absolute indices of patched rows (or `null` when no patches)
 /// @param patchLeftValues  actual left u16 values for patched rows; aligned with
-///                         {@code patchIndices}
+///                         `patchIndices`
 /// @param patchOffset      absolute origin subtracted from row positions before patch lookup
+@SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record LazyAlpRdDoubleArray(
         DType dtype, long length,
         short[] dict, int rightBitWidth,

@@ -5,22 +5,22 @@ import io.github.dfa1.vortex.core.DType;
 import java.util.function.LongBinaryOperator;
 import java.util.function.LongConsumer;
 
-/// Lazy Sparse-encoded {@link LongArray}: {@code getLong(i) = patches[binSearch(i + offset)]
-/// or fillValue}. The {@code patchIndices} array is typed as {@link Array} because the
-/// indices ptype varies — backed by one of {@link ByteArray}, {@link ShortArray},
-/// {@link IntArray}, {@link LongArray}.
+/// Lazy Sparse-encoded [LongArray]: {@code getLong(i) = patches[binSearch(i + offset)]
+/// or fillValue}. The `patchIndices` array is typed as [Array] because the
+/// indices ptype varies — backed by one of [ByteArray], [ShortArray],
+/// [IntArray], [LongArray].
 ///
-/// {@code forEachLong} / {@code fold} walk the patches in order, emitting {@code fillValue}
+/// `forEachLong` / `fold` walk the patches in order, emitting `fillValue`
 /// for runs of unpatched positions — O(numPatches) binary-search-equivalent steps plus
-/// {@code length} emissions, not O(length × log(numPatches)).
+/// `length` emissions, not O(length × log(numPatches)).
 ///
 /// @param dtype         logical element type
 /// @param length        total logical row count
 /// @param fillValue     value at every unpatched position
-/// @param patchValues   values for patched positions; length = {@code numPatches}
-/// @param patchIndices  sorted absolute positions of patches; length = {@code numPatches}
-/// @param offset        starting absolute position; logical row {@code i} maps to
-///                      absolute {@code i + offset}
+/// @param patchValues   values for patched positions; length = `numPatches`
+/// @param patchIndices  sorted absolute positions of patches; length = `numPatches`
+/// @param offset        starting absolute position; logical row `i` maps to
+///                      absolute `i + offset`
 public record LazySparseLongArray(
         DType dtype, long length, long fillValue,
         LongArray patchValues, Array patchIndices, long offset)

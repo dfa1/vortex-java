@@ -2,12 +2,12 @@ package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.VortexException;
 
-/// Package-private helpers shared by the {@code LazySparseXxxArray} records.
+/// Package-private helpers shared by the `LazySparseXxxArray` records.
 ///
 /// Centralises:
 /// - the patch-indices array-type switch in [#readPatchIdx(Array, long)] so all six
 ///   records agree on supported patch-index Array types (U8/U16/U32/U64 backed by
-///   {@link ByteArray}/{@link ShortArray}/{@link IntArray}/{@link LongArray}); and
+///   [ByteArray]/[ShortArray]/[IntArray]/[LongArray]); and
 /// - the two binary-search variants used by scalar / sequential accessors:
 ///   [#findPatch(Array, long, long)] for exact hit-or-miss and
 ///   [#findFirstAtOrAfter(Array, long, long)] for the forEach run-walker.
@@ -16,7 +16,7 @@ final class SparseArrays {
     private SparseArrays() {
     }
 
-    /// Reads patch-index {@code k} from {@code idxArr} as an unsigned long.
+    /// Reads patch-index `k` from `idxArr` as an unsigned long.
     static long readPatchIdx(Array idxArr, long k) {
         return switch (idxArr) {
             case ByteArray ba -> Byte.toUnsignedLong(ba.getByte(k));
@@ -28,8 +28,8 @@ final class SparseArrays {
         };
     }
 
-    /// Returns the index of the patch whose stored position equals {@code absPos}, or
-    /// {@code -1} if no such patch exists. Binary searches over {@code [0, numPatches)}.
+    /// Returns the index of the patch whose stored position equals `absPos`, or
+    /// `-1` if no such patch exists. Binary searches over `[0, numPatches)`.
     static int findPatch(Array idxArr, long numPatches, long absPos) {
         int lo = 0;
         int hi = (int) numPatches - 1;
@@ -48,8 +48,8 @@ final class SparseArrays {
         return -1;
     }
 
-    /// Returns the smallest index {@code k} such that {@code idxArr[k] >= absPos}, or
-    /// {@code (int) numPatches} when no such {@code k} exists. Used by the forEach
+    /// Returns the smallest index `k` such that `idxArr[k] >= absPos`, or
+    /// `(int) numPatches` when no such `k` exists. Used by the forEach
     /// run-walker to locate the first patch that could fall inside the iteration range.
     static int findFirstAtOrAfter(Array idxArr, long numPatches, long absPos) {
         int lo = 0;
