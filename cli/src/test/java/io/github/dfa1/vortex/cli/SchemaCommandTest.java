@@ -45,8 +45,13 @@ class SchemaCommandTest {
         CliTestSupport.Captured got = capture(() ->
                 SchemaCommand.run(new String[]{"schema", file.toString()}));
 
-        // Then
+        // Then — header + per-column row; row count and column count surfaced
         assertThat(got.status()).isEqualTo(ExitStatus.OK);
-        assertThat(got.stdout().trim()).isEqualTo("struct<id: I64>");
+        assertThat(got.stdout())
+                .contains("schema.vortex")
+                .contains("3 rows")
+                .contains("1 columns")
+                .contains("1  id")
+                .contains("I64");
     }
 }
