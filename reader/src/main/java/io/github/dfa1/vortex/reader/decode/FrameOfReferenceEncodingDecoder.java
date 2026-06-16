@@ -71,7 +71,7 @@ public final class FrameOfReferenceEncodingDecoder implements EncodingDecoder {
             return validity != null ? new MaskedArray(rawEncoded, validity) : rawEncoded;
         }
 
-        MemorySegment src = ArraySegments.of(rawEncoded);
+        MemorySegment src = ArraySegments.of(rawEncoded, ctx.arena());
         long n = ctx.rowCount();
         Array result = switch (p.ptype()) {
             case I64, U64 -> new LazyForLongArray(ctx.dtype(), n, src, ref);

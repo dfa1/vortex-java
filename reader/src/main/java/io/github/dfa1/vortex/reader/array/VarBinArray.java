@@ -20,7 +20,58 @@ import java.util.function.IntConsumer;
 /// accessors resolve transparently regardless of mode; only {@link OffsetMode}
 /// exposes {@link OffsetMode#offsetsSegment()} and {@link OffsetMode#offsetsPtype()}.
 public sealed interface VarBinArray extends Array
-        permits VarBinArray.OffsetMode, VarBinArray.DictMode, VarBinArray.ChunkedMode, VarBinArray.ViewMode {
+        permits VarBinArray.OffsetMode, VarBinArray.DictMode, VarBinArray.ChunkedMode,
+                VarBinArray.ViewMode, VarBinArray.SlicedMode {
+
+    /// Sliced view over a [VarBinArray]: every accessor delegates to `inner`
+    /// with the row index shifted by `offset`. Used by the scan iterator to
+    /// surface a column that was decoded once (because it shares a single
+    /// flat layout across multiple aligned chunks) as a per-chunk slice
+    /// without copying.
+    ///
+    /// @param dtype  logical element type (typically {@link DType.Utf8} or {@link DType.Binary})
+    /// @param length number of logical elements in this slice
+    /// @param inner  underlying VarBin array
+    /// @param offset starting row index into `inner`
+    record SlicedMode(DType dtype, long length, VarBinArray inner, long offset)
+            implements VarBinArray {
+
+        @Override
+        public MemorySegment bytesSegment() {
+            return inner.bytesSegment();
+        }
+
+        @Override
+        public byte[] getBytes(long i) {
+            return inner.getBytes(i + offset);
+        }
+
+        @Override
+        public String getString(long i) {
+            return inner.getString(i + offset);
+        }
+
+        @Override
+        public int getByteLength(long i) {
+            return inner.getByteLength(i + offset);
+        }
+
+        @Override
+        public void forEachByteLength(IntConsumer c) {
+            for (long i = 0; i < length; i++) {
+                c.accept(getByteLength(i));
+            }
+        }
+
+        @Override
+        public VarBinArray truncate(long rows) {
+            if (rows >= length) {
+                return this;
+            }
+            return new SlicedMode(dtype, rows, inner, offset);
+        }
+    }
+
 
     /// Returns the concatenated raw bytes segment backing all elements.
     ///

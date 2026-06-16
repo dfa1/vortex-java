@@ -42,6 +42,13 @@ import io.github.dfa1.vortex.reader.array.MaterializedFloatArray;
 import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
 import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
 import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
+import io.github.dfa1.vortex.reader.array.OffsetBoolArray;
+import io.github.dfa1.vortex.reader.array.OffsetByteArray;
+import io.github.dfa1.vortex.reader.array.OffsetDoubleArray;
+import io.github.dfa1.vortex.reader.array.OffsetFloatArray;
+import io.github.dfa1.vortex.reader.array.OffsetIntArray;
+import io.github.dfa1.vortex.reader.array.OffsetLongArray;
+import io.github.dfa1.vortex.reader.array.OffsetShortArray;
 import io.github.dfa1.vortex.reader.array.NullArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.StructArray;
@@ -103,6 +110,8 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     private long rowsReturned;
     private Chunk openChunk;
     private boolean closed;
+    private Arena sharedArena;
+    private Map<String, Array> sharedFullArrays;
 
     public ScanIterator(VortexHandle file, ScanOptions options) {
         this.file = file;
@@ -137,14 +146,49 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         }
         String[] colNames = columnFlats.keySet().toArray(String[]::new);
         int numCols = colNames.length;
-        int numChunks = columnFlats.values().iterator().next().size();
-        var result = new ArrayList<ChunkSpec>(numChunks);
-        for (int i = 0; i < numChunks; i++) {
-            Layout[] layouts = new Layout[numCols];
-            for (int j = 0; j < numCols; j++) {
-                layouts[j] = columnFlats.get(colNames[j]).get(i);
+        int maxChunks = 0;
+        int refCol = 0;
+        for (int j = 0; j < numCols; j++) {
+            int n = columnFlats.get(colNames[j]).size();
+            if (n > maxChunks) {
+                maxChunks = n;
+                refCol = j;
             }
-            result.add(new ChunkSpec(layouts[0].rowCount(), colNames, layouts));
+        }
+        // Detect single-flat columns sharing the chunked range of a wider column.
+        // Other mismatched widths (e.g. 5 flats vs 23 flats) are not supported.
+        boolean[] shared = new boolean[numCols];
+        for (int j = 0; j < numCols; j++) {
+            int n = columnFlats.get(colNames[j]).size();
+            if (n == maxChunks) {
+                continue;
+            }
+            if (n == 1) {
+                shared[j] = true;
+            } else {
+                throw new VortexException(
+                        "scan: column '" + colNames[j] + "' has " + n
+                                + " flats but the widest column has " + maxChunks
+                                + "; mixed per-column chunking beyond 1-vs-N is not supported");
+            }
+        }
+        var result = new ArrayList<ChunkSpec>(maxChunks);
+        long sliceStart = 0;
+        for (int i = 0; i < maxChunks; i++) {
+            Layout[] layouts = new Layout[numCols];
+            long[] sliceOffsets = new long[numCols];
+            long chunkRowCount = columnFlats.get(colNames[refCol]).get(i).rowCount();
+            for (int j = 0; j < numCols; j++) {
+                if (shared[j]) {
+                    layouts[j] = null;
+                    sliceOffsets[j] = sliceStart;
+                } else {
+                    layouts[j] = columnFlats.get(colNames[j]).get(i);
+                    sliceOffsets[j] = 0L;
+                }
+            }
+            result.add(new ChunkSpec(chunkRowCount, colNames, layouts, sliceOffsets));
+            sliceStart += chunkRowCount;
         }
         return List.copyOf(result);
     }
@@ -475,6 +519,11 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             openChunk.close();
         }
         openChunk = null;
+        if (sharedArena != null) {
+            sharedArena.close();
+            sharedArena = null;
+            sharedFullArrays = null;
+        }
     }
 
     private void onChunkClosed(Chunk chunk) {
@@ -488,6 +537,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         DType rootDtype = file.dtype();
 
         var columnFlats = new LinkedHashMap<String, List<Layout>>();
+        var columnTopLayouts = new LinkedHashMap<String, Layout>();
         Map<String, DType> columnDtypes = new LinkedHashMap<>();
 
         if (rootLayout.isStruct() && rootDtype instanceof DType.Struct structDtype) {
@@ -498,21 +548,53 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                 if (!projection.isEmpty() && !projection.contains(colName)) {
                     continue;
                 }
+                Layout colTop = rootLayout.children().get(i);
                 var flats = new ArrayList<Layout>();
-                collectFlats(rootLayout.children().get(i), flats);
+                collectFlats(colTop, flats);
                 columnFlats.put(colName, flats);
+                columnTopLayouts.put(colName, colTop);
                 columnDtypes.put(colName, colDtype);
             }
         } else {
             var flats = new ArrayList<Layout>();
             collectFlats(rootLayout, flats);
             columnFlats.put("_col", flats);
+            columnTopLayouts.put("_col", rootLayout);
             columnDtypes.put("_col", rootDtype);
         }
 
-        chunks = buildChunks(columnFlats);
         projectedNames = List.copyOf(columnDtypes.keySet());
         projectedDtypes = List.copyOf(columnDtypes.values());
+        chunks = buildChunks(columnFlats);
+        decodeSharedColumns(columnFlats, columnTopLayouts, columnDtypes);
+    }
+
+    private void decodeSharedColumns(
+            Map<String, List<Layout>> columnFlats,
+            Map<String, Layout> columnTopLayouts,
+            Map<String, DType> columnDtypes) {
+        int maxFlats = 0;
+        for (List<Layout> flats : columnFlats.values()) {
+            if (flats.size() > maxFlats) {
+                maxFlats = flats.size();
+            }
+        }
+        if (maxFlats <= 1) {
+            return;
+        }
+        for (var entry : columnFlats.entrySet()) {
+            if (entry.getValue().size() != 1) {
+                continue;
+            }
+            if (sharedArena == null) {
+                sharedArena = Arena.ofConfined();
+                sharedFullArrays = new java.util.HashMap<>();
+            }
+            String name = entry.getKey();
+            Layout topLayout = columnTopLayouts.get(name);
+            DType dtype = columnDtypes.get(name);
+            sharedFullArrays.put(name, decodeLayout(topLayout, dtype, sharedArena));
+        }
     }
 
     // Map.of with 1 or 2 args allocates Map1/Map2 (~2-4 fields) — avoids the
@@ -520,9 +602,10 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     // Direct array index into ChunkSpec.columnLayouts avoids HashMap.get() per column.
     private Map<String, Array> buildColumnMap(ChunkSpec chunk, Arena arena) {
         Layout[] layouts = chunk.columnLayouts();
+        long[] sliceOffsets = chunk.sliceOffsets();
         int n = projectedNames.size();
         if (n == 1) {
-            Array arr = decodeLayout(layouts[0], projectedDtypes.getFirst(), arena);
+            Array arr = decodeOrSlice(0, layouts[0], sliceOffsets[0], chunk.rowCount(), arena);
             if (arr instanceof StructArray sa) {
                 return expandStruct(sa);
             }
@@ -530,14 +613,53 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         }
         if (n == 2) {
             return Map.of(
-                    projectedNames.get(0), decodeLayout(layouts[0], projectedDtypes.get(0), arena),
-                    projectedNames.get(1), decodeLayout(layouts[1], projectedDtypes.get(1), arena));
+                    projectedNames.get(0),
+                    decodeOrSlice(0, layouts[0], sliceOffsets[0], chunk.rowCount(), arena),
+                    projectedNames.get(1),
+                    decodeOrSlice(1, layouts[1], sliceOffsets[1], chunk.rowCount(), arena));
         }
         var scratch = new LinkedHashMap<String, Array>(n);
         for (int i = 0; i < n; i++) {
-            scratch.put(projectedNames.get(i), decodeLayout(layouts[i], projectedDtypes.get(i), arena));
+            scratch.put(projectedNames.get(i),
+                    decodeOrSlice(i, layouts[i], sliceOffsets[i], chunk.rowCount(), arena));
         }
         return Map.copyOf(scratch);
+    }
+
+    private Array decodeOrSlice(int colIdx, Layout layout, long sliceStart, long rowCount,
+                                Arena arena) {
+        if (layout != null) {
+            return decodeLayout(layout, projectedDtypes.get(colIdx), arena);
+        }
+        Array full = sharedFullArrays.get(projectedNames.get(colIdx));
+        if (full == null) {
+            throw new VortexException("scan: missing shared array for column "
+                    + projectedNames.get(colIdx));
+        }
+        return sliceArray(full, sliceStart, rowCount, projectedDtypes.get(colIdx));
+    }
+
+    private static Array sliceArray(Array full, long offset, long length, DType dtype) {
+        return switch (full) {
+            case MaskedArray m -> {
+                Array innerSlice = sliceArray(m.inner(), offset, length, dtype);
+                BoolArray validity = m.validity();
+                BoolArray validitySlice = validity == null
+                        ? null
+                        : (BoolArray) sliceArray(validity, offset, length, new DType.Bool(false));
+                yield new MaskedArray(innerSlice, validitySlice);
+            }
+            case LongArray a -> new OffsetLongArray(dtype, length, a, offset);
+            case IntArray a -> new OffsetIntArray(dtype, length, a, offset);
+            case DoubleArray a -> new OffsetDoubleArray(dtype, length, a, offset);
+            case FloatArray a -> new OffsetFloatArray(dtype, length, a, offset);
+            case ShortArray a -> new OffsetShortArray(dtype, length, a, offset);
+            case ByteArray a -> new OffsetByteArray(dtype, length, a, offset);
+            case BoolArray a -> new OffsetBoolArray(dtype, length, a, offset);
+            case VarBinArray a -> new VarBinArray.SlicedMode(dtype, length, a, offset);
+            default -> throw new VortexException(
+                    "scan: cannot slice shared array of type " + full.getClass().getSimpleName());
+        };
     }
 
     private Array decodeLayout(Layout layout, DType dtype, SegmentAllocator arena) {
@@ -826,7 +948,8 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     // ── Internal record ───────────────────────────────────────────────────────
 
     @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
-    private record ChunkSpec(long rowCount, String[] columnNames, Layout[] columnLayouts) {
+    private record ChunkSpec(
+            long rowCount, String[] columnNames, Layout[] columnLayouts, long[] sliceOffsets) {
         Layout layoutFor(String col) {
             for (int i = 0; i < columnNames.length; i++) {
                 if (columnNames[i].equals(col)) {
