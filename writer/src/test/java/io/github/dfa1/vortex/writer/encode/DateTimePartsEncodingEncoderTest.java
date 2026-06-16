@@ -2,7 +2,6 @@ package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.reader.array.GenericArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.encoding.DTypes;
@@ -104,15 +103,10 @@ class DateTimePartsEncodingEncoderTest {
             MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
             DecodeContext ctx = new DecodeContext(
                     toArrayNode(result.rootNode()), EXT_TIMESTAMP_MS, 1, bufs, REGISTRY, Arena.global());
-            GenericArray decoded = (GenericArray) DECODER.decode(ctx);
+            LongArray decoded = (LongArray) DECODER.decode(ctx);
 
             assertThat(decoded.length()).isEqualTo(1);
-            LongArray days = (LongArray) decoded.child(0);
-            LongArray seconds = (LongArray) decoded.child(1);
-            LongArray subseconds = (LongArray) decoded.child(2);
-            assertThat(days.getLong(0)).isEqualTo(1L);
-            assertThat(seconds.getLong(0)).isEqualTo(3723L);
-            assertThat(subseconds.getLong(0)).isEqualTo(456L);
+            assertThat(decoded.getLong(0)).isEqualTo(ts);
         }
 
         @Test
@@ -126,14 +120,9 @@ class DateTimePartsEncodingEncoderTest {
             MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
             DecodeContext ctx = new DecodeContext(
                     toArrayNode(result.rootNode()), EXT_TIMESTAMP_NS, 1, bufs, REGISTRY, Arena.global());
-            GenericArray decoded = (GenericArray) DECODER.decode(ctx);
+            LongArray decoded = (LongArray) DECODER.decode(ctx);
 
-            LongArray days = (LongArray) decoded.child(0);
-            LongArray seconds = (LongArray) decoded.child(1);
-            LongArray subseconds = (LongArray) decoded.child(2);
-            assertThat(days.getLong(0)).isEqualTo(1L);
-            assertThat(seconds.getLong(0)).isEqualTo(3723L);
-            assertThat(subseconds.getLong(0)).isEqualTo(456_789_123L);
+            assertThat(decoded.getLong(0)).isEqualTo(ts);
         }
 
         @Test
@@ -145,14 +134,9 @@ class DateTimePartsEncodingEncoderTest {
             MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
             DecodeContext ctx = new DecodeContext(
                     toArrayNode(result.rootNode()), EXT_TIMESTAMP_MS, 1, bufs, REGISTRY, Arena.global());
-            GenericArray decoded = (GenericArray) DECODER.decode(ctx);
+            LongArray decoded = (LongArray) DECODER.decode(ctx);
 
-            LongArray days = (LongArray) decoded.child(0);
-            LongArray seconds = (LongArray) decoded.child(1);
-            LongArray subseconds = (LongArray) decoded.child(2);
-            assertThat(days.getLong(0)).isEqualTo(0L);
-            assertThat(seconds.getLong(0)).isEqualTo(0L);
-            assertThat(subseconds.getLong(0)).isEqualTo(0L);
+            assertThat(decoded.getLong(0)).isZero();
         }
 
         @Test
@@ -165,17 +149,12 @@ class DateTimePartsEncodingEncoderTest {
             MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
             DecodeContext ctx = new DecodeContext(
                     toArrayNode(result.rootNode()), EXT_TIMESTAMP_MS, 4, bufs, REGISTRY, Arena.global());
-            GenericArray decoded = (GenericArray) DECODER.decode(ctx);
+            LongArray decoded = (LongArray) DECODER.decode(ctx);
 
             assertThat(decoded.length()).isEqualTo(4);
-            LongArray days = (LongArray) decoded.child(0);
-            assertThat(days.getLong(0)).isEqualTo(0L);
-            assertThat(days.getLong(1)).isEqualTo(1L);
-            assertThat(days.getLong(2)).isEqualTo(1L);
-            assertThat(days.getLong(3)).isEqualTo(1L);
-            LongArray subseconds = (LongArray) decoded.child(2);
-            assertThat(subseconds.getLong(2)).isEqualTo(0L);
-            assertThat(subseconds.getLong(3)).isEqualTo(1L);
+            for (int i = 0; i < timestamps.length; i++) {
+                assertThat(decoded.getLong(i)).as("row %d", i).isEqualTo(timestamps[i]);
+            }
         }
 
         @ParameterizedTest
@@ -189,14 +168,9 @@ class DateTimePartsEncodingEncoderTest {
             MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
             DecodeContext ctx = new DecodeContext(
                     toArrayNode(result.rootNode()), dtype, 1, bufs, REGISTRY, Arena.global());
-            GenericArray decoded = (GenericArray) DECODER.decode(ctx);
+            LongArray decoded = (LongArray) DECODER.decode(ctx);
 
-            LongArray days = (LongArray) decoded.child(0);
-            LongArray seconds = (LongArray) decoded.child(1);
-            LongArray subseconds = (LongArray) decoded.child(2);
-            assertThat(days.getLong(0)).isZero();
-            assertThat(seconds.getLong(0)).isZero();
-            assertThat(subseconds.getLong(0)).isZero();
+            assertThat(decoded.getLong(0)).isZero();
         }
 
         @Test
