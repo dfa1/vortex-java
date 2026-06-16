@@ -15,12 +15,12 @@ JMH read throughput vs the Rust JNI reference implementation.
 
 | Column | Type | Java (ops/s) | JNI/Rust (ops/s) | Speedup |
 |--------|------|-------------|-----------------|---------|
-| volume | I64 / bitpacked | 14.1 | 6.4 | **2.2×** |
-| close  | F64 / ALP       | 8.3  | 6.2 | **1.3×** |
-| symbol | Utf8 / varbin   | 13.0 | 1.2 | **10.8×** |
+| volume | I64 / bitpacked | 14.2 | 6.7 | **2.1×** |
+| close  | F64 / ALP       | 7.7  | 6.3 | **1.2×** |
+| symbol | Utf8 / varbin   | 11.0 | 1.3 | **8.8×** |
 
 ops/s = complete file scans per second; higher is better.
-Measured 2026-06-13, commit `a57ea70d`. See [docs/explanation.md](docs/explanation.md#benchmarks) for full tables and methodology.
+Measured 2026-06-16, commit `74ec207b`. See [docs/explanation.md](docs/explanation.md#benchmarks) for full tables and methodology.
 
 ## Who is this for
 

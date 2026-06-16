@@ -13,6 +13,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ArraySegments;
+import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -262,6 +263,76 @@ class RustWritesJavaReadsIntegrationTest {
                                     .toArray();
             assertThat(allIds).containsExactly(1L, 2L, 3L, 4L, 5L);
         }
+    }
+
+    @Test
+    void jniWriter_javaReader_firstTenRows_matchesJniRead(@TempDir Path tmp) throws IOException {
+        // Given — JNI writes 1_000 rows; both readers consume only the first 10
+        Path file = tmp.resolve("jni_first_ten.vtx");
+        int n = 1_000;
+        long[] ids = new long[n];
+        double[] vals = new double[n];
+        for (int i = 0; i < n; i++) {
+            ids[i] = i + 1L;
+            vals[i] = i * 0.5;
+        }
+        writeJni(file, ids, vals);
+
+        // When — Java reader with ScanOptions.limit(10)
+        long[] javaIds;
+        double[] javaVals;
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.all().withLimit(10))) {
+            long rowsSeen = 0;
+            var idList = new ArrayList<Long>();
+            var valList = new ArrayList<Double>();
+            while (iter.hasNext() && rowsSeen < 10) {
+                try (var c = iter.next()) {
+                    LongArray idCol = (LongArray) c.column("id");
+                    DoubleArray valCol = (DoubleArray) c.column("value");
+                    long take = Math.min(idCol.length(), 10 - rowsSeen);
+                    for (long i = 0; i < take; i++) {
+                        idList.add(idCol.getLong(i));
+                        valList.add(valCol.getDouble(i));
+                    }
+                    rowsSeen += take;
+                }
+            }
+            javaIds = idList.stream().mapToLong(Long::longValue).toArray();
+            javaVals = valList.stream().mapToDouble(Double::doubleValue).toArray();
+        }
+
+        // When — JNI reader stops after 10 rows
+        var jniIdList = new ArrayList<Long>();
+        var jniValList = new ArrayList<Double>();
+        String uri = file.toAbsolutePath().toUri().toString();
+        DataSource ds = DataSource.open(SESSION, uri);
+        Scan scan = ds.scan(ScanOptions.of());
+        outer:
+        while (scan.hasNext()) {
+            Partition partition = scan.next();
+            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
+                while (reader.loadNextBatch()) {
+                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
+                    BigIntVector idVec = (BigIntVector) root.getVector("id");
+                    Float8Vector valVec = (Float8Vector) root.getVector("value");
+                    for (int i = 0; i < root.getRowCount() && jniIdList.size() < 10; i++) {
+                        jniIdList.add(idVec.get(i));
+                        jniValList.add(valVec.get(i));
+                    }
+                    if (jniIdList.size() >= 10) {
+                        break outer;
+                    }
+                }
+            }
+        }
+        long[] jniIds = jniIdList.stream().mapToLong(Long::longValue).toArray();
+        double[] jniVals = jniValList.stream().mapToDouble(Double::doubleValue).toArray();
+
+        // Then — both readers agree element-wise on the first 10 rows
+        assertThat(javaIds).hasSize(10).containsExactly(jniIds);
+        assertThat(javaVals).hasSize(10).containsExactly(jniVals);
+        assertThat(javaIds).containsExactly(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L);
     }
 
     @Test
