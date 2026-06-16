@@ -120,6 +120,20 @@ public final class LazyGridSource implements AutoCloseable {
         return totalRows;
     }
 
+    /// Total chunk count in the file.
+    ///
+    /// @return chunk count
+    public int chunkCount() {
+        return chunkCount;
+    }
+
+    /// Index of the chunk currently held open, or `-1` when no chunk is loaded.
+    ///
+    /// @return current chunk index
+    public int currentChunkIndex() {
+        return currentChunkIdx;
+    }
+
     /// Returns formatted rows for the absolute-row window `[startAbsRow, startAbsRow + count)`.
     ///
     /// The window may straddle a chunk boundary; this method handles the chunk

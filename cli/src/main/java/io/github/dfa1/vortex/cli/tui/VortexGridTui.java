@@ -222,11 +222,16 @@ public final class VortexGridTui {
 
         private void renderTitle(StringBuilder out, int termCols) {
             String err = errorMessage;
+            int curChunk = data.currentChunkIndex();
+            String chunkLabel = curChunk >= 0
+                    ? "  chunk " + (curChunk + 1) + "/" + data.chunkCount()
+                    : "";
             String title = err != null
                     ? " Vortex View  " + source + "  ERROR: " + err
                     : " Vortex View  " + source
                             + "  rows " + totalRows
-                            + "  cols " + totalCols;
+                            + "  cols " + totalCols
+                            + chunkLabel;
             out.append(Ansi.bg(err != null ? 41 : 44)).append(Ansi.fg(97));
             appendPadded(out, title, termCols);
             out.append(Ansi.RESET).append("\r\n");
