@@ -27,6 +27,7 @@ import io.github.dfa1.vortex.reader.array.StructArray;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
@@ -100,7 +101,7 @@ public final class VortexInspectorTui {
 
         /// Render cadence while idle — drives spinner animation and reaping of
         /// background fetches so updates land even when the user isn't typing.
-        private static final long POLL_INTERVAL_MS = 80;
+        private static final Duration POLL_INTERVAL = Duration.ofMillis(80);
 
         /// ASCII spinner frames; cycled by render tick.
         private static final char[] SPINNER = {'|', '/', '-', '\\'};
@@ -255,7 +256,7 @@ public final class VortexInspectorTui {
                     selected = 0;
                 }
                 render(items);
-                Optional<Key> maybeKey = term.readKey(POLL_INTERVAL_MS);
+                Optional<Key> maybeKey = term.readKey(POLL_INTERVAL);
                 if (maybeKey.isEmpty()) {
                     tick++;
                     continue;

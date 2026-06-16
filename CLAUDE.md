@@ -312,6 +312,20 @@ arrives that cannot be addressed by choosing a different encoding for a flat seg
       return a;
   }
   ```
+- **Time quantities use `java.time.Duration`, not `long`.** Any parameter, field, or
+  return type representing a time amount (timeout, delay, interval, period, deadline-offset)
+  must be `Duration`. No `long timeoutMs` / `long delayNanos` / `long intervalSeconds` —
+  the unit lives in the type, not the variable name.
+  ```java
+  // WRONG
+  Optional<Key> readKey(long timeoutMs) throws IOException;
+
+  // CORRECT
+  Optional<Key> readKey(Duration timeout) throws IOException;
+  ```
+  Exception: low-level interop with JDK APIs that take `long ns` (e.g. `Thread.sleep`,
+  `LockSupport.parkNanos`, `System.nanoTime` arithmetic) — convert at the call site
+  via `duration.toNanos()` / `toMillis()`.
 
 ## Encoding class structure
 

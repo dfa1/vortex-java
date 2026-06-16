@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.cli.tui.term;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Optional;
 
 /// Direct, dependency-free terminal abstraction.
@@ -57,13 +58,13 @@ public sealed interface Terminal extends AutoCloseable
     /// @throws IOException if reading fails
     Key readKey() throws IOException;
 
-    /// Reads a key with a wall-clock deadline. Returns {@link Optional#empty()}
+    /// Reads a key with a wall-clock deadline. Returns [Optional#empty()]
     /// if the timeout elapses before any input is available.
     ///
-    /// @param timeoutMs maximum time to wait, in milliseconds
+    /// @param timeout maximum time to wait
     /// @return the decoded key, or empty on timeout
     /// @throws IOException if reading fails
-    Optional<Key> readKey(long timeoutMs) throws IOException;
+    Optional<Key> readKey(Duration timeout) throws IOException;
 
     /// Restores the original terminal mode and exits the alternate screen.
     ///

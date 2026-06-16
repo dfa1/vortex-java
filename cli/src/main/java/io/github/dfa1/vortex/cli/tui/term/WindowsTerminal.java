@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.cli.tui.term;
 
 import java.io.IOException;
 import java.io.PrintStream;
+import java.time.Duration;
 import java.util.Optional;
 import java.lang.foreign.Arena;
 import java.lang.foreign.FunctionDescriptor;
@@ -145,8 +146,8 @@ public final class WindowsTerminal implements Terminal {
     }
 
     @Override
-    public Optional<Key> readKey(long timeoutMs) throws IOException {
-        long deadline = System.nanoTime() + timeoutMs * 1_000_000L;
+    public Optional<Key> readKey(Duration timeout) throws IOException {
+        long deadline = System.nanoTime() + timeout.toNanos();
         while (System.in.available() == 0) {
             if (System.nanoTime() >= deadline) {
                 return Optional.empty();
