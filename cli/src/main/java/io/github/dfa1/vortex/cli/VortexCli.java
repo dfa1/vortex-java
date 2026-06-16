@@ -24,6 +24,7 @@ public final class VortexCli {
         int exit = switch (args[0]) {
             case "inspect" -> InspectCommand.run(args);
             case "tui" -> TuiCommand.run(args);
+            case "view" -> ViewCommand.run(args);
             case "export" -> ExportCommand.run(args);
             case "import" -> ImportCommand.run(args);
             case "schema" -> SchemaCommand.run(args);
@@ -44,6 +45,7 @@ public final class VortexCli {
         out.println("Usage: java -jar vortex-cli-<version>-all.jar <subcommand> [args]");
         out.println("  inspect <file|url>                  print file structure; url is http(s)://");
         out.println("  tui     <file|url>                  open interactive inspector; url is http(s)://");
+        out.println("  view    <file|url>                  open scrollable data grid; url is http(s)://");
         out.println("  export  <file.vortex>               write CSV to stdout");
         out.println("  import  <file.csv|file.parquet> [out.vortex]  convert CSV or Parquet to Vortex");
         out.println("  schema  <file.vortex>               print dtype (machine-readable)");

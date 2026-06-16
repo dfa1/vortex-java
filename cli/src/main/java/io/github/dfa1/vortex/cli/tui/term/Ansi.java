@@ -15,6 +15,9 @@ public final class Ansi {
     /// Clear entire screen.
     public static final String CLEAR_SCREEN = CSI + "2J";
 
+    /// Erase from the cursor to the end of the current line.
+    public static final String CLEAR_LINE_RIGHT = CSI + "K";
+
     /// Move cursor to top-left.
     public static final String CURSOR_HOME = CSI + "H";
 

@@ -207,6 +207,28 @@ class CliIT {
     }
 
     @Test
+    void viewWithoutArgsPrintsUsage() {
+        // Given / When
+        String stderr = captureStderr(() -> ViewCommand.run(new String[]{"view"}));
+
+        // Then
+        assertThat(stderr).contains("usage: view <file.vortex | http(s)://url>");
+    }
+
+    @Test
+    void viewWithMissingFileReportsNotFound(@TempDir Path tmp) {
+        // Given
+        Path missing = tmp.resolve("nope.vortex");
+
+        // When
+        String stderr = captureStderr(
+                () -> ViewCommand.run(new String[]{"view", missing.toString()}));
+
+        // Then
+        assertThat(stderr).contains("file not found");
+    }
+
+    @Test
     void importRejectsMultiCharacterDelimiter(@TempDir Path tmp) throws Exception {
         // Given
         Path csvIn = tmp.resolve("data.csv");
