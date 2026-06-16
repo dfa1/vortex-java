@@ -9,10 +9,10 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 
-/// Excel-like scrollable grid viewer for a Vortex file's rows.
+/// Excel-like scrollable grid viewer over a [LazyGridSource].
 ///
-/// Renders a frozen header row and a viewport of data rows that the user can
-/// scroll with the arrow keys. Quit with `q` or `Esc`.
+/// Rows are decoded on demand as the viewport scrolls into new chunks. Quit
+/// with `q` or `Esc`.
 public final class VortexGridTui {
 
     private VortexGridTui() {
@@ -20,23 +20,14 @@ public final class VortexGridTui {
 
     /// Opens the terminal in raw mode and runs the grid viewer until quit.
     ///
-    /// @param data pre-materialised rows + column names + source label
-    /// @throws IOException if the terminal cannot be initialized
-    public static void show(GridData data) throws IOException {
+    /// @param source display label for the file (path or URL)
+    /// @param data   lazy row source; closed by the caller
+    /// @throws IOException if the terminal cannot be initialized or the row
+    ///                     decoder fails
+    public static void show(String source, LazyGridSource data) throws IOException {
         try (Terminal term = Terminal.open()) {
-            new Loop(term, data).run();
+            new Loop(term, source, data).run();
         }
-    }
-
-    /// Pre-materialised grid contents.
-    ///
-    /// @param source         display label for the file (path or URL)
-    /// @param columns        column header names in display order
-    /// @param rows           row data; each entry has `columns.size()` cells
-    /// @param totalRows      logical row count in the file (may exceed `rows.size()`)
-    /// @param truncated      true if `rows` is a prefix of the full file
-    public record GridData(String source, List<String> columns, List<String[]> rows,
-                           long totalRows, boolean truncated) {
     }
 
     private static final class Loop {
@@ -47,21 +38,28 @@ public final class VortexGridTui {
         private static final Duration POLL_INTERVAL = Duration.ofMillis(200);
 
         private final Terminal term;
-        private final GridData data;
+        private final String source;
+        private final LazyGridSource data;
         private final int[] colWidths;
         private final int rowNumberWidth;
+        private final long totalRows;
+        private final int totalCols;
 
-        private int cursorRow;
+        private long cursorRow;
         private int cursorCol;
-        private int rowOffset;
+        private long rowOffset;
         private int colOffset;
         private boolean dirty = true;
+        private String errorMessage;
 
-        Loop(Terminal term, GridData data) {
+        Loop(Terminal term, String source, LazyGridSource data) {
             this.term = term;
+            this.source = source;
             this.data = data;
-            this.colWidths = computeColWidths(data);
-            this.rowNumberWidth = Math.max(3, Long.toString(data.totalRows()).length()) + ROW_INDEX_PAD;
+            this.totalRows = data.totalRows();
+            this.totalCols = data.columns().size();
+            this.colWidths = computeColWidths(data.columns());
+            this.rowNumberWidth = Math.max(3, Long.toString(Math.max(1, totalRows)).length()) + ROW_INDEX_PAD;
         }
 
         void run() throws IOException {
@@ -97,9 +95,9 @@ public final class VortexGridTui {
                 case Key.PageUp ignored -> move(-pageRows(), 0);
                 case Key.PageDown ignored -> move(pageRows(), 0);
                 case Key.Home ignored -> jumpCol(0);
-                case Key.End ignored -> jumpCol(data.columns().size() - 1);
+                case Key.End ignored -> jumpCol(totalCols - 1);
                 case Key.Char c when c.value() == 'g' -> jumpRow(0);
-                case Key.Char c when c.value() == 'G' -> jumpRow(data.rows().size() - 1);
+                case Key.Char c when c.value() == 'G' -> jumpRow(totalRows - 1);
                 case Key.Char c when c.value() == 'q' -> false;
                 case Key.Escape ignored -> false;
                 case Key.Eof ignored -> false;
@@ -107,14 +105,12 @@ public final class VortexGridTui {
             };
         }
 
-        private boolean move(int dr, int dc) {
-            int rows = data.rows().size();
-            int cols = data.columns().size();
-            if (rows == 0 || cols == 0) {
+        private boolean move(long dr, int dc) {
+            if (totalRows == 0 || totalCols == 0) {
                 return true;
             }
-            int newRow = clamp(cursorRow + dr, 0, rows - 1);
-            int newCol = clamp(cursorCol + dc, 0, cols - 1);
+            long newRow = clamp(cursorRow + dr, 0L, totalRows - 1);
+            int newCol = clamp(cursorCol + dc, 0, totalCols - 1);
             if (newRow != cursorRow || newCol != cursorCol) {
                 cursorRow = newRow;
                 cursorCol = newCol;
@@ -123,70 +119,68 @@ public final class VortexGridTui {
             return true;
         }
 
-        private boolean jumpRow(int row) {
-            int rows = data.rows().size();
-            if (rows == 0) {
+        private boolean jumpRow(long row) {
+            if (totalRows == 0) {
                 return true;
             }
-            cursorRow = clamp(row, 0, rows - 1);
+            cursorRow = clamp(row, 0L, totalRows - 1);
             dirty = true;
             return true;
         }
 
         private boolean jumpCol(int col) {
-            int cols = data.columns().size();
-            if (cols == 0) {
+            if (totalCols == 0) {
                 return true;
             }
-            cursorCol = clamp(col, 0, cols - 1);
+            cursorCol = clamp(col, 0, totalCols - 1);
             dirty = true;
             return true;
         }
 
-        private int pageRows() {
+        private long pageRows() {
             Terminal.Size size = term.size();
             return Math.max(1, size.rows() - 4);
         }
 
         private void render() throws IOException {
             Terminal.Size size = term.size();
-            int totalCols = size.cols();
-            int totalRows = size.rows();
-            if (totalCols <= rowNumberWidth + 2 || totalRows <= 3) {
+            int termCols = size.cols();
+            int termRows = size.rows();
+            if (termCols <= rowNumberWidth + 2 || termRows <= 3) {
                 term.write(Ansi.CLEAR_SCREEN);
                 term.write(Ansi.CURSOR_HOME);
                 term.write("terminal too small");
                 term.flush();
                 return;
             }
-            ensureCursorVisible(totalRows, totalCols);
+            ensureCursorVisible(termRows, termCols);
 
-            StringBuilder out = new StringBuilder(totalCols * totalRows);
+            StringBuilder out = new StringBuilder(termCols * termRows);
             out.append(Ansi.CLEAR_SCREEN).append(Ansi.CURSOR_HOME);
-            renderTitle(out, totalCols);
-            renderHeader(out, totalCols);
-            renderRows(out, totalRows, totalCols);
-            renderStatus(out, totalRows, totalCols);
+            renderTitle(out, termCols);
+            renderHeader(out, termCols);
+            renderRows(out, termRows, termCols);
+            renderStatus(out, termCols);
 
             term.write(out.toString());
             term.flush();
         }
 
-        private void ensureCursorVisible(int totalRows, int totalCols) {
-            int viewportRows = totalRows - 3;
+        private void ensureCursorVisible(int termRows, int termCols) {
+            long viewportRows = (long) termRows - 3;
             if (cursorRow < rowOffset) {
                 rowOffset = cursorRow;
             } else if (cursorRow >= rowOffset + viewportRows) {
                 rowOffset = cursorRow - viewportRows + 1;
             }
-            int dataCols = totalCols - rowNumberWidth;
+            int dataCols = termCols - rowNumberWidth;
             while (cursorCol < colOffset) {
                 colOffset = cursorCol;
             }
             while (true) {
                 int width = 0;
                 int c = colOffset;
-                while (c < data.columns().size() && width + colWidths[c] + 1 <= dataCols) {
+                while (c < totalCols && width + colWidths[c] + 1 <= dataCols) {
                     width += colWidths[c] + 1;
                     if (c == cursorCol) {
                         return;
@@ -203,50 +197,74 @@ public final class VortexGridTui {
             }
         }
 
-        private void renderTitle(StringBuilder out, int totalCols) {
-            String title = " Vortex View  " + data.source()
-                    + "  rows " + data.rows().size() + "/" + data.totalRows()
-                    + (data.truncated() ? " (truncated)" : "")
-                    + "  cols " + data.columns().size();
-            out.append(Ansi.bg(44)).append(Ansi.fg(97));
-            appendPadded(out, title, totalCols);
+        private void renderTitle(StringBuilder out, int termCols) {
+            String err = errorMessage;
+            String title = err != null
+                    ? " Vortex View  " + source + "  ERROR: " + err
+                    : " Vortex View  " + source
+                            + "  rows " + totalRows
+                            + "  cols " + totalCols;
+            out.append(Ansi.bg(err != null ? 41 : 44)).append(Ansi.fg(97));
+            appendPadded(out, title, termCols);
             out.append(Ansi.RESET).append("\r\n");
         }
 
-        private void renderHeader(StringBuilder out, int totalCols) {
-            StringBuilder line = new StringBuilder(totalCols);
+        private void renderHeader(StringBuilder out, int termCols) {
+            StringBuilder line = new StringBuilder(termCols);
             appendPadded(line, padRight("#", rowNumberWidth - 1) + " ", rowNumberWidth);
             int width = rowNumberWidth;
             for (int c = colOffset;
-                 c < data.columns().size() && width + colWidths[c] + 1 <= totalCols;
+                 c < totalCols && width + colWidths[c] + 1 <= termCols;
                  c++) {
                 String cell = truncate(data.columns().get(c), colWidths[c]);
                 line.append(padRight(cell, colWidths[c])).append(' ');
                 width += colWidths[c] + 1;
             }
             out.append(Ansi.bg(100)).append(Ansi.fg(97));
-            appendPadded(out, line.toString(), totalCols);
+            appendPadded(out, line.toString(), termCols);
             out.append(Ansi.RESET).append("\r\n");
         }
 
-        private void renderRows(StringBuilder out, int totalRows, int totalCols) {
-            int viewportRows = totalRows - 3;
-            int rowCount = data.rows().size();
+        private void renderRows(StringBuilder out, int termRows, int termCols) {
+            int viewportRows = termRows - 3;
             for (int r = 0; r < viewportRows; r++) {
-                int absRow = rowOffset + r;
-                if (absRow >= rowCount) {
-                    appendPadded(out, "", totalCols);
+                long absRow = rowOffset + r;
+                if (absRow >= totalRows) {
+                    appendPadded(out, "", termCols);
                     out.append("\r\n");
                     continue;
                 }
-                renderDataRow(out, absRow, totalCols);
+                String[] row = safeRow(absRow);
+                renderDataRow(out, absRow, row, termCols);
                 out.append("\r\n");
             }
         }
 
-        private void renderDataRow(StringBuilder out, int absRow, int totalCols) {
+        private String[] safeRow(long absRow) {
+            try {
+                return data.row(absRow);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                errorMessage = "interrupted";
+                return placeholder();
+            } catch (RuntimeException e) {
+                errorMessage = e.getClass().getSimpleName()
+                        + (e.getMessage() != null ? ": " + e.getMessage() : "");
+                return placeholder();
+            }
+        }
+
+        private String[] placeholder() {
+            String[] row = new String[totalCols];
+            for (int c = 0; c < totalCols; c++) {
+                row[c] = "?";
+            }
+            return row;
+        }
+
+        private void renderDataRow(StringBuilder out, long absRow, String[] row, int termCols) {
             boolean cursorRowLine = absRow == cursorRow;
-            String rowLabel = padRight(Integer.toString(absRow + 1), rowNumberWidth - 1) + " ";
+            String rowLabel = padRight(Long.toString(absRow + 1), rowNumberWidth - 1) + " ";
             if (cursorRowLine) {
                 out.append(Ansi.fg(93));
             } else {
@@ -255,9 +273,8 @@ public final class VortexGridTui {
             out.append(rowLabel).append(Ansi.RESET);
 
             int width = rowNumberWidth;
-            String[] row = data.rows().get(absRow);
             for (int c = colOffset;
-                 c < data.columns().size() && width + colWidths[c] + 1 <= totalCols;
+                 c < totalCols && width + colWidths[c] + 1 <= termCols;
                  c++) {
                 String cell = c < row.length ? row[c] : "";
                 String text = padRight(truncate(cell, colWidths[c]), colWidths[c]);
@@ -274,25 +291,22 @@ public final class VortexGridTui {
                 out.append(' ');
                 width += colWidths[c] + 1;
             }
-            if (width < totalCols) {
-                appendPadded(out, "", totalCols - width);
+            if (width < termCols) {
+                appendPadded(out, "", termCols - width);
             }
         }
 
-        private void renderStatus(StringBuilder out, int totalRows, int totalCols) {
-            String col = cursorCol < data.columns().size() ? data.columns().get(cursorCol) : "-";
-            String cellValue = "";
-            if (cursorRow < data.rows().size() && cursorCol < data.rows().get(cursorRow).length) {
-                cellValue = data.rows().get(cursorRow)[cursorCol];
-            }
+        private void renderStatus(StringBuilder out, int termCols) {
+            String col = cursorCol < totalCols ? data.columns().get(cursorCol) : "-";
+            String cellValue = currentCellValue();
             String right = " arrows/PgUp/PgDn move  g/G top/bot  q quit ";
-            int rightRoom = right.length() < totalCols ? right.length() : 0;
-            int leftBudget = totalCols - rightRoom;
+            int rightRoom = right.length() < termCols ? right.length() : 0;
+            int leftBudget = termCols - rightRoom;
             String leftFull = " R" + (cursorRow + 1) + " C" + (cursorCol + 1)
                     + "  " + col + " = " + cellValue;
             String left = truncate(leftFull, Math.max(0, leftBudget));
 
-            StringBuilder line = new StringBuilder(totalCols);
+            StringBuilder line = new StringBuilder(termCols);
             line.append(left);
             for (int i = line.length(); i < leftBudget; i++) {
                 line.append(' ');
@@ -301,31 +315,33 @@ public final class VortexGridTui {
                 line.append(right);
             }
             out.append(Ansi.bg(44)).append(Ansi.fg(97));
-            appendPadded(out, line.toString(), totalCols);
+            appendPadded(out, line.toString(), termCols);
             out.append(Ansi.RESET);
         }
 
-        private static int[] computeColWidths(GridData data) {
-            int n = data.columns().size();
+        private String currentCellValue() {
+            if (totalRows == 0 || totalCols == 0) {
+                return "";
+            }
+            String[] row = safeRow(cursorRow);
+            return cursorCol < row.length ? row[cursorCol] : "";
+        }
+
+        private static int[] computeColWidths(List<String> columns) {
+            int n = columns.size();
             int[] widths = new int[n];
             for (int c = 0; c < n; c++) {
-                int w = Math.max(MIN_COL_WIDTH, data.columns().get(c).length());
+                int w = Math.max(MIN_COL_WIDTH, columns.get(c).length());
                 widths[c] = Math.min(MAX_COL_WIDTH, w);
             }
-            int sampled = Math.min(data.rows().size(), 200);
-            for (int r = 0; r < sampled; r++) {
-                String[] row = data.rows().get(r);
-                for (int c = 0; c < n && c < row.length; c++) {
-                    if (row[c] == null) {
-                        continue;
-                    }
-                    int len = row[c].length();
-                    if (len > widths[c]) {
-                        widths[c] = Math.min(MAX_COL_WIDTH, len);
-                    }
-                }
-            }
             return widths;
+        }
+
+        private static long clamp(long v, long lo, long hi) {
+            if (v < lo) {
+                return lo;
+            }
+            return Math.min(v, hi);
         }
 
         private static int clamp(int v, int lo, int hi) {

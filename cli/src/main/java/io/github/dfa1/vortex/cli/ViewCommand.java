@@ -1,41 +1,20 @@
 package io.github.dfa1.vortex.cli;
 
 import io.github.dfa1.vortex.cli.tui.IoWorker;
+import io.github.dfa1.vortex.cli.tui.LazyGridSource;
 import io.github.dfa1.vortex.cli.tui.VortexGridTui;
-import io.github.dfa1.vortex.cli.tui.VortexGridTui.GridData;
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.reader.Chunk;
-import io.github.dfa1.vortex.reader.ScanIterator;
-import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexHandle;
 import io.github.dfa1.vortex.reader.VortexHttpReader;
 import io.github.dfa1.vortex.reader.VortexReader;
-import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.BoolArray;
-import io.github.dfa1.vortex.reader.array.ByteArray;
-import io.github.dfa1.vortex.reader.array.DoubleArray;
-import io.github.dfa1.vortex.reader.array.FloatArray;
-import io.github.dfa1.vortex.reader.array.IntArray;
-import io.github.dfa1.vortex.reader.array.LazyDecimalArray;
-import io.github.dfa1.vortex.reader.array.LazyDecimalBytePartsArray;
-import io.github.dfa1.vortex.reader.array.LongArray;
-import io.github.dfa1.vortex.reader.array.MaskedArray;
-import io.github.dfa1.vortex.reader.array.ShortArray;
-import io.github.dfa1.vortex.reader.array.VarBinArray;
 
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 final class ViewCommand {
-
-    private static final long DEFAULT_ROW_CAP = 100_000L;
 
     private ViewCommand() {
     }
@@ -46,13 +25,23 @@ final class ViewCommand {
             return ExitStatus.USAGE_ERROR;
         }
         try (IoWorker worker = new IoWorker("vortex-view-io")) {
+            System.err.print("Opening file... ");
+            System.err.flush();
+            long tOpen = System.nanoTime();
             VortexHandle handle = openOnWorker(worker, args[1]);
             if (handle == null) {
                 return ExitStatus.FILE_NOT_FOUND;
             }
-            try {
-                GridData data = loadOnWorker(worker, handle, args[1]);
-                VortexGridTui.show(data);
+            System.err.println("done (" + (System.nanoTime() - tOpen) / 1_000_000L + " ms)");
+
+            System.err.print("Indexing chunks... ");
+            System.err.flush();
+            long tIdx = System.nanoTime();
+            try (LazyGridSource source = LazyGridSource.open(handle, worker, cacheCapacity())) {
+                long ms = (System.nanoTime() - tIdx) / 1_000_000L;
+                System.err.println("done — " + source.totalRows() + " rows × "
+                        + source.columns().size() + " cols (" + ms + " ms)");
+                VortexGridTui.show(args[1], source);
             } finally {
                 closeOnWorker(worker, handle);
             }
@@ -108,117 +97,19 @@ final class ViewCommand {
         return VortexReader.open(path);
     }
 
-    private static GridData loadOnWorker(IoWorker worker, VortexHandle handle, String source)
-            throws InterruptedException {
-        AtomicReference<GridData> ref = new AtomicReference<>();
-        AtomicReference<RuntimeException> failure = new AtomicReference<>();
-        worker.runAndAwait(() -> {
-            try {
-                ref.set(load(handle, source));
-            } catch (RuntimeException e) {
-                failure.set(e);
-            }
-        });
-        if (failure.get() != null) {
-            throw failure.get();
-        }
-        return ref.get();
-    }
-
-    private static GridData load(VortexHandle handle, String source) {
-        if (!(handle.dtype() instanceof DType.Struct schema)) {
-            throw new VortexException("view requires struct root dtype, got " + handle.dtype());
-        }
-        List<String> columns = schema.fieldNames();
-        int colCount = columns.size();
-
-        long cap = rowCap();
-        List<String[]> rows = new ArrayList<>();
-        long totalRows = 0;
-        boolean truncated = false;
-
-        try (ScanIterator iter = handle.scan(ScanOptions.all())) {
-            while (iter.hasNext()) {
-                try (Chunk chunk = iter.next()) {
-                    long chunkRows = chunk.rowCount();
-                    totalRows += chunkRows;
-                    if (rows.size() >= cap) {
-                        truncated = true;
-                        continue;
-                    }
-                    Array[] arrays = new Array[colCount];
-                    for (int c = 0; c < colCount; c++) {
-                        arrays[c] = chunk.column(columns.get(c));
-                    }
-                    long take = Math.min(chunkRows, cap - rows.size());
-                    for (long r = 0; r < take; r++) {
-                        String[] row = new String[colCount];
-                        for (int c = 0; c < colCount; c++) {
-                            row[c] = formatCell(arrays[c], r);
-                        }
-                        rows.add(row);
-                    }
-                    if (rows.size() >= cap && take < chunkRows) {
-                        truncated = true;
-                    }
-                }
-            }
-        }
-        return new GridData(source, columns, rows, totalRows, truncated);
-    }
-
-    private static long rowCap() {
-        String prop = System.getProperty("vortex.view.rowcap");
+    private static int cacheCapacity() {
+        String prop = System.getProperty("vortex.view.chunkcache");
         if (prop != null) {
             try {
-                long v = Long.parseLong(prop);
+                int v = Integer.parseInt(prop);
                 if (v > 0) {
                     return v;
                 }
             } catch (NumberFormatException ignored) {
-                // fall through to default
+                // fall through
             }
         }
-        return DEFAULT_ROW_CAP;
-    }
-
-    private static String formatCell(Array array, long i) {
-        Array inner = array instanceof MaskedArray m ? m.inner() : array;
-        if (array instanceof MaskedArray m && !m.isValid(i)) {
-            return "";
-        }
-        try {
-            return switch (inner) {
-                case LongArray a -> Long.toString(a.getLong(i));
-                case IntArray a -> Integer.toString(a.getInt(i));
-                case ShortArray a -> Short.toString(a.getShort(i));
-                case ByteArray a -> Byte.toString(a.getByte(i));
-                case DoubleArray a -> Double.toString(a.getDouble(i));
-                case FloatArray a -> Float.toString(a.getFloat(i));
-                case BoolArray a -> Boolean.toString(a.getBoolean(i));
-                case VarBinArray a -> a.dtype() instanceof DType.Utf8
-                        ? a.getString(i)
-                        : bytesToHex(a.getBytes(i));
-                case LazyDecimalArray a -> a.getDecimal(i).toPlainString();
-                case LazyDecimalBytePartsArray a -> a.getDecimal(i).toPlainString();
-                default -> "<" + inner.getClass().getSimpleName() + ">";
-            };
-        } catch (RuntimeException e) {
-            return "<error>";
-        }
-    }
-
-    private static String bytesToHex(byte[] bytes) {
-        int n = Math.min(bytes.length, 16);
-        StringBuilder sb = new StringBuilder(n * 2 + 2);
-        sb.append("0x");
-        for (int i = 0; i < n; i++) {
-            sb.append(String.format("%02x", bytes[i] & 0xff));
-        }
-        if (bytes.length > n) {
-            sb.append("...");
-        }
-        return sb.toString();
+        return LazyGridSource.DEFAULT_CACHE_CAPACITY;
     }
 
     private static String describe(Throwable t) {

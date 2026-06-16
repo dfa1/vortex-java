@@ -427,6 +427,29 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         }
     }
 
+    /// Returns the row count of every chunk in scan order, without decoding values.
+    ///
+    /// Walks the file's layout tree (initialising internal state on first call) and
+    /// returns one element per chunk that the iterator would yield, in the same
+    /// order. Useful for tooling that needs to navigate by absolute row index
+    /// (e.g. an interactive grid viewer) before deciding which chunks to actually
+    /// decode.
+    ///
+    /// Filter pruning and `ScanOptions.limit()` are not applied — the array
+    /// reflects the raw layout shape, not the projected scan.
+    ///
+    /// @return row counts in chunk-index order
+    public long[] chunkRowCounts() {
+        if (chunks == null) {
+            initialize();
+        }
+        long[] out = new long[chunks.size()];
+        for (int i = 0; i < chunks.size(); i++) {
+            out[i] = chunks.get(i).rowCount();
+        }
+        return out;
+    }
+
     /// Runs `action` on each remaining chunk inside a try-with-resources
     /// block so every chunk's [Arena] is released before the next iteration.
     /// Prefer this over a manual `while (hasNext()) { next(); `} loop
