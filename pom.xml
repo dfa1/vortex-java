@@ -84,14 +84,17 @@
 			**/fbs/**,
 			**/proto/**
 		</sonar.coverage.exclusions>
-		<!-- Coverage sources: per-module surefire, per-module failsafe, and the
-		     integration-module failsafe report. Integration tests live in the
-		     vortex-integration module and exercise classes in reader/writer/core —
-		     without the third path those cross-module hits are invisible to Sonar. -->
+		<!-- Coverage sources:
+		     1. per-module surefire (unit tests)
+		     2. per-module failsafe (module-local integration tests)
+		     3. integration-module aggregate — report-aggregate in the integration
+		        module reads **/jacoco-it.exec from all dependency modules and reports
+		        on all their classes, giving Sonar coverage for BitpackedEncodingDecoder
+		        etc. that are exercised by cross-module integration tests. -->
 		<sonar.coverage.jacoco.xmlReportPaths>
 			${project.build.directory}/site/jacoco/jacoco.xml,
 			${project.build.directory}/site/jacoco-it/jacoco.xml,
-			${maven.multiModuleProjectDirectory}/integration/target/site/jacoco-it/jacoco.xml
+			${maven.multiModuleProjectDirectory}/integration/target/site/jacoco-aggregate/jacoco.xml
 		</sonar.coverage.jacoco.xmlReportPaths>
 		<!-- Default for the {@code @{argLine}} placeholder in surefire/failsafe configs. JaCoCo's
 		     {@code prepare-agent} goal overwrites this with the agent arguments when active; if

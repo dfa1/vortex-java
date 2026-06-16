@@ -91,6 +91,62 @@
 		</dependency>
 	</dependencies>
 
+	<profiles>
+		<profile>
+			<id>coverage</id>
+			<!-- When reporting coverage, promote key modules from test to compile scope so
+			     jacoco:report-aggregate can locate their class directories. The integration
+			     module is never published (maven.deploy.skip=true) so this has no downstream
+			     impact. -->
+			<dependencies>
+				<dependency>
+					<groupId>io.github.dfa1.vortex</groupId>
+					<artifactId>vortex-core</artifactId>
+					<scope>compile</scope>
+				</dependency>
+				<dependency>
+					<groupId>io.github.dfa1.vortex</groupId>
+					<artifactId>vortex-reader</artifactId>
+					<scope>compile</scope>
+				</dependency>
+				<dependency>
+					<groupId>io.github.dfa1.vortex</groupId>
+					<artifactId>vortex-writer</artifactId>
+					<scope>compile</scope>
+				</dependency>
+				<dependency>
+					<groupId>io.github.dfa1.vortex</groupId>
+					<artifactId>vortex-inspector</artifactId>
+					<scope>compile</scope>
+				</dependency>
+			</dependencies>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.jacoco</groupId>
+						<artifactId>jacoco-maven-plugin</artifactId>
+						<executions>
+							<!-- Aggregate integration-test coverage across all dependency modules.
+							     report-integration only covers classes in THIS module (none), so
+							     we use report-aggregate to collect reader/writer/core class hits
+							     from the jacoco-it.exec files that failsafe produces here. -->
+							<execution>
+								<id>report-aggregate-it</id>
+								<phase>verify</phase>
+								<goals>
+									<goal>report-aggregate</goal>
+								</goals>
+								<configuration>
+									<outputDirectory>${project.reporting.outputDirectory}/jacoco-aggregate</outputDirectory>
+								</configuration>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
+
 	<build>
 		<plugins>
 			<plugin>
