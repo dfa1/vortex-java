@@ -9,21 +9,18 @@ import io.github.dfa1.vortex.proto.ScalarValue;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.reader.array.GenericArray;
-import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
-import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
-import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
-import io.github.dfa1.vortex.reader.array.MaterializedFloatArray;
-import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
-import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
-import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantBoolArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantByteArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantDoubleArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantFloatArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantIntArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantLongArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantShortArray;
 import io.github.dfa1.vortex.reader.array.NullArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 
 /// Read-only decoder for `vortex.constant`.
@@ -75,7 +72,12 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
             var storageCtx = new DecodeContext(ctx.node(), ext.storageDType(), ctx.rowCount(),
                     ctx.segmentBuffers(), ctx.registry(), ctx.arena());
             Array storage = decode(storageCtx);
-            return new GenericArray(ctx.dtype(), n, ArraySegments.of(storage));
+            // GenericArray needs a backing buffer; the recursive call now returns a
+            // metadata-only LazyConstantXxxArray. Materialise once into the chunk arena
+            // so downstream extension consumers that read via ArraySegments.of(arr) still
+            // find a segment. Extension-on-constant is rare enough that the small alloc
+            // doesn't matter — the bare primitive path stays buffer-free.
+            return new GenericArray(ctx.dtype(), n, ArraySegments.of(storage, ctx.arena()));
         }
 
         if (!(ctx.dtype() instanceof DType.Primitive p)) {
@@ -83,21 +85,15 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
         }
 
         PType ptype = p.ptype();
-        int elemBytes = ptype.byteSize();
         long rawBits = scalarToRawBits(scalar, ptype);
 
-        MemorySegment outSeg = ctx.arena().allocate(elemBytes);
-        ByteBuffer out = outSeg.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
-        writeRaw(out, ptype, rawBits);
-
-        MemorySegment ro = outSeg.asReadOnly();
         return switch (ptype) {
-            case I64, U64 -> new MaterializedLongArray(ctx.dtype(), n, ro);
-            case I32, U32 -> new MaterializedIntArray(ctx.dtype(), n, ro);
-            case F64 -> new MaterializedDoubleArray(ctx.dtype(), n, ro);
-            case F32 -> new MaterializedFloatArray(ctx.dtype(), n, ro);
-            case I16, U16 -> new MaterializedShortArray(ctx.dtype(), n, ro);
-            case I8, U8 -> new MaterializedByteArray(ctx.dtype(), n, ro);
+            case I64, U64 -> new LazyConstantLongArray(ctx.dtype(), n, rawBits);
+            case I32, U32 -> new LazyConstantIntArray(ctx.dtype(), n, (int) rawBits);
+            case F64 -> new LazyConstantDoubleArray(ctx.dtype(), n, Double.longBitsToDouble(rawBits));
+            case F32 -> new LazyConstantFloatArray(ctx.dtype(), n, Float.intBitsToFloat((int) rawBits));
+            case I16, U16 -> new LazyConstantShortArray(ctx.dtype(), n, (short) rawBits);
+            case I8, U8 -> new LazyConstantByteArray(ctx.dtype(), n, (byte) rawBits);
             default -> throw new VortexException(EncodingId.VORTEX_CONSTANT, "unsupported ptype " + ptype);
         };
     }
@@ -115,14 +111,7 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
 
     private static Array decodeBool(DecodeContext ctx, ScalarValue scalar, long n) {
         boolean value = scalar.bool_value() != null && scalar.bool_value();
-        long numBytes = (n + 7) >>> 3;
-        MemorySegment seg = ctx.arena().allocate(numBytes);
-        if (value) {
-            for (long i = 0; i < numBytes; i++) {
-                seg.set(ValueLayout.JAVA_BYTE, i, (byte) 0xFF);
-            }
-        }
-        return new MaterializedBoolArray(ctx.dtype(), n, seg.asReadOnly());
+        return new LazyConstantBoolArray(ctx.dtype(), n, value);
     }
 
     private static Array decodeString(DecodeContext ctx, ScalarValue scalar, long n) {
@@ -161,13 +150,4 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
         return 0L;
     }
 
-    private static void writeRaw(ByteBuffer buf, PType ptype, long rawBits) {
-        switch (ptype.byteSize()) {
-            case 1 -> buf.put((byte) rawBits);
-            case 2 -> buf.putShort((short) rawBits);
-            case 4 -> buf.putInt((int) rawBits);
-            case 8 -> buf.putLong(rawBits);
-            default -> throw new VortexException(EncodingId.VORTEX_CONSTANT, "unsupported ptype " + ptype);
-        }
-    }
 }

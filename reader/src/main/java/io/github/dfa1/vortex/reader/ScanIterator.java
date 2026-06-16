@@ -24,6 +24,13 @@ import io.github.dfa1.vortex.reader.array.EmptyArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.GenericArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantBoolArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantByteArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantDoubleArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantFloatArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantIntArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantLongArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantShortArray;
 import io.github.dfa1.vortex.reader.array.LazyDecimalBytePartsArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
@@ -257,6 +264,17 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                     DictDoubleArray.of(a.dtype(), rows, a.values(), truncateArray(a.codes(), rows, arena));
             case DictFloatArray a ->
                     DictFloatArray.of(a.dtype(), rows, a.values(), truncateArray(a.codes(), rows, arena));
+            // LazyConstant* cases must precede the LongArray / IntArray / etc catch-alls:
+            // each LazyConstantXxxArray IS a typed Array, but the catch-all would
+            // materialise a length-sized buffer just to slice it. Truncating a constant
+            // array is a no-buffer length swap.
+            case LazyConstantLongArray a -> new LazyConstantLongArray(a.dtype(), rows, a.value());
+            case LazyConstantIntArray a -> new LazyConstantIntArray(a.dtype(), rows, a.value());
+            case LazyConstantDoubleArray a -> new LazyConstantDoubleArray(a.dtype(), rows, a.value());
+            case LazyConstantFloatArray a -> new LazyConstantFloatArray(a.dtype(), rows, a.value());
+            case LazyConstantShortArray a -> new LazyConstantShortArray(a.dtype(), rows, a.value());
+            case LazyConstantByteArray a -> new LazyConstantByteArray(a.dtype(), rows, a.value());
+            case LazyConstantBoolArray a -> new LazyConstantBoolArray(a.dtype(), rows, a.value());
             case LongArray a ->
                     new MaterializedLongArray(a.dtype(), rows, ArraySegments.of(a, arena).asSlice(0, rows * Long.BYTES));
             case IntArray a ->

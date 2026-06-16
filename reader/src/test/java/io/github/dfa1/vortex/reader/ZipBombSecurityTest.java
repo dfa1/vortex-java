@@ -3,8 +3,7 @@ package io.github.dfa1.vortex.reader;
 import com.google.flatbuffers.FlatBufferBuilder;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.ArraySegments;
-import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantLongArray;
 
 import io.github.dfa1.vortex.reader.decode.ConstantEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
@@ -50,7 +49,7 @@ class ZipBombSecurityTest {
     //
     // A tiny ~130-byte file claims many rows encoded as a constant. Before the fix,
     // ConstantEncoding.Decoder allocated n * elemBytes unconditionally.
-    // After fix: decoder stores one element; array reports length=n with O(1) buffer.
+    // After fix: decoder emits a metadata-only LazyConstantLongArray; no buffer.
     @Test
     void attack1_constantEncoding_inflatedFlatRowCount(@TempDir Path tmp) throws Exception {
         // Given — 10M rows: 80 MB if fix reverted (clean AssertionError, not JVM crash)
@@ -64,12 +63,17 @@ class ZipBombSecurityTest {
             assertThat(iter.hasNext()).isTrue();
             Array col = iter.next().column("_col");
 
-            // Then — O(1) buffer proves fix is in place; logical length unchanged
+            // Then — LazyConstantLongArray carries no buffer at all, only metadata,
+            // so the O(rowCount) allocation the bomb would trigger cannot occur by
+            // construction. Length is preserved and the broadcast value resolves
+            // identically for any valid index.
             assertThat(col.length()).isEqualTo(claimedRows);
-            assertThat(col).isInstanceOf(LongArray.class);
-            assertThat(ArraySegments.of(col).byteSize())
-                    .as("ConstantEncoding must not allocate O(rowCount) memory")
-                    .isEqualTo(Long.BYTES);
+            assertThat(col)
+                    .as("ConstantEncoding must produce a metadata-only LazyConstantLongArray")
+                    .isInstanceOf(LazyConstantLongArray.class);
+            LazyConstantLongArray lazy = (LazyConstantLongArray) col;
+            assertThat(lazy.getLong(0)).isEqualTo(lazy.value());
+            assertThat(lazy.getLong(claimedRows - 1)).isEqualTo(lazy.value());
         }
     }
 

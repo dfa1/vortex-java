@@ -1,17 +1,17 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantIntArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantLongArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.encoding.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
-import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.reader.decode.ConstantEncodingDecoder;
@@ -27,7 +27,7 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// Property: encode then decode is lossless for constant (all-equal) arrays.
-/// Property: decode allocates O(1) memory regardless of rowCount.
+/// Property: decode emits a metadata-only `LazyConstantXxxArray` — no buffer at any rowCount.
 class ConstantEncodingEncoderTest {
 
     private static final ConstantEncodingEncoder ENCODER = new ConstantEncodingEncoder();
@@ -38,9 +38,9 @@ class ConstantEncodingEncoderTest {
     class Decode {
 
         @Test
-        void decode_largeRowCount_bufferStaysConstantSize() {
+        void decode_largeRowCount_emitsMetadataOnlyArray() {
             // Given — 10M rows would allocate 80 MB if the decoder materializes every element;
-            // the correct impl stores exactly one element regardless of logical length.
+            // the correct impl emits a metadata-only LazyConstantLongArray with no buffer at all.
             long rowCount = 10_000_000L;
 
             // When
@@ -50,10 +50,10 @@ class ConstantEncodingEncoderTest {
 
             // Then
             assertThat(result.length()).isEqualTo(rowCount);
-            assertThat(ArraySegments.of(result).byteSize())
-                    .as("constant encoding must not allocate O(rowCount) memory")
-                    .isEqualTo(Long.BYTES);
-            assertThat(ArraySegments.of(result).get(PTypeIO.LE_LONG, 0L)).isEqualTo(42L);
+            assertThat(result)
+                    .as("constant encoding must produce a metadata-only LazyConstantLongArray")
+                    .isInstanceOf(LazyConstantLongArray.class);
+            assertThat(((LazyConstantLongArray) result).value()).isEqualTo(42L);
         }
     }
 
@@ -87,8 +87,8 @@ class ConstantEncodingEncoderTest {
             Array result = DECODER.decode(ctx);
 
             assertThat(result.length()).isEqualTo(data.length);
-            assertThat(ArraySegments.of(result).byteSize()).isEqualTo(Integer.BYTES);
-            assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, 0L)).isEqualTo(data[0]);
+            assertThat(result).isInstanceOf(LazyConstantIntArray.class);
+            assertThat(((LazyConstantIntArray) result).value()).isEqualTo(data[0]);
         }
 
         @ParameterizedTest
@@ -99,8 +99,8 @@ class ConstantEncodingEncoderTest {
             Array result = DECODER.decode(ctx);
 
             assertThat(result.length()).isEqualTo(data.length);
-            assertThat(ArraySegments.of(result).byteSize()).isEqualTo(Long.BYTES);
-            assertThat(ArraySegments.of(result).get(PTypeIO.LE_LONG, 0L)).isEqualTo(data[0]);
+            assertThat(result).isInstanceOf(LazyConstantLongArray.class);
+            assertThat(((LazyConstantLongArray) result).value()).isEqualTo(data[0]);
         }
     }
 
