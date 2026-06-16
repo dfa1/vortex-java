@@ -55,10 +55,11 @@ class CliIT {
                 () -> InspectCommand.run(new String[]{"inspect", vortex.toString()}));
         assertThat(inspect).contains("Schema:").contains("id").contains("name");
 
-        // Step 3: schema
+        // Step 3: schema — tabular output: header line "<file> (<rows> rows, <cols> columns)"
+        // followed by per-row "<idx>  <name>  <type>" entries.
         String schema = captureStdout(
                 () -> SchemaCommand.run(new String[]{"schema", vortex.toString()}));
-        assertThat(schema.strip()).isEqualTo("struct<id: I64, name: utf8>");
+        assertThat(schema).contains("2 rows", "2 columns", "id", "I64", "name", "utf8");
 
         // Step 4: export vortex → CSV
         String exported = captureStdout(
@@ -69,14 +70,30 @@ class CliIT {
         assertThat(exportedLines[1]).isEqualTo("1,Alice");
         assertThat(exportedLines[2]).isEqualTo("2,Bob");
 
-        // Step 5: import the exported CSV again and verify schema is preserved
+        // Step 5: import the exported CSV again and verify schema is preserved.
+        // Tabular output's header line carries the file path, so strip it before
+        // comparing — round-trip preservation is about the column rows, not the
+        // file name.
         Path csvIn2 = tmp.resolve("data2.csv");
         Files.writeString(csvIn2, exported);
         assertThat(ImportCommand.run(new String[]{"import", csvIn2.toString()})).isZero();
         Path vortex2 = tmp.resolve("data2.vortex");
         String schema2 = captureStdout(
                 () -> SchemaCommand.run(new String[]{"schema", vortex2.toString()}));
-        assertThat(schema2.strip()).isEqualTo(schema.strip());
+        assertThat(columnRows(schema2)).isEqualTo(columnRows(schema));
+    }
+
+    /// Returns the column-listing portion of a `schema` command output, dropping
+    /// the leading `"<file> (<rows> rows, <cols> columns)"` header so callers
+    /// can compare two schemas without the file path noise.
+    private static String columnRows(String schemaOutput) {
+        String[] lines = schemaOutput.split("\r?\n", -1);
+        StringBuilder sb = new StringBuilder();
+        // Skip the header line (index 0); blank line follows; the rest are rows.
+        for (int i = 1; i < lines.length; i++) {
+            sb.append(lines[i]).append('\n');
+        }
+        return sb.toString().strip();
     }
 
     @Test
@@ -117,7 +134,7 @@ class CliIT {
     }
 
     @Test
-    void schemaPrintsMachineReadableDType(@TempDir Path tmp) throws Exception {
+    void schemaPrintsTabularDType(@TempDir Path tmp) throws Exception {
         // Given
         Path csvIn = tmp.resolve("data.csv");
         Files.writeString(csvIn, "id,name\n1,Alice\n");
@@ -128,8 +145,8 @@ class CliIT {
         String output = captureStdout(
                 () -> SchemaCommand.run(new String[]{"schema", vortexPath.toString()}));
 
-        // Then
-        assertThat(output.strip()).isEqualTo("struct<id: I64, name: utf8>");
+        // Then — tabular format: a header line plus one row per column with index, name, type.
+        assertThat(output).contains("1 rows", "2 columns", "id", "I64", "name", "utf8");
     }
 
     @Test
@@ -159,10 +176,10 @@ class CliIT {
         Path vortex = tmp.resolve("test.vortex");
         assertThat(vortex).exists();
 
-        // Then — schema and row count correct
+        // Then — schema and row count correct (tabular schema format)
         String schema = captureStdout(
                 () -> SchemaCommand.run(new String[]{"schema", vortex.toString()}));
-        assertThat(schema.strip()).isEqualTo("struct<id: I64, name: utf8>");
+        assertThat(schema).contains("3 rows", "2 columns", "id", "I64", "name", "utf8");
 
         String count = captureStdout(
                 () -> CountCommand.run(new String[]{"count", vortex.toString()}));
