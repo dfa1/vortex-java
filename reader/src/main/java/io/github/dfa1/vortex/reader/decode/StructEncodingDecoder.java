@@ -39,12 +39,7 @@ public final class StructEncodingDecoder implements EncodingDecoder {
                         "expected %d or %d children for struct dtype, got %d"
                                 .formatted(nfields, nfields + 1, numChildren));
             }
-            // Validity child is only present for nullable structs. A non-nullable
-            // struct with numChildren == nfields + 1 means the file stored an
-            // extra field (e.g. zone-map stats schemas) — do not treat the lead
-            // child as validity or we'll feed a data column into a Bool decode
-            // path and crash with a "decoded to unexpected type" mismatch.
-            boolean hasValidity = structDtype.nullable() && (numChildren == nfields + 1);
+            boolean hasValidity = (numChildren == nfields + 1);
             int fieldOffset = hasValidity ? 1 : 0;
 
             BoolArray structValidity = null;
