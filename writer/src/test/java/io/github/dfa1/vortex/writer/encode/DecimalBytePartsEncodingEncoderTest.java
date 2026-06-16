@@ -1,12 +1,9 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.ArraySegments;
-import io.github.dfa1.vortex.reader.array.GenericArray;
+import io.github.dfa1.vortex.reader.array.LazyDecimalBytePartsArray;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
-import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.proto.DecimalBytePartsMetadata;
@@ -14,13 +11,17 @@ import io.github.dfa1.vortex.reader.decode.DecimalBytePartsEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 class DecimalBytePartsEncodingEncoderTest {
 
     @Test
     void roundTrip_longArray_preservesMspValues() {
-        // Given
+        // Given — scale=0 means the reassembled BigDecimal equals the raw mantissa,
+        // so round-tripping the input values verifies both the writer's child
+        // payload and the lazy reader's reassembly without needing a scale factor.
         long[] values = {1L, -2L, 3L};
         DType dtype = new DType.Decimal((byte) 18, (byte) 0, false);
         var encoder = new DecimalBytePartsEncodingEncoder();
@@ -30,14 +31,12 @@ class DecimalBytePartsEncodingEncoderTest {
         // When
         EncodeResult encoded = encoder.encode(dtype, values, EncodeTestHelper.testCtx());
         DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, values.length, dtype, registry);
-        GenericArray result = (GenericArray) decoder.decode(ctx);
+        LazyDecimalBytePartsArray result = (LazyDecimalBytePartsArray) decoder.decode(ctx);
 
         // Then
         assertThat(result.length()).isEqualTo(values.length);
-        Array msp = result.child(0);
-        assertThat(msp.length()).isEqualTo(values.length);
         for (int i = 0; i < values.length; i++) {
-            assertThat(ArraySegments.of(msp).get(PTypeIO.LE_LONG, (long) i * 8)).isEqualTo(values[i]);
+            assertThat(result.getDecimal(i)).isEqualByComparingTo(BigDecimal.valueOf(values[i]));
         }
     }
 

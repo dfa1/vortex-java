@@ -24,6 +24,7 @@ import io.github.dfa1.vortex.reader.array.EmptyArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.GenericArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
+import io.github.dfa1.vortex.reader.array.LazyDecimalBytePartsArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
@@ -279,6 +280,8 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             }
             case EmptyArray a -> a;
             case GenericArray a -> a.withLength(rows);
+            case LazyDecimalBytePartsArray a ->
+                    new LazyDecimalBytePartsArray(a.dtype(), rows, truncateArray(a.msp(), rows, arena));
             default ->
                     throw new VortexException("limit: truncation not supported for " + arr.getClass().getSimpleName());
         };

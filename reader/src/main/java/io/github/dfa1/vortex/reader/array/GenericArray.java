@@ -76,25 +76,21 @@ public final class GenericArray implements Array {
         return buffers[i];
     }
 
-    /// Decodes the decimal value at row `i`.
+    /// Decodes the decimal value at row `i` from a single-buffer layout.
     ///
-    /// Handles the two shapes produced by Vortex decimal decoders:
+    /// The buffer holds one little-endian two's-complement integer per row. Element
+    /// width is derived from the buffer's byte size divided by {@link #length()},
+    /// not from the dtype's precision — `vortex.decimal` writes whatever width
+    /// the encoder chose in its `valuesType` metadata, which can be narrower
+    /// than the precision alone would allow.
     ///
-    /// - **single-buffer**: one raw buffer of little-endian two's-complement
-    ///   integers (one element per row). Element width is derived from the
-    ///   buffer's byte size divided by {@link #length()}, not from the
-    ///   dtype's precision — `vortex.decimal` writes whatever width
-    ///   the encoder chose in its `valuesType` metadata, which can be
-    ///   narrower than the precision alone would allow.
-    /// - **child-array**: zero buffers, one child holding the most-significant
-    ///   integer part as a {@link LongArray}, {@link IntArray}, {@link ShortArray},
-    ///   or {@link ByteArray}. Produced by `vortex.decimal_byte_parts`
-    ///   when `lower_part_count == 0`.
+    /// The child-array shape produced by `vortex.decimal_byte_parts` is now
+    /// handled by {@link LazyDecimalBytePartsArray} directly.
     ///
     /// @param i row index, `0 <= i < length()`
     /// @return decoded value as a {@link BigDecimal} with the dtype's scale
-    /// @throws VortexException        if the dtype isn't decimal or the array
-    ///                                shape doesn't match either supported layout
+    /// @throws VortexException             if the dtype isn't decimal or the array
+    ///                                     shape isn't the single-buffer layout
     /// @throws IndexOutOfBoundsException if `i` is outside `[0, length())`
     public BigDecimal getDecimal(long i) {
         if (i < 0 || i >= length) {
@@ -103,15 +99,11 @@ public final class GenericArray implements Array {
         if (!(dtype instanceof DType.Decimal d)) {
             throw new VortexException("getDecimal called on non-decimal dtype: " + dtype);
         }
-        BigInteger mantissa;
-        if (buffers.length == 1 && children.length == 0) {
-            mantissa = readSingleBufferMantissa(buffers[0], length, i);
-        } else if (buffers.length == 0 && children.length == 1) {
-            mantissa = mantissaFromChild(children[0], i);
-        } else {
+        if (buffers.length != 1 || children.length != 0) {
             throw new VortexException("getDecimal: unsupported decimal shape buffers="
                     + buffers.length + " children=" + children.length);
         }
+        BigInteger mantissa = readSingleBufferMantissa(buffers[0], length, i);
         return new BigDecimal(mantissa, d.scale());
     }
 
@@ -126,24 +118,6 @@ public final class GenericArray implements Array {
             throw new VortexException("getDecimal: unsupported element width " + width + " bytes");
         }
         return readSignedLe(buf, i * width, width);
-    }
-
-    private static BigInteger mantissaFromChild(Array child, long i) {
-        return switch (child) {
-            case LongArray a -> BigInteger.valueOf(a.getLong(i));
-            case IntArray a -> BigInteger.valueOf(a.getInt(i));
-            case ShortArray a -> BigInteger.valueOf(a.getShort(i));
-            case ByteArray a -> BigInteger.valueOf(a.getByte(i));
-            case MaskedArray a -> {
-                if (!a.isValid(i)) {
-                    throw new VortexException("getDecimal: null cell at index " + i);
-                }
-                yield mantissaFromChild(a.inner(), i);
-            }
-            default ->
-                    throw new VortexException("getDecimal: unsupported mantissa child type "
-                            + child.getClass().getSimpleName());
-        };
     }
 
     private static final ValueLayout.OfShort SHORT_LE =
