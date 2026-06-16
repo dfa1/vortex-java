@@ -347,6 +347,83 @@ public class RustVsJavaReadBenchmark {
         return sum[0];
     }
 
+    // ── Top-N reads: amortise open + footer/layout decode over N rows ────────
+
+    /// Java read: project on "volume", consume only the first 10 rows.
+    @Benchmark
+    public long javaReadVolumeFirst10() throws IOException {
+        return javaReadVolumeFirst(10);
+    }
+
+    /// Java read: project on "volume", consume only the first 100 rows.
+    @Benchmark
+    public long javaReadVolumeFirst100() throws IOException {
+        return javaReadVolumeFirst(100);
+    }
+
+    /// JNI read: project on "volume", stop after the first 10 rows.
+    @Benchmark
+    public long jniReadVolumeFirst10() throws IOException {
+        return jniReadVolumeFirst(10);
+    }
+
+    /// JNI read: project on "volume", stop after the first 100 rows.
+    @Benchmark
+    public long jniReadVolumeFirst100() throws IOException {
+        return jniReadVolumeFirst(100);
+    }
+
+    private long javaReadVolumeFirst(long limit) throws IOException {
+        long sum = 0L;
+        long taken = 0L;
+        try (VortexReader vf = VortexReader.open(benchFile, registry);
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.all()
+                             .withColumns("volume").withLimit(limit))) {
+            while (iter.hasNext() && taken < limit) {
+                try (Chunk c = iter.next()) {
+                    LongArray volume = c.column("volume");
+                    long take = Math.min(volume.length(), limit - taken);
+                    for (long i = 0; i < take; i++) {
+                        sum += volume.getLong(i);
+                    }
+                    taken += take;
+                }
+            }
+        }
+        return sum;
+    }
+
+    private long jniReadVolumeFirst(long limit) throws IOException {
+        String uri = benchFile.toAbsolutePath().toUri().toString();
+        var opts = ScanOptions.builder()
+                           .projection(Expression.select(new String[]{"volume"}, Expression.root()))
+                           .build();
+
+        long sum = 0L;
+        long taken = 0L;
+        DataSource ds = DataSource.open(SESSION, uri);
+        Scan scan = ds.scan(opts);
+        outer:
+        while (scan.hasNext()) {
+            Partition partition = scan.next();
+            try (ArrowReader reader = partition.scanArrow(allocator)) {
+                while (reader.loadNextBatch()) {
+                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
+                    BigIntVector volumeVec = (BigIntVector) root.getVector("volume");
+                    int take = (int) Math.min(root.getRowCount(), limit - taken);
+                    for (int i = 0; i < take; i++) {
+                        sum += volumeVec.get(i);
+                    }
+                    taken += take;
+                    if (taken >= limit) {
+                        break outer;
+                    }
+                }
+            }
+        }
+        return sum;
+    }
+
     private void writeJavaCascading(Path path) throws IOException {
         int[] epochDays = new int[BATCH_SIZE];
         String[] symbols = new String[BATCH_SIZE];
