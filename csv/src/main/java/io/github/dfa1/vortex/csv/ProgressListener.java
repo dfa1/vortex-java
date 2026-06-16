@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.csv;
 
-/// Callback invoked after each chunk is written during CSV import.
+/// Callback invoked during CSV import or export to report row-level progress.
 @FunctionalInterface
 public interface ProgressListener {
     void onProgress(long rowsDone, long rowsTotal);

@@ -80,6 +80,11 @@ public final class CsvExporter {
             csvWriter.writeRecord(colNames);
         }
 
+        ProgressListener progress = options.progressListener();
+        long rowsTotal = progress != null ? reader.layout().rowCount() : 0L;
+        long rowsDone = 0L;
+        long nextNotify = 1_000L;
+
         String[] row = new String[colCount];
         try (ScanIterator iter = reader.scan(scanOptions)) {
             while (iter.hasNext()) {
@@ -107,9 +112,17 @@ public final class CsvExporter {
                             row[c] = cellValue(arrays[c], r);
                         }
                         csvWriter.writeRecord(row);
+                        rowsDone++;
+                        if (progress != null && rowsDone >= nextNotify) {
+                            progress.onProgress(rowsDone, rowsTotal);
+                            nextNotify = rowsDone + 1_000L;
+                        }
                     }
                 }
             }
+        }
+        if (progress != null) {
+            progress.onProgress(rowsDone, rowsTotal);
         }
     }
 

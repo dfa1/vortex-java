@@ -84,7 +84,7 @@ class CsvExporterTest {
         Path csv = tmp.resolve("out.csv");
 
         // When
-        CsvExporter.exportCsv(vortex, csv, new ExportOptions(',', false, java.util.List.of()));
+        CsvExporter.exportCsv(vortex, csv, new ExportOptions(',', false, java.util.List.of(), null));
 
         // Then
         List<String> lines = Files.readAllLines(csv);

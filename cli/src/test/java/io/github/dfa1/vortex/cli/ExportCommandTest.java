@@ -41,7 +41,8 @@ class ExportCommandTest {
         Path file = writeSmallVortex(tmp, "export.vortex");
 
         // When
-        CliTestSupport.Captured got = capture(() -> ExportCommand.run(new String[]{"export", file.toString()}));
+        CliTestSupport.Captured got = capture(
+                () -> ExportCommand.run(new String[]{"export", file.toString(), "-"}));
 
         // Then — header + 3 data rows
         assertThat(got.status()).isEqualTo(ExitStatus.OK);

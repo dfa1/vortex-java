@@ -63,7 +63,7 @@ class CliIT {
 
         // Step 4: export vortex → CSV
         String exported = captureStdout(
-                () -> ExportCommand.run(new String[]{"export", vortex.toString()}));
+                () -> ExportCommand.run(new String[]{"export", vortex.toString(), "-"}));
         String[] exportedLines = exported.split("\r?\n");
         assertThat(exportedLines).hasSize(3);
         assertThat(exportedLines[0]).isEqualTo("id,name");
@@ -106,7 +106,7 @@ class CliIT {
         assertThat(ImportCommand.run(new String[]{"import", csvIn.toString()})).isZero();
         Path vortexPath = tmp.resolve("data.vortex");
         String exported = captureStdout(
-                () -> ExportCommand.run(new String[]{"export", vortexPath.toString()}));
+                () -> ExportCommand.run(new String[]{"export", vortexPath.toString(), "-"}));
 
         // Then
         String[] lines = exported.split("\r?\n");
@@ -196,7 +196,7 @@ class CliIT {
         assertThat(ImportCommand.run(new String[]{"import", "--delimiter", ";", csvIn.toString()})).isZero();
         Path vortex = tmp.resolve("data.vortex");
         String exported = captureStdout(
-                () -> ExportCommand.run(new String[]{"export", vortex.toString()}));
+                () -> ExportCommand.run(new String[]{"export", vortex.toString(), "-"}));
 
         // Then
         String[] lines = exported.split("\r?\n");
