@@ -110,9 +110,9 @@ decoder falls into one of three shapes:
 | `vortex.struct`             | Zero-copy     | Zero-copy     | `StructArray` wraps fields                                               |
 | `vortex.chunked`            | Lazy          | Lazy          | `ChunkedXxxArray` (primitive/Bool) + `VarBinArray.ChunkedMode` (Utf8/Binary), ADR 0012 |
 | `vortex.fsst`               | Materialized  | Materialized  | symbol-table decompression                                               |
-| `vortex.list`               | Materialized  | TBD           | offsets handling                                                         |
-| `vortex.listview`           | Materialized  | TBD           | similar to list                                                          |
-| `vortex.fixed_size_list`    | Materialized  | TBD           | inline elements                                                          |
+| `vortex.list`               | Lazy          | Lazy          | `ListArray` wraps elements + offsets children; shape inherits from child  |
+| `vortex.listview`           | Lazy          | Lazy          | `ListViewArray` wraps elements + offsets + sizes children                 |
+| `vortex.fixed_size_list`    | Lazy          | Lazy          | `FixedSizeListArray` wraps flat elements child; no per-row alloc          |
 | `vortex.zstd`               | Materialized  | Materialized  | block decompression                                                      |
 | `vortex.masked`             | Zero-copy     | Zero-copy     | wraps inner + validity                                                   |
 | `vortex.decimal`            | Lazy          | Lazy          | `LazyDecimalArray` — `BigDecimal` materialised per row on `getDecimal(i)` |
