@@ -88,7 +88,17 @@ public final class CsvExporter {
                     for (int c = 0; c < colCount; c++) {
                         arrays[c] = chunk.column(colNames.get(c));
                     }
+                    // Some files chunk per column independently. ChunkSpec.rowCount
+                    // tracks the first column's flat, so columns whose flats were
+                    // shorter would OOB on the tail rows. Clamp to the shortest
+                    // column length so the writer/reader mismatch only loses tail
+                    // rows instead of crashing mid-export.
                     long rowCount = chunk.rowCount();
+                    for (Array a : arrays) {
+                        if (a != null && a.length() < rowCount) {
+                            rowCount = a.length();
+                        }
+                    }
                     for (long r = 0; r < rowCount; r++) {
                         if (!predicate.test(chunk, r)) {
                             continue;
