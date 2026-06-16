@@ -84,11 +84,14 @@
 			**/fbs/**,
 			**/proto/**
 		</sonar.coverage.exclusions>
-		<!-- Both surefire (jacoco.xml) and failsafe (jacoco-it.xml) reports sent to Sonar.
-		     The failsafe report is produced by the report-integration execution in the coverage profile. -->
+		<!-- Coverage sources: per-module surefire, per-module failsafe, and the
+		     integration-module failsafe report. Integration tests live in the
+		     vortex-integration module and exercise classes in reader/writer/core —
+		     without the third path those cross-module hits are invisible to Sonar. -->
 		<sonar.coverage.jacoco.xmlReportPaths>
 			${project.build.directory}/site/jacoco/jacoco.xml,
-			${project.build.directory}/site/jacoco-it/jacoco.xml
+			${project.build.directory}/site/jacoco-it/jacoco.xml,
+			${maven.multiModuleProjectDirectory}/integration/target/site/jacoco-it/jacoco.xml
 		</sonar.coverage.jacoco.xmlReportPaths>
 		<!-- Default for the {@code @{argLine}} placeholder in surefire/failsafe configs. JaCoCo's
 		     {@code prepare-agent} goal overwrites this with the agent arguments when active; if
