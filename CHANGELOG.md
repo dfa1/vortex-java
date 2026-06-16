@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.2] — 2026-06-16
+
+CLI usability + reader robustness on real-world files (NYC Yellow Taxi).
+
+### Added
+
+- CLI `view <file>` — scrollable Excel-like grid TUI. Streams rows on demand via a new `LazyGridSource` (one live chunk at a time, format only the visible window). Title bar shows `chunk K/N`. Default writes to alt-screen; quit with `q` / `Esc`. ([1c0311fb](https://github.com/dfa1/vortex-java/commit/1c0311fb), [b7f6b6c1](https://github.com/dfa1/vortex-java/commit/b7f6b6c1), [94e5bff8](https://github.com/dfa1/vortex-java/commit/94e5bff8), [6a8ddd3a](https://github.com/dfa1/vortex-java/commit/6a8ddd3a))
+- CLI `export` writes to a derived `<name>.csv` next to the input by default, with a stderr progress bar mirroring the import flow. `export <file.vortex> -` keeps the old stdout streaming behaviour. ([2b26da9a](https://github.com/dfa1/vortex-java/commit/2b26da9a))
+- Reader: `ScanIterator.chunkRowCounts()` — returns per-chunk row counts by walking the layout tree, no value decode. Used by the `view` TUI to plan navigation. ([b7f6b6c1](https://github.com/dfa1/vortex-java/commit/b7f6b6c1))
+- Reader: lazy `vortex.decimal` decode — new `LazyDecimalArray` record holds a zero-copy mmap slice and produces `BigDecimal` per `getDecimal(i)`. Replaces the `GenericArray` wrapper, no buffers / children indirection. ([6bc955d2](https://github.com/dfa1/vortex-java/commit/6bc955d2))
+- Reader: 7 `Offset*Array` records (Long / Int / Short / Byte / Double / Float / Bool) + `VarBinArray.SlicedMode` for offset-based slicing of pre-decoded shared arrays. ([5df3d9a9](https://github.com/dfa1/vortex-java/commit/5df3d9a9))
+
+### Fixed
+
+- Reader: per-column chunking alignment — files where one column has 1 mega-flat and another has N small flats (e.g. NYC Yellow Taxi 2024-01 has a 2.96M-row VendorID flat next to 23 × 131072-row datetime flats) now decode the wide column once into a `sharedArena` and slice it per chunk via `Offset*Array`. Previously the scan iterator emitted a single chunk whose datetime columns were the first 131072 rows only — silently dropping 95.6 % of the file. ([5df3d9a9](https://github.com/dfa1/vortex-java/commit/5df3d9a9))
+- Reader: `FrameOfReferenceEncodingDecoder` now takes the arena variant of `ArraySegments.of`, so lazy children (e.g. `LazyRunEndLongArray`) materialise instead of throwing "no primary segment". ([5df3d9a9](https://github.com/dfa1/vortex-java/commit/5df3d9a9))
+
+### Docs
+
+- Compatibility table: `constant`, `varbinview`, `alprd`, `datetimeparts`, `decimal_byte_parts`, `decimal` rows now reflect their shipped Lazy shape; container encodings (`list` / `listview` / `fixed_size_list`) marked Lazy (inherit child shape); `patched` pinned Materialized with reasoning. ([6e87b74e](https://github.com/dfa1/vortex-java/commit/6e87b74e), [6bc955d2](https://github.com/dfa1/vortex-java/commit/6bc955d2), [2ed32ec8](https://github.com/dfa1/vortex-java/commit/2ed32ec8), [d8363920](https://github.com/dfa1/vortex-java/commit/d8363920))
+
+[0.7.2]: https://github.com/dfa1/vortex-java/compare/v0.7.1...v0.7.2
+
 ## [0.7.1] — 2026-06-16
 
 Cleanup release on top of 0.7.0 — one more lazy encoding, a Windows TUI usability fix, and a fresh round of read benchmarks.
