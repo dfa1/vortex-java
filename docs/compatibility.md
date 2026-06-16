@@ -123,7 +123,7 @@ decoder falls into one of three shapes:
 | `fastlanes.delta`           | Materialized  | Materialized  | cumulative sum requires sequential decode                                |
 | `fastlanes.for`             | Lazy          | Lazy          | `LazyForLongArray`/`LazyForIntArray`, ADR 0010                           |
 | `fastlanes.rle`             | Materialized  | Lazy          | run-locating accessor possible                                           |
-| `vortex.patched`            | Materialized  | TBD           | scatter patches                                                          |
+| `vortex.patched`            | Materialized  | Materialized  | inner is full base + chunked patches (1024-elem blocks, lane-window-sorted); per-row access requires 2 laneOffsets reads + binary search inside the chunk window, so eager scatter wins for full scans |
 | `vortex.variant`            | Materialized  | TBD           | shredded child reassembly                                                |
 | `vortex.onpair`             | n/a           | n/a           | not ported                                                               |
 
