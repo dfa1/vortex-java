@@ -62,7 +62,7 @@ resolves only the standalone decoders in `reader`; no encoder class is loaded.
 | `vortex.listview`           | `ListViewEncodingDecoder`        | `ListViewEncodingEncoder`        | ✅      | ✅      |                                                                       |
 | `vortex.fixed_size_list`    | `FixedSizeListEncodingDecoder`   | `FixedSizeListEncodingEncoder`   | ✅      | ✅      |                                                                       |
 | `vortex.zstd`               | `ZstdEncodingDecoder`            | `ZstdEncodingEncoder`            | ✅      | ✅      | Primitive, Utf8, Binary                                               |
-| `vortex.masked`             | `MaskedEncodingDecoder`          | `MaskedEncodingEncoder`          | ✅      | ❌      | Encode not yet implemented                                            |
+| `vortex.masked`             | `MaskedEncodingDecoder`          | `MaskedEncodingEncoder`          | ✅      | ✅      | NullableData carrier; inner picks Primitive / VarBin / FixedSizeList   |
 | `vortex.decimal`            | `DecimalEncodingDecoder`         | `DecimalEncodingEncoder`         | ✅      | ✅      |                                                                       |
 | `vortex.decimal_byte_parts` | `DecimalBytePartsEncodingDecoder`| `DecimalBytePartsEncodingEncoder`| ✅      | ✅      |                                                                       |
 | `vortex.datetimeparts`      | `DateTimePartsEncodingDecoder`   | `DateTimePartsEncodingEncoder`   | ✅      | ✅      |                                                                       |
