@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] — 2026-06-16
+
+Cleanup release on top of 0.7.0 — one more lazy encoding, a Windows TUI usability fix, and a fresh round of read benchmarks.
+
+### Added
+
+- `vortex.constant` lazy decode — seven metadata-only `LazyConstantXxxArray` records (Long / Int / Double / Float / Short / Byte / Bool) replace the one-element broadcast buffer; the per-element broadcast-modulo path is gone ([3edf6e8c](https://github.com/dfa1/vortex-java/commit/3edf6e8c))
+- Top-N read benchmarks (N=10, 100) + README table, refreshed 80M-row numbers ([c00fdf7f](https://github.com/dfa1/vortex-java/commit/c00fdf7f), [33714d7b](https://github.com/dfa1/vortex-java/commit/33714d7b), [a6fd92fc](https://github.com/dfa1/vortex-java/commit/a6fd92fc))
+
+### Changed
+
+- CLI: `schema` prints per-row column listing ([9b3fe4b5](https://github.com/dfa1/vortex-java/commit/9b3fe4b5))
+- CLI: `Terminal.readKey` takes `Duration` instead of `long ms` ([2942a4da](https://github.com/dfa1/vortex-java/commit/2942a4da))
+- Reader: extract `TimeDtype` + `TimestampDtype` shared metadata helpers ([8f1b9feb](https://github.com/dfa1/vortex-java/commit/8f1b9feb))
+
+### Fixed
+
+- CLI: actionable error on Git Bash / MinTTY — `GetConsoleMode` failure now points users at `winpty` / Windows Terminal / PowerShell instead of dead-ending on the raw error ([6ec42288](https://github.com/dfa1/vortex-java/commit/6ec42288))
+- Reader: `ArraySegments.of(arr)` typed-accessor fallback for lazy arrays ([74ec207b](https://github.com/dfa1/vortex-java/commit/74ec207b))
+
+### CI
+
+- Drop `sonar.cpd.exclusions` ([cde845bf](https://github.com/dfa1/vortex-java/commit/cde845bf))
+
+[0.7.1]: https://github.com/dfa1/vortex-java/compare/v0.7.0...v0.7.1
+
 ## [0.7.0] — 2026-06-16
 
 **pco encoder** (Classic + Consecutive delta + IntMult mode, 4-way tANS, multi-chunk, all 8 ptypes),
