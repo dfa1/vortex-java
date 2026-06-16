@@ -36,7 +36,7 @@ Measured 2026-06-13, commit `a57ea70d`. See [docs/explanation.md](docs/explanati
 <dependency>
   <groupId>io.github.dfa1.vortex</groupId>
   <artifactId>vortex-reader</artifactId>
-  <version>0.6.0</version>
+  <version>0.7.0</version>
 </dependency>
 ```
 
