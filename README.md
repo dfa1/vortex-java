@@ -26,8 +26,8 @@ ops/s = complete file scans per second; higher is better.
 
 | N rows | Java (ops/s) | JNI/Rust (ops/s) | Speedup |
 |--------|-------------|-----------------|---------|
-| 10     | 5,739       | 1,618           | **3.5×** |
-| 100    | 5,787       | 1,660           | **3.5×** |
+| 10     | 2,701       | 550             | **4.9×** |
+| 100    | 2,697       | 573             | **4.7×** |
 
 Measured 2026-06-16, commit `74ec207b`. See [docs/explanation.md](docs/explanation.md#benchmarks) for full tables and methodology.
 
