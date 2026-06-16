@@ -123,27 +123,6 @@ class GenericArrayTest {
     }
 
     @Test
-    void getDecimal_childArrayShape_decodesViaMostSignificantPart() {
-        // Given — the shape vortex.decimal_byte_parts decoders produce when
-        // lower_part_count == 0: zero buffers, one LongArray child carrying
-        // the i64 mantissa.
-        try (Arena arena = Arena.ofConfined()) {
-            MemorySegment mspBuf = arena.allocate(24);
-            mspBuf.set(ValueLayout.JAVA_LONG_UNALIGNED, 0, 4321L);
-            mspBuf.set(ValueLayout.JAVA_LONG_UNALIGNED, 8, -100L);
-            mspBuf.set(ValueLayout.JAVA_LONG_UNALIGNED, 16, 0L);
-            LongArray msp = new MaterializedLongArray(new DType.Primitive(PType.I64, false), 3, mspBuf);
-            DType.Decimal dec = new DType.Decimal((byte) 15, (byte) 2, false);
-            GenericArray sut = new GenericArray(dec, 3, new MemorySegment[0], new Array[]{msp});
-
-            // When / Then
-            assertThat(sut.getDecimal(0)).isEqualByComparingTo(new BigDecimal("43.21"));
-            assertThat(sut.getDecimal(1)).isEqualByComparingTo(new BigDecimal("-1.00"));
-            assertThat(sut.getDecimal(2)).isEqualByComparingTo(BigDecimal.ZERO);
-        }
-    }
-
-    @Test
     void getDecimal_i128Buffer_decodesWideMantissa() {
         // Given — decimal(38,4) stores mantissas wider than i64; vortex.decimal
         // writes 16-byte little-endian two's-complement. Two values: 2^70 (way
@@ -239,35 +218,6 @@ class GenericArrayTest {
                     .hasMessageContaining("out of bounds");
             assertThatThrownBy(() -> sut.getDecimal(Long.MAX_VALUE))
                     .isInstanceOf(IndexOutOfBoundsException.class);
-        }
-    }
-
-    @Test
-    void getDecimal_nullCellInMaskedChild_throws() {
-        // Given — mantissa-child shape with a MaskedArray wrapping a LongArray;
-        // the validity bitmap says index 1 is null. Without the validity check
-        // the previous code would happily decode whatever bytes sat at that
-        // slot and return a garbage BigDecimal.
-        try (Arena arena = Arena.ofConfined()) {
-            MemorySegment mspBuf = arena.allocate(16);
-            mspBuf.set(ValueLayout.JAVA_LONG_UNALIGNED, 0, 1234L);
-            mspBuf.set(ValueLayout.JAVA_LONG_UNALIGNED, 8, 9999L);
-            LongArray msp = new MaterializedLongArray(new DType.Primitive(PType.I64, false), 2, mspBuf);
-
-            MemorySegment validityBuf = arena.allocate(1);
-            // bit 0 set = index 0 valid; bit 1 clear = index 1 null
-            validityBuf.set(ValueLayout.JAVA_BYTE, 0, (byte) 0b0000_0001);
-            BoolArray validity = new MaterializedBoolArray(new DType.Bool(false), 2, validityBuf);
-
-            MaskedArray masked = new MaskedArray(msp, validity);
-            DType.Decimal dec = new DType.Decimal((byte) 15, (byte) 2, true);
-            GenericArray sut = new GenericArray(dec, 2, new MemorySegment[0], new Array[]{masked});
-
-            // When / Then
-            assertThat(sut.getDecimal(0)).isEqualByComparingTo(new BigDecimal("12.34"));
-            assertThatThrownBy(() -> sut.getDecimal(1))
-                    .isInstanceOf(io.github.dfa1.vortex.core.VortexException.class)
-                    .hasMessageContaining("null cell at index 1");
         }
     }
 

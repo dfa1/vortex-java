@@ -10,6 +10,7 @@ import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.GenericArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
+import io.github.dfa1.vortex.reader.array.LazyDecimalBytePartsArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
@@ -867,14 +868,16 @@ public final class VortexInspectorTui {
                         ? "\"" + a.getString(i) + "\""
                         : bytesToShortHex(a.getBytes(i));
                 case GenericArray a when a.dtype() instanceof DType.Decimal ->
-                        tryDecimal(a, i);
+                        tryDecimal(a::getDecimal, a, i);
+                case LazyDecimalBytePartsArray a -> tryDecimal(a::getDecimal, a, i);
                 default -> "<" + array.getClass().getSimpleName() + " " + array.dtype() + ">";
             };
         }
 
-        private static String tryDecimal(GenericArray a, int i) {
+        private static String tryDecimal(java.util.function.LongFunction<java.math.BigDecimal> reader,
+                                         Array a, int i) {
             try {
-                return a.getDecimal(i).toPlainString();
+                return reader.apply(i).toPlainString();
             } catch (RuntimeException e) {
                 String msg = e.getMessage();
                 if (msg != null && msg.contains("null cell")) {

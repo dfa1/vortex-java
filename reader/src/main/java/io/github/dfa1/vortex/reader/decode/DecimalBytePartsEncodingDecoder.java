@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.GenericArray;
+import io.github.dfa1.vortex.reader.array.LazyDecimalBytePartsArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.proto.DecimalBytePartsMetadata;
 
@@ -57,7 +57,6 @@ public final class DecimalBytePartsEncodingDecoder implements EncodingDecoder {
                 mspNode, mspDtype, ctx.rowCount(),
                 ctx.segmentBuffers(), ctx.registry(), ctx.arena());
         Array mspArray = ctx.registry().decode(mspCtx);
-        return new GenericArray(ctx.dtype(), ctx.rowCount(), new MemorySegment[0],
-                new Array[]{mspArray});
+        return new LazyDecimalBytePartsArray(ctx.dtype(), ctx.rowCount(), mspArray);
     }
 }
