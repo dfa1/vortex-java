@@ -3,7 +3,6 @@
 ## Project
 
 - [ ] Move project to a dedicated organization
-- [ ] Review documentation for new joiners
 - [ ] Create website
    - build something like hardwood.dev but for vortex files
 - [ ] **Benchmark publishing** — drop CI workflow, add `bench-publish` script; see [ADR-0006](docs/adr/0006-benchmark-publishing.md).
