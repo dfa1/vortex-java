@@ -115,7 +115,7 @@ decoder falls into one of three shapes:
 | `vortex.fixed_size_list`    | Materialized  | TBD           | inline elements                                                          |
 | `vortex.zstd`               | Materialized  | Materialized  | block decompression                                                      |
 | `vortex.masked`             | Zero-copy     | Zero-copy     | wraps inner + validity                                                   |
-| `vortex.decimal`            | Materialized  | TBD           | converts to `BigDecimal`                                                 |
+| `vortex.decimal`            | Lazy          | Lazy          | `LazyDecimalArray` — `BigDecimal` materialised per row on `getDecimal(i)` |
 | `vortex.decimal_byte_parts` | Lazy          | Lazy          | `LazyDecimalBytePartsArray` — reassembles byte parts on access           |
 | `vortex.datetimeparts`      | Lazy          | Lazy          | `LazyDateTimePartsLongArray` — reassembles parts on access               |
 | `vortex.pco`                | Materialized  | Materialized  | range-encoded decompression                                              |

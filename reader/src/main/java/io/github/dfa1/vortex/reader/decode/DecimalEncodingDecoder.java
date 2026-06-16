@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.reader.decode;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.GenericArray;
+import io.github.dfa1.vortex.reader.array.LazyDecimalArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.proto.DecimalMetadata;
 
@@ -49,7 +49,7 @@ public final class DecimalEncodingDecoder implements EncodingDecoder {
             throw new VortexException(EncodingId.VORTEX_DECIMAL,
                     "buffer too small: expected %d bytes, got %d".formatted(expected, buffer.byteSize()));
         }
-        return new GenericArray(ctx.dtype(), ctx.rowCount(), buffer);
+        return new LazyDecimalArray(ctx.dtype(), ctx.rowCount(), buffer, byteWidth);
     }
 
     private static int decimalTypeByteWidth(int valuesType) {

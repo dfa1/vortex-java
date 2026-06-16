@@ -44,6 +44,7 @@ public final class ArraySegments {
             case MaterializedFloat16Array a -> a.buffer();
             case VarBinArray a -> a.bytesSegment();
             case GenericArray a -> a.buffer(0);
+            case LazyDecimalArray a -> a.buf();
             default -> throw new VortexException(data.getClass().getSimpleName() + " has no primary segment");
         };
     }
