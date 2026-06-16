@@ -97,13 +97,13 @@ decoder falls into one of three shapes:
 | `vortex.null`               | n/a           | n/a           | no per-row data                                                          |
 | `vortex.bytebool`           | Zero-copy     | Zero-copy     | mmap slice                                                               |
 | `vortex.zigzag`             | Lazy          | Lazy          | `LazyZigZagXxxArray`, ADR 0010                                           |
-| `vortex.constant`           | Zero-copy     | Zero-copy     | single-element broadcast wrapper                                         |
+| `vortex.constant`           | Lazy          | Lazy          | `LazyConstantXxxArray` (primitive + bool); per-row broadcast, no buffer  |
 | `vortex.ext`                | Zero-copy     | Zero-copy     | wraps storage                                                            |
 | `vortex.runend`             | Materialized  | Lazy          | could expose run-locating accessor (similar to Dict)                     |
 | `vortex.varbin`             | Zero-copy     | Zero-copy     | bytes + offsets slices                                                   |
-| `vortex.varbinview`         | Materialized  | TBD           | currently converts to `varbin` shape                                     |
+| `vortex.varbinview`         | Lazy          | Lazy          | `VarBinArray.ViewMode` — keeps views + data buffers as mmap slices       |
 | `vortex.alp`                | Lazy          | Lazy          | `LazyAlpDoubleArray`/`LazyAlpFloatArray`, ADR 0010                       |
-| `vortex.alprd`              | Materialized  | TBD           | reassembles left/right + patches                                         |
+| `vortex.alprd`              | Lazy          | Lazy          | `LazyAlpRdDoubleArray`/`LazyAlpRdFloatArray` — left/right + patches on access |
 | `vortex.dict`               | Lazy          | Lazy          | `DictXxxArray` (numeric) + `VarBinArray.DictMode` (string), ADR 0012      |
 | `vortex.sparse`             | Materialized  | Lazy          | patches view over default fill                                           |
 | `vortex.sequence`           | Zero-copy     | Zero-copy     | synthetic (no data)                                                      |
@@ -116,8 +116,8 @@ decoder falls into one of three shapes:
 | `vortex.zstd`               | Materialized  | Materialized  | block decompression                                                      |
 | `vortex.masked`             | Zero-copy     | Zero-copy     | wraps inner + validity                                                   |
 | `vortex.decimal`            | Materialized  | TBD           | converts to `BigDecimal`                                                 |
-| `vortex.decimal_byte_parts` | Materialized  | TBD           | reassembles byte parts                                                   |
-| `vortex.datetimeparts`      | Materialized  | TBD           | reassembles parts                                                        |
+| `vortex.decimal_byte_parts` | Lazy          | Lazy          | `LazyDecimalBytePartsArray` — reassembles byte parts on access           |
+| `vortex.datetimeparts`      | Lazy          | Lazy          | `LazyDateTimePartsLongArray` — reassembles parts on access               |
 | `vortex.pco`                | Materialized  | Materialized  | range-encoded decompression                                              |
 | `fastlanes.bitpacked`       | Materialized  | Materialized  | window unpacks bits                                                      |
 | `fastlanes.delta`           | Materialized  | Materialized  | cumulative sum requires sequential decode                                |
