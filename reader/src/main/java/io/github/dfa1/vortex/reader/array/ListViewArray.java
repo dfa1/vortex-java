@@ -6,8 +6,8 @@ import io.github.dfa1.vortex.core.VortexException;
 /// Decoded variable-length list-view array (Arrow ListView layout).
 ///
 /// Unlike {@link ListArray}, offsets and sizes are independent per row:
-/// {@code list[i] = elements[offsets[i] .. offsets[i] + sizes[i]]}.
-/// Both {@code offsets} and {@code sizes} have length {@code outerLen} (not outerLen+1).
+/// `list[i] = elements[offsets[i] .. offsets[i] + sizes[i]]`.
+/// Both `offsets` and `sizes` have length `outerLen` (not outerLen+1).
 public final class ListViewArray implements Array {
 
     private final DType.List dtype;
@@ -16,13 +16,13 @@ public final class ListViewArray implements Array {
     private final Array offsets;
     private final Array sizes;
 
-    /// Creates a new {@code ListViewArray}.
+    /// Creates a new `ListViewArray`.
     ///
     /// @param dtype    logical list type
     /// @param outerLen number of outer list elements
     /// @param elements flat elements array
-    /// @param offsets  per-row start offsets into {@code elements} (length {@code outerLen})
-    /// @param sizes    per-row element counts (length {@code outerLen})
+    /// @param offsets  per-row start offsets into `elements` (length `outerLen`)
+    /// @param sizes    per-row element counts (length `outerLen`)
     public ListViewArray(DType.List dtype, long outerLen, Array elements, Array offsets, Array sizes) {
         this.dtype = dtype;
         this.outerLen = outerLen;
@@ -48,21 +48,21 @@ public final class ListViewArray implements Array {
         return elements;
     }
 
-    /// Returns the per-row start offsets array (length {@code outerLen}).
+    /// Returns the per-row start offsets array (length `outerLen`).
     ///
     /// @return the offsets array
     public Array offsets() {
         return offsets;
     }
 
-    /// Returns the per-row element count array (length {@code outerLen}).
+    /// Returns the per-row element count array (length `outerLen`).
     ///
     /// @return the sizes array
     public Array sizes() {
         return sizes;
     }
 
-    /// Returns the child array at position {@code i} (0 = elements, 1 = offsets, 2 = sizes).
+    /// Returns the child array at position `i` (0 = elements, 1 = offsets, 2 = sizes).
     ///
     /// @param i child index
     /// @return the child {@link Array}

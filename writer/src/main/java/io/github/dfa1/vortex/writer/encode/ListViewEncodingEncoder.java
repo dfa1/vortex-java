@@ -17,7 +17,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
-/// Write-only encoder for {@code vortex.listview}.
+/// Write-only encoder for `vortex.listview`.
 public final class ListViewEncodingEncoder implements EncodingEncoder {
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.

@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.reader.array;
 
-/// Consumer of {@code byte} values. Used by {@link ByteArray#forEachByte(ByteConsumer)}.
+/// Consumer of `byte` values. Used by {@link ByteArray#forEachByte(ByteConsumer)}.
 @FunctionalInterface
 public interface ByteConsumer {
 

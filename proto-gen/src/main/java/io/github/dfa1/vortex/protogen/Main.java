@@ -6,14 +6,14 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
-/// CLI entry for the build-time {@code .proto} to Java code generator.
-/// Invoked from the {@code regenerate-sources} Maven profile via {@code exec-maven-plugin}.
+/// CLI entry for the build-time `.proto` to Java code generator.
+/// Invoked from the `regenerate-sources` Maven profile via `exec-maven-plugin`.
 public final class Main {
 
     private Main() {
     }
 
-    /// Usage: {@code Main --out <dir> <proto> [<proto> ...]}.
+    /// Usage: `Main --out <dir> <proto> [<proto> ...]`.
     /// @param args command-line arguments
     /// @throws IOException on filesystem errors
     public static void main(String[] args) throws IOException {

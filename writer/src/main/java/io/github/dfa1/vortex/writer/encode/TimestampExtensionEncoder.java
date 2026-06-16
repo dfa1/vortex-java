@@ -14,8 +14,8 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.util.Collection;
 
-/// Write-side encoder for {@code vortex.timestamp}: converts {@code Collection<Instant>}
-/// to the {@code long[]} storage layout the writer accepts.
+/// Write-side encoder for `vortex.timestamp`: converts `Collection<Instant>`
+/// to the `long[]` storage layout the writer accepts.
 public final class TimestampExtensionEncoder implements ExtensionEncoder {
 
     /// Singleton instance.
@@ -41,7 +41,7 @@ public final class TimestampExtensionEncoder implements ExtensionEncoder {
     /// Returns the dtype for the given unit and timezone.
     ///
     /// @param unit     time resolution
-    /// @param zone     IANA timezone, or {@code null} for none
+    /// @param zone     IANA timezone, or `null` for none
     /// @param nullable whether the column allows nulls
     /// @return matching extension dtype
     public DType.Extension dtype(TimeUnit unit, ZoneId zone, boolean nullable) {

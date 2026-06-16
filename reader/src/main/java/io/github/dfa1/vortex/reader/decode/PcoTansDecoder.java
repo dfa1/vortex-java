@@ -10,7 +10,7 @@ import java.nio.ByteOrder;
 /// 4-way interleaved tANS decoder for one pco latent variable.
 ///
 /// Build via {@link #build(int, PcoBin[])}; then call {@link #decodePage} once per page.
-/// Port of {@code pco/src/ans/spec.rs} (spread) and {@code pco/src/ans/decoding.rs} (nodes).
+/// Port of `pco/src/ans/spec.rs` (spread) and `pco/src/ans/decoding.rs` (nodes).
 public final class PcoTansDecoder {
 
     public static final int BATCH_N = 256;
@@ -33,7 +33,7 @@ public final class PcoTansDecoder {
 
     /// Build the decode table from chunk latent-var metadata.
     ///
-    /// Port of {@code Spec::from_weights} + {@code Decoder::new} from pcodec.
+    /// Port of `Spec::from_weights` + `Decoder::new` from pcodec.
     public static PcoTansDecoder build(int ansSizeLog, PcoBin[] bins) {
         if (bins.length == 0) {
             // Degenerate: no bins → 1-state table, all offsets zero.
@@ -69,7 +69,7 @@ public final class PcoTansDecoder {
         return new PcoTansDecoder(nextStateIdxBase, bitsToRead, nodeOffsetBits, stateLowers);
     }
 
-    /// Port of {@code Spec::spread_state_symbols} from pcodec.
+    /// Port of `Spec::spread_state_symbols` from pcodec.
     ///
     /// Spreads symbols across the table with a stride of ~3/5 * tableSize (odd).
     static int[] spreadStateSymbols(int[] weights, int tableSize) {
@@ -89,12 +89,12 @@ public final class PcoTansDecoder {
         return stateSymbols;
     }
 
-    /// Decode {@code n} raw latent values (U64) from {@code reader} into {@code out}.
+    /// Decode `n` raw latent values (U64) from `reader` into `out`.
     ///
     /// Caller must have already read 4 initial ANS state indices and called
     /// {@link LeBitReader#alignToByte()} before this call.
-    /// {@code ansStateIdxs} is modified in place and not valid after return.
-    /// {@code batchLowers} and {@code batchOffsetBits} are caller-provided scratch arrays of
+    /// `ansStateIdxs` is modified in place and not valid after return.
+    /// `batchLowers` and `batchOffsetBits` are caller-provided scratch arrays of
     /// length ≥ {@link #BATCH_N}; they are fully overwritten before use.
     public void decodePage(LeBitReader reader, int[] ansStateIdxs, int n,
             MemorySegment out, long outByteOffset,
@@ -109,11 +109,11 @@ public final class PcoTansDecoder {
         }
     }
 
-    /// Decode exactly {@code batchN} latent values into {@code out[outByteOffset..]} and advance
+    /// Decode exactly `batchN` latent values into `out[outByteOffset..]` and advance
     /// the ANS states.
     ///
-    /// {@code batchLowers} and {@code batchOffsetBits} are caller-provided scratch arrays of
-    /// length ≥ {@code batchN}; they are fully overwritten before use.
+    /// `batchLowers` and `batchOffsetBits` are caller-provided scratch arrays of
+    /// length ≥ `batchN`; they are fully overwritten before use.
     public void decodeBatch(LeBitReader reader, int[] ansStateIdxs, int batchN,
             long[] batchLowers, int[] batchOffsetBits,
             MemorySegment out, long outByteOffset) {

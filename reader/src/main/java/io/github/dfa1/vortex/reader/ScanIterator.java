@@ -284,8 +284,8 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         };
     }
 
-    /// Truncates a {@code ChunkedXxxArray} by keeping full children that fit within
-    /// {@code rows} and recursively truncating the boundary child. Avoids the
+    /// Truncates a `ChunkedXxxArray` by keeping full children that fit within
+    /// `rows` and recursively truncating the boundary child. Avoids the
     /// full-column materialisation that the {@link LongArray}/{@link IntArray}/etc.
     /// catch-all cases would trigger via {@link ArraySegments#of(Array, SegmentAllocator)}.
     private static Array truncateChunkedLong(ChunkedLongArray arr, long rows, SegmentAllocator arena) {
@@ -403,9 +403,9 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         }
     }
 
-    /// Runs {@code action} on each remaining chunk inside a try-with-resources
+    /// Runs `action` on each remaining chunk inside a try-with-resources
     /// block so every chunk's [Arena] is released before the next iteration.
-    /// Prefer this over a manual {@code while (hasNext()) { next(); }} loop
+    /// Prefer this over a manual `while (hasNext()) { next(); `} loop
     /// when no early-exit is needed.
     ///
     /// @param action consumer invoked once per remaining chunk
@@ -607,7 +607,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                 codesSegFallback, codesPType, dtype, n, arena);
     }
 
-    /// Lazy-path zip-bomb guard. Inspects {@code codes}'s primary segment when available
+    /// Lazy-path zip-bomb guard. Inspects `codes`'s primary segment when available
     /// (segment-backed encodings can be mmap-bounded and undersized); skips validation
     /// for non-segment variants whose own decoder has already enforced length.
     ///
@@ -628,15 +628,15 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         }
     }
 
-    /// Builds the matching {@code DictXxxArray} for a primitive dictionary, unwrapping
+    /// Builds the matching `DictXxxArray` for a primitive dictionary, unwrapping
     /// any {@link MaskedArray} layer on either side — dictionary lookups are keyed by code
     /// so value-side validity is meaningless at this layer.
     ///
     /// @param dtype  primitive logical type of dict values
     /// @param n      total logical row count
     /// @param values dictionary values
-    /// @param codes  per-row codes into {@code values}
-    /// @return a lazy {@code DictXxxArray} matching the value ptype
+    /// @param codes  per-row codes into `values`
+    /// @return a lazy `DictXxxArray` matching the value ptype
     private static Array buildLazyDictPrimitive(DType.Primitive dtype, long n, Array values, Array codes) {
         Array valuesData = values instanceof MaskedArray mv ? mv.inner() : values;
         Array codesData = codes instanceof MaskedArray mc ? mc.inner() : codes;

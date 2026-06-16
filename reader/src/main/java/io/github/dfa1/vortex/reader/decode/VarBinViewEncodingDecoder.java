@@ -8,7 +8,7 @@ import io.github.dfa1.vortex.encoding.EncodingId;
 
 import java.lang.foreign.MemorySegment;
 
-/// Read-only decoder for {@code vortex.varbinview} (Apache Arrow StringView/BinaryView).
+/// Read-only decoder for `vortex.varbinview` (Apache Arrow StringView/BinaryView).
 public final class VarBinViewEncodingDecoder implements EncodingDecoder {
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.

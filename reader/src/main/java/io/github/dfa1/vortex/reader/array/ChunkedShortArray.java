@@ -9,12 +9,12 @@ import java.util.List;
 import java.util.function.LongBinaryOperator;
 
 /// Multi-chunk {@link ShortArray} record. ADR 0012 shape — children hold their
-/// own segments; scalar access binary-searches {@code offsets}.
+/// own segments; scalar access binary-searches `offsets`.
 ///
 /// @param dtype    logical element type (I16 or U16)
 /// @param length   total logical row count
 /// @param children chunk arrays in scan order
-/// @param offsets  cumulative row counts; length = {@code children.length + 1}
+/// @param offsets  cumulative row counts; length = `children.length + 1`
 @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record ChunkedShortArray(DType dtype, long length, ShortArray[] children, long[] offsets) implements ShortArray {
 

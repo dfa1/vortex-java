@@ -2,9 +2,9 @@ package io.github.dfa1.vortex.core;
 
 /// Physical primitive type — the wire-level numeric kind for a column.
 ///
-/// Unsigned integers ({@code U8}–{@code U64}) and signed integers ({@code I8}–{@code I64})
+/// Unsigned integers (`U8`–`U64`) and signed integers (`I8`–`I64`)
 /// share the same in-memory bit pattern; signedness only affects interpretation.
-/// Floating-point types follow IEEE 754: {@code F16} (half), {@code F32} (single), {@code F64} (double).
+/// Floating-point types follow IEEE 754: `F16` (half), `F32` (single), `F64` (double).
 public enum PType {
     /// Unsigned 8-bit integer.
     U8,
@@ -41,16 +41,16 @@ public enum PType {
         };
     }
 
-    /// Returns {@code true} for {@code F16}, {@code F32}, and {@code F64}.
+    /// Returns `true` for `F16`, `F32`, and `F64`.
     ///
-    /// @return {@code true} if this ptype is a floating-point type
+    /// @return `true` if this ptype is a floating-point type
     public boolean isFloating() {
         return this == F16 || this == F32 || this == F64;
     }
 
-    /// Returns {@code true} for signed integers ({@code I8}–{@code I64}) and all floating-point types.
+    /// Returns `true` for signed integers (`I8`–`I64`) and all floating-point types.
     ///
-    /// @return {@code true} if this ptype is signed
+    /// @return `true` if this ptype is signed
     public boolean isSigned() {
         return this == I8 || this == I16 || this == I32 || this == I64
                        || this == F16 || this == F32 || this == F64;
@@ -59,14 +59,14 @@ public enum PType {
     /// Returns the {@link PType} for the given enum ordinal — the integer value the wire format
     /// uses to identify a physical type.
     ///
-    /// Unlike {@code PType.values()[ordinal]}, this method validates the ordinal against the
+    /// Unlike `PType.values()[ordinal]`, this method validates the ordinal against the
     /// declared range and throws {@link VortexException} for crafted out-of-range values rather
     /// than the JDK's {@link ArrayIndexOutOfBoundsException}. Use this at every decode site that
     /// reads a ptype from untrusted metadata.
     ///
-    /// @param ordinal the enum ordinal, typically taken from a Protobuf {@code ptype} field
+    /// @param ordinal the enum ordinal, typically taken from a Protobuf `ptype` field
     /// @return the {@link PType} for the given ordinal
-    /// @throws VortexException if {@code ordinal} is negative or greater than the largest defined
+    /// @throws VortexException if `ordinal` is negative or greater than the largest defined
     ///                         {@link PType} ordinal
     public static PType fromOrdinal(int ordinal) {
         PType[] all = values();

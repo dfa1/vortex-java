@@ -13,11 +13,11 @@ import java.lang.invoke.MethodHandle;
 
 /// POSIX (Linux + macOS) raw-mode terminal implementation.
 ///
-/// Uses libc {@code tcgetattr} / {@code cfmakeraw} / {@code tcsetattr} via FFM
-/// to put stdin in non-canonical, no-echo mode. {@code ioctl(TIOCGWINSZ)}
+/// Uses libc `tcgetattr` / `cfmakeraw` / `tcsetattr` via FFM
+/// to put stdin in non-canonical, no-echo mode. `ioctl(TIOCGWINSZ)`
 /// queries the terminal size on every call (no SIGWINCH plumbing).
 ///
-/// On entry: saves the original {@code termios}, switches to alt screen, hides
+/// On entry: saves the original `termios`, switches to alt screen, hides
 /// the cursor. On [#close()]: restores everything, even on exceptions, via a
 /// shutdown hook that fires if the caller skips try-with-resources.
 public final class PosixTerminal implements Terminal {
@@ -28,7 +28,7 @@ public final class PosixTerminal implements Terminal {
 
     private static final long TIOCGWINSZ = isMac() ? 0x40087468L : 0x5413L;
 
-    /// {@code struct termios} is at most 72 bytes (macOS); Linux glibc is 60.
+    /// `struct termios` is at most 72 bytes (macOS); Linux glibc is 60.
     /// 128 is a comfortable upper bound and lets the same code work on both.
     private static final long TERMIOS_SIZE = 128;
 
@@ -64,7 +64,7 @@ public final class PosixTerminal implements Terminal {
     /// Enters raw mode and switches to the alternate screen.
     ///
     /// @return open terminal
-    /// @throws IOException if {@code tcgetattr} or {@code tcsetattr} fails
+    /// @throws IOException if `tcgetattr` or `tcsetattr` fails
     public static PosixTerminal open() throws IOException {
         Arena arena = Arena.ofShared();
         try {

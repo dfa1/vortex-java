@@ -18,7 +18,7 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 
-/// Read-only decoder for {@code fastlanes.bitpacked}.
+/// Read-only decoder for `fastlanes.bitpacked`.
 public final class BitpackedEncodingDecoder implements EncodingDecoder {
     private static final int[] FL_ORDER = {0, 4, 2, 6, 1, 5, 3, 7};
 

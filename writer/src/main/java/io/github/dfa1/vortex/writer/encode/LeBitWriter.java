@@ -7,7 +7,7 @@ import java.util.Arrays;
 /// Little-endian bit writer backed by a growable byte buffer.
 ///
 /// Bits are packed LSB-first within each byte — the symmetric counterpart to
-/// {@code io.github.dfa1.vortex.reader.decode.LeBitReader}.
+/// `io.github.dfa1.vortex.reader.decode.LeBitReader`.
 final class LeBitWriter {
 
     private byte[] buffer;
@@ -19,9 +19,9 @@ final class LeBitWriter {
         buffer = new byte[Math.max(initialCapacityBytes, 1)];
     }
 
-    /// Write {@code n} bits (0 ≤ n ≤ 64) from {@code value}, LSB-first.
+    /// Write `n` bits (0 ≤ n ≤ 64) from `value`, LSB-first.
     ///
-    /// @param value source bits; only the low {@code n} bits are written
+    /// @param value source bits; only the low `n` bits are written
     /// @param n     bit count, 0..64 inclusive
     void writeBits(long value, int n) {
         if (n == 0) {

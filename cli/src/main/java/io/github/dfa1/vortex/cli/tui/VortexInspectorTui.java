@@ -40,7 +40,7 @@ import java.util.concurrent.ConcurrentMap;
 /// escapes — no library dependency.
 ///
 /// Renders a two-pane terminal UI: layout tree on the left, node details on
-/// the right. Quit with {@code q} or {@code Esc}.
+/// the right. Quit with `q` or `Esc`.
 public final class VortexInspectorTui {
 
     private VortexInspectorTui() {
@@ -59,7 +59,7 @@ public final class VortexInspectorTui {
     /// and runs the interactive viewer until quit. The TUI now uses the
     /// shallow builder so the screen is interactive immediately; encoding,
     /// stats and data previews are fetched lazily as the user navigates.
-    /// The {@code progress} parameter is retained for source compatibility
+    /// The `progress` parameter is retained for source compatibility
     /// but is no longer invoked - shallow build does no peeks.
     ///
     /// @param handle   open Vortex file handle
@@ -69,17 +69,17 @@ public final class VortexInspectorTui {
         show(handle, null, progress);
     }
 
-    /// Variant that dispatches every {@code handle} I/O call onto the supplied
+    /// Variant that dispatches every `handle` I/O call onto the supplied
     /// {@link IoWorker}. Required when the handle was opened on a different
     /// thread (Vortex readers use a confined {@link java.lang.foreign.Arena},
-    /// so cross-thread access throws {@code WrongThreadException}).
+    /// so cross-thread access throws `WrongThreadException`).
     ///
-    /// Passing {@code null} for {@code worker} falls back to synchronous I/O
+    /// Passing `null` for `worker` falls back to synchronous I/O
     /// on the render thread — fine for tests but causes the sluggishness this
     /// machinery was built to avoid.
     ///
     /// @param handle   open Vortex file handle
-    /// @param worker   I/O dispatcher that owns the handle's thread; may be {@code null}
+    /// @param worker   I/O dispatcher that owns the handle's thread; may be `null`
     /// @param progress unused; kept for API stability
     /// @throws IOException if the terminal cannot be initialized
     public static void show(VortexHandle handle, IoWorker worker, InspectorTree.Progress progress)
@@ -615,7 +615,7 @@ public final class VortexInspectorTui {
         }
 
         /// Returns the Zoned/Chunked-with-leading-stats parent whose per-zone stats
-        /// table we want to render when the given node is selected, or {@code null}
+        /// table we want to render when the given node is selected, or `null`
         /// when no zone-map is associated with the node.
         ///
         /// Selecting either the parent (Zoned or Chunked-with-leading-stats) or the

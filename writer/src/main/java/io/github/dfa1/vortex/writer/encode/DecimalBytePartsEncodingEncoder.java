@@ -8,7 +8,7 @@ import io.github.dfa1.vortex.proto.DecimalBytePartsMetadata;
 import java.nio.ByteBuffer;
 import java.util.List;
 
-/// Write-only encoder for {@code vortex.decimal_byte_parts}.
+/// Write-only encoder for `vortex.decimal_byte_parts`.
 public final class DecimalBytePartsEncodingEncoder implements EncodingEncoder {
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.

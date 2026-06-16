@@ -7,7 +7,7 @@ import io.github.dfa1.vortex.writer.WriteOptions;
 /// @param fetchSize        number of rows the JDBC driver fetches per round-trip
 /// @param chunkSize        number of rows per Vortex chunk written to disk
 /// @param writeOptions     encoding and compression settings passed to {@link io.github.dfa1.vortex.writer.VortexWriter}
-/// @param progressListener optional callback invoked after each full chunk is written; {@code null} disables progress reporting
+/// @param progressListener optional callback invoked after each full chunk is written; `null` disables progress reporting
 public record JdbcImportOptions(
         int fetchSize,
         int chunkSize,
@@ -21,7 +21,7 @@ public record JdbcImportOptions(
         return new JdbcImportOptions(10_000, 65_536, WriteOptions.cascading(3), null);
     }
 
-    /// Returns a copy with the JDBC fetch size set to {@code size}.
+    /// Returns a copy with the JDBC fetch size set to `size`.
     ///
     /// @param size number of rows fetched per driver round-trip
     /// @return updated options
@@ -29,7 +29,7 @@ public record JdbcImportOptions(
         return new JdbcImportOptions(size, chunkSize, writeOptions, progressListener);
     }
 
-    /// Returns a copy with the Vortex chunk size set to {@code size}.
+    /// Returns a copy with the Vortex chunk size set to `size`.
     ///
     /// @param size number of rows per written chunk
     /// @return updated options
@@ -47,7 +47,7 @@ public record JdbcImportOptions(
 
     /// Returns a copy with the given progress listener.
     ///
-    /// @param listener callback invoked after each full chunk; pass {@code null} to disable
+    /// @param listener callback invoked after each full chunk; pass `null` to disable
     /// @return updated options
     public JdbcImportOptions withProgressListener(ProgressListener listener) {
         return new JdbcImportOptions(fetchSize, chunkSize, writeOptions, listener);

@@ -14,7 +14,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
-/// Write-only encoder for {@code vortex.fixed_size_list}.
+/// Write-only encoder for `vortex.fixed_size_list`.
 public final class FixedSizeListEncodingEncoder implements EncodingEncoder {
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.

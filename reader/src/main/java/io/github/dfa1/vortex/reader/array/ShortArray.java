@@ -12,15 +12,15 @@ public non-sealed interface ShortArray extends Array {
 
     /// Returns the raw signed short value at the given index.
     ///
-    /// @param i zero-based index (must be in {@code [0, length())})
-    /// @return the signed short value at position {@code i}
+    /// @param i zero-based index (must be in `[0, length())`)
+    /// @return the signed short value at position `i`
     short getShort(long i);
 
-    /// Returns the element at the given index as an {@code int}, widening to
+    /// Returns the element at the given index as an `int`, widening to
     /// unsigned if the dtype is U16.
     ///
-    /// @param i zero-based index (must be in {@code [0, length())})
-    /// @return the value at position {@code i} as int
+    /// @param i zero-based index (must be in `[0, length())`)
+    /// @return the value at position `i` as int
     int getInt(long i);
 
     /// Folds all elements using the given binary operator and identity value.
@@ -30,7 +30,7 @@ public non-sealed interface ShortArray extends Array {
     /// @return the final accumulated result
     long fold(long identity, LongBinaryOperator op);
 
-    /// Passes each {@code short} element to the given consumer in order.
+    /// Passes each `short` element to the given consumer in order.
     ///
     /// @param c consumer that receives each short element
     default void forEachShort(ShortConsumer c) {

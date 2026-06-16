@@ -22,7 +22,7 @@ import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 
-/// Read-only decoder for {@code vortex.sequence} — {@code A[i] = base + i * multiplier}.
+/// Read-only decoder for `vortex.sequence` — `A[i] = base + i * multiplier`.
 public final class SequenceEncodingDecoder implements EncodingDecoder {
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.

@@ -10,8 +10,8 @@ import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.UUID;
 
-/// Write-side encoder for {@code vortex.uuid}: converts {@code Collection<UUID>}
-/// to the {@code FixedSizeList(U8, 16)} storage layout the writer accepts.
+/// Write-side encoder for `vortex.uuid`: converts `Collection<UUID>`
+/// to the `FixedSizeList(U8, 16)` storage layout the writer accepts.
 public final class UuidExtensionEncoder implements ExtensionEncoder {
 
     /// Singleton instance.

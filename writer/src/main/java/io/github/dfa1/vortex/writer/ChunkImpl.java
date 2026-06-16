@@ -7,7 +7,7 @@ import io.github.dfa1.vortex.writer.encode.NullableData;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/// Package-private [Chunk] implementation. Validates each {@code .put} against the
+/// Package-private [Chunk] implementation. Validates each `.put` against the
 /// writer's schema and converts boxed nullable arrays into the internal
 /// [NullableData] carrier so the rest of the writer keeps its existing entry points.
 final class ChunkImpl implements Chunk {

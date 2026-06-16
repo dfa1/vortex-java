@@ -12,7 +12,7 @@ import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 
-/// Read-only decoder for {@code vortex.decimal_byte_parts}.
+/// Read-only decoder for `vortex.decimal_byte_parts`.
 public final class DecimalBytePartsEncodingDecoder implements EncodingDecoder {
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.

@@ -2,14 +2,14 @@ package io.github.dfa1.vortex.cli.tui.term;
 
 /// ANSI / xterm CSI escape constants and small formatting helpers.
 ///
-/// Sequences are plain ASCII once the leading {@code ESC} (0x1B) byte is included.
-/// They're written verbatim to {@code System.out} once raw mode is enabled.
+/// Sequences are plain ASCII once the leading `ESC` (0x1B) byte is included.
+/// They're written verbatim to `System.out` once raw mode is enabled.
 public final class Ansi {
 
     /// ESC (0x1B) - the byte every CSI sequence starts with.
     public static final String ESC = String.valueOf((char) 0x1B);
 
-    /// Control Sequence Introducer: {@code ESC + '['}.
+    /// Control Sequence Introducer: `ESC + '['`.
     public static final String CSI = ESC + "[";
 
     /// Clear entire screen.
@@ -36,7 +36,7 @@ public final class Ansi {
     private Ansi() {
     }
 
-    /// Move the cursor to (1-based) {@code row}, {@code col}.
+    /// Move the cursor to (1-based) `row`, `col`.
     ///
     /// @param row 1-based row index
     /// @param col 1-based column index

@@ -341,7 +341,7 @@ public final class VortexWriter implements Closeable {
 
     // ── Segment encoding ─────────────────────────────────────────────────────
 
-    /// Write one chunk via the typed {@link Chunk} builder. Each {@code .put} is validated
+    /// Write one chunk via the typed {@link Chunk} builder. Each `.put` is validated
     /// against the writer's schema (name exists, array type matches dtype, boxed arrays for
     /// nullable columns); after the consumer returns, every schema column must have been
     /// supplied and all column arrays must share the same length.
@@ -366,7 +366,7 @@ public final class VortexWriter implements Closeable {
     ///
     /// @param columns map from column name to typed array data
     /// @throws IOException              if an I/O error occurs writing to the underlying channel
-    /// @throws IllegalArgumentException if a schema column is missing from {@code columns},
+    /// @throws IllegalArgumentException if a schema column is missing from `columns`,
     ///         or if column arrays disagree on row count
     public void writeChunk(Map<String, Object> columns) throws IOException {
         // Pre-validate row counts so a length mismatch is rejected with a clear error
@@ -472,7 +472,7 @@ public final class VortexWriter implements Closeable {
         return writeSegment(dtype, data, null);
     }
 
-    /// Writes a segment, optionally forcing a specific {@code encodingOverride} instead of
+    /// Writes a segment, optionally forcing a specific `encodingOverride` instead of
     /// the configured cascade. Used by the global Utf8 dictionary path where the values
     /// segment must be flat varbin — the cascade would otherwise re-pick
     /// {@link DictEncodingEncoder} and wrap the dictionary in another dict (which the reader

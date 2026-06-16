@@ -10,8 +10,8 @@ public non-sealed interface BoolArray extends Array {
 
     /// Returns the boolean value at the given logical index.
     ///
-    /// @param i zero-based logical index (must be in {@code [0, length())})
-    /// @return the boolean value at position {@code i}
+    /// @param i zero-based logical index (must be in `[0, length())`)
+    /// @return the boolean value at position `i`
     boolean getBoolean(long i);
 
     /// Passes each boolean element to the given consumer in order.

@@ -12,8 +12,8 @@ public non-sealed interface FloatArray extends Array {
 
     /// Returns the float value at the given index.
     ///
-    /// @param i zero-based index (must be in {@code [0, length())})
-    /// @return the float value at position {@code i}
+    /// @param i zero-based index (must be in `[0, length())`)
+    /// @return the float value at position `i`
     float getFloat(long i);
 
     /// Folds all elements using the given binary operator and identity value.

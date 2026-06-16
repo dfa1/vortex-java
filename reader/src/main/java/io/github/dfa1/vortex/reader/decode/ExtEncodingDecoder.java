@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.encoding.EncodingId;
 
-/// Read-only decoder for {@code vortex.ext} — unwraps the storage-array child.
+/// Read-only decoder for `vortex.ext` — unwraps the storage-array child.
 public final class ExtEncodingDecoder implements EncodingDecoder {
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.

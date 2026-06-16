@@ -11,8 +11,8 @@ import java.nio.ByteBuffer;
 import java.time.LocalTime;
 import java.util.Collection;
 
-/// Write-side encoder for {@code vortex.time}: converts {@code Collection<LocalTime>}
-/// to {@code int[]} (s/ms) or {@code long[]} (μs/ns) storage the writer accepts.
+/// Write-side encoder for `vortex.time`: converts `Collection<LocalTime>`
+/// to `int[]` (s/ms) or `long[]` (μs/ns) storage the writer accepts.
 public final class TimeExtensionEncoder implements ExtensionEncoder {
 
     /// Singleton instance.

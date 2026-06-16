@@ -18,7 +18,7 @@ import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 
-/// Read-only decoder for {@code fastlanes.delta}.
+/// Read-only decoder for `fastlanes.delta`.
 public final class DeltaEncodingDecoder implements EncodingDecoder {
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.

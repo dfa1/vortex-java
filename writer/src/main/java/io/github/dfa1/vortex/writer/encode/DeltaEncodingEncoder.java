@@ -14,7 +14,7 @@ import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.util.List;
 
-/// Write-only encoder for {@code fastlanes.delta}.
+/// Write-only encoder for `fastlanes.delta`.
 public final class DeltaEncodingEncoder implements EncodingEncoder {
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.

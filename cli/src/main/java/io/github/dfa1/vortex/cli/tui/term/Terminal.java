@@ -7,7 +7,7 @@ import java.util.Optional;
 ///
 /// Implementations toggle the OS console into raw / non-canonical mode on
 /// [#open()] and restore the prior state on [#close()]. Output is plain bytes
-/// to {@code System.out}; input is buffered keystrokes from {@code System.in}.
+/// to `System.out`; input is buffered keystrokes from `System.in`.
 ///
 /// Usage:
 /// ```
@@ -23,7 +23,7 @@ public sealed interface Terminal extends AutoCloseable
     /// Opens the platform-appropriate raw-mode terminal.
     ///
     /// Picks [PosixTerminal] on Linux / macOS and [WindowsTerminal] on Windows
-    /// based on {@code os.name}.
+    /// based on `os.name`.
     ///
     /// @return an open raw terminal handle
     /// @throws IOException if the OS-level setup fails

@@ -9,7 +9,7 @@ import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
-/// Write-only encoder for {@code vortex.varbinview}.
+/// Write-only encoder for `vortex.varbinview`.
 public final class VarBinViewEncodingEncoder implements EncodingEncoder {
 
     private static final int MAX_INLINED_SIZE = 12;

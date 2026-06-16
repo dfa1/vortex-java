@@ -10,14 +10,14 @@ import java.util.HashMap;
 /// all encoders that requested a given stat via [StatsOptions]. Replaces the per-encoder
 /// sample-encoding probe that biases on leading rows.
 ///
-/// All values are stored as raw 64-bit patterns ({@code doubleToRawLongBits} for floats,
+/// All values are stored as raw 64-bit patterns (`doubleToRawLongBits` for floats,
 /// zero-extended unsigned ints for U8/U16/U32). Use [#mostFrequentValueBits()] etc. and
 /// reinterpret per ptype as needed.
 ///
 /// @param valueCount        number of non-null elements scanned
-/// @param distinctCount     distinct value count, or {@code -1} if not requested
-/// @param mostFrequentBits  raw bits of the most-frequent value, or {@code 0} if not requested
-/// @param topFrequency      occurrence count of the most-frequent value, or {@code 0} if not requested
+/// @param distinctCount     distinct value count, or `-1` if not requested
+/// @param mostFrequentBits  raw bits of the most-frequent value, or `0` if not requested
+/// @param topFrequency      occurrence count of the most-frequent value, or `0` if not requested
 public record ArrayStats(
         long valueCount,
         long distinctCount,
@@ -28,11 +28,11 @@ public record ArrayStats(
     /// Sentinel stats for empty arrays.
     public static final ArrayStats EMPTY = new ArrayStats(0, 0, 0, 0);
 
-    /// Compute stats over {@code data} according to {@code options}.
+    /// Compute stats over `data` according to `options`.
     ///
-    /// @param ptype   the primitive type of {@code data}
-    /// @param data    the input array (one of: {@code byte[]}, {@code short[]}, {@code int[]},
-    ///                {@code long[]}, {@code float[]}, {@code double[]})
+    /// @param ptype   the primitive type of `data`
+    /// @param data    the input array (one of: `byte[]`, `short[]`, `int[]`,
+    ///                `long[]`, `float[]`, `double[]`)
     /// @param options which stats to compute; merged options from all eligible encoders
     /// @return immutable [ArrayStats]
     public static ArrayStats compute(PType ptype, Object data, StatsOptions options) {

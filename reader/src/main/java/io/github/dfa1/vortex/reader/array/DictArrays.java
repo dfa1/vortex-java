@@ -2,18 +2,18 @@ package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.VortexException;
 
-/// Package-private helpers shared by the {@code DictXxxArray} records.
+/// Package-private helpers shared by the `DictXxxArray` records.
 ///
-/// Centralises the codes-type validation (so the four record {@code of}
+/// Centralises the codes-type validation (so the four record `of`
 /// factories agree on what counts as a valid codes array) and the scalar
-/// {@code readCode} dispatch (so a single update fixes all four records).
+/// `readCode` dispatch (so a single update fixes all four records).
 final class DictArrays {
 
     private DictArrays() {
     }
 
-    /// Validates that {@code codes} is one of the four supported narrow-int
-    /// array types and that its length matches {@code expectedLength}.
+    /// Validates that `codes` is one of the four supported narrow-int
+    /// array types and that its length matches `expectedLength`.
     static void validateCodes(Array codes, long expectedLength) {
         if (!(codes instanceof ByteArray || codes instanceof ShortArray
                 || codes instanceof IntArray || codes instanceof LongArray)) {
@@ -26,7 +26,7 @@ final class DictArrays {
         }
     }
 
-    /// Reads the code at row {@code i} from {@code codes}. One switch on the
+    /// Reads the code at row `i` from `codes`. One switch on the
     /// codes' Array type — JIT inline-caches on the stable concrete type.
     static long readCode(Array codes, long i) {
         return switch (codes) {

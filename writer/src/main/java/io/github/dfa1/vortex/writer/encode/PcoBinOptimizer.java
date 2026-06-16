@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/// Bin optimization DP — port of {@code pco/src/bin_optimization.rs}.
+/// Bin optimization DP — port of `pco/src/bin_optimization.rs`.
 ///
 /// Input: equal-count histogram bins (sorted by value). Output: merged bins that
 /// minimize total bit cost = Σ bin_meta_cost + (ans_cost + offset_cost) × count.

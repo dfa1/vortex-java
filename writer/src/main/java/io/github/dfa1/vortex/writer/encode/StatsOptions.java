@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.writer.encode;
 /// Stats requested by an [EncodingEncoder] for cascade selection. The cascading
 /// compressor merges every eligible encoder's options before scanning the input once.
 ///
-/// Mirrors {@code vortex-compressor::stats::options::GenerateStatsOptions}.
+/// Mirrors `vortex-compressor::stats::options::GenerateStatsOptions`.
 ///
 /// @param countDistinct      whether the scan must count distinct value occurrences
 /// @param trackMostFrequent  whether the scan must track the most-frequent value + its count

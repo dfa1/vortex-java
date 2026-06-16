@@ -8,7 +8,7 @@ import io.github.dfa1.vortex.proto.ScalarValue;
 
 import java.lang.foreign.MemorySegment;
 
-/// Write-only encoder for {@code vortex.constant}.
+/// Write-only encoder for `vortex.constant`.
 public final class ConstantEncodingEncoder implements EncodingEncoder {
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.

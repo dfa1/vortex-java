@@ -31,7 +31,7 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 
-/// Read-only decoder for {@code vortex.sparse}.
+/// Read-only decoder for `vortex.sparse`.
 public final class SparseEncodingDecoder implements EncodingDecoder {
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.

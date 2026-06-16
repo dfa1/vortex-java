@@ -12,7 +12,7 @@ import java.lang.foreign.SegmentAllocator;
 import java.nio.ByteBuffer;
 import java.util.List;
 
-/// Write-only encoder for {@code fastlanes.rle}.
+/// Write-only encoder for `fastlanes.rle`.
 public final class RleEncodingEncoder implements EncodingEncoder {
 
     private static final int FL_CHUNK_SIZE = 1024;

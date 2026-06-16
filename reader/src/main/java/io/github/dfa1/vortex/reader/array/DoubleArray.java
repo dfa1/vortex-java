@@ -13,8 +13,8 @@ public non-sealed interface DoubleArray extends Array {
 
     /// Returns the double value at the given logical index.
     ///
-    /// @param i zero-based logical index (must be in {@code [0, length())})
-    /// @return the double value at position {@code i}
+    /// @param i zero-based logical index (must be in `[0, length())`)
+    /// @return the double value at position `i`
     double getDouble(long i);
 
     /// Invokes the consumer for each element in order.

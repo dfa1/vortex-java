@@ -10,7 +10,7 @@ import io.github.dfa1.vortex.proto.SequenceMetadata;
 import java.nio.ByteBuffer;
 import java.util.List;
 
-/// Write-only encoder for {@code vortex.sequence} — arithmetic sequences as (base, multiplier).
+/// Write-only encoder for `vortex.sequence` — arithmetic sequences as (base, multiplier).
 public final class SequenceEncodingEncoder implements EncodingEncoder {
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.

@@ -8,7 +8,7 @@ import io.github.dfa1.vortex.extension.ExtensionId;
 /// Implementations pair a spec identity ({@link ExtensionId}) with the matching
 /// {@link DType.Extension} dtype. Typed decode methods live on each concrete
 /// implementation — they are not on this interface, so read callers get typed return
-/// values without casting through {@code Object}.
+/// values without casting through `Object`.
 public interface ExtensionDecoder {
 
     /// @return the spec identity of this extension

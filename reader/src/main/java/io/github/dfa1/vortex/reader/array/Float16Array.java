@@ -12,7 +12,7 @@ public non-sealed interface Float16Array extends Array {
 
     /// Returns the element at the given index widened to a single-precision float.
     ///
-    /// @param i zero-based index (must be in {@code [0, length())})
-    /// @return the half-precision value at position {@code i} converted to {@code float}
+    /// @param i zero-based index (must be in `[0, length())`)
+    /// @return the half-precision value at position `i` converted to `float`
     float getFloat(long i);
 }

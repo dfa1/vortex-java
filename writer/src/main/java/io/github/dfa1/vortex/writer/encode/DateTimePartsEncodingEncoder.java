@@ -12,7 +12,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
-/// Write-only encoder for {@code vortex.datetimeparts}.
+/// Write-only encoder for `vortex.datetimeparts`.
 public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
 
     private static final long SECONDS_PER_DAY = 86_400L;

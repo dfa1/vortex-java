@@ -8,16 +8,16 @@ import java.lang.foreign.SegmentAllocator;
 
 /// Utility for extracting the primary {@link MemorySegment} from any {@link Array}.
 ///
-/// If {@code arr} is a {@link MaskedArray}, the inner (data) segment is returned;
+/// If `arr` is a {@link MaskedArray}, the inner (data) segment is returned;
 /// the validity mask is not surfaced here — callers that need validity must unwrap manually.
 ///
-/// **Internal utility.** This class is {@code public} only because the
+/// **Internal utility.** This class is `public` only because the
 /// vortex-java reader, writer, and encoding implementations live in separate Maven modules and
 /// need cross-package access to the raw backing segment of typed arrays. It is not part of the
 /// supported public API: signatures may change without a deprecation cycle. Application code
 /// should prefer the typed accessors on concrete subtypes — {@link LongArray#getLong(long)},
 /// {@link IntArray#getInt(long)}, {@link DoubleArray#getDouble(long)}, and friends — and treat
-/// {@code ArraySegments} as a Vortex-internal escape hatch.
+/// `ArraySegments` as a Vortex-internal escape hatch.
 /// @deprecated this class should be removed gradually
 @Deprecated
 public final class ArraySegments {
@@ -25,7 +25,7 @@ public final class ArraySegments {
     private ArraySegments() {
     }
 
-    /// Returns the primary backing segment of {@code arr}.
+    /// Returns the primary backing segment of `arr`.
     ///
     /// @param arr the array whose segment is needed
     /// @return the primary {@link MemorySegment}
@@ -48,8 +48,8 @@ public final class ArraySegments {
         };
     }
 
-    /// Returns the primary backing segment of {@code arr}, materialising lazy variants into a
-    /// fresh segment allocated from {@code arena}.
+    /// Returns the primary backing segment of `arr`, materialising lazy variants into a
+    /// fresh segment allocated from `arena`.
     ///
     /// Use this overload when the caller already holds a chunk-scoped allocator (e.g.
     /// {@link io.github.dfa1.vortex.reader.ReadRegistry#decodeAsSegment}) so lazy array types

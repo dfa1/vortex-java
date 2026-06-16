@@ -16,7 +16,7 @@ public final class MaterializedDoubleArray implements DoubleArray {
     private final MemorySegment buffer;
     private final long elementCount;
 
-    /// Constructs a {@code MaterializedDoubleArray} backed by the given buffer.
+    /// Constructs a `MaterializedDoubleArray` backed by the given buffer.
     ///
     /// @param dtype  logical type, must be a {@link io.github.dfa1.vortex.core.DType.Primitive} with ptype F64
     /// @param length number of logical elements

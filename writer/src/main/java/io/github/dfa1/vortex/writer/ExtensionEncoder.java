@@ -21,9 +21,9 @@ public interface ExtensionEncoder {
     DType.Extension dtype(boolean nullable);
 
     /// Polymorphic encode: converts a collection of domain values into the raw
-    /// storage-array shape the writer accepts (e.g. {@code int[]}, {@code long[]},
-    /// {@code byte[]}). Concrete implementations cast {@code values} to their
-    /// domain type and may consult {@code dtype.metadata()} (e.g. {@code TimeUnit}).
+    /// storage-array shape the writer accepts (e.g. `int[]`, `long[]`,
+    /// `byte[]`). Concrete implementations cast `values` to their
+    /// domain type and may consult `dtype.metadata()` (e.g. `TimeUnit`).
     ///
     /// @param dtype  declared extension dtype (carries unit/timezone metadata)
     /// @param values domain-typed values to encode

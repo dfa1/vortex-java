@@ -18,7 +18,7 @@ import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 
-/// Read-only decoder for {@code vortex.patched}.
+/// Read-only decoder for `vortex.patched`.
 public final class PatchedEncodingDecoder implements EncodingDecoder {
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.

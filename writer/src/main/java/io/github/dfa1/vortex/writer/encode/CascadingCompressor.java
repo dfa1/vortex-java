@@ -10,7 +10,7 @@ import java.util.Random;
 import java.util.Set;
 
 /// Cascading compressor: evaluates multiple encodings on a sample and picks the one
-/// producing the smallest output. With {@code allowedCascading > 0}, also recurses
+/// producing the smallest output. With `allowedCascading > 0`, also recurses
 /// into open child slots (e.g. ALP → Bitpacked for F64 columns).
 ///
 /// Encodings that override {@link EncodingEncoder#encodeCascade} expose intermediate
@@ -20,7 +20,7 @@ public final class CascadingCompressor {
 
     private final List<EncodingEncoder> encodings;
 
-    /// Constructs a {@code CascadingCompressor} with the given candidate encoders.
+    /// Constructs a `CascadingCompressor` with the given candidate encoders.
     ///
     /// @param encodings candidate encoders evaluated during compression
     public CascadingCompressor(List<EncodingEncoder> encodings) {
@@ -42,7 +42,7 @@ public final class CascadingCompressor {
 
     private static final int STRIDE_COUNT = 32;
 
-    /// Build a stratified sample: pick {@code STRIDE_COUNT} contiguous strides at random
+    /// Build a stratified sample: pick `STRIDE_COUNT` contiguous strides at random
     /// offsets, concatenated. Preserves local run structure (so RunEnd/RLE can win)
     /// while covering breadth (so cardinality-based encoders see realistic distinct counts).
     /// Falls back to first-N when the data is short enough for one stride to span it.
@@ -99,7 +99,7 @@ public final class CascadingCompressor {
     }
 
     /// Rust-style partitioned stratified sample (vortex-compressor::sample::stratified_slices):
-    /// divide [0, n) into {@code strideCount} contiguous partitions, draw one random contiguous
+    /// divide [0, n) into `strideCount` contiguous partitions, draw one random contiguous
     /// slice from each. Strides cannot overlap or cluster — every region is represented.
     @SuppressWarnings("java:S2245") // Deterministic PRNG is the contract: stratified sampling
                                     // must be reproducible across builds for stable compression
@@ -133,9 +133,9 @@ public final class CascadingCompressor {
         return (long) n * p.ptype().byteSize();
     }
 
-    /// Entry point: encode {@code data} using the best cascading strategy.
+    /// Entry point: encode `data` using the best cascading strategy.
     ///
-    /// Cascade parameters (depth, sampling, exclusions) are taken from {@code ctx}.
+    /// Cascade parameters (depth, sampling, exclusions) are taken from `ctx`.
     /// Use {@link EncodeContext#ofDepth(int, java.lang.foreign.Arena, WriteRegistry)}
     /// to build a context with cascade depth set.
     ///

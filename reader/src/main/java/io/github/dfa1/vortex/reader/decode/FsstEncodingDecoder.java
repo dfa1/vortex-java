@@ -14,7 +14,7 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 
-/// Read-only decoder for {@code vortex.fsst}.
+/// Read-only decoder for `vortex.fsst`.
 public final class FsstEncodingDecoder implements EncodingDecoder {
 
     private static final int ESCAPE = 0xFF;

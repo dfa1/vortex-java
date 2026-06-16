@@ -19,8 +19,8 @@ import static io.github.dfa1.vortex.writer.VortexReads.readAllDoubles;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// Global dictionary encoding for low-cardinality F64 columns: ports Rust's
-/// {@code vortex-compressor::builtins::dict::float::FloatDictScheme}. Required for the
-/// NYC taxi {@code mta_tax} / {@code Airport_fee} / {@code extra} columns where ALP +
+/// `vortex-compressor::builtins::dict::float::FloatDictScheme`. Required for the
+/// NYC taxi `mta_tax` / `Airport_fee` / `extra` columns where ALP +
 /// per-chunk dict was producing ~10% larger files than Rust's global dict + sparse codes.
 class GlobalDictF64Test {
 

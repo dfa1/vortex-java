@@ -27,7 +27,7 @@ record Trailer(int version, int postscriptLen) {
     /// @param bodyBytes  number of bytes in the file body (i.e. `fileSize - TRAILER_SIZE`)
     /// @return validated [Trailer]
     /// @throws VortexException if the magic mismatches, the version is unsupported, or
-    ///                         postscriptLen is zero or exceeds {@code bodyBytes}
+    ///                         postscriptLen is zero or exceeds `bodyBytes`
     static Trailer parse(MemorySegment trailerSeg, long bodyBytes) {
         int version = Short.toUnsignedInt(trailerSeg.get(LE_SHORT, 0));
         int postscriptLen = Short.toUnsignedInt(trailerSeg.get(LE_SHORT, 2));

@@ -21,7 +21,7 @@ public final class GenericArray implements Array {
     private final MemorySegment[] buffers;
     private final Array[] children;
 
-    /// Creates a new {@code GenericArray} with the given buffers and children.
+    /// Creates a new `GenericArray` with the given buffers and children.
     ///
     /// @param dtype    logical type of this array
     /// @param length   number of logical elements
@@ -34,7 +34,7 @@ public final class GenericArray implements Array {
         this.children = children;
     }
 
-    /// Creates a new {@code GenericArray} with a single buffer and no children.
+    /// Creates a new `GenericArray` with a single buffer and no children.
     ///
     /// @param dtype  logical type of this array
     /// @param length number of logical elements
@@ -53,14 +53,14 @@ public final class GenericArray implements Array {
         return length;
     }
 
-    /// Returns a view of this array clamped to {@code newLength} logical rows.
+    /// Returns a view of this array clamped to `newLength` logical rows.
     /// Buffers and children are reused as-is; callers are expected to respect
     /// {@link #length()} when reading. Used by the scan iterator to honour
-    /// {@code ScanOptions.limit} for dtypes that don't have a typed array.
+    /// `ScanOptions.limit` for dtypes that don't have a typed array.
     ///
-    /// @param newLength desired logical length; must be {@code <= length()}
-    /// @return a new {@code GenericArray} sharing this array's buffers and children
-    /// @throws IllegalArgumentException if {@code newLength} exceeds the current length
+    /// @param newLength desired logical length; must be `<= length()`
+    /// @return a new `GenericArray` sharing this array's buffers and children
+    /// @throws IllegalArgumentException if `newLength` exceeds the current length
     public GenericArray withLength(long newLength) {
         if (newLength < 0 || newLength > length) {
             throw new IllegalArgumentException(
@@ -76,26 +76,26 @@ public final class GenericArray implements Array {
         return buffers[i];
     }
 
-    /// Decodes the decimal value at row {@code i}.
+    /// Decodes the decimal value at row `i`.
     ///
     /// Handles the two shapes produced by Vortex decimal decoders:
     ///
     /// - **single-buffer**: one raw buffer of little-endian two's-complement
     ///   integers (one element per row). Element width is derived from the
     ///   buffer's byte size divided by {@link #length()}, not from the
-    ///   dtype's precision — {@code vortex.decimal} writes whatever width
-    ///   the encoder chose in its {@code valuesType} metadata, which can be
+    ///   dtype's precision — `vortex.decimal` writes whatever width
+    ///   the encoder chose in its `valuesType` metadata, which can be
     ///   narrower than the precision alone would allow.
     /// - **child-array**: zero buffers, one child holding the most-significant
     ///   integer part as a {@link LongArray}, {@link IntArray}, {@link ShortArray},
-    ///   or {@link ByteArray}. Produced by {@code vortex.decimal_byte_parts}
-    ///   when {@code lower_part_count == 0}.
+    ///   or {@link ByteArray}. Produced by `vortex.decimal_byte_parts`
+    ///   when `lower_part_count == 0`.
     ///
-    /// @param i row index, {@code 0 <= i < length()}
+    /// @param i row index, `0 <= i < length()`
     /// @return decoded value as a {@link BigDecimal} with the dtype's scale
     /// @throws VortexException        if the dtype isn't decimal or the array
     ///                                shape doesn't match either supported layout
-    /// @throws IndexOutOfBoundsException if {@code i} is outside {@code [0, length())}
+    /// @throws IndexOutOfBoundsException if `i` is outside `[0, length())`
     public BigDecimal getDecimal(long i) {
         if (i < 0 || i >= length) {
             throw new IndexOutOfBoundsException("index " + i + " out of bounds for length " + length);
@@ -176,10 +176,10 @@ public final class GenericArray implements Array {
         return new BigInteger(be);
     }
 
-    /// Returns the child array at position {@code i}.
+    /// Returns the child array at position `i`.
     ///
     /// @param i child index
-    /// @return the child {@link Array} at index {@code i}
+    /// @return the child {@link Array} at index `i`
     public Array child(int i) {
         return children[i];
     }

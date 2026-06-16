@@ -4,21 +4,21 @@ import java.util.ArrayList;
 import java.util.List;
 
 /// Tokenizes a proto3 source file into a list of {@link Token}s.
-/// Comments ({@code //} line, {@code /* ... */} block) and whitespace are dropped.
+/// Comments (`//` line, `/* ... */` block) and whitespace are dropped.
 public final class Lexer {
 
     private final String src;
     private int pos;
     private int line;
 
-    /// @param src raw {@code .proto} source text
+    /// @param src raw `.proto` source text
     public Lexer(String src) {
         this.src = src;
         this.pos = 0;
         this.line = 1;
     }
 
-    /// Lex the entire source and return the token stream, terminated by a single {@code EOF}.
+    /// Lex the entire source and return the token stream, terminated by a single `EOF`.
     /// @return immutable token list
     public List<Token> tokenize() {
         List<Token> out = new ArrayList<>();

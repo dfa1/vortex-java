@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.OptionalLong;
 import java.util.stream.IntStream;
 
-/// Write-only encoder for {@code vortex.pco}.
+/// Write-only encoder for `vortex.pco`.
 ///
 /// Supports Classic mode (mode=0) and IntMult mode (mode=1).
 /// Each chunk independently chooses:

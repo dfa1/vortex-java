@@ -8,24 +8,24 @@ import java.util.function.IntConsumer;
 
 /// Dict-encoded {@link IntArray} view. ADR 0012 shape.
 ///
-/// Stores {@code values} (the dictionary pool) and {@code codes} (one index per
-/// row into {@code values}). Scalar access resolves on demand:
-/// {@code getInt(i) = values.getInt(codes.getCode(i))}. Per ADR 0012, this
+/// Stores `values` (the dictionary pool) and `codes` (one index per
+/// row into `values`). Scalar access resolves on demand:
+/// `getInt(i) = values.getInt(codes.getCode(i))`. Per ADR 0012, this
 /// preserves zero-copy on dict-encoded categorical columns.
 ///
-/// The {@code codes} array is typed as {@link Array} because the codes ptype
+/// The `codes` array is typed as {@link Array} because the codes ptype
 /// varies with dictionary size — U8/U16/U32/U64 backed by
 /// {@link ByteArray}/{@link ShortArray}/{@link IntArray}/{@link LongArray}.
 ///
-/// @param dtype  logical element type (matches {@code values.dtype()})
-/// @param length total logical row count (matches {@code codes.length()})
-/// @param values dictionary pool — element at code {@code c} is {@code values.getInt(c)}
-/// @param codes  per-row index into {@code values}; must be one of
+/// @param dtype  logical element type (matches `values.dtype()`)
+/// @param length total logical row count (matches `codes.length()`)
+/// @param values dictionary pool — element at code `c` is `values.getInt(c)`
+/// @param codes  per-row index into `values`; must be one of
 ///               {@link ByteArray}, {@link ShortArray}, {@link IntArray}, {@link LongArray}
 public record DictIntArray(DType dtype, long length, IntArray values, Array codes) implements IntArray {
 
-    /// Builds a {@link DictIntArray}, validating that {@code codes} is one of the
-    /// four narrow-int code array types and that its length matches {@code length}.
+    /// Builds a {@link DictIntArray}, validating that `codes` is one of the
+    /// four narrow-int code array types and that its length matches `length`.
     ///
     /// @param dtype  logical element type
     /// @param length total logical row count
@@ -33,8 +33,8 @@ public record DictIntArray(DType dtype, long length, IntArray values, Array code
     /// @param codes  per-row code array (must be {@link ByteArray}, {@link ShortArray},
     ///               {@link IntArray}, or {@link LongArray})
     /// @return a new {@link DictIntArray}
-    /// @throws VortexException if {@code codes} is not a supported code-array type or
-    ///                         its length does not equal {@code length}
+    /// @throws VortexException if `codes` is not a supported code-array type or
+    ///                         its length does not equal `length`
     public static DictIntArray of(DType dtype, long length, IntArray values, Array codes) {
         DictArrays.validateCodes(codes, length);
         return new DictIntArray(dtype, length, values, codes);

@@ -19,7 +19,7 @@ import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 
-/// Read-only decoder for {@code vortex.alprd}.
+/// Read-only decoder for `vortex.alprd`.
 public final class AlpRdEncodingDecoder implements EncodingDecoder {
     private static final DType U16_DTYPE = new DType.Primitive(PType.U16, false);
     private static final DType U32_DTYPE = new DType.Primitive(PType.U32, false);

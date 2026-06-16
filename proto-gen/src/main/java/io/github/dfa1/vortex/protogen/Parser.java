@@ -5,11 +5,11 @@ import java.util.List;
 import java.util.Optional;
 
 /// Recursive-descent parser for the proto3 subset used by vortex.
-/// Accepts: {@code syntax}, {@code package}, {@code import}, {@code option} (only {@code java_package}),
-/// {@code message}, {@code enum}, {@code oneof}, {@code repeated}, {@code optional}, and the proto3 scalar types
-/// {@code uint32}, {@code uint64}, {@code sint64}, {@code int32}, {@code bool}, {@code float}, {@code double},
-/// {@code string}, {@code bytes}, plus user-declared message/enum refs.
-/// Rejects: {@code service}, {@code rpc}, {@code extend}, {@code reserved}, {@code map<,>}, {@code editions}, custom options.
+/// Accepts: `syntax`, `package`, `import`, `option` (only `java_package`),
+/// `message`, `enum`, `oneof`, `repeated`, `optional`, and the proto3 scalar types
+/// `uint32`, `uint64`, `sint64`, `int32`, `bool`, `float`, `double`,
+/// `string`, `bytes`, plus user-declared message/enum refs.
+/// Rejects: `service`, `rpc`, `extend`, `reserved`, `map<,>`, `editions`, custom options.
 public final class Parser {
 
     private final List<Token> tokens;
@@ -21,7 +21,7 @@ public final class Parser {
         this.pos = 0;
     }
 
-    /// Parses one {@code .proto} file.
+    /// Parses one `.proto` file.
     /// @return the parsed file AST
     public Ast.ProtoFile parseFile() {
         String protoPackage = "";

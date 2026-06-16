@@ -6,8 +6,8 @@ import java.io.InputStream;
 /// Translates raw stdin bytes into [Key] events.
 ///
 /// Recognises common CSI sequences emitted by xterm-compatible terminals:
-/// {@code ESC [ A/B/C/D} for arrows, {@code ESC [ 5~ / 6~} for PgUp/PgDn,
-/// {@code ESC [ H / F} and {@code ESC [ 1~ / 4~} for Home/End. Any unrecognised
+/// `ESC [ A/B/C/D` for arrows, `ESC [ 5~ / 6~` for PgUp/PgDn,
+/// `ESC [ H / F` and `ESC [ 1~ / 4~` for Home/End. Any unrecognised
 /// escape sequence is dropped and decoding continues with the next byte.
 ///
 /// Stateless across reads - call [#next(InputStream)] for each event.
@@ -16,9 +16,9 @@ public final class KeyDecoder {
     private KeyDecoder() {
     }
 
-    /// Reads the next key from {@code in}, blocking until at least one byte arrives.
+    /// Reads the next key from `in`, blocking until at least one byte arrives.
     ///
-    /// @param in raw input stream (typically {@code System.in} in cbreak mode)
+    /// @param in raw input stream (typically `System.in` in cbreak mode)
     /// @return the decoded key, or [Key.Eof] if the stream is at EOF
     /// @throws IOException if the underlying read fails
     public static Key next(InputStream in) throws IOException {

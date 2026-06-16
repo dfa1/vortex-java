@@ -13,8 +13,8 @@ public non-sealed interface IntArray extends Array {
 
     /// Returns the int value at the given index.
     ///
-    /// @param i zero-based index (must be in {@code [0, length())})
-    /// @return the int value at position {@code i}
+    /// @param i zero-based index (must be in `[0, length())`)
+    /// @return the int value at position `i`
     int getInt(long i);
 
     /// Passes each element to the given consumer in order.

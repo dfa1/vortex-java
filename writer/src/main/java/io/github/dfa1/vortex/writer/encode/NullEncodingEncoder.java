@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.encoding.EncodingId;
 
 import java.util.List;
 
-/// Write-only encoder for {@code vortex.null} (all-null arrays).
+/// Write-only encoder for `vortex.null` (all-null arrays).
 public final class NullEncodingEncoder implements EncodingEncoder {
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.

@@ -12,7 +12,7 @@ import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 
-/// Read-only decoder for {@code vortex.varbin}.
+/// Read-only decoder for `vortex.varbin`.
 public final class VarBinEncodingDecoder implements EncodingDecoder {
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.

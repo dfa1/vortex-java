@@ -25,7 +25,7 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 
-/// Read-only decoder for {@code fastlanes.rle}.
+/// Read-only decoder for `fastlanes.rle`.
 public final class RleEncodingDecoder implements EncodingDecoder {
 
     private static final int FL_CHUNK_SIZE = 1024;

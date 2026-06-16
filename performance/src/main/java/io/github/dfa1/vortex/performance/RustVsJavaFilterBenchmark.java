@@ -39,7 +39,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /// Filter-pushdown benchmark: JNI reader vs Java reader on the "close" column
-/// with a {@code close > threshold} predicate at varying selectivity.
+/// with a `close > threshold` predicate at varying selectivity.
 ///
 /// Phase 0 instrument for ADR 0010 (lazy decode). The threshold is chosen at
 /// setup time so each {@link #selectivity} value selects approximately that
@@ -51,8 +51,8 @@ import java.util.concurrent.TimeUnit;
 /// predicate in user code — this benchmark exposes that gap.
 ///
 /// Requires a pre-existing OHLC file:
-/// {@code -Dvortex.bench.ohlc=/path/to/file.vtx}. Generate one by running
-/// {@link RustVsJavaReadBenchmark} first with the same {@code vortex.bench.ohlc}
+/// `-Dvortex.bench.ohlc=/path/to/file.vtx`. Generate one by running
+/// {@link RustVsJavaReadBenchmark} first with the same `vortex.bench.ohlc`
 /// pointing at the path you want (the read benchmark will write it lazily if
 /// the file does not exist yet).
 @State(Scope.Benchmark)
@@ -73,7 +73,7 @@ public class RustVsJavaFilterBenchmark {
         NativeLoader.loadJni();
     }
 
-    /// Target fraction of rows that should satisfy {@code close > threshold}.
+    /// Target fraction of rows that should satisfy `close > threshold`.
     /// The threshold is computed in {@link #setup()} from a sample of the
     /// "close" column; the realised selectivity is reported in the setup log
     /// and may differ slightly from this value on small samples.
@@ -167,8 +167,8 @@ public class RustVsJavaFilterBenchmark {
     }
 
     /// Sample every 1000th "close" value, sort, return the value at the
-    /// {@code (1 - selectivity)} quantile so {@code close > threshold} selects
-    /// roughly {@code selectivity} of all rows.
+    /// `(1 - selectivity)` quantile so `close > threshold` selects
+    /// roughly `selectivity` of all rows.
     private double computeThreshold(double targetSelectivity) throws IOException {
         List<Double> sample = new ArrayList<>(100_000);
         try (VortexReader vf = VortexReader.open(benchFile, registry);

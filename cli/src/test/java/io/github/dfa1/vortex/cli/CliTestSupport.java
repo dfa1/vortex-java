@@ -22,7 +22,7 @@ final class CliTestSupport {
     private CliTestSupport() {
     }
 
-    /// Writes a 3-row file with one I64 column {@code id} = [1, 2, 3].
+    /// Writes a 3-row file with one I64 column `id` = [1, 2, 3].
     static Path writeSmallVortex(Path dir, String name) throws IOException {
         Path file = dir.resolve(name);
         DType.Struct schema = new DType.Struct(
@@ -40,7 +40,7 @@ final class CliTestSupport {
     record Captured(int status, String stdout, String stderr) {
     }
 
-    /// Redirects {@code System.out} and {@code System.err} to fresh in-memory buffers,
+    /// Redirects `System.out` and `System.err` to fresh in-memory buffers,
     /// runs the supplied action, restores the originals, and returns whatever the action
     /// returned together with the captured output.
     static Captured capture(Runner runner) {

@@ -27,22 +27,22 @@ public sealed interface VarBinArray extends Array
     /// @return the bytes {@link MemorySegment}
     MemorySegment bytesSegment();
 
-    /// Returns a copy of the raw bytes for element {@code i}.
+    /// Returns a copy of the raw bytes for element `i`.
     ///
-    /// @param i zero-based logical index (must be in {@code [0, length)})
-    /// @return a newly allocated byte array containing the raw bytes of element {@code i}
+    /// @param i zero-based logical index (must be in `[0, length)`)
+    /// @return a newly allocated byte array containing the raw bytes of element `i`
     byte[] getBytes(long i);
 
-    /// Returns the UTF-8 decoded string for element {@code i}.
+    /// Returns the UTF-8 decoded string for element `i`.
     ///
-    /// @param i zero-based logical index (must be in {@code [0, length)})
-    /// @return the UTF-8 string at position {@code i}
+    /// @param i zero-based logical index (must be in `[0, length)`)
+    /// @return the UTF-8 string at position `i`
     String getString(long i);
 
-    /// Returns the byte length of element {@code i} without copying the data.
+    /// Returns the byte length of element `i` without copying the data.
     ///
-    /// @param i zero-based logical index (must be in {@code [0, length)})
-    /// @return the number of bytes in element {@code i}
+    /// @param i zero-based logical index (must be in `[0, length)`)
+    /// @return the number of bytes in element `i`
     int getByteLength(long i);
 
     /// Passes the byte length of each element to the given consumer in row order.
@@ -50,16 +50,16 @@ public sealed interface VarBinArray extends Array
     /// @param c consumer called once per element with the byte length at each index
     void forEachByteLength(IntConsumer c);
 
-    /// Returns a new {@code VarBinArray} containing only the first {@code rows} elements.
+    /// Returns a new `VarBinArray` containing only the first `rows` elements.
     ///
-    /// @param rows number of rows to retain; if {@code rows >= length} returns this array unchanged
-    /// @return a {@code VarBinArray} containing the first {@code rows} elements
+    /// @param rows number of rows to retain; if `rows >= length` returns this array unchanged
+    /// @return a `VarBinArray` containing the first `rows` elements
     VarBinArray truncate(long rows);
 
-    /// Materialises any {@code VarBinArray} into a flat {@link OffsetMode}. The fast path
-    /// returns {@code src} unchanged when it is already an {@link OffsetMode}. Other modes
+    /// Materialises any `VarBinArray` into a flat {@link OffsetMode}. The fast path
+    /// returns `src` unchanged when it is already an {@link OffsetMode}. Other modes
     /// (ViewMode in particular) walk every row through the typed accessors, copy the bytes
-    /// into a fresh contiguous segment allocated from {@code arena}, and build an I64
+    /// into a fresh contiguous segment allocated from `arena`, and build an I64
     /// offsets table. Used by parent decoders (dict, sparse, runend) whose downstream code
     /// depends on the bytes-plus-offsets shape.
     ///
@@ -88,17 +88,17 @@ public sealed interface VarBinArray extends Array
         return new OffsetMode(src.dtype(), n, outBytes.asReadOnly(), outOffsets, PType.I64);
     }
 
-    /// Creates a dict-mode {@code VarBinArray}. Lengths and bytes are resolved via the
+    /// Creates a dict-mode `VarBinArray`. Lengths and bytes are resolved via the
     /// dictionary on each access; no string materialization occurs at construction time.
     ///
     /// @param dtype           logical type (Utf8 or Binary)
     /// @param n               number of logical elements (rows)
     /// @param dictValBytes    concatenated raw bytes for all dictionary values
-    /// @param dictValOffsets  offsets into {@code dictValBytes} for each dictionary entry (length = dictSize + 1)
+    /// @param dictValOffsets  offsets into `dictValBytes` for each dictionary entry (length = dictSize + 1)
     /// @param dictValOffPType physical type of the dictionary value offsets
     /// @param dictCodesSegs   per-row dictionary code indices (length = n)
     /// @param dictCodesPType  physical type of the dictionary codes
-    /// @return a new dict-mode {@code VarBinArray}
+    /// @return a new dict-mode `VarBinArray`
     static VarBinArray ofDict(DType dtype, long n,
             MemorySegment dictValBytes,
             MemorySegment dictValOffsets, PType dictValOffPType,
@@ -107,14 +107,14 @@ public sealed interface VarBinArray extends Array
                 dictCodesSegs, dictCodesPType);
     }
 
-    /// Standard offset-based {@code VarBinArray}.
+    /// Standard offset-based `VarBinArray`.
     ///
-    /// Element {@code i} occupies {@code bytesSegment[offsetsSegment[i]..offsetsSegment[i+1]]}.
+    /// Element `i` occupies `bytesSegment[offsetsSegment[i]..offsetsSegment[i+1]]`.
     ///
     /// @param dtype          logical type (Utf8 or Binary)
     /// @param length         number of variable-length elements
     /// @param bytesSegment   concatenated raw byte data for all elements
-    /// @param offsetsSegment offsets segment of length {@code length + 1}
+    /// @param offsetsSegment offsets segment of length `length + 1`
     /// @param offsetsPtype   physical type of the offsets values (I32/U32 or I64/U64)
     @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     record OffsetMode(DType dtype, long length, MemorySegment bytesSegment,
@@ -177,7 +177,7 @@ public sealed interface VarBinArray extends Array
         }
     }
 
-    /// Dictionary-encoded {@code VarBinArray}.
+    /// Dictionary-encoded `VarBinArray`.
     ///
     /// Stores dictionary values and per-row codes; all accessors resolve through the
     /// dictionary without materializing strings at construction time.
@@ -185,9 +185,9 @@ public sealed interface VarBinArray extends Array
     /// @param dtype           logical type (Utf8 or Binary)
     /// @param length          number of logical elements (rows)
     /// @param bytesSegment    concatenated raw bytes for all dictionary values
-    /// @param dictValOffsets  offsets into {@code bytesSegment} for each dictionary entry (length = dictSize + 1)
+    /// @param dictValOffsets  offsets into `bytesSegment` for each dictionary entry (length = dictSize + 1)
     /// @param dictValOffPType physical type of the dictionary value offsets
-    /// @param dictCodesSegs   per-row dictionary code indices (length = {@code length})
+    /// @param dictCodesSegs   per-row dictionary code indices (length = `length`)
     /// @param dictCodesPType  physical type of the dictionary codes
     @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     record DictMode(DType dtype, long length, MemorySegment bytesSegment,
@@ -253,8 +253,8 @@ public sealed interface VarBinArray extends Array
         }
     }
 
-    /// Multi-chunk {@code VarBinArray} — wraps a list of child {@code VarBinArray}s plus
-    /// cumulative row offsets. Per-row accessors binary-search {@code offsets} to find the
+    /// Multi-chunk `VarBinArray` — wraps a list of child `VarBinArray`s plus
+    /// cumulative row offsets. Per-row accessors binary-search `offsets` to find the
     /// owning chunk and delegate. Per ADR 0012, preserves zero-copy on multi-chunk Utf8 /
     /// Binary columns: each chunk's underlying segments stay live (mmap slices); no concat.
     ///
@@ -265,17 +265,17 @@ public sealed interface VarBinArray extends Array
     /// @param dtype    logical element type (Utf8 or Binary)
     /// @param length   total logical row count
     /// @param children chunk arrays in scan order; each is itself a {@link VarBinArray}
-    /// @param offsets  cumulative row counts; length = {@code children.length + 1}
+    /// @param offsets  cumulative row counts; length = `children.length + 1`
     @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     record ChunkedMode(DType dtype, long length, VarBinArray[] children, long[] offsets)
             implements VarBinArray {
 
-        /// Builds a {@code ChunkedMode} from a list of chunk arrays.
+        /// Builds a `ChunkedMode` from a list of chunk arrays.
         ///
         /// @param dtype     logical element type
         /// @param totalRows expected total row count
         /// @param chunks    non-empty list of {@link VarBinArray} chunks
-        /// @return a new {@code ChunkedMode}
+        /// @return a new `ChunkedMode`
         /// @throws VortexException on empty input, non-{@link VarBinArray} chunks, or row-count mismatch
         public static ChunkedMode of(DType dtype, long totalRows,
                 java.util.List<? extends Array> chunks) {
@@ -367,12 +367,12 @@ public sealed interface VarBinArray extends Array
         }
     }
 
-    /// Arrow StringView / BinaryView {@code VarBinArray}.
+    /// Arrow StringView / BinaryView `VarBinArray`.
     ///
-    /// Each row is a 16-byte view in {@code views}: bytes 0-3 are the u32 size; for
+    /// Each row is a 16-byte view in `views`: bytes 0-3 are the u32 size; for
     /// sizes ≤ 12 bytes the data is inlined in bytes 4..15; for sizes > 12 bytes
     /// bytes 4-7 hold a 4-byte prefix (ignored on read), bytes 8-11 the u32 buffer
-    /// index into {@code dataBufs}, and bytes 12-15 the u32 offset within that
+    /// index into `dataBufs`, and bytes 12-15 the u32 offset within that
     /// buffer. Per-row accessors resolve the view on demand — no concat or
     /// materialisation at construction time.
     ///
@@ -382,7 +382,7 @@ public sealed interface VarBinArray extends Array
     ///
     /// @param dtype    logical element type (Utf8 or Binary)
     /// @param length   total logical row count
-    /// @param views    16-byte view per row; length must be ≥ {@code length * 16}
+    /// @param views    16-byte view per row; length must be ≥ `length * 16`
     /// @param dataBufs zero or more shared data buffers referenced by long views
     @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable refs that flow through pipelines without ever being compared.
     record ViewMode(DType dtype, long length, MemorySegment views, MemorySegment[] dataBufs)

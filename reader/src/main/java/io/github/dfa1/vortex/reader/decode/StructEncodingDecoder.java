@@ -11,7 +11,7 @@ import io.github.dfa1.vortex.encoding.EncodingId;
 import java.util.ArrayList;
 import java.util.List;
 
-/// Read-only decoder for {@code vortex.struct}.
+/// Read-only decoder for `vortex.struct`.
 public final class StructEncodingDecoder implements EncodingDecoder {
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.

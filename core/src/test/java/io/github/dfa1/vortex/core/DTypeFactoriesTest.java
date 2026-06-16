@@ -4,7 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// Static factories + {@code nullable()} shortcut (ADR 0009 part 1).
+/// Static factories + `nullable()` shortcut (ADR 0009 part 1).
 class DTypeFactoriesTest {
 
     @Test

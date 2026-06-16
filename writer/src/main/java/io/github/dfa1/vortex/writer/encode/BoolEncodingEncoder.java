@@ -8,9 +8,9 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 
-/// Write-only encoder for {@code vortex.bool} (bit-packed boolean arrays, LSB first).
+/// Write-only encoder for `vortex.bool` (bit-packed boolean arrays, LSB first).
 ///
-/// Write-side encoder for {@code vortex.bool}.
+/// Write-side encoder for `vortex.bool`.
 public final class BoolEncodingEncoder implements EncodingEncoder {
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.

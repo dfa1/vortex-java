@@ -16,7 +16,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
-/// Write-only encoder for {@code fastlanes.bitpacked}.
+/// Write-only encoder for `fastlanes.bitpacked`.
 public final class BitpackedEncodingEncoder implements EncodingEncoder {
     private static final int[] FL_ORDER = {0, 4, 2, 6, 1, 5, 3, 7};
 
@@ -138,8 +138,8 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
         return new EncodeResult(root, List.of(packed, idxBuf, valBuf), statsMin, statsMax);
     }
 
-    /// Picks the bit-width that minimises {@code packed_bytes + exceptions_bytes}.
-    /// Mirrors {@code vortex-fastlanes::bitpack_compress::best_bit_width}.
+    /// Picks the bit-width that minimises `packed_bytes + exceptions_bytes`.
+    /// Mirrors `vortex-fastlanes::bitpack_compress::best_bit_width`.
     private static int bestBitWidth(int[] bitWidthFreq, int bytesPerException, int n) {
         if (n == 0) {
             return 0;

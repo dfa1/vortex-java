@@ -11,7 +11,7 @@ import io.github.dfa1.vortex.proto.ListViewMetadata;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 
-/// Read-only decoder for {@code vortex.listview}.
+/// Read-only decoder for `vortex.listview`.
 public final class ListViewEncodingDecoder implements EncodingDecoder {
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.

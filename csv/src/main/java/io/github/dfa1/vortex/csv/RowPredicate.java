@@ -9,7 +9,7 @@ import io.github.dfa1.vortex.reader.Chunk;
 public interface RowPredicate {
     /// Returns a predicate that accepts every row.
     ///
-    /// @return predicate that always returns {@code true}
+    /// @return predicate that always returns `true`
     static RowPredicate all() {
         return (_, _) -> true;
     }
@@ -17,7 +17,7 @@ public interface RowPredicate {
     /// Tests whether a row should be exported.
     ///
     /// @param chunk    decoded chunk containing the row
-    /// @param rowIndex row index within {@code chunk}
-    /// @return {@code true} if the row should be exported
+    /// @param rowIndex row index within `chunk`
+    /// @return `true` if the row should be exported
     boolean test(Chunk chunk, long rowIndex);
 }

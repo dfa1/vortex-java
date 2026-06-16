@@ -59,10 +59,10 @@ public final class WriteRegistry {
         return encoders;
     }
 
-    /// Returns the registered extension encoder for {@code extensionId}, or {@code null} if not registered.
+    /// Returns the registered extension encoder for `extensionId`, or `null` if not registered.
     ///
     /// @param extensionId the extension id to look up
-    /// @return the registered {@link ExtensionEncoder}, or {@code null}
+    /// @return the registered {@link ExtensionEncoder}, or `null`
     public ExtensionEncoder lookup(ExtensionId extensionId) {
         return extensions.get(extensionId);
     }

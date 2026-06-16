@@ -13,17 +13,17 @@ import java.util.function.LongConsumer;
 /// Multi-chunk {@link LongArray} view backed by an immutable array of child
 /// chunks plus their cumulative row offsets. Scalar access is stateless —
 /// {@link #getLong(long)} resolves the chunk index via {@link #findChunk(long[], long)}
-/// (a binary search over {@code offsets}) on every call.
+/// (a binary search over `offsets`) on every call.
 ///
 /// Per ADR 0012, this preserves zero-copy on multi-chunk reads: each chunk
 /// remains its own underlying array (typically an mmap slice), no
 /// concatenation occurs.
 ///
 /// @param dtype    logical element type
-/// @param length   total logical row count = {@code offsets[children.length]}
+/// @param length   total logical row count = `offsets[children.length]`
 /// @param children chunk arrays in scan order
-/// @param offsets  cumulative row counts; {@code offsets[i] = sum of children[0..i).length()}
-///                 with {@code offsets[0] = 0} and {@code offsets[children.length] = length}
+/// @param offsets  cumulative row counts; `offsets[i] = sum of children[0..i).length()`
+///                 with `offsets[0] = 0` and `offsets[children.length] = length`
 @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record ChunkedLongArray(DType dtype, long length, LongArray[] children, long[] offsets) implements LongArray {
 
@@ -67,11 +67,11 @@ public record ChunkedLongArray(DType dtype, long length, LongArray[] children, l
         }
     }
 
-    /// Binary-search {@code offsets} to find the chunk index containing row {@code i}.
+    /// Binary-search `offsets` to find the chunk index containing row `i`.
     ///
     /// @param offsets cumulative row offsets (length = nchunks + 1)
     /// @param i       global row index
-    /// @return chunk index in {@code [0, nchunks)}
+    /// @return chunk index in `[0, nchunks)`
     public static int findChunk(long[] offsets, long i) {
         int hit = Arrays.binarySearch(offsets, i);
         int idx = hit >= 0 ? hit : -hit - 2;

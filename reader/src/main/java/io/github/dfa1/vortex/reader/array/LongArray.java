@@ -13,8 +13,8 @@ public non-sealed interface LongArray extends Array {
 
     /// Returns the long value at the given index.
     ///
-    /// @param i zero-based index (must be in {@code [0, length())})
-    /// @return the long value at position {@code i}
+    /// @param i zero-based index (must be in `[0, length())`)
+    /// @return the long value at position `i`
     long getLong(long i);
 
     /// Passes each element to the given consumer in order.

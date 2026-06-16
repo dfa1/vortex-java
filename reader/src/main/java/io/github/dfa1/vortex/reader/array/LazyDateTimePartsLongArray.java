@@ -5,29 +5,29 @@ import io.github.dfa1.vortex.core.DType;
 import java.util.function.LongBinaryOperator;
 import java.util.function.LongConsumer;
 
-/// Lazy {@code vortex.datetimeparts} reassembly as a {@link LongArray}.
+/// Lazy `vortex.datetimeparts` reassembly as a {@link LongArray}.
 ///
-/// The encoding splits each raw epoch count into three children — {@code days},
-/// {@code seconds} (within the day) and {@code subseconds} (within the second).
+/// The encoding splits each raw epoch count into three children — `days`,
+/// `seconds` (within the day) and `subseconds` (within the second).
 /// Reconstruction is
 ///
 /// ```
 /// raw = days * unitsPerDay + seconds * unitsPerSecond + subseconds
 /// ```
 ///
-/// where {@code unitsPerSecond} = `TimeUnit.divisor()` and
-/// {@code unitsPerDay} = `86_400 * unitsPerSecond`. The reassembled long carries the
+/// where `unitsPerSecond` = `TimeUnit.divisor()` and
+/// `unitsPerDay` = `86_400 * unitsPerSecond`. The reassembled long carries the
 /// same epoch count the downstream extension decoder
-/// ({@code TimestampExtensionDecoder}, {@code DateExtensionDecoder}, etc.) expects;
+/// (`TimestampExtensionDecoder`, `DateExtensionDecoder`, etc.) expects;
 /// no buffer materialisation occurs at construction time.
 ///
 /// The record's {@link #dtype()} is the parent Extension dtype (e.g.
-/// {@code vortex.timestamp}) so it slots transparently into the extension-decode
+/// `vortex.timestamp`) so it slots transparently into the extension-decode
 /// pipeline. Children may be any signed integer typed Array
 /// ({@link ByteArray}/{@link ShortArray}/{@link IntArray}/{@link LongArray}); the
 /// per-row {@link DateTimePartsArrays#readLong} switch handles widening.
 ///
-/// @param dtype            logical element type (typically a {@code DType.Extension})
+/// @param dtype            logical element type (typically a `DType.Extension`)
 /// @param length           total logical row count
 /// @param daysArr          per-row signed days
 /// @param secondsArr       per-row signed seconds within the day

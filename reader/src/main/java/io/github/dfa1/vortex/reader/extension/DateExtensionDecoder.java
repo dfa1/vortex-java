@@ -14,7 +14,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
-/// {@code vortex.date} — days since the Unix epoch, signed integer storage.
+/// `vortex.date` — days since the Unix epoch, signed integer storage.
 /// Per Arrow's canonical Date type.
 public final class DateExtensionDecoder implements ExtensionDecoder {
 
@@ -43,10 +43,10 @@ public final class DateExtensionDecoder implements ExtensionDecoder {
                 nullable);
     }
 
-    /// Decodes the date cell at row {@code i}.
+    /// Decodes the date cell at row `i`.
     ///
     /// @param storage signed-integer storage (Byte/Short/Int/Long, possibly Masked)
-    /// @param i       row index, {@code 0 <= i < storage.length()}
+    /// @param i       row index, `0 <= i < storage.length()`
     /// @return decoded date
     /// @throws io.github.dfa1.vortex.core.VortexException if storage isn't an integer primitive
     public LocalDate decode(Array storage, long i) {
@@ -54,11 +54,11 @@ public final class DateExtensionDecoder implements ExtensionDecoder {
         return LocalDate.ofEpochDay(ExtensionStorage.epochInteger(storage, i));
     }
 
-    /// Decodes every row of {@code storage} into a list of dates. {@link MaskedArray}
-    /// storage yields {@code null} at invalid positions instead of throwing.
+    /// Decodes every row of `storage` into a list of dates. {@link MaskedArray}
+    /// storage yields `null` at invalid positions instead of throwing.
     ///
-    /// @param storage signed-integer storage array (optionally wrapped in {@code MaskedArray})
-    /// @return list of decoded dates in row order; {@code null} entries mark invalid rows
+    /// @param storage signed-integer storage array (optionally wrapped in `MaskedArray`)
+    /// @return list of decoded dates in row order; `null` entries mark invalid rows
     public List<LocalDate> decodeAll(Array storage) {
         int n = Math.toIntExact(storage.length());
         List<LocalDate> out = new ArrayList<>(n);

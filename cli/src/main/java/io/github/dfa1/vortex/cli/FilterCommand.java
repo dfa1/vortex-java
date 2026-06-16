@@ -89,7 +89,7 @@ final class FilterCommand {
     }
 
     /// Scan-based parsing replaces the previous regex
-    /// {@code ^(\w[\w.]*)\s*(!=|>=|<=|==|>|<|=)\s*(.+)$} which Sonar flagged as a
+    /// `^(\w[\w.]*)\s*(!=|>=|<=|==|>|<|=)\s*(.+)$` which Sonar flagged as a
     /// potential regex-DoS (S5852). Linear scan, no backtracking, no engine surface.
     private static int indexOfOperator(String s) {
         for (int i = 0; i < s.length(); i++) {
@@ -101,8 +101,8 @@ final class FilterCommand {
         return -1;
     }
 
-    /// Returns the index one past the operator: 2 chars for {@code !=, >=, <=, ==},
-    /// 1 char for the single-character operators {@code >, <, =}.
+    /// Returns the index one past the operator: 2 chars for `!=, >=, <=, ==`,
+    /// 1 char for the single-character operators `>, <, =`.
     private static int operatorEnd(String s, int start) {
         if (start + 1 < s.length() && s.charAt(start + 1) == '=') {
             return start + 2;

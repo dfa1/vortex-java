@@ -41,16 +41,16 @@ import java.util.concurrent.TimeUnit;
 /// Columns: trip_distance (DOUBLE), fare_amount (DOUBLE), PULocationID (INT32).
 ///
 /// Two Parquet variants:
-///   - {@code parquetRead} / {@code parquetReadMultiColumn}: batch column API
+///   - `parquetRead` / `parquetReadMultiColumn`: batch column API
 ///     ({@link ColumnReader#nextBatch()} + {@link ColumnReader#getDoubles()}) —
 ///     apples-to-apples comparison with Vortex's batch fold.
-///   - {@code parquetReadRowByRow} / {@code parquetReadMultiColumnRowByRow}:
+///   - `parquetReadRowByRow` / `parquetReadMultiColumnRowByRow`:
 ///     Hardwood row cursor ({@link RowReader}) — measures row-oriented API overhead
 ///     on top of format decode cost.
 ///
-/// Override the Parquet source with: {@code -Dbench.parquet=/path/to/file.parquet}
+/// Override the Parquet source with: `-Dbench.parquet=/path/to/file.parquet`
 ///
-/// Run: {@code java -jar performance/target/benchmarks.jar ParquetVsVortexReadBenchmark}
+/// Run: `java -jar performance/target/benchmarks.jar ParquetVsVortexReadBenchmark`
 @State(Scope.Benchmark)
 @BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.SECONDS)

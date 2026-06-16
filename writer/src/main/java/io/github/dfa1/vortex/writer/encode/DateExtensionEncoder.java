@@ -11,8 +11,8 @@ import java.nio.ByteBuffer;
 import java.time.LocalDate;
 import java.util.Collection;
 
-/// Write-side encoder for {@code vortex.date}: converts {@code Collection<LocalDate>}
-/// to the {@code int[]} storage layout the writer accepts.
+/// Write-side encoder for `vortex.date`: converts `Collection<LocalDate>`
+/// to the `int[]` storage layout the writer accepts.
 public final class DateExtensionEncoder implements ExtensionEncoder {
 
     /// Singleton instance.

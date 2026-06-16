@@ -16,7 +16,7 @@ import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 
-/// Read-only decoder for {@code vortex.zigzag} — zigzag-decoded signed integers.
+/// Read-only decoder for `vortex.zigzag` — zigzag-decoded signed integers.
 public final class ZigZagEncodingDecoder implements EncodingDecoder {
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.

@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// missing-symbol / signature-mismatch regressions in CI without requiring
 /// a real interactive TTY:
 ///
-/// - Class load alone forces every {@code Linker.downcallHandle} to resolve
+/// - Class load alone forces every `Linker.downcallHandle` to resolve
 ///   its kernel32 symbol. A missing entry point throws
 ///   {@link UnsatisfiedLinkError} during static initialization.
 /// - Bit-flag math for the VT mode toggles is verified directly so a typo

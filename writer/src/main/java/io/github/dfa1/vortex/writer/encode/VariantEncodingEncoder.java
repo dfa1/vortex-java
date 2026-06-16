@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
 
-/// Write-only encoder for {@code vortex.variant} — currently throws (not implemented).
+/// Write-only encoder for `vortex.variant` — currently throws (not implemented).
 public final class VariantEncodingEncoder implements EncodingEncoder {
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.

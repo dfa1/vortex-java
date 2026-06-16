@@ -14,7 +14,7 @@ public final class MaterializedBoolArray implements BoolArray {
     private final long length;
     private final MemorySegment buffer;
 
-    /// Constructs a {@code MaterializedBoolArray} backed by the given bit-packed buffer.
+    /// Constructs a `MaterializedBoolArray` backed by the given bit-packed buffer.
     ///
     /// @param dtype  logical type, must be {@link io.github.dfa1.vortex.core.DType.Bool}
     /// @param length number of logical boolean elements

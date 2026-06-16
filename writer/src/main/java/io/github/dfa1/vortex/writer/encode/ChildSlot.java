@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 
 /// An open slot in a partially-assembled encoding tree.
 /// The cascading compressor fills each slot recursively, then splices the result
-/// into the parent node's children array at {@code parentChildIdx}.
+/// into the parent node's children array at `parentChildIdx`.
 ///
 /// @param childDtype     logical type of the child data
 /// @param childData      the raw child data to be encoded (type depends on the child encoding)

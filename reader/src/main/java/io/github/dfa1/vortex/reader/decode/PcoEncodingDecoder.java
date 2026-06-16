@@ -23,7 +23,7 @@ import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
-/// Read-only decoder for {@code vortex.pco} — port of pcodec.
+/// Read-only decoder for `vortex.pco` — port of pcodec.
 public final class PcoEncodingDecoder implements EncodingDecoder {
     static final byte PCO_FORMAT_MAJOR = 0x04;
     static final byte PCO_FORMAT_MINOR = 0x01;

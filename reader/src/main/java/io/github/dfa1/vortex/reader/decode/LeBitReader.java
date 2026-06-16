@@ -16,7 +16,7 @@ public final class LeBitReader {
     private final MemorySegment data;
     private long bitPos;
 
-    /// Wrap {@code data} for LSB-first sequential reads from bit position 0.
+    /// Wrap `data` for LSB-first sequential reads from bit position 0.
     ///
     /// @param data backing segment
     public LeBitReader(MemorySegment data) {
@@ -24,10 +24,10 @@ public final class LeBitReader {
         this.bitPos = 0;
     }
 
-    /// Read {@code n} bits (0 ≤ n ≤ 64) from the stream, LSB-first.
+    /// Read `n` bits (0 ≤ n ≤ 64) from the stream, LSB-first.
     ///
     /// @param n bit count, 0..64 inclusive
-    /// @return value with low {@code n} bits set from the stream
+    /// @return value with low `n` bits set from the stream
     public long readBits(int n) {
         if (n == 0) {
             return 0L;

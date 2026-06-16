@@ -9,7 +9,7 @@ import io.github.dfa1.vortex.proto.ScalarValue;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 
-/// Write-only encoder for {@code vortex.primitive} — raw little-endian primitive arrays.
+/// Write-only encoder for `vortex.primitive` — raw little-endian primitive arrays.
 public final class PrimitiveEncodingEncoder implements EncodingEncoder {
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.

@@ -20,16 +20,16 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 
-/// Read-only decoder for {@code vortex.dict}.
+/// Read-only decoder for `vortex.dict`.
 ///
-/// The primitive-value paths ({@code decodeRustProto}, {@code decodeLegacyJava})
-/// eagerly expand {@code codes} and {@code values} into a contiguous output segment
-/// via {@code expandU8/U16/U32} — these mirror the broadcast-aware scatter loop
-/// with {@code SegmentBroadcast.capacity} (ConstantEncoding fan-out), so the
+/// The primitive-value paths (`decodeRustProto`, `decodeLegacyJava`)
+/// eagerly expand `codes` and `values` into a contiguous output segment
+/// via `expandU8/U16/U32` — these mirror the broadcast-aware scatter loop
+/// with `SegmentBroadcast.capacity` (ConstantEncoding fan-out), so the
 /// output is materialised at decode time. ADR 0012's lazy-dict scope is the
-/// layout-level path in {@code ScanIterator.decodeDictLayout}, which is now lazy
-/// via {@code DictXxxArray}; this encoding-level path runs only when a parent
-/// decoder explicitly calls {@code decodeChild} on a {@code vortex.dict} segment,
+/// layout-level path in `ScanIterator.decodeDictLayout`, which is now lazy
+/// via `DictXxxArray`; this encoding-level path runs only when a parent
+/// decoder explicitly calls `decodeChild` on a `vortex.dict` segment,
 /// which is rarer and downstream-flat-segment-dependent. The broadcast semantics
 /// make lazy wrapping non-trivial here — kept eager by design.
 public final class DictEncodingDecoder implements EncodingDecoder {

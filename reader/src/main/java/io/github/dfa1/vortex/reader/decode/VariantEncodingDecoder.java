@@ -14,7 +14,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
-/// Read-only decoder for {@code vortex.variant}.
+/// Read-only decoder for `vortex.variant`.
 public final class VariantEncodingDecoder implements EncodingDecoder {
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.

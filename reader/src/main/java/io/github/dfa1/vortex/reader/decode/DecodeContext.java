@@ -31,17 +31,17 @@ public record DecodeContext(
         SegmentAllocator arena
 ) {
 
-    /// Recursively decode child {@code i} using this context's dtype and row count.
+    /// Recursively decode child `i` using this context's dtype and row count.
     ///
     /// @param i zero-based child index within this node's children array
-    /// @return the decoded {@link Array} for child {@code i}
+    /// @return the decoded {@link Array} for child `i`
     public Array decodeChild(int i) {
         ArrayNode child = node.children()[i];
         var childCtx = new DecodeContext(child, dtype, rowCount, segmentBuffers, registry, arena);
         return registry.decode(childCtx);
     }
 
-    /// Recursively decode child {@code i} with an explicit dtype and row count.
+    /// Recursively decode child `i` with an explicit dtype and row count.
     ///
     /// Use this overload when the child has a different logical type or length
     /// than the parent (e.g. run-end arrays, patch children, validity bitmaps).
@@ -49,14 +49,14 @@ public record DecodeContext(
     /// @param i        zero-based child index within this node's children array
     /// @param dtype    logical type to assign to the child context
     /// @param rowCount number of logical rows for the child
-    /// @return the decoded {@link Array} for child {@code i}
+    /// @return the decoded {@link Array} for child `i`
     public Array decodeChild(int i, DType dtype, long rowCount) {
         ArrayNode child = node.children()[i];
         var childCtx = new DecodeContext(child, dtype, rowCount, segmentBuffers, registry, arena);
         return registry.decode(childCtx);
     }
 
-    /// Recursively decode child {@code i} and return its primary backing segment.
+    /// Recursively decode child `i` and return its primary backing segment.
     ///
     /// @param i zero-based child index within this node's children array
     /// @return the primary {@link MemorySegment} of the decoded child
@@ -66,7 +66,7 @@ public record DecodeContext(
         return registry.decodeAsSegment(childCtx);
     }
 
-    /// Recursively decode child {@code i} with an explicit dtype and row count, returning its primary segment.
+    /// Recursively decode child `i` with an explicit dtype and row count, returning its primary segment.
     ///
     /// @param i        zero-based child index within this node's children array
     /// @param dtype    logical type to assign to the child context
@@ -78,17 +78,17 @@ public record DecodeContext(
         return registry.decodeAsSegment(childCtx);
     }
 
-    /// Returns the buffer at position {@code i} in this node's bufferIndices.
+    /// Returns the buffer at position `i` in this node's bufferIndices.
     ///
-    /// @param i zero-based index into this node's {@code bufferIndices} array
+    /// @param i zero-based index into this node's `bufferIndices` array
     /// @return the {@link MemorySegment} for the referenced segment buffer
     public MemorySegment buffer(int i) {
         return segmentBuffers[node.bufferIndices()[i]];
     }
 
-    /// Returns the encoding-specific metadata bytes for this node, or {@code null} if absent.
+    /// Returns the encoding-specific metadata bytes for this node, or `null` if absent.
     ///
-    /// @return the metadata {@link ByteBuffer}, or {@code null}
+    /// @return the metadata {@link ByteBuffer}, or `null`
     public ByteBuffer metadata() {
         return node.metadata();
     }

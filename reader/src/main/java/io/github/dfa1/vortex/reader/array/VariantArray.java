@@ -2,13 +2,13 @@ package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.DType;
 
-/// Decoded {@code vortex.variant} array: semi-structured data with a logical variant dtype.
+/// Decoded `vortex.variant` array: semi-structured data with a logical variant dtype.
 ///
 /// Wire format:
-/// - Metadata: proto {@code VariantMetadataProto} with optional {@code shredded_dtype}.
+/// - Metadata: proto `VariantMetadataProto` with optional `shredded_dtype`.
 /// - Buffers: none.
-/// - Child 0: {@code core_storage} — logical variant array preserving the full value per row.
-/// - Child 1 (optional): {@code shredded} — row-aligned typed array for selected paths.
+/// - Child 0: `core_storage` — logical variant array preserving the full value per row.
+/// - Child 1 (optional): `shredded` — row-aligned typed array for selected paths.
 public final class VariantArray implements Array {
 
     private final DType dtype;
@@ -16,12 +16,12 @@ public final class VariantArray implements Array {
     private final Array coreStorage;
     private final Array shredded;
 
-    /// Creates a new {@code VariantArray}.
+    /// Creates a new `VariantArray`.
     ///
     /// @param dtype       logical variant dtype
     /// @param length      number of rows
     /// @param coreStorage full variant storage, one entry per row
-    /// @param shredded    optional typed shredded storage, or {@code null}
+    /// @param shredded    optional typed shredded storage, or `null`
     public VariantArray(DType dtype, long length, Array coreStorage, Array shredded) {
         this.dtype = dtype;
         this.length = length;
@@ -46,9 +46,9 @@ public final class VariantArray implements Array {
         return coreStorage;
     }
 
-    /// Returns the optional typed shredded array, or {@code null} if absent.
+    /// Returns the optional typed shredded array, or `null` if absent.
     ///
-    /// @return shredded {@link Array}, or {@code null}
+    /// @return shredded {@link Array}, or `null`
     public Array shredded() {
         return shredded;
     }

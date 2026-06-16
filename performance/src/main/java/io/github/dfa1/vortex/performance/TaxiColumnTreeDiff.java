@@ -35,7 +35,7 @@ import java.util.List;
 ///        --add-opens java.base/java.nio=ALL-UNNAMED \
 ///        io.github.dfa1.vortex.performance.TaxiColumnTreeDiff [column-name]
 ///
-/// Defaults to {@code trip_distance} when no argument is given.
+/// Defaults to `trip_distance` when no argument is given.
 public final class TaxiColumnTreeDiff {
 
     private static final Path PARQUET =

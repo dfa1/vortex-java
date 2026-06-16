@@ -14,7 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 
-/// Write-only encoder for {@code vortex.fsst}.
+/// Write-only encoder for `vortex.fsst`.
 public final class FsstEncodingEncoder implements EncodingEncoder {
 
     private static final int MAX_SYMBOLS = 255;

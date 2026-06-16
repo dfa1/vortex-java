@@ -15,7 +15,7 @@ import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 
-/// {@code vortex.time} — sub-day count in the {@link TimeUnit} recorded in the metadata byte.
+/// `vortex.time` — sub-day count in the {@link TimeUnit} recorded in the metadata byte.
 public final class TimeExtensionDecoder implements ExtensionDecoder {
 
     /// Singleton instance.
@@ -58,11 +58,11 @@ public final class TimeExtensionDecoder implements ExtensionDecoder {
                 nullable);
     }
 
-    /// Decodes the time-of-day cell at row {@code i}.
+    /// Decodes the time-of-day cell at row `i`.
     ///
     /// @param ext     declared extension dtype carrying the {@link TimeUnit} byte
     /// @param storage signed-integer storage (I32 for s/ms, I64 for μs/ns)
-    /// @param i       row index, {@code 0 <= i < storage.length()}
+    /// @param i       row index, `0 <= i < storage.length()`
     /// @return decoded local time
     /// @throws VortexException if the metadata unit is {@link TimeUnit#Days}
     ///         or storage isn't an integer primitive
@@ -77,12 +77,12 @@ public final class TimeExtensionDecoder implements ExtensionDecoder {
         return LocalTime.ofNanoOfDay(nanos);
     }
 
-    /// Decodes every row of {@code storage} into a list of times. {@link MaskedArray}
-    /// storage yields {@code null} at invalid positions instead of throwing.
+    /// Decodes every row of `storage` into a list of times. {@link MaskedArray}
+    /// storage yields `null` at invalid positions instead of throwing.
     ///
     /// @param ext     declared extension dtype carrying the unit
-    /// @param storage signed-integer storage array (optionally wrapped in {@code MaskedArray})
-    /// @return list of decoded times in row order; {@code null} entries mark invalid rows
+    /// @param storage signed-integer storage array (optionally wrapped in `MaskedArray`)
+    /// @return list of decoded times in row order; `null` entries mark invalid rows
     public List<LocalTime> decodeAll(DType.Extension ext, Array storage) {
         int n = Math.toIntExact(storage.length());
         List<LocalTime> out = new ArrayList<>(n);

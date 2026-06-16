@@ -17,7 +17,7 @@ import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
 
 import java.lang.foreign.MemorySegment;
 
-/// Read-only decoder for {@code vortex.primitive} — raw little-endian primitive arrays.
+/// Read-only decoder for `vortex.primitive` — raw little-endian primitive arrays.
 public final class PrimitiveEncodingDecoder implements EncodingDecoder {
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.

@@ -6,7 +6,7 @@ import io.github.dfa1.vortex.encoding.EncodingId;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 
-/// Write-only encoder for {@code vortex.bytebool} — one byte per boolean element.
+/// Write-only encoder for `vortex.bytebool` — one byte per boolean element.
 public final class ByteBoolEncodingEncoder implements EncodingEncoder {
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.

@@ -17,7 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
 
-/// Write-only encoder for {@code vortex.dict}.
+/// Write-only encoder for `vortex.dict`.
 public final class DictEncodingEncoder implements EncodingEncoder {
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.

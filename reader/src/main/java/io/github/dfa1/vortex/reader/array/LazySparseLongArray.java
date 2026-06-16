@@ -5,8 +5,8 @@ import io.github.dfa1.vortex.core.DType;
 import java.util.function.LongBinaryOperator;
 import java.util.function.LongConsumer;
 
-/// Lazy Sparse-encoded [LongArray]: {@code getLong(i) = patches[binSearch(i + offset)]
-/// or fillValue}. The `patchIndices` array is typed as [Array] because the
+/// Lazy Sparse-encoded [LongArray]: `getLong(i) = patches[binSearch(i + offset)]
+/// or fillValue`. The `patchIndices` array is typed as [Array] because the
 /// indices ptype varies — backed by one of [ByteArray], [ShortArray],
 /// [IntArray], [LongArray].
 ///

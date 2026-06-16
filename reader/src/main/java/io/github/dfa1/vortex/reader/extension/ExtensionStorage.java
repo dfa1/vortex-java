@@ -19,7 +19,7 @@ public final class ExtensionStorage {
     private ExtensionStorage() {
     }
 
-    /// Reads a signed integer from any of the integer primitive arrays as {@code long}.
+    /// Reads a signed integer from any of the integer primitive arrays as `long`.
     /// Recurses through {@link MaskedArray}; throws on null cells so callers don't silently
     /// get garbage for nullable columns.
     ///
@@ -63,7 +63,7 @@ public final class ExtensionStorage {
     /// @param raw  epoch count
     /// @param unit time resolution; must not be {@link TimeUnit#Days}
     /// @return matching {@link Instant}
-    /// @throws VortexException if {@code unit} is {@link TimeUnit#Days}
+    /// @throws VortexException if `unit` is {@link TimeUnit#Days}
     public static Instant instantFromRaw(long raw, TimeUnit unit) {
         return switch (unit) {
             case Seconds -> Instant.ofEpochSecond(raw);
@@ -82,7 +82,7 @@ public final class ExtensionStorage {
         };
     }
 
-    /// Throws {@link IndexOutOfBoundsException} if {@code i} is outside {@code [0, length)}.
+    /// Throws {@link IndexOutOfBoundsException} if `i` is outside `[0, length)`.
     ///
     /// @param i      row index to check
     /// @param length array length

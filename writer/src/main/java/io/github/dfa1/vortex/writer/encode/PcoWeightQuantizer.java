@@ -1,9 +1,9 @@
 package io.github.dfa1.vortex.writer.encode;
 
-/// ANS weight quantization — port of {@code pco/src/ans/encoding.rs} quantize_weights*.
+/// ANS weight quantization — port of `pco/src/ans/encoding.rs` quantize_weights*.
 ///
 /// Converts raw bin counts (proportional to frequency) into ANS weights summing
-/// to exactly {@code 2^sizeLog}, then reduces the table if all weights share a
+/// to exactly `2^sizeLog`, then reduces the table if all weights share a
 /// common power-of-2 factor.
 final class PcoWeightQuantizer {
 
@@ -12,7 +12,7 @@ final class PcoWeightQuantizer {
 
     /// Result of weight quantization.
     ///
-    /// @param sizeLog log₂ of the ANS table size; sum of weights == {@code 1 << sizeLog}
+    /// @param sizeLog log₂ of the ANS table size; sum of weights == `1 << sizeLog`
     /// @param weights quantized ANS weight per bin
     @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     record Result(int sizeLog, int[] weights) {

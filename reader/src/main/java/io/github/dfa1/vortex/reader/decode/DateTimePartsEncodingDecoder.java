@@ -13,13 +13,13 @@ import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 
-/// Read-only decoder for {@code vortex.datetimeparts}.
+/// Read-only decoder for `vortex.datetimeparts`.
 ///
 /// Reassembles the three children (days, seconds, subseconds) into a
 /// {@link LazyDateTimePartsLongArray} of epoch counts in the extension's
 /// {@link TimeUnit}. No per-row materialisation happens at decode time —
 /// the downstream extension decoder reads the reassembled long via the
-/// lazy {@code getLong} accessor.
+/// lazy `getLong` accessor.
 public final class DateTimePartsEncodingDecoder implements EncodingDecoder {
 
     private static final long SECONDS_PER_DAY = 86_400L;
@@ -72,8 +72,8 @@ public final class DateTimePartsEncodingDecoder implements EncodingDecoder {
                 days, seconds, subseconds, unitsPerDay, unitsPerSecond);
     }
 
-    /// Returns {@code TimeUnit.divisor()} for the extension's declared time unit, or
-    /// {@code 1} when the unit is {@link TimeUnit#Days} (days carry no sub-second
+    /// Returns `TimeUnit.divisor()` for the extension's declared time unit, or
+    /// `1` when the unit is {@link TimeUnit#Days} (days carry no sub-second
     /// component; seconds and subseconds children are expected to be zero).
     private static long readUnitsPerSecond(DType.Extension ext) {
         ByteBuffer extMeta = ext.metadata();

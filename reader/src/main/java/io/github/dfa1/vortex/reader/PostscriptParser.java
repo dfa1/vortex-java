@@ -30,7 +30,7 @@ final class PostscriptParser {
     static final int MAX_LAYOUT_DEPTH = 64;
 
     /// Hard cap on per-layout metadata size. The FlatBuffer runtime returns an unbounded slice
-    /// from {@code metadataAsByteBuffer()}; a crafted file can claim a multi-gigabyte metadata
+    /// from `metadataAsByteBuffer()`; a crafted file can claim a multi-gigabyte metadata
     /// blob and force later allocators into pathological behaviour. 4 MiB is well above any
     /// real encoding's metadata footprint (the largest is FSST's symbol table at ~32 KiB).
     static final int MAX_LAYOUT_METADATA_BYTES = 4 * 1024 * 1024;
@@ -69,9 +69,9 @@ final class PostscriptParser {
     }
 
     /// Rejects {@link SegmentSpec} entries whose declared range is not entirely contained in the
-    /// memory-mapped file. Without this check, every scan-time {@code fileSegment.asSlice(offset,
-    /// length)} on these specs would throw {@link IndexOutOfBoundsException}, breaking the
-    /// "malformed input → {@link VortexException}" contract.
+    /// memory-mapped file. Without this check, every scan-time `fileSegment.asSlice(offset,
+    /// length)` on these specs would throw [IndexOutOfBoundsException], breaking the
+    /// "malformed input → [VortexException]" contract.
     static void validateSegmentSpecs(List<SegmentSpec> specs, long fileSize) {
         for (int i = 0; i < specs.size(); i++) {
             SegmentSpec s = specs.get(i);

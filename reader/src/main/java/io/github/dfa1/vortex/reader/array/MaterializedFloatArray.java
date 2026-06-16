@@ -16,7 +16,7 @@ public final class MaterializedFloatArray implements FloatArray {
     private final MemorySegment buffer;
     private final long elementCount;
 
-    /// Creates a new {@code MaterializedFloatArray} backed by the given memory segment.
+    /// Creates a new `MaterializedFloatArray` backed by the given memory segment.
     ///
     /// @param dtype  logical type, must be F32
     /// @param length number of elements

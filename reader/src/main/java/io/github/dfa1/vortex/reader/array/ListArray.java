@@ -5,8 +5,8 @@ import io.github.dfa1.vortex.core.VortexException;
 
 /// Decoded variable-length list array.
 ///
-/// List {@code i} covers {@code elements[offsets[i]..offsets[i+1])}.
-/// {@code offsets} has length {@code outerLen + 1}.
+/// List `i` covers `elements[offsets[i]..offsets[i+1])`.
+/// `offsets` has length `outerLen + 1`.
 public final class ListArray implements Array {
 
     private final DType.List dtype;
@@ -14,12 +14,12 @@ public final class ListArray implements Array {
     private final Array elements;
     private final Array offsets;
 
-    /// Creates a new {@code ListArray}.
+    /// Creates a new `ListArray`.
     ///
     /// @param dtype    logical list type
     /// @param outerLen number of outer list elements
     /// @param elements flat elements array (length = total element count)
-    /// @param offsets  offsets array of length {@code outerLen + 1}
+    /// @param offsets  offsets array of length `outerLen + 1`
     public ListArray(DType.List dtype, long outerLen, Array elements, Array offsets) {
         this.dtype = dtype;
         this.outerLen = outerLen;
@@ -44,14 +44,14 @@ public final class ListArray implements Array {
         return elements;
     }
 
-    /// Returns the offsets array (length {@code outerLen + 1}).
+    /// Returns the offsets array (length `outerLen + 1`).
     ///
     /// @return the offsets array
     public Array offsets() {
         return offsets;
     }
 
-    /// Returns the child array at position {@code i} (0 = elements, 1 = offsets).
+    /// Returns the child array at position `i` (0 = elements, 1 = offsets).
     ///
     /// @param i child index
     /// @return the child {@link Array}

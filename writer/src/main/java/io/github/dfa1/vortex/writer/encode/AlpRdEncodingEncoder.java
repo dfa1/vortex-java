@@ -13,7 +13,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/// Write-only encoder for {@code vortex.alprd}.
+/// Write-only encoder for `vortex.alprd`.
 public final class AlpRdEncodingEncoder implements EncodingEncoder {
     private static final DType U16_DTYPE = new DType.Primitive(PType.U16, false);
     private static final DType U32_DTYPE = new DType.Primitive(PType.U32, false);

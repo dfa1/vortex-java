@@ -13,7 +13,7 @@ import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
 import java.util.List;
 
-/// Write-only encoder for {@code vortex.masked}. Wraps the payload encode in a values + validity
+/// Write-only encoder for `vortex.masked`. Wraps the payload encode in a values + validity
 /// pair driven by a {@link NullableData} carrier.
 public final class MaskedEncodingEncoder implements EncodingEncoder {
 

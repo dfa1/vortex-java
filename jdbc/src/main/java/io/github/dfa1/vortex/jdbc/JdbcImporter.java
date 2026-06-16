@@ -28,14 +28,14 @@ import java.util.UUID;
 /// Reads rows from a JDBC {@link ResultSet} and writes a Vortex file.
 ///
 /// The schema is derived from {@link ResultSetMetaData} — no type inference is needed.
-/// SQL NULL values are mapped to {@code 0}, {@code 0.0}, {@code false}, or {@code ""} depending on column type.
+/// SQL NULL values are mapped to `0`, `0.0`, `false`, or `""` depending on column type.
 /// Use {@link JdbcImportOptions#withFetchSize} to control driver-side streaming for large tables.
 public final class JdbcImporter {
 
     private JdbcImporter() {
     }
 
-    /// Imports all rows from {@code tableName} via {@code SELECT * FROM <tableName>} using default options.
+    /// Imports all rows from `tableName` via `SELECT * FROM <tableName>` using default options.
     ///
     /// @param conn       open JDBC connection
     /// @param tableName  name of the table to export
@@ -46,7 +46,7 @@ public final class JdbcImporter {
         importQuery(conn, "SELECT * FROM " + tableName, vortexPath);
     }
 
-    /// Imports all rows returned by {@code sql} using default options.
+    /// Imports all rows returned by `sql` using default options.
     ///
     /// @param conn       open JDBC connection
     /// @param sql        SELECT statement to execute
@@ -57,7 +57,7 @@ public final class JdbcImporter {
         importQuery(conn, sql, vortexPath, JdbcImportOptions.defaults());
     }
 
-    /// Imports all rows returned by {@code sql} with the given options.
+    /// Imports all rows returned by `sql` with the given options.
     ///
     /// @param conn       open JDBC connection
     /// @param sql        SELECT statement to execute

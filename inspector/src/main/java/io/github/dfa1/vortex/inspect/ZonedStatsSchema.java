@@ -8,25 +8,25 @@ import java.util.ArrayList;
 import java.util.List;
 
 /// Reconstructs the per-zone statistics-table {@link DType} for a
-/// {@code vortex.stats} (Zoned) layout.
+/// `vortex.stats` (Zoned) layout.
 ///
 /// The shape is sourced from the Rust reference implementation:
 /// - Metadata format
 ///       (<a href="https://github.com/spiraldb/vortex/blob/develop/vortex-layout/src/layouts/zoned/mod.rs">
-///       vortex-layout/src/layouts/zoned/mod.rs</a> — {@code ZonedMetadata}):
-///       bytes [0..4) are the zone length as a little-endian {@code u32};
-///       remaining bytes form a {@code Stat} bitset (LSB-first per byte). Each
-///       set bit at index {@code i} indicates that the {@link Stat} with that
+///       vortex-layout/src/layouts/zoned/mod.rs</a> — `ZonedMetadata`):
+///       bytes [0..4) are the zone length as a little-endian `u32`;
+///       remaining bytes form a `Stat` bitset (LSB-first per byte). Each
+///       set bit at index `i` indicates that the {@link Stat} with that
 ///       ordinal is present in the auxiliary stats table.
 /// - Schema construction
 ///       (<a href="https://github.com/spiraldb/vortex/blob/develop/vortex-layout/src/layouts/zoned/schema.rs">
-///       vortex-layout/src/layouts/zoned/schema.rs</a> — {@code stats_table_dtype}):
+///       vortex-layout/src/layouts/zoned/schema.rs</a> — `stats_table_dtype`):
 ///       for each present stat in ordinal order, append a struct field with the
-///       stat's name and the stat's nullable dtype. {@code Max} and {@code Min}
-///       each get an extra trailing field {@code max_is_truncated} /
-///       {@code min_is_truncated} of type {@code Bool} (non-nullable).
+///       stat's name and the stat's nullable dtype. `Max` and `Min`
+///       each get an extra trailing field `max_is_truncated` /
+///       `min_is_truncated` of type `Bool` (non-nullable).
 ///
-/// {@code Sum} widening rules and Decimal handling are not yet implemented —
+/// `Sum` widening rules and Decimal handling are not yet implemented —
 /// when the column dtype has no resolvable stat dtype the stat is skipped so
 /// the inspector degrades to "no schema" rather than failing.
 public final class ZonedStatsSchema {
@@ -76,10 +76,10 @@ public final class ZonedStatsSchema {
     }
 
     /// Returns the zone length declared in the layout metadata (logical rows per zone),
-    /// or {@code 0} if the metadata is too short to carry one.
+    /// or `0` if the metadata is too short to carry one.
     ///
-    /// @param metadata raw {@code vortex.stats} layout metadata, possibly {@code null}
-    /// @return decoded zone length, or {@code 0} when absent
+    /// @param metadata raw `vortex.stats` layout metadata, possibly `null`
+    /// @return decoded zone length, or `0` when absent
     public static long zoneLength(ByteBuffer metadata) {
         if (metadata == null || metadata.remaining() < 4) {
             return 0L;
@@ -94,7 +94,7 @@ public final class ZonedStatsSchema {
     /// would mean a newer Vortex writer) are silently skipped — matching the Rust
     /// reader's forward-compatibility behaviour.
     ///
-    /// @param metadata raw {@code vortex.stats} layout metadata, possibly {@code null}
+    /// @param metadata raw `vortex.stats` layout metadata, possibly `null`
     /// @return present stats in ascending ordinal order; empty if metadata carries no bitset
     public static List<Stat> presentStats(ByteBuffer metadata) {
         if (metadata == null || metadata.remaining() <= 4) {
@@ -121,15 +121,15 @@ public final class ZonedStatsSchema {
     /// and metadata.
     ///
     /// The result is a {@link io.github.dfa1.vortex.core.DType.Struct} mirroring
-    /// the order produced by Rust's {@code stats_table_dtype}: for every present stat
-    /// in ordinal order, append a {@code (name, nullable dtype)} field; Max/Min each
-    /// add a trailing {@code _is_truncated} Bool (non-nullable) flag.
+    /// the order produced by Rust's `stats_table_dtype`: for every present stat
+    /// in ordinal order, append a `(name, nullable dtype)` field; Max/Min each
+    /// add a trailing `_is_truncated` Bool (non-nullable) flag.
     ///
-    /// If a stat has no resolvable dtype for the given column (e.g. {@code Sum}
+    /// If a stat has no resolvable dtype for the given column (e.g. `Sum`
     /// over an extension type without storage), it is omitted from the struct.
     ///
-    /// @param columnDtype the column's logical dtype (the {@code data} child's dtype)
-    /// @param metadata    raw {@code vortex.stats} layout metadata
+    /// @param columnDtype the column's logical dtype (the `data` child's dtype)
+    /// @param metadata    raw `vortex.stats` layout metadata
     /// @return reconstructed non-nullable struct dtype, or empty struct when nothing is present
     public static DType.Struct statsTableDtype(DType columnDtype, ByteBuffer metadata) {
         return statsTableDtype(columnDtype, presentStats(metadata));
@@ -163,10 +163,10 @@ public final class ZonedStatsSchema {
     }
 
     /// Returns the per-zone dtype the given stat resolves to for the given column
-    /// dtype, or {@code null} if the stat has no defined dtype for that column
+    /// dtype, or `null` if the stat has no defined dtype for that column
     /// (in which case it is dropped from the stats table).
     ///
-    /// Mirrors Rust's {@code Stat::dtype(&DType)} plus the aggregate-function
+    /// Mirrors Rust's `Stat::dtype(&DType)` plus the aggregate-function
     /// return-type rules (see
     /// <a href="https://github.com/spiraldb/vortex/blob/develop/vortex-array/src/aggregate_fn/fns">
     /// vortex-array/src/aggregate_fn/fns</a>):
@@ -179,12 +179,12 @@ public final class ZonedStatsSchema {
     ///       unsupported column dtypes.
     ///
     /// For Extension column dtypes, the storage dtype is consulted as a backward-compat
-    /// fallback (matching the {@code or_else} branch in Rust's
-    /// {@code stats_table_dtype}).
+    /// fallback (matching the `or_else` branch in Rust's
+    /// `stats_table_dtype`).
     ///
     /// @param stat        the stat to resolve
     /// @param columnDtype the column's logical dtype
-    /// @return the stat's stored dtype, or {@code null} if undefined for this column
+    /// @return the stat's stored dtype, or `null` if undefined for this column
     public static DType statDtype(Stat stat, DType columnDtype) {
         DType direct = statDtypeDirect(stat, columnDtype);
         if (direct != null) {

@@ -8,68 +8,68 @@ import java.util.stream.Stream;
 
 /// Strongly-typed encoding identifier used in place of raw strings.
 public enum EncodingId {
-    /// Canonical flat primitive encoding ({@code vortex.primitive}).
+    /// Canonical flat primitive encoding (`vortex.primitive`).
     VORTEX_PRIMITIVE("vortex.primitive"),
-    /// Bit-packed boolean encoding ({@code vortex.bool}).
+    /// Bit-packed boolean encoding (`vortex.bool`).
     VORTEX_BOOL("vortex.bool"),
-    /// Dictionary encoding for low-cardinality columns ({@code vortex.dict}).
+    /// Dictionary encoding for low-cardinality columns (`vortex.dict`).
     VORTEX_DICT("vortex.dict"),
-    /// Sparse encoding for columns with many nulls or zeros ({@code vortex.sparse}).
+    /// Sparse encoding for columns with many nulls or zeros (`vortex.sparse`).
     VORTEX_SPARSE("vortex.sparse"),
-    /// Sequence encoding ({@code vortex.sequence}).
+    /// Sequence encoding (`vortex.sequence`).
     VORTEX_SEQUENCE("vortex.sequence"),
-    /// Run-end encoding for sorted/repetitive columns ({@code vortex.runend}).
+    /// Run-end encoding for sorted/repetitive columns (`vortex.runend`).
     VORTEX_RUNEND("vortex.runend"),
-    /// Constant encoding — all elements share one value ({@code vortex.constant}).
+    /// Constant encoding — all elements share one value (`vortex.constant`).
     VORTEX_CONSTANT("vortex.constant"),
-    /// ALP (Adaptive Lossless floating-Point) encoding for F32/F64 ({@code vortex.alp}).
+    /// ALP (Adaptive Lossless floating-Point) encoding for F32/F64 (`vortex.alp`).
     VORTEX_ALP("vortex.alp"),
-    /// Variable-length binary encoding ({@code vortex.varbin}).
+    /// Variable-length binary encoding (`vortex.varbin`).
     VORTEX_VARBIN("vortex.varbin"),
-    /// FSST compressed string encoding ({@code vortex.fsst}).
+    /// FSST compressed string encoding (`vortex.fsst`).
     VORTEX_FSST("vortex.fsst"),
-    /// All-null encoding ({@code vortex.null}).
+    /// All-null encoding (`vortex.null`).
     VORTEX_NULL("vortex.null"),
-    /// One-byte-per-boolean encoding ({@code vortex.bytebool}).
+    /// One-byte-per-boolean encoding (`vortex.bytebool`).
     VORTEX_BYTEBOOL("vortex.bytebool"),
-    /// Zig-zag encoding for signed integers ({@code vortex.zigzag}).
+    /// Zig-zag encoding for signed integers (`vortex.zigzag`).
     VORTEX_ZIGZAG("vortex.zigzag"),
-    /// Extension type wrapper encoding ({@code vortex.ext}).
+    /// Extension type wrapper encoding (`vortex.ext`).
     VORTEX_EXT("vortex.ext"),
-    /// Variable-length binary view encoding ({@code vortex.varbinview}).
+    /// Variable-length binary view encoding (`vortex.varbinview`).
     VORTEX_VARBINVIEW("vortex.varbinview"),
-    /// pcodec (Pco) floating-point/integer encoding ({@code vortex.pco}).
+    /// pcodec (Pco) floating-point/integer encoding (`vortex.pco`).
     VORTEX_PCO("vortex.pco"),
-    /// Canonical flat decimal storage ({@code vortex.decimal}).
+    /// Canonical flat decimal storage (`vortex.decimal`).
     VORTEX_DECIMAL("vortex.decimal"),
-    /// Decimal split into MSP + LSP children ({@code vortex.decimal_byte_parts}).
+    /// Decimal split into MSP + LSP children (`vortex.decimal_byte_parts`).
     VORTEX_DECIMAL_BYTE_PARTS("vortex.decimal_byte_parts"),
-    /// Timestamp split into days/seconds/subseconds ({@code vortex.datetimeparts}).
+    /// Timestamp split into days/seconds/subseconds (`vortex.datetimeparts`).
     VORTEX_DATETIMEPARTS("vortex.datetimeparts"),
-    /// Zstandard compressed encoding ({@code vortex.zstd}).
+    /// Zstandard compressed encoding (`vortex.zstd`).
     VORTEX_ZSTD("vortex.zstd"),
-    /// Fixed-size list encoding ({@code vortex.fixed_size_list}).
+    /// Fixed-size list encoding (`vortex.fixed_size_list`).
     VORTEX_FIXED_SIZE_LIST("vortex.fixed_size_list"),
-    /// Variable-length list encoding ({@code vortex.list}).
+    /// Variable-length list encoding (`vortex.list`).
     VORTEX_LIST("vortex.list"),
-    /// List-view encoding ({@code vortex.listview}).
+    /// List-view encoding (`vortex.listview`).
     VORTEX_LISTVIEW("vortex.listview"),
-    /// ALP-RD (ALP with remainder dictionary) encoding ({@code vortex.alprd}).
+    /// ALP-RD (ALP with remainder dictionary) encoding (`vortex.alprd`).
     VORTEX_ALPRD("vortex.alprd"),
 
     // Layout encoding IDs included so parser/registry can represent them safely
-    /// Chunked layout encoding ({@code vortex.chunked}).
+    /// Chunked layout encoding (`vortex.chunked`).
     VORTEX_CHUNKED("vortex.chunked"),
-    /// Struct layout encoding ({@code vortex.struct}).
+    /// Struct layout encoding (`vortex.struct`).
     VORTEX_STRUCT("vortex.struct"),
 
-    /// FastLanes bit-packed encoding ({@code fastlanes.bitpacked}).
+    /// FastLanes bit-packed encoding (`fastlanes.bitpacked`).
     FASTLANES_BITPACKED("fastlanes.bitpacked"),
-    /// FastLanes frame-of-reference encoding ({@code fastlanes.for}).
+    /// FastLanes frame-of-reference encoding (`fastlanes.for`).
     FASTLANES_FOR("fastlanes.for"),
-    /// FastLanes delta encoding ({@code fastlanes.delta}).
+    /// FastLanes delta encoding (`fastlanes.delta`).
     FASTLANES_DELTA("fastlanes.delta"),
-    /// FastLanes run-length encoding ({@code fastlanes.rle}).
+    /// FastLanes run-length encoding (`fastlanes.rle`).
     FASTLANES_RLE("fastlanes.rle"),
 
     // Known in Rust but not yet implemented; registered so EncodingId.parse() resolves
@@ -91,16 +91,16 @@ public enum EncodingId {
     }
 
     /// Parses a raw encoding id string into the matching constant.
-    /// Used by {@code ReadRegistry} to discriminate {@code KnownArrayNode} from {@code UnknownArrayNode};
-    /// callers that demand a known id chain {@code .orElseThrow(...)}.
+    /// Used by `ReadRegistry` to discriminate `KnownArrayNode` from `UnknownArrayNode`;
+    /// callers that demand a known id chain `.orElseThrow(...)`.
     ///
-    /// @param id raw encoding id string (e.g. {@code "vortex.primitive"})
+    /// @param id raw encoding id string (e.g. `"vortex.primitive"`)
     /// @return matching constant, or empty if not recognised
     public static Optional<EncodingId> parse(String id) {
         return Optional.ofNullable(LOOKUP.get(id));
     }
 
-    /// Returns the raw encoding id string for this constant (e.g. {@code "vortex.primitive"}).
+    /// Returns the raw encoding id string for this constant (e.g. `"vortex.primitive"`).
     ///
     /// @return the raw string encoding id
     public String id() {

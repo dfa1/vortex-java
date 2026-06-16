@@ -100,7 +100,7 @@ class RustWritesJavaReadsIntegrationTest {
 
     /// Value-only chunk snapshot — copies columnar data out of the per-chunk arena
     /// so assertions can run after the [io.github.dfa1.vortex.reader.Chunk] has been
-    /// closed. Each entry in {@code columns} is a primitive Java array
+    /// closed. Each entry in `columns` is a primitive Java array
     /// (long[]/double[]/short[]/…) sized per [PType].
     private record JavaChunk(long rowCount, Map<String, Object> columns) {
     }

@@ -17,7 +17,7 @@ public final class MaterializedIntArray implements IntArray {
     private final MemorySegment buffer;
     private final long elementCount;
 
-    /// Creates a new {@code MaterializedIntArray} backed by the given memory segment.
+    /// Creates a new `MaterializedIntArray` backed by the given memory segment.
     ///
     /// @param dtype  logical type, must be I32 or U32
     /// @param length number of elements

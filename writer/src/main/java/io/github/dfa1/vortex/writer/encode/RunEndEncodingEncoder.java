@@ -12,7 +12,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
-/// Write-only encoder for {@code vortex.runend}.
+/// Write-only encoder for `vortex.runend`.
 public final class RunEndEncodingEncoder implements EncodingEncoder {
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.

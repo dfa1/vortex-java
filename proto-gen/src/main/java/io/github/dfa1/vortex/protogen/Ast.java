@@ -3,17 +3,17 @@ package io.github.dfa1.vortex.protogen;
 import java.util.List;
 import java.util.Optional;
 
-/// Container for the {@code .proto} AST node records.
+/// Container for the `.proto` AST node records.
 /// Nested types are kept here so consumers import a single class.
 public final class Ast {
 
     private Ast() {
     }
 
-    /// A parsed {@code .proto} source file.
+    /// A parsed `.proto` source file.
     ///
-    /// @param protoPackage  value of the {@code package} declaration, or empty
-    /// @param javaPackage   value of {@code option java_package = "..."}, or empty
+    /// @param protoPackage  value of the `package` declaration, or empty
+    /// @param javaPackage   value of `option java_package = "..."`, or empty
     /// @param imports       list of imported file paths (relative to include root)
     /// @param decls         top-level messages and enums declared in this file
     public record ProtoFile(String protoPackage, String javaPackage, List<String> imports, List<TopDecl> decls) {
@@ -23,7 +23,7 @@ public final class Ast {
     public sealed interface TopDecl permits MessageDecl, EnumDecl {
     }
 
-    /// A {@code message Foo { ... }} declaration.
+    /// A `message Foo { ... `} declaration.
     ///
     /// @param name     simple name (not qualified)
     /// @param members  fields, oneofs, nested messages, nested enums
@@ -38,20 +38,20 @@ public final class Ast {
     ///
     /// @param rule    singular / optional / repeated
     /// @param type    field type (scalar or ref)
-    /// @param name    field name as written in the {@code .proto}
+    /// @param name    field name as written in the `.proto`
     /// @param number  field tag number
-    /// @param packed  whether a repeated field has explicit {@code [packed=...]} option ({@code Optional.empty()} = default)
+    /// @param packed  whether a repeated field has explicit `[packed=...]` option (`Optional.empty()` = default)
     public record FieldDecl(Rule rule, FieldType type, String name, int number, Optional<Boolean> packed) implements MessageMember {
     }
 
-    /// A {@code oneof name { ... }} block. Member fields share a discriminator on the wire.
+    /// A `oneof name { ... `} block. Member fields share a discriminator on the wire.
     ///
     /// @param name    oneof name
     /// @param fields  oneof member fields
     public record OneOfDecl(String name, List<FieldDecl> fields) implements MessageMember {
     }
 
-    /// An {@code enum Foo { ... }} declaration.
+    /// An `enum Foo { ... `} declaration.
     ///
     /// @param name    enum name
     /// @param values  enum values
@@ -79,7 +79,7 @@ public final class Ast {
 
     /// Reference to a user-declared type (message or enum). Resolved post-parse against all loaded files.
     ///
-    /// @param typeName  the textual type reference as written ({@code "PType"}, {@code "vortex.dtype.DType"}, etc.)
+    /// @param typeName  the textual type reference as written (`"PType"`, `"vortex.dtype.DType"`, etc.)
     public record Ref(String typeName) implements FieldType {
     }
 }

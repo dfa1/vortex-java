@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.encoding;
 
-/// Time unit for timestamp values. Ordinals match Rust's {@code TimeUnit} enum.
+/// Time unit for timestamp values. Ordinals match Rust's `TimeUnit` enum.
 public enum TimeUnit {
     /// Nanoseconds — ordinal 0.
     Nanoseconds,
@@ -13,10 +13,10 @@ public enum TimeUnit {
     /// Days — ordinal 4. Not sub-dividable; {@link #divisor()} throws for this value.
     Days;
 
-    /// Returns the {@code TimeUnit} for the given wire tag byte.
+    /// Returns the `TimeUnit` for the given wire tag byte.
     ///
     /// @param tag wire tag byte (unsigned ordinal)
-    /// @return the corresponding {@code TimeUnit}
+    /// @return the corresponding `TimeUnit`
     public static TimeUnit fromTag(byte tag) {
         int i = Byte.toUnsignedInt(tag);
         TimeUnit[] values = values();

@@ -21,8 +21,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /// Asserts {@link VarBinArray.ChunkedMode} fires on multi-chunk Utf8 columns.
 ///
-/// Pre-ADR-0012-VarBin, {@code ScanIterator.decodeChunkedLayout} threw on
-/// {@code (DType.Primitive) dtype} for Utf8/Binary. This test guards the new
+/// Pre-ADR-0012-VarBin, `ScanIterator.decodeChunkedLayout` threw on
+/// `(DType.Primitive) dtype` for Utf8/Binary. This test guards the new
 /// lazy path so a future refactor that loses the chunked-Utf8 case is caught
 /// in CI rather than only at scan time.
 class MultiChunkUtf8RoundTripTest {

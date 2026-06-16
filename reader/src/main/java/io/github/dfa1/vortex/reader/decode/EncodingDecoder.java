@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.encoding.EncodingId;
 
-/// Read-side decoding interface. Implementations live in the {@code reader} module and
+/// Read-side decoding interface. Implementations live in the `reader` module and
 /// are discovered via {@link java.util.ServiceLoader}.
 ///
 /// Register via {@link io.github.dfa1.vortex.reader.ReadRegistry} — implementations
@@ -19,7 +19,7 @@ public interface EncodingDecoder {
     /// Returns whether this decoder handles the given dtype.
     ///
     /// @param dtype the dtype to test
-    /// @return {@code true} if this decoder can handle arrays of {@code dtype}
+    /// @return `true` if this decoder can handle arrays of `dtype`
     boolean accepts(DType dtype);
 
     /// Decodes an array node from the file using the provided context.

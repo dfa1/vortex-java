@@ -14,7 +14,7 @@ public final class MaterializedFloat16Array implements Float16Array {
     private final long length;
     private final MemorySegment buffer;
 
-    /// Creates a new {@code MaterializedFloat16Array} backed by the given memory segment.
+    /// Creates a new `MaterializedFloat16Array` backed by the given memory segment.
     ///
     /// @param dtype  logical type, must be F16
     /// @param length number of elements

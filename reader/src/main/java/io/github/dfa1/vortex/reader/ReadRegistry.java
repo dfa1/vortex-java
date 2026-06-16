@@ -53,21 +53,21 @@ public final class ReadRegistry {
 
     /// Returns whether passthrough decode for unknown encoding ids is enabled.
     ///
-    /// @return {@code true} if unknown encodings are silently wrapped as
+    /// @return `true` if unknown encodings are silently wrapped as
     ///         {@link io.github.dfa1.vortex.reader.array.UnknownArray}
     public boolean isAllowUnknown() {
         return allowUnknown;
     }
 
-    /// Returns {@code true} if a decoder is registered for the given id.
+    /// Returns `true` if a decoder is registered for the given id.
     ///
     /// @param encodingId the encoding id to query
-    /// @return {@code true} if a decoder is registered
+    /// @return `true` if a decoder is registered
     public boolean hasDecoder(EncodingId encodingId) {
         return decoders.containsKey(encodingId);
     }
 
-    /// Decodes the array described by {@code ctx}.
+    /// Decodes the array described by `ctx`.
     ///
     /// @param ctx the decode context
     /// @return the decoded {@link Array}
@@ -90,7 +90,7 @@ public final class ReadRegistry {
         throw new VortexException("no decoder registered for " + id);
     }
 
-    /// Decodes the array described by {@code ctx} and returns its primary backing segment.
+    /// Decodes the array described by `ctx` and returns its primary backing segment.
     ///
     /// @param ctx the decode context
     /// @return the primary {@link MemorySegment} of the decoded array
@@ -171,7 +171,7 @@ public final class ReadRegistry {
         ///
         /// Default is strict: unknown ids throw {@link VortexException}. When enabled, unknown
         /// nodes are wrapped as {@link io.github.dfa1.vortex.reader.array.UnknownArray}.
-        /// Mirrors Rust {@code VortexSession::allow_unknown()}.
+        /// Mirrors Rust `VortexSession::allow_unknown()`.
         ///
         /// @return this builder, for chaining
         public Builder allowUnknown() {

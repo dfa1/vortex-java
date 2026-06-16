@@ -33,14 +33,14 @@ public interface VortexHandle extends Closeable {
     Array decodeFlatSegment(SegmentSpec spec, DType dtype, long rowCount, SegmentAllocator arena);
 
     /// Returns a read-only view of the bytes backing the given segment spec.
-    /// Writes through the returned segment throw {@code UnsupportedOperationException}.
+    /// Writes through the returned segment throw `UnsupportedOperationException`.
     ///
     /// On memory-mapped handles this is a zero-copy slice of the mapped region.
     /// On HTTP handles this fires a targeted range request.
     ///
     /// @param spec the segment to read
-    /// @return a read-only {@link MemorySegment} covering exactly {@code spec.offset()} to
-    ///         {@code spec.offset() + spec.length()}
+    /// @return a read-only {@link MemorySegment} covering exactly `spec.offset()` to
+    ///         `spec.offset() + spec.length()`
     MemorySegment rawSegment(SegmentSpec spec);
 
     ScanIterator scan(ScanOptions options);

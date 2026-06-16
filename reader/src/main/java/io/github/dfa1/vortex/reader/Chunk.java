@@ -103,11 +103,11 @@ public final class Chunk implements AutoCloseable {
     ///
     /// @param name       column name as declared in the file's schema
     /// @param domainType the spec extension's Java domain type (e.g. {@link LocalDate} for
-    ///                   {@code vortex.date}, {@link Instant} for {@code vortex.timestamp})
+    ///                   `vortex.date`, {@link Instant} for `vortex.timestamp`)
     /// @param <T>        domain element type
     /// @return decoded values in row order
-    /// @throws VortexException if {@code name} isn't present, isn't an extension column,
-    ///         or the requested {@code domainType} doesn't match the column's extension id
+    /// @throws VortexException if `name` isn't present, isn't an extension column,
+    ///         or the requested `domainType` doesn't match the column's extension id
     @SuppressWarnings("unchecked")
     public <T> List<T> as(String name, Class<T> domainType) {
         DType colDtype = columnDtypes.get(name);
@@ -150,7 +150,7 @@ public final class Chunk implements AutoCloseable {
 
     /// Returns whether this chunk has already been closed.
     ///
-    /// @return {@code true} if [#close()] has run
+    /// @return `true` if [#close()] has run
     public boolean isClosed() {
         return closed;
     }

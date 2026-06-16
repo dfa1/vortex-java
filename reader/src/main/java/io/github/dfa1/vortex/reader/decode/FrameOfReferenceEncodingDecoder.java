@@ -22,7 +22,7 @@ import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 
-/// Read-only decoder for {@code fastlanes.for} (Frame of Reference).
+/// Read-only decoder for `fastlanes.for` (Frame of Reference).
 public final class FrameOfReferenceEncodingDecoder implements EncodingDecoder {
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.

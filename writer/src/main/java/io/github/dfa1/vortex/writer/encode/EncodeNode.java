@@ -8,7 +8,7 @@ import java.nio.ByteBuffer;
 /// Mirrors ArrayNode for the encode path.
 ///
 /// @param encodingId    encoding id for this node
-/// @param metadata      optional encoding-specific metadata bytes, or {@code null}
+/// @param metadata      optional encoding-specific metadata bytes, or `null`
 /// @param children      child encode nodes (empty for leaf nodes)
 /// @param bufferIndices indices into the flat buffer list for data owned by this node
 @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
@@ -27,11 +27,11 @@ public record EncodeNode(
         return new EncodeNode(encodingId, null, new EncodeNode[0], new int[]{bufferIndex});
     }
 
-    /// Shift all buffer indices in this node and its descendants by {@code offset}.
+    /// Shift all buffer indices in this node and its descendants by `offset`.
     ///
     /// @param node   the root node whose buffer indices to remap
     /// @param offset the value to add to every buffer index in the subtree
-    /// @return a new {@link EncodeNode} tree with all buffer indices shifted by {@code offset}
+    /// @return a new {@link EncodeNode} tree with all buffer indices shifted by `offset`
     public static EncodeNode remapBufferIndices(EncodeNode node, int offset) {
         if (offset == 0) {
             return node;

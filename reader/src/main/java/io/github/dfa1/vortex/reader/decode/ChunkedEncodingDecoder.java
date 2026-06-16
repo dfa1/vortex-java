@@ -20,7 +20,7 @@ import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.List;
 
-/// Read-only decoder for {@code vortex.chunked}.
+/// Read-only decoder for `vortex.chunked`.
 public final class ChunkedEncodingDecoder implements EncodingDecoder {
 
     private static final ValueLayout.OfLong LE_LONG =
@@ -73,7 +73,7 @@ public final class ChunkedEncodingDecoder implements EncodingDecoder {
         return offsets;
     }
 
-    /// Wraps the decoded chunk children in a zero-copy view: a {@code ChunkedXxxArray}
+    /// Wraps the decoded chunk children in a zero-copy view: a `ChunkedXxxArray`
     /// for primitives and Bool, a {@link StructArray} of per-field chunked views for
     /// {@link DType.Struct}. No concat / no per-row materialise.
     private static Array wrap(List<Array> chunks, DType dtype, long totalRows) {

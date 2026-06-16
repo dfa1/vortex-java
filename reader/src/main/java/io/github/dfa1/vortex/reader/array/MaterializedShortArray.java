@@ -17,7 +17,7 @@ public final class MaterializedShortArray implements ShortArray {
     private final MemorySegment buffer;
     private final long elementCount;
 
-    /// Creates a new {@code MaterializedShortArray} backed by the given memory segment.
+    /// Creates a new `MaterializedShortArray` backed by the given memory segment.
     ///
     /// @param dtype  logical type, must be I16 or U16
     /// @param length number of elements

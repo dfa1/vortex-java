@@ -6,14 +6,14 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
-/// Walks a {@link TypeRegistry} and emits one {@code .java} file per message or enum.
+/// Walks a {@link TypeRegistry} and emits one `.java` file per message or enum.
 ///
 /// Output:
-/// - Each enum becomes a Java {@code enum} with bounds-checked {@code fromValue(int)}.
-/// - Each message becomes an immutable Java {@code record} with a static
-///   {@code decode(MemorySegment, long, long)} factory and an instance {@code encode()} method.
+/// - Each enum becomes a Java `enum` with bounds-checked `fromValue(int)`.
+/// - Each message becomes an immutable Java `record` with a static
+///   `decode(MemorySegment, long, long)` factory and an instance `encode()` method.
 /// - All generated classes live in the same Java package, derived from the
-///   {@code java_package} option of the first parsed file.
+///   `java_package` option of the first parsed file.
 public final class CodeGen {
 
     /// Java reserved words + literals that cannot be used as identifiers.
@@ -39,7 +39,7 @@ public final class CodeGen {
         this.registry = registry;
     }
 
-    /// Generates one Java source file per type into {@code outDir}.
+    /// Generates one Java source file per type into `outDir`.
     ///
     /// @param outDir output directory (created if absent)
     /// @throws IOException on filesystem errors
@@ -131,9 +131,9 @@ public final class CodeGen {
         return sb.toString();
     }
 
-    /// Records auto-generate equals/hashCode using {@code Objects.equals}, which falls back to
-    /// reference equality for {@code byte[]} components. Override with {@code Arrays.equals}/
-    /// {@code Arrays.hashCode} so structurally equal records compare equal.
+    /// Records auto-generate equals/hashCode using `Objects.equals`, which falls back to
+    /// reference equality for `byte[]` components. Override with `Arrays.equals`/
+    /// `Arrays.hashCode` so structurally equal records compare equal.
     private void emitByteArrayEqualsHashCode(StringBuilder sb, TypeRegistry.ResolvedType.Message m, List<Field> fields) {
         sb.append("\n    @Override\n");
         sb.append("    public boolean equals(Object __o) {\n");
@@ -186,9 +186,9 @@ public final class CodeGen {
         };
     }
 
-    /// Emits one static factory per oneof member, returning a record with that member set and all other components {@code null}.
-    /// Avoids verbose constructor calls at consumer sites (e.g. {@code ScalarValue.ofInt64Value(123L)}
-    /// instead of {@code new ScalarValue(null, null, 123L, null, null, null, null, null, null, null, null)}).
+    /// Emits one static factory per oneof member, returning a record with that member set and all other components `null`.
+    /// Avoids verbose constructor calls at consumer sites (e.g. `ScalarValue.ofInt64Value(123L)`
+    /// instead of `new ScalarValue(null, null, 123L, null, null, null, null, null, null, null, null)`).
     private void emitOneOfFactories(StringBuilder sb, TypeRegistry.ResolvedType.Message m, List<Field> fields) {
         for (Ast.MessageMember mem : m.decl().members()) {
             if (!(mem instanceof Ast.OneOfDecl oneOf)) {
@@ -589,8 +589,8 @@ public final class CodeGen {
     // ------------------------------------------------------------------
 
     /// Emits a try/catch wrapper that translates {@link IllegalArgumentException} from
-    /// {@code Enum.fromValue(int)} into a checked {@link IOException}. The caller must already be
-    /// inside a {@code throws IOException} context (every {@code decode(...)} factory is).
+    /// `Enum.fromValue(int)` into a checked {@link IOException}. The caller must already be
+    /// inside a `throws IOException` context (every `decode(...)` factory is).
     private static void emitEnumDecodeWrap(StringBuilder sb, String indent, String javaName, String assignTarget) {
         sb.append(indent).append("int __ev = r.readVarint32();\n");
         sb.append(indent).append("try {\n");

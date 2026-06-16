@@ -6,7 +6,7 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.FixedSizeListArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
 
-/// Read-only decoder for {@code vortex.fixed_size_list}.
+/// Read-only decoder for `vortex.fixed_size_list`.
 public final class FixedSizeListEncodingDecoder implements EncodingDecoder {
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.

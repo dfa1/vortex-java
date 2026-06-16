@@ -11,7 +11,7 @@ import java.lang.foreign.ValueLayout;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// Unit tests for {@link LazyDateTimePartsLongArray}. Verifies the
-/// {@code days * unitsPerDay + seconds * unitsPerSecond + subseconds}
+/// `days * unitsPerDay + seconds * unitsPerSecond + subseconds`
 /// reassembly across the supported time units, and the widening read path
 /// that lets each child use whatever signed-integer ptype the encoder picked.
 class LazyDateTimePartsLongArrayTest {

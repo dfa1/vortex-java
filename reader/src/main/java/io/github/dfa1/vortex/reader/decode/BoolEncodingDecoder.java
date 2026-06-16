@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
 
-/// Read-only decoder for {@code vortex.bool} (bit-packed boolean arrays, LSB first).
+/// Read-only decoder for `vortex.bool` (bit-packed boolean arrays, LSB first).
 ///
 /// Read-only decoder for bit-packed boolean arrays.
 public final class BoolEncodingDecoder implements EncodingDecoder {

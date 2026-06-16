@@ -8,7 +8,7 @@ import io.github.dfa1.vortex.core.DType;
 /// encoder for a dtype and the {@link #encode(DType, Object, EncodeContext)} entry
 /// point itself.
 ///
-/// Encoder implementations live in the {@code writer} module and are registered via
+/// Encoder implementations live in the `writer` module and are registered via
 /// {@link java.util.ServiceLoader}.
 public interface EncodingEncoder {
 
@@ -16,10 +16,10 @@ public interface EncodingEncoder {
     EncodingId encodingId();
 
     /// @param dtype the dtype to test
-    /// @return {@code true} if this encoding can encode arrays of {@code dtype}
+    /// @return `true` if this encoding can encode arrays of `dtype`
     boolean accepts(DType dtype);
 
-    /// Encodes {@code data} to bytes using the provided arena for output buffer allocation.
+    /// Encodes `data` to bytes using the provided arena for output buffer allocation.
     ///
     /// @param dtype logical type of the data
     /// @param data  the data to encode (type depends on encoding; typically a primitive array)
@@ -47,13 +47,13 @@ public interface EncodingEncoder {
         return StatsOptions.NONE;
     }
 
-    /// Estimate compression effectiveness on {@code data} given pre-computed [ArrayStats].
+    /// Estimate compression effectiveness on `data` given pre-computed [ArrayStats].
     /// Returning a verdict lets the cascade skip the expensive sample-encode probe.
     ///
     /// @param dtype the logical type of the data
     /// @param data  the input data
     /// @param stats pre-computed stats reflecting the merged [StatsOptions]
-    /// @return [Estimate.Skip] / [Estimate.AlwaysUse] / [Estimate.Ratio], or {@code null} to
+    /// @return [Estimate.Skip] / [Estimate.AlwaysUse] / [Estimate.Ratio], or `null` to
     ///         defer to the sample-encoded selection path
     default Estimate expectedRatio(DType dtype, Object data, ArrayStats stats) {
         return null;

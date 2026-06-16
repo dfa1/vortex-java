@@ -11,7 +11,7 @@ import io.github.dfa1.vortex.proto.ListMetadata;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 
-/// Read-only decoder for {@code vortex.list}.
+/// Read-only decoder for `vortex.list`.
 public final class ListEncodingDecoder implements EncodingDecoder {
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.

@@ -5,17 +5,17 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/// Resolves type references across multiple parsed {@code .proto} files.
-/// References to user-declared messages/enums may be written as short names ({@code PType})
-/// or as fully-qualified names ({@code vortex.dtype.PType}) — both must resolve to the same type.
+/// Resolves type references across multiple parsed `.proto` files.
+/// References to user-declared messages/enums may be written as short names (`PType`)
+/// or as fully-qualified names (`vortex.dtype.PType`) — both must resolve to the same type.
 public final class TypeRegistry {
 
     private final Map<String, ResolvedType> byFqn = new HashMap<>();
 
-    /// Builds a registry covering every message and enum across {@code files}.
-    /// Each top-level message gets registered under its qualified name {@code <package>.<MessageName>}
-    /// (or just {@code <MessageName>} when the file has no package).
-    /// Nested messages and enums are registered under {@code <parentFqn>.<NestedName>}.
+    /// Builds a registry covering every message and enum across `files`.
+    /// Each top-level message gets registered under its qualified name `<package>.<MessageName>`
+    /// (or just `<MessageName>` when the file has no package).
+    /// Nested messages and enums are registered under `<parentFqn>.<NestedName>`.
     ///
     /// @param files parsed proto files
     public TypeRegistry(List<Ast.ProtoFile> files) {
@@ -72,12 +72,12 @@ public final class TypeRegistry {
     }
 
     /// Resolves a textual {@link Ast.Ref#typeName()} to its concrete type, searching first
-    /// for an exact qualified match, then attempting to match under {@code searchPackage}
+    /// for an exact qualified match, then attempting to match under `searchPackage`
     /// (the package of the file containing the reference).
     ///
     /// @param ref            the reference to resolve
     /// @param searchPackage  package of the containing file (for unqualified lookups)
-    /// @return resolved type, never {@code null}
+    /// @return resolved type, never `null`
     public ResolvedType resolve(Ast.Ref ref, String searchPackage) {
         String name = ref.typeName();
         ResolvedType hit = byFqn.get(name);

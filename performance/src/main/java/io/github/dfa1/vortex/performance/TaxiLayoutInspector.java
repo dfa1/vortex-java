@@ -44,7 +44,7 @@ import java.util.List;
 
 /// Compare JNI (Rust) vs Java Vortex encoding for the NYC Yellow Taxi 2024-01 dataset.
 ///
-/// Writes the same Parquet file using both writers, then prints {@code inspect} output
+/// Writes the same Parquet file using both writers, then prints `inspect` output
 /// so encoding choices can be compared side-by-side.
 ///
 /// Run: java -cp performance/target/benchmarks.jar \

@@ -17,7 +17,7 @@ public final class MaterializedLongArray implements LongArray {
     private final MemorySegment buffer;
     private final long elementCount;
 
-    /// Creates a new {@code MaterializedLongArray} backed by the given memory segment.
+    /// Creates a new `MaterializedLongArray` backed by the given memory segment.
     ///
     /// @param dtype  logical type, must be I64 or U64
     /// @param length number of elements

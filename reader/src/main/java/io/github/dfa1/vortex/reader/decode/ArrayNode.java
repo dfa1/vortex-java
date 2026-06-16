@@ -13,11 +13,11 @@ import java.nio.ByteBuffer;
 public sealed interface ArrayNode permits KnownArrayNode, UnknownArrayNode {
 
     /// Short factory for the common case: a node whose encoding id is well-known.
-    /// Mostly used by tests and helper code that converts an {@code EncodeNode} tree back into
-    /// an {@code ArrayNode} tree.
+    /// Mostly used by tests and helper code that converts an `EncodeNode` tree back into
+    /// an `ArrayNode` tree.
     ///
     /// @param encodingId    the well-known encoding identifier
-    /// @param metadata      encoding-specific metadata bytes, or {@code null}
+    /// @param metadata      encoding-specific metadata bytes, or `null`
     /// @param children      child nodes
     /// @param bufferIndices segment buffer indices for this node
     /// @return a {@link KnownArrayNode} with the given fields
@@ -26,7 +26,7 @@ public sealed interface ArrayNode permits KnownArrayNode, UnknownArrayNode {
         return new KnownArrayNode(encodingId, metadata, children, bufferIndices);
     }
 
-    /// @return encoding-specific metadata bytes, or {@code null}
+    /// @return encoding-specific metadata bytes, or `null`
     ByteBuffer metadata();
 
     /// @return child nodes

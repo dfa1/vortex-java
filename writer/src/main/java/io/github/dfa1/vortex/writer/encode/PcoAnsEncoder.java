@@ -1,15 +1,15 @@
 package io.github.dfa1.vortex.writer.encode;
 
-/// tANS encode table — port of {@code pco/src/ans/encoding.rs} and {@code spec.rs}.
+/// tANS encode table — port of `pco/src/ans/encoding.rs` and `spec.rs`.
 ///
-/// State is kept in Rust convention: {@code state ∈ [tableSize, 2*tableSize)}.
-/// The page header stores {@code state - tableSize} as the decoder initial state index.
+/// State is kept in Rust convention: `state ∈ [tableSize, 2*tableSize)`.
+/// The page header stores `state - tableSize` as the decoder initial state index.
 final class PcoAnsEncoder {
 
     /// Result of one ANS encode step.
     ///
-    /// @param newState  next ANS state (Rust convention: {@code ∈ [tableSize, 2*tableSize)})
-    /// @param bits      low {@code numBits} bits of the old state, to be written to the stream
+    /// @param newState  next ANS state (Rust convention: `∈ [tableSize, 2*tableSize)`)
+    /// @param bits      low `numBits` bits of the old state, to be written to the stream
     /// @param numBits   number of bits to write (renormalization bits)
     record Step(int newState, int bits, int numBits) {
     }
@@ -29,10 +29,10 @@ final class PcoAnsEncoder {
         this.nextStates = nextStates;
     }
 
-    /// Build an encoder from quantized ANS weights (sum must equal {@code 2^sizeLog}).
+    /// Build an encoder from quantized ANS weights (sum must equal `2^sizeLog`).
     ///
     /// @param sizeLog log₂ of the ANS table size
-    /// @param weights quantized weight per symbol (sum == {@code 1 << sizeLog})
+    /// @param weights quantized weight per symbol (sum == `1 << sizeLog`)
     /// @return a ready-to-use encoder
     static PcoAnsEncoder build(int sizeLog, int[] weights) {
         int tableSize = 1 << sizeLog;
@@ -67,7 +67,7 @@ final class PcoAnsEncoder {
     /// Encode one symbol. Caller writes the low {@link Step#numBits()} bits of
     /// the old state to the bit stream (in LIFO order; caller reverses per batch).
     ///
-    /// @param state  current ANS state {@code ∈ [tableSize, 2*tableSize)}
+    /// @param state  current ANS state `∈ [tableSize, 2*tableSize)`
     /// @param symbol bin symbol index
     /// @return encode step
     Step encode(int state, int symbol) {
@@ -83,7 +83,7 @@ final class PcoAnsEncoder {
 
     /// Starting state for all 4 interleaved streams.
     ///
-    /// @return {@code tableSize} (Rust convention initial state)
+    /// @return `tableSize` (Rust convention initial state)
     int defaultState() {
         return tableSize;
     }
@@ -91,7 +91,7 @@ final class PcoAnsEncoder {
     /// Convert a final encoder state to the decoder initial state index written in the page header.
     ///
     /// @param state final Rust-convention state after encoding
-    /// @return 0-based state index (= {@code state - tableSize})
+    /// @return 0-based state index (= `state - tableSize`)
     int toStateIdx(int state) {
         return state - tableSize;
     }

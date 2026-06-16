@@ -21,9 +21,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-/// {@code vortex.timestamp} — I64 epoch count plus optional IANA timezone.
-/// Metadata layout: {@code byte[0] = TimeUnit tag, bytes[1..3] = tz_len (u16 LE),
-/// bytes[3..3+tz_len] = tz UTF-8}.
+/// `vortex.timestamp` — I64 epoch count plus optional IANA timezone.
+/// Metadata layout: `byte[0] = TimeUnit tag, bytes[1..3] = tz_len (u16 LE),
+/// bytes[3..3+tz_len] = tz UTF-8`.
 public final class TimestampExtensionDecoder implements ExtensionDecoder {
 
     /// Singleton instance.
@@ -49,7 +49,7 @@ public final class TimestampExtensionDecoder implements ExtensionDecoder {
     /// Returns the dtype for the given unit and timezone.
     ///
     /// @param unit     time resolution
-    /// @param zone     IANA timezone, or {@code null} for none
+    /// @param zone     IANA timezone, or `null` for none
     /// @param nullable whether the column allows nulls
     /// @return matching extension dtype
     public DType.Extension dtype(TimeUnit unit, ZoneId zone, boolean nullable) {
@@ -67,11 +67,11 @@ public final class TimestampExtensionDecoder implements ExtensionDecoder {
                 nullable);
     }
 
-    /// Decodes the timestamp cell at row {@code i} to an {@link Instant}, ignoring timezone.
+    /// Decodes the timestamp cell at row `i` to an {@link Instant}, ignoring timezone.
     ///
     /// @param ext     declared extension dtype
     /// @param storage signed-integer storage array
-    /// @param i       row index, {@code 0 <= i < storage.length()}
+    /// @param i       row index, `0 <= i < storage.length()`
     /// @return decoded instant
     /// @throws VortexException if the metadata unit is {@link TimeUnit#Days}
     ///         or storage isn't an integer primitive
@@ -84,12 +84,12 @@ public final class TimestampExtensionDecoder implements ExtensionDecoder {
         return ExtensionStorage.instantFromRaw(ExtensionStorage.epochInteger(storage, i), unit);
     }
 
-    /// Decodes the timestamp cell at row {@code i} to a {@link ZonedDateTime}
+    /// Decodes the timestamp cell at row `i` to a {@link ZonedDateTime}
     /// using the timezone from the metadata, defaulting to UTC when absent.
     ///
     /// @param ext     declared extension dtype
     /// @param storage signed-integer storage array
-    /// @param i       row index, {@code 0 <= i < storage.length()}
+    /// @param i       row index, `0 <= i < storage.length()`
     /// @return decoded zoned date-time
     public ZonedDateTime zonedDateTime(DType.Extension ext, Array storage, long i) {
         return instant(ext, storage, i).atZone(timezone(ext).orElse(ZoneOffset.UTC));
@@ -123,12 +123,12 @@ public final class TimestampExtensionDecoder implements ExtensionDecoder {
         return Optional.of(ZoneId.of(new String(tzBytes, StandardCharsets.UTF_8)));
     }
 
-    /// Decodes every row of {@code storage} into a list of instants. {@link MaskedArray}
-    /// storage yields {@code null} at invalid positions instead of throwing.
+    /// Decodes every row of `storage` into a list of instants. {@link MaskedArray}
+    /// storage yields `null` at invalid positions instead of throwing.
     ///
     /// @param ext     declared extension dtype carrying the unit
-    /// @param storage signed-integer storage array (optionally wrapped in {@code MaskedArray})
-    /// @return list of decoded instants in row order; {@code null} entries mark invalid rows
+    /// @param storage signed-integer storage array (optionally wrapped in `MaskedArray`)
+    /// @return list of decoded instants in row order; `null` entries mark invalid rows
     public List<Instant> decodeAll(DType.Extension ext, Array storage) {
         int n = Math.toIntExact(storage.length());
         List<Instant> out = new ArrayList<>(n);

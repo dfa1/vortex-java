@@ -11,7 +11,7 @@ import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 import java.util.List;
 
-/// Write-only encoder for {@code fastlanes.for} (Frame of Reference).
+/// Write-only encoder for `fastlanes.for` (Frame of Reference).
 public final class FrameOfReferenceEncodingEncoder implements EncodingEncoder {
 
     /// Public no-arg constructor required by {@link java.util.ServiceLoader}.

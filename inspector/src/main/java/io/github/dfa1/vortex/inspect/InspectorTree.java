@@ -136,7 +136,7 @@ public record InspectorTree(
     ///
     /// @param node   node to resolve
     /// @param handle open file handle
-    /// @return peek result; never {@code null}
+    /// @return peek result; never `null`
     public static Peek peek(Node node, VortexHandle handle) {
         Layout layout = node.layout();
         if (!layout.isFlat() || layout.segments().isEmpty()) {
@@ -156,7 +156,7 @@ public record InspectorTree(
     /// triggers a separate HTTP range request).
     ///
     /// @param handle   open file handle
-    /// @param progress progress sink receiving {@code (current, total)} after each segment peek
+    /// @param progress progress sink receiving `(current, total)` after each segment peek
     /// @return immutable inspector tree
     public static InspectorTree build(VortexHandle handle, Progress progress) {
         Footer footer = handle.footer();
@@ -268,10 +268,10 @@ public record InspectorTree(
     }
 
     /// Result of a single Flat segment peek - the resolved encoding id (or
-    /// {@code null} when the FlatBuffer carried no root) plus the per-array
+    /// `null` when the FlatBuffer carried no root) plus the per-array
     /// statistics decoded from the same FlatBuffer.
     ///
-    /// @param encoding resolved encoding id from the array spec table, or {@code null}
+    /// @param encoding resolved encoding id from the array spec table, or `null`
     /// @param stats    per-array stats, or {@link ArrayStats#empty()} if unknown
     public record Peek(String encoding, ArrayStats stats) {
         /// Sentinel returned for non-Flat nodes, compressed segments, or

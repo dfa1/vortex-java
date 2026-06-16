@@ -7,7 +7,7 @@ package io.github.dfa1.vortex.writer.encode;
 /// - [AlwaysUse] — encoder is provably the best choice; pick immediately.
 /// - [Ratio] — encoder estimates this compression ratio; compete against other ratios.
 ///
-/// Mirrors {@code vortex-compressor::estimate::EstimateVerdict}.
+/// Mirrors `vortex-compressor::estimate::EstimateVerdict`.
 public sealed interface Estimate {
 
     /// Skip this encoder for this input.

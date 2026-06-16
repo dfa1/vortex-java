@@ -16,7 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-/// {@code vortex.uuid} — 16-byte UUID stored as {@code FixedSizeList(Primitive(U8), 16)}.
+/// `vortex.uuid` — 16-byte UUID stored as `FixedSizeList(Primitive(U8), 16)`.
 public final class UuidExtensionDecoder implements ExtensionDecoder {
 
     /// Singleton instance.
@@ -44,12 +44,12 @@ public final class UuidExtensionDecoder implements ExtensionDecoder {
                 nullable);
     }
 
-    /// Decodes the UUID cell at row {@code i}.
+    /// Decodes the UUID cell at row `i`.
     ///
     /// @param storage UUID storage array
-    /// @param i       row index, {@code 0 <= i < storage.length()}
+    /// @param i       row index, `0 <= i < storage.length()`
     /// @return decoded {@link UUID}
-    /// @throws VortexException if storage isn't a {@code FixedSizeListArray<ByteArray>} of size 16
+    /// @throws VortexException if storage isn't a `FixedSizeListArray<ByteArray>` of size 16
     public UUID decode(Array storage, long i) {
         ExtensionStorage.checkBounds(i, storage.length());
         if (storage instanceof MaskedArray masked) {
@@ -81,11 +81,11 @@ public final class UuidExtensionDecoder implements ExtensionDecoder {
         return new UUID(msb, lsb);
     }
 
-    /// Decodes every row of {@code storage} into a list of UUIDs. {@link MaskedArray}
-    /// storage yields {@code null} at invalid positions instead of throwing.
+    /// Decodes every row of `storage` into a list of UUIDs. {@link MaskedArray}
+    /// storage yields `null` at invalid positions instead of throwing.
     ///
-    /// @param storage UUID storage array (optionally wrapped in {@code MaskedArray})
-    /// @return list of decoded UUIDs in row order; {@code null} entries mark invalid rows
+    /// @param storage UUID storage array (optionally wrapped in `MaskedArray`)
+    /// @return list of decoded UUIDs in row order; `null` entries mark invalid rows
     public List<UUID> decodeAll(Array storage) {
         int n = Math.toIntExact(storage.length());
         List<UUID> out = new ArrayList<>(n);

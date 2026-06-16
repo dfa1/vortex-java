@@ -9,16 +9,16 @@ import java.util.Optional;
 /// **Non-recoverable contract:** once thrown, the underlying file or stream is
 /// in an indeterminate state. Callers must propagate this exception — do not catch-and-swallow,
 /// do not retry on the same input. The correct response is to abort the read, surface the error,
-/// and close the {@code VortexFile}.
+/// and close the `VortexFile`.
 ///
 /// Carries an optional {@link EncodingId} for diagnostic attribution; it is not intended
 /// for recovery logic.
 public final class VortexException extends RuntimeException {
 
-    /// The encoding that raised this exception, or {@code null} if not attributed to a specific encoding.
+    /// The encoding that raised this exception, or `null` if not attributed to a specific encoding.
     private final EncodingId encodingId;
 
-    /// Creates a {@code VortexException} with the given message and no associated encoding.
+    /// Creates a `VortexException` with the given message and no associated encoding.
     ///
     /// @param message human-readable error description
     public VortexException(String message) {
@@ -26,7 +26,7 @@ public final class VortexException extends RuntimeException {
         this.encodingId = null;
     }
 
-    /// Creates a {@code VortexException} with the given message and cause, and no associated encoding.
+    /// Creates a `VortexException` with the given message and cause, and no associated encoding.
     ///
     /// @param message human-readable error description
     /// @param cause   the underlying cause
@@ -35,7 +35,7 @@ public final class VortexException extends RuntimeException {
         this.encodingId = null;
     }
 
-    /// Creates a {@code VortexException} attributed to the given encoding.
+    /// Creates a `VortexException` attributed to the given encoding.
     ///
     /// @param encodingId encoding responsible for this error
     /// @param message    human-readable error description (prefixed with the encoding id)
@@ -44,7 +44,7 @@ public final class VortexException extends RuntimeException {
         this.encodingId = encodingId;
     }
 
-    /// Creates a {@code VortexException} attributed to the given encoding, with a cause.
+    /// Creates a `VortexException` attributed to the given encoding, with a cause.
     ///
     /// @param encodingId encoding responsible for this error
     /// @param message    human-readable error description (prefixed with the encoding id)

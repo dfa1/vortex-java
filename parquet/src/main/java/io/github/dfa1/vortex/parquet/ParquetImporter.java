@@ -30,7 +30,7 @@ import java.util.Map;
 ///
 /// Only flat schemas (no nested struct/list/map columns) are supported.
 /// Nullable columns (OPTIONAL repetition) produce nulls mapped to type defaults:
-/// 0 for numeric types, {@code false} for bool, {@code ""} for strings.
+/// 0 for numeric types, `false` for bool, `""` for strings.
 ///
 /// Supported Parquet physical types:
 /// - BOOLEAN → Bool

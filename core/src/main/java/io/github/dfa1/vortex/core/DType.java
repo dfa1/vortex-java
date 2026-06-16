@@ -21,14 +21,14 @@ public sealed interface DType
 
     /// Returns whether this type allows null values.
     ///
-    /// @return {@code true} if null values are permitted
+    /// @return `true` if null values are permitted
     boolean nullable();
 
     /// Returns a copy of this type marked nullable. Sugar over
     /// {@link #withNullable(boolean)} so call sites read as a fluent adjective:
-    /// {@code DType.i64().asNullable()}.
+    /// `DType.i64().asNullable()`.
     ///
-    /// @return a new {@link DType} identical to this one but with {@code nullable = true}
+    /// @return a new {@link DType} identical to this one but with `nullable = true`
     default DType asNullable() {
         return withNullable(true);
     }
@@ -174,10 +174,10 @@ public sealed interface DType
 
         /// Adds a named field to the struct under construction.
         ///
-        /// @param name the field name; must be non-{@code null} and not previously added
+        /// @param name the field name; must be non-`null` and not previously added
         /// @param type the field type
         /// @return this builder
-        /// @throws IllegalArgumentException if {@code name} duplicates a previously added field
+        /// @throws IllegalArgumentException if `name` duplicates a previously added field
         public StructBuilder field(String name, DType type) {
             if (fields.putIfAbsent(name, type) != null) {
                 throw new IllegalArgumentException("duplicate field name: " + name);
@@ -206,7 +206,7 @@ public sealed interface DType
 
     // ── Records ─────────────────────────────────────────────────────────────
 
-    /// The SQL {@code NULL} type — no values, always nullable.
+    /// The SQL `NULL` type — no values, always nullable.
     ///
     /// @param nullable whether null values are permitted
     record Null(boolean nullable) implements DType {
@@ -248,7 +248,7 @@ public sealed interface DType
     /// Struct logical type with named, typed fields.
     ///
     /// @param fieldNames ordered list of field names
-    /// @param fieldTypes ordered list of field types, parallel to {@code fieldNames}
+    /// @param fieldTypes ordered list of field types, parallel to `fieldNames`
     /// @param nullable   whether null values are permitted
     record Struct(
             java.util.List<String> fieldNames,
@@ -286,9 +286,9 @@ public sealed interface DType
 
     /// Extension logical type with user-defined semantics layered over a storage type.
     ///
-    /// @param extensionId  unique string identifier for the extension type (e.g. {@code "vortex.timestamp"})
+    /// @param extensionId  unique string identifier for the extension type (e.g. `"vortex.timestamp"`)
     /// @param storageDType underlying storage dtype used for physical encoding
-    /// @param metadata     opaque extension-specific metadata bytes, or {@code null}
+    /// @param metadata     opaque extension-specific metadata bytes, or `null`
     /// @param nullable     whether null values are permitted
     record Extension(
             String extensionId,
@@ -303,7 +303,7 @@ public sealed interface DType
         /// that would inflate parser allocations.
         public static final int MAX_METADATA_SIZE = 64 * 1024;
 
-        /// @throws VortexException if {@code metadata} carries more than
+        /// @throws VortexException if `metadata` carries more than
         ///         {@link #MAX_METADATA_SIZE} readable bytes
         public Extension {
             if (metadata != null && metadata.remaining() > MAX_METADATA_SIZE) {

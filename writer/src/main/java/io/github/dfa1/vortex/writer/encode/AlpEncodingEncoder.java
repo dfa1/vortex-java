@@ -13,7 +13,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
-/// Write-only encoder for {@code vortex.alp}.
+/// Write-only encoder for `vortex.alp`.
 public final class AlpEncodingEncoder implements EncodingEncoder {
     private static final double[] F10_F64 = {1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22, 1e23};
     private static final double[] IF10_F64 = {1e-0, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8, 1e-9, 1e-10, 1e-11, 1e-12, 1e-13, 1e-14, 1e-15, 1e-16, 1e-17, 1e-18, 1e-19, 1e-20, 1e-21, 1e-22, 1e-23};
@@ -66,13 +66,13 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         return CascadeStep.terminal(encode(dtype, data, ctx));
     }
 
-    /// Picks {@code (expE, expF)} by minimising the estimated post-cascade byte size
+    /// Picks `(expE, expF)` by minimising the estimated post-cascade byte size
     /// (FoR + bitpack on the encoded integers, plus per-exception patch overhead) on a
-    /// stratified sample, breaking ties in favour of the smaller {@code e - f} gap.
-    /// Mirrors Rust's {@code ALPFloat::find_best_exponents}.
+    /// stratified sample, breaking ties in favour of the smaller `e - f` gap.
+    /// Mirrors Rust's `ALPFloat::find_best_exponents`.
     ///
     /// The previous heuristic (minimise exception count) picked combinations like
-    /// {@code (e=14, f=0)} that produced few exceptions but huge encoded mantissas, forcing
+    /// `(e=14, f=0)` that produced few exceptions but huge encoded mantissas, forcing
     /// the cascade into Dict+FoR+BitPacked instead of a clean ALP→BitPacked chain.
     private static int[] findExponentsF64(double[] values) {
         int n = values.length;
@@ -106,12 +106,12 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         return new int[]{bestExpE, bestExpF};
     }
 
-    /// Estimates the post-cascade byte cost of encoding {@code sample} at {@code (expE, expF)}.
-    /// Cost model matches Rust: encoded = FoR + bitpack at {@code ceil(log2(range)+1)} bits/value,
-    /// plus {@code patchCount * (8 bytes value + 2 bytes index)} for exceptions.
+    /// Estimates the post-cascade byte cost of encoding `sample` at `(expE, expF)`.
+    /// Cost model matches Rust: encoded = FoR + bitpack at `ceil(log2(range)+1)` bits/value,
+    /// plus `patchCount * (8 bytes value + 2 bytes index)` for exceptions.
     ///
     /// Encoded byte count is computed over the full sample length (not just the cleanly encoded
-    /// values) to mirror Rust's {@code estimate_encoded_size}: patch positions are filled with the
+    /// values) to mirror Rust's `estimate_encoded_size`: patch positions are filled with the
     /// first non-patched encoded value, so they still consume bitpacked space.
     private static long estimateEncodedSizeF64(double[] sample, int expE, int expF, long[] encoded) {
         double ef = F10_F64[expE];

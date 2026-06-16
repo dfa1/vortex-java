@@ -13,12 +13,12 @@ import java.lang.invoke.MethodHandle;
 
 /// Windows console raw-mode implementation via kernel32.dll.
 ///
-/// Toggles {@code ENABLE_VIRTUAL_TERMINAL_PROCESSING} on stdout (Win10 1809+
+/// Toggles `ENABLE_VIRTUAL_TERMINAL_PROCESSING` on stdout (Win10 1809+
 /// required) so ANSI sequences in [Ansi] render natively. Stdin runs with
 /// line-input + echo + processed-input disabled and VT input enabled so xterm
 /// arrow sequences arrive intact.
 ///
-/// {@code GetConsoleScreenBufferInfo} drives [#size()]; we report the visible
+/// `GetConsoleScreenBufferInfo` drives [#size()]; we report the visible
 /// window rect, not the scrollback buffer.
 public final class WindowsTerminal implements Terminal {
 
