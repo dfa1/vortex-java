@@ -5,9 +5,7 @@ import io.github.dfa1.vortex.cli.tui.term.Key;
 import io.github.dfa1.vortex.cli.tui.term.Terminal;
 
 import java.io.IOException;
-import java.time.Duration;
 import java.util.List;
-import java.util.Optional;
 
 /// Excel-like scrollable grid viewer over a [LazyGridSource].
 ///
@@ -35,7 +33,6 @@ public final class VortexGridTui {
         private static final int MIN_COL_WIDTH = 4;
         private static final int MAX_COL_WIDTH = 24;
         private static final int ROW_INDEX_PAD = 2;
-        private static final Duration POLL_INTERVAL = Duration.ofMillis(200);
 
         private final Terminal term;
         private final String source;
@@ -65,17 +62,15 @@ public final class VortexGridTui {
         void run() throws IOException {
             term.write(Ansi.ENTER_ALT_SCREEN);
             term.write(Ansi.HIDE_CURSOR);
+            term.write(Ansi.CLEAR_SCREEN);
             try {
                 while (true) {
                     if (dirty) {
                         render();
                         dirty = false;
                     }
-                    Optional<Key> maybe = term.readKey(POLL_INTERVAL);
-                    if (maybe.isEmpty()) {
-                        continue;
-                    }
-                    if (!handle(maybe.get())) {
+                    Key key = term.readKey();
+                    if (!handle(key)) {
                         return;
                     }
                 }
@@ -155,15 +150,43 @@ public final class VortexGridTui {
             }
             ensureCursorVisible(termRows, termCols);
 
+            int viewportRows = Math.max(0, termRows - 3);
+            String[][] window = fetchWindow(rowOffset, viewportRows);
+
             StringBuilder out = new StringBuilder(termCols * termRows);
-            out.append(Ansi.CLEAR_SCREEN).append(Ansi.CURSOR_HOME);
+            out.append(Ansi.CURSOR_HOME);
             renderTitle(out, termCols);
             renderHeader(out, termCols);
-            renderRows(out, termRows, termCols);
-            renderStatus(out, termCols);
+            renderRows(out, window, viewportRows, termCols);
+            renderStatus(out, window, viewportRows, termCols);
 
             term.write(out.toString());
             term.flush();
+        }
+
+        private String[][] fetchWindow(long startAbsRow, int viewportRows) {
+            try {
+                return data.readRows(startAbsRow, viewportRows);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                errorMessage = "interrupted";
+                return placeholderWindow(viewportRows);
+            } catch (RuntimeException e) {
+                errorMessage = e.getClass().getSimpleName()
+                        + (e.getMessage() != null ? ": " + e.getMessage() : "");
+                return placeholderWindow(viewportRows);
+            }
+        }
+
+        private String[][] placeholderWindow(int viewportRows) {
+            String[][] w = new String[viewportRows][];
+            for (int r = 0; r < viewportRows; r++) {
+                w[r] = new String[totalCols];
+                for (int c = 0; c < totalCols; c++) {
+                    w[r][c] = "?";
+                }
+            }
+            return w;
         }
 
         private void ensureCursorVisible(int termRows, int termCols) {
@@ -225,8 +248,7 @@ public final class VortexGridTui {
             out.append(Ansi.RESET).append("\r\n");
         }
 
-        private void renderRows(StringBuilder out, int termRows, int termCols) {
-            int viewportRows = termRows - 3;
+        private void renderRows(StringBuilder out, String[][] window, int viewportRows, int termCols) {
             for (int r = 0; r < viewportRows; r++) {
                 long absRow = rowOffset + r;
                 if (absRow >= totalRows) {
@@ -234,32 +256,10 @@ public final class VortexGridTui {
                     out.append("\r\n");
                     continue;
                 }
-                String[] row = safeRow(absRow);
+                String[] row = window[r];
                 renderDataRow(out, absRow, row, termCols);
                 out.append("\r\n");
             }
-        }
-
-        private String[] safeRow(long absRow) {
-            try {
-                return data.row(absRow);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                errorMessage = "interrupted";
-                return placeholder();
-            } catch (RuntimeException e) {
-                errorMessage = e.getClass().getSimpleName()
-                        + (e.getMessage() != null ? ": " + e.getMessage() : "");
-                return placeholder();
-            }
-        }
-
-        private String[] placeholder() {
-            String[] row = new String[totalCols];
-            for (int c = 0; c < totalCols; c++) {
-                row[c] = "?";
-            }
-            return row;
         }
 
         private void renderDataRow(StringBuilder out, long absRow, String[] row, int termCols) {
@@ -296,9 +296,9 @@ public final class VortexGridTui {
             }
         }
 
-        private void renderStatus(StringBuilder out, int termCols) {
+        private void renderStatus(StringBuilder out, String[][] window, int viewportRows, int termCols) {
             String col = cursorCol < totalCols ? data.columns().get(cursorCol) : "-";
-            String cellValue = currentCellValue();
+            String cellValue = currentCellValue(window, viewportRows);
             String right = " arrows/PgUp/PgDn move  g/G top/bot  q quit ";
             int rightRoom = right.length() < termCols ? right.length() : 0;
             int leftBudget = termCols - rightRoom;
@@ -319,12 +319,16 @@ public final class VortexGridTui {
             out.append(Ansi.RESET);
         }
 
-        private String currentCellValue() {
+        private String currentCellValue(String[][] window, int viewportRows) {
             if (totalRows == 0 || totalCols == 0) {
                 return "";
             }
-            String[] row = safeRow(cursorRow);
-            return cursorCol < row.length ? row[cursorCol] : "";
+            int idx = (int) (cursorRow - rowOffset);
+            if (idx >= 0 && idx < viewportRows && window[idx] != null
+                    && cursorCol < window[idx].length && window[idx][cursorCol] != null) {
+                return window[idx][cursorCol];
+            }
+            return "";
         }
 
         private static int[] computeColWidths(List<String> columns) {

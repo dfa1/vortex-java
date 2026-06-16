@@ -37,7 +37,7 @@ final class ViewCommand {
             System.err.print("Indexing chunks... ");
             System.err.flush();
             long tIdx = System.nanoTime();
-            try (LazyGridSource source = LazyGridSource.open(handle, worker, cacheCapacity())) {
+            try (LazyGridSource source = LazyGridSource.open(handle, worker)) {
                 long ms = (System.nanoTime() - tIdx) / 1_000_000L;
                 System.err.println("done — " + source.totalRows() + " rows × "
                         + source.columns().size() + " cols (" + ms + " ms)");
@@ -95,21 +95,6 @@ final class ViewCommand {
             return null;
         }
         return VortexReader.open(path);
-    }
-
-    private static int cacheCapacity() {
-        String prop = System.getProperty("vortex.view.chunkcache");
-        if (prop != null) {
-            try {
-                int v = Integer.parseInt(prop);
-                if (v > 0) {
-                    return v;
-                }
-            } catch (NumberFormatException ignored) {
-                // fall through
-            }
-        }
-        return LazyGridSource.DEFAULT_CACHE_CAPACITY;
     }
 
     private static String describe(Throwable t) {

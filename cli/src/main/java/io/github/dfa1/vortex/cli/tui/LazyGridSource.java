@@ -24,30 +24,22 @@ import io.github.dfa1.vortex.reader.extension.TimeExtensionDecoder;
 import io.github.dfa1.vortex.reader.extension.TimestampExtensionDecoder;
 import io.github.dfa1.vortex.reader.extension.UuidExtensionDecoder;
 
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
-/// Streaming row source backing the [VortexGridTui].
+/// Streaming row source for the grid viewer.
 ///
-/// Decodes vortex chunks on demand as the grid viewport scrolls into them.
-/// Chunk boundaries are derived once up front from [ScanIterator#chunkRowCounts]
-/// so navigation math can find the chunk for any absolute row in O(log chunks).
+/// At any moment exactly one [Chunk] is held open. When the viewport scrolls
+/// into a different chunk the held chunk is closed and the next one is decoded;
+/// scrolling backwards reopens the scan from the start of the file. Only the
+/// rows the viewport actually paints are formatted into strings — so cursor
+/// moves inside the live chunk allocate nothing beyond the visible window
+/// (typically 30 rows), regardless of how many rows the chunk contains.
 ///
-/// A fixed-size LRU cache keeps the most recently touched chunks decoded as
-/// `String[][]` row arrays. When the viewport touches a non-resident chunk,
-/// the source advances its `ScanIterator` forward until the target chunk is
-/// decoded; if the target sits before the current iterator position the
-/// iterator is closed and reopened from the start of the file.
-///
-/// All `VortexHandle` I/O is routed through the provided [IoWorker] so the
-/// confined `Arena` owning the handle is never crossed from the render thread.
+/// All [VortexHandle] I/O is routed through the supplied [IoWorker] so the
+/// reader's confined `Arena` is never crossed from the render thread.
 public final class LazyGridSource implements AutoCloseable {
-
-    /// Number of chunks kept decoded in memory at once.
-    public static final int DEFAULT_CACHE_CAPACITY = 2;
 
     private final VortexHandle handle;
     private final IoWorker worker;
@@ -57,32 +49,30 @@ public final class LazyGridSource implements AutoCloseable {
     private final int chunkCount;
     private final long[] chunkStartRows;
     private final long[] chunkRowCounts;
-    private final int cacheCap;
-    private final LinkedHashMap<Integer, String[][]> cache;
 
     private ScanIterator iter;
     private int iterNextChunk;
+    private Chunk currentChunk;
+    private int currentChunkIdx = -1;
+    private Array[] currentColumns;
     private boolean closed;
 
-    /// Builds a lazy source over `handle`, computing chunk boundaries up front.
+    /// Builds a lazy source over `handle`, walking the layout once up front to
+    /// derive chunk boundaries.
     ///
-    /// @param handle  open Vortex file handle owned by `worker`
-    /// @param worker  I/O dispatcher for the handle's confined thread
-    /// @param cacheCap maximum decoded chunks kept resident; `<= 0` falls back
-    ///                  to {@link #DEFAULT_CACHE_CAPACITY}
+    /// @param handle open Vortex file handle owned by `worker`
+    /// @param worker I/O dispatcher for the handle's confined thread
     /// @return initialised source
     /// @throws InterruptedException if the calling thread is interrupted while
     ///                              waiting for the worker
-    public static LazyGridSource open(VortexHandle handle, IoWorker worker, int cacheCap)
+    public static LazyGridSource open(VortexHandle handle, IoWorker worker)
             throws InterruptedException {
-        return new LazyGridSource(handle, worker, cacheCap);
+        return new LazyGridSource(handle, worker);
     }
 
-    private LazyGridSource(VortexHandle handle, IoWorker worker, int cacheCap)
-            throws InterruptedException {
+    private LazyGridSource(VortexHandle handle, IoWorker worker) throws InterruptedException {
         this.handle = handle;
         this.worker = worker;
-        this.cacheCap = cacheCap > 0 ? cacheCap : DEFAULT_CACHE_CAPACITY;
         if (!(handle.dtype() instanceof DType.Struct schema)) {
             throw new VortexException("view requires struct root dtype, got " + handle.dtype());
         }
@@ -114,13 +104,6 @@ public final class LazyGridSource implements AutoCloseable {
         }
         chunkStartRows[chunkCount] = running;
         this.totalRows = running;
-
-        this.cache = new LinkedHashMap<>(this.cacheCap, 0.75f, true) {
-            @Override
-            protected boolean removeEldestEntry(Map.Entry<Integer, String[][]> eldest) {
-                return size() > LazyGridSource.this.cacheCap;
-            }
-        };
     }
 
     /// Column names in display order.
@@ -137,8 +120,66 @@ public final class LazyGridSource implements AutoCloseable {
         return totalRows;
     }
 
-    /// Decoded row at absolute index `absRow`. Triggers a chunk decode if the
-    /// chunk containing this row is not currently in the cache.
+    /// Returns formatted rows for the absolute-row window `[startAbsRow, startAbsRow + count)`.
+    ///
+    /// The window may straddle a chunk boundary; this method handles the chunk
+    /// transitions transparently. Returned rows are independent `String[]`
+    /// arrays — safe to keep after the underlying chunk is closed.
+    ///
+    /// @param startAbsRow first absolute row in the window
+    /// @param count       number of rows to read; rows past `totalRows()` are
+    ///                    returned as empty `String[]`
+    /// @return array of length `count`, one row per slot
+    /// @throws InterruptedException if the calling thread is interrupted while
+    ///                              waiting for the worker
+    /// @throws VortexException      if this source has already been closed
+    public String[][] readRows(long startAbsRow, int count) throws InterruptedException {
+        if (closed) {
+            throw new VortexException("LazyGridSource closed");
+        }
+        String[][] out = new String[count][];
+        if (count == 0 || startAbsRow >= totalRows) {
+            for (int i = 0; i < count; i++) {
+                out[i] = emptyRow();
+            }
+            return out;
+        }
+        AtomicReference<RuntimeException> failure = new AtomicReference<>();
+        worker.runAndAwait(() -> {
+            try {
+                long row = startAbsRow;
+                int slot = 0;
+                while (slot < count) {
+                    if (row >= totalRows) {
+                        out[slot++] = emptyRow();
+                        continue;
+                    }
+                    int chunkIdx = findChunk(row);
+                    loadChunk(chunkIdx);
+                    long chunkStart = chunkStartRows[chunkIdx];
+                    long chunkEnd = chunkStartRows[chunkIdx + 1];
+                    long limit = Math.min(chunkEnd, startAbsRow + count);
+                    while (row < limit && slot < count) {
+                        out[slot++] = formatRow(currentColumns, row - chunkStart);
+                        row++;
+                    }
+                }
+            } catch (RuntimeException e) {
+                failure.set(e);
+            }
+        });
+        if (failure.get() != null) {
+            throw failure.get();
+        }
+        for (int i = 0; i < count; i++) {
+            if (out[i] == null) {
+                out[i] = emptyRow();
+            }
+        }
+        return out;
+    }
+
+    /// Returns a single formatted row at absolute index `absRow`.
     ///
     /// @param absRow row index in `[0, totalRows())`
     /// @return one cell per column
@@ -147,16 +188,10 @@ public final class LazyGridSource implements AutoCloseable {
     /// @throws VortexException      if `absRow` is out of bounds or this source
     ///                              has already been closed
     public String[] row(long absRow) throws InterruptedException {
-        if (closed) {
-            throw new VortexException("LazyGridSource closed");
-        }
         if (absRow < 0 || absRow >= totalRows) {
             throw new VortexException("row index out of bounds: " + absRow);
         }
-        int chunkIdx = findChunk(absRow);
-        long inChunk = absRow - chunkStartRows[chunkIdx];
-        String[][] decoded = ensureLoaded(chunkIdx);
-        return decoded[(int) inChunk];
+        return readRows(absRow, 1)[0];
     }
 
     private int findChunk(long absRow) {
@@ -173,77 +208,57 @@ public final class LazyGridSource implements AutoCloseable {
         return lo;
     }
 
-    private String[][] ensureLoaded(int chunkIdx) throws InterruptedException {
-        String[][] hit = cache.get(chunkIdx);
-        if (hit != null) {
-            return hit;
+    /// Worker-thread-only. Ensures the chunk with index `chunkIdx` is the
+    /// currently open chunk, advancing or reopening the scan as needed.
+    private void loadChunk(int chunkIdx) {
+        if (currentChunkIdx == chunkIdx && currentChunk != null) {
+            return;
         }
+        closeCurrentChunk();
         if (chunkIdx < iterNextChunk) {
-            reopenIter();
+            iter.close();
+            iter = handle.scan(ScanOptions.all());
+            iterNextChunk = 0;
         }
-        advanceTo(chunkIdx);
-        String[][] loaded = cache.get(chunkIdx);
-        if (loaded == null) {
-            throw new VortexException("failed to decode chunk " + chunkIdx);
-        }
-        return loaded;
-    }
-
-    private void advanceTo(int targetChunkIdx) throws InterruptedException {
-        AtomicReference<RuntimeException> failure = new AtomicReference<>();
-        worker.runAndAwait(() -> {
-            try {
-                while (iterNextChunk <= targetChunkIdx && iter.hasNext()) {
-                    int loading = iterNextChunk;
-                    try (Chunk chunk = iter.next()) {
-                        String[][] formatted = formatChunkRows(chunk);
-                        cache.put(loading, formatted);
-                    }
-                    iterNextChunk++;
-                }
-            } catch (RuntimeException e) {
-                failure.set(e);
+        while (iterNextChunk < chunkIdx && iter.hasNext()) {
+            try (Chunk discard = iter.next()) {
+                // skip
             }
-        });
-        if (failure.get() != null) {
-            throw failure.get();
+            iterNextChunk++;
+        }
+        if (!iter.hasNext()) {
+            throw new VortexException("scan exhausted before reaching chunk " + chunkIdx);
+        }
+        Chunk chunk = iter.next();
+        iterNextChunk++;
+        currentChunk = chunk;
+        currentChunkIdx = chunkIdx;
+        currentColumns = new Array[columns.size()];
+        for (int c = 0; c < columns.size(); c++) {
+            currentColumns[c] = chunk.column(columns.get(c));
         }
     }
 
-    private void reopenIter() throws InterruptedException {
-        AtomicReference<RuntimeException> failure = new AtomicReference<>();
-        worker.runAndAwait(() -> {
-            try {
-                if (iter != null) {
-                    iter.close();
-                }
-                iter = handle.scan(ScanOptions.all());
-                iterNextChunk = 0;
-            } catch (RuntimeException e) {
-                failure.set(e);
-            }
-        });
-        if (failure.get() != null) {
-            throw failure.get();
+    private void closeCurrentChunk() {
+        if (currentChunk != null) {
+            currentChunk.close();
+            currentChunk = null;
+            currentChunkIdx = -1;
+            currentColumns = null;
         }
     }
 
-    private String[][] formatChunkRows(Chunk chunk) {
-        int colCount = columns.size();
-        Array[] arrays = new Array[colCount];
-        for (int c = 0; c < colCount; c++) {
-            arrays[c] = chunk.column(columns.get(c));
+    private String[] formatRow(Array[] arrays, long inChunk) {
+        int n = columns.size();
+        String[] row = new String[n];
+        for (int c = 0; c < n; c++) {
+            row[c] = formatCell(arrays[c], inChunk, columnDtypes.get(c));
         }
-        int rows = (int) chunk.rowCount();
-        String[][] out = new String[rows][];
-        for (int r = 0; r < rows; r++) {
-            String[] row = new String[colCount];
-            for (int c = 0; c < colCount; c++) {
-                row[c] = formatCell(arrays[c], r, columnDtypes.get(c));
-            }
-            out[r] = row;
-        }
-        return out;
+        return row;
+    }
+
+    private String[] emptyRow() {
+        return new String[columns.size()];
     }
 
     private static String formatCell(Array array, long i, DType declared) {
@@ -320,6 +335,7 @@ public final class LazyGridSource implements AutoCloseable {
         closed = true;
         try {
             worker.runAndAwait(() -> {
+                closeCurrentChunk();
                 if (iter != null) {
                     iter.close();
                     iter = null;
@@ -328,6 +344,5 @@ public final class LazyGridSource implements AutoCloseable {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
-        cache.clear();
     }
 }
