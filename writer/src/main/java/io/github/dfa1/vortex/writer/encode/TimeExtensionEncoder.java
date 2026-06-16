@@ -1,13 +1,12 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.TimeUnit;
 import io.github.dfa1.vortex.extension.ExtensionId;
+import io.github.dfa1.vortex.extension.TimeDtype;
 import io.github.dfa1.vortex.writer.ExtensionEncoder;
 
-import java.nio.ByteBuffer;
 import java.time.LocalTime;
 import java.util.Collection;
 
@@ -28,37 +27,26 @@ public final class TimeExtensionEncoder implements ExtensionEncoder {
         return ExtensionId.VORTEX_TIME;
     }
 
-    /// Returns the default dtype using {@link TimeUnit#Milliseconds} over I32 storage.
-    /// Use {@link #dtype(TimeUnit, boolean)} for non-default units.
+    /// Returns the default dtype using [TimeUnit#Milliseconds] over I32 storage.
+    /// Use [#dtype(TimeUnit, boolean)] for non-default units.
     @Override
     public DType.Extension dtype(boolean nullable) {
-        return dtype(TimeUnit.Milliseconds, nullable);
+        return TimeDtype.of(nullable);
     }
 
-    /// Returns the dtype for the given {@link TimeUnit}.
+    /// Returns the dtype for the given [TimeUnit].
     ///
     /// @param unit     time resolution; controls storage width (I32 for s/ms, I64 for μs/ns)
     /// @param nullable whether the column allows nulls
     /// @return matching extension dtype
     public DType.Extension dtype(TimeUnit unit, boolean nullable) {
-        PType storage = switch (unit) {
-            case Seconds, Milliseconds -> PType.I32;
-            case Microseconds, Nanoseconds -> PType.I64;
-            case Days -> throw new IllegalArgumentException("Days unit not valid for vortex.time");
-        };
-        ByteBuffer meta = ByteBuffer.allocate(1);
-        meta.put(0, (byte) unit.ordinal());
-        return new DType.Extension(
-                ExtensionId.VORTEX_TIME.id(),
-                new DType.Primitive(storage, nullable),
-                meta,
-                nullable);
+        return TimeDtype.of(unit, nullable);
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public Object encodeAll(DType.Extension dtype, Collection<?> values) {
-        TimeUnit unit = readUnit(dtype);
+        TimeUnit unit = TimeDtype.readUnit(dtype);
         Collection<LocalTime> typed = (Collection<LocalTime>) values;
         int n = typed.size();
         boolean[] validity = new boolean[n];
@@ -102,14 +90,6 @@ public final class TimeExtensionEncoder implements ExtensionEncoder {
             throw new VortexException("null element in non-nullable vortex.time column");
         }
         return new NullableData(out, validity);
-    }
-
-    private static TimeUnit readUnit(DType.Extension ext) {
-        ByteBuffer meta = ext.metadata();
-        if (meta == null || !meta.hasRemaining()) {
-            throw new VortexException("missing TimeUnit metadata byte for " + ext.extensionId());
-        }
-        return TimeUnit.fromTag(meta.get(meta.position()));
     }
 
     private static long encode(LocalTime value, TimeUnit unit) {

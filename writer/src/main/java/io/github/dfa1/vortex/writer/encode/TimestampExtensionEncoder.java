@@ -1,15 +1,12 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.TimeUnit;
 import io.github.dfa1.vortex.extension.ExtensionId;
+import io.github.dfa1.vortex.extension.TimestampDtype;
 import io.github.dfa1.vortex.writer.ExtensionEncoder;
 
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.Collection;
@@ -32,10 +29,10 @@ public final class TimestampExtensionEncoder implements ExtensionEncoder {
     }
 
     /// Returns the default dtype using milliseconds resolution and no timezone.
-    /// Use {@link #dtype(TimeUnit, ZoneId, boolean)} for non-default settings.
+    /// Use [#dtype(TimeUnit, ZoneId, boolean)] for non-default settings.
     @Override
     public DType.Extension dtype(boolean nullable) {
-        return dtype(TimeUnit.Milliseconds, null, nullable);
+        return TimestampDtype.of(nullable);
     }
 
     /// Returns the dtype for the given unit and timezone.
@@ -45,24 +42,13 @@ public final class TimestampExtensionEncoder implements ExtensionEncoder {
     /// @param nullable whether the column allows nulls
     /// @return matching extension dtype
     public DType.Extension dtype(TimeUnit unit, ZoneId zone, boolean nullable) {
-        byte[] tzBytes = zone == null ? new byte[0] : zone.getId().getBytes(StandardCharsets.UTF_8);
-        ByteBuffer meta = ByteBuffer.allocate(3 + tzBytes.length).order(ByteOrder.LITTLE_ENDIAN);
-        meta.put(0, (byte) unit.ordinal());
-        meta.putShort(1, (short) tzBytes.length);
-        for (int k = 0; k < tzBytes.length; k++) {
-            meta.put(3 + k, tzBytes[k]);
-        }
-        return new DType.Extension(
-                ExtensionId.VORTEX_TIMESTAMP.id(),
-                new DType.Primitive(PType.I64, nullable),
-                meta,
-                nullable);
+        return TimestampDtype.of(unit, zone, nullable);
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public Object encodeAll(DType.Extension dtype, Collection<?> values) {
-        TimeUnit unit = readUnit(dtype);
+        TimeUnit unit = TimestampDtype.readUnit(dtype);
         Collection<Instant> typed = (Collection<Instant>) values;
         int n = typed.size();
         long[] out = new long[n];
@@ -85,14 +71,6 @@ public final class TimestampExtensionEncoder implements ExtensionEncoder {
             throw new VortexException("null element in non-nullable vortex.timestamp column");
         }
         return new NullableData(out, validity);
-    }
-
-    private static TimeUnit readUnit(DType.Extension ext) {
-        java.nio.ByteBuffer meta = ext.metadata();
-        if (meta == null || !meta.hasRemaining()) {
-            throw new VortexException("missing TimeUnit metadata byte for " + ext.extensionId());
-        }
-        return TimeUnit.fromTag(meta.get(meta.position()));
     }
 
     private static long encode(Instant value, TimeUnit unit) {

@@ -1,16 +1,15 @@
 package io.github.dfa1.vortex.reader.extension;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.encoding.TimeUnit;
 import io.github.dfa1.vortex.extension.ExtensionId;
+import io.github.dfa1.vortex.extension.TimeDtype;
 
 import io.github.dfa1.vortex.reader.ExtensionDecoder;
 
-import java.nio.ByteBuffer;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -31,31 +30,20 @@ public final class TimeExtensionDecoder implements ExtensionDecoder {
         return ExtensionId.VORTEX_TIME;
     }
 
-    /// Returns the default dtype using {@link TimeUnit#Milliseconds} over I32 storage.
-    /// Use {@link #dtype(TimeUnit, boolean)} for non-default units.
+    /// Returns the default dtype using [TimeUnit#Milliseconds] over I32 storage.
+    /// Use [#dtype(TimeUnit, boolean)] for non-default units.
     @Override
     public DType.Extension dtype(boolean nullable) {
-        return dtype(TimeUnit.Milliseconds, nullable);
+        return TimeDtype.of(nullable);
     }
 
-    /// Returns the dtype for the given {@link TimeUnit}.
+    /// Returns the dtype for the given [TimeUnit].
     ///
     /// @param unit     time resolution; controls storage width (I32 for s/ms, I64 for μs/ns)
     /// @param nullable whether the column allows nulls
     /// @return matching extension dtype
     public DType.Extension dtype(TimeUnit unit, boolean nullable) {
-        PType storage = switch (unit) {
-            case Seconds, Milliseconds -> PType.I32;
-            case Microseconds, Nanoseconds -> PType.I64;
-            case Days -> throw new IllegalArgumentException("Days unit not valid for vortex.time");
-        };
-        ByteBuffer meta = ByteBuffer.allocate(1);
-        meta.put(0, (byte) unit.ordinal());
-        return new DType.Extension(
-                ExtensionId.VORTEX_TIME.id(),
-                new DType.Primitive(storage, nullable),
-                meta,
-                nullable);
+        return TimeDtype.of(unit, nullable);
     }
 
     /// Decodes the time-of-day cell at row `i`.

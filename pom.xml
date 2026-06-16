@@ -84,6 +84,23 @@
 			**/fbs/**,
 			**/proto/**
 		</sonar.coverage.exclusions>
+		<!-- CPD (copy-paste detector) exclusions: structurally-required duplications.
+		     - Bitpacked/Delta/Alp Encoder+Decoder: type-specialised SIMD-style loops
+		       (unpackLoop8/16/32/64). Inlined per the CLAUDE.md hot-loop rule —
+		       deduplicating would block JIT vectorisation and regress decode 5-10x.
+		     - Lazy*/Chunked*/Dict* arrays: one record per primitive type to avoid
+		       boxing. Java has no generic primitive specialisation, so the records
+		       look duplicated but each must be its own concrete type. -->
+		<sonar.cpd.exclusions>
+			**/reader/decode/BitpackedEncodingDecoder.java,
+			**/writer/encode/BitpackedEncodingEncoder.java,
+			**/reader/decode/DeltaEncodingDecoder.java,
+			**/writer/encode/DeltaEncodingEncoder.java,
+			**/writer/encode/AlpEncodingEncoder.java,
+			**/reader/array/Lazy*.java,
+			**/reader/array/Chunked*.java,
+			**/reader/array/Dict*.java
+		</sonar.cpd.exclusions>
 		<!-- Coverage sources:
 		     1. per-module surefire (unit tests)
 		     2. per-module failsafe (module-local integration tests)

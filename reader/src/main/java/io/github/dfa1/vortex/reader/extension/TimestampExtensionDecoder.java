@@ -1,18 +1,15 @@
 package io.github.dfa1.vortex.reader.extension;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.encoding.TimeUnit;
 import io.github.dfa1.vortex.extension.ExtensionId;
+import io.github.dfa1.vortex.extension.TimestampDtype;
 
 import io.github.dfa1.vortex.reader.ExtensionDecoder;
 
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -22,15 +19,13 @@ import java.util.List;
 import java.util.Optional;
 
 /// `vortex.timestamp` — I64 epoch count plus optional IANA timezone.
-/// Metadata layout: `byte[0] = TimeUnit tag, bytes[1..3] = tz_len (u16 LE),
-/// bytes[3..3+tz_len] = tz UTF-8`.
 public final class TimestampExtensionDecoder implements ExtensionDecoder {
 
     /// Singleton instance.
     public static final TimestampExtensionDecoder INSTANCE = new TimestampExtensionDecoder();
 
-    /// Public no-arg constructor for {@link java.util.ServiceLoader}.
-    /// Prefer the {@link #INSTANCE} singleton in application code.
+    /// Public no-arg constructor for [java.util.ServiceLoader].
+    /// Prefer the [#INSTANCE] singleton in application code.
     public TimestampExtensionDecoder() {
     }
 
@@ -40,10 +35,10 @@ public final class TimestampExtensionDecoder implements ExtensionDecoder {
     }
 
     /// Returns the default dtype using milliseconds resolution and no timezone.
-    /// Use {@link #dtype(TimeUnit, ZoneId, boolean)} for non-default settings.
+    /// Use [#dtype(TimeUnit, ZoneId, boolean)] for non-default settings.
     @Override
     public DType.Extension dtype(boolean nullable) {
-        return dtype(TimeUnit.Milliseconds, null, nullable);
+        return TimestampDtype.of(nullable);
     }
 
     /// Returns the dtype for the given unit and timezone.
@@ -53,18 +48,7 @@ public final class TimestampExtensionDecoder implements ExtensionDecoder {
     /// @param nullable whether the column allows nulls
     /// @return matching extension dtype
     public DType.Extension dtype(TimeUnit unit, ZoneId zone, boolean nullable) {
-        byte[] tzBytes = zone == null ? new byte[0] : zone.getId().getBytes(StandardCharsets.UTF_8);
-        ByteBuffer meta = ByteBuffer.allocate(3 + tzBytes.length).order(ByteOrder.LITTLE_ENDIAN);
-        meta.put(0, (byte) unit.ordinal());
-        meta.putShort(1, (short) tzBytes.length);
-        for (int k = 0; k < tzBytes.length; k++) {
-            meta.put(3 + k, tzBytes[k]);
-        }
-        return new DType.Extension(
-                ExtensionId.VORTEX_TIMESTAMP.id(),
-                new DType.Primitive(PType.I64, nullable),
-                meta,
-                nullable);
+        return TimestampDtype.of(unit, zone, nullable);
     }
 
     /// Decodes the timestamp cell at row `i` to an {@link Instant}, ignoring timezone.
@@ -101,26 +85,7 @@ public final class TimestampExtensionDecoder implements ExtensionDecoder {
     /// @return parsed zone id, or empty when no timezone is recorded
     /// @throws VortexException if the metadata is truncated mid-string
     public Optional<ZoneId> timezone(DType.Extension ext) {
-        ByteBuffer meta = ext.metadata();
-        if (meta == null || meta.remaining() < 3) {
-            return Optional.empty();
-        }
-        ByteBuffer le = meta.duplicate().order(ByteOrder.LITTLE_ENDIAN);
-        int basePos = le.position();
-        int tzLen = Short.toUnsignedInt(le.getShort(basePos + 1));
-        if (tzLen == 0) {
-            return Optional.empty();
-        }
-        if (le.remaining() < 3 + tzLen) {
-            throw new VortexException(
-                    "timestamp metadata truncated: declared tz_len="
-                            + tzLen + " but only " + (le.remaining() - 3) + " bytes available");
-        }
-        byte[] tzBytes = new byte[tzLen];
-        for (int k = 0; k < tzLen; k++) {
-            tzBytes[k] = le.get(basePos + 3 + k);
-        }
-        return Optional.of(ZoneId.of(new String(tzBytes, StandardCharsets.UTF_8)));
+        return TimestampDtype.timezone(ext);
     }
 
     /// Decodes every row of `storage` into a list of instants. {@link MaskedArray}
