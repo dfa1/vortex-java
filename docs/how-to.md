@@ -125,6 +125,23 @@ The `, stats` suffix on a row indicates the node carries zone-map statistics
 `vortex.dict` nodes show their dictionary entries; flat numeric leaves show
 a hex preview of the encoded buffer plus decoded data.
 
+**Windows: Git Bash / MinTTY.** The TUI calls `GetConsoleMode` on stdio,
+which only works on a real Windows console handle. Git Bash and other
+MinTTY-based shells pipe stdio through the terminal emulator, so the
+console APIs fail and the TUI aborts with a `winpty` pointer in the error
+message. Two options:
+
+```bash
+# wrap with winpty (ships with Git for Windows)
+winpty java -jar vortex-cli-*-all.jar tui data.vortex
+
+# or switch to a terminal that attaches a real console: Windows Terminal,
+# PowerShell, or cmd.exe
+```
+
+`inspect` (static, non-interactive) works in any shell since it does not
+toggle terminal modes.
+
 ---
 
 ## Project columns

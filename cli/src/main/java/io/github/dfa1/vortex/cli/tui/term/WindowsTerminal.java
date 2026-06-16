@@ -34,6 +34,8 @@ public final class WindowsTerminal implements Terminal {
     private static final int ENABLE_PROCESSED_OUTPUT = 0x0001;
     private static final int ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004;
 
+    private static final int FILE_TYPE_PIPE = 0x0003;
+
     private static final Linker LINKER = Linker.nativeLinker();
     private static final SymbolLookup KERNEL32 = SymbolLookup.libraryLookup(
             "kernel32", Arena.global());
@@ -47,6 +49,8 @@ public final class WindowsTerminal implements Terminal {
     private static final MethodHandle GET_CONSOLE_SCREEN_BUFFER_INFO = downcall(
             "GetConsoleScreenBufferInfo",
             FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+    private static final MethodHandle GET_FILE_TYPE = downcall("GetFileType",
+            FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
 
     private final Arena arena;
     private final MemorySegment stdoutHandle;
@@ -194,6 +198,18 @@ public final class WindowsTerminal implements Terminal {
     private static int readMode(Arena arena, MemorySegment handle) throws Throwable {
         MemorySegment slot = arena.allocate(4);
         if ((int) GET_CONSOLE_MODE.invokeExact(handle, slot) == 0) {
+            // Under Git Bash / MSYS / MinTTY stdio is piped from the terminal
+            // emulator rather than attached to a real Windows console, so
+            // GetConsoleMode fails with ERROR_INVALID_HANDLE. Distinguish
+            // that case so the user gets a pointer to `winpty` instead of
+            // a bare "GetConsoleMode failed".
+            int fileType = (int) GET_FILE_TYPE.invokeExact(handle);
+            if (fileType == FILE_TYPE_PIPE) {
+                throw new IOException(
+                        "TUI requires a real Windows console. Git Bash / MinTTY pipes stdio, so "
+                        + "console APIs fail. Re-run via `winpty <command>` or switch to "
+                        + "Windows Terminal, PowerShell, or cmd.exe.");
+            }
             throw new IOException("GetConsoleMode failed");
         }
         return slot.get(ValueLayout.JAVA_INT, 0);
