@@ -132,19 +132,7 @@ public final class PosixTerminal implements Terminal {
 
     @Override
     public Optional<Key> readKey(Duration timeout) throws IOException {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        while (System.in.available() == 0) {
-            if (System.nanoTime() >= deadline) {
-                return Optional.empty();
-            }
-            try {
-                Thread.sleep(20);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return Optional.empty();
-            }
-        }
-        return Optional.of(KeyDecoder.next(System.in));
+        return KeyDecoder.nextWithTimeout(System.in, timeout);
     }
 
     @Override

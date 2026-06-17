@@ -2,6 +2,8 @@ package io.github.dfa1.vortex.cli.tui.term;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.time.Duration;
+import java.util.Optional;
 
 /// Translates raw stdin bytes into [Key] events.
 ///
@@ -14,6 +16,29 @@ import java.io.InputStream;
 public final class KeyDecoder {
 
     private KeyDecoder() {
+    }
+
+    /// Reads the next key, returning empty if the timeout elapses before any
+    /// input is available. Polls [InputStream#available()] on a 20 ms cadence.
+    ///
+    /// @param in raw input stream
+    /// @param timeout maximum time to wait
+    /// @return the decoded key, or empty on timeout
+    /// @throws IOException if reading fails
+    public static Optional<Key> nextWithTimeout(InputStream in, Duration timeout) throws IOException {
+        long deadline = System.nanoTime() + timeout.toNanos();
+        while (in.available() == 0) {
+            if (System.nanoTime() >= deadline) {
+                return Optional.empty();
+            }
+            try {
+                Thread.sleep(20);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return Optional.empty();
+            }
+        }
+        return Optional.of(next(in));
     }
 
     /// Reads the next key from `in`, blocking until at least one byte arrives.

@@ -168,19 +168,7 @@ public final class WindowsTerminal implements Terminal {
 
     @Override
     public Optional<Key> readKey(Duration timeout) throws IOException {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        while (stdinStream.available() == 0) {
-            if (System.nanoTime() >= deadline) {
-                return Optional.empty();
-            }
-            try {
-                Thread.sleep(20);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return Optional.empty();
-            }
-        }
-        return Optional.of(KeyDecoder.next(stdinStream));
+        return KeyDecoder.nextWithTimeout(stdinStream, timeout);
     }
 
     @Override

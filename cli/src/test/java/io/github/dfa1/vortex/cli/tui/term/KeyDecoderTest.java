@@ -1,9 +1,13 @@
 package io.github.dfa1.vortex.cli.tui.term;
 
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.time.Duration;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -182,6 +186,82 @@ class KeyDecoderTest {
         // Then
         assertThat(sut).isInstanceOf(Key.Char.class);
         assertThat(((Key.Char) sut).value()).isEqualTo((char) 0x03);
+    }
+
+    @Nested
+    class NextWithTimeout {
+
+        @Test
+        void inputAvailable_returnsKeyImmediately() throws IOException {
+            // Given — 'q' already in the buffer; available() returns 1
+            ByteArrayInputStream in = bytes('q');
+
+            // When
+            Optional<Key> sut = KeyDecoder.nextWithTimeout(in, Duration.ofMillis(100));
+
+            // Then
+            assertThat(sut).isPresent();
+            assertThat(sut.get()).isInstanceOf(Key.Char.class);
+            assertThat(((Key.Char) sut.get()).value()).isEqualTo('q');
+        }
+
+        @Test
+        void noInputWithinTimeout_returnsEmpty() throws IOException {
+            // Given — stream that always reports available() == 0 and blocks on read()
+            InputStream empty = new InputStream() {
+                @Override
+                public int read() {
+                    throw new AssertionError("read() must not be called on timeout path");
+                }
+
+                @Override
+                public int available() {
+                    return 0;
+                }
+            };
+
+            // When
+            Optional<Key> sut = KeyDecoder.nextWithTimeout(empty, Duration.ofMillis(40));
+
+            // Then
+            assertThat(sut).isEmpty();
+        }
+
+        @Test
+        void arrowKeySequenceAvailable_decodesFullSequence() throws IOException {
+            // Given — ESC [ B (ArrowDown) ready in buffer
+            ByteArrayInputStream in = bytes(0x1B, '[', 'B');
+
+            // When
+            Optional<Key> sut = KeyDecoder.nextWithTimeout(in, Duration.ofMillis(100));
+
+            // Then
+            assertThat(sut).contains(Key.ArrowDown.INSTANCE);
+        }
+
+        @Test
+        void interruptedThread_returnsEmpty() throws IOException {
+            // Given — thread pre-interrupted; available() returns 0 so loop is entered
+            InputStream blocked = new InputStream() {
+                @Override
+                public int read() {
+                    throw new AssertionError("read() must not be called");
+                }
+
+                @Override
+                public int available() {
+                    return 0;
+                }
+            };
+            Thread.currentThread().interrupt();
+
+            // When
+            Optional<Key> sut = KeyDecoder.nextWithTimeout(blocked, Duration.ofSeconds(10));
+
+            // Then — returns empty rather than blocking; interrupt flag is restored
+            assertThat(sut).isEmpty();
+            assertThat(Thread.interrupted()).isTrue();
+        }
     }
 
     private static ByteArrayInputStream bytes(int... bs) {
