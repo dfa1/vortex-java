@@ -921,6 +921,11 @@ public final class VortexWriter implements Closeable {
                 return false;
             }
         }
+        // A single distinct value is better compressed by vortex.constant (no dict overhead);
+        // route it through the cascading compressor instead.
+        if (seen.size() == 1) {
+            return false;
+        }
         return seen.size() * 2 < n;
     }
 
