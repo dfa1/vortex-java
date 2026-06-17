@@ -40,6 +40,11 @@
 			<scope>test</scope>
 		</dependency>
 		<dependency>
+			<groupId>io.github.dfa1.vortex</groupId>
+			<artifactId>vortex-csv</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
 			<groupId>dev.hardwood</groupId>
 			<artifactId>hardwood-core</artifactId>
 			<scope>test</scope>
