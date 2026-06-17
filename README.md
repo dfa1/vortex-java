@@ -31,6 +31,22 @@ ops/s = complete file scans per second; higher is better.
 
 Measured 2026-06-16, commit `74ec207b`. See [docs/explanation.md](docs/explanation.md#benchmarks) for full tables and methodology.
 
+**Compression** — NYC Yellow Taxi 2024-01, 2,964,624 rows × 19 columns, imported from the
+same Parquet file (47.6 MB), cascading depth 3, Apple M5:
+
+| Implementation | Output size | vs Parquet |
+|---------------|-------------|------------|
+| Rust JNI      | 47.0 MB     | −1.3%      |
+| **Java**      | **40.7 MB** | **−14.5%** |
+
+Java produces a 13% smaller file than the Rust reference from identical input.
+The gap comes from the global dictionary encoder that catches low-cardinality `F64`
+columns (`mta_tax`, `Airport_fee`, `congestion_surcharge`) that Rust's compressor
+leaves as plain ALP. Data integrity is verified by
+`TaxiParquetOracleVsJavaIntegrationTest`: hardwood reads the Parquet file directly
+to a CSV (oracle); `ParquetImporter` → `CsvExporter` produces a second CSV (SUT);
+line-by-line diff is zero.
+
 ## Who is this for
 
 - JVM analytics engines and OLAP systems
