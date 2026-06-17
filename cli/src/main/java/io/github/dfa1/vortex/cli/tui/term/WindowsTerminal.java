@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.cli.tui.term;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.PrintStream;
 import java.time.Duration;
 import java.util.Optional;
@@ -51,22 +52,38 @@ public final class WindowsTerminal implements Terminal {
             FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS));
     private static final MethodHandle GET_FILE_TYPE = downcall("GetFileType",
             FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
+    private static final MethodHandle READ_FILE = downcall("ReadFile",
+            FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                    ValueLayout.ADDRESS,   // hFile
+                    ValueLayout.ADDRESS,   // lpBuffer
+                    ValueLayout.JAVA_INT,  // nNumberOfBytesToRead
+                    ValueLayout.ADDRESS,   // lpNumberOfBytesRead
+                    ValueLayout.ADDRESS)); // lpOverlapped (NULL for sync)
+    private static final MethodHandle GET_NUMBER_OF_CONSOLE_INPUT_EVENTS = downcall(
+            "GetNumberOfConsoleInputEvents",
+            FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                    ValueLayout.ADDRESS,   // hConsoleInput
+                    ValueLayout.ADDRESS)); // lpcNumberOfEvents
 
     private final Arena arena;
+    private final MemorySegment stdinHandle;
     private final MemorySegment stdoutHandle;
     private final int savedInMode;
     private final int savedOutMode;
     private final PrintStream out;
+    private final InputStream stdinStream;
     private final Thread shutdownHook;
     private boolean closed;
 
-    private WindowsTerminal(Arena arena, MemorySegment stdoutHandle,
+    private WindowsTerminal(Arena arena, MemorySegment stdinHandle, MemorySegment stdoutHandle,
             int savedInMode, int savedOutMode) {
         this.arena = arena;
+        this.stdinHandle = stdinHandle;
         this.stdoutHandle = stdoutHandle;
         this.savedInMode = savedInMode;
         this.savedOutMode = savedOutMode;
         this.out = System.out;
+        this.stdinStream = new ConsoleInputStream();
         this.shutdownHook = new Thread(this::restore, "windows-term-restore");
         Runtime.getRuntime().addShutdownHook(shutdownHook);
     }
@@ -94,7 +111,7 @@ public final class WindowsTerminal implements Terminal {
                 throw new IOException("SetConsoleMode(stdout) failed");
             }
 
-            WindowsTerminal term = new WindowsTerminal(arena, stdout, inMode, outMode);
+            WindowsTerminal term = new WindowsTerminal(arena, stdin, stdout, inMode, outMode);
             term.out.print(Ansi.ENTER_ALT_SCREEN);
             term.out.print(Ansi.HIDE_CURSOR);
             term.out.print(Ansi.CLEAR_SCREEN);
@@ -146,13 +163,13 @@ public final class WindowsTerminal implements Terminal {
 
     @Override
     public Key readKey() throws IOException {
-        return KeyDecoder.next(System.in);
+        return KeyDecoder.next(stdinStream);
     }
 
     @Override
     public Optional<Key> readKey(Duration timeout) throws IOException {
         long deadline = System.nanoTime() + timeout.toNanos();
-        while (System.in.available() == 0) {
+        while (stdinStream.available() == 0) {
             if (System.nanoTime() >= deadline) {
                 return Optional.empty();
             }
@@ -163,7 +180,7 @@ public final class WindowsTerminal implements Terminal {
                 return Optional.empty();
             }
         }
-        return Optional.of(KeyDecoder.next(System.in));
+        return Optional.of(KeyDecoder.next(stdinStream));
     }
 
     @Override
@@ -179,6 +196,39 @@ public final class WindowsTerminal implements Terminal {
         }
         restore();
         arena.close();
+    }
+
+    /// Reads bytes directly from the Windows console handle via `ReadFile`,
+    /// bypassing `System.in` which goes through JVM-internal CRT wrappers
+    /// that ignore `SetConsoleMode` changes.
+    private final class ConsoleInputStream extends InputStream {
+
+        private final MemorySegment readBuf = arena.allocate(ValueLayout.JAVA_BYTE);
+        private final MemorySegment bytesRead = arena.allocate(ValueLayout.JAVA_INT);
+        private final MemorySegment eventCount = arena.allocate(ValueLayout.JAVA_INT);
+
+        @Override
+        public int read() throws IOException {
+            try {
+                int rc = (int) READ_FILE.invokeExact(stdinHandle, readBuf, 1, bytesRead, MemorySegment.NULL);
+                if (rc == 0 || bytesRead.get(ValueLayout.JAVA_INT, 0) == 0) {
+                    return -1;
+                }
+                return Byte.toUnsignedInt(readBuf.get(ValueLayout.JAVA_BYTE, 0));
+            } catch (Throwable t) {
+                throw new IOException(t);
+            }
+        }
+
+        @Override
+        public int available() {
+            try {
+                int rc = (int) GET_NUMBER_OF_CONSOLE_INPUT_EVENTS.invokeExact(stdinHandle, eventCount);
+                return rc != 0 ? eventCount.get(ValueLayout.JAVA_INT, 0) : 0;
+            } catch (Throwable ignored) {
+                return 0;
+            }
+        }
     }
 
     private void restore() {

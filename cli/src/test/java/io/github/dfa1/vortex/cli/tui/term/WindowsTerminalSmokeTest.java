@@ -24,6 +24,9 @@ class WindowsTerminalSmokeTest {
     void classLoad_resolvesEveryKernel32Symbol() {
         // Given / When — touching the class triggers <clinit>, which calls
         // Linker.downcallHandle for every imported kernel32 function.
+        // Symbols covered: GetStdHandle, GetConsoleMode, SetConsoleMode,
+        // GetConsoleScreenBufferInfo, GetFileType, ReadFile,
+        // GetNumberOfConsoleInputEvents.
         Class<?> sut = WindowsTerminal.class;
 
         // Then
