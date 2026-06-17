@@ -22,6 +22,12 @@
 			<groupId>dev.hardwood</groupId>
 			<artifactId>hardwood-core</artifactId>
 		</dependency>
+		<dependency>
+			<!-- Required by hardwood-core for ZSTD-compressed Parquet files;
+			     declared as optional upstream so we must pull it in explicitly. -->
+			<groupId>com.github.luben</groupId>
+			<artifactId>zstd-jni</artifactId>
+		</dependency>
 		<!-- testing -->
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>

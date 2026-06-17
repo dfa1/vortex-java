@@ -38,6 +38,13 @@
 			<artifactId>aircompressor-v3</artifactId>
 		</dependency>
 		<dependency>
+			<!-- Required by hardwood-core (via vortex-parquet) for ZSTD-compressed
+			     Parquet files; listed here explicitly so the shade plugin bundles
+			     the native classes into the uber-jar. -->
+			<groupId>com.github.luben</groupId>
+			<artifactId>zstd-jni</artifactId>
+		</dependency>
+		<dependency>
 			<!-- ImportCommand calls {@code options.writeOptions().allowedCascading()} via the
 			     csv / parquet importers' API surface; that transitively reaches
 			     {@link io.github.dfa1.vortex.writer.WriteOptions}. Required at compile scope
