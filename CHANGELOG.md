@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.3] — 2026-06-17
+
+Parquet ZSTD support, `vortex.patched` encoder, constant-encoding selection fix, Windows TUI raw-mode fix.
+
+### Added
+
+- Parquet: ZSTD-compressed Parquet import now works — `zstd-jni` was an optional dep in hardwood and had to be declared explicitly. NYC Yellow Taxi 2024-01 (47.6 MB Parquet, 2.96 M rows × 19 cols) imports to **40.7 MB** Vortex — 14% smaller than the Rust JNI reference (47 MB) thanks to the global-dict encoder catching low-cardinality `F64` columns. ([bea15f2d](https://github.com/dfa1/vortex-java/commit/bea15f2d))
+- Writer: `vortex.patched` encoder — identifies outlier values that exceed the optimal bit width, zeros them in the inner array (exposed as an open cascade child for further bitpacking), and stores their within-chunk U16 indices and raw values separately. ([d63ab7c3](https://github.com/dfa1/vortex-java/commit/d63ab7c3))
+
+### Fixed
+
+- CLI: Windows TUI raw-mode — `readKey` now calls `ReadFile` directly on the kernel handle obtained via `GetStdHandle` instead of reading from `System.in`. Java's `System.in` goes through JVM-internal CRT wrappers that ignore `SetConsoleMode`, so every keypress previously required Enter before the TUI reacted. ([31b77acc](https://github.com/dfa1/vortex-java/commit/31b77acc))
+- Writer: constant encoding skipped for single-distinct-value columns — `isDictCandidate` returned `true` for `distinctCount == 1`, routing all-same-value columns through the global-dict path instead of `vortex.constant`. ([0e8b945e](https://github.com/dfa1/vortex-java/commit/0e8b945e))
+
+### Changed
+
+- CLI: polling loop in `Terminal.readKey(Duration)` extracted to `KeyDecoder.nextWithTimeout(InputStream, Duration)` — eliminates duplication between `PosixTerminal` and `WindowsTerminal`. ([35b05d16](https://github.com/dfa1/vortex-java/commit/35b05d16))
+
+### Tests
+
+- Integration: `TaxiParquetOracleVsJavaIntegrationTest` — hardwood reads the taxi Parquet to a CSV (oracle); `ParquetImporter` → `CsvExporter` produces a second CSV (SUT); line-by-line diff must be zero. Proves the importer loses no data across 2.96 M rows × 19 columns. ([1a1a676e](https://github.com/dfa1/vortex-java/commit/1a1a676e))
+
+[0.7.3]: https://github.com/dfa1/vortex-java/compare/v0.7.2...v0.7.3
+
 ## [0.7.2] — 2026-06-16
 
 CLI usability + reader robustness on real-world files (NYC Yellow Taxi).
