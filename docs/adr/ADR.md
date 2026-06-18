@@ -26,3 +26,4 @@ Each ADR is a Markdown file named `NNNN-short-title.md`. Use `template.md` as th
 | 0011 | Writer zero-copy MemorySegment overload       | Deferred  |
 | 0012 | Zero-copy layout decoding: lazy Chunked/Dict  | Implemented |
 | 0013 | Compute primitives: masks, kernels, no-materialise | Proposed  |
+| 0014 | Variant encoding: chunked constants now, parquet.variant later | Accepted  |
