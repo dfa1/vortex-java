@@ -12,8 +12,13 @@ public record ImportOptions(
         ProgressListener progressListener,
         WriteOptions writeOptions
 ) {
+    /// Default options.
+    ///
+    /// Global dictionary is disabled because CSV import is streaming — enabling it
+    /// would buffer every column's raw data across all chunks until close, consuming
+    /// O(total rows) heap. Per-chunk dict encoding still applies inside each chunk.
     public static ImportOptions defaults() {
-        return new ImportOptions(',', 65_536, true, null, null, WriteOptions.cascading(3));
+        return new ImportOptions(',', 65_536, true, null, null, WriteOptions.cascading(3).withGlobalDict(false));
     }
 
     /// Override the inferred schema. The struct's field names become column names;
