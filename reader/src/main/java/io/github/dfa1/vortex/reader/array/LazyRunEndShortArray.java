@@ -22,29 +22,11 @@ public record LazyRunEndShortArray(DType dtype, long length, ShortArray values, 
 
     @Override
     public int getInt(long i) {
-        int k = RunEndArrays.findRun(runEnds, values.length(), i + offset);
-        return values.getInt(k);
+        return RunEndArrays.runInt(runEnds, values.length(), i + offset, values::getInt);
     }
 
     @Override
     public long fold(long identity, LongBinaryOperator op) {
-        long[] acc = {identity};
-        long numRuns = values.length();
-        long startAbs = offset;
-        long endAbs = offset + length;
-        int run = RunEndArrays.findRun(runEnds, numRuns, startAbs);
-        long emittedFrom = startAbs;
-        while (emittedFrom < endAbs && run < numRuns) {
-            long runEnd = RunEndArrays.readRunEnd(runEnds, run);
-            long emitTo = Math.min(runEnd, endAbs);
-            long count = emitTo - emittedFrom;
-            long widened = values.getInt(run);
-            for (long r = 0; r < count; r++) {
-                acc[0] = op.applyAsLong(acc[0], widened);
-            }
-            emittedFrom = emitTo;
-            run++;
-        }
-        return acc[0];
+        return RunEndArrays.foldInt(runEnds, values.length(), offset, length, values::getInt, identity, op);
     }
 }

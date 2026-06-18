@@ -3,6 +3,8 @@ package io.github.dfa1.vortex.reader.array;
 import io.github.dfa1.vortex.core.VortexException;
 
 import java.util.function.IntConsumer;
+import java.util.function.LongBinaryOperator;
+import java.util.function.LongToIntFunction;
 
 /// Package-private helpers shared by the `LazySparseXxxArray` records.
 ///
@@ -97,5 +99,43 @@ final class SparseArrays {
         for (long r = pos; r < absEnd; r++) {
             fillSlot.run();
         }
+    }
+
+    /// Resolves the int value at absolute position `absPos`: the patch value when a
+    /// patch lands there, otherwise `fillInt`. Shared by the byte/short/int sparse
+    /// records whose `getInt` differs only in the patch-value accessor.
+    ///
+    /// @param patchIndices sorted absolute patch positions (may be `null` when `numPatches == 0`)
+    /// @param numPatches   number of patches; `0` for a no-patch array
+    /// @param absPos       absolute position to resolve
+    /// @param patchGetInt  reads patch value `p` as an int
+    /// @param fillInt      value at unpatched positions
+    /// @return the resolved int value
+    static int patchedInt(Array patchIndices, long numPatches, long absPos,
+            LongToIntFunction patchGetInt, int fillInt) {
+        int p = findPatch(patchIndices, numPatches, absPos);
+        return p >= 0 ? patchGetInt.applyAsInt(p) : fillInt;
+    }
+
+    /// Folds the int view of a sparse range, emitting `fillInt` for unpatched
+    /// positions and the patch value for patched ones. Shared by the byte/short/int
+    /// sparse records.
+    ///
+    /// @param patchIndices sorted absolute patch positions (may be `null` when `numPatches == 0`)
+    /// @param numPatches   number of patches; `0` for a no-patch array
+    /// @param offset       starting absolute position
+    /// @param length       logical row count
+    /// @param patchGetInt  reads patch value `p` as an int
+    /// @param fillInt      value at unpatched positions
+    /// @param identity     initial accumulator
+    /// @param op           reduction operator
+    /// @return the accumulated result
+    static long foldInt(Array patchIndices, long numPatches, long offset, long length,
+            LongToIntFunction patchGetInt, int fillInt, long identity, LongBinaryOperator op) {
+        long[] acc = {identity};
+        walkPatches(patchIndices, numPatches, offset, offset + length,
+                () -> acc[0] = op.applyAsLong(acc[0], fillInt),
+                p -> acc[0] = op.applyAsLong(acc[0], patchGetInt.applyAsInt(p)));
+        return acc[0];
     }
 }
