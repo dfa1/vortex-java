@@ -4,10 +4,6 @@ package io.github.dfa1.vortex.reader.array;
 import java.util.function.LongBinaryOperator;
 
 /// [Array] for I8/U8 primitive columns.
-///
-/// The default impl is [MaterializedByteArray], a buffer-backed record
-/// returned when an encoding decoder either materialises values eagerly or
-/// has no lazy variant of its own.
 public non-sealed interface ByteArray extends Array {
 
     /// Returns the raw byte value at the given logical index.

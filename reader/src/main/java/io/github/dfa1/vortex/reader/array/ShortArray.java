@@ -4,10 +4,6 @@ package io.github.dfa1.vortex.reader.array;
 import java.util.function.LongBinaryOperator;
 
 /// [Array] for I16/U16 primitive columns.
-///
-/// The default impl is [MaterializedShortArray], a buffer-backed record
-/// returned when an encoding decoder either materialises values eagerly or
-/// has no lazy variant of its own.
 public non-sealed interface ShortArray extends Array {
 
     /// Returns the raw signed short value at the given index.
