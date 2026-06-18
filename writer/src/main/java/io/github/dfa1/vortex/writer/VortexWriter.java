@@ -245,6 +245,7 @@ public final class VortexWriter implements Closeable {
             case DateTimePartsData d -> d.timestamps().length;
             case FixedSizeListData d -> d.outerLen();
             case io.github.dfa1.vortex.writer.encode.NullableData d -> d.validity().length;
+            case io.github.dfa1.vortex.writer.encode.VariantData d -> d.length();
             default -> throw new UnsupportedOperationException(
                     "unsupported data type: " + data.getClass());
         };
@@ -315,6 +316,10 @@ public final class VortexWriter implements Closeable {
                 }
                 int inner = Extension.createExtension(fbb, idOff, storageDtypeOff, metaOff);
                 yield io.github.dfa1.vortex.fbs.DType.createDType(fbb, Type.Extension, inner);
+            }
+            case DType.Variant v -> {
+                int inner = io.github.dfa1.vortex.fbs.Variant.createVariant(fbb, v.nullable());
+                yield io.github.dfa1.vortex.fbs.DType.createDType(fbb, Type.Variant, inner);
             }
             default -> throw new UnsupportedOperationException("unsupported DType: " + dtype);
         };
@@ -485,6 +490,11 @@ public final class VortexWriter implements Closeable {
                 && data instanceof io.github.dfa1.vortex.writer.encode.NullableData
                 && !(dtype instanceof DType.Extension)) {
             encodingOverride = new MaskedEncodingEncoder();
+        }
+        // Variant columns bypass the cascade: the container encoding is structural, not a
+        // compressible primitive codec, so route straight to the dedicated encoder.
+        if (encodingOverride == null && dtype instanceof DType.Variant) {
+            encodingOverride = new io.github.dfa1.vortex.writer.encode.VariantEncodingEncoder();
         }
         try (Arena arena = Arena.ofConfined()) {
             EncodeResult result;
