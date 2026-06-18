@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Writer: `vortex.variant` encoder. Encodes a variant column as the canonical `vortex.variant` container over `core_storage` — an all-equal column becomes a single `vortex.constant`, a row-varying column a `vortex.chunked` of per-run constants — with an optional row-aligned typed `shredded` child recorded in `VariantMetadata.shredded_dtype`. Input is `VariantData(List<Scalar>)` with `.constant(n, v)` / `.shredded(...)` factories. Java↔Rust (JNI) round-trip verified for constant, row-varying, and shredded columns. Scalar values only — arbitrary nested objects need `vortex.parquet.variant` (deferred, [ADR 0014](docs/adr/0014-variant-encoding-strategy.md)).
+- Reader: variant columns now decode Java-side. `ConstantEncodingDecoder` and `ChunkedEncodingDecoder` handle `DType.Variant` (materialising the inner-typed array); `VariantEncodingDecoder` wraps the result as `VariantArray`, exposing `coreStorage()` and `shredded()`.
+
 ## [0.7.3] — 2026-06-17
 
 Parquet ZSTD support, `vortex.patched` encoder, constant-encoding selection fix, Windows TUI raw-mode fix.

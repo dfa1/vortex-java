@@ -77,7 +77,7 @@ public enum EncodingId {
     VORTEX_MASKED("vortex.masked"),
     /// Patched encoding (not yet implemented; registered to prevent parse errors).
     VORTEX_PATCHED("vortex.patched"),
-    /// Variant encoding (not yet implemented; registered to prevent parse errors).
+    /// Variant logical encoding: canonical container over `core_storage` plus an optional shredded child.
     VORTEX_VARIANT("vortex.variant"),
     ;
 
