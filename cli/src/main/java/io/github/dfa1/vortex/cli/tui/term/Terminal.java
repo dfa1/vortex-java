@@ -18,8 +18,7 @@ import java.util.Optional;
 ///     ...
 /// }
 /// ```
-public sealed interface Terminal extends AutoCloseable
-        permits PosixTerminal, WindowsTerminal {
+public interface Terminal extends AutoCloseable {
 
     /// Opens the platform-appropriate raw-mode terminal.
     ///

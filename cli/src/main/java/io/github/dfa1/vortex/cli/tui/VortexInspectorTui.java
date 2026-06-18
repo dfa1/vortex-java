@@ -88,8 +88,23 @@ public final class VortexInspectorTui {
             throws IOException {
         InspectorTree tree = InspectorTree.buildShallow(handle);
         try (Terminal term = Terminal.open()) {
-            new Loop(term, tree, handle, worker).run();
+            run(term, tree, handle, worker);
         }
+    }
+
+    /// Runs the inspector viewer against a caller-supplied terminal. Package-private
+    /// seam used by tests to drive the loop with a scripted fake terminal,
+    /// bypassing the OS raw-mode setup in
+    /// [#show(VortexHandle, IoWorker, InspectorTree.Progress)].
+    ///
+    /// @param term   terminal to render to and read keys from
+    /// @param tree   pre-built inspector tree for `handle`
+    /// @param handle open Vortex file handle
+    /// @param worker I/O dispatcher; may be `null` for synchronous render-thread I/O
+    /// @throws IOException if the terminal write fails
+    static void run(Terminal term, InspectorTree tree, VortexHandle handle, IoWorker worker)
+            throws IOException {
+        new Loop(term, tree, handle, worker).run();
     }
 
     private static final class Loop {

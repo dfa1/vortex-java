@@ -24,8 +24,20 @@ public final class VortexGridTui {
     ///                     decoder fails
     public static void show(String source, LazyGridSource data) throws IOException {
         try (Terminal term = Terminal.open()) {
-            new Loop(term, source, data).run();
+            run(term, source, data);
         }
+    }
+
+    /// Runs the grid viewer against a caller-supplied terminal. Package-private
+    /// seam used by tests to drive the loop with a scripted fake terminal,
+    /// bypassing the OS raw-mode setup in [#show(String, LazyGridSource)].
+    ///
+    /// @param term   terminal to render to and read keys from
+    /// @param source display label for the file (path or URL)
+    /// @param data   lazy row source; closed by the caller
+    /// @throws IOException if the terminal write or row decode fails
+    static void run(Terminal term, String source, LazyGridSource data) throws IOException {
+        new Loop(term, source, data).run();
     }
 
     private static final class Loop {
