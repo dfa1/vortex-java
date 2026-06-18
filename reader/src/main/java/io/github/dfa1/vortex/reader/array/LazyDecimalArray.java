@@ -67,7 +67,7 @@ public record LazyDecimalArray(DType dtype, long length, MemorySegment buf, int 
     }
 
     @Override
-    public Array truncate(long rows) {
+    public Array limited(long rows) {
         return new LazyDecimalArray(dtype, rows, buf.asSlice(0, rows * (long) byteWidth), byteWidth);
     }
 }

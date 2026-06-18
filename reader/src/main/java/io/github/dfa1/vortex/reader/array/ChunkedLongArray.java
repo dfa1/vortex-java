@@ -104,7 +104,7 @@ public record ChunkedLongArray(DType dtype, long length, LongArray[] children, l
     }
 
     @Override
-    public Array truncate(long rows) {
-        return ChunkedLongArray.of(dtype, rows, ChunkedArrays.truncateChildren(children, offsets, rows));
+    public Array limited(long rows) {
+        return ChunkedLongArray.of(dtype, rows, ChunkedArrays.limitedChildren(children, offsets, rows));
     }
 }

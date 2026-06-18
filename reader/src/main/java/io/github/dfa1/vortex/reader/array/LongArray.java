@@ -47,7 +47,7 @@ public non-sealed interface LongArray extends Array {
     /// @param rows number of leading elements to keep
     /// @return a length-`rows` long array view
     @Override
-    default Array truncate(long rows) {
+    default Array limited(long rows) {
         return new OffsetLongArray(dtype(), rows, this, 0);
     }
 }

@@ -29,7 +29,7 @@ public non-sealed interface BoolArray extends Array {
     /// @param rows number of leading elements to keep
     /// @return a length-`rows` bool array view
     @Override
-    default Array truncate(long rows) {
+    default Array limited(long rows) {
         return new OffsetBoolArray(dtype(), rows, this, 0);
     }
 }

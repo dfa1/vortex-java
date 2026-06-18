@@ -50,7 +50,7 @@ public non-sealed interface ShortArray extends Array {
     /// @param rows number of leading elements to keep
     /// @return a length-`rows` short array view
     @Override
-    default Array truncate(long rows) {
+    default Array limited(long rows) {
         return new OffsetShortArray(dtype(), rows, this, 0);
     }
 }

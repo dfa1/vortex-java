@@ -47,7 +47,7 @@ public non-sealed interface DoubleArray extends Array {
     /// @param rows number of leading elements to keep
     /// @return a length-`rows` double array view
     @Override
-    default Array truncate(long rows) {
+    default Array limited(long rows) {
         return new OffsetDoubleArray(dtype(), rows, this, 0);
     }
 }

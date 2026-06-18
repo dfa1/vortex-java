@@ -64,7 +64,7 @@ public sealed interface VarBinArray extends Array
         }
 
         @Override
-        public VarBinArray truncate(long rows) {
+        public VarBinArray limited(long rows) {
             if (rows >= length) {
                 return this;
             }
@@ -105,7 +105,7 @@ public sealed interface VarBinArray extends Array
     ///
     /// @param rows number of rows to retain; if `rows >= length` returns this array unchanged
     /// @return a `VarBinArray` containing the first `rows` elements
-    VarBinArray truncate(long rows);
+    VarBinArray limited(long rows);
 
     /// Materialises any `VarBinArray` into a flat {@link OffsetMode}. The fast path
     /// returns `src` unchanged when it is already an {@link OffsetMode}. Other modes
@@ -208,7 +208,7 @@ public sealed interface VarBinArray extends Array
         }
 
         @Override
-        public VarBinArray truncate(long rows) {
+        public VarBinArray limited(long rows) {
             if (rows >= length) {
                 return this;
             }
@@ -276,7 +276,7 @@ public sealed interface VarBinArray extends Array
         }
 
         @Override
-        public VarBinArray truncate(long rows) {
+        public VarBinArray limited(long rows) {
             if (rows >= length) {
                 return this;
             }
@@ -396,11 +396,11 @@ public sealed interface VarBinArray extends Array
         }
 
         @Override
-        public VarBinArray truncate(long rows) {
+        public VarBinArray limited(long rows) {
             if (rows >= length) {
                 return this;
             }
-            // Keep full children that fit, recursively truncate the boundary child.
+            // Keep full children that fit, recursively limited the boundary child.
             var kept = new java.util.ArrayList<Array>(children.length);
             for (int i = 0; i < children.length; i++) {
                 long start = offsets[i];
@@ -411,7 +411,7 @@ public sealed interface VarBinArray extends Array
                 if (end <= rows) {
                     kept.add(children[i]);
                 } else {
-                    kept.add(children[i].truncate(rows - start));
+                    kept.add(children[i].limited(rows - start));
                 }
             }
             return ChunkedMode.of(dtype, rows, kept);
@@ -481,7 +481,7 @@ public sealed interface VarBinArray extends Array
         }
 
         @Override
-        public VarBinArray truncate(long rows) {
+        public VarBinArray limited(long rows) {
             if (rows >= length) {
                 return this;
             }

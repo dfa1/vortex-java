@@ -27,7 +27,7 @@ class GenericArrayTest {
             GenericArray sut = new GenericArray(DTYPE, 10, seg);
 
             // When
-            GenericArray clamped = sut.withLength(4);
+            GenericArray clamped = sut.limited(4);
 
             // Then — length reflects new bound; buffer is reused (no copy)
             assertThat(clamped.length()).isEqualTo(4);
@@ -42,7 +42,7 @@ class GenericArrayTest {
             GenericArray sut = new GenericArray(DTYPE, 10, arena.allocate(80));
 
             // When / Then — no-op short-circuits to avoid wrapper allocation
-            assertThat(sut.withLength(10)).isSameAs(sut);
+            assertThat(sut.limited(10)).isSameAs(sut);
         }
     }
 
@@ -54,7 +54,7 @@ class GenericArrayTest {
             GenericArray sut = new GenericArray(DTYPE, 5, arena.allocate(40));
 
             // When
-            GenericArray clamped = sut.withLength(0);
+            GenericArray clamped = sut.limited(0);
 
             // Then
             assertThat(clamped.length()).isZero();
@@ -68,7 +68,7 @@ class GenericArrayTest {
             GenericArray sut = new GenericArray(DTYPE, 3, arena.allocate(24));
 
             // When / Then
-            assertThatThrownBy(() -> sut.withLength(4))
+            assertThatThrownBy(() -> sut.limited(4))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("out of range");
         }
@@ -81,7 +81,7 @@ class GenericArrayTest {
             GenericArray sut = new GenericArray(DTYPE, 3, arena.allocate(24));
 
             // When / Then
-            assertThatThrownBy(() -> sut.withLength(-1))
+            assertThatThrownBy(() -> sut.limited(-1))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("out of range");
         }

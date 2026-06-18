@@ -53,28 +53,24 @@ public final class GenericArray implements Array {
         return length;
     }
 
-    /// Returns a view of this array clamped to `newLength` logical rows.
+    /// Returns a view of this array clamped to the first `rows` logical rows.
     /// Buffers and children are reused as-is; callers are expected to respect
     /// {@link #length()} when reading. Used by the scan iterator to honour
     /// `ScanOptions.limit` for dtypes that don't have a typed array.
     ///
-    /// @param newLength desired logical length; must be `<= length()`
+    /// @param rows desired logical length; must be `<= length()`
     /// @return a new `GenericArray` sharing this array's buffers and children
-    /// @throws IllegalArgumentException if `newLength` exceeds the current length
-    public GenericArray withLength(long newLength) {
-        if (newLength < 0 || newLength > length) {
+    /// @throws IllegalArgumentException if `rows` exceeds the current length
+    @Override
+    public GenericArray limited(long rows) {
+        if (rows < 0 || rows > length) {
             throw new IllegalArgumentException(
-                    "newLength " + newLength + " out of range [0," + length + "]");
+                    "rows " + rows + " out of range [0," + length + "]");
         }
-        if (newLength == length) {
+        if (rows == length) {
             return this;
         }
-        return new GenericArray(dtype, newLength, buffers, children);
-    }
-
-    @Override
-    public Array truncate(long rows) {
-        return withLength(rows);
+        return new GenericArray(dtype, rows, buffers, children);
     }
 
     MemorySegment buffer(int i) {

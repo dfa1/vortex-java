@@ -36,7 +36,7 @@ public non-sealed interface FloatArray extends Array {
     /// @param rows number of leading elements to keep
     /// @return a length-`rows` float array view
     @Override
-    default Array truncate(long rows) {
+    default Array limited(long rows) {
         return new OffsetFloatArray(dtype(), rows, this, 0);
     }
 }

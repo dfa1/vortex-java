@@ -112,7 +112,7 @@ class VarBinViewModeTest {
                 MemorySegment views = writeViews(arena, new String[]{"a", "b", "c", "d"});
                 var sut = new VarBinArray.ViewMode(UTF8, 4, views, new MemorySegment[0]);
 
-                VarBinArray truncated = sut.truncate(2);
+                VarBinArray truncated = sut.limited(2);
 
                 assertThat(truncated.length()).isEqualTo(2);
                 assertThat(truncated.getString(0)).isEqualTo("a");
@@ -126,7 +126,7 @@ class VarBinViewModeTest {
                 MemorySegment views = writeViews(arena, new String[]{"a"});
                 var sut = new VarBinArray.ViewMode(UTF8, 1, views, new MemorySegment[0]);
 
-                assertThat(sut.truncate(10)).isSameAs(sut);
+                assertThat(sut.limited(10)).isSameAs(sut);
             }
         }
     }

@@ -50,7 +50,7 @@ public non-sealed interface ByteArray extends Array {
     /// @param rows number of leading elements to keep
     /// @return a length-`rows` byte array view
     @Override
-    default Array truncate(long rows) {
+    default Array limited(long rows) {
         return new OffsetByteArray(dtype(), rows, this, 0);
     }
 }

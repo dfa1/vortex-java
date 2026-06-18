@@ -38,7 +38,7 @@ public record LazyDecimalBytePartsArray(DType dtype, long length, Array msp) imp
     }
 
     @Override
-    public Array truncate(long rows) {
-        return new LazyDecimalBytePartsArray(dtype, rows, Array.truncated(msp, rows));
+    public Array limited(long rows) {
+        return new LazyDecimalBytePartsArray(dtype, rows, Array.limited(msp, rows));
     }
 }

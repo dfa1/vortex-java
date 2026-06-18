@@ -257,10 +257,10 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
 
     // ── Zone-map pruning ──────────────────────────────────────────────────────
 
-    private static Map<String, Array> truncateColumns(Map<String, Array> columns, long rows) {
+    private static Map<String, Array> limitedColumns(Map<String, Array> columns, long rows) {
         var result = new LinkedHashMap<String, Array>(columns.size());
         for (var entry : columns.entrySet()) {
-            result.put(entry.getKey(), Array.truncated(entry.getValue(), rows));
+            result.put(entry.getKey(), Array.limited(entry.getValue(), rows));
         }
         return Map.copyOf(result);
     }
@@ -312,7 +312,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         try {
             Map<String, Array> columns = buildColumnMap(spec, arena);
             if (chunkRows < spec.rowCount()) {
-                columns = truncateColumns(columns, chunkRows);
+                columns = limitedColumns(columns, chunkRows);
             }
             rowsReturned += chunkRows;
             Map<String, DType> chunkDtypes = new java.util.LinkedHashMap<>();

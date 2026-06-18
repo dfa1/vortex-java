@@ -114,7 +114,7 @@ class VarBinChunkedModeTest {
                 VarBinArray c1 = stringChunk(arena, "d", "e");
                 VarBinArray.ChunkedMode sut = VarBinArray.ChunkedMode.of(UTF8, 5, List.of(c0, c1));
 
-                VarBinArray truncated = sut.truncate(4);
+                VarBinArray truncated = sut.limited(4);
 
                 assertThat(truncated.length()).isEqualTo(4);
                 assertThat(truncated.getString(0)).isEqualTo("a");

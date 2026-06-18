@@ -3,8 +3,8 @@ package io.github.dfa1.vortex.reader.array;
 import java.util.ArrayList;
 import java.util.List;
 
-/// Shared helper for the `ChunkedXxxArray.truncate` overrides. Keeps whole prefix
-/// children that fit within `rows` and recursively truncates the single boundary
+/// Shared helper for the `ChunkedXxxArray.limited` overrides. Keeps whole prefix
+/// children that fit within `rows` and recursively limits the single boundary
 /// child — preserving each chunk's batch iteration / zero-copy backing instead of
 /// the per-element view a plain length-cap would impose.
 final class ChunkedArrays {
@@ -17,8 +17,8 @@ final class ChunkedArrays {
     /// @param children chunk arrays in scan order
     /// @param offsets  cumulative row offsets (length = `children.length + 1`)
     /// @param rows     number of leading rows to keep
-    /// @return prefix children unchanged, with the boundary child truncated
-    static List<Array> truncateChildren(Array[] children, long[] offsets, long rows) {
+    /// @return prefix children unchanged, with the boundary child limited
+    static List<Array> limitedChildren(Array[] children, long[] offsets, long rows) {
         var kept = new ArrayList<Array>(children.length);
         for (int i = 0; i < children.length; i++) {
             long start = offsets[i];
@@ -29,7 +29,7 @@ final class ChunkedArrays {
             if (end <= rows) {
                 kept.add(children[i]);
             } else {
-                kept.add(Array.truncated(children[i], rows - start));
+                kept.add(Array.limited(children[i], rows - start));
             }
         }
         return kept;

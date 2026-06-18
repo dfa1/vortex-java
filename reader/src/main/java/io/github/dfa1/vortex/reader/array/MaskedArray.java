@@ -56,9 +56,9 @@ public final class MaskedArray implements Array {
     }
 
     @Override
-    public Array truncate(long rows) {
-        Array truncChild = Array.truncated(child, rows);
-        BoolArray truncValidity = validity != null ? (BoolArray) Array.truncated(validity, rows) : null;
+    public Array limited(long rows) {
+        Array truncChild = Array.limited(child, rows);
+        BoolArray truncValidity = validity != null ? (BoolArray) Array.limited(validity, rows) : null;
         return new MaskedArray(truncChild, truncValidity);
     }
 }
