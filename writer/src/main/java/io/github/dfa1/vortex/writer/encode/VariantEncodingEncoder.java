@@ -65,10 +65,60 @@ public final class VariantEncodingEncoder implements EncodingEncoder {
                 ? constantChild(runValues.get(0), buffers)
                 : chunkedConstants(runValues, runLengths, ctx, buffers);
 
-        ByteBuffer containerMeta = ByteBuffer.wrap(new VariantMetadata(null).encode());
-        EncodeNode root = new EncodeNode(EncodingId.VORTEX_VARIANT, containerMeta,
-                new EncodeNode[]{coreStorage}, new int[0]);
+        EncodeNode[] children;
+        io.github.dfa1.vortex.proto.DType shreddedProto = null;
+        if (variantData.shreddedData() != null) {
+            children = new EncodeNode[]{coreStorage, encodeShredded(variantData, ctx, buffers)};
+            shreddedProto = toProtoDtype(variantData.shreddedDtype());
+        } else {
+            children = new EncodeNode[]{coreStorage};
+        }
+
+        ByteBuffer containerMeta = ByteBuffer.wrap(new VariantMetadata(shreddedProto).encode());
+        EncodeNode root = new EncodeNode(EncodingId.VORTEX_VARIANT, containerMeta, children, new int[0]);
         return new EncodeResult(root, List.copyOf(buffers), null, null);
+    }
+
+    /// Encoders eligible to back the shredded child, tried in order by dtype.
+    private static final List<EncodingEncoder> SHREDDED_FALLBACK = List.of(
+            new PrimitiveEncodingEncoder(), new VarBinEncodingEncoder(),
+            new BoolEncodingEncoder(), new NullEncodingEncoder());
+
+    /// Encodes the shredded typed column as a child node, appending its buffers (remapped
+    /// to follow the core-storage buffers already in `buffers`).
+    private static EncodeNode encodeShredded(VariantData data, EncodeContext ctx, List<MemorySegment> buffers) {
+        EncodingEncoder enc = null;
+        for (EncodingEncoder e : SHREDDED_FALLBACK) {
+            if (e.accepts(data.shreddedDtype())) {
+                enc = e;
+                break;
+            }
+        }
+        if (enc == null) {
+            throw new VortexException(EncodingId.VORTEX_VARIANT,
+                    "no encoder for shredded dtype: " + data.shreddedDtype());
+        }
+        EncodeResult shredded = enc.encode(data.shreddedDtype(), data.shreddedData(), ctx);
+        EncodeNode child = EncodeNode.remapBufferIndices(shredded.rootNode(), buffers.size());
+        buffers.addAll(shredded.buffers());
+        return child;
+    }
+
+    /// Converts a shreddable scalar dtype to its protobuf form for `VariantMetadata`.
+    private static io.github.dfa1.vortex.proto.DType toProtoDtype(DType dtype) {
+        return switch (dtype) {
+            case DType.Primitive p -> io.github.dfa1.vortex.proto.DType.ofPrimitive(
+                    new io.github.dfa1.vortex.proto.Primitive(
+                            io.github.dfa1.vortex.proto.PType.fromValue(p.ptype().ordinal()), p.nullable()));
+            case DType.Bool b -> io.github.dfa1.vortex.proto.DType.ofBool(
+                    new io.github.dfa1.vortex.proto.Bool(b.nullable()));
+            case DType.Utf8 u -> io.github.dfa1.vortex.proto.DType.ofUtf8(
+                    new io.github.dfa1.vortex.proto.Utf8(u.nullable()));
+            case DType.Binary bin -> io.github.dfa1.vortex.proto.DType.ofBinary(
+                    new io.github.dfa1.vortex.proto.Binary(bin.nullable()));
+            default -> throw new VortexException(EncodingId.VORTEX_VARIANT,
+                    "shredded dtype not supported: " + dtype);
+        };
     }
 
     /// Groups adjacent equal scalars into runs, appending each run's value and length.
