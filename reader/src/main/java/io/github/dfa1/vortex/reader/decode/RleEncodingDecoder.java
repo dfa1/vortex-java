@@ -9,16 +9,16 @@ import io.github.dfa1.vortex.proto.RLEMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.reader.array.BoolArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantByteArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantIntArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantLongArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantShortArray;
 import io.github.dfa1.vortex.reader.array.LazyRleByteArray;
 import io.github.dfa1.vortex.reader.array.LazyRleIntArray;
 import io.github.dfa1.vortex.reader.array.LazyRleLongArray;
 import io.github.dfa1.vortex.reader.array.LazyRleShortArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
-import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
-import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
-import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
-import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
-import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
+import io.github.dfa1.vortex.reader.array.OffsetBoolArray;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -113,28 +113,18 @@ public final class RleEncodingDecoder implements EncodingDecoder {
         if (indicesValidity == null) {
             return result;
         }
-        int validityBytes = (int) ((rowCount + 7) / 8);
-        MemorySegment validityBuf = ctx.arena().allocate(validityBytes);
-        for (long j = 0; j < rowCount; j++) {
-            if (indicesValidity.getBoolean(offset + j)) {
-                int byteIdx = (int) (j >>> 3);
-                byte current = validityBuf.get(ValueLayout.JAVA_BYTE, byteIdx);
-                validityBuf.set(ValueLayout.JAVA_BYTE, byteIdx, (byte) ((current & 0xff) | (1 << (j & 7))));
-            }
-        }
-        BoolArray outputValidity = new MaterializedBoolArray(new DType.Bool(false), rowCount, validityBuf);
+        BoolArray outputValidity = new OffsetBoolArray(new DType.Bool(false), rowCount, indicesValidity, offset);
         return new MaskedArray(result, outputValidity);
     }
 
     private static Array emptyArray(DecodeContext ctx) {
-        MemorySegment empty = ctx.arena().allocate(0);
         DType dt = ctx.dtype();
         PType ptype = ((DType.Primitive) dt).ptype();
         return switch (ptype) {
-            case I64, U64 -> new MaterializedLongArray(dt, 0L, empty);
-            case I32, U32 -> new MaterializedIntArray(dt, 0L, empty);
-            case I16, U16 -> new MaterializedShortArray(dt, 0L, empty);
-            case I8, U8 -> new MaterializedByteArray(dt, 0L, empty);
+            case I64, U64 -> new LazyConstantLongArray(dt, 0L, 0L);
+            case I32, U32 -> new LazyConstantIntArray(dt, 0L, 0);
+            case I16, U16 -> new LazyConstantShortArray(dt, 0L, (short) 0);
+            case I8, U8 -> new LazyConstantByteArray(dt, 0L, (byte) 0);
             default -> throw new VortexException(EncodingId.FASTLANES_RLE, "unsupported ptype " + ptype);
         };
     }

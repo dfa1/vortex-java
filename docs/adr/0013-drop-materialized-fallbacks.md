@@ -1,6 +1,6 @@
 # ADR 0013: Drop Materialized fallbacks once Lazy has shipped
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-16
 - **Deciders:** project maintainer
 - **Supersedes:** —
@@ -98,10 +98,15 @@ A Materialized branch may be deleted when **all** of these hold:
 ## Rollout
 
 - **0.7.x:** policy ratified, no removals yet.
-- **0.8.0:** remove eager paths from encodings that satisfy all four
-  criteria today: `ZigZag`, `FoR` (long/int variants), `ALP`,
-  `Constant`, `DateTimeParts`, `DecimalByteParts`, `Decimal`,
-  `VarBinView`, `Chunked` containers, `RunEnd`, `Sparse`, `RLE`, `Dict`.
+- **0.8.0:** eager paths removed from `ZigZag` (all PTypes + broadcast),
+  `FoR` (all integer PTypes), `ALP` (broadcast-without-patches),
+  `Constant` (Decimal → `LazyConstantDecimalArray`; `DecimalArray` interface
+  introduced to replace two concrete `Array` permits entries),
+  `RunEnd` (Bool → `LazyRunEndBoolArray`), `Sparse` (Bool → `LazySparseBoolArray`),
+  `RLE` (validity → `OffsetBoolArray`; empty → `LazyConstantXxxArray`).
+  `Dict` encoding-level path intentionally kept eager (layout-level path is lazy via ADR 0012).
+  `DateTimeParts`, `DecimalByteParts`, `Decimal`, `VarBinView`, `Chunked` were already
+  fully lazy before this sweep.
 - **0.9.0:** revisit Decompression encodings — if a Lazy variant lands
   (e.g. window-decoded `Pco`) the same criteria apply.
 
