@@ -90,6 +90,11 @@ Per-encoding gotchas:
     - See [ADR-0008](docs/adr/0008-domain-primitives-unsigned-integers.md) and https://dfa1.github.io/articles/rethink-domain-primitives-with-valhalla
     - Candidates: `PType` integer kinds, buffer offsets, row indices, byte lengths
     - Goal: type-safety at zero cost (value class = no heap alloc, no boxing)
+- [ ] **Generalize `Array.limited(rows)` → `Array.slice(offset, length)`** — single verb, matches `MemorySegment.asSlice` / `ByteBuffer.slice` / `List.subList`; `limited(rows)` becomes `slice(0, rows)`.
+    - Zero-copy: buffer-backed (`Materialized*`, `length == elementCount`) slices the segment via `asSlice` (no per-element indirection); broadcast + view families fall back to `Offset*` wrappers
+    - Fold nested slices (`slice` of an `Offset*` composes offsets — never stack `Offset(Offset(...))`)
+    - Validate, fail fast (no silent clamp): consumer-facing `slice` throws `IllegalArgumentException` on `offset < 0 || length < 0 || offset + length > length()`; scan-internal `Offset*` construction fed by untrusted layout metadata throws `VortexException`
+    - Add the matching compact-constructor bounds guard to all `Offset*` records (currently document `inner length >= offset + length` but enforce nothing — broadcast inner silently wraps via `i % cap`)
 
 ## Encodings
 
