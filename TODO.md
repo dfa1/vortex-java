@@ -11,8 +11,6 @@
 
 - [ ] Performance tests must be peer reviewed
 - [ ] Run performance tests on other machines (I have access only to Apple M5)
-- [ ] Minimize `ctx.arena().allocate(...)` calls — prefer in-place decode when child buffer is writable (already done in
-  ALP); audit all decoders for unnecessary off-heap allocs
 - [ ] **Vector API adoption** — deferred; see [ADR-0005](docs/adr/0005-vector-api-adoption.md) for adoption criteria and candidate loops.
 
 ## Security
@@ -29,6 +27,7 @@ parser exception. Each entry below is either a known gap, a contract audit, or s
   must throw `VortexException` rather than the JDK's `IndexOutOfBoundsException`. Either wrap
   per call site, or route through an `IoBounds.slice(seg, off, len)` helper and add a
   Checkstyle rule rejecting raw `asSlice` in `io`/`scan`/`encoding` packages.
+
 ### Per-encoding adversarial tests
 
 Each encoding's `decode(DecodeContext)` should be exercised against:
@@ -81,43 +80,20 @@ Per-encoding gotchas:
 
 ## Tooling
 
-- [ ] Optional `vortex-arrow` bridge module for Arrow ecosystem interop
-    - Primary API stays `ArrayLong`/`ArrayDouble` (zero-copy, no deps, no Unsafe)
-    - Bridge wraps typed views into Arrow `BigIntVector`, `Float8Vector`, etc. for users who need
-      Arrow Flight / DuckDB ADBC / pandas interop
-    - Conversion involves a copy (MemorySegment → Arrow off-heap buffer) — cost is explicit and opt-in
-    - Arrow JVM uses `sun.misc.Unsafe` / Netty internally; keeping it in a separate module means
-      the core library stays Unsafe-free
+- [ ] Optional `vortex-arrow` bridge module for Arrow ecosystem interop — see [ADR-0016](docs/adr/0016-vortex-arrow-bridge.md)
 
 ## API
 
 - [ ] **Error messages — structural sanitization of `VortexException`** —
   see [ADR-0003](docs/adr/0003-vortex-exception-sanitization.md) for design and phasing.
 - [ ] Use domain primitives (`UInt32`, `UInt64`, etc.) as value classes via Project Valhalla instead of raw `long`/`int`
-    - See https://dfa1.github.io/articles/rethink-domain-primitives-with-valhalla
+    - See [ADR-0008](docs/adr/0008-domain-primitives-unsigned-integers.md) and https://dfa1.github.io/articles/rethink-domain-primitives-with-valhalla
     - Candidates: `PType` integer kinds, buffer offsets, row indices, byte lengths
     - Goal: type-safety at zero cost (value class = no heap alloc, no boxing)
 
 ## Encodings
 
 See [docs/compatibility.md](docs/compatibility.md) for the full encoding support table and S3 fixture status.
-
-### Remaining gap (no-Zstd mode) — biggest to smallest:
-
-Taxi 2024-01: **Java 40.7 MB vs Rust JNI 42.8 MB — Java is 2.07 MB smaller (4.9%)**.
-After porting Rust's size-based ALP exponent search + two-step decode, trip_distance now
-beats JNI by ~15 KB. Remaining per-column deltas vs JNI: total_amount (+202 KB),
-tpep_dropoff_datetime (+71 KB), mta_tax (+16 KB).
-
-- [ ] **PULocationID dict-codes layout** — +250 KB vs Rust. Both use dict; Java codes use
-  bitpack-only, Rust uses dict-codes-of-dict (inner dict over already-bitpacked codes). Mirror
-  Rust's `IntDictScheme` cascade child rule.
-
-- [ ] **Global dict for `Binary` dtype** — `DictEncoding.accepts` already covers `Utf8` and `Binary`-ish bytes,
-  but the writer's candidate scan only handles `DType.Primitive` + `DType.Utf8`. Mirror the Utf8 path for
-  binary columns once a real workload surfaces.
-
-
 
 ### `vortex.zstd` known limitations
 
