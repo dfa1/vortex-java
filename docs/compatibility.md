@@ -33,7 +33,7 @@ resolves only the standalone decoders in `reader`; no encoder class is loaded.
 |------|------------|-------------|
 | `DType::Union` (`fbs.DType.Type.Union = 12`) | Rust 0.71.0 | ❌ Decode throws `VortexException("unsupported DType typeType=12")`. No `DType.Union` variant in Java's sealed type. |
 | `vortex.onpair` experimental string encoding | Rust 0.74.0 | ❌ Not registered. Files using it fail to decode unless `Registry.allowUnknown()` is enabled. |
-| `vortex.variant` write path | Rust 0.73.0 (`Allow writing Variant to files`, #7945) | ❌ Java decode works; Java encode throws `"encode not yet implemented"`. Java→Rust round-trip not possible for Variant columns. |
+| `vortex.variant` arbitrary nested objects | Rust (`vortex.parquet.variant`) | ⚠️ Java encodes/decodes variant columns of **typed scalar** values (constant / chunked-of-constants core, optional shredded child); Java↔Rust round-trip verified. Arbitrary nested JSON objects and real path-based shredding need the `vortex.parquet.variant` physical encoding — deferred ([ADR 0014](adr/0014-variant-encoding-strategy.md)). |
 | Arrow extension array import affecting Variant shape | Rust 0.74.0 (#8125) | Untested. Re-run integration fixtures against v0.74.0 once published. |
 
 ## Encodings
@@ -72,7 +72,7 @@ resolves only the standalone decoders in `reader`; no encoder class is loaded.
 | `fastlanes.for`             | `FrameOfReferenceEncodingDecoder`| `FrameOfReferenceEncodingEncoder`| ✅      | ✅      | Integer PTypes                                                        |
 | `fastlanes.rle`             | `RleEncodingDecoder`             | `RleEncodingEncoder`             | ✅      | ✅      | Chunk-based RLE                                                       |
 | `vortex.patched`            | `PatchedEncodingDecoder`         | `PatchedEncodingEncoder`         | ✅      | ❌      | Primitive PTypes; encode not yet implemented                          |
-| `vortex.variant`            | `VariantEncodingDecoder`         | `VariantEncodingEncoder`         | ✅      | ❌      | Decode (incl. shredded child); encode not yet implemented (Rust 0.73+) |
+| `vortex.variant`            | `VariantEncodingDecoder`         | `VariantEncodingEncoder`         | ✅      | ✅      | Canonical container; constant / chunked-of-constants core + optional shredded child. Typed-scalar values only — nested objects need `parquet.variant` (ADR 0014) |
 | `vortex.onpair`             | _none_                           | _none_                           | ❌      | ❌      | Experimental in Rust 0.74.0; not yet ported                            |
 
 ### Decode shape
@@ -124,7 +124,7 @@ decoder falls into one of three shapes:
 | `fastlanes.for`             | Lazy          | Lazy          | `LazyForXxxArray` (I8/U8/I16/U16/I32/U32/I64/U64), ADR 0010 + 0013      |
 | `fastlanes.rle`             | Lazy          | Lazy          | `LazyRleXxxArray`; validity → `OffsetBoolArray`; empty → `LazyConstantXxxArray`, ADR 0013 |
 | `vortex.patched`            | Materialized  | Materialized  | inner is full base + chunked patches (1024-elem blocks, lane-window-sorted); per-row access requires 2 laneOffsets reads + binary search inside the chunk window, so eager scatter wins for full scans |
-| `vortex.variant`            | Materialized  | TBD           | shredded child reassembly                                                |
+| `vortex.variant`            | Lazy          | Lazy          | container wraps constant/chunked core (inner-typed) + optional shredded child |
 | `vortex.onpair`             | n/a           | n/a           | not ported                                                               |
 
 Decompression-style encodings (Bitpacked / Pco / Zstd / Fsst / Delta) stay Materialized by design
