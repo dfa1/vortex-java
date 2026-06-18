@@ -142,6 +142,63 @@ class VariantEncodingEncoderTest {
     }
 
     @Nested
+    class RoundTrip {
+
+        private static final io.github.dfa1.vortex.reader.ReadRegistry REGISTRY =
+                io.github.dfa1.vortex.reader.decode.TestRegistry.ofDecoders(
+                        new io.github.dfa1.vortex.reader.decode.VariantEncodingDecoder(),
+                        new io.github.dfa1.vortex.reader.decode.ConstantEncodingDecoder(),
+                        new io.github.dfa1.vortex.reader.decode.ChunkedEncodingDecoder(),
+                        new io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder());
+
+        private static io.github.dfa1.vortex.reader.decode.ArrayNode toArrayNode(EncodeNode node) {
+            io.github.dfa1.vortex.reader.decode.ArrayNode[] children =
+                    new io.github.dfa1.vortex.reader.decode.ArrayNode[node.children().length];
+            for (int i = 0; i < children.length; i++) {
+                children[i] = toArrayNode(node.children()[i]);
+            }
+            return io.github.dfa1.vortex.reader.decode.ArrayNode.of(
+                    node.encodingId(), node.metadata(), children, node.bufferIndices());
+        }
+
+        private static io.github.dfa1.vortex.reader.array.VariantArray decode(EncodeResult result, long rows) {
+            MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
+            var ctx = new io.github.dfa1.vortex.reader.decode.DecodeContext(
+                    toArrayNode(result.rootNode()), VARIANT, rows, bufs, REGISTRY, java.lang.foreign.Arena.global());
+            return (io.github.dfa1.vortex.reader.array.VariantArray) new io.github.dfa1.vortex.reader.decode.VariantEncodingDecoder().decode(ctx);
+        }
+
+        @Test
+        void constantColumn_decodesToBroadcastInnerValues() {
+            // Given/When a constant column is encoded then decoded back
+            var result = SUT.encode(VARIANT, VariantData.constant(4, i32Scalar(7L)), EncodeTestHelper.testCtx());
+            var variant = decode(result, 4);
+
+            // Then core storage is the inner i32 value broadcast to every row
+            assertThat(variant.length()).isEqualTo(4);
+            assertThat(variant.shredded()).isNull();
+            var core = (io.github.dfa1.vortex.reader.array.IntArray) variant.coreStorage();
+            assertThat(core.dtype()).isEqualTo(new DType.Primitive(io.github.dfa1.vortex.core.PType.I32, false));
+            for (long i = 0; i < 4; i++) {
+                assertThat(core.getInt(i)).isEqualTo(7);
+            }
+        }
+
+        @Test
+        void varyingColumn_decodesPerRowValuesInOrder() {
+            // Given/When distinct per-row values are encoded (chunked) then decoded back
+            var data = new VariantData(List.of(i32Scalar(10L), i32Scalar(20L), i32Scalar(30L)));
+            var variant = decode(SUT.encode(VARIANT, data, EncodeTestHelper.testCtx()), 3);
+
+            // Then the chunked core storage yields each row's inner value in order
+            var core = (io.github.dfa1.vortex.reader.array.IntArray) variant.coreStorage();
+            assertThat(core.getInt(0)).isEqualTo(10);
+            assertThat(core.getInt(1)).isEqualTo(20);
+            assertThat(core.getInt(2)).isEqualTo(30);
+        }
+    }
+
+    @Nested
     class Errors {
 
         @Test

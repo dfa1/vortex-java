@@ -28,7 +28,7 @@ public final class VariantEncodingDecoder implements EncodingDecoder {
 
     @Override
     public boolean accepts(DType dtype) {
-        return false;
+        return dtype instanceof DType.Variant;
     }
 
     @Override
