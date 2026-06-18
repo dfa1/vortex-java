@@ -27,24 +27,38 @@ class ArrayLimitedTest {
         @Test
         void rowsEqualToLengthReturnsSameInstance() {
             try (Arena arena = Arena.ofConfined()) {
+                // Given
                 LongArray sut = longs(arena, 1L, 2L, 3L);
-                assertThat(Array.limited(sut, 3)).isSameAs(sut);
+
+                // When
+                Array result = Array.limited(sut, 3);
+
+                // Then
+                assertThat(result).isSameAs(sut);
             }
         }
 
         @Test
         void rowsBiggerThanLengthReturnsSameInstance() {
-            // limit is min(length, rows): asking for more than exists yields the whole array
             try (Arena arena = Arena.ofConfined()) {
+                // Given — limit is min(length, rows): asking for more than exists is a no-op
                 LongArray sut = longs(arena, 1L, 2L, 3L);
-                assertThat(Array.limited(sut, 99)).isSameAs(sut);
+
+                // When
+                Array result = Array.limited(sut, 99);
+
+                // Then
+                assertThat(result).isSameAs(sut);
             }
         }
 
         @Test
         void negativeRowsThrows() {
             try (Arena arena = Arena.ofConfined()) {
+                // Given
                 LongArray sut = longs(arena, 1L);
+
+                // When / Then
                 assertThatThrownBy(() -> Array.limited(sut, -1))
                         .isInstanceOf(IllegalArgumentException.class)
                         .hasMessageContaining(">= 0");
@@ -58,10 +72,13 @@ class ArrayLimitedTest {
         @Test
         void cutsToFirstRowsAsView() {
             try (Arena arena = Arena.ofConfined()) {
+                // Given
                 LongArray sut = longs(arena, 10L, 20L, 30L, 40L);
 
+                // When
                 Array limited = sut.limited(2);
 
+                // Then
                 assertThat(limited.length()).isEqualTo(2L);
                 assertThat(((LongArray) limited).getLong(0)).isEqualTo(10L);
                 assertThat(((LongArray) limited).getLong(1)).isEqualTo(20L);
@@ -71,10 +88,13 @@ class ArrayLimitedTest {
         @Test
         void float16SlicesBuffer() {
             try (Arena arena = Arena.ofConfined()) {
+                // Given
                 Float16Array sut = float16(arena, 1.0f, 2.0f, 3.0f);
 
+                // When
                 Array limited = sut.limited(2);
 
+                // Then
                 assertThat(limited.length()).isEqualTo(2L);
                 assertThat(((Float16Array) limited).getFloat(0)).isEqualTo(1.0f);
                 assertThat(((Float16Array) limited).getFloat(1)).isEqualTo(2.0f);
@@ -88,12 +108,15 @@ class ArrayLimitedTest {
         @Test
         void structLimitsEachField() {
             try (Arena arena = Arena.ofConfined()) {
+                // Given
                 DType.Struct dtype = new DType.Struct(List.of("a", "b"), List.of(I64, I64), false);
                 StructArray sut = new StructArray(dtype, 3,
                         List.of(longs(arena, 1L, 2L, 3L), longs(arena, 10L, 20L, 30L)));
 
+                // When
                 StructArray limited = (StructArray) sut.limited(2);
 
+                // Then
                 assertThat(limited.length()).isEqualTo(2L);
                 assertThat(limited.field(0).length()).isEqualTo(2L);
                 assertThat(((LongArray) limited.field(1)).getLong(1)).isEqualTo(20L);
@@ -103,16 +126,17 @@ class ArrayLimitedTest {
         @Test
         void listLimitsOffsetsToRowsPlusOne() {
             try (Arena arena = Arena.ofConfined()) {
-                // 3 lists over offsets [0,2,3,5]; elements shared
+                // Given — 3 lists over offsets [0,2,3,5]; elements shared
                 DType.List dtype = new DType.List(I64, false);
                 LongArray elements = longs(arena, 7L, 7L, 8L, 9L, 9L);
                 LongArray offsets = longs(arena, 0L, 2L, 3L, 5L);
                 ListArray sut = new ListArray(dtype, 3, elements, offsets);
 
+                // When
                 ListArray limited = (ListArray) sut.limited(2);
 
+                // Then — offsets keep rows+1 = 3 entries so list[1] bounds stay readable
                 assertThat(limited.length()).isEqualTo(2L);
-                // offsets must keep rows+1 = 3 entries so list[1] bounds stay readable
                 assertThat(limited.offsets().length()).isEqualTo(3L);
                 assertThat(limited.elements()).isSameAs(elements);
             }
@@ -121,14 +145,17 @@ class ArrayLimitedTest {
         @Test
         void listViewLimitsOffsetsAndSizes() {
             try (Arena arena = Arena.ofConfined()) {
+                // Given
                 DType.List dtype = new DType.List(I64, false);
                 LongArray elements = longs(arena, 1L, 2L, 3L, 4L);
                 LongArray offsets = longs(arena, 0L, 2L, 3L);
                 LongArray sizes = longs(arena, 2L, 1L, 1L);
                 ListViewArray sut = new ListViewArray(dtype, 3, elements, offsets, sizes);
 
+                // When
                 ListViewArray limited = (ListViewArray) sut.limited(2);
 
+                // Then
                 assertThat(limited.length()).isEqualTo(2L);
                 assertThat(limited.offsets().length()).isEqualTo(2L);
                 assertThat(limited.sizes().length()).isEqualTo(2L);
@@ -138,13 +165,15 @@ class ArrayLimitedTest {
         @Test
         void fixedSizeListLimitsElementsByWidth() {
             try (Arena arena = Arena.ofConfined()) {
-                // fixedSize 2: 3 rows -> 6 elements; limit 2 rows -> 4 elements
+                // Given — fixedSize 2: 3 rows -> 6 elements
                 DType.FixedSizeList dtype = new DType.FixedSizeList(I64, 2, false);
                 FixedSizeListArray sut = new FixedSizeListArray(dtype, 3,
                         longs(arena, 1L, 2L, 3L, 4L, 5L, 6L));
 
+                // When
                 FixedSizeListArray limited = (FixedSizeListArray) sut.limited(2);
 
+                // Then — 2 rows -> 4 elements
                 assertThat(limited.length()).isEqualTo(2L);
                 assertThat(limited.elements().length()).isEqualTo(4L);
             }
@@ -153,11 +182,14 @@ class ArrayLimitedTest {
         @Test
         void variantLimitsCoreAndShredded() {
             try (Arena arena = Arena.ofConfined()) {
+                // Given
                 VariantArray sut = new VariantArray(I64, 3,
                         longs(arena, 1L, 2L, 3L), longs(arena, 4L, 5L, 6L));
 
+                // When
                 VariantArray limited = (VariantArray) sut.limited(2);
 
+                // Then
                 assertThat(limited.length()).isEqualTo(2L);
                 assertThat(limited.coreStorage().length()).isEqualTo(2L);
                 assertThat(limited.shredded().length()).isEqualTo(2L);
@@ -167,10 +199,13 @@ class ArrayLimitedTest {
         @Test
         void variantWithNullShreddedStaysNull() {
             try (Arena arena = Arena.ofConfined()) {
+                // Given
                 VariantArray sut = new VariantArray(I64, 3, longs(arena, 1L, 2L, 3L), null);
 
+                // When
                 VariantArray limited = (VariantArray) sut.limited(2);
 
+                // Then
                 assertThat(limited.shredded()).isNull();
             }
         }
@@ -181,9 +216,11 @@ class ArrayLimitedTest {
 
         @Test
         void unknownArrayThrows() {
+            // Given
             UnknownArray sut = new UnknownArray("vortex.mystery", I64, 3, null,
                     new MemorySegment[0], new Array[0]);
 
+            // When / Then
             assertThatThrownBy(() -> sut.limited(1))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("vortex.mystery");

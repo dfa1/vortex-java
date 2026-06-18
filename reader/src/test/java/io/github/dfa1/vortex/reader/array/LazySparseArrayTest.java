@@ -20,6 +20,10 @@ class LazySparseArrayTest {
     private static final DType I32 = new DType.Primitive(PType.I32, false);
     private static final DType F64 = new DType.Primitive(PType.F64, false);
     private static final DType F32 = new DType.Primitive(PType.F32, false);
+    private static final DType I8 = new DType.Primitive(PType.I8, false);
+    private static final DType U8 = new DType.Primitive(PType.U8, false);
+    private static final DType I16 = new DType.Primitive(PType.I16, false);
+    private static final DType U16 = new DType.Primitive(PType.U16, false);
 
     @Nested
     class Long {
@@ -128,6 +132,95 @@ class LazySparseArrayTest {
     }
 
     @Nested
+    class ByteAndShort {
+
+        // These exercise SparseArrays.patchedInt / foldInt (the shared int path the
+        // byte/short sparse records delegate to) — distinct from the long/int/double
+        // records above which fold over their own typed accessor.
+
+        @Test
+        void bytePatchAndFillDispatch() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given — patches at 0->7 and 2->11, fill 5
+                ByteArray values = byteArray(arena, (byte) 7, (byte) 11);
+                Array indices = intArray(arena, 0, 2);
+                var sut = new LazySparseByteArray(I8, 3, (byte) 5, 5, values, indices, 0L);
+
+                // When / Then
+                assertThat(sut.getByte(0)).isEqualTo((byte) 7);
+                assertThat(sut.getInt(1)).isEqualTo(5);
+                assertThat(sut.getInt(2)).isEqualTo(11);
+            }
+        }
+
+        @Test
+        void byteGetIntWidensUnsignedFill() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given — U8 fill 0xFF -> fillInt 255
+                ByteArray values = byteArray(arena, (byte) 1);
+                Array indices = intArray(arena, 0);
+                var sut = new LazySparseByteArray(U8, 3, (byte) 0xFF, 255, values, indices, 0L);
+
+                // When / Then — unpatched position reports 255 not -1
+                assertThat(sut.getInt(1)).isEqualTo(255);
+            }
+        }
+
+        @Test
+        void byteFoldSumsThroughIntPath() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given — length 5, fill 10, patches 1->7 and 3->11
+                ByteArray values = byteArray(arena, (byte) 7, (byte) 11);
+                Array indices = intArray(arena, 1, 3);
+                var sut = new LazySparseByteArray(I8, 5, (byte) 10, 10, values, indices, 0L);
+
+                // When / Then — 10+7+10+11+10 = 48
+                assertThat(sut.fold(0L, java.lang.Long::sum)).isEqualTo(48L);
+            }
+        }
+
+        @Test
+        void byteNullPatchesIsAllFill() {
+            // Given — no patches
+            var sut = new LazySparseByteArray(I8, 3, (byte) 9, 9, null, null, 0L);
+
+            // When / Then — every position is the fill
+            assertThat(sut.getInt(2)).isEqualTo(9);
+            assertThat(sut.fold(0L, java.lang.Long::sum)).isEqualTo(27L);
+        }
+
+        @Test
+        void shortPatchAndFoldDispatch() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given — length 5, fill 1, patches 1->100 and 3->200
+                ShortArray values = shortArray(arena, (short) 100, (short) 200);
+                Array indices = intArray(arena, 1, 3);
+                var sut = new LazySparseShortArray(I16, 5, (short) 1, 1, values, indices, 0L);
+
+                // When / Then — fill + patches; fold 1+100+1+200+1 = 303
+                assertThat(sut.getInt(0)).isEqualTo(1);
+                assertThat(sut.getInt(1)).isEqualTo(100);
+                assertThat(sut.fold(0L, java.lang.Long::sum)).isEqualTo(303L);
+            }
+        }
+
+        @Test
+        void shortGetIntWidensUnsigned() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given — widening flows through patchValues.getInt, so the patch array must be U16
+                MemorySegment seg = arena.allocate(2L, 2);
+                seg.setAtIndex(ValueLayout.JAVA_SHORT, 0, (short) 0xFFFF);
+                ShortArray values = new MaterializedShortArray(U16, 1, seg.asReadOnly());
+                Array indices = intArray(arena, 0);
+                var sut = new LazySparseShortArray(U16, 2, (short) 0, 0, values, indices, 0L);
+
+                // When / Then
+                assertThat(sut.getInt(0)).isEqualTo(65535);
+            }
+        }
+    }
+
+    @Nested
     class Float {
 
         @Test
@@ -220,5 +313,21 @@ class LazySparseArrayTest {
             seg.setAtIndex(ValueLayout.JAVA_FLOAT, i, vs[i]);
         }
         return new MaterializedFloatArray(F32, vs.length, seg.asReadOnly());
+    }
+
+    private static ByteArray byteArray(Arena arena, byte... vs) {
+        MemorySegment seg = arena.allocate(vs.length, 1);
+        for (int i = 0; i < vs.length; i++) {
+            seg.set(ValueLayout.JAVA_BYTE, i, vs[i]);
+        }
+        return new MaterializedByteArray(I8, vs.length, seg.asReadOnly());
+    }
+
+    private static ShortArray shortArray(Arena arena, short... vs) {
+        MemorySegment seg = arena.allocate(vs.length * 2L, 2);
+        for (int i = 0; i < vs.length; i++) {
+            seg.setAtIndex(ValueLayout.JAVA_SHORT, i, vs[i]);
+        }
+        return new MaterializedShortArray(I16, vs.length, seg.asReadOnly());
     }
 }
