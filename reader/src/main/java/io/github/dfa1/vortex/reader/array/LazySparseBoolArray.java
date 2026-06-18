@@ -24,24 +24,8 @@ public record LazySparseBoolArray(
     @Override
     public void forEachBoolean(BooleanConsumer c) {
         long numPatches = patchValues.length();
-        long absStart = offset;
-        long absEnd = offset + length;
-        int p = SparseArrays.findFirstAtOrAfter(patchIndices, numPatches, absStart);
-        long pos = absStart;
-        while (pos < absEnd && p < numPatches) {
-            long patchAbs = SparseArrays.readPatchIdx(patchIndices, p);
-            if (patchAbs >= absEnd) {
-                break;
-            }
-            for (long r = pos; r < patchAbs; r++) {
-                c.accept(fillValue);
-            }
-            c.accept(patchValues.getBoolean(p));
-            pos = patchAbs + 1;
-            p++;
-        }
-        for (long r = pos; r < absEnd; r++) {
-            c.accept(fillValue);
-        }
+        SparseArrays.walkPatches(patchIndices, numPatches, offset, offset + length,
+                () -> c.accept(fillValue),
+                p -> c.accept(patchValues.getBoolean(p)));
     }
 }

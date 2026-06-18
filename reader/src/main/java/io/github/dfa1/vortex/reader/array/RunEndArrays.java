@@ -7,10 +7,23 @@ import io.github.dfa1.vortex.core.VortexException;
 /// Centralises:
 /// - the run-ends array-type switch in [#readRunEnd(Array, long)] so all four records
 ///   agree on supported run-ends Array types (U8/U16/U32/U64 backed by
-///   [ByteArray]/[ShortArray]/[IntArray]/[LongArray]); and
+///   [ByteArray]/[ShortArray]/[IntArray]/[LongArray]);
 /// - the binary search in [#findRun(Array, long, long)] used by every scalar
-///   accessor.
+///   accessor; and
+/// - [#walkRuns(Array, long, long, long, RunSegmentConsumer)] for sequential traversal
+///   shared by the typed forEach variants.
 final class RunEndArrays {
+
+    /// Receives one call per run segment covering `[startAbs, endAbs)`.
+    @FunctionalInterface
+    interface RunSegmentConsumer {
+
+        /// Called for each run segment within the traversal range.
+        ///
+        /// @param runIdx zero-based index of the run in the values array
+        /// @param count  number of elements to emit for this segment
+        void accept(int runIdx, long count);
+    }
 
     private RunEndArrays() {
     }
@@ -43,5 +56,28 @@ final class RunEndArrays {
             }
         }
         return lo;
+    }
+
+    /// Walks runs covering `[startAbs, endAbs)`, calling `consumer` once per run segment.
+    ///
+    /// @param runEnds  cumulative run-end positions
+    /// @param numRuns  number of runs
+    /// @param startAbs inclusive start of the output range
+    /// @param endAbs   exclusive end of the output range
+    /// @param consumer receives `(runIdx, count)` for each run segment in range
+    static void walkRuns(Array runEnds, long numRuns, long startAbs, long endAbs,
+            RunSegmentConsumer consumer) {
+        int run = findRun(runEnds, numRuns, startAbs);
+        long emittedFrom = startAbs;
+        while (emittedFrom < endAbs && run < numRuns) {
+            long runEnd = readRunEnd(runEnds, run);
+            long emitTo = Math.min(runEnd, endAbs);
+            long count = emitTo - emittedFrom;
+            if (count > 0) {
+                consumer.accept(run, count);
+            }
+            emittedFrom = emitTo;
+            run++;
+        }
     }
 }

@@ -27,13 +27,6 @@ public record LazyZigZagByteArray(DType dtype, long length, MemorySegment encode
     }
 
     @Override
-    public int getInt(long i) {
-        byte raw = getByte(i);
-        boolean unsigned = dtype instanceof DType.Primitive p && p.ptype() == PType.U8;
-        return unsigned ? Byte.toUnsignedInt(raw) : (int) raw;
-    }
-
-    @Override
     public long fold(long identity, LongBinaryOperator op) {
         MemorySegment seg = encoded;
         long n = length;

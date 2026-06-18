@@ -2,15 +2,19 @@ package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.VortexException;
 
+import java.util.function.IntConsumer;
+
 /// Package-private helpers shared by the `LazySparseXxxArray` records.
 ///
 /// Centralises:
 /// - the patch-indices array-type switch in [#readPatchIdx(Array, long)] so all six
 ///   records agree on supported patch-index Array types (U8/U16/U32/U64 backed by
-///   [ByteArray]/[ShortArray]/[IntArray]/[LongArray]); and
+///   [ByteArray]/[ShortArray]/[IntArray]/[LongArray]);
 /// - the two binary-search variants used by scalar / sequential accessors:
 ///   [#findPatch(Array, long, long)] for exact hit-or-miss and
-///   [#findFirstAtOrAfter(Array, long, long)] for the forEach run-walker.
+///   [#findFirstAtOrAfter(Array, long, long)] for the forEach run-walker; and
+/// - [#walkPatches(Array, long, long, long, Runnable, IntConsumer)] for sequential
+///   traversal shared by the typed forEach variants.
 final class SparseArrays {
 
     private SparseArrays() {
@@ -63,5 +67,35 @@ final class SparseArrays {
             }
         }
         return lo;
+    }
+
+    /// Walks all positions in `[absStart, absEnd)`, calling `fillSlot` for each fill
+    /// position and `patchSlot` (with patch index `p`) for each patch in range.
+    ///
+    /// @param patchIndices sorted absolute patch positions
+    /// @param numPatches   number of patches
+    /// @param absStart     inclusive start of the output range
+    /// @param absEnd       exclusive end of the output range
+    /// @param fillSlot     invoked once per fill position
+    /// @param patchSlot    invoked with patch index `p` for each in-range patch
+    static void walkPatches(Array patchIndices, long numPatches, long absStart, long absEnd,
+            Runnable fillSlot, IntConsumer patchSlot) {
+        int p = findFirstAtOrAfter(patchIndices, numPatches, absStart);
+        long pos = absStart;
+        while (pos < absEnd && p < numPatches) {
+            long patchAbs = readPatchIdx(patchIndices, p);
+            if (patchAbs >= absEnd) {
+                break;
+            }
+            for (long r = pos; r < patchAbs; r++) {
+                fillSlot.run();
+            }
+            patchSlot.accept(p);
+            pos = patchAbs + 1;
+            p++;
+        }
+        for (long r = pos; r < absEnd; r++) {
+            fillSlot.run();
+        }
     }
 }

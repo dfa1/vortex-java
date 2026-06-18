@@ -24,22 +24,11 @@ public record LazyRunEndBoolArray(DType dtype, long length, BoolArray values, Ar
     @Override
     public void forEachBoolean(BooleanConsumer c) {
         long numRuns = values.length();
-        long startAbs = offset;
-        long endAbs = offset + length;
-        int run = RunEndArrays.findRun(runEnds, numRuns, startAbs);
-        long emittedFrom = startAbs;
-        while (emittedFrom < endAbs && run < numRuns) {
-            long runEnd = RunEndArrays.readRunEnd(runEnds, run);
-            long emitTo = Math.min(runEnd, endAbs);
-            long count = emitTo - emittedFrom;
-            if (count > 0) {
-                boolean v = values.getBoolean(run);
-                for (long r = 0; r < count; r++) {
-                    c.accept(v);
-                }
+        RunEndArrays.walkRuns(runEnds, numRuns, offset, offset + length, (run, count) -> {
+            boolean v = values.getBoolean(run);
+            for (long r = 0; r < count; r++) {
+                c.accept(v);
             }
-            emittedFrom = emitTo;
-            run++;
-        }
+        });
     }
 }

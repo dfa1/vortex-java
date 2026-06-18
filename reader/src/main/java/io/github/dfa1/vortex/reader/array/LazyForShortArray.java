@@ -26,13 +26,6 @@ public record LazyForShortArray(DType dtype, long length, MemorySegment encoded,
     }
 
     @Override
-    public int getInt(long i) {
-        short raw = getShort(i);
-        boolean unsigned = dtype instanceof DType.Primitive p && p.ptype() == PType.U16;
-        return unsigned ? Short.toUnsignedInt(raw) : (int) raw;
-    }
-
-    @Override
     public long fold(long identity, LongBinaryOperator op) {
         MemorySegment seg = encoded;
         long n = length;
