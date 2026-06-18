@@ -113,10 +113,14 @@ final class ImportCommand {
     }
 
     private static void renderProgress(long done, long total) {
-        int pct = total > 0 ? (int) (done * 100L / total) : 100;
-        int filled = pct * 30 / 100;
-        String bar = "=".repeat(filled) + (filled < 30 ? ">" : "") + " ".repeat(Math.max(0, 29 - filled));
-        System.err.printf("\r  [%s] %3d%%  %,d / %,d rows", bar, pct, done, total);
+        if (total < 0) {
+            System.err.printf("\r  imported %,d rows", done);
+        } else {
+            int pct = total > 0 ? (int) (done * 100L / total) : 100;
+            int filled = pct * 30 / 100;
+            String bar = "=".repeat(filled) + (filled < 30 ? ">" : "") + " ".repeat(Math.max(0, 29 - filled));
+            System.err.printf("\r  [%s] %3d%%  %,d / %,d rows", bar, pct, done, total);
+        }
         System.err.flush();
     }
 
