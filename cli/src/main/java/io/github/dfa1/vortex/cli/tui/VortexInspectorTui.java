@@ -4,16 +4,6 @@ import io.github.dfa1.vortex.reader.Layout;
 import io.github.dfa1.vortex.reader.SegmentSpec;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.BoolArray;
-import io.github.dfa1.vortex.reader.array.ByteArray;
-import io.github.dfa1.vortex.reader.array.DoubleArray;
-import io.github.dfa1.vortex.reader.array.FloatArray;
-import io.github.dfa1.vortex.reader.array.GenericArray;
-import io.github.dfa1.vortex.reader.array.IntArray;
-import io.github.dfa1.vortex.reader.array.DecimalArray;
-import io.github.dfa1.vortex.reader.array.LongArray;
-import io.github.dfa1.vortex.reader.array.ShortArray;
-import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.cli.tui.term.Ansi;
 import io.github.dfa1.vortex.cli.tui.term.Key;
 import io.github.dfa1.vortex.cli.tui.term.Terminal;
@@ -23,7 +13,6 @@ import io.github.dfa1.vortex.reader.VortexHandle;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ScanIterator;
 import io.github.dfa1.vortex.reader.ScanOptions;
-import io.github.dfa1.vortex.reader.array.StructArray;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -397,26 +386,26 @@ public final class VortexInspectorTui {
             }
             buf.append(Ansi.moveTo(row, 1));
             buf.append(Ansi.bg(bg)).append(Ansi.fg(30));
-            buf.append(pad(text, width));
+            buf.append(InspectorRender.pad(text, width));
             buf.append(Ansi.RESET);
         }
 
         private void drawHeader(StringBuilder buf, int width) {
             String header = " vortex-inspect — v" + tree.version()
-                    + "  " + formatBytes(tree.fileSize())
+                    + "  " + InspectorRender.formatBytes(tree.fileSize())
                     + "  rows=" + tree.totalRowCount()
                     + "  segs=" + tree.segmentCount()
-                    + " (" + formatBytes(tree.totalSegmentBytes()) + ")";
+                    + " (" + InspectorRender.formatBytes(tree.totalSegmentBytes()) + ")";
             buf.append(Ansi.moveTo(1, 1));
             buf.append(Ansi.bg(46)).append(Ansi.fg(30));
-            buf.append(pad(header, width));
+            buf.append(InspectorRender.pad(header, width));
             buf.append(Ansi.RESET);
         }
 
         private void drawFooter(StringBuilder buf, int width, int height) {
             buf.append(Ansi.moveTo(height, 1));
             buf.append(Ansi.bg(47)).append(Ansi.fg(30));
-            buf.append(pad(" ↑↓ nav   →/Enter expand   ← collapse   q quit ", width));
+            buf.append(InspectorRender.pad(" ↑↓ nav   →/Enter expand   ← collapse   q quit ", width));
             buf.append(Ansi.RESET);
         }
 
@@ -425,7 +414,7 @@ public final class VortexInspectorTui {
                 int idx = scrollOffset + row;
                 buf.append(Ansi.moveTo(top + row + 1, 1));
                 if (idx >= items.size()) {
-                    buf.append(pad("", leftWidth - 1));
+                    buf.append(InspectorRender.pad("", leftWidth - 1));
                     continue;
                 }
                 Item item = items.get(idx);
@@ -433,7 +422,7 @@ public final class VortexInspectorTui {
                 if (isSelected) {
                     buf.append(Ansi.bg(43)).append(Ansi.fg(30));
                 }
-                buf.append(pad(renderItem(item), leftWidth - 1));
+                buf.append(InspectorRender.pad(renderItem(item), leftWidth - 1));
                 if (isSelected) {
                     buf.append(Ansi.RESET);
                 }
@@ -469,7 +458,7 @@ public final class VortexInspectorTui {
             List<String> lines = detailLines(node);
             for (int i = 0; i < lines.size() && i < rows; i++) {
                 buf.append(Ansi.moveTo(top + i + 1, col + 1));
-                buf.append(truncate(lines.get(i), width));
+                buf.append(InspectorRender.truncate(lines.get(i), width));
             }
         }
 
@@ -491,7 +480,7 @@ public final class VortexInspectorTui {
                     subtotal += tree.segmentSpecs().get(idx).length();
                 }
                 lines.add("Segments:  " + layout.segments().size()
-                        + " (" + formatBytes(subtotal) + ")");
+                        + " (" + InspectorRender.formatBytes(subtotal) + ")");
                 long rows = layout.rowCount();
                 for (int idx : layout.segments()) {
                     SegmentSpec spec = tree.segmentSpecs().get(idx);
@@ -499,7 +488,7 @@ public final class VortexInspectorTui {
                             ? "  bits/elem=" + String.format("%.2f", spec.length() * 8.0 / rows)
                             : "";
                     lines.add("  [" + idx + "] off=" + spec.offset()
-                            + "  len=" + formatBytes(spec.length())
+                            + "  len=" + InspectorRender.formatBytes(spec.length())
                             + "  compression=" + spec.compression().name()
                             + bits);
                 }
@@ -571,9 +560,9 @@ public final class VortexInspectorTui {
                     int segIdx = layout.segments().getFirst();
                     SegmentSpec spec = tree.segmentSpecs().get(segIdx);
                     lines.add("Hex (first " + preview.length + " B of segment "
-                            + segIdx + ", total " + formatBytes(spec.length()) + "):");
+                            + segIdx + ", total " + InspectorRender.formatBytes(spec.length()) + "):");
                     for (int off = 0; off < preview.length; off += 16) {
-                        lines.add(formatHexRow(preview, off));
+                        lines.add(InspectorRender.formatHexRow(preview, off));
                     }
                 }
             }
@@ -621,7 +610,7 @@ public final class VortexInspectorTui {
                     int n = (int) Math.min(arr.length(), DATA_PREVIEW_ROWS);
                     List<String> out = new ArrayList<>(n);
                     for (int i = 0; i < n; i++) {
-                        out.add(formatValue(arr, i, dtype));
+                        out.add(InspectorRender.formatValue(arr, i, dtype));
                     }
                     dictCache.put(dictNode, new DataState.Loaded(List.copyOf(out)));
                 }
@@ -734,43 +723,7 @@ public final class VortexInspectorTui {
             int segIdx = flat.segments().getFirst();
             SegmentSpec spec = tree.segmentSpecs().get(segIdx);
             Array arr = handle.decodeFlatSegment(spec, statsDtype, flat.rowCount(), arena);
-            return formatStatsArray(arr, statsDtype);
-        }
-
-        private static List<String> formatStatsArray(Array arr, DType.Struct statsDtype) {
-            Array unwrapped = arr instanceof io.github.dfa1.vortex.reader.array.MaskedArray m
-                    ? m.inner()
-                    : arr;
-            if (!(unwrapped instanceof StructArray sa)) {
-                throw new IllegalStateException(
-                        "stats array is not a struct: " + arr.getClass().getSimpleName());
-            }
-            int n = (int) sa.length();
-            List<String> rows = new ArrayList<>(n);
-            for (int row = 0; row < n; row++) {
-                StringBuilder sb = new StringBuilder();
-                for (int f = 0; f < sa.fieldCount(); f++) {
-                    if (f > 0) {
-                        sb.append(", ");
-                    }
-                    String name = statsDtype.fieldNames().get(f);
-                    DType fdtype = statsDtype.fieldTypes().get(f);
-                    Array field = sa.field(f);
-                    sb.append(name).append('=').append(formatStatsCell(field, row, fdtype));
-                }
-                rows.add(sb.toString());
-            }
-            return rows;
-        }
-
-        private static String formatStatsCell(Array field, int row, DType declared) {
-            if (field instanceof io.github.dfa1.vortex.reader.array.MaskedArray m) {
-                if (!m.isValid(row)) {
-                    return "null";
-                }
-                return formatValue(m.inner(), row, declared);
-            }
-            return formatValue(field, row, declared);
+            return InspectorRender.formatStatsArray(arr, statsDtype);
         }
 
         private DType columnDtypeFor(InspectorTree.Node node) {
@@ -821,7 +774,7 @@ public final class VortexInspectorTui {
                         int n = (int) Math.min(array.length(), DATA_PREVIEW_ROWS);
                         List<String> out = new ArrayList<>(n);
                         for (int i = 0; i < n; i++) {
-                            out.add(formatValue(array, i, declared));
+                            out.add(InspectorRender.formatValue(array, i, declared));
                         }
                         dataCache.put(columnName, new DataState.Loaded(List.copyOf(out)));
                     }
@@ -859,61 +812,6 @@ public final class VortexInspectorTui {
             /// @param message short error string
             record Failed(String message) implements DataState {
             }
-        }
-
-        private static String formatValue(Array array, int i, DType declared) {
-            if (declared instanceof DType.Extension ext
-                    && io.github.dfa1.vortex.extension.ExtensionId.parse(ext.extensionId())
-                            .filter(id -> id == io.github.dfa1.vortex.extension.ExtensionId.VORTEX_DATE)
-                            .isPresent()) {
-                try {
-                    return io.github.dfa1.vortex.reader.extension.DateExtensionDecoder.INSTANCE.decode(array, i).toString();
-                } catch (RuntimeException e) {
-                    // fall through to generic rendering on shape mismatch
-                }
-            }
-            return switch (array) {
-                case LongArray a -> Long.toString(a.getLong(i));
-                case IntArray a -> Integer.toString(a.getInt(i));
-                case ShortArray a -> Short.toString(a.getShort(i));
-                case ByteArray a -> Byte.toString(a.getByte(i));
-                case DoubleArray a -> Double.toString(a.getDouble(i));
-                case FloatArray a -> Float.toString(a.getFloat(i));
-                case BoolArray a -> Boolean.toString(a.getBoolean(i));
-                case VarBinArray a -> a.dtype() instanceof DType.Utf8
-                        ? "\"" + a.getString(i) + "\""
-                        : bytesToShortHex(a.getBytes(i));
-                case GenericArray a when a.dtype() instanceof DType.Decimal ->
-                        tryDecimal(a::getDecimal, a, i);
-                case DecimalArray a -> tryDecimal(a::getDecimal, a, i);
-                default -> "<" + array.getClass().getSimpleName() + " " + array.dtype() + ">";
-            };
-        }
-
-        private static String tryDecimal(java.util.function.LongFunction<java.math.BigDecimal> reader,
-                                         Array a, int i) {
-            try {
-                return reader.apply(i).toPlainString();
-            } catch (RuntimeException e) {
-                String msg = e.getMessage();
-                if (msg != null && msg.contains("null cell")) {
-                    return "null";
-                }
-                return "<" + a.getClass().getSimpleName() + " " + a.dtype() + ">";
-            }
-        }
-
-        private static String bytesToShortHex(byte[] bytes) {
-            int n = Math.min(bytes.length, 16);
-            StringBuilder sb = new StringBuilder(n * 3 + 2);
-            sb.append("0x");
-            for (int i = 0; i < n; i++) {
-                sb.append(String.format("%02x", bytes[i] & 0xff));
-            }
-            if (bytes.length > n) {
-                sb.append("...");
-            }
-            return sb.toString();
         }
 
         private byte[] loadHexPreview(InspectorTree.Node node) {
@@ -957,56 +855,7 @@ public final class VortexInspectorTui {
             }
         }
 
-        private static String formatHexRow(byte[] data, int offset) {
-            StringBuilder sb = new StringBuilder(80);
-            sb.append(String.format("%08x  ", offset));
-            for (int i = 0; i < 16; i++) {
-                int idx = offset + i;
-                if (idx < data.length) {
-                    sb.append(String.format("%02x ", data[idx] & 0xff));
-                } else {
-                    sb.append("   ");
-                }
-                if (i == 7) {
-                    sb.append(' ');
-                }
-            }
-            sb.append(" |");
-            for (int i = 0; i < 16; i++) {
-                int idx = offset + i;
-                if (idx >= data.length) {
-                    sb.append(' ');
-                    continue;
-                }
-                int b = data[idx] & 0xff;
-                sb.append(b >= 0x20 && b < 0x7f ? (char) b : '.');
-            }
-            sb.append('|');
-            return sb.toString();
-        }
-
         private record Item(InspectorTree.Node node, int depth) {
-        }
-
-        private static String pad(String s, int width) {
-            if (s.length() >= width) {
-                return s.substring(0, width);
-            }
-            return s + " ".repeat(width - s.length());
-        }
-
-        private static String truncate(String s, int width) {
-            return s.length() > width ? s.substring(0, width) : s;
-        }
-
-        private static String formatBytes(long bytes) {
-            if (bytes < 1024) {
-                return bytes + " B";
-            }
-            if (bytes < 1024 * 1024) {
-                return String.format("%.1f KB", bytes / 1024.0);
-            }
-            return String.format("%.1f MB", bytes / (1024.0 * 1024.0));
         }
     }
 }
