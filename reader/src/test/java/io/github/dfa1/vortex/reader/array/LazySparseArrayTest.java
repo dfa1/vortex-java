@@ -19,6 +19,7 @@ class LazySparseArrayTest {
     private static final DType I64 = new DType.Primitive(PType.I64, false);
     private static final DType I32 = new DType.Primitive(PType.I32, false);
     private static final DType F64 = new DType.Primitive(PType.F64, false);
+    private static final DType F32 = new DType.Primitive(PType.F32, false);
 
     @Nested
     class Long {
@@ -126,6 +127,61 @@ class LazySparseArrayTest {
         }
     }
 
+    @Nested
+    class Float {
+
+        @Test
+        void patchAndFillDispatch() {
+            try (Arena arena = Arena.ofConfined()) {
+                FloatArray values = floatArray(arena, 1.5f, 2.5f);
+                Array indices = intArray(arena, 0, 2);
+                var sut = new LazySparseFloatArray(F32, 3, 9.0f, values, indices, 0L);
+
+                assertThat(sut.getFloat(0)).isEqualTo(1.5f);
+                assertThat(sut.getFloat(1)).isEqualTo(9.0f);
+                assertThat(sut.getFloat(2)).isEqualTo(2.5f);
+            }
+        }
+
+        @Test
+        void foldSumsFillAndPatches() {
+            try (Arena arena = Arena.ofConfined()) {
+                FloatArray values = floatArray(arena, 1.5f, 2.5f);
+                Array indices = intArray(arena, 1, 3);
+                // length=5, fill=10, patches at index 1 and 3
+                var sut = new LazySparseFloatArray(F32, 5, 10.0f, values, indices, 0L);
+
+                double sum = sut.fold(0.0, java.lang.Double::sum);
+
+                // 10 + 1.5 + 10 + 2.5 + 10 = 34
+                assertThat(sum).isEqualTo(34.0);
+            }
+        }
+
+        @Test
+        void offsetSkipsLeadingPatches() {
+            try (Arena arena = Arena.ofConfined()) {
+                // length=3 covering abs [4..7), fill=1, patches at abs 4 and 6
+                FloatArray values = floatArray(arena, 10.0f, 11.0f, 12.0f);
+                Array indices = intArray(arena, 1, 4, 6);
+                var sut = new LazySparseFloatArray(F32, 3, 1.0f, values, indices, 4L);
+
+                assertThat(sut.getFloat(0)).isEqualTo(11.0f);
+                assertThat(sut.getFloat(1)).isEqualTo(1.0f);
+                assertThat(sut.getFloat(2)).isEqualTo(12.0f);
+            }
+        }
+
+        @Test
+        void nullPatchesIsAllFill() {
+            // patchValues == null is the no-patch fast path: every position returns fill
+            var sut = new LazySparseFloatArray(F32, 3, 42.0f, null, null, 0L);
+
+            assertThat(sut.getFloat(0)).isEqualTo(42.0f);
+            assertThat(sut.fold(0.0, java.lang.Double::sum)).isEqualTo(126.0);
+        }
+    }
+
     private static LongArray longArray(Arena arena, long... vs) {
         if (vs.length == 0) {
             return new MaterializedLongArray(I64, 0,
@@ -156,5 +212,13 @@ class LazySparseArrayTest {
             seg.setAtIndex(ValueLayout.JAVA_DOUBLE, i, vs[i]);
         }
         return new MaterializedDoubleArray(F64, vs.length, seg.asReadOnly());
+    }
+
+    private static FloatArray floatArray(Arena arena, float... vs) {
+        MemorySegment seg = arena.allocate(vs.length * 4L, 4);
+        for (int i = 0; i < vs.length; i++) {
+            seg.setAtIndex(ValueLayout.JAVA_FLOAT, i, vs[i]);
+        }
+        return new MaterializedFloatArray(F32, vs.length, seg.asReadOnly());
     }
 }

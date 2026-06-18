@@ -37,6 +37,27 @@ class AlpRdEncodingEncoderTest {
     }
 
     @Test
+    void encode_f32_roundTrip() {
+        // Given — exercises the F32 path (encodeF32 + Dictionary32 selection),
+        // distinct from the F64 path which uses Dictionary64
+        float[] values = {0.1f, 0.2f, 0.3f, 0.4f, 0.5f};
+        var encoder = new AlpRdEncodingEncoder();
+        var decoder = new AlpRdEncodingDecoder();
+        ReadRegistry registry = TestRegistry.ofDecoders(decoder, new BitpackedEncodingDecoder(), new PrimitiveEncodingDecoder());
+
+        // When
+        EncodeResult encoded = encoder.encode(DTypes.F32, values, EncodeTestHelper.testCtx());
+        DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, values.length, DTypes.F32, registry);
+        var result = decoder.decode(ctx);
+
+        // Then
+        for (int i = 0; i < values.length; i++) {
+            assertThat(((io.github.dfa1.vortex.reader.array.FloatArray) result).getFloat(i))
+                    .as("index %d", i).isCloseTo(values[i], within(1e-6f));
+        }
+    }
+
+    @Test
     void encode_f64_metadata_rightBitWidth_isNonZero() throws Exception {
         // Given — ALPRD splits F64 into left+right parts; right_bit_width>0 means real encoding happened
         // if tag drifts, right_bit_width reads as 0 (proto3 default) and right parts are all zero
