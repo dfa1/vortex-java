@@ -51,11 +51,7 @@ class VariantJavaWritesRustReadsIntegrationTest {
         // its own i32 dtype so the reference reader knows the wrapped value's type.
         Path file = tmp.resolve("java_variant.vtx");
         int rows = 5;
-        Scalar inner = new Scalar(
-                io.github.dfa1.vortex.proto.DType.ofPrimitive(
-                        new Primitive(io.github.dfa1.vortex.proto.PType.I32, false)),
-                ScalarValue.ofInt64Value(7L));
-        VariantData data = new VariantData(rows, inner);
+        VariantData data = VariantData.constant(rows, i32Variant(7L));
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, VARIANT_SCHEMA, WriteOptions.defaults())) {
@@ -70,5 +66,35 @@ class VariantJavaWritesRustReadsIntegrationTest {
 
         Schema schema = ds.arrowSchema(ALLOCATOR);
         assertThat(schema.getFields()).extracting(f -> f.getName()).contains("v");
+    }
+
+    @Test
+    void javaWriter_jniReader_varyingVariantColumn(@TempDir Path tmp) throws IOException {
+        // Given — a non-constant variant column: distinct per-row i32 values. The encoder
+        // lays this out as core_storage = vortex.chunked of one vortex.constant per row,
+        // exactly the representation the Rust reference uses for a row-varying variant array.
+        Path file = tmp.resolve("java_variant_varying.vtx");
+        List<Scalar> values = List.of(i32Variant(10L), i32Variant(20L), i32Variant(30L), i32Variant(40L));
+        VariantData data = new VariantData(values);
+
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, VARIANT_SCHEMA, WriteOptions.defaults())) {
+            // When
+            sut.writeChunk(Map.of("v", data));
+        }
+
+        // Then — the Rust reader parses the chunked variant layout and agrees on row count + schema.
+        DataSource ds = DataSource.open(SESSION, file.toAbsolutePath().toUri().toString());
+        assertThat(ds.rowCount().asOptional()).hasValue(values.size());
+        assertThat(ds.arrowSchema(ALLOCATOR).getFields()).extracting(f -> f.getName()).contains("v");
+    }
+
+    private static Scalar i32Variant(long value) {
+        // Inner typed scalar carrying its own i32 dtype, wrapped as a variant value
+        // (mirrors Rust Scalar::variant(Scalar::primitive(value))).
+        return new Scalar(
+                io.github.dfa1.vortex.proto.DType.ofPrimitive(
+                        new Primitive(io.github.dfa1.vortex.proto.PType.I32, false)),
+                ScalarValue.ofInt64Value(value));
     }
 }
