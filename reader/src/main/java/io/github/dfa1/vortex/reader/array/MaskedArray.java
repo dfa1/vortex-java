@@ -54,4 +54,11 @@ public final class MaskedArray implements Array {
     public boolean isValid(long i) {
         return validity == null || validity.getBoolean(i);
     }
+
+    @Override
+    public Array truncate(long rows) {
+        Array truncChild = Array.truncated(child, rows);
+        BoolArray truncValidity = validity != null ? (BoolArray) Array.truncated(validity, rows) : null;
+        return new MaskedArray(truncChild, truncValidity);
+    }
 }

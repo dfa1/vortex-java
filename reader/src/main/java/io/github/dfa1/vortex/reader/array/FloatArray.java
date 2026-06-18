@@ -29,4 +29,14 @@ public non-sealed interface FloatArray extends Array {
         }
         return result;
     }
+
+    /// Zero-copy truncation: a length-capping view over this array.
+    /// [ChunkedFloatArray] overrides to keep batch iteration.
+    ///
+    /// @param rows number of leading elements to keep
+    /// @return a length-`rows` float array view
+    @Override
+    default Array truncate(long rows) {
+        return new OffsetFloatArray(dtype(), rows, this, 0);
+    }
 }

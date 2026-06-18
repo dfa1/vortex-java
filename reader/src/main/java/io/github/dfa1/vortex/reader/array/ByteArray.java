@@ -43,4 +43,14 @@ public non-sealed interface ByteArray extends Array {
             c.accept(getByte(i));
         }
     }
+
+    /// Zero-copy truncation: a length-capping view over this array.
+    /// [ChunkedByteArray] overrides to keep batch iteration.
+    ///
+    /// @param rows number of leading elements to keep
+    /// @return a length-`rows` byte array view
+    @Override
+    default Array truncate(long rows) {
+        return new OffsetByteArray(dtype(), rows, this, 0);
+    }
 }

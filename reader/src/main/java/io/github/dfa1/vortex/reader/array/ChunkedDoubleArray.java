@@ -79,4 +79,9 @@ public record ChunkedDoubleArray(DType dtype, long length, DoubleArray[] childre
         }
         return result;
     }
+
+    @Override
+    public Array truncate(long rows) {
+        return ChunkedDoubleArray.of(dtype, rows, ChunkedArrays.truncateChildren(children, offsets, rows));
+    }
 }

@@ -36,4 +36,9 @@ public record LazyDecimalBytePartsArray(DType dtype, long length, Array msp) imp
         }
         return new BigDecimal(DecimalBytePartsArrays.readMantissa(msp, i), d.scale());
     }
+
+    @Override
+    public Array truncate(long rows) {
+        return new LazyDecimalBytePartsArray(dtype, rows, Array.truncated(msp, rows));
+    }
 }

@@ -82,4 +82,9 @@ public record ChunkedByteArray(DType dtype, long length, ByteArray[] children, l
             child.forEachByte(c);
         }
     }
+
+    @Override
+    public Array truncate(long rows) {
+        return ChunkedByteArray.of(dtype, rows, ChunkedArrays.truncateChildren(children, offsets, rows));
+    }
 }

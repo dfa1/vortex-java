@@ -23,4 +23,13 @@ public non-sealed interface BoolArray extends Array {
             c.accept(getBoolean(i));
         }
     }
+
+    /// Zero-copy truncation: a length-capping view over this array.
+    ///
+    /// @param rows number of leading elements to keep
+    /// @return a length-`rows` bool array view
+    @Override
+    default Array truncate(long rows) {
+        return new OffsetBoolArray(dtype(), rows, this, 0);
+    }
 }

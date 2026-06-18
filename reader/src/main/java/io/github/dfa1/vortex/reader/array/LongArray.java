@@ -40,4 +40,14 @@ public non-sealed interface LongArray extends Array {
         }
         return result;
     }
+
+    /// Zero-copy truncation: a length-capping view over this array (no buffer is
+    /// copied). [ChunkedLongArray] overrides to keep batch iteration.
+    ///
+    /// @param rows number of leading elements to keep
+    /// @return a length-`rows` long array view
+    @Override
+    default Array truncate(long rows) {
+        return new OffsetLongArray(dtype(), rows, this, 0);
+    }
 }

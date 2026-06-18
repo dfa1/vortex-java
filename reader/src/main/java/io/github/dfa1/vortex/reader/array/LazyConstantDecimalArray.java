@@ -26,4 +26,9 @@ public record LazyConstantDecimalArray(DType dtype, long length, BigDecimal valu
         }
         return value;
     }
+
+    @Override
+    public Array truncate(long rows) {
+        return new LazyConstantDecimalArray(dtype, rows, value, byteWidth);
+    }
 }

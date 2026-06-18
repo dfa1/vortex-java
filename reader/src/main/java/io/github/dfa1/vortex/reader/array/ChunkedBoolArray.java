@@ -70,4 +70,9 @@ public record ChunkedBoolArray(DType dtype, long length, BoolArray[] children, l
             child.forEachBoolean(c);
         }
     }
+
+    @Override
+    public Array truncate(long rows) {
+        return ChunkedBoolArray.of(dtype, rows, ChunkedArrays.truncateChildren(children, offsets, rows));
+    }
 }

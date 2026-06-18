@@ -40,4 +40,14 @@ public non-sealed interface IntArray extends Array {
         }
         return result;
     }
+
+    /// Zero-copy truncation: a length-capping view over this array.
+    /// [ChunkedIntArray] overrides to keep batch iteration.
+    ///
+    /// @param rows number of leading elements to keep
+    /// @return a length-`rows` int array view
+    @Override
+    default Array truncate(long rows) {
+        return new OffsetIntArray(dtype(), rows, this, 0);
+    }
 }

@@ -69,4 +69,9 @@ public record ChunkedFloatArray(DType dtype, long length, FloatArray[] children,
         }
         return result;
     }
+
+    @Override
+    public Array truncate(long rows) {
+        return ChunkedFloatArray.of(dtype, rows, ChunkedArrays.truncateChildren(children, offsets, rows));
+    }
 }

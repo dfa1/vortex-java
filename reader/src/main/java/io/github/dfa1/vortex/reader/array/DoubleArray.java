@@ -40,4 +40,14 @@ public non-sealed interface DoubleArray extends Array {
         }
         return result;
     }
+
+    /// Zero-copy truncation: a length-capping view over this array.
+    /// [ChunkedDoubleArray] overrides to keep batch iteration.
+    ///
+    /// @param rows number of leading elements to keep
+    /// @return a length-`rows` double array view
+    @Override
+    default Array truncate(long rows) {
+        return new OffsetDoubleArray(dtype(), rows, this, 0);
+    }
 }

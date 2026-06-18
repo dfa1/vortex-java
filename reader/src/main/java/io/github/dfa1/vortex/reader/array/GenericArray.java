@@ -72,6 +72,11 @@ public final class GenericArray implements Array {
         return new GenericArray(dtype, newLength, buffers, children);
     }
 
+    @Override
+    public Array truncate(long rows) {
+        return withLength(rows);
+    }
+
     MemorySegment buffer(int i) {
         return buffers[i];
     }

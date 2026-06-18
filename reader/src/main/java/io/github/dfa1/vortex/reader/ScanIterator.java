@@ -20,31 +20,10 @@ import io.github.dfa1.vortex.reader.array.DictFloatArray;
 import io.github.dfa1.vortex.reader.array.DictIntArray;
 import io.github.dfa1.vortex.reader.array.DictLongArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
-import io.github.dfa1.vortex.reader.array.EmptyArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
-import io.github.dfa1.vortex.reader.array.GenericArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
-import io.github.dfa1.vortex.reader.array.LazyConstantBoolArray;
-import io.github.dfa1.vortex.reader.array.LazyConstantByteArray;
-import io.github.dfa1.vortex.reader.array.LazyConstantDoubleArray;
-import io.github.dfa1.vortex.reader.array.LazyConstantFloatArray;
-import io.github.dfa1.vortex.reader.array.LazyConstantIntArray;
-import io.github.dfa1.vortex.reader.array.LazyConstantLongArray;
-import io.github.dfa1.vortex.reader.array.LazyConstantShortArray;
-import io.github.dfa1.vortex.reader.array.LazyConstantDecimalArray;
-import io.github.dfa1.vortex.reader.array.LazyDecimalArray;
-import io.github.dfa1.vortex.reader.array.LazyDecimalBytePartsArray;
-import io.github.dfa1.vortex.reader.array.LazyRunEndBoolArray;
-import io.github.dfa1.vortex.reader.array.LazySparseBoolArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
-import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
-import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
-import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
-import io.github.dfa1.vortex.reader.array.MaterializedFloatArray;
-import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
-import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
-import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
 import io.github.dfa1.vortex.reader.array.OffsetBoolArray;
 import io.github.dfa1.vortex.reader.array.OffsetByteArray;
 import io.github.dfa1.vortex.reader.array.OffsetDoubleArray;
@@ -52,7 +31,6 @@ import io.github.dfa1.vortex.reader.array.OffsetFloatArray;
 import io.github.dfa1.vortex.reader.array.OffsetIntArray;
 import io.github.dfa1.vortex.reader.array.OffsetLongArray;
 import io.github.dfa1.vortex.reader.array.OffsetShortArray;
-import io.github.dfa1.vortex.reader.array.NullArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.StructArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
@@ -279,150 +257,14 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
 
     // ── Zone-map pruning ──────────────────────────────────────────────────────
 
-    private static Map<String, Array> truncateColumns(Map<String, Array> columns, long rows,
-                                                       SegmentAllocator arena) {
+    private static Map<String, Array> truncateColumns(Map<String, Array> columns, long rows) {
         var result = new LinkedHashMap<String, Array>(columns.size());
         for (var entry : columns.entrySet()) {
-            result.put(entry.getKey(), truncateArray(entry.getValue(), rows, arena));
+            result.put(entry.getKey(), Array.truncated(entry.getValue(), rows));
         }
         return Map.copyOf(result);
     }
 
-    private static Array truncateArray(Array arr, long rows, SegmentAllocator arena) {
-        if (arr.length() <= rows) {
-            return arr;
-        }
-        // Chunked* cases must precede the LongArray/IntArray/etc catch-alls below — a
-        // ChunkedLongArray IS a LongArray, but slicing it via ArraySegments.of would
-        // materialise the entire column before slicing (defeating the zero-copy win
-        // we just added). Instead, keep the prefix children intact and recursively
-        // truncate the boundary child.
-        return switch (arr) {
-            case ChunkedLongArray a -> truncateChunkedLong(a, rows, arena);
-            case ChunkedIntArray a -> truncateChunkedInt(a, rows, arena);
-            case ChunkedDoubleArray a -> truncateChunkedDouble(a, rows, arena);
-            case ChunkedFloatArray a -> truncateChunkedFloat(a, rows, arena);
-            case ChunkedShortArray a -> truncateChunkedShort(a, rows, arena);
-            case ChunkedByteArray a -> truncateChunkedByte(a, rows, arena);
-            case ChunkedBoolArray a -> truncateChunkedBool(a, rows, arena);
-            // Dict* cases must precede the LongArray/etc catch-alls below: a DictLongArray
-            // IS a LongArray, but the catch-all materialises via ArraySegments.of which
-            // would scatter the entire column to truncate. Instead keep the values
-            // dictionary intact and just truncate the codes — codes are a primitive Array
-            // that recursively flows through this same switch.
-            case DictLongArray a ->
-                    DictLongArray.of(a.dtype(), rows, a.values(), truncateArray(a.codes(), rows, arena));
-            case DictIntArray a ->
-                    DictIntArray.of(a.dtype(), rows, a.values(), truncateArray(a.codes(), rows, arena));
-            case DictDoubleArray a ->
-                    DictDoubleArray.of(a.dtype(), rows, a.values(), truncateArray(a.codes(), rows, arena));
-            case DictFloatArray a ->
-                    DictFloatArray.of(a.dtype(), rows, a.values(), truncateArray(a.codes(), rows, arena));
-            // LazyConstant* cases must precede the LongArray / IntArray / etc catch-alls:
-            // each LazyConstantXxxArray IS a typed Array, but the catch-all would
-            // materialise a length-sized buffer just to slice it. Truncating a constant
-            // array is a no-buffer length swap.
-            case LazyConstantLongArray a -> new LazyConstantLongArray(a.dtype(), rows, a.value());
-            case LazyConstantIntArray a -> new LazyConstantIntArray(a.dtype(), rows, a.value());
-            case LazyConstantDoubleArray a -> new LazyConstantDoubleArray(a.dtype(), rows, a.value());
-            case LazyConstantFloatArray a -> new LazyConstantFloatArray(a.dtype(), rows, a.value());
-            case LazyConstantShortArray a -> new LazyConstantShortArray(a.dtype(), rows, a.value());
-            case LazyConstantByteArray a -> new LazyConstantByteArray(a.dtype(), rows, a.value());
-            case LazyConstantBoolArray a -> new LazyConstantBoolArray(a.dtype(), rows, a.value());
-            case LongArray a ->
-                    new MaterializedLongArray(a.dtype(), rows, ArraySegments.of(a, arena).asSlice(0, rows * Long.BYTES));
-            case IntArray a ->
-                    new MaterializedIntArray(a.dtype(), rows, ArraySegments.of(a, arena).asSlice(0, rows * Integer.BYTES));
-            case DoubleArray a ->
-                    new MaterializedDoubleArray(a.dtype(), rows, ArraySegments.of(a, arena).asSlice(0, rows * Double.BYTES));
-            case FloatArray a ->
-                    new MaterializedFloatArray(a.dtype(), rows, ArraySegments.of(a, arena).asSlice(0, rows * Float.BYTES));
-            case ShortArray a ->
-                    new MaterializedShortArray(a.dtype(), rows, ArraySegments.of(a, arena).asSlice(0, rows * Short.BYTES));
-            case ByteArray a -> new MaterializedByteArray(a.dtype(), rows, ArraySegments.of(a, arena).asSlice(0, rows));
-            case LazyRunEndBoolArray a ->
-                    new LazyRunEndBoolArray(a.dtype(), rows, a.values(), a.runEnds(), a.offset());
-            case LazySparseBoolArray a ->
-                    new LazySparseBoolArray(a.dtype(), rows, a.fillValue(), a.patchValues(), a.patchIndices(), a.offset());
-            case BoolArray a ->
-                    new MaterializedBoolArray(a.dtype(), rows, ArraySegments.of(a, arena).asSlice(0, (rows + 7) / 8));
-            case NullArray a -> new NullArray(a.dtype(), rows);
-            case VarBinArray a -> a.truncate(rows);
-            case MaskedArray a -> {
-                Array truncChild = truncateArray(a.inner(), rows, arena);
-                BoolArray v = a.validity();
-                BoolArray truncValidity = (v != null) ? (BoolArray) truncateArray(v, rows, arena) : null;
-                yield new MaskedArray(truncChild, truncValidity);
-            }
-            case EmptyArray a -> a;
-            case GenericArray a -> a.withLength(rows);
-            case LazyDecimalArray a ->
-                    new LazyDecimalArray(a.dtype(), rows, a.buf().asSlice(0, rows * (long) a.byteWidth()), a.byteWidth());
-            case LazyDecimalBytePartsArray a ->
-                    new LazyDecimalBytePartsArray(a.dtype(), rows, truncateArray(a.msp(), rows, arena));
-            case LazyConstantDecimalArray a ->
-                    new LazyConstantDecimalArray(a.dtype(), rows, a.value(), a.byteWidth());
-            default ->
-                    throw new VortexException("limit: truncation not supported for " + arr.getClass().getSimpleName());
-        };
-    }
-
-    /// Truncates a `ChunkedXxxArray` by keeping full children that fit within
-    /// `rows` and recursively truncating the boundary child. Avoids the
-    /// full-column materialisation that the {@link LongArray}/{@link IntArray}/etc.
-    /// catch-all cases would trigger via {@link ArraySegments#of(Array, SegmentAllocator)}.
-    private static Array truncateChunkedLong(ChunkedLongArray arr, long rows, SegmentAllocator arena) {
-        List<Array> kept = collectTruncatedChildren(arr.children(), arr.offsets(), rows, arena);
-        return ChunkedLongArray.of(arr.dtype(), rows, kept);
-    }
-
-    private static Array truncateChunkedInt(ChunkedIntArray arr, long rows, SegmentAllocator arena) {
-        List<Array> kept = collectTruncatedChildren(arr.children(), arr.offsets(), rows, arena);
-        return ChunkedIntArray.of(arr.dtype(), rows, kept);
-    }
-
-    private static Array truncateChunkedDouble(ChunkedDoubleArray arr, long rows, SegmentAllocator arena) {
-        List<Array> kept = collectTruncatedChildren(arr.children(), arr.offsets(), rows, arena);
-        return ChunkedDoubleArray.of(arr.dtype(), rows, kept);
-    }
-
-    private static Array truncateChunkedFloat(ChunkedFloatArray arr, long rows, SegmentAllocator arena) {
-        List<Array> kept = collectTruncatedChildren(arr.children(), arr.offsets(), rows, arena);
-        return ChunkedFloatArray.of(arr.dtype(), rows, kept);
-    }
-
-    private static Array truncateChunkedShort(ChunkedShortArray arr, long rows, SegmentAllocator arena) {
-        List<Array> kept = collectTruncatedChildren(arr.children(), arr.offsets(), rows, arena);
-        return ChunkedShortArray.of(arr.dtype(), rows, kept);
-    }
-
-    private static Array truncateChunkedByte(ChunkedByteArray arr, long rows, SegmentAllocator arena) {
-        List<Array> kept = collectTruncatedChildren(arr.children(), arr.offsets(), rows, arena);
-        return ChunkedByteArray.of(arr.dtype(), rows, kept);
-    }
-
-    private static Array truncateChunkedBool(ChunkedBoolArray arr, long rows, SegmentAllocator arena) {
-        List<Array> kept = collectTruncatedChildren(arr.children(), arr.offsets(), rows, arena);
-        return ChunkedBoolArray.of(arr.dtype(), rows, kept);
-    }
-
-    private static List<Array> collectTruncatedChildren(Array[] children, long[] offsets,
-                                                        long rows, SegmentAllocator arena) {
-        var kept = new ArrayList<Array>(children.length);
-        for (int i = 0; i < children.length; i++) {
-            long start = offsets[i];
-            long end = offsets[i + 1];
-            if (start >= rows) {
-                break;
-            }
-            if (end <= rows) {
-                kept.add(children[i]);
-            } else {
-                kept.add(truncateArray(children[i], rows - start, arena));
-            }
-        }
-        return kept;
-    }
 
     @Override
     public boolean hasNext() {
@@ -470,7 +312,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         try {
             Map<String, Array> columns = buildColumnMap(spec, arena);
             if (chunkRows < spec.rowCount()) {
-                columns = truncateColumns(columns, chunkRows, arena);
+                columns = truncateColumns(columns, chunkRows);
             }
             rowsReturned += chunkRows;
             Map<String, DType> chunkDtypes = new java.util.LinkedHashMap<>();

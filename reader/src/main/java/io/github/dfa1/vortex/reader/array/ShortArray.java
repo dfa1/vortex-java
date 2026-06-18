@@ -43,4 +43,14 @@ public non-sealed interface ShortArray extends Array {
             c.accept(getShort(i));
         }
     }
+
+    /// Zero-copy truncation: a length-capping view over this array.
+    /// [ChunkedShortArray] overrides to keep batch iteration.
+    ///
+    /// @param rows number of leading elements to keep
+    /// @return a length-`rows` short array view
+    @Override
+    default Array truncate(long rows) {
+        return new OffsetShortArray(dtype(), rows, this, 0);
+    }
 }
