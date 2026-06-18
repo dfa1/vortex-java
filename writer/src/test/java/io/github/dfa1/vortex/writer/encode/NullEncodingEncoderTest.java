@@ -43,15 +43,15 @@ class NullEncodingEncoderTest {
             var decoder = new NullEncodingDecoder();
 
             // When
-            EncodeResult encoded = encoder.encode(DTypes.NULL, null, EncodeTestHelper.testCtx());
-            ArrayNode node = ArrayNode.of(encoded.rootNode().encodingId(), null, new ArrayNode[0], new int[0]);
+            EncodeResult resultEncoded = encoder.encode(DTypes.NULL, null, EncodeTestHelper.testCtx());
+            ArrayNode node = ArrayNode.of(resultEncoded.rootNode().encodingId(), null, new ArrayNode[0], new int[0]);
             DecodeContext ctx = new DecodeContext(node, DTypes.NULL, rowCount, new MemorySegment[0],
                     ReadRegistry.empty(), Arena.ofAuto());
+            var result = decoder.decode(ctx);
 
             // Then
-            var decoded = decoder.decode(ctx);
-            assertThat(decoded).isInstanceOf(NullArray.class);
-            assertThat(decoded.length()).isEqualTo(rowCount);
+            assertThat(result).isInstanceOf(NullArray.class);
+            assertThat(result.length()).isEqualTo(rowCount);
         }
     }
 }

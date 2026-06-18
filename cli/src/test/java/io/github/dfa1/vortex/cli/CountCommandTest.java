@@ -15,11 +15,11 @@ class CountCommandTest {
     @Test
     void wrongArity_returnsUsageError(@TempDir Path tmp) {
         // Given / When
-        CliTestSupport.Captured got = capture(() -> CountCommand.run(new String[]{"count"}));
+        CliTestSupport.Captured result = capture(() -> CountCommand.run(new String[]{"count"}));
 
         // Then
-        assertThat(got.status()).isEqualTo(ExitStatus.USAGE_ERROR);
-        assertThat(got.stderr()).contains("usage:");
+        assertThat(result.status()).isEqualTo(ExitStatus.USAGE_ERROR);
+        assertThat(result.stderr()).contains("usage:");
     }
 
     @Test
@@ -28,11 +28,11 @@ class CountCommandTest {
         Path missing = tmp.resolve("nope.vortex");
 
         // When
-        CliTestSupport.Captured got = capture(() -> CountCommand.run(new String[]{"count", missing.toString()}));
+        CliTestSupport.Captured result = capture(() -> CountCommand.run(new String[]{"count", missing.toString()}));
 
         // Then
-        assertThat(got.status()).isEqualTo(ExitStatus.FILE_NOT_FOUND);
-        assertThat(got.stderr()).contains("file not found");
+        assertThat(result.status()).isEqualTo(ExitStatus.FILE_NOT_FOUND);
+        assertThat(result.stderr()).contains("file not found");
     }
 
     @Test
@@ -41,10 +41,10 @@ class CountCommandTest {
         Path file = writeSmallVortex(tmp, "count.vortex");
 
         // When
-        CliTestSupport.Captured got = capture(() -> CountCommand.run(new String[]{"count", file.toString()}));
+        CliTestSupport.Captured result = capture(() -> CountCommand.run(new String[]{"count", file.toString()}));
 
         // Then
-        assertThat(got.status()).isEqualTo(ExitStatus.OK);
-        assertThat(got.stdout().trim()).isEqualTo("3");
+        assertThat(result.status()).isEqualTo(ExitStatus.OK);
+        assertThat(result.stdout().trim()).isEqualTo("3");
     }
 }

@@ -299,6 +299,7 @@ class FileSizeComparisonIntegrationTest {
         Schema jniSchema = new Schema(List.of(
                 Field.notNullable("v", new ArrowType.Int(64, true))));
 
+        // When / Then — each pattern writes both files and asserts non-empty output
         System.out.println("[PcoI64Comparison] pattern  rows  JNI bytes  Java bytes  Java/JNI");
         comparePcoI64(tmp, "sequential", sequential, javaSchema, jniSchema);
         comparePcoI64(tmp, "intMult",    intMult,    javaSchema, jniSchema);
@@ -361,6 +362,7 @@ class FileSizeComparisonIntegrationTest {
         Schema jniSchema = new Schema(List.of(
                 Field.notNullable("s", new ArrowType.Utf8())));
 
+        // When
         Path javaFile = tmp.resolve("hicard-java.vtx");
         try (FileChannel ch = FileChannel.open(javaFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(

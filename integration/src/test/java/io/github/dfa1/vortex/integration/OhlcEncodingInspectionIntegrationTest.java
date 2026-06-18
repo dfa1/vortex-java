@@ -124,23 +124,28 @@ class OhlcEncodingInspectionIntegrationTest {
         writeOhlc(file, ROWS, BATCH_SIZE);
 
         // When
-        String report;
+        String result;
         try (VortexReader vf = VortexReader.open(file, ReadRegistry.loadAll())) {
-            report = VortexInspector.inspect(vf);
+            result = VortexInspector.inspect(vf);
         }
 
         // Then
-        System.out.println(report);
-        assertThat(report).contains("volume");
-        assertThat(report).contains("Used encodings:");
+        System.out.println(result);
+        assertThat(result).contains("volume");
+        assertThat(result).contains("Used encodings:");
     }
 
     @Test
     void writeOhlc10kToTmp_persistentFile() throws IOException {
+        // Given
         Path file = Path.of("/tmp", "ohlc-10000.vtx");
         java.nio.file.Files.deleteIfExists(file);
+
+        // When
         writeOhlcMultiSymbol(file, 10_000, BATCH_SIZE,
                 new String[]{"ACME", "WIDGET", "GADGET", "MEGA", "PIXEL"});
+
+        // Then
         System.out.printf("[OhlcWriter] wrote %d rows to %s (%.1f KB)%n",
                 10_000, file, java.nio.file.Files.size(file) / 1024.0);
         assertThat(java.nio.file.Files.exists(file)).isTrue();

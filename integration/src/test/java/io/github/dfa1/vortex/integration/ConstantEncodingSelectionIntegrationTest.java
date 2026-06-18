@@ -40,9 +40,9 @@ class ConstantEncodingSelectionIntegrationTest {
         }
 
         // When
-        String report;
+        String result;
         try (VortexReader vf = VortexReader.open(file, ReadRegistry.loadAll())) {
-            report = VortexInspector.inspect(vf);
+            result = VortexInspector.inspect(vf);
         }
 
         // Then — constant must be the root encoding, not a sub-encoding inside a dict.
@@ -50,8 +50,8 @@ class ConstantEncodingSelectionIntegrationTest {
         // routing all-zero data through writeGlobalDictColumn which produced a dict layout
         // with vortex.constant-coded codes — constant appeared but as a dict child, wasting
         // the wrapping dict overhead.
-        assertThat(report)
-                .as("all-zero column must use vortex.constant, not vortex.dict\n%s", report)
+        assertThat(result)
+                .as("all-zero column must use vortex.constant, not vortex.dict\n%s", result)
                 .contains("vortex.constant")
                 .doesNotContain("vortex.dict");
     }

@@ -23,11 +23,11 @@ class DTypeFactoriesTest {
         DType sut = DType.utf8();
 
         // When
-        DType marked = sut.asNullable();
+        DType result = sut.asNullable();
 
         // Then
-        assertThat(marked).isInstanceOf(DType.Utf8.class);
-        assertThat(marked.nullable()).isTrue();
+        assertThat(result).isInstanceOf(DType.Utf8.class);
+        assertThat(result.nullable()).isTrue();
         // Original instance must remain non-nullable
         assertThat(sut.nullable()).isFalse();
     }
@@ -75,9 +75,9 @@ class DTypeFactoriesTest {
         DType direct = DType.f64().withNullable(true);
 
         // When
-        DType viaShortcut = DType.f64().asNullable();
+        DType result = DType.f64().asNullable();
 
         // Then
-        assertThat(viaShortcut).isEqualTo(direct);
+        assertThat(result).isEqualTo(direct);
     }
 }

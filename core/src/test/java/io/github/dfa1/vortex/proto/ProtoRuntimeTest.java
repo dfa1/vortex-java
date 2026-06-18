@@ -25,11 +25,11 @@ class ProtoRuntimeTest {
             byte[] bytes = w.toByteArray();
 
             // When
-            ProtoReader r = readerOver(bytes);
+            ProtoReader result = readerOver(bytes);
 
             // Then
-            assertThat(r.readVarint64()).isEqualTo(value);
-            assertThat(r.hasMore()).isFalse();
+            assertThat(result.readVarint64()).isEqualTo(value);
+            assertThat(result.hasMore()).isFalse();
         }
 
         @Test
@@ -39,10 +39,10 @@ class ProtoRuntimeTest {
             w.writeVarint64(150L);
 
             // When
-            byte[] bytes = w.toByteArray();
+            byte[] result = w.toByteArray();
 
             // Then
-            assertThat(bytes).containsExactly(0x96, 0x01);
+            assertThat(result).containsExactly(0x96, 0x01);
         }
 
         @Test
@@ -68,10 +68,10 @@ class ProtoRuntimeTest {
             w.writeSint64(value);
 
             // When
-            long decoded = readerOver(w.toByteArray()).readSint64();
+            long result = readerOver(w.toByteArray()).readSint64();
 
             // Then
-            assertThat(decoded).isEqualTo(value);
+            assertThat(result).isEqualTo(value);
         }
     }
 
@@ -108,11 +108,11 @@ class ProtoRuntimeTest {
             w.writeDouble(Math.PI);
 
             // When
-            ProtoReader r = readerOver(w.toByteArray());
+            ProtoReader result = readerOver(w.toByteArray());
 
             // Then
-            assertThat(r.readFloat()).isEqualTo(3.14f);
-            assertThat(r.readDouble()).isEqualTo(Math.PI);
+            assertThat(result.readFloat()).isEqualTo(3.14f);
+            assertThat(result.readDouble()).isEqualTo(Math.PI);
         }
     }
 
@@ -126,10 +126,10 @@ class ProtoRuntimeTest {
             w.writeString("hello 世界");
 
             // When
-            String s = readerOver(w.toByteArray()).readString();
+            String result = readerOver(w.toByteArray()).readString();
 
             // Then
-            assertThat(s).isEqualTo("hello 世界");
+            assertThat(result).isEqualTo("hello 世界");
         }
 
         @Test
@@ -140,10 +140,10 @@ class ProtoRuntimeTest {
             w.writeBytes(payload);
 
             // When
-            byte[] decoded = readerOver(w.toByteArray()).readBytes();
+            byte[] result = readerOver(w.toByteArray()).readBytes();
 
             // Then
-            assertThat(decoded).containsExactly(payload);
+            assertThat(result).containsExactly(payload);
         }
 
         @Test
@@ -155,11 +155,11 @@ class ProtoRuntimeTest {
             MemorySegment src = MemorySegment.ofArray(w.toByteArray());
 
             // When
-            MemorySegment slice = new ProtoReader(src, 0, src.byteSize()).readLenDelimSegment();
+            MemorySegment result = new ProtoReader(src, 0, src.byteSize()).readLenDelimSegment();
 
-            // Then — slice points into the original segment, not a fresh copy.
-            assertThat(slice.byteSize()).isEqualTo(payload.length);
-            assertThat(slice.address()).isEqualTo(src.address() + 1); // skip 1-byte length varint
+            // Then — result points into the original segment, not a fresh copy.
+            assertThat(result.byteSize()).isEqualTo(payload.length);
+            assertThat(result.address()).isEqualTo(src.address() + 1); // skip 1-byte length varint
         }
 
         @Test
@@ -184,11 +184,11 @@ class ProtoRuntimeTest {
             w.writeTag(5, WireType.LEN);
 
             // When
-            int tag = readerOver(w.toByteArray()).readVarint32();
+            int result = readerOver(w.toByteArray()).readVarint32();
 
             // Then
-            assertThat(tag >>> 3).isEqualTo(5);
-            assertThat(tag & 7).isEqualTo(WireType.LEN);
+            assertThat(result >>> 3).isEqualTo(5);
+            assertThat(result & 7).isEqualTo(WireType.LEN);
         }
     }
 
@@ -238,12 +238,12 @@ class ProtoRuntimeTest {
             ProtoReader r = new ProtoReader(seg, 0, packed.length);
 
             // When
-            long[] out = new long[3];
+            long[] result = new long[3];
             int[] idx = {0};
-            r.readPacked(packed.length, reader -> out[idx[0]++] = reader.readVarint64());
+            r.readPacked(packed.length, reader -> result[idx[0]++] = reader.readVarint64());
 
             // Then
-            assertThat(out).containsExactly(1, 127, 128);
+            assertThat(result).containsExactly(1, 127, 128);
         }
     }
 

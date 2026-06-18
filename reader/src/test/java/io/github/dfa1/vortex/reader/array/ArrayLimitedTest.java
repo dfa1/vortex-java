@@ -76,12 +76,12 @@ class ArrayLimitedTest {
                 LongArray sut = longs(arena, 10L, 20L, 30L, 40L);
 
                 // When
-                Array limited = sut.limited(2);
+                Array result = sut.limited(2);
 
                 // Then
-                assertThat(limited.length()).isEqualTo(2L);
-                assertThat(((LongArray) limited).getLong(0)).isEqualTo(10L);
-                assertThat(((LongArray) limited).getLong(1)).isEqualTo(20L);
+                assertThat(result.length()).isEqualTo(2L);
+                assertThat(((LongArray) result).getLong(0)).isEqualTo(10L);
+                assertThat(((LongArray) result).getLong(1)).isEqualTo(20L);
             }
         }
 
@@ -92,12 +92,12 @@ class ArrayLimitedTest {
                 Float16Array sut = float16(arena, 1.0f, 2.0f, 3.0f);
 
                 // When
-                Array limited = sut.limited(2);
+                Array result = sut.limited(2);
 
                 // Then
-                assertThat(limited.length()).isEqualTo(2L);
-                assertThat(((Float16Array) limited).getFloat(0)).isEqualTo(1.0f);
-                assertThat(((Float16Array) limited).getFloat(1)).isEqualTo(2.0f);
+                assertThat(result.length()).isEqualTo(2L);
+                assertThat(((Float16Array) result).getFloat(0)).isEqualTo(1.0f);
+                assertThat(((Float16Array) result).getFloat(1)).isEqualTo(2.0f);
             }
         }
     }
@@ -114,12 +114,12 @@ class ArrayLimitedTest {
                         List.of(longs(arena, 1L, 2L, 3L), longs(arena, 10L, 20L, 30L)));
 
                 // When
-                StructArray limited = (StructArray) sut.limited(2);
+                StructArray result = (StructArray) sut.limited(2);
 
                 // Then
-                assertThat(limited.length()).isEqualTo(2L);
-                assertThat(limited.field(0).length()).isEqualTo(2L);
-                assertThat(((LongArray) limited.field(1)).getLong(1)).isEqualTo(20L);
+                assertThat(result.length()).isEqualTo(2L);
+                assertThat(result.field(0).length()).isEqualTo(2L);
+                assertThat(((LongArray) result.field(1)).getLong(1)).isEqualTo(20L);
             }
         }
 
@@ -133,12 +133,12 @@ class ArrayLimitedTest {
                 ListArray sut = new ListArray(dtype, 3, elements, offsets);
 
                 // When
-                ListArray limited = (ListArray) sut.limited(2);
+                ListArray result = (ListArray) sut.limited(2);
 
                 // Then — offsets keep rows+1 = 3 entries so list[1] bounds stay readable
-                assertThat(limited.length()).isEqualTo(2L);
-                assertThat(limited.offsets().length()).isEqualTo(3L);
-                assertThat(limited.elements()).isSameAs(elements);
+                assertThat(result.length()).isEqualTo(2L);
+                assertThat(result.offsets().length()).isEqualTo(3L);
+                assertThat(result.elements()).isSameAs(elements);
             }
         }
 
@@ -153,12 +153,12 @@ class ArrayLimitedTest {
                 ListViewArray sut = new ListViewArray(dtype, 3, elements, offsets, sizes);
 
                 // When
-                ListViewArray limited = (ListViewArray) sut.limited(2);
+                ListViewArray result = (ListViewArray) sut.limited(2);
 
                 // Then
-                assertThat(limited.length()).isEqualTo(2L);
-                assertThat(limited.offsets().length()).isEqualTo(2L);
-                assertThat(limited.sizes().length()).isEqualTo(2L);
+                assertThat(result.length()).isEqualTo(2L);
+                assertThat(result.offsets().length()).isEqualTo(2L);
+                assertThat(result.sizes().length()).isEqualTo(2L);
             }
         }
 
@@ -171,11 +171,11 @@ class ArrayLimitedTest {
                         longs(arena, 1L, 2L, 3L, 4L, 5L, 6L));
 
                 // When
-                FixedSizeListArray limited = (FixedSizeListArray) sut.limited(2);
+                FixedSizeListArray result = (FixedSizeListArray) sut.limited(2);
 
                 // Then — 2 rows -> 4 elements
-                assertThat(limited.length()).isEqualTo(2L);
-                assertThat(limited.elements().length()).isEqualTo(4L);
+                assertThat(result.length()).isEqualTo(2L);
+                assertThat(result.elements().length()).isEqualTo(4L);
             }
         }
 
@@ -187,12 +187,12 @@ class ArrayLimitedTest {
                         longs(arena, 1L, 2L, 3L), longs(arena, 4L, 5L, 6L));
 
                 // When
-                VariantArray limited = (VariantArray) sut.limited(2);
+                VariantArray result = (VariantArray) sut.limited(2);
 
                 // Then
-                assertThat(limited.length()).isEqualTo(2L);
-                assertThat(limited.coreStorage().length()).isEqualTo(2L);
-                assertThat(limited.shredded().length()).isEqualTo(2L);
+                assertThat(result.length()).isEqualTo(2L);
+                assertThat(result.coreStorage().length()).isEqualTo(2L);
+                assertThat(result.shredded().length()).isEqualTo(2L);
             }
         }
 
@@ -203,10 +203,10 @@ class ArrayLimitedTest {
                 VariantArray sut = new VariantArray(I64, 3, longs(arena, 1L, 2L, 3L), null);
 
                 // When
-                VariantArray limited = (VariantArray) sut.limited(2);
+                VariantArray result = (VariantArray) sut.limited(2);
 
                 // Then
-                assertThat(limited.shredded()).isNull();
+                assertThat(result.shredded()).isNull();
             }
         }
     }

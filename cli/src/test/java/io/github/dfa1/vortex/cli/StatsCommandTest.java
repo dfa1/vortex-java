@@ -15,11 +15,11 @@ class StatsCommandTest {
     @Test
     void wrongArity_returnsUsageError() {
         // Given / When
-        CliTestSupport.Captured got = capture(() -> StatsCommand.run(new String[]{"stats"}));
+        CliTestSupport.Captured result = capture(() -> StatsCommand.run(new String[]{"stats"}));
 
         // Then
-        assertThat(got.status()).isEqualTo(ExitStatus.USAGE_ERROR);
-        assertThat(got.stderr()).contains("usage:");
+        assertThat(result.status()).isEqualTo(ExitStatus.USAGE_ERROR);
+        assertThat(result.stderr()).contains("usage:");
     }
 
     @Test
@@ -28,11 +28,11 @@ class StatsCommandTest {
         Path missing = tmp.resolve("nope.vortex");
 
         // When
-        CliTestSupport.Captured got = capture(() -> StatsCommand.run(new String[]{"stats", missing.toString()}));
+        CliTestSupport.Captured result = capture(() -> StatsCommand.run(new String[]{"stats", missing.toString()}));
 
         // Then
-        assertThat(got.status()).isEqualTo(ExitStatus.FILE_NOT_FOUND);
-        assertThat(got.stderr()).contains("file not found");
+        assertThat(result.status()).isEqualTo(ExitStatus.FILE_NOT_FOUND);
+        assertThat(result.stderr()).contains("file not found");
     }
 
     @Test
@@ -41,11 +41,11 @@ class StatsCommandTest {
         Path file = writeSmallVortex(tmp, "stats.vortex");
 
         // When
-        CliTestSupport.Captured got = capture(() -> StatsCommand.run(new String[]{"stats", file.toString()}));
+        CliTestSupport.Captured result = capture(() -> StatsCommand.run(new String[]{"stats", file.toString()}));
 
         // Then — header line + column row with the type and observed min/max
-        assertThat(got.status()).isEqualTo(ExitStatus.OK);
-        assertThat(got.stdout())
+        assertThat(result.status()).isEqualTo(ExitStatus.OK);
+        assertThat(result.stdout())
                 .contains("rows: 3")
                 .contains("column")
                 .contains("id")

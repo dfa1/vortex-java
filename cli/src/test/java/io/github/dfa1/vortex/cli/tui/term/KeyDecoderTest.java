@@ -19,10 +19,10 @@ class KeyDecoderTest {
         ByteArrayInputStream in = bytes(0x1B, '[', 'A');
 
         // When
-        Key sut = KeyDecoder.next(in);
+        Key result = KeyDecoder.next(in);
 
         // Then
-        assertThat(sut).isEqualTo(Key.ArrowUp.INSTANCE);
+        assertThat(result).isEqualTo(Key.ArrowUp.INSTANCE);
     }
 
     @Test
@@ -56,10 +56,10 @@ class KeyDecoderTest {
         ByteArrayInputStream in = bytes(0x1B);
 
         // When
-        Key sut = KeyDecoder.next(in);
+        Key result = KeyDecoder.next(in);
 
         // Then
-        assertThat(sut).isEqualTo(Key.Escape.INSTANCE);
+        assertThat(result).isEqualTo(Key.Escape.INSTANCE);
     }
 
     @Test
@@ -75,11 +75,11 @@ class KeyDecoderTest {
         ByteArrayInputStream in = bytes('q');
 
         // When
-        Key sut = KeyDecoder.next(in);
+        Key result = KeyDecoder.next(in);
 
         // Then
-        assertThat(sut).isInstanceOf(Key.Char.class);
-        assertThat(((Key.Char) sut).value()).isEqualTo('q');
+        assertThat(result).isInstanceOf(Key.Char.class);
+        assertThat(((Key.Char) result).value()).isEqualTo('q');
     }
 
     @Test
@@ -88,10 +88,10 @@ class KeyDecoderTest {
         ByteArrayInputStream in = bytes();
 
         // When
-        Key sut = KeyDecoder.next(in);
+        Key result = KeyDecoder.next(in);
 
         // Then
-        assertThat(sut).isEqualTo(Key.Eof.INSTANCE);
+        assertThat(result).isEqualTo(Key.Eof.INSTANCE);
     }
 
     @Test
@@ -100,10 +100,10 @@ class KeyDecoderTest {
         ByteArrayInputStream in = bytes(0x1B, '[', 'Z');
 
         // When
-        Key sut = KeyDecoder.next(in);
+        Key result = KeyDecoder.next(in);
 
         // Then — defensive: never emit garbage as Char on an unknown CSI
-        assertThat(sut).isEqualTo(Key.Escape.INSTANCE);
+        assertThat(result).isEqualTo(Key.Escape.INSTANCE);
     }
 
     @Test
@@ -140,10 +140,10 @@ class KeyDecoderTest {
         ByteArrayInputStream in = bytes(0x1B, 'X', 'A');
 
         // When
-        Key sut = KeyDecoder.next(in);
+        Key result = KeyDecoder.next(in);
 
         // Then
-        assertThat(sut).isEqualTo(Key.Escape.INSTANCE);
+        assertThat(result).isEqualTo(Key.Escape.INSTANCE);
     }
 
     @Test
@@ -152,10 +152,10 @@ class KeyDecoderTest {
         ByteArrayInputStream in = bytes(0x1B, '[', '5');
 
         // When
-        Key sut = KeyDecoder.next(in);
+        Key result = KeyDecoder.next(in);
 
         // Then — propagating Eof prevents the TUI from spinning on a truncated stream
-        assertThat(sut).isEqualTo(Key.Eof.INSTANCE);
+        assertThat(result).isEqualTo(Key.Eof.INSTANCE);
     }
 
     @Test
@@ -181,11 +181,11 @@ class KeyDecoderTest {
         ByteArrayInputStream in = bytes(0x03);
 
         // When
-        Key sut = KeyDecoder.next(in);
+        Key result = KeyDecoder.next(in);
 
         // Then
-        assertThat(sut).isInstanceOf(Key.Char.class);
-        assertThat(((Key.Char) sut).value()).isEqualTo((char) 0x03);
+        assertThat(result).isInstanceOf(Key.Char.class);
+        assertThat(((Key.Char) result).value()).isEqualTo((char) 0x03);
     }
 
     @Nested
@@ -197,12 +197,12 @@ class KeyDecoderTest {
             ByteArrayInputStream in = bytes('q');
 
             // When
-            Optional<Key> sut = KeyDecoder.nextWithTimeout(in, Duration.ofMillis(100));
+            Optional<Key> result = KeyDecoder.nextWithTimeout(in, Duration.ofMillis(100));
 
             // Then
-            assertThat(sut).isPresent();
-            assertThat(sut.get()).isInstanceOf(Key.Char.class);
-            assertThat(((Key.Char) sut.get()).value()).isEqualTo('q');
+            assertThat(result).isPresent();
+            assertThat(result.get()).isInstanceOf(Key.Char.class);
+            assertThat(((Key.Char) result.get()).value()).isEqualTo('q');
         }
 
         @Test
@@ -221,10 +221,10 @@ class KeyDecoderTest {
             };
 
             // When
-            Optional<Key> sut = KeyDecoder.nextWithTimeout(empty, Duration.ofMillis(40));
+            Optional<Key> result = KeyDecoder.nextWithTimeout(empty, Duration.ofMillis(40));
 
             // Then
-            assertThat(sut).isEmpty();
+            assertThat(result).isEmpty();
         }
 
         @Test
@@ -233,10 +233,10 @@ class KeyDecoderTest {
             ByteArrayInputStream in = bytes(0x1B, '[', 'B');
 
             // When
-            Optional<Key> sut = KeyDecoder.nextWithTimeout(in, Duration.ofMillis(100));
+            Optional<Key> result = KeyDecoder.nextWithTimeout(in, Duration.ofMillis(100));
 
             // Then
-            assertThat(sut).contains(Key.ArrowDown.INSTANCE);
+            assertThat(result).contains(Key.ArrowDown.INSTANCE);
         }
 
         @Test
@@ -256,10 +256,10 @@ class KeyDecoderTest {
             Thread.currentThread().interrupt();
 
             // When
-            Optional<Key> sut = KeyDecoder.nextWithTimeout(blocked, Duration.ofSeconds(10));
+            Optional<Key> result = KeyDecoder.nextWithTimeout(blocked, Duration.ofSeconds(10));
 
             // Then — returns empty rather than blocking; interrupt flag is restored
-            assertThat(sut).isEmpty();
+            assertThat(result).isEmpty();
             assertThat(Thread.interrupted()).isTrue();
         }
     }

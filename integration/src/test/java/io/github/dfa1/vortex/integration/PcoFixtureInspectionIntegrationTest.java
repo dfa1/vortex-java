@@ -325,16 +325,21 @@ class PcoFixtureInspectionIntegrationTest {
 
     @Test
     void dumpPcoMetadataForAllBlockedFixtures(@TempDir Path tmp) throws Exception {
+        // Given
         assumeNetworkAvailable();
-        StringBuilder report = new StringBuilder();
+
+        // When
+        StringBuilder result = new StringBuilder();
         for (String name : FIXTURES) {
             Path local = downloadIfMissing(tmp, name);
-            report.append("=== ").append(name).append(" ===\n");
-            inspect(local, report);
-            report.append('\n');
+            result.append("=== ").append(name).append(" ===\n");
+            inspect(local, result);
+            result.append('\n');
         }
-        System.out.println(report);
-        assertThat(report.toString()).isNotEmpty();
+
+        // Then
+        System.out.println(result);
+        assertThat(result.toString()).isNotEmpty();
     }
 
     private static final class PcoStats {

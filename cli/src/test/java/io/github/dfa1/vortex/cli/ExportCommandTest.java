@@ -15,11 +15,11 @@ class ExportCommandTest {
     @Test
     void wrongArity_returnsUsageError() {
         // Given / When
-        CliTestSupport.Captured got = capture(() -> ExportCommand.run(new String[]{"export"}));
+        CliTestSupport.Captured result = capture(() -> ExportCommand.run(new String[]{"export"}));
 
         // Then
-        assertThat(got.status()).isEqualTo(ExitStatus.USAGE_ERROR);
-        assertThat(got.stderr()).contains("usage:");
+        assertThat(result.status()).isEqualTo(ExitStatus.USAGE_ERROR);
+        assertThat(result.stderr()).contains("usage:");
     }
 
     @Test
@@ -28,11 +28,11 @@ class ExportCommandTest {
         Path missing = tmp.resolve("nope.vortex");
 
         // When
-        CliTestSupport.Captured got = capture(() -> ExportCommand.run(new String[]{"export", missing.toString()}));
+        CliTestSupport.Captured result = capture(() -> ExportCommand.run(new String[]{"export", missing.toString()}));
 
         // Then
-        assertThat(got.status()).isEqualTo(ExitStatus.FILE_NOT_FOUND);
-        assertThat(got.stderr()).contains("file not found");
+        assertThat(result.status()).isEqualTo(ExitStatus.FILE_NOT_FOUND);
+        assertThat(result.stderr()).contains("file not found");
     }
 
     @Test
@@ -41,12 +41,12 @@ class ExportCommandTest {
         Path file = writeSmallVortex(tmp, "export.vortex");
 
         // When
-        CliTestSupport.Captured got = capture(
+        CliTestSupport.Captured result = capture(
                 () -> ExportCommand.run(new String[]{"export", file.toString(), "-"}));
 
         // Then — header + 3 data rows
-        assertThat(got.status()).isEqualTo(ExitStatus.OK);
-        assertThat(got.stdout()).startsWith("id");
-        assertThat(got.stdout().lines().count()).isEqualTo(4);
+        assertThat(result.status()).isEqualTo(ExitStatus.OK);
+        assertThat(result.stdout()).startsWith("id");
+        assertThat(result.stdout().lines().count()).isEqualTo(4);
     }
 }

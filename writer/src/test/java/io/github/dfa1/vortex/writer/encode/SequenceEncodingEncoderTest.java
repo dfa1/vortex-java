@@ -47,54 +47,71 @@ class SequenceEncodingEncoderTest {
 
         @Test
         void encodingId_isVortexSequence() {
+            // Given / When / Then
             assertThat(ENCODER.encodingId()).isEqualTo(EncodingId.VORTEX_SEQUENCE);
         }
 
         @Test
         void encode_i64_roundTrips() {
+            // Given
             long[] data = {10L, 12L, 14L, 16L};
-            EncodeResult result = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
-            DecodeContext ctx = encodeResultToCtx(result, DTypes.I64, data.length);
-            LongArray decoded = (LongArray) DECODER.decode(ctx);
 
+            // When
+            EncodeResult resultEncoded = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = encodeResultToCtx(resultEncoded, DTypes.I64, data.length);
+            LongArray result = (LongArray) DECODER.decode(ctx);
+
+            // Then
             for (int i = 0; i < data.length; i++) {
-                assertThat(decoded.getLong(i)).as("index %d", i).isEqualTo(data[i]);
+                assertThat(result.getLong(i)).as("index %d", i).isEqualTo(data[i]);
             }
         }
 
         @Test
         void encode_f64_roundTrips() {
+            // Given
             double[] data = {1.0, 1.5, 2.0, 2.5};
-            EncodeResult result = ENCODER.encode(DTypes.F64, data, EncodeTestHelper.testCtx());
-            DecodeContext ctx = encodeResultToCtx(result, DTypes.F64, data.length);
-            DoubleArray decoded = (DoubleArray) DECODER.decode(ctx);
 
+            // When
+            EncodeResult resultEncoded = ENCODER.encode(DTypes.F64, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = encodeResultToCtx(resultEncoded, DTypes.F64, data.length);
+            DoubleArray result = (DoubleArray) DECODER.decode(ctx);
+
+            // Then
             for (int i = 0; i < data.length; i++) {
-                assertThat(decoded.getDouble(i)).as("index %d", i).isEqualTo(data[i]);
+                assertThat(result.getDouble(i)).as("index %d", i).isEqualTo(data[i]);
             }
         }
 
         @Test
         void encode_f16_roundTrips() {
+            // Given
             short[] data = {Float.floatToFloat16(0.0f), Float.floatToFloat16(1.0f), Float.floatToFloat16(2.0f)};
-            EncodeResult result = ENCODER.encode(DTypes.F16, data, EncodeTestHelper.testCtx());
-            DecodeContext ctx = encodeResultToCtx(result, DTypes.F16, data.length);
-            Float16Array decoded = (Float16Array) DECODER.decode(ctx);
 
+            // When
+            EncodeResult resultEncoded = ENCODER.encode(DTypes.F16, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = encodeResultToCtx(resultEncoded, DTypes.F16, data.length);
+            Float16Array result = (Float16Array) DECODER.decode(ctx);
+
+            // Then
             for (int i = 0; i < data.length; i++) {
-                assertThat(decoded.getFloat(i)).as("index %d", i).isEqualTo(Float.float16ToFloat(data[i]));
+                assertThat(result.getFloat(i)).as("index %d", i).isEqualTo(Float.float16ToFloat(data[i]));
             }
         }
 
         @Test
         void encode_nonArithmeticSequence_throwsVortexException() {
+            // Given
             long[] data = {1L, 2L, 4L};
+
+            // When / Then
             assertThatThrownBy(() -> ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx()))
                     .isInstanceOf(VortexException.class);
         }
 
         @Test
         void encode_nonPrimitiveDtype_throwsVortexException() {
+            // Given / When / Then
             assertThatThrownBy(() -> ENCODER.encode(new DType.Utf8(false), new long[]{1L}, EncodeTestHelper.testCtx()))
                     .isInstanceOf(VortexException.class);
         }
@@ -148,9 +165,13 @@ class SequenceEncodingEncoderTest {
         @ParameterizedTest
         @MethodSource("i64Sequences")
         void decode_i64_generatesCorrectSequence(long base, long mul, long[] expected) {
+            // Given
             DecodeContext ctx = makeCtx(intMeta(base, mul), DTypes.I64, expected.length);
+
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             assertThat(result.length()).isEqualTo(expected.length);
             LongArray longArray = (LongArray) result;
             for (int i = 0; i < expected.length; i++) {

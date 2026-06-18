@@ -69,23 +69,23 @@ class DTypeStructBuilderTest {
                 .build();
 
         // When
-        DType.Struct viaRecord = new DType.Struct(
+        DType.Struct result = new DType.Struct(
                 List.of("a", "b"),
                 List.of(new DType.Primitive(PType.I32, false), new DType.Utf8(false)),
                 false);
 
         // Then
-        assertThat(viaBuilder).isEqualTo(viaRecord);
+        assertThat(viaBuilder).isEqualTo(result);
     }
 
     @Test
     void builder_isNotReusable_afterMutation_byField() {
-        // Given — separate builder instances must produce independent structs
-        DType.Struct a = DType.structBuilder().field("x", DType.i64()).build();
-        DType.Struct b = DType.structBuilder().field("y", DType.utf8()).build();
+        // Given / When — separate builder instances must produce independent structs
+        DType.Struct resultX = DType.structBuilder().field("x", DType.i64()).build();
+        DType.Struct resultY = DType.structBuilder().field("y", DType.utf8()).build();
 
         // Then
-        assertThat(a.fieldNames()).containsExactly("x");
-        assertThat(b.fieldNames()).containsExactly("y");
+        assertThat(resultX.fieldNames()).containsExactly("x");
+        assertThat(resultY.fieldNames()).containsExactly("y");
     }
 }

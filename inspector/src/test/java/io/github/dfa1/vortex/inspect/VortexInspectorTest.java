@@ -26,10 +26,10 @@ class VortexInspectorTest {
                 Set.of("fastlanes.bitpacked", "vortex.constant"));
 
         // When
-        String out = VortexInspector.render(sut);
+        String result = VortexInspector.render(sut);
 
         // Then
-        assertThat(out)
+        assertThat(result)
                 .contains("Vortex v2")
                 .contains("4.0 KB")
                 .contains("1000 rows")
@@ -56,10 +56,10 @@ class VortexInspectorTest {
         InspectorTree sut = struct2col(1, 8192L, specs, Set.of());
 
         // When
-        String out = VortexInspector.render(sut);
+        String result = VortexInspector.render(sut);
 
         // Then
-        assertThat(out)
+        assertThat(result)
                 .contains("[0] off=0  len=1.0 KB  compression=ZSTD")
                 .contains("[1] off=1024  len=2.0 KB  compression=NONE")
                 .contains("[2] off=3072  len=4.0 KB  compression=LZ4");
@@ -78,11 +78,11 @@ class VortexInspectorTest {
                 100L, root);
 
         // When
-        String out = VortexInspector.render(sut);
+        String result = VortexInspector.render(sut);
 
         // Then
-        assertThat(out).contains("vortex.flat(100 rows)");
-        assertThat(out).doesNotContain("struct (");
+        assertThat(result).contains("vortex.flat(100 rows)");
+        assertThat(result).doesNotContain("struct (");
     }
 
     @Test
@@ -119,10 +119,10 @@ class VortexInspectorTest {
                 List.of(), 1000L, rootN);
 
         // When
-        String out = VortexInspector.render(sut);
+        String result = VortexInspector.render(sut);
 
         // Then
-        assertThat(out).contains("vortex.stats(1000 rows) → vortex.chunked(1000 rows) → vortex.flat(1000 rows)");
+        assertThat(result).contains("vortex.stats(1000 rows) → vortex.chunked(1000 rows) → vortex.flat(1000 rows)");
     }
 
     @Test
@@ -147,10 +147,10 @@ class VortexInspectorTest {
                 List.of("vortex.flat"), Set.of(), List.of(), 1000L, rootN);
 
         // When
-        String out = VortexInspector.render(sut);
+        String result = VortexInspector.render(sut);
 
         // Then — min over (10, 5) = 5; max over (50, 100) = 100
-        assertThat(out).contains("min=5 max=100");
+        assertThat(result).contains("min=5 max=100");
     }
 
     @Test
@@ -159,11 +159,11 @@ class VortexInspectorTest {
         InspectorTree sut = struct2col(1, 100L, List.of(), Set.of());
 
         // When
-        String out = VortexInspector.render(sut);
+        String result = VortexInspector.render(sut);
 
         // Then
-        assertThat(out).doesNotContain("min=");
-        assertThat(out).doesNotContain("max=");
+        assertThat(result).doesNotContain("min=");
+        assertThat(result).doesNotContain("max=");
     }
 
     @Test
@@ -172,10 +172,10 @@ class VortexInspectorTest {
         InspectorTree sut = struct2col(1, 100L, List.of(), Set.of());
 
         // When
-        String out = VortexInspector.render(sut);
+        String result = VortexInspector.render(sut);
 
         // Then
-        assertThat(out).doesNotContain("  []");
+        assertThat(result).doesNotContain("  []");
     }
 
     private static InspectorTree struct2col(int version, long fileSize, List<SegmentSpec> specs, Set<String> usedById) {

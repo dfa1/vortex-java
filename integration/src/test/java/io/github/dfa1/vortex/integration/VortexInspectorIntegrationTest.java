@@ -73,18 +73,18 @@ class VortexInspectorIntegrationTest {
         writeJni(file, 50_000);
 
         // When
-        String report;
+        String result;
         try (VortexReader vf = VortexReader.open(file, ReadRegistry.loadAll())) {
-            report = VortexInspector.inspect(vf);
+            result = VortexInspector.inspect(vf);
         }
 
         // Then
-        System.out.println(report);
-        assertThat(report).contains("Vortex v");
-        assertThat(report).contains("id");
-        assertThat(report).contains("value");
-        assertThat(report).contains("Registered encodings:");
-        assertThat(report).contains("Used encodings:");
-        assertThat(report).contains("Layout:");
+        System.out.println(result);
+        assertThat(result).contains("Vortex v");
+        assertThat(result).contains("id");
+        assertThat(result).contains("value");
+        assertThat(result).contains("Registered encodings:");
+        assertThat(result).contains("Used encodings:");
+        assertThat(result).contains("Layout:");
     }
 }

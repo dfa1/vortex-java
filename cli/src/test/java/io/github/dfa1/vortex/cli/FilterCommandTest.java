@@ -29,11 +29,11 @@ class FilterCommandTest {
     @Test
     void wrongArity_returnsUsageError() {
         // Given / When
-        CliTestSupport.Captured got = capture(() -> FilterCommand.run(new String[]{"filter"}));
+        CliTestSupport.Captured result = capture(() -> FilterCommand.run(new String[]{"filter"}));
 
         // Then
-        assertThat(got.status()).isEqualTo(ExitStatus.USAGE_ERROR);
-        assertThat(got.stderr()).contains("usage:");
+        assertThat(result.status()).isEqualTo(ExitStatus.USAGE_ERROR);
+        assertThat(result.stderr()).contains("usage:");
     }
 
     @Test
@@ -42,24 +42,24 @@ class FilterCommandTest {
         Path missing = tmp.resolve("nope.vortex");
 
         // When
-        CliTestSupport.Captured got = capture(() ->
+        CliTestSupport.Captured result = capture(() ->
                 FilterCommand.run(new String[]{"filter", missing.toString(), "id", ">", "0"}));
 
         // Then
-        assertThat(got.status()).isEqualTo(ExitStatus.FILE_NOT_FOUND);
-        assertThat(got.stderr()).contains("file not found");
+        assertThat(result.status()).isEqualTo(ExitStatus.FILE_NOT_FOUND);
+        assertThat(result.stderr()).contains("file not found");
     }
 
     @Test
     void invalidExpression_returnsUsageError() {
         // Given — file exists but expression has no operator
         // When
-        CliTestSupport.Captured got = capture(() ->
+        CliTestSupport.Captured result = capture(() ->
                 FilterCommand.run(new String[]{"filter", file.toString(), "id", "is", "1"}));
 
         // Then
-        assertThat(got.status()).isEqualTo(ExitStatus.USAGE_ERROR);
-        assertThat(got.stderr()).contains("invalid filter expression");
+        assertThat(result.status()).isEqualTo(ExitStatus.USAGE_ERROR);
+        assertThat(result.stderr()).contains("invalid filter expression");
     }
 
     @ParameterizedTest
@@ -69,12 +69,12 @@ class FilterCommandTest {
         String[] parts = filter.split(" ");
 
         // When
-        CliTestSupport.Captured got = capture(() ->
+        CliTestSupport.Captured result = capture(() ->
                 FilterCommand.run(new String[]{"filter", file.toString(), parts[0], parts[1], parts[2]}));
 
         // Then — every accepted operator reaches OK and produces a CSV header line.
-        assertThat(got.status()).isEqualTo(ExitStatus.OK);
-        assertThat(got.stdout()).startsWith("id");
+        assertThat(result.status()).isEqualTo(ExitStatus.OK);
+        assertThat(result.stdout()).startsWith("id");
     }
 
     @Test
@@ -82,12 +82,12 @@ class FilterCommandTest {
         // Given — parses cleanly, fails at column resolution. CLI must catch VortexException
         // and emit a stable error exit code rather than dumping the stack trace.
         // When
-        CliTestSupport.Captured got = capture(() ->
+        CliTestSupport.Captured result = capture(() ->
                 FilterCommand.run(new String[]{"filter", file.toString(), "nope", "=", "1"}));
 
         // Then
-        assertThat(got.status()).isEqualTo(ExitStatus.ERROR);
-        assertThat(got.stderr()).contains("error:");
+        assertThat(result.status()).isEqualTo(ExitStatus.ERROR);
+        assertThat(result.stderr()).contains("error:");
     }
 
     @Test
@@ -99,13 +99,13 @@ class FilterCommandTest {
         long start = System.nanoTime();
 
         // When
-        CliTestSupport.Captured got = capture(() ->
+        CliTestSupport.Captured result = capture(() ->
                 FilterCommand.run(new String[]{"filter", file.toString(), longName, "=", "1"}));
         long elapsedMs = (System.nanoTime() - start) / 1_000_000;
 
         // Then — parsing 10k chars must complete well under a second (linear scan).
         // The column won't exist; ERROR exit is expected, USAGE_ERROR is what we rule out.
         assertThat(elapsedMs).isLessThan(1000);
-        assertThat(got.status()).isNotEqualTo(ExitStatus.USAGE_ERROR);
+        assertThat(result.status()).isNotEqualTo(ExitStatus.USAGE_ERROR);
     }
 }

@@ -23,19 +23,19 @@ class ZonedStatsSchemaTest {
             meta.putInt(0, 8192);
 
             // When
-            long zoneLen = ZonedStatsSchema.zoneLength(meta);
+            long result = ZonedStatsSchema.zoneLength(meta);
 
             // Then
-            assertThat(zoneLen).isEqualTo(8192L);
+            assertThat(result).isEqualTo(8192L);
         }
 
         @Test
         void returnsZeroForNullMetadata() {
             // Given / When
-            long zoneLen = ZonedStatsSchema.zoneLength(null);
+            long result = ZonedStatsSchema.zoneLength(null);
 
             // Then — nothing to decode; caller treats as "no zones"
-            assertThat(zoneLen).isZero();
+            assertThat(result).isZero();
         }
 
         @Test
@@ -44,10 +44,10 @@ class ZonedStatsSchemaTest {
             ByteBuffer meta = ByteBuffer.allocate(2);
 
             // When
-            long zoneLen = ZonedStatsSchema.zoneLength(meta);
+            long result = ZonedStatsSchema.zoneLength(meta);
 
             // Then — defensively zero rather than throwing
-            assertThat(zoneLen).isZero();
+            assertThat(result).isZero();
         }
     }
 

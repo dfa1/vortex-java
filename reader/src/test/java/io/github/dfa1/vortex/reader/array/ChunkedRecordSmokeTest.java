@@ -30,10 +30,10 @@ class ChunkedRecordSmokeTest {
             long[] offsets = {0, 3, 7, 10};
 
             // When
-            int c = ChunkedLongArray.findChunk(offsets, 0);
+            int result = ChunkedLongArray.findChunk(offsets, 0);
 
             // Then
-            assertThat(c).isZero();
+            assertThat(result).isZero();
         }
 
         @Test
@@ -42,12 +42,12 @@ class ChunkedRecordSmokeTest {
             long[] offsets = {0, 3, 7, 10};
 
             // When
-            int atSecondBoundary = ChunkedLongArray.findChunk(offsets, 3);
-            int atThirdBoundary = ChunkedLongArray.findChunk(offsets, 7);
+            int resultSecondBoundary = ChunkedLongArray.findChunk(offsets, 3);
+            int resultThirdBoundary = ChunkedLongArray.findChunk(offsets, 7);
 
             // Then
-            assertThat(atSecondBoundary).isEqualTo(1);
-            assertThat(atThirdBoundary).isEqualTo(2);
+            assertThat(resultSecondBoundary).isEqualTo(1);
+            assertThat(resultThirdBoundary).isEqualTo(2);
         }
 
         @Test
@@ -56,10 +56,10 @@ class ChunkedRecordSmokeTest {
             long[] offsets = {0, 3, 7, 10};
 
             // When
-            int c = ChunkedLongArray.findChunk(offsets, 9);
+            int result = ChunkedLongArray.findChunk(offsets, 9);
 
             // Then
-            assertThat(c).isEqualTo(2);
+            assertThat(result).isEqualTo(2);
         }
     }
 
@@ -68,6 +68,7 @@ class ChunkedRecordSmokeTest {
 
         @Test
         void emptyChunkListRejected() {
+            // Given / When / Then
             assertThatThrownBy(() -> ChunkedLongArray.of(I64, 0, List.of()))
                     .isInstanceOf(VortexException.class);
         }
@@ -75,8 +76,11 @@ class ChunkedRecordSmokeTest {
         @Test
         void rowMismatchRejected() {
             try (Arena arena = Arena.ofConfined()) {
+                // Given
                 LongArray c0 = longChunk(arena, 1L, 2L, 3L);
                 LongArray c1 = longChunk(arena, 4L, 5L);
+
+                // When / Then
                 assertThatThrownBy(() -> ChunkedLongArray.of(I64, 99, List.of(c0, c1)))
                         .isInstanceOf(VortexException.class);
             }
@@ -90,7 +94,7 @@ class ChunkedRecordSmokeTest {
                 LongArray c1 = longChunk(arena, 20L, 21L, 22L, 23L);
                 ChunkedLongArray sut = ChunkedLongArray.of(I64, 7, List.of(c0, c1));
 
-                // When/Then
+                // When / Then
                 assertThat(sut.getLong(0)).isEqualTo(10L);
                 assertThat(sut.getLong(2)).isEqualTo(12L);
                 assertThat(sut.getLong(3)).isEqualTo(20L);
@@ -119,13 +123,16 @@ class ChunkedRecordSmokeTest {
         @Test
         void foldIteratesChildren() {
             try (Arena arena = Arena.ofConfined()) {
+                // Given
                 LongArray c0 = longChunk(arena, 1L, 2L);
                 LongArray c1 = longChunk(arena, 3L, 4L);
                 ChunkedLongArray sut = ChunkedLongArray.of(I64, 4, List.of(c0, c1));
 
-                long sum = sut.fold(0L, Long::sum);
+                // When
+                long result = sut.fold(0L, Long::sum);
 
-                assertThat(sum).isEqualTo(10L);
+                // Then
+                assertThat(result).isEqualTo(10L);
             }
         }
     }
@@ -136,10 +143,12 @@ class ChunkedRecordSmokeTest {
         @Test
         void chunkedDoubleSeesValues() {
             try (Arena arena = Arena.ofConfined()) {
+                // Given
                 DoubleArray c0 = doubleChunk(arena, 1.5, 2.5);
                 DoubleArray c1 = doubleChunk(arena, 3.5);
                 ChunkedDoubleArray sut = ChunkedDoubleArray.of(F64, 3, List.of(c0, c1));
 
+                // When / Then
                 assertThat(sut.getDouble(2)).isEqualTo(3.5);
             }
         }
@@ -147,10 +156,12 @@ class ChunkedRecordSmokeTest {
         @Test
         void chunkedIntSeesValues() {
             try (Arena arena = Arena.ofConfined()) {
+                // Given
                 IntArray c0 = intChunk(arena, 1, 2);
                 IntArray c1 = intChunk(arena, 3, 4);
                 ChunkedIntArray sut = ChunkedIntArray.of(I32, 4, List.of(c0, c1));
 
+                // When / Then
                 assertThat(sut.getInt(3)).isEqualTo(4);
             }
         }
@@ -158,10 +169,12 @@ class ChunkedRecordSmokeTest {
         @Test
         void chunkedFloatSeesValues() {
             try (Arena arena = Arena.ofConfined()) {
+                // Given
                 FloatArray c0 = floatChunk(arena, 1.5f, 2.5f);
                 FloatArray c1 = floatChunk(arena, 3.5f);
                 ChunkedFloatArray sut = ChunkedFloatArray.of(F32, 3, List.of(c0, c1));
 
+                // When / Then
                 assertThat(sut.getFloat(0)).isEqualTo(1.5f);
                 assertThat(sut.getFloat(2)).isEqualTo(3.5f);
             }
@@ -170,8 +183,10 @@ class ChunkedRecordSmokeTest {
         @Test
         void wrongTypeRejected() {
             try (Arena arena = Arena.ofConfined()) {
+                // Given — stuffing a LongArray into a Double container is a bug
                 LongArray longChunk = longChunk(arena, 1L);
-                // Wrong: stuffing a LongArray into a Double container.
+
+                // When / Then
                 assertThatThrownBy(() -> ChunkedDoubleArray.of(F64, 1, List.of(longChunk)))
                         .isInstanceOf(VortexException.class);
             }
@@ -186,10 +201,12 @@ class ChunkedRecordSmokeTest {
         @Test
         void getShortDispatchesAcrossChunks() {
             try (Arena arena = Arena.ofConfined()) {
+                // Given
                 ShortArray c0 = shortChunk(arena, (short) 10, (short) 11);
                 ShortArray c1 = shortChunk(arena, (short) 20, (short) 21);
                 ChunkedShortArray sut = ChunkedShortArray.of(I16, 4, List.of(c0, c1));
 
+                // When / Then
                 assertThat(sut.getShort(0)).isEqualTo((short) 10);
                 assertThat(sut.getShort(2)).isEqualTo((short) 20);
                 assertThat(sut.getShort(3)).isEqualTo((short) 21);
@@ -199,11 +216,12 @@ class ChunkedRecordSmokeTest {
         @Test
         void getIntWidens() {
             try (Arena arena = Arena.ofConfined()) {
+                // Given
                 ShortArray c0 = shortChunk(arena, (short) -1, (short) 2);
                 ShortArray c1 = shortChunk(arena, (short) 3);
                 ChunkedShortArray sut = ChunkedShortArray.of(I16, 3, List.of(c0, c1));
 
-                // I16 is signed - sign-extends.
+                // When / Then — I16 is signed, so sign-extends
                 assertThat(sut.getInt(0)).isEqualTo(-1);
                 assertThat(sut.getInt(2)).isEqualTo(3);
             }
@@ -212,18 +230,22 @@ class ChunkedRecordSmokeTest {
         @Test
         void foldIteratesChildren() {
             try (Arena arena = Arena.ofConfined()) {
+                // Given
                 ShortArray c0 = shortChunk(arena, (short) 1, (short) 2);
                 ShortArray c1 = shortChunk(arena, (short) 3);
                 ChunkedShortArray sut = ChunkedShortArray.of(I16, 3, List.of(c0, c1));
 
-                long sum = sut.fold(0L, Long::sum);
+                // When
+                long result = sut.fold(0L, Long::sum);
 
-                assertThat(sum).isEqualTo(6L);
+                // Then
+                assertThat(result).isEqualTo(6L);
             }
         }
 
         @Test
         void emptyRejected() {
+            // Given / When / Then
             assertThatThrownBy(() -> ChunkedShortArray.of(I16, 0, List.of()))
                     .isInstanceOf(VortexException.class);
         }
@@ -231,13 +253,16 @@ class ChunkedRecordSmokeTest {
         @Test
         void forEachShortIteratesChildren() {
             try (Arena arena = Arena.ofConfined()) {
+                // Given
                 ShortArray c0 = shortChunk(arena, (short) 1, (short) 2);
                 ShortArray c1 = shortChunk(arena, (short) 3);
                 ChunkedShortArray sut = ChunkedShortArray.of(I16, 3, List.of(c0, c1));
 
+                // When
                 var seen = new ArrayList<Short>();
                 sut.forEachShort(seen::add);
 
+                // Then
                 assertThat(seen).containsExactly((short) 1, (short) 2, (short) 3);
             }
         }

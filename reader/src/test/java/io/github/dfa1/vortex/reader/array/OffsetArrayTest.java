@@ -26,9 +26,11 @@ class OffsetArrayTest {
         @Test
         void getByteShiftsByOffset() {
             try (Arena arena = Arena.ofConfined()) {
+                // Given
                 ByteArray inner = byteArray(arena, (byte) 10, (byte) 20, (byte) 30, (byte) 40);
                 var sut = new OffsetByteArray(U8, 2, inner, 2L);
 
+                // When / Then
                 assertThat(sut.getByte(0)).isEqualTo((byte) 30);
                 assertThat(sut.getByte(1)).isEqualTo((byte) 40);
             }
@@ -37,10 +39,11 @@ class OffsetArrayTest {
         @Test
         void getIntWidensUnsignedThroughOffset() {
             try (Arena arena = Arena.ofConfined()) {
-                // 0xFF at inner index 1; sliced index 0 must read it as unsigned 255
+                // Given — 0xFF at inner index 1; sliced index 0 must read it as unsigned 255
                 ByteArray inner = byteArray(arena, (byte) 1, (byte) 0xFF);
                 var sut = new OffsetByteArray(U8, 1, inner, 1L);
 
+                // When / Then
                 assertThat(sut.getInt(0)).isEqualTo(255);
             }
         }
@@ -48,13 +51,15 @@ class OffsetArrayTest {
         @Test
         void foldReducesSlicedRange() {
             try (Arena arena = Arena.ofConfined()) {
+                // Given
                 ByteArray inner = byteArray(arena, (byte) 1, (byte) 2, (byte) 3, (byte) 4);
                 var sut = new OffsetByteArray(U8, 2, inner, 1L);
 
-                long sum = sut.fold(0L, java.lang.Long::sum);
+                // When
+                long result = sut.fold(0L, java.lang.Long::sum);
 
-                // bytes at sliced [0,1] = inner[1], inner[2] = 2 + 3 = 5
-                assertThat(sum).isEqualTo(5L);
+                // Then — bytes at sliced [0,1] = inner[1], inner[2] = 2 + 3 = 5
+                assertThat(result).isEqualTo(5L);
             }
         }
     }
@@ -65,9 +70,11 @@ class OffsetArrayTest {
         @Test
         void getShortShiftsByOffset() {
             try (Arena arena = Arena.ofConfined()) {
+                // Given
                 ShortArray inner = shortArray(arena, (short) 100, (short) 200, (short) 300);
                 var sut = new OffsetShortArray(U16, 2, inner, 1L);
 
+                // When / Then
                 assertThat(sut.getShort(0)).isEqualTo((short) 200);
                 assertThat(sut.getShort(1)).isEqualTo((short) 300);
             }
@@ -76,10 +83,11 @@ class OffsetArrayTest {
         @Test
         void getIntWidensUnsignedThroughOffset() {
             try (Arena arena = Arena.ofConfined()) {
-                // 0xFFFF at inner index 1; sliced index 0 must read it as unsigned 65535
+                // Given — 0xFFFF at inner index 1; sliced index 0 reads unsigned 65535
                 ShortArray inner = shortArray(arena, (short) 1, (short) 0xFFFF);
                 var sut = new OffsetShortArray(U16, 1, inner, 1L);
 
+                // When / Then
                 assertThat(sut.getInt(0)).isEqualTo(65535);
             }
         }
@@ -87,13 +95,15 @@ class OffsetArrayTest {
         @Test
         void foldReducesSlicedRange() {
             try (Arena arena = Arena.ofConfined()) {
+                // Given
                 ShortArray inner = shortArray(arena, (short) 5, (short) 6, (short) 7);
                 var sut = new OffsetShortArray(U16, 2, inner, 1L);
 
-                long sum = sut.fold(0L, java.lang.Long::sum);
+                // When
+                long result = sut.fold(0L, java.lang.Long::sum);
 
-                // shorts at sliced [0,1] = inner[1], inner[2] = 6 + 7 = 13
-                assertThat(sum).isEqualTo(13L);
+                // Then — shorts at sliced [0,1] = inner[1], inner[2] = 6 + 7 = 13
+                assertThat(result).isEqualTo(13L);
             }
         }
     }
@@ -104,9 +114,11 @@ class OffsetArrayTest {
         @Test
         void getFloatShiftsByOffset() {
             try (Arena arena = Arena.ofConfined()) {
+                // Given
                 FloatArray inner = floatArray(arena, 1.5f, 2.5f, 3.5f, 4.5f);
                 var sut = new OffsetFloatArray(F32, 2, inner, 2L);
 
+                // When / Then
                 assertThat(sut.getFloat(0)).isEqualTo(3.5f);
                 assertThat(sut.getFloat(1)).isEqualTo(4.5f);
             }
@@ -115,13 +127,15 @@ class OffsetArrayTest {
         @Test
         void foldReducesSlicedRange() {
             try (Arena arena = Arena.ofConfined()) {
+                // Given
                 FloatArray inner = floatArray(arena, 1.0f, 2.0f, 3.0f);
                 var sut = new OffsetFloatArray(F32, 2, inner, 1L);
 
-                double sum = sut.fold(0.0, java.lang.Double::sum);
+                // When
+                double result = sut.fold(0.0, java.lang.Double::sum);
 
-                // floats at sliced [0,1] = inner[1], inner[2] = 2 + 3 = 5
-                assertThat(sum).isEqualTo(5.0);
+                // Then — floats at sliced [0,1] = inner[1], inner[2] = 2 + 3 = 5
+                assertThat(result).isEqualTo(5.0);
             }
         }
     }

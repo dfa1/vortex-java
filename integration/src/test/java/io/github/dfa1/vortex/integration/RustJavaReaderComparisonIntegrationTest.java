@@ -402,33 +402,33 @@ class RustJavaReaderComparisonIntegrationTest {
         String inspect = VortexInspector.inspect(VortexReader.open(local));
         System.out.println(inspect);
         // When
-        Stats rustStats = rustStats(local);
-        Stats javaStats = javaStats(local);
+        Stats resultRust = rustStats(local);
+        Stats resultJava = javaStats(local);
 
         // Then — row counts match
-        assertThat(javaStats.rowCount())
+        assertThat(resultJava.rowCount())
                 .as("row count in %s", fixture)
-                .isEqualTo(rustStats.rowCount());
+                .isEqualTo(resultRust.rowCount());
 
         // Then — numeric column sums match (skip if no numeric cols in Rust output)
-        if (!rustStats.numSums().isEmpty()) {
-            assertThat(javaStats.numSums().keySet())
+        if (!resultRust.numSums().isEmpty()) {
+            assertThat(resultJava.numSums().keySet())
                     .as("numeric column names in %s", fixture)
-                    .containsExactlyInAnyOrderElementsOf(rustStats.numSums().keySet());
-            for (Map.Entry<String, Double> entry : rustStats.numSums().entrySet()) {
-                assertThat(javaStats.numSums().get(entry.getKey()))
+                    .containsExactlyInAnyOrderElementsOf(resultRust.numSums().keySet());
+            for (Map.Entry<String, Double> entry : resultRust.numSums().entrySet()) {
+                assertThat(resultJava.numSums().get(entry.getKey()))
                         .describedAs("numeric column '%s' sum in %s", entry.getKey(), fixture)
                         .isCloseTo(entry.getValue(), withPercentage(0.001));
             }
         }
 
         // Then — string byte-length sums match for cols Rust tracks (Rust may miss LargeVarChar etc.)
-        if (!rustStats.strLenSums().isEmpty()) {
-            assertThat(javaStats.strLenSums().keySet())
+        if (!resultRust.strLenSums().isEmpty()) {
+            assertThat(resultJava.strLenSums().keySet())
                     .as("string column names in %s", fixture)
-                    .containsAll(rustStats.strLenSums().keySet());
-            for (Map.Entry<String, Long> entry : rustStats.strLenSums().entrySet()) {
-                assertThat(javaStats.strLenSums().get(entry.getKey()))
+                    .containsAll(resultRust.strLenSums().keySet());
+            for (Map.Entry<String, Long> entry : resultRust.strLenSums().entrySet()) {
+                assertThat(resultJava.strLenSums().get(entry.getKey()))
                         .describedAs("string column '%s' byte-length sum in %s", entry.getKey(), fixture)
                         .isEqualTo(entry.getValue());
             }

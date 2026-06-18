@@ -27,11 +27,11 @@ class GenericArrayTest {
             GenericArray sut = new GenericArray(DTYPE, 10, seg);
 
             // When
-            GenericArray clamped = sut.limited(4);
+            GenericArray result = sut.limited(4);
 
             // Then — length reflects new bound; buffer is reused (no copy)
-            assertThat(clamped.length()).isEqualTo(4);
-            assertThat(clamped.dtype()).isEqualTo(DTYPE);
+            assertThat(result.length()).isEqualTo(4);
+            assertThat(result.dtype()).isEqualTo(DTYPE);
         }
     }
 
@@ -54,10 +54,10 @@ class GenericArrayTest {
             GenericArray sut = new GenericArray(DTYPE, 5, arena.allocate(40));
 
             // When
-            GenericArray clamped = sut.limited(0);
+            GenericArray result = sut.limited(0);
 
             // Then
-            assertThat(clamped.length()).isZero();
+            assertThat(result.length()).isZero();
         }
     }
 

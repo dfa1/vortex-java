@@ -15,11 +15,11 @@ class SchemaCommandTest {
     @Test
     void wrongArity_returnsUsageError() {
         // Given / When
-        CliTestSupport.Captured got = capture(() -> SchemaCommand.run(new String[]{"schema"}));
+        CliTestSupport.Captured result = capture(() -> SchemaCommand.run(new String[]{"schema"}));
 
         // Then
-        assertThat(got.status()).isEqualTo(ExitStatus.USAGE_ERROR);
-        assertThat(got.stderr()).contains("usage:");
+        assertThat(result.status()).isEqualTo(ExitStatus.USAGE_ERROR);
+        assertThat(result.stderr()).contains("usage:");
     }
 
     @Test
@@ -28,12 +28,12 @@ class SchemaCommandTest {
         Path missing = tmp.resolve("nope.vortex");
 
         // When
-        CliTestSupport.Captured got = capture(() ->
+        CliTestSupport.Captured result = capture(() ->
                 SchemaCommand.run(new String[]{"schema", missing.toString()}));
 
         // Then
-        assertThat(got.status()).isEqualTo(ExitStatus.FILE_NOT_FOUND);
-        assertThat(got.stderr()).contains("file not found");
+        assertThat(result.status()).isEqualTo(ExitStatus.FILE_NOT_FOUND);
+        assertThat(result.stderr()).contains("file not found");
     }
 
     @Test
@@ -42,12 +42,12 @@ class SchemaCommandTest {
         Path file = writeSmallVortex(tmp, "schema.vortex");
 
         // When
-        CliTestSupport.Captured got = capture(() ->
+        CliTestSupport.Captured result = capture(() ->
                 SchemaCommand.run(new String[]{"schema", file.toString()}));
 
         // Then — header + per-column row; row count and column count surfaced
-        assertThat(got.status()).isEqualTo(ExitStatus.OK);
-        assertThat(got.stdout())
+        assertThat(result.status()).isEqualTo(ExitStatus.OK);
+        assertThat(result.stdout())
                 .contains("schema.vortex")
                 .contains("3 rows")
                 .contains("1 columns")

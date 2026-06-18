@@ -44,8 +44,8 @@ class ConstantEncodingEncoderTest {
             long rowCount = 10_000_000L;
 
             // When
-            EncodeResult encoded = ENCODER.encode(DTypes.I64, new long[]{42L}, EncodeTestHelper.testCtx());
-            DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, rowCount, DTypes.I64, REGISTRY);
+            EncodeResult resultEncoded = ENCODER.encode(DTypes.I64, new long[]{42L}, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(resultEncoded, rowCount, DTypes.I64, REGISTRY);
             Array result = DECODER.decode(ctx);
 
             // Then
@@ -82,10 +82,12 @@ class ConstantEncodingEncoderTest {
         @ParameterizedTest
         @MethodSource("i32ConstantArrays")
         void encodeDecode_i32_isLossless(int[] data) {
-            EncodeResult encoded = ENCODER.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
-            DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, DTypes.I32, REGISTRY);
+            // Given / When
+            EncodeResult resultEncoded = ENCODER.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(resultEncoded, data.length, DTypes.I32, REGISTRY);
             Array result = DECODER.decode(ctx);
 
+            // Then
             assertThat(result.length()).isEqualTo(data.length);
             assertThat(result).isInstanceOf(LazyConstantIntArray.class);
             assertThat(((LazyConstantIntArray) result).value()).isEqualTo(data[0]);
@@ -94,10 +96,12 @@ class ConstantEncodingEncoderTest {
         @ParameterizedTest
         @MethodSource("i64ConstantArrays")
         void encodeDecode_i64_isLossless(long[] data) {
-            EncodeResult encoded = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
-            DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, DTypes.I64, REGISTRY);
+            // Given / When
+            EncodeResult resultEncoded = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(resultEncoded, data.length, DTypes.I64, REGISTRY);
             Array result = DECODER.decode(ctx);
 
+            // Then
             assertThat(result.length()).isEqualTo(data.length);
             assertThat(result).isInstanceOf(LazyConstantLongArray.class);
             assertThat(((LazyConstantLongArray) result).value()).isEqualTo(data[0]);
@@ -113,12 +117,15 @@ class ConstantEncodingEncoderTest {
         @ParameterizedTest
         @ValueSource(longs = {1, 2, 10, 1_000, 131_072, 1_000_000L})
         void i64_getLong_returnsConstantAtEveryIndex(long rowCount) {
+            // Given
             long constant = 0xDEADBEEFCAFEBABEL;
-            EncodeResult encoded = ENCODER.encode(DTypes.I64, new long[]{constant}, EncodeTestHelper.testCtx());
-            DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, rowCount, DTypes.I64, REGISTRY);
+            EncodeResult resultEncoded = ENCODER.encode(DTypes.I64, new long[]{constant}, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(resultEncoded, rowCount, DTypes.I64, REGISTRY);
 
+            // When
             LongArray result = (LongArray) DECODER.decode(ctx);
 
+            // Then
             assertThat(result.length()).isEqualTo(rowCount);
             assertThat(result.getLong(0)).isEqualTo(constant);
             assertThat(result.getLong(rowCount - 1)).isEqualTo(constant);
@@ -129,26 +136,32 @@ class ConstantEncodingEncoderTest {
 
         @Test
         void i64_fold_broadcastsAcrossAllRows() {
+            // Given
             long rowCount = 1_000_000L;
             long constant = 7L;
-            EncodeResult encoded = ENCODER.encode(DTypes.I64, new long[]{constant}, EncodeTestHelper.testCtx());
-            DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, rowCount, DTypes.I64, REGISTRY);
+            EncodeResult resultEncoded = ENCODER.encode(DTypes.I64, new long[]{constant}, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(resultEncoded, rowCount, DTypes.I64, REGISTRY);
 
+            // When
             LongArray result = (LongArray) DECODER.decode(ctx);
             long sum = result.fold(0L, Long::sum);
 
+            // Then
             assertThat(sum).isEqualTo(rowCount * constant);
         }
 
         @Test
         void i32_getInt_broadcastsAcrossEveryIndex() {
+            // Given
             long rowCount = 10_000L;
             int constant = -123_456;
-            EncodeResult encoded = ENCODER.encode(DTypes.I32, new int[]{constant}, EncodeTestHelper.testCtx());
-            DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, rowCount, DTypes.I32, REGISTRY);
+            EncodeResult resultEncoded = ENCODER.encode(DTypes.I32, new int[]{constant}, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(resultEncoded, rowCount, DTypes.I32, REGISTRY);
 
+            // When
             IntArray result = (IntArray) DECODER.decode(ctx);
 
+            // Then
             assertThat(result.length()).isEqualTo(rowCount);
             assertThat(result.getInt(0)).isEqualTo(constant);
             assertThat(result.getInt(rowCount - 1)).isEqualTo(constant);
@@ -157,13 +170,16 @@ class ConstantEncodingEncoderTest {
 
         @Test
         void f64_getDouble_broadcastsAcrossEveryIndex() {
+            // Given
             long rowCount = 10_000L;
             double constant = 3.141592653589793;
-            EncodeResult encoded = ENCODER.encode(DTypes.F64, new double[]{constant}, EncodeTestHelper.testCtx());
-            DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, rowCount, DTypes.F64, REGISTRY);
+            EncodeResult resultEncoded = ENCODER.encode(DTypes.F64, new double[]{constant}, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(resultEncoded, rowCount, DTypes.F64, REGISTRY);
 
+            // When
             DoubleArray result = (DoubleArray) DECODER.decode(ctx);
 
+            // Then
             assertThat(result.length()).isEqualTo(rowCount);
             assertThat(result.getDouble(0)).isEqualTo(constant);
             assertThat(result.getDouble(rowCount - 1)).isEqualTo(constant);
@@ -173,13 +189,16 @@ class ConstantEncodingEncoderTest {
 
         @Test
         void f32_getFloat_broadcastsAcrossEveryIndex() {
+            // Given
             long rowCount = 10_000L;
             float constant = 2.71828f;
-            EncodeResult encoded = ENCODER.encode(DTypes.F32, new float[]{constant}, EncodeTestHelper.testCtx());
-            DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, rowCount, DTypes.F32, REGISTRY);
+            EncodeResult resultEncoded = ENCODER.encode(DTypes.F32, new float[]{constant}, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(resultEncoded, rowCount, DTypes.F32, REGISTRY);
 
+            // When
             FloatArray result = (FloatArray) DECODER.decode(ctx);
 
+            // Then
             assertThat(result.length()).isEqualTo(rowCount);
             assertThat(result.getFloat(0)).isEqualTo(constant);
             assertThat(result.getFloat(rowCount - 1)).isEqualTo(constant);
@@ -187,13 +206,16 @@ class ConstantEncodingEncoderTest {
 
         @Test
         void i16_getShort_broadcastsAcrossEveryIndex() {
+            // Given
             long rowCount = 10_000L;
             short constant = (short) -12345;
-            EncodeResult encoded = ENCODER.encode(DTypes.I16, new short[]{constant}, EncodeTestHelper.testCtx());
-            DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, rowCount, DTypes.I16, REGISTRY);
+            EncodeResult resultEncoded = ENCODER.encode(DTypes.I16, new short[]{constant}, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(resultEncoded, rowCount, DTypes.I16, REGISTRY);
 
+            // When
             ShortArray result = (ShortArray) DECODER.decode(ctx);
 
+            // Then
             assertThat(result.length()).isEqualTo(rowCount);
             assertThat(result.getShort(0)).isEqualTo(constant);
             assertThat(result.getShort(rowCount - 1)).isEqualTo(constant);
@@ -201,13 +223,16 @@ class ConstantEncodingEncoderTest {
 
         @Test
         void i8_getByte_broadcastsAcrossEveryIndex() {
+            // Given
             long rowCount = 10_000L;
             byte constant = (byte) -42;
-            EncodeResult encoded = ENCODER.encode(DTypes.I8, new byte[]{constant}, EncodeTestHelper.testCtx());
-            DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, rowCount, DTypes.I8, REGISTRY);
+            EncodeResult resultEncoded = ENCODER.encode(DTypes.I8, new byte[]{constant}, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(resultEncoded, rowCount, DTypes.I8, REGISTRY);
 
+            // When
             ByteArray result = (ByteArray) DECODER.decode(ctx);
 
+            // Then
             assertThat(result.length()).isEqualTo(rowCount);
             assertThat(result.getByte(0)).isEqualTo(constant);
             assertThat(result.getByte(rowCount - 1)).isEqualTo(constant);

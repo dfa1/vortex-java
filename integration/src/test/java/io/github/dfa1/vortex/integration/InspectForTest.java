@@ -16,10 +16,14 @@ class InspectForTest {
     @Disabled("requires /tmp/for.vortex and /tmp/rle.vortex to be manually downloaded")
     @Test
     void inspect() throws Exception {
+        // Given
         for (String f : new String[]{"/tmp/for.vortex", "/tmp/rle.vortex"}) {
             try (VortexReader r = VortexReader.open(Path.of(f), ReadRegistry.loadAll())) {
-                String report = VortexInspector.inspect(r);
-                assertThat(report).isNotEmpty();
+                // When
+                String result = VortexInspector.inspect(r);
+
+                // Then
+                assertThat(result).isNotEmpty();
                 try (var iter = r.scan(ScanOptions.all())) {
                     if (iter.hasNext()) {
                         try (var chunk = iter.next()) {
