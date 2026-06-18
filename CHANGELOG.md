@@ -19,6 +19,15 @@ Read and write Vortex Variant (semi-structured, JSON-shaped) columns from Java. 
 ### Changed
 
 - Decode shape: transform encodings now decode **lazy-only**. The eager `Materialized*Array` fallbacks were removed from `vortex.zigzag` (all PTypes + broadcast), `fastlanes.for` (all integer PTypes), `vortex.alp` (broadcast-without-patches), `vortex.constant` (Decimal → `LazyConstantDecimalArray`), `vortex.runend` (Bool → `LazyRunEndBoolArray`), `vortex.sparse` (Bool → `LazySparseBoolArray`), and `fastlanes.rle` (validity → `OffsetBoolArray`, empty → `LazyConstantXxxArray`). Decompression encodings (`bitpacked`, `pco`, `zstd`, `fsst`, `delta`, `patched`), the primitive base, the `vortex.dict` encoding-level path, and the `vortex.alp` patches path stay Materialized by design. See [ADR 0015](docs/adr/0015-drop-materialized-fallbacks.md).
+- **Breaking — sealed `Array` permits changed.** `DecimalArray` is now a `non-sealed` family interface (decimal arrays moved from `implements Array` to `implements DecimalArray`), so decimal joins the per-dtype family layer. Downstream exhaustive `switch` over `Array` must add a `case DecimalArray`.
+
+### Removed
+
+- **Breaking — `EmptyArray` removed** from the sealed `Array` permits. It was never emitted by the reader (empties are zero-length typed arrays in their own family) and broke the dtype→family invariant (`EmptyArray(I64)` was not a `LongArray`). Represent an empty column as a zero-length array of the appropriate family.
+
+### Documentation
+
+- [ADR 0016](docs/adr/0016-vortex-arrow-bridge.md): captures `vortex-arrow` bridge interop options (separate module / Arrow C-Data / none); deferred until a concrete downstream need.
 
 ## [0.7.3] — 2026-06-17
 
