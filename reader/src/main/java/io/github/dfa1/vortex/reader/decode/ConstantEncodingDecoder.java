@@ -52,69 +52,77 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
             throw new VortexException(EncodingId.VORTEX_CONSTANT, "invalid scalar value", e);
         }
 
-        long n = ctx.rowCount();
+        return arrayFromScalar(ctx, scalar, ctx.dtype(), ctx.rowCount());
+    }
 
-        if (ctx.dtype() instanceof DType.Null) {
-            return new NullArray(ctx.dtype(), n);
+    /// Builds the constant array for `scalar` interpreted as `dtype`, broadcast to `n` rows.
+    /// Recurses for Extension (its storage dtype) and Variant (the wrapped inner scalar).
+    private static Array arrayFromScalar(DecodeContext ctx, ScalarValue scalar, DType dtype, long n) {
+        if (dtype instanceof DType.Null) {
+            return new NullArray(dtype, n);
         }
-
-        if (ctx.dtype() instanceof DType.Utf8 || ctx.dtype() instanceof DType.Binary) {
-            return decodeString(ctx, scalar, n);
+        if (dtype instanceof DType.Variant) {
+            // A constant variant wraps a typed inner scalar (Scalar::variant(inner)); the
+            // physical storage is the inner-typed constant array. The VariantArray wrapper
+            // re-applies the logical Variant dtype.
+            io.github.dfa1.vortex.proto.Scalar inner = scalar.variant_value();
+            if (inner == null || inner.value() == null) {
+                throw new VortexException(EncodingId.VORTEX_CONSTANT, "constant variant missing variant_value");
+            }
+            DType innerDtype = VariantEncodingDecoder.dtypeFromProto(inner.dtype());
+            return arrayFromScalar(ctx, inner.value(), innerDtype, n);
         }
-
-        if (ctx.dtype() instanceof DType.Bool) {
-            return decodeBool(ctx, scalar, n);
+        if (dtype instanceof DType.Utf8 || dtype instanceof DType.Binary) {
+            return decodeString(ctx, scalar, dtype, n);
         }
-
-        if (ctx.dtype() instanceof DType.Decimal) {
-            return decodeDecimal(ctx, scalar, n);
+        if (dtype instanceof DType.Bool) {
+            return decodeBool(dtype, scalar, n);
         }
-
-        if (ctx.dtype() instanceof DType.Extension ext) {
-            var storageCtx = new DecodeContext(ctx.node(), ext.storageDType(), ctx.rowCount(),
-                    ctx.segmentBuffers(), ctx.registry(), ctx.arena());
-            Array storage = decode(storageCtx);
-            // GenericArray needs a backing buffer; the recursive call now returns a
-            // metadata-only LazyConstantXxxArray. Materialise once into the chunk arena
-            // so downstream extension consumers that read via ArraySegments.of(arr) still
-            // find a segment. Extension-on-constant is rare enough that the small alloc
-            // doesn't matter — the bare primitive path stays buffer-free.
-            return new GenericArray(ctx.dtype(), n, ArraySegments.of(storage, ctx.arena()));
+        if (dtype instanceof DType.Decimal) {
+            return decodeDecimal(dtype, scalar, n);
         }
-
-        if (!(ctx.dtype() instanceof DType.Primitive p)) {
-            throw new VortexException(EncodingId.VORTEX_CONSTANT, "unsupported dtype " + ctx.dtype());
+        if (dtype instanceof DType.Extension ext) {
+            Array storage = arrayFromScalar(ctx, scalar, ext.storageDType(), n);
+            // GenericArray needs a backing buffer; the recursive call returns a metadata-only
+            // LazyConstantXxxArray. Materialise once into the chunk arena so downstream
+            // extension consumers that read via ArraySegments.of(arr) still find a segment.
+            // Extension-on-constant is rare enough that the small alloc doesn't matter — the
+            // bare primitive path stays buffer-free.
+            return new GenericArray(dtype, n, ArraySegments.of(storage, ctx.arena()));
+        }
+        if (!(dtype instanceof DType.Primitive p)) {
+            throw new VortexException(EncodingId.VORTEX_CONSTANT, "unsupported dtype " + dtype);
         }
 
         PType ptype = p.ptype();
         long rawBits = scalarToRawBits(scalar, ptype);
 
         return switch (ptype) {
-            case I64, U64 -> new LazyConstantLongArray(ctx.dtype(), n, rawBits);
-            case I32, U32 -> new LazyConstantIntArray(ctx.dtype(), n, (int) rawBits);
-            case F64 -> new LazyConstantDoubleArray(ctx.dtype(), n, Double.longBitsToDouble(rawBits));
-            case F32 -> new LazyConstantFloatArray(ctx.dtype(), n, Float.intBitsToFloat((int) rawBits));
-            case I16, U16 -> new LazyConstantShortArray(ctx.dtype(), n, (short) rawBits);
-            case I8, U8 -> new LazyConstantByteArray(ctx.dtype(), n, (byte) rawBits);
+            case I64, U64 -> new LazyConstantLongArray(dtype, n, rawBits);
+            case I32, U32 -> new LazyConstantIntArray(dtype, n, (int) rawBits);
+            case F64 -> new LazyConstantDoubleArray(dtype, n, Double.longBitsToDouble(rawBits));
+            case F32 -> new LazyConstantFloatArray(dtype, n, Float.intBitsToFloat((int) rawBits));
+            case I16, U16 -> new LazyConstantShortArray(dtype, n, (short) rawBits);
+            case I8, U8 -> new LazyConstantByteArray(dtype, n, (byte) rawBits);
             default -> throw new VortexException(EncodingId.VORTEX_CONSTANT, "unsupported ptype " + ptype);
         };
     }
 
-    private static Array decodeDecimal(DecodeContext ctx, ScalarValue scalar, long n) {
+    private static Array decodeDecimal(DType dtype, ScalarValue scalar, long n) {
         byte[] elemBytes = scalar.bytes_value();
         int elemLen = elemBytes.length;
         // Decode the single scalar value via LazyDecimalArray (reuses its LE byte-order logic),
         // then wrap in a constant array — O(1) allocation regardless of row count.
-        var value = new LazyDecimalArray(ctx.dtype(), 1, MemorySegment.ofArray(elemBytes), elemLen).getDecimal(0);
-        return new LazyConstantDecimalArray(ctx.dtype(), n, value, elemLen);
+        var value = new LazyDecimalArray(dtype, 1, MemorySegment.ofArray(elemBytes), elemLen).getDecimal(0);
+        return new LazyConstantDecimalArray(dtype, n, value, elemLen);
     }
 
-    private static Array decodeBool(DecodeContext ctx, ScalarValue scalar, long n) {
+    private static Array decodeBool(DType dtype, ScalarValue scalar, long n) {
         boolean value = scalar.bool_value() != null && scalar.bool_value();
-        return new LazyConstantBoolArray(ctx.dtype(), n, value);
+        return new LazyConstantBoolArray(dtype, n, value);
     }
 
-    private static Array decodeString(DecodeContext ctx, ScalarValue scalar, long n) {
+    private static Array decodeString(DecodeContext ctx, ScalarValue scalar, DType dtype, long n) {
         byte[] strBytes = scalar.string_value() != null
                               ? scalar.string_value().getBytes(StandardCharsets.UTF_8)
                               : (scalar.bytes_value() != null ? scalar.bytes_value() : new byte[0]);
@@ -131,7 +139,7 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
             offsetsSeg.setAtIndex(PTypeIO.LE_INT, i, (int) (i * strLen));
         }
 
-        return new VarBinArray.OffsetMode(ctx.dtype(), n, bytesSeg.asReadOnly(), offsetsSeg.asReadOnly(), PType.I32);
+        return new VarBinArray.OffsetMode(dtype, n, bytesSeg.asReadOnly(), offsetsSeg.asReadOnly(), PType.I32);
     }
 
     private static long scalarToRawBits(ScalarValue scalar, PType ptype) {

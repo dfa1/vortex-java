@@ -86,6 +86,23 @@ public final class ChunkedEncodingDecoder implements EncodingDecoder {
         if (dtype instanceof DType.Struct struct) {
             return wrapStruct(chunks, struct, totalRows);
         }
+        if (dtype instanceof DType.Variant) {
+            // Each chunk decoded as Variant materialises to its inner-typed constant array
+            // (see ConstantEncodingDecoder). Wrap the chunks under that inner dtype; the
+            // VariantArray container re-applies the logical Variant dtype.
+            if (chunks.isEmpty()) {
+                throw new VortexException(EncodingId.VORTEX_CHUNKED, "chunked variant has no chunks");
+            }
+            DType innerDtype = chunks.get(0).dtype();
+            if (innerDtype instanceof DType.Primitive innerPt) {
+                return wrapPrimitive(chunks, innerPt, innerDtype, totalRows);
+            }
+            if (innerDtype instanceof DType.Bool) {
+                return ChunkedBoolArray.of(innerDtype, totalRows, chunks);
+            }
+            throw new VortexException(EncodingId.VORTEX_CHUNKED,
+                    "chunked variant inner dtype not supported: " + innerDtype);
+        }
         throw new VortexException(EncodingId.VORTEX_CHUNKED,
                 "chunked not supported for dtype: " + dtype);
     }
