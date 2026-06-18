@@ -121,7 +121,7 @@ decoder falls into one of three shapes:
 | `vortex.pco`                | Materialized  | Materialized  | range-encoded decompression                                              |
 | `fastlanes.bitpacked`       | Materialized  | Materialized  | window unpacks bits                                                      |
 | `fastlanes.delta`           | Materialized  | Materialized  | cumulative sum requires sequential decode                                |
-| `fastlanes.for`             | Lazy          | Lazy          | `LazyForLongArray`/`LazyForIntArray`, ADR 0010                           |
+| `fastlanes.for`             | Lazy          | Lazy          | `LazyForXxxArray` (I8/U8/I16/U16/I32/U32/I64/U64), ADR 0010 + 0013      |
 | `fastlanes.rle`             | Materialized  | Lazy          | run-locating accessor possible                                           |
 | `vortex.patched`            | Materialized  | Materialized  | inner is full base + chunked patches (1024-elem blocks, lane-window-sorted); per-row access requires 2 laneOffsets reads + binary search inside the chunk window, so eager scatter wins for full scans |
 | `vortex.variant`            | Materialized  | TBD           | shredded child reassembly                                                |
