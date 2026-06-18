@@ -102,7 +102,7 @@ decoder falls into one of three shapes:
 | `vortex.runend`             | Materialized  | Lazy          | could expose run-locating accessor (similar to Dict)                     |
 | `vortex.varbin`             | Zero-copy     | Zero-copy     | bytes + offsets slices                                                   |
 | `vortex.varbinview`         | Lazy          | Lazy          | `VarBinArray.ViewMode` — keeps views + data buffers as mmap slices       |
-| `vortex.alp`                | Lazy          | Lazy          | `LazyAlpDoubleArray`/`LazyAlpFloatArray`, ADR 0010                       |
+| `vortex.alp`                | Lazy          | Lazy          | `LazyAlpXxxArray`; broadcast → `LazyConstantXxxArray`; patched stays Materialized, ADR 0010 + 0013 |
 | `vortex.alprd`              | Lazy          | Lazy          | `LazyAlpRdDoubleArray`/`LazyAlpRdFloatArray` — left/right + patches on access |
 | `vortex.dict`               | Lazy          | Lazy          | `DictXxxArray` (numeric) + `VarBinArray.DictMode` (string), ADR 0012      |
 | `vortex.sparse`             | Materialized  | Lazy          | patches view over default fill                                           |

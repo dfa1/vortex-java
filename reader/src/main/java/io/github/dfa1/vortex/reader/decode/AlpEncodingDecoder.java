@@ -10,6 +10,8 @@ import io.github.dfa1.vortex.proto.PatchesMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LazyAlpDoubleArray;
 import io.github.dfa1.vortex.reader.array.LazyAlpFloatArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantDoubleArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantFloatArray;
 import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
 import io.github.dfa1.vortex.reader.array.MaterializedFloatArray;
 
@@ -85,10 +87,16 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
         MemorySegment src = ctx.decodeChildSegment(0, I64_DTYPE, n);
         long srcCap = SegmentBroadcast.capacity(src, 8);
 
-        if (meta.patches() == null && srcCap >= n) {
-            return new LazyAlpDoubleArray(ctx.dtype(), n, src, df, de);
+        if (meta.patches() == null) {
+            if (srcCap >= n) {
+                return new LazyAlpDoubleArray(ctx.dtype(), n, src, df, de);
+            }
+            // broadcast without patches: decode single encoded value → constant
+            double v = (double) src.getAtIndex(PTypeIO.LE_LONG, 0) * df * de;
+            return new LazyConstantDoubleArray(ctx.dtype(), n, v);
         }
 
+        // patches path: materialize to scatter-write exceptions
         MemorySegment buf = ctx.arena().allocate(n * 8, 8);
         if (srcCap == n) {
             for (long i = 0; i < n; i++) {
@@ -99,9 +107,7 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
                 buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) src.getAtIndex(PTypeIO.LE_LONG, i % srcCap) * df * de);
             }
         }
-        if (meta.patches() != null) {
-            applyPatches(ctx, meta.patches(), buf, 8);
-        }
+        applyPatches(ctx, meta.patches(), buf, 8);
         return new MaterializedDoubleArray(ctx.dtype(), n, buf.asReadOnly());
     }
 
@@ -111,10 +117,16 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
         MemorySegment src = ctx.decodeChildSegment(0, I32_DTYPE, n);
         long srcCap = SegmentBroadcast.capacity(src, 4);
 
-        if (meta.patches() == null && srcCap >= n) {
-            return new LazyAlpFloatArray(ctx.dtype(), n, src, df, de);
+        if (meta.patches() == null) {
+            if (srcCap >= n) {
+                return new LazyAlpFloatArray(ctx.dtype(), n, src, df, de);
+            }
+            // broadcast without patches: decode single encoded value → constant
+            float v = (float) src.getAtIndex(PTypeIO.LE_INT, 0) * df * de;
+            return new LazyConstantFloatArray(ctx.dtype(), n, v);
         }
 
+        // patches path: materialize to scatter-write exceptions
         MemorySegment buf = ctx.arena().allocate(n * 4, 4);
         if (srcCap == n) {
             for (long i = 0; i < n; i++) {
@@ -125,9 +137,7 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
                 buf.setAtIndex(PTypeIO.LE_FLOAT, i, (float) src.getAtIndex(PTypeIO.LE_INT, i % srcCap) * df * de);
             }
         }
-        if (meta.patches() != null) {
-            applyPatches(ctx, meta.patches(), buf, 4);
-        }
+        applyPatches(ctx, meta.patches(), buf, 4);
         return new MaterializedFloatArray(ctx.dtype(), n, buf.asReadOnly());
     }
 
