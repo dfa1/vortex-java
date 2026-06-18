@@ -96,16 +96,16 @@ decoder falls into one of three shapes:
 | `vortex.bool`               | Zero-copy     | Zero-copy     | mmap slice (bit-packed)                                                  |
 | `vortex.null`               | n/a           | n/a           | no per-row data                                                          |
 | `vortex.bytebool`           | Zero-copy     | Zero-copy     | mmap slice                                                               |
-| `vortex.zigzag`             | Lazy          | Lazy          | `LazyZigZagXxxArray` (I8/I16/I32/I64); broadcast → `LazyConstantXxxArray`, ADR 0010 + 0013 |
-| `vortex.constant`           | Lazy          | Lazy          | `LazyConstantXxxArray` (primitive + bool + decimal); per-row broadcast, no buffer, ADR 0013 |
+| `vortex.zigzag`             | Lazy          | Lazy          | `LazyZigZagXxxArray` (I8/I16/I32/I64); broadcast → `LazyConstantXxxArray`, ADR 0010 + 0015 |
+| `vortex.constant`           | Lazy          | Lazy          | `LazyConstantXxxArray` (primitive + bool + decimal); per-row broadcast, no buffer, ADR 0015 |
 | `vortex.ext`                | Zero-copy     | Zero-copy     | wraps storage                                                            |
-| `vortex.runend`             | Lazy          | Lazy          | `LazyRunEndXxxArray` (primitive + bool); Utf8/Binary stays Materialized (offset rebasing), ADR 0013 |
+| `vortex.runend`             | Lazy          | Lazy          | `LazyRunEndXxxArray` (primitive + bool); Utf8/Binary stays Materialized (offset rebasing), ADR 0015 |
 | `vortex.varbin`             | Zero-copy     | Zero-copy     | bytes + offsets slices                                                   |
 | `vortex.varbinview`         | Lazy          | Lazy          | `VarBinArray.ViewMode` — keeps views + data buffers as mmap slices       |
-| `vortex.alp`                | Lazy          | Lazy          | `LazyAlpXxxArray`; broadcast → `LazyConstantXxxArray`; patched stays Materialized, ADR 0010 + 0013 |
+| `vortex.alp`                | Lazy          | Lazy          | `LazyAlpXxxArray`; broadcast → `LazyConstantXxxArray`; patched stays Materialized, ADR 0010 + 0015 |
 | `vortex.alprd`              | Lazy          | Lazy          | `LazyAlpRdDoubleArray`/`LazyAlpRdFloatArray` — left/right + patches on access |
 | `vortex.dict`               | Lazy          | Lazy          | `DictXxxArray` (numeric) + `VarBinArray.DictMode` (string), ADR 0012      |
-| `vortex.sparse`             | Lazy          | Lazy          | `LazySparseXxxArray` (primitive + bool); Utf8/Binary stays Materialized, ADR 0013 |
+| `vortex.sparse`             | Lazy          | Lazy          | `LazySparseXxxArray` (primitive + bool); Utf8/Binary stays Materialized, ADR 0015 |
 | `vortex.sequence`           | Zero-copy     | Zero-copy     | synthetic (no data)                                                      |
 | `vortex.struct`             | Zero-copy     | Zero-copy     | `StructArray` wraps fields                                               |
 | `vortex.chunked`            | Lazy          | Lazy          | `ChunkedXxxArray` (primitive/Bool) + `VarBinArray.ChunkedMode` (Utf8/Binary), ADR 0012 |
@@ -121,8 +121,8 @@ decoder falls into one of three shapes:
 | `vortex.pco`                | Materialized  | Materialized  | range-encoded decompression                                              |
 | `fastlanes.bitpacked`       | Materialized  | Materialized  | window unpacks bits                                                      |
 | `fastlanes.delta`           | Materialized  | Materialized  | cumulative sum requires sequential decode                                |
-| `fastlanes.for`             | Lazy          | Lazy          | `LazyForXxxArray` (I8/U8/I16/U16/I32/U32/I64/U64), ADR 0010 + 0013      |
-| `fastlanes.rle`             | Lazy          | Lazy          | `LazyRleXxxArray`; validity → `OffsetBoolArray`; empty → `LazyConstantXxxArray`, ADR 0013 |
+| `fastlanes.for`             | Lazy          | Lazy          | `LazyForXxxArray` (I8/U8/I16/U16/I32/U32/I64/U64), ADR 0010 + 0015      |
+| `fastlanes.rle`             | Lazy          | Lazy          | `LazyRleXxxArray`; validity → `OffsetBoolArray`; empty → `LazyConstantXxxArray`, ADR 0015 |
 | `vortex.patched`            | Materialized  | Materialized  | inner is full base + chunked patches (1024-elem blocks, lane-window-sorted); per-row access requires 2 laneOffsets reads + binary search inside the chunk window, so eager scatter wins for full scans |
 | `vortex.variant`            | Lazy          | Lazy          | container wraps constant/chunked core (inner-typed) + optional shredded child |
 | `vortex.onpair`             | n/a           | n/a           | not ported                                                               |
