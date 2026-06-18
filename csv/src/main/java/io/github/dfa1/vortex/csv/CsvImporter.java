@@ -22,10 +22,10 @@ import java.util.Map;
 /// Provide a schema via [ImportOptions#withSchema] to skip inference.
 /// Empty cell values are treated as 0 / false / "" for typed columns.
 ///
-/// Import is streaming: rows are read and written in chunks of [ImportOptions#chunkSize]
-/// without loading the entire file into memory. Schema inference requires a first
-/// sequential pass over the file; writing is a second pass. When a schema is provided
-/// via [ImportOptions#withSchema] only one pass is needed.
+/// Import is single-pass streaming. The first [ImportOptions#chunkSize] data rows
+/// are buffered to infer the schema (or skipped when a schema is provided), then
+/// all rows — including those first rows — are written in chunks. Memory usage is
+/// O(chunkSize) regardless of file size.
 public final class CsvImporter {
 
     private CsvImporter() {
@@ -42,45 +42,85 @@ public final class CsvImporter {
 
     /// Imports a CSV file to a Vortex file.
     ///
-    /// Rows are streamed in chunks — the file is never fully loaded into memory.
-    /// If no schema is provided, a first streaming pass infers column types; a
-    /// second pass writes the data. Progress is reported via
-    /// {@link ProgressListener#onProgress(long, long)} with `rowsTotal = -1`
-    /// (total unknown) on each completed chunk.
+    /// The file is read exactly once. The first chunk of rows is buffered for schema
+    /// inference (O(chunkSize) memory); remaining rows stream directly to the writer.
+    /// Progress is reported via {@link ProgressListener#onProgress(long, long)} with
+    /// `rowsTotal = -1` (total unknown) after each chunk completes.
     ///
     /// @param csvPath    path to the source CSV file
     /// @param vortexPath path to write the output Vortex file
     /// @param options    import configuration
     /// @throws IOException              if reading or writing fails
-    /// @throws IllegalArgumentException if the CSV file is empty
+    /// @throws IllegalArgumentException if the CSV file has no data rows
     public static void importCsv(Path csvPath, Path vortexPath, ImportOptions options) throws IOException {
-        String[] headers = readHeader(csvPath, options);
+        int chunkSize = options.chunkSize();
 
-        DType.Struct schema = options.schema() != null
-                ? options.schema()
-                : inferSchemaStreaming(csvPath, options, headers);
+        try (CsvReader<CsvRecord> reader = csvReader(csvPath, options)) {
+            // Read header row (if present) and buffer the first chunk of data rows.
+            // Both happen in a single pass so the reader position advances correctly.
+            String[] headers = null;
+            List<String[]> firstChunk = new ArrayList<>(chunkSize);
+            boolean expectHeader = options.hasHeader();
 
-        try (FileChannel channel = FileChannel.open(
-                vortexPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE,
-                StandardOpenOption.TRUNCATE_EXISTING);
-             VortexWriter writer = VortexWriter.create(channel, schema, options.writeOptions())) {
-            writeChunksStreaming(csvPath, options, schema, writer);
-        }
-    }
-
-    private static String[] readHeader(Path path, ImportOptions options) throws IOException {
-        try (CsvReader<CsvRecord> reader = csvReader(path, options)) {
-            CsvRecord first = reader.stream().findFirst().orElse(null);
-            if (first == null) {
-                throw new IllegalArgumentException("CSV file is empty");
+            for (CsvRecord record : reader) {
+                if (expectHeader) {
+                    headers = record.getFields().toArray(String[]::new);
+                    expectHeader = false;
+                    continue;
+                }
+                firstChunk.add(record.getFields().toArray(String[]::new));
+                if (firstChunk.size() == chunkSize) {
+                    break;
+                }
             }
-            String[] fields = first.getFields().toArray(String[]::new);
-            return options.hasHeader() ? fields : generateHeaders(fields.length);
+
+            if (firstChunk.isEmpty()) {
+                throw new IllegalArgumentException("CSV file has no data rows");
+            }
+
+            // Generate synthetic column names when the file has no header row.
+            if (headers == null) {
+                headers = generateHeaders(firstChunk.get(0).length);
+            }
+
+            DType.Struct schema = options.schema() != null
+                    ? options.schema()
+                    : inferSchemaFromRows(headers, firstChunk);
+
+            try (FileChannel channel = FileChannel.open(
+                    vortexPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE,
+                    StandardOpenOption.TRUNCATE_EXISTING);
+                 VortexWriter writer = VortexWriter.create(channel, schema, options.writeOptions())) {
+
+                long totalRows = 0;
+
+                // Write the buffered first chunk.
+                writer.writeChunk(buildChunk(schema, firstChunk));
+                totalRows += firstChunk.size();
+                reportProgress(options, totalRows);
+                firstChunk.clear();
+
+                // Stream the rest of the file through the still-open reader.
+                List<String[]> chunk = new ArrayList<>(chunkSize);
+                for (CsvRecord record : reader) {
+                    chunk.add(record.getFields().toArray(String[]::new));
+                    if (chunk.size() == chunkSize) {
+                        writer.writeChunk(buildChunk(schema, chunk));
+                        totalRows += chunk.size();
+                        reportProgress(options, totalRows);
+                        chunk.clear();
+                    }
+                }
+                if (!chunk.isEmpty()) {
+                    writer.writeChunk(buildChunk(schema, chunk));
+                    totalRows += chunk.size();
+                    reportProgress(options, totalRows);
+                }
+            }
         }
     }
 
-    private static DType.Struct inferSchemaStreaming(Path path, ImportOptions options, String[] headers)
-            throws IOException {
+    private static DType.Struct inferSchemaFromRows(String[] headers, List<String[]> rows) {
         int colCount = headers.length;
         boolean[] canBeLong = new boolean[colCount];
         boolean[] canBeDouble = new boolean[colCount];
@@ -89,37 +129,29 @@ public final class CsvImporter {
         Arrays.fill(canBeDouble, true);
         Arrays.fill(canBeBool, true);
 
-        try (CsvReader<CsvRecord> reader = csvReader(path, options)) {
-            boolean skipFirst = options.hasHeader();
-            for (CsvRecord record : reader) {
-                if (skipFirst) {
-                    skipFirst = false;
+        for (String[] row : rows) {
+            for (int c = 0; c < colCount; c++) {
+                String val = safeGet(row, c);
+                if (val.isEmpty()) {
                     continue;
                 }
-                String[] fields = record.getFields().toArray(String[]::new);
-                for (int c = 0; c < colCount; c++) {
-                    String val = safeGet(fields, c);
-                    if (val.isEmpty()) {
-                        continue;
+                if (canBeLong[c]) {
+                    try {
+                        Long.parseLong(val);
+                    } catch (NumberFormatException e) {
+                        canBeLong[c] = false;
                     }
-                    if (canBeLong[c]) {
-                        try {
-                            Long.parseLong(val);
-                        } catch (NumberFormatException e) {
-                            canBeLong[c] = false;
-                        }
+                }
+                if (canBeDouble[c]) {
+                    try {
+                        Double.parseDouble(val);
+                    } catch (NumberFormatException e) {
+                        canBeDouble[c] = false;
                     }
-                    if (canBeDouble[c]) {
-                        try {
-                            Double.parseDouble(val);
-                        } catch (NumberFormatException e) {
-                            canBeDouble[c] = false;
-                        }
-                    }
-                    if (canBeBool[c]) {
-                        if (!val.equalsIgnoreCase("true") && !val.equalsIgnoreCase("false")) {
-                            canBeBool[c] = false;
-                        }
+                }
+                if (canBeBool[c]) {
+                    if (!val.equalsIgnoreCase("true") && !val.equalsIgnoreCase("false")) {
+                        canBeBool[c] = false;
                     }
                 }
             }
@@ -131,36 +163,6 @@ public final class CsvImporter {
             types.add(resolveType(canBeLong[c], canBeDouble[c], canBeBool[c]));
         }
         return new DType.Struct(names, types, false);
-    }
-
-    private static void writeChunksStreaming(Path path, ImportOptions options, DType.Struct schema,
-                                             VortexWriter writer) throws IOException {
-        int chunkSize = options.chunkSize();
-        List<String[]> chunk = new ArrayList<>(chunkSize);
-        long totalRows = 0;
-
-        try (CsvReader<CsvRecord> reader = csvReader(path, options)) {
-            boolean skipFirst = options.hasHeader();
-            for (CsvRecord record : reader) {
-                if (skipFirst) {
-                    skipFirst = false;
-                    continue;
-                }
-                chunk.add(record.getFields().toArray(String[]::new));
-                if (chunk.size() == chunkSize) {
-                    writer.writeChunk(buildChunk(schema, chunk));
-                    totalRows += chunk.size();
-                    reportProgress(options, totalRows);
-                    chunk.clear();
-                }
-            }
-        }
-
-        if (!chunk.isEmpty()) {
-            writer.writeChunk(buildChunk(schema, chunk));
-            totalRows += chunk.size();
-            reportProgress(options, totalRows);
-        }
     }
 
     private static void reportProgress(ImportOptions options, long totalRows) {
