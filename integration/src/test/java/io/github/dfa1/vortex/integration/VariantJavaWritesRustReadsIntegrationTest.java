@@ -5,6 +5,7 @@ import dev.vortex.api.Session;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.proto.Primitive;
 import io.github.dfa1.vortex.proto.Scalar;
 import io.github.dfa1.vortex.proto.ScalarValue;
@@ -84,6 +85,27 @@ class VariantJavaWritesRustReadsIntegrationTest {
         }
 
         // Then — the Rust reader parses the chunked variant layout and agrees on row count + schema.
+        DataSource ds = DataSource.open(SESSION, file.toAbsolutePath().toUri().toString());
+        assertThat(ds.rowCount().asOptional()).hasValue(values.size());
+        assertThat(ds.arrowSchema(ALLOCATOR).getFields()).extracting(f -> f.getName()).contains("v");
+    }
+
+    @Test
+    void javaWriter_jniReader_shreddedVariantColumn(@TempDir Path tmp) throws IOException {
+        // Given — a variant column with a row-aligned shredded i32 projection. The container
+        // gains a second (shredded) typed child plus shredded_dtype in its metadata.
+        Path file = tmp.resolve("java_variant_shredded.vtx");
+        List<Scalar> values = List.of(i32Variant(10L), i32Variant(20L), i32Variant(30L));
+        VariantData data = VariantData.shredded(
+                values, new int[]{10, 20, 30}, new DType.Primitive(PType.I32, false));
+
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, VARIANT_SCHEMA, WriteOptions.defaults())) {
+            // When
+            sut.writeChunk(Map.of("v", data));
+        }
+
+        // Then — the Rust reader parses the shredded variant layout and agrees on row count + schema.
         DataSource ds = DataSource.open(SESSION, file.toAbsolutePath().toUri().toString());
         assertThat(ds.rowCount().asOptional()).hasValue(values.size());
         assertThat(ds.arrowSchema(ALLOCATOR).getFields()).extracting(f -> f.getName()).contains("v");

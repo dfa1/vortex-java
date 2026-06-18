@@ -196,6 +196,59 @@ class VariantEncodingEncoderTest {
             assertThat(core.getInt(1)).isEqualTo(20);
             assertThat(core.getInt(2)).isEqualTo(30);
         }
+
+        @Test
+        void shreddedColumn_decodesShreddedTypedChild() {
+            // Given/When a column with a shredded i32 projection is encoded then decoded
+            DType i32 = new DType.Primitive(io.github.dfa1.vortex.core.PType.I32, false);
+            var data = VariantData.shredded(
+                    List.of(i32Scalar(10L), i32Scalar(20L), i32Scalar(30L)), new int[]{10, 20, 30}, i32);
+            var variant = decode(SUT.encode(VARIANT, data, EncodeTestHelper.testCtx()), 3);
+
+            // Then the shredded child decodes as the typed column
+            assertThat(variant.shredded()).isNotNull();
+            var shredded = (io.github.dfa1.vortex.reader.array.IntArray) variant.shredded();
+            assertThat(shredded.dtype()).isEqualTo(i32);
+            assertThat(shredded.getInt(0)).isEqualTo(10);
+            assertThat(shredded.getInt(1)).isEqualTo(20);
+            assertThat(shredded.getInt(2)).isEqualTo(30);
+        }
+    }
+
+    @Nested
+    class Shredded {
+
+        @Test
+        void emitsSecondChildAndRecordsShreddedDtype() throws Exception {
+            // Given a column with a shredded i32 projection
+            DType i32 = new DType.Primitive(io.github.dfa1.vortex.core.PType.I32, false);
+            var data = VariantData.shredded(
+                    List.of(i32Scalar(10L), i32Scalar(20L), i32Scalar(30L)), new int[]{10, 20, 30}, i32);
+
+            // When
+            EncodeResult result = SUT.encode(VARIANT, data, EncodeTestHelper.testCtx());
+
+            // Then the container has a second (shredded) child encoded as a primitive array...
+            EncodeNode root = result.rootNode();
+            assertThat(root.children()).hasSize(2);
+            assertThat(root.children()[1].encodingId()).isEqualTo(EncodingId.VORTEX_PRIMITIVE);
+
+            // ...and the metadata records shredded_dtype = i32.
+            MemorySegment meta = MemorySegment.ofBuffer(root.metadata().duplicate());
+            VariantMetadata vm = VariantMetadata.decode(meta, 0, meta.byteSize());
+            assertThat(vm.shredded_dtype()).isNotNull();
+            assertThat(vm.shredded_dtype().primitive()).isNotNull();
+            assertThat(vm.shredded_dtype().primitive().type()).isEqualTo(io.github.dfa1.vortex.proto.PType.I32);
+        }
+
+        @Test
+        void halfSpecifiedShredded_throws() {
+            assertThatThrownBy(() -> VariantData.shredded(List.of(i32Scalar(1L)), null, null))
+                    .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> new VariantData(List.of(i32Scalar(1L)), new int[]{1}, null))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("both set or both null");
+        }
     }
 
     @Nested

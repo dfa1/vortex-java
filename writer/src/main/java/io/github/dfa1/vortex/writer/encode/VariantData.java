@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
+import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.proto.Scalar;
 
 import java.util.Collections;
@@ -7,22 +8,40 @@ import java.util.List;
 
 /// Input data for encoding a `vortex.variant` column.
 ///
-/// Holds one inner typed scalar per row, each wrapped as a variant value (mirroring
-/// Rust `Scalar::variant(inner)`). The encoder coalesces adjacent equal values into
-/// constant runs: an all-equal column becomes a single `vortex.constant` child, while
-/// a column with varying values becomes a `vortex.chunked` of per-run constants. There
-/// is no shredded child.
+/// `values` holds one inner typed scalar per row, each wrapped as a variant value
+/// (mirroring Rust `Scalar::variant(inner)`). The encoder coalesces adjacent equal
+/// values into constant runs: an all-equal column becomes a single `vortex.constant`
+/// child, while a varying column becomes a `vortex.chunked` of per-run constants.
 ///
-/// @param values one inner scalar per row, in row order
-public record VariantData(List<Scalar> values) {
+/// Optionally, `shreddedData` carries a row-aligned typed column pulled out for fast
+/// typed access; when present it is encoded as the container's `shredded` child and its
+/// `shreddedDtype` is recorded in `VariantMetadata.shredded_dtype`. `shreddedData` uses
+/// the same encoder-input shape as the matching encoding (e.g. `int[]` for I32,
+/// `String[]` for Utf8). Both `shreddedData` and `shreddedDtype` must be set together or
+/// both left `null`.
+///
+/// @param values       one inner scalar per row, in row order
+/// @param shreddedData  optional typed column data for the shredded child, or `null`
+/// @param shreddedDtype dtype of `shreddedData`, or `null`
+public record VariantData(List<Scalar> values, Object shreddedData, DType shreddedDtype) {
 
-    /// Validates and defensively copies the per-row values. Rejects empty input and
-    /// `null` elements.
+    /// Validates and defensively copies the per-row values; rejects empty input and a
+    /// half-specified shredded column.
     public VariantData {
         values = List.copyOf(values);
         if (values.isEmpty()) {
             throw new IllegalArgumentException("values must not be empty");
         }
+        if ((shreddedData == null) != (shreddedDtype == null)) {
+            throw new IllegalArgumentException("shreddedData and shreddedDtype must be both set or both null");
+        }
+    }
+
+    /// Creates unshredded input from per-row scalars.
+    ///
+    /// @param values one inner scalar per row, in row order
+    public VariantData(List<Scalar> values) {
+        this(values, null, null);
     }
 
     /// Creates input for a constant variant column: `length` rows all holding `value`.
@@ -38,6 +57,19 @@ public record VariantData(List<Scalar> values) {
             throw new IllegalArgumentException("value must not be null");
         }
         return new VariantData(Collections.nCopies(length, value));
+    }
+
+    /// Creates input with a row-aligned shredded typed column.
+    ///
+    /// @param values        one inner scalar per row, in row order
+    /// @param shreddedData  typed column data (encoder-input shape for `shreddedDtype`)
+    /// @param shreddedDtype dtype of `shreddedData`
+    /// @return variant input carrying a shredded child
+    public static VariantData shredded(List<Scalar> values, Object shreddedData, DType shreddedDtype) {
+        if (shreddedData == null || shreddedDtype == null) {
+            throw new IllegalArgumentException("shreddedData and shreddedDtype are required");
+        }
+        return new VariantData(values, shreddedData, shreddedDtype);
     }
 
     /// Returns the number of rows in the column.
