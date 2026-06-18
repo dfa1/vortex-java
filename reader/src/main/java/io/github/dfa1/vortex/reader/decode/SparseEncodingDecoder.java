@@ -14,6 +14,7 @@ import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
+import io.github.dfa1.vortex.reader.array.LazySparseBoolArray;
 import io.github.dfa1.vortex.reader.array.LazySparseByteArray;
 import io.github.dfa1.vortex.reader.array.LazySparseDoubleArray;
 import io.github.dfa1.vortex.reader.array.LazySparseFloatArray;
@@ -22,7 +23,6 @@ import io.github.dfa1.vortex.reader.array.LazySparseLongArray;
 import io.github.dfa1.vortex.reader.array.LazySparseShortArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
-import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 
@@ -74,7 +74,12 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
         }
 
         if (ctx.dtype() instanceof DType.Bool) {
-            return decodeBool(ctx, n, numPatches, offset, indicesPtype);
+            DType indicesDtype = new DType.Primitive(indicesPtype, false);
+            Array patchIndices = ctx.decodeChild(0, indicesDtype, numPatches);
+            Array patchValues = ctx.decodeChild(1, ctx.dtype(), numPatches);
+            Array idxData = patchIndices instanceof MaskedArray m ? m.inner() : patchIndices;
+            Array valData = patchValues instanceof MaskedArray m ? m.inner() : patchValues;
+            return new LazySparseBoolArray(ctx.dtype(), n, false, (BoolArray) valData, idxData, offset);
         }
 
         if (!(ctx.dtype() instanceof DType.Primitive)) {
@@ -119,28 +124,6 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
                     (ByteArray) valData, idxData, offset);
             default -> throw new VortexException(EncodingId.VORTEX_SPARSE, "unsupported ptype " + valuePtype);
         };
-    }
-
-    private static Array decodeBool(
-            DecodeContext ctx, long n, long numPatches, long offset, PType indicesPtype
-    ) {
-        long numBytes = (n + 7) >>> 3;
-        MemorySegment out = ctx.arena().allocate(numBytes);
-        if (numPatches > 0) {
-            DType indicesDtype = new DType.Primitive(indicesPtype, false);
-            MemorySegment idxSeg = ctx.decodeChildSegment(0, indicesDtype, numPatches);
-            BoolArray bools = (BoolArray) ctx.decodeChild(1, ctx.dtype(), numPatches);
-            int idxBytes = indicesPtype.byteSize();
-            for (long i = 0; i < numPatches; i++) {
-                if (bools.getBoolean(i)) {
-                    long pos = readUnsignedIdx(idxSeg, SegmentBroadcast.elementOffset(idxSeg, i, idxBytes), indicesPtype) - offset;
-                    long byteIdx = pos >>> 3;
-                    byte cur = out.get(ValueLayout.JAVA_BYTE, byteIdx);
-                    out.set(ValueLayout.JAVA_BYTE, byteIdx, (byte) ((cur & 0xff) | (1 << (pos & 7))));
-                }
-            }
-        }
-        return new MaterializedBoolArray(ctx.dtype(), n, out);
     }
 
     private static Array decodeVarBin(

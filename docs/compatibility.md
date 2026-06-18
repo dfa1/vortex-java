@@ -105,7 +105,7 @@ decoder falls into one of three shapes:
 | `vortex.alp`                | Lazy          | Lazy          | `LazyAlpXxxArray`; broadcast → `LazyConstantXxxArray`; patched stays Materialized, ADR 0010 + 0013 |
 | `vortex.alprd`              | Lazy          | Lazy          | `LazyAlpRdDoubleArray`/`LazyAlpRdFloatArray` — left/right + patches on access |
 | `vortex.dict`               | Lazy          | Lazy          | `DictXxxArray` (numeric) + `VarBinArray.DictMode` (string), ADR 0012      |
-| `vortex.sparse`             | Materialized  | Lazy          | patches view over default fill                                           |
+| `vortex.sparse`             | Lazy          | Lazy          | `LazySparseXxxArray` (primitive + bool); Utf8/Binary stays Materialized, ADR 0013 |
 | `vortex.sequence`           | Zero-copy     | Zero-copy     | synthetic (no data)                                                      |
 | `vortex.struct`             | Zero-copy     | Zero-copy     | `StructArray` wraps fields                                               |
 | `vortex.chunked`            | Lazy          | Lazy          | `ChunkedXxxArray` (primitive/Bool) + `VarBinArray.ChunkedMode` (Utf8/Binary), ADR 0012 |
