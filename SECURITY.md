@@ -6,17 +6,6 @@ metadata (via the in-tree MemorySegment-native `ProtoReader` — no `protobuf-ja
 and per-segment encoded data. Robustness against malformed input is treated as a correctness
 contract, not a best-effort feature.
 
-## Supported versions
-
-Security fixes are backported to the most recent minor release. Older releases receive fixes
-only if the vulnerability is critical and the fix is mechanical.
-
-| Version | Status                  |
-| ------- | ----------------------- |
-| 0.6.x   | Supported               |
-| 0.5.x   | Critical fixes only     |
-| < 0.5   | End of life             |
-
 ## Reporting a vulnerability
 
 **Please do not open a public GitHub issue for security problems.**
