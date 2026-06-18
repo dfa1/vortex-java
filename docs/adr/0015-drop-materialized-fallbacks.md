@@ -1,6 +1,6 @@
-# ADR 0013: Drop Materialized fallbacks once Lazy has shipped
+# ADR 0015: Drop Materialized fallbacks once Lazy has shipped
 
-- **Status:** Accepted
+- **Status:** Completed
 - **Date:** 2026-06-16
 - **Deciders:** project maintainer
 - **Supersedes:** —
@@ -72,7 +72,7 @@ A Materialized branch may be deleted when **all** of these hold:
 
 - Decompression-style encodings — `bitpacked`, `pco`, `zstd`, `fsst`,
   `delta`, `patched` — keep their Materialized output. ADR 0010 §
-  "Decompression encodings stay eager" applies; ADR 0013 does not change
+  "Decompression encodings stay eager" applies; ADR 0015 does not change
   it.
 - Materialisation fallbacks inside `ArraySegments.of(arr, arena)` stay —
   they exist for callers that explicitly request a `MemorySegment` from a
