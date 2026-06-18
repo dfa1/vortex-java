@@ -28,6 +28,8 @@ import java.util.Map;
 /// O(chunkSize) regardless of file size.
 public final class CsvImporter {
 
+    private static final long PROGRESS_BATCH = 10_000;
+
     private CsvImporter() {
     }
 
@@ -93,10 +95,12 @@ public final class CsvImporter {
                  VortexWriter writer = VortexWriter.create(channel, schema, options.writeOptions())) {
 
                 long totalRows = 0;
+                long lastReported = 0;
 
                 // Write the buffered first chunk.
                 writer.writeChunk(buildChunk(schema, firstChunk));
                 totalRows += firstChunk.size();
+                lastReported = totalRows;
                 reportProgress(options, totalRows);
                 firstChunk.clear();
 
@@ -104,16 +108,20 @@ public final class CsvImporter {
                 List<String[]> chunk = new ArrayList<>(chunkSize);
                 for (CsvRecord record : reader) {
                     chunk.add(record.getFields().toArray(String[]::new));
+                    totalRows++;
                     if (chunk.size() == chunkSize) {
                         writer.writeChunk(buildChunk(schema, chunk));
-                        totalRows += chunk.size();
-                        reportProgress(options, totalRows);
                         chunk.clear();
+                    }
+                    if (totalRows - lastReported >= PROGRESS_BATCH) {
+                        reportProgress(options, totalRows);
+                        lastReported = totalRows;
                     }
                 }
                 if (!chunk.isEmpty()) {
                     writer.writeChunk(buildChunk(schema, chunk));
-                    totalRows += chunk.size();
+                }
+                if (totalRows > lastReported) {
                     reportProgress(options, totalRows);
                 }
             }
