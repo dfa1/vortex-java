@@ -34,6 +34,7 @@ import io.github.dfa1.vortex.reader.array.LazyConstantShortArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantDecimalArray;
 import io.github.dfa1.vortex.reader.array.LazyDecimalArray;
 import io.github.dfa1.vortex.reader.array.LazyDecimalBytePartsArray;
+import io.github.dfa1.vortex.reader.array.LazyRunEndBoolArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
@@ -332,6 +333,8 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             case ShortArray a ->
                     new MaterializedShortArray(a.dtype(), rows, ArraySegments.of(a, arena).asSlice(0, rows * Short.BYTES));
             case ByteArray a -> new MaterializedByteArray(a.dtype(), rows, ArraySegments.of(a, arena).asSlice(0, rows));
+            case LazyRunEndBoolArray a ->
+                    new LazyRunEndBoolArray(a.dtype(), rows, a.values(), a.runEnds(), a.offset());
             case BoolArray a ->
                     new MaterializedBoolArray(a.dtype(), rows, ArraySegments.of(a, arena).asSlice(0, (rows + 7) / 8));
             case NullArray a -> new NullArray(a.dtype(), rows);

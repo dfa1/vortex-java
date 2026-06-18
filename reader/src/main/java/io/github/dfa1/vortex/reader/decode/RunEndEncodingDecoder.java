@@ -11,13 +11,13 @@ import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
+import io.github.dfa1.vortex.reader.array.LazyRunEndBoolArray;
 import io.github.dfa1.vortex.reader.array.LazyRunEndByteArray;
 import io.github.dfa1.vortex.reader.array.LazyRunEndIntArray;
 import io.github.dfa1.vortex.reader.array.LazyRunEndLongArray;
 import io.github.dfa1.vortex.reader.array.LazyRunEndShortArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
-import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 
@@ -74,7 +74,9 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
 
         if (ctx.dtype() instanceof DType.Bool) {
             Array valuesArr = ctx.decodeChild(1, ctx.dtype(), numRuns);
-            return expandBool(endsArr, (BoolArray) valuesArr, endsPtype, numRuns, offset, n, ctx.dtype(), ctx.arena());
+            Array valuesData = valuesArr instanceof MaskedArray m ? m.inner() : valuesArr;
+            Array endsData = endsArr instanceof MaskedArray m ? m.inner() : endsArr;
+            return new LazyRunEndBoolArray(ctx.dtype(), n, (BoolArray) valuesData, endsData, offset);
         }
 
         if (!(ctx.dtype() instanceof DType.Primitive p)) {
@@ -83,8 +85,8 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
         PType valuePtype = p.ptype();
 
         // Lazy path: wrap values + ends without expanding into an n-sized buffer.
-        // Bool and VarBin keep the eager path above (different shapes — bit-packing
-        // and offset rebasing don't trivially express as a binary-search-on-read).
+        // VarBin keeps the eager path above — offset rebasing doesn't trivially
+        // express as binary-search-on-read.
         Array valuesArr = ctx.decodeChild(1, ctx.dtype(), numRuns);
         Array valuesData = valuesArr instanceof MaskedArray m ? m.inner() : valuesArr;
         Array endsData = endsArr instanceof MaskedArray m ? m.inner() : endsArr;
@@ -95,35 +97,6 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
             case I8, U8 -> new LazyRunEndByteArray(ctx.dtype(), n, (ByteArray) valuesData, endsData, offset);
             default -> throw new VortexException(EncodingId.VORTEX_RUNEND, "unsupported ptype " + valuePtype);
         };
-    }
-
-    private static Array expandBool(
-            Array endsArr, BoolArray valuesArr,
-            PType endsPtype, long numRuns, long offset, long n,
-            DType dtype, SegmentAllocator arena
-    ) {
-        MemorySegment endsSeg = ArraySegments.of(endsArr);
-        long endsCap = SegmentBroadcast.capacity(endsSeg, endsPtype.byteSize());
-        long numBytes = (n + 7) >>> 3;
-        MemorySegment out = arena.allocate(numBytes);
-
-        long outIdx = 0;
-        long logicalPos = 0;
-        for (long run = 0; run < numRuns && outIdx < n; run++) {
-            long runEnd = readUnsigned(endsSeg, run % endsCap, endsPtype);
-            boolean val = valuesArr.getBoolean(run);
-            long lo = Math.max(logicalPos, offset);
-            long hi = Math.min(runEnd, offset + n);
-            for (long lp = lo; lp < hi; lp++, outIdx++) {
-                if (val) {
-                    long byteIdx = outIdx >>> 3;
-                    byte cur = out.get(ValueLayout.JAVA_BYTE, byteIdx);
-                    out.set(ValueLayout.JAVA_BYTE, byteIdx, (byte) ((cur & 0xff) | (1 << (outIdx & 7))));
-                }
-            }
-            logicalPos = runEnd;
-        }
-        return new MaterializedBoolArray(dtype, n, out.asReadOnly());
     }
 
     private static Array expandStrings(
