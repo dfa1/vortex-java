@@ -4,7 +4,6 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.VortexFormat;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.EmptyArray;
 import io.github.dfa1.vortex.reader.array.UnknownArray;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 import io.github.dfa1.vortex.reader.decode.EncodingDecoder;
@@ -16,6 +15,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.lang.foreign.MemorySegment;
 import java.net.URISyntaxException;
 import java.nio.ByteOrder;
 import java.nio.file.Files;
@@ -44,7 +44,10 @@ class VortexReaderTest {
 
                 @Override
                 public Array decode(DecodeContext ctx) {
-                    return EmptyArray.of(ctx.dtype());
+                    // Generic zero-length stand-in: scan chunk row count comes from the
+                    // layout, so the leaf array's contents are irrelevant to this test.
+                    return new UnknownArray("stub", ctx.dtype(), 0, null,
+                            new MemorySegment[0], new Array[0]);
                 }
             });
         }
