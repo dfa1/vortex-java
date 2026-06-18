@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.VortexException;
 
 /// Decoded columnar data. Concrete subtypes specialise element access for the JIT;
 /// each covers a specific dtype family.
@@ -26,33 +25,35 @@ public sealed interface Array
 
     /// Returns an array holding only the first `rows` elements of this array.
     ///
-    /// Used by the scan layer to honour [io.github.dfa1.vortex.reader.ScanOptions]
-    /// row limits. Callers must guarantee `rows < length()` — use the
-    /// [#limited(Array, long)] guard, which short-circuits the no-op case.
+    /// Low-level primitive: the caller must guarantee `0 <= rows < length()`.
+    /// Prefer the [#limited(Array, long)] guard, which clamps the `rows >= length()`
+    /// case to a no-op and rejects negatives — the scan layer and all composite
+    /// subtypes route through it.
     ///
-    /// The primitive family interfaces ([LongArray], [IntArray], …) provide a
-    /// zero-copy default: a length-capping view over `this` (no buffer is copied).
-    /// Subtypes that can do better override it — chunked arrays keep their whole
-    /// prefix children and only limited the boundary child, preserving batch
-    /// iteration. The base default fails fast for types with no truncation support
-    /// (struct, list, …).
+    /// Most subtypes implement this without copying: the primitive families
+    /// ([LongArray], [IntArray], …) return a length-capping view; chunked arrays
+    /// keep their whole prefix children and only re-cut the boundary child;
+    /// composite arrays (struct/list/variant) limit their children. Only
+    /// [UnknownArray] — raw, undecoded data with no row-addressable structure —
+    /// cannot be limited and throws.
     ///
-    /// @param rows number of leading elements to keep; must be `< length()`
-    /// @return a new array of length `rows`
-    /// @throws VortexException if truncation is not supported for this array type
-    default Array limited(long rows) {
-        throw new VortexException("limit: truncation not supported for " + getClass().getSimpleName());
-    }
+    /// @param rows number of leading elements to keep; must be in `[0, length())`
+    /// @return an array of length `rows`
+    Array limited(long rows);
 
-    /// Truncates `arr` to `rows` elements, returning it unchanged when it already
-    /// fits. Single guard shared by the scan layer and the composite subtypes that
-    /// recurse into children, so the `rows >= length()` no-op is handled in exactly
-    /// one place.
+    /// Limits `arr` to its first `rows` elements (semantically `min(length, rows)`),
+    /// returning it unchanged when it already fits. Single guard shared by the scan
+    /// layer and the composite subtypes that recurse into children, so the
+    /// `rows >= length()` no-op and the negative-`rows` rejection live in one place.
     ///
-    /// @param arr  array to limited
-    /// @param rows desired length
+    /// @param arr  array to limit
+    /// @param rows desired maximum length; must be `>= 0`
     /// @return `arr` when `arr.length() <= rows`, otherwise `arr.limited(rows)`
+    /// @throws IllegalArgumentException if `rows` is negative
     static Array limited(Array arr, long rows) {
+        if (rows < 0) {
+            throw new IllegalArgumentException("rows must be >= 0, got " + rows);
+        }
         return arr.length() <= rows ? arr : arr.limited(rows);
     }
 }

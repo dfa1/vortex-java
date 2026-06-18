@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
@@ -36,5 +37,16 @@ public record UnknownArray(
     /// @return the child {@link Array} at index `i`
     public Array child(int i) {
         return children[i];
+    }
+
+    /// Unsupported: an unknown encoding's `buffers` are raw, undecoded bytes with no
+    /// row-addressable structure, so "first `rows` rows" is undefined.
+    ///
+    /// @param rows ignored
+    /// @return never returns
+    /// @throws VortexException always
+    @Override
+    public Array limited(long rows) {
+        throw new VortexException("limit: not supported for undecoded encoding '" + encodingId + "'");
     }
 }

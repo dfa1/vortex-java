@@ -64,4 +64,9 @@ public final class StructArray implements Array {
         }
         throw new VortexException("no field '" + name + "' in struct");
     }
+
+    @Override
+    public Array limited(long rows) {
+        return new StructArray(dtype, rows, fields.stream().map(f -> Array.limited(f, rows)).toList());
+    }
 }

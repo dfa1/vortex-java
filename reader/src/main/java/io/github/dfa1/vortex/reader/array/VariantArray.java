@@ -52,4 +52,10 @@ public final class VariantArray implements Array {
     public Array shredded() {
         return shredded;
     }
+
+    @Override
+    public Array limited(long rows) {
+        return new VariantArray(dtype, rows, Array.limited(coreStorage, rows),
+                shredded != null ? Array.limited(shredded, rows) : null);
+    }
 }

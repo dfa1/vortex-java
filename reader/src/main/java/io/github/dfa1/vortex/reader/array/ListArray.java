@@ -62,4 +62,11 @@ public final class ListArray implements Array {
             default -> throw new VortexException("ListArray child index out of bounds: " + i);
         };
     }
+
+    @Override
+    public Array limited(long rows) {
+        // Keep the first `rows` lists: offsets needs rows+1 entries; elements stay
+        // shared (trailing elements past offsets[rows] are simply unreferenced).
+        return new ListArray(dtype, rows, elements, Array.limited(offsets, rows + 1));
+    }
 }

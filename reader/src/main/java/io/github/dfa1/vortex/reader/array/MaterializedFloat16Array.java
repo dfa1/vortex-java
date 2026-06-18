@@ -43,4 +43,10 @@ public final class MaterializedFloat16Array implements Float16Array {
     public float getFloat(long i) {
         return Float.float16ToFloat(buffer.getAtIndex(PTypeIO.LE_SHORT, i));
     }
+
+    @Override
+    public Array limited(long rows) {
+        // f16 is 2 bytes per element; zero-copy slice of the backing segment.
+        return new MaterializedFloat16Array(dtype, rows, buffer.asSlice(0, rows * 2));
+    }
 }

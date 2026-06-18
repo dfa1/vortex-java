@@ -56,4 +56,11 @@ public final class FixedSizeListArray implements Array {
         }
         return elements;
     }
+
+    @Override
+    public Array limited(long rows) {
+        // Each outer row spans `fixedSize` contiguous elements, so the first `rows`
+        // rows are the first `rows * fixedSize` elements.
+        return new FixedSizeListArray(dtype, rows, Array.limited(elements, rows * fixedSize()));
+    }
 }

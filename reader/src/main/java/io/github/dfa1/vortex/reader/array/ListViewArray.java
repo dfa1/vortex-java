@@ -74,4 +74,12 @@ public final class ListViewArray implements Array {
             default -> throw new VortexException("ListViewArray child index out of bounds: " + i);
         };
     }
+
+    @Override
+    public Array limited(long rows) {
+        // offsets/sizes are per-row (length outerLen); cut both to `rows`. elements
+        // stay shared — list-view rows can point anywhere, so nothing is trimmed.
+        return new ListViewArray(dtype, rows, elements,
+                Array.limited(offsets, rows), Array.limited(sizes, rows));
+    }
 }
