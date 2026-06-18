@@ -11,11 +11,13 @@ import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.reader.array.GenericArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantBoolArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantByteArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantDecimalArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantDoubleArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantFloatArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantIntArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantLongArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantShortArray;
+import io.github.dfa1.vortex.reader.array.LazyDecimalArray;
 import io.github.dfa1.vortex.reader.array.NullArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 
@@ -101,12 +103,10 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
     private static Array decodeDecimal(DecodeContext ctx, ScalarValue scalar, long n) {
         byte[] elemBytes = scalar.bytes_value();
         int elemLen = elemBytes.length;
-        MemorySegment outSeg = ctx.arena().allocate(n * elemLen);
-        MemorySegment elemSeg = MemorySegment.ofArray(elemBytes);
-        for (long i = 0; i < n; i++) {
-            MemorySegment.copy(elemSeg, 0L, outSeg, i * elemLen, elemLen);
-        }
-        return new GenericArray(ctx.dtype(), n, outSeg.asReadOnly());
+        // Decode the single scalar value via LazyDecimalArray (reuses its LE byte-order logic),
+        // then wrap in a constant array — O(1) allocation regardless of row count.
+        var value = new LazyDecimalArray(ctx.dtype(), 1, MemorySegment.ofArray(elemBytes), elemLen).getDecimal(0);
+        return new LazyConstantDecimalArray(ctx.dtype(), n, value, elemLen);
     }
 
     private static Array decodeBool(DecodeContext ctx, ScalarValue scalar, long n) {

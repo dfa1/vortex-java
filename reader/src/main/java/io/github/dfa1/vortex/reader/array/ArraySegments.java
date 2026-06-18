@@ -45,6 +45,7 @@ public final class ArraySegments {
             case VarBinArray a -> a.bytesSegment();
             case GenericArray a -> a.buffer(0);
             case LazyDecimalArray a -> a.buf();
+            case DecimalArray a -> throw new VortexException(a.getClass().getSimpleName() + " has no primary segment — use of(arr, arena)");
             default -> throw new VortexException(data.getClass().getSimpleName() + " has no primary segment");
         };
     }
@@ -88,6 +89,8 @@ public final class ArraySegments {
             case FloatArray a -> materialiseFloat(a, arena);
             case ShortArray a -> materialiseShort(a, arena);
             case ByteArray a -> materialiseByte(a, arena);
+            case LazyConstantDecimalArray a -> materialiseConstantDecimal(a, arena);
+            case DecimalArray a -> of(arr);
             default -> of(arr);
         };
     }
@@ -416,6 +419,26 @@ public final class ArraySegments {
             }
             default -> throw new VortexException("DictFloatArray: invalid codes type: "
                     + codes.getClass().getSimpleName());
+        }
+        return dst.asReadOnly();
+    }
+
+    private static MemorySegment materialiseConstantDecimal(LazyConstantDecimalArray a, SegmentAllocator arena) {
+        long n = a.length();
+        int byteWidth = a.byteWidth();
+        MemorySegment dst = arena.allocate(n * byteWidth);
+        java.math.BigInteger unscaled = a.value().unscaledValue();
+        // Write the single constant value in LE two's-complement, repeated n times.
+        long rawBits = unscaled.longValueExact();
+        for (long i = 0; i < n; i++) {
+            long off = i * byteWidth;
+            switch (byteWidth) {
+                case 1 -> dst.set(java.lang.foreign.ValueLayout.JAVA_BYTE, off, (byte) rawBits);
+                case 2 -> dst.set(PTypeIO.LE_SHORT, off, (short) rawBits);
+                case 4 -> dst.set(PTypeIO.LE_INT, off, (int) rawBits);
+                case 8 -> dst.set(PTypeIO.LE_LONG, off, rawBits);
+                default -> throw new VortexException("LazyConstantDecimalArray: unsupported byteWidth " + byteWidth);
+            }
         }
         return dst.asReadOnly();
     }

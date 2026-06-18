@@ -22,7 +22,7 @@ import java.nio.ByteOrder;
 /// @param length    total logical row count
 /// @param buf       backing little-endian two's-complement integer buffer
 /// @param byteWidth element width in bytes; one of 1, 2, 4, 8, 16
-public record LazyDecimalArray(DType dtype, long length, MemorySegment buf, int byteWidth) implements Array {
+public record LazyDecimalArray(DType dtype, long length, MemorySegment buf, int byteWidth) implements DecimalArray {
 
     private static final ValueLayout.OfShort SHORT_LE =
             ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);

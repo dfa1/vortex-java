@@ -13,8 +13,7 @@ import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
-import io.github.dfa1.vortex.reader.array.LazyDecimalArray;
-import io.github.dfa1.vortex.reader.array.LazyDecimalBytePartsArray;
+import io.github.dfa1.vortex.reader.array.DecimalArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
@@ -304,8 +303,7 @@ public final class LazyGridSource implements AutoCloseable {
                 case VarBinArray a -> a.dtype() instanceof DType.Utf8
                         ? a.getString(i)
                         : bytesToHex(a.getBytes(i));
-                case LazyDecimalArray a -> a.getDecimal(i).toPlainString();
-                case LazyDecimalBytePartsArray a -> a.getDecimal(i).toPlainString();
+                case DecimalArray a -> a.getDecimal(i).toPlainString();
                 default -> "<" + inner.getClass().getSimpleName() + ">";
             };
         } catch (RuntimeException e) {

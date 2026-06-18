@@ -10,8 +10,7 @@ import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.GenericArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
-import io.github.dfa1.vortex.reader.array.LazyDecimalArray;
-import io.github.dfa1.vortex.reader.array.LazyDecimalBytePartsArray;
+import io.github.dfa1.vortex.reader.array.DecimalArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
@@ -871,8 +870,7 @@ public final class VortexInspectorTui {
                         : bytesToShortHex(a.getBytes(i));
                 case GenericArray a when a.dtype() instanceof DType.Decimal ->
                         tryDecimal(a::getDecimal, a, i);
-                case LazyDecimalArray a -> tryDecimal(a::getDecimal, a, i);
-                case LazyDecimalBytePartsArray a -> tryDecimal(a::getDecimal, a, i);
+                case DecimalArray a -> tryDecimal(a::getDecimal, a, i);
                 default -> "<" + array.getClass().getSimpleName() + " " + array.dtype() + ">";
             };
         }

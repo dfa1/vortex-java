@@ -18,7 +18,7 @@ import java.math.BigDecimal;
 /// @param dtype  the parent {@link DType.Decimal} dtype (precision + scale + nullable)
 /// @param length total logical row count
 /// @param msp    child array holding the most-significant integer part of the mantissa
-public record LazyDecimalBytePartsArray(DType dtype, long length, Array msp) implements Array {
+public record LazyDecimalBytePartsArray(DType dtype, long length, Array msp) implements DecimalArray {
 
     /// Reads cell `i` as a {@link BigDecimal} with the parent dtype's scale.
     ///
