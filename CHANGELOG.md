@@ -7,10 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-06-18
+
+Variant encode/decode and the Materialized-fallback sweep.
+
 ### Added
 
 - Writer: `vortex.variant` encoder. Encodes a variant column as the canonical `vortex.variant` container over `core_storage` — an all-equal column becomes a single `vortex.constant`, a row-varying column a `vortex.chunked` of per-run constants — with an optional row-aligned typed `shredded` child recorded in `VariantMetadata.shredded_dtype`. Input is `VariantData(List<Scalar>)` with `.constant(n, v)` / `.shredded(...)` factories. Java↔Rust (JNI) round-trip verified for constant, row-varying, and shredded columns. Scalar values only — arbitrary nested objects need `vortex.parquet.variant` (deferred, [ADR 0014](docs/adr/0014-variant-encoding-strategy.md)).
 - Reader: variant columns now decode Java-side. `ConstantEncodingDecoder` and `ChunkedEncodingDecoder` handle `DType.Variant` (materialising the inner-typed array); `VariantEncodingDecoder` wraps the result as `VariantArray`, exposing `coreStorage()` and `shredded()`.
+
+### Changed
+
+- Decode shape: transform encodings now decode **lazy-only**. The eager `Materialized*Array` fallbacks were removed from `vortex.zigzag` (all PTypes + broadcast), `fastlanes.for` (all integer PTypes), `vortex.alp` (broadcast-without-patches), `vortex.constant` (Decimal → `LazyConstantDecimalArray`), `vortex.runend` (Bool → `LazyRunEndBoolArray`), `vortex.sparse` (Bool → `LazySparseBoolArray`), and `fastlanes.rle` (validity → `OffsetBoolArray`, empty → `LazyConstantXxxArray`). Decompression encodings (`bitpacked`, `pco`, `zstd`, `fsst`, `delta`, `patched`), the primitive base, the `vortex.dict` encoding-level path, and the `vortex.alp` patches path stay Materialized by design. See [ADR 0015](docs/adr/0015-drop-materialized-fallbacks.md).
 
 ## [0.7.3] — 2026-06-17
 
