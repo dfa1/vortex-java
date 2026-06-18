@@ -10,7 +10,7 @@ import java.util.function.LongBinaryOperator;
 /// Lazy [ByteArray] backed by the `fastlanes.for` encoded `i8`/`u8` child segment.
 ///
 /// Decode is deferred to element access: `getByte(i) = encoded[i] + ref` (byte-wrapping addition).
-/// Returned by {@link io.github.dfa1.vortex.reader.decode.FrameOfReferenceEncodingDecoder} when
+/// Returned by [io.github.dfa1.vortex.reader.decode.FrameOfReferenceEncodingDecoder] when
 /// `ref != 0` for I8 or U8 columns.
 ///
 /// @param dtype   logical I8/U8 type

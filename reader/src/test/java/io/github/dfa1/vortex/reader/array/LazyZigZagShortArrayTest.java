@@ -68,6 +68,6 @@ class LazyZigZagShortArrayTest {
         long sum = sut.fold(0L, Long::sum);
 
         // Then
-        assertThat(sum).isEqualTo(0L);
+        assertThat(sum).isZero();
     }
 }

@@ -83,26 +83,56 @@ public final class VortexGridTui {
 
         private boolean handle(Key key) {
             return switch (key) {
-                case Key.ArrowUp ignored -> move(-1, 0);
-                case Key.ArrowDown ignored -> move(1, 0);
-                case Key.ArrowLeft ignored -> move(0, -1);
-                case Key.ArrowRight ignored -> move(0, 1);
-                case Key.PageUp ignored -> move(-pageRows(), 0);
-                case Key.PageDown ignored -> move(pageRows(), 0);
-                case Key.Home ignored -> jumpCol(0);
-                case Key.End ignored -> jumpCol(totalCols - 1);
-                case Key.Char c when c.value() == 'g' -> jumpRow(0);
-                case Key.Char c when c.value() == 'G' -> jumpRow(totalRows - 1);
+                case Key.ArrowUp _ -> {
+                    move(-1, 0);
+                    yield true;
+                }
+                case Key.ArrowDown _ -> {
+                    move(1, 0);
+                    yield true;
+                }
+                case Key.ArrowLeft _ -> {
+                    move(0, -1);
+                    yield true;
+                }
+                case Key.ArrowRight _ -> {
+                    move(0, 1);
+                    yield true;
+                }
+                case Key.PageUp _ -> {
+                    move(-pageRows(), 0);
+                    yield true;
+                }
+                case Key.PageDown _ -> {
+                    move(pageRows(), 0);
+                    yield true;
+                }
+                case Key.Home _ -> {
+                    jumpCol(0);
+                    yield true;
+                }
+                case Key.End _ -> {
+                    jumpCol(totalCols - 1);
+                    yield true;
+                }
+                case Key.Char c when c.value() == 'g' -> {
+                    jumpRow(0);
+                    yield true;
+                }
+                case Key.Char c when c.value() == 'G' -> {
+                    jumpRow(totalRows - 1);
+                    yield true;
+                }
                 case Key.Char c when c.value() == 'q' -> false;
-                case Key.Escape ignored -> false;
-                case Key.Eof ignored -> false;
+                case Key.Escape _ -> false;
+                case Key.Eof _ -> false;
                 default -> true;
             };
         }
 
-        private boolean move(long dr, int dc) {
+        private void move(long dr, int dc) {
             if (totalRows == 0 || totalCols == 0) {
-                return true;
+                return;
             }
             long newRow = clamp(cursorRow + dr, 0L, totalRows - 1);
             int newCol = clamp(cursorCol + dc, 0, totalCols - 1);
@@ -111,25 +141,22 @@ public final class VortexGridTui {
                 cursorCol = newCol;
                 dirty = true;
             }
-            return true;
         }
 
-        private boolean jumpRow(long row) {
+        private void jumpRow(long row) {
             if (totalRows == 0) {
-                return true;
+                return;
             }
             cursorRow = clamp(row, 0L, totalRows - 1);
             dirty = true;
-            return true;
         }
 
-        private boolean jumpCol(int col) {
+        private void jumpCol(int col) {
             if (totalCols == 0) {
-                return true;
+                return;
             }
             cursorCol = clamp(col, 0, totalCols - 1);
             dirty = true;
-            return true;
         }
 
         private long pageRows() {
@@ -167,7 +194,7 @@ public final class VortexGridTui {
         private String[][] fetchWindow(long startAbsRow, int viewportRows) {
             try {
                 return data.readRows(startAbsRow, viewportRows);
-            } catch (InterruptedException e) {
+            } catch (InterruptedException _) {
                 Thread.currentThread().interrupt();
                 errorMessage = "interrupted";
                 return placeholderWindow(viewportRows);

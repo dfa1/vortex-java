@@ -11,7 +11,7 @@ import java.util.function.LongBinaryOperator;
 ///
 /// Decode is deferred to element access: `getShort(i) = (u >>> 1) ^ -(u & 1)`,
 /// where `u` is the unsigned short bit pattern at position `i`.
-/// Returned by {@link io.github.dfa1.vortex.reader.decode.ZigZagEncodingDecoder} for I16 columns
+/// Returned by [io.github.dfa1.vortex.reader.decode.ZigZagEncodingDecoder] for I16 columns
 /// when the source is not a broadcast constant.
 ///
 /// @param dtype   logical I16 type

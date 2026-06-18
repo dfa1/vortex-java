@@ -33,7 +33,7 @@ public final class KeyDecoder {
             }
             try {
                 Thread.sleep(20);
-            } catch (InterruptedException e) {
+            } catch (InterruptedException _) {
                 Thread.currentThread().interrupt();
                 return Optional.empty();
             }

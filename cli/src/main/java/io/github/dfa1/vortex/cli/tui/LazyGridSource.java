@@ -160,23 +160,7 @@ public final class LazyGridSource implements AutoCloseable {
         AtomicReference<RuntimeException> failure = new AtomicReference<>();
         worker.runAndAwait(() -> {
             try {
-                long row = startAbsRow;
-                int slot = 0;
-                while (slot < count) {
-                    if (row >= totalRows) {
-                        out[slot++] = emptyRow();
-                        continue;
-                    }
-                    int chunkIdx = findChunk(row);
-                    loadChunk(chunkIdx);
-                    long chunkStart = chunkStartRows[chunkIdx];
-                    long chunkEnd = chunkStartRows[chunkIdx + 1];
-                    long limit = Math.min(chunkEnd, startAbsRow + count);
-                    while (row < limit && slot < count) {
-                        out[slot++] = formatRow(currentColumns, row - chunkStart);
-                        row++;
-                    }
-                }
+                fillWindow(out, startAbsRow, count);
             } catch (RuntimeException e) {
                 failure.set(e);
             }
@@ -190,6 +174,26 @@ public final class LazyGridSource implements AutoCloseable {
             }
         }
         return out;
+    }
+
+    private void fillWindow(String[][] out, long startAbsRow, int count) {
+        long row = startAbsRow;
+        int slot = 0;
+        while (slot < count) {
+            if (row >= totalRows) {
+                out[slot++] = emptyRow();
+                continue;
+            }
+            int chunkIdx = findChunk(row);
+            loadChunk(chunkIdx);
+            long chunkStart = chunkStartRows[chunkIdx];
+            long chunkEnd = chunkStartRows[chunkIdx + 1];
+            long limit = Math.min(chunkEnd, startAbsRow + count);
+            while (row < limit && slot < count) {
+                out[slot++] = formatRow(currentColumns, row - chunkStart);
+                row++;
+            }
+        }
     }
 
     /// Returns a single formatted row at absolute index `absRow`.
@@ -234,7 +238,7 @@ public final class LazyGridSource implements AutoCloseable {
             iterNextChunk = 0;
         }
         while (iterNextChunk < chunkIdx && iter.hasNext()) {
-            try (Chunk discard = iter.next()) {
+            try (Chunk _ = iter.next()) {
                 // skip
             }
             iterNextChunk++;
@@ -353,7 +357,7 @@ public final class LazyGridSource implements AutoCloseable {
                     iter = null;
                 }
             });
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
         }
     }

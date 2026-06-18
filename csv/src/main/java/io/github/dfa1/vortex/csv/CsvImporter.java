@@ -46,7 +46,7 @@ public final class CsvImporter {
     ///
     /// The file is read exactly once. The first chunk of rows is buffered for schema
     /// inference (O(chunkSize) memory); remaining rows stream directly to the writer.
-    /// Progress is reported via {@link ProgressListener#onProgress(long, long)} with
+    /// Progress is reported via [ProgressListener#onProgress(long, long)] with
     /// `rowsTotal = -1` (total unknown) after each chunk completes.
     ///
     /// @param csvPath    path to the source CSV file
@@ -64,15 +64,15 @@ public final class CsvImporter {
             List<String[]> firstChunk = new ArrayList<>(chunkSize);
             boolean expectHeader = options.hasHeader();
 
-            for (CsvRecord record : reader) {
+            for (CsvRecord csvRecord : reader) {
                 if (expectHeader) {
-                    headers = record.getFields().toArray(String[]::new);
+                    headers = csvRecord.getFields().toArray(String[]::new);
                     expectHeader = false;
-                    continue;
-                }
-                firstChunk.add(record.getFields().toArray(String[]::new));
-                if (firstChunk.size() == chunkSize) {
-                    break;
+                } else {
+                    firstChunk.add(csvRecord.getFields().toArray(String[]::new));
+                    if (firstChunk.size() == chunkSize) {
+                        break;
+                    }
                 }
             }
 
@@ -106,8 +106,8 @@ public final class CsvImporter {
 
                 // Stream the rest of the file through the still-open reader.
                 List<String[]> chunk = new ArrayList<>(chunkSize);
-                for (CsvRecord record : reader) {
-                    chunk.add(record.getFields().toArray(String[]::new));
+                for (CsvRecord csvRecord : reader) {
+                    chunk.add(csvRecord.getFields().toArray(String[]::new));
                     totalRows++;
                     if (chunk.size() == chunkSize) {
                         writer.writeChunk(buildChunk(schema, chunk));
@@ -139,29 +139,7 @@ public final class CsvImporter {
 
         for (String[] row : rows) {
             for (int c = 0; c < colCount; c++) {
-                String val = safeGet(row, c);
-                if (val.isEmpty()) {
-                    continue;
-                }
-                if (canBeLong[c]) {
-                    try {
-                        Long.parseLong(val);
-                    } catch (NumberFormatException e) {
-                        canBeLong[c] = false;
-                    }
-                }
-                if (canBeDouble[c]) {
-                    try {
-                        Double.parseDouble(val);
-                    } catch (NumberFormatException e) {
-                        canBeDouble[c] = false;
-                    }
-                }
-                if (canBeBool[c]) {
-                    if (!val.equalsIgnoreCase("true") && !val.equalsIgnoreCase("false")) {
-                        canBeBool[c] = false;
-                    }
-                }
+                probeCell(canBeLong, canBeDouble, canBeBool, c, safeGet(row, c));
             }
         }
 
@@ -171,6 +149,30 @@ public final class CsvImporter {
             types.add(resolveType(canBeLong[c], canBeDouble[c], canBeBool[c]));
         }
         return new DType.Struct(names, types, false);
+    }
+
+    private static void probeCell(boolean[] canBeLong, boolean[] canBeDouble, boolean[] canBeBool,
+            int c, String val) {
+        if (val.isEmpty()) {
+            return;
+        }
+        if (canBeLong[c]) {
+            try {
+                Long.parseLong(val);
+            } catch (NumberFormatException e) {
+                canBeLong[c] = false;
+            }
+        }
+        if (canBeDouble[c]) {
+            try {
+                Double.parseDouble(val);
+            } catch (NumberFormatException e) {
+                canBeDouble[c] = false;
+            }
+        }
+        if (canBeBool[c] && !val.equalsIgnoreCase("true") && !val.equalsIgnoreCase("false")) {
+            canBeBool[c] = false;
+        }
     }
 
     private static void reportProgress(ImportOptions options, long totalRows) {

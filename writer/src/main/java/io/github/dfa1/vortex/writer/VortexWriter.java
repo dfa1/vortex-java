@@ -921,8 +921,8 @@ public final class VortexWriter implements Closeable {
                 return false;
             }
         }
-        // A single distinct value is better compressed by vortex.constant (no dict overhead);
-        // route it through the cascading compressor instead.
+        // Single-value columns fit vortex.constant better than dict (zero dict overhead).
+        // Delegate to the cascading compressor.
         if (seen.size() == 1) {
             return false;
         }

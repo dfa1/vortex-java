@@ -92,7 +92,7 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
                 return new LazyAlpDoubleArray(ctx.dtype(), n, src, df, de);
             }
             // broadcast without patches: decode single encoded value → constant
-            double v = (double) src.getAtIndex(PTypeIO.LE_LONG, 0) * df * de;
+            double v = src.getAtIndex(PTypeIO.LE_LONG, 0) * df * de;
             return new LazyConstantDoubleArray(ctx.dtype(), n, v);
         }
 
@@ -122,7 +122,7 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
                 return new LazyAlpFloatArray(ctx.dtype(), n, src, df, de);
             }
             // broadcast without patches: decode single encoded value → constant
-            float v = (float) src.getAtIndex(PTypeIO.LE_INT, 0) * df * de;
+            float v = src.getAtIndex(PTypeIO.LE_INT, 0) * df * de;
             return new LazyConstantFloatArray(ctx.dtype(), n, v);
         }
 

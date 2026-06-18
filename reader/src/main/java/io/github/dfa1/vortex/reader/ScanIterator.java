@@ -178,22 +178,28 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         var result = new ArrayList<ChunkSpec>(maxChunks);
         long sliceStart = 0;
         for (int i = 0; i < maxChunks; i++) {
-            Layout[] layouts = new Layout[numCols];
-            long[] sliceOffsets = new long[numCols];
             long chunkRowCount = columnFlats.get(colNames[refCol]).get(i).rowCount();
-            for (int j = 0; j < numCols; j++) {
-                if (shared[j]) {
-                    layouts[j] = null;
-                    sliceOffsets[j] = sliceStart;
-                } else {
-                    layouts[j] = columnFlats.get(colNames[j]).get(i);
-                    sliceOffsets[j] = 0L;
-                }
-            }
-            result.add(new ChunkSpec(chunkRowCount, colNames, layouts, sliceOffsets));
+            result.add(buildChunkSpec(colNames, columnFlats, shared, i, sliceStart, chunkRowCount));
             sliceStart += chunkRowCount;
         }
         return List.copyOf(result);
+    }
+
+    private static ChunkSpec buildChunkSpec(String[] colNames, Map<String, List<Layout>> columnFlats,
+            boolean[] shared, int chunkIdx, long sliceStart, long chunkRowCount) {
+        int numCols = colNames.length;
+        Layout[] layouts = new Layout[numCols];
+        long[] sliceOffsets = new long[numCols];
+        for (int j = 0; j < numCols; j++) {
+            if (shared[j]) {
+                layouts[j] = null;
+                sliceOffsets[j] = sliceStart;
+            } else {
+                layouts[j] = columnFlats.get(colNames[j]).get(chunkIdx);
+                sliceOffsets[j] = 0L;
+            }
+        }
+        return new ChunkSpec(chunkRowCount, colNames, layouts, sliceOffsets);
     }
 
     // ── Layout tree traversal ─────────────────────────────────────────────────

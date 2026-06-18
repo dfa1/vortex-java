@@ -11,7 +11,7 @@ import java.util.function.LongBinaryOperator;
 ///
 /// Decode is deferred to element access: `getByte(i) = (u >>> 1) ^ -(u & 1)`,
 /// where `u` is the unsigned byte bit pattern at position `i`.
-/// Returned by {@link io.github.dfa1.vortex.reader.decode.ZigZagEncodingDecoder} for I8 columns
+/// Returned by [io.github.dfa1.vortex.reader.decode.ZigZagEncodingDecoder] for I8 columns
 /// when the source is not a broadcast constant.
 ///
 /// @param dtype   logical I8 type

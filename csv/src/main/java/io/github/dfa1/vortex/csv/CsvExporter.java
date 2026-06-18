@@ -82,48 +82,56 @@ public final class CsvExporter {
 
         ProgressListener progress = options.progressListener();
         long rowsTotal = progress != null ? reader.layout().rowCount() : 0L;
-        long rowsDone = 0L;
-        long nextNotify = 1_000L;
-
+        long[] state = {0L, 1_000L}; // state[0]=rowsDone, state[1]=nextNotify
         String[] row = new String[colCount];
         try (ScanIterator iter = reader.scan(scanOptions)) {
             while (iter.hasNext()) {
                 try (Chunk chunk = iter.next()) {
-                    Array[] arrays = new Array[colCount];
-                    for (int c = 0; c < colCount; c++) {
-                        arrays[c] = chunk.column(colNames.get(c));
-                    }
-                    // Some files chunk per column independently. ChunkSpec.rowCount
-                    // tracks the first column's flat, so columns whose flats were
-                    // shorter would OOB on the tail rows. Clamp to the shortest
-                    // column length so the writer/reader mismatch only loses tail
-                    // rows instead of crashing mid-export.
-                    long rowCount = chunk.rowCount();
-                    for (Array a : arrays) {
-                        if (a != null && a.length() < rowCount) {
-                            rowCount = a.length();
-                        }
-                    }
-                    for (long r = 0; r < rowCount; r++) {
-                        if (!predicate.test(chunk, r)) {
-                            continue;
-                        }
-                        for (int c = 0; c < colCount; c++) {
-                            row[c] = cellValue(arrays[c], r);
-                        }
-                        csvWriter.writeRecord(row);
-                        rowsDone++;
-                        if (progress != null && rowsDone >= nextNotify) {
-                            progress.onProgress(rowsDone, rowsTotal);
-                            nextNotify = rowsDone + 1_000L;
-                        }
-                    }
+                    writeChunk(chunk, colNames, colCount, row, csvWriter, predicate, progress, rowsTotal, state);
                 }
             }
         }
         if (progress != null) {
-            progress.onProgress(rowsDone, rowsTotal);
+            progress.onProgress(state[0], rowsTotal);
         }
+    }
+
+    private static void writeChunk(Chunk chunk, List<String> colNames, int colCount,
+            String[] row, CsvWriter csvWriter, RowPredicate predicate,
+            ProgressListener progress, long rowsTotal, long[] state) {
+        Array[] arrays = new Array[colCount];
+        for (int c = 0; c < colCount; c++) {
+            arrays[c] = chunk.column(colNames.get(c));
+        }
+        // Some files chunk per column independently. ChunkSpec.rowCount
+        // tracks the first column's flat, so columns whose flats were
+        // shorter would OOB on the tail rows. Clamp to the shortest
+        // column length so the writer/reader mismatch only loses tail
+        // rows instead of crashing mid-export.
+        long rowCount = chunk.rowCount();
+        for (Array a : arrays) {
+            if (a != null && a.length() < rowCount) {
+                rowCount = a.length();
+            }
+        }
+        long rowsDone = state[0];
+        long nextNotify = state[1];
+        for (long r = 0; r < rowCount; r++) {
+            if (!predicate.test(chunk, r)) {
+                continue;
+            }
+            for (int c = 0; c < colCount; c++) {
+                row[c] = cellValue(arrays[c], r);
+            }
+            csvWriter.writeRecord(row);
+            rowsDone++;
+            if (progress != null && rowsDone >= nextNotify) {
+                progress.onProgress(rowsDone, rowsTotal);
+                nextNotify = rowsDone + 1_000L;
+            }
+        }
+        state[0] = rowsDone;
+        state[1] = nextNotify;
     }
 
     private static String cellValue(Array arr, long rowIdx) {

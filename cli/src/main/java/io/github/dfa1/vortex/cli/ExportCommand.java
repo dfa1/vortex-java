@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+@SuppressWarnings("java:S106")
 final class ExportCommand {
 
     private ExportCommand() {

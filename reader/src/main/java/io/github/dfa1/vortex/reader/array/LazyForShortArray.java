@@ -10,7 +10,7 @@ import java.util.function.LongBinaryOperator;
 /// Lazy [ShortArray] backed by the `fastlanes.for` encoded `i16`/`u16` child segment.
 ///
 /// Decode is deferred to element access: `getShort(i) = encoded[i] + ref` (short-wrapping addition).
-/// Returned by {@link io.github.dfa1.vortex.reader.decode.FrameOfReferenceEncodingDecoder} when
+/// Returned by [io.github.dfa1.vortex.reader.decode.FrameOfReferenceEncodingDecoder] when
 /// `ref != 0` for I16 or U16 columns.
 ///
 /// @param dtype   logical I16/U16 type

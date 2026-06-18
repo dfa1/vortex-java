@@ -90,7 +90,7 @@ public final class ArraySegments {
             case ShortArray a -> materialiseShort(a, arena);
             case ByteArray a -> materialiseByte(a, arena);
             case LazyConstantDecimalArray a -> materialiseConstantDecimal(a, arena);
-            case DecimalArray a -> of(arr);
+            case DecimalArray _ -> of(arr);
             default -> of(arr);
         };
     }

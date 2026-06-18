@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
+@SuppressWarnings("java:S106")
 final class ImportCommand {
 
     private record ParsedArgs(Path inputPath, Path outputPath, Character delimiter) {

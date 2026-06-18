@@ -14,6 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicReference;
 
+@SuppressWarnings("java:S106")
 final class ViewCommand {
 
     private ViewCommand() {

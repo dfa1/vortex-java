@@ -13,12 +13,12 @@ import java.util.function.IntConsumer;
 
 /// Sealed interface for variable-length binary / UTF-8 string columns.
 ///
-/// Four implementations: {@link OffsetMode} for standard offset-based layout,
-/// {@link DictMode} for dictionary-encoded strings, {@link ChunkedMode} for
-/// multi-chunk columns, and {@link ViewMode} for Arrow StringView / BinaryView
+/// Four implementations: [OffsetMode] for standard offset-based layout,
+/// [DictMode] for dictionary-encoded strings, [ChunkedMode] for
+/// multi-chunk columns, and [ViewMode] for Arrow StringView / BinaryView
 /// layout (16-byte view per row + zero or more shared data buffers). All
-/// accessors resolve transparently regardless of mode; only {@link OffsetMode}
-/// exposes {@link OffsetMode#offsetsSegment()} and {@link OffsetMode#offsetsPtype()}.
+/// accessors resolve transparently regardless of mode; only [OffsetMode]
+/// exposes [OffsetMode#offsetsSegment()] and [OffsetMode#offsetsPtype()].
 public sealed interface VarBinArray extends Array
         permits VarBinArray.OffsetMode, VarBinArray.DictMode, VarBinArray.ChunkedMode,
                 VarBinArray.ViewMode, VarBinArray.SlicedMode {
@@ -29,7 +29,7 @@ public sealed interface VarBinArray extends Array
     /// flat layout across multiple aligned chunks) as a per-chunk slice
     /// without copying.
     ///
-    /// @param dtype  logical element type (typically {@link DType.Utf8} or {@link DType.Binary})
+    /// @param dtype  logical element type (typically [DType.Utf8] or [DType.Binary])
     /// @param length number of logical elements in this slice
     /// @param inner  underlying VarBin array
     /// @param offset starting row index into `inner`

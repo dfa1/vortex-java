@@ -189,6 +189,7 @@ public final class WindowsTerminal implements Terminal {
     /// Reads bytes directly from the Windows console handle via `ReadFile`,
     /// bypassing `System.in` which goes through JVM-internal CRT wrappers
     /// that ignore `SetConsoleMode` changes.
+    @SuppressWarnings("java:S4929") // single-byte read per key is correct for console input
     private final class ConsoleInputStream extends InputStream {
 
         private final MemorySegment readBuf = arena.allocate(ValueLayout.JAVA_BYTE);
@@ -213,7 +214,7 @@ public final class WindowsTerminal implements Terminal {
             try {
                 int rc = (int) GET_NUMBER_OF_CONSOLE_INPUT_EVENTS.invokeExact(stdinHandle, eventCount);
                 return rc != 0 ? eventCount.get(ValueLayout.JAVA_INT, 0) : 0;
-            } catch (Throwable ignored) {
+            } catch (Throwable _) {
                 return 0;
             }
         }
@@ -228,7 +229,7 @@ public final class WindowsTerminal implements Terminal {
             MemorySegment stdin = invokeHandle(GET_STD_HANDLE, STD_INPUT_HANDLE);
             SET_CONSOLE_MODE.invokeExact(stdin, savedInMode);
             SET_CONSOLE_MODE.invokeExact(stdoutHandle, savedOutMode);
-        } catch (Throwable ignored) {
+        } catch (Throwable _) {
             // Best-effort: JVM is exiting; nothing useful to do.
         }
     }

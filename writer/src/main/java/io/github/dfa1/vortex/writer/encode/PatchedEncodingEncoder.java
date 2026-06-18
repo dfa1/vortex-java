@@ -50,14 +50,14 @@ public final class PatchedEncodingEncoder implements EncodingEncoder {
 
     @Override
     public CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
-        return Encoder.encodeCascade(dtype, data, ctx);
+        return Encoder.encodeCascade(dtype, data);
     }
 
     private static final class Encoder {
         private static final int CHUNK_SIZE = 1024;
         private static final int N_LANES = 1;
 
-        static CascadeStep encodeCascade(DType dtype, Object data, EncodeContext ctx) {
+        static CascadeStep encodeCascade(DType dtype, Object data) {
             if (!(dtype instanceof DType.Primitive p)) {
                 return CascadeStep.notApplicable();
             }
@@ -111,7 +111,7 @@ public final class PatchedEncodingEncoder implements EncodingEncoder {
                 PTypeIO.set(innerBuf, (long) i * elemBytes, ptype, pd.inner[i]);
             }
 
-            MemorySegment laneOffsBuf = ctx.arena().allocate((long) pd.laneOffsets.length * 4L);
+            MemorySegment laneOffsBuf = ctx.arena().allocate(pd.laneOffsets.length * 4L);
             for (int i = 0; i < pd.laneOffsets.length; i++) {
                 laneOffsBuf.setAtIndex(PTypeIO.LE_INT, i, pd.laneOffsets[i]);
             }
@@ -164,14 +164,16 @@ public final class PatchedEncodingEncoder implements EncodingEncoder {
             int nChunks = (n + CHUNK_SIZE - 1) / CHUNK_SIZE;
             int[] patchCountPerChunk = new int[nChunks];
             int totalPatches = 0;
-            for (int i = 0, posInChunk = 0, chunk = 0; i < n; i++) {
+            int posInChunk = 0;
+            int chunkIdx = 0;
+            for (int i = 0; i < n; i++) {
                 if (posInChunk == CHUNK_SIZE) {
                     posInChunk = 0;
-                    chunk++;
+                    chunkIdx++;
                 }
                 long uv = longs[i] & typeMask;
                 if (Long.compareUnsigned(uv, widthCap) >= 0) {
-                    patchCountPerChunk[chunk]++;
+                    patchCountPerChunk[chunkIdx]++;
                     totalPatches++;
                 }
                 posInChunk++;
@@ -181,6 +183,11 @@ public final class PatchedEncodingEncoder implements EncodingEncoder {
                 return null;
             }
 
+            return buildPatches(longs, typeMask, widthCap, n, nChunks, patchCountPerChunk, totalPatches);
+        }
+
+        private static PatchedData buildPatches(long[] longs, long typeMask, long widthCap, int n,
+                int nChunks, int[] patchCountPerChunk, int totalPatches) {
             // Build laneOffsets CSR: N_LANES=1 → nChunks+1 entries
             int[] laneOffsets = new int[nChunks + 1];
             for (int c = 0; c < nChunks; c++) {
@@ -224,7 +231,7 @@ public final class PatchedEncodingEncoder implements EncodingEncoder {
             for (int width = 0; width <= typeBits; width++) {
                 numFit += bitWidthFreq[width];
                 long packedCost = ((long) width * n + 7L) / 8L;
-                long exceptionsCost = ((long) n - numFit) * bytesPerPatch;
+                long exceptionsCost = (n - numFit) * bytesPerPatch;
                 long cost = packedCost + exceptionsCost;
                 if (cost < bestCost) {
                     bestCost = cost;
@@ -318,6 +325,7 @@ public final class PatchedEncodingEncoder implements EncodingEncoder {
         }
     }
 
+    @SuppressWarnings("java:S6218") // internal data carrier; array fields are not compared for equality
     private record PatchedData(
             int nPatches,
             long[] inner,
