@@ -131,11 +131,11 @@ final class FilterCommand {
     private static Comparable<?> parseValue(String raw) {
         try {
             return Long.parseLong(raw);
-        } catch (NumberFormatException ignored) {
+        } catch (NumberFormatException _) {
         }
         try {
             return Double.parseDouble(raw);
-        } catch (NumberFormatException ignored) {
+        } catch (NumberFormatException _) {
         }
         if ("true".equalsIgnoreCase(raw)) {
             return Boolean.TRUE;

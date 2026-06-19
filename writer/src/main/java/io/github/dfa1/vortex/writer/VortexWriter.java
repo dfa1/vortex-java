@@ -223,7 +223,7 @@ public final class VortexWriter implements Closeable {
         }
         try {
             return arrayLength(data);
-        } catch (UnsupportedOperationException e) {
+        } catch (UnsupportedOperationException _) {
             throw new IllegalArgumentException(
                     "column '" + colName + "' has unsupported data type: "
                             + data.getClass().getSimpleName());

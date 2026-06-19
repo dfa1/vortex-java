@@ -219,7 +219,7 @@ class RustWritesJavaReadsIntegrationTest {
     private static void assumeNetworkAvailable() {
         try {
             URI.create("https://vortex-compat-fixtures.s3.amazonaws.com").toURL().openStream().close();
-        } catch (Exception e) {
+        } catch (Exception _) {
             assumeTrue(false, "no network");
         }
     }
