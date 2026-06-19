@@ -65,8 +65,8 @@ public final class TypeRegistry {
                     String fqn = parentFqn + "." + e.name();
                     byFqn.put(fqn, new ResolvedType.Enum(e, fqn, javaPackage));
                 }
-                case Ast.FieldDecl ignored -> { }
-                case Ast.OneOfDecl ignored -> { }
+                case Ast.FieldDecl _ -> { }
+                case Ast.OneOfDecl _ -> { }
             }
         }
     }

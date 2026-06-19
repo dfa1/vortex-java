@@ -235,14 +235,14 @@ public final class CsvImporter {
                 }
                 yield arr;
             }
-            case DType.Bool ignored -> {
+            case DType.Bool _ -> {
                 boolean[] arr = new boolean[n];
                 for (int i = 0; i < n; i++) {
                     arr[i] = Boolean.parseBoolean(safeGet(rows.get(i), colIdx));
                 }
                 yield arr;
             }
-            case DType.Utf8 ignored -> {
+            case DType.Utf8 _ -> {
                 String[] arr = new String[n];
                 for (int i = 0; i < n; i++) {
                     arr[i] = safeGet(rows.get(i), colIdx);

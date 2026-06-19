@@ -179,13 +179,13 @@ public final class VortexInspector {
             case DType.Utf8(var nullable) -> "utf8" + (nullable ? "?" : "");
             case DType.Binary(var nullable) -> "binary" + (nullable ? "?" : "");
             case DType.Bool(var nullable) -> "bool" + (nullable ? "?" : "");
-            case DType.Null ignored -> "null";
+            case DType.Null _ -> "null";
             case DType.Decimal(var p, var s, var nullable) -> "decimal(" + p + "," + s + ")" + (nullable ? "?" : "");
-            case DType.Struct ignored -> "struct";
+            case DType.Struct _ -> "struct";
             case DType.List(var elem, var nullable) -> "list<" + formatDType(elem) + ">" + (nullable ? "?" : "");
             case DType.FixedSizeList(var elem, var size, var nullable) ->
                     "list<" + formatDType(elem) + ">[" + size + "]" + (nullable ? "?" : "");
-            case DType.Extension(var id, var storage, var meta, var nullable) ->
+            case DType.Extension(var id, var _, var _, var nullable) ->
                     "ext<" + id + ">" + (nullable ? "?" : "");
             case DType.Variant(var nullable) -> "variant" + (nullable ? "?" : "");
         };
