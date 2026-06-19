@@ -21,7 +21,7 @@ class DoubleArrayTest {
             ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     private static DoubleArray of(double... values) {
-        return TestArrays.doubles(Arena.ofAuto(), values);
+        return TestArrays.doubles(values);
     }
 
     @Nested

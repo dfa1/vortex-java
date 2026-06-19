@@ -21,7 +21,7 @@ class IntArrayTest {
             ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     private static IntArray of(int... values) {
-        return TestArrays.ints(Arena.ofAuto(), values);
+        return TestArrays.ints(values);
     }
 
     @Nested

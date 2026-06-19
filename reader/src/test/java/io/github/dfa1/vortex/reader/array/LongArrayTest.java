@@ -21,7 +21,7 @@ class LongArrayTest {
             ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     private static LongArray of(long... values) {
-        return TestArrays.longs(Arena.ofAuto(), values);
+        return TestArrays.longs(values);
     }
 
     @Nested
