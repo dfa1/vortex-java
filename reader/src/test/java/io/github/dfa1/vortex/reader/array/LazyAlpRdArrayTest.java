@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Test;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -81,6 +83,35 @@ class LazyAlpRdArrayTest {
                 assertThat(sut.getDouble(2)).isEqualTo(base);
             }
         }
+
+        @Test
+        void forEachAndFoldVisitAllRows() {
+            // Given — three values reconstructed dict-only
+            try (Arena arena = Arena.ofConfined()) {
+                int rightBitWidth = 48;
+                double[] sample = {1.0, 2.0, 4.0};
+                short[] dict = new short[sample.length];
+                long[] rights = new long[sample.length];
+                long rightMask = (1L << rightBitWidth) - 1;
+                short[] codes = new short[sample.length];
+                for (int i = 0; i < sample.length; i++) {
+                    long bits = Double.doubleToRawLongBits(sample[i]);
+                    dict[i] = (short) ((bits >>> rightBitWidth) & 0xFFFF);
+                    rights[i] = bits & rightMask;
+                    codes[i] = (short) i;
+                }
+                var sut = new LazyAlpRdDoubleArray(F64, sample.length, dict, rightBitWidth,
+                        shortArray(arena, codes), longArray(arena, rights), null, new short[0], 0L);
+
+                // When
+                List<Double> seen = new ArrayList<>();
+                sut.forEachDouble(seen::add);
+
+                // Then
+                assertThat(seen).containsExactly(1.0, 2.0, 4.0);
+                assertThat(sut.fold(0.0, Double::sum)).isEqualTo(7.0);
+            }
+        }
     }
 
     @Nested
@@ -107,6 +138,36 @@ class LazyAlpRdArrayTest {
 
                 assertThat(sut.getFloat(0)).isEqualTo(1.5f);
                 assertThat(sut.getFloat(1)).isEqualTo(-2.25f);
+            }
+        }
+
+        @Test
+        void patchOverridesDictAndFoldSums() {
+            // Given — row 1 patched, rows 0/2 dict; also exercises fold + the non-patch lookup
+            try (Arena arena = Arena.ofConfined()) {
+                int rightBitWidth = 16;
+                float base = 1.5f;
+                float patched = -3.0f;
+                int baseBits = Float.floatToRawIntBits(base);
+                int patchedBits = Float.floatToRawIntBits(patched);
+                int rightMask = (1 << rightBitWidth) - 1;
+
+                short[] dict = {(short) ((baseBits >>> rightBitWidth) & 0xFFFF)};
+                ShortArray leftArr = shortArray(arena, (short) 0, (short) 0, (short) 0);
+                IntArray rightArr = intArray(arena,
+                        baseBits & rightMask, patchedBits & rightMask, baseBits & rightMask);
+                Array patchIdx = intArray(arena, 1);
+                short[] patchLeft = {(short) ((patchedBits >>> rightBitWidth) & 0xFFFF)};
+
+                var sut = new LazyAlpRdFloatArray(F32, 3, dict, rightBitWidth,
+                        leftArr, rightArr, patchIdx, patchLeft, 0L);
+
+                // Then
+                assertThat(sut.getFloat(0)).isEqualTo(base);
+                assertThat(sut.getFloat(1)).isEqualTo(patched);
+                assertThat(sut.getFloat(2)).isEqualTo(base);
+                assertThat(sut.fold(0.0, Double::sum))
+                        .isEqualTo((double) base + patched + base);
             }
         }
     }

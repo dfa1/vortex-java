@@ -113,6 +113,29 @@ class LazyAlpDoubleArrayTest {
     }
 
     @Nested
+    class Materialize {
+
+        @Test
+        void decodesAllRows() {
+            // Given
+            LazyAlpDoubleArray sut = of(0.01, 123L, 456L, 789L);
+            ValueLayout.OfDouble leDouble =
+                    ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+
+            // When
+            try (Arena arena = Arena.ofConfined()) {
+                MemorySegment seg = sut.materialize(arena);
+
+                // Then — each materialized row matches the lazy getter
+                for (int i = 0; i < 3; i++) {
+                    assertThat(seg.getAtIndex(leDouble, i)).as("row %d", i)
+                            .isCloseTo(sut.getDouble(i), offset(1e-12));
+                }
+            }
+        }
+    }
+
+    @Nested
     class Metadata {
 
         @Test
