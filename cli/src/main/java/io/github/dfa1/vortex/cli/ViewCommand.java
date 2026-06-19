@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.cli.tui.VortexGridTui;
 import io.github.dfa1.vortex.reader.VortexHandle;
 
 import java.io.IOException;
+import java.util.Optional;
 
 @SuppressWarnings("java:S106")
 final class ViewCommand {
@@ -22,24 +23,27 @@ final class ViewCommand {
             System.err.print("Opening file... ");
             System.err.flush();
             long tOpen = System.nanoTime();
-            VortexHandle handle = CliHandles.openOnWorker(worker, args[1]);
-            if (handle == null) {
+            Optional<VortexHandle> opened = CliHandles.openOnWorker(worker, args[1]);
+            if (opened.isEmpty()) {
                 return ExitStatus.FILE_NOT_FOUND;
             }
-            System.err.println("done (" + (System.nanoTime() - tOpen) / 1_000_000L + " ms)");
+            VortexHandle handle = opened.get();
+            try {
+                System.err.println("done (" + (System.nanoTime() - tOpen) / 1_000_000L + " ms)");
 
-            System.err.print("Indexing chunks... ");
-            System.err.flush();
-            long tIdx = System.nanoTime();
-            try (LazyGridSource source = LazyGridSource.open(handle, worker)) {
-                long ms = (System.nanoTime() - tIdx) / 1_000_000L;
-                System.err.println("done — " + source.totalRows() + " rows × "
-                        + source.columns().size() + " cols (" + ms + " ms)");
-                VortexGridTui.show(args[1], source);
+                System.err.print("Indexing chunks... ");
+                System.err.flush();
+                long tIdx = System.nanoTime();
+                try (LazyGridSource source = LazyGridSource.open(handle, worker)) {
+                    long ms = (System.nanoTime() - tIdx) / 1_000_000L;
+                    System.err.println("done — " + source.totalRows() + " rows × "
+                            + source.columns().size() + " cols (" + ms + " ms)");
+                    VortexGridTui.show(args[1], source);
+                }
+                return ExitStatus.OK;
             } finally {
                 CliHandles.closeOnWorker(worker, handle);
             }
-            return ExitStatus.OK;
         } catch (IOException | RuntimeException | InterruptedException e) {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();

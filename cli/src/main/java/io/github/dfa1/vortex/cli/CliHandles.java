@@ -10,6 +10,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 /// Shared handle plumbing for the interactive subcommands (`view`, `tui`).
@@ -27,10 +28,10 @@ final class CliHandles {
     ///
     /// @param worker the I/O worker that owns the handle's arena
     /// @param target a local path or an `http(s)://` URL
-    /// @return the opened handle, or `null` if the target is missing or malformed
+    /// @return the opened handle, or empty if the target is missing or malformed
     /// @throws InterruptedException if interrupted while waiting on the worker
     /// @throws IOException          if opening the file or URL fails
-    static VortexHandle openOnWorker(IoWorker worker, String target)
+    static Optional<VortexHandle> openOnWorker(IoWorker worker, String target)
             throws InterruptedException, IOException {
         AtomicReference<VortexHandle> handle = new AtomicReference<>();
         AtomicReference<IOException> failure = new AtomicReference<>();
@@ -44,7 +45,7 @@ final class CliHandles {
         if (failure.get() != null) {
             throw failure.get();
         }
-        return handle.get();
+        return Optional.ofNullable(handle.get());
     }
 
     /// Closes `handle` on the worker thread that opened it.

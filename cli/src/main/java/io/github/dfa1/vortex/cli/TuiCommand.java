@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.reader.VortexHandle;
 
 import java.io.IOException;
 import java.io.PrintStream;
+import java.util.Optional;
 
 final class TuiCommand {
 
@@ -19,10 +20,11 @@ final class TuiCommand {
             return ExitStatus.USAGE_ERROR;
         }
         try (IoWorker worker = new IoWorker("vortex-tui-io")) {
-            VortexHandle handle = CliHandles.openOnWorker(worker, args[1]);
-            if (handle == null) {
+            Optional<VortexHandle> opened = CliHandles.openOnWorker(worker, args[1]);
+            if (opened.isEmpty()) {
                 return ExitStatus.FILE_NOT_FOUND;
             }
+            VortexHandle handle = opened.get();
             try {
                 VortexInspectorTui.show(handle, worker, progressBar(System.err));
             } finally {
