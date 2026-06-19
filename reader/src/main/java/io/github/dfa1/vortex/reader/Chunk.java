@@ -102,7 +102,7 @@ public final class Chunk implements AutoCloseable {
     /// this accessor is closed over the spec set.
     ///
     /// @param name       column name as declared in the file's schema
-    /// @param domainType the spec extension's Java domain type (e.g. {@link LocalDate} for
+    /// @param domainType the spec extension's Java domain type (e.g. [LocalDate] for
     ///                   `vortex.date`, {@link Instant} for `vortex.timestamp`)
     /// @param <T>        domain element type
     /// @return decoded values in row order

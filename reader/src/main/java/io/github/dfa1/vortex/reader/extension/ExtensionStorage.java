@@ -20,7 +20,7 @@ public final class ExtensionStorage {
     }
 
     /// Reads a signed integer from any of the integer primitive arrays as `long`.
-    /// Recurses through {@link MaskedArray}; throws on null cells so callers don't silently
+    /// Recurses through [MaskedArray]; throws on null cells so callers don't silently
     /// get garbage for nullable columns.
     ///
     /// @param storage signed-integer storage array
@@ -44,7 +44,7 @@ public final class ExtensionStorage {
         };
     }
 
-    /// Reads the {@link TimeUnit} metadata byte at the buffer's current position;
+    /// Reads the [TimeUnit] metadata byte at the buffer's current position;
     /// throws if the buffer is null or empty.
     ///
     /// @param ext declared extension dtype
@@ -58,7 +58,7 @@ public final class ExtensionStorage {
         return TimeUnit.fromTag(meta.get(meta.position()));
     }
 
-    /// Constructs an {@link Instant} from a signed epoch count in the given unit.
+    /// Constructs an [Instant] from a signed epoch count in the given unit.
     ///
     /// @param raw  epoch count
     /// @param unit time resolution; must not be {@link TimeUnit#Days}
@@ -82,7 +82,7 @@ public final class ExtensionStorage {
         };
     }
 
-    /// Throws {@link IndexOutOfBoundsException} if `i` is outside `[0, length)`.
+    /// Throws [IndexOutOfBoundsException] if `i` is outside `[0, length)`.
     ///
     /// @param i      row index to check
     /// @param length array length

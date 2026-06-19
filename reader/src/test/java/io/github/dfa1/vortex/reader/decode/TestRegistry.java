@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.reader.ReadRegistry;
 
-/// Static factories for {@link ReadRegistry} instances used in decode tests.
+/// Static factories for [ReadRegistry] instances used in decode tests.
 ///
 /// Public so writer/ test trees can reuse via the reader test-jar.
 public final class TestRegistry {
@@ -10,7 +10,7 @@ public final class TestRegistry {
     private TestRegistry() {
     }
 
-    /// Builds a {@link ReadRegistry} containing only the supplied decoders.
+    /// Builds a [ReadRegistry] containing only the supplied decoders.
     ///
     /// @param decoders decoders to register
     /// @return registry instance
@@ -22,7 +22,7 @@ public final class TestRegistry {
         return b.build();
     }
 
-    /// Builds a {@link ReadRegistry} containing the supplied decoder plus a
+    /// Builds a [ReadRegistry] containing the supplied decoder plus a
     /// {@link PrimitiveEncodingDecoder} fallback (so child decodes of primitive segments work).
     ///
     /// @param sut decoder under test

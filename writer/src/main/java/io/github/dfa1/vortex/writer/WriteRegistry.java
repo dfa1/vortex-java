@@ -9,7 +9,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.ServiceLoader;
 
-/// Write-side registry: maps {@link EncodingId} to {@link EncodingEncoder} implementations,
+/// Write-side registry: maps [EncodingId] to [EncodingEncoder] implementations,
 /// and {@link ExtensionId} to {@link ExtensionEncoder} implementations.
 ///
 /// Instances are immutable after construction. Build one via {@link #builder()} or via the
@@ -31,7 +31,7 @@ public final class WriteRegistry {
         this.extensions = Map.copyOf(extensions);
     }
 
-    /// Loads all service-discovered {@link EncodingEncoder} and {@link ExtensionEncoder} implementations.
+    /// Loads all service-discovered [EncodingEncoder] and [ExtensionEncoder] implementations.
     ///
     /// @return an immutable {@link WriteRegistry} populated with all service-loaded entries
     public static WriteRegistry loadAll() {
@@ -40,19 +40,19 @@ public final class WriteRegistry {
 
     /// Creates an empty registry with no encoders or extensions registered.
     ///
-    /// @return a new empty immutable {@link WriteRegistry}
+    /// @return a new empty immutable [WriteRegistry]
     public static WriteRegistry empty() {
         return builder().build();
     }
 
-    /// Returns a new {@link Builder}.
+    /// Returns a new [Builder].
     ///
     /// @return a fresh builder
     public static Builder builder() {
         return new Builder();
     }
 
-    /// Returns the encoder map for use in {@link io.github.dfa1.vortex.writer.encode.EncodeContext}.
+    /// Returns the encoder map for use in [io.github.dfa1.vortex.writer.encode.EncodeContext].
     ///
     /// @return immutable encoder map
     public Map<EncodingId, EncodingEncoder> encoderMap() {
@@ -62,12 +62,12 @@ public final class WriteRegistry {
     /// Returns the registered extension encoder for `extensionId`, or `null` if not registered.
     ///
     /// @param extensionId the extension id to look up
-    /// @return the registered {@link ExtensionEncoder}, or `null`
+    /// @return the registered [ExtensionEncoder], or `null`
     public ExtensionEncoder lookup(ExtensionId extensionId) {
         return extensions.get(extensionId);
     }
 
-    /// Builder for {@link WriteRegistry}.
+    /// Builder for [WriteRegistry].
     ///
     /// Not thread-safe. Build once, use everywhere — the produced {@link WriteRegistry} is immutable.
     public static final class Builder {
@@ -80,7 +80,7 @@ public final class WriteRegistry {
 
         /// Registers an encoder.
         ///
-        /// @param encoder the {@link EncodingEncoder} to register
+        /// @param encoder the [EncodingEncoder] to register
         /// @return this builder, for chaining
         /// @throws VortexException if an encoder for the same id is already registered
         public Builder register(EncodingEncoder encoder) {
@@ -93,7 +93,7 @@ public final class WriteRegistry {
 
         /// Registers an extension encoder.
         ///
-        /// @param extension the {@link ExtensionEncoder} to register
+        /// @param extension the [ExtensionEncoder] to register
         /// @return this builder, for chaining
         /// @throws VortexException if an extension with the same id is already registered
         public Builder register(ExtensionEncoder extension) {
@@ -104,7 +104,7 @@ public final class WriteRegistry {
             return this;
         }
 
-        /// Registers every {@link EncodingEncoder} and {@link ExtensionEncoder} discovered via
+        /// Registers every [EncodingEncoder] and [ExtensionEncoder] discovered via
         /// {@link ServiceLoader}.
         ///
         /// @return this builder, for chaining
@@ -119,7 +119,7 @@ public final class WriteRegistry {
             return this;
         }
 
-        /// Builds an immutable {@link WriteRegistry}.
+        /// Builds an immutable [WriteRegistry].
         ///
         /// @return the immutable registry
         public WriteRegistry build() {

@@ -56,7 +56,7 @@ public enum PType {
                        || this == F16 || this == F32 || this == F64;
     }
 
-    /// Returns the {@link PType} for the given enum ordinal — the integer value the wire format
+    /// Returns the [PType] for the given enum ordinal — the integer value the wire format
     /// uses to identify a physical type.
     ///
     /// Unlike `PType.values()[ordinal]`, this method validates the ordinal against the

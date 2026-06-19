@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.encoding.EncodingId;
 
 /// Read-side decoding interface. Implementations live in the `reader` module and
-/// are discovered via {@link java.util.ServiceLoader}.
+/// are discovered via [java.util.ServiceLoader].
 ///
 /// Register via {@link io.github.dfa1.vortex.reader.ReadRegistry} — implementations
 /// are discoverable via {@link java.util.ServiceLoader}.

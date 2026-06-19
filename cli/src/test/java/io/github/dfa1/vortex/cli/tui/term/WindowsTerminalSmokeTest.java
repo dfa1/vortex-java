@@ -14,7 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 ///
 /// - Class load alone forces every `Linker.downcallHandle` to resolve
 ///   its kernel32 symbol. A missing entry point throws
-///   {@link UnsatisfiedLinkError} during static initialization.
+///   [UnsatisfiedLinkError] during static initialization.
 /// - Bit-flag math for the VT mode toggles is verified directly so a typo
 ///   in a constant fails here, not in a customer's terminal.
 class WindowsTerminalSmokeTest {

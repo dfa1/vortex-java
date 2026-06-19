@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.protogen;
 
-/// A token emitted by {@link Lexer}.
+/// A token emitted by [Lexer].
 ///
 /// @param kind  token kind
 /// @param text  source text — meaningful for {@link Kind#IDENT}, {@link Kind#INT_LITERAL}, {@link Kind#STRING_LITERAL}

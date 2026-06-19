@@ -25,7 +25,7 @@ public sealed interface DType
     boolean nullable();
 
     /// Returns a copy of this type marked nullable. Sugar over
-    /// {@link #withNullable(boolean)} so call sites read as a fluent adjective:
+    /// [#withNullable(boolean)] so call sites read as a fluent adjective:
     /// `DType.i64().asNullable()`.
     ///
     /// @return a new {@link DType} identical to this one but with `nullable = true`
@@ -36,7 +36,7 @@ public sealed interface DType
     /// Returns a copy of this type with the given nullability.
     ///
     /// @param nullable the desired nullability for the returned type
-    /// @return a new {@link DType} identical to this one except for its nullability
+    /// @return a new [DType] identical to this one except for its nullability
     default DType withNullable(boolean nullable) {
         return switch (this) {
             case Null _ -> new Null(nullable);
@@ -59,94 +59,94 @@ public sealed interface DType
     // [#nullable()] for nullable columns. The underlying records are unchanged
     // and remain usable directly (pattern matching, proto serialization, tests).
 
-    /// @return non-nullable {@link Bool}
+    /// @return non-nullable [Bool]
     static Bool bool_() {
         return new Bool(false);
     }
 
-    /// @return non-nullable {@link Utf8}
+    /// @return non-nullable [Utf8]
     static Utf8 utf8() {
         return new Utf8(false);
     }
 
-    /// @return non-nullable {@link Binary}
+    /// @return non-nullable [Binary]
     static Binary binary() {
         return new Binary(false);
     }
 
-    /// @return non-nullable {@link Null}
+    /// @return non-nullable [Null]
     static Null null_() {
         return new Null(false);
     }
 
-    /// @return non-nullable {@link Variant}
+    /// @return non-nullable [Variant]
     static Variant variant() {
         return new Variant(false);
     }
 
-    /// @return non-nullable {@link Primitive} of {@link PType#I8}
+    /// @return non-nullable [Primitive] of [PType#I8]
     static Primitive i8() {
         return new Primitive(PType.I8, false);
     }
 
-    /// @return non-nullable {@link Primitive} of {@link PType#I16}
+    /// @return non-nullable [Primitive] of [PType#I16]
     static Primitive i16() {
         return new Primitive(PType.I16, false);
     }
 
-    /// @return non-nullable {@link Primitive} of {@link PType#I32}
+    /// @return non-nullable [Primitive] of [PType#I32]
     static Primitive i32() {
         return new Primitive(PType.I32, false);
     }
 
-    /// @return non-nullable {@link Primitive} of {@link PType#I64}
+    /// @return non-nullable [Primitive] of [PType#I64]
     static Primitive i64() {
         return new Primitive(PType.I64, false);
     }
 
-    /// @return non-nullable {@link Primitive} of {@link PType#U8}
+    /// @return non-nullable [Primitive] of [PType#U8]
     static Primitive u8() {
         return new Primitive(PType.U8, false);
     }
 
-    /// @return non-nullable {@link Primitive} of {@link PType#U16}
+    /// @return non-nullable [Primitive] of [PType#U16]
     static Primitive u16() {
         return new Primitive(PType.U16, false);
     }
 
-    /// @return non-nullable {@link Primitive} of {@link PType#U32}
+    /// @return non-nullable [Primitive] of [PType#U32]
     static Primitive u32() {
         return new Primitive(PType.U32, false);
     }
 
-    /// @return non-nullable {@link Primitive} of {@link PType#U64}
+    /// @return non-nullable [Primitive] of [PType#U64]
     static Primitive u64() {
         return new Primitive(PType.U64, false);
     }
 
-    /// @return non-nullable {@link Primitive} of {@link PType#F16}
+    /// @return non-nullable [Primitive] of [PType#F16]
     static Primitive f16() {
         return new Primitive(PType.F16, false);
     }
 
-    /// @return non-nullable {@link Primitive} of {@link PType#F32}
+    /// @return non-nullable [Primitive] of [PType#F32]
     static Primitive f32() {
         return new Primitive(PType.F32, false);
     }
 
-    /// @return non-nullable {@link Primitive} of {@link PType#F64}
+    /// @return non-nullable [Primitive] of [PType#F64]
     static Primitive f64() {
         return new Primitive(PType.F64, false);
     }
 
     /// @param precision total number of significant decimal digits
     /// @param scale     number of digits to the right of the decimal point
-    /// @return non-nullable {@link Decimal}
+    /// @return non-nullable [Decimal]
     static Decimal decimal(int precision, int scale) {
         return new Decimal((byte) precision, (byte) scale, false);
     }
 
-    /// Returns a fresh {@link StructBuilder} for assembling a {@link Struct} dtype with
+    /// Returns a fresh [StructBuilder] for assembling a [Struct] dtype with
     /// name+type pairs declared together at the call site.
     ///
     /// ```java
@@ -163,7 +163,7 @@ public sealed interface DType
         return new StructBuilder();
     }
 
-    /// Fluent builder for {@link Struct} dtypes. Use {@link #structBuilder()} to obtain one.
+    /// Fluent builder for [Struct] dtypes. Use [#structBuilder()] to obtain one.
     /// Preserves insertion order and rejects duplicate field names at {@link #build()}.
     final class StructBuilder {
         private final LinkedHashMap<String, DType> fields = new LinkedHashMap<>();
@@ -193,7 +193,7 @@ public sealed interface DType
             return this;
         }
 
-        /// Builds the {@link Struct} dtype.
+        /// Builds the [Struct] dtype.
         ///
         /// @return a new {@link Struct} reflecting every field added so far
         public Struct build() {
@@ -218,7 +218,7 @@ public sealed interface DType
     record Bool(boolean nullable) implements DType {
     }
 
-    /// Primitive numeric logical type backed by a physical {@link PType}.
+    /// Primitive numeric logical type backed by a physical [PType].
     ///
     /// @param ptype    physical primitive type (e.g. I32, F64)
     /// @param nullable whether null values are permitted
@@ -258,7 +258,7 @@ public sealed interface DType
         /// Returns the type of the field with the given name.
         ///
         /// @param name the field name to look up
-        /// @return the {@link DType} of the named field
+        /// @return the [DType] of the named field
         /// @throws IllegalArgumentException if no field with that name exists
         public DType field(String name) {
             int i = fieldNames.indexOf(name);
@@ -304,7 +304,7 @@ public sealed interface DType
         public static final int MAX_METADATA_SIZE = 64 * 1024;
 
         /// @throws VortexException if `metadata` carries more than
-        ///         {@link #MAX_METADATA_SIZE} readable bytes
+        ///         [#MAX_METADATA_SIZE] readable bytes
         public Extension {
             if (metadata != null && metadata.remaining() > MAX_METADATA_SIZE) {
                 throw new VortexException("extension metadata too large: "

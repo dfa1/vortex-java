@@ -83,7 +83,7 @@ public record InspectorTree(
     }
 
     /// Builds an inspector tree without peeking segments — every node starts
-    /// with an empty encoding set and {@link ArrayStats#empty()} stats. The
+    /// with an empty encoding set and [ArrayStats#empty()] stats. The
     /// resulting tree contains only structure derived from the file's footer
     /// and layout, so the call is essentially free on remote handles.
     ///
@@ -132,7 +132,7 @@ public record InspectorTree(
     /// compression, or missing data.
     ///
     /// Callers should cache the result — every call triggers a fresh
-    /// {@link io.github.dfa1.vortex.reader.VortexHandle#rawSegment}, which is a network round-trip on remote handles.
+    /// [io.github.dfa1.vortex.reader.VortexHandle#rawSegment], which is a network round-trip on remote handles.
     ///
     /// @param node   node to resolve
     /// @param handle open file handle
@@ -272,7 +272,7 @@ public record InspectorTree(
     /// statistics decoded from the same FlatBuffer.
     ///
     /// @param encoding resolved encoding id from the array spec table, or `null`
-    /// @param stats    per-array stats, or {@link ArrayStats#empty()} if unknown
+    /// @param stats    per-array stats, or [ArrayStats#empty()] if unknown
     public record Peek(String encoding, ArrayStats stats) {
         /// Sentinel returned for non-Flat nodes, compressed segments, or
         /// segments that don't carry an array root.

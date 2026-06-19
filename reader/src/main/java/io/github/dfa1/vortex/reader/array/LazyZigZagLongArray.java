@@ -8,7 +8,7 @@ import java.lang.foreign.MemorySegment;
 /// Lazy [LongArray] backed by the `vortex.zigzag` encoded `u64` child segment.
 ///
 /// Decode is deferred to element access: `getLong(i) = (u >>> 1) ^ -(u & 1)`.
-/// Returned by {@link io.github.dfa1.vortex.reader.decode.ZigZagEncodingDecoder} when the source
+/// Returned by [io.github.dfa1.vortex.reader.decode.ZigZagEncodingDecoder] when the source
 /// is not a broadcast constant.
 ///
 /// @param dtype   logical I64 type

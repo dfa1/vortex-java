@@ -27,7 +27,7 @@ public enum TimeUnit {
     }
 
     /// Returns the number of this time unit's divisions in one second (e.g. 1_000_000_000 for nanoseconds).
-    /// Throws {@link IllegalArgumentException} for {@link #Days}.
+    /// Throws [IllegalArgumentException] for [#Days].
     ///
     /// @return divisor for converting between this unit and seconds
     public long divisor() {

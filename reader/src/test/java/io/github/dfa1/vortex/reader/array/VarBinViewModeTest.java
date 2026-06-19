@@ -13,7 +13,7 @@ import java.util.ArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// Unit tests for {@link VarBinArray.ViewMode}. Covers inline (≤ 12 byte) views,
+/// Unit tests for [VarBinArray.ViewMode]. Covers inline (≤ 12 byte) views,
 /// referenced views into shared data buffers, length-only reads, and truncate.
 class VarBinViewModeTest {
 

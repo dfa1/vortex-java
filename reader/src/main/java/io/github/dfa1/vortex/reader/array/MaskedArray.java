@@ -7,7 +7,7 @@ import io.github.dfa1.vortex.core.DType;
 /// Invariant: `child` has no actual nulls — nullability is expressed solely via
 /// `validity`. When `validity` is `null` all positions are valid.
 ///
-/// Use {@link #inner()} to access the payload and {@link #isValid(long)} to check validity
+/// Use [#inner()] to access the payload and [#isValid(long)] to check validity
 /// before trusting a value.
 public final class MaskedArray implements Array {
 
@@ -35,7 +35,7 @@ public final class MaskedArray implements Array {
 
     /// Returns the non-nullable payload array wrapped by this masked array.
     ///
-    /// @return the inner payload {@link Array}
+    /// @return the inner payload [Array]
     public Array inner() {
         return child;
     }

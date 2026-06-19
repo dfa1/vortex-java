@@ -23,7 +23,7 @@ import java.util.List;
 /// are outliers (too many patches to be worthwhile).
 public final class PatchedEncodingEncoder implements EncodingEncoder {
 
-    /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor required by [java.util.ServiceLoader].
     public PatchedEncodingEncoder() {
     }
 

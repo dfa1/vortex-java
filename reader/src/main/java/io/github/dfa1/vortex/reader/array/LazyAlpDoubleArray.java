@@ -12,7 +12,7 @@ import java.lang.foreign.MemorySegment;
 /// mirrors the Rust reference (`ALPFloat::decode_single`) — pre-multiplying the two factors
 /// into a single `scale` gives different IEEE rounding for non-trivial `expF`,
 /// breaking round-trip with the encoder's verify step.
-/// Returned by {@link io.github.dfa1.vortex.reader.decode.AlpEncodingDecoder} when the chunk has
+/// Returned by [io.github.dfa1.vortex.reader.decode.AlpEncodingDecoder] when the chunk has
 /// no patches and the source is not a broadcast constant; patched or broadcast chunks fall back
 /// to [MaterializedDoubleArray].
 ///

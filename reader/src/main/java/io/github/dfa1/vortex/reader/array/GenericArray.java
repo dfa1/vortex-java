@@ -55,7 +55,7 @@ public final class GenericArray implements Array {
 
     /// Returns a view of this array clamped to the first `rows` logical rows.
     /// Buffers and children are reused as-is; callers are expected to respect
-    /// {@link #length()} when reading. Used by the scan iterator to honour
+    /// [#length()] when reading. Used by the scan iterator to honour
     /// `ScanOptions.limit` for dtypes that don't have a typed array.
     ///
     /// @param rows desired logical length; must be `<= length()`
@@ -80,7 +80,7 @@ public final class GenericArray implements Array {
     /// Decodes the decimal value at row `i` from a single-buffer layout.
     ///
     /// The buffer holds one little-endian two's-complement integer per row. Element
-    /// width is derived from the buffer's byte size divided by {@link #length()},
+    /// width is derived from the buffer's byte size divided by [#length()],
     /// not from the dtype's precision — `vortex.decimal` writes whatever width
     /// the encoder chose in its `valuesType` metadata, which can be narrower
     /// than the precision alone would allow.
@@ -154,7 +154,7 @@ public final class GenericArray implements Array {
     /// Returns the child array at position `i`.
     ///
     /// @param i child index
-    /// @return the child {@link Array} at index `i`
+    /// @return the child [Array] at index `i`
     public Array child(int i) {
         return children[i];
     }

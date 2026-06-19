@@ -31,7 +31,7 @@ public final class VariantEncodingEncoder implements EncodingEncoder {
 
     private static final DType U64 = new DType.Primitive(PType.U64, false);
 
-    /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor required by [java.util.ServiceLoader].
     public VariantEncodingEncoder() {
     }
 

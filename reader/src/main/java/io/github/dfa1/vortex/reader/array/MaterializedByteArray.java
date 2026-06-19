@@ -19,7 +19,7 @@ public final class MaterializedByteArray implements ByteArray {
 
     /// Constructs a `MaterializedByteArray` backed by the given buffer.
     ///
-    /// @param dtype  logical type, must be a {@link io.github.dfa1.vortex.core.DType.Primitive} with ptype I8 or U8
+    /// @param dtype  logical type, must be a [io.github.dfa1.vortex.core.DType.Primitive] with ptype I8 or U8
     /// @param length number of logical elements
     /// @param buffer raw byte data (one byte per element)
     public MaterializedByteArray(DType dtype, long length, MemorySegment buffer) {

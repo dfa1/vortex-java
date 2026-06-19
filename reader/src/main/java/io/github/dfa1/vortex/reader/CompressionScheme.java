@@ -21,7 +21,7 @@ public enum CompressionScheme {
     /// Returns the enum constant matching the given numeric code.
     ///
     /// @param code numeric compression code from the file postscript
-    /// @return the matching {@link CompressionScheme}
+    /// @return the matching [CompressionScheme]
     /// @throws IllegalArgumentException if `code` does not correspond to any known scheme
     public static CompressionScheme of(int code) {
         return switch (code) {

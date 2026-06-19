@@ -5,7 +5,7 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
 
-/// Stateful cursor over a {@link MemorySegment} that decodes proto3 wire-format primitives.
+/// Stateful cursor over a [MemorySegment] that decodes proto3 wire-format primitives.
 /// Generated record types call into this from their {@code decode(...)} static factories.
 /// Package-private — generated code lives in the same package.
 final class ProtoReader {
@@ -35,13 +35,13 @@ final class ProtoReader {
         return pos;
     }
 
-    /// Reads an unsigned varint into an {@code int}. Up to 5 bytes.
+    /// Reads an unsigned varint into an `int`. Up to 5 bytes.
     int readVarint32() throws IOException {
         long v = readVarint64();
         return (int) v;
     }
 
-    /// Reads an unsigned varint into a {@code long}. Up to 10 bytes.
+    /// Reads an unsigned varint into a `long`. Up to 10 bytes.
     long readVarint64() throws IOException {
         long result = 0;
         int shift = 0;
@@ -59,7 +59,7 @@ final class ProtoReader {
         throw new IOException("varint overflow at " + pos);
     }
 
-    /// Reads a zigzag-encoded signed varint into a {@code long}.
+    /// Reads a zigzag-encoded signed varint into a `long`.
     long readSint64() throws IOException {
         long n = readVarint64();
         return (n >>> 1) ^ -(n & 1);
@@ -107,7 +107,7 @@ final class ProtoReader {
         return new String(bytes, StandardCharsets.UTF_8);
     }
 
-    /// Reads a length-delimited byte sequence into a fresh {@code byte[]}.
+    /// Reads a length-delimited byte sequence into a fresh `byte[]`.
     /// Use {@link #readLenDelimSegment()} for zero-copy access when the consumer can hold a segment slice.
     byte[] readBytes() throws IOException {
         int len = readVarint32();
@@ -155,7 +155,7 @@ final class ProtoReader {
         }
     }
 
-    /// Consumes a packed-repeated payload, invoking {@code consumer.accept(this)} for each element.
+    /// Consumes a packed-repeated payload, invoking `consumer.accept(this)` for each element.
     /// The cursor advances over each element; loop ends when the packed region is exhausted.
     void readPacked(int len, PackedElementReader consumer) throws IOException {
         long packedEnd = pos + len;

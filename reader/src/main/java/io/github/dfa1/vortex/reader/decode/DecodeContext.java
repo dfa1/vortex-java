@@ -9,7 +9,7 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
 import java.nio.ByteBuffer;
 
-/// Decoding context passed to each {@link EncodingDecoder}.
+/// Decoding context passed to each [EncodingDecoder].
 ///
 /// Buffers are {@link MemorySegment} slices materialized from the file's segment table;
 /// children are decoded recursively via {@link #decodeChild(int)}.
@@ -35,7 +35,7 @@ public record DecodeContext(
     /// Recursively decode child `i` using this context's dtype and row count.
     ///
     /// @param i zero-based child index within this node's children array
-    /// @return the decoded {@link Array} for child `i`
+    /// @return the decoded [Array] for child `i`
     public Array decodeChild(int i) {
         ArrayNode child = node.children()[i];
         var childCtx = new DecodeContext(child, dtype, rowCount, segmentBuffers, registry, arena);
@@ -50,7 +50,7 @@ public record DecodeContext(
     /// @param i        zero-based child index within this node's children array
     /// @param dtype    logical type to assign to the child context
     /// @param rowCount number of logical rows for the child
-    /// @return the decoded {@link Array} for child `i`
+    /// @return the decoded [Array] for child `i`
     public Array decodeChild(int i, DType dtype, long rowCount) {
         ArrayNode child = node.children()[i];
         var childCtx = new DecodeContext(child, dtype, rowCount, segmentBuffers, registry, arena);
@@ -60,7 +60,7 @@ public record DecodeContext(
     /// Recursively decode child `i` and return its primary backing segment.
     ///
     /// @param i zero-based child index within this node's children array
-    /// @return the primary {@link MemorySegment} of the decoded child
+    /// @return the primary [MemorySegment] of the decoded child
     public MemorySegment decodeChildSegment(int i) {
         ArrayNode child = node.children()[i];
         var childCtx = new DecodeContext(child, dtype, rowCount, segmentBuffers, registry, arena);
@@ -72,7 +72,7 @@ public record DecodeContext(
     /// @param i        zero-based child index within this node's children array
     /// @param dtype    logical type to assign to the child context
     /// @param rowCount number of logical rows for the child
-    /// @return the primary {@link MemorySegment} of the decoded child
+    /// @return the primary [MemorySegment] of the decoded child
     public MemorySegment decodeChildSegment(int i, DType dtype, long rowCount) {
         ArrayNode child = node.children()[i];
         var childCtx = new DecodeContext(child, dtype, rowCount, segmentBuffers, registry, arena);
@@ -83,7 +83,7 @@ public record DecodeContext(
     /// variants from this context's arena.
     ///
     /// Use when a decoder already holds a decoded child — e.g. after unwrapping a
-    /// {@link io.github.dfa1.vortex.reader.array.MaskedArray} for its validity — and needs the
+    /// [io.github.dfa1.vortex.reader.array.MaskedArray] for its validity — and needs the
     /// raw buffer for a bulk read, rather than re-decoding via [#decodeChildSegment(int)].
     ///
     /// @param arr the decoded array to materialise
@@ -95,14 +95,14 @@ public record DecodeContext(
     /// Returns the buffer at position `i` in this node's bufferIndices.
     ///
     /// @param i zero-based index into this node's `bufferIndices` array
-    /// @return the {@link MemorySegment} for the referenced segment buffer
+    /// @return the [MemorySegment] for the referenced segment buffer
     public MemorySegment buffer(int i) {
         return segmentBuffers[node.bufferIndices()[i]];
     }
 
     /// Returns the encoding-specific metadata bytes for this node, or `null` if absent.
     ///
-    /// @return the metadata {@link ByteBuffer}, or `null`
+    /// @return the metadata [ByteBuffer], or `null`
     public ByteBuffer metadata() {
         return node.metadata();
     }

@@ -7,7 +7,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/// Multi-chunk {@link BoolArray} record. ADR 0012 shape.
+/// Multi-chunk [BoolArray] record. ADR 0012 shape.
 ///
 /// Bit-packed boolean columns store one bit per row across the children's
 /// segments; this record dispatches each scalar read to the chunk that
@@ -20,7 +20,7 @@ import java.util.List;
 @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record ChunkedBoolArray(DType dtype, long length, BoolArray[] children, long[] offsets) implements BoolArray {
 
-    /// Builds a {@link ChunkedBoolArray}.
+    /// Builds a [ChunkedBoolArray].
     ///
     /// @param dtype     logical element type
     /// @param totalRows expected total row count

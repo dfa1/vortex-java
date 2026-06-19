@@ -21,7 +21,7 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
     private static final io.github.dfa1.vortex.proto.PType I64_PROTO =
             io.github.dfa1.vortex.proto.PType.fromValue(PType.I64.ordinal());
 
-    /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor required by [java.util.ServiceLoader].
     public DateTimePartsEncodingEncoder() {
     }
 

@@ -25,7 +25,7 @@ public final class AlpRdEncodingDecoder implements EncodingDecoder {
     private static final DType U32_DTYPE = new DType.Primitive(PType.U32, false);
     private static final DType U64_DTYPE = new DType.Primitive(PType.U64, false);
 
-    /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor required by [java.util.ServiceLoader].
     public AlpRdEncodingDecoder() {
     }
 

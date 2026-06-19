@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.core.VortexException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 
-/// Little-endian bit reader over a {@link MemorySegment}.
+/// Little-endian bit reader over a [MemorySegment].
 ///
 /// Bits are packed LSB-first within each byte (pcodec wire format convention).
 /// Bit 0 of the stream is the LSB of byte 0; bit 8 is the LSB of byte 1.
@@ -62,7 +62,7 @@ public final class LeBitReader {
         }
     }
 
-    /// Current byte offset (only meaningful after {@link #alignToByte()}).
+    /// Current byte offset (only meaningful after [#alignToByte()]).
     ///
     /// @return current stream position in bytes
     public long byteOffset() {

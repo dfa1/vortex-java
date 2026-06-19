@@ -19,7 +19,7 @@ import java.nio.ByteBuffer;
 /// Read-only decoder for `fastlanes.for` (Frame of Reference).
 public final class FrameOfReferenceEncodingDecoder implements EncodingDecoder {
 
-    /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor required by [java.util.ServiceLoader].
     public FrameOfReferenceEncodingDecoder() {
     }
 

@@ -9,7 +9,7 @@ import java.math.BigDecimal;
 ///
 /// With `lower_part_count == 0` (the only shape this codebase currently
 /// emits or accepts) the encoding stores its mantissa as a single signed-integer
-/// child column, paired with the parent's {@link DType.Decimal} precision and
+/// child column, paired with the parent's [DType.Decimal] precision and
 /// scale. {@link #getDecimal(long)} reads one cell from the child via
 /// {@link DecimalBytePartsArrays#readMantissa(Array, long)} and combines it with
 /// the dtype scale to produce a {@link BigDecimal} on demand — no buffer
@@ -20,7 +20,7 @@ import java.math.BigDecimal;
 /// @param msp    child array holding the most-significant integer part of the mantissa
 public record LazyDecimalBytePartsArray(DType dtype, long length, Array msp) implements DecimalArray {
 
-    /// Reads cell `i` as a {@link BigDecimal} with the parent dtype's scale.
+    /// Reads cell `i` as a [BigDecimal] with the parent dtype's scale.
     ///
     /// @param i row index, `0 <= i < length()`
     /// @return decoded `BigDecimal`

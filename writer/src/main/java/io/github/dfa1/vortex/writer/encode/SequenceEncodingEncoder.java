@@ -13,7 +13,7 @@ import java.util.List;
 /// Write-only encoder for `vortex.sequence` — arithmetic sequences as (base, multiplier).
 public final class SequenceEncodingEncoder implements EncodingEncoder {
 
-    /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor required by [java.util.ServiceLoader].
     public SequenceEncodingEncoder() {
     }
 

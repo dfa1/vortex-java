@@ -52,7 +52,7 @@ import static org.assertj.core.data.Percentage.withPercentage;
 
 /// Cross-decoder correctness: downloads each S3 fixture once, then compares row counts,
 /// numeric column sums, and string byte-length sums from the Rust reader and the
-/// Java {@link VortexReader}.
+/// Java [VortexReader].
 ///
 /// Both readers decode the same local bytes — no auth, no network dependency during
 /// decode. A mismatch in any column value points to a decoding bug in the Java reader.

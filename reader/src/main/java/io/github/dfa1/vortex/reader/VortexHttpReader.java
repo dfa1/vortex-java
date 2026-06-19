@@ -68,7 +68,7 @@ public final class VortexHttpReader implements VortexHandle {
         return open(uri, registry, CLIENT);
     }
 
-    /// Opens a remote Vortex file using a caller-supplied {@link HttpClient}.
+    /// Opens a remote Vortex file using a caller-supplied [HttpClient].
     ///
     /// Use this overload when the default shared client is unsuitable — e.g. to configure
     /// a proxy, custom TLS context, or per-request timeout.
@@ -256,7 +256,7 @@ public final class VortexHttpReader implements VortexHandle {
     }
 
     /// Fetches the bytes of the given segment spec via HTTP Range.
-    /// Returns an off-heap {@link MemorySegment} tied to this reader's {@link Arena}.
+    /// Returns an off-heap [MemorySegment] tied to this reader's [Arena].
     ///
     /// @param spec the segment to fetch
     /// @return a read-only {@link MemorySegment} containing the fetched bytes

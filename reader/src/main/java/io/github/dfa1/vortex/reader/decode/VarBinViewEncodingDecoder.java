@@ -11,7 +11,7 @@ import java.lang.foreign.MemorySegment;
 /// Read-only decoder for `vortex.varbinview` (Apache Arrow StringView/BinaryView).
 public final class VarBinViewEncodingDecoder implements EncodingDecoder {
 
-    /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor required by [java.util.ServiceLoader].
     public VarBinViewEncodingDecoder() {
     }
 

@@ -61,7 +61,7 @@ public final class VortexInspectorTui {
     }
 
     /// Variant that dispatches every `handle` I/O call onto the supplied
-    /// {@link IoWorker}. Required when the handle was opened on a different
+    /// [IoWorker]. Required when the handle was opened on a different
     /// thread (Vortex readers use a confined {@link java.lang.foreign.Arena},
     /// so cross-thread access throws `WrongThreadException`).
     ///

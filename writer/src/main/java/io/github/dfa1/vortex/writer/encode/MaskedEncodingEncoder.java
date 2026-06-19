@@ -14,10 +14,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /// Write-only encoder for `vortex.masked`. Wraps the payload encode in a values + validity
-/// pair driven by a {@link NullableData} carrier.
+/// pair driven by a [NullableData] carrier.
 public final class MaskedEncodingEncoder implements EncodingEncoder {
 
-    /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor required by [java.util.ServiceLoader].
     public MaskedEncodingEncoder() {
     }
 

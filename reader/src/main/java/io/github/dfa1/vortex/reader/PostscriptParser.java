@@ -26,7 +26,7 @@ final class PostscriptParser {
     /// Hard cap on layout-tree recursion depth. Real-world layouts are typically four levels
     /// (Struct → Zoned → Chunked → Flat); 64 is well past any expected schema and prevents
     /// adversarial inputs — deeply nested trees or self-referential FlatBuffer cycles — from
-    /// blowing the JVM stack during {@link #convertLayout(io.github.dfa1.vortex.fbs.Layout, List, int)}.
+    /// blowing the JVM stack during [#convertLayout(io.github.dfa1.vortex.fbs.Layout, List, int)].
     static final int MAX_LAYOUT_DEPTH = 64;
 
     /// Hard cap on per-layout metadata size. The FlatBuffer runtime returns an unbounded slice
@@ -68,7 +68,7 @@ final class PostscriptParser {
         return parsed;
     }
 
-    /// Rejects {@link SegmentSpec} entries whose declared range is not entirely contained in the
+    /// Rejects [SegmentSpec] entries whose declared range is not entirely contained in the
     /// memory-mapped file. Without this check, every scan-time `fileSegment.asSlice(offset,
     /// length)` on these specs would throw [IndexOutOfBoundsException], breaking the
     /// "malformed input → [VortexException]" contract.

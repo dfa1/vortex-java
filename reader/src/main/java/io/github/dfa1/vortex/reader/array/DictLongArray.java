@@ -6,7 +6,7 @@ import io.github.dfa1.vortex.core.VortexException;
 import java.util.function.LongBinaryOperator;
 import java.util.function.LongConsumer;
 
-/// Dict-encoded {@link LongArray} view. ADR 0012 shape.
+/// Dict-encoded [LongArray] view. ADR 0012 shape.
 ///
 /// Stores `values` (the dictionary pool) and `codes` (one index per
 /// row into `values`). Scalar access resolves on demand:
@@ -27,7 +27,7 @@ import java.util.function.LongConsumer;
 ///               {@link ByteArray}, {@link ShortArray}, {@link IntArray}, {@link LongArray}
 public record DictLongArray(DType dtype, long length, LongArray values, Array codes) implements LongArray {
 
-    /// Builds a {@link DictLongArray}, validating that `codes` is one of the
+    /// Builds a [DictLongArray], validating that `codes` is one of the
     /// four narrow-int code array types and that its length matches `length`.
     ///
     /// @param dtype  logical element type

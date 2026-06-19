@@ -9,7 +9,7 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.util.List;
 
-/// Utilities for wrapping encode output into a {@link DecodeContext} for round-trip tests.
+/// Utilities for wrapping encode output into a [DecodeContext] for round-trip tests.
 ///
 /// Public so writer/ test trees can reuse via the reader test-jar.
 public final class DecodeTestHelper {
@@ -17,7 +17,7 @@ public final class DecodeTestHelper {
     private DecodeTestHelper() {
     }
 
-    /// Wraps a writer's {@link EncodeResult} into a {@link DecodeContext} for round-trip assertions.
+    /// Wraps a writer's [EncodeResult] into a [DecodeContext] for round-trip assertions.
     ///
     /// @param result   writer output
     /// @param rowCount logical row count

@@ -30,7 +30,7 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
     // include drift-triggering values, letting the search penalise such combinations correctly.
     private static final int SAMPLE_SIZE = 512;
 
-    /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor required by [java.util.ServiceLoader].
     public AlpEncodingEncoder() {
     }
 

@@ -20,7 +20,7 @@ import java.util.List;
 public final class BitpackedEncodingEncoder implements EncodingEncoder {
     private static final int[] FL_ORDER = {0, 4, 2, 6, 1, 5, 3, 7};
 
-    /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor required by [java.util.ServiceLoader].
     public BitpackedEncodingEncoder() {
     }
 

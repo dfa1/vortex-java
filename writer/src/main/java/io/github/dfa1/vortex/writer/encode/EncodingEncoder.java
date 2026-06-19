@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.core.DType;
 
 /// Write-side surface of an encoding. Exposes only the metadata required to pick an
-/// encoder for a dtype and the {@link #encode(DType, Object, EncodeContext)} entry
+/// encoder for a dtype and the [#encode(DType, Object, EncodeContext)] entry
 /// point itself.
 ///
 /// Encoder implementations live in the `writer` module and are registered via
@@ -28,7 +28,7 @@ public interface EncodingEncoder {
     EncodeResult encode(DType dtype, Object data, EncodeContext ctx);
 
     /// Cascade-aware encode: returns a partial step with open child slots.
-    /// Default wraps the terminal {@link #encode} result; override to expose children.
+    /// Default wraps the terminal [#encode] result; override to expose children.
     ///
     /// @param dtype the logical type of the data
     /// @param data  the data to encode
@@ -39,7 +39,7 @@ public interface EncodingEncoder {
     }
 
     /// Stats this encoder needs from the cascade compressor's single-pass scan to evaluate
-    /// {@link #expectedRatio}. Returned options are merged across all eligible encoders so
+    /// [#expectedRatio]. Returned options are merged across all eligible encoders so
     /// one scan satisfies every consumer.
     ///
     /// @return stats requested for cascade selection; default is no stats

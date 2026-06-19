@@ -7,7 +7,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
-/// Reconstructs the per-zone statistics-table {@link DType} for a
+/// Reconstructs the per-zone statistics-table [DType] for a
 /// `vortex.stats` (Zoned) layout.
 ///
 /// The shape is sourced from the Rust reference implementation:
@@ -31,7 +31,7 @@ import java.util.List;
 /// the inspector degrades to "no schema" rather than failing.
 public final class ZonedStatsSchema {
 
-    /// Ordinal positions of {@link Stat} in the Rust enum — kept stable across
+    /// Ordinal positions of [Stat] in the Rust enum — kept stable across
     /// Vortex versions so the bitset can be decoded without per-version logic.
     public enum Stat {
         /// Stat ordinal 0.
@@ -53,9 +53,9 @@ public final class ZonedStatsSchema {
         /// Stat ordinal 8.
         NAN_COUNT("nan_count");
 
-        /// Trailing struct-field name added next to {@link #MAX} for truncated max indicators.
+        /// Trailing struct-field name added next to [#MAX] for truncated max indicators.
         public static final String MAX_IS_TRUNCATED = "max_is_truncated";
-        /// Trailing struct-field name added next to {@link #MIN} for truncated min indicators.
+        /// Trailing struct-field name added next to [#MIN] for truncated min indicators.
         public static final String MIN_IS_TRUNCATED = "min_is_truncated";
 
         private final String fieldName;
@@ -90,7 +90,7 @@ public final class ZonedStatsSchema {
 
     /// Returns the stats present in the layout metadata bitset, in ordinal order.
     ///
-    /// Unknown bits (set at an index past {@link Stat#values()}'s length, which
+    /// Unknown bits (set at an index past [Stat#values()]'s length, which
     /// would mean a newer Vortex writer) are silently skipped — matching the Rust
     /// reader's forward-compatibility behaviour.
     ///
@@ -120,7 +120,7 @@ public final class ZonedStatsSchema {
     /// Reconstructs the per-zone stats-table dtype for the given column dtype
     /// and metadata.
     ///
-    /// The result is a {@link io.github.dfa1.vortex.core.DType.Struct} mirroring
+    /// The result is a [io.github.dfa1.vortex.core.DType.Struct] mirroring
     /// the order produced by Rust's `stats_table_dtype`: for every present stat
     /// in ordinal order, append a `(name, nullable dtype)` field; Max/Min each
     /// add a trailing `_is_truncated` Bool (non-nullable) flag.

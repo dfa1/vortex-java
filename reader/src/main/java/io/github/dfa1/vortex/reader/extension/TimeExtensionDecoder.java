@@ -14,13 +14,13 @@ import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 
-/// `vortex.time` — sub-day count in the {@link TimeUnit} recorded in the metadata byte.
+/// `vortex.time` — sub-day count in the [TimeUnit] recorded in the metadata byte.
 public final class TimeExtensionDecoder implements ExtensionDecoder {
 
     /// Singleton instance.
     public static final TimeExtensionDecoder INSTANCE = new TimeExtensionDecoder();
 
-    /// Public no-arg constructor for {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor for [java.util.ServiceLoader].
     /// Prefer the {@link #INSTANCE} singleton in application code.
     public TimeExtensionDecoder() {
     }
@@ -48,7 +48,7 @@ public final class TimeExtensionDecoder implements ExtensionDecoder {
 
     /// Decodes the time-of-day cell at row `i`.
     ///
-    /// @param ext     declared extension dtype carrying the {@link TimeUnit} byte
+    /// @param ext     declared extension dtype carrying the [TimeUnit] byte
     /// @param storage signed-integer storage (I32 for s/ms, I64 for μs/ns)
     /// @param i       row index, `0 <= i < storage.length()`
     /// @return decoded local time
@@ -65,7 +65,7 @@ public final class TimeExtensionDecoder implements ExtensionDecoder {
         return LocalTime.ofNanoOfDay(nanos);
     }
 
-    /// Decodes every row of `storage` into a list of times. {@link MaskedArray}
+    /// Decodes every row of `storage` into a list of times. [MaskedArray]
     /// storage yields `null` at invalid positions instead of throwing.
     ///
     /// @param ext     declared extension dtype carrying the unit

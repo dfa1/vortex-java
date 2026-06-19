@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.proto;
 
 /// Proto3 wire-type constants.
-/// Each field on the wire is preceded by a tag varint encoding {@code (fieldNumber << 3) | wireType}.
+/// Each field on the wire is preceded by a tag varint encoding `(fieldNumber << 3) | wireType`.
 final class WireType {
 
     static final int VARINT = 0;

@@ -8,7 +8,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.DoubleBinaryOperator;
 
-/// Multi-chunk {@link FloatArray} record. ADR 0012 shape.
+/// Multi-chunk [FloatArray] record. ADR 0012 shape.
 ///
 /// @param dtype    logical element type
 /// @param length   total logical row count
@@ -17,7 +17,7 @@ import java.util.function.DoubleBinaryOperator;
 @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record ChunkedFloatArray(DType dtype, long length, FloatArray[] children, long[] offsets) implements FloatArray {
 
-    /// Builds a {@link ChunkedFloatArray}.
+    /// Builds a [ChunkedFloatArray].
     ///
     /// @param dtype     logical element type
     /// @param totalRows expected total row count

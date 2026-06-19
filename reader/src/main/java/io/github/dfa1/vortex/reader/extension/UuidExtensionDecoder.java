@@ -22,7 +22,7 @@ public final class UuidExtensionDecoder implements ExtensionDecoder {
     /// Singleton instance.
     public static final UuidExtensionDecoder INSTANCE = new UuidExtensionDecoder();
 
-    /// Public no-arg constructor for {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor for [java.util.ServiceLoader].
     /// Prefer the {@link #INSTANCE} singleton in application code.
     public UuidExtensionDecoder() {
     }
@@ -48,7 +48,7 @@ public final class UuidExtensionDecoder implements ExtensionDecoder {
     ///
     /// @param storage UUID storage array
     /// @param i       row index, `0 <= i < storage.length()`
-    /// @return decoded {@link UUID}
+    /// @return decoded [UUID]
     /// @throws VortexException if storage isn't a `FixedSizeListArray<ByteArray>` of size 16
     public UUID decode(Array storage, long i) {
         ExtensionStorage.checkBounds(i, storage.length());
@@ -81,7 +81,7 @@ public final class UuidExtensionDecoder implements ExtensionDecoder {
         return new UUID(msb, lsb);
     }
 
-    /// Decodes every row of `storage` into a list of UUIDs. {@link MaskedArray}
+    /// Decodes every row of `storage` into a list of UUIDs. [MaskedArray]
     /// storage yields `null` at invalid positions instead of throwing.
     ///
     /// @param storage UUID storage array (optionally wrapped in `MaskedArray`)

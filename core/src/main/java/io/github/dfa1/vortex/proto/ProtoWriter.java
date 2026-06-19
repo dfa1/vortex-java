@@ -4,7 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 /// Growing-buffer writer for proto3 wire-format payloads.
-/// Generated record types call into this from their {@code encode()} methods.
+/// Generated record types call into this from their `encode()` methods.
 /// Package-private — generated code lives in the same package.
 final class ProtoWriter {
 
@@ -92,7 +92,7 @@ final class ProtoWriter {
     }
 
     /// Reserves space for a length-delimited region whose payload size is unknown until written.
-    /// Returns a mark to pass back to {@link #endLenDelim(int)}; the caller writes the payload
+    /// Returns a mark to pass back to [#endLenDelim(int)]; the caller writes the payload
     /// in between. Avoids the alloc/copy round-trip of writing into a temporary {@code ProtoWriter}.
     ///
     /// Reserves the worst-case 5 bytes for a varint32 length; {@link #endLenDelim} backpatches
@@ -104,7 +104,7 @@ final class ProtoWriter {
         return mark;
     }
 
-    /// Finalises a length-delimited region opened by {@link #beginLenDelim()}.
+    /// Finalises a length-delimited region opened by [#beginLenDelim()].
     /// Writes the payload length as a varint at the reserved offset and shifts the payload
     /// left if the varint is shorter than 5 bytes.
     void endLenDelim(int mark) {

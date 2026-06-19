@@ -4,7 +4,7 @@ package io.github.dfa1.vortex.reader.array;
 /// [Array] for F16 (IEEE 754 half-precision) columns.
 ///
 /// Wire format: little-endian shorts (2 bytes/element). Element access widens
-/// to `float` via {@link Float#float16ToFloat}. The default impl is
+/// to `float` via [Float#float16ToFloat]. The default impl is
 /// [MaterializedFloat16Array], a buffer-backed record returned when an
 /// encoding decoder either materialises values eagerly or has no lazy
 /// variant of its own.

@@ -30,7 +30,7 @@ public final class Ast {
     public record MessageDecl(String name, List<MessageMember> members) implements TopDecl, MessageMember {
     }
 
-    /// A member of a {@link MessageDecl}.
+    /// A member of a [MessageDecl].
     public sealed interface MessageMember permits FieldDecl, OneOfDecl, MessageDecl, EnumDecl {
     }
 

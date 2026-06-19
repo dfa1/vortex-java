@@ -7,7 +7,7 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
 import java.util.Optional;
 
-/// Internal materialization engine: turns any {@link Array} into its primary
+/// Internal materialization engine: turns any [Array] into its primary
 /// {@link MemorySegment}, allocating from a caller-supplied arena for lazy variants.
 ///
 /// If `arr` is a {@link MaskedArray}, the inner (data) segment is returned;
@@ -64,7 +64,7 @@ public final class ArraySegments {
     /// fresh segment allocated from `arena`.
     ///
     /// Use this overload when the caller already holds a chunk-scoped allocator (e.g.
-    /// {@link io.github.dfa1.vortex.reader.ReadRegistry#decodeAsSegment}) so lazy array types
+    /// [io.github.dfa1.vortex.reader.ReadRegistry#decodeAsSegment]) so lazy array types
     /// do not need to carry the arena as a record component.
     ///
     /// @param arr   the array whose segment is needed

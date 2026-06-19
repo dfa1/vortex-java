@@ -21,7 +21,7 @@ import java.nio.ByteBuffer;
 /// Read-only decoder for `vortex.patched`.
 public final class PatchedEncodingDecoder implements EncodingDecoder {
 
-    /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor required by [java.util.ServiceLoader].
     public PatchedEncodingDecoder() {
     }
 

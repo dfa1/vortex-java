@@ -10,7 +10,7 @@ import io.github.dfa1.vortex.encoding.EncodingId;
 /// Read-only decoder for `vortex.masked` — payload child + optional validity bitmap child.
 public final class MaskedEncodingDecoder implements EncodingDecoder {
 
-    /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor required by [java.util.ServiceLoader].
     public MaskedEncodingDecoder() {
     }
 

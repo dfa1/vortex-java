@@ -6,7 +6,7 @@ import io.github.dfa1.vortex.core.VortexException;
 import java.util.function.DoubleBinaryOperator;
 import java.util.function.DoubleConsumer;
 
-/// Dict-encoded {@link DoubleArray} view. ADR 0012 shape.
+/// Dict-encoded [DoubleArray] view. ADR 0012 shape.
 ///
 /// Stores `values` (the dictionary pool) and `codes` (one index per
 /// row into `values`). Scalar access resolves on demand:
@@ -24,7 +24,7 @@ import java.util.function.DoubleConsumer;
 ///               {@link ByteArray}, {@link ShortArray}, {@link IntArray}, {@link LongArray}
 public record DictDoubleArray(DType dtype, long length, DoubleArray values, Array codes) implements DoubleArray {
 
-    /// Builds a {@link DictDoubleArray}, validating that `codes` is one of the
+    /// Builds a [DictDoubleArray], validating that `codes` is one of the
     /// four narrow-int code array types and that its length matches `length`.
     ///
     /// @param dtype  logical element type

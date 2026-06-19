@@ -22,7 +22,7 @@ public record EncodeNode(
     ///
     /// @param encodingId  the encoding identifier for this leaf node
     /// @param bufferIndex index into the flat buffer list for the data buffer
-    /// @return a leaf {@link EncodeNode} referencing the given buffer
+    /// @return a leaf [EncodeNode] referencing the given buffer
     public static EncodeNode leaf(EncodingId encodingId, int bufferIndex) {
         return new EncodeNode(encodingId, null, new EncodeNode[0], new int[]{bufferIndex});
     }
@@ -31,7 +31,7 @@ public record EncodeNode(
     ///
     /// @param node   the root node whose buffer indices to remap
     /// @param offset the value to add to every buffer index in the subtree
-    /// @return a new {@link EncodeNode} tree with all buffer indices shifted by `offset`
+    /// @return a new [EncodeNode] tree with all buffer indices shifted by `offset`
     public static EncodeNode remapBufferIndices(EncodeNode node, int offset) {
         if (offset == 0) {
             return node;

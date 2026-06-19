@@ -4,7 +4,7 @@ import java.util.List;
 
 /// Input data for encoding a chunked array.
 /// Each element of `chunks` is the raw data for one chunk, in the same format
-/// the inner encoding expects (e.g. `long[]` for I64, {@link StructData} for Struct).
+/// the inner encoding expects (e.g. `long[]` for I64, [StructData] for Struct).
 /// `chunkLengths[i]` is the row count of `chunks.get(i)`.
 ///
 /// @param chunks       list of raw chunk data in the format the inner encoding expects

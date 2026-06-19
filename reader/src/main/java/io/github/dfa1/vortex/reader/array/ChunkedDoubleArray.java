@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.function.DoubleBinaryOperator;
 import java.util.function.DoubleConsumer;
 
-/// Multi-chunk {@link DoubleArray} view; record per ADR 0012 with stateless
+/// Multi-chunk [DoubleArray] view; record per ADR 0012 with stateless
 /// {@link ChunkedLongArray#findChunk(long[], long)} dispatch.
 ///
 /// @param dtype    logical element type
@@ -19,7 +19,7 @@ import java.util.function.DoubleConsumer;
 @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record ChunkedDoubleArray(DType dtype, long length, DoubleArray[] children, long[] offsets) implements DoubleArray {
 
-    /// Builds a {@link ChunkedDoubleArray}. Flattens nested chunked arrays;
+    /// Builds a [ChunkedDoubleArray]. Flattens nested chunked arrays;
     /// unwraps {@link MaskedArray} chunks.
     ///
     /// @param dtype     logical element type

@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.reader.array;
 
 /// Consumer of `short` values. JDK has `IntConsumer` / `LongConsumer`
 /// but no narrow-primitive variants, so this fills the gap for
-/// {@link ShortArray#forEachShort(ShortConsumer)}.
+/// [ShortArray#forEachShort(ShortConsumer)].
 @FunctionalInterface
 public interface ShortConsumer {
 

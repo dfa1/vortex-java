@@ -10,7 +10,7 @@ import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
 /// Read-only decoder for bit-packed boolean arrays.
 public final class BoolEncodingDecoder implements EncodingDecoder {
 
-    /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor required by [java.util.ServiceLoader].
     public BoolEncodingDecoder() {
     }
 

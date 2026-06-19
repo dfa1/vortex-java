@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.core.VortexException;
 
 import java.util.function.DoubleBinaryOperator;
 
-/// Dict-encoded {@link FloatArray} view. ADR 0012 shape.
+/// Dict-encoded [FloatArray] view. ADR 0012 shape.
 ///
 /// Stores `values` (the dictionary pool) and `codes` (one index per
 /// row into `values`). Scalar access resolves on demand:
@@ -23,7 +23,7 @@ import java.util.function.DoubleBinaryOperator;
 ///               {@link ByteArray}, {@link ShortArray}, {@link IntArray}, {@link LongArray}
 public record DictFloatArray(DType dtype, long length, FloatArray values, Array codes) implements FloatArray {
 
-    /// Builds a {@link DictFloatArray}, validating that `codes` is one of the
+    /// Builds a [DictFloatArray], validating that `codes` is one of the
     /// four narrow-int code array types and that its length matches `length`.
     ///
     /// @param dtype  logical element type

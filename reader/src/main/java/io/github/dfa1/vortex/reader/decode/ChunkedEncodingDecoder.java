@@ -26,7 +26,7 @@ public final class ChunkedEncodingDecoder implements EncodingDecoder {
     private static final ValueLayout.OfLong LE_LONG =
             ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
-    /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor required by [java.util.ServiceLoader].
     public ChunkedEncodingDecoder() {
     }
 
@@ -74,7 +74,7 @@ public final class ChunkedEncodingDecoder implements EncodingDecoder {
     }
 
     /// Wraps the decoded chunk children in a zero-copy view: a `ChunkedXxxArray`
-    /// for primitives and Bool, a {@link StructArray} of per-field chunked views for
+    /// for primitives and Bool, a [StructArray] of per-field chunked views for
     /// {@link DType.Struct}. No concat / no per-row materialise.
     private static Array wrap(List<Array> chunks, DType dtype, long totalRows) {
         if (dtype instanceof DType.Primitive pt) {

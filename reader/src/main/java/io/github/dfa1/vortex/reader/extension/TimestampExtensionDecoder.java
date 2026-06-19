@@ -51,7 +51,7 @@ public final class TimestampExtensionDecoder implements ExtensionDecoder {
         return TimestampDtype.of(unit, zone, nullable);
     }
 
-    /// Decodes the timestamp cell at row `i` to an {@link Instant}, ignoring timezone.
+    /// Decodes the timestamp cell at row `i` to an [Instant], ignoring timezone.
     ///
     /// @param ext     declared extension dtype
     /// @param storage signed-integer storage array
@@ -68,7 +68,7 @@ public final class TimestampExtensionDecoder implements ExtensionDecoder {
         return ExtensionStorage.instantFromRaw(ExtensionStorage.epochInteger(storage, i), unit);
     }
 
-    /// Decodes the timestamp cell at row `i` to a {@link ZonedDateTime}
+    /// Decodes the timestamp cell at row `i` to a [ZonedDateTime]
     /// using the timezone from the metadata, defaulting to UTC when absent.
     ///
     /// @param ext     declared extension dtype
@@ -88,7 +88,7 @@ public final class TimestampExtensionDecoder implements ExtensionDecoder {
         return TimestampDtype.timezone(ext);
     }
 
-    /// Decodes every row of `storage` into a list of instants. {@link MaskedArray}
+    /// Decodes every row of `storage` into a list of instants. [MaskedArray]
     /// storage yields `null` at invalid positions instead of throwing.
     ///
     /// @param ext     declared extension dtype carrying the unit

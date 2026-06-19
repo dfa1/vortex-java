@@ -8,7 +8,7 @@ import java.lang.foreign.MemorySegment;
 /// Lazy [LongArray] backed by the `fastlanes.for` encoded `i64` child segment.
 ///
 /// Decode is deferred to element access: `getLong(i) = encoded[i] + ref`.
-/// Returned by {@link io.github.dfa1.vortex.reader.decode.FrameOfReferenceEncodingDecoder} when
+/// Returned by [io.github.dfa1.vortex.reader.decode.FrameOfReferenceEncodingDecoder] when
 /// `ref != 0` and the source is not a broadcast constant.
 ///
 /// @param dtype   logical I64/U64 type

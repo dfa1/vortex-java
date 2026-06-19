@@ -12,7 +12,7 @@ import java.lang.foreign.MemorySegment;
 /// Write-only encoder for `vortex.primitive` — raw little-endian primitive arrays.
 public final class PrimitiveEncodingEncoder implements EncodingEncoder {
 
-    /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor required by [java.util.ServiceLoader].
     public PrimitiveEncodingEncoder() {
     }
 

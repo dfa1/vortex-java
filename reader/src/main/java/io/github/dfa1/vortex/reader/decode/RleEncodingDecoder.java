@@ -29,7 +29,7 @@ public final class RleEncodingDecoder implements EncodingDecoder {
 
     private static final int FL_CHUNK_SIZE = 1024;
 
-    /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor required by [java.util.ServiceLoader].
     public RleEncodingDecoder() {
     }
 

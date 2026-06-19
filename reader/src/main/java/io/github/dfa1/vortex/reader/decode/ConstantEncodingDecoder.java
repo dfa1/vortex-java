@@ -26,7 +26,7 @@ import java.nio.charset.StandardCharsets;
 /// Read-only decoder for `vortex.constant`.
 public final class ConstantEncodingDecoder implements EncodingDecoder {
 
-    /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor required by [java.util.ServiceLoader].
     public ConstantEncodingDecoder() {
     }
 

@@ -6,7 +6,7 @@ import io.github.dfa1.vortex.reader.ReadRegistry;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 
-/// Fluent builder for {@link DecodeContext} used in encoding tests.
+/// Fluent builder for [DecodeContext] used in encoding tests.
 ///
 /// Defaults: rowCount=0, segments=[], registry=empty, arena=Arena.global().
 ///
@@ -70,7 +70,7 @@ public final class TestDecodeContexts {
         return this;
     }
 
-    /// Builds the {@link DecodeContext}.
+    /// Builds the [DecodeContext].
     ///
     /// @return a new decode context
     public DecodeContext build() {

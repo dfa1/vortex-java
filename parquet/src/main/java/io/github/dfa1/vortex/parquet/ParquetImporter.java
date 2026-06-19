@@ -41,7 +41,7 @@ import java.util.Map;
 /// - BYTE_ARRAY annotated STRING, ENUM, or JSON → Utf8
 ///
 /// All other physical types (INT96, FIXED_LEN_BYTE_ARRAY, unannotated BYTE_ARRAY, DECIMAL,
-/// DATE, TIME, TIMESTAMP) throw {@link UnsupportedOperationException}.
+/// DATE, TIME, TIMESTAMP) throw [UnsupportedOperationException].
 public final class ParquetImporter {
 
     private ParquetImporter() {

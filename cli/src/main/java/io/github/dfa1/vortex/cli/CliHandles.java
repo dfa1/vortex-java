@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /// Shared handle plumbing for the interactive subcommands (`view`, `tui`).
 ///
-/// A {@link VortexReader} uses a confined {@link java.lang.foreign.Arena}, so the file must be
+/// A [VortexReader] uses a confined [java.lang.foreign.Arena], so the file must be
 /// opened and closed on the same {@link IoWorker} thread the TUI later dispatches I/O to. These
 /// helpers centralise that worker round-trip plus the local-file / http(s) target resolution.
 @SuppressWarnings("java:S106") // CLI tool: user-facing diagnostics go to System.err by design.

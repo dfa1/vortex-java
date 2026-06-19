@@ -24,7 +24,7 @@ public record EncodeResult(
     /// @param data       the single data buffer
     /// @param min        serialised minimum stat bytes, or `null`
     /// @param max        serialised maximum stat bytes, or `null`
-    /// @return an {@link EncodeResult} backed by a single-buffer leaf node
+    /// @return an [EncodeResult] backed by a single-buffer leaf node
     public static EncodeResult simple(EncodingId encodingId, MemorySegment data, byte[] min, byte[] max) {
         return new EncodeResult(EncodeNode.leaf(encodingId, 0), List.of(data), min, max);
     }
@@ -33,7 +33,7 @@ public record EncodeResult(
     ///
     /// @param encodingId the encoding identifier for the leaf node
     /// @param data       the single data buffer
-    /// @return an {@link EncodeResult} backed by a single-buffer leaf node with no stats
+    /// @return an [EncodeResult] backed by a single-buffer leaf node with no stats
     public static EncodeResult simple(EncodingId encodingId, MemorySegment data) {
         return simple(encodingId, data, null, null);
     }
