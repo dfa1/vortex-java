@@ -289,8 +289,7 @@ public final class VortexInspectorTui {
                 case Key.PageUp _ -> selected = Math.max(selected - 10, 0);
                 case Key.Home _ -> selected = 0;
                 case Key.End _ -> selected = items.size() - 1;
-                default -> {
-                }
+                default -> { /* ignore unhandled keys */ }
             }
         }
 
