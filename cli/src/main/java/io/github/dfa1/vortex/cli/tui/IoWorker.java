@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.cli.tui;
 
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -57,23 +58,22 @@ public final class IoWorker implements AutoCloseable {
     /// @param task task to execute
     /// @throws InterruptedException if the calling thread is interrupted while waiting
     public void runAndAwait(Runnable task) throws InterruptedException {
-        Object signal = new Object();
-        boolean[] done = {false};
-        submit(() -> {
+        if (closed) {
+            return;
+        }
+        // Count down only after pending is decremented, so a caller that reads pending()
+        // immediately after this returns never observes the in-flight task still counted.
+        CountDownLatch done = new CountDownLatch(1);
+        pending.incrementAndGet();
+        queue.add(() -> {
             try {
                 task.run();
             } finally {
-                synchronized (signal) {
-                    done[0] = true;
-                    signal.notifyAll();
-                }
+                pending.decrementAndGet();
+                done.countDown();
             }
         });
-        synchronized (signal) {
-            while (!done[0]) {
-                signal.wait();
-            }
-        }
+        done.await();
     }
 
     /// Number of submitted tasks that have not yet finished.
