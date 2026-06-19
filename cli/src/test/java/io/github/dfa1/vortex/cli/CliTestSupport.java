@@ -36,6 +36,30 @@ final class CliTestSupport {
         return file;
     }
 
+    /// Writes a 3-row file with mixed column types: `id` (I64), `qty` (I32),
+    /// `price` (F64), and `name` (Utf8). Used to exercise per-type formatting and
+    /// comparison branches that the single-column [#writeSmallVortex] cannot reach.
+    static Path writeTypedVortex(Path dir, String name) throws IOException {
+        Path file = dir.resolve(name);
+        DType.Struct schema = new DType.Struct(
+                List.of("id", "qty", "price", "name"),
+                List.of(
+                        new DType.Primitive(PType.I64, false),
+                        new DType.Primitive(PType.I32, false),
+                        new DType.Primitive(PType.F64, false),
+                        new DType.Utf8(false)),
+                false);
+        try (FileChannel ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            writer.writeChunk(Map.of(
+                    "id", new long[]{1L, 2L, 3L},
+                    "qty", new int[]{10, 20, 30},
+                    "price", new double[]{100.0, 200.0, 300.0},
+                    "name", new String[]{"alice", "bob", "carol"}));
+        }
+        return file;
+    }
+
     /// Captured streams + exit status from one CLI invocation.
     record Captured(int status, String stdout, String stderr) {
     }

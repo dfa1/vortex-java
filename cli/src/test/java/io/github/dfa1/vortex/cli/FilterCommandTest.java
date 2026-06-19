@@ -11,6 +11,7 @@ import java.nio.file.Path;
 
 import static io.github.dfa1.vortex.cli.CliTestSupport.capture;
 import static io.github.dfa1.vortex.cli.CliTestSupport.writeSmallVortex;
+import static io.github.dfa1.vortex.cli.CliTestSupport.writeTypedVortex;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class FilterCommandTest {
@@ -88,6 +89,109 @@ class FilterCommandTest {
         // Then
         assertThat(result.status()).isEqualTo(ExitStatus.ERROR);
         assertThat(result.stderr()).contains("error:");
+    }
+
+    @Test
+    void doubleValueAgainstLongColumn_returnsOk() {
+        // Given — a fractional literal parses as Double, compared against an I64 column
+        // (exercises parseValue's Double branch and compareNumeric's Double path)
+        // When
+        CliTestSupport.Captured result = capture(() ->
+                FilterCommand.run(new String[]{"filter", file.toString(), "id", ">", "1.5"}));
+
+        // Then — id in {2, 3} match
+        assertThat(result.status()).isEqualTo(ExitStatus.OK);
+        assertThat(result.stdout()).startsWith("id");
+    }
+
+    @Test
+    void unknownOperator_returnsUsageError() {
+        // Given — a lone '!' is a recognised operator char but not a valid operator
+        // When
+        CliTestSupport.Captured result = capture(() ->
+                FilterCommand.run(new String[]{"filter", file.toString(), "id", "!", "1"}));
+
+        // Then
+        assertThat(result.status()).isEqualTo(ExitStatus.USAGE_ERROR);
+        assertThat(result.stderr()).contains("unknown operator");
+    }
+
+    @Test
+    void emptyValue_returnsUsageError() {
+        // Given — operator present but no value after it
+        // When
+        CliTestSupport.Captured result = capture(() ->
+                FilterCommand.run(new String[]{"filter", file.toString(), "id", ">"}));
+
+        // Then
+        assertThat(result.status()).isEqualTo(ExitStatus.USAGE_ERROR);
+        assertThat(result.stderr()).contains("invalid filter expression");
+    }
+
+    @Test
+    void operatorAtStart_returnsUsageError() {
+        // Given — operator at index 0 means an empty column name
+        // When
+        CliTestSupport.Captured result = capture(() ->
+                FilterCommand.run(new String[]{"filter", file.toString(), "=", "1"}));
+
+        // Then
+        assertThat(result.status()).isEqualTo(ExitStatus.USAGE_ERROR);
+        assertThat(result.stderr()).contains("invalid filter expression");
+    }
+
+    @Test
+    void invalidColumnName_returnsUsageError() {
+        // Given — '-' is not a legal column-name character
+        // When
+        CliTestSupport.Captured result = capture(() ->
+                FilterCommand.run(new String[]{"filter", file.toString(), "a-b", "=", "1"}));
+
+        // Then
+        assertThat(result.status()).isEqualTo(ExitStatus.USAGE_ERROR);
+        assertThat(result.stderr()).contains("invalid filter expression");
+    }
+
+    @Test
+    void filtersDoubleColumn_returnsOk() throws IOException {
+        // Given — F64 column with a fractional threshold (compareDouble path)
+        Path typed = writeTypedVortex(tmp, "typed.vortex");
+
+        // When — price in {200.0, 300.0} match
+        CliTestSupport.Captured result = capture(() ->
+                FilterCommand.run(new String[]{"filter", typed.toString(), "price", ">", "150.0"}));
+
+        // Then
+        assertThat(result.status()).isEqualTo(ExitStatus.OK);
+        assertThat(result.stdout()).startsWith("id");
+    }
+
+    @Test
+    void filtersIntColumn_returnsOk() throws IOException {
+        // Given — I32 column (compareValue's IntArray branch)
+        Path typed = writeTypedVortex(tmp, "typed.vortex");
+
+        // When
+        CliTestSupport.Captured result = capture(() ->
+                FilterCommand.run(new String[]{"filter", typed.toString(), "qty", ">=", "20"}));
+
+        // Then
+        assertThat(result.status()).isEqualTo(ExitStatus.OK);
+        assertThat(result.stdout()).startsWith("id");
+    }
+
+    @Test
+    void filtersStringColumn_returnsOk() throws IOException {
+        // Given — Utf8 column (compareValue's VarBinArray branch, lexicographic compare)
+        Path typed = writeTypedVortex(tmp, "typed.vortex");
+
+        // When
+        CliTestSupport.Captured result = capture(() ->
+                FilterCommand.run(new String[]{"filter", typed.toString(), "name", "==", "bob"}));
+
+        // Then
+        assertThat(result.status()).isEqualTo(ExitStatus.OK);
+        assertThat(result.stdout()).startsWith("id");
     }
 
     @Test
