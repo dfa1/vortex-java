@@ -549,7 +549,7 @@ class RustWritesJavaReadsIntegrationTest {
             assertThat(results).hasSize(1);
             // F16 column snapshots as a short[] (raw float16 bits)
             short[] decoded = (short[]) results.getFirst().columns().get("v");
-            assertThat(decoded.length).isEqualTo(f16bits.length);
+            assertThat(decoded).hasSameSizeAs(f16bits);
             for (int i = 0; i < f16bits.length; i++) {
                 assertThat(Float.float16ToFloat(decoded[i]))
                         .as("index %d", i)

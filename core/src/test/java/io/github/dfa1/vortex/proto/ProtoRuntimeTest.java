@@ -316,7 +316,7 @@ class ProtoRuntimeTest {
 
             // When + Then
             assertThat(a).isEqualTo(b);
-            assertThat(a.hashCode()).isEqualTo(b.hashCode());
+            assertThat(a).hasSameHashCodeAs(b);
         }
 
         @Test

@@ -428,9 +428,9 @@ class RustJavaReaderComparisonIntegrationTest {
                     .as("string column names in %s", fixture)
                     .containsAll(resultRust.strLenSums().keySet());
             for (Map.Entry<String, Long> entry : resultRust.strLenSums().entrySet()) {
-                assertThat(resultJava.strLenSums().get(entry.getKey()))
+                assertThat(resultJava.strLenSums())
                         .describedAs("string column '%s' byte-length sum in %s", entry.getKey(), fixture)
-                        .isEqualTo(entry.getValue());
+                        .containsEntry(entry.getKey(), entry.getValue());
             }
         }
     }
