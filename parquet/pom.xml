@@ -29,6 +29,18 @@
 			<artifactId>zstd-jni</artifactId>
 		</dependency>
 		<!-- testing -->
+		<!-- project-internal test deps first: reader verifies the imported Vortex output. -->
+		<dependency>
+			<groupId>io.github.dfa1.vortex</groupId>
+			<artifactId>vortex-reader</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<!-- reader declares aircompressor-v3 optional; pull it in so the test can decode ZSTD chunks -->
+		<dependency>
+			<groupId>io.airlift</groupId>
+			<artifactId>aircompressor-v3</artifactId>
+			<scope>test</scope>
+		</dependency>
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>
 			<artifactId>junit-jupiter</artifactId>
