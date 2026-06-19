@@ -9,7 +9,7 @@ import java.util.Collection;
 /// Write-side contract for a Vortex extension type.
 ///
 /// Implementations pair a spec identity ([ExtensionId]) with the matching
-/// {@link DType.Extension} dtype and a polymorphic {@link #encodeAll} entry point used
+/// [DType.Extension] dtype and a polymorphic [#encodeAll] entry point used
 /// by the writer's auto-routing path.
 public interface ExtensionEncoder {
 

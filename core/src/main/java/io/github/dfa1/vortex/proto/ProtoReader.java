@@ -6,7 +6,7 @@ import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
 
 /// Stateful cursor over a [MemorySegment] that decodes proto3 wire-format primitives.
-/// Generated record types call into this from their {@code decode(...)} static factories.
+/// Generated record types call into this from their `decode(...)` static factories.
 /// Package-private — generated code lives in the same package.
 final class ProtoReader {
 
@@ -108,7 +108,7 @@ final class ProtoReader {
     }
 
     /// Reads a length-delimited byte sequence into a fresh `byte[]`.
-    /// Use {@link #readLenDelimSegment()} for zero-copy access when the consumer can hold a segment slice.
+    /// Use [#readLenDelimSegment()] for zero-copy access when the consumer can hold a segment slice.
     byte[] readBytes() throws IOException {
         int len = readVarint32();
         ensureBytes(len);

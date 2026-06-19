@@ -8,7 +8,7 @@ import java.lang.foreign.SegmentAllocator;
 import java.util.Optional;
 
 /// Internal materialization engine: turns any [Array] into its primary
-/// {@link MemorySegment}, allocating from a caller-supplied arena for lazy variants.
+/// [MemorySegment], allocating from a caller-supplied arena for lazy variants.
 ///
 /// If `arr` is a {@link MaskedArray}, the inner (data) segment is returned;
 /// the validity mask is not surfaced here — callers that need validity must unwrap manually.
@@ -69,7 +69,7 @@ public final class ArraySegments {
     ///
     /// @param arr   the array whose segment is needed
     /// @param arena allocator used to materialise lazy variants
-    /// @return the primary {@link MemorySegment}
+    /// @return the primary [MemorySegment]
     /// @throws VortexException if the array type has no primary segment
     public static MemorySegment of(Array arr, SegmentAllocator arena) {
         Array data = arr instanceof MaskedArray m ? m.inner() : arr;

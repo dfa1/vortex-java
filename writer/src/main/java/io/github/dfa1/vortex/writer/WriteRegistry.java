@@ -10,7 +10,7 @@ import java.util.Map;
 import java.util.ServiceLoader;
 
 /// Write-side registry: maps [EncodingId] to [EncodingEncoder] implementations,
-/// and {@link ExtensionId} to {@link ExtensionEncoder} implementations.
+/// and [ExtensionId] to [ExtensionEncoder] implementations.
 ///
 /// Instances are immutable after construction. Build one via {@link #builder()} or via the
 /// {@link #loadAll()} and {@link #empty()} convenience factories.
@@ -33,7 +33,7 @@ public final class WriteRegistry {
 
     /// Loads all service-discovered [EncodingEncoder] and [ExtensionEncoder] implementations.
     ///
-    /// @return an immutable {@link WriteRegistry} populated with all service-loaded entries
+    /// @return an immutable [WriteRegistry] populated with all service-loaded entries
     public static WriteRegistry loadAll() {
         return builder().registerServiceLoaded().build();
     }
@@ -69,7 +69,7 @@ public final class WriteRegistry {
 
     /// Builder for [WriteRegistry].
     ///
-    /// Not thread-safe. Build once, use everywhere — the produced {@link WriteRegistry} is immutable.
+    /// Not thread-safe. Build once, use everywhere — the produced [WriteRegistry] is immutable.
     public static final class Builder {
 
         private final Map<EncodingId, EncodingEncoder> encoders = new HashMap<>();
@@ -105,7 +105,7 @@ public final class WriteRegistry {
         }
 
         /// Registers every [EncodingEncoder] and [ExtensionEncoder] discovered via
-        /// {@link ServiceLoader}.
+        /// [ServiceLoader].
         ///
         /// @return this builder, for chaining
         /// @throws VortexException if a service-loaded entry collides with one already registered

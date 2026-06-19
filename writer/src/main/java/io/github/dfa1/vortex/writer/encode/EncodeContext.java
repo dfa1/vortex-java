@@ -11,7 +11,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 /// Encoding context passed to every [EncodingEncoder#encode] and
-/// {@link EncodingEncoder#encodeCascade} call.
+/// [EncodingEncoder#encodeCascade] call.
 ///
 /// Carries a caller-scoped {@link Arena} for encode output buffers, a
 /// {@link WriteRegistry} for cross-encoder delegation and extension lookup,

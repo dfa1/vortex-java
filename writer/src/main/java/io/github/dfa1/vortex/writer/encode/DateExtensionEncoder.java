@@ -19,7 +19,7 @@ public final class DateExtensionEncoder implements ExtensionEncoder {
     public static final DateExtensionEncoder INSTANCE = new DateExtensionEncoder();
 
     /// Public no-arg constructor for [java.util.ServiceLoader].
-    /// Prefer the {@link #INSTANCE} singleton in application code.
+    /// Prefer the [#INSTANCE] singleton in application code.
     public DateExtensionEncoder() {
     }
 

@@ -17,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// into the alternate screen / raw mode. Class load alone is the safe, meaningful
 /// assertion: it forces every `Linker.downcallHandle` in the static initializer
 /// (tcgetattr, tcsetattr, cfmakeraw, ioctl) to resolve its libc symbol, throwing
-/// {@link UnsatisfiedLinkError} during `<clinit>` if an entry point is missing.
+/// [UnsatisfiedLinkError] during `<clinit>` if an entry point is missing.
 class PosixTerminalSmokeTest {
 
     @Test

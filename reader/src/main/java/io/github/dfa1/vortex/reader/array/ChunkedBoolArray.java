@@ -25,7 +25,7 @@ public record ChunkedBoolArray(DType dtype, long length, BoolArray[] children, l
     /// @param dtype     logical element type
     /// @param totalRows expected total row count
     /// @param chunks    non-empty list of chunk arrays
-    /// @return a new {@link ChunkedBoolArray}
+    /// @return a new [ChunkedBoolArray]
     /// @throws VortexException on empty input, non-{@link BoolArray} chunks, or row-count mismatch
     public static ChunkedBoolArray of(DType dtype, long totalRows, List<? extends Array> chunks) {
         if (chunks.isEmpty()) {

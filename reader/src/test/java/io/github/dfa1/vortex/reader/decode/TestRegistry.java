@@ -23,7 +23,7 @@ public final class TestRegistry {
     }
 
     /// Builds a [ReadRegistry] containing the supplied decoder plus a
-    /// {@link PrimitiveEncodingDecoder} fallback (so child decodes of primitive segments work).
+    /// [PrimitiveEncodingDecoder] fallback (so child decodes of primitive segments work).
     ///
     /// @param sut decoder under test
     /// @return registry instance

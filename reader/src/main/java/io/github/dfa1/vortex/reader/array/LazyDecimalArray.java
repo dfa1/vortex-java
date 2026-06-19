@@ -15,7 +15,7 @@ import java.nio.ByteOrder;
 /// the integer's byte width (1/2/4/8/16) is fixed for the whole array and chosen
 /// by the writer based on precision. The buffer is a mmap slice — decode wraps
 /// it; per-row [#getDecimal(long)] reads `byteWidth` bytes and combines
-/// them with the parent dtype's scale into a {@link BigDecimal} on demand. No
+/// them with the parent dtype's scale into a [BigDecimal] on demand. No
 /// arena allocation happens at construction time.
 ///
 /// @param dtype     the parent {@link DType.Decimal} dtype (precision + scale + nullable)
@@ -35,7 +35,7 @@ public record LazyDecimalArray(DType dtype, long length, MemorySegment buf, int 
     ///
     /// @param i row index, `0 <= i < length()`
     /// @return decoded `BigDecimal`
-    /// @throws VortexException             if the dtype isn't a {@link DType.Decimal}
+    /// @throws VortexException             if the dtype isn't a [DType.Decimal]
     /// @throws IndexOutOfBoundsException if `i` is outside `[0, length())`
     public BigDecimal getDecimal(long i) {
         if (i < 0 || i >= length) {

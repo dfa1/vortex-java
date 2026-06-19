@@ -60,7 +60,7 @@ public enum PType {
     /// uses to identify a physical type.
     ///
     /// Unlike `PType.values()[ordinal]`, this method validates the ordinal against the
-    /// declared range and throws {@link VortexException} for crafted out-of-range values rather
+    /// declared range and throws [VortexException] for crafted out-of-range values rather
     /// than the JDK's {@link ArrayIndexOutOfBoundsException}. Use this at every decode site that
     /// reads a ptype from untrusted metadata.
     ///

@@ -18,7 +18,7 @@ import java.util.ServiceLoader;
 
 /// Read-side registry: maps [EncodingId] to [EncodingDecoder] implementations.
 ///
-/// Instances are immutable after construction. Build one via {@link #builder()} or
+/// Instances are immutable after construction. Build one via [#builder()] or
 /// via the {@link #loadAll()} and {@link #empty()} convenience factories.
 public final class ReadRegistry {
 
@@ -32,7 +32,7 @@ public final class ReadRegistry {
 
     /// Loads all service-discovered [EncodingDecoder] implementations.
     ///
-    /// @return an immutable {@link ReadRegistry} populated with all service-loaded decoders
+    /// @return an immutable [ReadRegistry] populated with all service-loaded decoders
     public static ReadRegistry loadAll() {
         return builder().registerServiceLoaded().build();
     }
@@ -134,7 +134,7 @@ public final class ReadRegistry {
 
     /// Builder for [ReadRegistry].
     ///
-    /// Not thread-safe. Build once, use everywhere — the produced {@link ReadRegistry} is immutable.
+    /// Not thread-safe. Build once, use everywhere — the produced [ReadRegistry] is immutable.
     public static final class Builder {
 
         private final Map<EncodingId, EncodingDecoder> decoders = new HashMap<>();
@@ -170,7 +170,7 @@ public final class ReadRegistry {
         /// Enable passthrough decode for unknown encoding ids.
         ///
         /// Default is strict: unknown ids throw [VortexException]. When enabled, unknown
-        /// nodes are wrapped as {@link io.github.dfa1.vortex.reader.array.UnknownArray}.
+        /// nodes are wrapped as [io.github.dfa1.vortex.reader.array.UnknownArray].
         /// Mirrors Rust `VortexSession::allow_unknown()`.
         ///
         /// @return this builder, for chaining

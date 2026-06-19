@@ -93,7 +93,7 @@ final class ProtoWriter {
 
     /// Reserves space for a length-delimited region whose payload size is unknown until written.
     /// Returns a mark to pass back to [#endLenDelim(int)]; the caller writes the payload
-    /// in between. Avoids the alloc/copy round-trip of writing into a temporary {@code ProtoWriter}.
+    /// in between. Avoids the alloc/copy round-trip of writing into a temporary `ProtoWriter`.
     ///
     /// Reserves the worst-case 5 bytes for a varint32 length; {@link #endLenDelim} backpatches
     /// the actual length and shifts the payload left if a shorter varint suffices.

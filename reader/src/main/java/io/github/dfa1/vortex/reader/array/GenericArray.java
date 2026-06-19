@@ -86,7 +86,7 @@ public final class GenericArray implements Array {
     /// than the precision alone would allow.
     ///
     /// The child-array shape produced by `vortex.decimal_byte_parts` is now
-    /// handled by {@link LazyDecimalBytePartsArray} directly.
+    /// handled by [LazyDecimalBytePartsArray] directly.
     ///
     /// @param i row index, `0 <= i < length()`
     /// @return decoded value as a {@link BigDecimal} with the dtype's scale

@@ -22,7 +22,7 @@ public final class DateExtensionDecoder implements ExtensionDecoder {
     public static final DateExtensionDecoder INSTANCE = new DateExtensionDecoder();
 
     /// Public no-arg constructor for [java.util.ServiceLoader].
-    /// Prefer the {@link #INSTANCE} singleton in application code.
+    /// Prefer the [#INSTANCE] singleton in application code.
     public DateExtensionDecoder() {
     }
 

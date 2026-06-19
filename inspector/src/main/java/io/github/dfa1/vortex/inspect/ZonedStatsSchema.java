@@ -16,7 +16,7 @@ import java.util.List;
 ///       vortex-layout/src/layouts/zoned/mod.rs</a> — `ZonedMetadata`):
 ///       bytes [0..4) are the zone length as a little-endian `u32`;
 ///       remaining bytes form a `Stat` bitset (LSB-first per byte). Each
-///       set bit at index `i` indicates that the {@link Stat} with that
+///       set bit at index `i` indicates that the [Stat] with that
 ///       ordinal is present in the auxiliary stats table.
 /// - Schema construction
 ///       (<a href="https://github.com/spiraldb/vortex/blob/develop/vortex-layout/src/layouts/zoned/schema.rs">

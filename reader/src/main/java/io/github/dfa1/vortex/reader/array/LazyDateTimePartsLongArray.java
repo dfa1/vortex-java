@@ -21,7 +21,7 @@ import java.util.function.LongConsumer;
 /// (`TimestampExtensionDecoder`, `DateExtensionDecoder`, etc.) expects;
 /// no buffer materialisation occurs at construction time.
 ///
-/// The record's {@link #dtype()} is the parent Extension dtype (e.g.
+/// The record's [#dtype()] is the parent Extension dtype (e.g.
 /// `vortex.timestamp`) so it slots transparently into the extension-decode
 /// pipeline. Children may be any signed integer typed Array
 /// ({@link ByteArray}/{@link ShortArray}/{@link IntArray}/{@link LongArray}); the

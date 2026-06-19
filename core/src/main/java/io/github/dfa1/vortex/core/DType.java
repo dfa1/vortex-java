@@ -28,7 +28,7 @@ public sealed interface DType
     /// [#withNullable(boolean)] so call sites read as a fluent adjective:
     /// `DType.i64().asNullable()`.
     ///
-    /// @return a new {@link DType} identical to this one but with `nullable = true`
+    /// @return a new [DType] identical to this one but with `nullable = true`
     default DType asNullable() {
         return withNullable(true);
     }
@@ -158,13 +158,13 @@ public sealed interface DType
     ///     .build();
     /// ```
     ///
-    /// @return a new {@link StructBuilder}
+    /// @return a new [StructBuilder]
     static StructBuilder structBuilder() {
         return new StructBuilder();
     }
 
     /// Fluent builder for [Struct] dtypes. Use [#structBuilder()] to obtain one.
-    /// Preserves insertion order and rejects duplicate field names at {@link #build()}.
+    /// Preserves insertion order and rejects duplicate field names at [#build()].
     final class StructBuilder {
         private final LinkedHashMap<String, DType> fields = new LinkedHashMap<>();
         private boolean nullable;
@@ -195,7 +195,7 @@ public sealed interface DType
 
         /// Builds the [Struct] dtype.
         ///
-        /// @return a new {@link Struct} reflecting every field added so far
+        /// @return a new [Struct] reflecting every field added so far
         public Struct build() {
             return new Struct(
                     java.util.List.copyOf(fields.keySet()),

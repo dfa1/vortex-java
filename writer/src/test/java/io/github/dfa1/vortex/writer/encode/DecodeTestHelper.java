@@ -23,7 +23,7 @@ public final class DecodeTestHelper {
     /// @param rowCount logical row count
     /// @param dtype    decoded dtype
     /// @param registry registry used for nested decode dispatch
-    /// @return decode context ready for {@link EncodingDecoder#decode}
+    /// @return decode context ready for [EncodingDecoder#decode]
     public static DecodeContext toDecodeContext(
             EncodeResult result, long rowCount, DType dtype, ReadRegistry registry
     ) {

@@ -23,7 +23,7 @@ public final class UuidExtensionDecoder implements ExtensionDecoder {
     public static final UuidExtensionDecoder INSTANCE = new UuidExtensionDecoder();
 
     /// Public no-arg constructor for [java.util.ServiceLoader].
-    /// Prefer the {@link #INSTANCE} singleton in application code.
+    /// Prefer the [#INSTANCE] singleton in application code.
     public UuidExtensionDecoder() {
     }
 

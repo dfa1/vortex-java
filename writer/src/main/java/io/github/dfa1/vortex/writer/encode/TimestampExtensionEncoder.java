@@ -19,7 +19,7 @@ public final class TimestampExtensionEncoder implements ExtensionEncoder {
     public static final TimestampExtensionEncoder INSTANCE = new TimestampExtensionEncoder();
 
     /// Public no-arg constructor for [java.util.ServiceLoader].
-    /// Prefer the {@link #INSTANCE} singleton in application code.
+    /// Prefer the [#INSTANCE] singleton in application code.
     public TimestampExtensionEncoder() {
     }
 

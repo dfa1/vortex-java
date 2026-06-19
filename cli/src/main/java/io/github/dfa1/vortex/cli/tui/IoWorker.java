@@ -7,7 +7,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /// Single-threaded I/O executor that owns one [io.github.dfa1.vortex.reader.VortexHandle].
 ///
-/// Vortex readers use a confined {@link java.lang.foreign.Arena}, so every
+/// Vortex readers use a confined [java.lang.foreign.Arena], so every
 /// `slice()` / `scan()` call must happen on the same thread that
 /// opened the file. The TUI dispatches all such calls to this worker so the
 /// render loop on the main thread never crosses the arena's owning thread.

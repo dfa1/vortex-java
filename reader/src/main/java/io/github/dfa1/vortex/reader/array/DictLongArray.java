@@ -15,7 +15,7 @@ import java.util.function.LongConsumer;
 /// `values` into a per-row buffer happens until a downstream caller
 /// genuinely requires a contiguous segment.
 ///
-/// The `codes` array is typed as {@link Array} because the codes ptype
+/// The `codes` array is typed as [Array] because the codes ptype
 /// varies with dictionary size — U8/U16/U32/U64 backed by
 /// {@link ByteArray}/{@link ShortArray}/{@link IntArray}/{@link LongArray}.
 /// {@link #of} validates that `codes` is one of those four types.
@@ -33,7 +33,7 @@ public record DictLongArray(DType dtype, long length, LongArray values, Array co
     /// @param dtype  logical element type
     /// @param length total logical row count
     /// @param values dictionary pool
-    /// @param codes  per-row code array (must be {@link ByteArray}, {@link ShortArray},
+    /// @param codes  per-row code array (must be [ByteArray], [ShortArray],
     ///               {@link IntArray}, or {@link LongArray})
     /// @return a new {@link DictLongArray}
     /// @throws VortexException if `codes` is not a supported code-array type or

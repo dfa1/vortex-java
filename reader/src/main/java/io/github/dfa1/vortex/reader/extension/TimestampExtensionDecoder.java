@@ -57,7 +57,7 @@ public final class TimestampExtensionDecoder implements ExtensionDecoder {
     /// @param storage signed-integer storage array
     /// @param i       row index, `0 <= i < storage.length()`
     /// @return decoded instant
-    /// @throws VortexException if the metadata unit is {@link TimeUnit#Days}
+    /// @throws VortexException if the metadata unit is [TimeUnit#Days]
     ///         or storage isn't an integer primitive
     public Instant instant(DType.Extension ext, Array storage, long i) {
         ExtensionStorage.checkBounds(i, storage.length());

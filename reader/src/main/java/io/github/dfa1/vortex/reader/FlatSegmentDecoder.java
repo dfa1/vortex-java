@@ -21,7 +21,7 @@ import java.util.List;
 /// Flat segment wire format:
 /// `buffer_data... | FlatBuffer(Array) | u32 LE = FlatBuffer byte length`
 ///
-/// {@link ReadRegistry} is pure dispatch; this class owns all file-format knowledge:
+/// [ReadRegistry] is pure dispatch; this class owns all file-format knowledge:
 /// FlatBuffer parsing, buffer-offset arithmetic, and encoding-spec lookup.
 public final class FlatSegmentDecoder {
 

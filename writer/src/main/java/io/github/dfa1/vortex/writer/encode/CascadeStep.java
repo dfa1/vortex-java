@@ -12,7 +12,7 @@ import java.util.List;
 /// (e.g. patch index/value buffers for ALP). Child recursion results are appended after these;
 /// child `bufferIndices` are remapped by `+ownedBuffers.size()`.
 ///
-/// When `applicable` is false the encoding cannot handle this data; {@link #ownedBytes()}
+/// When `applicable` is false the encoding cannot handle this data; [#ownedBytes()]
 /// returns {@link Long#MAX_VALUE}/2 so the step never wins in size-based selection.
 ///
 /// @param partialRoot  partially-assembled root encode node (may be `null` when not applicable)
@@ -56,7 +56,7 @@ public record CascadeStep(
     /// Total byte size of owned buffers (used for size-based winner selection on samples).
     /// Returns [Long#MAX_VALUE]/2 for non-applicable steps.
     ///
-    /// @return total size in bytes of all owned buffers, or {@link Long#MAX_VALUE}/2 if not applicable
+    /// @return total size in bytes of all owned buffers, or [Long#MAX_VALUE]/2 if not applicable
     public long ownedBytes() {
         if (!applicable) {
             return Long.MAX_VALUE / 2;
