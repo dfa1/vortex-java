@@ -2,12 +2,18 @@ package io.github.dfa1.vortex.cli.tui;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.encoding.TimeUnit;
 import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.ByteArray;
+import io.github.dfa1.vortex.reader.array.FixedSizeListArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantDecimalArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.StructArray;
+import io.github.dfa1.vortex.reader.extension.TimeExtensionDecoder;
+import io.github.dfa1.vortex.reader.extension.TimestampExtensionDecoder;
+import io.github.dfa1.vortex.reader.extension.UuidExtensionDecoder;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
@@ -77,6 +83,45 @@ class GridRenderTest {
             // When / Then
             assertThat(GridRender.formatCell(storage, 0, dateExt)).isEqualTo("1970-01-01");
             assertThat(GridRender.formatCell(storage, 1, dateExt)).isEqualTo("1970-01-02");
+        }
+    }
+
+    @Test
+    void rendersTimeExtensionFromIntStorage() {
+        try (Arena arena = Arena.ofConfined()) {
+            // Given — vortex.time (ms unit) over I32 storage; 0 ms-of-day = midnight
+            DType timeExt = TimeExtensionDecoder.INSTANCE.dtype(TimeUnit.Milliseconds, false);
+            IntArray storage = ArrayFixtures.ints(arena, 0);
+
+            // When / Then
+            assertThat(GridRender.formatCell(storage, 0, timeExt)).isEqualTo("00:00");
+        }
+    }
+
+    @Test
+    void rendersTimestampExtensionFromLongStorage() {
+        try (Arena arena = Arena.ofConfined()) {
+            // Given — vortex.timestamp (ms unit, no tz) over I64 storage; 0 ms = the epoch
+            DType tsExt = TimestampExtensionDecoder.INSTANCE.dtype(TimeUnit.Milliseconds, null, false);
+            LongArray storage = ArrayFixtures.longs(arena, 0L);
+
+            // When / Then
+            assertThat(GridRender.formatCell(storage, 0, tsExt)).isEqualTo("1970-01-01T00:00:00Z");
+        }
+    }
+
+    @Test
+    void rendersUuidExtensionFromFixedSizeListStorage() {
+        try (Arena arena = Arena.ofConfined()) {
+            // Given — vortex.uuid over FixedSizeList(U8,16); all-zero bytes = the nil UUID
+            DType uuidExt = UuidExtensionDecoder.INSTANCE.dtype(false);
+            ByteArray elems = ArrayFixtures.bytes(arena, new byte[16]);
+            FixedSizeListArray storage = new FixedSizeListArray(
+                    new DType.FixedSizeList(new DType.Primitive(PType.U8, false), 16, false), 1, elems);
+
+            // When / Then
+            assertThat(GridRender.formatCell(storage, 0, uuidExt))
+                    .isEqualTo("00000000-0000-0000-0000-000000000000");
         }
     }
 
