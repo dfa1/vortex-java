@@ -21,12 +21,7 @@ class LongArrayTest {
             ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     private static LongArray of(long... values) {
-        MemorySegment seg = Arena.ofAuto().allocate((long) values.length * 8, 8);
-        for (int i = 0; i < values.length; i++) {
-            seg.setAtIndex(LE_LONG, i, values[i]);
-        }
-        DType dtype = new DType.Primitive(PType.I64, false);
-        return new MaterializedLongArray(dtype, values.length, seg);
+        return TestArrays.longs(Arena.ofAuto(), values);
     }
 
     @Nested

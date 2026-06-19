@@ -21,12 +21,7 @@ class DoubleArrayTest {
             ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     private static DoubleArray of(double... values) {
-        MemorySegment seg = Arena.ofAuto().allocate((long) values.length * 8, 8);
-        for (int i = 0; i < values.length; i++) {
-            seg.setAtIndex(LE_DOUBLE, i, values[i]);
-        }
-        DType dtype = new DType.Primitive(PType.F64, false);
-        return new MaterializedDoubleArray(dtype, values.length, seg);
+        return TestArrays.doubles(Arena.ofAuto(), values);
     }
 
     @Nested
