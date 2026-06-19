@@ -171,11 +171,11 @@ public final class JdbcImporter {
             case DType.Primitive p when p.ptype() == PType.I8 -> new byte[size];
             case DType.Primitive p when p.ptype() == PType.F64 -> new double[size];
             case DType.Primitive p when p.ptype() == PType.F32 -> new float[size];
-            case DType.Bool ignored -> new boolean[size];
-            case DType.Utf8 ignored -> new String[size];
+            case DType.Bool _ -> new boolean[size];
+            case DType.Utf8 _ -> new String[size];
             // Extension columns buffer as domain-typed lists; VortexWriter.writeChunk
             // auto-routes Collection<DomainT> through the matching extension impl.
-            case DType.Extension ext -> new ArrayList<>(size);
+            case DType.Extension _ -> new ArrayList<>(size);
             default -> throw new UnsupportedOperationException("unsupported dtype: " + dtype);
         };
     }

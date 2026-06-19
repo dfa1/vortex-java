@@ -276,19 +276,19 @@ public final class VortexInspectorTui {
 
         private void handleKey(Key key, List<Item> items) {
             switch (key) {
-                case Key.ArrowDown ignored -> selected = Math.min(selected + 1, items.size() - 1);
-                case Key.ArrowUp ignored -> selected = Math.max(selected - 1, 0);
-                case Key.ArrowRight ignored -> expandSelected(items);
-                case Key.Enter ignored -> toggleSelected(items);
-                case Key.ArrowLeft ignored -> {
+                case Key.ArrowDown _ -> selected = Math.min(selected + 1, items.size() - 1);
+                case Key.ArrowUp _ -> selected = Math.max(selected - 1, 0);
+                case Key.ArrowRight _ -> expandSelected(items);
+                case Key.Enter _ -> toggleSelected(items);
+                case Key.ArrowLeft _ -> {
                     if (selected < items.size()) {
                         expanded.remove(items.get(selected).node());
                     }
                 }
-                case Key.PageDown ignored -> selected = Math.min(selected + 10, items.size() - 1);
-                case Key.PageUp ignored -> selected = Math.max(selected - 10, 0);
-                case Key.Home ignored -> selected = 0;
-                case Key.End ignored -> selected = items.size() - 1;
+                case Key.PageDown _ -> selected = Math.min(selected + 10, items.size() - 1);
+                case Key.PageUp _ -> selected = Math.max(selected - 10, 0);
+                case Key.Home _ -> selected = 0;
+                case Key.End _ -> selected = items.size() - 1;
                 default -> {
                 }
             }
@@ -504,7 +504,7 @@ public final class VortexInspectorTui {
                 DataState dictState = loadDictPreview(node);
                 lines.add("");
                 switch (dictState) {
-                    case DataState.Pending ignored ->
+                    case DataState.Pending _ ->
                             lines.add("Dictionary:  " + SPINNER[(int) (tick % SPINNER.length)] + " loading...");
                     case DataState.Failed(String msg) ->
                             lines.add("Dictionary:  ! " + msg);
@@ -524,7 +524,7 @@ public final class VortexInspectorTui {
                 DataState zoneState = loadStatsPreview(zoneAnchor);
                 lines.add("");
                 switch (zoneState) {
-                    case DataState.Pending ignored ->
+                    case DataState.Pending _ ->
                             lines.add("Per-chunk stats:  "
                                     + SPINNER[(int) (tick % SPINNER.length)] + " loading...");
                     case DataState.Failed(String msg) ->
@@ -541,7 +541,7 @@ public final class VortexInspectorTui {
                 DataState state = loadDataPreview(col);
                 lines.add("");
                 switch (state) {
-                    case DataState.Pending ignored ->
+                    case DataState.Pending _ ->
                             lines.add("Data (column '" + col + "'):  "
                                     + SPINNER[(int) (tick % SPINNER.length)] + " loading...");
                     case DataState.Failed(String msg) ->

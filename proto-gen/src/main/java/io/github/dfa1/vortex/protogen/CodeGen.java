@@ -308,8 +308,8 @@ public final class CodeGen {
                         out.add(toField(new Ast.FieldDecl(Ast.Rule.OPTIONAL, f.type(), f.name(), f.number(), f.packed())));
                     }
                 }
-                case Ast.MessageDecl ignored -> { /* nested, emitted separately */ }
-                case Ast.EnumDecl ignored -> { /* nested, emitted separately */ }
+                case Ast.MessageDecl _ -> { /* nested, emitted separately */ }
+                case Ast.EnumDecl _ -> { /* nested, emitted separately */ }
             }
         }
         return out;
@@ -395,7 +395,7 @@ public final class CodeGen {
                     case REPEATED -> new Field(name, decl.number(), "java.util.List<" + javaName + ">",
                             "new java.util.ArrayList<>()", new EnumRepeatedEmitter(javaName));
                 };
-                case TypeRegistry.ResolvedType.Message msg -> switch (decl.rule()) {
+                case TypeRegistry.ResolvedType.Message _ -> switch (decl.rule()) {
                     // Singular and Optional message refs are both nullable (proto3 message presence semantics).
                     case SINGLE, OPTIONAL -> new Field(name, decl.number(), javaName, "null",
                             new MessageOptionalEmitter(javaName));

@@ -57,9 +57,9 @@ final class StatsCommand {
     private static String formatDType(DType dtype) {
         return switch (dtype) {
             case DType.Primitive p -> p.ptype().name().toLowerCase();
-            case DType.Bool ignored -> "bool";
-            case DType.Utf8 ignored -> "utf8";
-            case DType.Struct ignored -> "struct";
+            case DType.Bool _ -> "bool";
+            case DType.Utf8 _ -> "utf8";
+            case DType.Struct _ -> "struct";
             default -> dtype.getClass().getSimpleName().toLowerCase();
         };
     }
