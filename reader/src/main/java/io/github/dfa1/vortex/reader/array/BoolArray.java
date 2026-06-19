@@ -53,7 +53,7 @@ public non-sealed interface BoolArray extends Array {
             if (getBoolean(i)) {
                 long byteIndex = i >>> 3;
                 byte b = dst.get(ValueLayout.JAVA_BYTE, byteIndex);
-                dst.set(ValueLayout.JAVA_BYTE, byteIndex, (byte) (b | (1 << (i & 7))));
+                dst.set(ValueLayout.JAVA_BYTE, byteIndex, (byte) ((b & 0xff) | (1 << (i & 7))));
             }
         }
         return dst;
