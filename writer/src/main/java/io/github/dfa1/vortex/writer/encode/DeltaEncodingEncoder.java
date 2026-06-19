@@ -47,7 +47,8 @@ public final class DeltaEncodingEncoder implements EncodingEncoder {
         long mask = typeMask(ptype);
         boolean unsign = isUnsigned(ptype);
 
-        long minVal = 0L, maxVal = 0L;
+        long minVal = 0L;
+        long maxVal = 0L;
         if (n > 0) {
             minVal = longs[0];
             maxVal = longs[0];

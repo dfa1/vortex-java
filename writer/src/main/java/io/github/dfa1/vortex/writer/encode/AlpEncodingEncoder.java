@@ -156,7 +156,8 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
     private static AlpF64Data computeF64(double[] values) {
         int n = values.length;
         int[] exps = findExponentsF64(values);
-        int expE = exps[0], expF = exps[1];
+        int expE = exps[0];
+        int expF = exps[1];
         double ef = F10_F64[expE];
         double iff = IF10_F64[expF];
         double df = F10_F64[expF];
@@ -166,7 +167,8 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         var patchIndices = new ArrayList<Integer>();
         var patchValues = new ArrayList<Double>();
 
-        double min = Double.MAX_VALUE, max = -Double.MAX_VALUE;
+        double min = Double.MAX_VALUE;
+        double max = -Double.MAX_VALUE;
         for (int i = 0; i < n; i++) {
             double v = values[i];
             double enc = v * ef * iff;
@@ -329,7 +331,8 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
     private static EncodeResult encodeF32(float[] values, EncodeContext ctx) {
         int n = values.length;
         int[] exps = findExponentsF32(values);
-        int expE = exps[0], expF = exps[1];
+        int expE = exps[0];
+        int expF = exps[1];
         float ef = F10_F32[expE];
         float iff = IF10_F32[expF];
         float df = F10_F32[expF];
@@ -339,7 +342,8 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         var patchIndices = new ArrayList<Integer>();
         var patchValues = new ArrayList<Float>();
 
-        float min = Float.MAX_VALUE, max = -Float.MAX_VALUE;
+        float min = Float.MAX_VALUE;
+        float max = -Float.MAX_VALUE;
         for (int i = 0; i < n; i++) {
             float v = values[i];
             float enc = v * ef * iff;
