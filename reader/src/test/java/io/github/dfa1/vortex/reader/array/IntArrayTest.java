@@ -21,12 +21,7 @@ class IntArrayTest {
             ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     private static IntArray of(int... values) {
-        MemorySegment seg = Arena.ofAuto().allocate((long) values.length * 4, 4);
-        for (int i = 0; i < values.length; i++) {
-            seg.setAtIndex(LE_INT, i, values[i]);
-        }
-        DType dtype = new DType.Primitive(PType.I32, false);
-        return new MaterializedIntArray(dtype, values.length, seg);
+        return TestArrays.ints(Arena.ofAuto(), values);
     }
 
     @Nested
