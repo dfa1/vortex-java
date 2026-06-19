@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.cli.tui;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.GenericArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantDecimalArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
@@ -11,6 +12,8 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.math.BigDecimal;
 import java.util.List;
 
@@ -55,6 +58,33 @@ class InspectorRenderTest {
 
             // When / Then
             assertThat(InspectorRender.formatValue(sut, 0, decimal)).isEqualTo("3.14");
+        }
+
+        @Test
+        void rendersGenericArrayDecimal() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given — GenericArray over an 8-byte LE mantissa 123 at scale 2 → 1.23
+                DType decimal = new DType.Decimal((byte) 10, (byte) 2, false);
+                MemorySegment buf = arena.allocate(8, 8);
+                buf.setAtIndex(ValueLayout.JAVA_LONG, 0, 123L);
+                Array sut = new GenericArray(decimal, 1, buf.asReadOnly());
+
+                // When / Then
+                assertThat(InspectorRender.formatValue(sut, 0, decimal)).isEqualTo("1.23");
+            }
+        }
+
+        @Test
+        void genericArrayDecimalBadShapeRendersFallback() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given — two buffers: getDecimal rejects the shape with a non-"null cell" error
+                DType decimal = new DType.Decimal((byte) 10, (byte) 2, false);
+                MemorySegment buf = arena.allocate(8, 8);
+                Array sut = new GenericArray(decimal, 1, new MemorySegment[]{buf, buf}, new Array[0]);
+
+                // When / Then — tryDecimal swallows it into the <ClassName dtype> fallback
+                assertThat(InspectorRender.formatValue(sut, 0, decimal)).startsWith("<GenericArray");
+            }
         }
 
         @Test
