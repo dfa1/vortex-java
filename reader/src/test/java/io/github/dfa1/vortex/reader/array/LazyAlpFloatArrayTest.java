@@ -51,6 +51,25 @@ class LazyAlpFloatArrayTest {
     }
 
     @Test
+    void materializeDecodesAllRows() {
+        // Given
+        LazyAlpFloatArray sut = of(0.01f, 123, 456, 789);
+        ValueLayout.OfFloat leFloat =
+                ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+
+        // When
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment seg = sut.materialize(arena);
+
+            // Then — each materialized row matches the lazy getter
+            for (int i = 0; i < 3; i++) {
+                assertThat(seg.getAtIndex(leFloat, i)).as("row %d", i)
+                        .isCloseTo(sut.getFloat(i), offset(1e-6f));
+            }
+        }
+    }
+
+    @Test
     void metadataExposed() {
         // Given
         LazyAlpFloatArray sut = of(0.5f, 1, 2, 3);
