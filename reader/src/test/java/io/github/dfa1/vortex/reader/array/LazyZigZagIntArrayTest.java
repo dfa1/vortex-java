@@ -34,7 +34,7 @@ class LazyZigZagIntArrayTest {
         LazyZigZagIntArray sut = of(0, 1, 2, 3, 4);
 
         // When + Then
-        assertThat(sut.getInt(0)).isEqualTo(0);
+        assertThat(sut.getInt(0)).isZero();
         assertThat(sut.getInt(1)).isEqualTo(-1);
         assertThat(sut.getInt(2)).isEqualTo(1);
         assertThat(sut.getInt(3)).isEqualTo(-2);
@@ -63,6 +63,6 @@ class LazyZigZagIntArrayTest {
         int sum = sut.fold(0, Integer::sum);
 
         // Then
-        assertThat(sum).isEqualTo(0);
+        assertThat(sum).isZero();
     }
 }

@@ -127,8 +127,8 @@ class PatchedEncodingDecoderTest {
         // Then
         IntArray ints = (IntArray) result;
         assertThat(ints.getInt(0)).isEqualTo(1);
-        assertThat(ints.getInt(1)).isEqualTo(0);
-        assertThat(ints.getInt(2)).isEqualTo(0);
+        assertThat(ints.getInt(1)).isZero();
+        assertThat(ints.getInt(2)).isZero();
         assertThat(ints.getInt(3)).isEqualTo(7);
     }
 

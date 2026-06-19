@@ -146,7 +146,7 @@ class LeBitReaderTest {
             // Then — 0xAB = 0b10101011, LSB first: 1,1,0,1,0,1,0,1
             assertThat(b0).isEqualTo(1);
             assertThat(b1).isEqualTo(1);
-            assertThat(b2).isEqualTo(0);
+            assertThat(b2).isZero();
             assertThat(b3).isEqualTo(1);
             assertThat(sut.bitsConsumed()).isEqualTo(4);
         }

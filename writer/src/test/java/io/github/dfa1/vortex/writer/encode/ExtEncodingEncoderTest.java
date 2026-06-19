@@ -103,7 +103,7 @@ class ExtEncodingEncoderTest {
             ChildSlot slot = result.openChildren().get(0);
             assertThat(slot.childDtype()).isEqualTo(storageDType);
             assertThat(slot.childData()).isSameAs(data);
-            assertThat(slot.parentChildIdx()).isEqualTo(0);
+            assertThat(slot.parentChildIdx()).isZero();
             assertThat(result.partialRoot().encodingId()).isEqualTo(EncodingId.VORTEX_EXT);
             assertThat(result.partialRoot().children()).hasSize(1);
         }

@@ -117,7 +117,7 @@ class ListViewEncodingEncoderTest {
 
             // Then
             assertThat(resultDecoded.length()).isEqualTo(2);
-            assertThat(resultDecoded.elements().length()).isEqualTo(0);
+            assertThat(resultDecoded.elements().length()).isZero();
             assertThat(resultDecoded.offsets().length()).isEqualTo(2);
             assertThat(resultDecoded.sizes().length()).isEqualTo(2);
         }

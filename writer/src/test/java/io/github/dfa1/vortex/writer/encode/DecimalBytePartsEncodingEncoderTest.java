@@ -72,6 +72,6 @@ class DecimalBytePartsEncodingEncoderTest {
         DecimalBytePartsMetadata meta =
                 DecimalBytePartsMetadata.decode(java.lang.foreign.MemorySegment.ofArray(metaBytes), 0, metaBytes.length);
         assertThat(meta.zeroth_child_ptype().value()).isEqualTo(7); // I64 ordinal
-        assertThat(meta.lower_part_count()).isEqualTo(0);
+        assertThat(meta.lower_part_count()).isZero();
     }
 }

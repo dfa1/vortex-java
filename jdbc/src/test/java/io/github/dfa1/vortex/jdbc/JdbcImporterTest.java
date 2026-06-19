@@ -360,7 +360,7 @@ class JdbcImporterTest {
                         assertThat(nMasked.isValid(1)).isTrue();
                         assertThat(nMasked.isValid(2)).isTrue();
                         LongArray nInner = (LongArray) nMasked.inner();
-                        assertThat(nInner.getLong(1)).isEqualTo(0L);
+                        assertThat(nInner.getLong(1)).isZero();
                         assertThat(nInner.getLong(2)).isEqualTo(42L);
 
                         io.github.dfa1.vortex.reader.array.MaskedArray sMasked =

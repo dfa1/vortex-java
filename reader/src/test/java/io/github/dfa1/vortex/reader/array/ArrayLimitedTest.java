@@ -213,7 +213,7 @@ class ArrayLimitedTest {
 
             // Then — first chunk kept whole, boundary chunk truncated to 1 row
             assertThat(result.length()).isEqualTo(4L);
-            assertThat(((LongArray) result).getLong(0)).isEqualTo(0L);
+            assertThat(((LongArray) result).getLong(0)).isZero();
             assertThat(((LongArray) result).getLong(3)).isEqualTo(3L);
         }
 
