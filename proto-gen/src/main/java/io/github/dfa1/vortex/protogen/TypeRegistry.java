@@ -65,8 +65,8 @@ public final class TypeRegistry {
                     String fqn = parentFqn + "." + e.name();
                     byFqn.put(fqn, new ResolvedType.Enum(e, fqn, javaPackage));
                 }
-                case Ast.FieldDecl _ -> { }
-                case Ast.OneOfDecl _ -> { }
+                case Ast.FieldDecl _ -> { /* not a type declaration */ }
+                case Ast.OneOfDecl _ -> { /* not a type declaration */ }
             }
         }
     }

@@ -452,7 +452,7 @@ class PcoEncodingDecoderTest {
             assertThatCode(() -> {
                 try {
                     SUT.decode(ctx);
-                } catch (VortexException _) {
+                } catch (VortexException _) { // acceptable; only non-Vortex failures should escape
                 }
             }).doesNotThrowAnyException();
         }
@@ -467,7 +467,7 @@ class PcoEncodingDecoderTest {
             assertThatCode(() -> {
                 try {
                     SUT.decode(ctx);
-                } catch (VortexException _) {
+                } catch (VortexException _) { // acceptable; only non-Vortex failures should escape
                 }
             }).doesNotThrowAnyException();
         }
