@@ -283,7 +283,7 @@ class ZstdEncodingEncoderTest {
             var metaSeg = java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate());
             ZstdMetadata meta = ZstdMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 
-            assertThat(meta.frames().size()).isGreaterThan(0);
+            assertThat(meta.frames()).isNotEmpty();
         }
     }
 }

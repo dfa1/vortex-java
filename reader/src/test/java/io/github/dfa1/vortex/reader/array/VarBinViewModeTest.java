@@ -60,7 +60,7 @@ class VarBinViewModeTest {
             try (Arena arena = Arena.ofConfined()) {
                 // Given a 13-byte string (exceeds 12-byte inline limit) stored in a shared data buffer.
                 String longStr = "thirteen-byte";
-                assertThat(longStr.length()).isEqualTo(13);
+                assertThat(longStr).hasSize(13);
                 MemorySegment dataBuf = arena.allocate(longStr.length());
                 MemorySegment.copy(MemorySegment.ofArray(longStr.getBytes(StandardCharsets.UTF_8)),
                         0, dataBuf, 0, longStr.length());

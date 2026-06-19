@@ -40,7 +40,7 @@ class EncodingIdTest {
         @EnumSource(EncodingId.class)
         void toString_equalsId(EncodingId id) {
             // Given / When / Then
-            assertThat(id.toString()).isEqualTo(id.id());
+            assertThat(id).hasToString(id.id());
         }
     }
 }
