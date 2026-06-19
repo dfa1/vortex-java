@@ -79,10 +79,12 @@
 		<!-- Generated sources (FlatBuffers + Protobuf) live under fbs/ and proto/. They
 		     are emitted by external code-gen and have no hand-written behaviour worth
 		     covering; counting them tanks the project-wide coverage ratio without
-		     reflecting real test gaps. -->
+		     reflecting real test gaps. The performance module is JMH benchmark main code
+		     with no tests by design — excluded for the same reason. -->
 		<sonar.coverage.exclusions>
 			**/fbs/**,
-			**/proto/**
+			**/proto/**,
+			**/performance/**
 		</sonar.coverage.exclusions>
 		<!-- Coverage sources:
 		     1. per-module surefire (unit tests)
