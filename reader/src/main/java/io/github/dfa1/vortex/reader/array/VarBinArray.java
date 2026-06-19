@@ -78,6 +78,18 @@ public sealed interface VarBinArray extends Array
     /// @return the bytes [MemorySegment]
     MemorySegment bytesSegment();
 
+    /// Returns the concatenated raw bytes segment directly — the primary data
+    /// buffer is already materialised, so no copy or allocation is needed.
+    /// Note this is the data buffer only; the per-row offsets are exposed
+    /// separately by [OffsetMode#offsetsSegment()].
+    ///
+    /// @param arena unused; the existing bytes segment is returned as-is
+    /// @return the concatenated raw bytes [MemorySegment]
+    @Override
+    default MemorySegment materialize(SegmentAllocator arena) {
+        return bytesSegment();
+    }
+
     /// Returns a copy of the raw bytes for element `i`.
     ///
     /// @param i zero-based logical index (must be in `[0, length)`)

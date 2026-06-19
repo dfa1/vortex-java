@@ -1,6 +1,10 @@
 package io.github.dfa1.vortex.reader.array;
 
 
+import io.github.dfa1.vortex.encoding.PTypeIO;
+
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 import java.util.function.LongBinaryOperator;
 import java.util.function.LongConsumer;
 
@@ -49,5 +53,22 @@ public non-sealed interface LongArray extends Array {
     @Override
     default Array limited(long rows) {
         return new OffsetLongArray(dtype(), rows, this, 0);
+    }
+
+    /// Scalar fallback: decodes every element through [#getLong(long)] into a fresh
+    /// little-endian segment. Buffer-backed ([MaterializedLongArray]) and lazy
+    /// formula-based variants ([LazyForLongArray], [LazyZigZagLongArray], …)
+    /// override with a zero-copy or vectorised path.
+    ///
+    /// @param arena allocator for the output segment
+    /// @return a little-endian `i64` segment of `length()` elements
+    @Override
+    default MemorySegment materialize(SegmentAllocator arena) {
+        long n = length();
+        MemorySegment dst = arena.allocate(n * 8L, 8);
+        for (long i = 0; i < n; i++) {
+            dst.setAtIndex(PTypeIO.LE_LONG, i, getLong(i));
+        }
+        return dst;
     }
 }

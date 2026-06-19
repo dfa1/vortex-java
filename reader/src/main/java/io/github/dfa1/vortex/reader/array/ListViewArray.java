@@ -3,6 +3,9 @@ package io.github.dfa1.vortex.reader.array;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
 
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
+
 /// Decoded variable-length list-view array (Arrow ListView layout).
 ///
 /// Unlike [ListArray], offsets and sizes are independent per row:
@@ -81,5 +84,17 @@ public final class ListViewArray implements Array {
         // stay shared — list-view rows can point anywhere, so nothing is trimmed.
         return new ListViewArray(dtype, rows, elements,
                 Array.limited(offsets, rows), Array.limited(sizes, rows));
+    }
+
+    /// Always throws: a list-view array is offsets, sizes, and a flat elements child,
+    /// not a single primary segment. Materialise [#elements()], [#offsets()], and
+    /// [#sizes()] separately.
+    ///
+    /// @param arena unused
+    /// @return never returns
+    /// @throws VortexException always
+    @Override
+    public MemorySegment materialize(SegmentAllocator arena) {
+        throw new VortexException("ListViewArray has no primary segment");
     }
 }

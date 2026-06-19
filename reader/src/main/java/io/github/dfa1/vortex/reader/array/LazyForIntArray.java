@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 
 /// Lazy [IntArray] backed by the `fastlanes.for` encoded `i32` child segment.
 ///
@@ -21,5 +22,22 @@ public record LazyForIntArray(DType dtype, long length, MemorySegment encoded, i
     @Override
     public int getInt(long i) {
         return encoded.getAtIndex(PTypeIO.LE_INT, i) + ref;
+    }
+
+    /// Bulk-decodes through [#getInt(long)] into a fresh little-endian `i32` segment.
+    /// The decode formula lives only in [#getInt(long)]; this override exists solely to
+    /// give the JIT a monomorphic, inlinable call site (the shared [IntArray] default is
+    /// megamorphic across every implementation and will not inline or auto-vectorise).
+    ///
+    /// @param arena allocator for the output segment
+    /// @return a little-endian `i32` segment of decoded values
+    @Override
+    public MemorySegment materialize(SegmentAllocator arena) {
+        long n = length;
+        MemorySegment dst = arena.allocate(n * 4L, 4);
+        for (long i = 0; i < n; i++) {
+            dst.setAtIndex(PTypeIO.LE_INT, i, getInt(i));
+        }
+        return dst;
     }
 }

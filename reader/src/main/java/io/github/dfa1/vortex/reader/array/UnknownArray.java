@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 import java.nio.ByteBuffer;
 
 /// Opaque passthrough array for encodings unknown to this reader.
@@ -48,5 +49,16 @@ public record UnknownArray(
     @Override
     public Array limited(long rows) {
         throw new VortexException("limit: not supported for undecoded encoding '" + encodingId + "'");
+    }
+
+    /// Unsupported: an unknown encoding's `buffers` are raw, undecoded bytes with no
+    /// row-addressable structure, so there is no decoded primary segment.
+    ///
+    /// @param arena ignored
+    /// @return never returns
+    /// @throws VortexException always
+    @Override
+    public MemorySegment materialize(SegmentAllocator arena) {
+        throw new VortexException("materialize: not supported for undecoded encoding '" + encodingId + "'");
     }
 }

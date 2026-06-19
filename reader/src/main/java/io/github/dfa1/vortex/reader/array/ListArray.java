@@ -3,6 +3,9 @@ package io.github.dfa1.vortex.reader.array;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
 
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
+
 /// Decoded variable-length list array.
 ///
 /// List `i` covers `elements[offsets[i]..offsets[i+1])`.
@@ -68,5 +71,16 @@ public final class ListArray implements Array {
         // Keep the first `rows` lists: offsets needs rows+1 entries; elements stay
         // shared (trailing elements past offsets[rows] are simply unreferenced).
         return new ListArray(dtype, rows, elements, Array.limited(offsets, rows + 1));
+    }
+
+    /// Always throws: a list array is offsets plus a flat elements child, not a
+    /// single primary segment. Materialise [#elements()] and [#offsets()] separately.
+    ///
+    /// @param arena unused
+    /// @return never returns
+    /// @throws VortexException always
+    @Override
+    public MemorySegment materialize(SegmentAllocator arena) {
+        throw new VortexException("ListArray has no primary segment");
     }
 }

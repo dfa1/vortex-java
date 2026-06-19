@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 import java.util.function.DoubleBinaryOperator;
 import java.util.function.DoubleConsumer;
 
@@ -39,6 +40,16 @@ public final class MaterializedDoubleArray implements DoubleArray {
     }
 
     MemorySegment buffer() {
+        return buffer;
+    }
+
+    /// Returns the backing buffer directly — already a contiguous little-endian
+    /// `f64` segment, so no copy or allocation is needed.
+    ///
+    /// @param arena unused; the existing buffer is returned as-is
+    /// @return the backing little-endian `f64` segment
+    @Override
+    public MemorySegment materialize(SegmentAllocator arena) {
         return buffer;
     }
 

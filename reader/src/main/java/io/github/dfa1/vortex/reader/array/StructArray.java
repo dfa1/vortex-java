@@ -3,6 +3,8 @@ package io.github.dfa1.vortex.reader.array;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
 
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 import java.util.List;
 
 /// Decoded struct array: holds one [Array] per field, keyed by position.
@@ -68,5 +70,16 @@ public final class StructArray implements Array {
     @Override
     public Array limited(long rows) {
         return new StructArray(dtype, rows, fields.stream().map(f -> Array.limited(f, rows)).toList());
+    }
+
+    /// Always throws: a struct has one segment per field, not a single primary
+    /// segment. Materialise each [#field(int)] separately.
+    ///
+    /// @param arena unused
+    /// @return never returns
+    /// @throws VortexException always
+    @Override
+    public MemorySegment materialize(SegmentAllocator arena) {
+        throw new VortexException("StructArray has no primary segment");
     }
 }

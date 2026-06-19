@@ -3,7 +3,6 @@ package io.github.dfa1.vortex.writer;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.writer.encode.DictEncodingEncoder;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -102,19 +101,19 @@ class DictEncodingTest {
             try (Chunk c1 = iter.next()) {
                 Array a1 = c1.columns().get("category");
                 assertThat(a1.length()).isEqualTo(3L);
-                assertThat(ArraySegments.of(a1, Arena.ofAuto()).get(LE_INT, 0)).isEqualTo(10);
-                assertThat(ArraySegments.of(a1, Arena.ofAuto()).get(LE_INT, 4)).isEqualTo(20);
-                assertThat(ArraySegments.of(a1, Arena.ofAuto()).get(LE_INT, 8)).isEqualTo(10);
+                assertThat(a1.materialize(Arena.ofAuto()).get(LE_INT, 0)).isEqualTo(10);
+                assertThat(a1.materialize(Arena.ofAuto()).get(LE_INT, 4)).isEqualTo(20);
+                assertThat(a1.materialize(Arena.ofAuto()).get(LE_INT, 8)).isEqualTo(10);
             }
 
             assertThat(iter.hasNext()).isTrue();
             try (Chunk c2 = iter.next()) {
                 Array a2 = c2.columns().get("category");
                 assertThat(a2.length()).isEqualTo(4L);
-                assertThat(ArraySegments.of(a2, Arena.ofAuto()).get(LE_INT, 0)).isEqualTo(30);
-                assertThat(ArraySegments.of(a2, Arena.ofAuto()).get(LE_INT, 4)).isEqualTo(10);
-                assertThat(ArraySegments.of(a2, Arena.ofAuto()).get(LE_INT, 8)).isEqualTo(20);
-                assertThat(ArraySegments.of(a2, Arena.ofAuto()).get(LE_INT, 12)).isEqualTo(30);
+                assertThat(a2.materialize(Arena.ofAuto()).get(LE_INT, 0)).isEqualTo(30);
+                assertThat(a2.materialize(Arena.ofAuto()).get(LE_INT, 4)).isEqualTo(10);
+                assertThat(a2.materialize(Arena.ofAuto()).get(LE_INT, 8)).isEqualTo(20);
+                assertThat(a2.materialize(Arena.ofAuto()).get(LE_INT, 12)).isEqualTo(30);
             }
 
             assertThat(iter.hasNext()).isFalse();

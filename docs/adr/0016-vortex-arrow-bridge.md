@@ -115,8 +115,7 @@ Three pieces of work beyond just handing over the existing mmap slices:
 2. **Lazy materialisation.** Lazy arrays (ZigZag/FoR/ALP/Dict/RLE) store the
    *encoded* form, which is not the Arrow values layout, so they must be materialised
    into a contiguous LE segment first. This is exactly the producer step that
-   `ArraySegments.of(...)` (or a future `Array.materialize(arena)` delegation seam,
-   see below) performs, so the internal materialise path feeds the `values` buffer
+   `Array.materialize(arena)` performs (see below), so it feeds the `values` buffer
    directly. Primitive values, VarBin data+offsets, and StringView are already
    Arrow-shaped (zero-copy).
 3. **Lifetime / release contract.** Buffers are zero-copy slices of the mmap'd file
@@ -127,20 +126,28 @@ Three pieces of work beyond just handing over the existing mmap slices:
    consumer calls `release` is a use-after-unmap → native segfault, not a Java
    exception. This is the highest-risk part.
 
-### Relationship to the internal materialise seam
+### Relationship to the `Array.materialize` seam (shipped)
 
-`ArraySegments.of(Array, SegmentAllocator)` already centralises "turn any array
-(lazy or eager) into a contiguous LE primitive segment", and currently re-states each
-encoding's decode formula (ZigZag/FoR/ALP) in a large switch separate from the
-per-element accessor on the lazy array. A standalone refactor — moving that bulk
-materialisation onto the array types as an `Array.materialize(SegmentAllocator)`
-delegation (mirroring the existing `Array.limited(...)` pattern, kept on a
-package-private seam to avoid widening the public API) — stands on its own as a
-locality cleanup. It is **not** an Arrow feature, but it is the natural producer of
-the Arrow `values` buffer, so Option B should build on it rather than duplicate it.
-The contiguous LE segment it yields already matches Arrow's primitive values-buffer
-layout; the gap to a full Arrow array is validity + offsets + children, per the table
-above.
+The bulk-materialisation seam Option B builds on now exists:
+`Array.materialize(SegmentAllocator)` — a pure abstract method (mirroring the existing
+`Array.limited(...)` polymorphism) that turns any array, lazy or eager, into a contiguous
+LE primitive segment. Each type owns its path: segment-backed arrays return their buffer
+zero-copy, the `Lazy*` variants apply their inlined decode formula (ZigZag/FoR/ALP) in a
+vectorisable loop next to their per-element accessor, chunked/dict arrays concat/gather,
+and the families with no primary segment (struct, list, variant, byte-parts decimal, null,
+unknown) throw.
+
+This is **not** an Arrow feature — but it is the natural producer of the Arrow `values`
+buffer, so Option B builds on it. The contiguous LE segment it yields already matches
+Arrow's primitive values-buffer layout. Two gaps remain to a full Arrow array, both per
+the table above: validity + offsets + children; and the broadcast edge — a constant column
+materialises to a single-element buffer (`length != elementCount`), which `materialize()`
+returns as-is, so the Arrow producer must expand it to `length` values.
+
+`materialize` is intentionally part of the public `Array` contract (not a package-private
+seam): it is the documented way to obtain a column's contiguous primitive buffer, and a
+future `vortex-arrow` module in a separate package consumes it without further API
+widening.
 
 ### Option C — No bridge; document manual conversion
 

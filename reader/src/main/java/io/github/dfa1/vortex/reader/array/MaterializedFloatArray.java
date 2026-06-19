@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 import java.util.function.DoubleBinaryOperator;
 
 /// Buffer-backed [FloatArray] — the fallback used when an encoding decoder
@@ -39,6 +40,16 @@ public final class MaterializedFloatArray implements FloatArray {
     }
 
     MemorySegment buffer() {
+        return buffer;
+    }
+
+    /// Returns the backing buffer directly — already a contiguous little-endian
+    /// `f32` segment, so no copy or allocation is needed.
+    ///
+    /// @param arena unused; the existing buffer is returned as-is
+    /// @return the backing little-endian `f32` segment
+    @Override
+    public MemorySegment materialize(SegmentAllocator arena) {
         return buffer;
     }
 

@@ -2,7 +2,10 @@ package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.encoding.PTypeIO;
 
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 import java.util.function.LongBinaryOperator;
 
 /// [Array] for I16/U16 primitive columns.
@@ -52,5 +55,21 @@ public non-sealed interface ShortArray extends Array {
     @Override
     default Array limited(long rows) {
         return new OffsetShortArray(dtype(), rows, this, 0);
+    }
+
+    /// Scalar fallback: decodes every element through [#getShort(long)] into a fresh
+    /// little-endian segment. Buffer-backed ([MaterializedShortArray]) overrides with
+    /// a zero-copy path.
+    ///
+    /// @param arena allocator for the output segment
+    /// @return a little-endian `i16` segment of `length()` elements
+    @Override
+    default MemorySegment materialize(SegmentAllocator arena) {
+        long n = length();
+        MemorySegment dst = arena.allocate(n * 2L, 2);
+        for (long i = 0; i < n; i++) {
+            dst.setAtIndex(PTypeIO.LE_SHORT, i, getShort(i));
+        }
+        return dst;
     }
 }

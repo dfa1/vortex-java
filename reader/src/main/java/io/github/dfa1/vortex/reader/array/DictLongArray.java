@@ -2,7 +2,10 @@ package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.encoding.PTypeIO;
 
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 import java.util.function.LongBinaryOperator;
 import java.util.function.LongConsumer;
 
@@ -46,6 +49,45 @@ public record DictLongArray(DType dtype, long length, LongArray values, Array co
     @Override
     public long getLong(long i) {
         return values.getLong(DictArrays.readCode(codes, i));
+    }
+
+    /// Materialises by gathering one dictionary value per code into a fresh
+    /// little-endian `i64` segment. The codes switch is hoisted outside the loop so
+    /// each branch is a uniform gather over a single code width.
+    ///
+    /// @param arena allocator for the output segment
+    /// @return a read-only little-endian `i64` segment of gathered values
+    /// @throws VortexException if `codes` is not a supported code-array type
+    @Override
+    public MemorySegment materialize(SegmentAllocator arena) {
+        long n = length;
+        MemorySegment dst = arena.allocate(n * 8L, 8);
+        LongArray vals = values;
+        switch (codes) {
+            case ByteArray ba -> {
+                for (long i = 0; i < n; i++) {
+                    dst.setAtIndex(PTypeIO.LE_LONG, i, vals.getLong(Byte.toUnsignedLong(ba.getByte(i))));
+                }
+            }
+            case ShortArray sa -> {
+                for (long i = 0; i < n; i++) {
+                    dst.setAtIndex(PTypeIO.LE_LONG, i, vals.getLong(Short.toUnsignedLong(sa.getShort(i))));
+                }
+            }
+            case IntArray ia -> {
+                for (long i = 0; i < n; i++) {
+                    dst.setAtIndex(PTypeIO.LE_LONG, i, vals.getLong(Integer.toUnsignedLong(ia.getInt(i))));
+                }
+            }
+            case LongArray la -> {
+                for (long i = 0; i < n; i++) {
+                    dst.setAtIndex(PTypeIO.LE_LONG, i, vals.getLong(la.getLong(i)));
+                }
+            }
+            default -> throw new VortexException("DictLongArray: invalid codes type: "
+                    + codes.getClass().getSimpleName());
+        }
+        return dst.asReadOnly();
     }
 
     @Override

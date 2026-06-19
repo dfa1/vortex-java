@@ -3,6 +3,8 @@ package io.github.dfa1.vortex.reader.array;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
 
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -106,5 +108,25 @@ public record ChunkedLongArray(DType dtype, long length, LongArray[] children, l
     @Override
     public Array limited(long rows) {
         return ChunkedLongArray.of(dtype, rows, ChunkedArrays.limitedChildren(children, offsets, rows));
+    }
+
+    /// Materialises by concatenating each child's segment into one contiguous
+    /// little-endian `i64` buffer. Each child is materialised through its own
+    /// [LongArray#materialize(SegmentAllocator)], so lazy children decode straight
+    /// into the shared destination via a bulk copy.
+    ///
+    /// @param arena allocator for the output segment
+    /// @return a read-only little-endian `i64` segment spanning all chunks
+    @Override
+    public MemorySegment materialize(SegmentAllocator arena) {
+        MemorySegment dst = arena.allocate(length * 8L, 8);
+        long byteOffset = 0;
+        for (LongArray child : children) {
+            MemorySegment src = child.materialize(arena);
+            long bytes = child.length() * 8L;
+            MemorySegment.copy(src, 0, dst, byteOffset, bytes);
+            byteOffset += bytes;
+        }
+        return dst.asReadOnly();
     }
 }

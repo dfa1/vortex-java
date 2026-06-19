@@ -1,6 +1,10 @@
 package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.VortexException;
+
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 
 /// Decoded `vortex.variant` array: semi-structured data with a logical variant dtype.
 ///
@@ -57,5 +61,17 @@ public final class VariantArray implements Array {
     public Array limited(long rows) {
         return new VariantArray(dtype, rows, Array.limited(coreStorage, rows),
                 shredded != null ? Array.limited(shredded, rows) : null);
+    }
+
+    /// Always throws: a variant array is core-storage plus optional shredded children,
+    /// not a single primary segment. Materialise [#coreStorage()] / [#shredded()]
+    /// separately.
+    ///
+    /// @param arena unused
+    /// @return never returns
+    /// @throws VortexException always
+    @Override
+    public MemorySegment materialize(SegmentAllocator arena) {
+        throw new VortexException("VariantArray has no primary segment");
     }
 }

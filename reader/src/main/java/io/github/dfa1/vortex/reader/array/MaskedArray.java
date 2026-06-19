@@ -2,6 +2,9 @@ package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.DType;
 
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
+
 /// Decoded `vortex.masked` array: a non-nullable child paired with an optional validity bitmap.
 ///
 /// Invariant: `child` has no actual nulls — nullability is expressed solely via
@@ -60,5 +63,17 @@ public final class MaskedArray implements Array {
         Array truncChild = Array.limited(child, rows);
         BoolArray truncValidity = validity != null ? (BoolArray) Array.limited(validity, rows) : null;
         return new MaskedArray(truncChild, truncValidity);
+    }
+
+    /// Materialises the inner (data) payload, ignoring the validity mask — the
+    /// segment returned is the data buffer only. This matches the prior
+    /// `ArraySegments` behaviour of unwrapping a masked array to its inner data;
+    /// callers that need validity must read [#validity()] separately.
+    ///
+    /// @param arena allocator used to materialise lazy inner variants
+    /// @return the inner payload's primary [MemorySegment]
+    @Override
+    public MemorySegment materialize(SegmentAllocator arena) {
+        return child.materialize(arena);
     }
 }

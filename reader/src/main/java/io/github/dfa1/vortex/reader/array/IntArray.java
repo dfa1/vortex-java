@@ -1,6 +1,10 @@
 package io.github.dfa1.vortex.reader.array;
 
 
+import io.github.dfa1.vortex.encoding.PTypeIO;
+
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 import java.util.function.IntBinaryOperator;
 import java.util.function.IntConsumer;
 
@@ -49,5 +53,22 @@ public non-sealed interface IntArray extends Array {
     @Override
     default Array limited(long rows) {
         return new OffsetIntArray(dtype(), rows, this, 0);
+    }
+
+    /// Scalar fallback: decodes every element through [#getInt(long)] into a fresh
+    /// little-endian segment. Buffer-backed ([MaterializedIntArray]) and lazy
+    /// formula-based variants ([LazyForIntArray], [LazyZigZagIntArray], …) override
+    /// with a zero-copy or vectorised path.
+    ///
+    /// @param arena allocator for the output segment
+    /// @return a little-endian `i32` segment of `length()` elements
+    @Override
+    default MemorySegment materialize(SegmentAllocator arena) {
+        long n = length();
+        MemorySegment dst = arena.allocate(n * 4L, 4);
+        for (long i = 0; i < n; i++) {
+            dst.setAtIndex(PTypeIO.LE_INT, i, getInt(i));
+        }
+        return dst;
     }
 }

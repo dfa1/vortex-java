@@ -2,7 +2,6 @@ package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 
 import java.lang.foreign.MemorySegment;
@@ -89,7 +88,7 @@ public record DecodeContext(
     /// @param arr the decoded array to materialise
     /// @return the array's primary [MemorySegment]
     public MemorySegment materialize(Array arr) {
-        return ArraySegments.of(arr, arena);
+        return arr.materialize(arena);
     }
 
     /// Returns the buffer at position `i` in this node's bufferIndices.

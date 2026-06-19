@@ -3,6 +3,9 @@ package io.github.dfa1.vortex.reader.array;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
+import java.lang.foreign.ValueLayout;
 import java.util.function.LongBinaryOperator;
 
 /// [Array] for I8/U8 primitive columns.
@@ -52,5 +55,21 @@ public non-sealed interface ByteArray extends Array {
     @Override
     default Array limited(long rows) {
         return new OffsetByteArray(dtype(), rows, this, 0);
+    }
+
+    /// Scalar fallback: decodes every element through [#getByte(long)] into a fresh
+    /// one-byte-per-element segment. Buffer-backed ([MaterializedByteArray]) overrides
+    /// with a zero-copy path.
+    ///
+    /// @param arena allocator for the output segment
+    /// @return a segment of `length()` bytes
+    @Override
+    default MemorySegment materialize(SegmentAllocator arena) {
+        long n = length();
+        MemorySegment dst = arena.allocate(n);
+        for (long i = 0; i < n; i++) {
+            dst.set(ValueLayout.JAVA_BYTE, i, getByte(i));
+        }
+        return dst;
     }
 }

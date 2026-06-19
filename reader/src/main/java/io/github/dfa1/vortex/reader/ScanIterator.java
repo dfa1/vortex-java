@@ -603,7 +603,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             // than the claimed rowCount. Full-decode encodings (e.g. bitpacked) already
             // wrote n * elemBytes to the arena during decodeLayout above, so their buffer
             // matches n.
-            MemorySegment codesSeg = ArraySegments.of(codes, arena);
+            MemorySegment codesSeg = codes.materialize(arena);
             long bufferCodes = codesSeg.byteSize() / (long) codesPType.byteSize();
             if (bufferCodes < n) {
                 throw new VortexException(EncodingId.VORTEX_DICT,
@@ -624,7 +624,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         }
         // Non-Utf8, non-Primitive dict — e.g. extension types backed by VarBin. Fall through
         // to the existing string expansion for compatibility.
-        MemorySegment codesSegFallback = ArraySegments.of(codes, arena);
+        MemorySegment codesSegFallback = codes.materialize(arena);
         long bufferCodesFallback = codesSegFallback.byteSize() / (long) codesPType.byteSize();
         if (bufferCodesFallback < n) {
             throw new VortexException(EncodingId.VORTEX_DICT,
@@ -641,6 +641,9 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     /// @param codes      the decoded codes array
     /// @param codesPType code ptype reported by the dict layout metadata
     /// @param n          claimed dict row count
+    // ArraySegments is deprecated-for-removal; this guard is its only caller and moves to
+    // the decode-limits layer with it.
+    @SuppressWarnings("removal")
     private static void validateDictCodesCapacity(Array codes, PType codesPType, long n) {
         Optional<MemorySegment> maybeSeg = ArraySegments.trySegment(codes);
         if (maybeSeg.isEmpty()) {

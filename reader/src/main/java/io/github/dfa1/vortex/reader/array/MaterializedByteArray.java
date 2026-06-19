@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
 import java.util.function.LongBinaryOperator;
 
@@ -40,6 +41,16 @@ public final class MaterializedByteArray implements ByteArray {
     }
 
     MemorySegment buffer() {
+        return buffer;
+    }
+
+    /// Returns the backing buffer directly — already a contiguous one-byte-per-element
+    /// segment, so no copy or allocation is needed.
+    ///
+    /// @param arena unused; the existing buffer is returned as-is
+    /// @return the backing byte segment
+    @Override
+    public MemorySegment materialize(SegmentAllocator arena) {
         return buffer;
     }
 

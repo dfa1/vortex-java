@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.encoding.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
@@ -70,7 +69,7 @@ class DeltaEncodingEncoderTest {
         // Then
         assertThat(result.length()).isEqualTo(data.length);
         for (int i = 0; i < data.length; i++) {
-            assertThat(ArraySegments.of(result, Arena.ofAuto()).get(PTypeIO.LE_LONG, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
+            assertThat(result.materialize(Arena.ofAuto()).get(PTypeIO.LE_LONG, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
         }
     }
 
@@ -87,7 +86,7 @@ class DeltaEncodingEncoderTest {
         // Then
         assertThat(result.length()).isEqualTo(data.length);
         for (int i = 0; i < data.length; i++) {
-            assertThat(ArraySegments.of(result, Arena.ofAuto()).get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
+            assertThat(result.materialize(Arena.ofAuto()).get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
         }
     }
 
@@ -104,7 +103,7 @@ class DeltaEncodingEncoderTest {
         // Then
         assertThat(result.length()).isEqualTo(data.length);
         for (int i = 0; i < data.length; i++) {
-            assertThat(ArraySegments.of(result, Arena.ofAuto()).get(PTypeIO.LE_LONG, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
+            assertThat(result.materialize(Arena.ofAuto()).get(PTypeIO.LE_LONG, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
         }
     }
 
