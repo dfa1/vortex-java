@@ -245,10 +245,6 @@ public final class VortexReader implements VortexHandle {
         return fileSegment.asSlice(spec.offset(), spec.length()).asReadOnly();
     }
 
-    MemorySegment slice(long offset, long length) {
-        return fileSegment.asSlice(offset, length).asReadOnly();
-    }
-
     @Override
     public void close() {
         arena.close();
