@@ -1,25 +1,37 @@
 package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import java.util.List;
 
+import static io.github.dfa1.vortex.encoding.DTypes.BOOL;
+import static io.github.dfa1.vortex.encoding.DTypes.F32;
+import static io.github.dfa1.vortex.encoding.DTypes.F64;
+import static io.github.dfa1.vortex.encoding.DTypes.I16;
+import static io.github.dfa1.vortex.encoding.DTypes.I32;
+import static io.github.dfa1.vortex.encoding.DTypes.I64;
+import static io.github.dfa1.vortex.encoding.DTypes.I8;
+import static io.github.dfa1.vortex.reader.array.TestArrays.bools;
+import static io.github.dfa1.vortex.reader.array.TestArrays.bytes;
+import static io.github.dfa1.vortex.reader.array.TestArrays.doubles;
+import static io.github.dfa1.vortex.reader.array.TestArrays.float16;
+import static io.github.dfa1.vortex.reader.array.TestArrays.floats;
+import static io.github.dfa1.vortex.reader.array.TestArrays.ints;
+import static io.github.dfa1.vortex.reader.array.TestArrays.longs;
+import static io.github.dfa1.vortex.reader.array.TestArrays.shorts;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /// Tests the [Array#limited(long)] contract: the [Array#limited(Array, long)] guard
 /// (no-op clamp + negative rejection) and every concrete implementation —
-/// zero-copy views, composite child recursion, and the [UnknownArray] rejection.
+/// zero-copy views, composite child recursion, chunked prefix retention, and the
+/// [UnknownArray] rejection.
 class ArrayLimitedTest {
-
-    private static final DType I64 = new DType.Primitive(PType.I64, false);
 
     @Nested
     class Guard {
@@ -212,6 +224,139 @@ class ArrayLimitedTest {
     }
 
     @Nested
+    class Chunked {
+
+        @Test
+        void limitAcrossBoundaryKeepsPrefixAndCutsBoundaryChild() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given — two chunks [0,1,2][3,4]; limit 4 lands inside the second chunk
+                ChunkedLongArray sut = ChunkedLongArray.of(I64, 5,
+                        List.of(longs(arena, 0L, 1L, 2L), longs(arena, 3L, 4L)));
+
+                // When
+                Array result = sut.limited(4);
+
+                // Then — first chunk kept whole, boundary chunk truncated to 1 row
+                assertThat(result.length()).isEqualTo(4L);
+                assertThat(((LongArray) result).getLong(0)).isEqualTo(0L);
+                assertThat(((LongArray) result).getLong(3)).isEqualTo(3L);
+            }
+        }
+
+        @Test
+        void limitWithinFirstChunkDropsLaterChunks() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given — two chunks; limit 2 falls inside the first
+                ChunkedLongArray sut = ChunkedLongArray.of(I64, 5,
+                        List.of(longs(arena, 0L, 1L, 2L), longs(arena, 3L, 4L)));
+
+                // When
+                Array result = sut.limited(2);
+
+                // Then — only the (truncated) first chunk survives
+                assertThat(result.length()).isEqualTo(2L);
+                assertThat(((LongArray) result).getLong(1)).isEqualTo(1L);
+            }
+        }
+
+        @Test
+        void intChunkedLimitsAcrossBoundary() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given
+                ChunkedIntArray sut = ChunkedIntArray.of(I32, 4,
+                        List.of(ints(arena, 0, 1), ints(arena, 2, 3)));
+
+                // When
+                Array result = sut.limited(3);
+
+                // Then
+                assertThat(result.length()).isEqualTo(3L);
+                assertThat(((IntArray) result).getInt(2)).isEqualTo(2);
+            }
+        }
+
+        @Test
+        void doubleChunkedLimitsAcrossBoundary() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given
+                ChunkedDoubleArray sut = ChunkedDoubleArray.of(F64, 4,
+                        List.of(doubles(arena, 0.5, 1.5), doubles(arena, 2.5, 3.5)));
+
+                // When
+                Array result = sut.limited(3);
+
+                // Then
+                assertThat(result.length()).isEqualTo(3L);
+                assertThat(((DoubleArray) result).getDouble(2)).isEqualTo(2.5);
+            }
+        }
+
+        @Test
+        void floatChunkedLimitsAcrossBoundary() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given
+                ChunkedFloatArray sut = ChunkedFloatArray.of(F32, 4,
+                        List.of(floats(arena, 0.5f, 1.5f), floats(arena, 2.5f, 3.5f)));
+
+                // When
+                Array result = sut.limited(3);
+
+                // Then
+                assertThat(result.length()).isEqualTo(3L);
+                assertThat(((FloatArray) result).getFloat(2)).isEqualTo(2.5f);
+            }
+        }
+
+        @Test
+        void shortChunkedLimitsAcrossBoundary() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given
+                ChunkedShortArray sut = ChunkedShortArray.of(I16, 4,
+                        List.of(shorts(arena, (short) 0, (short) 1), shorts(arena, (short) 2, (short) 3)));
+
+                // When
+                Array result = sut.limited(3);
+
+                // Then
+                assertThat(result.length()).isEqualTo(3L);
+                assertThat(((ShortArray) result).getShort(2)).isEqualTo((short) 2);
+            }
+        }
+
+        @Test
+        void byteChunkedLimitsAcrossBoundary() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given
+                ChunkedByteArray sut = ChunkedByteArray.of(I8, 4,
+                        List.of(bytes(arena, (byte) 0, (byte) 1), bytes(arena, (byte) 2, (byte) 3)));
+
+                // When
+                Array result = sut.limited(3);
+
+                // Then
+                assertThat(result.length()).isEqualTo(3L);
+                assertThat(((ByteArray) result).getByte(2)).isEqualTo((byte) 2);
+            }
+        }
+
+        @Test
+        void boolChunkedLimitsAcrossBoundary() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given
+                ChunkedBoolArray sut = ChunkedBoolArray.of(BOOL, 4,
+                        List.of(bools(arena, true, false), bools(arena, true, true)));
+
+                // When
+                Array result = sut.limited(3);
+
+                // Then
+                assertThat(result.length()).isEqualTo(3L);
+                assertThat(((BoolArray) result).getBoolean(2)).isTrue();
+            }
+        }
+    }
+
+    @Nested
     class Unsupported {
 
         @Test
@@ -225,21 +370,5 @@ class ArrayLimitedTest {
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("vortex.mystery");
         }
-    }
-
-    private static LongArray longs(Arena arena, long... vs) {
-        MemorySegment seg = arena.allocate(vs.length * 8L, 8);
-        for (int i = 0; i < vs.length; i++) {
-            seg.setAtIndex(ValueLayout.JAVA_LONG, i, vs[i]);
-        }
-        return new MaterializedLongArray(I64, vs.length, seg.asReadOnly());
-    }
-
-    private static Float16Array float16(Arena arena, float... vs) {
-        MemorySegment seg = arena.allocate(vs.length * 2L, 2);
-        for (int i = 0; i < vs.length; i++) {
-            seg.setAtIndex(ValueLayout.JAVA_SHORT, i, Float.floatToFloat16(vs[i]));
-        }
-        return new MaterializedFloat16Array(new DType.Primitive(PType.F16, false), vs.length, seg.asReadOnly());
     }
 }
