@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -69,5 +70,16 @@ public record LazyDecimalArray(DType dtype, long length, MemorySegment buf, int 
     @Override
     public Array limited(long rows) {
         return new LazyDecimalArray(dtype, rows, buf.asSlice(0, rows * (long) byteWidth), byteWidth);
+    }
+
+    /// Returns the backing buffer directly — already a contiguous little-endian
+    /// two's-complement integer segment (`byteWidth` bytes per row), so no copy or
+    /// allocation is needed.
+    ///
+    /// @param arena unused; the existing buffer is returned as-is
+    /// @return the backing little-endian two's-complement segment
+    @Override
+    public MemorySegment materialize(SegmentAllocator arena) {
+        return buf;
     }
 }

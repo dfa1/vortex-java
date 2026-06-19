@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.encoding.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
@@ -50,7 +49,7 @@ class BoolEncodingEncoderTest {
         assertThat(result).isInstanceOf(BoolArray.class);
         assertThat(result.length()).isEqualTo(data.length);
         for (int i = 0; i < data.length; i++) {
-            byte byteVal = ArraySegments.of(result, Arena.ofAuto()).get(ValueLayout.JAVA_BYTE, i / 8);
+            byte byteVal = result.materialize(Arena.ofAuto()).get(ValueLayout.JAVA_BYTE, i / 8);
             boolean decoded = ((byteVal >>> (i % 8)) & 1) == 1;
             assertThat(decoded).as("index %d", i).isEqualTo(data[i]);
         }

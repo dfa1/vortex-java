@@ -9,7 +9,6 @@ import dev.vortex.api.Session;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.Chunk;
@@ -181,7 +180,7 @@ public class RustWritesJavaReadsBigFileBenchmark {
             while (iter.hasNext()) {
                 try (Chunk c = iter.next()) {
                     Array arr = c.columns().get("c0");
-                    MemorySegment buf = ArraySegments.of(arr, Arena.ofAuto());
+                    MemorySegment buf = arr.materialize(Arena.ofAuto());
                     long count = buf.byteSize() / Long.BYTES;
                     for (long i = 0; i < count; i++) {
                         sum += buf.getAtIndex(LE_LONG, i);

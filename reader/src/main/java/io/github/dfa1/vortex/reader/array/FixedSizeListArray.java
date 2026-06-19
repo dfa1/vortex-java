@@ -1,6 +1,10 @@
 package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.VortexException;
+
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 
 /// Decoded fixed-size list array: holds a flat elements [Array] of length `outerLen * fixedSize`.
 ///
@@ -62,5 +66,16 @@ public final class FixedSizeListArray implements Array {
         // Each outer row spans `fixedSize` contiguous elements, so the first `rows`
         // rows are the first `rows * fixedSize` elements.
         return new FixedSizeListArray(dtype, rows, Array.limited(elements, rows * fixedSize()));
+    }
+
+    /// Always throws: a fixed-size list wraps a flat elements child, not a single
+    /// primary segment of its own. Materialise [#elements()] instead.
+    ///
+    /// @param arena unused
+    /// @return never returns
+    /// @throws VortexException always
+    @Override
+    public MemorySegment materialize(SegmentAllocator arena) {
+        throw new VortexException("FixedSizeListArray has no primary segment");
     }
 }

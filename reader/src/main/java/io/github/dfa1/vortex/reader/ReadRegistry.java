@@ -2,7 +2,6 @@ package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.reader.array.UnknownArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
@@ -101,7 +100,7 @@ public final class ReadRegistry {
             case UnknownArrayNode _ -> null;
         };
         if (decoder != null) {
-            return ArraySegments.of(decoder.decode(ctx), ctx.arena());
+            return decoder.decode(ctx).materialize(ctx.arena());
         }
         String id = switch (node) {
             case KnownArrayNode k -> k.encodingId().id();

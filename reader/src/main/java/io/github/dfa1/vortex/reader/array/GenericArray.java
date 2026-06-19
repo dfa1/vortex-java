@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -75,6 +76,15 @@ public final class GenericArray implements Array {
 
     MemorySegment buffer(int i) {
         return buffers[i];
+    }
+
+    /// Returns the primary (index 0) raw buffer directly — no copy or allocation.
+    ///
+    /// @param arena unused; the existing buffer is returned as-is
+    /// @return the first backing [MemorySegment]
+    @Override
+    public MemorySegment materialize(SegmentAllocator arena) {
+        return buffers[0];
     }
 
     /// Decodes the decimal value at row `i` from a single-buffer layout.

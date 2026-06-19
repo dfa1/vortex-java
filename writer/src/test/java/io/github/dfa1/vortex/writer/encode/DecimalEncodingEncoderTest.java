@@ -4,7 +4,6 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
 import io.github.dfa1.vortex.encoding.PTypeIO;
@@ -44,7 +43,7 @@ class DecimalEncodingEncoderTest {
         // Then
         assertThat(result.length()).isEqualTo(values.length);
         for (int i = 0; i < values.length; i++) {
-            assertThat(ArraySegments.of(result, Arena.ofAuto()).get(PTypeIO.LE_LONG, (long) i * 8)).isEqualTo(values[i]);
+            assertThat(result.materialize(Arena.ofAuto()).get(PTypeIO.LE_LONG, (long) i * 8)).isEqualTo(values[i]);
         }
     }
 

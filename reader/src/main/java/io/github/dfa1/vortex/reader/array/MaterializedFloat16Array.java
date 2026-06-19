@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 
 /// Buffer-backed [Float16Array] — the fallback used when an encoding decoder
 /// either materialises the output eagerly or has no lazy variant of its own.
@@ -36,6 +37,16 @@ public final class MaterializedFloat16Array implements Float16Array {
     }
 
     MemorySegment buffer() {
+        return buffer;
+    }
+
+    /// Returns the backing buffer directly — already a contiguous little-endian
+    /// half-precision segment (2 bytes per element), so no copy or allocation is needed.
+    ///
+    /// @param arena unused; the existing buffer is returned as-is
+    /// @return the backing little-endian `f16` segment
+    @Override
+    public MemorySegment materialize(SegmentAllocator arena) {
         return buffer;
     }
 

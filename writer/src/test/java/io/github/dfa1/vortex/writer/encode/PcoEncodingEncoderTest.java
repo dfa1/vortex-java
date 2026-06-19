@@ -5,7 +5,6 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 import io.github.dfa1.vortex.reader.decode.PcoEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
@@ -133,7 +132,7 @@ class PcoEncodingEncoderTest {
         // Then
         assertThat(result.length()).isEqualTo(data.length);
         for (int i = 0; i < data.length; i++) {
-            assertThat(ArraySegments.of(result, Arena.ofAuto()).get(PTypeIO.LE_LONG, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
+            assertThat(result.materialize(Arena.ofAuto()).get(PTypeIO.LE_LONG, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
         }
     }
 
@@ -150,7 +149,7 @@ class PcoEncodingEncoderTest {
         // Then
         assertThat(result.length()).isEqualTo(data.length);
         for (int i = 0; i < data.length; i++) {
-            assertThat(ArraySegments.of(result, Arena.ofAuto()).get(PTypeIO.LE_LONG, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
+            assertThat(result.materialize(Arena.ofAuto()).get(PTypeIO.LE_LONG, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
         }
     }
 
@@ -167,7 +166,7 @@ class PcoEncodingEncoderTest {
         // Then
         assertThat(result.length()).isEqualTo(data.length);
         for (int i = 0; i < data.length; i++) {
-            assertThat(ArraySegments.of(result, Arena.ofAuto()).get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
+            assertThat(result.materialize(Arena.ofAuto()).get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
         }
     }
 
@@ -184,7 +183,7 @@ class PcoEncodingEncoderTest {
         // Then
         assertThat(result.length()).isEqualTo(data.length);
         for (int i = 0; i < data.length; i++) {
-            assertThat(ArraySegments.of(result, Arena.ofAuto()).get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
+            assertThat(result.materialize(Arena.ofAuto()).get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
         }
     }
 
@@ -201,7 +200,7 @@ class PcoEncodingEncoderTest {
         // Then
         assertThat(result.length()).isEqualTo(data.length);
         for (int i = 0; i < data.length; i++) {
-            assertThat(ArraySegments.of(result, Arena.ofAuto()).get(PTypeIO.LE_SHORT, (long) i * 2)).as("index %d", i).isEqualTo(data[i]);
+            assertThat(result.materialize(Arena.ofAuto()).get(PTypeIO.LE_SHORT, (long) i * 2)).as("index %d", i).isEqualTo(data[i]);
         }
     }
 
@@ -218,7 +217,7 @@ class PcoEncodingEncoderTest {
         // Then
         assertThat(result.length()).isEqualTo(data.length);
         for (int i = 0; i < data.length; i++) {
-            assertThat(ArraySegments.of(result, Arena.ofAuto()).get(PTypeIO.LE_SHORT, (long) i * 2)).as("index %d", i).isEqualTo(data[i]);
+            assertThat(result.materialize(Arena.ofAuto()).get(PTypeIO.LE_SHORT, (long) i * 2)).as("index %d", i).isEqualTo(data[i]);
         }
     }
 
@@ -235,7 +234,7 @@ class PcoEncodingEncoderTest {
         // Then
         assertThat(result.length()).isEqualTo(data.length);
         for (int i = 0; i < data.length; i++) {
-            assertThat(ArraySegments.of(result, Arena.ofAuto()).get(PTypeIO.LE_FLOAT, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
+            assertThat(result.materialize(Arena.ofAuto()).get(PTypeIO.LE_FLOAT, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
         }
     }
 
@@ -252,7 +251,7 @@ class PcoEncodingEncoderTest {
         // Then
         assertThat(result.length()).isEqualTo(data.length);
         for (int i = 0; i < data.length; i++) {
-            assertThat(ArraySegments.of(result, Arena.ofAuto()).get(PTypeIO.LE_DOUBLE, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
+            assertThat(result.materialize(Arena.ofAuto()).get(PTypeIO.LE_DOUBLE, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
         }
     }
 

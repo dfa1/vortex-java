@@ -2,6 +2,9 @@ package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.DType;
 
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
+
 /// Decoded columnar data. Concrete subtypes specialise element access for the JIT;
 /// each covers a specific dtype family.
 ///
@@ -40,6 +43,24 @@ public sealed interface Array
     /// @param rows number of leading elements to keep; must be in `[0, length())`
     /// @return an array of length `rows`
     Array limited(long rows);
+
+    /// Materialises this array into its primary backing [MemorySegment],
+    /// allocating from `arena` for lazy variants.
+    ///
+    /// Segment-backed arrays (the `Materialized*` records, `VarBinArray`,
+    /// `GenericArray`, `LazyDecimalArray`) return their existing buffer with no
+    /// copy. Lazy primitive arrays decode element-by-element, the `Lazy*`
+    /// frame-of-reference / zigzag / ALP variants apply their inlined formula in a
+    /// vectorisable loop, and composite arrays (chunked, dict) concatenate or gather
+    /// their children. This is the single materialisation contract behind
+    /// [io.github.dfa1.vortex.reader.decode.DecodeContext#materialize(Array)].
+    ///
+    /// Array families with no row-addressable primary segment (struct, list, variant,
+    /// the byte-parts decimal layout) throw [io.github.dfa1.vortex.core.VortexException].
+    ///
+    /// @param arena allocator used to materialise lazy variants
+    /// @return the primary [MemorySegment]
+    MemorySegment materialize(SegmentAllocator arena);
 
     /// Limits `arr` to its first `rows` elements (semantically `min(length, rows)`),
     /// returning it unchanged when it already fits. Single guard shared by the scan

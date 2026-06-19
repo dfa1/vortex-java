@@ -2,7 +2,10 @@ package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.encoding.PTypeIO;
 
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 import java.util.function.DoubleBinaryOperator;
 
 /// Dict-encoded [FloatArray] view. ADR 0012 shape.
@@ -42,6 +45,45 @@ public record DictFloatArray(DType dtype, long length, FloatArray values, Array 
     @Override
     public float getFloat(long i) {
         return values.getFloat(DictArrays.readCode(codes, i));
+    }
+
+    /// Materialises by gathering one dictionary value per code into a fresh
+    /// little-endian `f32` segment. The codes switch is hoisted outside the loop so
+    /// each branch is a uniform gather over a single code width.
+    ///
+    /// @param arena allocator for the output segment
+    /// @return a read-only little-endian `f32` segment of gathered values
+    /// @throws VortexException if `codes` is not a supported code-array type
+    @Override
+    public MemorySegment materialize(SegmentAllocator arena) {
+        long n = length;
+        MemorySegment dst = arena.allocate(n * 4L, 4);
+        FloatArray vals = values;
+        switch (codes) {
+            case ByteArray ba -> {
+                for (long i = 0; i < n; i++) {
+                    dst.setAtIndex(PTypeIO.LE_FLOAT, i, vals.getFloat(Byte.toUnsignedLong(ba.getByte(i))));
+                }
+            }
+            case ShortArray sa -> {
+                for (long i = 0; i < n; i++) {
+                    dst.setAtIndex(PTypeIO.LE_FLOAT, i, vals.getFloat(Short.toUnsignedLong(sa.getShort(i))));
+                }
+            }
+            case IntArray ia -> {
+                for (long i = 0; i < n; i++) {
+                    dst.setAtIndex(PTypeIO.LE_FLOAT, i, vals.getFloat(Integer.toUnsignedLong(ia.getInt(i))));
+                }
+            }
+            case LongArray la -> {
+                for (long i = 0; i < n; i++) {
+                    dst.setAtIndex(PTypeIO.LE_FLOAT, i, vals.getFloat(la.getLong(i)));
+                }
+            }
+            default -> throw new VortexException("DictFloatArray: invalid codes type: "
+                    + codes.getClass().getSimpleName());
+        }
+        return dst.asReadOnly();
     }
 
     @Override

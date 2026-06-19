@@ -3,6 +3,8 @@ package io.github.dfa1.vortex.reader.array;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
 
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 import java.math.BigDecimal;
 
 /// Lazy `vortex.decimal_byte_parts` reassembly.
@@ -40,5 +42,16 @@ public record LazyDecimalBytePartsArray(DType dtype, long length, Array msp) imp
     @Override
     public Array limited(long rows) {
         return new LazyDecimalBytePartsArray(dtype, rows, Array.limited(msp, rows));
+    }
+
+    /// Always throws: the byte-parts layout reassembles its mantissa from a child
+    /// column on demand and has no single contiguous primary segment.
+    ///
+    /// @param arena unused
+    /// @return never returns
+    /// @throws VortexException always
+    @Override
+    public MemorySegment materialize(SegmentAllocator arena) {
+        throw new VortexException("LazyDecimalBytePartsArray has no primary segment");
     }
 }

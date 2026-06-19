@@ -1,6 +1,10 @@
 package io.github.dfa1.vortex.reader.array;
 
 
+import io.github.dfa1.vortex.encoding.PTypeIO;
+
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 import java.util.function.DoubleBinaryOperator;
 
 /// [Array] for F32 primitive columns.
@@ -38,5 +42,22 @@ public non-sealed interface FloatArray extends Array {
     @Override
     default Array limited(long rows) {
         return new OffsetFloatArray(dtype(), rows, this, 0);
+    }
+
+    /// Scalar fallback: decodes every element through [#getFloat(long)] into a fresh
+    /// little-endian segment. Buffer-backed ([MaterializedFloatArray]) and lazy
+    /// formula-based variants ([LazyAlpFloatArray], …) override with a zero-copy or
+    /// vectorised path.
+    ///
+    /// @param arena allocator for the output segment
+    /// @return a little-endian `f32` segment of `length()` elements
+    @Override
+    default MemorySegment materialize(SegmentAllocator arena) {
+        long n = length();
+        MemorySegment dst = arena.allocate(n * 4L, 4);
+        for (long i = 0; i < n; i++) {
+            dst.setAtIndex(PTypeIO.LE_FLOAT, i, getFloat(i));
+        }
+        return dst;
     }
 }

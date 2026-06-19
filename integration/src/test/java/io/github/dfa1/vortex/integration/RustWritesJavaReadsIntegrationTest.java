@@ -12,7 +12,6 @@ import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.ReadRegistry;
@@ -130,7 +129,7 @@ class RustWritesJavaReadsIntegrationTest {
     /// into a heap primitive array — long[]/int[]/double[]/float[]/short[]/byte[].
     private static Object snapshotArray(Array arr) {
         var ptype = ((DType.Primitive) arr.dtype()).ptype();
-        var seg = ArraySegments.of(arr, Arena.ofAuto());
+        var seg = arr.materialize(Arena.ofAuto());
         return switch (ptype) {
             case I64, U64 -> seg.toArray(ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN));
             case I32, U32 -> seg.toArray(ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN));

@@ -4,6 +4,7 @@ package io.github.dfa1.vortex.reader.array;
 import io.github.dfa1.vortex.core.DType;
 
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
 
 /// Buffer-backed [BoolArray] — the fallback used when an encoding decoder
@@ -36,6 +37,17 @@ public final class MaterializedBoolArray implements BoolArray {
     }
 
     MemorySegment buffer() {
+        return buffer;
+    }
+
+    /// Returns the backing buffer directly — already an LSB-first packed bitmap,
+    /// matching the format produced by [BoolArray#materialize(SegmentAllocator)],
+    /// so no copy or allocation is needed.
+    ///
+    /// @param arena unused; the existing buffer is returned as-is
+    /// @return the backing LSB-first packed bitmap
+    @Override
+    public MemorySegment materialize(SegmentAllocator arena) {
         return buffer;
     }
 

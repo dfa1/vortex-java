@@ -3,7 +3,6 @@ package io.github.dfa1.vortex.writer.encode;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 import io.github.dfa1.vortex.encoding.EncodingId;
@@ -73,7 +72,7 @@ class BitpackedConstantPatchesBroadcastTest {
 
             // Then
             assertThat(result.length()).isEqualTo(n);
-            MemorySegment data = ArraySegments.of(result, Arena.ofAuto());
+            MemorySegment data = result.materialize(Arena.ofAuto());
             assertThat(data.getAtIndex(PTypeIO.LE_LONG, 2)).isEqualTo(constantPatchValue);
             for (long i = 0; i < n; i++) {
                 if (i == 2) {

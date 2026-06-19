@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.encoding.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
@@ -74,11 +73,11 @@ class BitpackedEncodingPatchesTest {
 
             // Then
             assertThat(result.length()).isEqualTo(base.length);
-            assertThat(ArraySegments.of(result, Arena.ofAuto()).get(PTypeIO.LE_INT, 0L)).isEqualTo(10);
-            assertThat(ArraySegments.of(result, Arena.ofAuto()).get(PTypeIO.LE_INT, 4L)).isEqualTo(777);
-            assertThat(ArraySegments.of(result, Arena.ofAuto()).get(PTypeIO.LE_INT, 8L)).isEqualTo(30);
-            assertThat(ArraySegments.of(result, Arena.ofAuto()).get(PTypeIO.LE_INT, 12L)).isEqualTo(999);
-            assertThat(ArraySegments.of(result, Arena.ofAuto()).get(PTypeIO.LE_INT, 16L)).isEqualTo(50);
+            assertThat(result.materialize(Arena.ofAuto()).get(PTypeIO.LE_INT, 0L)).isEqualTo(10);
+            assertThat(result.materialize(Arena.ofAuto()).get(PTypeIO.LE_INT, 4L)).isEqualTo(777);
+            assertThat(result.materialize(Arena.ofAuto()).get(PTypeIO.LE_INT, 8L)).isEqualTo(30);
+            assertThat(result.materialize(Arena.ofAuto()).get(PTypeIO.LE_INT, 12L)).isEqualTo(999);
+            assertThat(result.materialize(Arena.ofAuto()).get(PTypeIO.LE_INT, 16L)).isEqualTo(50);
         }
     }
 
@@ -119,7 +118,7 @@ class BitpackedEncodingPatchesTest {
 
             assertThat(decoded.length()).isEqualTo(codes.length);
             for (int i = 0; i < codes.length; i++) {
-                byte got = ArraySegments.of(decoded, Arena.ofAuto()).get(java.lang.foreign.ValueLayout.JAVA_BYTE, i);
+                byte got = decoded.materialize(Arena.ofAuto()).get(java.lang.foreign.ValueLayout.JAVA_BYTE, i);
                 assertThat(got).as("idx " + i).isEqualTo(codes[i]);
             }
         }
