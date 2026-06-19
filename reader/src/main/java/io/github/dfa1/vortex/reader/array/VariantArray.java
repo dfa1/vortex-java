@@ -41,14 +41,14 @@ public final class VariantArray implements Array {
 
     /// Returns the core storage array holding the full variant value for every row.
     ///
-    /// @return core storage {@link Array}
+    /// @return core storage [Array]
     public Array coreStorage() {
         return coreStorage;
     }
 
     /// Returns the optional typed shredded array, or `null` if absent.
     ///
-    /// @return shredded {@link Array}, or `null`
+    /// @return shredded [Array], or `null`
     public Array shredded() {
         return shredded;
     }

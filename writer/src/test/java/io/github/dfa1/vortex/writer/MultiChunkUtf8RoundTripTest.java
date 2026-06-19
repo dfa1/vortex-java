@@ -19,7 +19,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// Asserts {@link VarBinArray.ChunkedMode} fires on multi-chunk Utf8 columns.
+/// Asserts [VarBinArray.ChunkedMode] fires on multi-chunk Utf8 columns.
 ///
 /// Pre-ADR-0012-VarBin, `ScanIterator.decodeChunkedLayout` threw on
 /// `(DType.Primitive) dtype` for Utf8/Binary. This test guards the new

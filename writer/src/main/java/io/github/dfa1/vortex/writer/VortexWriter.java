@@ -122,7 +122,7 @@ public final class VortexWriter implements Closeable {
         }
     }
 
-    /// Builds a {@link WriteRegistry} from the given encoder list plus all service-loaded extensions.
+    /// Builds a [WriteRegistry] from the given encoder list plus all service-loaded extensions.
     private static WriteRegistry buildRegistry(List<EncodingEncoder> encoders) {
         WriteRegistry.Builder b = WriteRegistry.builder();
         for (EncodingEncoder e : encoders) {
@@ -171,7 +171,7 @@ public final class VortexWriter implements Closeable {
         return List.copyOf(codecs);
     }
 
-    /// Creates a {@link VortexWriter} using the default encoder set.
+    /// Creates a [VortexWriter] using the default encoder set.
     ///
     /// @param channel the channel to write to
     /// @param schema  the struct schema for the file
@@ -183,7 +183,7 @@ public final class VortexWriter implements Closeable {
         return new VortexWriter(channel, schema, options, DEFAULT_CODECS);
     }
 
-    /// Creates a {@link VortexWriter} with a custom encoder list.
+    /// Creates a [VortexWriter] with a custom encoder list.
     ///
     /// Creates a {@link VortexWriter} with a custom encoder list.
     ///
@@ -200,7 +200,7 @@ public final class VortexWriter implements Closeable {
         return new VortexWriter(channel, schema, options.withGlobalDict(false), encodings);
     }
 
-    /// Creates a {@link VortexWriter} with a custom {@link WriteRegistry}.
+    /// Creates a [VortexWriter] with a custom [WriteRegistry].
     ///
     /// @param channel  the channel to write to
     /// @param schema   the struct schema for the file
@@ -214,7 +214,7 @@ public final class VortexWriter implements Closeable {
                 List.copyOf(registry.encoderMap().values()));
     }
 
-    /// Counts rows for the length-consistency check in {@link #writeChunk}. Accepts the
+    /// Counts rows for the length-consistency check in [#writeChunk]. Accepts the
     /// same shapes the writer takes plus pre-conversion {@link java.util.Collection}s
     /// from the extension-column auto-route path.
     private static long rowCountForValidation(String colName, Object data) {
@@ -346,7 +346,7 @@ public final class VortexWriter implements Closeable {
 
     // ── Segment encoding ─────────────────────────────────────────────────────
 
-    /// Write one chunk via the typed {@link Chunk} builder. Each `.put` is validated
+    /// Write one chunk via the typed [Chunk] builder. Each `.put` is validated
     /// against the writer's schema (name exists, array type matches dtype, boxed arrays for
     /// nullable columns); after the consumer returns, every schema column must have been
     /// supplied and all column arrays must share the same length.
@@ -480,7 +480,7 @@ public final class VortexWriter implements Closeable {
     /// Writes a segment, optionally forcing a specific `encodingOverride` instead of
     /// the configured cascade. Used by the global Utf8 dictionary path where the values
     /// segment must be flat varbin — the cascade would otherwise re-pick
-    /// {@link DictEncodingEncoder} and wrap the dictionary in another dict (which the reader
+    /// [DictEncodingEncoder] and wrap the dictionary in another dict (which the reader
     /// cannot unwrap).
     private int writeSegment(DType dtype, Object data, EncodingEncoder encodingOverride) throws IOException {
         // Non-extension nullable columns (Primitive, Utf8) wrap with MaskedEncodingEncoder here.

@@ -14,7 +14,7 @@ import java.util.List;
 /// Write-only encoder for `fastlanes.for` (Frame of Reference).
 public final class FrameOfReferenceEncodingEncoder implements EncodingEncoder {
 
-    /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor required by [java.util.ServiceLoader].
     public FrameOfReferenceEncodingEncoder() {
     }
 

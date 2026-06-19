@@ -8,7 +8,7 @@ import java.util.List;
 /// Write-only encoder for `vortex.null` (all-null arrays).
 public final class NullEncodingEncoder implements EncodingEncoder {
 
-    /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor required by [java.util.ServiceLoader].
     public NullEncodingEncoder() {
     }
 

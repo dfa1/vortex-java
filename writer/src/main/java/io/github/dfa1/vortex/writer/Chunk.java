@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.writer;
 
-/// Typed chunk builder for {@link VortexWriter#writeChunk(java.util.function.Consumer)}.
+/// Typed chunk builder for [VortexWriter#writeChunk(java.util.function.Consumer)].
 ///
 /// Validates each `put` against the writer's schema:
 /// - Column name must exist in the schema.

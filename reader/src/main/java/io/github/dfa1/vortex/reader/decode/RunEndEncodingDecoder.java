@@ -29,7 +29,7 @@ import java.nio.ByteBuffer;
 /// Read-only decoder for `vortex.runend`.
 public final class RunEndEncodingDecoder implements EncodingDecoder {
 
-    /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor required by [java.util.ServiceLoader].
     public RunEndEncodingDecoder() {
     }
 

@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// Smoke test for the FFM-based POSIX terminal binding.
 ///
 /// Runs only on Linux / macOS (other OSes lack the libc entry points). Mirrors
-/// {@link WindowsTerminalSmokeTest}: the goal is to catch missing-symbol /
+/// [WindowsTerminalSmokeTest]: the goal is to catch missing-symbol /
 /// signature-mismatch regressions in CI without requiring a real interactive TTY.
 ///
 /// `open()` and `size()` are deliberately not exercised — they need a real

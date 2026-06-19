@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.core.DType;
 import java.util.function.LongBinaryOperator;
 import java.util.function.LongConsumer;
 
-/// Lazy `vortex.datetimeparts` reassembly as a {@link LongArray}.
+/// Lazy `vortex.datetimeparts` reassembly as a [LongArray].
 ///
 /// The encoding splits each raw epoch count into three children — `days`,
 /// `seconds` (within the day) and `subseconds` (within the second).

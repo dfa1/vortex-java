@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.function.LongBinaryOperator;
 import java.util.function.LongConsumer;
 
-/// Multi-chunk {@link LongArray} view backed by an immutable array of child
+/// Multi-chunk [LongArray] view backed by an immutable array of child
 /// chunks plus their cumulative row offsets. Scalar access is stateless —
 /// {@link #getLong(long)} resolves the chunk index via {@link #findChunk(long[], long)}
 /// (a binary search over `offsets`) on every call.
@@ -27,7 +27,7 @@ import java.util.function.LongConsumer;
 @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record ChunkedLongArray(DType dtype, long length, LongArray[] children, long[] offsets) implements LongArray {
 
-    /// Builds a {@link ChunkedLongArray} from a list of chunk arrays. Nested
+    /// Builds a [ChunkedLongArray] from a list of chunk arrays. Nested
     /// chunked arrays are flattened; {@link MaskedArray} chunks are unwrapped
     /// to their inner data (validity dropped — matches prior concat behaviour).
     ///

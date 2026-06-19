@@ -6,7 +6,7 @@ import java.util.logging.Logger;
 
 /// Entry point for the Vortex command-line tool.
 ///
-/// Exit codes: see {@link ExitStatus}.
+/// Exit codes: see [ExitStatus].
 public final class VortexCli {
 
     static {

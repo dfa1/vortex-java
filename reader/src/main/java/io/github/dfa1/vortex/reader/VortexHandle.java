@@ -22,7 +22,7 @@ public interface VortexHandle extends Closeable {
 
     long fileSize();
 
-    /// Typed accessor for the common pattern "read a flat segment by its {@link SegmentSpec}
+    /// Typed accessor for the common pattern "read a flat segment by its [SegmentSpec]
     /// and decode the encoded array contained therein."
     ///
     /// @param spec     the segment spec to read from
@@ -39,13 +39,13 @@ public interface VortexHandle extends Closeable {
     /// On HTTP handles this fires a targeted range request.
     ///
     /// @param spec the segment to read
-    /// @return a read-only {@link MemorySegment} covering exactly `spec.offset()` to
+    /// @return a read-only [MemorySegment] covering exactly `spec.offset()` to
     ///         `spec.offset() + spec.length()`
     MemorySegment rawSegment(SegmentSpec spec);
 
     ScanIterator scan(ScanOptions options);
 
-    /// Returns the {@link ReadRegistry} this handle was opened with.
+    /// Returns the [ReadRegistry] this handle was opened with.
     ///
     /// **Internal escape hatch.** Exposed for tooling
     /// (e.g. the inspector's dictionary preview) that needs to decode an

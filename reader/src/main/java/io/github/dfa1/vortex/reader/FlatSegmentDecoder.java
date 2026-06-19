@@ -16,7 +16,7 @@ import java.nio.ByteOrder;
 import java.util.List;
 
 /// Parses a flat segment from the memory-mapped file region and dispatches to the
-/// appropriate decoder via the {@link ReadRegistry}.
+/// appropriate decoder via the [ReadRegistry].
 ///
 /// Flat segment wire format:
 /// `buffer_data... | FlatBuffer(Array) | u32 LE = FlatBuffer byte length`
@@ -41,7 +41,7 @@ public final class FlatSegmentDecoder {
     /// @param dtype         expected logical type for the decoded array
     /// @param rowCount      number of logical rows in this segment
     /// @param arena         allocator for decode output; lifetime matches the current chunk epoch
-    /// @return the decoded {@link Array} for this segment
+    /// @return the decoded [Array] for this segment
     public Array decode(MemorySegment seg, List<String> encodingSpecs,
             DType dtype, long rowCount, SegmentAllocator arena) {
         int segLen = (int) seg.byteSize();

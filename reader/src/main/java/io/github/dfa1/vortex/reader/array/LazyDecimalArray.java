@@ -14,7 +14,7 @@ import java.nio.ByteOrder;
 /// `vortex.decimal` stores one little-endian two's-complement integer per row;
 /// the integer's byte width (1/2/4/8/16) is fixed for the whole array and chosen
 /// by the writer based on precision. The buffer is a mmap slice — decode wraps
-/// it; per-row {@link #getDecimal(long)} reads `byteWidth` bytes and combines
+/// it; per-row [#getDecimal(long)] reads `byteWidth` bytes and combines
 /// them with the parent dtype's scale into a {@link BigDecimal} on demand. No
 /// arena allocation happens at construction time.
 ///
@@ -31,7 +31,7 @@ public record LazyDecimalArray(DType dtype, long length, MemorySegment buf, int 
     private static final ValueLayout.OfLong LONG_LE =
             ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
-    /// Reads cell `i` as a {@link BigDecimal} with the parent dtype's scale.
+    /// Reads cell `i` as a [BigDecimal] with the parent dtype's scale.
     ///
     /// @param i row index, `0 <= i < length()`
     /// @return decoded `BigDecimal`

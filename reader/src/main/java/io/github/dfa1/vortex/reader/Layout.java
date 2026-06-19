@@ -35,35 +35,35 @@ public record Layout(
 
     /// Returns `true` if this layout is a flat (leaf) layout.
     ///
-    /// @return `true` when `encodingId` equals {@link #FLAT}
+    /// @return `true` when `encodingId` equals [#FLAT]
     public boolean isFlat() {
         return FLAT.equals(encodingId);
     }
 
     /// Returns `true` if this layout is a chunked layout.
     ///
-    /// @return `true` when `encodingId` equals {@link #CHUNKED}
+    /// @return `true` when `encodingId` equals [#CHUNKED]
     public boolean isChunked() {
         return CHUNKED.equals(encodingId);
     }
 
     /// Returns `true` if this layout is a struct layout.
     ///
-    /// @return `true` when `encodingId` equals {@link #STRUCT}
+    /// @return `true` when `encodingId` equals [#STRUCT]
     public boolean isStruct() {
         return STRUCT.equals(encodingId);
     }
 
     /// Returns `true` if this layout is a zone-map (stats) layout.
     ///
-    /// @return `true` when `encodingId` equals {@link #ZONED}
+    /// @return `true` when `encodingId` equals [#ZONED]
     public boolean isZoned() {
         return ZONED.equals(encodingId);
     }
 
     /// Returns `true` if this layout is a dictionary layout.
     ///
-    /// @return `true` when `encodingId` equals {@link #DICT}
+    /// @return `true` when `encodingId` equals [#DICT]
     public boolean isDict() {
         return DICT.equals(encodingId);
     }

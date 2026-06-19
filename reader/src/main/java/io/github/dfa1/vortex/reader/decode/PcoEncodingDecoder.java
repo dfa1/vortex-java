@@ -34,7 +34,7 @@ public final class PcoEncodingDecoder implements EncodingDecoder {
     private static final ValueLayout.OfLong LE_LONG =
             ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
-    /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor required by [java.util.ServiceLoader].
     public PcoEncodingDecoder() {
     }
 

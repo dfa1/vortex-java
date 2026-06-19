@@ -15,7 +15,7 @@ public final class Parser {
     private final List<Token> tokens;
     private int pos;
 
-    /// @param tokens token stream produced by {@link Lexer}
+    /// @param tokens token stream produced by [Lexer]
     public Parser(List<Token> tokens) {
         this.tokens = tokens;
         this.pos = 0;

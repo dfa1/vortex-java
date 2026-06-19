@@ -13,7 +13,7 @@ import java.util.List;
 /// Write-only encoder for `vortex.zigzag` — signed integers as zigzag-encoded unsigned values.
 public final class ZigZagEncodingEncoder implements EncodingEncoder {
 
-    /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor required by [java.util.ServiceLoader].
     public ZigZagEncodingEncoder() {
     }
 

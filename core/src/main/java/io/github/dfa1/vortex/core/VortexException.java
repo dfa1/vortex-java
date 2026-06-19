@@ -11,7 +11,7 @@ import java.util.Optional;
 /// do not retry on the same input. The correct response is to abort the read, surface the error,
 /// and close the `VortexFile`.
 ///
-/// Carries an optional {@link EncodingId} for diagnostic attribution; it is not intended
+/// Carries an optional [EncodingId] for diagnostic attribution; it is not intended
 /// for recovery logic.
 public final class VortexException extends RuntimeException {
 
@@ -60,7 +60,7 @@ public final class VortexException extends RuntimeException {
 
     /// Returns the encoding that raised this exception, if known.
     ///
-    /// @return an {@link Optional} containing the {@link EncodingId}, or empty if not attributed
+    /// @return an [Optional] containing the [EncodingId], or empty if not attributed
     public Optional<EncodingId> encodingId() {
         return Optional.ofNullable(encodingId);
     }

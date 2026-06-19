@@ -9,7 +9,7 @@ import java.nio.ByteOrder;
 
 /// 4-way interleaved tANS decoder for one pco latent variable.
 ///
-/// Build via {@link #build(int, PcoBin[])}; then call {@link #decodePage} once per page.
+/// Build via [#build(int, PcoBin[])]; then call [#decodePage] once per page.
 /// Port of `pco/src/ans/spec.rs` (spread) and `pco/src/ans/decoding.rs` (nodes).
 public final class PcoTansDecoder {
 
@@ -92,7 +92,7 @@ public final class PcoTansDecoder {
     /// Decode `n` raw latent values (U64) from `reader` into `out`.
     ///
     /// Caller must have already read 4 initial ANS state indices and called
-    /// {@link LeBitReader#alignToByte()} before this call.
+    /// [LeBitReader#alignToByte()] before this call.
     /// `ansStateIdxs` is modified in place and not valid after return.
     /// `batchLowers` and `batchOffsetBits` are caller-provided scratch arrays of
     /// length ≥ {@link #BATCH_N}; they are fully overwritten before use.

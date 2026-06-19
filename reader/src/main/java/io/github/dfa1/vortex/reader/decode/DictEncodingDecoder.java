@@ -34,7 +34,7 @@ import java.nio.ByteBuffer;
 /// make lazy wrapping non-trivial here — kept eager by design.
 public final class DictEncodingDecoder implements EncodingDecoder {
 
-    /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor required by [java.util.ServiceLoader].
     public DictEncodingDecoder() {
     }
 

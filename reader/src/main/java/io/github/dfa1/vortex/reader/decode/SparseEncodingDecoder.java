@@ -34,7 +34,7 @@ import java.nio.ByteBuffer;
 /// Read-only decoder for `vortex.sparse`.
 public final class SparseEncodingDecoder implements EncodingDecoder {
 
-    /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor required by [java.util.ServiceLoader].
     public SparseEncodingDecoder() {
     }
 

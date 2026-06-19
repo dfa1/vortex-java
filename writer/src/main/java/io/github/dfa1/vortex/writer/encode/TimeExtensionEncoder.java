@@ -17,7 +17,7 @@ public final class TimeExtensionEncoder implements ExtensionEncoder {
     /// Singleton instance.
     public static final TimeExtensionEncoder INSTANCE = new TimeExtensionEncoder();
 
-    /// Public no-arg constructor for {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor for [java.util.ServiceLoader].
     /// Prefer the {@link #INSTANCE} singleton in application code.
     public TimeExtensionEncoder() {
     }

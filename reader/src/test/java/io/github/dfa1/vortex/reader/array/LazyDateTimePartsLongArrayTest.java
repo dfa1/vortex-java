@@ -7,7 +7,7 @@ import static io.github.dfa1.vortex.reader.array.TestArrays.ints;
 import static io.github.dfa1.vortex.reader.array.TestArrays.longs;
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// Unit tests for {@link LazyDateTimePartsLongArray}. Verifies the
+/// Unit tests for [LazyDateTimePartsLongArray]. Verifies the
 /// `days * unitsPerDay + seconds * unitsPerSecond + subseconds`
 /// reassembly across the supported time units, and the widening read path
 /// that lets each child use whatever signed-integer ptype the encoder picked.

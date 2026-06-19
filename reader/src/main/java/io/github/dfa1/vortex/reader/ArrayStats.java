@@ -28,12 +28,12 @@ public record ArrayStats(
 
     /// Returns an empty stats instance with all fields set to `null`.
     ///
-    /// @return an empty {@link ArrayStats} with no known statistics
+    /// @return an empty [ArrayStats] with no known statistics
     public static ArrayStats empty() {
         return EMPTY;
     }
 
-    /// Parses stats from a FlatBuffers {@link io.github.dfa1.vortex.fbs.ArrayStats} table.
+    /// Parses stats from a FlatBuffers [io.github.dfa1.vortex.fbs.ArrayStats] table.
     /// Returns an empty instance when `fbs` is `null` or carries no min/max.
     ///
     /// @param fbs the FlatBuffers stats table, or `null`

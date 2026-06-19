@@ -10,7 +10,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
-/// Encoding context passed to every {@link EncodingEncoder#encode} and
+/// Encoding context passed to every [EncodingEncoder#encode] and
 /// {@link EncodingEncoder#encodeCascade} call.
 ///
 /// Carries a caller-scoped {@link Arena} for encode output buffers, a
@@ -45,7 +45,7 @@ public record EncodeContext(
     ///
     /// @param arena    the arena to allocate encode output buffers from
     /// @param registry write registry for encoder and extension lookup
-    /// @return a new {@link EncodeContext} ready for non-cascading encoding
+    /// @return a new [EncodeContext] ready for non-cascading encoding
     public static EncodeContext of(Arena arena, WriteRegistry registry) {
         return new EncodeContext(arena, registry, 0, Set.of(), 42L, 4096, 0.05);
     }
@@ -55,14 +55,14 @@ public record EncodeContext(
     /// @param depth    maximum allowed cascade depth
     /// @param arena    the arena to allocate encode output buffers from
     /// @param registry write registry for encoder and extension lookup
-    /// @return a new {@link EncodeContext} ready for cascading compression
+    /// @return a new [EncodeContext] ready for cascading compression
     public static EncodeContext ofDepth(int depth, Arena arena, WriteRegistry registry) {
         return new EncodeContext(arena, registry, depth, Set.of(), 42L, 4096, 0.05);
     }
 
     /// Returns a copy of this context with the cascade depth decremented by one.
     ///
-    /// @return a new {@link EncodeContext} with `allowedCascading` reduced by 1
+    /// @return a new [EncodeContext] with `allowedCascading` reduced by 1
     public EncodeContext withDecrementedDepth() {
         return new EncodeContext(arena, registry, allowedCascading - 1, excluded, sampleSeed, minSampleSize, sampleFraction);
     }
@@ -70,7 +70,7 @@ public record EncodeContext(
     /// Returns a copy of this context with the given encoding id added to the excluded set.
     ///
     /// @param id the encoding id to exclude from consideration at this recursion level
-    /// @return a new {@link EncodeContext} with `id` added to the excluded set
+    /// @return a new [EncodeContext] with `id` added to the excluded set
     public EncodeContext withExcluded(EncodingId id) {
         Set<EncodingId> next = new HashSet<>(excluded);
         next.add(id);
@@ -80,7 +80,7 @@ public record EncodeContext(
     /// Returns the encoder registered for `id`.
     ///
     /// @param id the encoding id to look up
-    /// @return the registered {@link EncodingEncoder}
+    /// @return the registered [EncodingEncoder]
     /// @throws VortexException if no encoder is registered for `id`
     public EncodingEncoder lookupEncoder(EncodingId id) {
         EncodingEncoder enc = registry.encoderMap().get(id);

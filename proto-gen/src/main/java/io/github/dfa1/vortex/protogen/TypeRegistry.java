@@ -71,7 +71,7 @@ public final class TypeRegistry {
         }
     }
 
-    /// Resolves a textual {@link Ast.Ref#typeName()} to its concrete type, searching first
+    /// Resolves a textual [Ast.Ref#typeName()] to its concrete type, searching first
     /// for an exact qualified match, then attempting to match under `searchPackage`
     /// (the package of the file containing the reference).
     ///

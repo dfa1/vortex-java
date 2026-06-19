@@ -8,7 +8,7 @@ import java.util.Collection;
 
 /// Write-side contract for a Vortex extension type.
 ///
-/// Implementations pair a spec identity ({@link ExtensionId}) with the matching
+/// Implementations pair a spec identity ([ExtensionId]) with the matching
 /// {@link DType.Extension} dtype and a polymorphic {@link #encodeAll} entry point used
 /// by the writer's auto-routing path.
 public interface ExtensionEncoder {
@@ -17,7 +17,7 @@ public interface ExtensionEncoder {
     ExtensionId extensionId();
 
     /// @param nullable whether the column allows nulls
-    /// @return matching {@link DType.Extension} (storage dtype + default metadata)
+    /// @return matching [DType.Extension] (storage dtype + default metadata)
     DType.Extension dtype(boolean nullable);
 
     /// Polymorphic encode: converts a collection of domain values into the raw

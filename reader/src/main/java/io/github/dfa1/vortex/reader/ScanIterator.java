@@ -654,7 +654,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     }
 
     /// Builds the matching `DictXxxArray` for a primitive dictionary, unwrapping
-    /// any {@link MaskedArray} layer on either side — dictionary lookups are keyed by code
+    /// any [MaskedArray] layer on either side — dictionary lookups are keyed by code
     /// so value-side validity is meaningless at this layer.
     ///
     /// @param dtype  primitive logical type of dict values

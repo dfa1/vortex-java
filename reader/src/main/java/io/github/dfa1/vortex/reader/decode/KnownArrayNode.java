@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.encoding.EncodingId;
 
 import java.nio.ByteBuffer;
 
-/// Array node whose encoding id is well-known to this build (an {@link EncodingId} enum constant).
+/// Array node whose encoding id is well-known to this build (an [EncodingId] enum constant).
 ///
 /// @param encodingId    well-known encoding id
 /// @param metadata      encoding-specific metadata bytes, or `null`

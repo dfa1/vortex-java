@@ -75,7 +75,7 @@ public sealed interface VarBinArray extends Array
 
     /// Returns the concatenated raw bytes segment backing all elements.
     ///
-    /// @return the bytes {@link MemorySegment}
+    /// @return the bytes [MemorySegment]
     MemorySegment bytesSegment();
 
     /// Returns a copy of the raw bytes for element `i`.
@@ -107,7 +107,7 @@ public sealed interface VarBinArray extends Array
     /// @return a `VarBinArray` containing the first `rows` elements
     VarBinArray limited(long rows);
 
-    /// Materialises any `VarBinArray` into a flat {@link OffsetMode}. The fast path
+    /// Materialises any `VarBinArray` into a flat [OffsetMode]. The fast path
     /// returns `src` unchanged when it is already an {@link OffsetMode}. Other modes
     /// (ViewMode in particular) walk every row through the typed accessors, copy the bytes
     /// into a fresh contiguous segment allocated from `arena`, and build an I64
@@ -309,7 +309,7 @@ public sealed interface VarBinArray extends Array
     /// owning chunk and delegate. Per ADR 0012, preserves zero-copy on multi-chunk Utf8 /
     /// Binary columns: each chunk's underlying segments stay live (mmap slices); no concat.
     ///
-    /// {@link #bytesSegment()} is the {@link MemorySegment#NULL} sentinel — chunked
+    /// [#bytesSegment()] is the [MemorySegment#NULL] sentinel — chunked
     /// arrays have no single contiguous bytes segment. Callers that need contiguous
     /// bytes must materialise via the chunked children.
     ///
@@ -325,7 +325,7 @@ public sealed interface VarBinArray extends Array
         ///
         /// @param dtype     logical element type
         /// @param totalRows expected total row count
-        /// @param chunks    non-empty list of {@link VarBinArray} chunks
+        /// @param chunks    non-empty list of [VarBinArray] chunks
         /// @return a new `ChunkedMode`
         /// @throws VortexException on empty input, non-{@link VarBinArray} chunks, or row-count mismatch
         public static ChunkedMode of(DType dtype, long totalRows,
@@ -427,7 +427,7 @@ public sealed interface VarBinArray extends Array
     /// buffer. Per-row accessors resolve the view on demand — no concat or
     /// materialisation at construction time.
     ///
-    /// {@link #bytesSegment()} returns {@link MemorySegment#NULL} because there is
+    /// [#bytesSegment()] returns [MemorySegment#NULL] because there is
     /// no single contiguous bytes segment; callers needing one must materialise via
     /// the typed accessors.
     ///

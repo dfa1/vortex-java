@@ -9,7 +9,7 @@ import io.github.dfa1.vortex.core.DType;
 /// for any valid index, replacing the `(n+7)/8`-byte `0xFF`-fill the
 /// buffer-backed path required.
 ///
-/// @param dtype  logical {@link DType.Bool} type
+/// @param dtype  logical [DType.Bool] type
 /// @param length total logical row count
 /// @param value  broadcast value
 public record LazyConstantBoolArray(DType dtype, long length, boolean value) implements BoolArray {

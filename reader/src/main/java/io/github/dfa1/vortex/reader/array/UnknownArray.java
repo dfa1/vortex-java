@@ -34,7 +34,7 @@ public record UnknownArray(
     /// Returns the child array at position `i`.
     ///
     /// @param i child index
-    /// @return the child {@link Array} at index `i`
+    /// @return the child [Array] at index `i`
     public Array child(int i) {
         return children[i];
     }

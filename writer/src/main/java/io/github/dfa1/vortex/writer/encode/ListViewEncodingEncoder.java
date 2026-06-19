@@ -20,7 +20,7 @@ import java.util.List;
 /// Write-only encoder for `vortex.listview`.
 public final class ListViewEncodingEncoder implements EncodingEncoder {
 
-    /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor required by [java.util.ServiceLoader].
     public ListViewEncodingEncoder() {
     }
 

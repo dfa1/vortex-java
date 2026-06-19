@@ -17,7 +17,7 @@ import java.util.List;
 /// Write-only encoder for `vortex.sparse`.
 public final class SparseEncodingEncoder implements EncodingEncoder {
 
-    /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor required by [java.util.ServiceLoader].
     public SparseEncodingEncoder() {
     }
 

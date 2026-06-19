@@ -8,7 +8,7 @@ import io.github.dfa1.vortex.encoding.EncodingId;
 /// Read-only decoder for `vortex.ext` — unwraps the storage-array child.
 public final class ExtEncodingDecoder implements EncodingDecoder {
 
-    /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor required by [java.util.ServiceLoader].
     public ExtEncodingDecoder() {
     }
 

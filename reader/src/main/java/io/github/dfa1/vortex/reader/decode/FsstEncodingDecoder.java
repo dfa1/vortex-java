@@ -19,7 +19,7 @@ public final class FsstEncodingDecoder implements EncodingDecoder {
 
     private static final int ESCAPE = 0xFF;
 
-    /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor required by [java.util.ServiceLoader].
     public FsstEncodingDecoder() {
     }
 

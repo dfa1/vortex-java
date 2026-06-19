@@ -14,7 +14,7 @@ import java.nio.ByteBuffer;
 /// Read-only decoder for `vortex.decimal`.
 public final class DecimalEncodingDecoder implements EncodingDecoder {
 
-    /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor required by [java.util.ServiceLoader].
     public DecimalEncodingDecoder() {
     }
 

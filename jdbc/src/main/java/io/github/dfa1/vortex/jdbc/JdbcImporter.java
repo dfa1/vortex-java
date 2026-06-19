@@ -25,7 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/// Reads rows from a JDBC {@link ResultSet} and writes a Vortex file.
+/// Reads rows from a JDBC [ResultSet] and writes a Vortex file.
 ///
 /// The schema is derived from {@link ResultSetMetaData} — no type inference is needed.
 /// SQL NULL values are mapped to `0`, `0.0`, `false`, or `""` depending on column type.

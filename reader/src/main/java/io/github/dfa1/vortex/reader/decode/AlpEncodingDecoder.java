@@ -29,7 +29,7 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
     private static final DType I64_DTYPE = new DType.Primitive(PType.I64, false);
     private static final DType I32_DTYPE = new DType.Primitive(PType.I32, false);
 
-    /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor required by [java.util.ServiceLoader].
     public AlpEncodingDecoder() {
     }
 

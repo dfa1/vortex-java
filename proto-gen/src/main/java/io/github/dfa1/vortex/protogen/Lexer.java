@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.protogen;
 import java.util.ArrayList;
 import java.util.List;
 
-/// Tokenizes a proto3 source file into a list of {@link Token}s.
+/// Tokenizes a proto3 source file into a list of [Token]s.
 /// Comments (`//` line, `/* ... */` block) and whitespace are dropped.
 public final class Lexer {
 

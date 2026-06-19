@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.function.IntBinaryOperator;
 import java.util.function.IntConsumer;
 
-/// Multi-chunk {@link IntArray} record. ADR 0012 shape.
+/// Multi-chunk [IntArray] record. ADR 0012 shape.
 ///
 /// @param dtype    logical element type
 /// @param length   total logical row count
@@ -18,7 +18,7 @@ import java.util.function.IntConsumer;
 @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record ChunkedIntArray(DType dtype, long length, IntArray[] children, long[] offsets) implements IntArray {
 
-    /// Builds a {@link ChunkedIntArray}.
+    /// Builds a [ChunkedIntArray].
     ///
     /// @param dtype     logical element type
     /// @param totalRows expected total row count

@@ -8,7 +8,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.LongBinaryOperator;
 
-/// Multi-chunk {@link ByteArray} record. ADR 0012 shape.
+/// Multi-chunk [ByteArray] record. ADR 0012 shape.
 ///
 /// @param dtype    logical element type (I8 or U8)
 /// @param length   total logical row count
@@ -17,7 +17,7 @@ import java.util.function.LongBinaryOperator;
 @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record ChunkedByteArray(DType dtype, long length, ByteArray[] children, long[] offsets) implements ByteArray {
 
-    /// Builds a {@link ChunkedByteArray}.
+    /// Builds a [ChunkedByteArray].
     ///
     /// @param dtype     logical element type
     /// @param totalRows expected total row count

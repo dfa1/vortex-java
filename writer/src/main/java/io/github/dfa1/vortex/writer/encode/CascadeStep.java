@@ -5,7 +5,7 @@ import java.util.List;
 
 /// One step in cascade-aware encoding: a partially-assembled node tree plus open child slots.
 ///
-/// Terminal steps have no open children and carry a fully-resolved {@link EncodeResult}.
+/// Terminal steps have no open children and carry a fully-resolved [EncodeResult].
 /// Intermediate steps have open children that the `CascadingCompressor` (writer module) recursively fills.
 ///
 /// Buffer layout: `ownedBuffers` holds buffers belonging to the partial root
@@ -33,7 +33,7 @@ public record CascadeStep(
     /// Convenience: terminal step — no open children, result is final.
     ///
     /// @param result the fully-resolved encode result to wrap
-    /// @return a terminal {@link CascadeStep} backed by `result`
+    /// @return a terminal [CascadeStep] backed by `result`
     public static CascadeStep terminal(EncodeResult result) {
         return new CascadeStep(result.rootNode(), result.buffers(), List.of(),
                 result.statsMin(), result.statsMax(), true);
@@ -41,7 +41,7 @@ public record CascadeStep(
 
     /// Sentinel: encoding cannot handle this data — never wins in size selection.
     ///
-    /// @return a non-applicable {@link CascadeStep} sentinel
+    /// @return a non-applicable [CascadeStep] sentinel
     public static CascadeStep notApplicable() {
         return new CascadeStep(null, List.of(), List.of(), null, null, false);
     }
@@ -54,7 +54,7 @@ public record CascadeStep(
     }
 
     /// Total byte size of owned buffers (used for size-based winner selection on samples).
-    /// Returns {@link Long#MAX_VALUE}/2 for non-applicable steps.
+    /// Returns [Long#MAX_VALUE]/2 for non-applicable steps.
     ///
     /// @return total size in bytes of all owned buffers, or {@link Long#MAX_VALUE}/2 if not applicable
     public long ownedBytes() {

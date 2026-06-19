@@ -6,7 +6,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
-/// Walks a {@link TypeRegistry} and emits one `.java` file per message or enum.
+/// Walks a [TypeRegistry] and emits one `.java` file per message or enum.
 ///
 /// Output:
 /// - Each enum becomes a Java `enum` with bounds-checked `fromValue(int)`.
@@ -588,7 +588,7 @@ public final class CodeGen {
     // Enum emitters (wire type = VARINT)
     // ------------------------------------------------------------------
 
-    /// Emits a try/catch wrapper that translates {@link IllegalArgumentException} from
+    /// Emits a try/catch wrapper that translates [IllegalArgumentException] from
     /// `Enum.fromValue(int)` into a checked {@link IOException}. The caller must already be
     /// inside a `throws IOException` context (every `decode(...)` factory is).
     private static void emitEnumDecodeWrap(StringBuilder sb, String indent, String javaName, String assignTarget) {

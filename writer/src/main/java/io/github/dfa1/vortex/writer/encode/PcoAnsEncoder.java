@@ -64,7 +64,7 @@ final class PcoAnsEncoder {
         return new PcoAnsEncoder(sizeLog, tableSize, minR, cutoff, nextSt);
     }
 
-    /// Encode one symbol. Caller writes the low {@link Step#numBits()} bits of
+    /// Encode one symbol. Caller writes the low [Step#numBits()] bits of
     /// the old state to the bit stream (in LIFO order; caller reverses per batch).
     ///
     /// @param state  current ANS state `∈ [tableSize, 2*tableSize)`

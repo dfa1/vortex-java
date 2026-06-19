@@ -12,7 +12,7 @@ import java.lang.foreign.MemorySegment;
 /// `MemorySegment.copy(seg, i * elemBytes, ...)`) must replicate the lone element across
 /// every logical index instead of running off the end.
 ///
-/// {@link io.github.dfa1.vortex.reader.array.LongArray#getLong(long)} and the sibling typed
+/// [io.github.dfa1.vortex.reader.array.LongArray#getLong(long)] and the sibling typed
 /// accessors already wrap around with `i % cap`; this helper exposes the same arithmetic
 /// to call sites that work with raw segments.
 public final class SegmentBroadcast {
@@ -26,7 +26,7 @@ public final class SegmentBroadcast {
     /// @param seg       segment returned by DecodeContext#decodeChildSegment
     /// @param i         logical element index in `[0, rowCount)`
     /// @param elemBytes element width in bytes (>= 1)
-    /// @return byte offset suitable for {@link MemorySegment#get} or
+    /// @return byte offset suitable for [MemorySegment#get] or
     ///         {@link MemorySegment#copy(MemorySegment, long, MemorySegment, long, long)}
     /// @throws VortexException if `seg` is empty (zero elements)
     public static long elementOffset(MemorySegment seg, long i, int elemBytes) {

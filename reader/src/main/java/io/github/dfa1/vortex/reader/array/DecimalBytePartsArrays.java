@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.VortexException;
 
 import java.math.BigInteger;
 
-/// Package-private helper for the {@link LazyDecimalBytePartsArray} record.
+/// Package-private helper for the [LazyDecimalBytePartsArray] record.
 ///
 /// `vortex.decimal_byte_parts` with `lower_part_count == 0` stores the
 /// decimal mantissa as a single signed-integer child column whose ptype the
@@ -16,7 +16,7 @@ final class DecimalBytePartsArrays {
     private DecimalBytePartsArrays() {
     }
 
-    /// Reads `arr[i]` as a signed-magnitude {@link BigInteger} mantissa.
+    /// Reads `arr[i]` as a signed-magnitude [BigInteger] mantissa.
     /// Recurses through {@link MaskedArray}; throws on null cells so callers
     /// don't silently get a zero mantissa for invalid rows.
     ///

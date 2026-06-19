@@ -9,10 +9,10 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 
 /// Read-only decoder for `vortex.bytebool` — packs the input byte buffer into the
-/// bit-packed {@link BoolArray} layout used by `vortex.bool`.
+/// bit-packed [BoolArray] layout used by `vortex.bool`.
 public final class ByteBoolEncodingDecoder implements EncodingDecoder {
 
-    /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor required by [java.util.ServiceLoader].
     public ByteBoolEncodingDecoder() {
     }
 

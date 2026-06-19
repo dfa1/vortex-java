@@ -13,7 +13,7 @@ import java.lang.foreign.ValueLayout;
 /// Write-side encoder for `vortex.bool`.
 public final class BoolEncodingEncoder implements EncodingEncoder {
 
-    /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor required by [java.util.ServiceLoader].
     public BoolEncodingEncoder() {
     }
 

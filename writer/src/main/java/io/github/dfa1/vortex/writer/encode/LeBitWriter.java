@@ -50,7 +50,7 @@ final class LeBitWriter {
         }
     }
 
-    /// Copy buffered bytes into an arena-allocated {@link MemorySegment}.
+    /// Copy buffered bytes into an arena-allocated [MemorySegment].
     ///
     /// @param arena allocator whose lifetime must exceed all uses of the returned segment
     /// @return a new segment containing every byte written so far

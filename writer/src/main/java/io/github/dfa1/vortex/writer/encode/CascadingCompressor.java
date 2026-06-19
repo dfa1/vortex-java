@@ -13,7 +13,7 @@ import java.util.Set;
 /// producing the smallest output. With `allowedCascading > 0`, also recurses
 /// into open child slots (e.g. ALP → Bitpacked for F64 columns).
 ///
-/// Encodings that override {@link EncodingEncoder#encodeCascade} expose intermediate
+/// Encodings that override [EncodingEncoder#encodeCascade] expose intermediate
 /// representations as open children; encodings that use the default are terminal.
 /// At depth 0 only terminal encodings are considered.
 public final class CascadingCompressor {
@@ -136,7 +136,7 @@ public final class CascadingCompressor {
     /// Entry point: encode `data` using the best cascading strategy.
     ///
     /// Cascade parameters (depth, sampling, exclusions) are taken from `ctx`.
-    /// Use {@link EncodeContext#ofDepth(int, java.lang.foreign.Arena, WriteRegistry)}
+    /// Use [EncodeContext#ofDepth(int, java.lang.foreign.Arena, WriteRegistry)]
     /// to build a context with cascade depth set.
     ///
     /// @param dtype the logical type of the data to encode

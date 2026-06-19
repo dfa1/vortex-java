@@ -21,7 +21,7 @@ public final class DateExtensionDecoder implements ExtensionDecoder {
     /// Singleton instance.
     public static final DateExtensionDecoder INSTANCE = new DateExtensionDecoder();
 
-    /// Public no-arg constructor for {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor for [java.util.ServiceLoader].
     /// Prefer the {@link #INSTANCE} singleton in application code.
     public DateExtensionDecoder() {
     }
@@ -54,7 +54,7 @@ public final class DateExtensionDecoder implements ExtensionDecoder {
         return LocalDate.ofEpochDay(ExtensionStorage.epochInteger(storage, i));
     }
 
-    /// Decodes every row of `storage` into a list of dates. {@link MaskedArray}
+    /// Decodes every row of `storage` into a list of dates. [MaskedArray]
     /// storage yields `null` at invalid positions instead of throwing.
     ///
     /// @param storage signed-integer storage array (optionally wrapped in `MaskedArray`)

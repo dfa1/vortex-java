@@ -33,7 +33,7 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
     private static final int N_BINS_LOG = 8;
     private static final int CHUNK_SIZE = 1 << 16; // 65 536 elements
 
-    /// Public no-arg constructor required by {@link java.util.ServiceLoader}.
+    /// Public no-arg constructor required by [java.util.ServiceLoader].
     public PcoEncodingEncoder() {
     }
 

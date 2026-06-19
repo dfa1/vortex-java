@@ -16,7 +16,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.ServiceLoader;
 
-/// Read-side registry: maps {@link EncodingId} to {@link EncodingDecoder} implementations.
+/// Read-side registry: maps [EncodingId] to [EncodingDecoder] implementations.
 ///
 /// Instances are immutable after construction. Build one via {@link #builder()} or
 /// via the {@link #loadAll()} and {@link #empty()} convenience factories.
@@ -30,7 +30,7 @@ public final class ReadRegistry {
         this.allowUnknown = allowUnknown;
     }
 
-    /// Loads all service-discovered {@link EncodingDecoder} implementations.
+    /// Loads all service-discovered [EncodingDecoder] implementations.
     ///
     /// @return an immutable {@link ReadRegistry} populated with all service-loaded decoders
     public static ReadRegistry loadAll() {
@@ -39,12 +39,12 @@ public final class ReadRegistry {
 
     /// Creates an empty registry with no decoders registered.
     ///
-    /// @return a new empty immutable {@link ReadRegistry}
+    /// @return a new empty immutable [ReadRegistry]
     public static ReadRegistry empty() {
         return builder().build();
     }
 
-    /// Returns a new {@link Builder}.
+    /// Returns a new [Builder].
     ///
     /// @return a fresh builder
     public static Builder builder() {
@@ -54,7 +54,7 @@ public final class ReadRegistry {
     /// Returns whether passthrough decode for unknown encoding ids is enabled.
     ///
     /// @return `true` if unknown encodings are silently wrapped as
-    ///         {@link io.github.dfa1.vortex.reader.array.UnknownArray}
+    ///         [io.github.dfa1.vortex.reader.array.UnknownArray]
     public boolean isAllowUnknown() {
         return allowUnknown;
     }
@@ -70,7 +70,7 @@ public final class ReadRegistry {
     /// Decodes the array described by `ctx`.
     ///
     /// @param ctx the decode context
-    /// @return the decoded {@link Array}
+    /// @return the decoded [Array]
     public Array decode(DecodeContext ctx) {
         ArrayNode node = ctx.node();
         EncodingDecoder decoder = switch (node) {
@@ -93,7 +93,7 @@ public final class ReadRegistry {
     /// Decodes the array described by `ctx` and returns its primary backing segment.
     ///
     /// @param ctx the decode context
-    /// @return the primary {@link MemorySegment} of the decoded array
+    /// @return the primary [MemorySegment] of the decoded array
     public MemorySegment decodeAsSegment(DecodeContext ctx) {
         ArrayNode node = ctx.node();
         EncodingDecoder decoder = switch (node) {
@@ -132,7 +132,7 @@ public final class ReadRegistry {
                 node.metadata(), bufs, children);
     }
 
-    /// Builder for {@link ReadRegistry}.
+    /// Builder for [ReadRegistry].
     ///
     /// Not thread-safe. Build once, use everywhere — the produced {@link ReadRegistry} is immutable.
     public static final class Builder {
@@ -145,7 +145,7 @@ public final class ReadRegistry {
 
         /// Registers a decoder.
         ///
-        /// @param decoder the {@link EncodingDecoder} to register
+        /// @param decoder the [EncodingDecoder] to register
         /// @return this builder, for chaining
         /// @throws VortexException if a decoder for the same id is already registered
         public Builder register(EncodingDecoder decoder) {
@@ -156,7 +156,7 @@ public final class ReadRegistry {
             return this;
         }
 
-        /// Registers every {@link EncodingDecoder} discovered via {@link ServiceLoader}.
+        /// Registers every [EncodingDecoder] discovered via [ServiceLoader].
         ///
         /// @return this builder, for chaining
         /// @throws VortexException if a service-loaded entry collides with one already registered
@@ -169,7 +169,7 @@ public final class ReadRegistry {
 
         /// Enable passthrough decode for unknown encoding ids.
         ///
-        /// Default is strict: unknown ids throw {@link VortexException}. When enabled, unknown
+        /// Default is strict: unknown ids throw [VortexException]. When enabled, unknown
         /// nodes are wrapped as {@link io.github.dfa1.vortex.reader.array.UnknownArray}.
         /// Mirrors Rust `VortexSession::allow_unknown()`.
         ///
@@ -179,7 +179,7 @@ public final class ReadRegistry {
             return this;
         }
 
-        /// Builds an immutable {@link ReadRegistry}.
+        /// Builds an immutable [ReadRegistry].
         ///
         /// @return the immutable registry
         public ReadRegistry build() {
