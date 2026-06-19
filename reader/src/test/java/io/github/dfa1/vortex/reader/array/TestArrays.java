@@ -83,7 +83,7 @@ public final class TestArrays {
     /// @param vs element values
     /// @return read-only materialized byte array
     public static ByteArray bytes(byte... vs) {
-        MemorySegment seg = Arena.ofAuto().allocate(Math.max(1, vs.length), 1);
+        MemorySegment seg = Arena.ofAuto().allocate(vs.length, 1);
         for (int i = 0; i < vs.length; i++) {
             seg.set(ValueLayout.JAVA_BYTE, i, vs[i]);
         }
@@ -95,7 +95,7 @@ public final class TestArrays {
     /// @param vs element values
     /// @return read-only materialized bool array
     public static BoolArray bools(boolean... vs) {
-        MemorySegment seg = Arena.ofAuto().allocate(Math.max(1, (vs.length + 7) / 8), 1);
+        MemorySegment seg = Arena.ofAuto().allocate((vs.length + 7) / 8, 1);
         for (int i = 0; i < vs.length; i++) {
             if (vs[i]) {
                 long byteIdx = i >>> 3;
