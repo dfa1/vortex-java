@@ -91,12 +91,7 @@ public final class DictEncodingDecoder implements EncodingDecoder {
             case U8 -> expandU8(codesBuf, valuesBuf, out, rowCount, elemSize);
             case U16 -> expandU16(codesBuf, valuesBuf, out, rowCount, elemSize);
             case U32 -> expandU32(codesBuf, valuesBuf, out, rowCount, elemSize);
-            default -> {
-                for (long i = 0; i < rowCount; i++) {
-                    long code = readCode(codesBuf, codePType, i);
-                    MemorySegment.copy(valuesBuf, code * elemSize, out, i * elemSize, elemSize);
-                }
-            }
+            default -> throw new VortexException(EncodingId.VORTEX_DICT, "unexpected code type: " + codePType);
         }
         return typedArray(ctx.dtype(), valPType, rowCount, out.asReadOnly());
     }
@@ -166,18 +161,7 @@ public final class DictEncodingDecoder implements EncodingDecoder {
                 codesBuf, codePType);
     }
 
-    private static long readCode(MemorySegment buf, PType codePType, long i) {
-        long cap = SegmentBroadcast.capacity(buf, codePType.byteSize());
-        long idx = i % cap;
-        return switch (codePType) {
-            case U8 -> Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, idx));
-            case U16 -> Short.toUnsignedLong(buf.get(PTypeIO.LE_SHORT, idx * 2));
-            case U32 -> Integer.toUnsignedLong(buf.get(PTypeIO.LE_INT, idx * 4));
-            default -> throw new VortexException(EncodingId.VORTEX_DICT, "unexpected code type: " + codePType);
-        };
-    }
-
-    private static void expandU8(MemorySegment codes, MemorySegment values, MemorySegment out, long rowCount, int elemSize) {
+    static void expandU8(MemorySegment codes, MemorySegment values, MemorySegment out, long rowCount, int elemSize) {
         long codesCap = SegmentBroadcast.capacity(codes, 1);
         long valuesCap = SegmentBroadcast.capacity(values, elemSize);
         boolean fast = codesCap >= rowCount && valuesCap > 1;
@@ -250,7 +234,7 @@ public final class DictEncodingDecoder implements EncodingDecoder {
         }
     }
 
-    private static void expandU16(MemorySegment codes, MemorySegment values, MemorySegment out, long rowCount, int elemSize) {
+    static void expandU16(MemorySegment codes, MemorySegment values, MemorySegment out, long rowCount, int elemSize) {
         long codesCap = SegmentBroadcast.capacity(codes, 2);
         long valuesCap = SegmentBroadcast.capacity(values, elemSize);
         boolean fast = codesCap >= rowCount && valuesCap > 1;
@@ -323,7 +307,7 @@ public final class DictEncodingDecoder implements EncodingDecoder {
         }
     }
 
-    private static void expandU32(MemorySegment codes, MemorySegment values, MemorySegment out, long rowCount, int elemSize) {
+    static void expandU32(MemorySegment codes, MemorySegment values, MemorySegment out, long rowCount, int elemSize) {
         long codesCap = SegmentBroadcast.capacity(codes, 4);
         long valuesCap = SegmentBroadcast.capacity(values, elemSize);
         boolean fast = codesCap >= rowCount && valuesCap > 1;
