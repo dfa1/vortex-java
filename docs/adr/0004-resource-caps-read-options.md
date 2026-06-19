@@ -26,6 +26,40 @@ currently no limits on:
 The fix is a `ResourceLimits` value that is enforced at open/parse time,
 before any byte is decoded.
 
+### Why open-time, not per-scan
+
+The natural instinct is to hang these caps off `ScanOptions`, next to the
+existing row `limit`. That is too late. The structural attacks **detonate during
+`open()` — before a `ScanOptions` even exists.** `open(path)` already:
+
+1. memory-maps the **entire file** (`channel.map(READ_ONLY, 0, size, arena)`) — a
+   100 GB file exhausts virtual address space here;
+2. parses the postscript → footer → layout-tree flatbuffers;
+3. reads the **segment table** (a crafted file can declare millions of entries);
+4. walks the **layout tree** (depth / child-count bomb).
+
+By the time a caller builds `ScanOptions` and calls `scan()`, the file is already
+mapped and the layout tree already parsed — the OOM / address-space exhaustion /
+depth-bomb has already happened. A scan-time check runs after the damage.
+
+The governing rule: **enforce each cap at the earliest point the resource is
+consumed.** For the structural caps that is `open()`/parse, not scan.
+
+There is also a scope mismatch. Caps like `maxFileSizeBytes` and
+`maxSegmentCount` are properties of the **file + reader session**, not of an
+individual scan: one `open()` feeds many `scan()` calls. Placing them on
+`ScanOptions` would force the caller to re-pass the same limit on every scan and
+*still* could not guard `open()`.
+
+| Resource | Consumed / detonates at | Configured via |
+|----------|-------------------------|----------------|
+| file mmap, segment table, layout depth / children / node count | `open()` / parse | `ReadOptions` |
+| per-chunk decode allocation (`rows × byteWidth`) | decode (during `scan()`) | `ReadOptions` (`maxRowsPerChunk`, a layout-declared count fixed at open) |
+| output row count | `scan()` | `ScanOptions.limit` (already exists) |
+
+So `ScanOptions` keeps the one genuinely per-scan knob (output `limit`); every
+structural cap moves to a new open-time `ReadOptions`.
+
 ### Where limits live — the decision
 
 Three candidates:
