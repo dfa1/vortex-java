@@ -123,7 +123,7 @@ class ListEncodingEncoderTest {
 
             // Then
             assertThat(result.length()).isEqualTo(2);
-            assertThat(result.elements().length()).isEqualTo(0);
+            assertThat(result.elements().length()).isZero();
             assertThat(result.offsets().length()).isEqualTo(3);
         }
 

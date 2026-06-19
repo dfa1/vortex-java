@@ -34,7 +34,7 @@ class LazyZigZagLongArrayTest {
         LazyZigZagLongArray sut = of(0L, 1L, 2L, 3L, 4L);
 
         // When + Then
-        assertThat(sut.getLong(0)).isEqualTo(0L);
+        assertThat(sut.getLong(0)).isZero();
         assertThat(sut.getLong(1)).isEqualTo(-1L);
         assertThat(sut.getLong(2)).isEqualTo(1L);
         assertThat(sut.getLong(3)).isEqualTo(-2L);
@@ -63,6 +63,6 @@ class LazyZigZagLongArrayTest {
         long sum = sut.fold(0L, Long::sum);
 
         // Then
-        assertThat(sum).isEqualTo(0L);
+        assertThat(sum).isZero();
     }
 }
