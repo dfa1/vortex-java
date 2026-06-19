@@ -93,7 +93,8 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
                 if (arr.length == 0) {
                     yield null;
                 }
-                long min = arr[0], max = arr[0];
+                long min = arr[0];
+                long max = arr[0];
                 for (byte v : arr) {
                     if (v < min) {
                         min = v;
@@ -109,7 +110,8 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
                 if (arr.length == 0) {
                     yield null;
                 }
-                long min = arr[0], max = arr[0];
+                long min = arr[0];
+                long max = arr[0];
                 for (short v : arr) {
                     if (v < min) {
                         min = v;
@@ -125,7 +127,8 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
                 if (arr.length == 0) {
                     yield null;
                 }
-                long min = arr[0], max = arr[0];
+                long min = arr[0];
+                long max = arr[0];
                 for (int v : arr) {
                     if (v < min) {
                         min = v;
@@ -141,7 +144,8 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
                 if (arr.length == 0) {
                     yield null;
                 }
-                long min = arr[0], max = arr[0];
+                long min = arr[0];
+                long max = arr[0];
                 for (long v : arr) {
                     if (v < min) {
                         min = v;
@@ -157,7 +161,8 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
                 if (arr.length == 0) {
                     yield null;
                 }
-                long min = Byte.toUnsignedInt(arr[0]), max = Byte.toUnsignedInt(arr[0]);
+                long min = Byte.toUnsignedInt(arr[0]);
+                long max = Byte.toUnsignedInt(arr[0]);
                 for (byte v : arr) {
                     long uv = Byte.toUnsignedInt(v);
                     if (uv < min) {
@@ -174,7 +179,8 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
                 if (arr.length == 0) {
                     yield null;
                 }
-                long min = Short.toUnsignedInt(arr[0]), max = Short.toUnsignedInt(arr[0]);
+                long min = Short.toUnsignedInt(arr[0]);
+                long max = Short.toUnsignedInt(arr[0]);
                 for (short v : arr) {
                     long uv = Short.toUnsignedInt(v);
                     if (uv < min) {
@@ -191,7 +197,8 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
                 if (arr.length == 0) {
                     yield null;
                 }
-                long min = Integer.toUnsignedLong(arr[0]), max = Integer.toUnsignedLong(arr[0]);
+                long min = Integer.toUnsignedLong(arr[0]);
+                long max = Integer.toUnsignedLong(arr[0]);
                 for (int v : arr) {
                     long uv = Integer.toUnsignedLong(v);
                     if (uv < min) {
@@ -208,7 +215,8 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
                 if (arr.length == 0) {
                     yield null;
                 }
-                long min = arr[0], max = arr[0];
+                long min = arr[0];
+                long max = arr[0];
                 for (long v : arr) {
                     if (Long.compareUnsigned(v, min) < 0) {
                         min = v;
@@ -224,7 +232,8 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
                 if (arr.length == 0) {
                     yield null;
                 }
-                float min = arr[0], max = arr[0];
+                float min = arr[0];
+                float max = arr[0];
                 for (float v : arr) {
                     if (v < min) {
                         min = v;
@@ -240,7 +249,8 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
                 if (arr.length == 0) {
                     yield null;
                 }
-                double min = arr[0], max = arr[0];
+                double min = arr[0];
+                double max = arr[0];
                 for (double v : arr) {
                     if (v < min) {
                         min = v;
@@ -256,7 +266,8 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
                 if (arr.length == 0) {
                     yield null;
                 }
-                float min = Float.float16ToFloat(arr[0]), max = Float.float16ToFloat(arr[0]);
+                float min = Float.float16ToFloat(arr[0]);
+                float max = Float.float16ToFloat(arr[0]);
                 for (short v : arr) {
                     float fv = Float.float16ToFloat(v);
                     if (fv < min) {
