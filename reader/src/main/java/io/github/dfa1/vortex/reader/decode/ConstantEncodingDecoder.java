@@ -7,8 +7,6 @@ import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.proto.ScalarValue;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.ArraySegments;
-import io.github.dfa1.vortex.reader.array.GenericArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantBoolArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantByteArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantDecimalArray;
@@ -82,28 +80,39 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
             return decodeDecimal(dtype, scalar, n);
         }
         if (dtype instanceof DType.Extension ext) {
-            Array storage = arrayFromScalar(ctx, scalar, ext.storageDType(), n);
-            // GenericArray needs a backing buffer; the recursive call returns a metadata-only
-            // LazyConstantXxxArray. Materialise once into the chunk arena so downstream
-            // extension consumers that read via ArraySegments.of(arr, arena) still find a segment.
-            // Extension-on-constant is rare enough that the small alloc doesn't matter — the
-            // bare primitive path stays buffer-free.
-            return new GenericArray(dtype, n, ArraySegments.of(storage, ctx.arena()));
+            if (!(ext.storageDType() instanceof DType.Primitive sp)) {
+                throw new VortexException(EncodingId.VORTEX_CONSTANT,
+                        "constant extension storage must be primitive, got " + ext.storageDType());
+            }
+            // Build the constant storage directly under the Extension dtype. No materialisation:
+            // extension consumers read storage through its family typed-getter (see
+            // ExtensionStorage.epochInteger), so a lazy constant array works and stays O(1).
+            return constantPrimitive(dtype, sp.ptype(), scalar, n);
         }
         if (!(dtype instanceof DType.Primitive p)) {
             throw new VortexException(EncodingId.VORTEX_CONSTANT, "unsupported dtype " + dtype);
         }
+        return constantPrimitive(dtype, p.ptype(), scalar, n);
+    }
 
-        PType ptype = p.ptype();
+    /// Builds a metadata-only constant primitive array carrying `outDtype` — used for both
+    /// bare primitive constants and extension constants (whose primitive storage is relabelled
+    /// with the extension's logical dtype). O(1): no buffer is allocated.
+    ///
+    /// @param outDtype logical dtype the returned array reports
+    /// @param ptype    physical storage ptype of the constant value
+    /// @param scalar   the constant scalar value
+    /// @param n        row count
+    /// @return a lazy constant array of length `n`
+    private static Array constantPrimitive(DType outDtype, PType ptype, ScalarValue scalar, long n) {
         long rawBits = scalarToRawBits(scalar, ptype);
-
         return switch (ptype) {
-            case I64, U64 -> new LazyConstantLongArray(dtype, n, rawBits);
-            case I32, U32 -> new LazyConstantIntArray(dtype, n, (int) rawBits);
-            case F64 -> new LazyConstantDoubleArray(dtype, n, Double.longBitsToDouble(rawBits));
-            case F32 -> new LazyConstantFloatArray(dtype, n, Float.intBitsToFloat((int) rawBits));
-            case I16, U16 -> new LazyConstantShortArray(dtype, n, (short) rawBits);
-            case I8, U8 -> new LazyConstantByteArray(dtype, n, (byte) rawBits);
+            case I64, U64 -> new LazyConstantLongArray(outDtype, n, rawBits);
+            case I32, U32 -> new LazyConstantIntArray(outDtype, n, (int) rawBits);
+            case F64 -> new LazyConstantDoubleArray(outDtype, n, Double.longBitsToDouble(rawBits));
+            case F32 -> new LazyConstantFloatArray(outDtype, n, Float.intBitsToFloat((int) rawBits));
+            case I16, U16 -> new LazyConstantShortArray(outDtype, n, (short) rawBits);
+            case I8, U8 -> new LazyConstantByteArray(outDtype, n, (byte) rawBits);
             default -> throw new VortexException(EncodingId.VORTEX_CONSTANT, "unsupported ptype " + ptype);
         };
     }

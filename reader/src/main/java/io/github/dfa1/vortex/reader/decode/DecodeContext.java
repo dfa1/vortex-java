@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 
 import java.lang.foreign.MemorySegment;
@@ -76,6 +77,19 @@ public record DecodeContext(
         ArrayNode child = node.children()[i];
         var childCtx = new DecodeContext(child, dtype, rowCount, segmentBuffers, registry, arena);
         return registry.decodeAsSegment(childCtx);
+    }
+
+    /// Materialises an already-decoded array into a flat primary segment, allocating lazy
+    /// variants from this context's arena.
+    ///
+    /// Use when a decoder already holds a decoded child — e.g. after unwrapping a
+    /// {@link io.github.dfa1.vortex.reader.array.MaskedArray} for its validity — and needs the
+    /// raw buffer for a bulk read, rather than re-decoding via [#decodeChildSegment(int)].
+    ///
+    /// @param arr the decoded array to materialise
+    /// @return the array's primary {@link MemorySegment}
+    public MemorySegment materialize(Array arr) {
+        return ArraySegments.of(arr, arena);
     }
 
     /// Returns the buffer at position `i` in this node's bufferIndices.

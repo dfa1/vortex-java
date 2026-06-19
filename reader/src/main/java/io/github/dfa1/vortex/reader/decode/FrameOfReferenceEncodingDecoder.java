@@ -5,7 +5,6 @@ import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.proto.ScalarValue;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.LazyForByteArray;
 import io.github.dfa1.vortex.reader.array.LazyForIntArray;
@@ -66,7 +65,7 @@ public final class FrameOfReferenceEncodingDecoder implements EncodingDecoder {
             return validity != null ? new MaskedArray(rawEncoded, validity) : rawEncoded;
         }
 
-        MemorySegment src = ArraySegments.of(rawEncoded, ctx.arena());
+        MemorySegment src = ctx.materialize(rawEncoded);
         long n = ctx.rowCount();
         Array result = switch (p.ptype()) {
             case I64, U64 -> new LazyForLongArray(ctx.dtype(), n, src, ref);

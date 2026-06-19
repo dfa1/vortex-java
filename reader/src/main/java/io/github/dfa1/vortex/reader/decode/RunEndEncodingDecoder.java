@@ -7,7 +7,6 @@ import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.proto.RunEndMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
@@ -69,7 +68,8 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
 
         if (ctx.dtype() instanceof DType.Utf8 || ctx.dtype() instanceof DType.Binary) {
             VarBinArray valuesArr = (VarBinArray) ctx.decodeChild(1, ctx.dtype(), numRuns);
-            return expandStrings(endsArr, VarBinArray.toOffsetMode(valuesArr, ctx.arena()), endsPtype, numRuns, offset, n, ctx.dtype(), ctx.arena());
+            MemorySegment endsSeg = ctx.materialize(endsArr);
+            return expandStrings(endsSeg, VarBinArray.toOffsetMode(valuesArr, ctx.arena()), endsPtype, numRuns, offset, n, ctx.dtype(), ctx.arena());
         }
 
         if (ctx.dtype() instanceof DType.Bool) {
@@ -100,11 +100,10 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
     }
 
     private static Array expandStrings(
-            Array endsArr, VarBinArray.OffsetMode valuesArr,
+            MemorySegment endsSeg, VarBinArray.OffsetMode valuesArr,
             PType endsPtype, long numRuns, long offset, long n,
             DType dtype, SegmentAllocator arena
     ) {
-        MemorySegment endsSeg = ArraySegments.of(endsArr, arena);
         long endsCap = SegmentBroadcast.capacity(endsSeg, endsPtype.byteSize());
         MemorySegment valBytes = valuesArr.bytesSegment();
         MemorySegment valOffsets = valuesArr.offsetsSegment();

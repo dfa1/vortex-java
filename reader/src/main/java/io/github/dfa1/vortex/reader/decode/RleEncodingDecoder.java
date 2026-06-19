@@ -7,7 +7,6 @@ import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.proto.RLEMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantByteArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantIntArray;
@@ -85,7 +84,7 @@ public final class RleEncodingDecoder implements EncodingDecoder {
             indicesValidity = masked.validity();
         }
 
-        int[] indices = readIndices(ArraySegments.of(indicesArr, ctx.arena()), (int) indicesLen, indicesPtype);
+        int[] indices = readIndices(ctx.materialize(indicesArr), (int) indicesLen, indicesPtype);
         long[] valuesIdxOffsets = readUnsignedLongs(
                 ctx.decodeChildSegment(2, offsetsDtype, offsetsLen), (int) offsetsLen, offsetsPtype);
         long firstOffset = valuesLen > 0 && valuesIdxOffsets.length > 0 ? valuesIdxOffsets[0] : 0L;
