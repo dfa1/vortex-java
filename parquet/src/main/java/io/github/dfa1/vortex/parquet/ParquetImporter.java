@@ -115,7 +115,7 @@ public final class ParquetImporter {
         }
     }
 
-    private static DType mapDType(ColumnSchema col) {
+    static DType mapDType(ColumnSchema col) {
         boolean nullable = col.repetitionType() == RepetitionType.OPTIONAL;
         return switch (col.type()) {
             case BOOLEAN -> new DType.Bool(nullable);
@@ -239,7 +239,7 @@ public final class ParquetImporter {
         return chunk;
     }
 
-    private static List<ColumnSchema> filterColumns(List<ColumnSchema> all, List<String> names) {
+    static List<ColumnSchema> filterColumns(List<ColumnSchema> all, List<String> names) {
         List<ColumnSchema> result = new ArrayList<>(names.size());
         for (String name : names) {
             boolean found = false;
