@@ -83,7 +83,7 @@ class ParquetImportIntegrationTest {
     private static void assumeNetworkAvailable() {
         try {
             URI.create("https://raw.githubusercontent.com").toURL().openStream().close();
-        } catch (Exception e) {
+        } catch (Exception _) {
             assumeTrue(false, "no network");
         }
     }

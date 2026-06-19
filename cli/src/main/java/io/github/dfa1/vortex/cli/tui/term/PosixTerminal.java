@@ -104,7 +104,7 @@ public final class PosixTerminal implements Terminal {
             if (rc != 0) {
                 return new Size(24, 80);
             }
-        } catch (Throwable t) {
+        } catch (Throwable _) {
             return new Size(24, 80);
         }
         int rows = Short.toUnsignedInt(ws.get(ValueLayout.JAVA_SHORT, 0));
@@ -143,7 +143,7 @@ public final class PosixTerminal implements Terminal {
         closed = true;
         try {
             Runtime.getRuntime().removeShutdownHook(shutdownHook);
-        } catch (IllegalStateException ignored) {
+        } catch (IllegalStateException _) {
             // JVM already shutting down.
         }
         restore();
@@ -158,7 +158,7 @@ public final class PosixTerminal implements Terminal {
             out.flush();
             @SuppressWarnings("unused")
             int rc = (int) TCSETATTR.invokeExact(STDIN_FD, TCSANOW, savedTermios);
-        } catch (Throwable ignored) {
+        } catch (Throwable _) {
             // Best-effort: JVM is exiting; nothing useful to do.
         }
     }

@@ -55,7 +55,7 @@ final class CliHandles {
     static void closeOnWorker(IoWorker worker, VortexHandle handle) {
         try {
             worker.runAndAwait(handle::close);
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
         }
     }
@@ -84,7 +84,7 @@ final class CliHandles {
         if (target.startsWith("http://") || target.startsWith("https://")) {
             try {
                 return VortexHttpReader.open(new URI(target));
-            } catch (URISyntaxException e) {
+            } catch (URISyntaxException _) {
                 System.err.println("invalid URL: " + target);
                 return null;
             }

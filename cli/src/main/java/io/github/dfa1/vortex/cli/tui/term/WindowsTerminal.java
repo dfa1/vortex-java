@@ -136,7 +136,7 @@ public final class WindowsTerminal implements Terminal {
             if (rc == 0) {
                 return new Size(24, 80);
             }
-        } catch (Throwable t) {
+        } catch (Throwable _) {
             return new Size(24, 80);
         }
         int left = info.get(ValueLayout.JAVA_SHORT, 10);
@@ -179,7 +179,7 @@ public final class WindowsTerminal implements Terminal {
         closed = true;
         try {
             Runtime.getRuntime().removeShutdownHook(shutdownHook);
-        } catch (IllegalStateException ignored) {
+        } catch (IllegalStateException _) {
             // JVM already shutting down.
         }
         restore();

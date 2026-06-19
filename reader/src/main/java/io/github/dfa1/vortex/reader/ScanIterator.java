@@ -187,7 +187,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     private static int compareValues(Object a, Object b) {
         try {
             return ((Comparable<Object>) a).compareTo(b);
-        } catch (ClassCastException e) {
+        } catch (ClassCastException _) {
             return 0;
         }
     }
@@ -752,7 +752,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                     @SuppressWarnings("unchecked")
                     Comparable<Object> cv = (Comparable<Object>) val;
                     yield cv.compareTo(min) < 0 || cv.compareTo(max) > 0;
-                } catch (ClassCastException e) {
+                } catch (ClassCastException _) {
                     yield false;
                 }
             }
@@ -771,7 +771,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                     @SuppressWarnings("unchecked")
                     Comparable<Object> cv = (Comparable<Object>) val;
                     yield cv.compareTo(min) == 0 && cv.compareTo(max) == 0;
-                } catch (ClassCastException e) {
+                } catch (ClassCastException _) {
                     yield false;
                 }
             }

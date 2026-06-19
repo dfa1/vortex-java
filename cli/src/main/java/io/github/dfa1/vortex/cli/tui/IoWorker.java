@@ -88,13 +88,13 @@ public final class IoWorker implements AutoCloseable {
             Runnable task;
             try {
                 task = queue.take();
-            } catch (InterruptedException e) {
+            } catch (InterruptedException _) {
                 Thread.currentThread().interrupt();
                 return;
             }
             try {
                 task.run();
-            } catch (RuntimeException ignored) {
+            } catch (RuntimeException _) {
                 // Task is expected to capture its own failures into shared state.
             }
         }

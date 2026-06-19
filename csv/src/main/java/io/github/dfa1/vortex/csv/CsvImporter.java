@@ -159,14 +159,14 @@ public final class CsvImporter {
         if (canBeLong[c]) {
             try {
                 Long.parseLong(val);
-            } catch (NumberFormatException e) {
+            } catch (NumberFormatException _) {
                 canBeLong[c] = false;
             }
         }
         if (canBeDouble[c]) {
             try {
                 Double.parseDouble(val);
-            } catch (NumberFormatException e) {
+            } catch (NumberFormatException _) {
                 canBeDouble[c] = false;
             }
         }

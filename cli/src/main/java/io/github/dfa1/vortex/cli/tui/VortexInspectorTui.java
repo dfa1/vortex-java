@@ -166,7 +166,7 @@ public final class VortexInspectorTui {
             }
             try {
                 worker.runAndAwait(() -> indexStatsChildren(root));
-            } catch (InterruptedException e) {
+            } catch (InterruptedException _) {
                 Thread.currentThread().interrupt();
             }
         }
