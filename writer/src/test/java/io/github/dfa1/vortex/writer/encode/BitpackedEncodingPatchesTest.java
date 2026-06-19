@@ -74,11 +74,11 @@ class BitpackedEncodingPatchesTest {
 
             // Then
             assertThat(result.length()).isEqualTo(base.length);
-            assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, 0L)).isEqualTo(10);
-            assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, 4L)).isEqualTo(777);
-            assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, 8L)).isEqualTo(30);
-            assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, 12L)).isEqualTo(999);
-            assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, 16L)).isEqualTo(50);
+            assertThat(ArraySegments.of(result, Arena.ofAuto()).get(PTypeIO.LE_INT, 0L)).isEqualTo(10);
+            assertThat(ArraySegments.of(result, Arena.ofAuto()).get(PTypeIO.LE_INT, 4L)).isEqualTo(777);
+            assertThat(ArraySegments.of(result, Arena.ofAuto()).get(PTypeIO.LE_INT, 8L)).isEqualTo(30);
+            assertThat(ArraySegments.of(result, Arena.ofAuto()).get(PTypeIO.LE_INT, 12L)).isEqualTo(999);
+            assertThat(ArraySegments.of(result, Arena.ofAuto()).get(PTypeIO.LE_INT, 16L)).isEqualTo(50);
         }
     }
 
@@ -119,7 +119,7 @@ class BitpackedEncodingPatchesTest {
 
             assertThat(decoded.length()).isEqualTo(codes.length);
             for (int i = 0; i < codes.length; i++) {
-                byte got = ArraySegments.of(decoded).get(java.lang.foreign.ValueLayout.JAVA_BYTE, i);
+                byte got = ArraySegments.of(decoded, Arena.ofAuto()).get(java.lang.foreign.ValueLayout.JAVA_BYTE, i);
                 assertThat(got).as("idx " + i).isEqualTo(codes[i]);
             }
         }

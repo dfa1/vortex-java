@@ -104,7 +104,7 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
             PType endsPtype, long numRuns, long offset, long n,
             DType dtype, SegmentAllocator arena
     ) {
-        MemorySegment endsSeg = ArraySegments.of(endsArr);
+        MemorySegment endsSeg = ArraySegments.of(endsArr, arena);
         long endsCap = SegmentBroadcast.capacity(endsSeg, endsPtype.byteSize());
         MemorySegment valBytes = valuesArr.bytesSegment();
         MemorySegment valOffsets = valuesArr.offsetsSegment();

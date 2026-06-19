@@ -47,6 +47,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.function.Consumer;
 
 /// Iterates over decoded chunks from a [io.github.dfa1.vortex.reader.VortexReader].
@@ -641,13 +642,11 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     /// @param codesPType code ptype reported by the dict layout metadata
     /// @param n          claimed dict row count
     private static void validateDictCodesCapacity(Array codes, PType codesPType, long n) {
-        MemorySegment seg;
-        try {
-            seg = ArraySegments.of(codes);
-        } catch (VortexException e) {
+        Optional<MemorySegment> maybeSeg = ArraySegments.trySegment(codes);
+        if (maybeSeg.isEmpty()) {
             return;
         }
-        long bufferCodes = seg.byteSize() / (long) codesPType.byteSize();
+        long bufferCodes = maybeSeg.get().byteSize() / (long) codesPType.byteSize();
         if (bufferCodes < n) {
             throw new VortexException(EncodingId.VORTEX_DICT,
                     "dict codes: layout row_count=" + n + " exceeds buffer capacity=" + bufferCodes);

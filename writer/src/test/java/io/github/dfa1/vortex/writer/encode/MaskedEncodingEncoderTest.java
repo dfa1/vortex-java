@@ -117,9 +117,9 @@ class MaskedEncodingEncoderTest {
         IntArray inner = (IntArray) result.inner();
 
         // Then
-        assertThat(ArraySegments.of(inner).get(PTypeIO.LE_INT, 0L)).isEqualTo(7);
-        assertThat(ArraySegments.of(inner).get(PTypeIO.LE_INT, 4L)).isEqualTo(8);
-        assertThat(ArraySegments.of(inner).get(PTypeIO.LE_INT, 8L)).isEqualTo(9);
+        assertThat(ArraySegments.of(inner, Arena.ofAuto()).get(PTypeIO.LE_INT, 0L)).isEqualTo(7);
+        assertThat(ArraySegments.of(inner, Arena.ofAuto()).get(PTypeIO.LE_INT, 4L)).isEqualTo(8);
+        assertThat(ArraySegments.of(inner, Arena.ofAuto()).get(PTypeIO.LE_INT, 8L)).isEqualTo(9);
     }
 
     @Test

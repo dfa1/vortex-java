@@ -5,11 +5,9 @@ import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.proto.PatchedMetadata;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -102,9 +100,9 @@ class PatchedEncodingDecoderTest {
 
         // Then
         assertThat(result).isInstanceOf(IntArray.class);
-        MemorySegment seg = ArraySegments.of(result);
+        IntArray ints = (IntArray) result;
         for (int i = 0; i < n; i++) {
-            assertThat(seg.getAtIndex(PTypeIO.LE_INT, i)).as("index %d", i).isEqualTo(inner[i]);
+            assertThat(ints.getInt(i)).as("index %d", i).isEqualTo(inner[i]);
         }
     }
 
@@ -114,11 +112,11 @@ class PatchedEncodingDecoderTest {
         Array result = decode(4, new int[]{10, 20, 30, 40}, new int[]{0, 1}, new short[]{2}, new int[]{99});
 
         // Then
-        MemorySegment seg = ArraySegments.of(result);
-        assertThat(seg.getAtIndex(PTypeIO.LE_INT, 0)).isEqualTo(10);
-        assertThat(seg.getAtIndex(PTypeIO.LE_INT, 1)).isEqualTo(20);
-        assertThat(seg.getAtIndex(PTypeIO.LE_INT, 2)).isEqualTo(99);
-        assertThat(seg.getAtIndex(PTypeIO.LE_INT, 3)).isEqualTo(40);
+        IntArray ints = (IntArray) result;
+        assertThat(ints.getInt(0)).isEqualTo(10);
+        assertThat(ints.getInt(1)).isEqualTo(20);
+        assertThat(ints.getInt(2)).isEqualTo(99);
+        assertThat(ints.getInt(3)).isEqualTo(40);
     }
 
     @Test
@@ -127,11 +125,11 @@ class PatchedEncodingDecoderTest {
         Array result = decode(4, new int[]{0, 0, 0, 0}, new int[]{0, 2}, new short[]{0, 3}, new int[]{1, 7});
 
         // Then
-        MemorySegment seg = ArraySegments.of(result);
-        assertThat(seg.getAtIndex(PTypeIO.LE_INT, 0)).isEqualTo(1);
-        assertThat(seg.getAtIndex(PTypeIO.LE_INT, 1)).isEqualTo(0);
-        assertThat(seg.getAtIndex(PTypeIO.LE_INT, 2)).isEqualTo(0);
-        assertThat(seg.getAtIndex(PTypeIO.LE_INT, 3)).isEqualTo(7);
+        IntArray ints = (IntArray) result;
+        assertThat(ints.getInt(0)).isEqualTo(1);
+        assertThat(ints.getInt(1)).isEqualTo(0);
+        assertThat(ints.getInt(2)).isEqualTo(0);
+        assertThat(ints.getInt(3)).isEqualTo(7);
     }
 
     @ParameterizedTest
@@ -144,9 +142,9 @@ class PatchedEncodingDecoderTest {
         Array result = decode(n, inner, new int[]{0, 0}, new short[]{}, new int[]{});
 
         // Then
-        MemorySegment seg = ArraySegments.of(result);
+        IntArray ints = (IntArray) result;
         for (int i = 0; i < n; i++) {
-            assertThat(seg.getAtIndex(PTypeIO.LE_INT, i)).as("index %d", i).isZero();
+            assertThat(ints.getInt(i)).as("index %d", i).isZero();
         }
     }
 
@@ -161,10 +159,10 @@ class PatchedEncodingDecoderTest {
 
         // Then
         assertThat(result).isInstanceOf(LongArray.class);
-        MemorySegment seg = ArraySegments.of(result);
-        assertThat(seg.getAtIndex(PTypeIO.LE_LONG, 0)).isEqualTo(100L);
-        assertThat(seg.getAtIndex(PTypeIO.LE_LONG, 1)).isEqualTo(999L);
-        assertThat(seg.getAtIndex(PTypeIO.LE_LONG, 2)).isEqualTo(300L);
+        LongArray longs = (LongArray) result;
+        assertThat(longs.getLong(0)).isEqualTo(100L);
+        assertThat(longs.getLong(1)).isEqualTo(999L);
+        assertThat(longs.getLong(2)).isEqualTo(300L);
     }
 
     @Test

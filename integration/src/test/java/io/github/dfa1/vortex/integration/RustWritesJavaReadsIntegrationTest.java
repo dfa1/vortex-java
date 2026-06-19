@@ -34,6 +34,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.lang.foreign.Arena;
 import java.lang.foreign.ValueLayout;
 import java.net.URI;
 import java.nio.ByteOrder;
@@ -129,7 +130,7 @@ class RustWritesJavaReadsIntegrationTest {
     /// into a heap primitive array — long[]/int[]/double[]/float[]/short[]/byte[].
     private static Object snapshotArray(Array arr) {
         var ptype = ((DType.Primitive) arr.dtype()).ptype();
-        var seg = ArraySegments.of(arr);
+        var seg = ArraySegments.of(arr, Arena.ofAuto());
         return switch (ptype) {
             case I64, U64 -> seg.toArray(ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN));
             case I32, U32 -> seg.toArray(ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN));

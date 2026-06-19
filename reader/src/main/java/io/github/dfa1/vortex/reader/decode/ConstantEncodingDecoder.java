@@ -85,7 +85,7 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
             Array storage = arrayFromScalar(ctx, scalar, ext.storageDType(), n);
             // GenericArray needs a backing buffer; the recursive call returns a metadata-only
             // LazyConstantXxxArray. Materialise once into the chunk arena so downstream
-            // extension consumers that read via ArraySegments.of(arr) still find a segment.
+            // extension consumers that read via ArraySegments.of(arr, arena) still find a segment.
             // Extension-on-constant is rare enough that the small alloc doesn't matter — the
             // bare primitive path stays buffer-free.
             return new GenericArray(dtype, n, ArraySegments.of(storage, ctx.arena()));

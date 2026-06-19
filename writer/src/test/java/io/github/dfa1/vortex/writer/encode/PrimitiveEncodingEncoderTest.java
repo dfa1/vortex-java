@@ -80,7 +80,7 @@ class PrimitiveEncodingEncoderTest {
             // Then
             assertThat(result.length()).isEqualTo(data.length);
             for (int i = 0; i < data.length; i++) {
-                assertThat(ArraySegments.of(result).get(PTypeIO.LE_LONG, (long) i * 8)).isEqualTo(data[i]);
+                assertThat(ArraySegments.of(result, Arena.ofAuto()).get(PTypeIO.LE_LONG, (long) i * 8)).isEqualTo(data[i]);
             }
         }
 
@@ -98,7 +98,7 @@ class PrimitiveEncodingEncoderTest {
             // Then
             assertThat(result.length()).isEqualTo(data.length);
             for (int i = 0; i < data.length; i++) {
-                assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, (long) i * 4)).isEqualTo(data[i]);
+                assertThat(ArraySegments.of(result, Arena.ofAuto()).get(PTypeIO.LE_INT, (long) i * 4)).isEqualTo(data[i]);
             }
         }
 
@@ -116,7 +116,7 @@ class PrimitiveEncodingEncoderTest {
             // Then
             assertThat(result.length()).isEqualTo(data.length);
             for (int i = 0; i < data.length; i++) {
-                assertThat(ArraySegments.of(result).get(PTypeIO.LE_DOUBLE, (long) i * 8)).isEqualTo(data[i]);
+                assertThat(ArraySegments.of(result, Arena.ofAuto()).get(PTypeIO.LE_DOUBLE, (long) i * 8)).isEqualTo(data[i]);
             }
         }
 

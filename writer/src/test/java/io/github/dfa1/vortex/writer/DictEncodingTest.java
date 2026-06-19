@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.lang.foreign.Arena;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
@@ -101,19 +102,19 @@ class DictEncodingTest {
             try (Chunk c1 = iter.next()) {
                 Array a1 = c1.columns().get("category");
                 assertThat(a1.length()).isEqualTo(3L);
-                assertThat(ArraySegments.of(a1).get(LE_INT, 0)).isEqualTo(10);
-                assertThat(ArraySegments.of(a1).get(LE_INT, 4)).isEqualTo(20);
-                assertThat(ArraySegments.of(a1).get(LE_INT, 8)).isEqualTo(10);
+                assertThat(ArraySegments.of(a1, Arena.ofAuto()).get(LE_INT, 0)).isEqualTo(10);
+                assertThat(ArraySegments.of(a1, Arena.ofAuto()).get(LE_INT, 4)).isEqualTo(20);
+                assertThat(ArraySegments.of(a1, Arena.ofAuto()).get(LE_INT, 8)).isEqualTo(10);
             }
 
             assertThat(iter.hasNext()).isTrue();
             try (Chunk c2 = iter.next()) {
                 Array a2 = c2.columns().get("category");
                 assertThat(a2.length()).isEqualTo(4L);
-                assertThat(ArraySegments.of(a2).get(LE_INT, 0)).isEqualTo(30);
-                assertThat(ArraySegments.of(a2).get(LE_INT, 4)).isEqualTo(10);
-                assertThat(ArraySegments.of(a2).get(LE_INT, 8)).isEqualTo(20);
-                assertThat(ArraySegments.of(a2).get(LE_INT, 12)).isEqualTo(30);
+                assertThat(ArraySegments.of(a2, Arena.ofAuto()).get(LE_INT, 0)).isEqualTo(30);
+                assertThat(ArraySegments.of(a2, Arena.ofAuto()).get(LE_INT, 4)).isEqualTo(10);
+                assertThat(ArraySegments.of(a2, Arena.ofAuto()).get(LE_INT, 8)).isEqualTo(20);
+                assertThat(ArraySegments.of(a2, Arena.ofAuto()).get(LE_INT, 12)).isEqualTo(30);
             }
 
             assertThat(iter.hasNext()).isFalse();

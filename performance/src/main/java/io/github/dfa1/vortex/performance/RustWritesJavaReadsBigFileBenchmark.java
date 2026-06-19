@@ -37,6 +37,7 @@ import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 
 import java.io.IOException;
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteOrder;
@@ -180,7 +181,7 @@ public class RustWritesJavaReadsBigFileBenchmark {
             while (iter.hasNext()) {
                 try (Chunk c = iter.next()) {
                     Array arr = c.columns().get("c0");
-                    MemorySegment buf = ArraySegments.of(arr);
+                    MemorySegment buf = ArraySegments.of(arr, Arena.ofAuto());
                     long count = buf.byteSize() / Long.BYTES;
                     for (long i = 0; i < count; i++) {
                         sum += buf.getAtIndex(LE_LONG, i);

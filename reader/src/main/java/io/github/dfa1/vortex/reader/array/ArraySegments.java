@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.encoding.PTypeIO;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
+import java.util.Optional;
 
 /// Utility for extracting the primary {@link MemorySegment} from any {@link Array}.
 ///
@@ -25,29 +26,37 @@ public final class ArraySegments {
     private ArraySegments() {
     }
 
-    /// Returns the primary backing segment of `arr`.
+    /// Returns the primary backing segment of `arr` if it is segment-backed, otherwise empty.
+    ///
+    /// Non-throwing probe for callers that want to operate on the raw buffer only when one
+    /// exists (e.g. zone-map / capacity validation) and skip lazy variants without allocating.
+    /// To force a segment for a lazy array, use [#of(Array, SegmentAllocator)].
     ///
     /// @param arr the array whose segment is needed
-    /// @return the primary {@link MemorySegment}
-    /// @throws VortexException if the array type has no primary segment (e.g. lazy variants — use
-    ///                         {@link #of(Array, SegmentAllocator)} instead)
-    public static MemorySegment of(Array arr) {
+    /// @return the primary [MemorySegment], or empty if `arr` has no segment backing
+    public static Optional<MemorySegment> trySegment(Array arr) {
         Array data = arr instanceof MaskedArray m ? m.inner() : arr;
         return switch (data) {
-            case MaterializedIntArray a -> a.buffer();
-            case MaterializedLongArray a -> a.buffer();
-            case MaterializedDoubleArray a -> a.buffer();
-            case MaterializedFloatArray a -> a.buffer();
-            case MaterializedShortArray a -> a.buffer();
-            case MaterializedByteArray a -> a.buffer();
-            case MaterializedBoolArray a -> a.buffer();
-            case MaterializedFloat16Array a -> a.buffer();
-            case VarBinArray a -> a.bytesSegment();
-            case GenericArray a -> a.buffer(0);
-            case LazyDecimalArray a -> a.buf();
-            case DecimalArray a -> throw new VortexException(a.getClass().getSimpleName() + " has no primary segment — use of(arr, arena)");
-            default -> throw new VortexException(data.getClass().getSimpleName() + " has no primary segment");
+            case MaterializedIntArray a -> Optional.of(a.buffer());
+            case MaterializedLongArray a -> Optional.of(a.buffer());
+            case MaterializedDoubleArray a -> Optional.of(a.buffer());
+            case MaterializedFloatArray a -> Optional.of(a.buffer());
+            case MaterializedShortArray a -> Optional.of(a.buffer());
+            case MaterializedByteArray a -> Optional.of(a.buffer());
+            case MaterializedBoolArray a -> Optional.of(a.buffer());
+            case MaterializedFloat16Array a -> Optional.of(a.buffer());
+            case VarBinArray a -> Optional.of(a.bytesSegment());
+            case GenericArray a -> Optional.of(a.buffer(0));
+            case LazyDecimalArray a -> Optional.of(a.buf());
+            default -> Optional.empty();
         };
+    }
+
+    private static MemorySegment primarySegment(Array arr) {
+        return trySegment(arr).orElseThrow(() -> {
+            Array data = arr instanceof MaskedArray m ? m.inner() : arr;
+            return new VortexException(data.getClass().getSimpleName() + " has no primary segment — use of(arr, arena)");
+        });
     }
 
     /// Returns the primary backing segment of `arr`, materialising lazy variants into a
@@ -90,8 +99,8 @@ public final class ArraySegments {
             case ShortArray a -> materialiseShort(a, arena);
             case ByteArray a -> materialiseByte(a, arena);
             case LazyConstantDecimalArray a -> materialiseConstantDecimal(a, arena);
-            case DecimalArray _ -> of(arr);
-            default -> of(arr);
+            case DecimalArray _ -> primarySegment(arr);
+            default -> primarySegment(arr);
         };
     }
 

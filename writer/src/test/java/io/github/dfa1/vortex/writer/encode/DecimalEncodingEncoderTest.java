@@ -44,7 +44,7 @@ class DecimalEncodingEncoderTest {
         // Then
         assertThat(result.length()).isEqualTo(values.length);
         for (int i = 0; i < values.length; i++) {
-            assertThat(ArraySegments.of(result).get(PTypeIO.LE_LONG, (long) i * 8)).isEqualTo(values[i]);
+            assertThat(ArraySegments.of(result, Arena.ofAuto()).get(PTypeIO.LE_LONG, (long) i * 8)).isEqualTo(values[i]);
         }
     }
 

@@ -12,6 +12,7 @@ import io.github.dfa1.vortex.reader.decode.BoolEncodingDecoder;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.lang.foreign.Arena;
 import java.lang.foreign.ValueLayout;
 import java.util.stream.Stream;
 
@@ -49,7 +50,7 @@ class BoolEncodingEncoderTest {
         assertThat(result).isInstanceOf(BoolArray.class);
         assertThat(result.length()).isEqualTo(data.length);
         for (int i = 0; i < data.length; i++) {
-            byte byteVal = ArraySegments.of(result).get(ValueLayout.JAVA_BYTE, i / 8);
+            byte byteVal = ArraySegments.of(result, Arena.ofAuto()).get(ValueLayout.JAVA_BYTE, i / 8);
             boolean decoded = ((byteVal >>> (i % 8)) & 1) == 1;
             assertThat(decoded).as("index %d", i).isEqualTo(data[i]);
         }

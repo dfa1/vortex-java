@@ -73,7 +73,7 @@ class BitpackedConstantPatchesBroadcastTest {
 
             // Then
             assertThat(result.length()).isEqualTo(n);
-            MemorySegment data = ArraySegments.of(result);
+            MemorySegment data = ArraySegments.of(result, Arena.ofAuto());
             assertThat(data.getAtIndex(PTypeIO.LE_LONG, 2)).isEqualTo(constantPatchValue);
             for (long i = 0; i < n; i++) {
                 if (i == 2) {

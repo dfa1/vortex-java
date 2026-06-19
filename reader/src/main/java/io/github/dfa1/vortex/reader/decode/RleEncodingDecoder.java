@@ -85,7 +85,7 @@ public final class RleEncodingDecoder implements EncodingDecoder {
             indicesValidity = masked.validity();
         }
 
-        int[] indices = readIndices(ArraySegments.of(indicesArr), (int) indicesLen, indicesPtype);
+        int[] indices = readIndices(ArraySegments.of(indicesArr, ctx.arena()), (int) indicesLen, indicesPtype);
         long[] valuesIdxOffsets = readUnsignedLongs(
                 ctx.decodeChildSegment(2, offsetsDtype, offsetsLen), (int) offsetsLen, offsetsPtype);
         long firstOffset = valuesLen > 0 && valuesIdxOffsets.length > 0 ? valuesIdxOffsets[0] : 0L;
