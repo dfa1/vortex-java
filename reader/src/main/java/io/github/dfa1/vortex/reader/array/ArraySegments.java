@@ -7,20 +7,21 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
 import java.util.Optional;
 
-/// Utility for extracting the primary {@link MemorySegment} from any {@link Array}.
+/// Internal materialization engine: turns any {@link Array} into its primary
+/// {@link MemorySegment}, allocating from a caller-supplied arena for lazy variants.
 ///
 /// If `arr` is a {@link MaskedArray}, the inner (data) segment is returned;
 /// the validity mask is not surfaced here — callers that need validity must unwrap manually.
 ///
-/// **Internal utility.** This class is `public` only because the
-/// vortex-java reader, writer, and encoding implementations live in separate Maven modules and
-/// need cross-package access to the raw backing segment of typed arrays. It is not part of the
-/// supported public API: signatures may change without a deprecation cycle. Application code
-/// should prefer the typed accessors on concrete subtypes — {@link LongArray#getLong(long)},
-/// {@link IntArray#getInt(long)}, {@link DoubleArray#getDouble(long)}, and friends — and treat
-/// `ArraySegments` as a Vortex-internal escape hatch.
-/// @deprecated this class should be removed gradually
-@Deprecated
+/// **Vortex-internal — not public API.** This class is `public` only because the reader,
+/// writer, and encoding implementations live in separate Maven modules and need cross-package
+/// access; its signatures may change without a deprecation cycle. Encoding decoders should not
+/// call it directly — use [io.github.dfa1.vortex.reader.decode.DecodeContext#materialize(Array)]
+/// (which routes here). It backs that seam plus
+/// [io.github.dfa1.vortex.reader.ReadRegistry#decodeAsSegment] and the scan layer's dictionary
+/// validation. Application code should prefer the typed accessors on concrete subtypes —
+/// {@link LongArray#getLong(long)}, {@link IntArray#getInt(long)},
+/// {@link DoubleArray#getDouble(long)}, and friends.
 public final class ArraySegments {
 
     private ArraySegments() {
