@@ -40,23 +40,30 @@ class FixedSizeListEncodingEncoderTest {
 
         @Test
         void accepts_fixedSizeListDtype_true() {
+            // Given
             DType.FixedSizeList dtype = new DType.FixedSizeList(DTypes.I32, 3, false);
+
+            // When / Then
             assertThat(ENCODER.accepts(dtype)).isTrue();
         }
 
         @Test
         void accepts_primitiveDtype_false() {
+            // Given / When / Then
             assertThat(ENCODER.accepts(DTypes.I32)).isFalse();
         }
 
         @Test
         void encode_producesOneChild_noBuffers() {
+            // Given
             DType.FixedSizeList dtype = new DType.FixedSizeList(DTypes.I32, 2, false);
             int[] elements = {1, 2, 3, 4};
             FixedSizeListData data = new FixedSizeListData(elements, 2);
 
+            // When
             EncodeResult result = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
 
+            // Then
             assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_FIXED_SIZE_LIST);
             assertThat(result.rootNode().bufferIndices()).isEmpty();
             assertThat(result.rootNode().children()).hasSize(1);
@@ -68,19 +75,22 @@ class FixedSizeListEncodingEncoderTest {
 
         @Test
         void roundTrip_i32Elements_preservesValues() {
+            // Given
             DType.FixedSizeList dtype = new DType.FixedSizeList(DTypes.I32, 3, false);
             int[] elements = {10, 20, 30, 40, 50, 60};
             FixedSizeListData data = new FixedSizeListData(elements, 2);
 
-            EncodeResult result = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
-            MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
+            // When
+            EncodeResult resultEncoded = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
+            MemorySegment[] bufs = resultEncoded.buffers().toArray(MemorySegment[]::new);
             DecodeContext ctx = new DecodeContext(
-                    toArrayNode(result.rootNode()), dtype, 2, bufs, REGISTRY, Arena.global());
-            FixedSizeListArray decoded = (FixedSizeListArray) DECODER.decode(ctx);
+                    toArrayNode(resultEncoded.rootNode()), dtype, 2, bufs, REGISTRY, Arena.global());
+            FixedSizeListArray resultDecoded = (FixedSizeListArray) DECODER.decode(ctx);
 
-            assertThat(decoded.length()).isEqualTo(2);
-            assertThat(decoded.fixedSize()).isEqualTo(3);
-            IntArray elems = (IntArray) decoded.elements();
+            // Then
+            assertThat(resultDecoded.length()).isEqualTo(2);
+            assertThat(resultDecoded.fixedSize()).isEqualTo(3);
+            IntArray elems = (IntArray) resultDecoded.elements();
             assertThat(elems.length()).isEqualTo(6);
             for (int i = 0; i < elements.length; i++) {
                 assertThat(elems.getInt(i)).isEqualTo(elements[i]);
@@ -89,19 +99,22 @@ class FixedSizeListEncodingEncoderTest {
 
         @Test
         void roundTrip_fixedSizeOne_preservesValues() {
+            // Given
             DType.FixedSizeList dtype = new DType.FixedSizeList(DTypes.I32, 1, false);
             int[] elements = {7, 8, 9};
             FixedSizeListData data = new FixedSizeListData(elements, 3);
 
-            EncodeResult result = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
-            MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
+            // When
+            EncodeResult resultEncoded = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
+            MemorySegment[] bufs = resultEncoded.buffers().toArray(MemorySegment[]::new);
             DecodeContext ctx = new DecodeContext(
-                    toArrayNode(result.rootNode()), dtype, 3, bufs, REGISTRY, Arena.global());
-            FixedSizeListArray decoded = (FixedSizeListArray) DECODER.decode(ctx);
+                    toArrayNode(resultEncoded.rootNode()), dtype, 3, bufs, REGISTRY, Arena.global());
+            FixedSizeListArray resultDecoded = (FixedSizeListArray) DECODER.decode(ctx);
 
-            assertThat(decoded.length()).isEqualTo(3);
-            assertThat(decoded.fixedSize()).isEqualTo(1);
-            IntArray elems = (IntArray) decoded.elements();
+            // Then
+            assertThat(resultDecoded.length()).isEqualTo(3);
+            assertThat(resultDecoded.fixedSize()).isEqualTo(1);
+            IntArray elems = (IntArray) resultDecoded.elements();
             for (int i = 0; i < elements.length; i++) {
                 assertThat(elems.getInt(i)).isEqualTo(elements[i]);
             }
@@ -109,10 +122,12 @@ class FixedSizeListEncodingEncoderTest {
 
         @Test
         void decode_wrongDtype_throws() {
+            // Given
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_FIXED_SIZE_LIST, null,
                     new ArrayNode[0], new int[0]);
             DecodeContext ctx = new DecodeContext(node, DTypes.I32, 0, new MemorySegment[0], REGISTRY, Arena.global());
 
+            // When / Then
             assertThatThrownBy(() -> DECODER.decode(ctx))
                     .hasMessageContaining("DType.FixedSizeList");
         }

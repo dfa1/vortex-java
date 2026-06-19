@@ -34,24 +34,41 @@ class VarBinViewEncodingEncoderTest {
 
         @Test
         void accepts_utf8_true() {
-            assertThat(ENCODER.accepts(DTypes.UTF8)).isTrue();
+            // Given
+            // When
+            boolean result = ENCODER.accepts(DTypes.UTF8);
+
+            // Then
+            assertThat(result).isTrue();
         }
 
         @Test
         void accepts_binary_true() {
-            assertThat(ENCODER.accepts(DTypes.BINARY)).isTrue();
+            // Given
+            // When
+            boolean result = ENCODER.accepts(DTypes.BINARY);
+
+            // Then
+            assertThat(result).isTrue();
         }
 
         @Test
         void accepts_primitive_false() {
-            assertThat(ENCODER.accepts(DTypes.I32)).isFalse();
+            // Given
+            // When
+            boolean result = ENCODER.accepts(DTypes.I32);
+
+            // Then
+            assertThat(result).isFalse();
         }
 
         @ParameterizedTest(name = "{0}")
         @MethodSource("io.github.dfa1.vortex.writer.encode.VarBinViewEncodingEncoderTest$Decode#stringArrays")
         void encode_thenDecode_roundtripsAllStrings(String name, String[] values) {
+            // Given
             Arena arena = Arena.ofAuto();
 
+            // When
             EncodeResult result = ENCODER.encode(DTypes.UTF8, values, EncodeTestHelper.testCtx());
             MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
             ArrayNode node = ArrayNode.of(
@@ -60,6 +77,7 @@ class VarBinViewEncodingEncoderTest {
             DecodeContext ctx = new DecodeContext(node, DTypes.UTF8, values.length, bufs, REGISTRY, arena);
             var decoded = (VarBinArray) DECODER.decode(ctx);
 
+            // Then
             assertThat(decoded.length()).isEqualTo(values.length);
             for (int i = 0; i < values.length; i++) {
                 assertThat(decoded.getString(i)).as("index %d", i).isEqualTo(values[i]);
@@ -95,6 +113,7 @@ class VarBinViewEncodingEncoderTest {
         @ParameterizedTest(name = "{0}")
         @MethodSource("stringArrays")
         void decode_roundtrip_returnsAllStrings(String name, String[] values) {
+            // Given
             Arena arena = Arena.ofAuto();
             long n = values.length;
 
@@ -140,8 +159,10 @@ class VarBinViewEncodingEncoderTest {
 
             DecodeContext ctx = new DecodeContext(node, DTypes.UTF8, n, segBufs, REGISTRY, arena);
 
+            // When
             var result = DECODER.decode(ctx);
 
+            // Then
             assertThat(result).isInstanceOf(VarBinArray.class);
             assertThat(result.length()).isEqualTo(n);
             VarBinArray varBinArray = (VarBinArray) result;

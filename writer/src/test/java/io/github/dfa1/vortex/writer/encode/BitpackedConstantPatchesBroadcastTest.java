@@ -29,6 +29,7 @@ class BitpackedConstantPatchesBroadcastTest {
 
     @Test
     void bitpackedDecode_withConstantPatchesValues_broadcastsValueAcrossPatches() {
+        // Given
         long n = 10;
         long numPatches = 3;
         long constantPatchValue = 42L;
@@ -67,8 +68,10 @@ class BitpackedConstantPatchesBroadcastTest {
                     new MemorySegment[]{packedSeg, idxBufSeg, valBufSeg},
                     registry, Arena.ofAuto());
 
+            // When
             Array result = new BitpackedEncodingDecoder().decode(ctx);
 
+            // Then
             assertThat(result.length()).isEqualTo(n);
             MemorySegment data = ArraySegments.of(result);
             assertThat(data.getAtIndex(PTypeIO.LE_LONG, 2)).isEqualTo(constantPatchValue);

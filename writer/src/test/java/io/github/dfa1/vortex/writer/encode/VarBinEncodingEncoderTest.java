@@ -35,82 +35,122 @@ class VarBinEncodingEncoderTest {
 
         @Test
         void encodingId_isVortexVarbin() {
-            assertThat(ENCODER.encodingId()).isEqualTo(EncodingId.VORTEX_VARBIN);
+            // Given
+            // When
+            EncodingId result = ENCODER.encodingId();
+
+            // Then
+            assertThat(result).isEqualTo(EncodingId.VORTEX_VARBIN);
         }
 
         @Test
         void accepts_utf8Dtype_returnsTrue() {
-            assertThat(ENCODER.accepts(DTypes.UTF8)).isTrue();
+            // Given
+            // When
+            boolean result = ENCODER.accepts(DTypes.UTF8);
+
+            // Then
+            assertThat(result).isTrue();
         }
 
         @Test
         void accepts_binaryDtype_returnsTrue() {
-            assertThat(ENCODER.accepts(DTypes.BINARY)).isTrue();
+            // Given
+            // When
+            boolean result = ENCODER.accepts(DTypes.BINARY);
+
+            // Then
+            assertThat(result).isTrue();
         }
 
         @Test
         void accepts_primitiveDtype_returnsFalse() {
-            assertThat(ENCODER.accepts(new DType.Primitive(PType.I64, false))).isFalse();
+            // Given
+            // When
+            boolean result = ENCODER.accepts(new DType.Primitive(PType.I64, false));
+
+            // Then
+            assertThat(result).isFalse();
         }
 
         @Test
         void encode_singleString_roundTrips() {
+            // Given
             String[] data = {"hello"};
-            EncodeResult result = ENCODER.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
-            DecodeContext ctx = DecodeTestHelper.toDecodeContext(result, data.length, DTypes.UTF8, REGISTRY);
-            VarBinArray decoded = (VarBinArray) DECODER.decode(ctx);
+            EncodeResult encoded = ENCODER.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, DTypes.UTF8, REGISTRY);
 
-            assertThat(decoded.length()).isEqualTo(1);
-            assertThat(decoded.getBytes(0)).isEqualTo("hello".getBytes(StandardCharsets.UTF_8));
+            // When
+            VarBinArray result = (VarBinArray) DECODER.decode(ctx);
+
+            // Then
+            assertThat(result.length()).isEqualTo(1);
+            assertThat(result.getBytes(0)).isEqualTo("hello".getBytes(StandardCharsets.UTF_8));
         }
 
         @Test
         void encode_multipleStrings_roundTrips() {
+            // Given
             String[] data = {"foo", "bar", "baz"};
-            EncodeResult result = ENCODER.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
-            DecodeContext ctx = DecodeTestHelper.toDecodeContext(result, data.length, DTypes.UTF8, REGISTRY);
-            VarBinArray decoded = (VarBinArray) DECODER.decode(ctx);
+            EncodeResult encoded = ENCODER.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, DTypes.UTF8, REGISTRY);
 
-            assertThat(decoded.length()).isEqualTo(3);
+            // When
+            VarBinArray result = (VarBinArray) DECODER.decode(ctx);
+
+            // Then
+            assertThat(result.length()).isEqualTo(3);
             for (int i = 0; i < data.length; i++) {
-                assertThat(decoded.getBytes(i)).isEqualTo(data[i].getBytes(StandardCharsets.UTF_8));
+                assertThat(result.getBytes(i)).isEqualTo(data[i].getBytes(StandardCharsets.UTF_8));
             }
         }
 
         @Test
         void encode_unicodeString_roundTrips() {
+            // Given
             String[] data = {"héllo", "wörld", "日本語"};
-            EncodeResult result = ENCODER.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
-            DecodeContext ctx = DecodeTestHelper.toDecodeContext(result, data.length, DTypes.UTF8, REGISTRY);
-            VarBinArray decoded = (VarBinArray) DECODER.decode(ctx);
+            EncodeResult encoded = ENCODER.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, DTypes.UTF8, REGISTRY);
 
-            assertThat(decoded.length()).isEqualTo(3);
+            // When
+            VarBinArray result = (VarBinArray) DECODER.decode(ctx);
+
+            // Then
+            assertThat(result.length()).isEqualTo(3);
             for (int i = 0; i < data.length; i++) {
-                assertThat(decoded.getBytes(i)).isEqualTo(data[i].getBytes(StandardCharsets.UTF_8));
+                assertThat(result.getBytes(i)).isEqualTo(data[i].getBytes(StandardCharsets.UTF_8));
             }
         }
 
         @Test
         void encode_emptyStringInArray_roundTrips() {
+            // Given
             String[] data = {"a", "", "b"};
-            EncodeResult result = ENCODER.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
-            DecodeContext ctx = DecodeTestHelper.toDecodeContext(result, data.length, DTypes.UTF8, REGISTRY);
-            VarBinArray decoded = (VarBinArray) DECODER.decode(ctx);
+            EncodeResult encoded = ENCODER.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, DTypes.UTF8, REGISTRY);
 
-            assertThat(decoded.length()).isEqualTo(3);
-            assertThat(decoded.getBytes(0)).isEqualTo(new byte[]{'a'});
-            assertThat(decoded.getBytes(1)).isEmpty();
-            assertThat(decoded.getBytes(2)).isEqualTo(new byte[]{'b'});
+            // When
+            VarBinArray result = (VarBinArray) DECODER.decode(ctx);
+
+            // Then
+            assertThat(result.length()).isEqualTo(3);
+            assertThat(result.getBytes(0)).isEqualTo(new byte[]{'a'});
+            assertThat(result.getBytes(1)).isEmpty();
+            assertThat(result.getBytes(2)).isEqualTo(new byte[]{'b'});
         }
 
         @Test
         void encode_emptyArray_producesZeroLengthResult() {
+            // Given
             String[] data = {};
-            EncodeResult result = ENCODER.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
-            DecodeContext ctx = DecodeTestHelper.toDecodeContext(result, data.length, DTypes.UTF8, REGISTRY);
-            VarBinArray decoded = (VarBinArray) DECODER.decode(ctx);
+            EncodeResult encoded = ENCODER.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, DTypes.UTF8, REGISTRY);
 
-            assertThat(decoded.length()).isZero();
+            // When
+            VarBinArray result = (VarBinArray) DECODER.decode(ctx);
+
+            // Then
+            assertThat(result.length()).isZero();
         }
     }
 
@@ -119,9 +159,12 @@ class VarBinEncodingEncoderTest {
 
         @Test
         void decode_missingMetadata_throwsVortexException() {
+            // Given
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_VARBIN, null, new ArrayNode[0], new int[0]);
             DecodeContext ctx = new DecodeContext(node, DTypes.UTF8, 3, new MemorySegment[0],
                     ReadRegistry.empty(), Arena.ofAuto());
+
+            // When / Then
             assertThatThrownBy(() -> DECODER.decode(ctx))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("missing metadata");
@@ -133,8 +176,13 @@ class VarBinEncodingEncoderTest {
 
         @Test
         void encode_utf8_metadata_offsetsPtype_isI64() throws Exception {
+            // Given
             String[] data = {"hello", "world"};
+
+            // When
             EncodeResult result = ENCODER.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
+
+            // Then
             var metaSeg = java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate());
             VarBinMetadata meta = VarBinMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 

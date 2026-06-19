@@ -43,7 +43,7 @@ final class InspectorRender {
                         .isPresent()) {
             try {
                 return DateExtensionDecoder.INSTANCE.decode(array, i).toString();
-            } catch (RuntimeException e) {
+            } catch (RuntimeException _) {
                 // fall through to generic rendering on shape mismatch
             }
         }

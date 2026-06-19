@@ -47,15 +47,18 @@ class ChunkedEncodingEncoderTest {
 
         @Test
         void roundTrip_twoChunks_i64_preservesValues() {
+            // Given
             long[] chunk0 = {10L, 20L, 30L};
             long[] chunk1 = {40L, 50L};
             DType i64 = new DType.Primitive(PType.I64, false);
             ChunkedData data = new ChunkedData(List.of(chunk0, chunk1), new long[]{3, 2});
 
-            EncodeResult encoded = ENCODER.encode(i64, data, EncodeTestHelper.testCtx());
-            DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, 5L, i64, REGISTRY);
+            // When
+            EncodeResult resultEncoded = ENCODER.encode(i64, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(resultEncoded, 5L, i64, REGISTRY);
             Array result = DECODER.decode(ctx);
 
+            // Then
             LongArray la = (LongArray) result;
             assertThat(la.length()).isEqualTo(5);
             assertThat(la.getLong(0)).isEqualTo(10L);
@@ -67,12 +70,15 @@ class ChunkedEncodingEncoderTest {
 
         @Test
         void encodeNode_hasNoDirectBuffers_offsetsAsFirstChild() {
+            // Given
             long[] chunk0 = {1L, 2L};
             DType i64 = new DType.Primitive(PType.I64, false);
             ChunkedData data = new ChunkedData(List.of(chunk0), new long[]{2});
 
+            // When
             EncodeResult result = ENCODER.encode(i64, data, EncodeTestHelper.testCtx());
 
+            // Then
             assertThat(result.rootNode().bufferIndices()).isEmpty();
             assertThat(result.rootNode().children()).hasSize(2);
             assertThat(result.buffers()).hasSize(2);
@@ -80,6 +86,7 @@ class ChunkedEncodingEncoderTest {
 
         @Test
         void mismatchedLengths_throws() {
+            // Given / When / Then
             assertThatThrownBy(() -> new ChunkedData(List.of(new long[]{1L}), new long[]{1, 2}))
                     .isInstanceOf(IllegalArgumentException.class);
         }
@@ -90,6 +97,7 @@ class ChunkedEncodingEncoderTest {
 
         @Test
         void roundTrip_twoChunks_concatenatesValues() {
+            // Given
             long[] chunk0 = {10L, 20L, 30L};
             long[] chunk1 = {40L, 50L};
             DType i64 = new DType.Primitive(PType.I64, false);
@@ -114,8 +122,11 @@ class ChunkedEncodingEncoderTest {
                     new int[]{});
 
             DecodeContext ctx = new DecodeContext(root, i64, 5L, allBufs, REGISTRY, Arena.ofAuto());
+
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             LongArray la = (LongArray) result;
             assertThat(la.length()).isEqualTo(5);
             assertThat(la.getLong(0)).isEqualTo(10L);
@@ -127,6 +138,7 @@ class ChunkedEncodingEncoderTest {
 
         @Test
         void singleChunk_returnsSameValues() {
+            // Given
             long[] data = {1L, 2L, 3L};
             DType i64 = new DType.Primitive(PType.I64, false);
             DType u64 = new DType.Primitive(PType.U64, false);
@@ -145,8 +157,11 @@ class ChunkedEncodingEncoderTest {
                     new int[]{});
 
             DecodeContext ctx = new DecodeContext(root, i64, 3L, allBufs, REGISTRY, Arena.ofAuto());
+
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             LongArray la = (LongArray) result;
             assertThat(la.length()).isEqualTo(3);
             for (int i = 0; i < 3; i++) {
@@ -156,10 +171,12 @@ class ChunkedEncodingEncoderTest {
 
         @Test
         void noChildren_throws() {
+            // Given
             DType i64 = new DType.Primitive(PType.I64, false);
             ArrayNode root = ArrayNode.of(EncodingId.VORTEX_CHUNKED, null, new ArrayNode[]{}, new int[]{});
             DecodeContext ctx = new DecodeContext(root, i64, 0L, new MemorySegment[]{}, REGISTRY, Arena.ofAuto());
 
+            // When / Then
             assertThatThrownBy(() -> DECODER.decode(ctx))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("at least one child");

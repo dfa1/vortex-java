@@ -69,11 +69,15 @@ class PrimitiveEncodingEncoderTest {
         @ParameterizedTest
         @MethodSource("longArrays")
         void encodeDecode_i64_isLossless(long[] data) {
+            // Given
             DType dtype = new DType.Primitive(PType.I64, false);
-            EncodeResult encoded = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
-            DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, dtype, REGISTRY);
+            EncodeResult resultEncoded = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(resultEncoded, data.length, dtype, REGISTRY);
+
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             assertThat(result.length()).isEqualTo(data.length);
             for (int i = 0; i < data.length; i++) {
                 assertThat(ArraySegments.of(result).get(PTypeIO.LE_LONG, (long) i * 8)).isEqualTo(data[i]);
@@ -83,11 +87,15 @@ class PrimitiveEncodingEncoderTest {
         @ParameterizedTest
         @MethodSource("intArrays")
         void encodeDecode_i32_isLossless(int[] data) {
+            // Given
             DType dtype = new DType.Primitive(PType.I32, false);
-            EncodeResult encoded = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
-            DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, dtype, REGISTRY);
+            EncodeResult resultEncoded = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(resultEncoded, data.length, dtype, REGISTRY);
+
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             assertThat(result.length()).isEqualTo(data.length);
             for (int i = 0; i < data.length; i++) {
                 assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, (long) i * 4)).isEqualTo(data[i]);
@@ -97,11 +105,15 @@ class PrimitiveEncodingEncoderTest {
         @ParameterizedTest
         @MethodSource("doubleArrays")
         void encodeDecode_f64_isLossless(double[] data) {
+            // Given
             DType dtype = new DType.Primitive(PType.F64, false);
-            EncodeResult encoded = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
-            DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, dtype, REGISTRY);
+            EncodeResult resultEncoded = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(resultEncoded, data.length, dtype, REGISTRY);
+
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             assertThat(result.length()).isEqualTo(data.length);
             for (int i = 0; i < data.length; i++) {
                 assertThat(ArraySegments.of(result).get(PTypeIO.LE_DOUBLE, (long) i * 8)).isEqualTo(data[i]);
@@ -111,10 +123,14 @@ class PrimitiveEncodingEncoderTest {
         @ParameterizedTest
         @MethodSource("longArrays")
         void encodedSize_equalsBytesInBuffer(long[] data) {
+            // Given
             DType dtype = new DType.Primitive(PType.I64, false);
-            EncodeResult encoded = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
 
-            long totalBytes = encoded.buffers().stream().mapToLong(MemorySegment::byteSize).sum();
+            // When
+            EncodeResult result = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
+
+            // Then
+            long totalBytes = result.buffers().stream().mapToLong(MemorySegment::byteSize).sum();
             assertThat(totalBytes).isEqualTo((long) data.length * 8);
         }
     }
@@ -124,6 +140,7 @@ class PrimitiveEncodingEncoderTest {
 
         @Test
         void decode_withValidityChild_returnsMaskedArray() {
+            // Given
             int[] raw = {10, 0, 20, 0};
             MemorySegment valuesSeg = TestSegments.leInts(raw);
             MemorySegment validitySeg = MemorySegment.ofArray(new byte[]{0x05});
@@ -141,8 +158,10 @@ class PrimitiveEncodingEncoderTest {
                     new MemorySegment[]{valuesSeg, validitySeg},
                     registry, Arena.global());
 
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             assertThat(result).isInstanceOf(MaskedArray.class);
             MaskedArray masked = (MaskedArray) result;
             assertThat(masked.inner()).isInstanceOf(IntArray.class);
@@ -157,6 +176,7 @@ class PrimitiveEncodingEncoderTest {
 
         @Test
         void decode_noValidityChild_returnsPlainArray() {
+            // Given
             int[] raw = {1, 2, 3};
             MemorySegment valuesSeg = TestSegments.leInts(raw);
 
@@ -169,7 +189,10 @@ class PrimitiveEncodingEncoderTest {
                     new MemorySegment[]{valuesSeg},
                     REGISTRY, Arena.global());
 
+            // When
             Array result = DECODER.decode(ctx);
+
+            // Then
             assertThat(result).isInstanceOf(IntArray.class);
         }
     }

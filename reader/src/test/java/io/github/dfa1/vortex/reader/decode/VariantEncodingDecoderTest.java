@@ -51,6 +51,7 @@ class VariantEncodingDecoderTest {
 
     @org.junit.jupiter.api.Test
     void decode_withoutShredded_returnsCoreStorageOnly() {
+        // Given
         ArrayNode coreNode = nullChildNode();
         ArrayNode variantNode = ArrayNode.of(EncodingId.VORTEX_VARIANT, null,
                 new ArrayNode[]{coreNode}, new int[]{});
@@ -59,8 +60,10 @@ class VariantEncodingDecoderTest {
         DecodeContext ctx = new DecodeContext(variantNode, VARIANT_DTYPE, N,
                 new MemorySegment[0], registry, Arena.ofAuto());
 
+        // When
         Array result = SUT.decode(ctx);
 
+        // Then
         assertThat(result).isInstanceOf(VariantArray.class);
         VariantArray va = (VariantArray) result;
         assertThat(va.dtype()).isEqualTo(VARIANT_DTYPE);
@@ -71,6 +74,7 @@ class VariantEncodingDecoderTest {
 
     @Test
     void decode_withShredded_decodesSecondChild() {
+        // Given
         io.github.dfa1.vortex.proto.DType shreddedProto = io.github.dfa1.vortex.proto.DType.ofPrimitive(
                 new Primitive(io.github.dfa1.vortex.proto.PType.I32, false));
         ByteBuffer meta = variantMetaWithShredded(shreddedProto);
@@ -85,8 +89,10 @@ class VariantEncodingDecoderTest {
         DecodeContext ctx = new DecodeContext(variantNode, VARIANT_DTYPE, N,
                 segments, registry, Arena.ofAuto());
 
+        // When
         Array result = SUT.decode(ctx);
 
+        // Then
         assertThat(result).isInstanceOf(VariantArray.class);
         VariantArray va = (VariantArray) result;
         assertThat(va.shredded()).isNotNull();
@@ -96,6 +102,7 @@ class VariantEncodingDecoderTest {
 
     @Test
     void decode_emptyMetadata_noShredded() {
+        // Given
         ArrayNode coreNode = nullChildNode();
         ArrayNode variantNode = ArrayNode.of(EncodingId.VORTEX_VARIANT, ByteBuffer.allocate(0),
                 new ArrayNode[]{coreNode}, new int[]{});
@@ -104,14 +111,17 @@ class VariantEncodingDecoderTest {
         DecodeContext ctx = new DecodeContext(variantNode, VARIANT_DTYPE, N,
                 new MemorySegment[0], registry, Arena.ofAuto());
 
+        // When
         Array result = SUT.decode(ctx);
 
+        // Then
         VariantArray va = (VariantArray) result;
         assertThat(va.shredded()).isNull();
     }
 
     @Test
     void decode_nullableDtype_preservedOnResult() {
+        // Given
         DType nullableVariant = new DType.Variant(true);
         ArrayNode coreNode = nullChildNode();
         ArrayNode variantNode = ArrayNode.of(EncodingId.VORTEX_VARIANT, null,
@@ -121,14 +131,17 @@ class VariantEncodingDecoderTest {
         DecodeContext ctx = new DecodeContext(variantNode, nullableVariant, N,
                 new MemorySegment[0], registry, Arena.ofAuto());
 
-        VariantArray va = (VariantArray) SUT.decode(ctx);
+        // When
+        VariantArray result = (VariantArray) SUT.decode(ctx);
 
-        assertThat(va.dtype()).isEqualTo(nullableVariant);
-        assertThat(va.dtype().nullable()).isTrue();
+        // Then
+        assertThat(result.dtype()).isEqualTo(nullableVariant);
+        assertThat(result.dtype().nullable()).isTrue();
     }
 
     @Test
     void decode_wrongChildCount_throws() {
+        // Given
         ArrayNode variantNode = ArrayNode.of(EncodingId.VORTEX_VARIANT, null,
                 new ArrayNode[0], new int[]{});
 
@@ -136,6 +149,7 @@ class VariantEncodingDecoderTest {
         DecodeContext ctx = new DecodeContext(variantNode, VARIANT_DTYPE, N,
                 new MemorySegment[0], registry, Arena.ofAuto());
 
+        // When / Then
         assertThatThrownBy(() -> SUT.decode(ctx))
                 .hasMessageContaining("expected 1 or 2 children");
     }

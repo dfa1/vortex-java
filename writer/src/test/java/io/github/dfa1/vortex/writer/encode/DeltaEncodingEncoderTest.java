@@ -59,10 +59,14 @@ class DeltaEncodingEncoderTest {
     @ParameterizedTest
     @MethodSource("i64Arrays")
     void encodeDecode_i64_isLossless(long[] data) {
-        EncodeResult encoded = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
-        DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, DTypes.I64, REGISTRY);
+        // Given
+        EncodeResult resultEncoded = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
+        DecodeContext ctx = DecodeTestHelper.toDecodeContext(resultEncoded, data.length, DTypes.I64, REGISTRY);
+
+        // When
         Array result = DECODER.decode(ctx);
 
+        // Then
         assertThat(result.length()).isEqualTo(data.length);
         for (int i = 0; i < data.length; i++) {
             assertThat(ArraySegments.of(result).get(PTypeIO.LE_LONG, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
@@ -72,10 +76,14 @@ class DeltaEncodingEncoderTest {
     @ParameterizedTest
     @MethodSource("i32Arrays")
     void encodeDecode_i32_isLossless(int[] data) {
-        EncodeResult encoded = ENCODER.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
-        DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, DTypes.I32, REGISTRY);
+        // Given
+        EncodeResult resultEncoded = ENCODER.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
+        DecodeContext ctx = DecodeTestHelper.toDecodeContext(resultEncoded, data.length, DTypes.I32, REGISTRY);
+
+        // When
         Array result = DECODER.decode(ctx);
 
+        // Then
         assertThat(result.length()).isEqualTo(data.length);
         for (int i = 0; i < data.length; i++) {
             assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
@@ -85,10 +93,14 @@ class DeltaEncodingEncoderTest {
     @ParameterizedTest(name = "{0}")
     @MethodSource("monotoneI64Arrays")
     void encodeDecode_monotoneI64_isLossless(String name, long[] data) {
-        EncodeResult encoded = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
-        DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, DTypes.I64, REGISTRY);
+        // Given
+        EncodeResult resultEncoded = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
+        DecodeContext ctx = DecodeTestHelper.toDecodeContext(resultEncoded, data.length, DTypes.I64, REGISTRY);
+
+        // When
         Array result = DECODER.decode(ctx);
 
+        // Then
         assertThat(result.length()).isEqualTo(data.length);
         for (int i = 0; i < data.length; i++) {
             assertThat(ArraySegments.of(result).get(PTypeIO.LE_LONG, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
@@ -97,12 +109,15 @@ class DeltaEncodingEncoderTest {
 
     @Test
     void encode_i64_metadata_deltasLen_isNonZero() throws Exception {
+        // Given
         long[] data = {10L, 20L, 30L, 40L, 50L};
 
+        // When
         EncodeResult result = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
         MemorySegment metaSeg = MemorySegment.ofBuffer(result.rootNode().metadata().duplicate());
         DeltaMetadata meta = DeltaMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 
+        // Then
         assertThat(meta.deltas_len()).isGreaterThan(0);
     }
 }

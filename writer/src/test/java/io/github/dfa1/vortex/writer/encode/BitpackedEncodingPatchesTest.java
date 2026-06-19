@@ -35,6 +35,7 @@ class BitpackedEncodingPatchesTest {
 
         @Test
         void decode_appliesPatches_overridingBitPackedValues() {
+            // Given
             int[] base = {10, 20, 30, 40, 50};
             EncodeResult packed = ENCODER.encode(DTypes.I32, base, EncodeTestHelper.testCtx());
 
@@ -68,8 +69,10 @@ class BitpackedEncodingPatchesTest {
             DecodeContext ctx = new DecodeContext(
                     bpNode, DTypes.I32, base.length, segments, REGISTRY, Arena.global());
 
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             assertThat(result.length()).isEqualTo(base.length);
             assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, 0L)).isEqualTo(10);
             assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, 4L)).isEqualTo(777);
@@ -84,26 +87,29 @@ class BitpackedEncodingPatchesTest {
 
         @Test
         void encode_thenDecode_roundTripsWithPatches() {
+            // Given
             // U8 codes mostly zero with one outlier — encoder picks bit_width=0 + 1 patch.
             byte[] codes = new byte[1000];
             codes[42] = 7;
 
-            EncodeResult res = ENCODER.encode(DTypes.U8, codes, EncodeTestHelper.testCtx());
+            // When
+            EncodeResult result = ENCODER.encode(DTypes.U8, codes, EncodeTestHelper.testCtx());
 
-            assertThat(res.buffers()).hasSize(3); // packed (0 B) + idx + val
-            assertThat(res.rootNode().children()).hasSize(2);
+            // Then
+            assertThat(result.buffers()).hasSize(3); // packed (0 B) + idx + val
+            assertThat(result.rootNode().children()).hasSize(2);
 
             MemorySegment[] segments = {
-                    res.buffers().get(0),
-                    res.buffers().get(1),
-                    res.buffers().get(2)
+                    result.buffers().get(0),
+                    result.buffers().get(1),
+                    result.buffers().get(2)
             };
             ArrayNode idxNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
                     new ArrayNode[0], new int[]{1});
             ArrayNode valNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
                     new ArrayNode[0], new int[]{2});
             ArrayNode bpNode = ArrayNode.of(EncodingId.FASTLANES_BITPACKED,
-                    res.rootNode().metadata(),
+                    result.rootNode().metadata(),
                     new ArrayNode[]{idxNode, valNode},
                     new int[]{0});
 

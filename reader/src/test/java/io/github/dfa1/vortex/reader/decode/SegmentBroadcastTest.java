@@ -16,9 +16,11 @@ class SegmentBroadcastTest {
     @Test
     void elementOffset_wrapsConstantSegment() {
         try (Arena arena = Arena.ofConfined()) {
+            // Given
             MemorySegment seg = arena.allocate(8);
             seg.set(PTypeIO.LE_LONG, 0, 99L);
 
+            // When / Then
             assertThat(SegmentBroadcast.elementOffset(seg, 0, 8)).isZero();
             assertThat(SegmentBroadcast.elementOffset(seg, 5, 8)).isZero();
             assertThat(SegmentBroadcast.elementOffset(seg, 999_999, 8)).isZero();
@@ -29,7 +31,10 @@ class SegmentBroadcastTest {
     @Test
     void elementOffset_passesThroughFullSegment() {
         try (Arena arena = Arena.ofConfined()) {
+            // Given
             MemorySegment seg = arena.allocate(8 * 4);
+
+            // When / Then
             for (long i = 0; i < 4; i++) {
                 assertThat(SegmentBroadcast.elementOffset(seg, i, 8)).isEqualTo(i * 8);
             }
@@ -41,12 +46,15 @@ class SegmentBroadcastTest {
     @Test
     void broadcastCopy_replicatesSingleElement() {
         try (Arena arena = Arena.ofConfined()) {
+            // Given
             MemorySegment src = arena.allocate(8);
             src.set(PTypeIO.LE_LONG, 0, 0xCAFEBABEL);
             MemorySegment dst = arena.allocate(8 * 5);
 
+            // When
             SegmentBroadcast.broadcastCopy(src, dst, 5, 8);
 
+            // Then
             for (long i = 0; i < 5; i++) {
                 assertThat(dst.getAtIndex(PTypeIO.LE_LONG, i)).isEqualTo(0xCAFEBABEL);
             }

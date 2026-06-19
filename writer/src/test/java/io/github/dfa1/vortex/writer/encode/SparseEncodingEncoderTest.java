@@ -65,8 +65,13 @@ class SparseEncodingEncoderTest {
 
         @Test
         void encode_allZeros_noPatches() throws java.io.IOException {
+            // Given
             long[] data = {0L, 0L, 0L, 0L};
+
+            // When
             EncodeResult result = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
+
+            // Then
             var metaSeg = java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate());
             SparseMetadata meta = SparseMetadata.decode(metaSeg, 0, metaSeg.byteSize());
             assertThat(meta.patches().len()).isZero();
@@ -74,8 +79,13 @@ class SparseEncodingEncoderTest {
 
         @Test
         void encode_withNonZero_createsPatches() throws java.io.IOException {
+            // Given
             long[] data = {0L, 10L, 0L, 50L, 0L};
+
+            // When
             EncodeResult result = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
+
+            // Then
             var metaSeg = java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate());
             SparseMetadata meta = SparseMetadata.decode(metaSeg, 0, metaSeg.byteSize());
             assertThat(meta.patches().len()).isEqualTo(2);
@@ -83,11 +93,15 @@ class SparseEncodingEncoderTest {
 
         @Test
         void encode_roundTrip_i64() {
+            // Given
             long[] data = {0L, 0L, 42L, 0L, 99L, 0L, 0L, 7L};
             EncodeResult encoded = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
-            Array decoded = decodeResult(encoded, DTypes.I64, data.length);
 
-            LongArray la = (LongArray) decoded;
+            // When
+            Array result = decodeResult(encoded, DTypes.I64, data.length);
+
+            // Then
+            LongArray la = (LongArray) result;
             for (int i = 0; i < data.length; i++) {
                 assertThat(la.getLong(i)).as("index %d", i).isEqualTo(data[i]);
             }
@@ -95,11 +109,15 @@ class SparseEncodingEncoderTest {
 
         @Test
         void encode_roundTrip_f64() {
+            // Given
             double[] data = {0.0, 3.14, 0.0, 0.0, 2.72};
             EncodeResult encoded = ENCODER.encode(DTypes.F64, data, EncodeTestHelper.testCtx());
-            Array decoded = decodeResult(encoded, DTypes.F64, data.length);
 
-            DoubleArray da = (DoubleArray) decoded;
+            // When
+            Array result = decodeResult(encoded, DTypes.F64, data.length);
+
+            // Then
+            DoubleArray da = (DoubleArray) result;
             for (int i = 0; i < data.length; i++) {
                 assertThat(da.getDouble(i)).as("index %d", i).isEqualTo(data[i]);
             }
@@ -108,8 +126,13 @@ class SparseEncodingEncoderTest {
         @ParameterizedTest
         @ValueSource(ints = {0, 1, 100})
         void encode_empty_or_allZero_noPatches(int size) throws java.io.IOException {
+            // Given
             long[] data = new long[size];
+
+            // When
             EncodeResult result = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
+
+            // Then
             var metaSeg = java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate());
             SparseMetadata meta = SparseMetadata.decode(metaSeg, 0, metaSeg.byteSize());
             assertThat(meta.patches().len()).isZero();
@@ -211,10 +234,14 @@ class SparseEncodingEncoderTest {
 
         @Test
         void decode_noPatches_returnsFillValue() {
+            // Given
             long fill = 99L;
             DecodeContext ctx = buildSparseCtx(DTypes.I64, 5, fill, PType.U32, new long[0], new long[0]);
+
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             assertThat(result.length()).isEqualTo(5L);
             LongArray la = (LongArray) result;
             for (int i = 0; i < 5; i++) {
@@ -224,12 +251,16 @@ class SparseEncodingEncoderTest {
 
         @Test
         void decode_withPatches_overwritesAtIndices() {
+            // Given
             long fill = 0L;
             long[] patchIndices = {1L, 5L};
             long[] patchValues = {10L, 50L};
             DecodeContext ctx = buildSparseCtx(DTypes.I64, 8, fill, PType.U32, patchIndices, patchValues);
+
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             long[] expected = {0, 10, 0, 0, 0, 50, 0, 0};
             LongArray la = (LongArray) result;
             for (int i = 0; i < expected.length; i++) {
@@ -239,11 +270,15 @@ class SparseEncodingEncoderTest {
 
         @Test
         void decode_f64_fillAndPatches() {
+            // Given
             double fillVal = Double.NaN;
             double patchVal = 3.14;
             DecodeContext ctx = buildSparseCtxF64(DTypes.F64, 4, fillVal, new long[]{2L}, new double[]{patchVal});
+
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             DoubleArray da = (DoubleArray) result;
             assertThat(da.getDouble(0)).isNaN();
             assertThat(da.getDouble(1)).isNaN();
@@ -253,21 +288,29 @@ class SparseEncodingEncoderTest {
 
         @Test
         void decode_offsetSubtracted() {
+            // Given
             long[] patchIndices = {12L};
             long[] patchValues = {777L};
             DecodeContext ctx = buildSparseCtxWithOffset(DTypes.I64, 5, 0L, PType.U32, patchIndices, patchValues, 10L);
+
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             assertThat(((LongArray) result).getLong(2)).isEqualTo(777L);
         }
 
         @Test
         void decode_nullValueFill_treatedAsZero() {
+            // Given
             byte[] nullFill = ScalarValue.ofNullValue(NullValue.NULL_VALUE).encode();
             byte[] meta = buildSparseMetaBytes(0, 0L, PType.U32);
             DecodeContext ctx = buildCtx(DTypes.I64, 4, nullFill, meta, new byte[0], new byte[0]);
+
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             LongArray la = (LongArray) result;
             for (int i = 0; i < 4; i++) {
                 assertThat(la.getLong(i)).as("index %d", i).isZero();
@@ -276,12 +319,16 @@ class SparseEncodingEncoderTest {
 
         @Test
         void decode_utf8_noPatches_allEmpty() {
+            // Given
             DType utf8 = new DType.Utf8(true);
             byte[] nullFill = ScalarValue.ofNullValue(NullValue.NULL_VALUE).encode();
             byte[] meta = buildSparseMetaBytes(0, 0L, PType.U32);
             DecodeContext ctx = buildCtx(utf8, 3, nullFill, meta, new byte[0], new byte[0]);
+
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             assertThat(result.length()).isEqualTo(3L);
             VarBinArray varBin = (VarBinArray) result;
             for (int i = 0; i < 3; i++) {
@@ -291,6 +338,7 @@ class SparseEncodingEncoderTest {
 
         @Test
         void decode_utf8_withPatches_writesStringsAtIndices() {
+            // Given
             DType utf8 = new DType.Utf8(true);
             byte[] nullFill = ScalarValue.ofNullValue(NullValue.NULL_VALUE).encode();
             byte[] meta = buildSparseMetaBytes(2, 0L, PType.U32);
@@ -321,8 +369,10 @@ class SparseEncodingEncoderTest {
             };
             DecodeContext ctx = new DecodeContext(sparseNode, utf8, 5, segments, registry, Arena.global());
 
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             VarBinArray varBin = (VarBinArray) result;
             assertThat(varBin.length()).isEqualTo(5L);
             assertThat(varBin.getByteLength(0)).isZero();
@@ -334,6 +384,7 @@ class SparseEncodingEncoderTest {
 
         @Test
         void decode_bool_withPatches_setsBitsAtIndices() {
+            // Given
             DType bool = new DType.Bool(true);
             byte[] nullFill = ScalarValue.ofNullValue(NullValue.NULL_VALUE).encode();
             byte[] meta = buildSparseMetaBytes(2, 0L, PType.U32);
@@ -357,8 +408,10 @@ class SparseEncodingEncoderTest {
             };
             DecodeContext ctx = new DecodeContext(sparseNode, bool, 6, segments, registry, Arena.global());
 
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             BoolArray boolArr = (BoolArray) result;
             assertThat(boolArr.length()).isEqualTo(6L);
             assertThat(boolArr.getBoolean(0)).isFalse();

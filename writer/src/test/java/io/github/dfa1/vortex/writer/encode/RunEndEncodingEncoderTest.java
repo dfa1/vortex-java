@@ -79,11 +79,15 @@ class RunEndEncodingEncoderTest {
 
         @Test
         void decode_singleRun_fillsAllElements() {
+            // Given
             long[] ends = {5L};
             long[] values = {42L};
             DecodeContext ctx = buildCtx(DTypes.I64, 5, ends, values, PType.U32, 0L);
+
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             assertThat(result.length()).isEqualTo(5L);
             for (int i = 0; i < 5; i++) {
                 assertThat(((io.github.dfa1.vortex.reader.array.LongArray) result).getLong(i)).isEqualTo(42L);
@@ -92,11 +96,15 @@ class RunEndEncodingEncoderTest {
 
         @Test
         void decode_multipleRuns_expandsCorrectly() {
+            // Given
             long[] ends = {2L, 5L, 7L};
             long[] values = {10L, 20L, 30L};
             DecodeContext ctx = buildCtx(DTypes.I64, 7, ends, values, PType.U32, 0L);
+
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             long[] expected = {10, 10, 20, 20, 20, 30, 30};
             for (int i = 0; i < expected.length; i++) {
                 assertThat(((io.github.dfa1.vortex.reader.array.LongArray) result).getLong(i))
@@ -106,11 +114,15 @@ class RunEndEncodingEncoderTest {
 
         @Test
         void decode_withOffset_skipsLogicalElements() {
+            // Given
             long[] ends = {3L, 6L};
             long[] values = {10L, 20L};
             DecodeContext ctx = buildCtx(DTypes.I64, 3, ends, values, PType.U32, 2L);
+
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             long[] expected = {10L, 20L, 20L};
             for (int i = 0; i < expected.length; i++) {
                 assertThat(((io.github.dfa1.vortex.reader.array.LongArray) result).getLong(i))
@@ -135,10 +147,14 @@ class RunEndEncodingEncoderTest {
         @ParameterizedTest
         @MethodSource("i64Arrays")
         void encodeDecode_i64_isLossless(long[] data) {
+            // Given
             EncodeResult encoded = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, DTypes.I64, REGISTRY);
+
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             assertThat(result.length()).isEqualTo(data.length);
             for (int i = 0; i < data.length; i++) {
                 assertThat(((io.github.dfa1.vortex.reader.array.LongArray) result).getLong(i)).as("index %d", i).isEqualTo(data[i]);
@@ -147,11 +163,15 @@ class RunEndEncodingEncoderTest {
 
         @Test
         void encode_i64_metadata_numRuns_andEndsPtype() throws Exception {
+            // Given
             long[] data = {1L, 1L, 2L, 2L, 3L};
+
+            // When
             EncodeResult result = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
             var metaSeg = java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate());
             RunEndMetadata meta = RunEndMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 
+            // Then
             assertThat(meta.num_runs()).isEqualTo(3);
             assertThat(meta.ends_ptype().value()).isEqualTo(2);
         }

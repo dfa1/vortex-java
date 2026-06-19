@@ -57,11 +57,14 @@ class MaskedEncodingEncoderTest {
 
     @Test
     void oneChild_noValidity_allPositionsValid() {
+        // Given
         DType i32Nullable = new DType.Primitive(PType.I32, true);
         EncodeResult ctx = maskedResult(new int[]{10, 20, 30}, null);
 
+        // When
         Array result = DECODER.decode(DecodeTestHelper.toDecodeContext(ctx, 3L, i32Nullable, REGISTRY));
 
+        // Then
         assertThat(result).isInstanceOf(MaskedArray.class);
         MaskedArray masked = (MaskedArray) result;
         assertThat(masked.length()).isEqualTo(3);
@@ -72,12 +75,15 @@ class MaskedEncodingEncoderTest {
 
     @Test
     void twoChildren_withValidity_masksNulls() {
+        // Given
         DType i32Nullable = new DType.Primitive(PType.I32, true);
         EncodeResult ctx = maskedResult(new int[]{1, 2, 3, 4, 5},
                 new boolean[]{true, false, true, false, true});
 
+        // When
         Array result = DECODER.decode(DecodeTestHelper.toDecodeContext(ctx, 5L, i32Nullable, REGISTRY));
 
+        // Then
         MaskedArray masked = (MaskedArray) result;
         assertThat(masked.length()).isEqualTo(5);
         assertThat(masked.isValid(0)).isTrue();
@@ -89,22 +95,28 @@ class MaskedEncodingEncoderTest {
 
     @Test
     void dtype_isNullable() {
+        // Given
         DType i32Nullable = new DType.Primitive(PType.I32, true);
         EncodeResult ctx = maskedResult(new int[]{1, 2, 3}, null);
 
+        // When
         Array result = DECODER.decode(DecodeTestHelper.toDecodeContext(ctx, 3L, i32Nullable, REGISTRY));
 
+        // Then
         assertThat(result.dtype().nullable()).isTrue();
     }
 
     @Test
     void inner_containsChildValues() {
+        // Given
         DType i32Nullable = new DType.Primitive(PType.I32, true);
         EncodeResult ctx = maskedResult(new int[]{7, 8, 9}, null);
 
+        // When
         MaskedArray result = (MaskedArray) DECODER.decode(DecodeTestHelper.toDecodeContext(ctx, 3L, i32Nullable, REGISTRY));
         IntArray inner = (IntArray) result.inner();
 
+        // Then
         assertThat(ArraySegments.of(inner).get(PTypeIO.LE_INT, 0L)).isEqualTo(7);
         assertThat(ArraySegments.of(inner).get(PTypeIO.LE_INT, 4L)).isEqualTo(8);
         assertThat(ArraySegments.of(inner).get(PTypeIO.LE_INT, 8L)).isEqualTo(9);
@@ -112,6 +124,7 @@ class MaskedEncodingEncoderTest {
 
     @Test
     void buffersPresentThrows() {
+        // Given
         DType i32Nullable = new DType.Primitive(PType.I32, true);
 
         EncodeNode childNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
@@ -121,6 +134,8 @@ class MaskedEncodingEncoderTest {
         MemorySegment dummyBuf = Arena.ofAuto().allocate(4);
         EncodeResult result = new EncodeResult(maskedNode, List.of(dummyBuf, dummyBuf), null, null);
 
+        // When
+        // Then
         assertThatThrownBy(() -> DECODER.decode(DecodeTestHelper.toDecodeContext(result, 1L, i32Nullable, REGISTRY)))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("expected 0 buffers");
@@ -128,12 +143,15 @@ class MaskedEncodingEncoderTest {
 
     @Test
     void zeroChildrenThrows() {
+        // Given
         DType i32Nullable = new DType.Primitive(PType.I32, true);
 
         EncodeNode maskedNode = new EncodeNode(
                 EncodingId.VORTEX_MASKED, null, new EncodeNode[]{}, new int[]{});
         EncodeResult result = new EncodeResult(maskedNode, List.of(), null, null);
 
+        // When
+        // Then
         assertThatThrownBy(() -> DECODER.decode(DecodeTestHelper.toDecodeContext(result, 0L, i32Nullable, REGISTRY)))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("expected 1 or 2 children");
@@ -141,6 +159,7 @@ class MaskedEncodingEncoderTest {
 
     @Test
     void threeChildrenThrows() {
+        // Given
         DType i32Nullable = new DType.Primitive(PType.I32, true);
 
         DType i32 = new DType.Primitive(PType.I32, false);
@@ -152,6 +171,8 @@ class MaskedEncodingEncoderTest {
         List<MemorySegment> bufs = new ArrayList<>(childResult.buffers());
         EncodeResult result = new EncodeResult(maskedNode, bufs, null, null);
 
+        // When
+        // Then
         assertThatThrownBy(() -> DECODER.decode(DecodeTestHelper.toDecodeContext(result, 1L, i32Nullable, REGISTRY)))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("expected 1 or 2 children");

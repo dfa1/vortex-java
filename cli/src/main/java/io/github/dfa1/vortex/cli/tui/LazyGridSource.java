@@ -222,7 +222,7 @@ public final class LazyGridSource implements AutoCloseable {
             iterNextChunk = 0;
         }
         while (iterNextChunk < chunkIdx && iter.hasNext()) {
-            try (Chunk _ = iter.next()) {
+            try (var _ = iter.next()) {
                 // skip
             }
             iterNextChunk++;

@@ -86,10 +86,14 @@ class DictEncodingEncoderTest {
     @ParameterizedTest
     @MethodSource("i32Arrays")
     void encodeDecode_i32_isLossless(int[] data) {
+        // Given
         EncodeResult encoded = ENCODER.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
         DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, DTypes.I32, PRIM_REG);
+
+        // When
         Array result = DECODER.decode(ctx);
 
+        // Then
         assertThat(result.length()).isEqualTo(data.length);
         for (int i = 0; i < data.length; i++) {
             assertThat(ArraySegments.of(result).get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
@@ -99,10 +103,14 @@ class DictEncodingEncoderTest {
     @ParameterizedTest
     @MethodSource("i64Arrays")
     void encodeDecode_i64_isLossless(long[] data) {
+        // Given
         EncodeResult encoded = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
         DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, DTypes.I64, PRIM_REG);
+
+        // When
         Array result = DECODER.decode(ctx);
 
+        // Then
         assertThat(result.length()).isEqualTo(data.length);
         for (int i = 0; i < data.length; i++) {
             assertThat(ArraySegments.of(result).get(PTypeIO.LE_LONG, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
@@ -112,9 +120,12 @@ class DictEncodingEncoderTest {
     @ParameterizedTest(name = "{0}")
     @MethodSource("repetitiveI32Arrays")
     void encodedSize_lowCardinality_compressesWellVsRaw(String name, int[] data) {
-        EncodeResult encoded = ENCODER.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
+        // Given
+        // When
+        EncodeResult result = ENCODER.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
 
-        long encodedBytes = encoded.buffers().stream().mapToLong(MemorySegment::byteSize).sum();
+        // Then
+        long encodedBytes = result.buffers().stream().mapToLong(MemorySegment::byteSize).sum();
         long rawBytes = (long) data.length * 4;
         assertThat(encodedBytes).isLessThan(rawBytes);
     }
@@ -122,10 +133,14 @@ class DictEncodingEncoderTest {
     @ParameterizedTest(name = "{0}")
     @MethodSource("utf8Arrays")
     void encodeDecode_utf8_isLossless(String name, String[] data) {
+        // Given
         EncodeResult encoded = ENCODER.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
         DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, DTypes.UTF8, UTF8_REG);
+
+        // When
         Array result = DECODER.decode(ctx);
 
+        // Then
         assertThat(result).isInstanceOf(VarBinArray.class);
         VarBinArray arr = (VarBinArray) result;
         assertThat(arr.length()).isEqualTo(data.length);
@@ -137,24 +152,30 @@ class DictEncodingEncoderTest {
 
     @Test
     void encodedSize_lowCardinalityUtf8_compressesWellVsRaw() {
+        // Given
         String[] symbols = {"AAPL", "GOOG", "MSFT"};
         String[] data = repeat(symbols, 1000);
 
-        EncodeResult encoded = ENCODER.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
+        // When
+        EncodeResult result = ENCODER.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
 
-        long encodedBytes = encoded.buffers().stream().mapToLong(MemorySegment::byteSize).sum();
+        // Then
+        long encodedBytes = result.buffers().stream().mapToLong(MemorySegment::byteSize).sum();
         long rawBytes = 3000L * 5;
         assertThat(encodedBytes).isLessThan(rawBytes);
     }
 
     @Test
     void encode_utf8_metadata_valuesLen_matchesUniqueCount() throws Exception {
+        // Given
         String[] data = {"apple", "banana", "apple", "banana", "apple"};
 
+        // When
         EncodeResult result = ENCODER.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
         var metaSeg = java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate());
         DictMetadata meta = DictMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 
+        // Then
         assertThat(meta.values_len()).isEqualTo(2);
     }
 }

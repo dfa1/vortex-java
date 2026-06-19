@@ -38,6 +38,7 @@ class RandomAccessTest {
     @MethodSource("encodings")
     void randomOrderAccess_matchesForwardOrder(String name,
             EncodingEncoder encoder, io.github.dfa1.vortex.reader.decode.EncodingDecoder decoder, DType dtype) {
+        // Given
         long[] original = new long[N];
         for (int i = 0; i < N; i++) {
             original[i] = (long) i * 1_000_003L + 7L;
@@ -49,9 +50,11 @@ class RandomAccessTest {
         EncodeResult encoded = encoder.encode(dtype, original, EncodeTestHelper.testCtx());
         DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, N, dtype, registry);
 
+        // When
         Array array = decoder.decode(ctx);
         LongArray result = (LongArray) array;
 
+        // Then
         for (int i = N - 1; i >= 0; i--) {
             assertThat(result.getLong(i))
                     .as("reverse access at index %d", i)

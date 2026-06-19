@@ -93,12 +93,16 @@ class PatchedEncodingDecoderTest {
 
     @Test
     void decode_noPatches_returnsInnerUnchanged() {
+        // Given
         int n = 4;
         int[] inner = {10, 20, 30, 40};
-        Array sut = decode(n, inner, new int[]{0, 0}, new short[]{}, new int[]{});
 
-        assertThat(sut).isInstanceOf(IntArray.class);
-        MemorySegment seg = ArraySegments.of(sut);
+        // When
+        Array result = decode(n, inner, new int[]{0, 0}, new short[]{}, new int[]{});
+
+        // Then
+        assertThat(result).isInstanceOf(IntArray.class);
+        MemorySegment seg = ArraySegments.of(result);
         for (int i = 0; i < n; i++) {
             assertThat(seg.getAtIndex(PTypeIO.LE_INT, i)).as("index %d", i).isEqualTo(inner[i]);
         }
@@ -106,9 +110,11 @@ class PatchedEncodingDecoderTest {
 
     @Test
     void decode_singlePatch_overwrites() {
-        Array sut = decode(4, new int[]{10, 20, 30, 40}, new int[]{0, 1}, new short[]{2}, new int[]{99});
+        // Given / When
+        Array result = decode(4, new int[]{10, 20, 30, 40}, new int[]{0, 1}, new short[]{2}, new int[]{99});
 
-        MemorySegment seg = ArraySegments.of(sut);
+        // Then
+        MemorySegment seg = ArraySegments.of(result);
         assertThat(seg.getAtIndex(PTypeIO.LE_INT, 0)).isEqualTo(10);
         assertThat(seg.getAtIndex(PTypeIO.LE_INT, 1)).isEqualTo(20);
         assertThat(seg.getAtIndex(PTypeIO.LE_INT, 2)).isEqualTo(99);
@@ -117,9 +123,11 @@ class PatchedEncodingDecoderTest {
 
     @Test
     void decode_multiplePatches_allApplied() {
-        Array sut = decode(4, new int[]{0, 0, 0, 0}, new int[]{0, 2}, new short[]{0, 3}, new int[]{1, 7});
+        // Given / When
+        Array result = decode(4, new int[]{0, 0, 0, 0}, new int[]{0, 2}, new short[]{0, 3}, new int[]{1, 7});
 
-        MemorySegment seg = ArraySegments.of(sut);
+        // Then
+        MemorySegment seg = ArraySegments.of(result);
         assertThat(seg.getAtIndex(PTypeIO.LE_INT, 0)).isEqualTo(1);
         assertThat(seg.getAtIndex(PTypeIO.LE_INT, 1)).isEqualTo(0);
         assertThat(seg.getAtIndex(PTypeIO.LE_INT, 2)).isEqualTo(0);
@@ -129,10 +137,14 @@ class PatchedEncodingDecoderTest {
     @ParameterizedTest
     @ValueSource(ints = {1, 2, 1020, 1023, 1024, 1025, 2048})
     void decode_variousLengths_noPatches(int n) {
+        // Given
         int[] inner = new int[n];
-        Array sut = decode(n, inner, new int[]{0, 0}, new short[]{}, new int[]{});
 
-        MemorySegment seg = ArraySegments.of(sut);
+        // When
+        Array result = decode(n, inner, new int[]{0, 0}, new short[]{}, new int[]{});
+
+        // Then
+        MemorySegment seg = ArraySegments.of(result);
         for (int i = 0; i < n; i++) {
             assertThat(seg.getAtIndex(PTypeIO.LE_INT, i)).as("index %d", i).isZero();
         }
@@ -140,12 +152,16 @@ class PatchedEncodingDecoderTest {
 
     @Test
     void decode_i64_singlePatch() {
+        // Given
         DType dtype = new DType.Primitive(PType.I64, false);
-        Array sut = decode(dtype, 3, i64Segment(100L, 200L, 300L), u32Segment(0, 1),
+
+        // When
+        Array result = decode(dtype, 3, i64Segment(100L, 200L, 300L), u32Segment(0, 1),
                 u16Segment((short) 1), i64Segment(999L), 1);
 
-        assertThat(sut).isInstanceOf(LongArray.class);
-        MemorySegment seg = ArraySegments.of(sut);
+        // Then
+        assertThat(result).isInstanceOf(LongArray.class);
+        MemorySegment seg = ArraySegments.of(result);
         assertThat(seg.getAtIndex(PTypeIO.LE_LONG, 0)).isEqualTo(100L);
         assertThat(seg.getAtIndex(PTypeIO.LE_LONG, 1)).isEqualTo(999L);
         assertThat(seg.getAtIndex(PTypeIO.LE_LONG, 2)).isEqualTo(300L);
@@ -153,6 +169,7 @@ class PatchedEncodingDecoderTest {
 
     @Test
     void decode_missingMetadata_throws() {
+        // Given
         ArrayNode innerNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
         ArrayNode patchedNode = ArrayNode.of(EncodingId.VORTEX_PATCHED, null,
                 new ArrayNode[]{innerNode, innerNode, innerNode, innerNode}, new int[]{});
@@ -160,6 +177,7 @@ class PatchedEncodingDecoderTest {
         DecodeContext ctx = new DecodeContext(patchedNode, new DType.Primitive(PType.I32, false), 3,
                 new MemorySegment[]{seg}, ReadRegistry.empty(), Arena.ofAuto());
 
+        // When / Then
         assertThatThrownBy(() -> SUT.decode(ctx)).hasMessageContaining("missing metadata");
     }
 }

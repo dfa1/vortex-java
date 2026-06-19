@@ -46,26 +46,32 @@ class StructEncodingEncoderTest {
 
         @Test
         void accepts_structDtype_trueForStruct_falseForPrimitive() {
+            // Given
             DType.Struct structDtype = new DType.Struct(List.of("x"), List.of(DTypes.I64), false);
+
+            // When
+            // Then
             assertThat(ENCODER.accepts(structDtype)).isTrue();
             assertThat(ENCODER.accepts(DTypes.I64)).isFalse();
         }
 
         @Test
         void roundTrip_twoI64Fields_preservesValues() {
+            // Given
             long[] ids = {1L, 2L, 3L};
             long[] values = {10L, 20L, 30L};
             DType.Struct dtype = new DType.Struct(
                     List.of("id", "value"), List.of(DTypes.I64, DTypes.I64), false);
             StructData data = new StructData(List.of(ids, values));
 
+            // When
             EncodeResult result = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
-
             MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
             DecodeContext ctx = new DecodeContext(
                     toArrayNode(result.rootNode()), dtype, ids.length, bufs, REGISTRY, Arena.global());
             StructArray decoded = (StructArray) DECODER.decode(ctx);
 
+            // Then
             assertThat(decoded.length()).isEqualTo(ids.length);
             assertThat(decoded.fieldCount()).isEqualTo(2);
             LongArray idField = (LongArray) decoded.field(0);
@@ -78,11 +84,14 @@ class StructEncodingEncoderTest {
 
         @Test
         void singleField_encodeResult_hasOneChildAndNoBuffers() {
+            // Given
             long[] data = {7L, 14L, 21L};
             DType.Struct dtype = new DType.Struct(List.of("v"), List.of(DTypes.I64), false);
 
+            // When
             EncodeResult result = ENCODER.encode(dtype, new StructData(List.of(data)), EncodeTestHelper.testCtx());
 
+            // Then
             assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_STRUCT);
             assertThat(result.rootNode().children()).hasSize(1);
             assertThat(result.rootNode().bufferIndices()).isEmpty();
@@ -91,9 +100,12 @@ class StructEncodingEncoderTest {
 
         @Test
         void fieldCountMismatch_throwsVortexException() {
+            // Given
             DType.Struct dtype = new DType.Struct(List.of("a", "b"), List.of(DTypes.I64, DTypes.I64), false);
             StructData data = new StructData(List.of(new long[]{1L}));
 
+            // When
+            // Then
             org.junit.jupiter.api.Assertions.assertThrows(
                     io.github.dfa1.vortex.core.VortexException.class,
                     () -> ENCODER.encode(dtype, data, EncodeTestHelper.testCtx()));
@@ -115,16 +127,19 @@ class StructEncodingEncoderTest {
 
         @Test
         void decode_nonNullableWrapper_oneChild_returnsValues() {
+            // Given
             long[] data = {10L, 20L, 30L};
             MemorySegment seg = TestSegments.leLongs(data);
             ArrayNode valuesNode = primitiveNode(0);
             ArrayNode structNode = ArrayNode.of(EncodingId.VORTEX_STRUCT, null,
                     new ArrayNode[]{valuesNode}, new int[0]);
-
             DecodeContext ctx = new DecodeContext(structNode, DTypes.I64, data.length,
                     new MemorySegment[]{seg}, REGISTRY, Arena.global());
+
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             assertThat(result.length()).isEqualTo(data.length);
             for (int i = 0; i < data.length; i++) {
                 assertThat(ArraySegments.of(result).get(PTypeIO.LE_LONG, (long) i * 8)).isEqualTo(data[i]);
@@ -133,6 +148,7 @@ class StructEncodingEncoderTest {
 
         @Test
         void decode_nullableWrapper_twoChildren_returnsMaskedArray() {
+            // Given
             long[] data = {7L, 14L, 21L};
             MemorySegment validitySeg = MemorySegment.ofArray(new byte[]{(byte) 0xFF});
             MemorySegment valuesSeg = TestSegments.leLongs(data);
@@ -148,8 +164,10 @@ class StructEncodingEncoderTest {
                     new MemorySegment[]{validitySeg, valuesSeg},
                     registry, Arena.global());
 
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             assertThat(result).isInstanceOf(MaskedArray.class);
             MaskedArray masked = (MaskedArray) result;
             LongArray values = (LongArray) masked.inner();

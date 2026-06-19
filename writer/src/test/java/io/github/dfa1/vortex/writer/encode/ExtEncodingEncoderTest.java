@@ -31,37 +31,44 @@ class ExtEncodingEncoderTest {
 
         @Test
         void accepts_extensionDtype_returnsTrue() {
+            // Given
             DType extDType = new DType.Extension("vortex.timestamp",
                     new DType.Primitive(PType.I64, false), null, false);
+
+            // When / Then
             assertThat(ENCODER.accepts(extDType)).isTrue();
         }
 
         @Test
         void accepts_primitiveDtype_returnsFalse() {
+            // Given / When / Then
             assertThat(ENCODER.accepts(new DType.Primitive(PType.I64, false))).isFalse();
         }
 
         @Test
         void encode_extensionWrappingI64_roundTrips() {
+            // Given
             long[] data = {100L, 200L, 300L, 400L};
             DType storageDType = new DType.Primitive(PType.I64, false);
             DType extDType = new DType.Extension("vortex.timestamp", storageDType, null, false);
 
-            EncodeResult result = ENCODER.encode(extDType, data, EncodeTestHelper.testCtx());
+            // When
+            EncodeResult resultEncoded = ENCODER.encode(extDType, data, EncodeTestHelper.testCtx());
 
-            assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_EXT);
-            assertThat(result.rootNode().children()).hasSize(1);
-            assertThat(result.rootNode().children()[0].encodingId()).isEqualTo(EncodingId.VORTEX_PRIMITIVE);
+            // Then
+            assertThat(resultEncoded.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_EXT);
+            assertThat(resultEncoded.rootNode().children()).hasSize(1);
+            assertThat(resultEncoded.rootNode().children()[0].encodingId()).isEqualTo(EncodingId.VORTEX_PRIMITIVE);
 
-            ArrayNode rootNode = encodeNodeToArrayNode(result.rootNode());
+            ArrayNode rootNode = encodeNodeToArrayNode(resultEncoded.rootNode());
             DecodeContext ctx = new DecodeContext(
                     rootNode, extDType, data.length,
-                    result.buffers().toArray(MemorySegment[]::new),
+                    resultEncoded.buffers().toArray(MemorySegment[]::new),
                     REGISTRY, Arena.ofAuto());
-            var decoded = DECODER.decode(ctx);
+            var resultDecoded = DECODER.decode(ctx);
 
-            assertThat(decoded).isInstanceOf(LongArray.class);
-            LongArray longArray = (LongArray) decoded;
+            assertThat(resultDecoded).isInstanceOf(LongArray.class);
+            LongArray longArray = (LongArray) resultDecoded;
             for (int i = 0; i < data.length; i++) {
                 assertThat(longArray.getLong(i)).isEqualTo(data[i]);
             }
@@ -81,25 +88,29 @@ class ExtEncodingEncoderTest {
 
         @Test
         void encodeCascade_exposesStorageAsOpenChild() {
+            // Given
             long[] data = {100L, 200L, 300L, 400L};
             DType storageDType = new DType.Primitive(PType.I64, false);
             DType extDType = new DType.Extension("vortex.timestamp", storageDType, null, false);
 
-            CascadeStep step = ENCODER.encodeCascade(extDType, data, EncodeTestHelper.testCtx());
+            // When
+            CascadeStep result = ENCODER.encodeCascade(extDType, data, EncodeTestHelper.testCtx());
 
-            assertThat(step.applicable()).isTrue();
-            assertThat(step.isTerminal()).isFalse();
-            assertThat(step.openChildren()).hasSize(1);
-            ChildSlot slot = step.openChildren().get(0);
+            // Then
+            assertThat(result.applicable()).isTrue();
+            assertThat(result.isTerminal()).isFalse();
+            assertThat(result.openChildren()).hasSize(1);
+            ChildSlot slot = result.openChildren().get(0);
             assertThat(slot.childDtype()).isEqualTo(storageDType);
             assertThat(slot.childData()).isSameAs(data);
             assertThat(slot.parentChildIdx()).isEqualTo(0);
-            assertThat(step.partialRoot().encodingId()).isEqualTo(EncodingId.VORTEX_EXT);
-            assertThat(step.partialRoot().children()).hasSize(1);
+            assertThat(result.partialRoot().encodingId()).isEqualTo(EncodingId.VORTEX_EXT);
+            assertThat(result.partialRoot().children()).hasSize(1);
         }
 
         @Test
         void encodeCascade_rejectsNonExtensionDtype() {
+            // Given / When / Then
             org.assertj.core.api.Assertions.assertThatThrownBy(() ->
                     ENCODER.encodeCascade(new DType.Primitive(PType.I64, false), new long[]{1L},
                             EncodeTestHelper.testCtx()))
@@ -113,6 +124,7 @@ class ExtEncodingEncoderTest {
 
         @Test
         void decode_extensionWrappingI64_returnsStorageArray() {
+            // Given
             long[] values = {10L, 20L, 30L, 40L};
             MemorySegment buf = TestSegments.leLongs(values);
 
@@ -125,8 +137,10 @@ class ExtEncodingEncoderTest {
             DecodeContext ctx = new DecodeContext(
                     extNode, extDType, values.length, new MemorySegment[]{buf}, REGISTRY, Arena.ofAuto());
 
+            // When
             var result = DECODER.decode(ctx);
 
+            // Then
             assertThat(result).isInstanceOf(LongArray.class);
             assertThat(result.length()).isEqualTo(values.length);
             LongArray longArray = (LongArray) result;

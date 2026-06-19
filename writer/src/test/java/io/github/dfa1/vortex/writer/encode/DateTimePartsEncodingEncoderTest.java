@@ -58,21 +58,34 @@ class DateTimePartsEncodingEncoderTest {
 
         @Test
         void accepts_extensionDtype_true() {
-            assertThat(ENCODER.accepts(EXT_TIMESTAMP_MS)).isTrue();
+            // Given
+            // When
+            boolean result = ENCODER.accepts(EXT_TIMESTAMP_MS);
+
+            // Then
+            assertThat(result).isTrue();
         }
 
         @Test
         void accepts_primitiveDtype_false() {
-            assertThat(ENCODER.accepts(DTypes.I64)).isFalse();
+            // Given
+            // When
+            boolean result = ENCODER.accepts(DTypes.I64);
+
+            // Then
+            assertThat(result).isFalse();
         }
 
         @Test
         void encode_producesThreeChildren_noBuffersAtRoot() {
+            // Given
             long[] timestamps = {0L, 86_400_000L};
             DateTimePartsData data = new DateTimePartsData(timestamps, false);
 
+            // When
             EncodeResult result = ENCODER.encode(EXT_TIMESTAMP_MS, data, EncodeTestHelper.testCtx());
 
+            // Then
             assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_DATETIMEPARTS);
             assertThat(result.rootNode().bufferIndices()).isEmpty();
             assertThat(result.rootNode().children()).hasSize(3);
@@ -80,10 +93,12 @@ class DateTimePartsEncodingEncoderTest {
 
         @Test
         void encode_missingMetadata_throws() {
+            // Given
             DType noMeta = new DType.Extension("vortex.timestamp",
                     new DType.Primitive(PType.I64, false), null, false);
             DateTimePartsData data = new DateTimePartsData(new long[]{0L}, false);
 
+            // When / Then
             assertThatThrownBy(() -> ENCODER.encode(noMeta, data, EncodeTestHelper.testCtx()))
                     .hasMessageContaining("extension metadata missing");
         }
@@ -94,91 +109,110 @@ class DateTimePartsEncodingEncoderTest {
 
         @Test
         void roundTrip_milliseconds_preservesDaysSecondsSubseconds() {
+            // Given
             long msPerDay = 86_400_000L;
             long ts = msPerDay + (3723L * 1000L) + 456L;
             long[] timestamps = {ts};
             DateTimePartsData data = new DateTimePartsData(timestamps, false);
-
-            EncodeResult result = ENCODER.encode(EXT_TIMESTAMP_MS, data, EncodeTestHelper.testCtx());
-            MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
+            EncodeResult encoded = ENCODER.encode(EXT_TIMESTAMP_MS, data, EncodeTestHelper.testCtx());
+            MemorySegment[] bufs = encoded.buffers().toArray(MemorySegment[]::new);
             DecodeContext ctx = new DecodeContext(
-                    toArrayNode(result.rootNode()), EXT_TIMESTAMP_MS, 1, bufs, REGISTRY, Arena.global());
-            LongArray decoded = (LongArray) DECODER.decode(ctx);
+                    toArrayNode(encoded.rootNode()), EXT_TIMESTAMP_MS, 1, bufs, REGISTRY, Arena.global());
 
-            assertThat(decoded.length()).isEqualTo(1);
-            assertThat(decoded.getLong(0)).isEqualTo(ts);
+            // When
+            LongArray result = (LongArray) DECODER.decode(ctx);
+
+            // Then
+            assertThat(result.length()).isEqualTo(1);
+            assertThat(result.getLong(0)).isEqualTo(ts);
         }
 
         @Test
         void roundTrip_nanoseconds_preservesSubsecondPrecision() {
+            // Given
             long nsPerDay = 86_400_000_000_000L;
             long ts = nsPerDay + (3723L * 1_000_000_000L) + 456_789_123L;
             long[] timestamps = {ts};
             DateTimePartsData data = new DateTimePartsData(timestamps, false);
-
-            EncodeResult result = ENCODER.encode(EXT_TIMESTAMP_NS, data, EncodeTestHelper.testCtx());
-            MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
+            EncodeResult encoded = ENCODER.encode(EXT_TIMESTAMP_NS, data, EncodeTestHelper.testCtx());
+            MemorySegment[] bufs = encoded.buffers().toArray(MemorySegment[]::new);
             DecodeContext ctx = new DecodeContext(
-                    toArrayNode(result.rootNode()), EXT_TIMESTAMP_NS, 1, bufs, REGISTRY, Arena.global());
-            LongArray decoded = (LongArray) DECODER.decode(ctx);
+                    toArrayNode(encoded.rootNode()), EXT_TIMESTAMP_NS, 1, bufs, REGISTRY, Arena.global());
 
-            assertThat(decoded.getLong(0)).isEqualTo(ts);
+            // When
+            LongArray result = (LongArray) DECODER.decode(ctx);
+
+            // Then
+            assertThat(result.getLong(0)).isEqualTo(ts);
         }
 
         @Test
         void roundTrip_epoch_allZero() {
+            // Given
             long[] timestamps = {0L};
             DateTimePartsData data = new DateTimePartsData(timestamps, false);
-
-            EncodeResult result = ENCODER.encode(EXT_TIMESTAMP_MS, data, EncodeTestHelper.testCtx());
-            MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
+            EncodeResult encoded = ENCODER.encode(EXT_TIMESTAMP_MS, data, EncodeTestHelper.testCtx());
+            MemorySegment[] bufs = encoded.buffers().toArray(MemorySegment[]::new);
             DecodeContext ctx = new DecodeContext(
-                    toArrayNode(result.rootNode()), EXT_TIMESTAMP_MS, 1, bufs, REGISTRY, Arena.global());
-            LongArray decoded = (LongArray) DECODER.decode(ctx);
+                    toArrayNode(encoded.rootNode()), EXT_TIMESTAMP_MS, 1, bufs, REGISTRY, Arena.global());
 
-            assertThat(decoded.getLong(0)).isZero();
+            // When
+            LongArray result = (LongArray) DECODER.decode(ctx);
+
+            // Then
+            assertThat(result.getLong(0)).isZero();
         }
 
         @Test
         void roundTrip_multipleTimestamps_allRowsPreserved() {
+            // Given
             long msPerDay = 86_400_000L;
             long[] timestamps = {0L, msPerDay, msPerDay + 1000L, msPerDay + 1001L};
             DateTimePartsData data = new DateTimePartsData(timestamps, false);
-
-            EncodeResult result = ENCODER.encode(EXT_TIMESTAMP_MS, data, EncodeTestHelper.testCtx());
-            MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
+            EncodeResult encoded = ENCODER.encode(EXT_TIMESTAMP_MS, data, EncodeTestHelper.testCtx());
+            MemorySegment[] bufs = encoded.buffers().toArray(MemorySegment[]::new);
             DecodeContext ctx = new DecodeContext(
-                    toArrayNode(result.rootNode()), EXT_TIMESTAMP_MS, 4, bufs, REGISTRY, Arena.global());
-            LongArray decoded = (LongArray) DECODER.decode(ctx);
+                    toArrayNode(encoded.rootNode()), EXT_TIMESTAMP_MS, 4, bufs, REGISTRY, Arena.global());
 
-            assertThat(decoded.length()).isEqualTo(4);
+            // When
+            LongArray result = (LongArray) DECODER.decode(ctx);
+
+            // Then
+            assertThat(result.length()).isEqualTo(4);
             for (int i = 0; i < timestamps.length; i++) {
-                assertThat(decoded.getLong(i)).as("row %d", i).isEqualTo(timestamps[i]);
+                assertThat(result.getLong(i)).as("row %d", i).isEqualTo(timestamps[i]);
             }
         }
 
         @ParameterizedTest
         @EnumSource(value = TimeUnit.class, names = {"Nanoseconds", "Microseconds", "Milliseconds", "Seconds"})
         void roundTrip_allUnits_epochIsZero(TimeUnit unit) {
+            // Given
             DType dtype = timestampDType(unit);
             long[] timestamps = {0L};
             DateTimePartsData data = new DateTimePartsData(timestamps, false);
-
-            EncodeResult result = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
-            MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
+            EncodeResult encoded = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
+            MemorySegment[] bufs = encoded.buffers().toArray(MemorySegment[]::new);
             DecodeContext ctx = new DecodeContext(
-                    toArrayNode(result.rootNode()), dtype, 1, bufs, REGISTRY, Arena.global());
-            LongArray decoded = (LongArray) DECODER.decode(ctx);
+                    toArrayNode(encoded.rootNode()), dtype, 1, bufs, REGISTRY, Arena.global());
 
-            assertThat(decoded.getLong(0)).isZero();
+            // When
+            LongArray result = (LongArray) DECODER.decode(ctx);
+
+            // Then
+            assertThat(result.getLong(0)).isZero();
         }
 
         @Test
         void encode_metadata_ptypes_areI64() throws Exception {
+            // Given
             long[] timestamps = {0L, 86_400_000L};
             DateTimePartsData data = new DateTimePartsData(timestamps, false);
 
+            // When
             EncodeResult result = ENCODER.encode(EXT_TIMESTAMP_MS, data, EncodeTestHelper.testCtx());
+
+            // Then
             var metaSeg = java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate());
             DateTimePartsMetadata meta = DateTimePartsMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 

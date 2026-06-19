@@ -23,6 +23,7 @@ class VarBinChunkedModeTest {
 
         @Test
         void emptyChunkListRejected() {
+            // Given / When / Then
             assertThatThrownBy(() -> VarBinArray.ChunkedMode.of(UTF8, 0, List.of()))
                     .isInstanceOf(VortexException.class);
         }
@@ -30,7 +31,10 @@ class VarBinChunkedModeTest {
         @Test
         void rowMismatchRejected() {
             try (Arena arena = Arena.ofConfined()) {
+                // Given
                 VarBinArray c0 = stringChunk(arena, "a", "b");
+
+                // When / Then
                 assertThatThrownBy(() -> VarBinArray.ChunkedMode.of(UTF8, 99, List.of(c0)))
                         .isInstanceOf(VortexException.class);
             }
@@ -39,10 +43,13 @@ class VarBinChunkedModeTest {
         @Test
         void nonVarBinChunkRejected() {
             try (Arena arena = Arena.ofConfined()) {
+                // Given
                 MemorySegment seg = arena.allocate(8L);
                 seg.setAtIndex(ValueLayout.JAVA_LONG, 0, 42L);
                 LongArray notVarBin = new MaterializedLongArray(
                         new DType.Primitive(PType.I64, false), 1, seg.asReadOnly());
+
+                // When / Then
                 assertThatThrownBy(() -> VarBinArray.ChunkedMode.of(UTF8, 1, List.of(notVarBin)))
                         .isInstanceOf(VortexException.class);
             }
@@ -51,13 +58,16 @@ class VarBinChunkedModeTest {
         @Test
         void nestedChunkedFlattens() {
             try (Arena arena = Arena.ofConfined()) {
+                // Given
                 VarBinArray leaf0 = stringChunk(arena, "a");
                 VarBinArray leaf1 = stringChunk(arena, "b");
                 VarBinArray.ChunkedMode nested = VarBinArray.ChunkedMode.of(UTF8, 2, List.of(leaf0, leaf1));
                 VarBinArray leaf2 = stringChunk(arena, "c");
 
+                // When
                 VarBinArray.ChunkedMode sut = VarBinArray.ChunkedMode.of(UTF8, 3, List.of(nested, leaf2));
 
+                // Then
                 assertThat(sut.children()).hasSize(3);
                 assertThat(sut.getString(2)).isEqualTo("c");
             }
@@ -70,10 +80,12 @@ class VarBinChunkedModeTest {
         @Test
         void getStringDispatchesAcrossChunks() {
             try (Arena arena = Arena.ofConfined()) {
+                // Given
                 VarBinArray c0 = stringChunk(arena, "alpha", "beta");
                 VarBinArray c1 = stringChunk(arena, "gamma");
                 VarBinArray.ChunkedMode sut = VarBinArray.ChunkedMode.of(UTF8, 3, List.of(c0, c1));
 
+                // When / Then
                 assertThat(sut.getString(0)).isEqualTo("alpha");
                 assertThat(sut.getString(1)).isEqualTo("beta");
                 assertThat(sut.getString(2)).isEqualTo("gamma");
@@ -83,10 +95,12 @@ class VarBinChunkedModeTest {
         @Test
         void getBytesDispatchesAcrossChunks() {
             try (Arena arena = Arena.ofConfined()) {
+                // Given
                 VarBinArray c0 = stringChunk(arena, "abc");
                 VarBinArray c1 = stringChunk(arena, "xyz");
                 VarBinArray.ChunkedMode sut = VarBinArray.ChunkedMode.of(UTF8, 2, List.of(c0, c1));
 
+                // When / Then
                 assertThat(sut.getBytes(1)).containsExactly('x', 'y', 'z');
             }
         }
@@ -94,10 +108,12 @@ class VarBinChunkedModeTest {
         @Test
         void getByteLengthCrossesBoundary() {
             try (Arena arena = Arena.ofConfined()) {
+                // Given
                 VarBinArray c0 = stringChunk(arena, "hi");
                 VarBinArray c1 = stringChunk(arena, "hello");
                 VarBinArray.ChunkedMode sut = VarBinArray.ChunkedMode.of(UTF8, 2, List.of(c0, c1));
 
+                // When / Then
                 assertThat(sut.getByteLength(0)).isEqualTo(2);
                 assertThat(sut.getByteLength(1)).isEqualTo(5);
             }
@@ -110,15 +126,18 @@ class VarBinChunkedModeTest {
         @Test
         void keepsPrefix() {
             try (Arena arena = Arena.ofConfined()) {
+                // Given
                 VarBinArray c0 = stringChunk(arena, "a", "b", "c");
                 VarBinArray c1 = stringChunk(arena, "d", "e");
                 VarBinArray.ChunkedMode sut = VarBinArray.ChunkedMode.of(UTF8, 5, List.of(c0, c1));
 
-                VarBinArray truncated = sut.limited(4);
+                // When
+                VarBinArray result = sut.limited(4);
 
-                assertThat(truncated.length()).isEqualTo(4);
-                assertThat(truncated.getString(0)).isEqualTo("a");
-                assertThat(truncated.getString(3)).isEqualTo("d");
+                // Then
+                assertThat(result.length()).isEqualTo(4);
+                assertThat(result.getString(0)).isEqualTo("a");
+                assertThat(result.getString(3)).isEqualTo("d");
             }
         }
     }

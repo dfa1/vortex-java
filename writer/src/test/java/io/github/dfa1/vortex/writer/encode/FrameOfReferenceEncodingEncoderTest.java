@@ -67,13 +67,16 @@ class FrameOfReferenceEncodingEncoderTest {
 
         @Test
         void decode_i64_addsReferenceToResiduals() {
+            // Given
             long reference = 1000L;
             long[] residuals = {0, 1, 2, 3, 4};
             long[] expected = {1000, 1001, 1002, 1003, 1004};
-
             DecodeContext ctx = buildForContext(DTypes.I64, reference, residuals, PType.I64);
+
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             assertThat(result.length()).isEqualTo(residuals.length);
             LongArray arr = (LongArray) result;
             for (int i = 0; i < expected.length; i++) {
@@ -83,13 +86,16 @@ class FrameOfReferenceEncodingEncoderTest {
 
         @Test
         void decode_i32_addsReferenceToResiduals() {
+            // Given
             long reference = -100L;
             long[] residuals = {0, 5, 10, 15};
             int[] expected = {-100, -95, -90, -85};
-
             DecodeContext ctx = buildForContext(DTypes.I32, reference, residuals, PType.I32);
+
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             assertThat(result.length()).isEqualTo(residuals.length);
             IntArray arr = (IntArray) result;
             for (int i = 0; i < expected.length; i++) {
@@ -99,10 +105,14 @@ class FrameOfReferenceEncodingEncoderTest {
 
         @Test
         void decode_zeroReference_returnsChildUnchanged() {
+            // Given
             long[] residuals = {7, 8, 9};
             DecodeContext ctx = buildForContext(DTypes.I64, 0L, residuals, PType.I64);
+
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             LongArray arr = (LongArray) result;
             for (int i = 0; i < residuals.length; i++) {
                 assertThat(arr.getLong(i)).isEqualTo(residuals[i]);
@@ -112,15 +122,20 @@ class FrameOfReferenceEncodingEncoderTest {
         @ParameterizedTest
         @ValueSource(longs = {Long.MIN_VALUE, Long.MAX_VALUE, -1L, 1L})
         void decode_wrappingAdd_i64(long reference) {
+            // Given
             long[] residuals = {1L};
             DecodeContext ctx = buildForContext(DTypes.I64, reference, residuals, PType.I64);
+
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             assertThat(((LongArray) result).getLong(0)).isEqualTo(residuals[0] + reference);
         }
 
         @Test
         void decode_nullableResiduals_returnsMaskedArrayWithCorrectValues() {
+            // Given
             long reference = 100L;
             long[] residuals = {0, 0, 5, 0};
             MemorySegment validitySeg = MemorySegment.ofArray(new byte[]{0x05});
@@ -146,8 +161,10 @@ class FrameOfReferenceEncodingEncoderTest {
             DecodeContext ctx = new DecodeContext(
                     forNode, DTypes.I32, residuals.length, segments, registry, java.lang.foreign.Arena.global());
 
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             assertThat(result).isInstanceOf(MaskedArray.class);
             MaskedArray masked = (MaskedArray) result;
             assertThat(masked.isValid(0)).isTrue();
@@ -184,10 +201,14 @@ class FrameOfReferenceEncodingEncoderTest {
         @ParameterizedTest
         @MethodSource("i64Arrays")
         void encodeDecode_i64_isLossless(long[] data) {
-            EncodeResult encoded = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
-            DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, DTypes.I64, REGISTRY);
+            // Given
+            EncodeResult resultEncoded = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(resultEncoded, data.length, DTypes.I64, REGISTRY);
+
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             assertThat(result.length()).isEqualTo(data.length);
             LongArray arr = (LongArray) result;
             for (int i = 0; i < data.length; i++) {
@@ -198,10 +219,14 @@ class FrameOfReferenceEncodingEncoderTest {
         @ParameterizedTest
         @MethodSource("i32Arrays")
         void encodeDecode_i32_isLossless(int[] data) {
-            EncodeResult encoded = ENCODER.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
-            DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, DTypes.I32, REGISTRY);
+            // Given
+            EncodeResult resultEncoded = ENCODER.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(resultEncoded, data.length, DTypes.I32, REGISTRY);
+
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             assertThat(result.length()).isEqualTo(data.length);
             IntArray arr = (IntArray) result;
             for (int i = 0; i < data.length; i++) {

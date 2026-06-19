@@ -70,30 +70,48 @@ class FsstEncodingEncoderTest {
 
         @Test
         void accepts_utf8_true() {
-            assertThat(ENCODER.accepts(DTypes.UTF8)).isTrue();
+            // Given
+            // When
+            boolean result = ENCODER.accepts(DTypes.UTF8);
+
+            // Then
+            assertThat(result).isTrue();
         }
 
         @Test
         void accepts_binary_true() {
-            assertThat(ENCODER.accepts(DTypes.BINARY)).isTrue();
+            // Given
+            // When
+            boolean result = ENCODER.accepts(DTypes.BINARY);
+
+            // Then
+            assertThat(result).isTrue();
         }
 
         @Test
         void accepts_primitive_false() {
-            assertThat(ENCODER.accepts(DTypes.I32)).isFalse();
+            // Given
+            // When
+            boolean result = ENCODER.accepts(DTypes.I32);
+
+            // Then
+            assertThat(result).isFalse();
         }
 
         @ParameterizedTest(name = "{0}")
         @MethodSource("stringArrays")
         void encode_thenDecode_roundtripsAllStrings(String name, String[] values) {
+            // Given
             Arena arena = Arena.ofAuto();
 
+            // When
             EncodeResult result = ENCODER.encode(DTypes.UTF8, values, EncodeTestHelper.testCtx());
             MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
             ArrayNode node = toArrayNode(result.rootNode());
             DecodeContext ctx = new DecodeContext(node, DTypes.UTF8, values.length, bufs, REGISTRY, arena);
             var decoded = (VarBinArray) DECODER.decode(ctx);
 
+            // Then
             assertThat(decoded.length()).isEqualTo(values.length);
             for (int i = 0; i < values.length; i++) {
                 assertThat(decoded.getString(i)).as("index %d", i).isEqualTo(values[i]);
@@ -152,51 +170,71 @@ class FsstEncodingEncoderTest {
 
         @Test
         void decode_singleByteSymbol_decompressesCorrectly() {
+            // Given
             DecodeContext ctx = buildCtx(
                     new long[]{0x41L}, new byte[]{1}, new byte[]{0x00, 0x00},
                     new int[]{2}, new int[]{0, 2}, 1);
-            var result = DECODER.decode(ctx);
-            VarBinArray vba = (VarBinArray) result;
-            assertThat(vba.getBytes(0)).isEqualTo("AA".getBytes(StandardCharsets.UTF_8));
+
+            // When
+            var result = (VarBinArray) DECODER.decode(ctx);
+
+            // Then
+            assertThat(result.getBytes(0)).isEqualTo("AA".getBytes(StandardCharsets.UTF_8));
         }
 
         @Test
         void decode_escapeByte_decompressesCorrectly() {
+            // Given
             DecodeContext ctx = buildCtx(
                     new long[0], new byte[0], new byte[]{(byte) 0xFF, 0x58, (byte) 0xFF, 0x59},
                     new int[]{2}, new int[]{0, 4}, 1);
-            var result = DECODER.decode(ctx);
-            VarBinArray vba = (VarBinArray) result;
-            assertThat(vba.getBytes(0)).isEqualTo("XY".getBytes(StandardCharsets.UTF_8));
+
+            // When
+            var result = (VarBinArray) DECODER.decode(ctx);
+
+            // Then
+            assertThat(result.getBytes(0)).isEqualTo("XY".getBytes(StandardCharsets.UTF_8));
         }
 
         @Test
         void decode_multiByteSymbol_decompressesCorrectly() {
+            // Given
             DecodeContext ctx = buildCtx(
                     new long[]{0x6261L}, new byte[]{2}, new byte[]{0x00},
                     new int[]{2}, new int[]{0, 1}, 1);
-            var result = DECODER.decode(ctx);
-            VarBinArray vba = (VarBinArray) result;
-            assertThat(vba.getBytes(0)).isEqualTo("ab".getBytes(StandardCharsets.UTF_8));
+
+            // When
+            var result = (VarBinArray) DECODER.decode(ctx);
+
+            // Then
+            assertThat(result.getBytes(0)).isEqualTo("ab".getBytes(StandardCharsets.UTF_8));
         }
 
         @Test
         void decode_multipleStrings_decompressesAll() {
+            // Given
             DecodeContext ctx = buildCtx(
                     new long[]{0x48L}, new byte[]{1},
                     new byte[]{0x00, 0x00, 0x00, (byte) 0xFF, 0x21},
                     new int[]{1, 2, 1}, new int[]{0, 1, 3, 5}, 3);
-            var result = DECODER.decode(ctx);
-            VarBinArray vba = (VarBinArray) result;
-            assertThat(vba.getBytes(0)).isEqualTo("H".getBytes(StandardCharsets.UTF_8));
-            assertThat(vba.getBytes(1)).isEqualTo("HH".getBytes(StandardCharsets.UTF_8));
-            assertThat(vba.getBytes(2)).isEqualTo("!".getBytes(StandardCharsets.UTF_8));
+
+            // When
+            var result = (VarBinArray) DECODER.decode(ctx);
+
+            // Then
+            assertThat(result.getBytes(0)).isEqualTo("H".getBytes(StandardCharsets.UTF_8));
+            assertThat(result.getBytes(1)).isEqualTo("HH".getBytes(StandardCharsets.UTF_8));
+            assertThat(result.getBytes(2)).isEqualTo("!".getBytes(StandardCharsets.UTF_8));
         }
 
         @Test
         void decode_missingMetadata_throwsVortexException() {
+            // Given
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_FSST, null, new ArrayNode[0], new int[0]);
             DecodeContext ctx = new DecodeContext(node, DTypes.UTF8, 0, new MemorySegment[0], REGISTRY, Arena.ofAuto());
+
+            // When
+            // Then
             assertThatThrownBy(() -> DECODER.decode(ctx)).isInstanceOf(VortexException.class);
         }
     }
@@ -206,10 +244,15 @@ class FsstEncodingEncoderTest {
 
         @Test
         void encode_metadata_ptypes_areI32() throws Exception {
+            // Given
             String[] data = {"hello", "world", "hello", "fsst"};
+
+            // When
             EncodeResult result = ENCODER.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
             var metaSeg = java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate());
             FSSTMetadata meta = FSSTMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+
+            // Then
             assertThat(meta.uncompressed_lengths_ptype().value()).isEqualTo(6);
             assertThat(meta.codes_offsets_ptype().value()).isEqualTo(6);
         }

@@ -62,9 +62,13 @@ class ZigZagEncodingEncoderTest {
         @ParameterizedTest(name = "{0}")
         @MethodSource("i32Cases")
         void decode_i32_zigzagDecodesCorrectly(String name, int[] encoded, int[] expected) {
+            // Given
             DecodeContext ctx = buildI32Ctx(encoded);
+
+            // When
             var result = DECODER.decode(ctx);
 
+            // Then
             assertThat(result).isInstanceOf(IntArray.class);
             assertThat(result.length()).isEqualTo(expected.length);
             IntArray arr = (IntArray) result;
@@ -75,8 +79,13 @@ class ZigZagEncodingEncoderTest {
 
         @Test
         void decode_empty_returnsEmptyArray() {
+            // Given
             DecodeContext ctx = buildI32Ctx(new int[]{});
+
+            // When
             var result = DECODER.decode(ctx);
+
+            // Then
             assertThat(result.length()).isZero();
         }
     }
@@ -106,10 +115,14 @@ class ZigZagEncodingEncoderTest {
         @ParameterizedTest
         @MethodSource("i32RoundtripArrays")
         void encodeDecode_i32_isLossless(int[] data) {
-            EncodeResult encoded = ENCODER.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
-            DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, DTypes.I32, REGISTRY);
+            // Given
+            EncodeResult resultEncoded = ENCODER.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(resultEncoded, data.length, DTypes.I32, REGISTRY);
+
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             assertThat(result.length()).isEqualTo(data.length);
             IntArray arr = (IntArray) result;
             for (int i = 0; i < data.length; i++) {
@@ -120,10 +133,14 @@ class ZigZagEncodingEncoderTest {
         @ParameterizedTest
         @MethodSource("i64RoundtripArrays")
         void encodeDecode_i64_isLossless(long[] data) {
-            EncodeResult encoded = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
-            DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, DTypes.I64, REGISTRY);
+            // Given
+            EncodeResult resultEncoded = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(resultEncoded, data.length, DTypes.I64, REGISTRY);
+
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             assertThat(result.length()).isEqualTo(data.length);
             LongArray arr = (LongArray) result;
             for (int i = 0; i < data.length; i++) {

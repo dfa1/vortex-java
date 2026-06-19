@@ -41,22 +41,35 @@ class ListEncodingEncoderTest {
 
         @Test
         void accepts_listDtype_true() {
-            assertThat(ENCODER.accepts(DTypes.LIST_I32)).isTrue();
+            // Given
+            // When
+            boolean result = ENCODER.accepts(DTypes.LIST_I32);
+
+            // Then
+            assertThat(result).isTrue();
         }
 
         @Test
         void accepts_primitiveDtype_false() {
-            assertThat(ENCODER.accepts(DTypes.I32)).isFalse();
+            // Given
+            // When
+            boolean result = ENCODER.accepts(DTypes.I32);
+
+            // Then
+            assertThat(result).isFalse();
         }
 
         @Test
         void encode_producesTwoChildren_noBuffers() {
+            // Given
             int[] elements = {1, 2, 3, 4, 5};
             long[] offsets = {0, 2, 5};
             ListData data = new ListData(elements, offsets, 2);
 
+            // When
             EncodeResult result = ENCODER.encode(DTypes.LIST_I32, data, EncodeTestHelper.testCtx());
 
+            // Then
             assertThat(result.rootNode().encodingId()).isEqualTo(EncodingId.VORTEX_LIST);
             assertThat(result.rootNode().bufferIndices()).isEmpty();
             assertThat(result.rootNode().children()).hasSize(2);
@@ -68,23 +81,26 @@ class ListEncodingEncoderTest {
 
         @Test
         void roundTrip_i32Elements_preservesValues() {
+            // Given
             int[] elements = {10, 20, 30, 40, 50};
             long[] offsets = {0, 2, 3, 5};
             ListData data = new ListData(elements, offsets, 3);
-
-            EncodeResult result = ENCODER.encode(DTypes.LIST_I32, data, EncodeTestHelper.testCtx());
-            MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
+            EncodeResult encoded = ENCODER.encode(DTypes.LIST_I32, data, EncodeTestHelper.testCtx());
+            MemorySegment[] bufs = encoded.buffers().toArray(MemorySegment[]::new);
             DecodeContext ctx = new DecodeContext(
-                    toArrayNode(result.rootNode()), DTypes.LIST_I32, 3, bufs, REGISTRY, Arena.global());
-            ListArray decoded = (ListArray) DECODER.decode(ctx);
+                    toArrayNode(encoded.rootNode()), DTypes.LIST_I32, 3, bufs, REGISTRY, Arena.global());
 
-            assertThat(decoded.length()).isEqualTo(3);
-            IntArray decodedElems = (IntArray) decoded.elements();
+            // When
+            ListArray result = (ListArray) DECODER.decode(ctx);
+
+            // Then
+            assertThat(result.length()).isEqualTo(3);
+            IntArray decodedElems = (IntArray) result.elements();
             assertThat(decodedElems.length()).isEqualTo(5);
             for (int i = 0; i < elements.length; i++) {
                 assertThat(decodedElems.getInt(i)).isEqualTo(elements[i]);
             }
-            LongArray decodedOffsets = (LongArray) decoded.offsets();
+            LongArray decodedOffsets = (LongArray) result.offsets();
             assertThat(decodedOffsets.length()).isEqualTo(4);
             for (int i = 0; i < offsets.length; i++) {
                 assertThat(decodedOffsets.getLong(i)).isEqualTo(offsets[i]);
@@ -93,35 +109,41 @@ class ListEncodingEncoderTest {
 
         @Test
         void roundTrip_emptyLists_preservesOffsets() {
+            // Given
             int[] elements = {};
             long[] offsets = {0, 0, 0};
             ListData data = new ListData(elements, offsets, 2);
-
-            EncodeResult result = ENCODER.encode(DTypes.LIST_I32, data, EncodeTestHelper.testCtx());
-            MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
+            EncodeResult encoded = ENCODER.encode(DTypes.LIST_I32, data, EncodeTestHelper.testCtx());
+            MemorySegment[] bufs = encoded.buffers().toArray(MemorySegment[]::new);
             DecodeContext ctx = new DecodeContext(
-                    toArrayNode(result.rootNode()), DTypes.LIST_I32, 2, bufs, REGISTRY, Arena.global());
-            ListArray decoded = (ListArray) DECODER.decode(ctx);
+                    toArrayNode(encoded.rootNode()), DTypes.LIST_I32, 2, bufs, REGISTRY, Arena.global());
 
-            assertThat(decoded.length()).isEqualTo(2);
-            assertThat(decoded.elements().length()).isEqualTo(0);
-            assertThat(decoded.offsets().length()).isEqualTo(3);
+            // When
+            ListArray result = (ListArray) DECODER.decode(ctx);
+
+            // Then
+            assertThat(result.length()).isEqualTo(2);
+            assertThat(result.elements().length()).isEqualTo(0);
+            assertThat(result.offsets().length()).isEqualTo(3);
         }
 
         @Test
         void roundTrip_singleList_preservesValues() {
+            // Given
             int[] elements = {7, 8, 9};
             long[] offsets = {0, 3};
             ListData data = new ListData(elements, offsets, 1);
-
-            EncodeResult result = ENCODER.encode(DTypes.LIST_I32, data, EncodeTestHelper.testCtx());
-            MemorySegment[] bufs = result.buffers().toArray(MemorySegment[]::new);
+            EncodeResult encoded = ENCODER.encode(DTypes.LIST_I32, data, EncodeTestHelper.testCtx());
+            MemorySegment[] bufs = encoded.buffers().toArray(MemorySegment[]::new);
             DecodeContext ctx = new DecodeContext(
-                    toArrayNode(result.rootNode()), DTypes.LIST_I32, 1, bufs, REGISTRY, Arena.global());
-            ListArray decoded = (ListArray) DECODER.decode(ctx);
+                    toArrayNode(encoded.rootNode()), DTypes.LIST_I32, 1, bufs, REGISTRY, Arena.global());
 
-            assertThat(decoded.length()).isEqualTo(1);
-            IntArray decodedElems = (IntArray) decoded.elements();
+            // When
+            ListArray result = (ListArray) DECODER.decode(ctx);
+
+            // Then
+            assertThat(result.length()).isEqualTo(1);
+            IntArray decodedElems = (IntArray) result.elements();
             assertThat(decodedElems.length()).isEqualTo(3);
             for (int i = 0; i < elements.length; i++) {
                 assertThat(decodedElems.getInt(i)).isEqualTo(elements[i]);
@@ -130,15 +152,18 @@ class ListEncodingEncoderTest {
 
         @Test
         void decode_wrongDtype_throws() {
+            // Given
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_LIST, null,
                     new ArrayNode[0], new int[0]);
             DecodeContext ctx = new DecodeContext(node, DTypes.I32, 0, new MemorySegment[0], REGISTRY, Arena.global());
 
+            // When / Then
             assertThatThrownBy(() -> DECODER.decode(ctx)).hasMessageContaining("DType.List");
         }
 
         @Test
         void decode_wrongChildCount_throws() {
+            // Given
             ArrayNode child = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
                     new ArrayNode[0], new int[0]);
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_LIST,
@@ -146,6 +171,7 @@ class ListEncodingEncoderTest {
                     new ArrayNode[]{child}, new int[0]);
             DecodeContext ctx = new DecodeContext(node, DTypes.LIST_I32, 0, new MemorySegment[0], REGISTRY, Arena.global());
 
+            // When / Then
             assertThatThrownBy(() -> DECODER.decode(ctx)).hasMessageContaining("expected 2 or 3 children");
         }
     }
@@ -155,11 +181,15 @@ class ListEncodingEncoderTest {
 
         @Test
         void encode_metadata_elementsLen_matchesElementCount() throws Exception {
+            // Given
             int[] elements = {1, 2, 3, 4, 5};
             long[] offsets = {0L, 2L, 5L};
             ListData data = new ListData(elements, offsets, 2);
 
+            // When
             EncodeResult result = ENCODER.encode(DTypes.LIST_I32, data, EncodeTestHelper.testCtx());
+
+            // Then
             var metaSeg = java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate());
             ListMetadata meta = ListMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 

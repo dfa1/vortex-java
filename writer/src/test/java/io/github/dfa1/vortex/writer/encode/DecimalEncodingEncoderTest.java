@@ -31,14 +31,17 @@ class DecimalEncodingEncoderTest {
 
     @Test
     void roundTrip_i64Precision_preservesBuffer() {
+        // Given
         long[] values = {100L, -200L, 300L};
         MemorySegment input = TestSegments.leLongs(values);
         DType dtype = new DType.Decimal((byte) 18, (byte) 2, false);
-
         EncodeResult encoded = ENCODER.encode(dtype, input, EncodeTestHelper.testCtx());
         DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, values.length, dtype, REGISTRY);
+
+        // When
         Array result = DECODER.decode(ctx);
 
+        // Then
         assertThat(result.length()).isEqualTo(values.length);
         for (int i = 0; i < values.length; i++) {
             assertThat(ArraySegments.of(result).get(PTypeIO.LE_LONG, (long) i * 8)).isEqualTo(values[i]);
@@ -47,6 +50,8 @@ class DecimalEncodingEncoderTest {
 
     @Test
     void accepts_decimalDtype_true_primitiveReturnsFalse() {
+        // Given
+        // When / Then
         assertThat(ENCODER.accepts(new DType.Decimal((byte) 18, (byte) 2, false))).isTrue();
         assertThat(ENCODER.accepts(new DType.Primitive(PType.I64, false))).isFalse();
     }
@@ -66,6 +71,7 @@ class DecimalEncodingEncoderTest {
             "39, 5",
     })
     void valuesType_matchesPrecisionBoundaries(int precision, int expectedValuesType) throws Exception {
+        // Given
         int byteWidth = switch (expectedValuesType) {
             case 0 -> 1;
             case 1 -> 2;
@@ -77,8 +83,10 @@ class DecimalEncodingEncoderTest {
         MemorySegment input = Arena.ofAuto().allocate(byteWidth);
         DType dtype = new DType.Decimal((byte) precision, (byte) 0, false);
 
+        // When
         EncodeResult encoded = ENCODER.encode(dtype, input, EncodeTestHelper.testCtx());
 
+        // Then
         byte[] metaBytes = new byte[encoded.rootNode().metadata().remaining()];
         encoded.rootNode().metadata().duplicate().get(metaBytes);
         DecimalMetadata meta = DecimalMetadata.decode(java.lang.foreign.MemorySegment.ofArray(metaBytes), 0, metaBytes.length);
@@ -87,9 +95,11 @@ class DecimalEncodingEncoderTest {
 
     @Test
     void invalidBufferSize_throws() {
+        // Given
         MemorySegment input = Arena.ofAuto().allocate(7);
         DType dtype = new DType.Decimal((byte) 18, (byte) 0, false);
 
+        // When / Then
         assertThatThrownBy(() -> ENCODER.encode(dtype, input, EncodeTestHelper.testCtx()))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("not multiple of byteWidth");

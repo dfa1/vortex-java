@@ -48,26 +48,37 @@ class RleEncodingEncoderTest {
 
         @Test
         void roundTrip_empty_i32() {
+            // Given
             DType dtype = new DType.Primitive(PType.I32, false);
             EncodeResult encoded = ENCODER.encode(dtype, new int[0], EncodeTestHelper.testCtx());
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, 0, dtype, REGISTRY);
+
+            // When
             Array result = DECODER.decode(ctx);
+
+            // Then
             assertThat(result.length()).isZero();
         }
 
         @Test
         void roundTrip_singleElement_i32() {
+            // Given
             DType dtype = new DType.Primitive(PType.I32, false);
             int[] data = {42};
             EncodeResult encoded = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, dtype, REGISTRY);
+
+            // When
             Array result = DECODER.decode(ctx);
+
+            // Then
             assertThat(result.length()).isEqualTo(1);
             assertThat(((io.github.dfa1.vortex.reader.array.IntArray) result).getInt(0)).isEqualTo(42);
         }
 
         @Test
         void roundTrip_constantArray_i32() {
+            // Given
             DType dtype = new DType.Primitive(PType.I32, false);
             int n = 2048;
             int[] data = new int[n];
@@ -76,7 +87,11 @@ class RleEncodingEncoderTest {
             }
             EncodeResult encoded = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, n, dtype, REGISTRY);
+
+            // When
             Array result = DECODER.decode(ctx);
+
+            // Then
             assertThat(result.length()).isEqualTo(n);
             for (int i = 0; i < n; i++) {
                 assertThat(((io.github.dfa1.vortex.reader.array.IntArray) result).getInt(i)).as("index %d", i).isEqualTo(99);
@@ -85,11 +100,16 @@ class RleEncodingEncoderTest {
 
         @Test
         void roundTrip_classicRunLengthData_i32() {
+            // Given
             DType dtype = new DType.Primitive(PType.I32, false);
             int[] data = {1, 1, 1, 2, 2, 3};
             EncodeResult encoded = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, dtype, REGISTRY);
+
+            // When
             Array result = DECODER.decode(ctx);
+
+            // Then
             for (int i = 0; i < data.length; i++) {
                 assertThat(((io.github.dfa1.vortex.reader.array.IntArray) result).getInt(i)).as("index %d", i).isEqualTo(data[i]);
             }
@@ -97,6 +117,7 @@ class RleEncodingEncoderTest {
 
         @Test
         void roundTrip_multipleChunks_i32() {
+            // Given
             DType dtype = new DType.Primitive(PType.I32, false);
             int n = 3000;
             int[] data = new int[n];
@@ -105,7 +126,11 @@ class RleEncodingEncoderTest {
             }
             EncodeResult encoded = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, n, dtype, REGISTRY);
+
+            // When
             Array result = DECODER.decode(ctx);
+
+            // Then
             assertThat(result.length()).isEqualTo(n);
             for (int i = 0; i < n; i++) {
                 assertThat(((io.github.dfa1.vortex.reader.array.IntArray) result).getInt(i)).as("index %d", i).isEqualTo(i / 100);
@@ -114,11 +139,16 @@ class RleEncodingEncoderTest {
 
         @Test
         void roundTrip_i64() {
+            // Given
             DType dtype = new DType.Primitive(PType.I64, false);
             long[] data = {100L, 100L, 200L, 300L, 300L, 300L};
             EncodeResult encoded = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, dtype, REGISTRY);
+
+            // When
             Array result = DECODER.decode(ctx);
+
+            // Then
             for (int i = 0; i < data.length; i++) {
                 assertThat(((io.github.dfa1.vortex.reader.array.LongArray) result).getLong(i)).as("index %d", i).isEqualTo(data[i]);
             }
@@ -127,6 +157,7 @@ class RleEncodingEncoderTest {
         @ParameterizedTest
         @ValueSource(ints = {1, 512, 1023, 1024, 1025, 2048, 2049})
         void roundTrip_variousLengths_i32(int n) {
+            // Given
             DType dtype = new DType.Primitive(PType.I32, false);
             int[] data = new int[n];
             for (int i = 0; i < n; i++) {
@@ -134,7 +165,11 @@ class RleEncodingEncoderTest {
             }
             EncodeResult encoded = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, n, dtype, REGISTRY);
+
+            // When
             Array result = DECODER.decode(ctx);
+
+            // Then
             assertThat(result.length()).isEqualTo(n);
             for (int i = 0; i < n; i++) {
                 assertThat(((io.github.dfa1.vortex.reader.array.IntArray) result).getInt(i)).as("index %d", i).isEqualTo(i / 50);
@@ -143,6 +178,7 @@ class RleEncodingEncoderTest {
 
         @Test
         void roundTrip_allDifferent_u16() {
+            // Given
             DType dtype = new DType.Primitive(PType.U16, false);
             short[] data = new short[256];
             for (int i = 0; i < 256; i++) {
@@ -150,7 +186,11 @@ class RleEncodingEncoderTest {
             }
             EncodeResult encoded = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, dtype, REGISTRY);
+
+            // When
             Array result = DECODER.decode(ctx);
+
+            // Then
             for (int i = 0; i < data.length; i++) {
                 assertThat(Short.toUnsignedInt(((io.github.dfa1.vortex.reader.array.ShortArray) result).getShort(i)))
                         .as("index %d", i).isEqualTo(i);
@@ -159,11 +199,16 @@ class RleEncodingEncoderTest {
 
         @Test
         void roundTrip_negativeValues_i32() {
+            // Given
             DType dtype = new DType.Primitive(PType.I32, false);
             int[] data = {-3, -3, -1, -1, 0, 0, 5};
             EncodeResult encoded = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, dtype, REGISTRY);
+
+            // When
             Array result = DECODER.decode(ctx);
+
+            // Then
             for (int i = 0; i < data.length; i++) {
                 assertThat(((io.github.dfa1.vortex.reader.array.IntArray) result).getInt(i)).as("index %d", i).isEqualTo(data[i]);
             }
@@ -175,6 +220,7 @@ class RleEncodingEncoderTest {
 
         @Test
         void decode_exactlyOneChunk_correctLength() {
+            // Given
             DType dtype = new DType.Primitive(PType.I32, false);
             int[] data = new int[1024];
             for (int i = 0; i < 1024; i++) {
@@ -182,12 +228,17 @@ class RleEncodingEncoderTest {
             }
             EncodeResult encoded = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, 1024, dtype, REGISTRY);
+
+            // When
             Array result = DECODER.decode(ctx);
+
+            // Then
             assertThat(result.length()).isEqualTo(1024);
         }
 
         @Test
         void decode_crossesChunkBoundary_correctValues() {
+            // Given
             DType dtype = new DType.Primitive(PType.I32, false);
             int n = 2048;
             int[] data = new int[n];
@@ -196,7 +247,11 @@ class RleEncodingEncoderTest {
             }
             EncodeResult encoded = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, n, dtype, REGISTRY);
+
+            // When
             Array result = DECODER.decode(ctx);
+
+            // Then
             for (int i = 1000; i < 1048; i++) {
                 assertThat(((io.github.dfa1.vortex.reader.array.IntArray) result).getInt(i)).as("index %d", i).isEqualTo(i / 100);
             }
@@ -204,6 +259,7 @@ class RleEncodingEncoderTest {
 
         @Test
         void decode_nullableIndices_returnsMaskedArrayWithCorrectValidity() {
+            // Given
             DType dtype = new DType.Primitive(PType.I32, false);
             int[] data = {10, 10, 20, 20};
             EncodeResult encoded = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
@@ -228,8 +284,10 @@ class RleEncodingEncoderTest {
             ReadRegistry reg = TestRegistry.ofDecoders(DECODER, new PrimitiveEncodingDecoder(), new BoolEncodingDecoder());
             DecodeContext ctx = new DecodeContext(root, dtype, data.length, segments, reg, Arena.ofAuto());
 
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             assertThat(result).isInstanceOf(MaskedArray.class);
             MaskedArray masked = (MaskedArray) result;
             assertThat(masked.isValid(0)).isTrue();
@@ -243,6 +301,7 @@ class RleEncodingEncoderTest {
 
         @Test
         void decode_partialLastChunk_correctLength() {
+            // Given
             DType dtype = new DType.Primitive(PType.I32, false);
             int n = 1500;
             int[] data = new int[n];
@@ -251,7 +310,11 @@ class RleEncodingEncoderTest {
             }
             EncodeResult encoded = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, n, dtype, REGISTRY);
+
+            // When
             Array result = DECODER.decode(ctx);
+
+            // Then
             assertThat(result.length()).isEqualTo(n);
             for (int i = 0; i < n; i++) {
                 assertThat(((io.github.dfa1.vortex.reader.array.IntArray) result).getInt(i)).as("index %d", i).isEqualTo(i / 100);
@@ -260,8 +323,13 @@ class RleEncodingEncoderTest {
 
         @Test
         void encode_i32_metadata_valuesLen_matchesRunCount() throws Exception {
+            // Given
             int[] data = {1, 1, 1, 2, 2, 2};
+
+            // When
             EncodeResult result = ENCODER.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
+
+            // Then
             var metaSeg = MemorySegment.ofBuffer(result.rootNode().metadata().duplicate());
             RLEMetadata meta = RLEMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 

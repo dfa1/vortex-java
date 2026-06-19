@@ -100,13 +100,16 @@ class AlpEncodingEncoderTest {
 
         @Test
         void decode_f64_noPatches() {
+            // Given
             int expE = 2, expF = 0;
             long[] encoded = {123L, 456L, 789L};
             double[] expected = {1.23, 4.56, 7.89};
-
             DecodeContext ctx = buildAlpCtxF64(expE, expF, encoded, null, null);
+
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             assertThat(result.length()).isEqualTo(encoded.length);
             DoubleArray arr = (DoubleArray) result;
             for (int i = 0; i < expected.length; i++) {
@@ -116,14 +119,17 @@ class AlpEncodingEncoderTest {
 
         @Test
         void decode_f64_withPatches() {
+            // Given
             int expE = 2, expF = 0;
             long[] encoded = {100L, 0L, 200L, 0L, 300L};
             long[] patchIndices = {1L, 3L};
             double[] patchValues = {Double.NaN, Double.POSITIVE_INFINITY};
-
             DecodeContext ctx = buildAlpCtxF64(expE, expF, encoded, patchIndices, patchValues);
+
+            // When
             DoubleArray result = (DoubleArray) DECODER.decode(ctx);
 
+            // Then
             assertThat(result.getDouble(0)).isCloseTo(1.0, within(1e-9));
             assertThat(result.getDouble(1)).isNaN();
             assertThat(result.getDouble(2)).isCloseTo(2.0, within(1e-9));
@@ -134,27 +140,33 @@ class AlpEncodingEncoderTest {
         @ParameterizedTest
         @CsvSource({"0,0", "1,0", "2,1", "3,2", "4,3"})
         void decode_f64_exponentCombinations(int expE, int expF) {
+            // Given
             double value = 42.0;
             double[] f10 = {1e0, 1e1, 1e2, 1e3, 1e4};
             double[] if10 = {1e-0, 1e-1, 1e-2, 1e-3, 1e-4};
             long encVal = Math.round(value * f10[expE] * if10[expF]);
             long[] encoded = {encVal};
-
             DecodeContext ctx = buildAlpCtxF64(expE, expF, encoded, null, null);
+
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             assertThat(((DoubleArray) result).getDouble(0)).isCloseTo(value, within(1e-6));
         }
 
         @Test
         void decode_f32_noPatches() {
+            // Given
             int expE = 1, expF = 0;
             int[] encoded = {10, 25, 100};
             float[] expected = {1.0f, 2.5f, 10.0f};
-
             DecodeContext ctx = buildAlpCtxF32(expE, expF, encoded);
+
+            // When
             FloatArray result = (FloatArray) DECODER.decode(ctx);
 
+            // Then
             for (int i = 0; i < expected.length; i++) {
                 assertThat(result.getFloat(i)).as("index %d", i).isCloseTo(expected[i], within(1e-6f));
             }
@@ -166,12 +178,15 @@ class AlpEncodingEncoderTest {
 
         @Test
         void encode_f32_roundTrip_noPatches() {
+            // Given
             float[] values = {1.0f, 2.5f, 3.75f, 10.0f, 0.1f};
-
             EncodeResult encoded = ENCODER.encode(DTypes.F32, values, EncodeTestHelper.testCtx());
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, values.length, DTypes.F32, REGISTRY);
+
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             FloatArray arr = (FloatArray) result;
             for (int i = 0; i < values.length; i++) {
                 assertThat(arr.getFloat(i)).as("index %d", i).isCloseTo(values[i], within(1e-6f));
@@ -180,12 +195,15 @@ class AlpEncodingEncoderTest {
 
         @Test
         void encode_f32_roundTrip_withPatches() {
+            // Given
             float[] values = {1.0f, Float.NaN, 2.5f, Float.POSITIVE_INFINITY, 3.0f};
-
             EncodeResult encoded = ENCODER.encode(DTypes.F32, values, EncodeTestHelper.testCtx());
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, values.length, DTypes.F32, REGISTRY);
+
+            // When
             FloatArray result = (FloatArray) DECODER.decode(ctx);
 
+            // Then
             assertThat(result.getFloat(0)).isCloseTo(1.0f, within(1e-6f));
             assertThat(result.getFloat(1)).isNaN();
             assertThat(result.getFloat(2)).isCloseTo(2.5f, within(1e-6f));
@@ -195,12 +213,15 @@ class AlpEncodingEncoderTest {
 
         @Test
         void encode_f64_roundTrip_noPatches() {
+            // Given
             double[] values = {1.23, 4.56, 7.89, 0.001, 100.0};
-
             EncodeResult encoded = ENCODER.encode(DTypes.F64, values, EncodeTestHelper.testCtx());
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, values.length, DTypes.F64, REGISTRY);
+
+            // When
             Array result = DECODER.decode(ctx);
 
+            // Then
             DoubleArray arr = (DoubleArray) result;
             for (int i = 0; i < values.length; i++) {
                 assertThat(arr.getDouble(i)).as("index %d", i).isCloseTo(values[i], within(1e-9));
@@ -209,9 +230,13 @@ class AlpEncodingEncoderTest {
 
         @Test
         void encode_f64_metadata_expE_isNonZero() throws Exception {
+            // Given
             double[] values = {1.23, 4.56, 7.89};
 
+            // When
             EncodeResult result = ENCODER.encode(DTypes.F64, values, EncodeTestHelper.testCtx());
+
+            // Then
             MemorySegment metaSeg = MemorySegment.ofBuffer(result.rootNode().metadata().duplicate());
             ALPMetadata meta = ALPMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 
