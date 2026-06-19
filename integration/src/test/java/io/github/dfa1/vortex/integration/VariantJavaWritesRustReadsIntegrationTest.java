@@ -13,6 +13,7 @@ import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import io.github.dfa1.vortex.writer.encode.VariantData;
 import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -66,7 +67,7 @@ class VariantJavaWritesRustReadsIntegrationTest {
         assertThat(count).hasValue(rows);
 
         Schema schema = ds.arrowSchema(ALLOCATOR);
-        assertThat(schema.getFields()).extracting(f -> f.getName()).contains("v");
+        assertThat(schema.getFields()).extracting(Field::getName).contains("v");
     }
 
     @Test
@@ -87,7 +88,7 @@ class VariantJavaWritesRustReadsIntegrationTest {
         // Then — the Rust reader parses the chunked variant layout and agrees on row count + schema.
         DataSource ds = DataSource.open(SESSION, file.toAbsolutePath().toUri().toString());
         assertThat(ds.rowCount().asOptional()).hasValue(values.size());
-        assertThat(ds.arrowSchema(ALLOCATOR).getFields()).extracting(f -> f.getName()).contains("v");
+        assertThat(ds.arrowSchema(ALLOCATOR).getFields()).extracting(Field::getName).contains("v");
     }
 
     @Test
@@ -108,7 +109,7 @@ class VariantJavaWritesRustReadsIntegrationTest {
         // Then — the Rust reader parses the shredded variant layout and agrees on row count + schema.
         DataSource ds = DataSource.open(SESSION, file.toAbsolutePath().toUri().toString());
         assertThat(ds.rowCount().asOptional()).hasValue(values.size());
-        assertThat(ds.arrowSchema(ALLOCATOR).getFields()).extracting(f -> f.getName()).contains("v");
+        assertThat(ds.arrowSchema(ALLOCATOR).getFields()).extracting(Field::getName).contains("v");
     }
 
     private static Scalar i32Variant(long value) {
