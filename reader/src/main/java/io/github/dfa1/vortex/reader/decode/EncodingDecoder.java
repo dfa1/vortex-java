@@ -8,7 +8,7 @@ import io.github.dfa1.vortex.encoding.EncodingId;
 /// are discovered via [java.util.ServiceLoader].
 ///
 /// Register via [io.github.dfa1.vortex.reader.ReadRegistry] — implementations
-/// are discoverable via {@link java.util.ServiceLoader}.
+/// are discoverable via [java.util.ServiceLoader].
 public interface EncodingDecoder {
 
     /// Returns the wire identifier of this decoder.

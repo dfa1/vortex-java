@@ -10,7 +10,7 @@ public enum TimeUnit {
     Milliseconds,
     /// Seconds — ordinal 3.
     Seconds,
-    /// Days — ordinal 4. Not sub-dividable; {@link #divisor()} throws for this value.
+    /// Days — ordinal 4. Not sub-dividable; [#divisor()] throws for this value.
     Days;
 
     /// Returns the `TimeUnit` for the given wire tag byte.

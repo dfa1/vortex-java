@@ -79,8 +79,8 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
 
     private static Array decodeF64(DecodeContext ctx, ALPMetadata meta, int expE, int expF, long n) {
         // Decode formula mirrors the Rust reference (`ALPFloat::decode_single`): two-step
-        // {@code encoded * F10[f] * IF10[e]}. A pre-multiplied {@code scale = F10[f] * IF10[e]}
-        // gives different IEEE rounding for non-trivial {@code expF}, breaking round-trip with
+        // `encoded * F10[f] * IF10[e]`. A pre-multiplied `scale = F10[f] * IF10[e]`
+        // gives different IEEE rounding for non-trivial `expF`, breaking round-trip with
         // the encoder's verify step.
         double df = F10_F64[expF];
         double de = IF10_F64[expE];

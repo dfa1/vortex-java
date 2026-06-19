@@ -24,7 +24,7 @@ public record ChunkedIntArray(DType dtype, long length, IntArray[] children, lon
     /// @param totalRows expected total row count
     /// @param chunks    non-empty list of chunk arrays
     /// @return a new [ChunkedIntArray]
-    /// @throws VortexException on empty input, non-{@link IntArray} chunks, or row-count mismatch
+    /// @throws VortexException on empty input, non-[IntArray] chunks, or row-count mismatch
     public static ChunkedIntArray of(DType dtype, long totalRows, List<? extends Array> chunks) {
         if (chunks.isEmpty()) {
             throw new VortexException("ChunkedIntArray: empty chunk list");

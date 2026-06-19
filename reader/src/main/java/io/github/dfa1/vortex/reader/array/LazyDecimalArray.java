@@ -18,7 +18,7 @@ import java.nio.ByteOrder;
 /// them with the parent dtype's scale into a [BigDecimal] on demand. No
 /// arena allocation happens at construction time.
 ///
-/// @param dtype     the parent {@link DType.Decimal} dtype (precision + scale + nullable)
+/// @param dtype     the parent [DType.Decimal] dtype (precision + scale + nullable)
 /// @param length    total logical row count
 /// @param buf       backing little-endian two's-complement integer buffer
 /// @param byteWidth element width in bytes; one of 1, 2, 4, 8, 16

@@ -34,8 +34,8 @@ public record ChunkedLongArray(DType dtype, long length, LongArray[] children, l
     /// @param dtype     logical element type
     /// @param totalRows expected total row count across all chunks
     /// @param chunks    non-empty list of chunk arrays
-    /// @return a new {@link ChunkedLongArray} over the flattened chunks
-    /// @throws VortexException on empty input, non-{@link LongArray} chunks, or row-count mismatch
+    /// @return a new [ChunkedLongArray] over the flattened chunks
+    /// @throws VortexException on empty input, non-[LongArray] chunks, or row-count mismatch
     public static ChunkedLongArray of(DType dtype, long totalRows, List<? extends Array> chunks) {
         if (chunks.isEmpty()) {
             throw new VortexException("ChunkedLongArray: empty chunk list");

@@ -18,8 +18,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * Adversarial tests for the 8-byte file trailer and postscript length field.
  *
  * <p>The trailer is the entry point for every Vortex file read; any malformed input here
- * must surface as a {@link VortexException}, never as an unchecked JDK exception
- * ({@code IndexOutOfBoundsException}, {@code NegativeArraySizeException}, {@code OutOfMemoryError}),
+ * must surface as a [VortexException], never as an unchecked JDK exception
+ * (`IndexOutOfBoundsException`, `NegativeArraySizeException`, `OutOfMemoryError`),
  * a FlatBuffer runtime exception, or a Protobuf parser exception.
  *
  * <p>Trailer layout (LE):
@@ -82,8 +82,8 @@ class MalformedTrailerSecurityTest {
 
     /**
      * postscriptLen larger than the file body would make postscriptOffset go negative,
-     * which previously surfaced as {@code IndexOutOfBoundsException} from
-     * {@code MemorySegment.asSlice(negative, ...)}.
+     * which previously surfaced as `IndexOutOfBoundsException` from
+     * `MemorySegment.asSlice(negative, ...)`.
      */
     @Test
     void postscriptLenPastFileStart_throwsVortexException(@TempDir Path tmp) throws Exception {
@@ -104,7 +104,7 @@ class MalformedTrailerSecurityTest {
 
     /**
      * postscriptLen == 0 leaves no bytes to FlatBuffer-parse; without validation, the empty
-     * buffer would either throw {@code ArrayIndexOutOfBoundsException} from the FlatBuffer
+     * buffer would either throw `ArrayIndexOutOfBoundsException` from the FlatBuffer
      * runtime or silently parse against a missing root table.
      */
     @Test
@@ -124,7 +124,7 @@ class MalformedTrailerSecurityTest {
     }
 
     /**
-     * Unknown version must surface as a {@link VortexException} rather than silently
+     * Unknown version must surface as a [VortexException] rather than silently
      * parsing against an unknown layout.
      */
     @Test
@@ -145,7 +145,7 @@ class MalformedTrailerSecurityTest {
 
     /**
      * Garbage where the postscript FlatBuffer is expected must surface as a
-     * {@link VortexException}, not a raw FlatBuffer runtime exception.
+     * [VortexException], not a raw FlatBuffer runtime exception.
      */
     @Test
     void garbagePostscriptBytes_throwsVortexException(@TempDir Path tmp) throws Exception {

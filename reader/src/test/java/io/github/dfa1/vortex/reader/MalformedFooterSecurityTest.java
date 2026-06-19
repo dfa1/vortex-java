@@ -28,15 +28,15 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Adversarial tests for {@code footer.segmentSpecs[i]} bounds.
+ * Adversarial tests for `footer.segmentSpecs[i]` bounds.
  *
- * <p>Every {@link SegmentSpec} declared in the footer is later sliced from the memory-mapped
- * file via {@code fileSegment.asSlice(spec.offset(), spec.length())} at scan time. Without
- * up-front validation, malformed offsets/lengths surface as {@code IndexOutOfBoundsException}
- * from the FFM layer rather than {@link VortexException}, breaking the reader contract.
+ * <p>Every [SegmentSpec] declared in the footer is later sliced from the memory-mapped
+ * file via `fileSegment.asSlice(spec.offset(), spec.length())` at scan time. Without
+ * up-front validation, malformed offsets/lengths surface as `IndexOutOfBoundsException`
+ * from the FFM layer rather than [VortexException], breaking the reader contract.
  *
- * <p>{@link PostscriptParser#validateSegmentSpecs} now rejects negative offsets, negative
- * lengths, offsets past end-of-file, and {@code offset + length} overflowing the file size at
+ * <p>[PostscriptParser#validateSegmentSpecs] now rejects negative offsets, negative
+ * lengths, offsets past end-of-file, and `offset + length` overflowing the file size at
  * the moment the postscript is parsed — before any scan iterator is ever created.
  */
 class MalformedFooterSecurityTest {
@@ -76,10 +76,10 @@ class MalformedFooterSecurityTest {
 
     /**
      * Crafts a minimal .vtx file with a single I64 flat-layout column and a footer whose
-     * {@code segmentSpecs[0]} contains the supplied (deliberately bad) offset/length.
+     * `segmentSpecs[0]` contains the supplied (deliberately bad) offset/length.
      *
      * <p>The file body is 8 bytes of placeholder data: the bad spec means
-     * {@code VortexReader.open} should never look at them.
+     * `VortexReader.open` should never look at them.
      */
     private static Path buildFileWithBadSegmentSpec(Path dir, long segOffset, long segLength) throws Exception {
         byte[] body = new byte[8]; // unused; placeholder data segment

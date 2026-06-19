@@ -12,8 +12,8 @@ import java.util.ServiceLoader;
 /// Write-side registry: maps [EncodingId] to [EncodingEncoder] implementations,
 /// and [ExtensionId] to [ExtensionEncoder] implementations.
 ///
-/// Instances are immutable after construction. Build one via {@link #builder()} or via the
-/// {@link #loadAll()} and {@link #empty()} convenience factories.
+/// Instances are immutable after construction. Build one via [#builder()] or via the
+/// [#loadAll()] and [#empty()] convenience factories.
 ///
 /// Usage:
 /// ```java

@@ -12,7 +12,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /// opened the file. The TUI dispatches all such calls to this worker so the
 /// render loop on the main thread never crosses the arena's owning thread.
 ///
-/// {@link #pending()} drives the status-line counter; callers should check it
+/// [#pending()] drives the status-line counter; callers should check it
 /// when computing UI state.
 public final class IoWorker implements AutoCloseable {
 
@@ -40,8 +40,8 @@ public final class IoWorker implements AutoCloseable {
             return;
         }
         pending.incrementAndGet();
-        // Unbounded {@link LinkedBlockingQueue} never rejects on capacity; {@code add} is the
-        // right idiom (throws {@code IllegalStateException} on the impossible case) so we don't
+        // Unbounded [LinkedBlockingQueue] never rejects on capacity; `add` is the
+        // right idiom (throws `IllegalStateException` on the impossible case) so we don't
         // silently drop tasks if anyone ever swaps in a bounded queue.
         queue.add(() -> {
             try {

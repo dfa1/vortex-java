@@ -19,7 +19,7 @@ import java.util.ServiceLoader;
 /// Read-side registry: maps [EncodingId] to [EncodingDecoder] implementations.
 ///
 /// Instances are immutable after construction. Build one via [#builder()] or
-/// via the {@link #loadAll()} and {@link #empty()} convenience factories.
+/// via the [#loadAll()] and [#empty()] convenience factories.
 public final class ReadRegistry {
 
     private final Map<EncodingId, EncodingDecoder> decoders;

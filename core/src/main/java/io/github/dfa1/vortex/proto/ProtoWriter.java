@@ -95,7 +95,7 @@ final class ProtoWriter {
     /// Returns a mark to pass back to [#endLenDelim(int)]; the caller writes the payload
     /// in between. Avoids the alloc/copy round-trip of writing into a temporary `ProtoWriter`.
     ///
-    /// Reserves the worst-case 5 bytes for a varint32 length; {@link #endLenDelim} backpatches
+    /// Reserves the worst-case 5 bytes for a varint32 length; [#endLenDelim] backpatches
     /// the actual length and shifts the payload left if a shorter varint suffices.
     int beginLenDelim() {
         ensure(MAX_LEN_VARINT);

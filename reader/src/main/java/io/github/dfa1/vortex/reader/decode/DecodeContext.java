@@ -12,7 +12,7 @@ import java.nio.ByteBuffer;
 /// Decoding context passed to each [EncodingDecoder].
 ///
 /// Buffers are [MemorySegment] slices materialized from the file's segment table;
-/// children are decoded recursively via {@link #decodeChild(int)}.
+/// children are decoded recursively via [#decodeChild(int)].
 /// The arena is scoped to one chunk epoch — all decode output allocated from it is
 /// valid until the next chunk is opened.
 ///

@@ -13,7 +13,7 @@ import java.util.List;
 /// child `bufferIndices` are remapped by `+ownedBuffers.size()`.
 ///
 /// When `applicable` is false the encoding cannot handle this data; [#ownedBytes()]
-/// returns {@link Long#MAX_VALUE}/2 so the step never wins in size-based selection.
+/// returns [Long#MAX_VALUE]/2 so the step never wins in size-based selection.
 ///
 /// @param partialRoot  partially-assembled root encode node (may be `null` when not applicable)
 /// @param ownedBuffers buffers owned directly by the root node, before child buffers are appended

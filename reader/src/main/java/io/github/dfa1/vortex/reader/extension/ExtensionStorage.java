@@ -62,8 +62,8 @@ public final class ExtensionStorage {
     ///
     /// @param raw  epoch count
     /// @param unit time resolution; must not be [TimeUnit#Days]
-    /// @return matching {@link Instant}
-    /// @throws VortexException if `unit` is {@link TimeUnit#Days}
+    /// @return matching [Instant]
+    /// @throws VortexException if `unit` is [TimeUnit#Days]
     public static Instant instantFromRaw(long raw, TimeUnit unit) {
         return switch (unit) {
             case Seconds -> Instant.ofEpochSecond(raw);
