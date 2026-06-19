@@ -23,7 +23,7 @@ class FilterCommandTest {
 
     @BeforeEach
     void setUp() throws IOException {
-        // 3-row Vortex file with one I64 column {@code id} = [1, 2, 3].
+        // 3-row Vortex file with one I64 column `id` = [1, 2, 3].
         file = writeSmallVortex(tmp, "filter.vortex");
     }
 

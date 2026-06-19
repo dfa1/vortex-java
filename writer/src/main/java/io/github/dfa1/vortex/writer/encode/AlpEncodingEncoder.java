@@ -25,7 +25,7 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
     private static final int MAX_EXPONENT_F64 = 18;
     private static final int MAX_EXPONENT_F32 = 10;
     // Wider than Rust's SAMPLE_SIZE=32: at small samples, IEEE precision drift at high
-    // {@code (expE, expF)} can hide as a 0-patch tie in the size estimate, then explode into
+    // `(expE, expF)` can hide as a 0-patch tie in the size estimate, then explode into
     // thousands of patches when the full chunk is encoded. A larger sample is more likely to
     // include drift-triggering values, letting the search penalise such combinations correctly.
     private static final int SAMPLE_SIZE = 512;
@@ -90,7 +90,7 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
 
         // Iterate e ascending and f ascending so the first-encountered minimum has the smallest
         // e (and smallest e-f for that e). With strict less-than replacement, ties resolve to
-        // the smaller exponent — important because IEEE precision of {@code F10[f] * IF10[e]}
+        // the smaller exponent — important because IEEE precision of `F10[f] * IF10[e]`
         // tends to drift at high (e, f), and Rust's sample-of-32 sometimes detects this drift
         // as exceptions while ours does not (sample bias). Preferring smaller e protects us.
         for (int expE = 1; expE < MAX_EXPONENT_F64; expE++) {

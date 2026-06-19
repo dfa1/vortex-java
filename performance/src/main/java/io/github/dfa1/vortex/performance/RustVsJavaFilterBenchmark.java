@@ -42,7 +42,7 @@ import java.util.concurrent.TimeUnit;
 /// with a `close > threshold` predicate at varying selectivity.
 ///
 /// Phase 0 instrument for ADR 0010 (lazy decode). The threshold is chosen at
-/// setup time so each {@link #selectivity} value selects approximately that
+/// setup time so each [#selectivity] value selects approximately that
 /// fraction of rows. Both readers report the sum of surviving close values so
 /// the JVM cannot elide the per-row work.
 ///
@@ -52,7 +52,7 @@ import java.util.concurrent.TimeUnit;
 ///
 /// Requires a pre-existing OHLC file:
 /// `-Dvortex.bench.ohlc=/path/to/file.vtx`. Generate one by running
-/// {@link RustVsJavaReadBenchmark} first with the same `vortex.bench.ohlc`
+/// [RustVsJavaReadBenchmark] first with the same `vortex.bench.ohlc`
 /// pointing at the path you want (the read benchmark will write it lazily if
 /// the file does not exist yet).
 @State(Scope.Benchmark)
@@ -74,7 +74,7 @@ public class RustVsJavaFilterBenchmark {
     }
 
     /// Target fraction of rows that should satisfy `close > threshold`.
-    /// The threshold is computed in {@link #setup()} from a sample of the
+    /// The threshold is computed in [#setup()] from a sample of the
     /// "close" column; the realised selectivity is reported in the setup log
     /// and may differ slightly from this value on small samples.
     @Param({"0.001", "0.01", "0.1", "1.0"})

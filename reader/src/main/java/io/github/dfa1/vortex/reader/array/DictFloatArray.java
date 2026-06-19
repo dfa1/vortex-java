@@ -14,13 +14,13 @@ import java.util.function.DoubleBinaryOperator;
 ///
 /// The `codes` array is typed as [Array] because the codes ptype
 /// varies with dictionary size — U8/U16/U32/U64 backed by
-/// {@link ByteArray}/{@link ShortArray}/{@link IntArray}/{@link LongArray}.
+/// [ByteArray]/[ShortArray]/[IntArray]/[LongArray].
 ///
 /// @param dtype  logical element type (matches `values.dtype()`)
 /// @param length total logical row count (matches `codes.length()`)
 /// @param values dictionary pool — element at code `c` is `values.getFloat(c)`
 /// @param codes  per-row index into `values`; must be one of
-///               {@link ByteArray}, {@link ShortArray}, {@link IntArray}, {@link LongArray}
+///               [ByteArray], [ShortArray], [IntArray], [LongArray]
 public record DictFloatArray(DType dtype, long length, FloatArray values, Array codes) implements FloatArray {
 
     /// Builds a [DictFloatArray], validating that `codes` is one of the
@@ -30,8 +30,8 @@ public record DictFloatArray(DType dtype, long length, FloatArray values, Array 
     /// @param length total logical row count
     /// @param values dictionary pool
     /// @param codes  per-row code array (must be [ByteArray], [ShortArray],
-    ///               {@link IntArray}, or {@link LongArray})
-    /// @return a new {@link DictFloatArray}
+    ///               [IntArray], or [LongArray])
+    /// @return a new [DictFloatArray]
     /// @throws VortexException if `codes` is not a supported code-array type or
     ///                         its length does not equal `length`
     public static DictFloatArray of(DType dtype, long length, FloatArray values, Array codes) {

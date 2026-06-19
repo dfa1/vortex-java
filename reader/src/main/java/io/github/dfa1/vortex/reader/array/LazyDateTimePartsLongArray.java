@@ -24,8 +24,8 @@ import java.util.function.LongConsumer;
 /// The record's [#dtype()] is the parent Extension dtype (e.g.
 /// `vortex.timestamp`) so it slots transparently into the extension-decode
 /// pipeline. Children may be any signed integer typed Array
-/// ({@link ByteArray}/{@link ShortArray}/{@link IntArray}/{@link LongArray}); the
-/// per-row {@link DateTimePartsArrays#readLong} switch handles widening.
+/// ([ByteArray]/[ShortArray]/[IntArray]/[LongArray]); the
+/// per-row [DateTimePartsArrays#readLong] switch handles widening.
 ///
 /// @param dtype            logical element type (typically a `DType.Extension`)
 /// @param length           total logical row count

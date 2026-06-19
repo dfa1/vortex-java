@@ -42,10 +42,10 @@ import java.util.concurrent.TimeUnit;
 ///
 /// Two Parquet variants:
 ///   - `parquetRead` / `parquetReadMultiColumn`: batch column API
-///     ({@link ColumnReader#nextBatch()} + {@link ColumnReader#getDoubles()}) —
+///     ([ColumnReader#nextBatch()] + [ColumnReader#getDoubles()]) —
 ///     apples-to-apples comparison with Vortex's batch fold.
 ///   - `parquetReadRowByRow` / `parquetReadMultiColumnRowByRow`:
-///     Hardwood row cursor ({@link RowReader}) — measures row-oriented API overhead
+///     Hardwood row cursor ([RowReader]) — measures row-oriented API overhead
 ///     on top of format decode cost.
 ///
 /// Override the Parquet source with: `-Dbench.parquet=/path/to/file.parquet`

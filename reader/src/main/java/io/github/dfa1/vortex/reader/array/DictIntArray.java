@@ -15,13 +15,13 @@ import java.util.function.IntConsumer;
 ///
 /// The `codes` array is typed as [Array] because the codes ptype
 /// varies with dictionary size — U8/U16/U32/U64 backed by
-/// {@link ByteArray}/{@link ShortArray}/{@link IntArray}/{@link LongArray}.
+/// [ByteArray]/[ShortArray]/[IntArray]/[LongArray].
 ///
 /// @param dtype  logical element type (matches `values.dtype()`)
 /// @param length total logical row count (matches `codes.length()`)
 /// @param values dictionary pool — element at code `c` is `values.getInt(c)`
 /// @param codes  per-row index into `values`; must be one of
-///               {@link ByteArray}, {@link ShortArray}, {@link IntArray}, {@link LongArray}
+///               [ByteArray], [ShortArray], [IntArray], [LongArray]
 public record DictIntArray(DType dtype, long length, IntArray values, Array codes) implements IntArray {
 
     /// Builds a [DictIntArray], validating that `codes` is one of the
@@ -31,8 +31,8 @@ public record DictIntArray(DType dtype, long length, IntArray values, Array code
     /// @param length total logical row count
     /// @param values dictionary pool
     /// @param codes  per-row code array (must be [ByteArray], [ShortArray],
-    ///               {@link IntArray}, or {@link LongArray})
-    /// @return a new {@link DictIntArray}
+    ///               [IntArray], or [LongArray])
+    /// @return a new [DictIntArray]
     /// @throws VortexException if `codes` is not a supported code-array type or
     ///                         its length does not equal `length`
     public static DictIntArray of(DType dtype, long length, IntArray values, Array codes) {

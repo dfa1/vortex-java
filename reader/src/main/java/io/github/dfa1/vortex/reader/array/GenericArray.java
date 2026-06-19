@@ -89,7 +89,7 @@ public final class GenericArray implements Array {
     /// handled by [LazyDecimalBytePartsArray] directly.
     ///
     /// @param i row index, `0 <= i < length()`
-    /// @return decoded value as a {@link BigDecimal} with the dtype's scale
+    /// @return decoded value as a [BigDecimal] with the dtype's scale
     /// @throws VortexException             if the dtype isn't decimal or the array
     ///                                     shape isn't the single-buffer layout
     /// @throws IndexOutOfBoundsException if `i` is outside `[0, length())`

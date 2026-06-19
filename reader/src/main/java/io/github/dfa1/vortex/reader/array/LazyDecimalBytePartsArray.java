@@ -11,11 +11,11 @@ import java.math.BigDecimal;
 /// emits or accepts) the encoding stores its mantissa as a single signed-integer
 /// child column, paired with the parent's [DType.Decimal] precision and
 /// scale. [#getDecimal(long)] reads one cell from the child via
-/// {@link DecimalBytePartsArrays#readMantissa(Array, long)} and combines it with
-/// the dtype scale to produce a {@link BigDecimal} on demand — no buffer
+/// [DecimalBytePartsArrays#readMantissa(Array, long)] and combines it with
+/// the dtype scale to produce a [BigDecimal] on demand — no buffer
 /// materialisation occurs at construction time.
 ///
-/// @param dtype  the parent {@link DType.Decimal} dtype (precision + scale + nullable)
+/// @param dtype  the parent [DType.Decimal] dtype (precision + scale + nullable)
 /// @param length total logical row count
 /// @param msp    child array holding the most-significant integer part of the mantissa
 public record LazyDecimalBytePartsArray(DType dtype, long length, Array msp) implements DecimalArray {

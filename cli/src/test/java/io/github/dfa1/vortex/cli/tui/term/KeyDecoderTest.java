@@ -124,8 +124,8 @@ class KeyDecoderTest {
 
     @Test
     void next_ss3SequenceVariant_decodesArrows() throws IOException {
-        // Given — DEC keypad / VT100 application-cursor mode uses {@code ESC O A}
-        // instead of {@code ESC [ A}. KeyDecoder must accept both prefixes so the
+        // Given — DEC keypad / VT100 application-cursor mode uses `ESC O A`
+        // instead of `ESC [ A`. KeyDecoder must accept both prefixes so the
         // TUI works under tmux / screen / putty configurations that ship SS3.
         assertThat(KeyDecoder.next(bytes(0x1B, 'O', 'A'))).isEqualTo(Key.ArrowUp.INSTANCE);
         assertThat(KeyDecoder.next(bytes(0x1B, 'O', 'D'))).isEqualTo(Key.ArrowLeft.INSTANCE);
@@ -135,7 +135,7 @@ class KeyDecoderTest {
 
     @Test
     void next_unknownEscapePrefix_yieldsEscape() throws IOException {
-        // Given — {@code ESC X} (X is neither '[' nor 'O') is not a recognised
+        // Given — `ESC X` (X is neither '[' nor 'O') is not a recognised
         // CSI or SS3 sequence. Must return Escape rather than try to decode further.
         ByteArrayInputStream in = bytes(0x1B, 'X', 'A');
 
@@ -148,7 +148,7 @@ class KeyDecoderTest {
 
     @Test
     void next_eofMidTildeSequence_returnsEof() throws IOException {
-        // Given — partial {@code ESC [ 5} with no trailing tilde / digit
+        // Given — partial `ESC [ 5` with no trailing tilde / digit
         ByteArrayInputStream in = bytes(0x1B, '[', '5');
 
         // When
@@ -160,7 +160,7 @@ class KeyDecoderTest {
 
     @Test
     void next_tildeWithoutTrailingTildeChar_yieldsEscape() throws IOException {
-        // Given — {@code ESC [ 5 x}: digit followed by a non-tilde non-digit.
+        // Given — `ESC [ 5 x`: digit followed by a non-tilde non-digit.
         // The trailing character must be re-yielded by the next call, not lost.
         ByteArrayInputStream in = bytes(0x1B, '[', '5', 'x', 'y');
 
@@ -177,7 +177,7 @@ class KeyDecoderTest {
     @Test
     void next_controlByte_returnsCharWithRawValue() throws IOException {
         // Given — Ctrl-C is 0x03, no special handling — surfaced as Char so the
-        // TUI's keymap can match it via {@code Key.Char(3)} if needed.
+        // TUI's keymap can match it via `Key.Char(3)` if needed.
         ByteArrayInputStream in = bytes(0x03);
 
         // When

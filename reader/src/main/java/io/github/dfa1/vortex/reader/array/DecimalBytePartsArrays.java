@@ -22,7 +22,7 @@ final class DecimalBytePartsArrays {
     ///
     /// @param arr source typed Array (must be one of Byte/Short/Int/Long, optionally MaskedArray-wrapped)
     /// @param i   row index
-    /// @return cell value as a {@link BigInteger}
+    /// @return cell value as a [BigInteger]
     /// @throws VortexException for null cells or unsupported array types
     static BigInteger readMantissa(Array arr, long i) {
         return switch (arr) {

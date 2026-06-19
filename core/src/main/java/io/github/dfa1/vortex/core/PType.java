@@ -61,13 +61,13 @@ public enum PType {
     ///
     /// Unlike `PType.values()[ordinal]`, this method validates the ordinal against the
     /// declared range and throws [VortexException] for crafted out-of-range values rather
-    /// than the JDK's {@link ArrayIndexOutOfBoundsException}. Use this at every decode site that
+    /// than the JDK's [ArrayIndexOutOfBoundsException]. Use this at every decode site that
     /// reads a ptype from untrusted metadata.
     ///
     /// @param ordinal the enum ordinal, typically taken from a Protobuf `ptype` field
-    /// @return the {@link PType} for the given ordinal
+    /// @return the [PType] for the given ordinal
     /// @throws VortexException if `ordinal` is negative or greater than the largest defined
-    ///                         {@link PType} ordinal
+    ///                         [PType] ordinal
     public static PType fromOrdinal(int ordinal) {
         PType[] all = values();
         if (ordinal < 0 || ordinal >= all.length) {

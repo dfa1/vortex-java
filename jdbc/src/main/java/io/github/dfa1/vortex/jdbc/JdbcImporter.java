@@ -29,7 +29,7 @@ import java.util.UUID;
 ///
 /// The schema is derived from [ResultSetMetaData] — no type inference is needed.
 /// SQL NULL values are mapped to `0`, `0.0`, `false`, or `""` depending on column type.
-/// Use {@link JdbcImportOptions#withFetchSize} to control driver-side streaming for large tables.
+/// Use [JdbcImportOptions#withFetchSize] to control driver-side streaming for large tables.
 public final class JdbcImporter {
 
     private JdbcImporter() {

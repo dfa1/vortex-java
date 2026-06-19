@@ -15,7 +15,7 @@ public final class EncodeTestHelper {
     /// Creates a non-cascading [EncodeContext] using a GC-managed arena and all
     /// service-loaded [EncodingEncoder]s.
     ///
-    /// @return a test-suitable {@link EncodeContext}
+    /// @return a test-suitable [EncodeContext]
     public static EncodeContext testCtx() {
         return EncodeContext.of(Arena.ofAuto(), WriteRegistry.loadAll());
     }

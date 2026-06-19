@@ -31,7 +31,7 @@ class ImportCommandTest {
 
         @Test
         void delimiterMissingValue_returnsUsageError() {
-            // Given / When — {@code --delimiter} at the tail with no value
+            // Given / When — `--delimiter` at the tail with no value
             CliTestSupport.Captured result = capture(() ->
                     ImportCommand.run(new String[]{"import", "--delimiter"}));
 
@@ -125,9 +125,9 @@ class ImportCommandTest {
                     ImportCommand.run(new String[]{"import", "--delimiter", "\t", csv.toString()}));
 
             // Then — without the explicit delimiter the import would treat the whole row as one
-            // column. Success here confirms the {@code --delimiter} flag plumbs through.
-            // Output filename: input is {@code data.tsv}, deriveOutputPath only strips
-            // {@code .csv}/{@code .parquet} suffixes, so the result is {@code data.tsv.vortex}.
+            // column. Success here confirms the `--delimiter` flag plumbs through.
+            // Output filename: input is `data.tsv`, deriveOutputPath only strips
+            // `.csv`/`.parquet` suffixes, so the result is `data.tsv.vortex`.
             assertThat(result.status()).isEqualTo(ExitStatus.OK);
             assertThat(tmp.resolve("data.tsv.vortex")).exists();
         }

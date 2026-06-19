@@ -10,7 +10,7 @@ import java.util.Optional;
 /// Internal materialization engine: turns any [Array] into its primary
 /// [MemorySegment], allocating from a caller-supplied arena for lazy variants.
 ///
-/// If `arr` is a {@link MaskedArray}, the inner (data) segment is returned;
+/// If `arr` is a [MaskedArray], the inner (data) segment is returned;
 /// the validity mask is not surfaced here — callers that need validity must unwrap manually.
 ///
 /// **Vortex-internal — not public API.** This class is `public` only because the reader,
@@ -20,8 +20,8 @@ import java.util.Optional;
 /// (which routes here). It backs that seam plus
 /// [io.github.dfa1.vortex.reader.ReadRegistry#decodeAsSegment] and the scan layer's dictionary
 /// validation. Application code should prefer the typed accessors on concrete subtypes —
-/// {@link LongArray#getLong(long)}, {@link IntArray#getInt(long)},
-/// {@link DoubleArray#getDouble(long)}, and friends.
+/// [LongArray#getLong(long)], [IntArray#getInt(long)],
+/// [DoubleArray#getDouble(long)], and friends.
 public final class ArraySegments {
 
     private ArraySegments() {

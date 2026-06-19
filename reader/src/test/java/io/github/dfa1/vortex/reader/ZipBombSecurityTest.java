@@ -33,12 +33,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * Regression tests for zip-bomb style attacks against VortexReader.
  *
- * <p>Root cause: the format trusts {@code row_count} in the layout FlatBuffer without
+ * <p>Root cause: the format trusts `row_count` in the layout FlatBuffer without
  * validating it against actual segment byte sizes. A ~150-byte file can claim 10⁹ rows
- * and trigger an 8 GB allocation on the first {@code iter.hasNext()} call.
+ * and trigger an 8 GB allocation on the first `iter.hasNext()` call.
  *
  * <p>Both attacks are fixed: tests use small row counts safe for CI and assert the
- * expected post-fix behavior (no OOM; either completes or throws {@link io.github.dfa1.vortex.core.VortexException}).
+ * expected post-fix behavior (no OOM; either completes or throws [io.github.dfa1.vortex.core.VortexException]).
  */
 class ZipBombSecurityTest {
 
@@ -172,9 +172,9 @@ class ZipBombSecurityTest {
     // ── FlatBuffer segment builders ───────────────────────────────────────────
 
     /**
-     * Builds: {@code [rawData][Array FlatBuffer (1 buffer)][4-byte LE fbLen]}.
+     * Builds: `[rawData][Array FlatBuffer (1 buffer)][4-byte LE fbLen]`.
      *
-     * <p>The Array FlatBuffer describes one buffer at offset 0 with length {@code rawData.length}.
+     * <p>The Array FlatBuffer describes one buffer at offset 0 with length `rawData.length`.
      * Buffer index 0 in the ArrayNode refers to this buffer.
      */
     private static byte[] buildOneBufferSegment(byte[] rawData) {
@@ -253,7 +253,7 @@ class ZipBombSecurityTest {
         return slice(fbb);
     }
 
-    /** Flat layout: {@code vortex.flat} at layoutSpecs[layoutSpecIdx], pointing to segmentSpecs[segIdx]. */
+    /** Flat layout: `vortex.flat` at layoutSpecs[layoutSpecIdx], pointing to segmentSpecs[segIdx]. */
     private static ByteBuffer buildFlatLayout(int layoutSpecIdx, long rowCount, int segIdx) {
         var fbb = new FlatBufferBuilder(128);
         int segV = Layout.createSegmentsVector(fbb, new long[]{segIdx});
@@ -270,8 +270,8 @@ class ZipBombSecurityTest {
      *   child[1] = flat(enc=0, rowCount=claimedRows, seg=1)  ← codes (INFLATED)
      * }
      * </pre>
-     * {@code decodeDictLayout} reads {@code n = codesLayout.rowCount() = claimedRows}
-     * then calls {@code expandDictPrimitive(..., n, arena)} which allocates {@code n * elemBytes}.
+     * `decodeDictLayout` reads `n = codesLayout.rowCount() = claimedRows`
+     * then calls `expandDictPrimitive(..., n, arena)` which allocates `n * elemBytes`.
      */
     private static ByteBuffer buildDictLayout(long claimedRows) {
         var fbb = new FlatBufferBuilder(256);

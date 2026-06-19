@@ -26,15 +26,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Adversarial tests for the layout-tree recursion in
- * {@link PostscriptParser}'s {@code convertLayout}.
+ * [PostscriptParser]'s `convertLayout`.
  *
  * <p>The reader walks the layout tree recursively when materialising a file's
- * {@code Layout} object. Without a depth cap a crafted file with thousands of
- * nested children produces a {@link StackOverflowError} during {@code VortexReader.open},
- * breaking the contract that every malformed input must surface as a {@link VortexException}.
+ * `Layout` object. Without a depth cap a crafted file with thousands of
+ * nested children produces a [StackOverflowError] during `VortexReader.open`,
+ * breaking the contract that every malformed input must surface as a [VortexException].
  *
  * <p>This test pins the contract: deeply nested layouts must be rejected as
- * {@link VortexException}, never a {@link StackOverflowError}.
+ * [VortexException], never a [StackOverflowError].
  */
 class LayoutDepthBombSecurityTest {
 
@@ -55,8 +55,8 @@ class LayoutDepthBombSecurityTest {
     // ── File builders ─────────────────────────────────────────────────────────
 
     /**
-     * Builds a .vtx file whose root Layout has {@code depth} levels of single-child nesting,
-     * each level reusing the same {@code vortex.flat} layout spec.
+     * Builds a .vtx file whose root Layout has `depth` levels of single-child nesting,
+     * each level reusing the same `vortex.flat` layout spec.
      */
     private static Path buildDeeplyNestedFile(Path dir, int depth) throws Exception {
         byte[] body = new byte[8]; // unused placeholder
