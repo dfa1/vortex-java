@@ -140,6 +140,107 @@ class OffsetArrayTest {
         }
     }
 
+    @Nested
+    class Bool {
+        @Test
+        void getBooleanShiftsByOffset() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given — packed bits [F, T, T, F]
+                BoolArray inner = boolArray(arena, false, true, true, false);
+                var sut = new OffsetBoolArray(new DType.Bool(false), 2, inner, 1L);
+
+                // When / Then
+                assertThat(sut.getBoolean(0)).isTrue();  // inner[1]
+                assertThat(sut.getBoolean(1)).isTrue();  // inner[2]
+                assertThat(sut.length()).isEqualTo(2);
+            }
+        }
+    }
+
+    @Nested
+    class Int {
+        @Test
+        void getIntShiftsByOffset() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given
+                IntArray inner = intArray(arena, 10, 20, 30, 40);
+                var sut = new OffsetIntArray(new DType.Primitive(PType.I32, false), 2, inner, 2L);
+
+                // When / Then
+                assertThat(sut.getInt(0)).isEqualTo(30);
+                assertThat(sut.getInt(1)).isEqualTo(40);
+            }
+        }
+    }
+
+    @Nested
+    class Long {
+        @Test
+        void getLongShiftsByOffset() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given
+                LongArray inner = longArray(arena, 5L, 6L, 7L, 8L);
+                var sut = new OffsetLongArray(new DType.Primitive(PType.I64, false), 2, inner, 1L);
+
+                // When / Then
+                assertThat(sut.getLong(0)).isEqualTo(6L);
+                assertThat(sut.getLong(1)).isEqualTo(7L);
+            }
+        }
+    }
+
+    @Nested
+    class Double {
+        @Test
+        void getDoubleShiftsByOffset() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given
+                DoubleArray inner = doubleArray(arena, 1.5, 2.5, 3.5);
+                var sut = new OffsetDoubleArray(new DType.Primitive(PType.F64, false), 2, inner, 1L);
+
+                // When / Then
+                assertThat(sut.getDouble(0)).isEqualTo(2.5);
+                assertThat(sut.getDouble(1)).isEqualTo(3.5);
+            }
+        }
+    }
+
+    private static BoolArray boolArray(Arena arena, boolean... vs) {
+        MemorySegment seg = arena.allocate((vs.length + 7) / 8);
+        for (int i = 0; i < vs.length; i++) {
+            if (vs[i]) {
+                long bi = i >>> 3;
+                byte b = seg.get(ValueLayout.JAVA_BYTE, bi);
+                seg.set(ValueLayout.JAVA_BYTE, bi, (byte) ((b & 0xff) | (1 << (i & 7))));
+            }
+        }
+        return new MaterializedBoolArray(new DType.Bool(false), vs.length, seg.asReadOnly());
+    }
+
+    private static IntArray intArray(Arena arena, int... vs) {
+        MemorySegment seg = arena.allocate(vs.length * 4L, 4);
+        for (int i = 0; i < vs.length; i++) {
+            seg.setAtIndex(ValueLayout.JAVA_INT, i, vs[i]);
+        }
+        return new MaterializedIntArray(new DType.Primitive(PType.I32, false), vs.length, seg.asReadOnly());
+    }
+
+    private static LongArray longArray(Arena arena, long... vs) {
+        MemorySegment seg = arena.allocate(vs.length * 8L, 8);
+        for (int i = 0; i < vs.length; i++) {
+            seg.setAtIndex(ValueLayout.JAVA_LONG, i, vs[i]);
+        }
+        return new MaterializedLongArray(new DType.Primitive(PType.I64, false), vs.length, seg.asReadOnly());
+    }
+
+    private static DoubleArray doubleArray(Arena arena, double... vs) {
+        MemorySegment seg = arena.allocate(vs.length * 8L, 8);
+        for (int i = 0; i < vs.length; i++) {
+            seg.setAtIndex(ValueLayout.JAVA_DOUBLE, i, vs[i]);
+        }
+        return new MaterializedDoubleArray(new DType.Primitive(PType.F64, false), vs.length, seg.asReadOnly());
+    }
+
     private static ByteArray byteArray(Arena arena, byte... vs) {
         MemorySegment seg = arena.allocate(vs.length, 1);
         for (int i = 0; i < vs.length; i++) {
