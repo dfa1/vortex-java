@@ -12,7 +12,7 @@ import java.util.function.LongConsumer;
 
 /// Multi-chunk [LongArray] view backed by an immutable array of child
 /// chunks plus their cumulative row offsets. Scalar access is stateless —
-/// {@link #getLong(long)} resolves the chunk index via {@link #findChunk(long[], long)}
+/// [#getLong(long)] resolves the chunk index via [#findChunk(long[], long)]
 /// (a binary search over `offsets`) on every call.
 ///
 /// Per ADR 0012, this preserves zero-copy on multi-chunk reads: each chunk
@@ -28,7 +28,7 @@ import java.util.function.LongConsumer;
 public record ChunkedLongArray(DType dtype, long length, LongArray[] children, long[] offsets) implements LongArray {
 
     /// Builds a [ChunkedLongArray] from a list of chunk arrays. Nested
-    /// chunked arrays are flattened; {@link MaskedArray} chunks are unwrapped
+    /// chunked arrays are flattened; [MaskedArray] chunks are unwrapped
     /// to their inner data (validity dropped — matches prior concat behaviour).
     ///
     /// @param dtype     logical element type

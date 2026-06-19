@@ -27,7 +27,7 @@ public final class SegmentBroadcast {
     /// @param i         logical element index in `[0, rowCount)`
     /// @param elemBytes element width in bytes (>= 1)
     /// @return byte offset suitable for [MemorySegment#get] or
-    ///         {@link MemorySegment#copy(MemorySegment, long, MemorySegment, long, long)}
+    ///         [MemorySegment#copy(MemorySegment, long, MemorySegment, long, long)]
     /// @throws VortexException if `seg` is empty (zero elements)
     public static long elementOffset(MemorySegment seg, long i, int elemBytes) {
         long cap = seg.byteSize() / elemBytes;

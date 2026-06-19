@@ -11,7 +11,7 @@ import java.nio.ByteBuffer;
 
 /// Decoding context passed to each [EncodingDecoder].
 ///
-/// Buffers are {@link MemorySegment} slices materialized from the file's segment table;
+/// Buffers are [MemorySegment] slices materialized from the file's segment table;
 /// children are decoded recursively via {@link #decodeChild(int)}.
 /// The arena is scoped to one chunk epoch — all decode output allocated from it is
 /// valid until the next chunk is opened.
@@ -87,7 +87,7 @@ public record DecodeContext(
     /// raw buffer for a bulk read, rather than re-decoding via [#decodeChildSegment(int)].
     ///
     /// @param arr the decoded array to materialise
-    /// @return the array's primary {@link MemorySegment}
+    /// @return the array's primary [MemorySegment]
     public MemorySegment materialize(Array arr) {
         return ArraySegments.of(arr, arena);
     }

@@ -23,7 +23,7 @@ public record ChunkedShortArray(DType dtype, long length, ShortArray[] children,
     /// @param dtype     logical element type
     /// @param totalRows expected total row count
     /// @param chunks    non-empty list of chunk arrays
-    /// @return a new {@link ChunkedShortArray}
+    /// @return a new [ChunkedShortArray]
     /// @throws VortexException on empty input, non-{@link ShortArray} chunks, or row-count mismatch
     public static ChunkedShortArray of(DType dtype, long totalRows, List<? extends Array> chunks) {
         if (chunks.isEmpty()) {

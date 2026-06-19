@@ -142,7 +142,7 @@ public final class CascadingCompressor {
     /// @param dtype the logical type of the data to encode
     /// @param data  input data in the format expected by the candidate encodings
     /// @param ctx   encoding context supplying the arena, encoder map, and cascade parameters
-    /// @return the {@link EncodeResult} produced by the winning encoding
+    /// @return the [EncodeResult] produced by the winning encoding
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
         return encodeWithCtx(dtype, data, ctx);
     }

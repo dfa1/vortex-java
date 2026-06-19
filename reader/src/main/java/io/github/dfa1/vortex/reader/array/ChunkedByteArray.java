@@ -22,7 +22,7 @@ public record ChunkedByteArray(DType dtype, long length, ByteArray[] children, l
     /// @param dtype     logical element type
     /// @param totalRows expected total row count
     /// @param chunks    non-empty list of chunk arrays
-    /// @return a new {@link ChunkedByteArray}
+    /// @return a new [ChunkedByteArray]
     /// @throws VortexException on empty input, non-{@link ByteArray} chunks, or row-count mismatch
     public static ChunkedByteArray of(DType dtype, long totalRows, List<? extends Array> chunks) {
         if (chunks.isEmpty()) {

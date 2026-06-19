@@ -6,7 +6,7 @@ import io.github.dfa1.vortex.extension.ExtensionId;
 /// Read-side contract for a Vortex extension type.
 ///
 /// Implementations pair a spec identity ([ExtensionId]) with the matching
-/// {@link DType.Extension} dtype. Typed decode methods live on each concrete
+/// [DType.Extension] dtype. Typed decode methods live on each concrete
 /// implementation — they are not on this interface, so read callers get typed return
 /// values without casting through `Object`.
 public interface ExtensionDecoder {

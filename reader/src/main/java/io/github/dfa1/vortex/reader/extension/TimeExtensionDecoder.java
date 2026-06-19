@@ -21,7 +21,7 @@ public final class TimeExtensionDecoder implements ExtensionDecoder {
     public static final TimeExtensionDecoder INSTANCE = new TimeExtensionDecoder();
 
     /// Public no-arg constructor for [java.util.ServiceLoader].
-    /// Prefer the {@link #INSTANCE} singleton in application code.
+    /// Prefer the [#INSTANCE] singleton in application code.
     public TimeExtensionDecoder() {
     }
 
@@ -52,7 +52,7 @@ public final class TimeExtensionDecoder implements ExtensionDecoder {
     /// @param storage signed-integer storage (I32 for s/ms, I64 for μs/ns)
     /// @param i       row index, `0 <= i < storage.length()`
     /// @return decoded local time
-    /// @throws VortexException if the metadata unit is {@link TimeUnit#Days}
+    /// @throws VortexException if the metadata unit is [TimeUnit#Days]
     ///         or storage isn't an integer primitive
     public LocalTime decode(DType.Extension ext, Array storage, long i) {
         ExtensionStorage.checkBounds(i, storage.length());

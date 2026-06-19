@@ -13,7 +13,7 @@ public final class EncodeTestHelper {
     }
 
     /// Creates a non-cascading [EncodeContext] using a GC-managed arena and all
-    /// service-loaded {@link EncodingEncoder}s.
+    /// service-loaded [EncodingEncoder]s.
     ///
     /// @return a test-suitable {@link EncodeContext}
     public static EncodeContext testCtx() {

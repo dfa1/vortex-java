@@ -18,7 +18,7 @@ public final class UuidExtensionEncoder implements ExtensionEncoder {
     public static final UuidExtensionEncoder INSTANCE = new UuidExtensionEncoder();
 
     /// Public no-arg constructor for [java.util.ServiceLoader].
-    /// Prefer the {@link #INSTANCE} singleton in application code.
+    /// Prefer the [#INSTANCE] singleton in application code.
     public UuidExtensionEncoder() {
     }
 

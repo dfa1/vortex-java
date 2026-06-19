@@ -13,7 +13,7 @@ import java.util.function.IntConsumer;
 /// `getInt(i) = values.getInt(codes.getCode(i))`. Per ADR 0012, this
 /// preserves zero-copy on dict-encoded categorical columns.
 ///
-/// The `codes` array is typed as {@link Array} because the codes ptype
+/// The `codes` array is typed as [Array] because the codes ptype
 /// varies with dictionary size — U8/U16/U32/U64 backed by
 /// {@link ByteArray}/{@link ShortArray}/{@link IntArray}/{@link LongArray}.
 ///
@@ -30,7 +30,7 @@ public record DictIntArray(DType dtype, long length, IntArray values, Array code
     /// @param dtype  logical element type
     /// @param length total logical row count
     /// @param values dictionary pool
-    /// @param codes  per-row code array (must be {@link ByteArray}, {@link ShortArray},
+    /// @param codes  per-row code array (must be [ByteArray], [ShortArray],
     ///               {@link IntArray}, or {@link LongArray})
     /// @return a new {@link DictIntArray}
     /// @throws VortexException if `codes` is not a supported code-array type or

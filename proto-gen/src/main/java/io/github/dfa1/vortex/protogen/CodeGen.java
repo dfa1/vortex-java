@@ -589,7 +589,7 @@ public final class CodeGen {
     // ------------------------------------------------------------------
 
     /// Emits a try/catch wrapper that translates [IllegalArgumentException] from
-    /// `Enum.fromValue(int)` into a checked {@link IOException}. The caller must already be
+    /// `Enum.fromValue(int)` into a checked [IOException]. The caller must already be
     /// inside a `throws IOException` context (every `decode(...)` factory is).
     private static void emitEnumDecodeWrap(StringBuilder sb, String indent, String javaName, String assignTarget) {
         sb.append(indent).append("int __ev = r.readVarint32();\n");

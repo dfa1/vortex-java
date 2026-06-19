@@ -108,7 +108,7 @@ public sealed interface VarBinArray extends Array
     VarBinArray limited(long rows);
 
     /// Materialises any `VarBinArray` into a flat [OffsetMode]. The fast path
-    /// returns `src` unchanged when it is already an {@link OffsetMode}. Other modes
+    /// returns `src` unchanged when it is already an [OffsetMode]. Other modes
     /// (ViewMode in particular) walk every row through the typed accessors, copy the bytes
     /// into a fresh contiguous segment allocated from `arena`, and build an I64
     /// offsets table. Used by parent decoders (dict, sparse, runend) whose downstream code
@@ -315,7 +315,7 @@ public sealed interface VarBinArray extends Array
     ///
     /// @param dtype    logical element type (Utf8 or Binary)
     /// @param length   total logical row count
-    /// @param children chunk arrays in scan order; each is itself a {@link VarBinArray}
+    /// @param children chunk arrays in scan order; each is itself a [VarBinArray]
     /// @param offsets  cumulative row counts; length = `children.length + 1`
     @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     record ChunkedMode(DType dtype, long length, VarBinArray[] children, long[] offsets)
@@ -327,7 +327,7 @@ public sealed interface VarBinArray extends Array
         /// @param totalRows expected total row count
         /// @param chunks    non-empty list of [VarBinArray] chunks
         /// @return a new `ChunkedMode`
-        /// @throws VortexException on empty input, non-{@link VarBinArray} chunks, or row-count mismatch
+        /// @throws VortexException on empty input, non-[VarBinArray] chunks, or row-count mismatch
         public static ChunkedMode of(DType dtype, long totalRows,
                 java.util.List<? extends Array> chunks) {
             if (chunks.isEmpty()) {

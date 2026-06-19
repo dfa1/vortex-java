@@ -10,7 +10,7 @@ import java.util.function.DoubleBinaryOperator;
 import java.util.function.DoubleConsumer;
 
 /// Multi-chunk [DoubleArray] view; record per ADR 0012 with stateless
-/// {@link ChunkedLongArray#findChunk(long[], long)} dispatch.
+/// [ChunkedLongArray#findChunk(long[], long)] dispatch.
 ///
 /// @param dtype    logical element type
 /// @param length   total logical row count
@@ -20,7 +20,7 @@ import java.util.function.DoubleConsumer;
 public record ChunkedDoubleArray(DType dtype, long length, DoubleArray[] children, long[] offsets) implements DoubleArray {
 
     /// Builds a [ChunkedDoubleArray]. Flattens nested chunked arrays;
-    /// unwraps {@link MaskedArray} chunks.
+    /// unwraps [MaskedArray] chunks.
     ///
     /// @param dtype     logical element type
     /// @param totalRows expected total row count

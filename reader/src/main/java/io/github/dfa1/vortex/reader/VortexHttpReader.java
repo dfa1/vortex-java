@@ -259,7 +259,7 @@ public final class VortexHttpReader implements VortexHandle {
     /// Returns an off-heap [MemorySegment] tied to this reader's [Arena].
     ///
     /// @param spec the segment to fetch
-    /// @return a read-only {@link MemorySegment} containing the fetched bytes
+    /// @return a read-only [MemorySegment] containing the fetched bytes
     @Override
     public MemorySegment rawSegment(SegmentSpec spec) {
         long offset = spec.offset();

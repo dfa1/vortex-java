@@ -10,7 +10,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /// Unit tests for [SegmentBroadcast]. These verify the wrap-on-broadcast
 /// semantics that protect downstream encoders/decoders from IOOB when a child
-/// segment was produced by {@link ConstantEncoding} (single-element buffer).
+/// segment was produced by [ConstantEncoding] (single-element buffer).
 class SegmentBroadcastTest {
 
     @Test

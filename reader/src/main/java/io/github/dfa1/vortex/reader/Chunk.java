@@ -103,7 +103,7 @@ public final class Chunk implements AutoCloseable {
     ///
     /// @param name       column name as declared in the file's schema
     /// @param domainType the spec extension's Java domain type (e.g. [LocalDate] for
-    ///                   `vortex.date`, {@link Instant} for `vortex.timestamp`)
+    ///                   `vortex.date`, [Instant] for `vortex.timestamp`)
     /// @param <T>        domain element type
     /// @return decoded values in row order
     /// @throws VortexException if `name` isn't present, isn't an extension column,

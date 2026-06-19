@@ -185,7 +185,7 @@ public final class VortexWriter implements Closeable {
 
     /// Creates a [VortexWriter] with a custom encoder list.
     ///
-    /// Creates a {@link VortexWriter} with a custom encoder list.
+    /// Creates a [VortexWriter] with a custom encoder list.
     ///
     /// @param channel   the channel to write to
     /// @param schema    the struct schema for the file
@@ -215,7 +215,7 @@ public final class VortexWriter implements Closeable {
     }
 
     /// Counts rows for the length-consistency check in [#writeChunk]. Accepts the
-    /// same shapes the writer takes plus pre-conversion {@link java.util.Collection}s
+    /// same shapes the writer takes plus pre-conversion [java.util.Collection]s
     /// from the extension-column auto-route path.
     private static long rowCountForValidation(String colName, Object data) {
         if (data instanceof java.util.Collection<?> coll) {
@@ -359,7 +359,7 @@ public final class VortexWriter implements Closeable {
     ///     .put("volume",    new Long[]   {100L, null}));  // boxed → nullable
     /// ```
     ///
-    /// @param builder consumer that populates a {@link Chunk} with all schema columns
+    /// @param builder consumer that populates a [Chunk] with all schema columns
     /// @throws IOException if an I/O error occurs writing to the underlying channel
     public void writeChunk(java.util.function.Consumer<Chunk> builder) throws IOException {
         var impl = new io.github.dfa1.vortex.writer.ChunkImpl(schema);

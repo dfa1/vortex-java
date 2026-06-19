@@ -9,7 +9,7 @@ import io.github.dfa1.vortex.core.DType;
 /// point itself.
 ///
 /// Encoder implementations live in the `writer` module and are registered via
-/// {@link java.util.ServiceLoader}.
+/// [java.util.ServiceLoader].
 public interface EncodingEncoder {
 
     /// @return the wire identifier of this encoding

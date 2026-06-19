@@ -75,7 +75,7 @@ public final class ChunkedEncodingDecoder implements EncodingDecoder {
 
     /// Wraps the decoded chunk children in a zero-copy view: a `ChunkedXxxArray`
     /// for primitives and Bool, a [StructArray] of per-field chunked views for
-    /// {@link DType.Struct}. No concat / no per-row materialise.
+    /// [DType.Struct]. No concat / no per-row materialise.
     private static Array wrap(List<Array> chunks, DType dtype, long totalRows) {
         if (dtype instanceof DType.Primitive pt) {
             return wrapPrimitive(chunks, pt, dtype, totalRows);

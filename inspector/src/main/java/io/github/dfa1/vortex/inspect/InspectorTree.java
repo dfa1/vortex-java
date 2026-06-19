@@ -87,7 +87,7 @@ public record InspectorTree(
     /// resulting tree contains only structure derived from the file's footer
     /// and layout, so the call is essentially free on remote handles.
     ///
-    /// Use with {@link #peek(Node, VortexHandle)} for lazy on-demand resolution.
+    /// Use with [#peek(Node, VortexHandle)] for lazy on-demand resolution.
     ///
     /// @param handle open file handle
     /// @return immutable shallow inspector tree
