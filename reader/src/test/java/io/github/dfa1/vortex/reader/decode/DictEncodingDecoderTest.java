@@ -23,6 +23,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
@@ -149,6 +150,20 @@ class DictEncodingDecoderTest {
         }
 
         @Test
+        void emptyMetadata_throws() {
+            // Given — metadata present but with zero remaining bytes (exercises !hasRemaining)
+            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DICT, ByteBuffer.allocate(0),
+                    new ArrayNode[0], new int[]{});
+            DecodeContext ctx = new DecodeContext(node, new DType.Primitive(PType.I32, false),
+                    1, new MemorySegment[0], REGISTRY, Arena.ofAuto());
+
+            // When / Then
+            assertThatThrownBy(() -> SUT.decode(ctx))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("missing metadata");
+        }
+
+        @Test
         void malformedProtoMetadata_throws() {
             // Given — >1 byte (routes to proto path) but a truncated varint that proto decode rejects
             ByteBuffer meta = ByteBuffer.wrap(new byte[]{0x08, (byte) 0x80});
@@ -183,8 +198,8 @@ class DictEncodingDecoderTest {
         }
 
         @Test
-        void nonStandardCodeType_hitsReadCodeAndThrows() {
-            // Given — code ptype I8 falls into the scalar default branch, where readCode rejects it
+        void nonStandardCodeType_throws() {
+            // Given — code ptype I8 is not U8/U16/U32, so the legacy switch rejects it
             MemorySegment values = i64Segment(1, 2);
             MemorySegment codes = MemorySegment.ofArray(new byte[]{0, 0});
 
@@ -193,6 +208,84 @@ class DictEncodingDecoderTest {
                     decodeLegacy(new DType.Primitive(PType.I64, false), PType.I8, values, codes, 2))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("unexpected code type");
+        }
+    }
+
+    /// Directly exercises the generic copy fallback (element width not 1/2/4/8) in each
+    /// expand* helper — unreachable through decode() since primitive widths are always
+    /// 1/2/4/8, but kept as a defensive bulk-copy path.
+    @Nested
+    class ExpandGenericElemSize {
+
+        @ParameterizedTest(name = "codes={0}")
+        @org.junit.jupiter.params.provider.EnumSource(value = PType.class, names = {"U8", "U16", "U32"})
+        void fastPath_copiesPerElement(PType codePType) {
+            // Given — two 3-byte elements, codes [0, 1] (codesCap == rowCount, valuesCap > 1)
+            MemorySegment values = bytes(1, 2, 3, 4, 5, 6);
+            MemorySegment codes = codeSegment(codePType, new long[]{0, 1});
+            MemorySegment out = Arena.ofAuto().allocate(6);
+
+            // When
+            expand(codePType, codes, values, out, 2, 3);
+
+            // Then
+            assertThat(toByteArray(out, 6)).containsExactly(1, 2, 3, 4, 5, 6);
+        }
+
+        @ParameterizedTest(name = "codes={0}")
+        @org.junit.jupiter.params.provider.EnumSource(value = PType.class, names = {"U8", "U16", "U32"})
+        void slowPath_broadcastsSingleElement(PType codePType) {
+            // Given — one 3-byte element (valuesCap == 1) forces the broadcast branch
+            MemorySegment values = bytes(7, 8, 9);
+            MemorySegment codes = codeSegment(codePType, new long[]{0, 0});
+            MemorySegment out = Arena.ofAuto().allocate(6);
+
+            // When
+            expand(codePType, codes, values, out, 2, 3);
+
+            // Then
+            assertThat(toByteArray(out, 6)).containsExactly(7, 8, 9, 7, 8, 9);
+        }
+
+        @ParameterizedTest(name = "codes={0}")
+        @org.junit.jupiter.params.provider.EnumSource(value = PType.class, names = {"U8", "U16", "U32"})
+        void broadcastCodes_whenCodesShorterThanRowCount(PType codePType) {
+            // Given — a single code element (codesCap < rowCount) takes the codes-broadcast branch
+            MemorySegment values = bytes(10, 11, 12, 20, 21, 22);
+            MemorySegment codes = codeSegment(codePType, new long[]{1});
+            MemorySegment out = Arena.ofAuto().allocate(6);
+
+            // When
+            expand(codePType, codes, values, out, 2, 3);
+
+            // Then — code 1 resolves to the second element for every row
+            assertThat(toByteArray(out, 6)).containsExactly(20, 21, 22, 20, 21, 22);
+        }
+
+        private void expand(PType codePType, MemorySegment codes, MemorySegment values,
+                MemorySegment out, long rowCount, int elemSize) {
+            switch (codePType) {
+                case U8 -> DictEncodingDecoder.expandU8(codes, values, out, rowCount, elemSize);
+                case U16 -> DictEncodingDecoder.expandU16(codes, values, out, rowCount, elemSize);
+                case U32 -> DictEncodingDecoder.expandU32(codes, values, out, rowCount, elemSize);
+                default -> throw new IllegalArgumentException("unsupported: " + codePType);
+            }
+        }
+
+        private MemorySegment bytes(int... values) {
+            byte[] a = new byte[values.length];
+            for (int i = 0; i < values.length; i++) {
+                a[i] = (byte) values[i];
+            }
+            return MemorySegment.ofArray(a);
+        }
+
+        private byte[] toByteArray(MemorySegment seg, int n) {
+            byte[] a = new byte[n];
+            for (int i = 0; i < n; i++) {
+                a[i] = seg.get(ValueLayout.JAVA_BYTE, i);
+            }
+            return a;
         }
     }
 
@@ -287,6 +380,35 @@ class DictEncodingDecoderTest {
             // Given — children present but metadata absent
             ArrayNode child = primitiveNode(0);
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DICT, null, new ArrayNode[]{child, child}, new int[]{});
+            DecodeContext ctx = new DecodeContext(node, new DType.Utf8(false), 1,
+                    new MemorySegment[]{u8Codes(0)}, REGISTRY, Arena.ofAuto());
+
+            // When / Then
+            assertThatThrownBy(() -> SUT.decode(ctx))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("missing metadata for utf8 dict");
+        }
+
+        @Test
+        void legacyLayout_emptyMetadata_throws() {
+            // Given — no children and zero-remaining metadata (exercises !hasRemaining)
+            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DICT, ByteBuffer.allocate(0),
+                    new ArrayNode[0], new int[]{});
+            DecodeContext ctx = new DecodeContext(node, new DType.Utf8(false), 0,
+                    new MemorySegment[0], REGISTRY, Arena.ofAuto());
+
+            // When / Then
+            assertThatThrownBy(() -> SUT.decode(ctx))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("legacy utf8 dict");
+        }
+
+        @Test
+        void protoLayout_emptyMetadata_throws() {
+            // Given — children present, zero-remaining metadata
+            ArrayNode child = primitiveNode(0);
+            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DICT, ByteBuffer.allocate(0),
+                    new ArrayNode[]{child, child}, new int[]{});
             DecodeContext ctx = new DecodeContext(node, new DType.Utf8(false), 1,
                     new MemorySegment[]{u8Codes(0)}, REGISTRY, Arena.ofAuto());
 
