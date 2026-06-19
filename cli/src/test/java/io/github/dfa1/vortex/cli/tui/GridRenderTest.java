@@ -94,6 +94,73 @@ class GridRenderTest {
     }
 
     @Test
+    void rendersUtf8VarBinAsRawString() {
+        try (Arena arena = Arena.ofConfined()) {
+            // Given — Utf8 VarBin renders unquoted in the grid
+            Array sut = ArrayFixtures.utf8(arena, "héllo", "x");
+
+            // When / Then
+            assertThat(GridRender.formatCell(sut, 0, new DType.Utf8(false))).isEqualTo("héllo");
+            assertThat(GridRender.formatCell(sut, 1, new DType.Utf8(false))).isEqualTo("x");
+        }
+    }
+
+    @Test
+    void rendersBinaryVarBinAsHex() {
+        try (Arena arena = Arena.ofConfined()) {
+            // Given — non-Utf8 bytes render as 0x-prefixed hex
+            Array sut = ArrayFixtures.binary(arena, new byte[]{0x01, (byte) 0xab, 0x02});
+
+            // When / Then
+            assertThat(GridRender.formatCell(sut, 0, new DType.Binary(false))).isEqualTo("0x01ab02");
+        }
+    }
+
+    @Test
+    void truncatesBinaryHexBeyond16Bytes() {
+        try (Arena arena = Arena.ofConfined()) {
+            // Given — 20 bytes: only the first 16 are shown, then an ellipsis
+            byte[] twenty = new byte[20];
+            Array sut = ArrayFixtures.binary(arena, twenty);
+
+            // When
+            String cell = GridRender.formatCell(sut, 0, new DType.Binary(false));
+
+            // Then — "0x" + 16*"00" + "..."
+            assertThat(cell).isEqualTo("0x" + "00".repeat(16) + "...");
+        }
+    }
+
+    @Test
+    void extensionDecodeFailureRendersDiagnostic() {
+        try (Arena arena = Arena.ofConfined()) {
+            // Given — vortex.date declared but storage is F64, which epochInteger rejects
+            DType dateExt = new DType.Extension("vortex.date",
+                    new DType.Primitive(PType.I32, false), null, false);
+            Array badStorage = ArrayFixtures.doubles(arena, 1.5);
+
+            // When — the decode throws and is caught
+            String cell = GridRender.formatCell(badStorage, 0, dateExt);
+
+            // Then — angle-bracketed diagnostic rather than a thrown exception
+            assertThat(cell).startsWith("<").endsWith(">").contains("Exception");
+        }
+    }
+
+    @Test
+    void unknownExtensionIdFallsThroughToStorageRendering() {
+        try (Arena arena = Arena.ofConfined()) {
+            // Given — an extension id this reader does not know: render the raw storage value
+            DType unknownExt = new DType.Extension("custom.thing",
+                    new DType.Primitive(PType.I32, false), null, false);
+            IntArray storage = ArrayFixtures.ints(arena, 42);
+
+            // When / Then — no extension formatting, falls to the IntArray branch
+            assertThat(GridRender.formatCell(storage, 0, unknownExt)).isEqualTo("42");
+        }
+    }
+
+    @Test
     void unrenderableTypeFallsBackToAngleBrackets() {
         try (Arena arena = Arena.ofConfined()) {
             // Given — StructArray has no scalar rendering

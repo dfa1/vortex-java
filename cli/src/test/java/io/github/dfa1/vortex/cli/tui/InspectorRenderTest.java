@@ -15,6 +15,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /// Unit tests for [InspectorRender]: pure formatters exercised directly against
 /// in-memory arrays — no terminal, worker, or encoded fixture required.
@@ -70,6 +71,41 @@ class InspectorRenderTest {
         }
 
         @Test
+        void rendersUtf8VarBinQuoted() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given — the inspector quotes Utf8 strings to make whitespace visible
+                Array sut = ArrayFixtures.utf8(arena, "hi");
+
+                // When / Then
+                assertThat(InspectorRender.formatValue(sut, 0, new DType.Utf8(false))).isEqualTo("\"hi\"");
+            }
+        }
+
+        @Test
+        void rendersBinaryVarBinAsShortHex() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given — non-Utf8 bytes render as 0x-prefixed hex
+                Array sut = ArrayFixtures.binary(arena, new byte[]{0x01, (byte) 0xab});
+
+                // When / Then
+                assertThat(InspectorRender.formatValue(sut, 0, new DType.Binary(false))).isEqualTo("0x01ab");
+            }
+        }
+
+        @Test
+        void dateExtensionDecodeFailureFallsThroughToGeneric() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given — vortex.date declared but storage is F64; the decode throws and is swallowed
+                DType dateExt = new DType.Extension("vortex.date",
+                        new DType.Primitive(PType.I32, false), null, false);
+                Array badStorage = ArrayFixtures.doubles(arena, 1.5);
+
+                // When / Then — falls through to the generic DoubleArray rendering
+                assertThat(InspectorRender.formatValue(badStorage, 0, dateExt)).isEqualTo("1.5");
+            }
+        }
+
+        @Test
         void unknownTypeFallsBackToAngleBrackets() {
             try (Arena arena = Arena.ofConfined()) {
                 // Given — StructArray has no scalar rendering
@@ -114,6 +150,20 @@ class InspectorRenderTest {
 
                 // Then
                 assertThat(rows).containsExactly("min=5", "min=null");
+            }
+        }
+
+        @Test
+        void nonStructStatsArrayThrows() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given — stats payload that is not a struct
+                DType.Struct statsDtype = new DType.Struct(List.of("min"), List.of(I64), false);
+                Array notAStruct = ArrayFixtures.longs(arena, 1L);
+
+                // When / Then
+                assertThatThrownBy(() -> InspectorRender.formatStatsArray(notAStruct, statsDtype))
+                        .isInstanceOf(IllegalStateException.class)
+                        .hasMessageContaining("not a struct");
             }
         }
     }
