@@ -927,11 +927,18 @@ public final class VortexWriter implements Closeable {
     }
 
     static boolean isDictCandidate(PType ptype, Object data) {
-        // F16/F32 excluded: no measured workload; ALP usually wins. F64 admitted: low-card
-        // F64 columns (taxi mta_tax/Airport_fee/extra) compress better via global dict +
-        // sparse-coded codes (matches Rust FloatDictScheme). Skip rule (cardinality / 2
-        // below) mirrors Rust's >50%-distinct skip.
-        if (ptype == PType.F16 || ptype == PType.F32) {
+        // Only the carriers the reader's lazy dict decode supports (I32/I64/F64) are admitted.
+        // - I8/U8/I16/U16 excluded: dict gives little/no benefit (a U8/U16 code is no smaller
+        //   than the value), the Rust compressor does not dict them either (verified by
+        //   RustWritesJavaReadsIntegrationTest#jniWriter_javaReader_lowCardinalityI16), and the
+        //   reader cannot decode a narrow-int dict — emitting one produced an unreadable file.
+        // - F16/F32 excluded: no measured workload; ALP usually wins.
+        // F64 admitted: low-card F64 columns (taxi mta_tax/Airport_fee/extra) compress better via
+        // global dict + sparse-coded codes (matches Rust FloatDictScheme). The skip rule
+        // (cardinality / 2 below) mirrors Rust's >50%-distinct skip.
+        if (ptype == PType.I8 || ptype == PType.U8
+                || ptype == PType.I16 || ptype == PType.U16
+                || ptype == PType.F16 || ptype == PType.F32) {
             return false;
         }
         int n = primitiveArrayLen(data, ptype);

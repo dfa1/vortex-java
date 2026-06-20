@@ -23,6 +23,18 @@ class VortexWriterDictDecisionTest {
     }
 
     @Test
+    void isDictCandidate_excludesNarrowIntegers() {
+        // I8/U8/I16/U16 are excluded: a U8/U16 code is no smaller than the value, the Rust
+        // compressor does not dict them, and the reader's lazy dict cannot decode a narrow-int
+        // dictionary. Low-cardinality data that would otherwise pass the ratio gate must still
+        // be rejected.
+        assertThat(VortexWriter.isDictCandidate(PType.I8, new byte[]{1, 2, 1, 2, 1})).isFalse();
+        assertThat(VortexWriter.isDictCandidate(PType.U8, new byte[]{1, 2, 1, 2, 1})).isFalse();
+        assertThat(VortexWriter.isDictCandidate(PType.I16, new short[]{1, 2, 1, 2, 1})).isFalse();
+        assertThat(VortexWriter.isDictCandidate(PType.U16, new short[]{1, 2, 1, 2, 1})).isFalse();
+    }
+
+    @Test
     void isDictCandidate_admitsLowCardinalityI64AndF64() {
         // Given — 2 distinct over 5 rows: 2*2 = 4 < 5, under the 50%-unique gate
         assertThat(VortexWriter.isDictCandidate(PType.I64, new long[]{1, 2, 1, 2, 1})).isTrue();
