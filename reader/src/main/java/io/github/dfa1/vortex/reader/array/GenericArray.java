@@ -9,6 +9,7 @@ import java.lang.foreign.ValueLayout;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteOrder;
+import java.util.Optional;
 
 /// Fallback [Array] for dtypes that lack a dedicated concrete subtype.
 ///
@@ -74,10 +75,6 @@ public final class GenericArray implements Array {
         return new GenericArray(dtype, rows, buffers, children);
     }
 
-    MemorySegment buffer(int i) {
-        return buffers[i];
-    }
-
     /// Returns the primary (index 0) raw buffer directly — no copy or allocation.
     ///
     /// @param arena unused; the existing buffer is returned as-is
@@ -85,6 +82,14 @@ public final class GenericArray implements Array {
     @Override
     public MemorySegment materialize(SegmentAllocator arena) {
         return buffers[0];
+    }
+
+    /// Returns the primary (index 0) raw buffer — already materialised, no allocation.
+    ///
+    /// @return the first backing [MemorySegment]
+    @Override
+    public Optional<MemorySegment> segmentIfPresent() {
+        return Optional.of(buffers[0]);
     }
 
     /// Decodes the decimal value at row `i` from a single-buffer layout.

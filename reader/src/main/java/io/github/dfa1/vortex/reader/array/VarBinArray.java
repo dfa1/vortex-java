@@ -9,6 +9,7 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
+import java.util.Optional;
 import java.util.function.IntConsumer;
 
 /// Sealed interface for variable-length binary / UTF-8 string columns.
@@ -39,6 +40,15 @@ public sealed interface VarBinArray extends Array
         @Override
         public MemorySegment bytesSegment() {
             return inner.bytesSegment();
+        }
+
+        /// Delegates the probe to the wrapped array — empty if the inner is
+        /// itself composite (chunked / view).
+        ///
+        /// @return the inner array's segment if segment-backed, otherwise empty
+        @Override
+        public Optional<MemorySegment> segmentIfPresent() {
+            return inner.segmentIfPresent();
         }
 
         @Override
@@ -88,6 +98,14 @@ public sealed interface VarBinArray extends Array
     @Override
     default MemorySegment materialize(SegmentAllocator arena) {
         return bytesSegment();
+    }
+
+    /// Returns the concatenated raw bytes segment — already materialised, no allocation.
+    ///
+    /// @return the bytes [MemorySegment]
+    @Override
+    default Optional<MemorySegment> segmentIfPresent() {
+        return Optional.of(bytesSegment());
     }
 
     /// Returns a copy of the raw bytes for element `i`.
@@ -382,6 +400,14 @@ public sealed interface VarBinArray extends Array
             return MemorySegment.NULL;
         }
 
+        /// No single contiguous segment — chunked data lives across children.
+        ///
+        /// @return always empty
+        @Override
+        public Optional<MemorySegment> segmentIfPresent() {
+            return Optional.empty();
+        }
+
         @Override
         public byte[] getBytes(long i) {
             int c = findChunk(i);
@@ -457,6 +483,14 @@ public sealed interface VarBinArray extends Array
         @Override
         public MemorySegment bytesSegment() {
             return MemorySegment.NULL;
+        }
+
+        /// No single contiguous segment — view rows reference shared data buffers.
+        ///
+        /// @return always empty
+        @Override
+        public Optional<MemorySegment> segmentIfPresent() {
+            return Optional.empty();
         }
 
         @Override
