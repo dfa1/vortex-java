@@ -64,4 +64,26 @@
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
+
+	<profiles>
+		<!-- Mutation testing (opt-in: -P pitest). Common PIT setup is inherited from the parent
+		     `pitest` profile; only the scope differs. Run: ./mvnw -pl writer -am -P pitest verify
+		     Report: writer/target/pit-reports/. -->
+		<profile>
+			<id>pitest</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.pitest</groupId>
+						<artifactId>pitest-maven</artifactId>
+						<configuration>
+							<targetClasses>
+								<param>io.github.dfa1.vortex.writer.ChunkImpl</param>
+							</targetClasses>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
 </project>
