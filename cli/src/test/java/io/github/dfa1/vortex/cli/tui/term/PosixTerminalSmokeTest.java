@@ -14,18 +14,24 @@ import static org.assertj.core.api.Assertions.assertThat;
 ///
 /// `open()` and `size()` are deliberately not exercised — they need a real
 /// console, and a stray successful `open()` would switch the developer's terminal
-/// into the alternate screen / raw mode. Class load alone is the safe, meaningful
-/// assertion: it forces every `Linker.downcallHandle` in the static initializer
-/// (tcgetattr, tcsetattr, cfmakeraw, ioctl) to resolve its libc symbol, throwing
+/// into the alternate screen / raw mode. Forcing class *initialization* is the
+/// safe, meaningful assertion: it runs every `Linker.downcallHandle` in the
+/// static initializer (tcgetattr, tcsetattr, cfmakeraw, ioctl), throwing
 /// [UnsatisfiedLinkError] during `<clinit>` if an entry point is missing.
 class PosixTerminalSmokeTest {
 
     @Test
     @EnabledOnOs({OS.LINUX, OS.MAC})
-    void classLoad_resolvesEveryLibcSymbol() {
-        // Given / When — touching the class triggers <clinit>, which calls
-        // Linker.downcallHandle for tcgetattr / tcsetattr / cfmakeraw / ioctl.
-        Class<?> sut = PosixTerminal.class;
+    void classLoad_resolvesEveryLibcSymbol() throws ClassNotFoundException {
+        // Given / When — a class *literal* (PosixTerminal.class) only loads the
+        // class; it does NOT run <clinit>, so the downcall handles in static
+        // fields would never resolve and this would assert nothing. Force
+        // initialization explicitly so the Linker.downcallHandle calls for
+        // tcgetattr / tcsetattr / cfmakeraw / ioctl actually fire.
+        Class<?> sut = Class.forName(
+                "io.github.dfa1.vortex.cli.tui.term.PosixTerminal",
+                true,
+                getClass().getClassLoader());
 
         // Then
         assertThat(sut).isNotNull();

@@ -21,13 +21,17 @@ class WindowsTerminalSmokeTest {
 
     @Test
     @EnabledOnOs(OS.WINDOWS)
-    void classLoad_resolvesEveryKernel32Symbol() {
-        // Given / When — touching the class triggers <clinit>, which calls
-        // Linker.downcallHandle for every imported kernel32 function.
+    void classLoad_resolvesEveryKernel32Symbol() throws ClassNotFoundException {
+        // Given / When — a class *literal* (WindowsTerminal.class) only loads the
+        // class; it does NOT run <clinit>. Force initialization so the
+        // Linker.downcallHandle calls for every imported kernel32 function fire.
         // Symbols covered: GetStdHandle, GetConsoleMode, SetConsoleMode,
         // GetConsoleScreenBufferInfo, GetFileType, ReadFile,
         // GetNumberOfConsoleInputEvents.
-        Class<?> sut = WindowsTerminal.class;
+        Class<?> sut = Class.forName(
+                "io.github.dfa1.vortex.cli.tui.term.WindowsTerminal",
+                true,
+                getClass().getClassLoader());
 
         // Then
         assertThat(sut).isNotNull();
