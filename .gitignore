@@ -7,3 +7,6 @@ target/
 dependency-reduced-pom.xml
 release.properties
 *.releaseBackup
+
+# Claude Code agent worktrees (embedded git repos; never part of the project)
+.claude/worktrees/
