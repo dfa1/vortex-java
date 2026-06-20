@@ -53,9 +53,9 @@ public interface EncodingEncoder {
     /// @param dtype the logical type of the data
     /// @param data  the input data
     /// @param stats pre-computed stats reflecting the merged [StatsOptions]
-    /// @return [Estimate.Skip] / [Estimate.AlwaysUse], or `null` to defer to the
-    ///         sample-encoded selection path
+    /// @return [Estimate#SKIP] / [Estimate#ALWAYS_USE], or [Estimate#COMPLETE] to
+    ///         defer to the sample-encoded selection path
     default Estimate expectedRatio(DType dtype, Object data, ArrayStats stats) {
-        return null;
+        return Estimate.COMPLETE;
     }
 }

@@ -39,16 +39,16 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
     @Override
     public Estimate expectedRatio(DType dtype, Object data, ArrayStats stats) {
         if (!(dtype instanceof DType.Primitive) || !stats.hasMostFrequent()) {
-            return null;
+            return Estimate.COMPLETE;
         }
         long n = stats.valueCount();
         // Sparse stores fill scalar (hardcoded 0) + n - topFreq patches. Skip unless the
         // dominant value's bit pattern is zero AND it covers more than half the array —
         // otherwise the patch buffer dwarfs raw storage.
         if (n == 0 || stats.mostFrequentBits() != 0L || stats.topFrequency() * 2 < n) {
-            return Estimate.skip();
+            return Estimate.SKIP;
         }
-        return null;
+        return Estimate.COMPLETE;
     }
 
     /// Cascade gate: skip unless analytic sparse size beats raw-bitpacked size.

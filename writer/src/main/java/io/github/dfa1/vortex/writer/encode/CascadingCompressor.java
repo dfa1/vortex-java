@@ -163,8 +163,8 @@ public final class CascadingCompressor {
 
         // Stats-first selection (Rust vortex-compressor pattern): merge every eligible
         // encoder's StatsOptions, compute stats in one pass, query each encoder's
-        // expectedRatio(). AlwaysUse short-circuits; Skip excludes; Ratio competes;
-        // null defers to the sample-encoded path below.
+        // expectedRatio(). ALWAYS_USE short-circuits; SKIP excludes; COMPLETE defers
+        // to the sample-encoded path below.
         StatsOptions merged = StatsOptions.NONE;
         for (EncodingEncoder enc : encodings) {
             if (enc.accepts(dtype) && !ctx.excluded().contains(enc.encodingId())) {
@@ -175,9 +175,8 @@ public final class CascadingCompressor {
                                    ? ArrayStats.EMPTY
                                    : ArrayStats.compute(p.ptype(), data, merged);
 
-        // First sweep: stats verdicts. AlwaysUse short-circuits; Skip excludes from
-        // sample-encoded competition below; Ratio acts as a Skip hint (rough estimate,
-        // not directly comparable to cascade-aware sample bytes); null defers.
+        // First sweep: stats verdicts. ALWAYS_USE short-circuits; SKIP excludes from
+        // the sample-encoded competition below; COMPLETE defers to it.
         boolean[] skipMask = new boolean[encodings.size()];
         for (int i = 0; i < encodings.size(); i++) {
             EncodingEncoder enc = encodings.get(i);
@@ -186,10 +185,10 @@ public final class CascadingCompressor {
                 continue;
             }
             Estimate est = enc.expectedRatio(dtype, data, stats);
-            if (est instanceof Estimate.AlwaysUse) {
+            if (est == Estimate.ALWAYS_USE) {
                 return spliceResult(enc, dtype, data, ctx);
             }
-            if (est instanceof Estimate.Skip) {
+            if (est == Estimate.SKIP) {
                 skipMask[i] = true;
             }
         }

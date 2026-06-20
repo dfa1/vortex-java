@@ -33,15 +33,15 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
     @Override
     public Estimate expectedRatio(DType dtype, Object data, ArrayStats stats) {
         if (stats.valueCount() == 0) {
-            return Estimate.alwaysUse();
+            return Estimate.ALWAYS_USE;
         }
         if (!stats.hasDistinctCount()) {
-            return null;
+            return Estimate.COMPLETE;
         }
         if (stats.distinctCount() == 1) {
-            return Estimate.alwaysUse();
+            return Estimate.ALWAYS_USE;
         }
-        return Estimate.skip();
+        return Estimate.SKIP;
     }
 
     @Override

@@ -37,20 +37,20 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
     @Override
     public Estimate expectedRatio(DType dtype, Object data, ArrayStats stats) {
         if (!(dtype instanceof DType.Primitive) || !stats.hasDistinctCount()) {
-            return null;
+            return Estimate.COMPLETE;
         }
         long n = stats.valueCount();
         long distinct = stats.distinctCount();
         if (n == 0) {
-            return Estimate.skip();
+            return Estimate.SKIP;
         }
         // Skip rule: if every value is distinct, each row is its own run — pure overhead.
         // Defer to the sample-encoded path otherwise; RunEnd's actual compression depends
         // on run-length distribution which is not summarised by distinct count alone.
         if (distinct >= n) {
-            return Estimate.skip();
+            return Estimate.SKIP;
         }
-        return null;
+        return Estimate.COMPLETE;
     }
 
     @Override
