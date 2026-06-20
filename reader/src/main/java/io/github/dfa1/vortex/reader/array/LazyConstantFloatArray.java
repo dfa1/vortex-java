@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.DType;
 
+import java.util.Objects;
 import java.util.function.DoubleBinaryOperator;
 
 /// Metadata-only [FloatArray] for `vortex.constant` columns.
@@ -16,9 +17,7 @@ public record LazyConstantFloatArray(DType dtype, long length, float value) impl
 
     @Override
     public float getFloat(long i) {
-        if (i < 0 || i >= length) {
-            throw new IndexOutOfBoundsException("index " + i + " out of bounds for length " + length);
-        }
+        Objects.checkIndex(i, length);
         return value;
     }
 

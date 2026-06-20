@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.DType;
 
+import java.util.Objects;
 import java.util.function.IntBinaryOperator;
 import java.util.function.IntConsumer;
 
@@ -18,9 +19,7 @@ public record LazyConstantIntArray(DType dtype, long length, int value) implemen
 
     @Override
     public int getInt(long i) {
-        if (i < 0 || i >= length) {
-            throw new IndexOutOfBoundsException("index " + i + " out of bounds for length " + length);
-        }
+        Objects.checkIndex(i, length);
         return value;
     }
 

@@ -12,6 +12,7 @@ import io.github.dfa1.vortex.encoding.TimeUnit;
 
 import java.nio.ByteBuffer;
 import java.time.Instant;
+import java.util.Objects;
 
 /// Low-level storage helpers for extension decode paths.
 public final class ExtensionStorage {
@@ -87,8 +88,6 @@ public final class ExtensionStorage {
     /// @param i      row index to check
     /// @param length array length
     public static void checkBounds(long i, long length) {
-        if (i < 0 || i >= length) {
-            throw new IndexOutOfBoundsException("index " + i + " out of bounds for length " + length);
-        }
+        Objects.checkIndex(i, length);
     }
 }

@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.DType;
 
+import java.util.Objects;
 import java.util.function.DoubleBinaryOperator;
 import java.util.function.DoubleConsumer;
 
@@ -17,9 +18,7 @@ public record LazyConstantDoubleArray(DType dtype, long length, double value) im
 
     @Override
     public double getDouble(long i) {
-        if (i < 0 || i >= length) {
-            throw new IndexOutOfBoundsException("index " + i + " out of bounds for length " + length);
-        }
+        Objects.checkIndex(i, length);
         return value;
     }
 

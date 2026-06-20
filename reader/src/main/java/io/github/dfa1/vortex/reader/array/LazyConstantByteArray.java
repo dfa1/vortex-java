@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.reader.array;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 
+import java.util.Objects;
 import java.util.function.LongBinaryOperator;
 
 /// Metadata-only [ByteArray] for `vortex.constant` columns.
@@ -19,17 +20,13 @@ public record LazyConstantByteArray(DType dtype, long length, byte value) implem
 
     @Override
     public byte getByte(long i) {
-        if (i < 0 || i >= length) {
-            throw new IndexOutOfBoundsException("index " + i + " out of bounds for length " + length);
-        }
+        Objects.checkIndex(i, length);
         return value;
     }
 
     @Override
     public int getInt(long i) {
-        if (i < 0 || i >= length) {
-            throw new IndexOutOfBoundsException("index " + i + " out of bounds for length " + length);
-        }
+        Objects.checkIndex(i, length);
         boolean unsigned = dtype instanceof DType.Primitive p && p.ptype() == PType.U8;
         return unsigned ? Byte.toUnsignedInt(value) : (int) value;
     }

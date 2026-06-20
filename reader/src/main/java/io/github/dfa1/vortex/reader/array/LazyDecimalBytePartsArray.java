@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.VortexException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
 import java.math.BigDecimal;
+import java.util.Objects;
 
 /// Lazy `vortex.decimal_byte_parts` reassembly.
 ///
@@ -30,9 +31,7 @@ public record LazyDecimalBytePartsArray(DType dtype, long length, Array msp) imp
     ///                                     mantissa cell is null
     /// @throws IndexOutOfBoundsException if `i` is outside `[0, length())`
     public BigDecimal getDecimal(long i) {
-        if (i < 0 || i >= length) {
-            throw new IndexOutOfBoundsException("index " + i + " out of bounds for length " + length);
-        }
+        Objects.checkIndex(i, length);
         if (!(dtype instanceof DType.Decimal d)) {
             throw new VortexException("LazyDecimalBytePartsArray: non-decimal dtype " + dtype);
         }
