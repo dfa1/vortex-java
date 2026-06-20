@@ -1,9 +1,12 @@
 package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.encoding.PTypeIO;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -357,6 +360,186 @@ class ChunkedRecordSmokeTest {
 
             // Then
             assertThat(seen).containsExactly(true, false, true);
+        }
+    }
+
+    @Nested
+    class ChunkedIntFull {
+
+        @Test
+        void forEachFoldAndMaterialize() {
+            // Given
+            ChunkedIntArray sut = ChunkedIntArray.of(I32, 4, List.of(ints(1, 2), ints(3, 4)));
+
+            // When / Then
+            var seen = new ArrayList<Integer>();
+            sut.forEachInt(seen::add);
+            assertThat(seen).containsExactly(1, 2, 3, 4);
+            assertThat(sut.fold(0, Integer::sum)).isEqualTo(10);
+
+            try (Arena arena = Arena.ofConfined()) {
+                MemorySegment m = sut.materialize(arena);
+                for (int i = 0; i < 4; i++) {
+                    assertThat(m.getAtIndex(PTypeIO.LE_INT, i)).isEqualTo(sut.getInt(i));
+                }
+            }
+        }
+
+        @Test
+        void limitedKeepsLimitsAndBreaks() {
+            // Given 3 chunks of 2 rows each; limit 3 keeps chunk0, limits chunk1 to 1, breaks before chunk2
+            ChunkedIntArray sut = ChunkedIntArray.of(I32, 6, List.of(ints(1, 2), ints(3, 4), ints(5, 6)));
+
+            // When
+            IntArray limited = (IntArray) sut.limited(3);
+
+            // Then
+            assertThat(limited.length()).isEqualTo(3);
+            assertThat(limited.getInt(0)).isEqualTo(1);
+            assertThat(limited.getInt(2)).isEqualTo(3);
+        }
+
+        @Test
+        void maskedChunkFlattensToInner() {
+            // Given a masked chunk wrapping an IntArray
+            MaskedArray masked = new MaskedArray(ints(7, 8), bools(true, true));
+
+            // When
+            ChunkedIntArray sut = ChunkedIntArray.of(I32, 2, List.of(masked));
+
+            // Then — flattened to the inner IntArray
+            assertThat(sut.getInt(1)).isEqualTo(8);
+        }
+
+        @Test
+        void wrongChunkTypeRejected() {
+            // Given / When / Then — a LongArray is not an IntArray chunk
+            assertThatThrownBy(() -> ChunkedIntArray.of(I32, 1, List.of(longs(1L))))
+                    .isInstanceOf(VortexException.class);
+        }
+
+        @Test
+        void ofFlattensNestedAndValidates() {
+            // nested flatten
+            ChunkedIntArray nested = ChunkedIntArray.of(I32, 3, List.of(ints(1, 2), ints(3)));
+            ChunkedIntArray sut = ChunkedIntArray.of(I32, 5, List.of(nested, ints(4, 5)));
+            assertThat(sut.children()).hasSize(3);
+            assertThat(sut.getInt(4)).isEqualTo(5);
+
+            // empty + row mismatch
+            assertThatThrownBy(() -> ChunkedIntArray.of(I32, 0, List.of()))
+                    .isInstanceOf(VortexException.class);
+            assertThatThrownBy(() -> ChunkedIntArray.of(I32, 99, List.of(ints(1))))
+                    .isInstanceOf(VortexException.class);
+        }
+    }
+
+    @Nested
+    class ChunkedDoubleFull {
+
+        @Test
+        void forEachFoldAndMaterialize() {
+            // Given
+            ChunkedDoubleArray sut = ChunkedDoubleArray.of(F64, 3, List.of(doubles(1.5, 2.5), doubles(3.5)));
+
+            // When / Then
+            var seen = new ArrayList<Double>();
+            sut.forEachDouble(seen::add);
+            assertThat(seen).containsExactly(1.5, 2.5, 3.5);
+            assertThat(sut.fold(0.0, Double::sum)).isEqualTo(7.5);
+
+            try (Arena arena = Arena.ofConfined()) {
+                MemorySegment m = sut.materialize(arena);
+                for (int i = 0; i < 3; i++) {
+                    assertThat(m.getAtIndex(PTypeIO.LE_DOUBLE, i)).isEqualTo(sut.getDouble(i));
+                }
+            }
+        }
+
+        @Test
+        void limitedKeepsLimitsAndBreaks() {
+            ChunkedDoubleArray sut = ChunkedDoubleArray.of(F64, 6,
+                    List.of(doubles(1, 2), doubles(3, 4), doubles(5, 6)));
+
+            DoubleArray limited = (DoubleArray) sut.limited(3);
+
+            assertThat(limited.length()).isEqualTo(3);
+            assertThat(limited.getDouble(2)).isEqualTo(3.0);
+        }
+
+        @Test
+        void ofFlattensNestedAndValidatesMismatch() {
+            ChunkedDoubleArray nested = ChunkedDoubleArray.of(F64, 3, List.of(doubles(1, 2), doubles(3)));
+            ChunkedDoubleArray sut = ChunkedDoubleArray.of(F64, 5, List.of(nested, doubles(4, 5)));
+            assertThat(sut.children()).hasSize(3);
+
+            assertThatThrownBy(() -> ChunkedDoubleArray.of(F64, 99, List.of(doubles(1))))
+                    .isInstanceOf(VortexException.class);
+
+            // masked chunk flattens to its inner DoubleArray
+            var masked = ChunkedDoubleArray.of(F64, 2,
+                    List.of(new MaskedArray(doubles(8.0, 9.0), bools(true, true))));
+            assertThat(masked.getDouble(1)).isEqualTo(9.0);
+        }
+
+        @Test
+        void emptyRejected() {
+            assertThatThrownBy(() -> ChunkedDoubleArray.of(F64, 0, List.of()))
+                    .isInstanceOf(VortexException.class);
+        }
+    }
+
+    @Nested
+    class ChunkedFloatFull {
+
+        @Test
+        void foldAndMaterialize() {
+            // Given
+            ChunkedFloatArray sut = ChunkedFloatArray.of(F32, 3, List.of(floats(1.5f, 2.5f), floats(3.5f)));
+
+            // When / Then
+            assertThat(sut.fold(0.0, Double::sum)).isEqualTo(7.5);
+
+            try (Arena arena = Arena.ofConfined()) {
+                MemorySegment m = sut.materialize(arena);
+                for (int i = 0; i < 3; i++) {
+                    assertThat(m.getAtIndex(PTypeIO.LE_FLOAT, i)).isEqualTo(sut.getFloat(i));
+                }
+            }
+        }
+
+        @Test
+        void limitedKeepsLimitsAndBreaks() {
+            ChunkedFloatArray sut = ChunkedFloatArray.of(F32, 6,
+                    List.of(floats(1, 2), floats(3, 4), floats(5, 6)));
+
+            FloatArray limited = (FloatArray) sut.limited(3);
+
+            assertThat(limited.length()).isEqualTo(3);
+            assertThat(limited.getFloat(2)).isEqualTo(3.0f);
+        }
+
+        @Test
+        void ofFlattensNestedValidatesAndRejectsWrongType() {
+            ChunkedFloatArray nested = ChunkedFloatArray.of(F32, 3, List.of(floats(1, 2), floats(3)));
+            ChunkedFloatArray sut = ChunkedFloatArray.of(F32, 5, List.of(nested, floats(4, 5)));
+            assertThat(sut.children()).hasSize(3);
+
+            assertThatThrownBy(() -> ChunkedFloatArray.of(F32, 99, List.of(floats(1))))
+                    .isInstanceOf(VortexException.class);
+            assertThatThrownBy(() -> ChunkedFloatArray.of(F32, 1, List.of(longs(1L))))
+                    .isInstanceOf(VortexException.class);
+
+            // masked chunk flattens to its inner FloatArray
+            var masked = ChunkedFloatArray.of(F32, 2,
+                    List.of(new MaskedArray(floats(8.0f, 9.0f), bools(true, true))));
+            assertThat(masked.getFloat(1)).isEqualTo(9.0f);
+        }
+
+        @Test
+        void emptyRejected() {
+            assertThatThrownBy(() -> ChunkedFloatArray.of(F32, 0, List.of()))
+                    .isInstanceOf(VortexException.class);
         }
     }
 }
