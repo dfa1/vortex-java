@@ -191,6 +191,7 @@
 						<configuration>
 							<targetClasses>
 								<param>io.github.dfa1.vortex.core.IoBounds</param>
+								<param>io.github.dfa1.vortex.encoding.PTypeIO</param>
 							</targetClasses>
 						</configuration>
 					</plugin>
