@@ -143,11 +143,12 @@ class GlobalDictPrimitiveTest {
     }
 
     @Test
-    void lowCardinality_i16_globalDict_readerRejects(@TempDir Path tmp) throws IOException {
-        // Documents a real write/read incompatibility surfaced by mutation coverage: the writer's
-        // global dict admits I8/I16 columns (isDictCandidate), but the reader's lazy dict decode
-        // only supports I32/I64/F64 — reading back throws "unsupported ptype for lazy dict: I16".
-        // Pinning it here makes the gap explicit; fixing it belongs to the reader's dict decode.
+    void lowCardinality_i16_notDicted_roundTrips(@TempDir Path tmp) throws IOException {
+        // Regression: the writer used to admit I16 to the global dict, producing a vortex.dict
+        // column the reader cannot decode ("unsupported ptype for lazy dict: I16"). I8/I16 are now
+        // excluded from dict candidacy — matching the Rust compressor, which does not dict narrow
+        // ints (RustWritesJavaReadsIntegrationTest#jniWriter_javaReader_lowCardinalityI16) — so a
+        // low-card I16 column encodes via the cascade and round-trips cleanly.
         var schema = new DType.Struct(List.of("v"), List.of(new DType.Primitive(PType.I16, false)), false);
         short[] data = {1, 2, 3, 1, 2, 3, 1, 2};
         Path file = tmp.resolve("i16.vortex");
@@ -156,12 +157,25 @@ class GlobalDictPrimitiveTest {
             sut.writeChunk(Map.of("v", data));
         }
 
-        // When / Then — the round-trip is not yet supported; assert the current behaviour
-        try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
-            org.assertj.core.api.Assertions.assertThatThrownBy(() -> VortexReads.readAllInts(vf, "v"))
-                    .isInstanceOf(io.github.dfa1.vortex.core.VortexException.class)
-                    .hasMessageContaining("unsupported ptype for lazy dict");
+        // When — I16 now encodes via the cascade (a ShortArray view), not a dict
+        short[] result;
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("v"))) {
+            var out = new java.util.ArrayList<Short>();
+            iter.forEachRemaining(c -> {
+                var arr = (io.github.dfa1.vortex.reader.array.ShortArray) c.columns().get("v");
+                for (long i = 0; i < arr.length(); i++) {
+                    out.add(arr.getShort(i));
+                }
+            });
+            result = new short[out.size()];
+            for (int i = 0; i < result.length; i++) {
+                result[i] = out.get(i);
+            }
         }
+
+        // Then — reads back exactly, no lazy-dict error
+        assertThat(result).containsExactly(data);
     }
 
     @Test

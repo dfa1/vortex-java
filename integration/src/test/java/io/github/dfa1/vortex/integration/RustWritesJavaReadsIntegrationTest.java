@@ -23,6 +23,7 @@ import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.Float2Vector;
 import org.apache.arrow.vector.Float8Vector;
+import org.apache.arrow.vector.SmallIntVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.arrow.vector.types.FloatingPointPrecision;
@@ -388,6 +389,62 @@ class RustWritesJavaReadsIntegrationTest {
             // spot-check: first 9 values must cycle [1.1,2.2,3.3] — catches silent value corruption
             // that leaves sums intact but permutes elements (e.g. proto tag drift on dict encoding)
             assertThat(first9).containsExactly(1.1, 2.2, 3.3, 1.1, 2.2, 3.3, 1.1, 2.2, 3.3);
+        }
+    }
+
+    private static final Schema I16_SCHEMA = new Schema(List.of(
+            Field.notNullable("v", new ArrowType.Int(16, true))
+    ));
+
+    private static void writeJniI16(Path file, short[] vals) throws IOException {
+        String uri = file.toAbsolutePath().toUri().toString();
+        try (VortexWriter writer = VortexWriter.create(SESSION, uri, I16_SCHEMA, new HashMap<>(), ALLOCATOR);
+             VectorSchemaRoot root = VectorSchemaRoot.create(I16_SCHEMA, ALLOCATOR)) {
+            SmallIntVector vec = (SmallIntVector) root.getVector("v");
+            vec.allocateNew(vals.length);
+            for (int i = 0; i < vals.length; i++) {
+                vec.setSafe(i, vals[i]);
+            }
+            root.setRowCount(vals.length);
+            try (ArrowArray arr = ArrowArray.allocateNew(ALLOCATOR);
+                 ArrowSchema schema = ArrowSchema.allocateNew(ALLOCATOR)) {
+                Data.exportVectorSchemaRoot(ALLOCATOR, root, null, arr, schema);
+                writer.writeBatch(arr.memoryAddress(), schema.memoryAddress());
+            }
+        }
+    }
+
+    @Test
+    void jniWriter_javaReader_lowCardinalityI16(@TempDir Path tmp) throws IOException {
+        // Given — 10_000 rows cycling 3 unique I16 values. Ground-truth cross-check: does the
+        // Rust/JNI compressor dict-encode a low-cardinality I16 column, and can the Java reader
+        // read it back? (The Java writer's global dict admitted I16 but the Java reader rejected
+        // it with "unsupported ptype for lazy dict: I16".) If Rust dicts I16 and Java cannot read
+        // it, the bug is reader-side and this test fails with that exact message.
+        int n = 10_000;
+        short[] unique = {7, 8, 9};
+        short[] vals = new short[n];
+        for (int i = 0; i < n; i++) {
+            vals[i] = unique[i % unique.length];
+        }
+        Path file = tmp.resolve("jni_i16_lowcard.vtx");
+        writeJniI16(file, vals);
+
+        // When / Then — must round-trip exactly
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
+            List<JavaChunk> results = scanAll(vf, io.github.dfa1.vortex.reader.ScanOptions.columns("v"));
+            long total = results.stream().mapToLong(JavaChunk::rowCount).sum();
+            assertThat(total).isEqualTo(n);
+            var got = new ArrayList<Short>();
+            for (JavaChunk r : results) {
+                short[] decoded = (short[]) r.columns().get("v");
+                for (short s : decoded) {
+                    got.add(s);
+                }
+            }
+            for (int i = 0; i < n; i++) {
+                assertThat(got.get(i)).as("row %d", i).isEqualTo(unique[i % unique.length]);
+            }
         }
     }
 
