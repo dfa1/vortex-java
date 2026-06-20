@@ -33,7 +33,7 @@ public final class VortexHttpReader implements VortexHandle {
     /// Shared across all instances. JDK HttpClient is heavyweight and designed for reuse;
     /// per-reader instantiation would create redundant connection pools and selector threads.
     /// Never closed: lifetime tracks the JVM.
-    private static final HttpClient CLIENT = HttpClient.newHttpClient();
+    private static final HttpClient DEFAULT_HTTP_CLIENT = HttpClient.newHttpClient();
 
     private final URI uri;
     private final HttpClient client;
@@ -66,7 +66,7 @@ public final class VortexHttpReader implements VortexHandle {
     }
 
     public static VortexHttpReader open(URI uri, ReadRegistry registry) throws IOException {
-        return open(uri, registry, CLIENT);
+        return open(uri, registry, DEFAULT_HTTP_CLIENT);
     }
 
     /// Opens a remote Vortex file using a caller-supplied [HttpClient].
