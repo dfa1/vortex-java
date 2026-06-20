@@ -63,4 +63,20 @@ class LazyForIntArrayTest {
         // Then
         assertThat(sum).isEqualTo(36);
     }
+
+    @Test
+    void materializeDecodesAllRows() {
+        // Given
+        LazyForIntArray sut = of(1000, 1, 2, 3);
+
+        // When
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment seg = sut.materialize(arena);
+
+            // Then — materialized rows match the lazy getter
+            for (int i = 0; i < 3; i++) {
+                assertThat(seg.getAtIndex(LE_INT, i)).as("row %d", i).isEqualTo(sut.getInt(i));
+            }
+        }
+    }
 }

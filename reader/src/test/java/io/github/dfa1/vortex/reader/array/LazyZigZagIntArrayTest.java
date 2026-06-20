@@ -65,4 +65,20 @@ class LazyZigZagIntArrayTest {
         // Then
         assertThat(sum).isZero();
     }
+
+    @Test
+    void materializeDecodesAllRows() {
+        // Given
+        LazyZigZagIntArray sut = of(0, 1, 2, 3, 4);
+
+        // When
+        try (Arena arena = Arena.ofConfined()) {
+            MemorySegment seg = sut.materialize(arena);
+
+            // Then — materialized rows match the lazy getter
+            for (int i = 0; i < 5; i++) {
+                assertThat(seg.getAtIndex(LE_INT, i)).as("row %d", i).isEqualTo(sut.getInt(i));
+            }
+        }
+    }
 }
