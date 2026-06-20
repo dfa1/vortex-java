@@ -1,13 +1,12 @@
 package io.github.dfa1.vortex.reader.array;
 
+import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -15,15 +14,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class LazyForIntArrayTest {
 
-    private static final ValueLayout.OfInt LE_INT =
-            ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     private static final DType I32 = new DType.Primitive(PType.I32, false);
 
     private static LazyForIntArray of(int ref, int... encoded) {
         MemorySegment seg = Arena.ofAuto().allocate((long) encoded.length * 4, 4);
         for (int i = 0; i < encoded.length; i++) {
-            seg.setAtIndex(LE_INT, i, encoded[i]);
+            seg.setAtIndex(PTypeIO.LE_INT, i, encoded[i]);
         }
         return new LazyForIntArray(I32, encoded.length, seg, ref);
     }
@@ -75,7 +72,7 @@ class LazyForIntArrayTest {
 
             // Then — materialized rows match the lazy getter
             for (int i = 0; i < 3; i++) {
-                assertThat(seg.getAtIndex(LE_INT, i)).as("row %d", i).isEqualTo(sut.getInt(i));
+                assertThat(seg.getAtIndex(PTypeIO.LE_INT, i)).as("row %d", i).isEqualTo(sut.getInt(i));
             }
         }
     }

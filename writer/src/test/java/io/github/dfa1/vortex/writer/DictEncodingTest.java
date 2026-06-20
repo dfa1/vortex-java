@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.writer;
 
+import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -13,8 +14,6 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.lang.foreign.Arena;
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -26,7 +25,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class DictEncodingTest {
 
-    private static final ValueLayout.OfInt LE_INT = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
     private static final DType.Struct SCHEMA = new DType.Struct(
             List.of("category"),
             List.of(new DType.Primitive(PType.I32, false)),
@@ -101,19 +99,19 @@ class DictEncodingTest {
             try (Chunk c1 = iter.next()) {
                 Array a1 = c1.columns().get("category");
                 assertThat(a1.length()).isEqualTo(3L);
-                assertThat(a1.materialize(Arena.ofAuto()).get(LE_INT, 0)).isEqualTo(10);
-                assertThat(a1.materialize(Arena.ofAuto()).get(LE_INT, 4)).isEqualTo(20);
-                assertThat(a1.materialize(Arena.ofAuto()).get(LE_INT, 8)).isEqualTo(10);
+                assertThat(a1.materialize(Arena.ofAuto()).get(PTypeIO.LE_INT, 0)).isEqualTo(10);
+                assertThat(a1.materialize(Arena.ofAuto()).get(PTypeIO.LE_INT, 4)).isEqualTo(20);
+                assertThat(a1.materialize(Arena.ofAuto()).get(PTypeIO.LE_INT, 8)).isEqualTo(10);
             }
 
             assertThat(iter.hasNext()).isTrue();
             try (Chunk c2 = iter.next()) {
                 Array a2 = c2.columns().get("category");
                 assertThat(a2.length()).isEqualTo(4L);
-                assertThat(a2.materialize(Arena.ofAuto()).get(LE_INT, 0)).isEqualTo(30);
-                assertThat(a2.materialize(Arena.ofAuto()).get(LE_INT, 4)).isEqualTo(10);
-                assertThat(a2.materialize(Arena.ofAuto()).get(LE_INT, 8)).isEqualTo(20);
-                assertThat(a2.materialize(Arena.ofAuto()).get(LE_INT, 12)).isEqualTo(30);
+                assertThat(a2.materialize(Arena.ofAuto()).get(PTypeIO.LE_INT, 0)).isEqualTo(30);
+                assertThat(a2.materialize(Arena.ofAuto()).get(PTypeIO.LE_INT, 4)).isEqualTo(10);
+                assertThat(a2.materialize(Arena.ofAuto()).get(PTypeIO.LE_INT, 8)).isEqualTo(20);
+                assertThat(a2.materialize(Arena.ofAuto()).get(PTypeIO.LE_INT, 12)).isEqualTo(30);
             }
 
             assertThat(iter.hasNext()).isFalse();

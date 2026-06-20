@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.reader.array;
 
+import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import org.junit.jupiter.api.Nested;
@@ -7,8 +8,6 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -16,15 +15,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class LazyForLongArrayTest {
 
-    private static final ValueLayout.OfLong LE_LONG =
-            ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     private static final DType I64 = new DType.Primitive(PType.I64, false);
 
     private static LazyForLongArray of(long ref, long... encoded) {
         MemorySegment seg = Arena.ofAuto().allocate((long) encoded.length * 8, 8);
         for (int i = 0; i < encoded.length; i++) {
-            seg.setAtIndex(LE_LONG, i, encoded[i]);
+            seg.setAtIndex(PTypeIO.LE_LONG, i, encoded[i]);
         }
         return new LazyForLongArray(I64, encoded.length, seg, ref);
     }

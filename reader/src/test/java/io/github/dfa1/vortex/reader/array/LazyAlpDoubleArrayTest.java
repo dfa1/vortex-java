@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.reader.array;
 
+import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import org.junit.jupiter.api.Nested;
@@ -7,8 +8,6 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -17,15 +16,13 @@ import static org.assertj.core.api.Assertions.offset;
 
 class LazyAlpDoubleArrayTest {
 
-    private static final ValueLayout.OfLong LE_LONG =
-            ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     private static final DType F64 = new DType.Primitive(PType.F64, false);
 
     private static LazyAlpDoubleArray of(double scale, long... encoded) {
         MemorySegment seg = Arena.ofAuto().allocate((long) encoded.length * 8, 8);
         for (int i = 0; i < encoded.length; i++) {
-            seg.setAtIndex(LE_LONG, i, encoded[i]);
+            seg.setAtIndex(PTypeIO.LE_LONG, i, encoded[i]);
         }
         return new LazyAlpDoubleArray(F64, encoded.length, seg, scale, 1.0);
     }
@@ -119,8 +116,6 @@ class LazyAlpDoubleArrayTest {
         void decodesAllRows() {
             // Given
             LazyAlpDoubleArray sut = of(0.01, 123L, 456L, 789L);
-            ValueLayout.OfDouble leDouble =
-                    ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
             // When
             try (Arena arena = Arena.ofConfined()) {
@@ -128,7 +123,7 @@ class LazyAlpDoubleArrayTest {
 
                 // Then — each materialized row matches the lazy getter
                 for (int i = 0; i < 3; i++) {
-                    assertThat(seg.getAtIndex(leDouble, i)).as("row %d", i)
+                    assertThat(seg.getAtIndex(PTypeIO.LE_DOUBLE, i)).as("row %d", i)
                             .isCloseTo(sut.getDouble(i), offset(1e-12));
                 }
             }

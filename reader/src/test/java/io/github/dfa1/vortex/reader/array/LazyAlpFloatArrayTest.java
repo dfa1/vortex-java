@@ -1,28 +1,25 @@
 package io.github.dfa1.vortex.reader.array;
 
+import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.offset;
 
 class LazyAlpFloatArrayTest {
 
-    private static final ValueLayout.OfInt LE_INT =
-            ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     private static final DType F32 = new DType.Primitive(PType.F32, false);
 
     private static LazyAlpFloatArray of(float scale, int... encoded) {
         MemorySegment seg = Arena.ofAuto().allocate((long) encoded.length * 4, 4);
         for (int i = 0; i < encoded.length; i++) {
-            seg.setAtIndex(LE_INT, i, encoded[i]);
+            seg.setAtIndex(PTypeIO.LE_INT, i, encoded[i]);
         }
         return new LazyAlpFloatArray(F32, encoded.length, seg, scale, 1.0f);
     }
@@ -54,8 +51,6 @@ class LazyAlpFloatArrayTest {
     void materializeDecodesAllRows() {
         // Given
         LazyAlpFloatArray sut = of(0.01f, 123, 456, 789);
-        ValueLayout.OfFloat leFloat =
-                ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
         // When
         try (Arena arena = Arena.ofConfined()) {
@@ -63,7 +58,7 @@ class LazyAlpFloatArrayTest {
 
             // Then — each materialized row matches the lazy getter
             for (int i = 0; i < 3; i++) {
-                assertThat(seg.getAtIndex(leFloat, i)).as("row %d", i)
+                assertThat(seg.getAtIndex(PTypeIO.LE_FLOAT, i)).as("row %d", i)
                         .isCloseTo(sut.getFloat(i), offset(1e-6f));
             }
         }

@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.reader;
 
+import io.github.dfa1.vortex.encoding.PTypeIO;
 import com.google.flatbuffers.FlatBufferBuilder;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
@@ -11,8 +12,6 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -25,8 +24,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /// a [VortexException], never a raw `IndexOutOfBoundsException` from `MemorySegment.asSlice`.
 class FlatSegmentBoundsSecurityTest {
 
-    private static final ValueLayout.OfInt LE_INT =
-            ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     private static final DType DTYPE = new DType.Primitive(PType.I32, false);
 
@@ -50,7 +47,7 @@ class FlatSegmentBoundsSecurityTest {
             // Given a 16-byte segment whose trailing u32 claims a 1 000 000-byte FlatBuffer;
             // fbStart = segLen - 4 - fbLen would go deeply negative.
             MemorySegment seg = arena.allocate(16);
-            seg.set(LE_INT, 12, 1_000_000);
+            seg.set(PTypeIO.LE_INT, 12, 1_000_000);
 
             // When / Then
             assertThatThrownBy(() -> sut.decode(seg, List.of("vortex.flat"), DTYPE, 1, arena))
@@ -63,7 +60,7 @@ class FlatSegmentBoundsSecurityTest {
         try (Arena arena = Arena.ofConfined()) {
             // Given a trailing u32 of 0xFFFFFFFF — reads back as a signed int of -1
             MemorySegment seg = arena.allocate(16);
-            seg.set(LE_INT, 12, -1);
+            seg.set(PTypeIO.LE_INT, 12, -1);
 
             // When / Then the negative length is rejected (checkRange len < 0)
             assertThatThrownBy(() -> sut.decode(seg, List.of("vortex.flat"), DTYPE, 1, arena))
@@ -79,7 +76,7 @@ class FlatSegmentBoundsSecurityTest {
             byte[] fb = arrayFlatBufferWithOneBuffer(1_000_000L);
             MemorySegment seg = arena.allocate(fb.length + 4L);
             MemorySegment.copy(MemorySegment.ofArray(fb), 0, seg, 0, fb.length);
-            seg.set(LE_INT, fb.length, fb.length);
+            seg.set(PTypeIO.LE_INT, fb.length, fb.length);
 
             // When / Then the buffer slice is bounds-checked before asSlice
             assertThatThrownBy(() -> sut.decode(seg, List.of("vortex.flat"), DTYPE, 1, arena))
