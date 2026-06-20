@@ -7,19 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.8.0] — 2026-06-18
+## [0.8.0] — 2026-06-20
 
-Read and write Vortex Variant (semi-structured, JSON-shaped) columns from Java. Internally, transform encodings now decode lazily, trimming per-decode allocation.
+Read and write Vortex Variant (semi-structured, JSON-shaped) columns from Java. Internally, transform encodings now decode lazily, trimming per-decode allocation. This release also hardens the reader's bounds handling on untrusted input (ADR 0003 Phase E), fixes CSV-import memory blow-ups on large files, and lifts test coverage to 80% with all Sonar ratings at A.
 
 ### Added
 
 - Writer: `vortex.variant` encoder. Encodes a variant column as the canonical `vortex.variant` container over `core_storage` — an all-equal column becomes a single `vortex.constant`, a row-varying column a `vortex.chunked` of per-run constants — with an optional row-aligned typed `shredded` child recorded in `VariantMetadata.shredded_dtype`. Input is `VariantData(List<Scalar>)` with `.constant(n, v)` / `.shredded(...)` factories. Java↔Rust (JNI) round-trip verified for constant, row-varying, and shredded columns. Scalar values only — arbitrary nested objects need `vortex.parquet.variant` (deferred, [ADR 0014](docs/adr/0014-variant-encoding-strategy.md)). ([35da529d](https://github.com/dfa1/vortex-java/commit/35da529d), [e4e44980](https://github.com/dfa1/vortex-java/commit/e4e44980), [4566dca0](https://github.com/dfa1/vortex-java/commit/4566dca0))
 - Reader: variant columns now decode Java-side. `ConstantEncodingDecoder` and `ChunkedEncodingDecoder` handle `DType.Variant` (materialising the inner-typed array); `VariantEncodingDecoder` wraps the result as `VariantArray`, exposing `coreStorage()` and `shredded()`. ([76e4c741](https://github.com/dfa1/vortex-java/commit/76e4c741), [4566dca0](https://github.com/dfa1/vortex-java/commit/4566dca0))
 
+### Security
+
+- Reader bounds hardening (ADR 0003 Phase E): untrusted offsets/lengths from file metadata now flow through a typed `IoBounds` helper that throws `VortexException` instead of a raw `IndexOutOfBoundsException`, and hand-rolled index guards were replaced with `Objects.checkIndex`. A crafted flat-segment file can no longer trip an unchecked array access during decode. ([e9af80d6](https://github.com/dfa1/vortex-java/commit/e9af80d6), [3bcd9881](https://github.com/dfa1/vortex-java/commit/3bcd9881), [a5ce8380](https://github.com/dfa1/vortex-java/commit/a5ce8380))
+
+### Fixed
+
+- CSV import: large files no longer OOM. The importer now streams rows in a single pass (buffering only the first chunk for schema inference) and disables the global-dictionary pass by default, which previously accumulated every distinct value in memory. ([d5280ae2](https://github.com/dfa1/vortex-java/commit/d5280ae2), [0b6784b5](https://github.com/dfa1/vortex-java/commit/0b6784b5), [62863616](https://github.com/dfa1/vortex-java/commit/62863616))
+- CLI: `IoWorker.runAndAwait` decremented its in-flight counter *after* signaling completion, so a caller reading `pending()` right after it returned could still see the task counted; the counter is now decremented before the await returns. The `view`/`tui` commands also close the opened `VortexHandle` on every error path (`openOnWorker` returns `Optional`). ([95c06b1a](https://github.com/dfa1/vortex-java/commit/95c06b1a), [27446d81](https://github.com/dfa1/vortex-java/commit/27446d81))
+- Reader: `BoolArray.materialize` masked the accumulator byte before the bit-set OR, removing a sign-promotion footgun in the packed-bitmap write. ([bc8e9d4e](https://github.com/dfa1/vortex-java/commit/bc8e9d4e))
+
 ### Changed
 
 - Decode shape: transform encodings now decode **lazy-only**. The eager `Materialized*Array` fallbacks were removed from `vortex.zigzag` (all PTypes + broadcast, [cd59fefa](https://github.com/dfa1/vortex-java/commit/cd59fefa)), `fastlanes.for` (all integer PTypes, [d7953e1f](https://github.com/dfa1/vortex-java/commit/d7953e1f)), `vortex.alp` (broadcast-without-patches, [deab8067](https://github.com/dfa1/vortex-java/commit/deab8067)), `vortex.constant` (Decimal → `LazyConstantDecimalArray`, [a6a9611e](https://github.com/dfa1/vortex-java/commit/a6a9611e)), `vortex.runend` (Bool → `LazyRunEndBoolArray`, [0bbcb81f](https://github.com/dfa1/vortex-java/commit/0bbcb81f)), `vortex.sparse` (Bool → `LazySparseBoolArray`, [db2e955b](https://github.com/dfa1/vortex-java/commit/db2e955b)), and `fastlanes.rle` (validity → `OffsetBoolArray`, empty → `LazyConstantXxxArray`, [5e83a5c3](https://github.com/dfa1/vortex-java/commit/5e83a5c3)). Decompression encodings (`bitpacked`, `pco`, `zstd`, `fsst`, `delta`, `patched`), the primitive base, the `vortex.dict` encoding-level path, and the `vortex.alp` patches path stay Materialized by design. See [ADR 0015](docs/adr/0015-drop-materialized-fallbacks.md).
 - **Breaking — sealed `Array` permits changed.** `DecimalArray` is now a `non-sealed` family interface (decimal arrays moved from `implements Array` to `implements DecimalArray`), so decimal joins the per-dtype family layer. Downstream exhaustive `switch` over `Array` must add a `case DecimalArray`. ([a6a9611e](https://github.com/dfa1/vortex-java/commit/a6a9611e))
+- **Breaking — `Array` API.** `Array.truncate(rows)` renamed to `Array.limited(rows)` and made an abstract operation implemented by every array (composites slice their children); raw-segment access moved off the `ArraySegments` utility onto `Array.materialize(SegmentAllocator)` and `Array.segmentIfPresent()`. ([87ab65e2](https://github.com/dfa1/vortex-java/commit/87ab65e2), [4d9ac1f8](https://github.com/dfa1/vortex-java/commit/4d9ac1f8), [332b067e](https://github.com/dfa1/vortex-java/commit/332b067e), [32a35e03](https://github.com/dfa1/vortex-java/commit/32a35e03))
+- CSV import reports progress every 10K rows instead of per-chunk. ([07a056e7](https://github.com/dfa1/vortex-java/commit/07a056e7))
 
 ### Removed
 
@@ -28,6 +40,10 @@ Read and write Vortex Variant (semi-structured, JSON-shaped) columns from Java. 
 ### Documentation
 
 - [ADR 0016](docs/adr/0016-vortex-arrow-bridge.md): captures `vortex-arrow` bridge interop options (separate module / Arrow C-Data / none); deferred until a concrete downstream need. ([a6126f29](https://github.com/dfa1/vortex-java/commit/a6126f29))
+
+### Tests
+
+- Test coverage raised from ~74% to 80% — the lazy/chunked/dict/run-end/sparse array families, `ChunkImpl`, and several decoders (`DecimalEncodingDecoder`, `DictEncodingDecoder`, `ParquetImporter`) reached full line + branch coverage. SonarCloud quality gate green: reliability, security, and maintainability all at **A**, zero bugs and vulnerabilities.
 
 [0.8.0]: https://github.com/dfa1/vortex-java/compare/v0.7.3...v0.8.0
 
