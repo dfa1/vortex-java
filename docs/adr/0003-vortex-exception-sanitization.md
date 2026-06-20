@@ -1,9 +1,10 @@
-# ADR 0003: Structured sanitization of `VortexException` messages
+# ADR 0003: `VortexException` contract — message sanitization and bounds typing
 
 - **Status:** Accepted — implementation pending (see Phases below)
-- **Date:** 2026-06-13
+- **Date:** 2026-06-13 (bounds-typing scope added 2026-06-20)
 - **Deciders:** project maintainer
 - **Related:** [ADR 0001 — Split read and write runtimes](0001-split-read-and-write-runtimes.md),
+  [ADR 0004 — Resource caps and `ReadOptions`](0004-resource-caps-read-options.md),
   [SECURITY.md](../../SECURITY.md)
 
 ## Context
@@ -39,6 +40,37 @@ The existing `VortexException(EncodingId, String)` constructor requires a
 typed `EncodingId` for the attribution field but accepts a free-form `String`
 for the message body, which callers build via `+` or `.formatted()`. There is
 no sanitization contract.
+
+### Second axis — exception *type*, not just message
+
+Message sanitization governs *what a `VortexException` says*. A separate,
+orthogonal gap governs *whether a `VortexException` is thrown at all*. The
+reader's contract (SECURITY.md) is: any malformed input throws
+`VortexException`, never a raw JDK exception. But ~21 `MemorySegment.asSlice`
+call sites take offsets/lengths straight from untrusted layout/footer
+metadata and pass them to the JDK unguarded:
+
+```java
+// ScanIterator — fbStart/fbLen decoded from an attacker FlatBuffer
+ByteBuffer fbBuf = seg.asSlice(fbStart, fbLen).asByteBuffer()...   // raw IndexOutOfBoundsException on overflow
+```
+
+Only `PostscriptParser` guards its slices (a private `slice()` +
+`checkBlobBounds()`); its own comment warns that every *other* scan-time
+`asSlice` would throw `IndexOutOfBoundsException` and break the contract. The
+same leak appears in three more shapes:
+
+- `Math.toIntExact(storage.length())` (4 extension decoders) → raw
+  `ArithmeticException` on a > 2 GB declared length.
+- `new byte[(int)(end - start)]` / `new long[(int) rowCount]` (VarBin, AlpRd,
+  Delta) → `NegativeArraySizeException` / `OutOfMemoryError` on crafted
+  non-monotonic offsets or huge counts.
+- `ByteBuffer` is `int`-indexed (2 GB cap); a slice fed to `asByteBuffer()`
+  past that throws raw too.
+
+These are the same `VortexException`-contract violation as a leaked ANSI
+escape — just on the type axis instead of the content axis — so they belong
+in the same ADR.
 
 ## Decision
 
@@ -203,6 +235,73 @@ throw new VortexException(VortexError.UNKNOWN_LAYOUT_ENCODING, layout.encodingId
 The message format `[UNKNOWN_LAYOUT_ENCODING] vortex.flat\x0a<injected>` is
 machine-parseable, log-friendly, and injection-safe.
 
+### Bounds typing: the `IoBounds` helper
+
+A public static utility in `io.github.dfa1.vortex.core` (must be reachable by
+core itself — `ProtoReader` has a site — plus reader, `reader.array`, and
+`reader.decode`; `reader → core`, so core is the only home that covers all
+layers). It wraps the untrusted-offset operations and throws `VortexException`
+(via the `VortexError` catalog above) instead of the raw JDK exception:
+
+```java
+public final class IoBounds {
+    private IoBounds() {}
+
+    /// off/len must lie within [0, size]. Throws VortexException otherwise.
+    public static void checkRange(long off, long len, long size) {
+        if (off < 0 || len < 0 || len > size - off) {
+            throw new VortexException(VortexError.SEGMENT_INDEX_OUT_OF_RANGE, off, len, size);
+        }
+    }
+
+    /// Bounds-checked asSlice — the canonical replacement for raw seg.asSlice.
+    public static MemorySegment slice(MemorySegment seg, long off, long len) {
+        checkRange(off, len, seg.byteSize());
+        return seg.asSlice(off, len);
+    }
+
+    /// long → int for sizes/counts that index a ByteBuffer or back a Java array.
+    /// Replaces Math.toIntExact (ArithmeticException) and guards the 2 GB cap.
+    public static int toIntSize(long n) {
+        if (n < 0 || n > Integer.MAX_VALUE) {
+            throw new VortexException(VortexError.SEGMENT_INDEX_OUT_OF_RANGE, n);
+        }
+        return (int) n;
+    }
+
+    /// Element count for a `new T[n]` decode buffer; same guard as toIntSize,
+    /// named for the alloc-count call sites (the per-encoding cap from ADR 0004
+    /// plugs in here later).
+    public static int checkCount(long n) {
+        return toIntSize(n);
+    }
+}
+```
+
+Why a static helper, not a `BoundedSegment` wrapper (the approach explored in
+[PR #27](https://github.com/dfa1/vortex-java/pull/27)):
+
+- The hot path is `MemorySegment` zero-copy slices; a wrapper type would have
+  to be unwrapped at every typed accessor or it taxes per-element reads. A
+  static call slices once, off the per-element path, and returns a plain
+  `MemorySegment` — no new type crosses module boundaries.
+- It mirrors the `Sanitize` decision: one small pure primitive in `core`, not
+  a new abstraction. `Sanitize` cleans the message; `IoBounds` types the
+  throw. Symmetric.
+
+#### The consumer-access carve-out
+
+The ~14 per-element guards in `Lazy*` / `Materialized*` / `Generic` accessors
+(`getInt(i)` etc.) throw `IndexOutOfBoundsException` and **stay that way** —
+they are *consumer* random-access (`array.getInt(5)`), where IOOBE is the
+correct JDK-idiomatic signal (cf. `List.get`), not a malformed-file event.
+These must **not** be routed through `IoBounds`. They are instead collapsed
+onto the JDK built-in `Objects.checkIndex(i, length)` (Java 16+) — stdlib, no
+custom helper. The dividing line:
+
+- offset/length/count from **parsed file bytes** → `IoBounds` → `VortexException`
+- index from a **caller's accessor argument** → `Objects.checkIndex` → `IndexOutOfBoundsException`
+
 ## Migration phases
 
 ### Phase A — Foundation (~1.5 h)
@@ -243,6 +342,35 @@ approximate-fit existing ones.
   `throw new VortexException\(\"` (raw string literal in constructor) to
   prevent regression. Also flag `+` inside the VortexException args to
   catch interpolation-before-sanitization.
+
+### Phase E — Bounds typing via `IoBounds` (0.8.0)
+
+Independent of A–D. The `VortexError` catalog (Phase A) is not built yet, so
+`IoBounds` ships using the current `VortexException(String)` constructor with a
+fixed, non-interpolated message (no attacker strings in the bounds messages —
+only numeric offsets/lengths, which need no sanitization). When Phase A lands,
+`IoBounds` migrates to `VortexError.SEGMENT_INDEX_OUT_OF_RANGE` mechanically
+with every other site. Lands in 0.8.0 before the release, since variant decode
+widens the parse surface.
+
+1. Add `IoBounds` (`slice` / `checkRange` / `toIntSize` / `checkCount`) in
+   `core` with unit tests: negative offset, length overflow, off+len past end,
+   > 2 GB size, exact-boundary pass.
+2. Route the ~21 raw `asSlice` sites through `IoBounds.slice`; fold
+   `PostscriptParser`'s private `slice()`/`checkBlobBounds` and `ProtoReader`'s
+   hand-rolled guard into it.
+3. Replace `Math.toIntExact(...length())` (4 extension decoders) with
+   `IoBounds.toIntSize`; guard the `new T[(int) n]` alloc sites with
+   `IoBounds.checkCount`.
+4. Collapse the ~14 consumer-access `getX(i)` guards onto
+   `Objects.checkIndex(i, length)` (separate commit — different error class,
+   no `IoBounds`).
+5. Checkstyle `RegexpSingleline` rejecting raw `.asSlice(` in
+   `reader` / `reader.array` / `reader.decode` / `core.proto` packages
+   (mirrors the existing `<p>`-blocking rule), so new raw slices can't regress.
+6. `BoundsTypingSecurityTest`: crafted file with out-of-range slice offset,
+   oversize declared length, and non-monotonic VarBin offsets each produce a
+   `VortexException`, never a raw JDK exception.
 
 ## Alternative considered
 
