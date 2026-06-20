@@ -29,6 +29,8 @@ Read and write Vortex Variant (semi-structured, JSON-shaped) columns from Java. 
 
 - [ADR 0016](docs/adr/0016-vortex-arrow-bridge.md): captures `vortex-arrow` bridge interop options (separate module / Arrow C-Data / none); deferred until a concrete downstream need. ([a6126f29](https://github.com/dfa1/vortex-java/commit/a6126f29))
 
+[0.8.0]: https://github.com/dfa1/vortex-java/compare/v0.7.3...v0.8.0
+
 ## [0.7.3] — 2026-06-17
 
 Parquet ZSTD support, `vortex.patched` encoder, constant-encoding selection fix, Windows TUI raw-mode fix.
