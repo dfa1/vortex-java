@@ -11,9 +11,11 @@ import io.github.dfa1.vortex.reader.decode.KnownArrayNode;
 import io.github.dfa1.vortex.reader.decode.UnknownArrayNode;
 
 import java.lang.foreign.MemorySegment;
-import java.util.HashMap;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Map;
 import java.util.ServiceLoader;
+import java.util.TreeMap;
 
 /// Read-side registry: maps [EncodingId] to [EncodingDecoder] implementations.
 ///
@@ -25,7 +27,12 @@ public final class ReadRegistry {
     private final boolean allowUnknown;
 
     private ReadRegistry(Map<EncodingId, EncodingDecoder> decoders, boolean allowUnknown) {
-        this.decoders = Map.copyOf(decoders);
+        // Order by encoding name, mirroring WriteRegistry (Enum.compareTo is final, so a Comparator
+        // is required to sort by id rather than ordinal). Decode dispatch is keyed, so order is not
+        // load-bearing here, but a stable order keeps the two registries consistent.
+        var sorted = new TreeMap<EncodingId, EncodingDecoder>(Comparator.comparing(EncodingId::id));
+        sorted.putAll(decoders);
+        this.decoders = Collections.unmodifiableMap(sorted);
         this.allowUnknown = allowUnknown;
     }
 
@@ -136,7 +143,7 @@ public final class ReadRegistry {
     /// Not thread-safe. Build once, use everywhere — the produced [ReadRegistry] is immutable.
     public static final class Builder {
 
-        private final Map<EncodingId, EncodingDecoder> decoders = new HashMap<>();
+        private final Map<EncodingId, EncodingDecoder> decoders = new TreeMap<>();
         private boolean allowUnknown = false;
 
         private Builder() {

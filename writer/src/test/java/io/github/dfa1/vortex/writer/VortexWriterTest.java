@@ -474,9 +474,13 @@ class VortexWriterTest {
     }
 
     @Test
-    void create_withWriteRegistry_roundTrips(@TempDir Path tmp) throws IOException {
-        // Given — the WriteRegistry factory overload (global dict forced off, encoders taken from
-        // the registry). A round-trip exercises this otherwise-untested create path end to end.
+    void create_withFullRegistry_roundTrips(@TempDir Path tmp) throws IOException {
+        // Given — create(WriteRegistry) over loadAll(), the exact combination that broke on Windows.
+        // With no cascade, writeSegment picks the first registered encoder whose accepts() matches
+        // the dtype. loadAll() pulls in every service encoder, so this is the end-to-end guard that
+        // a deterministic order (WriteRegistry's TreeMap) plus an honest accepts() (composite
+        // encoders like ChunkedEncodingEncoder no longer claim raw primitive dtypes) keep selection
+        // both stable across platforms and correct.
         var schema = new DType.Struct(List.of("v"),
                 List.of(new DType.Primitive(PType.I64, false)), false);
         Path file = tmp.resolve("registry.vortex");
