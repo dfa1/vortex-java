@@ -87,6 +87,40 @@ class VortexWriterTest {
     }
 
     @Test
+    void writeChunk_extensionCollectionColumn_rowCountValidatedAgainstSibling(@TempDir Path tmp)
+            throws IOException {
+        // Given — a two-column chunk where one column is a List<LocalDate> (extension auto-route)
+        // and the sibling is a same-length long[]. The row-count check must measure the collection
+        // by its element count: if it reported anything else, the two columns would look mismatched
+        // and writeChunk would reject a perfectly valid chunk.
+        var schema = new DType.Struct(
+                List.of("birthdays", "id"),
+                List.of(io.github.dfa1.vortex.writer.encode.DateExtensionEncoder.INSTANCE.dtype(false),
+                        new DType.Primitive(PType.I64, false)),
+                false);
+        List<java.time.LocalDate> dates = List.of(
+                java.time.LocalDate.of(1996, 2, 12),
+                java.time.LocalDate.of(2026, 6, 9),
+                java.time.LocalDate.of(2030, 1, 1));
+        long[] ids = {1L, 2L, 3L};
+        Path file = tmp.resolve("ext_rowcount.vtx");
+
+        // When / Then — both columns are 3 rows, so the chunk is accepted and round-trips
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            sut.writeChunk(Map.of("birthdays", dates, "id", ids));
+        }
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
+             var iter = vf.scan(ScanOptions.all())) {
+            try (Chunk chunk = iter.next()) {
+                assertThat(chunk.rowCount()).isEqualTo(3);
+                assertThat(chunk.as("birthdays", java.time.LocalDate.class))
+                        .containsExactlyElementsOf(dates);
+            }
+        }
+    }
+
+    @Test
     void writeChunk_map_nullablePrimitive_acceptsBoxedArray(@TempDir Path tmp) throws IOException {
         // Given — nullable I64 column passed to the MAP entry point as a boxed Long[] with a null.
         // Regression: the map path used to reject boxed arrays ("unsupported data type: Long[]");

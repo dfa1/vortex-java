@@ -1,10 +1,15 @@
 package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.PType;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+
+import java.util.stream.Stream;
 
 import static io.github.dfa1.vortex.writer.VortexWriter.GLOBAL_DICT_MAX_CARDINALITY;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 /// Direct unit tests for the global-dictionary decision helpers in [VortexWriter]. These choices
 /// (dict vs cascade fallback, and the code width) only affect *encoding*, not the values a reader
@@ -14,107 +19,121 @@ class VortexWriterDictDecisionTest {
 
     // ── isDictCandidate (primitive) ──────────────────────────────────────────────
 
-    @Test
-    void isDictCandidate_excludesF16AndF32() {
-        // Given low-cardinality float data that would otherwise qualify
-        // When / Then — F16/F32 are excluded outright (ALP wins there)
-        assertThat(VortexWriter.isDictCandidate(PType.F32, new float[]{1f, 1f, 2f, 2f, 2f})).isFalse();
-        assertThat(VortexWriter.isDictCandidate(PType.F16, new short[]{1, 1, 2, 2, 2})).isFalse();
+    static Stream<Arguments> dictCandidateCases() {
+        return Stream.of(
+                // exclusions: a U8/U16 code is no smaller than the value, and F16/F32 prefer ALP
+                arguments("F32 excluded", PType.F32, new float[]{1f, 1f, 2f, 2f, 2f}, false),
+                arguments("F16 excluded", PType.F16, new short[]{1, 1, 2, 2, 2}, false),
+                arguments("I8 excluded", PType.I8, new byte[]{1, 2, 1, 2, 1}, false),
+                arguments("U8 excluded", PType.U8, new byte[]{1, 2, 1, 2, 1}, false),
+                arguments("I16 excluded", PType.I16, new short[]{1, 2, 1, 2, 1}, false),
+                arguments("U16 excluded", PType.U16, new short[]{1, 2, 1, 2, 1}, false),
+                // admitted carriers, 2 distinct over 5 rows (4 < 5, under the gate)
+                arguments("I64 low cardinality", PType.I64, new long[]{1, 2, 1, 2, 1}, true),
+                arguments("F64 low cardinality", PType.F64, new double[]{1, 2, 1, 2, 1}, true),
+                arguments("empty", PType.I64, new long[0], false),
+                arguments("single distinct value", PType.I64, new long[]{7, 7, 7, 7}, false),
+                arguments("ratio exactly 50%", PType.I64, new long[]{1, 2, 1, 2}, false),
+                arguments("ratio under 50%", PType.I64, new long[]{1, 2, 1, 2, 1}, true),
+                arguments("cardinality at MAX", PType.I64, distinctThenRepeat(GLOBAL_DICT_MAX_CARDINALITY), true),
+                arguments("cardinality over MAX", PType.I64, distinctThenRepeat(GLOBAL_DICT_MAX_CARDINALITY + 1), false));
     }
 
-    @Test
-    void isDictCandidate_excludesNarrowIntegers() {
-        // I8/U8/I16/U16 are excluded: a U8/U16 code is no smaller than the value, the Rust
-        // compressor does not dict them, and the reader's lazy dict cannot decode a narrow-int
-        // dictionary. Low-cardinality data that would otherwise pass the ratio gate must still
-        // be rejected.
-        assertThat(VortexWriter.isDictCandidate(PType.I8, new byte[]{1, 2, 1, 2, 1})).isFalse();
-        assertThat(VortexWriter.isDictCandidate(PType.U8, new byte[]{1, 2, 1, 2, 1})).isFalse();
-        assertThat(VortexWriter.isDictCandidate(PType.I16, new short[]{1, 2, 1, 2, 1})).isFalse();
-        assertThat(VortexWriter.isDictCandidate(PType.U16, new short[]{1, 2, 1, 2, 1})).isFalse();
-    }
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("dictCandidateCases")
+    void isDictCandidate(String name, PType ptype, Object data, boolean expected) {
+        // Given — a column of `ptype` with the case's data
 
-    @Test
-    void isDictCandidate_admitsLowCardinalityI64AndF64() {
-        // Given — 2 distinct over 5 rows: 2*2 = 4 < 5, under the 50%-unique gate
-        assertThat(VortexWriter.isDictCandidate(PType.I64, new long[]{1, 2, 1, 2, 1})).isTrue();
-        assertThat(VortexWriter.isDictCandidate(PType.F64, new double[]{1, 2, 1, 2, 1})).isTrue();
-    }
+        // When
+        boolean result = VortexWriter.isDictCandidate(ptype, data);
 
-    @Test
-    void isDictCandidate_emptyArray_isFalse() {
-        assertThat(VortexWriter.isDictCandidate(PType.I64, new long[0])).isFalse();
-    }
-
-    @Test
-    void isDictCandidate_singleDistinctValue_isFalse() {
-        // One distinct value fits vortex.constant better than a dict
-        assertThat(VortexWriter.isDictCandidate(PType.I64, new long[]{7, 7, 7, 7})).isFalse();
-    }
-
-    @Test
-    void isDictCandidate_ratioGate_isExclusive() {
-        // 2 distinct over 4 rows: 2*2 == 4, NOT < 4 → rejected (exactly 50% unique)
-        assertThat(VortexWriter.isDictCandidate(PType.I64, new long[]{1, 2, 1, 2})).isFalse();
-        // 2 distinct over 5 rows: 4 < 5 → admitted
-        assertThat(VortexWriter.isDictCandidate(PType.I64, new long[]{1, 2, 1, 2, 1})).isTrue();
-    }
-
-    @Test
-    void isDictCandidate_cardinalityAtAndOverMax() {
-        // At MAX distinct values (well under 50% unique) → still a candidate
-        assertThat(VortexWriter.isDictCandidate(PType.I64, distinctThenRepeat(GLOBAL_DICT_MAX_CARDINALITY))).isTrue();
-        // One over MAX → rejected by the cardinality guard
-        assertThat(VortexWriter.isDictCandidate(PType.I64, distinctThenRepeat(GLOBAL_DICT_MAX_CARDINALITY + 1))).isFalse();
+        // Then
+        assertThat(result).isEqualTo(expected);
     }
 
     // ── isUtf8DictCandidate ──────────────────────────────────────────────────────
 
-    @Test
-    void isUtf8DictCandidate_emptyArray_isFalse() {
-        assertThat(VortexWriter.isUtf8DictCandidate(new String[0])).isFalse();
+    static Stream<Arguments> utf8DictCandidateCases() {
+        return Stream.of(
+                arguments("empty", new String[0], false),
+                arguments("ratio exactly 50%", new String[]{"a", "b", "a", "b"}, false),
+                arguments("ratio under 50%", new String[]{"a", "b", "a", "b", "a"}, true),
+                arguments("cardinality at MAX", distinctStrings(GLOBAL_DICT_MAX_CARDINALITY), true),
+                arguments("cardinality over MAX", distinctStrings(GLOBAL_DICT_MAX_CARDINALITY + 1), false));
     }
 
-    @Test
-    void isUtf8DictCandidate_ratioGate_isExclusive() {
-        // 2 distinct over 4: 4 == 4, not < → rejected
-        assertThat(VortexWriter.isUtf8DictCandidate(new String[]{"a", "b", "a", "b"})).isFalse();
-        // 2 distinct over 5: 4 < 5 → admitted
-        assertThat(VortexWriter.isUtf8DictCandidate(new String[]{"a", "b", "a", "b", "a"})).isTrue();
-    }
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("utf8DictCandidateCases")
+    void isUtf8DictCandidate(String name, String[] data, boolean expected) {
+        // Given — a string column with the case's data
 
-    @Test
-    void isUtf8DictCandidate_overMaxCardinality_isFalse() {
-        String[] data = new String[(GLOBAL_DICT_MAX_CARDINALITY + 1) * 4];
-        for (int i = 0; i < data.length; i++) {
-            data[i] = "s" + (i % (GLOBAL_DICT_MAX_CARDINALITY + 1));
-        }
-        assertThat(VortexWriter.isUtf8DictCandidate(data)).isFalse();
+        // When
+        boolean result = VortexWriter.isUtf8DictCandidate(data);
+
+        // Then
+        assertThat(result).isEqualTo(expected);
     }
 
     // ── codePTypeForSize ─────────────────────────────────────────────────────────
 
-    @Test
-    void codePTypeForSize_picksNarrowestUnsignedCarrier() {
-        assertThat(VortexWriter.codePTypeForSize(1)).isEqualTo(PType.U8);
-        assertThat(VortexWriter.codePTypeForSize(256)).isEqualTo(PType.U8);     // upper edge of U8
-        assertThat(VortexWriter.codePTypeForSize(257)).isEqualTo(PType.U16);    // first U16
-        assertThat(VortexWriter.codePTypeForSize(65_536)).isEqualTo(PType.U16); // upper edge of U16
-        assertThat(VortexWriter.codePTypeForSize(65_537)).isEqualTo(PType.U32); // first U32
+    static Stream<Arguments> codePTypeCases() {
+        return Stream.of(
+                arguments(1, PType.U8),
+                arguments(256, PType.U8),      // upper edge of U8
+                arguments(257, PType.U16),     // first U16
+                arguments(65_536, PType.U16),  // upper edge of U16
+                arguments(65_537, PType.U32)); // first U32
+    }
+
+    @ParameterizedTest
+    @MethodSource("codePTypeCases")
+    void codePTypeForSize_picksNarrowestUnsignedCarrier(int dictSize, PType expected) {
+        // Given — a dictionary of `dictSize` distinct values
+
+        // When
+        PType result = VortexWriter.codePTypeForSize(dictSize);
+
+        // Then
+        assertThat(result).isEqualTo(expected);
     }
 
     // ── primitiveArrayLen / readPrimitiveElement ─────────────────────────────────
 
-    @Test
-    void primitiveArrayLen_returnsActualLength() {
-        assertThat(VortexWriter.primitiveArrayLen(new long[]{1, 2, 3}, PType.I64)).isEqualTo(3);
-        assertThat(VortexWriter.primitiveArrayLen(new int[]{1, 2}, PType.I32)).isEqualTo(2);
+    static Stream<Arguments> primitiveArrayLenCases() {
+        return Stream.of(
+                arguments(new long[]{1, 2, 3}, PType.I64, 3),
+                arguments(new int[]{1, 2}, PType.I32, 2),
+                arguments(new byte[]{1, 2, 3, 4}, PType.I8, 4));
     }
 
-    @Test
-    void readPrimitiveElement_returnsElementAtIndex() {
-        assertThat(VortexWriter.readPrimitiveElement(new long[]{7, 8, 9}, PType.I64, 1)).isEqualTo(8L);
-        assertThat(VortexWriter.readPrimitiveElement(new int[]{7, 8, 9}, PType.I32, 2)).isEqualTo(9);
+    @ParameterizedTest
+    @MethodSource("primitiveArrayLenCases")
+    void primitiveArrayLen_returnsActualLength(Object data, PType ptype, int expected) {
+        // Given — a typed primitive array of `ptype`
+
+        // When
+        int result = VortexWriter.primitiveArrayLen(data, ptype);
+
+        // Then
+        assertThat(result).isEqualTo(expected);
+    }
+
+    static Stream<Arguments> readPrimitiveElementCases() {
+        return Stream.of(
+                arguments(new long[]{7, 8, 9}, PType.I64, 1, 8L),
+                arguments(new int[]{7, 8, 9}, PType.I32, 2, 9));
+    }
+
+    @ParameterizedTest
+    @MethodSource("readPrimitiveElementCases")
+    void readPrimitiveElement_returnsElementAtIndex(Object data, PType ptype, int index, Object expected) {
+        // Given — a typed primitive array of `ptype`
+
+        // When
+        Object result = VortexWriter.readPrimitiveElement(data, ptype, index);
+
+        // Then
+        assertThat(result).isEqualTo(expected);
     }
 
     /// Builds a long[] with exactly `distinct` distinct values, each repeated 4× (so the array is
@@ -123,6 +142,15 @@ class VortexWriterDictDecisionTest {
         long[] a = new long[distinct * 4];
         for (int i = 0; i < a.length; i++) {
             a[i] = i % distinct;
+        }
+        return a;
+    }
+
+    /// Builds a String[] with exactly `distinct` distinct values, each repeated 4×.
+    private static String[] distinctStrings(int distinct) {
+        String[] a = new String[distinct * 4];
+        for (int i = 0; i < a.length; i++) {
+            a[i] = "s" + (i % distinct);
         }
         return a;
     }
