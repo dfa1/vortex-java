@@ -46,6 +46,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -167,26 +168,36 @@ class RustWritesJavaReadsIntegrationTest {
     }
 
     private static long[] readJniLongColumn(Path file, String column) throws IOException {
-        String uri = file.toAbsolutePath().toUri().toString();
         ScanOptions opts = ScanOptions.builder()
                                    .projection(Expression.select(new String[]{column}, Expression.root()))
                                    .build();
         var longs = new ArrayList<Long>();
+        forEachArrowBatch(file, opts, root -> {
+            BigIntVector vec = (BigIntVector) root.getVector(column);
+            for (int i = 0; i < root.getRowCount(); i++) {
+                longs.add(vec.get(i));
+            }
+        });
+        return longs.stream().mapToLong(Long::longValue).toArray();
+    }
+
+    /// Scans `file` through the JNI Arrow reader and hands every loaded
+    /// [VectorSchemaRoot] batch to `batch`. Centralises the
+    /// open → scan → partition → loadNextBatch boilerplate shared by the
+    /// JNI-reader assertions.
+    private static void forEachArrowBatch(Path file, ScanOptions opts, Consumer<VectorSchemaRoot> batch)
+            throws IOException {
+        String uri = file.toAbsolutePath().toUri().toString();
         DataSource ds = DataSource.open(SESSION, uri);
         Scan scan = ds.scan(opts);
         while (scan.hasNext()) {
             Partition partition = scan.next();
             try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
                 while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    BigIntVector vec = (BigIntVector) root.getVector(column);
-                    for (int i = 0; i < root.getRowCount(); i++) {
-                        longs.add(vec.get(i));
-                    }
+                    batch.accept(reader.getVectorSchemaRoot());
                 }
             }
         }
-        return longs.stream().mapToLong(Long::longValue).toArray();
     }
 
     private static long[] readJavaLongColumn(Path file, String column) throws IOException {
@@ -305,27 +316,17 @@ class RustWritesJavaReadsIntegrationTest {
         // When — JNI reader stops after 10 rows
         var jniIdList = new ArrayList<Long>();
         var jniValList = new ArrayList<Double>();
-        String uri = file.toAbsolutePath().toUri().toString();
-        DataSource ds = DataSource.open(SESSION, uri);
-        Scan scan = ds.scan(ScanOptions.of());
-        outer:
-        while (scan.hasNext()) {
-            Partition partition = scan.next();
-            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
-                while (reader.loadNextBatch()) {
-                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
-                    BigIntVector idVec = (BigIntVector) root.getVector("id");
-                    Float8Vector valVec = (Float8Vector) root.getVector("value");
-                    for (int i = 0; i < root.getRowCount() && jniIdList.size() < 10; i++) {
-                        jniIdList.add(idVec.get(i));
-                        jniValList.add(valVec.get(i));
-                    }
-                    if (jniIdList.size() >= 10) {
-                        break outer;
-                    }
-                }
+        forEachArrowBatch(file, ScanOptions.of(), root -> {
+            if (jniIdList.size() >= 10) {
+                return;
             }
-        }
+            BigIntVector idVec = (BigIntVector) root.getVector("id");
+            Float8Vector valVec = (Float8Vector) root.getVector("value");
+            for (int i = 0; i < root.getRowCount() && jniIdList.size() < 10; i++) {
+                jniIdList.add(idVec.get(i));
+                jniValList.add(valVec.get(i));
+            }
+        });
         long[] jniIds = jniIdList.stream().mapToLong(Long::longValue).toArray();
         double[] jniVals = jniValList.stream().mapToDouble(Double::doubleValue).toArray();
 
