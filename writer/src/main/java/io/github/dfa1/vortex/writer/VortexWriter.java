@@ -78,7 +78,7 @@ public final class VortexWriter implements Closeable {
 
     // Columns with global cardinality below this threshold are dict-encoded across all chunks.
     // Kept low: global dict hurts high-cardinality F64 columns (ALP codes beat U16 dict codes).
-    private static final int GLOBAL_DICT_MAX_CARDINALITY = 2_048;
+    static final int GLOBAL_DICT_MAX_CARDINALITY = 2_048;
 
     private static final List<EncodingEncoder> DEFAULT_CODECS = List.of(
             new AlpEncodingEncoder(), new PrimitiveEncodingEncoder(), new BoolEncodingEncoder(),
@@ -912,7 +912,7 @@ public final class VortexWriter implements Closeable {
         };
     }
 
-    private static boolean isUtf8DictCandidate(String[] data) {
+    static boolean isUtf8DictCandidate(String[] data) {
         if (data.length == 0) {
             return false;
         }
@@ -926,7 +926,7 @@ public final class VortexWriter implements Closeable {
         return seen.size() * 2 < data.length;
     }
 
-    private static boolean isDictCandidate(PType ptype, Object data) {
+    static boolean isDictCandidate(PType ptype, Object data) {
         // F16/F32 excluded: no measured workload; ALP usually wins. F64 admitted: low-card
         // F64 columns (taxi mta_tax/Airport_fee/extra) compress better via global dict +
         // sparse-coded codes (matches Rust FloatDictScheme). Skip rule (cardinality / 2
@@ -953,7 +953,7 @@ public final class VortexWriter implements Closeable {
         return seen.size() * 2 < n;
     }
 
-    private static int primitiveArrayLen(Object data, PType ptype) {
+    static int primitiveArrayLen(Object data, PType ptype) {
         return switch (ptype) {
             case I8, U8 -> ((byte[]) data).length;
             case I16, U16, F16 -> ((short[]) data).length;
@@ -964,7 +964,7 @@ public final class VortexWriter implements Closeable {
         };
     }
 
-    private static Object readPrimitiveElement(Object data, PType ptype, int i) {
+    static Object readPrimitiveElement(Object data, PType ptype, int i) {
         return switch (ptype) {
             case I8, U8 -> ((byte[]) data)[i];
             case I16, U16, F16 -> ((short[]) data)[i];
@@ -975,7 +975,7 @@ public final class VortexWriter implements Closeable {
         };
     }
 
-    private static PType codePTypeForSize(int dictSize) {
+    static PType codePTypeForSize(int dictSize) {
         if (dictSize <= 256) {
             return PType.U8;
         }

@@ -438,4 +438,25 @@ class VortexWriterTest {
             assertThat(snapshots.getFirst().columnNames()).doesNotContain("value");
         }
     }
+
+    @Test
+    void create_withWriteRegistry_roundTrips(@TempDir Path tmp) throws IOException {
+        // Given — the WriteRegistry factory overload (global dict forced off, encoders taken from
+        // the registry). A round-trip exercises this otherwise-untested create path end to end.
+        var schema = new DType.Struct(List.of("v"),
+                List.of(new DType.Primitive(PType.I64, false)), false);
+        Path file = tmp.resolve("registry.vortex");
+        long[] data = {1L, 2L, 3L, 4L};
+
+        // When
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.defaults(), WriteRegistry.loadAll())) {
+            sut.writeChunk(Map.of("v", data));
+        }
+
+        // Then
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
+            assertThat(VortexReads.readAllLongs(vf, "v")).containsExactly(data);
+        }
+    }
 }
