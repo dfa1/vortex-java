@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.IoBounds;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.VortexFormat;
 
@@ -78,11 +79,11 @@ public final class VortexReader implements VortexHandle {
             MemorySegment seg, long size, Arena arena, ReadRegistry registry
     ) {
         long bodyBytes = size - VortexFormat.TRAILER_SIZE;
-        var trailerSeg = seg.asSlice(bodyBytes, VortexFormat.TRAILER_SIZE);
+        var trailerSeg = IoBounds.slice(seg, bodyBytes, VortexFormat.TRAILER_SIZE);
         Trailer trailer = Trailer.parse(trailerSeg, bodyBytes);
 
         long postscriptOffset = bodyBytes - trailer.postscriptLen();
-        var postscriptBuf = seg.asSlice(postscriptOffset, trailer.postscriptLen())
+        var postscriptBuf = IoBounds.slice(seg, postscriptOffset, trailer.postscriptLen())
                                     .asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
 
         PostscriptParser.ParsedFile parsed;
@@ -211,7 +212,7 @@ public final class VortexReader implements VortexHandle {
         if (segLen < 4) {
             return ArrayStats.empty();
         }
-        MemorySegment seg = fileSegment.asSlice(spec.offset(), segLen);
+        MemorySegment seg = IoBounds.slice(fileSegment, spec.offset(), segLen);
         int fbLen = seg.get(LE_INT, segLen - 4);
         // Reject negative fbLen (signed int from untrusted bytes) or any value that would push
         // fbStart below 0 → asSlice(negative, ...) throws IndexOutOfBoundsException without this guard.
@@ -219,7 +220,7 @@ public final class VortexReader implements VortexHandle {
             return ArrayStats.empty();
         }
         long fbStart = segLen - 4L - fbLen;
-        var fbBuf = seg.asSlice(fbStart, fbLen).asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
+        var fbBuf = IoBounds.slice(seg, fbStart, fbLen).asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
         var fbArray = io.github.dfa1.vortex.fbs.Array.getRootAsArray(fbBuf);
         var root = fbArray.root();
         if (root == null) {
@@ -234,7 +235,7 @@ public final class VortexReader implements VortexHandle {
             DType dtype, long rowCount,
             java.lang.foreign.SegmentAllocator arena
     ) {
-        MemorySegment seg = fileSegment.asSlice(spec.offset(), spec.length()).asReadOnly();
+        MemorySegment seg = IoBounds.slice(fileSegment, spec.offset(), spec.length()).asReadOnly();
         return new FlatSegmentDecoder(registry)
                 .decode(seg, footer.arraySpecs(), dtype, rowCount, arena);
     }
@@ -242,7 +243,7 @@ public final class VortexReader implements VortexHandle {
     /// Zero-copy read-only slice of the memory-mapped file covering the given spec.
     @Override
     public MemorySegment rawSegment(SegmentSpec spec) {
-        return fileSegment.asSlice(spec.offset(), spec.length()).asReadOnly();
+        return IoBounds.slice(fileSegment, spec.offset(), spec.length()).asReadOnly();
     }
 
     @Override

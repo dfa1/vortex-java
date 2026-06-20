@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.extension;
 
 import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.IoBounds;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
@@ -95,7 +96,7 @@ public final class TimestampExtensionDecoder implements ExtensionDecoder {
     /// @param storage signed-integer storage array (optionally wrapped in `MaskedArray`)
     /// @return list of decoded instants in row order; `null` entries mark invalid rows
     public List<Instant> decodeAll(DType.Extension ext, Array storage) {
-        int n = Math.toIntExact(storage.length());
+        int n = IoBounds.toIntSize(storage.length());
         List<Instant> out = new ArrayList<>(n);
         if (storage instanceof MaskedArray masked) {
             for (long i = 0; i < n; i++) {

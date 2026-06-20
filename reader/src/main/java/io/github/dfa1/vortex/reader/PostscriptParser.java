@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.IoBounds;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.fbs.Binary;
@@ -115,7 +116,7 @@ final class PostscriptParser {
     }
 
     private static ByteBuffer slice(MemorySegment seg, long offset, long length) {
-        return seg.asSlice(offset, length).asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
+        return IoBounds.slice(seg, offset, length).asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
     }
 
     static Footer convertFooter(io.github.dfa1.vortex.fbs.Footer f) {

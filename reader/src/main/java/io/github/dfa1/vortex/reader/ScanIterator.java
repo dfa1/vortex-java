@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.IoBounds;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
@@ -788,9 +789,10 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
 
         // Stats FlatBuffer lives in the segment's last 4+fbLen bytes; reading the whole
         // segment as a ByteBuffer would fail for segments larger than 2 GB (ByteBuffer cap).
+        IoBounds.checkRange(segLen - 4L, 4, segLen);
         int fbLen = seg.get(LE_INT, segLen - 4);
         long fbStart = segLen - 4L - fbLen;
-        ByteBuffer fbBuf = seg.asSlice(fbStart, fbLen).asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
+        ByteBuffer fbBuf = IoBounds.slice(seg, fbStart, fbLen).asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
         var fbArray = io.github.dfa1.vortex.fbs.Array.getRootAsArray(fbBuf);
 
         io.github.dfa1.vortex.fbs.ArrayNode root = fbArray.root();
