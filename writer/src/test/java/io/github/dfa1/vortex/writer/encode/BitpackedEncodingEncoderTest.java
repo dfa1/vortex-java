@@ -15,6 +15,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.foreign.Arena;
+import java.util.Random;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -82,5 +83,63 @@ class BitpackedEncodingEncoderTest {
         BitPackedMetadata meta = BitPackedMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 
         assertThat(meta.bit_width()).isGreaterThan(0);
+    }
+
+    /// Property: lossless pack/unpack at **every** bit width. Each array forces a specific
+    /// width by including its max value `2^W - 1`, fills the rest with random values masked to
+    /// W bits, and checks the boundary widths (1, 7, 8, 31/32, 63/64) explicitly. The random
+    /// arrays' values don't deterministically exercise every width, so this pins them all.
+    @ParameterizedTest(name = "u32 width={0}")
+    @MethodSource("u32Widths")
+    void encodeDecode_u32_everyBitWidth(int width, int[] data) {
+        EncodeResult encoded = ENCODER.encode(DTypes.U32, data, EncodeTestHelper.testCtx());
+        DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, DTypes.U32, REGISTRY);
+        Array result = DECODER.decode(ctx);
+
+        var seg = result.materialize(Arena.ofAuto());
+        for (int i = 0; i < data.length; i++) {
+            assertThat(seg.get(PTypeIO.LE_INT, (long) i * 4)).as("width %d index %d", width, i).isEqualTo(data[i]);
+        }
+    }
+
+    @ParameterizedTest(name = "u64 width={0}")
+    @MethodSource("u64Widths")
+    void encodeDecode_u64_everyBitWidth(int width, long[] data) {
+        EncodeResult encoded = ENCODER.encode(DTypes.U64, data, EncodeTestHelper.testCtx());
+        DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, DTypes.U64, REGISTRY);
+        Array result = DECODER.decode(ctx);
+
+        var seg = result.materialize(Arena.ofAuto());
+        for (int i = 0; i < data.length; i++) {
+            assertThat(seg.get(PTypeIO.LE_LONG, (long) i * 8)).as("width %d index %d", width, i).isEqualTo(data[i]);
+        }
+    }
+
+    static Stream<Arguments> u32Widths() {
+        Random rng = new Random(0xB17BACEDL);
+        return Stream.iterate(1, w -> w <= 32, w -> w + 1).map(w -> {
+            int mask = w == 32 ? -1 : (1 << w) - 1; // -1 == 0xFFFFFFFF for the full width
+            int[] a = new int[40];
+            a[0] = 0;
+            a[1] = mask; // 2^w - 1 — forces the encoder to pick width w
+            for (int i = 2; i < a.length; i++) {
+                a[i] = rng.nextInt() & mask;
+            }
+            return Arguments.of(w, a);
+        });
+    }
+
+    static Stream<Arguments> u64Widths() {
+        Random rng = new Random(0xB17BACE2L);
+        return Stream.iterate(1, w -> w <= 64, w -> w + 1).map(w -> {
+            long mask = w == 64 ? -1L : (1L << w) - 1L;
+            long[] a = new long[40];
+            a[0] = 0L;
+            a[1] = mask;
+            for (int i = 2; i < a.length; i++) {
+                a[i] = rng.nextLong() & mask;
+            }
+            return Arguments.of(w, a);
+        });
     }
 }
