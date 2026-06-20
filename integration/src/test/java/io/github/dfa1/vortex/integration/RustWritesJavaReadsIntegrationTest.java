@@ -32,6 +32,8 @@ import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.lang.foreign.Arena;
@@ -499,69 +501,24 @@ class RustWritesJavaReadsIntegrationTest {
         }
     }
 
-    @Test
-    void s3_pcoVortex_javaDecodeMatchesJni(@TempDir Path tmp) throws Exception {
-        // Given — pco.vortex: synthetic file with all pco ptypes; Classic+Consecutive+IntMult+FloatMult modes
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {
+        "pco.vortex",                        // all pco ptypes: Classic+Consecutive+IntMult+FloatMult
+        "tpch_lineitem.compact.vortex",      // I64/I32/Decimal/date: Classic+Consecutive
+        "tpch_orders.compact.vortex",        // I64/I32/Decimal/date: Classic+Consecutive
+        "clickbench_hits_5k.compact.vortex"  // I16/I32/I64/ts-I64: Classic+Consecutive
+    })
+    void s3_javaDecodeMatchesJni(String fixture, @TempDir Path tmp) throws Exception {
+        // Given — Java decode of a first-I64 column from an S3 fixture
         assumeNetworkAvailable();
-        Path file = downloadIfMissing(tmp, "pco.vortex");
+        Path file = downloadIfMissing(tmp, fixture);
         String col = firstI64Column(file);
 
         // When
         long[] jni = readJniLongColumn(file, col);
         long[] java = readJavaLongColumn(file, col);
 
-        // Then — same values (order may differ across chunks)
-        Arrays.sort(jni);
-        Arrays.sort(java);
-        assertThat(java).containsExactly(jni);
-    }
-
-    @Test
-    void s3_tpchLineitem_javaDecodeMatchesJni(@TempDir Path tmp) throws Exception {
-        // Given — tpch_lineitem.compact.vortex: I64/I32/Decimal/date columns, Classic+Consecutive
-        assumeNetworkAvailable();
-        Path file = downloadIfMissing(tmp, "tpch_lineitem.compact.vortex");
-        String col = firstI64Column(file);
-
-        // When
-        long[] jni = readJniLongColumn(file, col);
-        long[] java = readJavaLongColumn(file, col);
-
-        // Then
-        Arrays.sort(jni);
-        Arrays.sort(java);
-        assertThat(java).containsExactly(jni);
-    }
-
-    @Test
-    void s3_tpchOrders_javaDecodeMatchesJni(@TempDir Path tmp) throws Exception {
-        // Given — tpch_orders.compact.vortex: I64/I32/Decimal/date columns, Classic+Consecutive
-        assumeNetworkAvailable();
-        Path file = downloadIfMissing(tmp, "tpch_orders.compact.vortex");
-        String col = firstI64Column(file);
-
-        // When
-        long[] jni = readJniLongColumn(file, col);
-        long[] java = readJavaLongColumn(file, col);
-
-        // Then
-        Arrays.sort(jni);
-        Arrays.sort(java);
-        assertThat(java).containsExactly(jni);
-    }
-
-    @Test
-    void s3_clickbenchHits5k_javaDecodeMatchesJni(@TempDir Path tmp) throws Exception {
-        // Given — clickbench_hits_5k.compact.vortex: I16/I32/I64/ts-I64 columns, Classic+Consecutive
-        assumeNetworkAvailable();
-        Path file = downloadIfMissing(tmp, "clickbench_hits_5k.compact.vortex");
-        String col = firstI64Column(file);
-
-        // When
-        long[] jni = readJniLongColumn(file, col);
-        long[] java = readJavaLongColumn(file, col);
-
-        // Then
+        // Then — same values element-wise (chunk order may differ)
         Arrays.sort(jni);
         Arrays.sort(java);
         assertThat(java).containsExactly(jni);

@@ -4,6 +4,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -152,42 +153,19 @@ class FilterCommandTest {
         assertThat(result.stderr()).contains("invalid filter expression");
     }
 
-    @Test
-    void filtersDoubleColumn_returnsOk() throws IOException {
-        // Given — F64 column with a fractional threshold (compareDouble path)
-        Path typed = writeTypedVortex(tmp, "typed.vortex");
-
-        // When — price in {200.0, 300.0} match
-        CliTestSupport.Captured result = capture(() ->
-                FilterCommand.run(new String[]{"filter", typed.toString(), "price", ">", "150.0"}));
-
-        // Then
-        assertThat(result.status()).isEqualTo(ExitStatus.OK);
-        assertThat(result.stdout()).startsWith("id");
-    }
-
-    @Test
-    void filtersIntColumn_returnsOk() throws IOException {
-        // Given — I32 column (compareValue's IntArray branch)
+    @ParameterizedTest(name = "{0} {1} {2}")
+    @CsvSource({
+            "price, >,  150.0", // F64 column — compareDouble path
+            "qty,   >=, 20",    // I32 column — compareValue IntArray branch
+            "name,  ==, bob"    // Utf8 column — compareValue VarBinArray branch, lexicographic
+    })
+    void filtersTypedColumn_returnsOk(String column, String op, String value) throws IOException {
+        // Given — typed column exercising the per-dtype compare branch
         Path typed = writeTypedVortex(tmp, "typed.vortex");
 
         // When
         CliTestSupport.Captured result = capture(() ->
-                FilterCommand.run(new String[]{"filter", typed.toString(), "qty", ">=", "20"}));
-
-        // Then
-        assertThat(result.status()).isEqualTo(ExitStatus.OK);
-        assertThat(result.stdout()).startsWith("id");
-    }
-
-    @Test
-    void filtersStringColumn_returnsOk() throws IOException {
-        // Given — Utf8 column (compareValue's VarBinArray branch, lexicographic compare)
-        Path typed = writeTypedVortex(tmp, "typed.vortex");
-
-        // When
-        CliTestSupport.Captured result = capture(() ->
-                FilterCommand.run(new String[]{"filter", typed.toString(), "name", "==", "bob"}));
+                FilterCommand.run(new String[]{"filter", typed.toString(), column, op, value}));
 
         // Then
         assertThat(result.status()).isEqualTo(ExitStatus.OK);

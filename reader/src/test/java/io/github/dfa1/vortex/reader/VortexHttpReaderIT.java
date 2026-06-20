@@ -8,6 +8,8 @@ import io.github.dfa1.vortex.reader.array.ListViewArray;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.net.URI;
 import java.util.List;
@@ -80,52 +82,11 @@ class VortexHttpReaderIT {
     // No S3 fixture exists in v0.72.0 — enable these tests once fixtures are published.
 
     @Disabled("no S3 fixture in v0.72.0")
-    @Test
-    void scan_maskedVortex_decodesAllRows() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"masked.vortex", "patched.vortex", "variant.vortex"})
+    void scan_unimplementedEncoding_decodesAllRows(String fixture) throws Exception {
         // Given
-        URI uri = BASE.resolve("masked.vortex");
-
-        // When
-        long totalRows = 0;
-        try (var sut = VortexHttpReader.open(uri);
-             var iter = sut.scan(ScanOptions.all())) {
-            while (iter.hasNext()) {
-                try (var c = iter.next()) {
-                    totalRows += c.rowCount();
-                }
-            }
-        }
-
-        // Then
-        assertThat(totalRows).isGreaterThan(0);
-    }
-
-    @Disabled("no S3 fixture in v0.72.0")
-    @Test
-    void scan_patchedVortex_decodesAllRows() throws Exception {
-        // Given
-        URI uri = BASE.resolve("patched.vortex");
-
-        // When
-        long totalRows = 0;
-        try (var sut = VortexHttpReader.open(uri);
-             var iter = sut.scan(ScanOptions.all())) {
-            while (iter.hasNext()) {
-                try (var c = iter.next()) {
-                    totalRows += c.rowCount();
-                }
-            }
-        }
-
-        // Then
-        assertThat(totalRows).isGreaterThan(0);
-    }
-
-    @Disabled("no S3 fixture in v0.72.0")
-    @Test
-    void scan_variantVortex_decodesAllRows() throws Exception {
-        // Given
-        URI uri = BASE.resolve("variant.vortex");
+        URI uri = BASE.resolve(fixture);
 
         // When
         long totalRows = 0;
