@@ -1,428 +1,231 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code working in this repository.
 
 ## What it is
 
-Java 25 native implementation of the [Vortex](https://github.com/vortex-data/vortex) columnar file format. Uses FFM (
-`MemorySegment`/`Arena`) instead of JNI or `sun.misc.Unsafe`.
+Java 25 native implementation of the [Vortex](https://github.com/vortex-data/vortex) columnar
+file format. Uses FFM (`MemorySegment`/`Arena`) — never JNI or `sun.misc.Unsafe`.
 
 ## Module structure
 
 ```
 core    — DType, PType, VortexException, VortexFormat + generated fbs/proto
-          encoding: EncodingId, TimeUnit, PTypeIO
-          extension: ExtensionId
+          encoding: EncodingId, TimeUnit, PTypeIO   extension: ExtensionId
 reader  — VortexReader, VortexHttpReader, VortexHandle, ReadRegistry, ExtensionDecoder,
-          Chunk, ArrayStats, ScanOptions, RowFilter
-          reader.array: Array and all subtypes (decode outputs)
-          reader.decode: EncodingDecoder, DecodeContext, ArrayNode + all *EncodingDecoder impls
-          reader.extension: DateExtensionDecoder, TimeExtensionDecoder,
-                            TimestampExtensionDecoder, UuidExtensionDecoder
-          (file-structure internals: Footer, Layout, SegmentSpec, Trailer, PostscriptParser, …)
+          Chunk, ArrayStats, ScanOptions, RowFilter; file internals (Footer, Layout, Trailer,
+          PostscriptParser, …)
+          reader.array  — Array + all subtypes (decode outputs)
+          reader.decode — EncodingDecoder, DecodeContext, ArrayNode + *EncodingDecoder impls
+          reader.extension — Date/Time/Timestamp/Uuid ExtensionDecoder
 writer  — VortexWriter, WriteRegistry, WriteOptions, ExtensionEncoder
-          writer.encode: EncodingEncoder, EncodeContext, NullableData + all *EncodingEncoder impls,
-                         extension encoders (DateExtensionEncoder, TimeExtensionEncoder,
-                         TimestampExtensionEncoder, UuidExtensionEncoder)
+          writer.encode — EncodingEncoder, EncodeContext, NullableData + *EncodingEncoder impls,
+          extension encoders
 ```
 
-Dependency rule: `writer → core`, `reader → core`. Writer never depends on reader.
-`Array` and its subtypes are decode outputs — they live in `reader.array`, not `core`.
+Dependency rule: `writer → core`, `reader → core`. **Writer never depends on reader.**
+`Array` and subtypes are decode outputs — they live in `reader.array`, not `core`.
 
-## Branching strategy
+## Branching
 
-Trunk-based development. PRs are fine but always squash or rebase — no merge commits.
-Keep commits small and `main` always green.
+Trunk-based. PRs fine but always squash or rebase — no merge commits. Keep commits small,
+`main` always green.
 
 ## Commands
 
-Never use `mvn install` or `./mvwn install`.
-
-Generated sources (`fbs`/`proto` → Java) are committed under `core/src/main/java`.
-Normal builds need no external tools.
-
-Proto-to-Java generation is in-process via the `proto-gen` module (no `protoc` needed).
-The generator emits one record per message with a {@code decode(MemorySegment, long, long)} static
-factory and an {@code encode()} method that operate directly on a memory segment — no `byte[]`
-copy, no `protobuf-java` runtime, no `sun.misc.Unsafe`.
-
-To regenerate after editing `.fbs` or `.proto` schemas:
+**Never `mvn install` / `./mvnw install`.** Normal builds need no external tools; generated
+`fbs`/`proto` sources are committed under `core/src/main/java`.
 
 ```bash
-brew install flatbuffers              # only needed for .fbs edits
-./mvnw compile -pl proto-gen          # build the proto generator (only on .proto edits)
-./mvnw generate-sources -pl core -P regenerate-sources
-# then commit the updated files
+./mvnw verify                              # build all
+./mvnw verify -DskipTests                  # build, no tests
+./mvnw test                                # unit only (excludes *IntegrationTest)
+./mvnw test -pl reader                     # one module
+./mvnw test -pl reader -Dtest=MyTest       # one class
+./mvnw test -pl reader -Dtest=MyTest#m     # one method
+./mvnw verify -pl integration -am          # integration (failsafe, NOT surefire)
+./mvnw verify -pl integration -am -Dit.test="RustWritesJavaReadsIntegrationTest#method"
+./bench RustVsJavaReadBenchmark.javaReadVolume   # benchmark — always ClassName.methodName filter
 ```
 
-Any `flatc` version works — the profile strips the version guard automatically.
-`flatc` runs every time the profile is active; if you only changed `.proto` files, revert any
-spurious `fbs/` diffs with `git checkout -- core/src/main/java/io/github/dfa1/vortex/fbs/`.
+Regenerate after editing `.fbs`/`.proto`:
 
 ```bash
-# Build all modules
-./mvnw verify
-
-# Build without tests
-./mvnw verify -DskipTests
-
-# Run all tests (unit only — excludes *IntegrationTest)
-./mvnw test
-
-# Run tests in one module
-./mvnw test -pl reader
-
-# Run a single test class
-./mvnw test -pl reader -Dtest=MyTest
-
-# Run a single test method
-./mvnw test -pl reader -Dtest=MyTest#myMethod
-
-# Run integration tests (use verify + failsafe, NOT test + surefire)
-./mvnw verify -pl integration -am
-
-# Run a single integration test class
-./mvnw verify -pl integration -am -Dit.test=RustWritesJavaReadsIntegrationTest
-
-# Run a single integration test method
-./mvnw verify -pl integration -am -Dit.test="RustWritesJavaReadsIntegrationTest#s3_pcoVortex_javaDecodeMatchesJni"
-
-# Run all benchmarks
-./bench
-
-# Run specific benchmark class or method (always use ClassName.methodName filter)
-./bench RustVsJavaReadBenchmark
-./bench RustVsJavaReadBenchmark.javaReadVolume
+brew install flatbuffers              # only for .fbs edits (any flatc version; guard auto-stripped)
+./mvnw compile -pl proto-gen          # only on .proto edits
+./mvnw generate-sources -pl core -P regenerate-sources   # then commit
 ```
 
-### Javadoc
-
-Every public method must have complete Javadoc. The build enforces this via
-`failOnError=true` + `failOnWarnings=true` in the `maven-javadoc-plugin`.
-
-Rules:
-
-- Every public method needs a main description, `@param` for each parameter, and `@return` (unless `void`).
-- Every public record needs `@param` entries on the class-level doc (one per component).
-- Cross-references use `[ClassName#method(ParamType)]` — verify the target exists before writing it. Wrong references
-  are **errors**, not warnings.
-- `@see`-only Javadoc counts as "no main description" — always add a prose sentence.
-
-**Check:** `./mvnw javadoc:javadoc -pl core` — must produce zero output.
+`flatc` runs whenever the profile is active; if you only changed `.proto`, revert spurious
+`fbs/` diffs: `git checkout -- core/src/main/java/io/github/dfa1/vortex/fbs/`. Proto-to-Java
+is in-process via `proto-gen` (no `protoc`/`protobuf-java`): one record per message with static
+`decode(MemorySegment, long, long)` + `encode()` operating directly on a segment.
 
 ### Releasing
 
 ```bash
 ./mvnw --batch-mode release:clean release:prepare \
-    -DreleaseVersion=<version> \
-    -DdevelopmentVersion=<next>-SNAPSHOT
-git push && git push --tags
+    -DreleaseVersion=<version> -DdevelopmentVersion=<next>-SNAPSHOT
+git push && git push --tags          # GitHub Actions deploys the tag to Maven Central
 ```
 
-GitHub Actions picks up the tag and deploys to Maven Central.
+## File format
 
-### File format
+8-byte trailer at EOF: `version(u16 LE) | postscriptLen(u16 LE) | magic(VTXF)`. The postscript
+(FlatBuffer, immediately before the trailer) points (offset+length) to the Footer (FlatBuffer),
+DType (Protobuf), and Layout (FlatBuffer) blobs elsewhere in the file.
 
-8-byte trailer at EOF: `version(u16 LE) | postscriptLen(u16 LE) | magic(VTXF)`. The postscript is a FlatBuffer blob
-immediately before the trailer; it points (offset+length) to the Footer (FlatBuffer), DType (Protobuf), and Layout (
-FlatBuffer) blobs elsewhere in the file.
+Layout tree: `Struct → Zoned(Stats) → Chunked → [Flat, Flat, ...]`
+- **Flat** single encoded segment · **Chunked** sequence of Flats · **Struct** one child/column
+- **Zoned** (`vortex.stats`) wraps a child with per-chunk min/max for zone-map pruning
 
-### Layout tree
+Encoding IDs are strings (`"vortex.flat"`, `"fastlanes.bitpacked"`). `ReadRegistry` maps IDs →
+`EncodingDecoder` via `ServiceLoader`; immutable after construction — register custom decoders on
+the builder: `ReadRegistry.builder().registerServiceLoaded().register(myDecoder).build()`.
 
-```
-Struct → Zoned(Stats) → Chunked → [Flat, Flat, ...]
-```
+### Adding an encoding
 
-- **Flat**: single encoded segment on disk
-- **Chunked**: sequence of Flat children
-- **Zoned** (`vortex.stats`): wraps a child with per-chunk min/max statistics used for zone-map pruning
-- **Struct**: one child per column
+Add `EncodingId` enum constant `VORTEX_FOO("vortex.foo")`, then per side:
+- **Decode:** `FooEncodingDecoder implements EncodingDecoder` in `reader.decode` + FQN in
+  `reader/.../META-INF/services/io.github.dfa1.vortex.reader.decode.EncodingDecoder`
+- **Encode:** `FooEncodingEncoder implements EncodingEncoder` in `writer.encode` + FQN in
+  `writer/.../META-INF/services/io.github.dfa1.vortex.writer.encode.EncodingEncoder`
 
-Encoding IDs are strings (e.g. `"vortex.flat"`, `"fastlanes.bitpacked"`). `ReadRegistry` maps IDs → `EncodingDecoder`
-impls via `ServiceLoader`. The registry is immutable after construction — register custom decoders on the builder:
-`ReadRegistry.builder().registerServiceLoaded().register(myDecoder).build()`.
+### Adding an extension type
 
-**Adding a new encoding:** touch-points depend on read vs write:
+Add `ExtensionId` constant, then per side:
+- **Decode:** `FooExtensionDecoder implements ExtensionDecoder` in `reader.extension`; register via
+  `ReadRegistry.builder().register(new FooExtensionDecoder())` — **no service file**
+  (`registerServiceLoaded()` does not discover `ExtensionDecoder`).
+- **Encode:** `FooExtensionEncoder implements ExtensionEncoder` in `writer` + FQN in
+  `writer/.../META-INF/services/io.github.dfa1.vortex.writer.ExtensionEncoder`
 
-- **Decode side** (reader):
-  1. `EncodingId.java` — add enum constant `VORTEX_FOO("vortex.foo")`
-  2. `FooEncodingDecoder.java` — implement `EncodingDecoder` in `reader.decode`
-  3. `reader/src/main/resources/META-INF/services/io.github.dfa1.vortex.reader.decode.EncodingDecoder` — add the FQN
+## Memory model
 
-- **Encode side** (writer):
-  1. `EncodingId.java` — add enum constant (if not already added above)
-  2. `FooEncodingEncoder.java` — implement `EncodingEncoder` in `writer.encode`
-  3. `writer/src/main/resources/META-INF/services/io.github.dfa1.vortex.writer.encode.EncodingEncoder` — add the FQN
+`VortexReader` memory-maps the whole file into one confined-`Arena` `MemorySegment`. All `Array`
+buffers returned during scan are zero-copy slices of it — lifetime tied to the reader; close to
+release.
 
-**Adding a new extension type:** split by side — implement `ExtensionDecoder` (reader), `ExtensionEncoder` (writer), or both:
-
-- **Decode side** (reader):
-  1. `ExtensionId.java` — add enum constant `VORTEX_FOO("vortex.foo")`
-  2. `FooExtensionDecoder.java` — implement `ExtensionDecoder` in `reader.extension`
-  3. Register via `ReadRegistry.builder().register(new FooExtensionDecoder())` — no service file; `registerServiceLoaded()` does not discover `ExtensionDecoder`.
-
-- **Encode side** (writer):
-  1. `ExtensionId.java` — add enum constant (if not already added above)
-  2. `FooExtensionEncoder.java` — implement `ExtensionEncoder` in `writer.encode` (or `writer`)
-  3. `writer/src/main/resources/META-INF/services/io.github.dfa1.vortex.writer.ExtensionEncoder` — add the FQN
-
-### Memory model
-
-`VortexReader` memory-maps the entire file into one `MemorySegment` (confined `Arena`). All `Array` buffers returned
-during scan are zero-copy slices of that segment — their lifetime is tied to the `VortexReader`. Close the file to release
-the mapped region.
-
-**Encoding output allocation rule:** never allocate `byte[]` + wrap with `MemorySegment.ofArray()` for decode output.
-Always allocate from `ctx.arena()`:
+**Allocation rule — never `new byte[]` + `MemorySegment.ofArray()` for decode output.** Always
+`ctx.arena().allocate(...)` (off-heap, zero GC, scan-chunk lifetime). If a private helper lacks
+`DecodeContext`, pass an `Arena arena` param from the `decode()` call site.
 
 ```java
-// WRONG — heap allocation, GC pressure, extra copy
-byte[] outBytes = new byte[(int) (n * elemBytes)];
-MemorySegment out = MemorySegment.ofArray(outBytes);
-
-// CORRECT — off-heap, zero GC, same lifetime as the scan chunk
+// WRONG: heap alloc, GC pressure, extra copy
+MemorySegment out = MemorySegment.ofArray(new byte[(int) (n * elemBytes)]);
+// CORRECT
 MemorySegment out = ctx.arena().allocate(n * elemBytes);
 ```
 
-If the allocation is in a private static helper that doesn't receive `DecodeContext`, add an `Arena arena` parameter
-and pass `ctx.arena()` from the `decode()` call site.
-
-**Hot-loop rule — never put modulo, division, or branch-with-variable-target on every element.**
-A single `i % cap` per row blocks JIT auto-vectorization (C2 superword pass refuses to vectorize loops containing
-`Op_ModL`/`Op_DivL`; no SIMD ISA has an integer-divide opcode). Even loop-invariant `cap` doesn't save you —
-strength-reduction (Barrett/Granlund-Montgomery) requires a *compile-time* constant divisor. Per-element scalar
-modulo also costs 20–40 cycles on Apple silicon vs ~1 cycle for surrounding loads. Net: one modulo in the body of
-a 1M-row inner loop has cost 5–10× regressions in this codebase already (commits `ed658b7` → `051a794` → `442021f`).
-
-If you need broadcast/clamp/masking semantics for the rare path, **branch-split**: hoist the cap once outside the
-loop, gate two specialized loop bodies on the cheap check.
+**Hot-loop rule — no modulo/division/variable-target branch per element.** A single `i % cap` per
+row blocks JIT auto-vectorization (C2 superword refuses `Op_ModL`/`Op_DivL`; no SIMD integer-divide
+opcode) — and loop-invariant `cap` doesn't help (strength-reduction needs a *compile-time* constant
+divisor). Scalar modulo is also 20–40 cycles vs ~1 for a load on Apple silicon. One modulo in a 1M-row
+body has caused 5–10× regressions here (`ed658b7`→`051a794`→`442021f`). Same for bounds/validity-bit
+checks and sign-extension switches — anything making the body non-uniform. For broadcast/clamp/mask,
+**branch-split**: hoist the check once, gate two specialized loop bodies.
 
 ```java
-// WRONG — modulo per element kills vectorization and adds 20+ cycles/iter
 long cap = SegmentBroadcast.capacity(src, 8);
-for (long i = 0; i < n; i++) {
-    out.setAtIndex(LE_LONG, i, src.getAtIndex(LE_LONG, i % cap));
-}
-
-// CORRECT — fast path has zero modulos; slow path only fires for ConstantEncoding broadcast
-long cap = SegmentBroadcast.capacity(src, 8);
-if (cap == n) {
-    for (long i = 0; i < n; i++) {
-        out.setAtIndex(LE_LONG, i, src.getAtIndex(LE_LONG, i));
-    }
-} else {
-    for (long i = 0; i < n; i++) {
-        out.setAtIndex(LE_LONG, i, src.getAtIndex(LE_LONG, i % cap));
-    }
+if (cap == n) {                                  // fast path: zero modulos, vectorizes
+    for (long i = 0; i < n; i++) { out.setAtIndex(LE_LONG, i, src.getAtIndex(LE_LONG, i)); }
+} else {                                          // slow path: only ConstantEncoding broadcast
+    for (long i = 0; i < n; i++) { out.setAtIndex(LE_LONG, i, src.getAtIndex(LE_LONG, i % cap)); }
 }
 ```
 
-The same rule applies to bounds checks, validity-bit checks, sign-extension switches — anything that
-makes the body of a multi-million-row loop non-uniform. Profile with JFR (`-prof stack:lines=10`); if you
-see `idiv` / `sdiv` / arithmetic helpers showing up as the hot frame, it's almost always this pattern.
+Profile with JFR (`-prof stack:lines=10`); `idiv`/`sdiv`/arithmetic helpers as the hot frame is
+almost always this.
 
 ## Reference implementation
 
-When stuck on encoding/decoding behavior, consult the Rust reference implementation at
-`https://github.com/spiraldb/vortex` (via `gh api repos/spiraldb/vortex/contents/<path>`).
+When stuck on encode/decode behavior, read the Rust reference at
+`https://github.com/spiraldb/vortex` (via `gh api repos/spiraldb/vortex/contents/<path>`):
+`encodings/fastlanes/src/{bitpacking,for}/`, `encodings/sparse/src/`, `encodings/alp/src/alp/`, and
+`https://github.com/spiraldb/fastlanes-rs` (`src/bitpacking.rs`, `src/macros.rs`).
 
-Key paths:
+**Never reverse-engineer wire formats by probing bytes.** Read the vtable `serialize`/`deserialize`
+in the Rust source for the exact schema, then implement from spec.
 
-- `encodings/fastlanes/src/bitpacking/` — `fastlanes.bitpacked` wire format and algorithm
-- `encodings/fastlanes/src/for/` — `fastlanes.for` (frame-of-reference)
-- `encodings/sparse/src/` — `vortex.sparse`
-- `encodings/alp/src/alp/` — `vortex.alp`
-- `https://github.com/spiraldb/fastlanes-rs` — FastLanes bit-packing algorithm (`src/bitpacking.rs`, `src/macros.rs`)
+## Design decisions
 
-Never reverse-engineer wire formats by probing byte patterns. Read the vtable `serialize`/`deserialize`
-methods in the Rust source to get the exact protobuf schema, then implement from spec.
-
-## POM dependency ordering
-
-In every module `pom.xml`, dependencies are grouped with comments:
-
-```xml
-<!-- production -->
-<!-- project-internal deps (io.github.dfa1.vortex:*) first, then external -->
-
-<!-- testing -->
-<!-- project-internal test deps first, then external -->
-```
-
-Omit a section if empty (e.g. integration module has no production deps; performance has no test deps).
-
-## Pluggability decisions
-
-### DType — already pluggable via Extension
-
-`DType` is a sealed interface. The sealed variants (Primitive, Utf8, Struct, …) are
-file-format primitives; downstream consumers **must not** add new variants. Instead use
-`DType.Extension`:
-
-```java
-// custom "ip.address" logical type over 4-byte I32 storage
-DType.Extension ipDtype = new DType.Extension("ip.address",
-        new DType.Primitive(PType.I32, false), null, false);
-```
-
-Register decoders via `ReadRegistry.builder().register(myDecoder)` and encoders via
-`ServiceLoader<ExtensionEncoder>` or `WriteRegistry.builder().register(myEncoder)`.
-This mirrors Rust exactly — `vortex.date`, `vortex.uuid`, etc. are all Extension types
-in Rust too. **No SPI for DType variants is planned.**
-
-### Layout — fixed set, no SPI
-
-`Layout` is a plain record with a `String encodingId`. `ScanIterator.decodeLayout()`
-dispatches on the four known IDs (flat/chunked/zoned/struct/dict) and throws for
-anything else. Custom layouts would require reader changes to traverse the tree,
-decode metadata, and handle child counts — no upstream Vortex format has shipped a
-custom layout that requires Java support.
-
-Decision: **keep the fixed set**. Revisit only when a concrete downstream use case
-arrives that cannot be addressed by choosing a different encoding for a flat segment.
-
-## API design
-
-- Keep public interfaces as small as possible.
-- Don't expose internals. When in doubt, leave it out or make it private.
+- **DType is pluggable only via `Extension`.** `DType` is a sealed interface; downstream code must
+  not add variants. Use `new DType.Extension("ip.address", new DType.Primitive(PType.I32, false),
+  null, false)` and register decoders/encoders on the registries (or `ServiceLoader<ExtensionEncoder>`).
+  Mirrors Rust (`vortex.date`, `vortex.uuid`, …). No SPI for DType variants planned.
+- **Layout is a fixed set, no SPI.** `ScanIterator.decodeLayout()` dispatches the known IDs
+  (flat/chunked/zoned/struct/dict) and throws otherwise. Keep the fixed set; revisit only for a
+  concrete downstream case unaddressable by a different flat-segment encoding.
+- **Small public APIs.** Don't expose internals — when in doubt, leave it out or make it private.
+- **POM deps** grouped with comments: `<!-- production -->` then `<!-- testing -->`, each with
+  project-internal (`io.github.dfa1.vortex:*`) deps first, then external. Omit empty sections.
 
 ## Code style
 
-- indents are 4 spaces, enforced by checkstyle
-- Zero SonarQube bugs/smells policy.
-- **Javadoc style:** all `///` Markdown Javadoc — no HTML tags. Use Markdown syntax:
-  blank `///` line for paragraph break, `- item` for lists, ` ```java ``` ` for code
-  blocks, `**text**` for bold. Checkstyle enforces this (`RegexpSingleline` rule in
-  `checkstyle.xml` blocks `<p>`, `<ul>`, `<li>`, `<strong>`, `<pre>`, `<table>`, etc.).
-- No `sun.misc.Unsafe` or internal JDK APIs.
-- Prefer explicit over clever. Fail fast on unhandled cases.
-- Always prefer idiomatic modern Java. Reuse the standard library and language
-  features the JDK already provides — e.g. override `Iterator.forEachRemaining`
-  instead of inventing a parallel `forEachChunk`; use `Optional`, records,
-  sealed types, pattern switches, virtual threads, FFM — over hand-rolled
-  equivalents. New APIs should look and feel like JDK APIs Java developers
-  already know.
-- Always use braces for `if`/`else`/`for`/`while` bodies, even single-liners:
-  ```java
-  // WRONG
-  if (cond) return a;
+- 4-space indent, **zero SonarQube bugs/smells**, no `sun.misc.Unsafe` or internal JDK APIs.
+- Prefer explicit over clever; fail fast on unhandled cases.
+- Idiomatic modern Java: reuse the JDK (override `Iterator.forEachRemaining`, don't invent
+  `forEachChunk`; use `Optional`, records, sealed types, pattern switches, virtual threads, FFM).
+  New APIs should feel like JDK APIs.
+- Always braces for `if`/`else`/`for`/`while`, even one-liners (`if (c) { return a; }`).
+- **Time quantities use `java.time.Duration`, never `long`** (no `long timeoutMs`/`delayNanos`).
+  Exception: low-level JDK interop taking `long ns` (`Thread.sleep`, `LockSupport.parkNanos`,
+  `System.nanoTime` math) — convert at the call site via `duration.toNanos()`/`toMillis()`.
 
-  // CORRECT
-  if (cond) {
-      return a;
-  }
-  ```
-- **Time quantities use `java.time.Duration`, not `long`.** Any parameter, field, or
-  return type representing a time amount (timeout, delay, interval, period, deadline-offset)
-  must be `Duration`. No `long timeoutMs` / `long delayNanos` / `long intervalSeconds` —
-  the unit lives in the type, not the variable name.
-  ```java
-  // WRONG
-  Optional<Key> readKey(long timeoutMs) throws IOException;
+### Javadoc (build-enforced: `failOnError` + `failOnWarnings`)
 
-  // CORRECT
-  Optional<Key> readKey(Duration timeout) throws IOException;
-  ```
-  Exception: low-level interop with JDK APIs that take `long ns` (e.g. `Thread.sleep`,
-  `LockSupport.parkNanos`, `System.nanoTime` arithmetic) — convert at the call site
-  via `duration.toNanos()` / `toMillis()`.
+- Every public method: main prose description, `@param` per parameter, `@return` (unless `void`).
+  Every public record: `@param` per component on the class doc. `@see`-only counts as no description.
+- All `///` Markdown — **no HTML** (checkstyle `RegexpSingleline` blocks `<p>`,`<ul>`,`<li>`,
+  `<strong>`,`<pre>`,`<table>`, …). Use blank `///` for paragraphs, `- ` lists, ` ```java ``` `,
+  `**bold**`. Cross-refs `[ClassName#method(ParamType)]` — verify the target exists (wrong refs are
+  **errors**).
+- Check: `./mvnw javadoc:javadoc -pl core` must produce zero output.
 
-## Encoding class structure
+### Encoding class structure
 
-Encoding classes with non-trivial encode **and** decode paths must separate them into
-private static inner classes named `Encoder` and `Decoder`. Shared low-level helpers
-(buffer math, proto serialization) live in the side that owns them or in a third inner
-class if genuinely shared by both.
+Encodings with non-trivial encode **and** decode separate them into private static inner classes
+`Encoder` and `Decoder` (shared low-level helpers live with their owner or a third inner class):
 
 ```java
 public final class FooEncoding implements Encoding {
-
-    @Override
-    public EncodeResult encode(DType dtype, Object data) {
-        return Encoder.encode(dtype, data);
-    }
-
-    @Override
-    public Array decode(DecodeContext ctx) {
-        return Decoder.decode(ctx);
-    }
-
-    private static final class Encoder {
-        static EncodeResult encode(DType dtype, Object data) { ...}
-    }
-
-    private static final class Decoder {
-        static Array decode(DecodeContext ctx) { ...}
-    }
+    @Override public EncodeResult encode(DType dtype, Object data) { return Encoder.encode(dtype, data); }
+    @Override public Array decode(DecodeContext ctx) { return Decoder.decode(ctx); }
+    private static final class Encoder { static EncodeResult encode(DType dtype, Object data) { ... } }
+    private static final class Decoder { static Array decode(DecodeContext ctx) { ... } }
 }
 ```
 
-Simple encodings (≤ ~80 lines total, e.g. `NullEncoding`, `BoolEncoding`) are exempt.
+Simple encodings (≤ ~80 lines, e.g. `NullEncoding`, `BoolEncoding`) are exempt.
 
-### Metadata-only encodings
-
-Some encodings store all data in proto3 metadata — no buffers, no children (e.g. `SequenceEncoding`).
-Their `EncodeResult` uses an `EncodeNode` with `metadata` set and an empty `bufferIndices` array:
-
-```java
-ByteBuffer metaBuf = ByteBuffer.wrap(meta.encode());
-EncodeNode node = new EncodeNode(encodingId, metaBuf, new EncodeNode[0], new int[]{});
-return new EncodeResult(node, List.of(), null, null);
-```
-
-The decoder reads back via `ctx.metadata()`, not `ctx.buffer(n)`:
+**Metadata-only encodings** (all data in proto3 metadata, no buffers/children, e.g. `SequenceEncoding`):
+`EncodeResult` uses an `EncodeNode` with `metadata` set and empty `bufferIndices`; the decoder reads
+`ctx.metadata()` (not `ctx.buffer(n)`):
 
 ```java
+EncodeNode node = new EncodeNode(encodingId, ByteBuffer.wrap(meta.encode()), new EncodeNode[0], new int[]{});
+// decode:
 MemorySegment metaSeg = MemorySegment.ofBuffer(ctx.metadata().duplicate());
 FooMetadata meta = FooMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 ```
 
-Generated proto records live in `io.github.dfa1.vortex.proto`. The runtime decoder
-(`ProtoReader`, `ProtoWriter`) is package-private — generated code calls it directly.
-For oneof messages (e.g. `ScalarValue`), prefer the static `ofXxxValue(v)` factory over
-the 11-arg constructor.
+Generated proto records live in `io.github.dfa1.vortex.proto`; the runtime (`ProtoReader`,
+`ProtoWriter`) is package-private. For oneof messages (e.g. `ScalarValue`) prefer the static
+`ofXxxValue(v)` factory over the multi-arg constructor.
 
 ## Testing
 
-- Every feature needs unit tests covering: happy path, negative cases (invalid input, error conditions), and corner
-  cases (empty, zero, max values, boundary conditions).
-- Unit tests must be fast — no file I/O, no network, no sleep. Mock or use in-memory data.
-- Integration tests are critical: there is no formal spec, so interoperability with the Rust reference implementation is
-  the ground truth. Write integration tests for every encoding round-trip and file format boundary.
-- JUnit 5 + Mockito (BDDMockito) + AssertJ.
-- Every test has `// Given` / `// When` / `// Then` sections.
-- Class under test is always named `sut`.
-- Use `BDDMockito` exclusively: `given(mock.method()).willReturn(value)`. Never the reverse form. Only static-import
-  `given` and `then` — not `willReturn`/`willThrow`.
-- Prefer `@ParameterizedTest` over copy-pasting tests. Use `@ValueSource` when possible; `@ArgumentsSource` when more
-  structure needed (test case must have a name).
-- Use `@ParameterizedTest` with seeded random generators for encoding/decoding logic where input space is large — they
-  find corner cases that example tests miss.
-- Acceptance tests run the built jar end-to-end with hosh scripts.
-- Use `@Nested` to group related tests by scenario or feature within a test class:
-  ```java
-  class FooEncodingTest {
-      @Nested class Encode { @Test void roundTrips() { ... } }
-      @Nested class Decode { @Test void handlesEmpty() { ... } }
-  }
-  ```
-  `@BeforeEach` inside a `@Nested` class applies only to that group. Private helpers go
-  at the end of the class they serve, after all `@Test` methods.
-
-## Random-data parameterized tests
-
-Use `@ParameterizedTest` + `@MethodSource` for random-input coverage. Put generators in `RandomArrays` (integration
-module)
-or a similar utility class. Static provider methods in the test class delegate to the generator:
-
-```java
-static Stream<long[]> i64ArrayProvider() {
-    return RandomArrays.i64Arrays(30);
-}
-
-@ParameterizedTest
-@MethodSource("i64ArrayProvider")
-void roundTrips(long[] data) { ...}
-```
-
-Keep counts low (10–30) for integration tests that involve file I/O or JNI.
+- Cover happy path, negative cases (invalid input / errors), and corners (empty, zero, max,
+  boundaries). Unit tests must be fast — no file I/O, network, or sleep; mock or use in-memory data.
+- **Integration tests are ground truth** (no formal spec): interop with the Rust reference. Write
+  one for every encoding round-trip and file-format boundary.
+- JUnit 5 + Mockito (BDDMockito) + AssertJ. Class under test named `sut`. Every test has
+  `// Given` / `// When` / `// Then`. BDDMockito only: `given(mock.m()).willReturn(v)` /
+  `then(...)` (static-import only `given`/`then`, never `willReturn`/`willThrow`).
+- Prefer `@ParameterizedTest` over copy-paste (`@ValueSource`, else `@ArgumentsSource`/named cases).
+  For large input spaces use seeded-random `@MethodSource` generators — they find corners examples
+  miss. Put generators in `RandomArrays` (integration) or a similar util; keep counts low (10–30)
+  when the test does file I/O or JNI.
+- `@Nested` groups related scenarios (`@BeforeEach` in a nested class applies only to it). Private
+  helpers go after all `@Test` methods.
+- Acceptance tests run the built jar end-to-end via hosh scripts.
