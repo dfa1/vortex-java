@@ -90,10 +90,12 @@ final class PostscriptParser {
     }
 
     private static void checkBlobBounds(String name, long offset, long length, long fileSize) {
-        // Same overflow-safe range form as IoBounds.checkRange (no redundant `offset > fileSize`
-        // clause: length >= 0 makes it implied by the final comparison). Keeps the blob-named
-        // message that checkRange's generic text would lose.
-        if (offset < 0 || length < 0 || length > fileSize - offset) {
+        // Overflow-safe containment in [0, fileSize], keeping the blob-named message that
+        // IoBounds.checkRange's generic text would lose. Two clauses checkRange carries are
+        // omitted because they are unreachable here: every caller passes a u32-masked
+        // PostscriptSegment.length() (always >= 0, so no `length < 0` check), which in turn makes
+        // an `offset > fileSize` check redundant — it is already implied by the final comparison.
+        if (offset < 0 || length > fileSize - offset) {
             throw new VortexException(
                     "postscript " + name + " blob out of bounds: offset=" + offset
                             + " length=" + length + " fileSize=" + fileSize);

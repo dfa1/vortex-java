@@ -11,10 +11,9 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
 import java.util.List;
 
+import static io.github.dfa1.vortex.encoding.PTypeIO.LE_INT;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// Successful flat-segment decode path — complements [FlatSegmentBoundsSecurityTest] (which only
@@ -26,11 +25,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - the `orElseGet(() -> new UnknownArrayNode(...))` fallback: returning `null` there yields a
 ///   null node and the decode would not produce an `UnknownArray`.
 class FlatSegmentDecoderDecodeTest {
-
-    private static final ValueLayout.OfInt LE_INT =
-            ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-
-    private static final DType DTYPE = new DType.Primitive(PType.I32, false);
 
     @Test
     void decode_unknownEncodingWithBufferPadding_returnsUnknownArray() {
@@ -49,7 +43,8 @@ class FlatSegmentDecoderDecodeTest {
             seg.set(LE_INT, padding + fb.length, fb.length);
 
             // When — encoding index 0 maps to an id no decoder handles
-            Array result = sut.decode(seg, List.of("vortex.nonexistent"), DTYPE, 0, arena);
+            Array result = sut.decode(seg, List.of("vortex.nonexistent"),
+                    new DType.Primitive(PType.I32, false), 0, arena);
 
             // Then — the allow-unknown path produced an UnknownArray (proves both the +padding
             // walk and the UnknownArrayNode fallback ran)
