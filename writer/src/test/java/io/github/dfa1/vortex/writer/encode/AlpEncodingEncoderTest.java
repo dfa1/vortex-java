@@ -18,10 +18,13 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.Random;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
@@ -241,6 +244,104 @@ class AlpEncodingEncoderTest {
             ALPMetadata meta = ALPMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 
             assertThat(meta.exp_e()).isGreaterThan(0);
+        }
+    }
+
+    /// Property-based round-trip. ALP is a **lossless** codec: every value either fits the
+    /// exponent model exactly or is stored verbatim as a patch. So `decode(encode(x))` must
+    /// equal `x` **bit-for-bit** (raw bits — NaN payloads, subnormals, extremes all checked) —
+    /// a stronger guarantee than the `isCloseTo` example tests above. Seeded for reproducibility.
+    ///
+    /// One documented exception: signed zero. ALP's round-trip check treats `-0.0 == 0.0`, so
+    /// `-0.0` is not patched and decodes to `+0.0`. This is value-lossless but not bit-lossless,
+    /// and matches the Rust reference (forcing a patch would diverge from it). The assertion
+    /// canonicalizes ±0 to capture exactly that — everything else must be bit-identical.
+    @Nested
+    class PropertyRoundTrip {
+
+        @ParameterizedTest
+        @MethodSource("f64Cases")
+        void f64_losslessBitExact(double[] values) {
+            // When
+            EncodeResult enc = ENCODER.encode(DTypes.F64, values, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(enc, values.length, DTypes.F64, REGISTRY);
+            DoubleArray result = (DoubleArray) DECODER.decode(ctx);
+
+            // Then — bit-exact for every element (±0 canonicalized; see class doc)
+            for (int i = 0; i < values.length; i++) {
+                assertThat(canon(result.getDouble(i)))
+                        .as("index %d value %s", i, values[i])
+                        .isEqualTo(canon(values[i]));
+            }
+        }
+
+        @ParameterizedTest
+        @MethodSource("f32Cases")
+        void f32_losslessBitExact(float[] values) {
+            // When
+            EncodeResult enc = ENCODER.encode(DTypes.F32, values, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(enc, values.length, DTypes.F32, REGISTRY);
+            FloatArray result = (FloatArray) DECODER.decode(ctx);
+
+            // Then — bit-exact (±0 canonicalized; see class doc)
+            for (int i = 0; i < values.length; i++) {
+                assertThat(canon(result.getFloat(i)))
+                        .as("index %d value %s", i, values[i])
+                        .isEqualTo(canon(values[i]));
+            }
+        }
+
+        private static long canon(double d) {
+            return d == 0.0 ? 0L : Double.doubleToRawLongBits(d); // map +0.0 and -0.0 to one key
+        }
+
+        private static int canon(float f) {
+            return f == 0.0f ? 0 : Float.floatToRawIntBits(f);
+        }
+
+        static Stream<double[]> f64Cases() {
+            Random rng = new Random(0xA1F64L);
+            Stream.Builder<double[]> b = Stream.builder();
+            // Curated edges: ±0, subnormals, extremes, non-finite — the classic float corner cases.
+            b.add(new double[]{0.0, -0.0, 1.0, -1.0, 0.5, -0.25, 100.0, 3.14159,
+                    Double.MIN_VALUE, Double.MAX_VALUE, Double.MIN_NORMAL, 1e-300, 1e300,
+                    Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY});
+            for (int n = 0; n < 50; n++) {
+                int len = 1 + rng.nextInt(80);
+                double[] a = new double[len];
+                for (int i = 0; i < len; i++) {
+                    a[i] = switch (rng.nextInt(3)) {
+                        // ALP-friendly decimal (clean exponent path)
+                        case 0 -> (rng.nextInt(2_000_000) - 1_000_000) / Math.pow(10, rng.nextInt(7));
+                        // fully random bits (mostly the patch path)
+                        case 1 -> Double.longBitsToDouble(rng.nextLong());
+                        default -> rng.nextGaussian() * Math.pow(10, rng.nextInt(20) - 10);
+                    };
+                }
+                b.add(a);
+            }
+            return b.build();
+        }
+
+        static Stream<float[]> f32Cases() {
+            Random rng = new Random(0xA1F32L);
+            Stream.Builder<float[]> b = Stream.builder();
+            b.add(new float[]{0.0f, -0.0f, 1.0f, -1.0f, 0.5f, -0.25f, 100.0f, 3.14159f,
+                    Float.MIN_VALUE, Float.MAX_VALUE, Float.MIN_NORMAL, 1e-30f, 1e30f,
+                    Float.NaN, Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY});
+            for (int n = 0; n < 50; n++) {
+                int len = 1 + rng.nextInt(80);
+                float[] a = new float[len];
+                for (int i = 0; i < len; i++) {
+                    a[i] = switch (rng.nextInt(3)) {
+                        case 0 -> (rng.nextInt(2_000_000) - 1_000_000) / (float) Math.pow(10, rng.nextInt(5));
+                        case 1 -> Float.intBitsToFloat(rng.nextInt());
+                        default -> (float) (rng.nextGaussian() * Math.pow(10, rng.nextInt(12) - 6));
+                    };
+                }
+                b.add(a);
+            }
+            return b.build();
         }
     }
 }
