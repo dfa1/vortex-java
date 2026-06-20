@@ -120,6 +120,27 @@ loop structure.
 - If Vector API finalizes and shows large gains, this deferral costs
   time. Mitigation: the TODO items remain; the ADR is the trigger to
   act when conditions are met, not a permanent block.
+- **Code duplication is a deliberate cost of the auto-vectorization
+  strategy.** Keeping each hot loop's body uniform (condition for C2
+  superword) forces *monomorphization* — one specialized copy per element
+  width / ptype rather than a shared generic loop. `BitpackedEncodingDecoder`
+  carries `unpackLoop16` / `unpackLoop32` / `unpackLoop64`, three ~96-line
+  methods identical except for their `2L`/`4L`/`8L` strides and
+  `LE_SHORT`/`LE_INT`/`LE_LONG` accessors (~254 duplicated lines, ~48%
+  of the file). They cannot be merged: a single generic loop parameterized
+  by element width reintroduces a per-element variable-width branch, which
+  is exactly what makes C2 refuse to vectorize. The same trade-off produces
+  the per-ptype duplication in `DeltaEncodingEncoder`, `AlpEncodingEncoder`,
+  and the FrameOfReference paths.
+
+  Consequence for tooling: SonarCloud reports this as duplication
+  (project density ~4.7%, dominated by these files). That number is
+  expected and should not be "fixed" by collapsing the loops — doing so
+  would regress throughput. If the metric becomes noisy, suppress it for
+  the specialized decoders via `sonar.cpd.exclusions` rather than
+  refactoring. (Generated `fbs/`/`proto/` sources are already excluded
+  from analysis via `sonar.exclusions` for the same reason — machine
+  output, not hand-maintained code.)
 
 ### Risk
 - If a downstream consumer benchmarks the library and finds a

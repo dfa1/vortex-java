@@ -86,6 +86,15 @@
 			**/proto/**,
 			**/performance/**
 		</sonar.coverage.exclusions>
+		<!-- Generated FlatBuffers/Protobuf sources under fbs/ and proto/ are emitted
+		     verbatim by external code-gen and never hand-edited. Their machine style
+		     (getRootAsX naming, redundant casts) trips ~160 smells and pads the
+		     duplication metric with copy-shaped accessors, all unactionable noise.
+		     Exclude from analysis entirely, not just coverage. -->
+		<sonar.exclusions>
+			**/fbs/**,
+			**/proto/**
+		</sonar.exclusions>
 		<!-- Coverage sources:
 		     1. per-module surefire (unit tests)
 		     2. per-module failsafe (module-local integration tests)
