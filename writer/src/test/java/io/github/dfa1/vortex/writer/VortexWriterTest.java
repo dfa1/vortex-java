@@ -12,6 +12,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.channels.FileChannel;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
@@ -82,6 +83,42 @@ class VortexWriterTest {
                 assertThat(chunk.as("birthdays", java.time.LocalDate.class))
                         .containsExactlyElementsOf(dates);
             }
+        }
+    }
+
+    @Test
+    void writeChunk_map_nullablePrimitive_acceptsBoxedArray(@TempDir Path tmp) throws IOException {
+        // Given — nullable I64 column passed to the MAP entry point as a boxed Long[] with a null.
+        // Regression: the map path used to reject boxed arrays ("unsupported data type: Long[]");
+        // only the builder accepted them. Both now share ChunkImpl.validateAndAdapt, so the map
+        // form routes the column through nullable → MaskedEncoding. The null round-trip itself is
+        // asserted end-to-end (through the JNI reader) by the integration masked test.
+        var schema = new DType.Struct(List.of("v"),
+                List.of(new DType.Primitive(PType.I64, true)), false);
+        Path file = tmp.resolve("nullable_map.vtx");
+
+        // When
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            sut.writeChunk(Map.of("v", new Long[]{10L, null, 30L}));
+        }
+
+        // Then — the masked file is well-formed
+        assertThat(Files.size(file)).isPositive();
+    }
+
+    @Test
+    void writeChunk_map_nonNullablePrimitive_rejectsBoxedArray(@TempDir Path tmp) throws IOException {
+        // Given — a non-nullable I64 column rejects a boxed array on the map path, same as the
+        // builder: boxed implies nullability, which the schema does not allow.
+        Path file = tmp.resolve("err.vtx");
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
+            // When / Then
+            assertThatThrownBy(() -> sut.writeChunk(Map.of("id", new Long[]{1L, 2L})))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("non-nullable")
+                    .hasMessageContaining("id");
         }
     }
 

@@ -42,9 +42,24 @@ final class ChunkImpl implements Chunk {
         return data;
     }
 
-    private static Object validateAndAdapt(String column, DType dtype, Object value) {
+    /// Validates a column's raw data against its schema dtype and adapts boxed nullable arrays
+    /// (`Long[]`, `Integer[]`, `Boolean[]`, …) into the internal [NullableData] carrier. Shared by
+    /// the builder ([#put]) and the map-based [VortexWriter#writeChunk(Map)] entry points so both
+    /// accept the same shapes.
+    ///
+    /// @param column the column name, for error messages
+    /// @param dtype  the column's declared schema type
+    /// @param value  the raw column data
+    /// @return the adapted data: the original array for non-nullable primitives, a [NullableData]
+    ///         for boxed nullable arrays, or `value` unchanged for non-primitive carriers
+    static Object validateAndAdapt(String column, DType dtype, Object value) {
         if (value == null) {
             throw new IllegalArgumentException("null array for column: " + column);
+        }
+        // Idempotent: an already-adapted NullableData (e.g. from the builder, which adapts before
+        // delegating to VortexWriter.writeChunk(Map)) passes through so a second call is a no-op.
+        if (value instanceof NullableData) {
+            return value;
         }
         return switch (dtype) {
             case DType.Primitive p -> adaptPrimitive(column, p, value);

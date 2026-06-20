@@ -369,11 +369,29 @@ public final class VortexWriter implements Closeable {
 
     /// Write one chunk. Each column is encoded by the first registered encoder that accepts its dtype.
     ///
+    /// A nullable column may be supplied as a boxed array (`Long[]`, `Integer[]`, `Double[]`,
+    /// `Boolean[]`, …) with `null` marking absent rows; it routes through `MaskedEncoding` just like
+    /// the builder form. Non-nullable columns take the raw primitive array (`long[]`, `int[]`, …).
+    ///
     /// @param columns map from column name to typed array data
     /// @throws IOException              if an I/O error occurs writing to the underlying channel
     /// @throws IllegalArgumentException if a schema column is missing from `columns`,
     ///         or if column arrays disagree on row count
     public void writeChunk(Map<String, Object> columns) throws IOException {
+        // Adapt each column up front so the map entry point accepts the same shapes as the
+        // builder: boxed nullable arrays (Long[], Integer[], Boolean[], …) become NullableData,
+        // raw primitive arrays pass through. Done before the row-count check so length validation
+        // and encoding both see the normalized carrier.
+        Map<String, Object> adapted = new LinkedHashMap<>();
+        for (int i = 0; i < schema.fieldNames().size(); i++) {
+            String colName = schema.fieldNames().get(i);
+            Object data = columns.get(colName);
+            if (data == null) {
+                throw new IllegalArgumentException("missing column: " + colName);
+            }
+            adapted.put(colName, ChunkImpl.validateAndAdapt(colName, schema.fieldTypes().get(i), data));
+        }
+
         // Pre-validate row counts so a length mismatch is rejected with a clear error
         // before any data is serialised. Without this check, the writer would produce a
         // file whose column chunks claim different row counts — readable but logically
@@ -382,11 +400,7 @@ public final class VortexWriter implements Closeable {
         String expectedFrom = null;
         for (int i = 0; i < schema.fieldNames().size(); i++) {
             String colName = schema.fieldNames().get(i);
-            Object data = columns.get(colName);
-            if (data == null) {
-                throw new IllegalArgumentException("missing column: " + colName);
-            }
-            long len = rowCountForValidation(colName, columns.get(colName));
+            long len = rowCountForValidation(colName, adapted.get(colName));
             if (expectedLen < 0) {
                 expectedLen = len;
                 expectedFrom = colName;
@@ -400,7 +414,7 @@ public final class VortexWriter implements Closeable {
         for (int i = 0; i < schema.fieldNames().size(); i++) {
             String colName = schema.fieldNames().get(i);
             DType colDtype = schema.fieldTypes().get(i);
-            Object data = columns.get(colName);
+            Object data = adapted.get(colName);
 
             // Auto-route extension columns: callers can pass List<LocalDate>, List<Instant>,
             // etc., and we route through the matching spec extension to produce the int[] /

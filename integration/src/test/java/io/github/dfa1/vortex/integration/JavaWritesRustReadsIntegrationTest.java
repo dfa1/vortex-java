@@ -1031,8 +1031,8 @@ class JavaWritesRustReadsIntegrationTest {
         Long[] data = {10L, null, 30L, null, 50L, 60L};
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
-            // When — boxed Long[] via the builder routes through the nullable → masked path
-            sut.writeChunk(c -> c.put("v", data));
+            // When — boxed Long[] via the map entry point routes through the nullable → masked path
+            sut.writeChunk(Map.of("v", data));
         }
 
         // Then — Rust reads a nullable BigInt vector; null positions survive, values round-trip
