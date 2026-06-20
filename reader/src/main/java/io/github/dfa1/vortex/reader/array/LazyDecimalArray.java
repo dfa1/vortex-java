@@ -9,6 +9,7 @@ import java.lang.foreign.ValueLayout;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteOrder;
+import java.util.Optional;
 
 /// Lazy `vortex.decimal` array.
 ///
@@ -81,5 +82,13 @@ public record LazyDecimalArray(DType dtype, long length, MemorySegment buf, int 
     @Override
     public MemorySegment materialize(SegmentAllocator arena) {
         return buf;
+    }
+
+    /// Returns the backing buffer directly — already materialised, no allocation.
+    ///
+    /// @return the backing little-endian two's-complement segment
+    @Override
+    public Optional<MemorySegment> segmentIfPresent() {
+        return Optional.of(buf);
     }
 }

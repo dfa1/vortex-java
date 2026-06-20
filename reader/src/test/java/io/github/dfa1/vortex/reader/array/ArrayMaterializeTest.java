@@ -41,7 +41,8 @@ class ArrayMaterializeTest {
             MemorySegment result = sut.materialize(arena);
 
             // Then the exact backing segment is handed back — no allocation, no copy
-            assertThat(result).isSameAs(sut.buffer());
+            // (segmentIfPresent() exposes the same zero-copy buffer).
+            assertThat(result).isSameAs(sut.segmentIfPresent().orElseThrow());
         }
 
         @Test
@@ -52,8 +53,8 @@ class ArrayMaterializeTest {
             // When
             MemorySegment result = sut.materialize(arena);
 
-            // Then
-            assertThat(result).isSameAs(sut.buffer());
+            // Then (segmentIfPresent() exposes the same zero-copy buffer)
+            assertThat(result).isSameAs(sut.segmentIfPresent().orElseThrow());
         }
     }
 

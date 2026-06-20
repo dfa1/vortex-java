@@ -5,7 +5,6 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.ArraySegments;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.ChunkedBoolArray;
@@ -641,11 +640,8 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     /// @param codes      the decoded codes array
     /// @param codesPType code ptype reported by the dict layout metadata
     /// @param n          claimed dict row count
-    // ArraySegments is deprecated-for-removal; this guard is its only caller and moves to
-    // the decode-limits layer with it.
-    @SuppressWarnings("removal")
     private static void validateDictCodesCapacity(Array codes, PType codesPType, long n) {
-        Optional<MemorySegment> maybeSeg = ArraySegments.trySegment(codes);
+        Optional<MemorySegment> maybeSeg = codes.segmentIfPresent();
         if (maybeSeg.isEmpty()) {
             return;
         }

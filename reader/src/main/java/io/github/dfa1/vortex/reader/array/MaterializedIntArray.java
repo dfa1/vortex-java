@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.encoding.PTypeIO;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
+import java.util.Optional;
 import java.util.function.IntBinaryOperator;
 import java.util.function.IntConsumer;
 
@@ -40,10 +41,6 @@ public final class MaterializedIntArray implements IntArray {
         return length;
     }
 
-    MemorySegment buffer() {
-        return buffer;
-    }
-
     /// Returns the backing buffer directly — already a contiguous little-endian
     /// `i32` segment, so no copy or allocation is needed.
     ///
@@ -52,6 +49,11 @@ public final class MaterializedIntArray implements IntArray {
     @Override
     public MemorySegment materialize(SegmentAllocator arena) {
         return buffer;
+    }
+
+    @Override
+    public Optional<MemorySegment> segmentIfPresent() {
+        return Optional.of(buffer);
     }
 
     @Override

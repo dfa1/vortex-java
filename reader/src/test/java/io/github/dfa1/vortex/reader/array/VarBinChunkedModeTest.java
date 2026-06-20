@@ -142,6 +142,48 @@ class VarBinChunkedModeTest {
         }
     }
 
+    @Nested
+    class SegmentProbe {
+
+        @Test
+        void chunkedHasNoContiguousSegment() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given a chunked array — bytes are spread across child segments
+                VarBinArray c0 = stringChunk(arena, "a", "b");
+                VarBinArray c1 = stringChunk(arena, "c");
+                VarBinArray.ChunkedMode sut = VarBinArray.ChunkedMode.of(UTF8, 3, List.of(c0, c1));
+
+                // When / Then the probe must not surface the NULL bytesSegment() sentinel
+                assertThat(sut.segmentIfPresent()).isEmpty();
+            }
+        }
+
+        @Test
+        void slicedDelegatesToInnerProbe() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given a slice over a chunked inner — still no single segment
+                VarBinArray c0 = stringChunk(arena, "a", "b");
+                VarBinArray c1 = stringChunk(arena, "c");
+                VarBinArray.ChunkedMode chunked = VarBinArray.ChunkedMode.of(UTF8, 3, List.of(c0, c1));
+                VarBinArray.SlicedMode sut = new VarBinArray.SlicedMode(UTF8, 2, chunked, 1);
+
+                // When / Then the probe follows the inner array, not the NULL bytesSegment()
+                assertThat(sut.segmentIfPresent()).isEmpty();
+            }
+        }
+
+        @Test
+        void offsetBackedSurfacesItsSegment() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given a single-segment offset-backed array
+                VarBinArray sut = stringChunk(arena, "a", "b");
+
+                // When / Then the probe returns the real backing bytes segment
+                assertThat(sut.segmentIfPresent()).containsSame(sut.bytesSegment());
+            }
+        }
+    }
+
     private static VarBinArray stringChunk(Arena arena, String... values) {
         int totalBytes = 0;
         for (String s : values) {

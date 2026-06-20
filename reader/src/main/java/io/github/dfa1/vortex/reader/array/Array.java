@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
+import java.util.Optional;
 
 /// Decoded columnar data. Concrete subtypes specialise element access for the JIT;
 /// each covers a specific dtype family.
@@ -76,5 +77,25 @@ public sealed interface Array
             throw new IllegalArgumentException("rows must be >= 0, got " + rows);
         }
         return arr.length() <= rows ? arr : arr.limited(rows);
+    }
+
+    /// Returns this array's primary backing segment if it is already segment-backed,
+    /// otherwise empty — a non-allocating probe.
+    ///
+    /// Unlike [#materialize(java.lang.foreign.SegmentAllocator)], this never allocates or
+    /// decodes: lazy and composite arrays return empty rather than being materialised. The
+    /// default is empty; segment-backed types (the `Materialized*` records, `VarBinArray`,
+    /// `GenericArray`, `LazyDecimalArray`) override to return their existing buffer, and
+    /// [MaskedArray] delegates to its inner data. The scan layer's dictionary zip-bomb guard
+    /// uses it to inspect a codes buffer's real size without expanding an oversized claimed
+    /// row count.
+    ///
+    /// **Vortex-internal.** Application code should prefer the typed accessors on concrete
+    /// subtypes ([LongArray#getLong(long)], [IntArray#getInt(long)], …) or
+    /// [#materialize(java.lang.foreign.SegmentAllocator)].
+    ///
+    /// @return the primary [MemorySegment], or empty if this array has no segment backing
+    default Optional<MemorySegment> segmentIfPresent() {
+        return Optional.empty();
     }
 }

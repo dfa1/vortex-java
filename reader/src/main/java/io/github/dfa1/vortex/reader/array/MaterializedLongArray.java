@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.encoding.PTypeIO;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
+import java.util.Optional;
 import java.util.function.LongBinaryOperator;
 import java.util.function.LongConsumer;
 
@@ -40,10 +41,6 @@ public final class MaterializedLongArray implements LongArray {
         return length;
     }
 
-    MemorySegment buffer() {
-        return buffer;
-    }
-
     /// Returns the backing buffer directly — already a contiguous little-endian
     /// `i64` segment, so no copy or allocation is needed.
     ///
@@ -52,6 +49,11 @@ public final class MaterializedLongArray implements LongArray {
     @Override
     public MemorySegment materialize(SegmentAllocator arena) {
         return buffer;
+    }
+
+    @Override
+    public Optional<MemorySegment> segmentIfPresent() {
+        return Optional.of(buffer);
     }
 
     @Override

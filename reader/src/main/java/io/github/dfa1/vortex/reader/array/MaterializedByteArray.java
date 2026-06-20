@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.core.PType;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
+import java.util.Optional;
 import java.util.function.LongBinaryOperator;
 
 /// Buffer-backed [ByteArray] — the fallback used when an encoding decoder
@@ -40,10 +41,6 @@ public final class MaterializedByteArray implements ByteArray {
         return length;
     }
 
-    MemorySegment buffer() {
-        return buffer;
-    }
-
     /// Returns the backing buffer directly — already a contiguous one-byte-per-element
     /// segment, so no copy or allocation is needed.
     ///
@@ -52,6 +49,11 @@ public final class MaterializedByteArray implements ByteArray {
     @Override
     public MemorySegment materialize(SegmentAllocator arena) {
         return buffer;
+    }
+
+    @Override
+    public Optional<MemorySegment> segmentIfPresent() {
+        return Optional.of(buffer);
     }
 
     @Override

@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
+import java.util.Optional;
 
 /// Decoded `vortex.masked` array: a non-nullable child paired with an optional validity bitmap.
 ///
@@ -66,14 +67,21 @@ public final class MaskedArray implements Array {
     }
 
     /// Materialises the inner (data) payload, ignoring the validity mask — the
-    /// segment returned is the data buffer only. This matches the prior
-    /// `ArraySegments` behaviour of unwrapping a masked array to its inner data;
-    /// callers that need validity must read [#validity()] separately.
+    /// segment returned is the data buffer only. Unwraps to the inner array's own
+    /// materialisation; callers that need validity must read [#validity()] separately.
     ///
     /// @param arena allocator used to materialise lazy inner variants
     /// @return the inner payload's primary [MemorySegment]
     @Override
     public MemorySegment materialize(SegmentAllocator arena) {
         return child.materialize(arena);
+    }
+
+    /// Probes the inner (data) payload's backing segment, ignoring the validity mask.
+    ///
+    /// @return the inner array's segment if segment-backed, otherwise empty
+    @Override
+    public Optional<MemorySegment> segmentIfPresent() {
+        return child.segmentIfPresent();
     }
 }
