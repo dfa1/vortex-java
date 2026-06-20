@@ -5,7 +5,7 @@ All notable changes to **vortex-java** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.8.1] — 2026-06-20
 
 A hardening release: no new file-format capability, but a large step up in verification rigour. Mutation testing (PIT) now guards the security-critical bounds/parse paths in core, reader, and writer at 99–100% kill rate; the build fails on any javac warning (`-Xlint:all -Werror`); and property-based round-trips exercise every lossless encoding plus the full cascade-selection pipeline against seeded-random inputs. The one functional addition is boxed-nullable array input on the map `writeChunk` path.
 
@@ -21,6 +21,8 @@ A hardening release: no new file-format capability, but a large step up in verif
 
 ### Fixed
 
+- Writer: I8/I16 columns are excluded from the global dictionary — the reader cannot decode a narrow-int dict, so dict-encoding them produced unreadable files. ([473256b1](https://github.com/dfa1/vortex-java/commit/473256b1))
+- Writer: `WriteRegistry` now iterates encoders in a deterministic order and `accepts()` reports honestly, fixing a non-deterministic encoder selection that broke the Windows build. ([9c4ebb18](https://github.com/dfa1/vortex-java/commit/9c4ebb18))
 - Reader: Pco decode now guards `preDeltaN` against int overflow before clamping — the subtraction is widened to `long`, restoring the overflow-safe path. ([b7346e7c](https://github.com/dfa1/vortex-java/commit/b7346e7c))
 
 ### Build
@@ -74,6 +76,7 @@ Read and write Vortex Variant (semi-structured, JSON-shaped) columns from Java. 
 
 - Test coverage raised from ~74% to 80% — the lazy/chunked/dict/run-end/sparse array families, `ChunkImpl`, and several decoders (`DecimalEncodingDecoder`, `DictEncodingDecoder`, `ParquetImporter`) reached full line + branch coverage. SonarCloud quality gate green: reliability, security, and maintainability all at **A**, zero bugs and vulnerabilities.
 
+[0.8.1]: https://github.com/dfa1/vortex-java/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/dfa1/vortex-java/compare/v0.7.3...v0.8.0
 
 ## [0.7.3] — 2026-06-17
