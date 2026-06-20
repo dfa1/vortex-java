@@ -76,9 +76,10 @@
 
 	<profiles>
 		<!-- Mutation testing pilot (ADR: test-suite strength). Opt-in only:
-		     ./mvnw -pl reader -P pitest test-compile org.pitest:pitest-maven:mutationCoverage
-		     Scoped to the file-structure bounds-checking parse classes that have
-		     dedicated security tests. Report: reader/target/pit-reports/. -->
+		     ./mvnw -pl reader -am -P pitest verify -DskipITs
+		     Common PIT setup is inherited from the parent `pitest` profile; only the scope differs:
+		     the file-structure bounds-checking parse classes with dedicated security tests.
+		     Report: reader/target/pit-reports/. -->
 		<profile>
 			<id>pitest</id>
 			<build>
@@ -86,23 +87,6 @@
 					<plugin>
 						<groupId>org.pitest</groupId>
 						<artifactId>pitest-maven</artifactId>
-						<version>1.20.0</version>
-						<dependencies>
-							<dependency>
-								<groupId>org.pitest</groupId>
-								<artifactId>pitest-junit5-plugin</artifactId>
-								<version>1.2.3</version>
-							</dependency>
-						</dependencies>
-						<executions>
-							<execution>
-								<id>pit-report</id>
-								<phase>verify</phase>
-								<goals>
-									<goal>mutationCoverage</goal>
-								</goals>
-							</execution>
-						</executions>
 						<configuration>
 							<targetClasses>
 								<param>io.github.dfa1.vortex.reader.Footer</param>
@@ -112,14 +96,6 @@
 								<param>io.github.dfa1.vortex.reader.Layout</param>
 								<param>io.github.dfa1.vortex.reader.FlatSegmentDecoder</param>
 							</targetClasses>
-							<targetTests>
-								<param>io.github.dfa1.vortex.reader.*</param>
-							</targetTests>
-							<outputFormats>
-								<param>HTML</param>
-								<param>XML</param>
-							</outputFormats>
-							<timestampedReports>false</timestampedReports>
 						</configuration>
 					</plugin>
 				</plugins>

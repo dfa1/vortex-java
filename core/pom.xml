@@ -179,6 +179,7 @@
 
 		<!-- Mutation testing for the bounds primitive (ADR 0003 Phase E). Opt-in only:
 		     ./mvnw -pl core -P pitest verify
+		     Common PIT setup is inherited from the parent `pitest` profile; only the scope differs.
 		     Report: core/target/pit-reports/. -->
 		<profile>
 			<id>pitest</id>
@@ -187,35 +188,10 @@
 					<plugin>
 						<groupId>org.pitest</groupId>
 						<artifactId>pitest-maven</artifactId>
-						<version>1.20.0</version>
-						<dependencies>
-							<dependency>
-								<groupId>org.pitest</groupId>
-								<artifactId>pitest-junit5-plugin</artifactId>
-								<version>1.2.3</version>
-							</dependency>
-						</dependencies>
-						<executions>
-							<execution>
-								<id>pit-report</id>
-								<phase>verify</phase>
-								<goals>
-									<goal>mutationCoverage</goal>
-								</goals>
-							</execution>
-						</executions>
 						<configuration>
 							<targetClasses>
 								<param>io.github.dfa1.vortex.core.IoBounds</param>
 							</targetClasses>
-							<targetTests>
-								<param>io.github.dfa1.vortex.core.*</param>
-							</targetTests>
-							<outputFormats>
-								<param>HTML</param>
-								<param>XML</param>
-							</outputFormats>
-							<timestampedReports>false</timestampedReports>
 						</configuration>
 					</plugin>
 				</plugins>
