@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.extension.ExtensionId;
 
 import java.util.Collection;
@@ -28,8 +27,5 @@ public interface ExtensionEncoder {
     /// @param dtype  declared extension dtype (carries unit/timezone metadata)
     /// @param values domain-typed values to encode
     /// @return packed storage array
-    /// @throws VortexException by default; implementations must override to support writes
-    default Object encodeAll(DType.Extension dtype, Collection<?> values) {
-        throw new VortexException("encode not supported for " + extensionId());
-    }
+    Object encodeAll(DType.Extension dtype, Collection<?> values);
 }
