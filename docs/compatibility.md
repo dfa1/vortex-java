@@ -12,14 +12,14 @@ A consumer that only needs to read Vortex files can depend on a strict subset:
 <dependency>
   <groupId>io.github.dfa1.vortex</groupId>
   <artifactId>vortex-reader</artifactId>
-  <version>0.7.3</version>
+  <version>0.8.0</version>
 </dependency>
 
 <!-- optional: inspector for layout-tree introspection -->
 <dependency>
   <groupId>io.github.dfa1.vortex</groupId>
   <artifactId>vortex-inspector</artifactId>
-  <version>0.7.3</version>
+  <version>0.8.0</version>
 </dependency>
 ```
 
@@ -71,7 +71,7 @@ resolves only the standalone decoders in `reader`; no encoder class is loaded.
 | `fastlanes.delta`           | `DeltaEncodingDecoder`           | `DeltaEncodingEncoder`           | ✅      | ✅      | Integer PTypes                                                        |
 | `fastlanes.for`             | `FrameOfReferenceEncodingDecoder`| `FrameOfReferenceEncodingEncoder`| ✅      | ✅      | Integer PTypes                                                        |
 | `fastlanes.rle`             | `RleEncodingDecoder`             | `RleEncodingEncoder`             | ✅      | ✅      | Chunk-based RLE                                                       |
-| `vortex.patched`            | `PatchedEncodingDecoder`         | `PatchedEncodingEncoder`         | ✅      | ❌      | Primitive PTypes; encode not yet implemented                          |
+| `vortex.patched`            | `PatchedEncodingDecoder`         | `PatchedEncodingEncoder`         | ✅      | ✅      | Primitive PTypes; base + chunked patches (1024-elem blocks)            |
 | `vortex.variant`            | `VariantEncodingDecoder`         | `VariantEncodingEncoder`         | ✅      | ✅      | Canonical container; constant / chunked-of-constants core + optional shredded child. Typed-scalar values only — nested objects need `parquet.variant` (ADR 0014) |
 | `vortex.onpair`             | _none_                           | _none_                           | ❌      | ❌      | Experimental in Rust 0.74.0; not yet ported                            |
 
