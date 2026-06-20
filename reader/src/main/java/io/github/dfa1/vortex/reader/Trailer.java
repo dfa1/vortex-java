@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.reader;
 
+import io.github.dfa1.vortex.core.IoBounds;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.VortexFormat;
 
@@ -32,7 +33,7 @@ record Trailer(int version, int postscriptLen) {
         int version = Short.toUnsignedInt(trailerSeg.get(LE_SHORT, 0));
         int postscriptLen = Short.toUnsignedInt(trailerSeg.get(LE_SHORT, 2));
 
-        MemorySegment magicSlice = trailerSeg.asSlice(4, VortexFormat.MAGIC_SIZE);
+        MemorySegment magicSlice = IoBounds.slice(trailerSeg, 4, VortexFormat.MAGIC_SIZE);
         if (magicSlice.mismatch(VortexFormat.MAGIC) != -1) {
             throw new VortexException(
                 "invalid magic bytes [%02x %02x %02x %02x]".formatted(

@@ -365,9 +365,12 @@ widens the parse surface.
 4. Collapse the ~14 consumer-access `getX(i)` guards onto
    `Objects.checkIndex(i, length)` (separate commit — different error class,
    no `IoBounds`).
-5. Checkstyle `RegexpSingleline` rejecting raw `.asSlice(` in
-   `reader` / `reader.array` / `reader.decode` / `core.proto` packages
-   (mirrors the existing `<p>`-blocking rule), so new raw slices can't regress.
+5. Checkstyle `RegexpSingleline` rejecting raw `.asSlice(` in the
+   file-structure (`reader` root) and `reader.decode` packages — the layers
+   that slice on offsets parsed from file bytes. `reader.array` is excluded:
+   its only `asSlice` calls are inside `limited(rows)`, re-slicing an already
+   validated segment at offset 0 with `rows < length` (bounded by construction,
+   no untrusted offset), so wrapping them adds noise without closing a gap.
 6. `BoundsTypingSecurityTest`: crafted file with out-of-range slice offset,
    oversize declared length, and non-monotonic VarBin offsets each produce a
    `VortexException`, never a raw JDK exception.

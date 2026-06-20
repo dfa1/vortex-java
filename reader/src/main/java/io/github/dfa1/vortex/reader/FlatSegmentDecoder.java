@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.IoBounds;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.fbs.Buffer;
@@ -44,12 +45,15 @@ public final class FlatSegmentDecoder {
     /// @return the decoded [Array] for this segment
     public Array decode(MemorySegment seg, List<String> encodingSpecs,
             DType dtype, long rowCount, SegmentAllocator arena) {
-        int segLen = (int) seg.byteSize();
+        int segLen = IoBounds.toIntSize(seg.byteSize());
         ByteBuffer bb = seg.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
 
+        // The trailing u32 length field must itself be in range before we read it.
+        IoBounds.checkRange(segLen - 4L, 4, segLen);
         int fbLen = bb.getInt(segLen - 4);
-        int fbStart = segLen - 4 - fbLen;
-        ByteBuffer fbBuf = bb.slice(fbStart, fbLen).order(ByteOrder.LITTLE_ENDIAN);
+        long fbStart = segLen - 4L - fbLen;
+        IoBounds.checkRange(fbStart, fbLen, segLen);
+        ByteBuffer fbBuf = bb.slice((int) fbStart, fbLen).order(ByteOrder.LITTLE_ENDIAN);
         var fbArray = io.github.dfa1.vortex.fbs.Array.getRootAsArray(fbBuf);
 
         int numBuffers = fbArray.buffersLength();
@@ -58,7 +62,7 @@ public final class FlatSegmentDecoder {
         for (int i = 0; i < numBuffers; i++) {
             Buffer bufDesc = fbArray.buffers(i);
             dataOffset += bufDesc.padding();
-            bufs[i] = seg.asSlice(dataOffset, bufDesc.length());
+            bufs[i] = IoBounds.slice(seg, dataOffset, bufDesc.length());
             dataOffset += bufDesc.length();
         }
 
