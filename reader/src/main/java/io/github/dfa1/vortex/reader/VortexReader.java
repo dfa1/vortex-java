@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.reader;
 
+import static io.github.dfa1.vortex.encoding.PTypeIO.LE_INT;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.IoBounds;
 import io.github.dfa1.vortex.core.VortexException;
@@ -8,7 +9,6 @@ import io.github.dfa1.vortex.core.VortexFormat;
 import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
@@ -24,8 +24,6 @@ import java.util.Map;
 /// Close this to release the memory-mapped region.
 public final class VortexReader implements VortexHandle {
 
-    private static final ValueLayout.OfInt LE_INT =
-            ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     private final Arena arena;
     private final MemorySegment fileSegment;

@@ -1,5 +1,8 @@
 package io.github.dfa1.vortex.reader;
 
+import static io.github.dfa1.vortex.encoding.PTypeIO.LE_SHORT;
+import static io.github.dfa1.vortex.encoding.PTypeIO.LE_INT;
+import static io.github.dfa1.vortex.encoding.PTypeIO.LE_LONG;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.IoBounds;
 import io.github.dfa1.vortex.core.PType;
@@ -77,9 +80,6 @@ import java.util.function.Consumer;
 /// ```
 public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
 
-    private static final ValueLayout.OfShort LE_SHORT = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-    private static final ValueLayout.OfInt LE_INT = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-    private static final ValueLayout.OfLong LE_LONG = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     private final VortexHandle file;
     private final ScanOptions options;

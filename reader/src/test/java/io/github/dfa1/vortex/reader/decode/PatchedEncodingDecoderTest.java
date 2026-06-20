@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.reader.decode;
 
+import io.github.dfa1.vortex.encoding.TestSegments;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 
 import io.github.dfa1.vortex.core.DType;
@@ -16,7 +17,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -30,41 +30,14 @@ class PatchedEncodingDecoderTest {
         return ByteBuffer.wrap(new PatchedMetadata(nPatches, nLanes, offset).encode());
     }
 
-    private static MemorySegment i32Segment(int... values) {
-        MemorySegment seg = MemorySegment.ofArray(new byte[values.length * 4]);
-        ByteBuffer bb = seg.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
-        for (int v : values) {
-            bb.putInt(v);
-        }
-        return seg;
-    }
 
-    private static MemorySegment u32Segment(int... values) {
-        return i32Segment(values);
-    }
 
-    private static MemorySegment u16Segment(short... values) {
-        MemorySegment seg = MemorySegment.ofArray(new byte[values.length * 2]);
-        ByteBuffer bb = seg.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
-        for (short v : values) {
-            bb.putShort(v);
-        }
-        return seg;
-    }
 
-    private static MemorySegment i64Segment(long... values) {
-        MemorySegment seg = MemorySegment.ofArray(new byte[values.length * 8]);
-        ByteBuffer bb = seg.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
-        for (long v : values) {
-            bb.putLong(v);
-        }
-        return seg;
-    }
 
     private static Array decode(int n, int[] innerI32, int[] laneOffsets, short[] patchIndices, int[] patchValues) {
         return decode(new DType.Primitive(PType.I32, false), n,
-                i32Segment(innerI32), u32Segment(laneOffsets),
-                u16Segment(patchIndices), i32Segment(patchValues),
+                TestSegments.leInts(innerI32), TestSegments.leInts(laneOffsets),
+                TestSegments.leShorts(patchIndices), TestSegments.leInts(patchValues),
                 laneOffsets.length - 1);
     }
 
@@ -154,8 +127,8 @@ class PatchedEncodingDecoderTest {
         DType dtype = new DType.Primitive(PType.I64, false);
 
         // When
-        Array result = decode(dtype, 3, i64Segment(100L, 200L, 300L), u32Segment(0, 1),
-                u16Segment((short) 1), i64Segment(999L), 1);
+        Array result = decode(dtype, 3, TestSegments.leLongs(100L, 200L, 300L), TestSegments.leInts(0, 1),
+                TestSegments.leShorts((short) 1), TestSegments.leLongs(999L), 1);
 
         // Then
         assertThat(result).isInstanceOf(LongArray.class);
@@ -171,7 +144,7 @@ class PatchedEncodingDecoderTest {
         ArrayNode innerNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
         ArrayNode patchedNode = ArrayNode.of(EncodingId.VORTEX_PATCHED, null,
                 new ArrayNode[]{innerNode, innerNode, innerNode, innerNode}, new int[]{});
-        MemorySegment seg = i32Segment(1, 2, 3);
+        MemorySegment seg = TestSegments.leInts(1, 2, 3);
         DecodeContext ctx = new DecodeContext(patchedNode, new DType.Primitive(PType.I32, false), 3,
                 new MemorySegment[]{seg}, ReadRegistry.empty(), Arena.ofAuto());
 

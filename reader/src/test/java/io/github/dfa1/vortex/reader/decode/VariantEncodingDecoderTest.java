@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.reader.decode;
 
+import io.github.dfa1.vortex.encoding.TestSegments;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 
 import io.github.dfa1.vortex.core.DType;
@@ -16,7 +17,6 @@ import org.junit.jupiter.api.Test;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -40,14 +40,6 @@ class VariantEncodingDecoderTest {
         return ArrayNode.of(EncodingId.VORTEX_NULL, null, new ArrayNode[0], new int[]{});
     }
 
-    private static MemorySegment i32Segment(int... values) {
-        MemorySegment seg = MemorySegment.ofArray(new byte[values.length * 4]);
-        ByteBuffer bb = seg.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
-        for (int v : values) {
-            bb.putInt(v);
-        }
-        return seg;
-    }
 
     @org.junit.jupiter.api.Test
     void decode_withoutShredded_returnsCoreStorageOnly() {
@@ -84,7 +76,7 @@ class VariantEncodingDecoderTest {
         ArrayNode variantNode = ArrayNode.of(EncodingId.VORTEX_VARIANT, meta,
                 new ArrayNode[]{coreNode, shreddedNode}, new int[]{});
 
-        MemorySegment[] segments = {i32Segment(1, 2, 3)};
+        MemorySegment[] segments = {TestSegments.leInts(1, 2, 3)};
         ReadRegistry registry = TestRegistry.ofDecoders(SUT, new NullEncodingDecoder(), new PrimitiveEncodingDecoder());
         DecodeContext ctx = new DecodeContext(variantNode, VARIANT_DTYPE, N,
                 segments, registry, Arena.ofAuto());

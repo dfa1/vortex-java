@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.reader.decode;
 
+import io.github.dfa1.vortex.encoding.TestSegments;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
@@ -25,7 +26,6 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.stream.Stream;
 
@@ -83,7 +83,7 @@ class DictEncodingDecoderTest {
         void f64Values_roundTripThroughDoubleArray() {
             // Given — covers typedArray's F64 branch and the 8-byte expand path
             MemorySegment codes = u8Codes(0, 1, 0);
-            MemorySegment values = doubleSegment(1.5, -2.25);
+            MemorySegment values = TestSegments.leDoubles(1.5, -2.25);
             DType dtype = new DType.Primitive(PType.F64, false);
 
             // When
@@ -99,7 +99,7 @@ class DictEncodingDecoderTest {
         void f32Values_roundTripThroughFloatArray() {
             // Given — covers typedArray's F32 branch and the 4-byte expand path
             MemorySegment codes = u8Codes(1, 0);
-            MemorySegment values = floatSegment(3.5f, 4.75f);
+            MemorySegment values = TestSegments.leFloats(3.5f, 4.75f);
             DType dtype = new DType.Primitive(PType.F32, false);
 
             // When
@@ -113,8 +113,8 @@ class DictEncodingDecoderTest {
         @Test
         void unexpectedCodeType_throws() {
             // Given — proto declares an I64 code type, which decodeRustProto rejects
-            MemorySegment codes = i64Segment(0, 1);
-            MemorySegment values = i64Segment(5, 6);
+            MemorySegment codes = TestSegments.leLongs(0, 1);
+            MemorySegment values = TestSegments.leLongs(5, 6);
             DType dtype = new DType.Primitive(PType.I64, false);
 
             // When / Then
@@ -127,7 +127,7 @@ class DictEncodingDecoderTest {
         void unsupportedValuePType_throws() {
             // Given — F16 expands fine (2 bytes) but typedArray has no F16 mapping
             MemorySegment codes = u8Codes(0, 1);
-            MemorySegment values = shortSegment((short) 1, (short) 2);
+            MemorySegment values = TestSegments.leShorts((short) 1, (short) 2);
             DType dtype = new DType.Primitive(PType.F16, false);
 
             // When / Then
@@ -170,7 +170,7 @@ class DictEncodingDecoderTest {
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DICT, meta,
                     new ArrayNode[]{primitiveNode(0), primitiveNode(1)}, new int[]{});
             DecodeContext ctx = new DecodeContext(node, new DType.Primitive(PType.I32, false),
-                    1, new MemorySegment[]{u8Codes(0), i64Segment(0)}, REGISTRY, Arena.ofAuto());
+                    1, new MemorySegment[]{u8Codes(0), TestSegments.leLongs(0)}, REGISTRY, Arena.ofAuto());
 
             // When / Then
             assertThatThrownBy(() -> SUT.decode(ctx))
@@ -187,7 +187,7 @@ class DictEncodingDecoderTest {
         void singleByteMetadata_decodesViaLegacyPath(PType codePType) {
             // Given — legacy layout: 1-byte metadata (code ptype), child[0]=values, child[1]=codes
             long[] dict = {100, 200, 300};
-            MemorySegment values = i64Segment(dict);
+            MemorySegment values = TestSegments.leLongs(dict);
             MemorySegment codes = codeSegment(codePType, new long[]{2, 0, 1, 2});
 
             // When
@@ -200,7 +200,7 @@ class DictEncodingDecoderTest {
         @Test
         void nonStandardCodeType_throws() {
             // Given — code ptype I8 is not U8/U16/U32, so the legacy switch rejects it
-            MemorySegment values = i64Segment(1, 2);
+            MemorySegment values = TestSegments.leLongs(1, 2);
             MemorySegment codes = MemorySegment.ofArray(new byte[]{0, 0});
 
             // When / Then
@@ -297,7 +297,7 @@ class DictEncodingDecoderTest {
             // Given — no children, 3 buffers (dict bytes, I64 offsets, codes), 1-byte metadata
             byte[] dictBytes = "abcde".getBytes(StandardCharsets.UTF_8); // "ab","cde"
             MemorySegment bytes = MemorySegment.ofArray(dictBytes);
-            MemorySegment offsets = i64Segment(0, 2, 5);
+            MemorySegment offsets = TestSegments.leLongs(0, 2, 5);
             MemorySegment codes = u8Codes(1, 0, 1);
 
             ByteBuffer meta = ByteBuffer.wrap(new byte[]{(byte) PType.U8.ordinal()});
@@ -319,7 +319,7 @@ class DictEncodingDecoderTest {
             // Given — children present: child[0]=codes, child[1]=varbin dictionary values
             byte[] dictBytes = "fizzbuzz".getBytes(StandardCharsets.UTF_8); // "fizz","buzz"
             MemorySegment bytes = MemorySegment.ofArray(dictBytes);
-            MemorySegment offsets = i64Segment(0, 4, 8);
+            MemorySegment offsets = TestSegments.leLongs(0, 4, 8);
             MemorySegment codes = u8Codes(0, 1, 0);
             MemorySegment[] segs = {codes, bytes, offsets};
 
@@ -485,14 +485,14 @@ class DictEncodingDecoderTest {
                 for (int i = 0; i < codes.length; i++) {
                     s[i] = (short) codes[i];
                 }
-                yield shortSegment(s);
+                yield TestSegments.leShorts(s);
             }
             case U32 -> {
                 int[] in = new int[codes.length];
                 for (int i = 0; i < codes.length; i++) {
                     in[i] = (int) codes[i];
                 }
-                yield intSegment(in);
+                yield TestSegments.leInts(in);
             }
             default -> throw new IllegalArgumentException("unsupported code ptype: " + codePType);
         };
@@ -512,16 +512,16 @@ class DictEncodingDecoderTest {
                 for (int i = 0; i < values.length; i++) {
                     s[i] = (short) values[i];
                 }
-                yield shortSegment(s);
+                yield TestSegments.leShorts(s);
             }
             case I32, U32 -> {
                 int[] in = new int[values.length];
                 for (int i = 0; i < values.length; i++) {
                     in[i] = (int) values[i];
                 }
-                yield intSegment(in);
+                yield TestSegments.leInts(in);
             }
-            case I64, U64 -> i64Segment(values);
+            case I64, U64 -> TestSegments.leLongs(values);
             default -> throw new IllegalArgumentException("unsupported value ptype: " + valPType);
         };
     }
@@ -534,45 +534,10 @@ class DictEncodingDecoderTest {
         return MemorySegment.ofArray(a);
     }
 
-    private static MemorySegment shortSegment(short... values) {
-        ByteBuffer bb = ByteBuffer.allocate(values.length * 2).order(ByteOrder.LITTLE_ENDIAN);
-        for (short v : values) {
-            bb.putShort(v);
-        }
-        return MemorySegment.ofArray(bb.array());
-    }
 
-    private static MemorySegment intSegment(int... values) {
-        ByteBuffer bb = ByteBuffer.allocate(values.length * 4).order(ByteOrder.LITTLE_ENDIAN);
-        for (int v : values) {
-            bb.putInt(v);
-        }
-        return MemorySegment.ofArray(bb.array());
-    }
 
-    private static MemorySegment i64Segment(long... values) {
-        ByteBuffer bb = ByteBuffer.allocate(values.length * 8).order(ByteOrder.LITTLE_ENDIAN);
-        for (long v : values) {
-            bb.putLong(v);
-        }
-        return MemorySegment.ofArray(bb.array());
-    }
 
-    private static MemorySegment doubleSegment(double... values) {
-        ByteBuffer bb = ByteBuffer.allocate(values.length * 8).order(ByteOrder.LITTLE_ENDIAN);
-        for (double v : values) {
-            bb.putDouble(v);
-        }
-        return MemorySegment.ofArray(bb.array());
-    }
 
-    private static MemorySegment floatSegment(float... values) {
-        ByteBuffer bb = ByteBuffer.allocate(values.length * 4).order(ByteOrder.LITTLE_ENDIAN);
-        for (float v : values) {
-            bb.putFloat(v);
-        }
-        return MemorySegment.ofArray(bb.array());
-    }
 
     private static void assertLongValues(Array array, PType valPType, long[] expected) {
         for (int i = 0; i < expected.length; i++) {

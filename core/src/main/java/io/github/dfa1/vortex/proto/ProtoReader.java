@@ -1,5 +1,7 @@
 package io.github.dfa1.vortex.proto;
 
+import static io.github.dfa1.vortex.encoding.PTypeIO.LE_INT;
+import static io.github.dfa1.vortex.encoding.PTypeIO.LE_LONG;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -11,8 +13,6 @@ import java.nio.charset.StandardCharsets;
 final class ProtoReader {
 
     private static final ValueLayout.OfByte BYTE = ValueLayout.JAVA_BYTE;
-    private static final ValueLayout.OfInt LE_INT = ValueLayout.JAVA_INT_UNALIGNED.withOrder(java.nio.ByteOrder.LITTLE_ENDIAN);
-    private static final ValueLayout.OfLong LE_LONG = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(java.nio.ByteOrder.LITTLE_ENDIAN);
 
     private final MemorySegment seg;
     private final long end;
