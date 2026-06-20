@@ -69,7 +69,7 @@ public record LazyDecimalArray(DType dtype, long length, MemorySegment buf, int 
 
     @Override
     public Array limited(long rows) {
-        return new LazyDecimalArray(dtype, rows, buf.asSlice(0, rows * (long) byteWidth), byteWidth);
+        return new LazyDecimalArray(dtype, rows, buf.asSlice(0, rows * byteWidth), byteWidth);
     }
 
     /// Returns the backing buffer directly — already a contiguous little-endian

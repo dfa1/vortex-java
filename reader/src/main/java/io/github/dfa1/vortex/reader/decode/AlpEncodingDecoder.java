@@ -100,11 +100,11 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
         MemorySegment buf = ctx.arena().allocate(n * 8, 8);
         if (srcCap == n) {
             for (long i = 0; i < n; i++) {
-                buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) src.getAtIndex(PTypeIO.LE_LONG, i) * df * de);
+                buf.setAtIndex(PTypeIO.LE_DOUBLE, i, src.getAtIndex(PTypeIO.LE_LONG, i) * df * de);
             }
         } else {
             for (long i = 0; i < n; i++) {
-                buf.setAtIndex(PTypeIO.LE_DOUBLE, i, (double) src.getAtIndex(PTypeIO.LE_LONG, i % srcCap) * df * de);
+                buf.setAtIndex(PTypeIO.LE_DOUBLE, i, src.getAtIndex(PTypeIO.LE_LONG, i % srcCap) * df * de);
             }
         }
         applyPatches(ctx, meta.patches(), buf, 8);
@@ -130,11 +130,11 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
         MemorySegment buf = ctx.arena().allocate(n * 4, 4);
         if (srcCap == n) {
             for (long i = 0; i < n; i++) {
-                buf.setAtIndex(PTypeIO.LE_FLOAT, i, (float) src.getAtIndex(PTypeIO.LE_INT, i) * df * de);
+                buf.setAtIndex(PTypeIO.LE_FLOAT, i, src.getAtIndex(PTypeIO.LE_INT, i) * df * de);
             }
         } else {
             for (long i = 0; i < n; i++) {
-                buf.setAtIndex(PTypeIO.LE_FLOAT, i, (float) src.getAtIndex(PTypeIO.LE_INT, i % srcCap) * df * de);
+                buf.setAtIndex(PTypeIO.LE_FLOAT, i, src.getAtIndex(PTypeIO.LE_INT, i % srcCap) * df * de);
             }
         }
         applyPatches(ctx, meta.patches(), buf, 4);

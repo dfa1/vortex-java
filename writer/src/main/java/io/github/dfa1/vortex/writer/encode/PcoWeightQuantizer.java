@@ -54,7 +54,7 @@ final class PcoWeightQuantizer {
         }
 
         int requiredSurplus = requiredSum - counts.length;
-        float surplusMult = totalDesiredSurplus == 0f ? 0f : (float) requiredSurplus / totalDesiredSurplus;
+        float surplusMult = totalDesiredSurplus == 0f ? 0f : requiredSurplus / totalDesiredSurplus;
 
         float[] floatWeights = new float[counts.length];
         for (int i = 0; i < counts.length; i++) {

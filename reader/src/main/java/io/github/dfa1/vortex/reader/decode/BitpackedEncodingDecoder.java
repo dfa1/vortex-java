@@ -135,7 +135,7 @@ public final class BitpackedEncodingDecoder implements EncodingDecoder {
         long blockByteStride = 128L * bitWidth;
         for (int block = 0; block < blockCount; block++, blockByteOff += blockByteStride) {
             int blockLogicStart = block * 1024 - offset;
-            boolean fullBlock = blockLogicStart >= 0 && (long) blockLogicStart + 1023L < rowCount;
+            boolean fullBlock = blockLogicStart >= 0 && blockLogicStart + 1023L < rowCount;
 
             if (fullBlock) {
                 for (int row = 0; row < 8; row++) {
@@ -221,15 +221,15 @@ public final class BitpackedEncodingDecoder implements EncodingDecoder {
             nextWordByteBase[row] = rem > 0 ? (long) lanes * nextWord * 2L : 0L;
             int o = row / 8;
             int s = row % 8;
-            outRowByteOff[row] = (long) (FL_ORDER[o] * 16 + s * 128) * 2L;
+            outRowByteOff[row] = (FL_ORDER[o] * 16 + s * 128) * 2L;
         }
 
         long blockByteOff = 0L;
         long blockByteStride = 128L * bitWidth;
         for (int block = 0; block < blockCount; block++, blockByteOff += blockByteStride) {
             int blockLogicStart = block * 1024 - offset;
-            boolean fullBlock = blockLogicStart >= 0 && (long) blockLogicStart + 1023L < rowCount;
-            long blockOutByteBase = (long) blockLogicStart * 2L;
+            boolean fullBlock = blockLogicStart >= 0 && blockLogicStart + 1023L < rowCount;
+            long blockOutByteBase = blockLogicStart * 2L;
 
             if (fullBlock) {
                 for (int row = 0; row < 16; row++) {
@@ -317,15 +317,15 @@ public final class BitpackedEncodingDecoder implements EncodingDecoder {
             nextWordByteBase[row] = rem > 0 ? (long) lanes * nextWord * 4L : 0L;
             int o = row / 8;
             int s = row % 8;
-            outRowByteOff[row] = (long) (FL_ORDER[o] * 16 + s * 128) * 4L;
+            outRowByteOff[row] = (FL_ORDER[o] * 16 + s * 128) * 4L;
         }
 
         long blockByteOff = 0L;
         long blockByteStride = 128L * bitWidth;
         for (int block = 0; block < blockCount; block++, blockByteOff += blockByteStride) {
             int blockLogicStart = block * 1024 - offset;
-            boolean fullBlock = blockLogicStart >= 0 && (long) blockLogicStart + 1023L < rowCount;
-            long blockOutByteBase = (long) blockLogicStart * 4L;
+            boolean fullBlock = blockLogicStart >= 0 && blockLogicStart + 1023L < rowCount;
+            long blockOutByteBase = blockLogicStart * 4L;
 
             if (fullBlock) {
                 for (int row = 0; row < 32; row++) {
@@ -413,15 +413,15 @@ public final class BitpackedEncodingDecoder implements EncodingDecoder {
             nextWordByteBase[row] = rem > 0 ? (long) lanes * nextWord * 8L : 0L;
             int o = row / 8;
             int s = row % 8;
-            outRowByteOff[row] = (long) (FL_ORDER[o] * 16 + s * 128) * 8L;
+            outRowByteOff[row] = (FL_ORDER[o] * 16 + s * 128) * 8L;
         }
 
         long blockByteOff = 0L;
         long blockByteStride = 128L * bitWidth;
         for (int block = 0; block < blockCount; block++, blockByteOff += blockByteStride) {
             int blockLogicStart = block * 1024 - offset;
-            boolean fullBlock = blockLogicStart >= 0 && (long) blockLogicStart + 1023L < rowCount;
-            long blockOutByteBase = (long) blockLogicStart * 8L;
+            boolean fullBlock = blockLogicStart >= 0 && blockLogicStart + 1023L < rowCount;
+            long blockOutByteBase = blockLogicStart * 8L;
 
             if (fullBlock) {
                 for (int row = 0; row < 64; row++) {

@@ -150,7 +150,7 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
         for (int width = 0; width < bitWidthFreq.length; width++) {
             long packedCost = ((long) width * n + 7L) / 8L;
             numPacked += bitWidthFreq[width];
-            long exceptionsCost = ((long) n - numPacked) * bytesPerException;
+            long exceptionsCost = (n - numPacked) * bytesPerException;
             long cost = packedCost + exceptionsCost;
             if (cost < bestCost) {
                 bestCost = cost;

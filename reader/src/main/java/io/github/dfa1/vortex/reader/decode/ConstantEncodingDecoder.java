@@ -138,7 +138,7 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
 
         int strLen = strBytes.length;
 
-        MemorySegment bytesSeg = ctx.arena().allocate((long) n * strLen);
+        MemorySegment bytesSeg = ctx.arena().allocate(n * strLen);
         for (long i = 0; i < n; i++) {
             MemorySegment.copy(MemorySegment.ofArray(strBytes), 0L, bytesSeg, i * strLen, strLen);
         }

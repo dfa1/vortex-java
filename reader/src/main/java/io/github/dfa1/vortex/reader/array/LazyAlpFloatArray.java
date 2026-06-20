@@ -23,7 +23,7 @@ public record LazyAlpFloatArray(DType dtype, long length, MemorySegment encoded,
 
     @Override
     public float getFloat(long i) {
-        return (float) encoded.getAtIndex(PTypeIO.LE_INT, i) * factorF * factorE;
+        return encoded.getAtIndex(PTypeIO.LE_INT, i) * factorF * factorE;
     }
 
     /// Bulk-decodes through [#getFloat(long)] into a fresh little-endian `f32` segment.

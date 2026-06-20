@@ -28,7 +28,7 @@ public record LazyAlpDoubleArray(DType dtype, long length, MemorySegment encoded
 
     @Override
     public double getDouble(long i) {
-        return (double) encoded.getAtIndex(PTypeIO.LE_LONG, i) * factorF * factorE;
+        return encoded.getAtIndex(PTypeIO.LE_LONG, i) * factorF * factorE;
     }
 
     /// Bulk-decodes through [#getDouble(long)] into a fresh little-endian `f64` segment.

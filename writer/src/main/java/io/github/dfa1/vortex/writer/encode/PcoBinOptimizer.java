@@ -44,7 +44,7 @@ final class PcoBinOptimizer {
         for (PcoHistBin b : histBins) {
             total += b.count();
         }
-        float totalLog2 = log2Approx((float) total);
+        float totalLog2 = log2Approx(total);
 
         long[] cCounts = new long[n + 1];
         long[] lowers = new long[n];
@@ -120,7 +120,7 @@ final class PcoBinOptimizer {
     }
 
     private static float binCost(float metaCost, long lower, long upper, long count, float totalLog2) {
-        float ansLoss = totalLog2 - log2Approx((float) count);
+        float ansLoss = totalLog2 - log2Approx(count);
         long range = upper - lower;
         float offsetCost = range == 0 ? 0f : 64 - Long.numberOfLeadingZeros(range);
         return metaCost + (ansLoss + offsetCost) * count;

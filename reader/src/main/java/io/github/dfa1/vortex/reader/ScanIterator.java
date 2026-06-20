@@ -604,7 +604,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             // wrote n * elemBytes to the arena during decodeLayout above, so their buffer
             // matches n.
             MemorySegment codesSeg = codes.materialize(arena);
-            long bufferCodes = codesSeg.byteSize() / (long) codesPType.byteSize();
+            long bufferCodes = codesSeg.byteSize() / codesPType.byteSize();
             if (bufferCodes < n) {
                 throw new VortexException(EncodingId.VORTEX_DICT,
                         "dict codes: layout row_count=" + n + " exceeds buffer capacity=" + bufferCodes);
@@ -625,7 +625,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         // Non-Utf8, non-Primitive dict — e.g. extension types backed by VarBin. Fall through
         // to the existing string expansion for compatibility.
         MemorySegment codesSegFallback = codes.materialize(arena);
-        long bufferCodesFallback = codesSegFallback.byteSize() / (long) codesPType.byteSize();
+        long bufferCodesFallback = codesSegFallback.byteSize() / codesPType.byteSize();
         if (bufferCodesFallback < n) {
             throw new VortexException(EncodingId.VORTEX_DICT,
                     "dict codes: layout row_count=" + n + " exceeds buffer capacity=" + bufferCodesFallback);
@@ -646,7 +646,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         if (maybeSeg.isEmpty()) {
             return;
         }
-        long bufferCodes = maybeSeg.get().byteSize() / (long) codesPType.byteSize();
+        long bufferCodes = maybeSeg.get().byteSize() / codesPType.byteSize();
         if (bufferCodes < n) {
             throw new VortexException(EncodingId.VORTEX_DICT,
                     "dict codes: layout row_count=" + n + " exceeds buffer capacity=" + bufferCodes);

@@ -129,7 +129,7 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
                 continue;
             }
             long e = Math.round(enc);
-            if ((double) e * df * de != v) {
+            if (e * df * de != v) {
                 patchCount++;
                 continue;
             }
@@ -173,7 +173,7 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
             double v = values[i];
             double enc = v * ef * iff;
             long encoded;
-            if (Double.isFinite(enc) && (double) (encoded = Math.round(enc)) * df * de == v) {
+            if (Double.isFinite(enc) && (encoded = Math.round(enc)) * df * de == v) {
                 encodedArr[i] = encoded;
             } else {
                 encodedArr[i] = 0L;
@@ -304,7 +304,7 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
                 continue;
             }
             int e = Math.round(enc);
-            if ((float) e * df * de != v) {
+            if (e * df * de != v) {
                 patchCount++;
                 continue;
             }
@@ -348,7 +348,7 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
             float v = values[i];
             float enc = v * ef * iff;
             int encoded;
-            if (Float.isFinite(enc) && (float) (encoded = Math.round(enc)) * df * de == v) {
+            if (Float.isFinite(enc) && (encoded = Math.round(enc)) * df * de == v) {
                 encodedArr[i] = encoded;
             } else {
                 encodedArr[i] = 0;

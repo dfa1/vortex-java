@@ -271,7 +271,7 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
             EncodeNode valNode = EncodeNode.remapBufferIndices(valResult.rootNode(), idxOffset + idxBufCount);
 
             patchesMeta = new PatchesMetadata(
-                    (long) excPos.size(),
+                    excPos.size(),
                     0L,
                     io.github.dfa1.vortex.proto.PType.fromValue(PType.U64.ordinal()),
                     null, null, null);

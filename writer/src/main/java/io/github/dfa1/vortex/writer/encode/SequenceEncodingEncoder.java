@@ -49,7 +49,7 @@ public final class SequenceEncodingEncoder implements EncodingEncoder {
             base = readLong(pt, data, 0);
             multiplier = n > 1 ? readLong(pt, data, 1) - base : 0;
             for (int i = 2; i < n; i++) {
-                long expected = base + (long) i * multiplier;
+                long expected = base + i * multiplier;
                 if (readLong(pt, data, i) != expected) {
                     throw new VortexException(EncodingId.VORTEX_SEQUENCE, "not an arithmetic sequence at index " + i);
                 }
@@ -64,7 +64,7 @@ public final class SequenceEncodingEncoder implements EncodingEncoder {
         float base = data.length > 0 ? data[0] : 0f;
         float mul = data.length > 1 ? data[1] - base : 0f;
         for (int i = 2; i < data.length; i++) {
-            if (data[i] != base + (float) i * mul) {
+            if (data[i] != base + i * mul) {
                 throw new VortexException(EncodingId.VORTEX_SEQUENCE, "not an arithmetic sequence at index " + i);
             }
         }
@@ -75,7 +75,7 @@ public final class SequenceEncodingEncoder implements EncodingEncoder {
         double base = data.length > 0 ? data[0] : 0.0;
         double mul = data.length > 1 ? data[1] - base : 0.0;
         for (int i = 2; i < data.length; i++) {
-            if (data[i] != base + (double) i * mul) {
+            if (data[i] != base + i * mul) {
                 throw new VortexException(EncodingId.VORTEX_SEQUENCE, "not an arithmetic sequence at index " + i);
             }
         }
@@ -88,7 +88,7 @@ public final class SequenceEncodingEncoder implements EncodingEncoder {
         float mulF = data.length > 1 ? Float.float16ToFloat(data[1]) - baseF : 0f;
         short mulShort = Float.floatToFloat16(mulF);
         for (int i = 2; i < data.length; i++) {
-            short expected = Float.floatToFloat16(baseF + (float) i * mulF);
+            short expected = Float.floatToFloat16(baseF + i * mulF);
             if (data[i] != expected) {
                 throw new VortexException(EncodingId.VORTEX_SEQUENCE, "not an arithmetic sequence at index " + i);
             }

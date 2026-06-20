@@ -530,10 +530,10 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
             if (bins.isEmpty()) {
                 return 0f;
             }
-            float totalLog2 = PcoBinOptimizer.log2Approx((float) n);
+            float totalLog2 = PcoBinOptimizer.log2Approx(n);
             float cost = 0f;
             for (PcoBinOptimizer.Bin bin : bins) {
-                float ansLoss = totalLog2 - PcoBinOptimizer.log2Approx((float) bin.weight());
+                float ansLoss = totalLog2 - PcoBinOptimizer.log2Approx(bin.weight());
                 cost += (ansLoss + bin.offsetBits()) * bin.weight();
             }
             return cost;

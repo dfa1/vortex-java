@@ -839,7 +839,7 @@ public final class VortexInspectorTui {
             Layout layout = node.layout();
             int segIdx = layout.segments().getFirst();
             SegmentSpec spec = tree.segmentSpecs().get(segIdx);
-            int wanted = (int) Math.min((long) HEX_PREVIEW_BYTES, spec.length());
+            int wanted = (int) Math.min(HEX_PREVIEW_BYTES, spec.length());
             if (wanted <= 0) {
                 return new byte[0];
             }

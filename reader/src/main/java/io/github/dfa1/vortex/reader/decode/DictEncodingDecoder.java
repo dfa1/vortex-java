@@ -86,7 +86,7 @@ public final class DictEncodingDecoder implements EncodingDecoder {
         DType codesDtype = new DType.Primitive(codePType, false);
         MemorySegment codesBuf = ctx.decodeChildSegment(1, codesDtype, rowCount);
 
-        MemorySegment out = ctx.arena().allocate(rowCount * (long) elemSize);
+        MemorySegment out = ctx.arena().allocate(rowCount * elemSize);
         switch (codePType) {
             case U8 -> expandU8(codesBuf, valuesBuf, out, rowCount, elemSize);
             case U16 -> expandU16(codesBuf, valuesBuf, out, rowCount, elemSize);
@@ -115,7 +115,7 @@ public final class DictEncodingDecoder implements EncodingDecoder {
         MemorySegment codesBuf = ctx.decodeChildSegment(0, codesDtype, rowCount);
         MemorySegment valuesBuf = ctx.decodeChildSegment(1, ctx.dtype(), valuesLen);
 
-        MemorySegment out = ctx.arena().allocate(rowCount * (long) elemSize);
+        MemorySegment out = ctx.arena().allocate(rowCount * elemSize);
         switch (codePType) {
             case U8 -> expandU8(codesBuf, valuesBuf, out, rowCount, elemSize);
             case U16 -> expandU16(codesBuf, valuesBuf, out, rowCount, elemSize);
