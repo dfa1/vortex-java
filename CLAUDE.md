@@ -61,6 +61,27 @@ brew install flatbuffers              # only for .fbs edits (any flatc version; 
 is in-process via `proto-gen` (no `protoc`/`protobuf-java`): one record per message with static
 `decode(MemorySegment, long, long)` + `encode()` operating directly on a segment.
 
+### Mutation testing
+
+Opt-in [PIT](https://pitest.org) profile in `core` and `reader` (`-P pitest`), bound to the
+`verify` phase and scoped to the bounds/parse classes via `<targetClasses>` in each module POM.
+Used to harden the security-critical bounds guards (ADR 0003 Phase E).
+
+```bash
+./mvnw -pl reader -am -P pitest verify -DskipITs   # reader run (-am builds core; -DskipITs skips ITs)
+./mvnw -pl core -P pitest verify                   # core run (IoBounds)
+```
+
+Report: `<module>/target/pit-reports/index.html` (+ `mutations.xml` for scripting). Widen a run by
+adding `<param>` entries under `<targetClasses>` in the module's `pitest` profile.
+
+Do not invoke the goal directly (`org.pitest:pitest-maven:mutationCoverage`) — it resolves the
+latest plugin without the JUnit 5 engine and ignores the profile; always go through `-P pitest`.
+
+Read survivors as a **simplify-first** signal, not only a test-gap signal: an equivalent mutant
+often marks a clause that can never change the outcome (dead code) — delete it rather than writing
+an unkillable test. Only add a test when the mutated bound is a genuine, independent edge.
+
 ### Releasing
 
 ```bash
