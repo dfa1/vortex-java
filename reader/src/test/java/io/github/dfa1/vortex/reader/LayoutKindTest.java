@@ -2,48 +2,53 @@ package io.github.dfa1.vortex.reader;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.List;
-import java.util.stream.Stream;
+import java.util.function.Predicate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// Pins the [Layout] encoding-kind predicates (`isFlat`, `isChunked`, `isStruct`, `isZoned`,
 /// `isDict`). [ScanIterator] dispatches layout-tree traversal on these, so a predicate that
-/// silently returns a constant would route a whole layout family down the wrong decode path.
-/// One layout per encoding id, asserting the matching predicate is `true` and every other is
-/// `false` — which fixes each method's return to its `encodingId` rather than a constant.
+/// silently returned a constant would route a whole layout family down the wrong decode path.
+/// For a layout of each kind, exactly its own predicate must be `true` and every other `false`,
+/// which fixes each method's return to its `encodingId` rather than a constant.
 class LayoutKindTest {
+
+    /// Each layout kind paired with its encoding id and the predicate that should recognise it.
+    private enum Kind {
+        FLAT(Layout.FLAT, Layout::isFlat),
+        CHUNKED(Layout.CHUNKED, Layout::isChunked),
+        STRUCT(Layout.STRUCT, Layout::isStruct),
+        ZONED(Layout.ZONED, Layout::isZoned),
+        DICT(Layout.DICT, Layout::isDict);
+
+        private final String encodingId;
+        private final Predicate<Layout> predicate;
+
+        Kind(String encodingId, Predicate<Layout> predicate) {
+            this.encodingId = encodingId;
+            this.predicate = predicate;
+        }
+    }
 
     private static Layout layout(String encodingId) {
         return new Layout(encodingId, 0L, null, List.of(), List.of());
     }
 
-    static Stream<Arguments> kinds() {
-        // (encodingId, isFlat, isChunked, isStruct, isZoned, isDict)
-        return Stream.of(
-                Arguments.of(Layout.FLAT, true, false, false, false, false),
-                Arguments.of(Layout.CHUNKED, false, true, false, false, false),
-                Arguments.of(Layout.STRUCT, false, false, true, false, false),
-                Arguments.of(Layout.ZONED, false, false, false, true, false),
-                Arguments.of(Layout.DICT, false, false, false, false, true));
-    }
+    @ParameterizedTest
+    @EnumSource(Kind.class)
+    void predicate_recognisesOnlyItsOwnEncodingId(Kind kind) {
+        // Given — a layout carrying this kind's encoding id
+        Layout sut = layout(kind.encodingId);
 
-    @ParameterizedTest(name = "{0}")
-    @MethodSource("kinds")
-    void predicates_matchOnlyOwnEncodingId(
-            String encodingId, boolean flat, boolean chunked, boolean struct, boolean zoned, boolean dict) {
-        // Given
-        Layout sut = layout(encodingId);
-
-        // When / Then — exactly one predicate is true, the rest false
-        assertThat(sut.isFlat()).as("isFlat").isEqualTo(flat);
-        assertThat(sut.isChunked()).as("isChunked").isEqualTo(chunked);
-        assertThat(sut.isStruct()).as("isStruct").isEqualTo(struct);
-        assertThat(sut.isZoned()).as("isZoned").isEqualTo(zoned);
-        assertThat(sut.isDict()).as("isDict").isEqualTo(dict);
+        // When / Then — only this kind's predicate is true; every other kind's is false
+        for (Kind other : Kind.values()) {
+            assertThat(other.predicate.test(sut))
+                    .as("%s on %s", other, kind.encodingId)
+                    .isEqualTo(other == kind);
+        }
     }
 
     @Test
@@ -51,11 +56,9 @@ class LayoutKindTest {
         // Given — an id matching no known layout kind
         Layout sut = layout("vortex.bogus");
 
-        // When / Then — no predicate claims it
-        assertThat(sut.isFlat()).isFalse();
-        assertThat(sut.isChunked()).isFalse();
-        assertThat(sut.isStruct()).isFalse();
-        assertThat(sut.isZoned()).isFalse();
-        assertThat(sut.isDict()).isFalse();
+        // When / Then — no kind claims it
+        for (Kind kind : Kind.values()) {
+            assertThat(kind.predicate.test(sut)).as("%s", kind).isFalse();
+        }
     }
 }
