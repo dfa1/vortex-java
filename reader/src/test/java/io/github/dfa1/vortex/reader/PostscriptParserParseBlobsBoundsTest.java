@@ -131,6 +131,32 @@ class PostscriptParserParseBlobsBoundsTest {
                 .hasMessageContaining("scale");
     }
 
+    // ── Layout metadata-size bound: metadata.remaining() > MAX_LAYOUT_METADATA_BYTES ──
+
+    @Test
+    void parseBlobs_layoutMetadata_atLimit_parses() {
+        // Given — metadata of exactly MAX_LAYOUT_METADATA_BYTES (the largest allowed). `> MAX` is
+        // false at the limit, so it must parse; kills `>` relaxed to `>=`, which would reject it.
+        ByteBuffer footer = footerWithLayoutSpecs("vortex.flat");
+        ByteBuffer layout = flatLayoutWithMetadata(PostscriptParser.MAX_LAYOUT_METADATA_BYTES);
+
+        // When / Then
+        assertThatCode(() -> PostscriptParser.parseBlobs(footer, layout, null))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void parseBlobs_layoutMetadata_oneOverLimit_throws() {
+        // Given — one byte past the cap
+        ByteBuffer footer = footerWithLayoutSpecs("vortex.flat");
+        ByteBuffer layout = flatLayoutWithMetadata(PostscriptParser.MAX_LAYOUT_METADATA_BYTES + 1);
+
+        // When / Then
+        assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, null))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("metadata size");
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────────────
 
     /// Parses a dtype blob through the full parseBlobs path, paired with a minimal valid
@@ -161,6 +187,15 @@ class PostscriptParserParseBlobsBoundsTest {
         var fbb = new FlatBufferBuilder(128);
         int segV = Layout.createSegmentsVector(fbb, new long[]{0});
         int off = Layout.createLayout(fbb, encodingIdx, 1L, 0, 0, segV);
+        Layout.finishLayoutBuffer(fbb, off);
+        return slice(fbb);
+    }
+
+    private static ByteBuffer flatLayoutWithMetadata(int metadataBytes) {
+        var fbb = new FlatBufferBuilder(metadataBytes + 128);
+        int meta = Layout.createMetadataVector(fbb, new byte[metadataBytes]);
+        int segV = Layout.createSegmentsVector(fbb, new long[]{0});
+        int off = Layout.createLayout(fbb, 0, 1L, meta, 0, segV);
         Layout.finishLayoutBuffer(fbb, off);
         return slice(fbb);
     }
