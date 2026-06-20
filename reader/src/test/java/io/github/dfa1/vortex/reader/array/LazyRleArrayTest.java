@@ -18,6 +18,10 @@ class LazyRleArrayTest {
 
     private static final DType I64 = new DType.Primitive(PType.I64, false);
     private static final DType I32 = new DType.Primitive(PType.I32, false);
+    private static final DType U8 = new DType.Primitive(PType.U8, false);
+    private static final DType I8 = new DType.Primitive(PType.I8, false);
+    private static final DType U16 = new DType.Primitive(PType.U16, false);
+    private static final DType I16 = new DType.Primitive(PType.I16, false);
 
     @Nested
     class LongDispatch {
@@ -99,6 +103,54 @@ class LazyRleArrayTest {
             // 1024 * 7 + 2 * 11 = 7168 + 22 = 7190
             assertThat(sum).isEqualTo(7190L);
         }
+
+        @Test
+        void getLongLookupIndexedClampAndEmpty() {
+            // Given — indexed chunk; index[2] out of range clamps to last value
+            int[] idx = new int[1024];
+            idx[0] = 0;
+            idx[1] = 1;
+            idx[2] = 9;
+            var x = new LazyRleLongArray(I64, 3, new long[]{10L, 20L, 30L}, idx,
+                    new long[]{0L}, 0L, 3L, 1, 0);
+            assertThat(x.getLong(0)).isEqualTo(10L);
+            assertThat(x.getLong(1)).isEqualTo(20L);
+            assertThat(x.getLong(2)).isEqualTo(30L); // clamped
+
+            // empty chunk → zero
+            var e = new LazyRleLongArray(I64, 2, new long[0], new int[1024],
+                    new long[]{0L}, 0L, 0L, 1, 0);
+            assertThat(e.getLong(0)).isZero();
+        }
+
+        @Test
+        void foldStopsWhenLengthSatisfiedBeforeChunksExhausted() {
+            // Given — 2 chunks declared but length only spans 5 rows of chunk 0;
+            // the fold loop must exit on `emitted < n`, not on chunk exhaustion
+            var sut = new LazyRleLongArray(I64, 5, new long[]{1L, 2L}, new int[2048],
+                    new long[]{0L, 1L}, 0L, 2L, 2, 0);
+            assertThat(sut.fold(0L, java.lang.Long::sum)).isEqualTo(5L);
+        }
+
+        @Test
+        void forEachIndexedClampAndEmptyChunk() {
+            // indexed forEach with out-of-range index → clamps to last value
+            int[] idx = new int[1024];
+            idx[0] = 0;
+            idx[1] = 9;
+            var x = new LazyRleLongArray(I64, 2, new long[]{10L, 20L}, idx,
+                    new long[]{0L}, 0L, 2L, 1, 0);
+            var seen = new ArrayList<java.lang.Long>();
+            x.forEachLong(seen::add);
+            assertThat(seen).containsExactly(10L, 20L);
+
+            // empty chunk via forEach → zeros
+            var e = new LazyRleLongArray(I64, 2, new long[0], new int[1024],
+                    new long[]{0L}, 0L, 0L, 1, 0);
+            var zeros = new ArrayList<java.lang.Long>();
+            e.forEachLong(zeros::add);
+            assertThat(zeros).containsExactly(0L, 0L);
+        }
     }
 
     @Nested
@@ -118,6 +170,163 @@ class LazyRleArrayTest {
             assertThat(sut.getInt(0)).isEqualTo(100);
             assertThat(sut.getInt(1)).isEqualTo(200);
             assertThat(sut.getInt(2)).isEqualTo(100);
+        }
+
+        @Test
+        void forEachFoldClampAndEmptyChunk() {
+            // Given — values [1,2,3]; index[3] out of range → clamps to last (3)
+            int[] indices = new int[1024];
+            indices[0] = 0;
+            indices[1] = 1;
+            indices[2] = 2;
+            indices[3] = 99;
+            var sut = new LazyRleIntArray(I32, 4, new int[]{1, 2, 3}, indices,
+                    new long[]{0L}, 0L, 3L, 1, 0);
+
+            assertThat(sut.getInt(0)).isEqualTo(1);
+            assertThat(sut.getInt(3)).isEqualTo(3); // getInt lookup clamp path
+            var seen = new ArrayList<java.lang.Integer>();
+            sut.forEachInt(seen::add);
+            assertThat(seen).containsExactly(1, 2, 3, 3);
+            assertThat(sut.fold(0, Integer::sum)).isEqualTo(9);
+
+            // empty chunk (0 distinct values) → zero, via getInt, forEach and fold
+            var empty = new LazyRleIntArray(I32, 2, new int[0], new int[1024],
+                    new long[]{0L}, 0L, 0L, 1, 0);
+            assertThat(empty.getInt(0)).isZero();
+            var zeros = new ArrayList<java.lang.Integer>();
+            empty.forEachInt(zeros::add);
+            assertThat(zeros).containsExactly(0, 0);
+            assertThat(empty.fold(0, Integer::sum)).isZero();
+        }
+
+        @Test
+        void getIntConstantRunFastPath() {
+            // single distinct value → getInt hits the numChunkValues == 1 lookup branch
+            var sut = new LazyRleIntArray(I32, 3, new int[]{42}, new int[1024],
+                    new long[]{0L}, 0L, 1L, 1, 0);
+            assertThat(sut.getInt(0)).isEqualTo(42);
+            assertThat(sut.getInt(2)).isEqualTo(42);
+        }
+
+        @Test
+        void foldStopsWhenLengthSatisfiedBeforeChunksExhausted() {
+            // 2 chunks declared, length spans only 5 rows of chunk 0 → loop exits on emitted < n
+            var sut = new LazyRleIntArray(I32, 5, new int[]{1, 2}, new int[2048],
+                    new long[]{0L, 1L}, 0L, 2L, 2, 0);
+            assertThat(sut.fold(0, Integer::sum)).isEqualTo(5);
+        }
+    }
+
+    @Nested
+    class ByteDispatch {
+
+        @Test
+        void lookupConstantEmptyIndexedClamp() {
+            // constant run (1 distinct)
+            var c = new LazyRleByteArray(U8, 3, new byte[]{7}, new int[1024],
+                    new long[]{0L}, 0L, 1L, 1, 0, true);
+            assertThat(c.getByte(0)).isEqualTo((byte) 7);
+            assertThat(c.fold(0L, Long::sum)).isEqualTo(21L);
+
+            // empty chunk (0 distinct) → zero
+            var e = new LazyRleByteArray(U8, 2, new byte[0], new int[1024],
+                    new long[]{0L}, 0L, 0L, 1, 0, true);
+            assertThat(e.getByte(0)).isZero();
+            assertThat(e.fold(0L, Long::sum)).isZero();
+
+            // indexed with out-of-range index → clamps to last value
+            int[] idx = new int[1024];
+            idx[0] = 0;
+            idx[1] = 1;
+            idx[2] = 2;
+            idx[3] = 99;
+            var x = new LazyRleByteArray(U8, 4, new byte[]{1, 2, 3}, idx,
+                    new long[]{0L}, 0L, 3L, 1, 0, true);
+            assertThat(x.getByte(0)).isEqualTo((byte) 1);
+            assertThat(x.getByte(3)).isEqualTo((byte) 3); // clamped
+            assertThat(x.fold(0L, Long::sum)).isEqualTo(9L);
+        }
+
+        @Test
+        void getIntWidensSignedAndUnsigned() {
+            int[] idx = new int[1024];
+            var u = new LazyRleByteArray(U8, 1, new byte[]{(byte) 0xF0}, idx,
+                    new long[]{0L}, 0L, 1L, 1, 0, true);
+            assertThat(u.getInt(0)).isEqualTo(240);
+            var s = new LazyRleByteArray(I8, 1, new byte[]{(byte) 0xF0}, idx,
+                    new long[]{0L}, 0L, 1L, 1, 0, false);
+            assertThat(s.getInt(0)).isEqualTo(-16);
+        }
+
+        @Test
+        void multiChunkFoldSignedWiden() {
+            // two constant chunks: 1024×1 + 2×2; signed widening path in foldChunk
+            var sut = new LazyRleByteArray(I8, 1026, new byte[]{1, 2}, new int[2048],
+                    new long[]{0L, 1L}, 0L, 2L, 2, 0, false);
+            assertThat(sut.getByte(1024)).isEqualTo((byte) 2);
+            assertThat(sut.fold(0L, Long::sum)).isEqualTo(1024L + 4L);
+        }
+
+        @Test
+        void foldStopsWhenLengthSatisfiedBeforeChunksExhausted() {
+            var sut = new LazyRleByteArray(U8, 5, new byte[]{1, 2}, new int[2048],
+                    new long[]{0L, 1L}, 0L, 2L, 2, 0, true);
+            assertThat(sut.fold(0L, Long::sum)).isEqualTo(5L);
+        }
+    }
+
+    @Nested
+    class ShortDispatch {
+
+        @Test
+        void lookupConstantEmptyIndexedClamp() {
+            var c = new LazyRleShortArray(U16, 3, new short[]{7}, new int[1024],
+                    new long[]{0L}, 0L, 1L, 1, 0, true);
+            assertThat(c.getShort(0)).isEqualTo((short) 7);
+            assertThat(c.fold(0L, Long::sum)).isEqualTo(21L);
+
+            var e = new LazyRleShortArray(U16, 2, new short[0], new int[1024],
+                    new long[]{0L}, 0L, 0L, 1, 0, true);
+            assertThat(e.getShort(0)).isZero();
+            assertThat(e.fold(0L, Long::sum)).isZero();
+
+            int[] idx = new int[1024];
+            idx[0] = 0;
+            idx[1] = 1;
+            idx[2] = 2;
+            idx[3] = 99;
+            var x = new LazyRleShortArray(U16, 4, new short[]{1, 2, 3}, idx,
+                    new long[]{0L}, 0L, 3L, 1, 0, true);
+            assertThat(x.getShort(0)).isEqualTo((short) 1);
+            assertThat(x.getShort(3)).isEqualTo((short) 3); // clamped
+            assertThat(x.fold(0L, Long::sum)).isEqualTo(9L);
+        }
+
+        @Test
+        void getIntWidensSignedAndUnsigned() {
+            int[] idx = new int[1024];
+            var u = new LazyRleShortArray(U16, 1, new short[]{(short) 0xFF00}, idx,
+                    new long[]{0L}, 0L, 1L, 1, 0, true);
+            assertThat(u.getInt(0)).isEqualTo(0xFF00);
+            var s = new LazyRleShortArray(I16, 1, new short[]{(short) 0xFF00}, idx,
+                    new long[]{0L}, 0L, 1L, 1, 0, false);
+            assertThat(s.getInt(0)).isEqualTo((int) (short) 0xFF00);
+        }
+
+        @Test
+        void multiChunkFoldSignedWiden() {
+            var sut = new LazyRleShortArray(I16, 1026, new short[]{1, 2}, new int[2048],
+                    new long[]{0L, 1L}, 0L, 2L, 2, 0, false);
+            assertThat(sut.getShort(1024)).isEqualTo((short) 2);
+            assertThat(sut.fold(0L, Long::sum)).isEqualTo(1024L + 4L);
+        }
+
+        @Test
+        void foldStopsWhenLengthSatisfiedBeforeChunksExhausted() {
+            var sut = new LazyRleShortArray(U16, 5, new short[]{1, 2}, new int[2048],
+                    new long[]{0L, 1L}, 0L, 2L, 2, 0, true);
+            assertThat(sut.fold(0L, Long::sum)).isEqualTo(5L);
         }
     }
 }
