@@ -62,38 +62,32 @@ final class ChunkImpl implements Chunk {
         return switch (ptype) {
             case I8, U8 -> switch (value) {
                 case byte[] a -> a;
-                case Byte[] a -> nullable ? boxedToNullableBytes(a)
-                                          : rejectNullable(column, ptype);
+                case Byte[] a -> nullable ? boxedToNullableBytes(a) : rejectNullable(column, ptype);
                 default -> throw typeMismatch(column, ptype, value);
             };
             case I16, U16 -> switch (value) {
                 case short[] a -> a;
-                case Short[] a -> nullable ? boxedToNullableShorts(a)
-                                           : rejectNullable(column, ptype);
+                case Short[] a -> nullable ? boxedToNullableShorts(a) : rejectNullable(column, ptype);
                 default -> throw typeMismatch(column, ptype, value);
             };
             case I32, U32 -> switch (value) {
                 case int[] a -> a;
-                case Integer[] a -> nullable ? boxedToNullableInts(a)
-                                             : rejectNullable(column, ptype);
+                case Integer[] a -> nullable ? boxedToNullableInts(a) : rejectNullable(column, ptype);
                 default -> throw typeMismatch(column, ptype, value);
             };
             case I64, U64 -> switch (value) {
                 case long[] a -> a;
-                case Long[] a -> nullable ? boxedToNullableLongs(a)
-                                          : rejectNullable(column, ptype);
+                case Long[] a -> nullable ? boxedToNullableLongs(a) : rejectNullable(column, ptype);
                 default -> throw typeMismatch(column, ptype, value);
             };
             case F32 -> switch (value) {
                 case float[] a -> a;
-                case Float[] a -> nullable ? boxedToNullableFloats(a)
-                                           : rejectNullable(column, ptype);
+                case Float[] a -> nullable ? boxedToNullableFloats(a) : rejectNullable(column, ptype);
                 default -> throw typeMismatch(column, ptype, value);
             };
             case F64 -> switch (value) {
                 case double[] a -> a;
-                case Double[] a -> nullable ? boxedToNullableDoubles(a)
-                                            : rejectNullable(column, ptype);
+                case Double[] a -> nullable ? boxedToNullableDoubles(a) : rejectNullable(column, ptype);
                 default -> throw typeMismatch(column, ptype, value);
             };
             case F16 -> switch (value) {
