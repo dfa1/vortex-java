@@ -99,12 +99,12 @@ public final class TimestampExtensionDecoder implements ExtensionDecoder {
         int n = IoBounds.toIntSize(storage.length());
         List<Instant> out = new ArrayList<>(n);
         if (storage instanceof MaskedArray masked) {
-            for (long i = 0; i < n; i++) {
+            for (int i = 0; i < n; i++) {
                 out.add(masked.isValid(i) ? instant(ext, masked.inner(), i) : null);
             }
             return out;
         }
-        for (long i = 0; i < n; i++) {
+        for (int i = 0; i < n; i++) {
             out.add(instant(ext, storage, i));
         }
         return out;

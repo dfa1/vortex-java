@@ -783,14 +783,24 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             return ArrayStats.empty();
         }
         int segIdx = flat.segments().getFirst();
+        if (segIdx < 0 || segIdx >= file.footer().segmentSpecs().size()) {
+            return ArrayStats.empty();
+        }
         SegmentSpec spec = file.footer().segmentSpecs().get(segIdx);
         long segLen = spec.length();
-        MemorySegment seg = file.rawSegment(spec);
-
-        // Stats FlatBuffer lives in the segment's last 4+fbLen bytes; reading the whole
+        // Stats are an optional zone-map pruning optimization: a malformed stats segment
+        // degrades to "no stats" (empty) and never aborts the scan. This mirrors
+        // VortexReader.readFlatStats — both stats readers swallow bounds errors here.
+        // The trailing 4-byte fbLen lives in the segment's last bytes; reading the whole
         // segment as a ByteBuffer would fail for segments larger than 2 GB (ByteBuffer cap).
-        IoBounds.checkRange(segLen - 4L, 4, segLen);
+        if (segLen < 4) {
+            return ArrayStats.empty();
+        }
+        MemorySegment seg = file.rawSegment(spec);
         int fbLen = seg.get(LE_INT, segLen - 4);
+        if (fbLen < 0 || fbLen > segLen - 4) {
+            return ArrayStats.empty();
+        }
         long fbStart = segLen - 4L - fbLen;
         ByteBuffer fbBuf = IoBounds.slice(seg, fbStart, fbLen).asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
         var fbArray = io.github.dfa1.vortex.fbs.Array.getRootAsArray(fbBuf);

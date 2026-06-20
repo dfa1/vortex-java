@@ -76,12 +76,12 @@ public final class TimeExtensionDecoder implements ExtensionDecoder {
         int n = IoBounds.toIntSize(storage.length());
         List<LocalTime> out = new ArrayList<>(n);
         if (storage instanceof MaskedArray masked) {
-            for (long i = 0; i < n; i++) {
+            for (int i = 0; i < n; i++) {
                 out.add(masked.isValid(i) ? decode(ext, masked.inner(), i) : null);
             }
             return out;
         }
-        for (long i = 0; i < n; i++) {
+        for (int i = 0; i < n; i++) {
             out.add(decode(ext, storage, i));
         }
         return out;
