@@ -78,7 +78,10 @@ final class PostscriptParser {
             SegmentSpec s = specs.get(i);
             long offset = s.offset();
             long length = s.length();
-            if (offset < 0 || length < 0 || offset > fileSize || length > fileSize - offset) {
+            // Overflow-safe containment in [0, fileSize], same shape as IoBounds.checkRange. An
+            // `offset > fileSize` clause would be redundant: with length >= 0 already guaranteed,
+            // offset > fileSize forces length > fileSize - offset, so the final clause covers it.
+            if (offset < 0 || length < 0 || length > fileSize - offset) {
                 throw new VortexException(
                         "footer segmentSpecs[" + i + "] out of bounds: offset=" + offset
                                 + " length=" + length + " fileSize=" + fileSize);
@@ -87,7 +90,10 @@ final class PostscriptParser {
     }
 
     private static void checkBlobBounds(String name, long offset, long length, long fileSize) {
-        if (offset < 0 || length < 0 || offset > fileSize || length > fileSize - offset) {
+        // Same overflow-safe range form as IoBounds.checkRange (no redundant `offset > fileSize`
+        // clause: length >= 0 makes it implied by the final comparison). Keeps the blob-named
+        // message that checkRange's generic text would lose.
+        if (offset < 0 || length < 0 || length > fileSize - offset) {
             throw new VortexException(
                     "postscript " + name + " blob out of bounds: offset=" + offset
                             + " length=" + length + " fileSize=" + fileSize);
