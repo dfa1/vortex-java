@@ -8,6 +8,7 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.util.ArrayList;
 
+import static io.github.dfa1.vortex.encoding.DTypes.BOOL;
 import static io.github.dfa1.vortex.encoding.DTypes.F32;
 import static io.github.dfa1.vortex.encoding.DTypes.F64;
 import static io.github.dfa1.vortex.encoding.DTypes.I16;
@@ -16,6 +17,7 @@ import static io.github.dfa1.vortex.encoding.DTypes.I64;
 import static io.github.dfa1.vortex.encoding.DTypes.I8;
 import static io.github.dfa1.vortex.encoding.DTypes.U16;
 import static io.github.dfa1.vortex.encoding.DTypes.U8;
+import static io.github.dfa1.vortex.reader.array.TestArrays.bools;
 import static io.github.dfa1.vortex.reader.array.TestArrays.bytes;
 import static io.github.dfa1.vortex.reader.array.TestArrays.doubles;
 import static io.github.dfa1.vortex.reader.array.TestArrays.floats;
@@ -210,6 +212,56 @@ class LazySparseArrayTest {
 
             // When / Then
             assertThat(sut.getInt(0)).isEqualTo(65535);
+        }
+
+        @Test
+        void shortGetShortPatchFillAndNullPatches() {
+            // Given — fill 1, patches at 1->100, 3->200
+            ShortArray values = shorts((short) 100, (short) 200);
+            Array indices = ints(1, 3);
+            var sut = new LazySparseShortArray(I16, 5, (short) 1, 1, values, indices, 0L);
+
+            // When / Then — getShort hits both patch (p>=0) and fill (p<0)
+            assertThat(sut.getShort(0)).isEqualTo((short) 1);
+            assertThat(sut.getShort(1)).isEqualTo((short) 100);
+            assertThat(sut.getShort(3)).isEqualTo((short) 200);
+
+            // null patches → every position returns the fill (getShort, getInt and fold paths)
+            var nf = new LazySparseShortArray(I16, 3, (short) 7, 7, null, null, 0L);
+            assertThat(nf.getShort(0)).isEqualTo((short) 7);
+            assertThat(nf.getInt(0)).isEqualTo(7);
+            assertThat(nf.fold(0L, java.lang.Long::sum)).isEqualTo(21L);
+        }
+    }
+
+    @Nested
+    class Bool {
+
+        @Test
+        void getBooleanPatchAndFill() {
+            // Given — fill false, single patch true at index 2
+            BoolArray values = bools(true);
+            Array indices = ints(2);
+            var sut = new LazySparseBoolArray(BOOL, 4, false, values, indices, 0L);
+
+            // When / Then
+            assertThat(sut.getBoolean(0)).isFalse(); // fill (p<0)
+            assertThat(sut.getBoolean(2)).isTrue();  // patch
+        }
+
+        @Test
+        void forEachBooleanEmitsFillAndPatches() {
+            // Given
+            BoolArray values = bools(true);
+            Array indices = ints(2);
+            var sut = new LazySparseBoolArray(BOOL, 4, false, values, indices, 0L);
+
+            // When
+            var seen = new ArrayList<Boolean>();
+            sut.forEachBoolean(seen::add);
+
+            // Then
+            assertThat(seen).containsExactly(false, false, true, false);
         }
     }
 
