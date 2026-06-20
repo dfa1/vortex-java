@@ -14,6 +14,8 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.util.Random;
 import java.util.stream.LongStream;
 import java.util.stream.Stream;
 
@@ -257,11 +259,176 @@ class PcoEncodingEncoderTest {
 
     /// IntMult-favorable data: base 100 + small random adjustment ([0,100)).
     private static long[] intMultPriceData(int n) {
-        java.util.Random rng = new java.util.Random(42L);
+        Random rng = new Random(42L);
         long[] arr = new long[n];
         for (int i = 0; i < n; i++) {
             arr[i] = (10L + rng.nextInt(1000)) * 100L + rng.nextInt(100);
         }
         return arr;
+    }
+
+    // ── seeded-random property sweeps ───────────────────────────────────────────
+    //
+    // The curated cases above name one corner each; these sweep mixed distributions
+    // so the bin optimizer, delta/IntMult mode pickers, and ANS/patch paths face
+    // combinations no single example covers. Lengths vary up to a chunk-boundary
+    // crossing. Seeds are fixed so failures reproduce.
+
+    static Stream<Arguments> i64Random() {
+        Random rng = new Random(0x9C0L);
+        Stream.Builder<Arguments> b = Stream.builder();
+        for (int t = 0; t < 24; t++) {
+            int len = 1 + rng.nextInt(t == 0 ? 70_000 : 4000); // one run crosses the 64K chunk boundary
+            long[] a = new long[len];
+            int mode = rng.nextInt(6);
+            long base = rng.nextLong();
+            long mult = 1L + rng.nextInt(1000);
+            for (int i = 0; i < len; i++) {
+                a[i] = switch (mode) {
+                    case 0 -> rng.nextLong();                              // full-range: many bins, noOp
+                    case 1 -> rng.nextInt(16);                            // tiny range: tight bins
+                    case 2 -> base + i;                                    // monotone: delta
+                    case 3 -> base + (long) i * mult + rng.nextInt(8);    // strided + jitter: IntMult
+                    case 4 -> (rng.nextInt(20) == 0) ? rng.nextLong() : 1000L + rng.nextInt(4); // sparse outliers: patches/ANS
+                    default -> rng.nextInt(3) == 0 ? base : base + rng.nextInt(2); // heavy repeats: runs
+                };
+            }
+            b.add(Arguments.of("i64-mode" + mode + "-len" + len, a));
+        }
+        return b.build();
+    }
+
+    static Stream<Arguments> i32Random() {
+        Random rng = new Random(0x9C1L);
+        Stream.Builder<Arguments> b = Stream.builder();
+        for (int t = 0; t < 24; t++) {
+            int len = 1 + rng.nextInt(4000);
+            int[] a = new int[len];
+            int mode = rng.nextInt(6);
+            int base = rng.nextInt();
+            int mult = 1 + rng.nextInt(1000);
+            for (int i = 0; i < len; i++) {
+                a[i] = switch (mode) {
+                    case 0 -> rng.nextInt();
+                    case 1 -> rng.nextInt(16);
+                    case 2 -> base + i;
+                    case 3 -> base + i * mult + rng.nextInt(8);
+                    case 4 -> (rng.nextInt(20) == 0) ? rng.nextInt() : 1000 + rng.nextInt(4);
+                    default -> rng.nextInt(3) == 0 ? base : base + rng.nextInt(2);
+                };
+            }
+            b.add(Arguments.of("i32-mode" + mode + "-len" + len, a));
+        }
+        return b.build();
+    }
+
+    static Stream<Arguments> f64Random() {
+        Random rng = new Random(0x9C2L);
+        Stream.Builder<Arguments> b = Stream.builder();
+        for (int t = 0; t < 20; t++) {
+            int len = 1 + rng.nextInt(3000);
+            double[] a = new double[len];
+            int mode = rng.nextInt(3);
+            for (int i = 0; i < len; i++) {
+                a[i] = switch (mode) {
+                    case 0 -> rng.nextGaussian() * Math.pow(10, rng.nextInt(20) - 10); // wide magnitude
+                    case 1 -> 100.0 + (i % 50) * 0.01;                                 // FloatMult-friendly decimals
+                    default -> rng.nextInt(8);                                         // low cardinality
+                };
+            }
+            b.add(Arguments.of("f64-mode" + mode + "-len" + len, a));
+        }
+        return b.build();
+    }
+
+    static Stream<Arguments> f32Random() {
+        Random rng = new Random(0x9C3L);
+        Stream.Builder<Arguments> b = Stream.builder();
+        for (int t = 0; t < 20; t++) {
+            int len = 1 + rng.nextInt(3000);
+            float[] a = new float[len];
+            int mode = rng.nextInt(3);
+            for (int i = 0; i < len; i++) {
+                a[i] = switch (mode) {
+                    case 0 -> (float) (rng.nextGaussian() * Math.pow(10, rng.nextInt(12) - 6));
+                    case 1 -> 100.0f + (i % 50) * 0.01f;
+                    default -> rng.nextInt(8);
+                };
+            }
+            b.add(Arguments.of("f32-mode" + mode + "-len" + len, a));
+        }
+        return b.build();
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("i64Random")
+    void encodeDecode_i64_random_isLossless(String name, long[] data) {
+        // Given
+        EncodeResult encoded = ENCODER.encode(I64, data, EncodeTestHelper.testCtx());
+
+        // When
+        DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, I64, REGISTRY);
+        Array result = DECODER.decode(ctx);
+
+        // Then
+        assertThat(result.length()).isEqualTo(data.length);
+        MemorySegment m = result.materialize(Arena.ofAuto());
+        for (int i = 0; i < data.length; i++) {
+            assertThat(m.get(PTypeIO.LE_LONG, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
+        }
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("i32Random")
+    void encodeDecode_i32_random_isLossless(String name, int[] data) {
+        // Given
+        EncodeResult encoded = ENCODER.encode(I32, data, EncodeTestHelper.testCtx());
+
+        // When
+        DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, I32, REGISTRY);
+        Array result = DECODER.decode(ctx);
+
+        // Then
+        assertThat(result.length()).isEqualTo(data.length);
+        MemorySegment m = result.materialize(Arena.ofAuto());
+        for (int i = 0; i < data.length; i++) {
+            assertThat(m.get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
+        }
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("f64Random")
+    void encodeDecode_f64_random_isLossless(String name, double[] data) {
+        // Given
+        EncodeResult encoded = ENCODER.encode(F64, data, EncodeTestHelper.testCtx());
+
+        // When
+        DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, F64, REGISTRY);
+        Array result = DECODER.decode(ctx);
+
+        // Then
+        assertThat(result.length()).isEqualTo(data.length);
+        MemorySegment m = result.materialize(Arena.ofAuto());
+        for (int i = 0; i < data.length; i++) {
+            assertThat(m.get(PTypeIO.LE_DOUBLE, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
+        }
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("f32Random")
+    void encodeDecode_f32_random_isLossless(String name, float[] data) {
+        // Given
+        EncodeResult encoded = ENCODER.encode(F32, data, EncodeTestHelper.testCtx());
+
+        // When
+        DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, F32, REGISTRY);
+        Array result = DECODER.decode(ctx);
+
+        // Then
+        assertThat(result.length()).isEqualTo(data.length);
+        MemorySegment m = result.materialize(Arena.ofAuto());
+        for (int i = 0; i < data.length; i++) {
+            assertThat(m.get(PTypeIO.LE_FLOAT, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
+        }
     }
 }
