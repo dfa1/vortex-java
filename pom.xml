@@ -536,6 +536,46 @@
 				</plugins>
 			</build>
 		</profile>
+		<!-- Mutation testing (opt-in: -P pitest). Common PIT setup lives here once; each module's
+		     own `pitest` profile only adds the plugin to <plugins> and names its <targetClasses>.
+		     targetTests is left to PIT's default (test packages matching the target classes). -->
+		<profile>
+			<id>pitest</id>
+			<build>
+				<pluginManagement>
+					<plugins>
+						<plugin>
+							<groupId>org.pitest</groupId>
+							<artifactId>pitest-maven</artifactId>
+							<version>1.20.0</version>
+							<dependencies>
+								<dependency>
+									<groupId>org.pitest</groupId>
+									<artifactId>pitest-junit5-plugin</artifactId>
+									<version>1.2.3</version>
+								</dependency>
+							</dependencies>
+							<executions>
+								<execution>
+									<id>pit-report</id>
+									<phase>verify</phase>
+									<goals>
+										<goal>mutationCoverage</goal>
+									</goals>
+								</execution>
+							</executions>
+							<configuration>
+								<outputFormats>
+									<param>HTML</param>
+									<param>XML</param>
+								</outputFormats>
+								<timestampedReports>false</timestampedReports>
+							</configuration>
+						</plugin>
+					</plugins>
+				</pluginManagement>
+			</build>
+		</profile>
 	</profiles>
 
 </project>
