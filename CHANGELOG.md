@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+A hardening release: no new file-format capability, but a large step up in verification rigour. Mutation testing (PIT) now guards the security-critical bounds/parse paths in core, reader, and writer at 99–100% kill rate; the build fails on any javac warning (`-Xlint:all -Werror`); and property-based round-trips exercise every lossless encoding plus the full cascade-selection pipeline against seeded-random inputs. The one functional addition is boxed-nullable array input on the map `writeChunk` path.
+
+### Added
+
+- Writer: the map-based `writeChunk` path accepts boxed nullable arrays (`Integer[]`, `Long[]`, `Double[]`, …) alongside primitive arrays, so columns with nulls can be written without manual validity bookkeeping. ([4d18939a](https://github.com/dfa1/vortex-java/commit/4d18939a))
+
+### Changed
+
+- **Breaking — `ExtensionEncoder.encodeAll` is now abstract.** The default body threw `VortexException`; every implementation already overrides it, so the contract now fails at compile time rather than at runtime. ([2dcd69ce](https://github.com/dfa1/vortex-java/commit/2dcd69ce))
+- **Breaking — `Estimate` is now an enum** `{ SKIP, ALWAYS_USE, COMPLETE }`. The sealed interface with empty `Skip`/`AlwaysUse` records, the `skip()`/`alwaysUse()` factories, and the `null` "no verdict" sentinel are gone; `COMPLETE` is the explicit defer-to-sample-encode verdict. ([c355a4bf](https://github.com/dfa1/vortex-java/commit/c355a4bf))
+- Reader cleanups: dropped a dead `length < 0` blob check and a redundant `offset > fileSize` bounds clause, reused the shared `PTypeIO` little-endian layouts, and removed redundant numeric casts flagged by static analysis. ([5d5fcc45](https://github.com/dfa1/vortex-java/commit/5d5fcc45), [36328285](https://github.com/dfa1/vortex-java/commit/36328285), [04cab707](https://github.com/dfa1/vortex-java/commit/04cab707))
+
+### Fixed
+
+- Reader: Pco decode now guards `preDeltaN` against int overflow before clamping — the subtraction is widened to `long`, restoring the overflow-safe path. ([b7346e7c](https://github.com/dfa1/vortex-java/commit/b7346e7c))
+
+### Build
+
+- Zero-warning rule: `-Xlint:all -Werror` across all modules. The `classfile` lint (which only flags missing annotation class files inside third-party Arrow bytecode) is scoped off in the two Arrow-using modules only. ([dab467e5](https://github.com/dfa1/vortex-java/commit/dab467e5), [43f6f840](https://github.com/dfa1/vortex-java/commit/43f6f840))
+- Mutation testing (PIT): opt-in `pitest` profiles in core, reader, and writer, scoped to the bounds/parse classes (`IoBounds`, `PTypeIO`, `WriteRegistry`, `ChunkImpl`, …), with common config hoisted into the parent POM. ([46904b24](https://github.com/dfa1/vortex-java/commit/46904b24), [ed8c98a1](https://github.com/dfa1/vortex-java/commit/ed8c98a1), [1200c76b](https://github.com/dfa1/vortex-java/commit/1200c76b), [840cc46a](https://github.com/dfa1/vortex-java/commit/840cc46a))
+- SonarCloud: generated `fbs/` and `proto/` sources excluded from analysis (machine output, not hand-maintained); the deliberate per-width SIMD-loop duplication is documented in [ADR 0005](docs/adr/0005-vector-api-adoption.md) rather than refactored away. Code smells dropped 857→394; coverage ~81%, all ratings A, zero bugs/vulnerabilities. ([6c591293](https://github.com/dfa1/vortex-java/commit/6c591293))
+
+### Tests
+
+- Property-based lossless round-trips added for ALP (f32/f64), Delta/FoR/ZigZag/AlpRd, a bitpacked bit-width sweep, the full `CascadingCompressor` (every codec × cascade depth 0–3), and a Pco seeded-random distribution sweep. ([dbe44aaa](https://github.com/dfa1/vortex-java/commit/dbe44aaa), [a2cf3443](https://github.com/dfa1/vortex-java/commit/a2cf3443), [aede11d7](https://github.com/dfa1/vortex-java/commit/aede11d7), [115dd6fd](https://github.com/dfa1/vortex-java/commit/115dd6fd), [a426c1de](https://github.com/dfa1/vortex-java/commit/a426c1de))
+- Mutation-driven test hardening lifted core/reader/writer bounds and registry classes to 99–100% kill rate. ([2235499a](https://github.com/dfa1/vortex-java/commit/2235499a), [c9243f9a](https://github.com/dfa1/vortex-java/commit/c9243f9a), [912fcaff](https://github.com/dfa1/vortex-java/commit/912fcaff))
+- Integration: added Java↔Rust round-trips for `vortex.patched`, `fastlanes.delta`, and `masked` encodings. ([13702764](https://github.com/dfa1/vortex-java/commit/13702764))
+- CLI: terminal smoke tests now force class initialization so the FFM libc/kernel32 symbol resolution is actually exercised. ([3f741ef7](https://github.com/dfa1/vortex-java/commit/3f741ef7))
+
 ## [0.8.0] — 2026-06-20
 
 Read and write Vortex Variant (semi-structured, JSON-shaped) columns from Java. Internally, transform encodings now decode lazily, trimming per-decode allocation. This release also hardens the reader's bounds handling on untrusted input (ADR 0003 Phase E), fixes CSV-import memory blow-ups on large files, and lifts test coverage to 80% with all Sonar ratings at A.

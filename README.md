@@ -127,7 +127,8 @@ Docs follow the [Diátaxis](https://diataxis.fr/) framework.
 | [docs/how-to.md](docs/how-to.md)               | How-to      | Recipes: count rows, convert Parquet, filter, project, custom encodings |
 | [docs/reference.md](docs/reference.md)         | Reference   | API surface, CLI subcommands, operator tables, file-format trailer      |
 | [docs/compatibility.md](docs/compatibility.md) | Reference   | Encoding support table, S3 fixture status                               |
-| [docs/explanation.md](docs/explanation.md)     | Explanation | Design rationale, memory model, testing strategy, benchmarks            |
+| [docs/explanation.md](docs/explanation.md)     | Explanation | Design rationale, memory model, benchmarks                              |
+| [docs/testing.md](docs/testing.md)             | Explanation | Test strategy: layers, counts per module, what each layer verifies      |
 
 ## Vortex implementations
 

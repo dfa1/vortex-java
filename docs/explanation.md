@@ -491,5 +491,5 @@ See the [benchmark tables](#benchmarks) for numbers. Summary:
 - No JNI, no `sun.misc.Unsafe` ([FFM vs Unsafe](https://inside.java/2025/06/12/ffm-vs-unsafe/))
 - Align with vortex-rust and vortex-go semantics
 - Make the JIT happy: constant layouts, predictable strides, no virtual dispatch in hot loops
-- Rigorous testing: unit + property-based + cross-language integration
+- Rigorous testing: unit + property-based + cross-language integration — see [testing strategy](testing.md)
 - Tracking [JEP 469](https://openjdk.org/jeps/469) (Vector API) for future SIMD paths

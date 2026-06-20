@@ -249,4 +249,3 @@ Generated proto records live in `io.github.dfa1.vortex.proto`; the runtime (`Pro
   when the test does file I/O or JNI.
 - `@Nested` groups related scenarios (`@BeforeEach` in a nested class applies only to it). Private
   helpers go after all `@Test` methods.
-- Acceptance tests run the built jar end-to-end via hosh scripts.
