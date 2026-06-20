@@ -79,6 +79,8 @@
 						<configuration>
 							<targetClasses>
 								<param>io.github.dfa1.vortex.writer.ChunkImpl</param>
+								<param>io.github.dfa1.vortex.writer.WriteRegistry</param>
+								<param>io.github.dfa1.vortex.writer.WriteRegistry$Builder</param>
 							</targetClasses>
 						</configuration>
 					</plugin>
