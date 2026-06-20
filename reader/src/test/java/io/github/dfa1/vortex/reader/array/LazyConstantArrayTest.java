@@ -128,7 +128,7 @@ class LazyConstantArrayTest {
         void fold_signedAndUnsignedWidening() {
             // signed short value is negative; unsigned is 0xFF00
             assertThat(new LazyConstantShortArray(new DType.Primitive(PType.I16, false), 2, RAW)
-                    .fold(0L, Long::sum)).isEqualTo(2L * (short) RAW);
+                    .fold(0L, Long::sum)).isEqualTo(2L * RAW);
             assertThat(new LazyConstantShortArray(new DType.Primitive(PType.U16, false), 2, RAW)
                     .fold(0L, Long::sum)).isEqualTo(2L * 0xFF00);
         }
@@ -140,7 +140,7 @@ class LazyConstantArrayTest {
 
             // When / Then — falls back to signed widening
             assertThat(sut.getInt(0)).isEqualTo((int) RAW);
-            assertThat(sut.fold(0L, Long::sum)).isEqualTo(2L * (short) RAW);
+            assertThat(sut.fold(0L, Long::sum)).isEqualTo(2L * RAW);
         }
 
         @Test
@@ -175,7 +175,7 @@ class LazyConstantArrayTest {
         @Test
         void fold_signedAndUnsignedWidening() {
             assertThat(new LazyConstantByteArray(new DType.Primitive(PType.I8, false), 2, RAW)
-                    .fold(0L, Long::sum)).isEqualTo(2L * (byte) RAW);
+                    .fold(0L, Long::sum)).isEqualTo(2L * RAW);
             assertThat(new LazyConstantByteArray(new DType.Primitive(PType.U8, false), 2, RAW)
                     .fold(0L, Long::sum)).isEqualTo(2L * 0xF0);
         }
@@ -187,7 +187,7 @@ class LazyConstantArrayTest {
 
             // When / Then — falls back to signed widening
             assertThat(sut.getInt(0)).isEqualTo((int) RAW);
-            assertThat(sut.fold(0L, Long::sum)).isEqualTo(2L * (byte) RAW);
+            assertThat(sut.fold(0L, Long::sum)).isEqualTo(2L * RAW);
         }
 
         @Test

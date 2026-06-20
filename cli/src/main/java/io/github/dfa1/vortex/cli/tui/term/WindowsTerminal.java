@@ -38,6 +38,7 @@ public final class WindowsTerminal implements Terminal {
     private static final int FILE_TYPE_PIPE = 0x0003;
 
     private static final Linker LINKER = Linker.nativeLinker();
+    @SuppressWarnings("restricted") // FFM native binding: kernel32 lookup is this class's purpose
     private static final SymbolLookup KERNEL32 = SymbolLookup.libraryLookup(
             "kernel32", Arena.global());
 
@@ -258,6 +259,7 @@ public final class WindowsTerminal implements Terminal {
         return (MemorySegment) mh.invokeExact(stdHandle);
     }
 
+    @SuppressWarnings("restricted") // FFM native binding: kernel32 downcalls are this class's purpose
     private static MethodHandle downcall(String name, FunctionDescriptor desc) {
         return LINKER.downcallHandle(
                 KERNEL32.find(name).orElseThrow(() -> new UnsatisfiedLinkError(name)),

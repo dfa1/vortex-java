@@ -42,6 +42,7 @@ public final class PosixTerminal implements Terminal {
             FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
     private static final MethodHandle CFMAKERAW = downcall("cfmakeraw",
             FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+    @SuppressWarnings("restricted") // FFM native binding: the ioctl downcall is this class's purpose
     private static final MethodHandle IOCTL = LINKER.downcallHandle(
             LIBC.find("ioctl").orElseThrow(() -> new UnsatisfiedLinkError("ioctl")),
             FunctionDescriptor.of(ValueLayout.JAVA_INT,
@@ -163,6 +164,7 @@ public final class PosixTerminal implements Terminal {
         }
     }
 
+    @SuppressWarnings("restricted") // FFM native binding: libc downcalls are this class's purpose
     private static MethodHandle downcall(String name, FunctionDescriptor desc) {
         return LINKER.downcallHandle(
                 LIBC.find(name).orElseThrow(() -> new UnsatisfiedLinkError(name)),

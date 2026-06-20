@@ -180,6 +180,7 @@ public final class JdbcImporter {
         };
     }
 
+    @SuppressWarnings("unchecked") // buffer's element type is fixed by dtype at allocation; the cast is checked by construction
     private static boolean fillCell(Object buffer, int rowIdx, ResultSet rs, int colIdx, DType dtype)
             throws SQLException {
         if (dtype instanceof DType.Primitive p) {

@@ -15,6 +15,8 @@ import java.util.Optional;
 /// for recovery logic.
 public final class VortexException extends RuntimeException {
 
+    private static final long serialVersionUID = 1L;
+
     /// The encoding that raised this exception, or `null` if not attributed to a specific encoding.
     private final EncodingId encodingId;
 
