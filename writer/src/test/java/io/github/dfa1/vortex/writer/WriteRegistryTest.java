@@ -6,6 +6,8 @@ import io.github.dfa1.vortex.extension.ExtensionId;
 import io.github.dfa1.vortex.writer.encode.EncodingEncoder;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
@@ -124,5 +126,34 @@ class WriteRegistryTest {
 
         // Then
         assertThat(sut.encoderMap()).isNotEmpty();
+    }
+
+    @Test
+    void build_ordersEncodersByEncodingNameRegardlessOfRegistrationSequence() {
+        // Given — three encoders registered out of name order ("vortex.bool" < "vortex.constant"
+        // < "vortex.primitive")
+        EncodingEncoder bool = encoder(EncodingId.VORTEX_BOOL);
+        EncodingEncoder primitive = encoder(EncodingId.VORTEX_PRIMITIVE);
+        EncodingEncoder constant = encoder(EncodingId.VORTEX_CONSTANT);
+
+        // When
+        WriteRegistry result = WriteRegistry.builder().register(primitive).register(bool).register(constant).build();
+
+        // Then — encoderMap iterates by encoding name no matter the registration sequence, so
+        // VortexWriter's first-match encoder selection is deterministic
+        assertThat(result.encoderMap().keySet())
+                .containsExactly(EncodingId.VORTEX_BOOL, EncodingId.VORTEX_CONSTANT, EncodingId.VORTEX_PRIMITIVE);
+    }
+
+    @Test
+    void loadAll_encoderOrderIsDeterministicallySortedByName() {
+        // Given — all service-loaded encoders
+        WriteRegistry registry = WriteRegistry.loadAll();
+
+        // When — the encoder names in iteration order
+        List<String> result = registry.encoderMap().keySet().stream().map(EncodingId::id).toList();
+
+        // Then — sorted by name, independent of ServiceLoader's unspecified iteration order
+        assertThat(result).isSorted();
     }
 }

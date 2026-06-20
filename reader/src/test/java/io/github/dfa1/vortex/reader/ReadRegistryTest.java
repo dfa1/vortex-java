@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.encoding.DTypes;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
+import io.github.dfa1.vortex.reader.decode.EncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.UnknownArrayNode;
 import org.junit.jupiter.api.Test;
 
@@ -16,6 +17,8 @@ import java.nio.ByteBuffer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 
 class ReadRegistryTest {
 
@@ -115,5 +118,26 @@ class ReadRegistryTest {
         assertThat(unknown.children()[0]).isInstanceOf(UnknownArray.class);
         assertThat(((UnknownArray) unknown.children()[0]).encodingId()).isEqualTo("vortex.primitive");
         assertThat(sut.isAllowUnknown()).isTrue();
+    }
+
+    @Test
+    void builder_retainsAllRegisteredDecoders() {
+        // Given — decoders registered out of natural id order (the registry sorts into a TreeMap)
+        EncodingDecoder bool = decoder(EncodingId.VORTEX_BOOL);
+        EncodingDecoder primitive = decoder(EncodingId.VORTEX_PRIMITIVE);
+
+        // When
+        ReadRegistry result = ReadRegistry.builder().register(bool).register(primitive).build();
+
+        // Then — every registered decoder is retained, regardless of registration order
+        assertThat(result.hasDecoder(EncodingId.VORTEX_PRIMITIVE)).isTrue();
+        assertThat(result.hasDecoder(EncodingId.VORTEX_BOOL)).isTrue();
+        assertThat(result.hasDecoder(EncodingId.VORTEX_CONSTANT)).isFalse();
+    }
+
+    private static EncodingDecoder decoder(EncodingId id) {
+        EncodingDecoder decoder = mock(EncodingDecoder.class);
+        given(decoder.encodingId()).willReturn(id);
+        return decoder;
     }
 }

@@ -35,7 +35,12 @@ public final class ChunkedEncodingEncoder implements EncodingEncoder {
 
     @Override
     public boolean accepts(DType dtype) {
-        return dtype instanceof DType.Primitive || dtype instanceof DType.Struct;
+        // Carrier-dispatched, not dtype-dispatched: encode() requires a ChunkedData wrapper, which
+        // the dtype-based write path never produces. Returning false keeps this encoder out of
+        // first-match selection (VortexWriter.findEncoder and the cascade), where it would
+        // otherwise be handed a raw primitive array and throw ClassCastException. It stays usable
+        // by explicit construction / keyed lookup for callers that already hold ChunkedData.
+        return false;
     }
 
     @Override
