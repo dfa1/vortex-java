@@ -156,6 +156,20 @@
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<configuration>
+					<!-- This module compiles against Apache Arrow, whose classes carry
+					     @org.immutables.value.Generated in their bytecode without exporting
+					     the annotation jar — javac's classfile lint then warns about a
+					     dependency we don't own. Drop only that category here; every other
+					     lint stays strict via the parent's -Werror. -->
+					<compilerArgs combine.self="override">
+						<arg>-Xlint:all,-classfile</arg>
+					</compilerArgs>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
 				<configuration>
 					<excludes>

@@ -103,6 +103,13 @@
 				<artifactId>maven-compiler-plugin</artifactId>
 				<configuration>
 					<release>25</release>
+					<!-- Benchmarks compile against Apache Arrow; its bytecode carries
+					     @org.immutables.value.Generated without the annotation jar, tripping
+					     javac's classfile lint on a dependency we don't own. Drop only that
+					     category; the parent's -Werror keeps every other lint strict. -->
+					<compilerArgs combine.self="override">
+						<arg>-Xlint:all,-classfile</arg>
+					</compilerArgs>
 					<annotationProcessorPaths>
 						<path>
 							<groupId>org.openjdk.jmh</groupId>

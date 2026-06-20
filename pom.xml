@@ -297,11 +297,7 @@
 						<showWarnings>true</showWarnings>
 						<failOnWarning>true</failOnWarning>
 						<compilerArgs>
-							<!-- All lint categories except classfile: that one only flags missing
-							     annotation class files inside third-party dependencies (e.g.
-							     org.immutables.value.Generated pulled in transitively), which we
-							     cannot fix and which says nothing about our own sources. -->
-							<arg>-Xlint:all,-classfile</arg>
+							<arg>-Xlint:all</arg>
 						</compilerArgs>
 					</configuration>
 				</plugin>
