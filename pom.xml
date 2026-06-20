@@ -72,7 +72,7 @@
 		<arrow.version>19.0.0</arrow.version>
 		<slf4j.version>2.0.18</slf4j.version>
 		<!-- coverage -->
-		<jacoco-maven-plugin.version>0.8.13</jacoco-maven-plugin.version>
+		<jacoco-maven-plugin.version>0.8.15</jacoco-maven-plugin.version>
 		<!-- byte-buddy-agent version must match what mockito-core pulls in transitively.
 		     Update this when bumping mockito.version (run: mvn dependency:tree -pl reader | grep byte-buddy-agent). -->
 		<bytebuddy.version>1.17.7</bytebuddy.version>
