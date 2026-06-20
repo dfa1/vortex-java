@@ -15,6 +15,7 @@ import io.github.dfa1.vortex.writer.encode.PcoEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.ByteBoolEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.ConstantEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.DateExtensionEncoder;
+import io.github.dfa1.vortex.writer.encode.DeltaEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.FsstEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.ListData;
 import io.github.dfa1.vortex.writer.encode.ListEncodingEncoder;
@@ -992,6 +993,66 @@ class JavaWritesRustReadsIntegrationTest {
         // Then
         int[] decoded = readIntColumn(file, "v");
         assertThat(decoded).containsExactly(data);
+    }
+
+    @Test
+    void javaWriter_rustReader_delta_i64(@TempDir Path tmp) throws IOException {
+        // Given — FastLanes delta: monotonic data with varied positive steps. The encoder pads to a
+        // 1024-element chunk and stores per-lane bases + deltas; Rust must trim back to n rows.
+        Path file = tmp.resolve("java_delta_i64.vtx");
+        long[] data = new long[50];
+        long acc = 1_000L;
+        for (int i = 0; i < data.length; i++) {
+            acc += 1 + (i % 7);
+            data[i] = acc;
+        }
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.defaults(),
+                     List.of(new DeltaEncodingEncoder()))) {
+            // When
+            sut.writeChunk(Map.of("ts", data));
+        }
+
+        // Then
+        long[] decoded = readLongColumn(file, "ts");
+        assertThat(decoded).containsExactly(data);
+    }
+
+    @Test
+    void javaWriter_rustReader_masked_nullableI64(@TempDir Path tmp) throws IOException {
+        // Given — nullable primitive I64 with interleaved nulls. The default write path wraps a
+        // nullable column as MaskedEncoding → PrimitiveEncoding (values + validity bool child).
+        // This is the direct Masked-over-primitive layout; nullable_date only covers Masked → Ext.
+        Path file = tmp.resolve("java_masked_i64.vtx");
+        DType.Struct schema = new DType.Struct(
+                List.of("v"),
+                List.of(new DType.Primitive(PType.I64, true)),
+                false);
+        Long[] data = {10L, null, 30L, null, 50L, 60L};
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            // When — boxed Long[] via the builder routes through the nullable → masked path
+            sut.writeChunk(c -> c.put("v", data));
+        }
+
+        // Then — Rust reads a nullable BigInt vector; null positions survive, values round-trip
+        String uri = file.toAbsolutePath().toUri().toString();
+        DataSource ds = DataSource.open(SESSION, uri);
+        Scan scan = ds.scan(ScanOptions.of());
+        var values = new ArrayList<Long>();
+        while (scan.hasNext()) {
+            Partition partition = scan.next();
+            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
+                while (reader.loadNextBatch()) {
+                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
+                    BigIntVector vec = (BigIntVector) root.getVector("v");
+                    for (int i = 0; i < root.getRowCount(); i++) {
+                        values.add(vec.isNull(i) ? null : vec.get(i));
+                    }
+                }
+            }
+        }
+        assertThat(values).containsExactly(10L, null, 30L, null, 50L, 60L);
     }
 
     @Test
