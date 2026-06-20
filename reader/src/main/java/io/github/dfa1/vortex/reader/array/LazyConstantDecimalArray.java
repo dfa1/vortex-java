@@ -9,6 +9,7 @@ import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.Objects;
 
 /// Metadata-only decimal array for `vortex.constant` columns.
 ///
@@ -27,9 +28,7 @@ public record LazyConstantDecimalArray(DType dtype, long length, BigDecimal valu
     /// @param i row index, `0 <= i < length`
     /// @return the constant [java.math.BigDecimal] value
     public BigDecimal getDecimal(long i) {
-        if (i < 0 || i >= length) {
-            throw new IndexOutOfBoundsException("index " + i + " out of bounds for length " + length);
-        }
+        Objects.checkIndex(i, length);
         return value;
     }
 

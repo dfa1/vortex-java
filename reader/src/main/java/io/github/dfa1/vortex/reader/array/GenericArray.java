@@ -9,6 +9,7 @@ import java.lang.foreign.ValueLayout;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteOrder;
+import java.util.Objects;
 import java.util.Optional;
 
 /// Fallback [Array] for dtypes that lack a dedicated concrete subtype.
@@ -109,9 +110,7 @@ public final class GenericArray implements Array {
     ///                                     shape isn't the single-buffer layout
     /// @throws IndexOutOfBoundsException if `i` is outside `[0, length())`
     public BigDecimal getDecimal(long i) {
-        if (i < 0 || i >= length) {
-            throw new IndexOutOfBoundsException("index " + i + " out of bounds for length " + length);
-        }
+        Objects.checkIndex(i, length);
         if (!(dtype instanceof DType.Decimal d)) {
             throw new VortexException("getDecimal called on non-decimal dtype: " + dtype);
         }

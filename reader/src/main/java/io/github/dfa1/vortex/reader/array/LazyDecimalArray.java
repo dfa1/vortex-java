@@ -9,6 +9,7 @@ import java.lang.foreign.ValueLayout;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteOrder;
+import java.util.Objects;
 import java.util.Optional;
 
 /// Lazy `vortex.decimal` array.
@@ -40,9 +41,7 @@ public record LazyDecimalArray(DType dtype, long length, MemorySegment buf, int 
     /// @throws VortexException             if the dtype isn't a [DType.Decimal]
     /// @throws IndexOutOfBoundsException if `i` is outside `[0, length())`
     public BigDecimal getDecimal(long i) {
-        if (i < 0 || i >= length) {
-            throw new IndexOutOfBoundsException("index " + i + " out of bounds for length " + length);
-        }
+        Objects.checkIndex(i, length);
         if (!(dtype instanceof DType.Decimal d)) {
             throw new VortexException("LazyDecimalArray: non-decimal dtype " + dtype);
         }

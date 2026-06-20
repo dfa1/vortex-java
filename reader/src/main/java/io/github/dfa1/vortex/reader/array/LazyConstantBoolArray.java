@@ -2,6 +2,8 @@ package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.DType;
 
+import java.util.Objects;
+
 /// Metadata-only [BoolArray] for `vortex.constant` columns.
 ///
 /// Holds a single boolean value broadcast across `length` logical rows. No
@@ -16,9 +18,7 @@ public record LazyConstantBoolArray(DType dtype, long length, boolean value) imp
 
     @Override
     public boolean getBoolean(long i) {
-        if (i < 0 || i >= length) {
-            throw new IndexOutOfBoundsException("index " + i + " out of bounds for length " + length);
-        }
+        Objects.checkIndex(i, length);
         return value;
     }
 
