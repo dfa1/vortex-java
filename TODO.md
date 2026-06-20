@@ -22,11 +22,11 @@ parser exception. Each entry below is either a known gap, a contract audit, or s
 
 ### Parser hardening
 
-- [ ] **Audit every `MemorySegment.asSlice` call site for bounds wrapping** —
-  `grep -rn 'asSlice' core/src/main reader/src/main`. Each call on untrusted offsets/lengths
-  must throw `VortexException` rather than the JDK's `IndexOutOfBoundsException`. Either wrap
-  per call site, or route through an `IoBounds.slice(seg, off, len)` helper and add a
-  Checkstyle rule rejecting raw `asSlice` in `io`/`scan`/`encoding` packages.
+- [ ] **Checkstyle rule rejecting raw `MemorySegment.asSlice` on untrusted offsets** —
+  the `IoBounds.slice(seg, off, len)` helper shipped (ADR-0003 Phase E) and the untrusted
+  file-structure + decode call sites already route through it. Remaining: add the Checkstyle
+  rule blocking raw `asSlice` in the reader file-structure / decode packages, then a final
+  `grep -rn 'asSlice' core/src/main reader/src/main` sweep to catch any site the migration missed.
 
 ### Per-encoding adversarial tests
 
@@ -85,7 +85,9 @@ Per-encoding gotchas:
 ## API
 
 - [ ] **Error messages — structural sanitization of `VortexException`** —
-  see [ADR-0003](docs/adr/0003-vortex-exception-sanitization.md) for design and phasing.
+  Phase E (bounds typing via `IoBounds`) shipped; remaining is Phases A–D (the `Sanitize`
+  helper + `VortexError` catalog). See [ADR-0003](docs/adr/0003-vortex-exception-sanitization.md)
+  for design and phasing.
 - [ ] Use domain primitives (`UInt32`, `UInt64`, etc.) as value classes via Project Valhalla instead of raw `long`/`int`
     - See [ADR-0008](docs/adr/0008-domain-primitives-unsigned-integers.md) and https://dfa1.github.io/articles/rethink-domain-primitives-with-valhalla
     - Candidates: `PType` integer kinds, buffer offsets, row indices, byte lengths
@@ -95,6 +97,12 @@ Per-encoding gotchas:
     - Fold nested slices (`slice` of an `Offset*` composes offsets — never stack `Offset(Offset(...))`)
     - Validate, fail fast (no silent clamp): consumer-facing `slice` throws `IllegalArgumentException` on `offset < 0 || length < 0 || offset + length > length()`; scan-internal `Offset*` construction fed by untrusted layout metadata throws `VortexException`
     - Add the matching compact-constructor bounds guard to all `Offset*` records (currently document `inner length >= offset + length` but enforce nothing — broadcast inner silently wraps via `i % cap`)
+
+## Compute
+
+- [ ] **Compute primitives — masks, kernels, no-materialise** — pushdown filter/compare/aggregate
+  kernels operating on Lazy arrays without materialising. See [ADR-0013](docs/adr/0013-compute-primitives.md)
+  (Proposed). Gate: a concrete downstream consumer (e.g. the vortex-arrow bridge or filter pushdown).
 
 ## Encodings
 

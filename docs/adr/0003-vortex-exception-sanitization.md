@@ -1,6 +1,6 @@
 # ADR 0003: `VortexException` contract — message sanitization and bounds typing
 
-- **Status:** Accepted — implementation pending (see Phases below)
+- **Status:** Accepted — Phase E (bounds typing via `IoBounds`) done; Phases A–D (message sanitization) pending
 - **Date:** 2026-06-13 (bounds-typing scope added 2026-06-20)
 - **Deciders:** project maintainer
 - **Related:** [ADR 0001 — Split read and write runtimes](0001-split-read-and-write-runtimes.md),

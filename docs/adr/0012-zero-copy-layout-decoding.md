@@ -1,6 +1,6 @@
 # ADR 0012: Zero-copy layout decoding — lazy Chunked and Dict arrays
 
-- **Status:** Implemented
+- **Status:** Completed
 - **Date:** 2026-06-14
 - **Implemented:** 2026-06-15 (PRs #38, #39, #42)
 - **Deciders:** project maintainer
