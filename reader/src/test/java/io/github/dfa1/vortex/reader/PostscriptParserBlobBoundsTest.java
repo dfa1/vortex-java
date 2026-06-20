@@ -1,0 +1,205 @@
+package io.github.dfa1.vortex.reader;
+
+import com.google.flatbuffers.FlatBufferBuilder;
+import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.fbs.ArraySpec;
+import io.github.dfa1.vortex.fbs.Footer;
+import io.github.dfa1.vortex.fbs.Layout;
+import io.github.dfa1.vortex.fbs.LayoutSpec;
+import io.github.dfa1.vortex.fbs.Postscript;
+import io.github.dfa1.vortex.fbs.PostscriptSegment;
+import io.github.dfa1.vortex.fbs.Primitive;
+import io.github.dfa1.vortex.fbs.Type;
+import org.junit.jupiter.api.Test;
+
+import java.lang.foreign.MemorySegment;
+import java.nio.ByteBuffer;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+/// Bounds coverage for `PostscriptParser.checkBlobBounds` — the guard that rejects a postscript
+/// whose footer / layout / dtype blob pointer escapes the mapped file, run before any blob is
+/// sliced or parsed. Drives [PostscriptParser#parse] directly with an in-memory
+/// [MemorySegment] (no file I/O): a valid file segment of `[layout | dtype | footer]`, then a
+/// postscript whose one blob pointer is moved out of range.
+///
+/// Two things must hold for every blob:
+/// - an out-of-range pointer throws a `VortexException` naming *that blob* — not the generic
+///   `IoBounds` slice message. Asserting the specific message is what proves the dedicated
+///   `checkBlobBounds` call still runs (delete it and the failure shifts to the later slice,
+///   with a different message).
+/// - the footer blob is laid out last so it ends exactly at EOF: its `length == fileSize -
+///   offset`, the largest legal range, which must still pass.
+class PostscriptParserBlobBoundsTest {
+
+    /// In-memory file: blobs concatenated as `[layout | dtype | footer]` with the footer last so
+    /// it ends at EOF (exercises the exact-fit upper bound). Offsets/lengths are recorded for the
+    /// postscript builder.
+    private record Fixture(MemorySegment segment, long fileSize,
+                           long footerOff, int footerLen,
+                           long dtypeOff, int dtypeLen,
+                           long layoutOff, int layoutLen) {
+    }
+
+    private static Fixture validFile() {
+        ByteBuffer layout = buildFlatLayout();
+        ByteBuffer dtype = buildI64Dtype();
+        ByteBuffer footer = buildFooter();
+        int layoutLen = layout.remaining();
+        int dtypeLen = dtype.remaining();
+        int footerLen = footer.remaining();
+
+        int layoutOff = 0;
+        int dtypeOff = layoutOff + layoutLen;
+        int footerOff = dtypeOff + dtypeLen;
+        int fileSize = footerOff + footerLen;
+
+        byte[] file = new byte[fileSize];
+        copyInto(file, layoutOff, layout);
+        copyInto(file, dtypeOff, dtype);
+        copyInto(file, footerOff, footer);
+
+        return new Fixture(MemorySegment.ofArray(file), fileSize,
+                footerOff, footerLen, dtypeOff, dtypeLen, layoutOff, layoutLen);
+    }
+
+    @Test
+    void parse_validInBoundsBlobs_succeeds() {
+        // Given — every blob pointer fits; footer ends exactly at EOF (length == fileSize - offset)
+        Fixture f = validFile();
+        ByteBuffer ps = buildPostscript(f.footerOff, f.footerLen, f.dtypeOff, f.dtypeLen,
+                f.layoutOff, f.layoutLen);
+
+        // When / Then — the largest legal footer range must not be rejected
+        assertThatCode(() -> PostscriptParser.parse(ps, f.segment, f.fileSize))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void parse_footerBlobPastEof_throwsNamingFooter() {
+        // Given — footer pointer one byte past EOF; everything else valid
+        Fixture f = validFile();
+        ByteBuffer ps = buildPostscript(f.fileSize + 1, f.footerLen, f.dtypeOff, f.dtypeLen,
+                f.layoutOff, f.layoutLen);
+
+        // When / Then — rejected by the footer-specific check, not the later slice
+        assertThatThrownBy(() -> PostscriptParser.parse(ps, f.segment, f.fileSize))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("footer blob out of bounds");
+    }
+
+    @Test
+    void parse_layoutBlobLengthOverrunsEof_throwsNamingLayout() {
+        // Given — layout length reaches one byte past EOF (offset valid, offset + length > fileSize)
+        Fixture f = validFile();
+        ByteBuffer ps = buildPostscript(f.footerOff, f.footerLen, f.dtypeOff, f.dtypeLen,
+                f.layoutOff, (int) (f.fileSize - f.layoutOff + 1));
+
+        // When / Then
+        assertThatThrownBy(() -> PostscriptParser.parse(ps, f.segment, f.fileSize))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("layout blob out of bounds");
+    }
+
+    @Test
+    void parse_footerBlobLengthOverrunsEof_throwsNamingFooter() {
+        // Given — footer length one byte past EOF. The footer sits at a non-zero offset (after
+        // layout + dtype), so `length > fileSize - offset` and `length > fileSize + offset` give
+        // different answers — this is what kills the `fileSize - offset` → `+` math mutant that a
+        // zero-offset overrun (the layout case) cannot distinguish.
+        Fixture f = validFile();
+        ByteBuffer ps = buildPostscript(f.footerOff, (int) (f.fileSize - f.footerOff + 1),
+                f.dtypeOff, f.dtypeLen, f.layoutOff, f.layoutLen);
+
+        // When / Then
+        assertThatThrownBy(() -> PostscriptParser.parse(ps, f.segment, f.fileSize))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("footer blob out of bounds");
+    }
+
+    @Test
+    void parse_dtypeBlobPastEof_throwsNamingDtype() {
+        // Given — dtype pointer past EOF with non-zero length, so the dtype check runs
+        Fixture f = validFile();
+        ByteBuffer ps = buildPostscript(f.footerOff, f.footerLen, f.fileSize + 1, f.dtypeLen,
+                f.layoutOff, f.layoutLen);
+
+        // When / Then
+        assertThatThrownBy(() -> PostscriptParser.parse(ps, f.segment, f.fileSize))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("dtype blob out of bounds");
+    }
+
+    @Test
+    void parse_dtypeBlobLengthZero_skipsDtypeCheckEvenWithBadOffset() {
+        // Given — dtype length 0 with a wildly out-of-range offset. The `length > 0` gate must
+        // skip both the bounds check and the slice, so a zero-length dtype never trips on its
+        // offset and the file still parses (dtype absent). Kills the `length > 0` boundary/negate
+        // mutants that would otherwise run the check on an empty dtype.
+        Fixture f = validFile();
+        ByteBuffer ps = buildPostscript(f.footerOff, f.footerLen, f.fileSize + 999, 0,
+                f.layoutOff, f.layoutLen);
+
+        // When
+        PostscriptParser.ParsedFile result = PostscriptParser.parse(ps, f.segment, f.fileSize);
+
+        // Then — parsed, with no dtype
+        assertThat(result.dtype()).isNull();
+    }
+
+    // ── FlatBuffer blob builders (minimal, just enough to parse) ────────────────
+
+    private static ByteBuffer buildFooter() {
+        var fbb = new FlatBufferBuilder(256);
+        int asv = Footer.createArraySpecsVector(fbb, new int[]{
+                ArraySpec.createArraySpec(fbb, fbb.createString("vortex.primitive"))});
+        int lsv = Footer.createLayoutSpecsVector(fbb, new int[]{
+                LayoutSpec.createLayoutSpec(fbb, fbb.createString(io.github.dfa1.vortex.reader.Layout.FLAT))});
+        // No segment_specs: validateSegmentSpecs has its own dedicated test; keep this fixture
+        // focused on the blob-pointer bounds.
+        Footer.startSegmentSpecsVector(fbb, 0);
+        int ssv = fbb.endVector();
+        int footOff = Footer.createFooter(fbb, asv, lsv, ssv, 0, 0);
+        fbb.finish(footOff);
+        return slice(fbb);
+    }
+
+    private static ByteBuffer buildI64Dtype() {
+        var fbb = new FlatBufferBuilder(64);
+        int prim = Primitive.createPrimitive(fbb, io.github.dfa1.vortex.fbs.PType.I64, false);
+        int off = io.github.dfa1.vortex.fbs.DType.createDType(fbb, Type.Primitive, prim);
+        io.github.dfa1.vortex.fbs.DType.finishDTypeBuffer(fbb, off);
+        return slice(fbb);
+    }
+
+    private static ByteBuffer buildFlatLayout() {
+        var fbb = new FlatBufferBuilder(128);
+        int segV = Layout.createSegmentsVector(fbb, new long[]{0});
+        int layoutOff = Layout.createLayout(fbb, 0, 1L, 0, 0, segV);
+        Layout.finishLayoutBuffer(fbb, layoutOff);
+        return slice(fbb);
+    }
+
+    private static ByteBuffer buildPostscript(
+            long footerOff, int footerLen, long dtypeOff, int dtypeLen, long layoutOff, int layoutLen) {
+        var fbb = new FlatBufferBuilder(128);
+        int footSeg = PostscriptSegment.createPostscriptSegment(fbb, footerOff, footerLen, 0, 0, 0);
+        int dtypeSeg = PostscriptSegment.createPostscriptSegment(fbb, dtypeOff, dtypeLen, 0, 0, 0);
+        int layoutSeg = PostscriptSegment.createPostscriptSegment(fbb, layoutOff, layoutLen, 0, 0, 0);
+        int psOff = Postscript.createPostscript(fbb, dtypeSeg, layoutSeg, 0, footSeg);
+        Postscript.finishPostscriptBuffer(fbb, psOff);
+        return slice(fbb);
+    }
+
+    private static ByteBuffer slice(FlatBufferBuilder fbb) {
+        ByteBuffer data = fbb.dataBuffer();
+        return data.slice(data.position(), data.remaining());
+    }
+
+    private static void copyInto(byte[] dst, int offset, ByteBuffer src) {
+        ByteBuffer dup = src.duplicate();
+        dup.get(dst, offset, dup.remaining());
+    }
+}
