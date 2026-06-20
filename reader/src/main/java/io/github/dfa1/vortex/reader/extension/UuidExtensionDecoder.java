@@ -91,12 +91,12 @@ public final class UuidExtensionDecoder implements ExtensionDecoder {
         int n = IoBounds.toIntSize(storage.length());
         List<UUID> out = new ArrayList<>(n);
         if (storage instanceof MaskedArray masked) {
-            for (long i = 0; i < n; i++) {
+            for (int i = 0; i < n; i++) {
                 out.add(masked.isValid(i) ? decode(masked.inner(), i) : null);
             }
             return out;
         }
-        for (long i = 0; i < n; i++) {
+        for (int i = 0; i < n; i++) {
             out.add(decode(storage, i));
         }
         return out;

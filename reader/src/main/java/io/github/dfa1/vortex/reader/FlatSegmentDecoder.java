@@ -56,7 +56,7 @@ public final class FlatSegmentDecoder {
         ByteBuffer fbBuf = bb.slice((int) fbStart, fbLen).order(ByteOrder.LITTLE_ENDIAN);
         var fbArray = io.github.dfa1.vortex.fbs.Array.getRootAsArray(fbBuf);
 
-        int numBuffers = fbArray.buffersLength();
+        int numBuffers = IoBounds.checkCount(fbArray.buffersLength());
         MemorySegment[] bufs = new MemorySegment[numBuffers];
         long dataOffset = 0;
         for (int i = 0; i < numBuffers; i++) {
