@@ -5,9 +5,8 @@ import io.github.dfa1.vortex.core.VortexFormat;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
 
+import static io.github.dfa1.vortex.encoding.PTypeIO.LE_SHORT;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -17,9 +16,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /// parse; one byte more overruns the body and must throw. Relaxing `>` to `>=` would reject the
 /// exact-fill case — this pins that edge.
 class TrailerLengthBoundaryTest {
-
-    private static final ValueLayout.OfShort LE_SHORT =
-            ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     /// Builds a well-formed 8-byte trailer (`version | postscriptLen | magic`) with the given
     /// postscript length, so only the length-vs-body check is under test.
