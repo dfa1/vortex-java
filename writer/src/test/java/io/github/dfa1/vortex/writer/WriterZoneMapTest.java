@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.StructArray;
+import io.github.dfa1.vortex.reader.array.VarBinArray;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -219,38 +220,38 @@ class WriterZoneMapTest {
     }
 
     @Test
-    void nonPrimitiveColumn_emitsNullCountOnlyZoneMap(@TempDir Path tmp) throws IOException {
-        // Given a nullable Utf8 column (no min/max stats yet) across two zones of two rows:
-        // zone 0 = ["a", null], zone 1 = [null, null]
+    void utf8Column_emitsStringMinMaxZoneMap(@TempDir Path tmp) throws IOException {
+        // Given a Utf8 column across two zones of two rows: zone 0 = ["apple", "banana"],
+        // zone 1 = ["cherry", "date"]. vortex.varbin records full string min/max per chunk, so
+        // the zone-map carries MAX+MIN+NULL_COUNT (string min/max), not null_count alone.
         DType.Struct schema = new DType.Struct(
-                List.of("s"), List.of(new DType.Utf8(true)), false);
+                List.of("s"), List.of(new DType.Utf8(false)), false);
         WriteOptions opts = new WriteOptions(2, true, 0.90, 0, false, false);
         Path file = tmp.resolve("utf8.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, opts)) {
-            sut.writeChunk(Map.of("s", new io.github.dfa1.vortex.writer.encode.NullableData(
-                    new String[]{"a", ""}, new boolean[]{true, false})));
-            sut.writeChunk(Map.of("s", new io.github.dfa1.vortex.writer.encode.NullableData(
-                    new String[]{"", ""}, new boolean[]{false, false})));
+            sut.writeChunk(Map.of("s", new String[]{"apple", "banana"}));
+            sut.writeChunk(Map.of("s", new String[]{"cherry", "date"}));
         }
 
-        // When the NULL_COUNT-only stats table is decoded
+        // When / Then the column is zoned with MAX+MIN+NULL_COUNT and string min/max decode per zone
         try (VortexReader reader = VortexReader.open(file)) {
             Layout column = reader.layout().children().get(0);
             assertThat(column.isZoned()).isTrue();
             ByteBuffer meta = column.metadata().duplicate().order(ByteOrder.LITTLE_ENDIAN);
-            assertThat(meta.get(meta.position() + 4)).isEqualTo((byte) 0x40); // NULL_COUNT only
+            assertThat(meta.get(meta.position() + 4)).isEqualTo((byte) 0x58); // MAX+MIN+NULL_COUNT
 
             Layout zonesFlat = column.children().get(1);
             SegmentSpec spec = reader.footer().segmentSpecs().get(zonesFlat.segments().getFirst());
-            DType.Struct statsDtype = new DType.Struct(
-                    List.of("null_count"), List.of(new DType.Primitive(PType.U64, true)), false);
             try (Arena arena = Arena.ofConfined()) {
-                // A single-field stats table decodes to the bare (masked) field, not a StructArray.
-                MaskedArray stats = (MaskedArray) reader.decodeFlatSegment(spec, statsDtype, 2, arena);
-                LongArray nullCount = (LongArray) stats.inner();
-                assertThat(nullCount.getLong(0)).isEqualTo(1);
-                assertThat(nullCount.getLong(1)).isEqualTo(2);
+                StructArray stats =
+                        (StructArray) reader.decodeFlatSegment(spec, utf8StatsTableDtype(), 2, arena);
+                VarBinArray max = (VarBinArray) ((MaskedArray) stats.field("max")).inner();
+                VarBinArray min = (VarBinArray) ((MaskedArray) stats.field("min")).inner();
+                assertThat(min.getString(0)).isEqualTo("apple");
+                assertThat(max.getString(0)).isEqualTo("banana");
+                assertThat(min.getString(1)).isEqualTo("cherry");
+                assertThat(max.getString(1)).isEqualTo("date");
             }
         }
     }
@@ -336,6 +337,16 @@ class WriterZoneMapTest {
         return new DType.Struct(
                 List.of("max", "max_is_truncated", "min", "min_is_truncated", "null_count"),
                 List.of(nullableI64, new DType.Bool(false), nullableI64, new DType.Bool(false),
+                        new DType.Primitive(PType.U64, true)),
+                false);
+    }
+
+    /// Same as [#statsTableDtype()] but with Utf8 (string) MAX/MIN columns.
+    private static DType.Struct utf8StatsTableDtype() {
+        DType nullableUtf8 = new DType.Utf8(true);
+        return new DType.Struct(
+                List.of("max", "max_is_truncated", "min", "min_is_truncated", "null_count"),
+                List.of(nullableUtf8, new DType.Bool(false), nullableUtf8, new DType.Bool(false),
                         new DType.Primitive(PType.U64, true)),
                 false);
     }
