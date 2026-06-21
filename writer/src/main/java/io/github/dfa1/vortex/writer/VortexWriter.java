@@ -691,38 +691,48 @@ public final class VortexWriter implements Closeable {
             if (chunks.isEmpty()) {
                 continue;
             }
-            DType colDtype = schema.fieldTypes().get(schema.fieldNames().indexOf(colName));
-            if (!(colDtype instanceof DType.Primitive prim)) {
-                continue;
-            }
-            if (!chunks.stream().allMatch(ChunkRef::hasStats)) {
-                continue;
-            }
             int nZones = chunks.size();
             boolean[] allValid = new boolean[nZones];
             java.util.Arrays.fill(allValid, true);
-            boolean[] notTruncated = new boolean[nZones];
-            DType nullablePrim = new DType.Primitive(prim.ptype(), true);
+
+            // NULL_COUNT is computable for every column type; MIN/MAX only for fixed-width
+            // primitives whose chunks all carry stats. Field/bit order follows
+            // ZonedStatsSchema: MAX(3), MIN(4), NULL_COUNT(6); each stat field is nullable.
+            DType colDtype = schema.fieldTypes().get(schema.fieldNames().indexOf(colName));
+            boolean hasMinMax = colDtype instanceof DType.Primitive
+                    && chunks.stream().allMatch(ChunkRef::hasStats);
+
+            List<String> names = new java.util.ArrayList<>();
+            List<DType> types = new java.util.ArrayList<>();
+            List<Object> fields = new java.util.ArrayList<>();
+            if (hasMinMax) {
+                PType ptype = ((DType.Primitive) colDtype).ptype();
+                DType nullablePrim = new DType.Primitive(ptype, true);
+                boolean[] notTruncated = new boolean[nZones];
+                names.add("max");
+                types.add(nullablePrim);
+                fields.add(new NullableData(statColumn(ptype, chunks, true), allValid.clone()));
+                names.add("max_is_truncated");
+                types.add(new DType.Bool(false));
+                fields.add(notTruncated);
+                names.add("min");
+                types.add(nullablePrim);
+                fields.add(new NullableData(statColumn(ptype, chunks, false), allValid.clone()));
+                names.add("min_is_truncated");
+                types.add(new DType.Bool(false));
+                fields.add(notTruncated.clone());
+            }
             long[] nullCounts = new long[nZones];
             for (int i = 0; i < nZones; i++) {
                 nullCounts[i] = chunks.get(i).nullCount();
             }
-            // Field order mirrors ZonedStatsSchema.statsTableDtype for present stats MAX(3), MIN(4),
-            // NULL_COUNT(6): [max, max_is_truncated, min, min_is_truncated, null_count]. Every stat
-            // field is nullable in the reconstructed dtype, so null_count is a nullable U64.
-            DType.Struct statsDtype = new DType.Struct(
-                    List.of("max", "max_is_truncated", "min", "min_is_truncated", "null_count"),
-                    List.of(nullablePrim, new DType.Bool(false), nullablePrim, new DType.Bool(false),
-                            new DType.Primitive(PType.U64, true)),
-                    false);
-            StructData sd = new StructData(List.of(
-                    new NullableData(statColumn(prim.ptype(), chunks, true), allValid),
-                    notTruncated,
-                    new NullableData(statColumn(prim.ptype(), chunks, false), allValid.clone()),
-                    notTruncated.clone(),
-                    new NullableData(nullCounts, allValid.clone())));
-            int zonesSegIdx = writeSegment(statsDtype, sd, new StructEncodingEncoder());
-            zoneMaps.put(colName, new ZoneMapRef(zonesSegIdx, nZones, options.chunkSize()));
+            names.add("null_count");
+            types.add(new DType.Primitive(PType.U64, true));
+            fields.add(new NullableData(nullCounts, allValid.clone()));
+
+            DType.Struct statsDtype = new DType.Struct(List.copyOf(names), List.copyOf(types), false);
+            int zonesSegIdx = writeSegment(statsDtype, new StructData(fields), new StructEncodingEncoder());
+            zoneMaps.put(colName, new ZoneMapRef(zonesSegIdx, nZones, options.chunkSize(), hasMinMax));
         }
     }
 
@@ -736,16 +746,21 @@ public final class VortexWriter implements Closeable {
         int zonesSegV = Layout.createSegmentsVector(fbb, new long[]{zm.zonesSegIdx()});
         int zonesFlat = Layout.createLayout(fbb, LAYOUT_FLAT, zm.nZones(), 0, 0, zonesSegV);
         int childV = Layout.createChildrenVector(fbb, new int[]{dataLayout, zonesFlat});
-        int metaV = Layout.createMetadataVector(fbb, zonedMetadataBytes(zm.zoneLen()));
+        int metaV = Layout.createMetadataVector(fbb, zonedMetadataBytes(zm.zoneLen(), zm.hasMinMax()));
         return Layout.createLayout(fbb, LAYOUT_ZONED, colRows, metaV, childV, 0);
     }
 
-    /// `vortex.stats` metadata: `u32` zone length (LE) + a 1-byte stat bitset with the MAX and
-    /// MIN bits set (LSB-first), matching [io.github.dfa1.vortex.inspect] `ZonedStatsSchema`.
-    private static byte[] zonedMetadataBytes(long zoneLen) {
+    /// `vortex.stats` metadata: `u32` zone length (LE) + a 1-byte stat bitset (LSB-first) with the
+    /// NULL_COUNT bit always set and the MAX/MIN bits set when present, matching
+    /// [io.github.dfa1.vortex.inspect] `ZonedStatsSchema`.
+    private static byte[] zonedMetadataBytes(long zoneLen, boolean hasMinMax) {
         byte[] meta = new byte[5];
         ByteBuffer.wrap(meta).order(ByteOrder.LITTLE_ENDIAN).putInt((int) zoneLen);
-        meta[4] = (byte) ((1 << STAT_MAX) | (1 << STAT_MIN) | (1 << STAT_NULL_COUNT));
+        int bits = 1 << STAT_NULL_COUNT;
+        if (hasMinMax) {
+            bits |= (1 << STAT_MAX) | (1 << STAT_MIN);
+        }
+        meta[4] = (byte) bits;
         return meta;
     }
 
@@ -1262,8 +1277,9 @@ public final class VortexWriter implements Closeable {
     }
 
     /// Per-column zone-map: the flat segment holding the per-zone stats table, the zone
-    /// count (one zone per chunk), and the logical rows per zone.
-    private record ZoneMapRef(int zonesSegIdx, long nZones, long zoneLen) {
+    /// count (one zone per chunk), the logical rows per zone, and whether the table carries
+    /// MIN/MAX (else NULL_COUNT only).
+    private record ZoneMapRef(int zonesSegIdx, long nZones, long zoneLen, boolean hasMinMax) {
     }
 
     private record DictColRef(int valuesSegIdx, long valuesLen, List<Integer> codesSegIdxes,

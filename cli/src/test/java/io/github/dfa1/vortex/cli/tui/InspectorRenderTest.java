@@ -184,16 +184,33 @@ class InspectorRenderTest {
         }
 
         @Test
-        void nonStructStatsArrayThrows() {
+        void multiFieldNonStructStatsArrayThrows() {
             try (Arena arena = Arena.ofConfined()) {
-                // Given — stats payload that is not a struct
-                DType.Struct statsDtype = new DType.Struct(List.of("min"), List.of(I64), false);
+                // Given — a multi-field stats schema but a non-struct payload
+                DType.Struct statsDtype = new DType.Struct(List.of("min", "max"), List.of(I64, I64), false);
                 Array notAStruct = ArrayFixtures.longs(arena, 1L);
 
                 // When / Then
                 assertThatThrownBy(() -> InspectorRender.formatStatsArray(notAStruct, statsDtype))
                         .isInstanceOf(IllegalStateException.class)
                         .hasMessageContaining("not a struct");
+            }
+        }
+
+        @Test
+        void singleFieldStatsArrayRendersBareField() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given — a single-field (NULL_COUNT-only) stats table decodes to the bare field,
+                // not a StructArray; the renderer must still render it
+                DType.Struct statsDtype = new DType.Struct(
+                        List.of("null_count"), List.of(new DType.Primitive(PType.U64, true)), false);
+                Array oneStat = ArrayFixtures.longs(arena, 0L, 2L);
+
+                // When
+                List<String> rows = InspectorRender.formatStatsArray(oneStat, statsDtype);
+
+                // Then one row per zone, each showing the stat
+                assertThat(rows).containsExactly("null_count=0", "null_count=2");
             }
         }
     }
