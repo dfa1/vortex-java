@@ -56,6 +56,24 @@ public final class VarBinEncodingEncoder implements EncodingEncoder {
 
         byte[] metaBytes = new VarBinMetadata(io.github.dfa1.vortex.proto.PType.fromValue(PType.I64.ordinal())).encode();
 
+        byte[][] stats = minMaxStats(strings);
+        byte[] statsMin = stats != null ? stats[0] : null;
+        byte[] statsMax = stats != null ? stats[1] : null;
+
+        EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
+        EncodeNode root = new EncodeNode(EncodingId.VORTEX_VARBIN, ByteBuffer.wrap(metaBytes),
+                new EncodeNode[]{offsetsNode}, new int[]{0});
+        return new EncodeResult(root, List.of(bytesBuf, offsetsBuf), statsMin, statsMax);
+    }
+
+    /// Computes the serialised min/max string [ScalarValue] pair for a string array, skipping
+    /// `null` entries (lexicographic by [String#compareTo]). Returns `null` when every entry is
+    /// `null`. Shared so the dictionary zone-map path computes per-chunk string min/max identically
+    /// to the flat path.
+    ///
+    /// @param strings the string values (may contain `null`)
+    /// @return a two-element `{min, max}` array of encoded scalars, or `null` if all entries are `null`
+    public static byte[][] minMaxStats(String[] strings) {
         String minStr = null;
         String maxStr = null;
         for (String s : strings) {
@@ -69,12 +87,9 @@ public final class VarBinEncodingEncoder implements EncodingEncoder {
                 maxStr = s;
             }
         }
-        byte[] statsMin = minStr != null ? ScalarValue.ofStringValue(minStr).encode() : null;
-        byte[] statsMax = maxStr != null ? ScalarValue.ofStringValue(maxStr).encode() : null;
-
-        EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
-        EncodeNode root = new EncodeNode(EncodingId.VORTEX_VARBIN, ByteBuffer.wrap(metaBytes),
-                new EncodeNode[]{offsetsNode}, new int[]{0});
-        return new EncodeResult(root, List.of(bytesBuf, offsetsBuf), statsMin, statsMax);
+        if (minStr == null) {
+            return null;
+        }
+        return new byte[][]{ScalarValue.ofStringValue(minStr).encode(), ScalarValue.ofStringValue(maxStr).encode()};
     }
 }

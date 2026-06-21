@@ -294,10 +294,11 @@ class WriterZoneMapTest {
     }
 
     @Test
-    void dictColumn_emitsNullCountZoneMapWrappingDict(@TempDir Path tmp) throws IOException {
+    void dictColumn_emitsStringMinMaxZoneMapWrappingDict(@TempDir Path tmp) throws IOException {
         // Given a low-cardinality Utf8 column across 2 chunks of 6 with heavy repeats (so the
-        // global-dict candidate test, distinct*2 < rows, fires) → vortex.dict; with zone maps the
-        // column is vortex.stats wrapping the dict, carrying NULL_COUNT only.
+        // global-dict candidate test, distinct*2 < rows, fires) → vortex.dict. Zone-map stats are
+        // computed on the logical Utf8 values, independent of the dict encoding: zone 0 = a..b,
+        // zone 1 = a..c → MAX+MIN+NULL_COUNT, with the column wrapped as vortex.stats over the dict.
         DType.Struct schema = new DType.Struct(
                 List.of("s"), List.of(new DType.Utf8(false)), false);
         WriteOptions opts = new WriteOptions(6, true, 0.90, 0, true, false);
@@ -308,13 +309,62 @@ class WriterZoneMapTest {
             sut.writeChunk(Map.of("s", new String[]{"c", "c", "c", "a", "a", "a"}));
         }
 
-        // When / Then — zoned over a dict data child, NULL_COUNT-only bitset
+        // When / Then — zoned over a dict data child, MAX+MIN+NULL_COUNT, string min/max per zone
         try (VortexReader reader = VortexReader.open(file)) {
             Layout column = reader.layout().children().get(0);
             assertThat(column.isZoned()).isTrue();
             assertThat(column.children().get(0).isDict()).isTrue();
             ByteBuffer meta = column.metadata().duplicate().order(ByteOrder.LITTLE_ENDIAN);
-            assertThat(meta.get(meta.position() + 4)).isEqualTo((byte) 0x40);
+            assertThat(meta.get(meta.position() + 4)).isEqualTo((byte) 0x58); // MAX+MIN+NULL_COUNT
+
+            Layout zonesFlat = column.children().get(1);
+            SegmentSpec spec = reader.footer().segmentSpecs().get(zonesFlat.segments().getFirst());
+            try (Arena arena = Arena.ofConfined()) {
+                StructArray stats =
+                        (StructArray) reader.decodeFlatSegment(spec, utf8StatsTableDtype(), 2, arena);
+                VarBinArray max = (VarBinArray) ((MaskedArray) stats.field("max")).inner();
+                VarBinArray min = (VarBinArray) ((MaskedArray) stats.field("min")).inner();
+                assertThat(min.getString(0)).isEqualTo("a");
+                assertThat(max.getString(0)).isEqualTo("b");
+                assertThat(min.getString(1)).isEqualTo("a");
+                assertThat(max.getString(1)).isEqualTo("c");
+            }
+        }
+    }
+
+    @Test
+    void primitiveDictColumn_emitsNumericMinMaxZoneMapWrappingDict(@TempDir Path tmp) throws IOException {
+        // Given a low-cardinality I64 column across 2 chunks of 6 with heavy repeats → vortex.dict.
+        // Zone-map min/max are computed on the logical I64 values: zone 0 = 1..2, zone 1 = 1..3.
+        DType.Struct schema = new DType.Struct(
+                List.of("v"), List.of(new DType.Primitive(PType.I64, false)), false);
+        WriteOptions opts = new WriteOptions(6, true, 0.90, 0, true, false);
+        Path file = tmp.resolve("primdict.vtx");
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, opts)) {
+            sut.writeChunk(Map.of("v", new long[]{1, 1, 1, 2, 2, 2}));
+            sut.writeChunk(Map.of("v", new long[]{3, 3, 3, 1, 1, 1}));
+        }
+
+        // When / Then — zoned over a dict child with MAX+MIN+NULL_COUNT, numeric min/max per zone
+        try (VortexReader reader = VortexReader.open(file)) {
+            Layout column = reader.layout().children().get(0);
+            assertThat(column.isZoned()).isTrue();
+            assertThat(column.children().get(0).isDict()).isTrue();
+            ByteBuffer meta = column.metadata().duplicate().order(ByteOrder.LITTLE_ENDIAN);
+            assertThat(meta.get(meta.position() + 4)).isEqualTo((byte) 0x58);
+
+            Layout zonesFlat = column.children().get(1);
+            SegmentSpec spec = reader.footer().segmentSpecs().get(zonesFlat.segments().getFirst());
+            try (Arena arena = Arena.ofConfined()) {
+                StructArray stats = (StructArray) reader.decodeFlatSegment(spec, statsTableDtype(), 2, arena);
+                LongArray max = (LongArray) ((MaskedArray) stats.field("max")).inner();
+                LongArray min = (LongArray) ((MaskedArray) stats.field("min")).inner();
+                assertThat(min.getLong(0)).isEqualTo(1);
+                assertThat(max.getLong(0)).isEqualTo(2);
+                assertThat(min.getLong(1)).isEqualTo(1);
+                assertThat(max.getLong(1)).isEqualTo(3);
+            }
         }
     }
 
