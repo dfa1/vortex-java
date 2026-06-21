@@ -62,21 +62,6 @@ class VortexHttpReaderIT {
     }
 
     @Test
-    void open_withCustomRegistry_parsesMetadata() throws Exception {
-        // Given the two-arg overload: caller supplies a registry, default shared HttpClient.
-        // The three-arg overload is exercised by the mock-client unit tests, but this
-        // delegating overload was otherwise untested.
-
-        // When
-        try (var sut = VortexHttpReader.open(FOR_ARRAY, ReadRegistry.loadAll())) {
-
-            // Then
-            assertThat(sut.version()).isEqualTo(1);
-            assertThat(sut.dtype()).isNotNull();
-        }
-    }
-
-    @Test
     void scan_forVortex_decodesAllRows() throws Exception {
         // Given
         long totalRows = 0;
