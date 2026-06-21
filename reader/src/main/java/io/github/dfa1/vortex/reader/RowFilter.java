@@ -6,7 +6,8 @@ import java.util.List;
 /// chunks where no row can satisfy the filter are skipped entirely.
 public sealed interface RowFilter
         permits RowFilter.And, RowFilter.Eq, RowFilter.Neq,
-                        RowFilter.Gt, RowFilter.Gte, RowFilter.Lt, RowFilter.Lte {
+                        RowFilter.Gt, RowFilter.Gte, RowFilter.Lt, RowFilter.Lte,
+                        RowFilter.IsNull, RowFilter.IsNotNull {
 
     static RowFilter and(RowFilter... filters) {
         return new And(List.of(filters));
@@ -36,6 +37,14 @@ public sealed interface RowFilter
         return new Lte(col, val);
     }
 
+    static RowFilter isNull(String col) {
+        return new IsNull(col);
+    }
+
+    static RowFilter isNotNull(String col) {
+        return new IsNotNull(col);
+    }
+
     default RowFilter and(RowFilter other) {
         return new And(List.of(this, other));
     }
@@ -59,5 +68,11 @@ public sealed interface RowFilter
     }
 
     record Lte(String column, Comparable<?> value) implements RowFilter {
+    }
+
+    record IsNull(String column) implements RowFilter {
+    }
+
+    record IsNotNull(String column) implements RowFilter {
     }
 }

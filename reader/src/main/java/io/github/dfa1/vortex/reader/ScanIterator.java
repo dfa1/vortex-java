@@ -775,6 +775,24 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                     yield false;
                 }
             }
+            case RowFilter.IsNull(var col) -> {
+                Layout flat = chunk.layoutFor(col);
+                if (flat == null) {
+                    yield false;
+                }
+                // Zero nulls in the chunk → no row is null → nothing can match IS NULL.
+                Long nullCount = readFlatStats(flat).nullCount();
+                yield nullCount != null && nullCount == 0;
+            }
+            case RowFilter.IsNotNull(var col) -> {
+                Layout flat = chunk.layoutFor(col);
+                if (flat == null) {
+                    yield false;
+                }
+                // Every row is null → no row is non-null → nothing can match IS NOT NULL.
+                Long nullCount = readFlatStats(flat).nullCount();
+                yield nullCount != null && nullCount == flat.rowCount();
+            }
         };
     }
 
