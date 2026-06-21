@@ -78,4 +78,20 @@ class NullCountPruningTest {
         // Given / When / Then all three chunks survive
         assertThat(scanRowCounts(write(), null)).containsExactly(3L, 2L, 4L);
     }
+
+    @Test
+    void columnStats_sumsNullCountAcrossChunks() throws IOException {
+        // Given chunks carry 0, 1 and 4 nulls; every chunk records a null count so the
+        // column total is known (0 + 1 + 4 = 5) rather than dropped to unknown
+        Path file = write();
+
+        // When
+        Long result;
+        try (VortexReader reader = VortexReader.open(file)) {
+            result = reader.columnStats().get("v").nullCount();
+        }
+
+        // Then
+        assertThat(result).isEqualTo(5L);
+    }
 }

@@ -181,6 +181,10 @@ public final class VortexReader implements VortexHandle {
     private ArrayStats aggregateStats(List<Layout> flats) {
         Object globalMin = null;
         Object globalMax = null;
+        // Sum is meaningful only when every chunk carries a null count; one missing makes the
+        // column total unknown (null), so don't report a partial sum.
+        long totalNullCount = 0L;
+        boolean allHaveNullCount = !flats.isEmpty();
         for (Layout flat : flats) {
             ArrayStats s = readFlatStats(flat);
             if (s.min() != null) {
@@ -189,11 +193,17 @@ public final class VortexReader implements VortexHandle {
             if (s.max() != null) {
                 globalMax = globalMax == null ? s.max() : maxOf(globalMax, s.max());
             }
+            if (s.nullCount() != null) {
+                totalNullCount += s.nullCount();
+            } else {
+                allHaveNullCount = false;
+            }
         }
-        if (globalMin == null && globalMax == null) {
+        Long nullCount = allHaveNullCount ? totalNullCount : null;
+        if (globalMin == null && globalMax == null && nullCount == null) {
             return ArrayStats.empty();
         }
-        return new ArrayStats(globalMin, globalMax, null, null, null, null);
+        return new ArrayStats(globalMin, globalMax, null, nullCount, null, null);
     }
 
     private ArrayStats readFlatStats(Layout flat) {
