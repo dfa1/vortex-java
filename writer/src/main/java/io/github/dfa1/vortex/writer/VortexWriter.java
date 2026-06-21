@@ -81,9 +81,10 @@ public final class VortexWriter implements Closeable {
     private static final int LAYOUT_DICT = 3;
     private static final int LAYOUT_ZONED = 4;
 
-    // Stat ordinals in the Rust `Stat` enum (see ZonedStatsSchema). v1 emits MAX + MIN only.
+    // Stat ordinals in the Rust `Stat` enum (see ZonedStatsSchema). Emitted: MAX, MIN, NULL_COUNT.
     private static final int STAT_MAX = 3;
     private static final int STAT_MIN = 4;
+    private static final int STAT_NULL_COUNT = 6;
 
     // Columns with global cardinality below this threshold are dict-encoded across all chunks.
     // Kept low: global dict hurts high-cardinality F64 columns (ALP codes beat U16 dict codes).
@@ -121,6 +122,8 @@ public final class VortexWriter implements Closeable {
     // Stats (ScalarValue bytes) of the most recently written segment, captured for ChunkRef.
     private byte[] lastStatsMin;
     private byte[] lastStatsMax;
+    // Null count of the most recently written segment's input data (0 for dense arrays).
+    private long lastNullCount;
 
     private VortexWriter(
             WritableByteChannel channel, DType.Struct schema, WriteOptions options, List<EncodingEncoder> encodings
@@ -466,7 +469,7 @@ public final class VortexWriter implements Closeable {
             } else {
                 long rowCount = arrayLength(data);
                 int segIdx = writeSegment(colDtype, data);
-                colChunks.get(colName).add(new ChunkRef(segIdx, rowCount, lastStatsMin, lastStatsMax));
+                colChunks.get(colName).add(new ChunkRef(segIdx, rowCount, lastStatsMin, lastStatsMax, lastNullCount));
             }
         }
         firstChunkSeen = true;
@@ -568,6 +571,7 @@ public final class VortexWriter implements Closeable {
             segs.add(new SegRef(offset, bytesWritten - offset));
             lastStatsMin = result.statsMin();
             lastStatsMax = result.statsMax();
+            lastNullCount = data instanceof NullableData nd ? countNulls(nd.validity()) : 0L;
             return segIdx;
         }
     }
@@ -699,17 +703,24 @@ public final class VortexWriter implements Closeable {
             java.util.Arrays.fill(allValid, true);
             boolean[] notTruncated = new boolean[nZones];
             DType nullablePrim = new DType.Primitive(prim.ptype(), true);
-            // Field order mirrors ZonedStatsSchema.statsTableDtype for present stats MAX(3), MIN(4):
-            // [max, max_is_truncated, min, min_is_truncated].
+            long[] nullCounts = new long[nZones];
+            for (int i = 0; i < nZones; i++) {
+                nullCounts[i] = chunks.get(i).nullCount();
+            }
+            // Field order mirrors ZonedStatsSchema.statsTableDtype for present stats MAX(3), MIN(4),
+            // NULL_COUNT(6): [max, max_is_truncated, min, min_is_truncated, null_count]. Every stat
+            // field is nullable in the reconstructed dtype, so null_count is a nullable U64.
             DType.Struct statsDtype = new DType.Struct(
-                    List.of("max", "max_is_truncated", "min", "min_is_truncated"),
-                    List.of(nullablePrim, new DType.Bool(false), nullablePrim, new DType.Bool(false)),
+                    List.of("max", "max_is_truncated", "min", "min_is_truncated", "null_count"),
+                    List.of(nullablePrim, new DType.Bool(false), nullablePrim, new DType.Bool(false),
+                            new DType.Primitive(PType.U64, true)),
                     false);
             StructData sd = new StructData(List.of(
                     new NullableData(statColumn(prim.ptype(), chunks, true), allValid),
                     notTruncated,
                     new NullableData(statColumn(prim.ptype(), chunks, false), allValid.clone()),
-                    notTruncated.clone()));
+                    notTruncated.clone(),
+                    new NullableData(nullCounts, allValid.clone())));
             int zonesSegIdx = writeSegment(statsDtype, sd, new StructEncodingEncoder());
             zoneMaps.put(colName, new ZoneMapRef(zonesSegIdx, nZones, options.chunkSize()));
         }
@@ -734,8 +745,18 @@ public final class VortexWriter implements Closeable {
     private static byte[] zonedMetadataBytes(long zoneLen) {
         byte[] meta = new byte[5];
         ByteBuffer.wrap(meta).order(ByteOrder.LITTLE_ENDIAN).putInt((int) zoneLen);
-        meta[4] = (byte) ((1 << STAT_MAX) | (1 << STAT_MIN));
+        meta[4] = (byte) ((1 << STAT_MAX) | (1 << STAT_MIN) | (1 << STAT_NULL_COUNT));
         return meta;
+    }
+
+    private static long countNulls(boolean[] validity) {
+        long nulls = 0;
+        for (boolean valid : validity) {
+            if (!valid) {
+                nulls++;
+            }
+        }
+        return nulls;
     }
 
     private static boolean isZoneMappable(PType ptype) {
@@ -989,7 +1010,7 @@ public final class VortexWriter implements Closeable {
             for (Object chunk : chunks) {
                 long rowCount = arrayLength(chunk);
                 int segIdx = writeSegment(dtype, chunk);
-                colChunks.get(colName).add(new ChunkRef(segIdx, rowCount, lastStatsMin, lastStatsMax));
+                colChunks.get(colName).add(new ChunkRef(segIdx, rowCount, lastStatsMin, lastStatsMax, lastNullCount));
             }
             return;
         }
@@ -1033,7 +1054,7 @@ public final class VortexWriter implements Closeable {
             for (Object chunk : chunks) {
                 long rowCount = arrayLength(chunk);
                 int segIdx = writeSegment(dtype, chunk);
-                colChunks.get(colName).add(new ChunkRef(segIdx, rowCount, lastStatsMin, lastStatsMax));
+                colChunks.get(colName).add(new ChunkRef(segIdx, rowCount, lastStatsMin, lastStatsMax, lastNullCount));
             }
             return;
         }
@@ -1248,7 +1269,7 @@ public final class VortexWriter implements Closeable {
     private record SegRef(long offset, long len) {
     }
 
-    private record ChunkRef(int segIdx, long rowCount, byte[] statsMin, byte[] statsMax) {
+    private record ChunkRef(int segIdx, long rowCount, byte[] statsMin, byte[] statsMax, long nullCount) {
         boolean hasStats() {
             return statsMin != null && statsMax != null;
         }
