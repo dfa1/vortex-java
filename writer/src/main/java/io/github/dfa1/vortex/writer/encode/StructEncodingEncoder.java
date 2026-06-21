@@ -49,7 +49,15 @@ public final class StructEncodingEncoder implements EncodingEncoder {
         EncodeNode[] children = new EncodeNode[fields.size()];
         for (int i = 0; i < fields.size(); i++) {
             DType fieldDtype = fieldTypes.get(i);
-            EncodeResult fieldResult = findEncoding(fieldDtype).encode(fieldDtype, fields.get(i), ctx);
+            Object fieldData = fields.get(i);
+            // Nullable fields carry a NullableData(values, validity) pair; route them through the
+            // masked encoder (values + validity bitmap), mirroring VortexWriter.writeSegment. The
+            // plain fallbacks only handle dense arrays.
+            EncodingEncoder fieldEncoder =
+                    (fieldData instanceof NullableData && !(fieldDtype instanceof DType.Extension))
+                            ? new MaskedEncodingEncoder()
+                            : findEncoding(fieldDtype);
+            EncodeResult fieldResult = fieldEncoder.encode(fieldDtype, fieldData, ctx);
             int bufOffset = allBuffers.size();
             children[i] = EncodeNode.remapBufferIndices(fieldResult.rootNode(), bufOffset);
             allBuffers.addAll(fieldResult.buffers());
