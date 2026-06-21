@@ -63,7 +63,7 @@ class WriterZoneMapTest {
             assertThat(column.children()).hasSize(2);
             ByteBuffer meta = column.metadata().duplicate().order(ByteOrder.LITTLE_ENDIAN);
             assertThat(meta.getInt(meta.position())).isEqualTo(4);           // zone_len
-            assertThat(meta.get(meta.position() + 4)).isEqualTo((byte) 0x58); // bits 3(MAX)+4(MIN)+6(NULL_COUNT)
+            assertThat(meta.get(meta.position() + 4)).isEqualTo((byte) 0x78); // bits 3(MAX)+4(MIN)+5(SUM)+6(NULL_COUNT)
         }
     }
 
@@ -103,12 +103,13 @@ class WriterZoneMapTest {
             Layout zonesFlat = reader.layout().children().get(0).children().get(1);
             SegmentSpec spec = reader.footer().segmentSpecs().get(zonesFlat.segments().getFirst());
             try (Arena arena = Arena.ofConfined()) {
-                StructArray stats = (StructArray) reader.decodeFlatSegment(spec, statsTableDtype(), 3, arena);
+                StructArray stats = (StructArray) reader.decodeFlatSegment(spec, numericStatsTableDtype(), 3, arena);
                 LongArray max = (LongArray) ((MaskedArray) stats.field("max")).inner();
                 LongArray min = (LongArray) ((MaskedArray) stats.field("min")).inner();
+                LongArray sum = (LongArray) ((MaskedArray) stats.field("sum")).inner();
                 LongArray nullCount = (LongArray) ((MaskedArray) stats.field("null_count")).inner();
 
-                // Then min/max per zone match the source data; the column is non-nullable so
+                // Then min/max/sum per zone match the source data; the column is non-nullable so
                 // every zone reports zero nulls
                 assertThat(min.getLong(0)).isZero();
                 assertThat(max.getLong(0)).isEqualTo(3);
@@ -116,6 +117,9 @@ class WriterZoneMapTest {
                 assertThat(max.getLong(1)).isEqualTo(7);
                 assertThat(min.getLong(2)).isEqualTo(8);
                 assertThat(max.getLong(2)).isEqualTo(11);
+                assertThat(sum.getLong(0)).isEqualTo(0 + 1 + 2 + 3);
+                assertThat(sum.getLong(1)).isEqualTo(4 + 5 + 6 + 7);
+                assertThat(sum.getLong(2)).isEqualTo(8 + 9 + 10 + 11);
                 assertThat(nullCount.getLong(0)).isZero();
                 assertThat(nullCount.getLong(1)).isZero();
                 assertThat(nullCount.getLong(2)).isZero();
@@ -144,12 +148,16 @@ class WriterZoneMapTest {
             Layout zonesFlat = reader.layout().children().get(0).children().get(1);
             SegmentSpec spec = reader.footer().segmentSpecs().get(zonesFlat.segments().getFirst());
             try (Arena arena = Arena.ofConfined()) {
-                StructArray stats = (StructArray) reader.decodeFlatSegment(spec, statsTableDtype(), 2, arena);
+                StructArray stats = (StructArray) reader.decodeFlatSegment(spec, numericStatsTableDtype(), 2, arena);
                 LongArray nullCount = (LongArray) ((MaskedArray) stats.field("null_count")).inner();
+                LongArray sum = (LongArray) ((MaskedArray) stats.field("sum")).inner();
 
-                // Then each zone's null count is recorded (1 and 2)
+                // Then each zone's null count is recorded (1 and 2). Sum skips nulls (zero
+                // placeholders are sum-neutral): zone 0 = 10, zone 1 = 0
                 assertThat(nullCount.getLong(0)).isEqualTo(1);
                 assertThat(nullCount.getLong(1)).isEqualTo(2);
+                assertThat(sum.getLong(0)).isEqualTo(10);
+                assertThat(sum.getLong(1)).isZero();
             }
         }
     }
@@ -199,7 +207,8 @@ class WriterZoneMapTest {
     @Test
     void chunkWithoutStats_emitsNullCountOnlyZoneMap(@TempDir Path tmp) throws IOException {
         // Given a column with one normal chunk and one empty chunk (no min/max stats): MIN/MAX is
-        // dropped, but NULL_COUNT is still emitted — the zone-map carries the NULL_COUNT bit only.
+        // dropped (it requires every chunk to carry stats), but NULL_COUNT and SUM are still emitted
+        // — SUM is independent (the empty zone's sum is simply null).
         DType.Struct schema = new DType.Struct(
                 List.of("v"), List.of(new DType.Primitive(PType.I64, false)), false);
         WriteOptions opts = new WriteOptions(2, true, 0.90, 0, false, false);
@@ -210,12 +219,12 @@ class WriterZoneMapTest {
             sut.writeChunk(Map.of("v", new long[]{}));
         }
 
-        // When / Then — zoned with the NULL_COUNT-only bitset (bit 6 = 0x40)
+        // When / Then — zoned with the SUM+NULL_COUNT bitset (bits 5+6 = 0x60), no MIN/MAX
         try (VortexReader reader = VortexReader.open(file)) {
             Layout column = reader.layout().children().get(0);
             assertThat(column.isZoned()).isTrue();
             ByteBuffer meta = column.metadata().duplicate().order(ByteOrder.LITTLE_ENDIAN);
-            assertThat(meta.get(meta.position() + 4)).isEqualTo((byte) 0x40);
+            assertThat(meta.get(meta.position() + 4)).isEqualTo((byte) 0x60);
         }
     }
 
@@ -352,18 +361,21 @@ class WriterZoneMapTest {
             assertThat(column.isZoned()).isTrue();
             assertThat(column.children().get(0).isDict()).isTrue();
             ByteBuffer meta = column.metadata().duplicate().order(ByteOrder.LITTLE_ENDIAN);
-            assertThat(meta.get(meta.position() + 4)).isEqualTo((byte) 0x58);
+            assertThat(meta.get(meta.position() + 4)).isEqualTo((byte) 0x78);
 
             Layout zonesFlat = column.children().get(1);
             SegmentSpec spec = reader.footer().segmentSpecs().get(zonesFlat.segments().getFirst());
             try (Arena arena = Arena.ofConfined()) {
-                StructArray stats = (StructArray) reader.decodeFlatSegment(spec, statsTableDtype(), 2, arena);
+                StructArray stats = (StructArray) reader.decodeFlatSegment(spec, numericStatsTableDtype(), 2, arena);
                 LongArray max = (LongArray) ((MaskedArray) stats.field("max")).inner();
                 LongArray min = (LongArray) ((MaskedArray) stats.field("min")).inner();
+                LongArray sum = (LongArray) ((MaskedArray) stats.field("sum")).inner();
                 assertThat(min.getLong(0)).isEqualTo(1);
                 assertThat(max.getLong(0)).isEqualTo(2);
                 assertThat(min.getLong(1)).isEqualTo(1);
                 assertThat(max.getLong(1)).isEqualTo(3);
+                assertThat(sum.getLong(0)).isEqualTo(1 + 1 + 1 + 2 + 2 + 2);
+                assertThat(sum.getLong(1)).isEqualTo(3 + 3 + 3 + 1 + 1 + 1);
             }
         }
     }
@@ -381,13 +393,24 @@ class WriterZoneMapTest {
         };
     }
 
-    /// Reconstructs the stats-table dtype the writer emits: MAX, MIN, NULL_COUNT for an I64 column.
+    /// Stats-table dtype for a column with MAX, MIN, NULL_COUNT but no SUM (e.g. an extension
+    /// column over I64 storage — Rust does not sum date/extension columns).
     private static DType.Struct statsTableDtype() {
         DType nullableI64 = new DType.Primitive(PType.I64, true);
         return new DType.Struct(
                 List.of("max", "max_is_truncated", "min", "min_is_truncated", "null_count"),
                 List.of(nullableI64, new DType.Bool(false), nullableI64, new DType.Bool(false),
                         new DType.Primitive(PType.U64, true)),
+                false);
+    }
+
+    /// Stats-table dtype for a numeric I64 column: MAX, MIN, SUM (nullable I64), NULL_COUNT.
+    private static DType.Struct numericStatsTableDtype() {
+        DType nullableI64 = new DType.Primitive(PType.I64, true);
+        return new DType.Struct(
+                List.of("max", "max_is_truncated", "min", "min_is_truncated", "sum", "null_count"),
+                List.of(nullableI64, new DType.Bool(false), nullableI64, new DType.Bool(false),
+                        nullableI64, new DType.Primitive(PType.U64, true)),
                 false);
     }
 

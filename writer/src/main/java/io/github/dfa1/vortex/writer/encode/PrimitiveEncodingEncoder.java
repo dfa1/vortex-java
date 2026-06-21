@@ -290,6 +290,151 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
         };
     }
 
+    /// Computes the serialised SUM [io.github.dfa1.vortex.proto.ScalarValue] for a raw primitive
+    /// array, in the widened shape Rust uses for zone-map sums: signed ints → `i64`, unsigned ints
+    /// → `u64`, floats → `f64`. Returns `null` on integer overflow (Rust drops the zone's sum) and
+    /// for an empty array. Floats never overflow to `null` (they saturate to infinity).
+    ///
+    /// Nulls need not be excluded by the caller: validity placeholders are zero, which is
+    /// sum-neutral — matching the per-segment min/max convention.
+    ///
+    /// @param ptype the primitive type of `data`
+    /// @param data  the raw primitive array
+    /// @return the encoded sum scalar, or `null` on overflow or empty input
+    public static byte[] sumStat(PType ptype, Object data) {
+        return switch (ptype) {
+            case I8 -> {
+                byte[] a = (byte[]) data;
+                if (a.length == 0) {
+                    yield null;
+                }
+                long s = 0;
+                for (byte v : a) {
+                    s += v;
+                }
+                yield scalarI64(s);
+            }
+            case I16 -> {
+                short[] a = (short[]) data;
+                if (a.length == 0) {
+                    yield null;
+                }
+                long s = 0;
+                for (short v : a) {
+                    s += v;
+                }
+                yield scalarI64(s);
+            }
+            case I32 -> {
+                int[] a = (int[]) data;
+                if (a.length == 0) {
+                    yield null;
+                }
+                long s = 0;
+                for (int v : a) {
+                    s += v;
+                }
+                yield scalarI64(s);
+            }
+            case I64 -> {
+                long[] a = (long[]) data;
+                if (a.length == 0) {
+                    yield null;
+                }
+                long s = 0;
+                for (long v : a) {
+                    try {
+                        s = Math.addExact(s, v);
+                    } catch (ArithmeticException overflow) {
+                        yield null;
+                    }
+                }
+                yield scalarI64(s);
+            }
+            case U8 -> {
+                byte[] a = (byte[]) data;
+                if (a.length == 0) {
+                    yield null;
+                }
+                long s = 0;
+                for (byte v : a) {
+                    s += Byte.toUnsignedLong(v);
+                }
+                yield scalarU64(s);
+            }
+            case U16 -> {
+                short[] a = (short[]) data;
+                if (a.length == 0) {
+                    yield null;
+                }
+                long s = 0;
+                for (short v : a) {
+                    s += Short.toUnsignedLong(v);
+                }
+                yield scalarU64(s);
+            }
+            case U32 -> {
+                int[] a = (int[]) data;
+                if (a.length == 0) {
+                    yield null;
+                }
+                long s = 0;
+                for (int v : a) {
+                    s += Integer.toUnsignedLong(v);
+                }
+                yield scalarU64(s);
+            }
+            case U64 -> {
+                long[] a = (long[]) data;
+                if (a.length == 0) {
+                    yield null;
+                }
+                long s = 0;
+                for (long v : a) {
+                    long next = s + v;
+                    if (Long.compareUnsigned(next, s) < 0) {
+                        yield null;
+                    }
+                    s = next;
+                }
+                yield scalarU64(s);
+            }
+            case F32 -> {
+                float[] a = (float[]) data;
+                if (a.length == 0) {
+                    yield null;
+                }
+                double s = 0;
+                for (float v : a) {
+                    s += v;
+                }
+                yield scalarF64(s);
+            }
+            case F64 -> {
+                double[] a = (double[]) data;
+                if (a.length == 0) {
+                    yield null;
+                }
+                double s = 0;
+                for (double v : a) {
+                    s += v;
+                }
+                yield scalarF64(s);
+            }
+            case F16 -> {
+                short[] a = (short[]) data;
+                if (a.length == 0) {
+                    yield null;
+                }
+                double s = 0;
+                for (short v : a) {
+                    s += Float.float16ToFloat(v);
+                }
+                yield scalarF64(s);
+            }
+        };
+    }
+
     private static byte[] scalarI64(long v) {
         return ScalarValue.ofInt64Value(v).encode();
     }
