@@ -5,6 +5,25 @@ All notable changes to **vortex-java** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.2] — 2026-06-21
+
+A maintenance and test-hardening release: no new file-format capability. The lowest-covered encoder/decoder paths are filled in — the ten lowest-coverage encode/decode classes plus Delta/AlpRd property-and-mutation sweeps — SonarCloud new-code coverage is back to 100% with the quality gate green (overall ~83%, all ratings A, zero bugs/vulnerabilities), and the build toolchain is refreshed across eight dependency bumps.
+
+### Changed
+
+- Reader: the shared default `HttpClient` behind `VortexHttpReader.open(URI, ReadRegistry)` is now a package-private non-final field used purely as a unit-test seam, so the default-client overload is driven to a normal return by a mocked client instead of a live network call. Production never reassigns it. ([12e46270](https://github.com/dfa1/vortex-java/commit/12e46270))
+
+### Tests
+
+- Coverage for the ten lowest-coverage encode/decode classes — `ZigZagEncodingDecoder`/`Encoder`, `SequenceEncodingEncoder`, `VariantEncodingDecoder.dtypeFromProto` (every proto→core `DType` arm), `TimeExtensionEncoder`, `VarBinViewEncodingDecoder`, `VarBinEncodingDecoder`, `AlpEncodingDecoder`, `DateTimePartsEncodingDecoder`, and `DeltaEncodingDecoder` — exercising guards, broadcast/constant paths, and ptype arms. ([a3012d4a](https://github.com/dfa1/vortex-java/commit/a3012d4a), [c9386eda](https://github.com/dfa1/vortex-java/commit/c9386eda), [6c9682b8](https://github.com/dfa1/vortex-java/commit/6c9682b8), [bbb9d669](https://github.com/dfa1/vortex-java/commit/bbb9d669), [7742ecd3](https://github.com/dfa1/vortex-java/commit/7742ecd3))
+- Writer: property-based and mutation-driven round-trips for the Delta and AlpRd encoders. ([d3d245a6](https://github.com/dfa1/vortex-java/commit/d3d245a6))
+- Reader: HTTP fixtures bumped to `v0.75.0` with a smoke test across all encodings; the `open(URI, ReadRegistry)` overload is now covered via the default-client seam. ([8a1b5db2](https://github.com/dfa1/vortex-java/commit/8a1b5db2), [12e46270](https://github.com/dfa1/vortex-java/commit/12e46270))
+- Reader: decoder tests allocate via `Arena.ofAuto()` instead of the never-freed `Arena.global()`. ([59ec2e2a](https://github.com/dfa1/vortex-java/commit/59ec2e2a))
+
+### Build
+
+- Dependency refresh: `jacoco-maven-plugin` 0.8.13→0.8.15, `pitest-maven` 1.20.0→1.25.5, `checkstyle` 13.5.0→13.6.0, `byte-buddy-agent` 1.17.7→1.18.10, `central-publishing-maven-plugin` 0.10.0→0.11.0, `maven-jar-plugin` 3.4.1→3.5.0, `maven-dependency-plugin` 3.7.0→3.11.0, and `actions/checkout` 6→7. ([dab876b7](https://github.com/dfa1/vortex-java/commit/dab876b7), [7b7c3580](https://github.com/dfa1/vortex-java/commit/7b7c3580), [46659a73](https://github.com/dfa1/vortex-java/commit/46659a73), [46a30be1](https://github.com/dfa1/vortex-java/commit/46a30be1), [c6723832](https://github.com/dfa1/vortex-java/commit/c6723832), [3e5fa349](https://github.com/dfa1/vortex-java/commit/3e5fa349), [c943f81b](https://github.com/dfa1/vortex-java/commit/c943f81b), [af009116](https://github.com/dfa1/vortex-java/commit/af009116))
+
 ## [0.8.1] — 2026-06-20
 
 A hardening release: no new file-format capability, but a large step up in verification rigour. Mutation testing (PIT) now guards the security-critical bounds/parse paths in core, reader, and writer at 99–100% kill rate; the build fails on any javac warning (`-Xlint:all -Werror`); and property-based round-trips exercise every lossless encoding plus the full cascade-selection pipeline against seeded-random inputs. The one functional addition is boxed-nullable array input on the map `writeChunk` path.
@@ -76,6 +95,7 @@ Read and write Vortex Variant (semi-structured, JSON-shaped) columns from Java. 
 
 - Test coverage raised from ~74% to 80% — the lazy/chunked/dict/run-end/sparse array families, `ChunkImpl`, and several decoders (`DecimalEncodingDecoder`, `DictEncodingDecoder`, `ParquetImporter`) reached full line + branch coverage. SonarCloud quality gate green: reliability, security, and maintainability all at **A**, zero bugs and vulnerabilities.
 
+[0.8.2]: https://github.com/dfa1/vortex-java/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/dfa1/vortex-java/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/dfa1/vortex-java/compare/v0.7.3...v0.8.0
 
