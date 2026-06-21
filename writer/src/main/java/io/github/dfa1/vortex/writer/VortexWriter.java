@@ -734,6 +734,26 @@ public final class VortexWriter implements Closeable {
             int zonesSegIdx = writeSegment(statsDtype, new StructData(fields), new StructEncodingEncoder());
             zoneMaps.put(colName, new ZoneMapRef(zonesSegIdx, nZones, options.chunkSize(), hasMinMax));
         }
+        // Dict-encoded columns live in a separate path (one zone per code chunk); they carry
+        // NULL_COUNT only for now (no dict-level MIN/MAX yet). Matches Rust, which zone-maps dict
+        // columns (vortex.stats wrapping vortex.dict).
+        for (Map.Entry<String, DictColRef> e : dictColRefs.entrySet()) {
+            // A dict column always has at least one code chunk, so null counts are non-empty.
+            long[] nullCounts = e.getValue().chunkNullCounts().stream().mapToLong(Long::longValue).toArray();
+            writeNullCountZoneMap(e.getKey(), nullCounts);
+        }
+    }
+
+    /// Emits a NULL_COUNT-only `vortex.stats` zone-map (one zone per chunk) for `colName`.
+    private void writeNullCountZoneMap(String colName, long[] nullCounts) throws IOException {
+        int nZones = nullCounts.length;
+        boolean[] allValid = new boolean[nZones];
+        java.util.Arrays.fill(allValid, true);
+        DType.Struct statsDtype = new DType.Struct(
+                List.of("null_count"), List.of(new DType.Primitive(PType.U64, true)), false);
+        StructData sd = new StructData(List.of(new NullableData(nullCounts, allValid)));
+        int zonesSegIdx = writeSegment(statsDtype, sd, new StructEncodingEncoder());
+        zoneMaps.put(colName, new ZoneMapRef(zonesSegIdx, nZones, options.chunkSize(), false));
     }
 
     /// Wraps a column's data layout in a `vortex.stats` (zoned) layout when a zone-map was
@@ -895,7 +915,8 @@ public final class VortexWriter implements Closeable {
             String colName = schema.fieldNames().get(c);
             DictColRef ref = dictColRefs.get(colName);
             if (ref != null) {
-                colLayouts[c] = buildDictColLayout(fbb, ref);
+                int dictLayout = buildDictColLayout(fbb, ref);
+                colLayouts[c] = wrapZoneMap(fbb, colName, dictLayout, ref.totalRows());
                 if (totalRows == 0) {
                     totalRows = ref.totalRows();
                 }
@@ -1029,14 +1050,17 @@ public final class VortexWriter implements Closeable {
         DType codesDtype = new DType.Primitive(codePType, false);
         List<Integer> codesSegIdxes = new ArrayList<>();
         List<Long> chunkRowCounts = new ArrayList<>();
+        List<Long> chunkNullCounts = new ArrayList<>();
         for (Object chunk : chunks) {
             int len = primitiveArrayLen(chunk, ptype);
             Object codesArr = buildCodesArray(chunk, ptype, valueMap, codePType, len);
             codesSegIdxes.add(writeSegment(codesDtype, codesArr));
             chunkRowCounts.add((long) len);
+            chunkNullCounts.add(chunk instanceof NullableData nd ? countNulls(nd.validity()) : 0L);
         }
 
-        dictColRefs.put(colName, new DictColRef(valuesSegIdx, dictSize, codesSegIdxes, chunkRowCounts));
+        dictColRefs.put(colName,
+                new DictColRef(valuesSegIdx, dictSize, codesSegIdxes, chunkRowCounts, chunkNullCounts));
     }
 
     private void writeGlobalDictUtf8Column(String colName, DType.Utf8 dtype, List<Object> chunks)
@@ -1072,13 +1096,16 @@ public final class VortexWriter implements Closeable {
         DType codesDtype = new DType.Primitive(codePType, false);
         List<Integer> codesSegIdxes = new ArrayList<>();
         List<Long> chunkRowCounts = new ArrayList<>();
+        List<Long> chunkNullCounts = new ArrayList<>();
         for (Object chunk : chunks) {
             String[] strs = (String[]) chunk;
             Object codesArr = buildUtf8CodesArray(strs, valueMap, codePType);
             codesSegIdxes.add(writeSegment(codesDtype, codesArr));
             chunkRowCounts.add((long) strs.length);
+            chunkNullCounts.add(0L); // global-dict Utf8 columns are dense (non-nullable)
         }
-        dictColRefs.put(colName, new DictColRef(valuesSegIdx, dictSize, codesSegIdxes, chunkRowCounts));
+        dictColRefs.put(colName,
+                new DictColRef(valuesSegIdx, dictSize, codesSegIdxes, chunkRowCounts, chunkNullCounts));
     }
 
     private static Object buildUtf8CodesArray(String[] strs, Map<String, Integer> valueMap, PType codePType) {
@@ -1283,7 +1310,7 @@ public final class VortexWriter implements Closeable {
     }
 
     private record DictColRef(int valuesSegIdx, long valuesLen, List<Integer> codesSegIdxes,
-            List<Long> chunkRowCounts) {
+            List<Long> chunkRowCounts, List<Long> chunkNullCounts) {
         long totalRows() {
             return chunkRowCounts.stream().mapToLong(Long::longValue).sum();
         }
