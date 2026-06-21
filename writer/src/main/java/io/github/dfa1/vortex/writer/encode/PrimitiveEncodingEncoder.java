@@ -32,7 +32,7 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
         MemorySegment seg = encodePrimitive(ptype, data, ctx.arena());
         byte[] min = null;
         byte[] max = null;
-        byte[][] stats = computeStats(ptype, data);
+        byte[][] stats = minMaxStats(ptype, data);
         if (stats != null) {
             min = stats[0];
             max = stats[1];
@@ -86,7 +86,15 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
         };
     }
 
-    private static byte[][] computeStats(PType ptype, Object data) {
+    /// Computes the serialised min/max [io.github.dfa1.vortex.proto.ScalarValue] pair for a raw
+    /// primitive array, in the same signed/unsigned/float shape the per-segment stats use. Returns
+    /// `null` for an empty array. Shared so the dictionary zone-map path computes per-chunk min/max
+    /// identically to the flat path.
+    ///
+    /// @param ptype the primitive type of `data`
+    /// @param data  the raw primitive array (e.g. `long[]`, `int[]`, `String`-free)
+    /// @return a two-element `{min, max}` array of encoded scalars, or `null` if `data` is empty
+    public static byte[][] minMaxStats(PType ptype, Object data) {
         return switch (ptype) {
             case I8 -> {
                 byte[] arr = (byte[]) data;
