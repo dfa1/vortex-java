@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.csv.CsvExporter;
@@ -158,6 +159,8 @@ final class FilterCommand {
                     (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, (Comparable<?>) val) == 0;
             case RowFilter.Neq(var col, var val) ->
                     (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, (Comparable<?>) val) != 0;
+            case RowFilter.IsNull(var col) -> (chunk, rowIdx) -> isRowNull(chunk.column(col), rowIdx);
+            case RowFilter.IsNotNull(var col) -> (chunk, rowIdx) -> !isRowNull(chunk.column(col), rowIdx);
             case RowFilter.And(var filters) -> {
                 RowPredicate[] preds = filters.stream().map(FilterCommand::toRowPredicate).toArray(RowPredicate[]::new);
                 yield (chunk, rowIdx) -> {
@@ -170,6 +173,11 @@ final class FilterCommand {
                 };
             }
         };
+    }
+
+    // Only a masked column carries nulls; an unmasked array is null-free, so every row is non-null.
+    private static boolean isRowNull(Array arr, long rowIdx) {
+        return arr instanceof MaskedArray masked && !masked.isValid(rowIdx);
     }
 
     private static int compareValue(Array arr, long rowIdx, Comparable<?> value) {
