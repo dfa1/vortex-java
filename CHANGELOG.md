@@ -7,7 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.8.2] — 2026-06-21
 
-A maintenance and test-hardening release: no new file-format capability. The lowest-covered encoder/decoder paths are filled in — the ten lowest-coverage encode/decode classes plus Delta/AlpRd property-and-mutation sweeps — SonarCloud new-code coverage is back to 100% with the quality gate green (overall ~83%, all ratings A, zero bugs/vulnerabilities), and the build toolchain is refreshed across eight dependency bumps.
+The headline is **writer-side zone-map statistics**: the writer now emits `vortex.stats` (zoned) layouts carrying per-chunk MIN/MAX, NULL_COUNT, and SUM — matching the Rust reference — so zone-map chunk pruning and aggregate push-down work on Java-written files (previously the reader could decode these stats but the writer never produced them). The release also continues the test-hardening track: the lowest-covered encoder/decoder paths are filled in, SonarCloud new-code coverage is back to 100% with the quality gate green (overall ~83%, all ratings A, zero bugs/vulnerabilities), and the build toolchain is refreshed across eight dependency bumps.
+
+### Added
+
+- Writer: `vortex.stats` (zoned) layout emission, toggled by `WriteOptions.enableZoneMaps`. Each column is wrapped with a per-zone (one zone per chunk) statistics table; the stat set follows the Rust reference exactly. ([838dba82](https://github.com/dfa1/vortex-java/commit/838dba82), [f2d74351](https://github.com/dfa1/vortex-java/commit/f2d74351))
+- Writer: per-zone **MIN/MAX** for primitive columns including F16, extension columns (over their storage primitive), Utf8 columns (full string bounds), and dictionary-encoded columns (computed on the logical values, independent of the dict encoding). ([838dba82](https://github.com/dfa1/vortex-java/commit/838dba82), [fb5d096a](https://github.com/dfa1/vortex-java/commit/fb5d096a), [38ab5c51](https://github.com/dfa1/vortex-java/commit/38ab5c51), [c1198253](https://github.com/dfa1/vortex-java/commit/c1198253), [e51da936](https://github.com/dfa1/vortex-java/commit/e51da936))
+- Writer: per-zone **NULL_COUNT** for every column type. ([135c9b37](https://github.com/dfa1/vortex-java/commit/135c9b37), [c52d4b83](https://github.com/dfa1/vortex-java/commit/c52d4b83), [ab233b86](https://github.com/dfa1/vortex-java/commit/ab233b86))
+- Writer: per-zone **SUM** for numeric primitive columns (signed → `i64`, unsigned → `u64`, float → `f64`; integer overflow records a null sum). Matches Rust, which sums numeric primitives and decimals but not Utf8/extension columns. ([9661f554](https://github.com/dfa1/vortex-java/commit/9661f554))
+- Reader: `RowFilter.isNull` / `RowFilter.isNotNull` predicates with zone-map chunk pruning — IS NULL skips chunks with zero nulls, IS NOT NULL skips all-null chunks — via the per-chunk `null_count`. ([2749b6ca](https://github.com/dfa1/vortex-java/commit/2749b6ca))
+- Reader: `columnStats()` aggregates `null_count` across a column's chunks (reported only when every chunk carries one). ([cb844f23](https://github.com/dfa1/vortex-java/commit/cb844f23))
 
 ### Changed
 
