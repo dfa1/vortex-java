@@ -1,8 +1,11 @@
 package io.github.dfa1.vortex.writer.encode;
 
+import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.encoding.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
@@ -90,8 +93,85 @@ class ZigZagEncodingEncoderTest {
         }
     }
 
+    @Test
+    void encodingId_isVortexZigzag() {
+        // Given / When / Then
+        assertThat(ENCODER.encodingId()).isEqualTo(EncodingId.VORTEX_ZIGZAG);
+    }
+
+    @Test
+    void accepts_signedIntegers_true() {
+        // Given / When / Then
+        assertThat(ENCODER.accepts(DTypes.I8)).isTrue();
+        assertThat(ENCODER.accepts(DTypes.I16)).isTrue();
+        assertThat(ENCODER.accepts(DTypes.I32)).isTrue();
+        assertThat(ENCODER.accepts(DTypes.I64)).isTrue();
+    }
+
+    @Test
+    void accepts_unsignedOrNonPrimitive_false() {
+        // Given / When / Then
+        assertThat(ENCODER.accepts(DTypes.U32)).isFalse();
+        assertThat(ENCODER.accepts(DTypes.F64)).isFalse();
+        assertThat(ENCODER.accepts(new DType.Utf8(false))).isFalse();
+    }
+
     @Nested
     class Encode {
+
+        static Stream<byte[]> i8RoundtripArrays() {
+            return Stream.of(
+                    new byte[]{},
+                    new byte[]{0},
+                    new byte[]{-1, 1, -2, 2},
+                    new byte[]{Byte.MIN_VALUE, Byte.MAX_VALUE, 0}
+            );
+        }
+
+        static Stream<short[]> i16RoundtripArrays() {
+            return Stream.of(
+                    new short[]{},
+                    new short[]{0},
+                    new short[]{Short.MIN_VALUE, Short.MAX_VALUE, 0},
+                    new short[]{-100, 100, -1000, 1000}
+            );
+        }
+
+        @ParameterizedTest
+        @MethodSource("i8RoundtripArrays")
+        void encodeDecode_i8_isLossless(byte[] data) {
+            // Given
+            EncodeResult resultEncoded = ENCODER.encode(DTypes.I8, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(resultEncoded, data.length, DTypes.I8, REGISTRY);
+
+            // When
+            Array result = DECODER.decode(ctx);
+
+            // Then
+            assertThat(result.length()).isEqualTo(data.length);
+            ByteArray arr = (ByteArray) result;
+            for (int i = 0; i < data.length; i++) {
+                assertThat(arr.getByte(i)).as("index %d", i).isEqualTo(data[i]);
+            }
+        }
+
+        @ParameterizedTest
+        @MethodSource("i16RoundtripArrays")
+        void encodeDecode_i16_isLossless(short[] data) {
+            // Given
+            EncodeResult resultEncoded = ENCODER.encode(DTypes.I16, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(resultEncoded, data.length, DTypes.I16, REGISTRY);
+
+            // When
+            Array result = DECODER.decode(ctx);
+
+            // Then
+            assertThat(result.length()).isEqualTo(data.length);
+            ShortArray arr = (ShortArray) result;
+            for (int i = 0; i < data.length; i++) {
+                assertThat(arr.getShort(i)).as("index %d", i).isEqualTo(data[i]);
+            }
+        }
 
         static Stream<int[]> i32RoundtripArrays() {
             return Stream.of(
