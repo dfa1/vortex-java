@@ -2,8 +2,9 @@ package io.github.dfa1.vortex.reader;
 
 import java.util.List;
 
-/// Predicate tree for zone-map pruning. Evaluated against per-chunk min/max statistics;
-/// chunks where no row can satisfy the filter are skipped entirely.
+/// Predicate tree for zone-map pruning. Evaluated against per-chunk statistics — min/max for
+/// comparisons, null count for [#isNull(String)] / [#isNotNull(String)]; chunks where no row
+/// can satisfy the filter are skipped entirely.
 public sealed interface RowFilter
         permits RowFilter.And, RowFilter.Eq, RowFilter.Neq,
                         RowFilter.Gt, RowFilter.Gte, RowFilter.Lt, RowFilter.Lte,
