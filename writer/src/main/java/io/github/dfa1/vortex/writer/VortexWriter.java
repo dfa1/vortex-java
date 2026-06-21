@@ -692,7 +692,7 @@ public final class VortexWriter implements Closeable {
                 continue;
             }
             DType colDtype = schema.fieldTypes().get(schema.fieldNames().indexOf(colName));
-            if (!(colDtype instanceof DType.Primitive prim) || !isZoneMappable(prim.ptype())) {
+            if (!(colDtype instanceof DType.Primitive prim)) {
                 continue;
             }
             if (!chunks.stream().allMatch(ChunkRef::hasStats)) {
@@ -759,16 +759,9 @@ public final class VortexWriter implements Closeable {
         return nulls;
     }
 
-    private static boolean isZoneMappable(PType ptype) {
-        return switch (ptype) {
-            case I8, I16, I32, I64, U8, U16, U32, U64, F32, F64 -> true;
-            case F16 -> false;
-        };
-    }
-
     /// Builds the per-zone min (or max) values array in the storage shape the primitive encoder
     /// expects, decoding each chunk's serialised [ScalarValue] stat.
-    private static Object statColumn(PType ptype, List<ChunkRef> chunks, boolean max) {
+    private static Object statColumn(PType ptype, List<ChunkRef> chunks, boolean max) throws IOException {
         int n = chunks.size();
         return switch (ptype) {
             case I8, U8 -> {
@@ -813,39 +806,32 @@ public final class VortexWriter implements Closeable {
                 }
                 yield a;
             }
-            case F16 -> throw new IllegalStateException("F16 is not zone-mappable");
+            case F16 -> {
+                // F16 min/max are serialised as f32 scalars; re-pack to float16 storage.
+                short[] a = new short[n];
+                for (int i = 0; i < n; i++) {
+                    a[i] = Float.floatToFloat16((float) scalarDouble(chunks.get(i), max));
+                }
+                yield a;
+            }
         };
     }
 
-    private static long scalarLong(ChunkRef cr, boolean max) {
+    private static long scalarLong(ChunkRef cr, boolean max) throws IOException {
+        // Integer columns serialise min/max as int64 (signed) or uint64 (unsigned).
         ScalarValue sv = decodeScalar(max ? cr.statsMax() : cr.statsMin());
-        if (sv.int64_value() != null) {
-            return sv.int64_value();
-        }
-        if (sv.uint64_value() != null) {
-            return sv.uint64_value();
-        }
-        throw new IllegalStateException("expected integer scalar stat");
+        return sv.int64_value() != null ? sv.int64_value() : sv.uint64_value();
     }
 
-    private static double scalarDouble(ChunkRef cr, boolean max) {
+    private static double scalarDouble(ChunkRef cr, boolean max) throws IOException {
+        // Float columns serialise min/max as f64 (F64) or f32 (F32).
         ScalarValue sv = decodeScalar(max ? cr.statsMax() : cr.statsMin());
-        if (sv.f64_value() != null) {
-            return sv.f64_value();
-        }
-        if (sv.f32_value() != null) {
-            return sv.f32_value();
-        }
-        throw new IllegalStateException("expected float scalar stat");
+        return sv.f64_value() != null ? sv.f64_value() : sv.f32_value();
     }
 
-    private static ScalarValue decodeScalar(byte[] bytes) {
+    private static ScalarValue decodeScalar(byte[] bytes) throws IOException {
         MemorySegment seg = MemorySegment.ofArray(bytes);
-        try {
-            return ScalarValue.decode(seg, 0, seg.byteSize());
-        } catch (IOException ex) {
-            throw new java.io.UncheckedIOException(ex);
-        }
+        return ScalarValue.decode(seg, 0, seg.byteSize());
     }
 
     private ByteBuffer buildFooter() {

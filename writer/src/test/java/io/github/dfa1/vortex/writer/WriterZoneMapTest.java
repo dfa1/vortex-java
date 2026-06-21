@@ -10,6 +10,8 @@ import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.StructArray;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.IOException;
 import java.lang.foreign.Arena;
@@ -149,6 +151,81 @@ class WriterZoneMapTest {
                 assertThat(nullCount.getLong(1)).isEqualTo(2);
             }
         }
+    }
+
+    @ParameterizedTest
+    @EnumSource(PType.class)
+    void everyPrimitiveType_emitsZonedLayout(PType ptype, @TempDir Path tmp) throws IOException {
+        // Given a two-zone file of the given primitive type (globalDict off so the column stays
+        // a plain primitive, not a dict). Every fixed-width primitive carries min/max stats, so
+        // every one gets a vortex.stats layout — exercising each per-ptype stat-column arm.
+        DType.Struct schema = new DType.Struct(
+                List.of("v"), List.of(new DType.Primitive(ptype, false)), false);
+        WriteOptions opts = new WriteOptions(2, true, 0.90, 0, false, false);
+        Path file = tmp.resolve("ptype-" + ptype + ".vtx");
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, opts)) {
+            sut.writeChunk(Map.of("v", sample(ptype, 0)));
+            sut.writeChunk(Map.of("v", sample(ptype, 2)));
+        }
+
+        // When / Then
+        try (VortexReader reader = VortexReader.open(file)) {
+            assertThat(reader.layout().children().get(0).isZoned())
+                    .as("ptype %s zoned", ptype)
+                    .isTrue();
+        }
+    }
+
+    @Test
+    void noChunks_emitsNoZoneMap(@TempDir Path tmp) throws IOException {
+        // Given a file closed without any writeChunk: the column has no chunks, so flushZoneMaps
+        // skips it (the empty-chunks guard) and emits no zone-map.
+        WriteOptions opts = new WriteOptions(4, true, 0.90, 0, false, false);
+        Path file = tmp.resolve("empty.vtx");
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, SCHEMA, opts)) {
+            // no writeChunk
+            assertThat(sut).isNotNull();
+        }
+
+        // When / Then
+        try (VortexReader reader = VortexReader.open(file)) {
+            assertThat(reader.layout().children().get(0).isZoned()).isFalse();
+        }
+    }
+
+    @Test
+    void chunkWithoutStats_skipsZoneMap(@TempDir Path tmp) throws IOException {
+        // Given a column with one normal chunk and one empty chunk (no min/max stats): not every
+        // chunk carries stats, so flushZoneMaps skips the column (the all-stats guard).
+        DType.Struct schema = new DType.Struct(
+                List.of("v"), List.of(new DType.Primitive(PType.I64, false)), false);
+        WriteOptions opts = new WriteOptions(2, true, 0.90, 0, false, false);
+        Path file = tmp.resolve("partial.vtx");
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, opts)) {
+            sut.writeChunk(Map.of("v", new long[]{1L, 2L}));
+            sut.writeChunk(Map.of("v", new long[]{}));
+        }
+
+        // When / Then
+        try (VortexReader reader = VortexReader.open(file)) {
+            assertThat(reader.layout().children().get(0).isZoned()).isFalse();
+        }
+    }
+
+    /// Two values starting at `base` in the storage shape for `ptype`.
+    private static Object sample(PType ptype, int base) {
+        return switch (ptype) {
+            case I8, U8 -> new byte[]{(byte) base, (byte) (base + 1)};
+            case I16, U16 -> new short[]{(short) base, (short) (base + 1)};
+            case F16 -> new short[]{Float.floatToFloat16(base), Float.floatToFloat16(base + 1)};
+            case I32, U32 -> new int[]{base, base + 1};
+            case I64, U64 -> new long[]{base, base + 1};
+            case F32 -> new float[]{base, base + 1};
+            case F64 -> new double[]{base, base + 1};
+        };
     }
 
     /// Reconstructs the stats-table dtype the writer emits: MAX, MIN, NULL_COUNT for an I64 column.
