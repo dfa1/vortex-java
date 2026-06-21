@@ -141,6 +141,44 @@ chunks via zone maps. The new `Predicate` type is the input format
 shape — same vocabulary used by both layers, so pushdown is just "the
 same predicate compiled against zone-map stats instead of an array."
 
+### 6. Aggregate push-down via zone-map stats
+
+§5 is *predicate* push-down: skip zones whose min/max rule them out. The
+`vortex.stats` (zoned) layout also enables *aggregate* push-down — answer
+a reduction from the per-zone stats table **without decoding the data
+segment at all**.
+
+The stats table carries one row per zone. The writer emits `MIN`/`MAX`
+today; `NULL_COUNT` and `SUM` are the next increment (Rust parity — Rust
+fixtures emit exactly `[MIN, MAX, NULL_COUNT]` and, for numeric columns,
+`[MIN, MAX, SUM, NULL_COUNT]`, nothing else). Those four stats answer the
+common reductions directly:
+
+- `SUM(col)`   → sum the per-zone `SUM` column.
+- `COUNT(col)` → `Σ zone_len − Σ NULL_COUNT` (count of non-nulls).
+- `MIN`/`MAX`  → reduce the per-zone `MIN`/`MAX` columns.
+
+A `ReduceKernel` therefore runs in **two tiers**, mirroring the predicate
+case:
+
+1. **Whole-zone tier** — for every zone the predicate selects entirely
+   (or with no predicate at all), fold the zone's contribution from the
+   stats row. No data segment is touched.
+2. **Residual tier** — only zones the predicate *partially* selects fall
+   back to the streaming per-element reduce (§3 contract), and only for
+   those zones.
+
+So a `filter(...).sum(col)` over a column where the filter prunes at zone
+granularity becomes a read of the small stats table plus a streaming
+reduce of the boundary zones — the same `Predicate` / reduction
+vocabulary compiled against zone-map stats at tier 1 and against the
+encoded array at tier 2.
+
+This needs the scan to expose per-zone stats to the reduce kernel. The
+decode path already exists: `inspector` `ZonedStatsSchema` reconstructs
+the stats-table dtype and decodes the zones child; the scan would surface
+the same per-zone rows to the kernel rather than (only) to the inspector.
+
 ## Consequences
 
 ### Positive
@@ -153,6 +191,10 @@ same predicate compiled against zone-map stats instead of an array."
 - User-facing API layer (transducer, Stream, fluent builder) is a thin
   wrapper — same primitives, multiple syntaxes possible.
 - Test coverage is per-kernel, decoupled from any specific API surface.
+- Aggregate push-down (§6) lets `SUM` / `COUNT` / `MIN` / `MAX` be answered
+  from the zone-map stats table, skipping data decode entirely for whole
+  zones — the payoff that motivates emitting `NULL_COUNT` + `SUM` zone
+  stats on the writer side.
 
 ### Negative
 
