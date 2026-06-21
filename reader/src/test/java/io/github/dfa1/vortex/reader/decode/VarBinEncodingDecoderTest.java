@@ -56,7 +56,7 @@ class VarBinEncodingDecoderTest {
         // Given an offsets child holding a single value (as ConstantEncoding emits):
         // capacity 1 < n+1, so the decoder must broadcast-copy it. A constant offset
         // means every row spans an empty slice.
-        MemorySegment data = Arena.global().allocate(1);
+        MemorySegment data = Arena.ofAuto().allocate(1);
         MemorySegment offsets = TestSegments.leInts(0); // one element only
 
         // When

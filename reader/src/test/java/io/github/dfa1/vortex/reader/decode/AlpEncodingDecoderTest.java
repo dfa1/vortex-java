@@ -69,7 +69,7 @@ class AlpEncodingDecoderTest {
         ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ALP, ByteBuffer.wrap(new ALPMetadata(0, 0, null).encode()),
                 new ArrayNode[0], new int[0]);
         DecodeContext ctx = new DecodeContext(node, new DType.Utf8(false), 1,
-                new MemorySegment[0], REGISTRY, Arena.global());
+                new MemorySegment[0], REGISTRY, Arena.ofAuto());
 
         // When / Then
         assertThatThrownBy(() -> SUT.decode(ctx)).hasMessageContaining("expected primitive dtype");
@@ -80,7 +80,7 @@ class AlpEncodingDecoderTest {
         // Given no metadata — decoder falls back to exp_e=0, exp_f=0 (scale 1.0)
         ArrayNode enc = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
         ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ALP, null, new ArrayNode[]{enc}, new int[0]);
-        DecodeContext ctx = new DecodeContext(node, F64, 2, new MemorySegment[]{leLongs(5L, 7L)}, REGISTRY, Arena.global());
+        DecodeContext ctx = new DecodeContext(node, F64, 2, new MemorySegment[]{leLongs(5L, 7L)}, REGISTRY, Arena.ofAuto());
 
         // When
         DoubleArray result = (DoubleArray) SUT.decode(ctx);
@@ -97,7 +97,7 @@ class AlpEncodingDecoderTest {
         ArrayNode enc = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
         byte[] meta = new ALPMetadata(2, 0, null).encode(); // exp_e=2 -> *0.01
         ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ALP, ByteBuffer.wrap(meta), new ArrayNode[]{enc}, new int[0]);
-        DecodeContext ctx = new DecodeContext(node, F64, 4, new MemorySegment[]{leLongs(123L)}, REGISTRY, Arena.global());
+        DecodeContext ctx = new DecodeContext(node, F64, 4, new MemorySegment[]{leLongs(123L)}, REGISTRY, Arena.ofAuto());
 
         // When
         DoubleArray result = (DoubleArray) SUT.decode(ctx);
@@ -115,7 +115,7 @@ class AlpEncodingDecoderTest {
         ArrayNode enc = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
         byte[] meta = new ALPMetadata(1, 0, null).encode(); // exp_e=1 -> *0.1
         ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ALP, ByteBuffer.wrap(meta), new ArrayNode[]{enc}, new int[0]);
-        DecodeContext ctx = new DecodeContext(node, F32, 3, new MemorySegment[]{leInts(25)}, REGISTRY, Arena.global());
+        DecodeContext ctx = new DecodeContext(node, F32, 3, new MemorySegment[]{leInts(25)}, REGISTRY, Arena.ofAuto());
 
         // When
         FloatArray result = (FloatArray) SUT.decode(ctx);
@@ -142,7 +142,7 @@ class AlpEncodingDecoderTest {
 
         MemorySegment idxSeg = MemorySegment.ofArray(new byte[]{1}); // patch row 1
         MemorySegment[] segs = {leLongs(100L, 0L, 300L), idxSeg, leDoubles(9.0)};
-        DecodeContext ctx = new DecodeContext(node, F64, 3, segs, REGISTRY, Arena.global());
+        DecodeContext ctx = new DecodeContext(node, F64, 3, segs, REGISTRY, Arena.ofAuto());
 
         // When
         DoubleArray result = (DoubleArray) SUT.decode(ctx);
@@ -166,7 +166,7 @@ class AlpEncodingDecoderTest {
                 new ArrayNode[]{enc, idx, val}, new int[0]);
 
         MemorySegment[] segs = {leLongs(100L, 0L), leInts(1), leDoubles(9.0)};
-        DecodeContext ctx = new DecodeContext(node, F64, 2, segs, REGISTRY, Arena.global());
+        DecodeContext ctx = new DecodeContext(node, F64, 2, segs, REGISTRY, Arena.ofAuto());
 
         // When / Then
         assertThatThrownBy(() -> SUT.decode(ctx)).hasMessageContaining("non-unsigned patch index ptype");

@@ -48,7 +48,7 @@ class DateTimePartsEncodingDecoderTest {
         ArrayNode s = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1});
         ArrayNode ss = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{2});
         ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DATETIMEPARTS, meta, new ArrayNode[]{d, s, ss}, new int[0]);
-        return new DecodeContext(node, dtype, n, new MemorySegment[]{days, seconds, subseconds}, REGISTRY, Arena.global());
+        return new DecodeContext(node, dtype, n, new MemorySegment[]{days, seconds, subseconds}, REGISTRY, Arena.ofAuto());
     }
 
     @Test
@@ -62,7 +62,7 @@ class DateTimePartsEncodingDecoderTest {
         // Given a node with no metadata
         ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DATETIMEPARTS, null, new ArrayNode[0], new int[0]);
         DecodeContext c = new DecodeContext(node, timestampDType(TimeUnit.Milliseconds, false), 1,
-                new MemorySegment[0], REGISTRY, Arena.global());
+                new MemorySegment[0], REGISTRY, Arena.ofAuto());
 
         // When / Then
         assertThatThrownBy(() -> SUT.decode(c)).hasMessageContaining("missing metadata");
