@@ -30,7 +30,7 @@ class ZigZagEncodingDecoderTest {
     // --- zigzag encode helpers (mirror of the decoder's (u >>> 1) ^ -(u & 1)) ---
 
     private static MemorySegment encodedBytes(byte... signed) {
-        MemorySegment seg = Arena.global().allocate(signed.length);
+        MemorySegment seg = Arena.ofAuto().allocate(signed.length);
         for (int i = 0; i < signed.length; i++) {
             seg.set(ValueLayout.JAVA_BYTE, i, (byte) ((signed[i] << 1) ^ (signed[i] >> 7)));
         }

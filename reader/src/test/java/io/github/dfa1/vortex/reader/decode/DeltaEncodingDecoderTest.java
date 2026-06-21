@@ -40,7 +40,7 @@ class DeltaEncodingDecoderTest {
         // always writes metadata)
         ArrayNode node = ArrayNode.of(EncodingId.FASTLANES_DELTA, null, new ArrayNode[0], new int[0]);
         DecodeContext ctx = new DecodeContext(node, new DType.Primitive(ptype, false), 0,
-                new MemorySegment[0], REGISTRY, Arena.global());
+                new MemorySegment[0], REGISTRY, Arena.ofAuto());
 
         // When
         Array result = SUT.decode(ctx);
@@ -65,7 +65,7 @@ class DeltaEncodingDecoderTest {
 
         // one element each → broadcast
         MemorySegment[] segs = {TestSegments.leLongs(0L), TestSegments.leLongs(0L)};
-        DecodeContext ctx = new DecodeContext(node, new DType.Primitive(ptype, false), 4, segs, REGISTRY, Arena.global());
+        DecodeContext ctx = new DecodeContext(node, new DType.Primitive(ptype, false), 4, segs, REGISTRY, Arena.ofAuto());
 
         // When
         LongArray result = (LongArray) SUT.decode(ctx);
@@ -89,7 +89,7 @@ class DeltaEncodingDecoderTest {
         ArrayNode node = ArrayNode.of(EncodingId.FASTLANES_DELTA, meta, new ArrayNode[]{bases, deltas}, new int[0]);
 
         MemorySegment[] segs = {TestSegments.leLongs(5L), TestSegments.leLongs(0L)};
-        DecodeContext ctx = new DecodeContext(node, new DType.Primitive(ptype, false), 3, segs, REGISTRY, Arena.global());
+        DecodeContext ctx = new DecodeContext(node, new DType.Primitive(ptype, false), 3, segs, REGISTRY, Arena.ofAuto());
 
         // When
         LongArray result = (LongArray) SUT.decode(ctx);
@@ -97,7 +97,7 @@ class DeltaEncodingDecoderTest {
         // Then prefix-sum of zero deltas over base 5 stays 5 on lane 0
         assertThat(result.getLong(0)).isEqualTo(5L);
         // sanity: materialized bytes are little-endian
-        MemorySegment seg = result.materialize(Arena.global());
+        MemorySegment seg = result.materialize(Arena.ofAuto());
         assertThat(seg.get(PTypeIO.LE_LONG, 0)).isEqualTo(5L);
     }
 }
