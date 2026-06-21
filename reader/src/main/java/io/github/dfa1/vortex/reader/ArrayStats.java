@@ -34,7 +34,7 @@ public record ArrayStats(
     }
 
     /// Parses stats from a FlatBuffers [io.github.dfa1.vortex.fbs.ArrayStats] table.
-    /// Returns an empty instance when `fbs` is `null` or carries no min/max.
+    /// Returns an empty instance when `fbs` is `null` or carries no min/max and no null count.
     ///
     /// @param fbs the FlatBuffers stats table, or `null`
     /// @return parsed stats, or an empty instance if no usable data is present
@@ -44,10 +44,11 @@ public record ArrayStats(
         }
         Object min = decodeScalar(fbs.minAsByteBuffer());
         Object max = decodeScalar(fbs.maxAsByteBuffer());
-        if (min == null && max == null) {
+        Long nullCount = fbs.hasNullCount() ? fbs.nullCount() : null;
+        if (min == null && max == null && nullCount == null) {
             return EMPTY;
         }
-        return new ArrayStats(min, max, null, null, null, null);
+        return new ArrayStats(min, max, null, nullCount, null, null);
     }
 
     private static Object decodeScalar(ByteBuffer bytes) {

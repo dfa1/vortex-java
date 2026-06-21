@@ -555,7 +555,8 @@ public final class VortexWriter implements Closeable {
             int segIdx = segs.size();
             long offset = bytesWritten;
 
-            ByteBuffer fbBuf = buildArrayFlatBuffer(result);
+            long segNullCount = data instanceof NullableData nd ? countNulls(nd.validity()) : 0L;
+            ByteBuffer fbBuf = buildArrayFlatBuffer(result, segNullCount);
 
             // Segment format: [buffer data...] [FlatBuffer Array bytes] [4-byte LE u32 = fbLen]
             int fbLen = fbBuf.remaining();
@@ -571,7 +572,7 @@ public final class VortexWriter implements Closeable {
             segs.add(new SegRef(offset, bytesWritten - offset));
             lastStatsMin = result.statsMin();
             lastStatsMax = result.statsMax();
-            lastNullCount = data instanceof NullableData nd ? countNulls(nd.validity()) : 0L;
+            lastNullCount = segNullCount;
             return segIdx;
         }
     }
@@ -616,19 +617,28 @@ public final class VortexWriter implements Closeable {
         bytesWritten += n;
     }
 
-    private ByteBuffer buildArrayFlatBuffer(EncodeResult result) {
+    private ByteBuffer buildArrayFlatBuffer(EncodeResult result, long nullCount) {
         var fbb = new FlatBufferBuilder(256);
 
-        // Stats for root node only (build before root ArrayNode)
-        int statsOff = 0;
+        // Stats for the root node only (build vectors before the ArrayStats table). null_count is
+        // always recorded; min/max only when the encoder produced them.
+        int minVec = result.hasStats()
+                ? io.github.dfa1.vortex.fbs.ArrayStats.createMinVector(fbb, result.statsMin()) : 0;
+        int maxVec = result.hasStats()
+                ? io.github.dfa1.vortex.fbs.ArrayStats.createMaxVector(fbb, result.statsMax()) : 0;
+        // forceDefaults only while building ArrayStats, so null_count = 0 is serialised (flatbuffers
+        // omits a scalar equal to its default otherwise) — matching the Rust writer and letting the
+        // reader prune IS NULL on zero-null chunks. Reset immediately so the Array/ArrayNode tables
+        // keep their normal (offset-default-omitting) layout.
+        fbb.forceDefaults(true);
+        io.github.dfa1.vortex.fbs.ArrayStats.startArrayStats(fbb);
         if (result.hasStats()) {
-            int minVec = io.github.dfa1.vortex.fbs.ArrayStats.createMinVector(fbb, result.statsMin());
-            int maxVec = io.github.dfa1.vortex.fbs.ArrayStats.createMaxVector(fbb, result.statsMax());
-            io.github.dfa1.vortex.fbs.ArrayStats.startArrayStats(fbb);
             io.github.dfa1.vortex.fbs.ArrayStats.addMin(fbb, minVec);
             io.github.dfa1.vortex.fbs.ArrayStats.addMax(fbb, maxVec);
-            statsOff = io.github.dfa1.vortex.fbs.ArrayStats.endArrayStats(fbb);
         }
+        io.github.dfa1.vortex.fbs.ArrayStats.addNullCount(fbb, nullCount);
+        int statsOff = io.github.dfa1.vortex.fbs.ArrayStats.endArrayStats(fbb);
+        fbb.forceDefaults(false);
 
         int rootNodeOff = buildArrayNodeFlatBuffer(fbb, result.rootNode(), statsOff);
 
