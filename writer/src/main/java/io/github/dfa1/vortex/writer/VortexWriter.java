@@ -706,17 +706,19 @@ public final class VortexWriter implements Closeable {
             java.util.Arrays.fill(allValid, true);
 
             // NULL_COUNT is computable for every column type; MIN/MAX only for fixed-width
-            // primitives whose chunks all carry stats. Field/bit order follows
-            // ZonedStatsSchema: MAX(3), MIN(4), NULL_COUNT(6); each stat field is nullable.
+            // primitives whose chunks all carry stats. Extension columns unwrap to their storage
+            // primitive — ExtEncoding propagates the storage min/max, stored here as that primitive.
+            // Field/bit order follows ZonedStatsSchema: MAX(3), MIN(4), NULL_COUNT(6); each nullable.
             DType colDtype = schema.fieldTypes().get(schema.fieldNames().indexOf(colName));
-            boolean hasMinMax = colDtype instanceof DType.Primitive
+            PType statPtype = zoneStatPType(colDtype);
+            boolean hasMinMax = statPtype != null
                     && chunks.stream().allMatch(ChunkRef::hasStats);
 
             List<String> names = new java.util.ArrayList<>();
             List<DType> types = new java.util.ArrayList<>();
             List<Object> fields = new java.util.ArrayList<>();
             if (hasMinMax) {
-                PType ptype = ((DType.Primitive) colDtype).ptype();
+                PType ptype = statPtype;
                 DType nullablePrim = new DType.Primitive(ptype, true);
                 boolean[] notTruncated = new boolean[nZones];
                 names.add("max");
@@ -802,6 +804,17 @@ public final class VortexWriter implements Closeable {
             }
         }
         return nulls;
+    }
+
+    /// The primitive type whose min/max a zone-map stores for `dtype`, or `null` when the column
+    /// has no fixed-width min/max. Extension columns resolve to their storage primitive, since
+    /// `ExtEncoding` propagates the storage array's min/max scalars unchanged.
+    private static PType zoneStatPType(DType dtype) {
+        return switch (dtype) {
+            case DType.Primitive p -> p.ptype();
+            case DType.Extension ext when ext.storageDType() instanceof DType.Primitive p -> p.ptype();
+            default -> null;
+        };
     }
 
     /// Builds the per-zone min (or max) values array in the storage shape the primitive encoder
