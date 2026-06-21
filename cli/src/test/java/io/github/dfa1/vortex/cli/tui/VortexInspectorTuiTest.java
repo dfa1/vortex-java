@@ -72,10 +72,11 @@ class VortexInspectorTuiTest {
     }
 
     @Test
-    void deepExpand_rendersDictAndDataPanes_synchronously() throws Exception {
-        // Given — a rich fixture (low-cardinality dict column + an I64 column) and a
-        // script that expands the whole tree, then visits every row so each node's
-        // detail pane renders. worker == null runs all previews inline.
+    void deepExpand_rendersDictStatsAndDataPanes_synchronously() throws Exception {
+        // Given — a rich fixture (low-cardinality dict column + an I64 column, which the
+        // writer now wraps in a vortex.stats zone-map) and a script that expands the whole
+        // tree, then visits every row so each node's detail pane renders. worker == null
+        // runs all previews inline.
         Path file = TuiTestSupport.writeRichVortex(tmp, "rich.vortex", 200);
         FakeTerminal term = new FakeTerminal(new Terminal.Size(40, 120), expandAndVisitAll());
 
@@ -85,9 +86,10 @@ class VortexInspectorTuiTest {
             VortexInspectorTui.run(term, tree, handle, null);
         }
 
-        // Then — the dictionary-preview and data-preview panes both rendered
+        // Then — the dictionary, per-chunk stats, and data preview panes all rendered
         String out = term.output();
         assertThat(out).contains("Dictionary");
+        assertThat(out).contains("Per-chunk stats");
         assertThat(out).contains("Data (column");
     }
 
