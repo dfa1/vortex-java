@@ -11,6 +11,7 @@ import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+@SuppressWarnings("java:S106") // CLI command: stdout is the intended output channel
 final class InspectCommand {
 
     private InspectCommand() {

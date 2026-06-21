@@ -25,6 +25,7 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 
+@SuppressWarnings("java:S106") // CLI command: stdout is the intended output channel
 final class FilterCommand {
 
     private FilterCommand() {
