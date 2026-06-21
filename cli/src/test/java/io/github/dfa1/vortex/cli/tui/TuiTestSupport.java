@@ -79,6 +79,33 @@ final class TuiTestSupport {
         return file;
     }
 
+    /// Writes a single-chunk file with a low-cardinality `label` Utf8 column and an
+    /// `n` I64 column. The repeated labels trip the global-dictionary encoder, so the
+    /// `label` column decodes to a `vortex.dict` layout — letting the inspector render
+    /// its dictionary-preview detail pane (alongside the I64 data-preview pane).
+    ///
+    /// The global dictionary only forms within a single chunk, so all `rows` are
+    /// written in one `writeChunk`.
+    static Path writeRichVortex(Path dir, String name, int rows) throws IOException {
+        Path file = dir.resolve(name);
+        DType.Struct schema = new DType.Struct(
+                List.of("label", "n"),
+                List.of(new DType.Utf8(false), new DType.Primitive(PType.I64, false)),
+                false);
+        String[] labels = {"red", "green", "blue"};
+        String[] label = new String[rows];
+        long[] n = new long[rows];
+        for (int i = 0; i < rows; i++) {
+            label[i] = labels[i % labels.length];
+            n[i] = i;
+        }
+        try (FileChannel ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            writer.writeChunk(Map.of("label", label, "n", n));
+        }
+        return file;
+    }
+
     /// Opens `file` on the worker thread and returns the handle. The caller must
     /// close the returned handle on the same worker (see [#closeOnWorker]).
     ///
