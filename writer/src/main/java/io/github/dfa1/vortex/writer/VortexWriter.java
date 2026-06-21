@@ -705,31 +705,30 @@ public final class VortexWriter implements Closeable {
             boolean[] allValid = new boolean[nZones];
             java.util.Arrays.fill(allValid, true);
 
-            // NULL_COUNT is computable for every column type; MIN/MAX only for fixed-width
-            // primitives whose chunks all carry stats. Extension columns unwrap to their storage
-            // primitive — ExtEncoding propagates the storage min/max, stored here as that primitive.
-            // Field/bit order follows ZonedStatsSchema: MAX(3), MIN(4), NULL_COUNT(6); each nullable.
+            // NULL_COUNT is computable for every column type; MIN/MAX whenever every chunk carries
+            // stats. Fixed-width primitives store min/max as that primitive (extension columns
+            // unwrap to their storage primitive); Utf8 stores them as full strings. Field/bit
+            // order follows ZonedStatsSchema: MAX(3), MIN(4), NULL_COUNT(6); each stat nullable, and
+            // MAX/MIN carry a trailing `_is_truncated` Bool (always false — we never truncate).
             DType colDtype = schema.fieldTypes().get(schema.fieldNames().indexOf(colName));
-            PType statPtype = zoneStatPType(colDtype);
-            boolean hasMinMax = statPtype != null
+            DType minMaxDtype = zoneMinMaxDtype(colDtype);
+            boolean hasMinMax = minMaxDtype != null
                     && chunks.stream().allMatch(ChunkRef::hasStats);
 
             List<String> names = new java.util.ArrayList<>();
             List<DType> types = new java.util.ArrayList<>();
             List<Object> fields = new java.util.ArrayList<>();
             if (hasMinMax) {
-                PType ptype = statPtype;
-                DType nullablePrim = new DType.Primitive(ptype, true);
                 boolean[] notTruncated = new boolean[nZones];
                 names.add("max");
-                types.add(nullablePrim);
-                fields.add(new NullableData(statColumn(ptype, chunks, true), allValid.clone()));
+                types.add(minMaxDtype);
+                fields.add(new NullableData(zoneStatValues(minMaxDtype, chunks, true), allValid.clone()));
                 names.add("max_is_truncated");
                 types.add(new DType.Bool(false));
                 fields.add(notTruncated);
                 names.add("min");
-                types.add(nullablePrim);
-                fields.add(new NullableData(statColumn(ptype, chunks, false), allValid.clone()));
+                types.add(minMaxDtype);
+                fields.add(new NullableData(zoneStatValues(minMaxDtype, chunks, false), allValid.clone()));
                 names.add("min_is_truncated");
                 types.add(new DType.Bool(false));
                 fields.add(notTruncated.clone());
@@ -806,15 +805,40 @@ public final class VortexWriter implements Closeable {
         return nulls;
     }
 
-    /// The primitive type whose min/max a zone-map stores for `dtype`, or `null` when the column
-    /// has no fixed-width min/max. Extension columns resolve to their storage primitive, since
-    /// `ExtEncoding` propagates the storage array's min/max scalars unchanged.
-    private static PType zoneStatPType(DType dtype) {
+    /// The (nullable) dtype a zone-map stores per-zone min/max in for `dtype`, or `null` when the
+    /// column has no recordable min/max. Primitives store the primitive; extension columns unwrap
+    /// to their storage primitive (`ExtEncoding` propagates the storage min/max scalars unchanged);
+    /// Utf8 stores the full string value. Matches [ZonedStatsSchema#statDtype]. Binary is excluded:
+    /// `vortex.varbin` records its min/max as string scalars, not `bytes`.
+    private static DType zoneMinMaxDtype(DType dtype) {
         return switch (dtype) {
-            case DType.Primitive p -> p.ptype();
-            case DType.Extension ext when ext.storageDType() instanceof DType.Primitive p -> p.ptype();
+            case DType.Primitive p -> p.withNullable(true);
+            case DType.Extension ext when ext.storageDType() instanceof DType.Primitive p -> p.withNullable(true);
+            case DType.Utf8 u -> u.withNullable(true);
             default -> null;
         };
+    }
+
+    /// Builds the per-zone min (or max) values array for the resolved min/max `dtype`, decoding each
+    /// chunk's serialised [ScalarValue] stat into the array shape its encoder expects.
+    private static Object zoneStatValues(DType minMaxDtype, List<ChunkRef> chunks, boolean max) throws IOException {
+        return switch (minMaxDtype) {
+            case DType.Primitive p -> statColumn(p.ptype(), chunks, max);
+            case DType.Utf8 ignored -> statStringColumn(chunks, max);
+            default -> throw new IllegalStateException("no zone stat values for " + minMaxDtype);
+        };
+    }
+
+    /// Builds the per-zone min (or max) string array, decoding each chunk's serialised string
+    /// [ScalarValue] stat. Used for Utf8 columns whose `vortex.varbin` encoder records full
+    /// string min/max scalars.
+    private static String[] statStringColumn(List<ChunkRef> chunks, boolean max) throws IOException {
+        String[] out = new String[chunks.size()];
+        for (int i = 0; i < out.length; i++) {
+            ChunkRef cr = chunks.get(i);
+            out[i] = decodeScalar(max ? cr.statsMax() : cr.statsMin()).string_value();
+        }
+        return out;
     }
 
     /// Builds the per-zone min (or max) values array in the storage shape the primitive encoder
