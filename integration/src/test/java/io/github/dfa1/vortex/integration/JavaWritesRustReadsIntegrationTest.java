@@ -496,6 +496,37 @@ class JavaWritesRustReadsIntegrationTest {
     }
 
     @Test
+    void javaWriter_jniReader_zoneMapped_multipleZones(@TempDir Path tmp) throws IOException {
+        // Given — a small chunkSize forces several chunks, so the writer emits a vortex.stats
+        // zone-map with one zone per chunk. The Rust reader must parse that layout and still
+        // return every value (zones are a transparent pruning aux).
+        Path file = tmp.resolve("java_zoned.vtx");
+        WriteOptions zoneMapped = new WriteOptions(4, true, 0.90, 0, true, false);
+        long[] ids = new long[20];
+        double[] vals = new double[20];
+        for (int i = 0; i < 20; i++) {
+            ids[i] = i;
+            vals[i] = i * 0.5;
+        }
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, SCHEMA, zoneMapped)) {
+            for (int start = 0; start < 20; start += 4) {
+                sut.writeChunk(Map.of(
+                        "id", Arrays.copyOfRange(ids, start, start + 4),
+                        "value", Arrays.copyOfRange(vals, start, start + 4)));
+            }
+        }
+
+        // When
+        long[] decodedIds = readLongColumn(file, "id");
+        double[] decodedVals = readDoubleColumn(file, "value");
+
+        // Then — all rows survive the Java zone-map -> Rust read round-trip
+        assertThat(decodedIds).containsExactly(ids);
+        assertThat(decodedVals).containsExactly(vals);
+    }
+
+    @Test
     void javaWriter_jniReader_i32Column(@TempDir Path tmp) throws IOException {
         // Given
         Path file = tmp.resolve("java_i32.vtx");
