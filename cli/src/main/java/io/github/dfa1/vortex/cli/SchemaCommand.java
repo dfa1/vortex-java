@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
 
+@SuppressWarnings("java:S106") // CLI command: stdout is the intended output channel
 final class SchemaCommand {
 
     private SchemaCommand() {

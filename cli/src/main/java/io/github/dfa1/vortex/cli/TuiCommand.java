@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.util.Optional;
 
+@SuppressWarnings("java:S106") // CLI command: stdout is the intended output channel
 final class TuiCommand {
 
     private TuiCommand() {

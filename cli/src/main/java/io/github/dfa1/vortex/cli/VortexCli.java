@@ -7,6 +7,7 @@ import java.util.logging.Logger;
 /// Entry point for the Vortex command-line tool.
 ///
 /// Exit codes: see [ExitStatus].
+@SuppressWarnings("java:S106") // CLI entry point: stdout is the intended output channel
 public final class VortexCli {
 
     static {

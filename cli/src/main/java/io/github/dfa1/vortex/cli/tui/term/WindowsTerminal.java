@@ -22,6 +22,7 @@ import java.lang.invoke.MethodHandle;
 ///
 /// `GetConsoleScreenBufferInfo` drives [#size()]; we report the visible
 /// window rect, not the scrollback buffer.
+@SuppressWarnings("java:S106") // terminal driver: writes control sequences straight to stdout
 public final class WindowsTerminal implements Terminal {
 
     private static final long STD_INPUT_HANDLE = -10L;

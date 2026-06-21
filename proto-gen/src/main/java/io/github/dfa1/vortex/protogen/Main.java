@@ -8,6 +8,7 @@ import java.util.List;
 
 /// CLI entry for the build-time `.proto` to Java code generator.
 /// Invoked from the `regenerate-sources` Maven profile via `exec-maven-plugin`.
+@SuppressWarnings("java:S106") // build-time code-gen CLI: progress goes to stdout
 public final class Main {
 
     private Main() {
