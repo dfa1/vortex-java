@@ -255,6 +255,31 @@ class WriterZoneMapTest {
         }
     }
 
+    @Test
+    void dictColumn_emitsNullCountZoneMapWrappingDict(@TempDir Path tmp) throws IOException {
+        // Given a low-cardinality Utf8 column across 2 chunks of 6 with heavy repeats (so the
+        // global-dict candidate test, distinct*2 < rows, fires) → vortex.dict; with zone maps the
+        // column is vortex.stats wrapping the dict, carrying NULL_COUNT only.
+        DType.Struct schema = new DType.Struct(
+                List.of("s"), List.of(new DType.Utf8(false)), false);
+        WriteOptions opts = new WriteOptions(6, true, 0.90, 0, true, false);
+        Path file = tmp.resolve("dict.vtx");
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, opts)) {
+            sut.writeChunk(Map.of("s", new String[]{"a", "a", "a", "b", "b", "b"}));
+            sut.writeChunk(Map.of("s", new String[]{"c", "c", "c", "a", "a", "a"}));
+        }
+
+        // When / Then — zoned over a dict data child, NULL_COUNT-only bitset
+        try (VortexReader reader = VortexReader.open(file)) {
+            Layout column = reader.layout().children().get(0);
+            assertThat(column.isZoned()).isTrue();
+            assertThat(column.children().get(0).isDict()).isTrue();
+            ByteBuffer meta = column.metadata().duplicate().order(ByteOrder.LITTLE_ENDIAN);
+            assertThat(meta.get(meta.position() + 4)).isEqualTo((byte) 0x40);
+        }
+    }
+
     /// Two values starting at `base` in the storage shape for `ptype`.
     private static Object sample(PType ptype, int base) {
         return switch (ptype) {
