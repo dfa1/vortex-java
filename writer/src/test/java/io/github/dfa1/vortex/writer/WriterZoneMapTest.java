@@ -256,6 +256,43 @@ class WriterZoneMapTest {
     }
 
     @Test
+    void extensionColumn_emitsStorageMinMaxZoneMap(@TempDir Path tmp) throws IOException {
+        // Given an extension column over I64 storage written as a raw long[] (no spec auto-route),
+        // two zones of two rows: zone 0 = [10, 11], zone 1 = [20, 21]. ExtEncoding propagates the
+        // storage primitive's min/max, so the zone-map carries MAX+MIN+NULL_COUNT — same as I64.
+        DType ext = new DType.Extension(
+                "test.ext", new DType.Primitive(PType.I64, false), null, false);
+        DType.Struct schema = new DType.Struct(List.of("t"), List.of(ext), false);
+        WriteOptions opts = new WriteOptions(2, true, 0.90, 0, false, false);
+        Path file = tmp.resolve("ext.vtx");
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, opts)) {
+            sut.writeChunk(Map.of("t", new long[]{10, 11}));
+            sut.writeChunk(Map.of("t", new long[]{20, 21}));
+        }
+
+        // When / Then the column is zoned with MAX+MIN+NULL_COUNT and the stats decode per zone
+        try (VortexReader reader = VortexReader.open(file)) {
+            Layout column = reader.layout().children().get(0);
+            assertThat(column.isZoned()).isTrue();
+            ByteBuffer meta = column.metadata().duplicate().order(ByteOrder.LITTLE_ENDIAN);
+            assertThat(meta.get(meta.position() + 4)).isEqualTo((byte) 0x58); // MAX+MIN+NULL_COUNT
+
+            Layout zonesFlat = column.children().get(1);
+            SegmentSpec spec = reader.footer().segmentSpecs().get(zonesFlat.segments().getFirst());
+            try (Arena arena = Arena.ofConfined()) {
+                StructArray stats = (StructArray) reader.decodeFlatSegment(spec, statsTableDtype(), 2, arena);
+                LongArray max = (LongArray) ((MaskedArray) stats.field("max")).inner();
+                LongArray min = (LongArray) ((MaskedArray) stats.field("min")).inner();
+                assertThat(min.getLong(0)).isEqualTo(10);
+                assertThat(max.getLong(0)).isEqualTo(11);
+                assertThat(min.getLong(1)).isEqualTo(20);
+                assertThat(max.getLong(1)).isEqualTo(21);
+            }
+        }
+    }
+
+    @Test
     void dictColumn_emitsNullCountZoneMapWrappingDict(@TempDir Path tmp) throws IOException {
         // Given a low-cardinality Utf8 column across 2 chunks of 6 with heavy repeats (so the
         // global-dict candidate test, distinct*2 < rows, fires) → vortex.dict; with zone maps the
