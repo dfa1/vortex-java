@@ -73,6 +73,18 @@ final class InspectorRender {
     static List<String> formatStatsArray(Array arr, DType.Struct statsDtype) {
         Array unwrapped = arr instanceof MaskedArray m ? m.inner() : arr;
         if (!(unwrapped instanceof StructArray sa)) {
+            // A single-field stats table (e.g. NULL_COUNT only) is decoded to the bare field, not
+            // a StructArray (the struct decoder collapses one-field structs). Render that one stat.
+            if (statsDtype.fieldTypes().size() == 1) {
+                String name = statsDtype.fieldNames().getFirst();
+                DType fdtype = statsDtype.fieldTypes().getFirst();
+                int rowCount = (int) arr.length();
+                List<String> rows = new ArrayList<>(rowCount);
+                for (int row = 0; row < rowCount; row++) {
+                    rows.add(name + "=" + formatStatsCell(arr, row, fdtype));
+                }
+                return rows;
+            }
             throw new IllegalStateException(
                     "stats array is not a struct: " + arr.getClass().getSimpleName());
         }

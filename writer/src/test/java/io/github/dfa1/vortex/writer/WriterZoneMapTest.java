@@ -196,9 +196,9 @@ class WriterZoneMapTest {
     }
 
     @Test
-    void chunkWithoutStats_skipsZoneMap(@TempDir Path tmp) throws IOException {
-        // Given a column with one normal chunk and one empty chunk (no min/max stats): not every
-        // chunk carries stats, so flushZoneMaps skips the column (the all-stats guard).
+    void chunkWithoutStats_emitsNullCountOnlyZoneMap(@TempDir Path tmp) throws IOException {
+        // Given a column with one normal chunk and one empty chunk (no min/max stats): MIN/MAX is
+        // dropped, but NULL_COUNT is still emitted — the zone-map carries the NULL_COUNT bit only.
         DType.Struct schema = new DType.Struct(
                 List.of("v"), List.of(new DType.Primitive(PType.I64, false)), false);
         WriteOptions opts = new WriteOptions(2, true, 0.90, 0, false, false);
@@ -209,9 +209,49 @@ class WriterZoneMapTest {
             sut.writeChunk(Map.of("v", new long[]{}));
         }
 
-        // When / Then
+        // When / Then — zoned with the NULL_COUNT-only bitset (bit 6 = 0x40)
         try (VortexReader reader = VortexReader.open(file)) {
-            assertThat(reader.layout().children().get(0).isZoned()).isFalse();
+            Layout column = reader.layout().children().get(0);
+            assertThat(column.isZoned()).isTrue();
+            ByteBuffer meta = column.metadata().duplicate().order(ByteOrder.LITTLE_ENDIAN);
+            assertThat(meta.get(meta.position() + 4)).isEqualTo((byte) 0x40);
+        }
+    }
+
+    @Test
+    void nonPrimitiveColumn_emitsNullCountOnlyZoneMap(@TempDir Path tmp) throws IOException {
+        // Given a nullable Utf8 column (no min/max stats yet) across two zones of two rows:
+        // zone 0 = ["a", null], zone 1 = [null, null]
+        DType.Struct schema = new DType.Struct(
+                List.of("s"), List.of(new DType.Utf8(true)), false);
+        WriteOptions opts = new WriteOptions(2, true, 0.90, 0, false, false);
+        Path file = tmp.resolve("utf8.vtx");
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, opts)) {
+            sut.writeChunk(Map.of("s", new io.github.dfa1.vortex.writer.encode.NullableData(
+                    new String[]{"a", ""}, new boolean[]{true, false})));
+            sut.writeChunk(Map.of("s", new io.github.dfa1.vortex.writer.encode.NullableData(
+                    new String[]{"", ""}, new boolean[]{false, false})));
+        }
+
+        // When the NULL_COUNT-only stats table is decoded
+        try (VortexReader reader = VortexReader.open(file)) {
+            Layout column = reader.layout().children().get(0);
+            assertThat(column.isZoned()).isTrue();
+            ByteBuffer meta = column.metadata().duplicate().order(ByteOrder.LITTLE_ENDIAN);
+            assertThat(meta.get(meta.position() + 4)).isEqualTo((byte) 0x40); // NULL_COUNT only
+
+            Layout zonesFlat = column.children().get(1);
+            SegmentSpec spec = reader.footer().segmentSpecs().get(zonesFlat.segments().getFirst());
+            DType.Struct statsDtype = new DType.Struct(
+                    List.of("null_count"), List.of(new DType.Primitive(PType.U64, true)), false);
+            try (Arena arena = Arena.ofConfined()) {
+                // A single-field stats table decodes to the bare (masked) field, not a StructArray.
+                MaskedArray stats = (MaskedArray) reader.decodeFlatSegment(spec, statsDtype, 2, arena);
+                LongArray nullCount = (LongArray) stats.inner();
+                assertThat(nullCount.getLong(0)).isEqualTo(1);
+                assertThat(nullCount.getLong(1)).isEqualTo(2);
+            }
         }
     }
 
