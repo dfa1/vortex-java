@@ -13,11 +13,12 @@ import java.nio.file.Path;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
-/// Shared handle plumbing for the interactive subcommands (`view`, `tui`).
+/// Shared plumbing for the subcommands: local-file / http(s) target resolution ([#openTarget]),
+/// cause-chain rendering ([#describe]), and the worker-thread handle round-trip the interactive
+/// `view`/`tui` commands need.
 ///
-/// A [VortexReader] uses a confined [java.lang.foreign.Arena], so the file must be
-/// opened and closed on the same [IoWorker] thread the TUI later dispatches I/O to. These
-/// helpers centralise that worker round-trip plus the local-file / http(s) target resolution.
+/// A [VortexReader] uses a confined [java.lang.foreign.Arena], so for the interactive commands the
+/// file must be opened and closed on the same [IoWorker] thread the TUI later dispatches I/O to.
 @SuppressWarnings("java:S106") // CLI tool: user-facing diagnostics go to System.err by design.
 final class CliHandles {
 
@@ -37,7 +38,7 @@ final class CliHandles {
         AtomicReference<IOException> failure = new AtomicReference<>();
         worker.runAndAwait(() -> {
             try {
-                handle.set(open(target));
+                handle.set(openTarget(target));
             } catch (IOException e) {
                 failure.set(e);
             }
@@ -80,7 +81,13 @@ final class CliHandles {
         return sb.toString();
     }
 
-    private static VortexHandle open(String target) throws IOException {
+    /// Opens `target` as a local path or `http(s)://` URL, printing a diagnostic and returning
+    /// `null` when the file is missing or the URL is malformed.
+    ///
+    /// @param target a local path or an `http(s)://` URL
+    /// @return the opened handle, or `null` if the target is missing or malformed
+    /// @throws IOException if opening the file or URL fails
+    static VortexHandle openTarget(String target) throws IOException {
         if (target.startsWith("http://") || target.startsWith("https://")) {
             try {
                 return VortexHttpReader.open(new URI(target));
