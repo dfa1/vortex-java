@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
+import io.github.dfa1.vortex.encoding.PrimitiveArrays;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.proto.RLEMetadata;
 
@@ -149,55 +150,6 @@ public final class RleEncodingEncoder implements EncodingEncoder {
 
     private static long[] toLongs(Object data, PType ptype) {
         return switch (ptype) {
-            case I8 -> {
-                byte[] arr = (byte[]) data;
-                long[] r = new long[arr.length];
-                for (int i = 0; i < arr.length; i++) {
-                    r[i] = arr[i];
-                }
-                yield r;
-            }
-            case U8 -> {
-                byte[] arr = (byte[]) data;
-                long[] r = new long[arr.length];
-                for (int i = 0; i < arr.length; i++) {
-                    r[i] = Byte.toUnsignedLong(arr[i]);
-                }
-                yield r;
-            }
-            case I16 -> {
-                short[] arr = (short[]) data;
-                long[] r = new long[arr.length];
-                for (int i = 0; i < arr.length; i++) {
-                    r[i] = arr[i];
-                }
-                yield r;
-            }
-            case U16 -> {
-                short[] arr = (short[]) data;
-                long[] r = new long[arr.length];
-                for (int i = 0; i < arr.length; i++) {
-                    r[i] = Short.toUnsignedLong(arr[i]);
-                }
-                yield r;
-            }
-            case I32 -> {
-                int[] arr = (int[]) data;
-                long[] r = new long[arr.length];
-                for (int i = 0; i < arr.length; i++) {
-                    r[i] = arr[i];
-                }
-                yield r;
-            }
-            case U32 -> {
-                int[] arr = (int[]) data;
-                long[] r = new long[arr.length];
-                for (int i = 0; i < arr.length; i++) {
-                    r[i] = Integer.toUnsignedLong(arr[i]);
-                }
-                yield r;
-            }
-            case I64, U64 -> (long[]) data;
             case F32 -> {
                 float[] arr = (float[]) data;
                 long[] r = new long[arr.length];
@@ -222,6 +174,8 @@ public final class RleEncodingEncoder implements EncodingEncoder {
                 }
                 yield r;
             }
+            // Integer ptypes share the standard widen; floats above keep RLE's raw-bit packing.
+            default -> PrimitiveArrays.toLongs(data, ptype, EncodingId.FASTLANES_RLE);
         };
     }
 
