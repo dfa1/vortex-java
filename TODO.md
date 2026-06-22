@@ -11,6 +11,10 @@
 
 - [ ] Performance tests must be peer reviewed
 - [ ] Run performance tests on other machines (I have access only to Apple M5)
+- [ ] **Optimize `FastLanes.transposeIndex(int)`** — per-element `%`/`/` violate the hot-loop rule;
+  called once per element in the delta transpose loops (`DeltaEncodingDecoder`, `DeltaEncodingEncoder`).
+  Divisors are power-of-two constants (16/8/128); replace with shifts/masks or a precomputed
+  1024-entry permutation table. Profile first, benchmark both.
 - [ ] **Vector API adoption** — deferred; see [ADR-0005](docs/adr/0005-vector-api-adoption.md) for adoption criteria and candidate loops.
 
 ## Security
