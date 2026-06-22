@@ -58,7 +58,8 @@ final class SchemaCommand {
         return String.format(Locale.ROOT, "%,d", rows);
     }
 
-    private static String formatDType(DType dtype) {
+    // Package-private for direct unit testing of every DType arm (see SchemaCommandTest).
+    static String formatDType(DType dtype) {
         return switch (dtype) {
             case DType.Struct s -> {
                 var sb = new StringBuilder("struct<");
