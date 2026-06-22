@@ -5,7 +5,7 @@ All notable changes to **vortex-java** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.8.2] — 2026-06-21
+## [0.8.2] — 2026-06-22
 
 The headline is **writer-side zone-map statistics**: the writer now emits `vortex.stats` (zoned) layouts carrying per-chunk MIN/MAX, NULL_COUNT, and SUM — matching the Rust reference — so zone-map chunk pruning and aggregate push-down work on Java-written files (previously the reader could decode these stats but the writer never produced them). The release also continues the test-hardening track: the lowest-covered encoder/decoder paths are filled in, SonarCloud new-code coverage is back to 100% with the quality gate green (overall ~83%, all ratings A, zero bugs/vulnerabilities), and the build toolchain is refreshed across eight dependency bumps.
 
