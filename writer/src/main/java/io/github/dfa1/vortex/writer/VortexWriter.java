@@ -1332,14 +1332,15 @@ public final class VortexWriter implements Closeable {
         };
     }
 
+    /// Boxed element `i` of a global-dict column's chunk array. Only the dict-admitted carriers
+    /// ([#isDictCandidate]) — I32/U32, I64/U64, F64 — reach here; narrow-int and F16/F32 ptypes are
+    /// rejected upstream.
     static Object readPrimitiveElement(Object data, PType ptype, int i) {
         return switch (ptype) {
-            case I8, U8 -> ((byte[]) data)[i];
-            case I16, U16, F16 -> ((short[]) data)[i];
             case I32, U32 -> ((int[]) data)[i];
             case I64, U64 -> ((long[]) data)[i];
-            case F32 -> ((float[]) data)[i];
             case F64 -> ((double[]) data)[i];
+            default -> throw new IllegalStateException("ptype not admitted to the global dict: " + ptype);
         };
     }
 

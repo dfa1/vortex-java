@@ -120,9 +120,11 @@ class VortexWriterDictDecisionTest {
     }
 
     static Stream<Arguments> readPrimitiveElementCases() {
+        // Only dict-admitted ptypes reach readPrimitiveElement: I32/U32, I64/U64, F64.
         return Stream.of(
                 arguments(new long[]{7, 8, 9}, PType.I64, 1, 8L),
-                arguments(new int[]{7, 8, 9}, PType.I32, 2, 9));
+                arguments(new int[]{7, 8, 9}, PType.I32, 2, 9),
+                arguments(new double[]{7.0, 8.0, 9.0}, PType.F64, 0, 7.0));
     }
 
     @ParameterizedTest
