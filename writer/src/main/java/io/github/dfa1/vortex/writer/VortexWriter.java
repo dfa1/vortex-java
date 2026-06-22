@@ -1353,24 +1353,11 @@ public final class VortexWriter implements Closeable {
         return PType.U32;
     }
 
+    /// Builds the dictionary's unique-values array for a global-dict column. Only the carriers
+    /// [#isDictCandidate] admits — I32/U32, I64/U64, F64 — reach here; the narrow-int and F16/F32
+    /// ptypes are rejected as dict candidates upstream, so they are not handled.
     private static Object buildTypedUniqueArray(PType ptype, java.util.Set<Object> keys, int size) {
         return switch (ptype) {
-            case I8, U8 -> {
-                byte[] a = new byte[size];
-                int i = 0;
-                for (Object v : keys) {
-                    a[i++] = (Byte) v;
-                }
-                yield a;
-            }
-            case I16, U16, F16 -> {
-                short[] a = new short[size];
-                int i = 0;
-                for (Object v : keys) {
-                    a[i++] = (Short) v;
-                }
-                yield a;
-            }
             case I32, U32 -> {
                 int[] a = new int[size];
                 int i = 0;
@@ -1387,14 +1374,6 @@ public final class VortexWriter implements Closeable {
                 }
                 yield a;
             }
-            case F32 -> {
-                float[] a = new float[size];
-                int i = 0;
-                for (Object v : keys) {
-                    a[i++] = (Float) v;
-                }
-                yield a;
-            }
             case F64 -> {
                 double[] a = new double[size];
                 int i = 0;
@@ -1403,6 +1382,7 @@ public final class VortexWriter implements Closeable {
                 }
                 yield a;
             }
+            default -> throw new IllegalStateException("ptype not admitted to the global dict: " + ptype);
         };
     }
 
