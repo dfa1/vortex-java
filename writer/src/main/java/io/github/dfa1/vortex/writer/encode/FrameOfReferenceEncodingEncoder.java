@@ -60,7 +60,7 @@ public final class FrameOfReferenceEncodingEncoder implements EncodingEncoder {
         // Skip when ref == 0 and ptype is unsigned: residuals == input, so FOR adds metadata
         // overhead (ref scalar + extra node) for zero compression benefit over plain bitpack.
         // Matches Rust IntFoRScheme's skip estimate for this case.
-        if (ref == 0L && isUnsigned(ptype)) {
+        if (ref == 0L && ptype.isUnsigned()) {
             return CascadeStep.notApplicable();
         }
         ByteBuffer meta = buildForMeta(ref, ptype);
@@ -70,12 +70,6 @@ public final class FrameOfReferenceEncodingEncoder implements EncodingEncoder {
         return new CascadeStep(partialRoot, List.of(), List.of(slot), null, null, true);
     }
 
-    private static boolean isUnsigned(PType ptype) {
-        return switch (ptype) {
-            case U8, U16, U32, U64 -> true;
-            default -> false;
-        };
-    }
 
     private static long computeRef(long[] longs, int n) {
         long ref = n > 0 ? longs[0] : 0L;

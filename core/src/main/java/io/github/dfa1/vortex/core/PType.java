@@ -56,6 +56,14 @@ public enum PType {
                        || this == F16 || this == F32 || this == F64;
     }
 
+    /// Returns `true` for the unsigned integer types (`U8`–`U64`) — the complement of
+    /// [#isSigned()], since every non-unsigned ptype is either a signed integer or floating-point.
+    ///
+    /// @return `true` if this ptype is an unsigned integer
+    public boolean isUnsigned() {
+        return !isSigned();
+    }
+
     /// Returns the [PType] for the given enum ordinal — the integer value the wire format
     /// uses to identify a physical type.
     ///
