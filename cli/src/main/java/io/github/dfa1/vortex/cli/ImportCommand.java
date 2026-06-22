@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.cli;
 
 import io.github.dfa1.vortex.csv.CsvImporter;
+import io.github.dfa1.vortex.inspect.ByteSize;
 import io.github.dfa1.vortex.csv.ImportOptions;
 import io.github.dfa1.vortex.parquet.ParquetImporter;
 
@@ -109,7 +110,7 @@ final class ImportCommand {
                                        ? String.format(", cascading depth %d", cascadingDepth)
                                        : "";
         System.out.printf("written: %s  (%s → %s, %s%s)%n",
-                vortexPath, formatBytes(inputBytes), formatBytes(vortexBytes),
+                vortexPath, ByteSize.format(inputBytes), ByteSize.format(vortexBytes),
                 sizeChange, cascadingInfo);
     }
 
@@ -128,16 +129,6 @@ final class ImportCommand {
     private static void clearProgress() {
         System.err.printf("\r%-80s\r", "");
         System.err.flush();
-    }
-
-    private static String formatBytes(long bytes) {
-        if (bytes < 1024L) {
-            return bytes + " B";
-        }
-        if (bytes < 1024L * 1024) {
-            return String.format("%.1f KB", bytes / 1024.0);
-        }
-        return String.format("%.1f MB", bytes / (1024.0 * 1024));
     }
 
     private static Path deriveOutputPath(Path inputPath) {

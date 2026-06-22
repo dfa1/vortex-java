@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.cli;
 
 import io.github.dfa1.vortex.csv.CsvExporter;
+import io.github.dfa1.vortex.inspect.ByteSize;
 import io.github.dfa1.vortex.csv.ExportOptions;
 
 import java.io.IOException;
@@ -63,17 +64,7 @@ final class ExportCommand {
         long inputBytes = Files.size(inputPath);
         long outputBytes = Files.size(outputPath);
         System.out.printf("written: %s  (%s → %s)%n",
-                outputPath, formatBytes(inputBytes), formatBytes(outputBytes));
-    }
-
-    private static String formatBytes(long bytes) {
-        if (bytes < 1024L) {
-            return bytes + " B";
-        }
-        if (bytes < 1024L * 1024) {
-            return String.format("%.1f KB", bytes / 1024.0);
-        }
-        return String.format("%.1f MB", bytes / (1024.0 * 1024));
+                outputPath, ByteSize.format(inputBytes), ByteSize.format(outputBytes));
     }
 
     private static void renderProgress(long done, long total) {

@@ -174,20 +174,6 @@ final class InspectorRender {
         return sb.toString();
     }
 
-    /// Formats a byte count as B / KB / MB.
-    ///
-    /// @param bytes raw byte count
-    /// @return human-readable size string
-    static String formatBytes(long bytes) {
-        if (bytes < 1024) {
-            return bytes + " B";
-        }
-        if (bytes < 1024 * 1024) {
-            return String.format("%.1f KB", bytes / 1024.0);
-        }
-        return String.format("%.1f MB", bytes / (1024.0 * 1024.0));
-    }
-
     /// Pads or truncates `s` to exactly `width` characters.
     ///
     /// @param s     source string

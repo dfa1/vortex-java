@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.cli.tui.term.Ansi;
 import io.github.dfa1.vortex.cli.tui.term.Key;
 import io.github.dfa1.vortex.cli.tui.term.Terminal;
+import io.github.dfa1.vortex.inspect.ByteSize;
 import io.github.dfa1.vortex.inspect.InspectorTree;
 import io.github.dfa1.vortex.inspect.ZonedStatsSchema;
 import io.github.dfa1.vortex.reader.VortexHandle;
@@ -391,10 +392,10 @@ public final class VortexInspectorTui {
 
         private void drawHeader(StringBuilder buf, int width) {
             String header = " vortex-inspect — v" + tree.version()
-                    + "  " + InspectorRender.formatBytes(tree.fileSize())
+                    + "  " + ByteSize.format(tree.fileSize())
                     + "  rows=" + tree.totalRowCount()
                     + "  segs=" + tree.segmentCount()
-                    + " (" + InspectorRender.formatBytes(tree.totalSegmentBytes()) + ")";
+                    + " (" + ByteSize.format(tree.totalSegmentBytes()) + ")";
             buf.append(Ansi.moveTo(1, 1));
             buf.append(Ansi.bg(46)).append(Ansi.fg(30));
             buf.append(InspectorRender.pad(header, width));
@@ -479,7 +480,7 @@ public final class VortexInspectorTui {
                     subtotal += tree.segmentSpecs().get(idx).length();
                 }
                 lines.add("Segments:  " + layout.segments().size()
-                        + " (" + InspectorRender.formatBytes(subtotal) + ")");
+                        + " (" + ByteSize.format(subtotal) + ")");
                 long rows = layout.rowCount();
                 for (int idx : layout.segments()) {
                     SegmentSpec spec = tree.segmentSpecs().get(idx);
@@ -487,7 +488,7 @@ public final class VortexInspectorTui {
                             ? "  bits/elem=" + String.format("%.2f", spec.length() * 8.0 / rows)
                             : "";
                     lines.add("  [" + idx + "] off=" + spec.offset()
-                            + "  len=" + InspectorRender.formatBytes(spec.length())
+                            + "  len=" + ByteSize.format(spec.length())
                             + "  compression=" + spec.compression().name()
                             + bits);
                 }
@@ -559,7 +560,7 @@ public final class VortexInspectorTui {
                     int segIdx = layout.segments().getFirst();
                     SegmentSpec spec = tree.segmentSpecs().get(segIdx);
                     lines.add("Hex (first " + preview.length + " B of segment "
-                            + segIdx + ", total " + InspectorRender.formatBytes(spec.length()) + "):");
+                            + segIdx + ", total " + ByteSize.format(spec.length()) + "):");
                     for (int off = 0; off < preview.length; off += 16) {
                         lines.add(InspectorRender.formatHexRow(preview, off));
                     }

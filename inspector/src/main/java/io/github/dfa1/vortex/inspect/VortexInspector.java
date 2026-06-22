@@ -30,7 +30,7 @@ public final class VortexInspector {
         var sb = new StringBuilder();
 
         sb.append("Vortex v").append(tree.version())
-                .append("  ").append(formatBytes(tree.fileSize()))
+                .append("  ").append(ByteSize.format(tree.fileSize()))
                 .append("  ").append(tree.totalRowCount()).append(" rows").append('\n');
         sb.append('\n');
 
@@ -45,7 +45,7 @@ public final class VortexInspector {
         sb.append('\n');
 
         sb.append("Segments: ").append(tree.segmentCount())
-                .append("  total ").append(formatBytes(tree.totalSegmentBytes())).append('\n');
+                .append("  total ").append(ByteSize.format(tree.totalSegmentBytes())).append('\n');
         appendSegmentTable(sb, tree.segmentSpecs(), "  ");
         sb.append('\n');
 
@@ -60,7 +60,7 @@ public final class VortexInspector {
             SegmentSpec spec = specs.get(i);
             sb.append(indent).append('[').append(i).append("] ")
                     .append("off=").append(spec.offset())
-                    .append("  len=").append(formatBytes(spec.length()))
+                    .append("  len=").append(ByteSize.format(spec.length()))
                     .append("  compression=").append(spec.compression().name())
                     .append('\n');
         }
@@ -189,15 +189,5 @@ public final class VortexInspector {
                     "ext<" + id + ">" + (nullable ? "?" : "");
             case DType.Variant(var nullable) -> "variant" + (nullable ? "?" : "");
         };
-    }
-
-    private static String formatBytes(long bytes) {
-        if (bytes < 1024) {
-            return bytes + " B";
-        }
-        if (bytes < 1024 * 1024) {
-            return String.format("%.1f KB", bytes / 1024.0);
-        }
-        return String.format("%.1f MB", bytes / (1024.0 * 1024.0));
     }
 }

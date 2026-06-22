@@ -251,18 +251,6 @@ class InspectorRenderTest {
     }
 
     @Nested
-    class FormatBytes {
-
-        @Test
-        void formatsAcrossUnitBoundaries() {
-            // Given / When / Then — B / KB / MB thresholds
-            assertThat(InspectorRender.formatBytes(512)).isEqualTo("512 B");
-            assertThat(InspectorRender.formatBytes(2048)).isEqualTo("2.0 KB");
-            assertThat(InspectorRender.formatBytes(3 * 1024 * 1024)).isEqualTo("3.0 MB");
-        }
-    }
-
-    @Nested
     class PadAndTruncate {
 
         @Test
