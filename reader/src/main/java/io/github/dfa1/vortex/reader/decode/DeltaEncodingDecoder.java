@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
+import io.github.dfa1.vortex.encoding.FastLanes;
 import io.github.dfa1.vortex.encoding.PrimitiveArrays;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.proto.DeltaMetadata;
@@ -58,9 +59,9 @@ public final class DeltaEncodingDecoder implements EncodingDecoder {
 
         PType ptype = ((DType.Primitive) ctx.dtype()).ptype();
         long rowCount = ctx.rowCount();
-        int typeBits = typeBits(ptype);
-        int lanes = lanes(ptype);
-        long mask = typeMask(ptype);
+        int typeBits = ptype.bits();
+        int lanes = FastLanes.lanes(ptype);
+        long mask = FastLanes.lowMask(ptype.bits());
 
         long deltasLen = meta.deltas_len();
         int offset = meta.offset();
@@ -76,32 +77,32 @@ public final class DeltaEncodingDecoder implements EncodingDecoder {
             };
         }
 
-        long basesLen = (deltasLen / FL_CHUNK_SIZE) * lanes;
+        long basesLen = (deltasLen / FastLanes.CHUNK) * lanes;
         DType dtype = ctx.dtype();
 
         long[] basesAll = readLongs(ctx.decodeChildSegment(0, dtype, basesLen), (int) basesLen, ptype);
         long[] deltasAll = readLongs(ctx.decodeChildSegment(1, dtype, deltasLen), (int) deltasLen, ptype);
 
-        int numChunks = (int) (deltasLen / FL_CHUNK_SIZE);
+        int numChunks = (int) (deltasLen / FastLanes.CHUNK);
         long[] decoded = new long[(int) deltasLen];
-        long[] untransposedChunk = new long[FL_CHUNK_SIZE];
+        long[] untransposedChunk = new long[FastLanes.CHUNK];
         long[] chunkBases = new long[lanes];
-        long[] chunkDeltas = new long[FL_CHUNK_SIZE];
-        long[] chunkUndelta = new long[FL_CHUNK_SIZE];
+        long[] chunkDeltas = new long[FastLanes.CHUNK];
+        long[] chunkUndelta = new long[FastLanes.CHUNK];
 
         for (int chunk = 0; chunk < numChunks; chunk++) {
             int basesOff = chunk * lanes;
-            int deltaOff = chunk * FL_CHUNK_SIZE;
+            int deltaOff = chunk * FastLanes.CHUNK;
 
             System.arraycopy(basesAll, basesOff, chunkBases, 0, lanes);
-            System.arraycopy(deltasAll, deltaOff, chunkDeltas, 0, FL_CHUNK_SIZE);
+            System.arraycopy(deltasAll, deltaOff, chunkDeltas, 0, FastLanes.CHUNK);
 
             undeltaChunk(chunkDeltas, chunkBases, lanes, typeBits, mask, chunkUndelta);
 
-            for (int i = 0; i < FL_CHUNK_SIZE; i++) {
-                untransposedChunk[transposeIndex(i)] = chunkUndelta[i];
+            for (int i = 0; i < FastLanes.CHUNK; i++) {
+                untransposedChunk[FastLanes.transposeIndex(i)] = chunkUndelta[i];
             }
-            System.arraycopy(untransposedChunk, 0, decoded, deltaOff, FL_CHUNK_SIZE);
+            System.arraycopy(untransposedChunk, 0, decoded, deltaOff, FastLanes.CHUNK);
         }
 
         long[] result = new long[(int) rowCount];
@@ -121,7 +122,7 @@ public final class DeltaEncodingDecoder implements EncodingDecoder {
         for (int lane = 0; lane < lanes; lane++) {
             long prev = bases[lane] & mask;
             for (int row = 0; row < typeBits; row++) {
-                int idx = iterateIndex(row, lane);
+                int idx = FastLanes.iterateIndex(row, lane);
                 long next = ((deltas[idx] & mask) + prev) & mask;
                 out[idx] = next;
                 prev = next;
@@ -149,34 +150,5 @@ public final class DeltaEncodingDecoder implements EncodingDecoder {
         return out;
     }
 
-    private static final int FL_CHUNK_SIZE = 1024;
-
-    private static final int[] FL_ORDER = {0, 4, 2, 6, 1, 5, 3, 7};
-
-    private static int transposeIndex(int idx) {
-        int lane = idx % 16;
-        int order = (idx / 16) % 8;
-        int row = idx / 128;
-        return lane * 64 + FL_ORDER[order] * 8 + row;
-    }
-
-    private static int iterateIndex(int row, int lane) {
-        int o = row / 8;
-        int s = row % 8;
-        return FL_ORDER[o] * 16 + s * 128 + lane;
-    }
-
-    private static int lanes(PType ptype) {
-        return FL_CHUNK_SIZE / (ptype.byteSize() * 8);
-    }
-
-    private static int typeBits(PType ptype) {
-        return ptype.byteSize() * 8;
-    }
-
-    private static long typeMask(PType ptype) {
-        int bits = ptype.byteSize() * 8;
-        return bits == 64 ? -1L : (1L << bits) - 1;
-    }
 
 }
