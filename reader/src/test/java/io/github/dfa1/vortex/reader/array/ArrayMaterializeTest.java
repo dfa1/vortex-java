@@ -16,7 +16,11 @@ import static io.github.dfa1.vortex.encoding.DTypes.F64;
 import static io.github.dfa1.vortex.encoding.DTypes.I64;
 import static io.github.dfa1.vortex.reader.array.TestArrays.bools;
 import static io.github.dfa1.vortex.reader.array.TestArrays.bytes;
+import static io.github.dfa1.vortex.reader.array.TestArrays.doubles;
+import static io.github.dfa1.vortex.reader.array.TestArrays.floats;
+import static io.github.dfa1.vortex.reader.array.TestArrays.ints;
 import static io.github.dfa1.vortex.reader.array.TestArrays.longs;
+import static io.github.dfa1.vortex.reader.array.TestArrays.shorts;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -306,6 +310,84 @@ class ArrayMaterializeTest {
             assertThatThrownBy(() -> sut.materialize(arena))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("vortex.mystery");
+        }
+    }
+
+    /// The scalar/per-element `materialize` fallback on each primitive [Array] interface, reached
+    /// through an `Offset*Array` view (which does not override `materialize`, unlike the buffer-backed
+    /// `Materialized*` records). The Long and Bool defaults are covered above; this group fills in the
+    /// remaining numeric interfaces.
+    @Nested
+    class PrimitiveScalarDefaults {
+
+        @Test
+        void floatViewDecodesEveryElementThroughGetFloat() {
+            // Given an OffsetFloatArray view (FloatArray.materialize default, not a buffer return)
+            Array sut = floats(1.5f, 2.5f, 3.5f, 4.5f).limited(3);
+
+            // When
+            MemorySegment result = sut.materialize(arena);
+
+            // Then the kept prefix is written as little-endian f32
+            assertThat(result.byteSize()).isEqualTo(3 * 4L);
+            assertThat(result.getAtIndex(PTypeIO.LE_FLOAT, 0)).isEqualTo(1.5f);
+            assertThat(result.getAtIndex(PTypeIO.LE_FLOAT, 2)).isEqualTo(3.5f);
+        }
+
+        @Test
+        void byteViewDecodesEveryElementThroughGetByte() {
+            // Given an OffsetByteArray view (ByteArray.materialize default)
+            Array sut = bytes((byte) 10, (byte) 20, (byte) 30, (byte) 40).limited(3);
+
+            // When
+            MemorySegment result = sut.materialize(arena);
+
+            // Then one byte per element
+            assertThat(result.byteSize()).isEqualTo(3L);
+            assertThat(result.get(ValueLayout.JAVA_BYTE, 0)).isEqualTo((byte) 10);
+            assertThat(result.get(ValueLayout.JAVA_BYTE, 2)).isEqualTo((byte) 30);
+        }
+
+        @Test
+        void shortViewDecodesEveryElementThroughGetShort() {
+            // Given an OffsetShortArray view (ShortArray.materialize default)
+            Array sut = shorts((short) 100, (short) 200, (short) 300, (short) 400).limited(3);
+
+            // When
+            MemorySegment result = sut.materialize(arena);
+
+            // Then little-endian i16
+            assertThat(result.byteSize()).isEqualTo(3 * 2L);
+            assertThat(result.getAtIndex(PTypeIO.LE_SHORT, 0)).isEqualTo((short) 100);
+            assertThat(result.getAtIndex(PTypeIO.LE_SHORT, 2)).isEqualTo((short) 300);
+        }
+
+        @Test
+        void intViewDecodesEveryElementThroughGetInt() {
+            // Given an OffsetIntArray view (IntArray.materialize default)
+            Array sut = ints(1, 2, 3, 4).limited(3);
+
+            // When
+            MemorySegment result = sut.materialize(arena);
+
+            // Then little-endian i32
+            assertThat(result.byteSize()).isEqualTo(3 * 4L);
+            assertThat(result.getAtIndex(PTypeIO.LE_INT, 0)).isEqualTo(1);
+            assertThat(result.getAtIndex(PTypeIO.LE_INT, 2)).isEqualTo(3);
+        }
+
+        @Test
+        void doubleViewDecodesEveryElementThroughGetDouble() {
+            // Given an OffsetDoubleArray view (DoubleArray.materialize default)
+            Array sut = doubles(1.5, 2.5, 3.5).limited(2);
+
+            // When
+            MemorySegment result = sut.materialize(arena);
+
+            // Then little-endian f64
+            assertThat(result.byteSize()).isEqualTo(2 * 8L);
+            assertThat(result.getAtIndex(PTypeIO.LE_DOUBLE, 0)).isEqualTo(1.5);
+            assertThat(result.getAtIndex(PTypeIO.LE_DOUBLE, 1)).isEqualTo(2.5);
         }
     }
 
