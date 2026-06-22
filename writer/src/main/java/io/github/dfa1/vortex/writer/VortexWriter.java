@@ -974,9 +974,13 @@ public final class VortexWriter implements Closeable {
     }
 
     private static double scalarDouble(byte[] bytes) throws IOException {
-        // Float columns serialise min/max as f64 (F64) or f32 (F32).
+        // Float columns serialise min/max as f64 (F64) or f32 (F32). Branch rather than use a
+        // ternary so the F32 path widens Float -> double explicitly instead of mixing boxed types.
         ScalarValue sv = decodeScalar(bytes);
-        return sv.f64_value() != null ? sv.f64_value() : sv.f32_value();
+        if (sv.f64_value() != null) {
+            return sv.f64_value();
+        }
+        return sv.f32_value();
     }
 
     private static ScalarValue decodeScalar(byte[] bytes) throws IOException {
@@ -1432,6 +1436,9 @@ public final class VortexWriter implements Closeable {
     private record SegRef(long offset, long len) {
     }
 
+    // S6218: the byte[] stat components are never value-compared — ChunkRef instances are only
+    // collected in per-column lists and read positionally, so the default identity equals is fine.
+    @SuppressWarnings("java:S6218")
     private record ChunkRef(int segIdx, long rowCount, byte[] statsMin, byte[] statsMax,
             byte[] statsSum, long nullCount) {
         boolean hasStats() {
