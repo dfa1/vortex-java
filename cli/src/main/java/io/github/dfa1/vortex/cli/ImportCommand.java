@@ -42,7 +42,7 @@ final class ImportCommand {
                 return runCsv(inputPath, parsedArgs.outputPath(), parsedArgs.delimiter());
             }
         } catch (IOException e) {
-            clearProgress();
+            ProgressBar.clear();
             System.err.println("error: " + e.getMessage());
             return ExitStatus.ERROR;
         }
@@ -84,7 +84,7 @@ final class ImportCommand {
             options = options.withDelimiter(delimiter);
         }
         CsvImporter.importCsv(csvPath, vortexPath, options);
-        clearProgress();
+        ProgressBar.clear();
         printResult(csvPath, vortexPath, options.writeOptions().allowedCascading());
         return ExitStatus.OK;
     }
@@ -94,7 +94,7 @@ final class ImportCommand {
                 io.github.dfa1.vortex.parquet.ImportOptions.defaults()
                         .withProgressListener(ImportCommand::renderProgress);
         ParquetImporter.importParquet(parquetPath, vortexPath, options);
-        clearProgress();
+        ProgressBar.clear();
         printResult(parquetPath, vortexPath, options.writeOptions().allowedCascading());
         return ExitStatus.OK;
     }
@@ -114,21 +114,15 @@ final class ImportCommand {
                 sizeChange, cascadingInfo);
     }
 
+    /// Progress callback for imports. An indeterminate `total` (`< 0`, e.g. a streamed source with
+    /// no known row count) shows just the running row count; otherwise delegates to the shared bar.
     private static void renderProgress(long done, long total) {
         if (total < 0) {
             System.err.printf("\r  imported %,d rows", done);
+            System.err.flush();
         } else {
-            int pct = total > 0 ? (int) (done * 100L / total) : 100;
-            int filled = pct * 30 / 100;
-            String bar = "=".repeat(filled) + (filled < 30 ? ">" : "") + " ".repeat(Math.max(0, 29 - filled));
-            System.err.printf("\r  [%s] %3d%%  %,d / %,d rows", bar, pct, done, total);
+            ProgressBar.render(done, total);
         }
-        System.err.flush();
-    }
-
-    private static void clearProgress() {
-        System.err.printf("\r%-80s\r", "");
-        System.err.flush();
     }
 
     private static Path deriveOutputPath(Path inputPath) {

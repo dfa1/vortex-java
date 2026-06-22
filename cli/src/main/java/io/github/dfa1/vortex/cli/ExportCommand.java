@@ -33,20 +33,20 @@ final class ExportCommand {
                 : deriveOutputPath(inputPath);
         try {
             ExportOptions options = ExportOptions.defaults()
-                    .withProgressListener(ExportCommand::renderProgress);
+                    .withProgressListener(ProgressBar::render);
             if (toStdout) {
                 Writer stdout = new OutputStreamWriter(System.out, StandardCharsets.UTF_8);
                 CsvExporter.exportCsv(inputPath, stdout, options);
                 stdout.flush();
-                clearProgress();
+                ProgressBar.clear();
             } else {
                 CsvExporter.exportCsv(inputPath, outputPath, options);
-                clearProgress();
+                ProgressBar.clear();
                 printResult(inputPath, outputPath);
             }
             return ExitStatus.OK;
         } catch (IOException e) {
-            clearProgress();
+            ProgressBar.clear();
             System.err.println("error: " + e.getMessage());
             return ExitStatus.ERROR;
         }
@@ -65,18 +65,5 @@ final class ExportCommand {
         long outputBytes = Files.size(outputPath);
         System.out.printf("written: %s  (%s → %s)%n",
                 outputPath, ByteSize.format(inputBytes), ByteSize.format(outputBytes));
-    }
-
-    private static void renderProgress(long done, long total) {
-        int pct = total > 0 ? (int) (done * 100L / total) : 100;
-        int filled = pct * 30 / 100;
-        String bar = "=".repeat(filled) + (filled < 30 ? ">" : "") + " ".repeat(Math.max(0, 29 - filled));
-        System.err.printf("\r  [%s] %3d%%  %,d / %,d rows", bar, pct, done, total);
-        System.err.flush();
-    }
-
-    private static void clearProgress() {
-        System.err.printf("\r%-80s\r", "");
-        System.err.flush();
     }
 }
