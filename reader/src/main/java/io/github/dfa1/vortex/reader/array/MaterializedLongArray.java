@@ -5,18 +5,13 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.SegmentAllocator;
-import java.util.Optional;
 import java.util.function.LongBinaryOperator;
 import java.util.function.LongConsumer;
 
 /// Buffer-backed [LongArray] — the fallback used when an encoding decoder
 /// either materialises the output eagerly or has no lazy variant of its own.
-public final class MaterializedLongArray implements LongArray {
+public final class MaterializedLongArray extends AbstractMaterializedArray implements LongArray {
 
-    private final DType dtype;
-    private final long length;
-    private final MemorySegment buffer;
     private final long elementCount;
 
     /// Creates a new `MaterializedLongArray` backed by the given memory segment.
@@ -25,35 +20,8 @@ public final class MaterializedLongArray implements LongArray {
     /// @param length number of elements
     /// @param buffer little-endian long data (8 bytes per element)
     public MaterializedLongArray(DType dtype, long length, MemorySegment buffer) {
-        this.dtype = dtype;
-        this.length = length;
-        this.buffer = buffer;
+        super(dtype, length, buffer);
         this.elementCount = buffer.byteSize() / PTypeIO.LE_LONG.byteSize();
-    }
-
-    @Override
-    public DType dtype() {
-        return dtype;
-    }
-
-    @Override
-    public long length() {
-        return length;
-    }
-
-    /// Returns the backing buffer directly — already a contiguous little-endian
-    /// `i64` segment, so no copy or allocation is needed.
-    ///
-    /// @param arena unused; the existing buffer is returned as-is
-    /// @return the backing little-endian `i64` segment
-    @Override
-    public MemorySegment materialize(SegmentAllocator arena) {
-        return buffer;
-    }
-
-    @Override
-    public Optional<MemorySegment> segmentIfPresent() {
-        return Optional.of(buffer);
     }
 
     @Override
