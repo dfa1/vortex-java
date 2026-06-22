@@ -92,6 +92,62 @@ class GlobalDictUtf8Test {
     }
 
     @Test
+    void mediumCardinality_utf8_usesU16Codes(@TempDir Path tmp) throws IOException {
+        // Given — 300 distinct strings over 1000 rows: a global-dict candidate whose dict size (300)
+        // is above the 256 U8-code boundary, so codes are U16. Exercises buildUtf8CodesArray's U16
+        // arm (the existing low-card test has 3 values → U8).
+        Path file = tmp.resolve("u16_utf8.vortex");
+        int rows = 1_000;
+        int cardinality = 300;
+        String[] data = new String[rows];
+        for (int i = 0; i < rows; i++) {
+            data[i] = "s" + (i % cardinality);
+        }
+
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.cascading(3))) {
+            sut.writeChunk(Map.of("status", data));
+        }
+
+        // Then — every value round-trips through the U16-coded dict
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
+            assertThat(readAllStrings(vf, "status")).containsExactly(data);
+        }
+    }
+
+    @Test
+    void cardinalityExceededAcrossChunks_utf8_fallsBackToPerChunk(@TempDir Path tmp) throws IOException {
+        // Given — the first chunk is a candidate (400 distinct / 1000 rows, < 50% unique), buffering
+        // the column for a global dict; a second chunk of fresh uniques pushes the total cardinality
+        // past GLOBAL_DICT_MAX_CARDINALITY (2048), tripping the per-chunk fallback in
+        // writeGlobalDictUtf8Column once the full key set is known at flush.
+        String[] c0 = new String[1_000];
+        for (int i = 0; i < c0.length; i++) {
+            c0[i] = "v" + (i % 400);
+        }
+        String[] c1 = new String[1_700];
+        for (int i = 0; i < c1.length; i++) {
+            c1[i] = "u" + i;
+        }
+        Path file = tmp.resolve("card_exceeded_utf8.vortex");
+
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.cascading(3))) {
+            // When — 400 + 1700 = 2100 distinct > 2048
+            sut.writeChunk(Map.of("status", c0));
+            sut.writeChunk(Map.of("status", c1));
+        }
+
+        // Then — the fallback round-trips both chunks in order
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
+            List<String> got = readAllStrings(vf, "status");
+            assertThat(got).hasSize(2_700);
+            assertThat(got.subList(0, 1_000)).containsExactly(c0);
+            assertThat(got.subList(1_000, 2_700)).containsExactly(c1);
+        }
+    }
+
+    @Test
     void utf8_globalDict_disabled_byOptions(@TempDir Path tmp) throws IOException {
         // Given — globalDict() off, low-cardinality column → falls back to per-chunk DictEncoding.
         // Both paths round-trip correctly; this test guards the opt-out.

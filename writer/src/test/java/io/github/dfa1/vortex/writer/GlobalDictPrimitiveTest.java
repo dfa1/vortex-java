@@ -120,6 +120,32 @@ class GlobalDictPrimitiveTest {
     }
 
     @Test
+    void cardinalityExceededAcrossChunks_i64_fallsBackToPerChunk(@TempDir Path tmp) throws IOException {
+        // Given — the first chunk is a dict candidate (400 distinct in 1000 rows, < 50% unique), so
+        // the column is buffered for a global dict; a second chunk of fresh uniques then pushes the
+        // global cardinality past GLOBAL_DICT_MAX_CARDINALITY (2048). The shared-dict build sees the
+        // full key set only at flush, so it trips the per-chunk fallback in writeGlobalDictColumn.
+        long[] c0 = new long[1_000];
+        for (int i = 0; i < c0.length; i++) {
+            c0[i] = i % 400;
+        }
+        long[] c1 = new long[1_700];
+        for (int i = 0; i < c1.length; i++) {
+            c1[i] = 1_000_000L + i;
+        }
+        long[] expected = new long[c0.length + c1.length];
+        System.arraycopy(c0, 0, expected, 0, c0.length);
+        System.arraycopy(c1, 0, expected, c0.length, c1.length);
+        Path file = tmp.resolve("card_exceeded_i64.vortex");
+
+        // When — 400 + 1700 = 2100 distinct > 2048, so the dict path bails to per-chunk segments
+        long[] result = writeI64(file, new long[][]{c0, c1}, WriteOptions.cascading(3));
+
+        // Then — the fallback round-trips every value exactly
+        assertThat(result).containsExactly(expected);
+    }
+
+    @Test
     void lowCardinality_i32_usesGlobalDict(@TempDir Path tmp) throws IOException {
         // Given — a low-cardinality I32 column drives the global dict build through the int[]
         // unique-array and codes paths (the narrower I8/I16 carriers are NOT round-tripped here:
