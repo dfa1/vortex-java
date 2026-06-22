@@ -100,10 +100,11 @@ class VortexWriterDictDecisionTest {
     // ── primitiveArrayLen / readPrimitiveElement ─────────────────────────────────
 
     static Stream<Arguments> primitiveArrayLenCases() {
+        // Only dict-admitted ptypes reach primitiveArrayLen: I32/U32 (int[]), I64/U64 (long[]), F64.
         return Stream.of(
                 arguments(new long[]{1, 2, 3}, PType.I64, 3),
                 arguments(new int[]{1, 2}, PType.I32, 2),
-                arguments(new byte[]{1, 2, 3, 4}, PType.I8, 4));
+                arguments(new double[]{1.0, 2.0, 3.0, 4.0}, PType.F64, 4));
     }
 
     @ParameterizedTest

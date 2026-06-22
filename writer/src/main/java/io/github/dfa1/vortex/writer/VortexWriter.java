@@ -1321,14 +1321,14 @@ public final class VortexWriter implements Closeable {
         return seen.size() * 2 < n;
     }
 
+    /// Length of a global-dict column's chunk array. Only the dict-admitted carriers ([#isDictCandidate])
+    /// — I32/U32, I64/U64, F64 — reach here; narrow-int and F16/F32 ptypes are rejected upstream.
     static int primitiveArrayLen(Object data, PType ptype) {
         return switch (ptype) {
-            case I8, U8 -> ((byte[]) data).length;
-            case I16, U16, F16 -> ((short[]) data).length;
             case I32, U32 -> ((int[]) data).length;
             case I64, U64 -> ((long[]) data).length;
-            case F32 -> ((float[]) data).length;
             case F64 -> ((double[]) data).length;
+            default -> throw new IllegalStateException("ptype not admitted to the global dict: " + ptype);
         };
     }
 
