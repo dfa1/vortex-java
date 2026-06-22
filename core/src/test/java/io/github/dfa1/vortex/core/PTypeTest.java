@@ -52,6 +52,27 @@ class PTypeTest {
     }
 
     @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"U8", "U16", "U32", "U64"})
+    void isUnsigned_trueForUnsigned(PType ptype) {
+        // Given / When / Then
+        assertThat(ptype.isUnsigned()).isTrue();
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = PType.class, names = {"I8", "I16", "I32", "I64", "F16", "F32", "F64"})
+    void isUnsigned_falseForSignedAndFloats(PType ptype) {
+        // Given / When / Then
+        assertThat(ptype.isUnsigned()).isFalse();
+    }
+
+    @ParameterizedTest
+    @EnumSource(PType.class)
+    void isUnsigned_isExactComplementOfIsSigned(PType ptype) {
+        // Given / When / Then — the two must partition every ptype; isUnsigned is defined as !isSigned
+        assertThat(ptype.isUnsigned()).isNotEqualTo(ptype.isSigned());
+    }
+
+    @ParameterizedTest
     @EnumSource(PType.class)
     void fromOrdinal_roundTrips(PType ptype) {
         // Given / When / Then

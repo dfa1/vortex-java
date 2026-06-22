@@ -42,7 +42,7 @@ public final class DeltaEncodingEncoder implements EncodingEncoder {
         int typeBits = typeBits(ptype);
         int lanes = lanes(ptype);
         long mask = typeMask(ptype);
-        boolean unsign = isUnsigned(ptype);
+        boolean unsign = ptype.isUnsigned();
 
         long minVal = 0L;
         long maxVal = 0L;
@@ -117,15 +117,8 @@ public final class DeltaEncodingEncoder implements EncodingEncoder {
         }
     }
 
-    private static boolean isUnsigned(PType ptype) {
-        return switch (ptype) {
-            case U8, U16, U32, U64 -> true;
-            default -> false;
-        };
-    }
-
     private static byte[] statsBytes(PType ptype, long value) {
-        if (isUnsigned(ptype)) {
+        if (ptype.isUnsigned()) {
             return ScalarValue.ofUint64Value(value).encode();
         }
         return ScalarValue.ofInt64Value(value).encode();

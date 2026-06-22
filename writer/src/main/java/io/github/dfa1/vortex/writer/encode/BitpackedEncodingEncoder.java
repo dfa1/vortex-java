@@ -48,7 +48,7 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
         int n = longs.length;
         int typeBits = ptype.byteSize() * 8;
         long typeMask = typeMask(typeBits);
-        boolean unsign = isUnsigned(ptype);
+        boolean unsign = ptype.isUnsigned();
 
         long signedMin = 0L;
         long signedMax = 0L;
@@ -243,15 +243,8 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
         return typeBits == 64 ? -1L : (1L << typeBits) - 1L;
     }
 
-    private static boolean isUnsigned(PType ptype) {
-        return switch (ptype) {
-            case U8, U16, U32, U64 -> true;
-            default -> false;
-        };
-    }
-
     private static byte[] statsBytes(PType ptype, long value) {
-        if (isUnsigned(ptype)) {
+        if (ptype.isUnsigned()) {
             return ScalarValue.ofUint64Value(value).encode();
         }
         return ScalarValue.ofInt64Value(value).encode();
