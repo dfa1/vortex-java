@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
+import io.github.dfa1.vortex.encoding.PrimitiveArrays;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.proto.PatchedMetadata;
 
@@ -62,7 +63,7 @@ public final class PatchedEncodingEncoder implements EncodingEncoder {
                 return CascadeStep.notApplicable();
             }
             PType ptype = p.ptype();
-            long[] longs = toLongs(data, ptype);
+            long[] longs = PrimitiveArrays.toLongs(data, ptype, EncodingId.VORTEX_PATCHED);
             int n = longs.length;
             if (n == 0) {
                 return CascadeStep.notApplicable();
@@ -96,7 +97,7 @@ public final class PatchedEncodingEncoder implements EncodingEncoder {
                         "expected primitive dtype, got " + dtype);
             }
             PType ptype = p.ptype();
-            long[] longs = toLongs(data, ptype);
+            long[] longs = PrimitiveArrays.toLongs(data, ptype, EncodingId.VORTEX_PATCHED);
             int n = longs.length;
 
             PatchedData pd = computePatchedData(longs, ptype, n);
@@ -269,60 +270,6 @@ public final class PatchedEncodingEncoder implements EncodingEncoder {
             };
         }
 
-        private static long[] toLongs(Object data, PType ptype) {
-            return switch (ptype) {
-                case I8 -> {
-                    byte[] a = (byte[]) data;
-                    long[] r = new long[a.length];
-                    for (int i = 0; i < a.length; i++) {
-                        r[i] = a[i];
-                    }
-                    yield r;
-                }
-                case U8 -> {
-                    byte[] a = (byte[]) data;
-                    long[] r = new long[a.length];
-                    for (int i = 0; i < a.length; i++) {
-                        r[i] = Byte.toUnsignedLong(a[i]);
-                    }
-                    yield r;
-                }
-                case I16 -> {
-                    short[] a = (short[]) data;
-                    long[] r = new long[a.length];
-                    for (int i = 0; i < a.length; i++) {
-                        r[i] = a[i];
-                    }
-                    yield r;
-                }
-                case U16 -> {
-                    short[] a = (short[]) data;
-                    long[] r = new long[a.length];
-                    for (int i = 0; i < a.length; i++) {
-                        r[i] = Short.toUnsignedLong(a[i]);
-                    }
-                    yield r;
-                }
-                case I32 -> {
-                    int[] a = (int[]) data;
-                    long[] r = new long[a.length];
-                    for (int i = 0; i < a.length; i++) {
-                        r[i] = a[i];
-                    }
-                    yield r;
-                }
-                case U32 -> {
-                    int[] a = (int[]) data;
-                    long[] r = new long[a.length];
-                    for (int i = 0; i < a.length; i++) {
-                        r[i] = Integer.toUnsignedLong(a[i]);
-                    }
-                    yield r;
-                }
-                case I64, U64 -> (long[]) data;
-                default -> throw new VortexException(EncodingId.VORTEX_PATCHED, "unsupported ptype: " + ptype);
-            };
-        }
     }
 
     @SuppressWarnings("java:S6218") // internal data carrier; array fields are not compared for equality

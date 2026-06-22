@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
+import io.github.dfa1.vortex.encoding.PrimitiveArrays;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.proto.DeltaMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -14,7 +15,6 @@ import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 
@@ -107,7 +107,7 @@ public final class DeltaEncodingDecoder implements EncodingDecoder {
         long[] result = new long[(int) rowCount];
         System.arraycopy(decoded, offset, result, 0, (int) rowCount);
 
-        MemorySegment seg = fromLongs(result, ptype, ctx.arena());
+        MemorySegment seg = PrimitiveArrays.fromLongs(result, ptype, ctx.arena());
         return switch (ptype) {
             case I64, U64 -> new MaterializedLongArray(ctx.dtype(), rowCount, seg);
             case I32, U32 -> new MaterializedIntArray(ctx.dtype(), rowCount, seg);
@@ -177,21 +177,6 @@ public final class DeltaEncodingDecoder implements EncodingDecoder {
     private static long typeMask(PType ptype) {
         int bits = ptype.byteSize() * 8;
         return bits == 64 ? -1L : (1L << bits) - 1;
-    }
-
-    private static MemorySegment fromLongs(long[] longs, PType ptype, SegmentAllocator arena) {
-        if (ptype == PType.I64 || ptype == PType.U64) {
-            MemorySegment dst = arena.allocate((long) longs.length * 8);
-            MemorySegment.copy(MemorySegment.ofArray(longs), ValueLayout.JAVA_LONG, 0L, dst, PTypeIO.LE_LONG, 0L, longs.length);
-            return dst;
-        }
-        int n = longs.length;
-        long elemSize = ptype.byteSize();
-        MemorySegment seg = arena.allocate(n * elemSize);
-        for (int i = 0; i < n; i++) {
-            PTypeIO.set(seg, i * elemSize, ptype, longs[i]);
-        }
-        return seg;
     }
 
 }
