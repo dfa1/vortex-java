@@ -4,18 +4,13 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.SegmentAllocator;
-import java.util.Optional;
 import java.util.function.DoubleBinaryOperator;
 import java.util.function.DoubleConsumer;
 
 /// Buffer-backed [DoubleArray] — the fallback used when an encoding decoder
 /// either materialises the output eagerly or has no lazy variant of its own.
-public final class MaterializedDoubleArray implements DoubleArray {
+public final class MaterializedDoubleArray extends AbstractMaterializedArray implements DoubleArray {
 
-    private final DType dtype;
-    private final long length;
-    private final MemorySegment buffer;
     private final long elementCount;
 
     /// Constructs a `MaterializedDoubleArray` backed by the given buffer.
@@ -24,35 +19,8 @@ public final class MaterializedDoubleArray implements DoubleArray {
     /// @param length number of logical elements
     /// @param buffer raw double data (8 bytes per element, little-endian)
     public MaterializedDoubleArray(DType dtype, long length, MemorySegment buffer) {
-        this.dtype = dtype;
-        this.length = length;
-        this.buffer = buffer;
+        super(dtype, length, buffer);
         this.elementCount = buffer.byteSize() / PTypeIO.LE_DOUBLE.byteSize();
-    }
-
-    @Override
-    public DType dtype() {
-        return dtype;
-    }
-
-    @Override
-    public long length() {
-        return length;
-    }
-
-    /// Returns the backing buffer directly — already a contiguous little-endian
-    /// `f64` segment, so no copy or allocation is needed.
-    ///
-    /// @param arena unused; the existing buffer is returned as-is
-    /// @return the backing little-endian `f64` segment
-    @Override
-    public MemorySegment materialize(SegmentAllocator arena) {
-        return buffer;
-    }
-
-    @Override
-    public Optional<MemorySegment> segmentIfPresent() {
-        return Optional.of(buffer);
     }
 
     @Override
