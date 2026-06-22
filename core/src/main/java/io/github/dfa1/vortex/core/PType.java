@@ -41,6 +41,13 @@ public enum PType {
         };
     }
 
+    /// Number of bits per element — [#byteSize()] times eight (8, 16, 32, or 64).
+    ///
+    /// @return the bit width of this physical type
+    public int bits() {
+        return byteSize() * 8;
+    }
+
     /// Returns `true` for `F16`, `F32`, and `F64`.
     ///
     /// @return `true` if this ptype is a floating-point type

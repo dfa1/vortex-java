@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
+import io.github.dfa1.vortex.encoding.FastLanes;
 import io.github.dfa1.vortex.encoding.PrimitiveArrays;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.proto.BitPackedMetadata;
@@ -46,8 +47,8 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
         PType ptype = ((DType.Primitive) dtype).ptype();
         long[] longs = PrimitiveArrays.toLongs(data, ptype, EncodingId.FASTLANES_BITPACKED);
         int n = longs.length;
-        int typeBits = ptype.byteSize() * 8;
-        long typeMask = typeMask(typeBits);
+        int typeBits = ptype.bits();
+        long typeMask = FastLanes.lowMask(typeBits);
         boolean unsign = ptype.isUnsigned();
 
         long signedMin = 0L;
@@ -198,7 +199,7 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
         int lanes = 1024 / typeBits;
         int wordBytes = typeBits / 8;
         int blockCount = (n + 1023) / 1024;
-        long typeMask = typeMask(typeBits);
+        long typeMask = FastLanes.lowMask(typeBits);
         // Mask values to the chosen bit width so over-cap entries (handled separately as
         // patches) don't spill into the next row's region in the packed layout.
         long widthMask = bitWidth >= 64 ? -1L : (1L << bitWidth) - 1L;
@@ -239,9 +240,6 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
     }
 
 
-    private static long typeMask(int typeBits) {
-        return typeBits == 64 ? -1L : (1L << typeBits) - 1L;
-    }
 
     private static byte[] statsBytes(PType ptype, long value) {
         if (ptype.isUnsigned()) {

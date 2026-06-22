@@ -64,7 +64,7 @@ public final class BitpackedEncodingDecoder implements EncodingDecoder {
         int bitWidth = meta.bit_width();
         int offset = meta.offset();
         PType ptype = ((DType.Primitive) ctx.dtype()).ptype();
-        int typeBits = ptype.byteSize() * 8;
+        int typeBits = ptype.bits();
         long rowCount = ctx.rowCount();
 
         MemorySegment packed = ctx.buffer(0);

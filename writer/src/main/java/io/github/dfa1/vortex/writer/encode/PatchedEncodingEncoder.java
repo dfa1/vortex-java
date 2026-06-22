@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
+import io.github.dfa1.vortex.encoding.FastLanes;
 import io.github.dfa1.vortex.encoding.PrimitiveArrays;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.proto.PatchedMetadata;
@@ -140,8 +141,8 @@ public final class PatchedEncodingEncoder implements EncodingEncoder {
         }
 
         private static PatchedData computePatchedData(long[] longs, PType ptype, int n) {
-            int typeBits = ptype.byteSize() * 8;
-            long typeMask = typeBits == 64 ? -1L : (1L << typeBits) - 1L;
+            int typeBits = ptype.bits();
+            long typeMask = FastLanes.lowMask(typeBits);
             int elemBytes = ptype.byteSize();
 
             int[] bitWidthFreq = new int[typeBits + 1];
