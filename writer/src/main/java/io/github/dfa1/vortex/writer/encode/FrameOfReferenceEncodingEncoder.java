@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
+import io.github.dfa1.vortex.encoding.PrimitiveArrays;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.proto.ScalarValue;
 
@@ -34,7 +35,7 @@ public final class FrameOfReferenceEncodingEncoder implements EncodingEncoder {
             throw new VortexException(EncodingId.FASTLANES_FOR, "expected primitive dtype, got " + dtype);
         }
         PType ptype = p.ptype();
-        long[] longs = toLongs(data, ptype);
+        long[] longs = PrimitiveArrays.toLongs(data, ptype, EncodingId.FASTLANES_FOR);
         int n = longs.length;
 
         long ref = computeRef(longs, n);
@@ -52,7 +53,7 @@ public final class FrameOfReferenceEncodingEncoder implements EncodingEncoder {
             throw new VortexException(EncodingId.FASTLANES_FOR, "expected primitive dtype, got " + dtype);
         }
         PType ptype = p.ptype();
-        long[] longs = toLongs(data, ptype);
+        long[] longs = PrimitiveArrays.toLongs(data, ptype, EncodingId.FASTLANES_FOR);
         int n = longs.length;
 
         long ref = computeRef(longs, n);
@@ -130,36 +131,6 @@ public final class FrameOfReferenceEncodingEncoder implements EncodingEncoder {
         };
     }
 
-    private static long[] toLongs(Object data, PType ptype) {
-        return switch (ptype) {
-            case I8, U8 -> {
-                byte[] arr = (byte[]) data;
-                long[] r = new long[arr.length];
-                for (int i = 0; i < arr.length; i++) {
-                    r[i] = ptype == PType.U8 ? Byte.toUnsignedLong(arr[i]) : arr[i];
-                }
-                yield r;
-            }
-            case I16, U16 -> {
-                short[] arr = (short[]) data;
-                long[] r = new long[arr.length];
-                for (int i = 0; i < arr.length; i++) {
-                    r[i] = ptype == PType.U16 ? Short.toUnsignedLong(arr[i]) : arr[i];
-                }
-                yield r;
-            }
-            case I32, U32 -> {
-                int[] arr = (int[]) data;
-                long[] r = new long[arr.length];
-                for (int i = 0; i < arr.length; i++) {
-                    r[i] = ptype == PType.U32 ? Integer.toUnsignedLong(arr[i]) : arr[i];
-                }
-                yield r;
-            }
-            case I64, U64 -> (long[]) data;
-            default -> throw new VortexException(EncodingId.FASTLANES_FOR, "unsupported ptype: " + ptype);
-        };
-    }
 
     private static MemorySegment toResidualBuffer(long[] longs, long ref, PType ptype, EncodeContext ctx) {
         int n = longs.length;

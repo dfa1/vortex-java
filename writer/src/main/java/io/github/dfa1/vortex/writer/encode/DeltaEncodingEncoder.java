@@ -2,15 +2,12 @@ package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.encoding.PTypeIO;
+import io.github.dfa1.vortex.encoding.PrimitiveArrays;
 import io.github.dfa1.vortex.proto.DeltaMetadata;
 import io.github.dfa1.vortex.proto.ScalarValue;
 
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.SegmentAllocator;
-import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.util.List;
 
@@ -40,7 +37,7 @@ public final class DeltaEncodingEncoder implements EncodingEncoder {
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
         PType ptype = ((DType.Primitive) dtype).ptype();
-        long[] longs = toLongs(data, ptype);
+        long[] longs = PrimitiveArrays.toLongs(data, ptype, EncodingId.FASTLANES_DELTA);
         int n = longs.length;
         int typeBits = typeBits(ptype);
         int lanes = lanes(ptype);
@@ -93,8 +90,8 @@ public final class DeltaEncodingEncoder implements EncodingEncoder {
             System.arraycopy(chunkDelta, 0, deltasAll, chunk * FL_CHUNK_SIZE, FL_CHUNK_SIZE);
         }
 
-        MemorySegment basesSeg = fromLongs(basesAll, ptype, ctx.arena());
-        MemorySegment deltasSeg = fromLongs(deltasAll, ptype, ctx.arena());
+        MemorySegment basesSeg = PrimitiveArrays.fromLongs(basesAll, ptype, ctx.arena());
+        MemorySegment deltasSeg = PrimitiveArrays.fromLongs(deltasAll, ptype, ctx.arena());
 
         byte[] metaBytes = new DeltaMetadata(paddedLen, 0).encode();
 
@@ -118,61 +115,6 @@ public final class DeltaEncodingEncoder implements EncodingEncoder {
                 prev = next;
             }
         }
-    }
-
-    private static long[] toLongs(Object data, PType ptype) {
-        return switch (ptype) {
-            case I8 -> {
-                byte[] arr = (byte[]) data;
-                long[] r = new long[arr.length];
-                for (int i = 0; i < arr.length; i++) {
-                    r[i] = arr[i];
-                }
-                yield r;
-            }
-            case U8 -> {
-                byte[] arr = (byte[]) data;
-                long[] r = new long[arr.length];
-                for (int i = 0; i < arr.length; i++) {
-                    r[i] = Byte.toUnsignedLong(arr[i]);
-                }
-                yield r;
-            }
-            case I16 -> {
-                short[] arr = (short[]) data;
-                long[] r = new long[arr.length];
-                for (int i = 0; i < arr.length; i++) {
-                    r[i] = arr[i];
-                }
-                yield r;
-            }
-            case U16 -> {
-                short[] arr = (short[]) data;
-                long[] r = new long[arr.length];
-                for (int i = 0; i < arr.length; i++) {
-                    r[i] = Short.toUnsignedLong(arr[i]);
-                }
-                yield r;
-            }
-            case I32 -> {
-                int[] arr = (int[]) data;
-                long[] r = new long[arr.length];
-                for (int i = 0; i < arr.length; i++) {
-                    r[i] = arr[i];
-                }
-                yield r;
-            }
-            case U32 -> {
-                int[] arr = (int[]) data;
-                long[] r = new long[arr.length];
-                for (int i = 0; i < arr.length; i++) {
-                    r[i] = Integer.toUnsignedLong(arr[i]);
-                }
-                yield r;
-            }
-            case I64, U64 -> (long[]) data;
-            default -> throw new VortexException(EncodingId.FASTLANES_DELTA, "unsupported ptype: " + ptype);
-        };
     }
 
     private static boolean isUnsigned(PType ptype) {
@@ -219,19 +161,5 @@ public final class DeltaEncodingEncoder implements EncodingEncoder {
         return bits == 64 ? -1L : (1L << bits) - 1;
     }
 
-    private static MemorySegment fromLongs(long[] longs, PType ptype, SegmentAllocator arena) {
-        if (ptype == PType.I64 || ptype == PType.U64) {
-            MemorySegment dst = arena.allocate((long) longs.length * 8);
-            MemorySegment.copy(MemorySegment.ofArray(longs), ValueLayout.JAVA_LONG, 0L, dst, PTypeIO.LE_LONG, 0L, longs.length);
-            return dst;
-        }
-        int n = longs.length;
-        long elemSize = ptype.byteSize();
-        MemorySegment seg = arena.allocate(n * elemSize);
-        for (int i = 0; i < n; i++) {
-            PTypeIO.set(seg, i * elemSize, ptype, longs[i]);
-        }
-        return seg;
-    }
 
 }
