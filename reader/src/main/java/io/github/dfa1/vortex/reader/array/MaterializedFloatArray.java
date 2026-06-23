@@ -11,8 +11,6 @@ import java.util.function.DoubleBinaryOperator;
 /// either materialises the output eagerly or has no lazy variant of its own.
 public final class MaterializedFloatArray extends AbstractMaterializedArray implements FloatArray {
 
-    private final long elementCount;
-
     /// Creates a new `MaterializedFloatArray` backed by the given memory segment.
     ///
     /// @param dtype  logical type, must be F32
@@ -20,7 +18,6 @@ public final class MaterializedFloatArray extends AbstractMaterializedArray impl
     /// @param buffer little-endian float data (4 bytes per element)
     public MaterializedFloatArray(DType dtype, long length, MemorySegment buffer) {
         super(dtype, length, buffer);
-        this.elementCount = buffer.byteSize() / PTypeIO.LE_FLOAT.byteSize();
     }
 
     @Override

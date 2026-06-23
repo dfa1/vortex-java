@@ -12,8 +12,6 @@ import java.util.function.LongBinaryOperator;
 /// either materialises the output eagerly or has no lazy variant of its own.
 public final class MaterializedByteArray extends AbstractMaterializedArray implements ByteArray {
 
-    private final long elementCount;
-
     /// Constructs a `MaterializedByteArray` backed by the given buffer.
     ///
     /// @param dtype  logical type, must be a [io.github.dfa1.vortex.core.DType.Primitive] with ptype I8 or U8
@@ -21,7 +19,6 @@ public final class MaterializedByteArray extends AbstractMaterializedArray imple
     /// @param buffer raw byte data (one byte per element)
     public MaterializedByteArray(DType dtype, long length, MemorySegment buffer) {
         super(dtype, length, buffer);
-        this.elementCount = buffer.byteSize();
     }
 
     @Override

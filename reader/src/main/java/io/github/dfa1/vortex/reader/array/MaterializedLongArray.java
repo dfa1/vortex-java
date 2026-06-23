@@ -12,8 +12,6 @@ import java.util.function.LongConsumer;
 /// either materialises the output eagerly or has no lazy variant of its own.
 public final class MaterializedLongArray extends AbstractMaterializedArray implements LongArray {
 
-    private final long elementCount;
-
     /// Creates a new `MaterializedLongArray` backed by the given memory segment.
     ///
     /// @param dtype  logical type, must be I64 or U64
@@ -21,7 +19,6 @@ public final class MaterializedLongArray extends AbstractMaterializedArray imple
     /// @param buffer little-endian long data (8 bytes per element)
     public MaterializedLongArray(DType dtype, long length, MemorySegment buffer) {
         super(dtype, length, buffer);
-        this.elementCount = buffer.byteSize() / PTypeIO.LE_LONG.byteSize();
     }
 
     @Override

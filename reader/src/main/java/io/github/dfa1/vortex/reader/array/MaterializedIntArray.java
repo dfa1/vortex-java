@@ -12,8 +12,6 @@ import java.util.function.IntConsumer;
 /// either materialises the output eagerly or has no lazy variant of its own.
 public final class MaterializedIntArray extends AbstractMaterializedArray implements IntArray {
 
-    private final long elementCount;
-
     /// Creates a new `MaterializedIntArray` backed by the given memory segment.
     ///
     /// @param dtype  logical type, must be I32 or U32
@@ -21,7 +19,6 @@ public final class MaterializedIntArray extends AbstractMaterializedArray implem
     /// @param buffer little-endian int data (4 bytes per element)
     public MaterializedIntArray(DType dtype, long length, MemorySegment buffer) {
         super(dtype, length, buffer);
-        this.elementCount = buffer.byteSize() / PTypeIO.LE_INT.byteSize();
     }
 
     @Override

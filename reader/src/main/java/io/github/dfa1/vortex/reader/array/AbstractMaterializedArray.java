@@ -23,11 +23,19 @@ abstract class AbstractMaterializedArray {
     final DType dtype;
     final long length;
     final MemorySegment buffer;
+    /// Number of physical elements the buffer actually holds, derived from its byte size
+    /// and the element width. Equals [#length] except for broadcast buffers (e.g. a
+    /// `ConstantEncoding` of one element), where the leaf hot loops take `i % elementCount`.
+    final long elementCount;
 
     AbstractMaterializedArray(DType dtype, long length, MemorySegment buffer) {
         this.dtype = dtype;
         this.length = length;
         this.buffer = buffer;
+        this.elementCount = switch (dtype) {
+            case DType.Primitive p -> buffer.byteSize() / p.ptype().byteSize();
+            default -> length;
+        };
     }
 
     public final DType dtype() {

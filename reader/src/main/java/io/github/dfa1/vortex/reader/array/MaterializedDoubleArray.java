@@ -11,8 +11,6 @@ import java.util.function.DoubleConsumer;
 /// either materialises the output eagerly or has no lazy variant of its own.
 public final class MaterializedDoubleArray extends AbstractMaterializedArray implements DoubleArray {
 
-    private final long elementCount;
-
     /// Constructs a `MaterializedDoubleArray` backed by the given buffer.
     ///
     /// @param dtype  logical type, must be a [io.github.dfa1.vortex.core.DType.Primitive] with ptype F64
@@ -20,7 +18,6 @@ public final class MaterializedDoubleArray extends AbstractMaterializedArray imp
     /// @param buffer raw double data (8 bytes per element, little-endian)
     public MaterializedDoubleArray(DType dtype, long length, MemorySegment buffer) {
         super(dtype, length, buffer);
-        this.elementCount = buffer.byteSize() / PTypeIO.LE_DOUBLE.byteSize();
     }
 
     @Override

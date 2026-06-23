@@ -12,8 +12,6 @@ import java.util.function.LongBinaryOperator;
 /// either materialises the output eagerly or has no lazy variant of its own.
 public final class MaterializedShortArray extends AbstractMaterializedArray implements ShortArray {
 
-    private final long elementCount;
-
     /// Creates a new `MaterializedShortArray` backed by the given memory segment.
     ///
     /// @param dtype  logical type, must be I16 or U16
@@ -21,7 +19,6 @@ public final class MaterializedShortArray extends AbstractMaterializedArray impl
     /// @param buffer little-endian short data (2 bytes per element)
     public MaterializedShortArray(DType dtype, long length, MemorySegment buffer) {
         super(dtype, length, buffer);
-        this.elementCount = buffer.byteSize() / PTypeIO.LE_SHORT.byteSize();
     }
 
     @Override
