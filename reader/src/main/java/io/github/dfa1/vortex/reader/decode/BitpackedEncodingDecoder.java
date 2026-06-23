@@ -102,6 +102,7 @@ public final class BitpackedEncodingDecoder implements EncodingDecoder {
     /// @param currWordByteBase  byte offset of the current word within the block
     /// @param nextWordByteBase  byte offset of the next word within the block
     /// @param outRowByteOff     byte offset of the row within the transposed output block
+    @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives that flow through the unpack loops without ever being compared.
     private record UnpackSchedule(
             int[] shifts, int[] remainingBits, int[] currentBits,
             long[] loMasks, long[] hiMasks,
