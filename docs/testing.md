@@ -89,6 +89,21 @@ JNI boundary to the Rust reference and read/write real files.
 There is **one integration round-trip per encoding and per file-format boundary** — this is
 where a wire-format regression surfaces.
 
+### Load test (`LargeCsvRoundTripLoadIntegrationTest`)
+
+A CSV → Vortex → CSV round-trip whose data is a **deterministic seeded generator** that also
+serves as the oracle: exported rows are diffed against regenerated rows, so no second copy is
+stored. Two methods share one pipeline:
+- a 1 000-row case runs in every integration build (guards the generator/diff logic);
+- a load case gated on `-Dvortex.load.rows=<n>` (scratch dir via `-Dvortex.load.dir`).
+
+The daily `.github/workflows/load.yml` cron runs it at ~100 M rows (~10 GB) on `ubuntu-latest`,
+writing to `/mnt` (the runner's large disk). Byte-exact round-trip holds because the generator
+emits only canonical `Long`/`Double`/`Boolean.toString` + plain-ASCII forms that
+`CsvExporter` reproduces exactly. Trigger manually via the workflow's `workflow_dispatch`
+(`rows` input) or locally: `./mvnw verify -pl integration -am
+-Dit.test=LargeCsvRoundTripLoadIntegrationTest -Dvortex.load.rows=1000000`.
+
 ## Mutation testing (PIT, `-P pitest`)
 
 Opt-in, bound to `verify`, scoped via `<targetClasses>` to the **security-critical
@@ -111,7 +126,7 @@ when the mutated bound is a genuine independent edge. These classes currently si
 ## Benchmarks (`./bench ClassName.methodName`)
 
 JMH benchmarks under `performance/` measure throughput against the Rust reference
-(`RustVsJavaReadBenchmark`, `…WriteBenchmark`, `…FilterBenchmark`, `ParquetVsVortexReadBenchmark`).
+(`JavaVsJniReadBenchmark`, `…WriteBenchmark`, `…FilterBenchmark`, `ParquetVsVortexReadBenchmark`).
 They are **performance signal, not correctness** — never gated in CI, always run with an
 explicit `ClassName.methodName` filter.
 

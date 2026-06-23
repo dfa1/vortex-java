@@ -1,0 +1,63 @@
+name: Load test
+
+# Daily CSV -> Vortex -> CSV round-trip at ~10 GB (~100 M rows). The data is a
+# deterministic seeded generator that doubles as the oracle, so the exported
+# rows are diffed against the regenerated rows (no second copy stored).
+#
+# Scheduled workflows run only from the default branch, may be delayed under
+# load, and are auto-disabled after 60 days of repo inactivity.
+on:
+  schedule:
+    - cron: '0 3 * * *'   # 03:00 UTC daily
+  workflow_dispatch:
+    inputs:
+      rows:
+        description: 'Number of rows to generate'
+        required: false
+        default: '100000000'
+
+# Never run two load jobs at once; a late-starting cron should yield to a newer one.
+concurrency:
+  group: load-test
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  load:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Azul Zulu JDK 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: zulu
+          java-version: '25'
+
+      - name: Cache Maven repository
+        uses: actions/cache@v5
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      # The root volume has only ~21 GB free; /mnt is the large (~70 GB) scratch
+      # disk on GitHub-hosted Ubuntu runners. The 10 GB CSV + Vortex file + 10 GB
+      # re-exported CSV (~25 GB peak) fit there but not on the root volume.
+      - name: Prepare scratch dir on the large disk
+        run: |
+          sudo mkdir -p /mnt/vortex-load
+          sudo chown "$USER" /mnt/vortex-load
+          df -h / /mnt
+
+      - name: Run round-trip load test
+        run: >
+          ./mvnw verify -pl integration -am
+          -Dit.test=LargeCsvRoundTripLoadIntegrationTest
+          -Dvortex.load.rows=${{ github.event.inputs.rows || '100000000' }}
+          -Dvortex.load.dir=/mnt/vortex-load
