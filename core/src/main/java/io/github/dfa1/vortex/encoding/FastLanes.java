@@ -19,30 +19,51 @@ public final class FastLanes {
     /// The FastLanes transpose order — the lane permutation applied within each 8-row group.
     private static final int[] ORDER = {0, 4, 2, 6, 1, 5, 3, 7};
 
+    /// Precomputed logical-to-transposed permutation for one chunk (see [#transposeIndex(int)]).
+    private static final int[] TRANSPOSE = new int[CHUNK];
+
+    /// Precomputed per-row base offsets for [#iterateIndex(int, int)]; the lane is added at use.
+    /// Sized to the maximum row count (a 64-bit type has 64 rows per chunk).
+    private static final int[] ITERATE_BASE = new int[64];
+
+    static {
+        for (int idx = 0; idx < CHUNK; idx++) {
+            int lane = idx % 16;
+            int order = (idx / 16) % 8;
+            int row = idx / 128;
+            TRANSPOSE[idx] = lane * 64 + ORDER[order] * 8 + row;
+        }
+        for (int row = 0; row < ITERATE_BASE.length; row++) {
+            ITERATE_BASE[row] = ORDER[row / 8] * 16 + (row % 8) * 128;
+        }
+    }
+
     private FastLanes() {
     }
 
     /// Maps a logical element index to its position in the transposed (interleaved-lane) layout.
     ///
+    /// The mapping is precomputed into a per-chunk table; the lookup avoids the per-element
+    /// division and `ORDER` indirection that would otherwise serialize address generation in the
+    /// transpose hot loop.
+    ///
     /// @param idx logical element index within a chunk, in `[0, CHUNK)`
     /// @return the corresponding index in the transposed buffer
     public static int transposeIndex(int idx) {
-        int lane = idx % 16;
-        int order = (idx / 16) % 8;
-        int row = idx / 128;
-        return lane * 64 + ORDER[order] * 8 + row;
+        return TRANSPOSE[idx];
     }
 
     /// Computes the logical element index visited at the given `row` and `lane` of the FastLanes
     /// iteration order — the inverse mapping used while packing or unpacking.
     ///
+    /// The row-dependent part is precomputed; only the lane is added per call, keeping the
+    /// pack/unpack inner loop free of division and `ORDER` indirection.
+    ///
     /// @param row  the row within the chunk
     /// @param lane the lane within the row
     /// @return the logical element index
     public static int iterateIndex(int row, int lane) {
-        int o = row / 8;
-        int s = row % 8;
-        return ORDER[o] * 16 + s * 128 + lane;
+        return ITERATE_BASE[row] + lane;
     }
 
     /// Returns the FastLanes lane count for `ptype` — [#CHUNK] divided by the type's bit width.
