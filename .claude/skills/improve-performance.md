@@ -25,7 +25,7 @@ setup → benchmark → profile → analyse → change → repeat
 ## Step 1 — Verify readiness
 
 Confirm the workload under test is already covered by a JMH benchmark in the `performance/` module
-(e.g. `RustVsJavaReadBenchmark`). If the column / codec / path is not benched, add it before profiling.
+(e.g. `JavaVsJniReadBenchmark`). If the column / codec / path is not benched, add it before profiling.
 Always pass a fully-qualified JMH filter (`ClassName.methodName`) when invoking the harness — never
 class-only or empty.
 
@@ -51,7 +51,7 @@ Never substitute `mvn` for `./mvnw` (project mandates the wrapper) and never run
 ## Step 3 — Run the baseline
 
 ```bash
-./benchmark.sh RustVsJavaReadBenchmark.javaReadVolume
+./benchmark.sh JavaVsJniReadBenchmark.javaReadVolume
 ```
 
 Read both output files:

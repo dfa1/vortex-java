@@ -59,7 +59,7 @@ import java.util.concurrent.TimeUnit;
 /// `-Dvortex.bench.bigfile=/path/to/existing.vtx` — useful when iterating on the read
 /// path against the same fixture.
 ///
-/// Run: `java -jar performance/target/benchmarks.jar RustWritesJavaReadsBigFileBenchmark.javaScan`
+/// Run: `java -jar performance/target/benchmarks.jar JniWritesJavaReadsBigFileBenchmark.javaScan`
 @State(Scope.Benchmark)
 @BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.SECONDS)
@@ -70,7 +70,7 @@ import java.util.concurrent.TimeUnit;
         "--enable-native-access=ALL-UNNAMED",
         "--sun-misc-unsafe-memory-access=allow"
 })
-public class RustWritesJavaReadsBigFileBenchmark {
+public class JniWritesJavaReadsBigFileBenchmark {
 
     private static final ValueLayout.OfLong LE_LONG =
             ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);

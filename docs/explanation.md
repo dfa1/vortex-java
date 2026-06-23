@@ -34,7 +34,7 @@ re-measured 2026-06-13 against commit `fea3aa29`.
 
 ### OHLC read — 10 M rows, 58.9 MB (Rust-written file, single-column projection)
 
-| Benchmark           | Java (ops/s)  | JNI/Rust (ops/s) | Java speedup |
+| Benchmark           | vortex-java (ops/s)  | vortex-jni (ops/s) | Speedup      |
 |---------------------|---------------|------------------|--------------|
 | close (F64/ALP)     | 69.2 ± 0.1    | 50.6 ± 0.1       | **1.4×**     |
 | volume (I64/bitpacked) | 118.0 ± 0.3 | 51.3 ± 3.5      | **2.3×**     |
@@ -43,7 +43,7 @@ re-measured 2026-06-13 against commit `fea3aa29`.
 
 ### OHLC write — 10 M rows
 
-| Benchmark | Java (ops/s) | JNI/Rust (ops/s) | Java speedup |
+| Benchmark | vortex-java (ops/s) | vortex-jni (ops/s) | Speedup      |
 |-----------|--------------|------------------|--------------|
 | write     | 4.4 ± 1.1    | 0.7 ± 0.1        | **6.4×**     |
 
@@ -52,7 +52,7 @@ _Last measured before 2026-06-08; re-run pending._
 
 ### Big-file scan — 100 M rows × 4 I64 columns, ~3 GB (Rust-written file, all columns)
 
-| Benchmark | Java (ops/s) | JNI/Rust (ops/s) | Java speedup |
+| Benchmark | vortex-java (ops/s) | vortex-jni (ops/s) | Speedup      |
 |-----------|--------------|------------------|--------------|
 | scan      | 20.4 ± 0.9   | 5.7 ± 0.6        | **3.6×**     |
 

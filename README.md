@@ -10,22 +10,27 @@ Pure-Java reader/writer for the [Vortex](https://github.com/vortex-data/vortex) 
 100% Java, no JNI, no `sun.misc.Unsafe`. Uses the FFM API (`MemorySegment`/`Arena`, Java 25+)
 for zero-copy memory-mapped reads.
 This has good performance out of the box, without using native dependencies.
-JMH read throughput vs the Rust JNI reference implementation.
+JMH read throughput: **vortex-java** (this project) vs **vortex-jni** (the Rust
+reference implementation's JNI bindings).
 80 M rows of OHLC trade data, single-column projection, Apple M5, Zulu JDK 25.0.2.
 
-| Column | Type | Java (ops/s) | JNI/Rust (ops/s) | Speedup |
-|--------|------|-------------|-----------------|---------|
+| Column | Type | vortex-java (ops/s) | vortex-jni (ops/s) | Speedup |
+|--------|------|--------------------|-------------------|---------|
 | volume | I64 / bitpacked | 14.2 | 6.7 | **2.1×** |
 | close  | F64 / ALP       | 7.7  | 6.3 | **1.2×** |
 | symbol | Utf8 / varbin   | 11.0 | 1.3 | **8.8×** |
 
 ops/s = complete file scans per second; higher is better.
 
+> **Naming:** `vortex-java` is this project; `vortex-jni` is the Vortex Rust reference's JNI
+> bindings (its numbers include the JNI-boundary cost — it is not pure Rust). We use these two
+> labels everywhere instead of "Rust vs Java".
+
 **Top-N reads** on the same 80 M-row file, "volume" column, exit after N rows
 (measures open + footer/layout decode + first-chunk overhead):
 
-| N rows | Java (ops/s) | JNI/Rust (ops/s) | Speedup |
-|--------|-------------|-----------------|---------|
+| N rows | vortex-java (ops/s) | vortex-jni (ops/s) | Speedup |
+|--------|--------------------|-------------------|---------|
 | 10     | 2,701       | 550             | **4.9×** |
 | 100    | 2,697       | 573             | **4.7×** |
 
@@ -35,11 +40,11 @@ Measured 2026-06-16, commit `74ec207b`. See [docs/explanation.md](docs/explanati
 same Parquet file (47.6 MB), cascading depth 3, Apple M5:
 
 | Implementation | Output size | vs Parquet |
-|---------------|-------------|------------|
-| Rust JNI      | 47.0 MB     | −1.3%      |
-| **Java**      | **40.7 MB** | **−14.5%** |
+|----------------|-------------|------------|
+| vortex-jni     | 47.0 MB     | −1.3%      |
+| **vortex-java** | **40.7 MB** | **−14.5%** |
 
-Java produces a 13% smaller file than the Rust reference from identical input.
+vortex-java produces a 13% smaller file than the Rust reference from identical input.
 The gap comes from the global dictionary encoder that catches low-cardinality `F64`
 columns (`mta_tax`, `Airport_fee`, `congestion_surcharge`) that Rust's compressor
 leaves as plain ALP. Data integrity is verified by

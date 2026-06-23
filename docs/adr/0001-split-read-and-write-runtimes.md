@@ -310,7 +310,7 @@ of CI / integration-test fallout, plus reviewer time. Not a weekend.
   as `Encoding`; the migration plan assumes a parallel split. If the
   extension API has tighter user-facing constraints (it does — see
   `DateExtension.decodeAll`), Phase 5 may need a separate ADR.
-- **JMH benchmarks.** `RustVsJavaReadBenchmark` and friends construct
+- **JMH benchmarks.** `JavaVsJniReadBenchmark` and friends construct
   `Registry` + `DecodeContext` directly. They live in the `performance`
   module, which depends on `reader`. The benchmarks need re-wiring at the
   end of Phase 2.

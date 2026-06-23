@@ -68,10 +68,10 @@ import java.util.concurrent.TimeUnit;
 /// Both benchmarks project onto the "close" column (F64) and sum all values so
 /// the JVM can't optimise away the decode work.
 ///
-/// Run: java -jar performance/target/benchmarks.jar RustVsJavaReadBenchmark
+/// Run: java -jar performance/target/benchmarks.jar JavaVsJniReadBenchmark
 ///
 /// To test against a pre-existing JNI-written file:
-///   java -Dvortex.bench.ohlc=/path/to/file.vtx -jar target/benchmarks.jar RustVsJavaReadBenchmark
+///   java -Dvortex.bench.ohlc=/path/to/file.vtx -jar target/benchmarks.jar JavaVsJniReadBenchmark
 @State(Scope.Benchmark)
 @BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.SECONDS)
@@ -82,7 +82,7 @@ import java.util.concurrent.TimeUnit;
         "--enable-native-access=ALL-UNNAMED",
         "--sun-misc-unsafe-memory-access=allow"
 })
-public class RustVsJavaReadBenchmark {
+public class JavaVsJniReadBenchmark {
 
     private static final int TOTAL_ROWS = Integer.getInteger("vortex.bench.ohlc.rows", 10_000_000);
     private static final int BATCH_SIZE = 50_000;
@@ -154,28 +154,28 @@ public class RustVsJavaReadBenchmark {
                     sharedBenchFile = Path.of(externalFile);
                     sharedOwnFile = false;
                     if (!Files.exists(sharedBenchFile) || Files.size(sharedBenchFile) == 0L) {
-                        System.out.printf("[RustVsJavaReadBenchmark] external file missing — writing %d OHLC rows via JNI to %s...%n",
+                        System.out.printf("[JavaVsJniReadBenchmark] external file missing — writing %d OHLC rows via JNI to %s...%n",
                                 TOTAL_ROWS, sharedBenchFile);
                         writeJni(sharedBenchFile);
-                        System.out.printf("[RustVsJavaReadBenchmark] file size: %.1f MB%n",
+                        System.out.printf("[JavaVsJniReadBenchmark] file size: %.1f MB%n",
                                 Files.size(sharedBenchFile) / 1_048_576.0);
                     } else {
-                        System.out.printf("[RustVsJavaReadBenchmark] using external file: %s%n", sharedBenchFile);
+                        System.out.printf("[JavaVsJniReadBenchmark] using external file: %s%n", sharedBenchFile);
                     }
                 } else {
                     sharedBenchFile = Files.createTempFile("ohlc-bench", ".vtx");
                     sharedOwnFile = true;
-                    System.out.printf("[RustVsJavaReadBenchmark] writing %d OHLC rows via JNI...%n", TOTAL_ROWS);
+                    System.out.printf("[JavaVsJniReadBenchmark] writing %d OHLC rows via JNI...%n", TOTAL_ROWS);
                     writeJni(sharedBenchFile);
-                    System.out.printf("[RustVsJavaReadBenchmark] file size: %.1f MB%n",
+                    System.out.printf("[JavaVsJniReadBenchmark] file size: %.1f MB%n",
                             Files.size(sharedBenchFile) / 1_048_576.0);
                 }
             }
             if (sharedCascadingFile == null) {
                 sharedCascadingFile = Files.createTempFile("ohlc-java-cascading", ".vtx");
-                System.out.printf("[RustVsJavaReadBenchmark] writing %d OHLC rows (cascading depth 3) via Java...%n", TOTAL_ROWS);
+                System.out.printf("[JavaVsJniReadBenchmark] writing %d OHLC rows (cascading depth 3) via Java...%n", TOTAL_ROWS);
                 writeJavaCascading(sharedCascadingFile);
-                System.out.printf("[RustVsJavaReadBenchmark] cascading file size: %.1f MB%n",
+                System.out.printf("[JavaVsJniReadBenchmark] cascading file size: %.1f MB%n",
                         Files.size(sharedCascadingFile) / 1_048_576.0);
             }
             sharedRefCount++;

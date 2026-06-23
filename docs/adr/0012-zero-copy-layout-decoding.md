@@ -150,7 +150,7 @@ on the user-facing array — no allocation happens.
 ### Bench gate
 
 Before merging the implementation, run `./bench
-RustVsJavaReadBenchmark.javaReadClose` on the single-chunk OHLC fixture
+JavaVsJniReadBenchmark.javaReadClose` on the single-chunk OHLC fixture
 **and** add a multi-chunk variant (e.g. 8-chunk OHLC). The single-chunk
 number measures the inlining regression risk in isolation; the
 multi-chunk number measures the concat-avoidance win. The decision to
@@ -315,7 +315,7 @@ Shipped across three PRs against `main`:
   renamed to `decodeChunkedLayout` and rewritten to construct `ChunkedXxxArray` directly; the alloc + memcpy loop
   deleted. `ChunkedEncodingDecoder.decode` rewritten the same way (`wrap`/`wrapPrimitive`/`wrapStruct` replaces
   `concat`/`concatPrimitive`/`concatStruct`). `ArraySegments.of(arr, arena)` gained the chunked materialise cases
-  per §"Materialisation fallback". Bench gate passed: `RustVsJavaReadBenchmark` showed no statistically significant
+  per §"Materialisation fallback". Bench gate passed: `JavaVsJniReadBenchmark` showed no statistically significant
   delta vs the previously-considered sticky-cache class shape; record shape chosen on architecture grounds
   (immutable, thread-safe, idiomatic Java). `forEach*` overrides iterate children directly so sequential scans
   bypass the per-row binary search.
@@ -340,7 +340,7 @@ Resolutions to the open questions:
 1. **Scope:** Chunked first (PR #38), Dict second (PR #39). Bench between confirmed Chunked was net positive
    before adding Dict polymorphism.
 2. **Megamorphic mitigation:** accepted the 5-impl dispatch cost on `LongArray`/`IntArray` (Materialized + LazyFor +
-   LazyZigZag + Chunked + Dict). `RustVsJavaReadBenchmark` between PRs showed no measurable regression because
+   LazyZigZag + Chunked + Dict). `JavaVsJniReadBenchmark` between PRs showed no measurable regression because
    sequential reads use `forEach*` (single impl per call site) and the polymorphic `getXxx(i)` site isn't the
    benchmark's hot path. Re-evaluate if a real workload surfaces the cost.
 3. **Fallback policy:** relaxed — `ArraySegments.of(arr, arena)` materialises Chunked and Dict variants on

@@ -9,7 +9,7 @@
 ## Context
 
 The project has a nightly CI benchmark workflow (`.github/workflows/benchmark.yml`)
-that runs `./bench RustVsJava` on a GitHub Actions `ubuntu-latest` runner and pushes
+that runs `./bench JavaVsJni` on a GitHub Actions `ubuntu-latest` runner and pushes
 results to `gh-pages/dev/bench` via `benchmark-action/github-action-benchmark`.
 
 ### Why CI benchmarks are not the source of truth

@@ -33,7 +33,7 @@ Thanks for your interest. This guide covers everything needed to contribute code
 ./mvnw verify -pl integration -am -Dit.test=RustWritesJavaReadsIntegrationTest
 
 # Benchmarks (always pass ClassName.methodName — never run without a filter)
-./bench RustVsJavaReadBenchmark.javaReadVolume
+./bench JavaVsJniReadBenchmark.javaReadVolume
 ```
 
 CI runs `./mvnw verify` on Java 25 and 26. Both must pass before merge.

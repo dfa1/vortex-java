@@ -18,7 +18,7 @@ into a fresh `MemorySegment`, and returns a `DoubleArray` backed by that
 materialized buffer. `FrameOfReferenceEncodingDecoder` does the same with
 `+ ref`. `ZigZagEncodingDecoder` does the same with `(u >>> 1) ^ -(u & 1)`.
 
-The current `RustVsJavaReadBenchmark.javaReadClose` reads every decoded
+The current `JavaVsJniReadBenchmark.javaReadClose` reads every decoded
 value via `close.fold(0.0, Double::sum)`. The fold touches every row, so
 eager decode looks optimal — each value is computed once, summed once.
 
@@ -89,15 +89,15 @@ gates the work; phases 1 and 2 are sequential.
 Add benchmarks that reward laziness. Without these, phase 1 will look
 like a regression on the only number we measure.
 
-- `RustVsJavaFilterBenchmark.javaFilterClose` / `jniFilterClose` —
+- `JavaVsJniFilterBenchmark.javaFilterClose` / `jniFilterClose` —
   `WHERE close > X` with selectivity sweeps at 0.1% / 1% / 10% / 100%.
   Threshold is computed in `@Setup` from a sampled quantile so each
   selectivity maps to a real fraction of matching rows. **Already
   landed** alongside this ADR.
-- `RustVsJavaReadBenchmark.javaTakeClose` — `take` with k random indices
+- `JavaVsJniReadBenchmark.javaTakeClose` — `take` with k random indices
   for k ∈ {100, 10k, 1M}. (TODO — phase 1 unlocks the win.)
-- `RustVsJavaReadBenchmark.javaSliceClose` — `LIMIT 100` semantics. (TODO.)
-- `RustVsJavaReadBenchmark.javaProjectionClose` — request `close`,
+- `JavaVsJniReadBenchmark.javaSliceClose` — `LIMIT 100` semantics. (TODO.)
+- `JavaVsJniReadBenchmark.javaProjectionClose` — request `close`,
   iterate without touching `getDouble`. Measures decode cost paid for
   nothing. (TODO.)
 
@@ -109,12 +109,12 @@ dropped — see Phase 2.
 
 #### Phase 0 baseline (10M rows, OHLC, `close` column)
 
-| Selectivity | Java ops/s | JNI ops/s | JNI/Java |
-|-------------|-----------:|----------:|---------:|
-| 0.1%        |       96   |      361  | **3.7×** |
-| 1%          |       96   |      348  | **3.6×** |
-| 10%         |       49   |      193  | **3.9×** |
-| 100%        |       82   |       53  | 0.65× (Java wins) |
+| Selectivity | vortex-java ops/s | vortex-jni ops/s | jni/java |
+|-------------|------------------:|-----------------:|---------:|
+| 0.1%        |       96          |      361         | **3.7×** |
+| 1%          |       96          |      348         | **3.6×** |
+| 10%         |       49          |      193         | **3.9×** |
+| 100%        |       82          |       53         | 0.65× (java wins) |
 
 Two observations:
 1. Java loses 3.5–4× to JNI at low selectivity. The whole loss is eager

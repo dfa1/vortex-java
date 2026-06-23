@@ -7,6 +7,18 @@ Guidance for Claude Code working in this repository.
 Java 25 native implementation of the [Vortex](https://github.com/vortex-data/vortex) columnar
 file format. Uses FFM (`MemorySegment`/`Arena`) — never JNI or `sun.misc.Unsafe`.
 
+### Naming convention (benchmarks & comparisons)
+
+One vocabulary across all artifacts (tables, identifiers, prose):
+- **`vortex-java`** / `java*` — this project.
+- **`vortex-jni`** / `jni*` — the perf competitor: the Vortex Rust reference's JNI bindings.
+  Numbers include JNI-boundary cost, so never label it `vortex-rust` (inaccurate + flame-bait).
+- **`Rust`** — reserved for the *correctness* ground-truth only (oracle/interop tests like
+  `RustWritesJavaReadsIntegrationTest`, "Rust-written file"). Not a perf label.
+
+Benchmark classes follow this: `JavaVsJni{Read,Write,Filter}Benchmark`,
+`JniWritesJavaReadsBigFileBenchmark`, methods `javaXxx`/`jniXxx`.
+
 ## Module structure
 
 ```
@@ -45,7 +57,7 @@ Trunk-based. PRs fine but always squash or rebase — no merge commits. Keep com
 ./mvnw test -pl reader -Dtest=MyTest#m     # one method
 ./mvnw verify -pl integration -am          # integration (failsafe, NOT surefire)
 ./mvnw verify -pl integration -am -Dit.test="RustWritesJavaReadsIntegrationTest#method"
-./bench RustVsJavaReadBenchmark.javaReadVolume   # benchmark — always ClassName.methodName filter
+./bench JavaVsJniReadBenchmark.javaReadVolume   # benchmark — always ClassName.methodName filter
 ```
 
 Regenerate after editing `.fbs`/`.proto`:

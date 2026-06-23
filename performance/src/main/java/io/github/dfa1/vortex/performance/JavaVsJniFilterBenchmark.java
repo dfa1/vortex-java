@@ -52,7 +52,7 @@ import java.util.concurrent.TimeUnit;
 ///
 /// Requires a pre-existing OHLC file:
 /// `-Dvortex.bench.ohlc=/path/to/file.vtx`. Generate one by running
-/// [RustVsJavaReadBenchmark] first with the same `vortex.bench.ohlc`
+/// [JavaVsJniReadBenchmark] first with the same `vortex.bench.ohlc`
 /// pointing at the path you want (the read benchmark will write it lazily if
 /// the file does not exist yet).
 @State(Scope.Benchmark)
@@ -65,7 +65,7 @@ import java.util.concurrent.TimeUnit;
         "--enable-native-access=ALL-UNNAMED",
         "--sun-misc-unsafe-memory-access=allow"
 })
-public class RustVsJavaFilterBenchmark {
+public class JavaVsJniFilterBenchmark {
 
     private static final Session SESSION = Session.create();
 
@@ -93,8 +93,8 @@ public class RustVsJavaFilterBenchmark {
         String externalFile = System.getProperty("vortex.bench.ohlc");
         if (externalFile == null || externalFile.isEmpty()) {
             throw new IllegalStateException(
-                    "RustVsJavaFilterBenchmark requires -Dvortex.bench.ohlc=<file> "
-                            + "(reuse the file produced by RustVsJavaReadBenchmark)");
+                    "JavaVsJniFilterBenchmark requires -Dvortex.bench.ohlc=<file> "
+                            + "(reuse the file produced by JavaVsJniReadBenchmark)");
         }
         benchFile = Path.of(externalFile);
         if (!Files.isReadable(benchFile)) {
@@ -102,7 +102,7 @@ public class RustVsJavaFilterBenchmark {
         }
 
         threshold = computeThreshold(selectivity);
-        System.out.printf("[RustVsJavaFilterBenchmark] selectivity=%.4f → threshold=%.4f%n",
+        System.out.printf("[JavaVsJniFilterBenchmark] selectivity=%.4f → threshold=%.4f%n",
                 selectivity, threshold);
     }
 

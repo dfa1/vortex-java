@@ -34,7 +34,7 @@ import java.util.Random;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// Inspects the OHLC file (same schema and data as RustVsJavaReadBenchmark)
+/// Inspects the OHLC file (same schema and data as JavaVsJniReadBenchmark)
 /// to reveal which encodings Rust chose for each column, especially "volume".
 class OhlcEncodingInspectionIntegrationTest {
 

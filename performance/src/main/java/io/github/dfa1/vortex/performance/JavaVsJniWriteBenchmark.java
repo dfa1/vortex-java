@@ -56,7 +56,7 @@ import java.util.concurrent.TimeUnit;
 /// Each invocation writes 10 M rows; the file size is returned as the benchmark result
 /// so the JVM cannot eliminate the write as dead code.
 ///
-/// Run: java -jar performance/target/benchmarks.jar RustVsJavaWriteBenchmark
+/// Run: java -jar performance/target/benchmarks.jar JavaVsJniWriteBenchmark
 @State(Scope.Benchmark)
 @BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.SECONDS)
@@ -67,7 +67,7 @@ import java.util.concurrent.TimeUnit;
         "--enable-native-access=ALL-UNNAMED",
         "--sun-misc-unsafe-memory-access=allow"
 })
-public class RustVsJavaWriteBenchmark {
+public class JavaVsJniWriteBenchmark {
 
     private static final int TOTAL_ROWS = 10_000_000;
     private static final int BATCH_SIZE = 50_000;
@@ -178,7 +178,7 @@ public class RustVsJavaWriteBenchmark {
             day += BATCH_SIZE / NASDAQ_TICKERS.length;
         }
 
-        System.out.printf("[RustVsJavaWriteBenchmark] data pre-generated: %d rows in %d batches%n",
+        System.out.printf("[JavaVsJniWriteBenchmark] data pre-generated: %d rows in %d batches%n",
                 TOTAL_ROWS, NUM_BATCHES);
     }
 
@@ -187,7 +187,7 @@ public class RustVsJavaWriteBenchmark {
         if (Files.exists(javaFile) && Files.exists(javaFileCascading)) {
             long plain = Files.size(javaFile);
             long cascading = Files.size(javaFileCascading);
-            System.out.printf("[RustVsJavaWriteBenchmark] cascading/plain size ratio: %.3f (%d B / %d B)%n",
+            System.out.printf("[JavaVsJniWriteBenchmark] cascading/plain size ratio: %.3f (%d B / %d B)%n",
                     (double) cascading / plain, cascading, plain);
         }
         Files.deleteIfExists(jniFile);

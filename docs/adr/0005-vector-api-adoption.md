@@ -155,4 +155,4 @@ loop structure.
 - [TODO.md §Vector API items](../../TODO.md)
 - JEP 469: Vector API (8th Incubator) —
   https://openjdk.org/jeps/469
-- JMH benchmark harness: `./bench` command, `RustVsJavaReadBenchmark`
+- JMH benchmark harness: `./bench` command, `JavaVsJniReadBenchmark`
