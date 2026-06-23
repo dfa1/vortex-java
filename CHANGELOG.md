@@ -5,6 +5,36 @@ All notable changes to **vortex-java** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.3] — 2026-06-23
+
+A **Sonar-driven refactoring** release: no new file-format capability, but a focused pass using SonarCloud findings to drive cleanups — dead code removed, duplication factored out, and one hot-loop micro-optimisation. Each finding was triaged (lead, not verdict) so the changes preserve behaviour and the JIT vectorisation of the hot decode loops. The interpretation framework behind this is now documented in `docs/testing.md`.
+
+### Performance
+
+- `FastLanes.transposeIndex` / `iterateIndex`: replaced the per-element `%`/`/` + `ORDER[]` indirection with permutation tables built once in a static initialiser. Faster address generation keeps more outstanding scatter misses in flight; measured 1.4×–3.4× on the transpose/undelta kernels (Apple M5, L1→DRAM working sets). The per-element decode loops stay specialised per width to preserve C2 superword vectorisation. ([089b6e36](https://github.com/dfa1/vortex-java/commit/089b6e36), [e683a634](https://github.com/dfa1/vortex-java/commit/e683a634))
+
+### Removed
+
+- **Breaking (read SPI):** removed `EncodingDecoder.accepts(DType)`. It was a residual of the ADR-0001 read/write split — encode-selection semantics copied onto the decoder side, where the reader dispatches purely by `EncodingId` and never called it (dead since the split). `EncodingEncoder.accepts` is unchanged. Downstream custom `EncodingDecoder` implementations should delete their `accepts` override. ([7516a544](https://github.com/dfa1/vortex-java/commit/7516a544))
+
+### Changed
+
+- Internal dedup driven by Sonar duplication findings: extracted the shared FastLanes layout + `PType.bits` and `PrimitiveArrays.toLongs`/`fromLongs` into core, hoisted the `Materialized*` array boilerplate into a shared base, factored the four `BitpackedEncodingDecoder` unpack loops onto one precomputed per-row schedule, added `PType.isUnsigned` (dropping three private copies), and deduplicated the CLI inspect plumbing and `formatBytes`. ([ec6b9631](https://github.com/dfa1/vortex-java/commit/ec6b9631), [a74263c0](https://github.com/dfa1/vortex-java/commit/a74263c0), [7af0af2a](https://github.com/dfa1/vortex-java/commit/7af0af2a), [8362a353](https://github.com/dfa1/vortex-java/commit/8362a353), [87c77cc9](https://github.com/dfa1/vortex-java/commit/87c77cc9), [d8f84088](https://github.com/dfa1/vortex-java/commit/d8f84088), [b557e573](https://github.com/dfa1/vortex-java/commit/b557e573), [d52e8c0c](https://github.com/dfa1/vortex-java/commit/d52e8c0c))
+- Dropped dead `PType` switch arms in the writer's `readPrimitiveElement`, `primitiveArrayLen`, and `buildTypedUniqueArray` — unreachable branches flagged as uncovered. ([4c6ab149](https://github.com/dfa1/vortex-java/commit/4c6ab149), [94d2fa49](https://github.com/dfa1/vortex-java/commit/94d2fa49), [f89072a6](https://github.com/dfa1/vortex-java/commit/f89072a6))
+
+### Fixed
+
+- Cleared two SonarCloud-reported bugs in the writer's SUM zone-map stat plumbing. ([33798ab9](https://github.com/dfa1/vortex-java/commit/33798ab9))
+- Suppressed `java:S1172` on `AbstractMaterializedArray.materialize` with a reason — the `arena` parameter is contractual (implements `Array#materialize(SegmentAllocator)` for the leaf classes), not a removable unused parameter. ([9b226f73](https://github.com/dfa1/vortex-java/commit/9b226f73))
+
+### Tests
+
+- Filled coverage gaps surfaced by Sonar: the `Materialized*` `materialize` defaults, every `SchemaCommand.formatDType` arm, and the writer's global-dict cardinality fallback with U16 utf8 codes. ([8741dad3](https://github.com/dfa1/vortex-java/commit/8741dad3), [77fad504](https://github.com/dfa1/vortex-java/commit/77fad504), [c2918eaa](https://github.com/dfa1/vortex-java/commit/c2918eaa))
+
+### Docs
+
+- `docs/testing.md`: new section on reading Sonar/PIT as data — the uncovered-line triage (missing-test / dead-code / defensive-by-contract), why mutation testing splits what coverage cannot, and when duplication is the deliberate price of the hot-loop rule. ([8999661b](https://github.com/dfa1/vortex-java/commit/8999661b))
+
 ## [0.8.2] — 2026-06-22
 
 The headline is **writer-side zone-map statistics**: the writer now emits `vortex.stats` (zoned) layouts carrying per-chunk MIN/MAX, NULL_COUNT, and SUM — matching the Rust reference — so zone-map chunk pruning and aggregate push-down work on Java-written files (previously the reader could decode these stats but the writer never produced them). The release also continues the test-hardening track: the lowest-covered encoder/decoder paths are filled in, SonarCloud new-code coverage is back to 100% with the quality gate green (overall ~83%, all ratings A, zero bugs/vulnerabilities), and the build toolchain is refreshed across eight dependency bumps.
@@ -104,6 +134,7 @@ Read and write Vortex Variant (semi-structured, JSON-shaped) columns from Java. 
 
 - Test coverage raised from ~74% to 80% — the lazy/chunked/dict/run-end/sparse array families, `ChunkImpl`, and several decoders (`DecimalEncodingDecoder`, `DictEncodingDecoder`, `ParquetImporter`) reached full line + branch coverage. SonarCloud quality gate green: reliability, security, and maintainability all at **A**, zero bugs and vulnerabilities.
 
+[0.8.3]: https://github.com/dfa1/vortex-java/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/dfa1/vortex-java/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/dfa1/vortex-java/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/dfa1/vortex-java/compare/v0.7.3...v0.8.0
