@@ -66,9 +66,9 @@ public final class PatchedEncodingDecoder implements EncodingDecoder {
 
         MemorySegment innerSeg = ctx.decodeChildSegment(0, ctx.dtype(), n);
         MemorySegment laneOffsetsSeg = ctx.decodeChildSegment(1,
-                new DType.Primitive(PType.U32, false), nChunks * nLanes + 1);
+                DType.U32, nChunks * nLanes + 1);
         MemorySegment patchIndicesSeg = ctx.decodeChildSegment(2,
-                new DType.Primitive(PType.U16, false), nPatches);
+                DType.U16, nPatches);
         MemorySegment patchValuesSeg = ctx.decodeChildSegment(3, ctx.dtype(), nPatches);
 
         MemorySegment out = ctx.arena().allocate(n * elemBytes);

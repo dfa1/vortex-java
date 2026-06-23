@@ -4,7 +4,6 @@ import dev.vortex.api.Session;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -54,13 +53,13 @@ class FileSizeComparisonIntegrationTest {
     private static final DType.Struct JAVA_SCHEMA = new DType.Struct(
             List.of("symbol", "date", "open", "high", "low", "close", "volume"),
             List.of(
-                    new DType.Utf8(false),
-                    new DType.Primitive(PType.I32, false),
-                    new DType.Primitive(PType.F64, false),
-                    new DType.Primitive(PType.F64, false),
-                    new DType.Primitive(PType.F64, false),
-                    new DType.Primitive(PType.F64, false),
-                    new DType.Primitive(PType.I64, false)
+                    DType.UTF8,
+                    DType.I32,
+                    DType.F64,
+                    DType.F64,
+                    DType.F64,
+                    DType.F64,
+                    DType.I64
             ),
             false
     );
@@ -295,7 +294,7 @@ class FileSizeComparisonIntegrationTest {
         }
 
         DType.Struct javaSchema = new DType.Struct(
-                List.of("v"), List.of(new DType.Primitive(PType.I64, false)), false);
+                List.of("v"), List.of(DType.I64), false);
         Schema jniSchema = new Schema(List.of(
                 Field.notNullable("v", new ArrowType.Int(64, true))));
 
@@ -358,7 +357,7 @@ class FileSizeComparisonIntegrationTest {
             data[i] = new String(bytes, StandardCharsets.UTF_8);
         }
         DType.Struct javaSchema = new DType.Struct(
-                List.of("s"), List.of(new DType.Utf8(false)), false);
+                List.of("s"), List.of(DType.UTF8), false);
         Schema jniSchema = new Schema(List.of(
                 Field.notNullable("s", new ArrowType.Utf8())));
 

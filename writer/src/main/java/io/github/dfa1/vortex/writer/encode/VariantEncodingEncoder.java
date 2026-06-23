@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.proto.Scalar;
@@ -28,8 +27,6 @@ import java.util.List;
 /// This mirrors the Rust reference, where a non-constant variant column is a chunked
 /// array of constant variant scalars under the canonical variant array.
 public final class VariantEncodingEncoder implements EncodingEncoder {
-
-    private static final DType U64 = new DType.Primitive(PType.U64, false);
 
     /// Public no-arg constructor required by [java.util.ServiceLoader].
     public VariantEncodingEncoder() {
@@ -160,7 +157,7 @@ public final class VariantEncodingEncoder implements EncodingEncoder {
             offsets[i + 1] = offsets[i] + runLengths.get(i);
         }
 
-        EncodeResult offsetsResult = ctx.lookupEncoder(EncodingId.VORTEX_PRIMITIVE).encode(U64, offsets, ctx);
+        EncodeResult offsetsResult = ctx.lookupEncoder(EncodingId.VORTEX_PRIMITIVE).encode(DType.U64, offsets, ctx);
         buffers.addAll(offsetsResult.buffers());
 
         EncodeNode[] children = new EncodeNode[nruns + 1];

@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /// in-memory arrays — no terminal, worker, or encoded fixture required.
 class InspectorRenderTest {
 
-    private static final DType I64 = new DType.Primitive(PType.I64, false);
+    private static final DType I64 = DType.I64;
 
     @Nested
     class FormatValue {
@@ -92,7 +92,7 @@ class InspectorRenderTest {
             try (Arena arena = Arena.ofConfined()) {
                 // Given — vortex.date over I32 epoch-day storage
                 DType dateExt = new DType.Extension("vortex.date",
-                        new DType.Primitive(PType.I32, false), null, false);
+                        DType.I32, null, false);
                 IntArray storage = ArrayFixtures.ints(arena, 0);
 
                 // When / Then — day 0 = 1970-01-01
@@ -107,7 +107,7 @@ class InspectorRenderTest {
                 Array sut = ArrayFixtures.utf8(arena, "hi");
 
                 // When / Then
-                assertThat(InspectorRender.formatValue(sut, 0, new DType.Utf8(false))).isEqualTo("\"hi\"");
+                assertThat(InspectorRender.formatValue(sut, 0, DType.UTF8)).isEqualTo("\"hi\"");
             }
         }
 
@@ -118,7 +118,7 @@ class InspectorRenderTest {
                 Array sut = ArrayFixtures.binary(arena, new byte[]{0x01, (byte) 0xab});
 
                 // When / Then
-                assertThat(InspectorRender.formatValue(sut, 0, new DType.Binary(false))).isEqualTo("0x01ab");
+                assertThat(InspectorRender.formatValue(sut, 0, DType.BINARY)).isEqualTo("0x01ab");
             }
         }
 
@@ -127,7 +127,7 @@ class InspectorRenderTest {
             try (Arena arena = Arena.ofConfined()) {
                 // Given — vortex.date declared but storage is F64; the decode throws and is swallowed
                 DType dateExt = new DType.Extension("vortex.date",
-                        new DType.Primitive(PType.I32, false), null, false);
+                        DType.I32, null, false);
                 Array badStorage = ArrayFixtures.doubles(arena, 1.5);
 
                 // When / Then — falls through to the generic DoubleArray rendering

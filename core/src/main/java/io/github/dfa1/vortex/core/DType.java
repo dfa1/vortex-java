@@ -26,7 +26,7 @@ public sealed interface DType
 
     /// Returns a copy of this type marked nullable. Sugar over
     /// [#withNullable(boolean)] so call sites read as a fluent adjective:
-    /// `DType.i64().asNullable()`.
+    /// `DType.I64.asNullable()`.
     ///
     /// @return a new [DType] identical to this one but with `nullable = true`
     default DType asNullable() {
@@ -53,91 +53,65 @@ public sealed interface DType
         };
     }
 
-    // ── Static factories ────────────────────────────────────────────────────
+    // ── Canonical non-nullable types ─────────────────────────────────────────
     //
-    // Convenience entry points returning non-nullable instances. Combine with
-    // [#nullable()] for nullable columns. The underlying records are unchanged
-    // and remain usable directly (pattern matching, proto serialization, tests).
+    // Shared immutable instances — prefer these over `new Bool(false)`,
+    // `new Utf8(false)`, etc. For a nullable column build from one with
+    // [#asNullable()], e.g. `DType.UTF8.asNullable()`.
 
-    /// @return non-nullable [Bool]
-    static Bool bool_() {
-        return new Bool(false);
-    }
+    /// Non-nullable [Bool].
+    Bool BOOL = new Bool(false);
 
-    /// @return non-nullable [Utf8]
-    static Utf8 utf8() {
-        return new Utf8(false);
-    }
+    /// Non-nullable [Utf8].
+    Utf8 UTF8 = new Utf8(false);
 
-    /// @return non-nullable [Binary]
-    static Binary binary() {
-        return new Binary(false);
-    }
+    /// Non-nullable [Binary].
+    Binary BINARY = new Binary(false);
 
-    /// @return non-nullable [Null]
-    static Null null_() {
-        return new Null(false);
-    }
+    /// Non-nullable [Null].
+    Null NULL = new Null(false);
 
-    /// @return non-nullable [Variant]
-    static Variant variant() {
-        return new Variant(false);
-    }
+    /// Non-nullable [Variant].
+    Variant VARIANT = new Variant(false);
 
-    /// @return non-nullable [Primitive] of [PType#I8]
-    static Primitive i8() {
-        return new Primitive(PType.I8, false);
-    }
+    // ── Canonical non-nullable primitives ───────────────────────────────────
+    //
+    // Shared immutable instances — prefer these over `new Primitive(pt, false)`.
+    // For a nullable column build from one with [#asNullable()], e.g.
+    // `DType.I64.asNullable()`.
 
-    /// @return non-nullable [Primitive] of [PType#I16]
-    static Primitive i16() {
-        return new Primitive(PType.I16, false);
-    }
+    /// Non-nullable [Primitive] of [PType#I8].
+    Primitive I8 = new Primitive(PType.I8, false);
 
-    /// @return non-nullable [Primitive] of [PType#I32]
-    static Primitive i32() {
-        return new Primitive(PType.I32, false);
-    }
+    /// Non-nullable [Primitive] of [PType#I16].
+    Primitive I16 = new Primitive(PType.I16, false);
 
-    /// @return non-nullable [Primitive] of [PType#I64]
-    static Primitive i64() {
-        return new Primitive(PType.I64, false);
-    }
+    /// Non-nullable [Primitive] of [PType#I32].
+    Primitive I32 = new Primitive(PType.I32, false);
 
-    /// @return non-nullable [Primitive] of [PType#U8]
-    static Primitive u8() {
-        return new Primitive(PType.U8, false);
-    }
+    /// Non-nullable [Primitive] of [PType#I64].
+    Primitive I64 = new Primitive(PType.I64, false);
 
-    /// @return non-nullable [Primitive] of [PType#U16]
-    static Primitive u16() {
-        return new Primitive(PType.U16, false);
-    }
+    /// Non-nullable [Primitive] of [PType#U8].
+    Primitive U8 = new Primitive(PType.U8, false);
 
-    /// @return non-nullable [Primitive] of [PType#U32]
-    static Primitive u32() {
-        return new Primitive(PType.U32, false);
-    }
+    /// Non-nullable [Primitive] of [PType#U16].
+    Primitive U16 = new Primitive(PType.U16, false);
 
-    /// @return non-nullable [Primitive] of [PType#U64]
-    static Primitive u64() {
-        return new Primitive(PType.U64, false);
-    }
+    /// Non-nullable [Primitive] of [PType#U32].
+    Primitive U32 = new Primitive(PType.U32, false);
 
-    /// @return non-nullable [Primitive] of [PType#F16]
-    static Primitive f16() {
-        return new Primitive(PType.F16, false);
-    }
+    /// Non-nullable [Primitive] of [PType#U64].
+    Primitive U64 = new Primitive(PType.U64, false);
 
-    /// @return non-nullable [Primitive] of [PType#F32]
-    static Primitive f32() {
-        return new Primitive(PType.F32, false);
-    }
+    /// Non-nullable [Primitive] of [PType#F16].
+    Primitive F16 = new Primitive(PType.F16, false);
 
-    /// @return non-nullable [Primitive] of [PType#F64]
-    static Primitive f64() {
-        return new Primitive(PType.F64, false);
-    }
+    /// Non-nullable [Primitive] of [PType#F32].
+    Primitive F32 = new Primitive(PType.F32, false);
+
+    /// Non-nullable [Primitive] of [PType#F64].
+    Primitive F64 = new Primitive(PType.F64, false);
 
     /// @param precision total number of significant decimal digits
     /// @param scale     number of digits to the right of the decimal point
@@ -151,10 +125,10 @@ public sealed interface DType
     ///
     /// ```java
     /// DType.Struct schema = DType.structBuilder()
-    ///     .field("timestamp", DType.i64())
-    ///     .field("symbol",    DType.utf8())
-    ///     .field("price",     DType.f64())
-    ///     .field("volume",    DType.i64().asNullable())
+    ///     .field("timestamp", DType.I64)
+    ///     .field("symbol",    DType.UTF8)
+    ///     .field("price",     DType.F64)
+    ///     .field("volume",    DType.I64.asNullable())
     ///     .build();
     /// ```
     ///

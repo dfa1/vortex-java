@@ -120,7 +120,7 @@ class ZonedStatsSchemaTest {
         @Test
         void buildsStructWithMinMaxAndTruncationFlags() {
             // Given — i64 column with Min, Max, Sum
-            DType columnDtype = new DType.Primitive(PType.I64, false);
+            DType columnDtype = DType.I64;
             List<ZonedStatsSchema.Stat> present = List.of(
                     ZonedStatsSchema.Stat.MAX,
                     ZonedStatsSchema.Stat.MIN,
@@ -137,9 +137,9 @@ class ZonedStatsSchemaTest {
             // i64 sum widens to nullable i64; min/max stay i64 but nullable; truncation flags are non-null Bool
             assertThat(schema.fieldTypes()).containsExactly(
                     new DType.Primitive(PType.I64, true),
-                    new DType.Bool(false),
+                    DType.BOOL,
                     new DType.Primitive(PType.I64, true),
-                    new DType.Bool(false),
+                    DType.BOOL,
                     new DType.Primitive(PType.I64, true));
             assertThat(schema.nullable()).isFalse();
         }
@@ -163,7 +163,7 @@ class ZonedStatsSchemaTest {
         @Test
         void dropsSumForUnsupportedColumnDtype() {
             // Given — Utf8 column has no sum (Rust returns None)
-            DType columnDtype = new DType.Utf8(false);
+            DType columnDtype = DType.UTF8;
             List<ZonedStatsSchema.Stat> present = List.of(
                     ZonedStatsSchema.Stat.MIN,
                     ZonedStatsSchema.Stat.SUM,
@@ -179,7 +179,7 @@ class ZonedStatsSchemaTest {
         @Test
         void dropsNanCountForNonFloatColumn() {
             // Given — nan_count only makes sense for floats
-            DType columnDtype = new DType.Primitive(PType.I32, false);
+            DType columnDtype = DType.I32;
             List<ZonedStatsSchema.Stat> present = List.of(
                     ZonedStatsSchema.Stat.MAX,
                     ZonedStatsSchema.Stat.NAN_COUNT,
@@ -195,7 +195,7 @@ class ZonedStatsSchemaTest {
         @Test
         void keepsNanCountForFloatColumn() {
             // Given — float column → nan_count is u64
-            DType columnDtype = new DType.Primitive(PType.F64, false);
+            DType columnDtype = DType.F64;
             List<ZonedStatsSchema.Stat> present = List.of(
                     ZonedStatsSchema.Stat.MAX, ZonedStatsSchema.Stat.NAN_COUNT);
 
@@ -211,7 +211,7 @@ class ZonedStatsSchemaTest {
         void resolvesExtensionViaStorageDType() {
             // Given — ext over i32 storage; sum should widen using storage dtype (i32 → i64)
             DType columnDtype = new DType.Extension("ip.address",
-                    new DType.Primitive(PType.I32, false), null, false);
+                    DType.I32, null, false);
             List<ZonedStatsSchema.Stat> present = List.of(
                     ZonedStatsSchema.Stat.MIN, ZonedStatsSchema.Stat.SUM);
 
@@ -227,7 +227,7 @@ class ZonedStatsSchemaTest {
         @Test
         void allStatsTogetherForI32() {
             // Given — sanity that every stat slots correctly into i32 column
-            DType columnDtype = new DType.Primitive(PType.I32, false);
+            DType columnDtype = DType.I32;
             List<ZonedStatsSchema.Stat> present = List.copyOf(EnumSet.allOf(ZonedStatsSchema.Stat.class));
 
             // When

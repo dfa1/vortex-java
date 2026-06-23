@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.VortexFormat;
 import io.github.dfa1.vortex.reader.array.ListArray;
@@ -193,7 +192,7 @@ class VortexHttpReaderIT {
                         .isGreaterThan(0);
                 assertThat(listArray.offsets().dtype())
                         .as("offset_ptype must be I64; U8 indicates silent proto tag mismatch")
-                        .isEqualTo(new DType.Primitive(PType.I64, false));
+                        .isEqualTo(DType.I64);
                 assertThat(listArray.offsets().length())
                         .as("offsets length must be rowCount + 1")
                         .isEqualTo(chunk.rowCount() + 1);
@@ -231,10 +230,10 @@ class VortexHttpReaderIT {
                         .isGreaterThan(0);
                 assertThat(listViewArray.offsets().dtype())
                         .as("offset_ptype must be U32; U8 indicates silent proto tag mismatch")
-                        .isEqualTo(new DType.Primitive(PType.U32, false));
+                        .isEqualTo(DType.U32);
                 assertThat(listViewArray.sizes().dtype())
                         .as("size_ptype must be U32; U8 indicates silent proto tag mismatch")
-                        .isEqualTo(new DType.Primitive(PType.U32, false));
+                        .isEqualTo(DType.U32);
                 assertThat(listViewArray.offsets().length())
                         .as("offsets length must equal rowCount")
                         .isEqualTo(chunk.rowCount());

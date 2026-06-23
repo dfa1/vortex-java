@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 
 
@@ -59,7 +58,7 @@ public final class ChunkedEncodingEncoder implements EncodingEncoder {
             offsets[i + 1] = offsets[i] + chunkLengths[i];
         }
 
-        DType u64 = new DType.Primitive(PType.U64, false);
+        DType u64 = DType.U64;
         EncodeResult offsetsResult = ctx.lookupEncoder(EncodingId.VORTEX_PRIMITIVE).encode(u64, offsets, ctx);
 
         List<MemorySegment> allBuffers = new ArrayList<>(offsetsResult.buffers());

@@ -26,8 +26,8 @@ class VortexWriterTest {
 
     private static final DType.Struct SCHEMA = new DType.Struct(
             List.of("id", "value"),
-            List.of(new DType.Primitive(PType.I64, false),
-                    new DType.Primitive(PType.F64, false)),
+            List.of(DType.I64,
+                    DType.F64),
             false);
 
     private record ChunkSnapshot(long rowCount, java.util.Set<String> columnNames) {
@@ -96,7 +96,7 @@ class VortexWriterTest {
         var schema = new DType.Struct(
                 List.of("birthdays", "id"),
                 List.of(io.github.dfa1.vortex.writer.encode.DateExtensionEncoder.INSTANCE.dtype(false),
-                        new DType.Primitive(PType.I64, false)),
+                        DType.I64),
                 false);
         List<java.time.LocalDate> dates = List.of(
                 java.time.LocalDate.of(1996, 2, 12),
@@ -482,7 +482,7 @@ class VortexWriterTest {
         // encoders like ChunkedEncodingEncoder no longer claim raw primitive dtypes) keep selection
         // both stable across platforms and correct.
         var schema = new DType.Struct(List.of("v"),
-                List.of(new DType.Primitive(PType.I64, false)), false);
+                List.of(DType.I64), false);
         Path file = tmp.resolve("registry.vortex");
         long[] data = {1L, 2L, 3L, 4L};
 

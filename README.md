@@ -97,10 +97,10 @@ try (VortexReader vf = VortexReader.open(Path.of("data/example.vortex"));
 
 ```java
 DType.Struct schema = DType.structBuilder()
-        .field("timestamp", DType.i64())
-        .field("symbol",    DType.utf8())
-        .field("price",     DType.f64())
-        .field("volume",    DType.i64().asNullable())  // boxed Long[] → nullable
+        .field("timestamp", DType.I64)
+        .field("symbol",    DType.UTF8)
+        .field("price",     DType.F64)
+        .field("volume",    DType.I64.asNullable())     // boxed Long[] → nullable
         .build();
 
 try (var ch = FileChannel.open(Path.of("data/example.vortex"),

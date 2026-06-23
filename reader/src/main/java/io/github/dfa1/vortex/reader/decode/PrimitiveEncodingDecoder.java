@@ -45,7 +45,7 @@ public final class PrimitiveEncodingDecoder implements EncodingDecoder {
             case F16 -> new MaterializedFloat16Array(dt, n, buf);
         };
         if (ctx.node().children().length == 1) {
-            Array va = ctx.decodeChild(0, new DType.Bool(false), n);
+            Array va = ctx.decodeChild(0, DType.BOOL, n);
             if (!(va instanceof BoolArray validity)) {
                 throw new VortexException(EncodingId.VORTEX_PRIMITIVE,
                         "validity child decoded to unexpected type: " + va.getClass().getSimpleName());

@@ -6,7 +6,6 @@ import de.siegmar.fastcsv.reader.CsvReader;
 import de.siegmar.fastcsv.reader.CsvRecord;
 import de.siegmar.fastcsv.writer.CsvWriter;
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.csv.CsvExporter;
 import io.github.dfa1.vortex.csv.CsvImporter;
 import io.github.dfa1.vortex.csv.ExportOptions;
@@ -47,14 +46,14 @@ class LargeCsvRoundTripLoadIntegrationTest {
     private static final DType.Struct SCHEMA = new DType.Struct(
             List.of("id", "a", "b", "x", "y", "flag", "sym", "note"),
             List.of(
-                    new DType.Primitive(PType.I64, false),
-                    new DType.Primitive(PType.I64, false),
-                    new DType.Primitive(PType.I64, false),
-                    new DType.Primitive(PType.F64, false),
-                    new DType.Primitive(PType.F64, false),
-                    new DType.Bool(false),
-                    new DType.Utf8(false),
-                    new DType.Utf8(false)),
+                    DType.I64,
+                    DType.I64,
+                    DType.I64,
+                    DType.F64,
+                    DType.F64,
+                    DType.BOOL,
+                    DType.UTF8,
+                    DType.UTF8),
             false);
 
     private static final String[] HEADER = SCHEMA.fieldNames().toArray(String[]::new);

@@ -37,7 +37,7 @@ class VarBinViewEncodingDecoderTest {
         writeInlineView(views, 1, b);
 
         ArrayNode node = ArrayNode.of(EncodingId.VORTEX_VARBINVIEW, null, new ArrayNode[0], new int[]{0});
-        DecodeContext ctx = new DecodeContext(node, new DType.Binary(false), 2,
+        DecodeContext ctx = new DecodeContext(node, DType.BINARY, 2,
                 new MemorySegment[]{views}, ReadRegistry.empty(), arena);
 
         // When
@@ -66,7 +66,7 @@ class VarBinViewEncodingDecoderTest {
     void decode_noBuffers_throws() {
         // Given a node with zero buffer indices
         ArrayNode node = ArrayNode.of(EncodingId.VORTEX_VARBINVIEW, null, new ArrayNode[0], new int[0]);
-        DecodeContext ctx = new DecodeContext(node, new DType.Utf8(false), 0,
+        DecodeContext ctx = new DecodeContext(node, DType.UTF8, 0,
                 new MemorySegment[0], ReadRegistry.empty(), Arena.ofAuto());
 
         // When / Then

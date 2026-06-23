@@ -88,7 +88,7 @@ class ZstdEncodingEncoderTest {
 
         @Test
         void encode_unsupportedDtype_throwsVortexException() {
-            assertThatThrownBy(() -> ENCODER.encode(new DType.Null(false), null, EncodeTestHelper.testCtx()))
+            assertThatThrownBy(() -> ENCODER.encode(DType.NULL, null, EncodeTestHelper.testCtx()))
                     .isInstanceOf(VortexException.class);
         }
     }
@@ -115,7 +115,7 @@ class ZstdEncodingEncoderTest {
         private static DecodeContext makeNullableCtx(
                 byte[] meta, DType dtype, long n, boolean[] validityBits, byte[]... compressedFrames
         ) {
-            EncodeResult validityResult = BOOL_ENCODER.encode(new DType.Bool(false), validityBits, EncodeTestHelper.testCtx());
+            EncodeResult validityResult = BOOL_ENCODER.encode(DType.BOOL, validityBits, EncodeTestHelper.testCtx());
             EncodeNode remappedValidity = EncodeNode.remapBufferIndices(
                     validityResult.rootNode(), compressedFrames.length);
 

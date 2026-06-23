@@ -58,7 +58,7 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
 
         BoolArray validity = null;
         if (ctx.node().children().length > 0) {
-            Array validityArray = ctx.decodeChild(0, new DType.Bool(false), ctx.rowCount());
+            Array validityArray = ctx.decodeChild(0, DType.BOOL, ctx.rowCount());
             if (!(validityArray instanceof BoolArray ba)) {
                 throw new VortexException(EncodingId.VORTEX_ZSTD,
                         "validity child decoded to unexpected type: " + validityArray.getClass().getSimpleName());

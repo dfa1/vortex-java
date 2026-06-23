@@ -82,7 +82,7 @@ class DictEncodingDecoderTest {
             // Given — covers typedArray's F64 branch and the 8-byte expand path
             MemorySegment codes = u8Codes(0, 1, 0);
             MemorySegment values = TestSegments.leDoubles(1.5, -2.25);
-            DType dtype = new DType.Primitive(PType.F64, false);
+            DType dtype = DType.F64;
 
             // When
             DoubleArray result = (DoubleArray) decodeProtoSegments(dtype, PType.U8, codes, values, 2, 3);
@@ -98,7 +98,7 @@ class DictEncodingDecoderTest {
             // Given — covers typedArray's F32 branch and the 4-byte expand path
             MemorySegment codes = u8Codes(1, 0);
             MemorySegment values = TestSegments.leFloats(3.5f, 4.75f);
-            DType dtype = new DType.Primitive(PType.F32, false);
+            DType dtype = DType.F32;
 
             // When
             FloatArray result = (FloatArray) decodeProtoSegments(dtype, PType.U8, codes, values, 2, 2);
@@ -113,7 +113,7 @@ class DictEncodingDecoderTest {
             // Given — proto declares an I64 code type, which decodeRustProto rejects
             MemorySegment codes = TestSegments.leLongs(0, 1);
             MemorySegment values = TestSegments.leLongs(5, 6);
-            DType dtype = new DType.Primitive(PType.I64, false);
+            DType dtype = DType.I64;
 
             // When / Then
             assertThatThrownBy(() -> decodeProtoSegments(dtype, PType.I64, codes, values, 2, 2))
@@ -126,7 +126,7 @@ class DictEncodingDecoderTest {
             // Given — F16 expands fine (2 bytes) but typedArray has no F16 mapping
             MemorySegment codes = u8Codes(0, 1);
             MemorySegment values = TestSegments.leShorts((short) 1, (short) 2);
-            DType dtype = new DType.Primitive(PType.F16, false);
+            DType dtype = DType.F16;
 
             // When / Then
             assertThatThrownBy(() -> decodeProtoSegments(dtype, PType.U8, codes, values, 2, 2))
@@ -138,7 +138,7 @@ class DictEncodingDecoderTest {
         void missingMetadata_throws() {
             // Given — primitive dict with no metadata
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DICT, null, new ArrayNode[0], new int[]{});
-            DecodeContext ctx = new DecodeContext(node, new DType.Primitive(PType.I32, false),
+            DecodeContext ctx = new DecodeContext(node, DType.I32,
                     1, new MemorySegment[0], REGISTRY, Arena.ofAuto());
 
             // When / Then
@@ -152,7 +152,7 @@ class DictEncodingDecoderTest {
             // Given — metadata present but with zero remaining bytes (exercises !hasRemaining)
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DICT, ByteBuffer.allocate(0),
                     new ArrayNode[0], new int[]{});
-            DecodeContext ctx = new DecodeContext(node, new DType.Primitive(PType.I32, false),
+            DecodeContext ctx = new DecodeContext(node, DType.I32,
                     1, new MemorySegment[0], REGISTRY, Arena.ofAuto());
 
             // When / Then
@@ -167,7 +167,7 @@ class DictEncodingDecoderTest {
             ByteBuffer meta = ByteBuffer.wrap(new byte[]{0x08, (byte) 0x80});
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DICT, meta,
                     new ArrayNode[]{primitiveNode(0), primitiveNode(1)}, new int[]{});
-            DecodeContext ctx = new DecodeContext(node, new DType.Primitive(PType.I32, false),
+            DecodeContext ctx = new DecodeContext(node, DType.I32,
                     1, new MemorySegment[]{u8Codes(0), TestSegments.leLongs(0)}, REGISTRY, Arena.ofAuto());
 
             // When / Then
@@ -189,7 +189,7 @@ class DictEncodingDecoderTest {
             MemorySegment codes = codeSegment(codePType, new long[]{2, 0, 1, 2});
 
             // When
-            Array result = decodeLegacy(new DType.Primitive(PType.I64, false), codePType, values, codes, 4);
+            Array result = decodeLegacy(DType.I64, codePType, values, codes, 4);
 
             // Then
             assertLongValues(result, PType.I64, new long[]{300, 100, 200, 300});
@@ -203,7 +203,7 @@ class DictEncodingDecoderTest {
 
             // When / Then
             assertThatThrownBy(() ->
-                    decodeLegacy(new DType.Primitive(PType.I64, false), PType.I8, values, codes, 2))
+                    decodeLegacy(DType.I64, PType.I8, values, codes, 2))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("unexpected code type");
         }
@@ -300,7 +300,7 @@ class DictEncodingDecoderTest {
 
             ByteBuffer meta = ByteBuffer.wrap(new byte[]{(byte) PType.U8.ordinal()});
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DICT, meta, new ArrayNode[0], new int[]{0, 1, 2});
-            DecodeContext ctx = new DecodeContext(node, new DType.Utf8(false), 3,
+            DecodeContext ctx = new DecodeContext(node, DType.UTF8, 3,
                     new MemorySegment[]{bytes, offsets, codes}, REGISTRY, Arena.ofAuto());
 
             // When
@@ -332,7 +332,7 @@ class DictEncodingDecoderTest {
             ArrayNode dictNode = ArrayNode.of(EncodingId.VORTEX_DICT, dictMeta,
                     new ArrayNode[]{codesNode, valuesNode}, new int[]{});
 
-            DecodeContext ctx = new DecodeContext(dictNode, new DType.Utf8(false), 3,
+            DecodeContext ctx = new DecodeContext(dictNode, DType.UTF8, 3,
                     segs, REGISTRY, Arena.ofAuto());
 
             // When
@@ -348,7 +348,7 @@ class DictEncodingDecoderTest {
         void legacyLayout_missingMetadata_throws() {
             // Given — no children and no metadata
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DICT, null, new ArrayNode[0], new int[]{});
-            DecodeContext ctx = new DecodeContext(node, new DType.Utf8(false), 0,
+            DecodeContext ctx = new DecodeContext(node, DType.UTF8, 0,
                     new MemorySegment[0], REGISTRY, Arena.ofAuto());
 
             // When / Then
@@ -364,7 +364,7 @@ class DictEncodingDecoderTest {
             ArrayNode child = primitiveNode(0);
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DICT, meta,
                     new ArrayNode[]{child, child}, new int[]{});
-            DecodeContext ctx = new DecodeContext(node, new DType.Utf8(false), 1,
+            DecodeContext ctx = new DecodeContext(node, DType.UTF8, 1,
                     new MemorySegment[]{u8Codes(0)}, REGISTRY, Arena.ofAuto());
 
             // When / Then
@@ -378,7 +378,7 @@ class DictEncodingDecoderTest {
             // Given — children present but metadata absent
             ArrayNode child = primitiveNode(0);
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DICT, null, new ArrayNode[]{child, child}, new int[]{});
-            DecodeContext ctx = new DecodeContext(node, new DType.Utf8(false), 1,
+            DecodeContext ctx = new DecodeContext(node, DType.UTF8, 1,
                     new MemorySegment[]{u8Codes(0)}, REGISTRY, Arena.ofAuto());
 
             // When / Then
@@ -392,7 +392,7 @@ class DictEncodingDecoderTest {
             // Given — no children and zero-remaining metadata (exercises !hasRemaining)
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DICT, ByteBuffer.allocate(0),
                     new ArrayNode[0], new int[]{});
-            DecodeContext ctx = new DecodeContext(node, new DType.Utf8(false), 0,
+            DecodeContext ctx = new DecodeContext(node, DType.UTF8, 0,
                     new MemorySegment[0], REGISTRY, Arena.ofAuto());
 
             // When / Then
@@ -407,7 +407,7 @@ class DictEncodingDecoderTest {
             ArrayNode child = primitiveNode(0);
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DICT, ByteBuffer.allocate(0),
                     new ArrayNode[]{child, child}, new int[]{});
-            DecodeContext ctx = new DecodeContext(node, new DType.Utf8(false), 1,
+            DecodeContext ctx = new DecodeContext(node, DType.UTF8, 1,
                     new MemorySegment[]{u8Codes(0)}, REGISTRY, Arena.ofAuto());
 
             // When / Then

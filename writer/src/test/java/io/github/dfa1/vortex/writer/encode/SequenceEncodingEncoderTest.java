@@ -62,7 +62,7 @@ class SequenceEncodingEncoderTest {
         @Test
         void accepts_nonPrimitive_false() {
             // Given / When / Then
-            assertThat(ENCODER.accepts(new DType.Utf8(false))).isFalse();
+            assertThat(ENCODER.accepts(DType.UTF8)).isFalse();
         }
 
         @Test
@@ -288,7 +288,7 @@ class SequenceEncodingEncoderTest {
         @Test
         void encode_nonPrimitiveDtype_throwsVortexException() {
             // Given / When / Then
-            assertThatThrownBy(() -> ENCODER.encode(new DType.Utf8(false), new long[]{1L}, EncodeTestHelper.testCtx()))
+            assertThatThrownBy(() -> ENCODER.encode(DType.UTF8, new long[]{1L}, EncodeTestHelper.testCtx()))
                     .isInstanceOf(VortexException.class);
         }
     }
@@ -425,7 +425,7 @@ class SequenceEncodingEncoderTest {
 
         @Test
         void decode_nonPrimitiveDtype_throwsVortexException() {
-            DType utf8 = new DType.Utf8(false);
+            DType utf8 = DType.UTF8;
             DecodeContext ctx = makeCtx(intMeta(0, 1), utf8, 3);
             assertThatThrownBy(() -> DECODER.decode(ctx)).isInstanceOf(VortexException.class);
         }

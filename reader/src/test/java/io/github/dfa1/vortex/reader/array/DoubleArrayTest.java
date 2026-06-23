@@ -3,7 +3,6 @@ package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -68,7 +67,7 @@ class DoubleArrayTest {
             // Given — constant-encoding: 1-element buffer, logical length 3; all 3 visits yield same value
             MemorySegment seg = Arena.ofAuto().allocate(8, 8);
             seg.setAtIndex(PTypeIO.LE_DOUBLE, 0, 2.71);
-            DoubleArray sut = new MaterializedDoubleArray(new DType.Primitive(PType.F64, false), 3, seg);
+            DoubleArray sut = new MaterializedDoubleArray(DType.F64, 3, seg);
             List<Double> collected = new ArrayList<>();
 
             // When

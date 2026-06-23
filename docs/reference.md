@@ -33,18 +33,18 @@ Methods: `byteSize()`, `isFloating()`, `isSigned()`.
 
 Sealed logical type. All variants take a trailing `boolean nullable`.
 
-Each `DType` variant is a record. Prefer the static factories for new code — the
-record constructors stay available for pattern matching and tests.
+Each `DType` variant is a record. Prefer the canonical constants / factories for
+new code — the record constructors stay available for pattern matching and tests.
 
-| Record                | Factory                                                | Record constructor                                          |
+| Record                | Constant / factory                                     | Record constructor                                          |
 |-----------------------|--------------------------------------------------------|-------------------------------------------------------------|
-| `DType.Null`          | `DType.null_()`                                        | `new DType.Null(nullable)`                                  |
-| `DType.Bool`          | `DType.bool_()`                                        | `new DType.Bool(nullable)`                                  |
-| `DType.Primitive`     | `DType.i8()` … `DType.i64()`, `DType.u8()` … `DType.u64()`, `DType.f16()`, `DType.f32()`, `DType.f64()` | `new DType.Primitive(PType, nullable)`                      |
+| `DType.Null`          | `DType.NULL`                                           | `new DType.Null(nullable)`                                  |
+| `DType.Bool`          | `DType.BOOL`                                           | `new DType.Bool(nullable)`                                  |
+| `DType.Primitive`     | `DType.I8` … `DType.I64`, `DType.U8` … `DType.U64`, `DType.F16`, `DType.F32`, `DType.F64` (constants) | `DType.I64.asNullable()` / `new DType.Primitive(PType, nullable)` |
 | `DType.Decimal`       | `DType.decimal(precision, scale)`                      | `new DType.Decimal(precision, scale, nullable)`             |
-| `DType.Utf8`          | `DType.utf8()`                                         | `new DType.Utf8(nullable)`                                  |
-| `DType.Binary`        | `DType.binary()`                                       | `new DType.Binary(nullable)`                                |
-| `DType.Variant`       | `DType.variant()`                                      | `new DType.Variant(nullable)`                               |
+| `DType.Utf8`          | `DType.UTF8`                                           | `new DType.Utf8(nullable)`                                  |
+| `DType.Binary`        | `DType.BINARY`                                         | `new DType.Binary(nullable)`                                |
+| `DType.Variant`       | `DType.VARIANT`                                        | `new DType.Variant(nullable)`                               |
 | `DType.Struct`        | `DType.structBuilder().field(name, type)…build()`      | `new DType.Struct(fieldNames, fieldTypes, nullable)`        |
 | `DType.List`          | —                                                      | `new DType.List(elementType, nullable)`                     |
 | `DType.FixedSizeList` | —                                                      | `new DType.FixedSizeList(elementType, fixedSize, nullable)` |

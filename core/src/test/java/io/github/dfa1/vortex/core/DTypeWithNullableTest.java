@@ -16,19 +16,19 @@ class DTypeWithNullableTest {
     /// One non-nullable instance of each [DType] variant, with non-default payload
     /// fields so field-preservation is actually exercised (not just the flag).
     static Stream<Arguments> nonNullableSamples() {
-        DType i32 = new DType.Primitive(PType.I32, false);
+        DType i32 = DType.I32;
         return Stream.of(
-                Arguments.of("Null", new DType.Null(false)),
-                Arguments.of("Bool", new DType.Bool(false)),
-                Arguments.of("Primitive", new DType.Primitive(PType.I64, false)),
+                Arguments.of("Null", DType.NULL),
+                Arguments.of("Bool", DType.BOOL),
+                Arguments.of("Primitive", DType.I64),
                 Arguments.of("Decimal", new DType.Decimal((byte) 10, (byte) 2, false)),
-                Arguments.of("Utf8", new DType.Utf8(false)),
-                Arguments.of("Binary", new DType.Binary(false)),
-                Arguments.of("Struct", new DType.Struct(List.of("a", "b"), List.of(i32, new DType.Utf8(false)), false)),
+                Arguments.of("Utf8", DType.UTF8),
+                Arguments.of("Binary", DType.BINARY),
+                Arguments.of("Struct", new DType.Struct(List.of("a", "b"), List.of(i32, DType.UTF8), false)),
                 Arguments.of("List", new DType.List(i32, false)),
                 Arguments.of("FixedSizeList", new DType.FixedSizeList(i32, 4, false)),
                 Arguments.of("Extension", new DType.Extension("ip.address", i32, null, false)),
-                Arguments.of("Variant", new DType.Variant(false))
+                Arguments.of("Variant", DType.VARIANT)
         );
     }
 
@@ -68,7 +68,7 @@ class DTypeWithNullableTest {
     @Test
     void asNullable_isSugarForWithNullableTrue() {
         // Given
-        DType sut = new DType.Primitive(PType.I64, false);
+        DType sut = DType.I64;
 
         // When
         DType result = sut.asNullable();
@@ -81,7 +81,7 @@ class DTypeWithNullableTest {
     @Test
     void withNullable_preservesCompoundPayload_struct() {
         // Given — a struct whose field names/types must ride through the flip verbatim
-        DType i32 = new DType.Primitive(PType.I32, false);
+        DType i32 = DType.I32;
         DType.Struct sut = new DType.Struct(List.of("id", "name"), List.of(i32, new DType.Utf8(true)), false);
 
         // When
@@ -96,7 +96,7 @@ class DTypeWithNullableTest {
     @Test
     void withNullable_preservesCompoundPayload_extensionAndFixedSizeList() {
         // Given
-        DType storage = new DType.Primitive(PType.I32, false);
+        DType storage = DType.I32;
         DType.Extension ext = new DType.Extension("ip.address", storage, null, false);
         DType.FixedSizeList fsl = new DType.FixedSizeList(storage, 16, false);
 

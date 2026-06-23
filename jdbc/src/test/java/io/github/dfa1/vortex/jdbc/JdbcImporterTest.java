@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.jdbc;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
@@ -65,10 +64,10 @@ class JdbcImporterTest {
                 assertThat(reader.dtype()).isInstanceOf(DType.Struct.class);
                 DType.Struct schema = (DType.Struct) reader.dtype();
                 assertThat(schema.fieldNames()).containsExactly("ID", "NAME", "SCORE", "ACTIVE");
-                assertThat(schema.fieldTypes().get(0)).isEqualTo(new DType.Primitive(PType.I64, false));
-                assertThat(schema.fieldTypes().get(1)).isEqualTo(new DType.Utf8(false));
-                assertThat(schema.fieldTypes().get(2)).isEqualTo(new DType.Primitive(PType.F64, false));
-                assertThat(schema.fieldTypes().get(3)).isEqualTo(new DType.Bool(false));
+                assertThat(schema.fieldTypes().get(0)).isEqualTo(DType.I64);
+                assertThat(schema.fieldTypes().get(1)).isEqualTo(DType.UTF8);
+                assertThat(schema.fieldTypes().get(2)).isEqualTo(DType.F64);
+                assertThat(schema.fieldTypes().get(3)).isEqualTo(DType.BOOL);
 
                 try (ScanIterator iter = reader.scan(ScanOptions.all())) {
                     assertThat(iter.hasNext()).isTrue();

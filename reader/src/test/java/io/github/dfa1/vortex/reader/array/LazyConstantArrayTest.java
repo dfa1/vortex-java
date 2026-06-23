@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import org.junit.jupiter.api.Nested;
@@ -22,7 +21,7 @@ class LazyConstantArrayTest {
     @Nested
     class LongConstant {
         private final LazyConstantLongArray sut =
-                new LazyConstantLongArray(new DType.Primitive(PType.I64, false), 4, 42L);
+                new LazyConstantLongArray(DType.I64, 4, 42L);
 
         @Test
         void getLong_returnsBroadcastValue() {
@@ -51,7 +50,7 @@ class LazyConstantArrayTest {
         @Test
         void fold_appliesValueLengthTimes() {
             // When
-            long result = new LazyConstantLongArray(new DType.Primitive(PType.I64, false), 3, 7L)
+            long result = new LazyConstantLongArray(DType.I64, 3, 7L)
                     .fold(0L, Long::sum);
 
             // Then
@@ -69,7 +68,7 @@ class LazyConstantArrayTest {
     @Nested
     class IntConstant {
         private final LazyConstantIntArray sut =
-                new LazyConstantIntArray(new DType.Primitive(PType.I32, false), 3, -5);
+                new LazyConstantIntArray(DType.I32, 3, -5);
 
         @Test
         void getInt_returnsBroadcastValue() {
@@ -111,32 +110,32 @@ class LazyConstantArrayTest {
 
         @Test
         void getShort_returnsBroadcastValue() {
-            LazyConstantShortArray sut = new LazyConstantShortArray(new DType.Primitive(PType.I16, false), 2, RAW);
+            LazyConstantShortArray sut = new LazyConstantShortArray(DType.I16, 2, RAW);
             assertThat(sut.getShort(0)).isEqualTo(RAW);
             assertThat(sut.getShort(1)).isEqualTo(RAW);
         }
 
         @Test
         void getInt_signedKeepsSign_unsignedZeroExtends() {
-            assertThat(new LazyConstantShortArray(new DType.Primitive(PType.I16, false), 1, RAW).getInt(0))
+            assertThat(new LazyConstantShortArray(DType.I16, 1, RAW).getInt(0))
                     .isEqualTo((int) RAW);
-            assertThat(new LazyConstantShortArray(new DType.Primitive(PType.U16, false), 1, RAW).getInt(0))
+            assertThat(new LazyConstantShortArray(DType.U16, 1, RAW).getInt(0))
                     .isEqualTo(0xFF00);
         }
 
         @Test
         void fold_signedAndUnsignedWidening() {
             // signed short value is negative; unsigned is 0xFF00
-            assertThat(new LazyConstantShortArray(new DType.Primitive(PType.I16, false), 2, RAW)
+            assertThat(new LazyConstantShortArray(DType.I16, 2, RAW)
                     .fold(0L, Long::sum)).isEqualTo(2L * RAW);
-            assertThat(new LazyConstantShortArray(new DType.Primitive(PType.U16, false), 2, RAW)
+            assertThat(new LazyConstantShortArray(DType.U16, 2, RAW)
                     .fold(0L, Long::sum)).isEqualTo(2L * 0xFF00);
         }
 
         @Test
         void nonPrimitiveDtype_treatedAsSigned() {
             // Given — a non-Primitive dtype hits the defensive `instanceof` false branch
-            LazyConstantShortArray sut = new LazyConstantShortArray(new DType.Bool(false), 2, RAW);
+            LazyConstantShortArray sut = new LazyConstantShortArray(DType.BOOL, 2, RAW);
 
             // When / Then — falls back to signed widening
             assertThat(sut.getInt(0)).isEqualTo((int) RAW);
@@ -145,7 +144,7 @@ class LazyConstantArrayTest {
 
         @Test
         void outOfBounds_throws() {
-            LazyConstantShortArray sut = new LazyConstantShortArray(new DType.Primitive(PType.I16, false), 1, RAW);
+            LazyConstantShortArray sut = new LazyConstantShortArray(DType.I16, 1, RAW);
             assertThatThrownBy(() -> sut.getShort(-1)).isInstanceOf(IndexOutOfBoundsException.class);
             assertThatThrownBy(() -> sut.getShort(1)).isInstanceOf(IndexOutOfBoundsException.class);
             assertThatThrownBy(() -> sut.getInt(-1)).isInstanceOf(IndexOutOfBoundsException.class);
@@ -159,31 +158,31 @@ class LazyConstantArrayTest {
 
         @Test
         void getByte_returnsBroadcastValue() {
-            LazyConstantByteArray sut = new LazyConstantByteArray(new DType.Primitive(PType.I8, false), 2, RAW);
+            LazyConstantByteArray sut = new LazyConstantByteArray(DType.I8, 2, RAW);
             assertThat(sut.getByte(0)).isEqualTo(RAW);
             assertThat(sut.getByte(1)).isEqualTo(RAW);
         }
 
         @Test
         void getInt_signedKeepsSign_unsignedZeroExtends() {
-            assertThat(new LazyConstantByteArray(new DType.Primitive(PType.I8, false), 1, RAW).getInt(0))
+            assertThat(new LazyConstantByteArray(DType.I8, 1, RAW).getInt(0))
                     .isEqualTo((int) RAW);
-            assertThat(new LazyConstantByteArray(new DType.Primitive(PType.U8, false), 1, RAW).getInt(0))
+            assertThat(new LazyConstantByteArray(DType.U8, 1, RAW).getInt(0))
                     .isEqualTo(0xF0);
         }
 
         @Test
         void fold_signedAndUnsignedWidening() {
-            assertThat(new LazyConstantByteArray(new DType.Primitive(PType.I8, false), 2, RAW)
+            assertThat(new LazyConstantByteArray(DType.I8, 2, RAW)
                     .fold(0L, Long::sum)).isEqualTo(2L * RAW);
-            assertThat(new LazyConstantByteArray(new DType.Primitive(PType.U8, false), 2, RAW)
+            assertThat(new LazyConstantByteArray(DType.U8, 2, RAW)
                     .fold(0L, Long::sum)).isEqualTo(2L * 0xF0);
         }
 
         @Test
         void nonPrimitiveDtype_treatedAsSigned() {
             // Given — a non-Primitive dtype hits the defensive `instanceof` false branch
-            LazyConstantByteArray sut = new LazyConstantByteArray(new DType.Bool(false), 2, RAW);
+            LazyConstantByteArray sut = new LazyConstantByteArray(DType.BOOL, 2, RAW);
 
             // When / Then — falls back to signed widening
             assertThat(sut.getInt(0)).isEqualTo((int) RAW);
@@ -192,7 +191,7 @@ class LazyConstantArrayTest {
 
         @Test
         void outOfBounds_throws() {
-            LazyConstantByteArray sut = new LazyConstantByteArray(new DType.Primitive(PType.I8, false), 1, RAW);
+            LazyConstantByteArray sut = new LazyConstantByteArray(DType.I8, 1, RAW);
             assertThatThrownBy(() -> sut.getByte(-1)).isInstanceOf(IndexOutOfBoundsException.class);
             assertThatThrownBy(() -> sut.getByte(1)).isInstanceOf(IndexOutOfBoundsException.class);
             assertThatThrownBy(() -> sut.getInt(-1)).isInstanceOf(IndexOutOfBoundsException.class);
@@ -203,7 +202,7 @@ class LazyConstantArrayTest {
     @Nested
     class DoubleConstant {
         private final LazyConstantDoubleArray sut =
-                new LazyConstantDoubleArray(new DType.Primitive(PType.F64, false), 3, 3.14);
+                new LazyConstantDoubleArray(DType.F64, 3, 3.14);
 
         @Test
         void getDouble_returnsBroadcastValue() {
@@ -243,7 +242,7 @@ class LazyConstantArrayTest {
     @Nested
     class FloatConstant {
         private final LazyConstantFloatArray sut =
-                new LazyConstantFloatArray(new DType.Primitive(PType.F32, false), 2, 1.5f);
+                new LazyConstantFloatArray(DType.F32, 2, 1.5f);
 
         @Test
         void getFloat_returnsBroadcastValue() {
@@ -267,8 +266,8 @@ class LazyConstantArrayTest {
     class BoolConstant {
         @Test
         void getBoolean_returnsBroadcastValue() {
-            assertThat(new LazyConstantBoolArray(new DType.Bool(false), 3, true).getBoolean(2)).isTrue();
-            assertThat(new LazyConstantBoolArray(new DType.Bool(false), 3, false).getBoolean(0)).isFalse();
+            assertThat(new LazyConstantBoolArray(DType.BOOL, 3, true).getBoolean(2)).isTrue();
+            assertThat(new LazyConstantBoolArray(DType.BOOL, 3, false).getBoolean(0)).isFalse();
         }
 
         @Test
@@ -278,7 +277,7 @@ class LazyConstantArrayTest {
             int[] total = {0};
 
             // When
-            new LazyConstantBoolArray(new DType.Bool(false), 3, true).forEachBoolean(v -> {
+            new LazyConstantBoolArray(DType.BOOL, 3, true).forEachBoolean(v -> {
                 if (v) {
                     trueCount[0]++;
                 }
@@ -292,7 +291,7 @@ class LazyConstantArrayTest {
 
         @Test
         void getBoolean_outOfBounds_throws() {
-            LazyConstantBoolArray sut = new LazyConstantBoolArray(new DType.Bool(false), 2, true);
+            LazyConstantBoolArray sut = new LazyConstantBoolArray(DType.BOOL, 2, true);
             assertThatThrownBy(() -> sut.getBoolean(-1)).isInstanceOf(IndexOutOfBoundsException.class);
             assertThatThrownBy(() -> sut.getBoolean(2)).isInstanceOf(IndexOutOfBoundsException.class);
         }

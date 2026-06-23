@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
@@ -69,7 +68,7 @@ class PrimitiveEncodingEncoderTest {
         @MethodSource("longArrays")
         void encodeDecode_i64_isLossless(long[] data) {
             // Given
-            DType dtype = new DType.Primitive(PType.I64, false);
+            DType dtype = DType.I64;
             EncodeResult resultEncoded = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(resultEncoded, data.length, dtype, REGISTRY);
 
@@ -87,7 +86,7 @@ class PrimitiveEncodingEncoderTest {
         @MethodSource("intArrays")
         void encodeDecode_i32_isLossless(int[] data) {
             // Given
-            DType dtype = new DType.Primitive(PType.I32, false);
+            DType dtype = DType.I32;
             EncodeResult resultEncoded = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(resultEncoded, data.length, dtype, REGISTRY);
 
@@ -105,7 +104,7 @@ class PrimitiveEncodingEncoderTest {
         @MethodSource("doubleArrays")
         void encodeDecode_f64_isLossless(double[] data) {
             // Given
-            DType dtype = new DType.Primitive(PType.F64, false);
+            DType dtype = DType.F64;
             EncodeResult resultEncoded = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(resultEncoded, data.length, dtype, REGISTRY);
 
@@ -123,7 +122,7 @@ class PrimitiveEncodingEncoderTest {
         @MethodSource("longArrays")
         void encodedSize_equalsBytesInBuffer(long[] data) {
             // Given
-            DType dtype = new DType.Primitive(PType.I64, false);
+            DType dtype = DType.I64;
 
             // When
             EncodeResult result = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
@@ -151,7 +150,7 @@ class PrimitiveEncodingEncoderTest {
 
             ReadRegistry registry = TestRegistry.ofDecoders(new PrimitiveEncodingDecoder(), new BoolEncodingDecoder());
 
-            DType dtype = new DType.Primitive(PType.I32, false);
+            DType dtype = DType.I32;
             DecodeContext ctx = new DecodeContext(
                     primNode, dtype, raw.length,
                     new MemorySegment[]{valuesSeg, validitySeg},
@@ -182,7 +181,7 @@ class PrimitiveEncodingEncoderTest {
             ArrayNode primNode = ArrayNode.of(
                     EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
 
-            DType dtype = new DType.Primitive(PType.I32, false);
+            DType dtype = DType.I32;
             DecodeContext ctx = new DecodeContext(
                     primNode, dtype, raw.length,
                     new MemorySegment[]{valuesSeg},

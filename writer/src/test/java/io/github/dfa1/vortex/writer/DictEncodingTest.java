@@ -2,7 +2,6 @@ package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.writer.encode.DictEncodingEncoder;
 import io.github.dfa1.vortex.reader.ReadRegistry;
@@ -27,7 +26,7 @@ class DictEncodingTest {
 
     private static final DType.Struct SCHEMA = new DType.Struct(
             List.of("category"),
-            List.of(new DType.Primitive(PType.I32, false)),
+            List.of(DType.I32),
             false);
 
     private static ReadRegistry dictRegistry() {

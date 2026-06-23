@@ -14,15 +14,15 @@ class DTypeStructBuilderTest {
     void build_preservesFieldInsertionOrder() {
         // Given / When
         DType.Struct sut = DType.structBuilder()
-                .field("timestamp", DType.i64())
-                .field("symbol", DType.utf8())
-                .field("price", DType.f64())
+                .field("timestamp", DType.I64)
+                .field("symbol", DType.UTF8)
+                .field("price", DType.F64)
                 .build();
 
         // Then
         assertThat(sut.fieldNames()).containsExactly("timestamp", "symbol", "price");
         assertThat(sut.fieldTypes()).containsExactly(
-                DType.i64(), DType.utf8(), DType.f64());
+                DType.I64, DType.UTF8, DType.F64);
         assertThat(sut.nullable()).isFalse();
     }
 
@@ -30,7 +30,7 @@ class DTypeStructBuilderTest {
     void asNullable_marksTheStructItself() {
         // Given / When
         DType.Struct sut = DType.structBuilder()
-                .field("v", DType.i64())
+                .field("v", DType.I64)
                 .asNullable()
                 .build();
 
@@ -52,10 +52,10 @@ class DTypeStructBuilderTest {
     @Test
     void duplicateField_throws_atAddTime() {
         // Given
-        DType.StructBuilder sut = DType.structBuilder().field("x", DType.i64());
+        DType.StructBuilder sut = DType.structBuilder().field("x", DType.I64);
 
         // When / Then
-        assertThatThrownBy(() -> sut.field("x", DType.f64()))
+        assertThatThrownBy(() -> sut.field("x", DType.F64))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("duplicate field name: x");
     }
@@ -64,14 +64,14 @@ class DTypeStructBuilderTest {
     void buildResult_equalsRecordConstructed_struct() {
         // Given
         DType.Struct viaBuilder = DType.structBuilder()
-                .field("a", DType.i32())
-                .field("b", DType.utf8())
+                .field("a", DType.I32)
+                .field("b", DType.UTF8)
                 .build();
 
         // When
         DType.Struct result = new DType.Struct(
                 List.of("a", "b"),
-                List.of(new DType.Primitive(PType.I32, false), new DType.Utf8(false)),
+                List.of(DType.I32, DType.UTF8),
                 false);
 
         // Then
@@ -81,8 +81,8 @@ class DTypeStructBuilderTest {
     @Test
     void builder_isNotReusable_afterMutation_byField() {
         // Given / When — separate builder instances must produce independent structs
-        DType.Struct resultX = DType.structBuilder().field("x", DType.i64()).build();
-        DType.Struct resultY = DType.structBuilder().field("y", DType.utf8()).build();
+        DType.Struct resultX = DType.structBuilder().field("x", DType.I64).build();
+        DType.Struct resultY = DType.structBuilder().field("y", DType.UTF8).build();
 
         // Then
         assertThat(resultX.fieldNames()).containsExactly("x");

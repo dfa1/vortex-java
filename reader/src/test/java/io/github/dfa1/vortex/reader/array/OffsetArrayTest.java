@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -16,9 +15,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// unsigned-widening `getInt` path, and fold reduction over the sliced range.
 class OffsetArrayTest {
 
-    private static final DType U8 = new DType.Primitive(PType.U8, false);
-    private static final DType U16 = new DType.Primitive(PType.U16, false);
-    private static final DType F32 = new DType.Primitive(PType.F32, false);
+    private static final DType U8 = DType.U8;
+    private static final DType U16 = DType.U16;
+    private static final DType F32 = DType.F32;
 
     @Nested
     class Byte {
@@ -146,7 +145,7 @@ class OffsetArrayTest {
         void getBooleanShiftsByOffset() {
             // Given — bits [F, T, T, F]
             BoolArray inner = TestArrays.bools(false, true, true, false);
-            var sut = new OffsetBoolArray(new DType.Bool(false), 2, inner, 1L);
+            var sut = new OffsetBoolArray(DType.BOOL, 2, inner, 1L);
 
             // When / Then
             assertThat(sut.getBoolean(0)).isTrue();  // inner[1]
@@ -161,7 +160,7 @@ class OffsetArrayTest {
         void getIntShiftsByOffset() {
             // Given
             IntArray inner = TestArrays.ints(10, 20, 30, 40);
-            var sut = new OffsetIntArray(new DType.Primitive(PType.I32, false), 2, inner, 2L);
+            var sut = new OffsetIntArray(DType.I32, 2, inner, 2L);
 
             // When / Then
             assertThat(sut.getInt(0)).isEqualTo(30);
@@ -175,7 +174,7 @@ class OffsetArrayTest {
         void getLongShiftsByOffset() {
             // Given
             LongArray inner = TestArrays.longs(5L, 6L, 7L, 8L);
-            var sut = new OffsetLongArray(new DType.Primitive(PType.I64, false), 2, inner, 1L);
+            var sut = new OffsetLongArray(DType.I64, 2, inner, 1L);
 
             // When / Then
             assertThat(sut.getLong(0)).isEqualTo(6L);
@@ -189,7 +188,7 @@ class OffsetArrayTest {
         void getDoubleShiftsByOffset() {
             // Given
             DoubleArray inner = TestArrays.doubles(1.5, 2.5, 3.5);
-            var sut = new OffsetDoubleArray(new DType.Primitive(PType.F64, false), 2, inner, 1L);
+            var sut = new OffsetDoubleArray(DType.F64, 2, inner, 1L);
 
             // When / Then
             assertThat(sut.getDouble(0)).isEqualTo(2.5);

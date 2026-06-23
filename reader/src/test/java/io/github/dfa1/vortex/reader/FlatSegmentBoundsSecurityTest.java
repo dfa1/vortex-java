@@ -3,7 +3,6 @@ package io.github.dfa1.vortex.reader;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import com.google.flatbuffers.FlatBufferBuilder;
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.fbs.Array;
 import io.github.dfa1.vortex.fbs.ArrayNode;
@@ -25,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class FlatSegmentBoundsSecurityTest {
 
 
-    private static final DType DTYPE = new DType.Primitive(PType.I32, false);
+    private static final DType DTYPE = DType.I32;
 
     private final FlatSegmentDecoder sut = new FlatSegmentDecoder(ReadRegistry.empty());
 

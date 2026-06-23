@@ -48,16 +48,17 @@ A Vortex file is a typed struct — every column has a declared type before any 
 import io.github.dfa1.vortex.core.DType;
 
 DType.Struct schema = DType.structBuilder()
-    .field("timestamp", DType.i64())                   // unix epoch millis
-    .field("symbol",    DType.utf8())                  // ticker symbol
-    .field("price",     DType.f64())                   // trade price
-    .field("volume",    DType.i64().asNullable())      // shares traded, may be null
+    .field("timestamp", DType.I64)                     // unix epoch millis
+    .field("symbol",    DType.UTF8)                    // ticker symbol
+    .field("price",     DType.F64)                     // trade price
+    .field("volume",    DType.I64.asNullable())        // shares traded, may be null
     .build();
 ```
 
-`DType.i64()`, `DType.utf8()`, `DType.f64()`, etc. return non-nullable types by default.
-Chain `.asNullable()` to opt into nulls.
-See [reference.md#core-types](reference.md#core-types) for the full factory list.
+`DType.I8` … `DType.F64`, plus `DType.BOOL`, `DType.UTF8`, `DType.BINARY`,
+`DType.NULL`, `DType.VARIANT`, are non-nullable canonical constants. Chain
+`.asNullable()` to opt into nulls.
+See [reference.md#core-types](reference.md#core-types) for the full list.
 
 ---
 

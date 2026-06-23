@@ -3,7 +3,6 @@ package io.github.dfa1.vortex.reader.array;
 
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import org.junit.jupiter.api.Test;
 
@@ -17,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class GenericArrayTest {
 
-    private static final DType DTYPE = new DType.Primitive(PType.I64, false);
+    private static final DType DTYPE = DType.I64;
 
     @Test
     void withLength_shorterLength_returnsClampedView() {

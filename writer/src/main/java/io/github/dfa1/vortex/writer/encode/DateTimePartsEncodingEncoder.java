@@ -16,8 +16,6 @@ import java.util.List;
 public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
 
     private static final long SECONDS_PER_DAY = 86_400L;
-    private static final DType I64 = new DType.Primitive(PType.I64, false);
-    private static final DType I64_NULLABLE = new DType.Primitive(PType.I64, true);
     private static final io.github.dfa1.vortex.proto.PType I64_PROTO =
             io.github.dfa1.vortex.proto.PType.fromValue(PType.I64.ordinal());
 
@@ -70,12 +68,12 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
             subseconds[i] = rem % divisor;
         }
 
-        DType daysDtype = d.nullable() ? I64_NULLABLE : I64;
+        DType daysDtype = d.nullable() ? DType.I64.asNullable() : DType.I64;
 
         EncodingEncoder primEnc = ctx.lookupEncoder(EncodingId.VORTEX_PRIMITIVE);
         EncodeResult daysResult = primEnc.encode(daysDtype, days, ctx);
-        EncodeResult secondsResult = primEnc.encode(I64, seconds, ctx);
-        EncodeResult subsecondsResult = primEnc.encode(I64, subseconds, ctx);
+        EncodeResult secondsResult = primEnc.encode(DType.I64, seconds, ctx);
+        EncodeResult subsecondsResult = primEnc.encode(DType.I64, subseconds, ctx);
 
         List<MemorySegment> allBuffers = new ArrayList<>();
         allBuffers.addAll(daysResult.buffers());
@@ -139,11 +137,11 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
                 new EncodeNode[3],
                 new int[0]);
 
-        DType daysDtype = d.nullable() ? I64_NULLABLE : I64;
+        DType daysDtype = d.nullable() ? DType.I64.asNullable() : DType.I64;
         List<ChildSlot> children = List.of(
                 new ChildSlot(daysDtype, days, 0),
-                new ChildSlot(I64, seconds, 1),
-                new ChildSlot(I64, subseconds, 2));
+                new ChildSlot(DType.I64, seconds, 1),
+                new ChildSlot(DType.I64, subseconds, 2));
 
         return new CascadeStep(partialRoot, List.of(), children, null, null, true);
     }

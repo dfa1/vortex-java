@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.inspect;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -153,10 +152,10 @@ public final class ZonedStatsSchema {
             types.add(stype.withNullable(true));
             if (stat == Stat.MAX) {
                 names.add(Stat.MAX_IS_TRUNCATED);
-                types.add(new DType.Bool(false));
+                types.add(DType.BOOL);
             } else if (stat == Stat.MIN) {
                 names.add(Stat.MIN_IS_TRUNCATED);
-                types.add(new DType.Bool(false));
+                types.add(DType.BOOL);
             }
         }
         return new DType.Struct(List.copyOf(names), List.copyOf(types), false);
@@ -198,18 +197,18 @@ public final class ZonedStatsSchema {
 
     private static DType statDtypeDirect(Stat stat, DType columnDtype) {
         return switch (stat) {
-            case IS_CONSTANT, IS_SORTED, IS_STRICT_SORTED -> new DType.Bool(false);
+            case IS_CONSTANT, IS_SORTED, IS_STRICT_SORTED -> DType.BOOL;
             case MAX, MIN -> {
                 if (columnDtype instanceof DType.Null) {
                     yield null;
                 }
                 yield columnDtype;
             }
-            case NULL_COUNT -> new DType.Primitive(PType.U64, false);
-            case UNCOMPRESSED_SIZE_IN_BYTES -> new DType.Primitive(PType.U64, false);
+            case NULL_COUNT -> DType.U64;
+            case UNCOMPRESSED_SIZE_IN_BYTES -> DType.U64;
             case NAN_COUNT -> {
                 if (columnDtype instanceof DType.Primitive p && p.ptype().isFloating()) {
-                    yield new DType.Primitive(PType.U64, false);
+                    yield DType.U64;
                 }
                 yield null;
             }
@@ -219,13 +218,13 @@ public final class ZonedStatsSchema {
 
     private static DType sumDtype(DType columnDtype) {
         if (columnDtype instanceof DType.Bool) {
-            return new DType.Primitive(PType.U64, false);
+            return DType.U64;
         }
         if (columnDtype instanceof DType.Primitive p) {
             return switch (p.ptype()) {
-                case U8, U16, U32, U64 -> new DType.Primitive(PType.U64, false);
-                case I8, I16, I32, I64 -> new DType.Primitive(PType.I64, false);
-                case F16, F32, F64 -> new DType.Primitive(PType.F64, false);
+                case U8, U16, U32, U64 -> DType.U64;
+                case I8, I16, I32, I64 -> DType.I64;
+                case F16, F32, F64 -> DType.F64;
             };
         }
         // Decimal sum widening and other types are not handled — falls through to null

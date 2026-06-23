@@ -174,7 +174,7 @@ class ChunkImplTest {
 
         @Test
         void stringArrayAccepted() {
-            assertThat(putGet(new DType.Utf8(false), new String[]{"a", "b"})).isInstanceOf(String[].class);
+            assertThat(putGet(DType.UTF8, new String[]{"a", "b"})).isInstanceOf(String[].class);
         }
 
         @Test
@@ -184,13 +184,13 @@ class ChunkImplTest {
 
         @Test
         void nonNullableRejectsNullElement() {
-            assertThatThrownBy(() -> putGet(new DType.Utf8(false), new String[]{"a", null}))
+            assertThatThrownBy(() -> putGet(DType.UTF8, new String[]{"a", null}))
                     .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("null at row 1");
         }
 
         @Test
         void wrongTypeRejected() {
-            assertThatThrownBy(() -> putGet(new DType.Utf8(false), new int[]{1}))
+            assertThatThrownBy(() -> putGet(DType.UTF8, new int[]{1}))
                     .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("expects String[]");
         }
     }
@@ -200,7 +200,7 @@ class ChunkImplTest {
 
         @Test
         void boolArrayAccepted() {
-            assertThat(putGet(new DType.Bool(false), new boolean[]{true, false})).isInstanceOf(boolean[].class);
+            assertThat(putGet(DType.BOOL, new boolean[]{true, false})).isInstanceOf(boolean[].class);
         }
 
         @Test
@@ -215,13 +215,13 @@ class ChunkImplTest {
 
         @Test
         void boxedRejectedOnNonNullableColumn() {
-            assertThatThrownBy(() -> putGet(new DType.Bool(false), new Boolean[]{true}))
+            assertThatThrownBy(() -> putGet(DType.BOOL, new Boolean[]{true}))
                     .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("rejects Boolean[]");
         }
 
         @Test
         void wrongTypeRejected() {
-            assertThatThrownBy(() -> putGet(new DType.Bool(false), new int[]{1}))
+            assertThatThrownBy(() -> putGet(DType.BOOL, new int[]{1}))
                     .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("expects boolean[]");
         }
     }

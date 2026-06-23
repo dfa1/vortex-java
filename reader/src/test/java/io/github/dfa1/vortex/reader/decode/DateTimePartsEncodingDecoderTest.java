@@ -113,7 +113,7 @@ class DateTimePartsEncodingDecoderTest {
     void decode_extensionMissingTimeUnitMetadata_throws() {
         // Given an extension whose metadata byte is absent
         DType noUnit = new DType.Extension("vortex.timestamp",
-                new DType.Primitive(PType.I64, false), null, false);
+                DType.I64, null, false);
         DecodeContext c = ctx(i64Meta(), noUnit, 1,
                 TestSegments.leLongs(0L), TestSegments.leLongs(0L), TestSegments.leLongs(0L));
 
@@ -124,7 +124,7 @@ class DateTimePartsEncodingDecoderTest {
     @Test
     void decode_nonExtensionDtype_throws() {
         // Given a primitive (non-extension) logical type
-        DecodeContext c = ctx(i64Meta(), new DType.Primitive(PType.I64, false), 1,
+        DecodeContext c = ctx(i64Meta(), DType.I64, 1,
                 TestSegments.leLongs(0L), TestSegments.leLongs(0L), TestSegments.leLongs(0L));
 
         // When / Then

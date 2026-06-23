@@ -241,9 +241,9 @@ class PatchedEncodingEncoderTest {
             // child 0: inner (same dtype), child 1: laneOffsets (U32), child 2: patchIdx (U16), child 3: patchVal (same dtype)
             assertThat(step.openChildren().get(0).childDtype()).isEqualTo(DTypes.I64);
             assertThat(step.openChildren().get(1).childDtype())
-                    .isEqualTo(new DType.Primitive(PType.U32, false));
+                    .isEqualTo(DType.U32);
             assertThat(step.openChildren().get(2).childDtype())
-                    .isEqualTo(new DType.Primitive(PType.U16, false));
+                    .isEqualTo(DType.U16);
             assertThat(step.openChildren().get(3).childDtype()).isEqualTo(DTypes.I64);
         }
 

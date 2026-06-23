@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.proto.ALPMetadata;
 import io.github.dfa1.vortex.proto.PatchesMetadata;
@@ -24,8 +23,8 @@ class AlpEncodingDecoderTest {
     private static final AlpEncodingDecoder SUT = new AlpEncodingDecoder();
     private static final ReadRegistry REGISTRY = TestRegistry.ofDecoders(SUT, new PrimitiveEncodingDecoder());
 
-    private static final DType F64 = new DType.Primitive(PType.F64, false);
-    private static final DType F32 = new DType.Primitive(PType.F32, false);
+    private static final DType F64 = DType.F64;
+    private static final DType F32 = DType.F32;
 
     private static MemorySegment leLongs(long... vs) {
         byte[] b = new byte[vs.length * 8];
@@ -59,7 +58,7 @@ class AlpEncodingDecoderTest {
         // Given a Utf8 dtype on an ALP node
         ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ALP, ByteBuffer.wrap(new ALPMetadata(0, 0, null).encode()),
                 new ArrayNode[0], new int[0]);
-        DecodeContext ctx = new DecodeContext(node, new DType.Utf8(false), 1,
+        DecodeContext ctx = new DecodeContext(node, DType.UTF8, 1,
                 new MemorySegment[0], REGISTRY, Arena.ofAuto());
 
         // When / Then

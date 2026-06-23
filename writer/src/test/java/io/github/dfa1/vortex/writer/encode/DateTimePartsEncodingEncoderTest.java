@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.encoding.DTypes;
@@ -42,7 +41,7 @@ class DateTimePartsEncodingEncoderTest {
         meta.putShort((short) 0);
         meta.flip();
         return new DType.Extension("vortex.timestamp",
-                new DType.Primitive(PType.I64, false), meta, false);
+                DType.I64, meta, false);
     }
 
     private static ArrayNode toArrayNode(EncodeNode node) {
@@ -95,7 +94,7 @@ class DateTimePartsEncodingEncoderTest {
         void encode_missingMetadata_throws() {
             // Given
             DType noMeta = new DType.Extension("vortex.timestamp",
-                    new DType.Primitive(PType.I64, false), null, false);
+                    DType.I64, null, false);
             DateTimePartsData data = new DateTimePartsData(new long[]{0L}, false);
 
             // When / Then

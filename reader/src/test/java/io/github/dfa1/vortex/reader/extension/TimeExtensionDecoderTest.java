@@ -54,7 +54,7 @@ class TimeExtensionDecoderTest {
         DType.Extension dtype = sut.dtype(TimeUnit.Nanoseconds, false);
 
         // Then
-        assertThat(dtype.storageDType()).isEqualTo(new DType.Primitive(PType.I64, false));
+        assertThat(dtype.storageDType()).isEqualTo(DType.I64);
         assertThat(dtype.metadata().get(0)).isEqualTo((byte) TimeUnit.Nanoseconds.ordinal());
     }
 
@@ -105,7 +105,7 @@ class TimeExtensionDecoderTest {
             IntArray inner = new MaterializedIntArray(I32, 2, buf);
             MemorySegment validityBuf = arena.allocate(1);
             validityBuf.set(ValueLayout.JAVA_BYTE, 0, (byte) 0b0000_0001);
-            BoolArray validity = new MaterializedBoolArray(new DType.Bool(false), 2, validityBuf);
+            BoolArray validity = new MaterializedBoolArray(DType.BOOL, 2, validityBuf);
 
             // When
             List<LocalTime> out = sut.decodeAll(

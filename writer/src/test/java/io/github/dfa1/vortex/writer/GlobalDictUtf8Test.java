@@ -23,7 +23,7 @@ class GlobalDictUtf8Test {
 
     private static final DType.Struct SCHEMA = new DType.Struct(
             List.of("status"),
-            List.of(new DType.Utf8(false)),
+            List.of(DType.UTF8),
             false);
 
     @Test

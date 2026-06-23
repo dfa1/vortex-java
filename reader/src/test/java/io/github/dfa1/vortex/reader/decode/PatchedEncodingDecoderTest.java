@@ -4,7 +4,6 @@ import io.github.dfa1.vortex.encoding.TestSegments;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
@@ -35,7 +34,7 @@ class PatchedEncodingDecoderTest {
 
 
     private static Array decode(int n, int[] innerI32, int[] laneOffsets, short[] patchIndices, int[] patchValues) {
-        return decode(new DType.Primitive(PType.I32, false), n,
+        return decode(DType.I32, n,
                 TestSegments.leInts(innerI32), TestSegments.leInts(laneOffsets),
                 TestSegments.leShorts(patchIndices), TestSegments.leInts(patchValues),
                 laneOffsets.length - 1);
@@ -124,7 +123,7 @@ class PatchedEncodingDecoderTest {
     @Test
     void decode_i64_singlePatch() {
         // Given
-        DType dtype = new DType.Primitive(PType.I64, false);
+        DType dtype = DType.I64;
 
         // When
         Array result = decode(dtype, 3, TestSegments.leLongs(100L, 200L, 300L), TestSegments.leInts(0, 1),
@@ -145,7 +144,7 @@ class PatchedEncodingDecoderTest {
         ArrayNode patchedNode = ArrayNode.of(EncodingId.VORTEX_PATCHED, null,
                 new ArrayNode[]{innerNode, innerNode, innerNode, innerNode}, new int[]{});
         MemorySegment seg = TestSegments.leInts(1, 2, 3);
-        DecodeContext ctx = new DecodeContext(patchedNode, new DType.Primitive(PType.I32, false), 3,
+        DecodeContext ctx = new DecodeContext(patchedNode, DType.I32, 3,
                 new MemorySegment[]{seg}, ReadRegistry.empty(), Arena.ofAuto());
 
         // When / Then

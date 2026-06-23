@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -28,14 +27,14 @@ class PcoEncodingEncoderTest {
     private static final PcoEncodingDecoder DECODER = new PcoEncodingDecoder();
     private static final ReadRegistry REGISTRY = TestRegistry.ofDecoders(DECODER);
 
-    private static final DType I64 = new DType.Primitive(PType.I64, false);
-    private static final DType U64 = new DType.Primitive(PType.U64, false);
-    private static final DType I32 = new DType.Primitive(PType.I32, false);
-    private static final DType U32 = new DType.Primitive(PType.U32, false);
-    private static final DType I16 = new DType.Primitive(PType.I16, false);
-    private static final DType U16 = new DType.Primitive(PType.U16, false);
-    private static final DType F32 = new DType.Primitive(PType.F32, false);
-    private static final DType F64 = new DType.Primitive(PType.F64, false);
+    private static final DType I64 = DType.I64;
+    private static final DType U64 = DType.U64;
+    private static final DType I32 = DType.I32;
+    private static final DType U32 = DType.U32;
+    private static final DType I16 = DType.I16;
+    private static final DType U16 = DType.U16;
+    private static final DType F32 = DType.F32;
+    private static final DType F64 = DType.F64;
 
     static Stream<Arguments> i64Arrays() {
         return Stream.of(

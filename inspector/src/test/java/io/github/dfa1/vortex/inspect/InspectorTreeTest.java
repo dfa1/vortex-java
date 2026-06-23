@@ -4,7 +4,6 @@ import io.github.dfa1.vortex.reader.CompressionScheme;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.reader.Footer;
 import io.github.dfa1.vortex.reader.Layout;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.SegmentSpec;
 import io.github.dfa1.vortex.reader.VortexHandle;
 import org.junit.jupiter.api.Test;
@@ -32,7 +31,7 @@ class InspectorTreeTest {
         Layout root = struct(10, List.of(idLeaf, valLeaf));
         DType dtype = new DType.Struct(
                 List.of("id", "value"),
-                List.of(new DType.Primitive(PType.I64, false), new DType.Primitive(PType.F64, false)),
+                List.of(DType.I64, DType.F64),
                 false);
         givenHandle(dtype, root, List.of("vortex.constant"), List.of());
 
@@ -52,7 +51,7 @@ class InspectorTreeTest {
         // exceeds the dtype's named fields. Should not throw; should fall back to col0/col1...
         Layout root = struct(0, List.of(leaf("vortex.constant", 0), leaf("vortex.constant", 0)));
         DType dtype = new DType.Struct(List.of("only"),
-                List.of(new DType.Primitive(PType.I32, false)), false);
+                List.of(DType.I32), false);
         givenHandle(dtype, root, List.of("vortex.constant"), List.of());
 
         // When
@@ -67,7 +66,7 @@ class InspectorTreeTest {
     void build_withNonStructRoot_leavesFieldNameEmpty() {
         // Given
         Layout root = leaf("vortex.flat", 100);
-        DType dtype = new DType.Primitive(PType.I64, false);
+        DType dtype = DType.I64;
         givenHandle(dtype, root, List.of("vortex.flat"), List.of());
 
         // When
@@ -82,7 +81,7 @@ class InspectorTreeTest {
     void build_sumsSegmentBytesAndCountsSegments() {
         // Given
         Layout root = leaf("vortex.flat", 0);
-        DType dtype = new DType.Primitive(PType.I32, false);
+        DType dtype = DType.I32;
         List<SegmentSpec> segs = List.of(
                 new SegmentSpec(0, 128, (byte) 0, CompressionScheme.LZ4),
                 new SegmentSpec(128, 256, (byte) 0, CompressionScheme.LZ4),
@@ -103,7 +102,7 @@ class InspectorTreeTest {
         // Given — total rows is the root layout's row count, regardless of struct/non-struct
         Layout root = struct(12_345L, List.of(leaf("vortex.constant", 12_345L)));
         DType dtype = new DType.Struct(List.of("c"),
-                List.of(new DType.Primitive(PType.I32, false)), false);
+                List.of(DType.I32), false);
         givenHandle(dtype, root, List.of("vortex.constant"), List.of());
 
         // When
@@ -117,7 +116,7 @@ class InspectorTreeTest {
     void build_carriesVersionAndFileSize() {
         // Given
         Layout root = leaf("vortex.flat", 0);
-        DType dtype = new DType.Primitive(PType.I32, false);
+        DType dtype = DType.I32;
         given(handle.version()).willReturn(7);
         given(handle.fileSize()).willReturn(123_456L);
         given(handle.dtype()).willReturn(dtype);
@@ -142,9 +141,9 @@ class InspectorTreeTest {
         Layout c3 = new Layout("vortex.flat", 0, null, List.of(), List.of(2));
         Layout root = struct(0, List.of(c1, c2, c3));
         DType dtype = new DType.Struct(List.of("a", "b", "c"),
-                List.of(new DType.Primitive(PType.I32, false),
-                        new DType.Primitive(PType.I32, false),
-                        new DType.Primitive(PType.I32, false)),
+                List.of(DType.I32,
+                        DType.I32,
+                        DType.I32),
                 false);
         List<SegmentSpec> segs = List.of(
                 new SegmentSpec(0, 1024, (byte) 0, CompressionScheme.ZSTD),  // skipped
@@ -166,7 +165,7 @@ class InspectorTreeTest {
         // Given
         Layout root = struct(0, List.of(leaf("vortex.constant", 0)));
         DType dtype = new DType.Struct(List.of("c"),
-                List.of(new DType.Primitive(PType.I32, false)), false);
+                List.of(DType.I32), false);
         givenHandle(dtype, root, List.of("vortex.constant"), List.of());
 
         // When / Then — NOOP passes; no NPE
@@ -183,8 +182,8 @@ class InspectorTreeTest {
         Layout col1 = new Layout("vortex.flat", 10, null, List.of(), List.of(1));
         Layout root = struct(10, List.of(col0, col1));
         DType dtype = new DType.Struct(List.of("id", "value"),
-                List.of(new DType.Primitive(PType.I64, false),
-                        new DType.Primitive(PType.F64, false)),
+                List.of(DType.I64,
+                        DType.F64),
                 false);
         List<SegmentSpec> segs = List.of(
                 new SegmentSpec(0, 64, (byte) 0, CompressionScheme.NONE),
@@ -250,7 +249,7 @@ class InspectorTreeTest {
         // are intentionally skipped so a malformed or compressed payload can't crash the
         // inspector. With code != NONE we should still build a tree, with no encodings used.
         Layout root = new Layout("vortex.flat", 0, null, List.of(), List.of(0));
-        DType dtype = new DType.Primitive(PType.I32, false);
+        DType dtype = DType.I32;
         SegmentSpec compressed = new SegmentSpec(0, 1024, (byte) 0, CompressionScheme.ZSTD);
         givenHandle(dtype, root, List.of("vortex.flat"), List.of(compressed));
 

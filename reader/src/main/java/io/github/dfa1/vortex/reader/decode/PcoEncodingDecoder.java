@@ -61,7 +61,7 @@ public final class PcoEncodingDecoder implements EncodingDecoder {
         BoolArray validity = null;
         long validCount = n;
         if (ctx.node().children().length > 0) {
-            Array validityArr = ctx.decodeChild(0, new DType.Bool(false), n);
+            Array validityArr = ctx.decodeChild(0, DType.BOOL, n);
             if (!(validityArr instanceof BoolArray ba)) {
                 throw new VortexException(EncodingId.VORTEX_PCO,
                         "pco validity child must be Bool, got: " + validityArr.getClass().getSimpleName());

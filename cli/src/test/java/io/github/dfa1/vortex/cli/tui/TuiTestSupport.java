@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.cli.tui;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.VortexHandle;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.writer.VortexWriter;
@@ -31,9 +30,9 @@ final class TuiTestSupport {
         DType.Struct schema = new DType.Struct(
                 List.of("a", "b", "c"),
                 List.of(
-                        new DType.Primitive(PType.I64, false),
-                        new DType.Primitive(PType.I64, false),
-                        new DType.Primitive(PType.I64, false)),
+                        DType.I64,
+                        DType.I64,
+                        DType.I64),
                 false);
         long[] a = new long[rows];
         long[] b = new long[rows];
@@ -58,10 +57,10 @@ final class TuiTestSupport {
         DType.Struct schema = new DType.Struct(
                 List.of("i", "d", "flag", "name"),
                 List.of(
-                        new DType.Primitive(PType.I64, false),
-                        new DType.Primitive(PType.F64, false),
-                        new DType.Bool(false),
-                        new DType.Utf8(false)),
+                        DType.I64,
+                        DType.F64,
+                        DType.BOOL,
+                        DType.UTF8),
                 false);
         try (FileChannel ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
@@ -90,7 +89,7 @@ final class TuiTestSupport {
         Path file = dir.resolve(name);
         DType.Struct schema = new DType.Struct(
                 List.of("label", "n"),
-                List.of(new DType.Utf8(false), new DType.Primitive(PType.I64, false)),
+                List.of(DType.UTF8, DType.I64),
                 false);
         String[] labels = {"red", "green", "blue"};
         String[] label = new String[rows];

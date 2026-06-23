@@ -39,7 +39,7 @@ class ParquetImporterTest {
         void boolean_mapsToBool_carryingNullability() {
             // Given / When / Then — REQUIRED is non-null, OPTIONAL is nullable
             assertThat(ParquetImporter.mapDType(col("b", PhysicalType.BOOLEAN, RepetitionType.REQUIRED, null)))
-                    .isEqualTo(new DType.Bool(false));
+                    .isEqualTo(DType.BOOL);
             assertThat(ParquetImporter.mapDType(col("b", PhysicalType.BOOLEAN, RepetitionType.OPTIONAL, null)))
                     .isEqualTo(new DType.Bool(true));
         }
@@ -50,7 +50,7 @@ class ParquetImporterTest {
             DType result = ParquetImporter.mapDType(col("i", PhysicalType.INT32, RepetitionType.REQUIRED, null));
 
             // Then
-            assertThat(result).isEqualTo(new DType.Primitive(PType.I32, false));
+            assertThat(result).isEqualTo(DType.I32);
         }
 
         @ParameterizedTest
@@ -78,11 +78,11 @@ class ParquetImporterTest {
         void int64_signedAndUnsigned_mapToI64AndU64() {
             // Given / When / Then
             assertThat(ParquetImporter.mapDType(col("l", PhysicalType.INT64, RepetitionType.REQUIRED, null)))
-                    .isEqualTo(new DType.Primitive(PType.I64, false));
+                    .isEqualTo(DType.I64);
             assertThat(ParquetImporter.mapDType(col("l", PhysicalType.INT64, RepetitionType.REQUIRED,
-                    new LogicalType.IntType(64, true)))).isEqualTo(new DType.Primitive(PType.I64, false));
+                    new LogicalType.IntType(64, true)))).isEqualTo(DType.I64);
             assertThat(ParquetImporter.mapDType(col("l", PhysicalType.INT64, RepetitionType.REQUIRED,
-                    new LogicalType.IntType(64, false)))).isEqualTo(new DType.Primitive(PType.U64, false));
+                    new LogicalType.IntType(64, false)))).isEqualTo(DType.U64);
         }
 
         @ParameterizedTest
@@ -107,9 +107,9 @@ class ParquetImporterTest {
         void float_and_double_mapToF32AndF64() {
             // Given / When / Then
             assertThat(ParquetImporter.mapDType(col("f", PhysicalType.FLOAT, RepetitionType.REQUIRED, null)))
-                    .isEqualTo(new DType.Primitive(PType.F32, false));
+                    .isEqualTo(DType.F32);
             assertThat(ParquetImporter.mapDType(col("d", PhysicalType.DOUBLE, RepetitionType.REQUIRED, null)))
-                    .isEqualTo(new DType.Primitive(PType.F64, false));
+                    .isEqualTo(DType.F64);
         }
 
         @Test
