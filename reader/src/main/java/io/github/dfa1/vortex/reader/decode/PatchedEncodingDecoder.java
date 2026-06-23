@@ -31,11 +31,6 @@ public final class PatchedEncodingDecoder implements EncodingDecoder {
     }
 
     @Override
-    public boolean accepts(DType dtype) {
-        return false;
-    }
-
-    @Override
     public Array decode(DecodeContext ctx) {
         ByteBuffer rawMeta = ctx.metadata();
         if (rawMeta == null || !rawMeta.hasRemaining()) {

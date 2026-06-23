@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.reader;
 
-import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.VortexFormat;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -35,11 +34,6 @@ class VortexReaderTest {
                 @Override
                 public EncodingId encodingId() {
                     return encodingId;
-                }
-
-                @Override
-                public boolean accepts(DType dtype) {
-                    return false;
                 }
 
                 @Override

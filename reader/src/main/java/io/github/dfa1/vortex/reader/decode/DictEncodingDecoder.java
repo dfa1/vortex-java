@@ -44,11 +44,6 @@ public final class DictEncodingDecoder implements EncodingDecoder {
     }
 
     @Override
-    public boolean accepts(DType dtype) {
-        return dtype instanceof DType.Primitive || dtype instanceof DType.Utf8;
-    }
-
-    @Override
     public Array decode(DecodeContext ctx) {
         ByteBuffer meta = ctx.metadata();
 

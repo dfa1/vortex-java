@@ -36,13 +36,6 @@ public final class ChunkedEncodingDecoder implements EncodingDecoder {
     }
 
     @Override
-    public boolean accepts(DType dtype) {
-        return dtype instanceof DType.Primitive
-                || dtype instanceof DType.Bool
-                || dtype instanceof DType.Struct;
-    }
-
-    @Override
     public Array decode(DecodeContext ctx) {
         int nchildren = ctx.node().children().length;
         if (nchildren < 1) {

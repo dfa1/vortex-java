@@ -32,17 +32,6 @@ public final class DeltaEncodingDecoder implements EncodingDecoder {
     }
 
     @Override
-    public boolean accepts(DType dtype) {
-        if (!(dtype instanceof DType.Primitive p)) {
-            return false;
-        }
-        return switch (p.ptype()) {
-            case I8, I16, I32, I64, U8, U16, U32, U64 -> true;
-            default -> false;
-        };
-    }
-
-    @Override
     public Array decode(DecodeContext ctx) {
         ByteBuffer rawMeta = ctx.metadata();
         DeltaMetadata meta;

@@ -24,11 +24,6 @@ public final class ListViewEncodingDecoder implements EncodingDecoder {
     }
 
     @Override
-    public boolean accepts(DType dtype) {
-        return dtype instanceof DType.List;
-    }
-
-    @Override
     public Array decode(DecodeContext ctx) {
         if (!(ctx.dtype() instanceof DType.List listDtype)) {
             throw new VortexException(EncodingId.VORTEX_LISTVIEW,

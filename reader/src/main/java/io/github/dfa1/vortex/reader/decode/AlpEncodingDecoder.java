@@ -39,14 +39,6 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
     }
 
     @Override
-    public boolean accepts(DType dtype) {
-        if (!(dtype instanceof DType.Primitive p)) {
-            return false;
-        }
-        return p.ptype() == PType.F64 || p.ptype() == PType.F32;
-    }
-
-    @Override
     public Array decode(DecodeContext ctx) {
         ByteBuffer rawMeta = ctx.metadata();
         ALPMetadata meta;

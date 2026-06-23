@@ -35,11 +35,6 @@ public final class SequenceEncodingDecoder implements EncodingDecoder {
     }
 
     @Override
-    public boolean accepts(DType dtype) {
-        return dtype instanceof DType.Primitive;
-    }
-
-    @Override
     public Array decode(DecodeContext ctx) {
         ByteBuffer metaBuf = ctx.metadata();
         if (metaBuf == null || !metaBuf.hasRemaining()) {

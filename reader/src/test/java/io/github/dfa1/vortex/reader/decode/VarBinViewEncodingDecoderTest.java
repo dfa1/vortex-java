@@ -26,14 +26,6 @@ class VarBinViewEncodingDecoderTest {
     }
 
     @Test
-    void accepts_utf8AndBinary_true_otherFalse() {
-        // Given / When / Then
-        assertThat(SUT.accepts(new DType.Utf8(false))).isTrue();
-        assertThat(SUT.accepts(new DType.Binary(false))).isTrue();
-        assertThat(SUT.accepts(new DType.Primitive(io.github.dfa1.vortex.core.PType.I32, false))).isFalse();
-    }
-
-    @Test
     void decode_binaryDtype_inlineViews() {
         // Given two short (inline) values under a Binary dtype — exercises the
         // Binary branch the UTF8-only encoder tests never reach

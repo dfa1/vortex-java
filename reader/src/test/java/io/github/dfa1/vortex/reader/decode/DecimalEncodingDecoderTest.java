@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.reader.ReadRegistry;
@@ -37,13 +36,6 @@ class DecimalEncodingDecoderTest {
         DecodeContext ctx = new DecodeContext(node, DECIMAL, rowCount,
                 new MemorySegment[]{buf}, ReadRegistry.empty(), Arena.ofAuto());
         return SUT.decode(ctx);
-    }
-
-    @Test
-    void acceptsDecimalRejectsOthers() {
-        // Given / When / Then
-        assertThat(SUT.accepts(DECIMAL)).isTrue();
-        assertThat(SUT.accepts(new DType.Primitive(PType.I32, false))).isFalse();
     }
 
     @Test

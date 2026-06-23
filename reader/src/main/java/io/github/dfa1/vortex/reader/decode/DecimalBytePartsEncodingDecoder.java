@@ -25,11 +25,6 @@ public final class DecimalBytePartsEncodingDecoder implements EncodingDecoder {
     }
 
     @Override
-    public boolean accepts(DType dtype) {
-        return dtype instanceof DType.Decimal;
-    }
-
-    @Override
     public Array decode(DecodeContext ctx) {
         ByteBuffer meta = ctx.metadata();
         if (meta == null || meta.remaining() == 0) {

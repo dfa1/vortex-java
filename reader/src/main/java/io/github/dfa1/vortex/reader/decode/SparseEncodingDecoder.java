@@ -44,11 +44,6 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
     }
 
     @Override
-    public boolean accepts(DType dtype) {
-        return dtype instanceof DType.Primitive;
-    }
-
-    @Override
     public Array decode(DecodeContext ctx) {
         ByteBuffer rawMeta = ctx.metadata();
         if (rawMeta == null || !rawMeta.hasRemaining()) {

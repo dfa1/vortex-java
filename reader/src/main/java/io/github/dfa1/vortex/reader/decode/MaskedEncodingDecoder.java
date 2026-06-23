@@ -20,11 +20,6 @@ public final class MaskedEncodingDecoder implements EncodingDecoder {
     }
 
     @Override
-    public boolean accepts(DType dtype) {
-        return false;
-    }
-
-    @Override
     public Array decode(DecodeContext ctx) {
         if (ctx.node().bufferIndices().length != 0) {
             throw new VortexException(EncodingId.VORTEX_MASKED,

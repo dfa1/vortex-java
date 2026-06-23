@@ -19,11 +19,6 @@ public final class FixedSizeListEncodingDecoder implements EncodingDecoder {
     }
 
     @Override
-    public boolean accepts(DType dtype) {
-        return dtype instanceof DType.FixedSizeList;
-    }
-
-    @Override
     public Array decode(DecodeContext ctx) {
         if (!(ctx.dtype() instanceof DType.FixedSizeList fsl)) {
             throw new VortexException(EncodingId.VORTEX_FIXED_SIZE_LIST,

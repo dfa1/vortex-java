@@ -39,11 +39,6 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
     }
 
     @Override
-    public boolean accepts(DType dtype) {
-        return dtype instanceof DType.Primitive p && !p.ptype().isFloating();
-    }
-
-    @Override
     public Array decode(DecodeContext ctx) {
         ByteBuffer rawMeta = ctx.metadata();
         if (rawMeta == null) {

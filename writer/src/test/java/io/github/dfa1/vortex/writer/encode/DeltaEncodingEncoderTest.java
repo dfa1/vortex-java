@@ -164,16 +164,13 @@ class DeltaEncodingEncoderTest {
     void accepts_everyIntegerPtype_isTrue(String ptype) {
         // Given / When / Then
         assertThat(ENCODER.accepts(new DType.Primitive(PType.valueOf(ptype), false))).isTrue();
-        assertThat(DECODER.accepts(new DType.Primitive(PType.valueOf(ptype), false))).isTrue();
     }
 
     @Test
     void accepts_nonIntegerOrNonPrimitive_isFalse() {
-        // Given / When / Then — floats and non-primitive dtypes are rejected by both sides
+        // Given / When / Then — floats and non-primitive dtypes are rejected
         assertThat(ENCODER.accepts(DTypes.F64)).isFalse();
         assertThat(ENCODER.accepts(DTypes.UTF8)).isFalse();
-        assertThat(DECODER.accepts(DTypes.F32)).isFalse();
-        assertThat(DECODER.accepts(DTypes.BOOL)).isFalse();
     }
 
     @Test
