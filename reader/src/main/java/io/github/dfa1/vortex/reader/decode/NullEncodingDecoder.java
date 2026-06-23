@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.reader.decode;
 
-import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.NullArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
@@ -15,11 +14,6 @@ public final class NullEncodingDecoder implements EncodingDecoder {
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_NULL;
-    }
-
-    @Override
-    public boolean accepts(DType dtype) {
-        return dtype instanceof DType.Null;
     }
 
     @Override

@@ -30,11 +30,6 @@ public final class PrimitiveEncodingDecoder implements EncodingDecoder {
     }
 
     @Override
-    public boolean accepts(DType dtype) {
-        return dtype instanceof DType.Primitive;
-    }
-
-    @Override
     public Array decode(DecodeContext ctx) {
         MemorySegment buf = ctx.buffer(0);
         long n = ctx.rowCount();

@@ -35,14 +35,6 @@ public final class AlpRdEncodingDecoder implements EncodingDecoder {
     }
 
     @Override
-    public boolean accepts(DType dtype) {
-        if (!(dtype instanceof DType.Primitive p)) {
-            return false;
-        }
-        return p.ptype() == PType.F32 || p.ptype() == PType.F64;
-    }
-
-    @Override
     public Array decode(DecodeContext ctx) {
         ALPRDMetadata meta = parseMeta(ctx);
 

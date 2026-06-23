@@ -12,8 +12,6 @@ import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -73,26 +71,6 @@ class ZigZagEncodingDecoderTest {
     void encodingId_isZigzag() {
         // Given / When / Then
         assertThat(SUT.encodingId()).isEqualTo(EncodingId.VORTEX_ZIGZAG);
-    }
-
-    @ParameterizedTest
-    @EnumSource(value = PType.class, names = {"I8", "I16", "I32", "I64"})
-    void accepts_signedIntegers(PType ptype) {
-        // Given / When / Then
-        assertThat(SUT.accepts(new DType.Primitive(ptype, false))).isTrue();
-    }
-
-    @ParameterizedTest
-    @EnumSource(value = PType.class, names = {"U8", "U16", "U32", "U64", "F16", "F32", "F64"})
-    void accepts_rejectsNonSigned(PType ptype) {
-        // Given / When / Then
-        assertThat(SUT.accepts(new DType.Primitive(ptype, false))).isFalse();
-    }
-
-    @Test
-    void accepts_rejectsNonPrimitive() {
-        // Given / When / Then
-        assertThat(SUT.accepts(new DType.Bool(false))).isFalse();
     }
 
     @Test

@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.reader.decode;
 
-import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LazyDecimalArray;
@@ -21,11 +20,6 @@ public final class DecimalEncodingDecoder implements EncodingDecoder {
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_DECIMAL;
-    }
-
-    @Override
-    public boolean accepts(DType dtype) {
-        return dtype instanceof DType.Decimal;
     }
 
     @Override

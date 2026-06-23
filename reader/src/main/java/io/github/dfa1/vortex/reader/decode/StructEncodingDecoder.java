@@ -24,11 +24,6 @@ public final class StructEncodingDecoder implements EncodingDecoder {
     }
 
     @Override
-    public boolean accepts(DType dtype) {
-        return dtype instanceof DType.Struct;
-    }
-
-    @Override
     public Array decode(DecodeContext ctx) {
         int numChildren = ctx.node().children().length;
 

@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.reader.decode;
 
-import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
@@ -19,11 +18,6 @@ public final class ByteBoolEncodingDecoder implements EncodingDecoder {
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_BYTEBOOL;
-    }
-
-    @Override
-    public boolean accepts(DType dtype) {
-        return dtype instanceof DType.Bool;
     }
 
     @Override

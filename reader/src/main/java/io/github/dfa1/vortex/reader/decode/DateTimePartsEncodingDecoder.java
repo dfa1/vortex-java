@@ -34,11 +34,6 @@ public final class DateTimePartsEncodingDecoder implements EncodingDecoder {
     }
 
     @Override
-    public boolean accepts(DType dtype) {
-        return dtype instanceof DType.Extension;
-    }
-
-    @Override
     public Array decode(DecodeContext ctx) {
         ByteBuffer meta = ctx.metadata();
         if (meta == null || meta.remaining() == 0) {

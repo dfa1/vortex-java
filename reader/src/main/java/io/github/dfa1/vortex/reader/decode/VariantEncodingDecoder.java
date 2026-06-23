@@ -27,11 +27,6 @@ public final class VariantEncodingDecoder implements EncodingDecoder {
     }
 
     @Override
-    public boolean accepts(DType dtype) {
-        return dtype instanceof DType.Variant;
-    }
-
-    @Override
     public Array decode(DecodeContext ctx) {
         DType shreddedDtype = parseShreddedDtype(ctx.metadata());
 

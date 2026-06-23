@@ -31,15 +31,6 @@ public final class ZigZagEncodingDecoder implements EncodingDecoder {
     }
 
     @Override
-    public boolean accepts(DType dtype) {
-        if (!(dtype instanceof DType.Primitive p)) {
-            return false;
-        }
-        PType pt = p.ptype();
-        return pt == PType.I8 || pt == PType.I16 || pt == PType.I32 || pt == PType.I64;
-    }
-
-    @Override
     public Array decode(DecodeContext ctx) {
         if (!(ctx.dtype() instanceof DType.Primitive p)) {
             throw new VortexException(EncodingId.VORTEX_ZIGZAG, "expected primitive dtype, got " + ctx.dtype());

@@ -55,15 +55,6 @@ class AlpEncodingDecoderTest {
     }
 
     @Test
-    void accepts_floatsTrue_otherFalse() {
-        // Given / When / Then
-        assertThat(SUT.accepts(F64)).isTrue();
-        assertThat(SUT.accepts(F32)).isTrue();
-        assertThat(SUT.accepts(new DType.Primitive(PType.I64, false))).isFalse();
-        assertThat(SUT.accepts(new DType.Utf8(false))).isFalse();
-    }
-
-    @Test
     void decode_nonPrimitiveDtype_throws() {
         // Given a Utf8 dtype on an ALP node
         ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ALP, ByteBuffer.wrap(new ALPMetadata(0, 0, null).encode()),

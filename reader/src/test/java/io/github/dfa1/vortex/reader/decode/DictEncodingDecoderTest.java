@@ -39,11 +39,9 @@ class DictEncodingDecoderTest {
             SUT, new PrimitiveEncodingDecoder(), new VarBinEncodingDecoder());
 
     @Test
-    void acceptsPrimitiveAndUtf8_rejectsOthers() {
+    void encodingId_isVortexDict() {
         // Given / When / Then
-        assertThat(SUT.accepts(new DType.Primitive(PType.I32, false))).isTrue();
-        assertThat(SUT.accepts(new DType.Utf8(false))).isTrue();
-        assertThat(SUT.accepts(new DType.Bool(false))).isFalse();
+        assertThat(SUT.encodingId()).isEqualTo(EncodingId.VORTEX_DICT);
     }
 
     @Nested

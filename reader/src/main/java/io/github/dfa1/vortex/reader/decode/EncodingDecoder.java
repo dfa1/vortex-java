@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.reader.decode;
 
-import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.encoding.EncodingId;
 
@@ -15,12 +14,6 @@ public interface EncodingDecoder {
     ///
     /// @return the wire identifier
     EncodingId encodingId();
-
-    /// Returns whether this decoder handles the given dtype.
-    ///
-    /// @param dtype the dtype to test
-    /// @return `true` if this decoder can handle arrays of `dtype`
-    boolean accepts(DType dtype);
 
     /// Decodes an array node from the file using the provided context.
     ///

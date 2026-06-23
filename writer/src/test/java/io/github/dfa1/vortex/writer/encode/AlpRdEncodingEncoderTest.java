@@ -132,14 +132,10 @@ class AlpRdEncodingEncoderTest {
     void accepts_floatPtypesOnly() {
         // Given / When / Then — only F32/F64 are encodable; integers and non-primitives are rejected
         var encoder = new AlpRdEncodingEncoder();
-        var decoder = new AlpRdEncodingDecoder();
         assertThat(encoder.accepts(DTypes.F32)).isTrue();
         assertThat(encoder.accepts(DTypes.F64)).isTrue();
-        assertThat(decoder.accepts(DTypes.F32)).isTrue();
-        assertThat(decoder.accepts(DTypes.F64)).isTrue();
         assertThat(encoder.accepts(DTypes.I64)).isFalse();
         assertThat(encoder.accepts(DTypes.UTF8)).isFalse();
-        assertThat(decoder.accepts(DTypes.I32)).isFalse();
     }
 
     private static Stream<Arguments> sizes() {

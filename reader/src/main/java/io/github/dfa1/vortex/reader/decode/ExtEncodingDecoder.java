@@ -18,11 +18,6 @@ public final class ExtEncodingDecoder implements EncodingDecoder {
     }
 
     @Override
-    public boolean accepts(DType dtype) {
-        return dtype instanceof DType.Extension;
-    }
-
-    @Override
     public Array decode(DecodeContext ctx) {
         if (!(ctx.dtype() instanceof DType.Extension ext)) {
             throw new VortexException(EncodingId.VORTEX_EXT, "expected extension dtype, got " + ctx.dtype());

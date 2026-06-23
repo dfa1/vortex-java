@@ -21,11 +21,6 @@ public final class VarBinViewEncodingDecoder implements EncodingDecoder {
     }
 
     @Override
-    public boolean accepts(DType dtype) {
-        return dtype instanceof DType.Utf8 || dtype instanceof DType.Binary;
-    }
-
-    @Override
     public Array decode(DecodeContext ctx) {
         if (!(ctx.dtype() instanceof DType.Utf8 || ctx.dtype() instanceof DType.Binary)) {
             throw new VortexException(EncodingId.VORTEX_VARBINVIEW,

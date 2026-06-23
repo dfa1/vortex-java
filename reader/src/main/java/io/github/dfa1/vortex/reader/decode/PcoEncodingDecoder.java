@@ -44,11 +44,6 @@ public final class PcoEncodingDecoder implements EncodingDecoder {
     }
 
     @Override
-    public boolean accepts(DType dtype) {
-        return false;
-    }
-
-    @Override
     public Array decode(DecodeContext ctx) {
         PcoMetadata meta = parseMeta(ctx);
         validateHeader(meta);
