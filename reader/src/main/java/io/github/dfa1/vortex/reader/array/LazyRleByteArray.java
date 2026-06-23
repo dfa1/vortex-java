@@ -52,20 +52,10 @@ public record LazyRleByteArray(
 
     @Override
     public long fold(long identity, LongBinaryOperator op) {
-        long acc = identity;
-        long n = length;
-        long emitted = 0;
-        int absRow = offset;
-        int startChunk = absRow >>> RleArrays.FL_LOG2;
-        for (int chunkIdx = startChunk; chunkIdx < numChunks && emitted < n; chunkIdx++) {
-            int rowInChunk = absRow - chunkIdx * RleArrays.FL_CHUNK_SIZE;
-            int end = Math.min(RleArrays.FL_CHUNK_SIZE, rowInChunk + (int) (n - emitted));
-            acc = foldChunk(chunkIdx, rowInChunk, end, acc, op);
-            int count = end - rowInChunk;
-            emitted += count;
-            absRow += count;
-        }
-        return acc;
+        long[] acc = {identity};
+        RleArrays.walkChunks(length, offset, numChunks,
+                (chunkIdx, rowInChunk, end) -> acc[0] = foldChunk(chunkIdx, rowInChunk, end, acc[0], op));
+        return acc[0];
     }
 
     private long widen(byte v) {

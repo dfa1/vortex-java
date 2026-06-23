@@ -39,4 +39,45 @@ final class RleArrays {
                 : valuesLen;
         return (int) (end - start);
     }
+
+    /// Visitor for [#walkChunks]. Invoked once per covered chunk with the
+    /// chunk's local row span `[rowInChunk, end)`; the implementation runs its
+    /// own typed inner loop over that span.
+    @FunctionalInterface
+    interface ChunkVisitor {
+
+        /// Processes one chunk's row span.
+        ///
+        /// @param chunkIdx   chunk index in `[0, numChunks)`
+        /// @param rowInChunk first local row to emit (inclusive)
+        /// @param end        one past the last local row to emit
+        void visit(int chunkIdx, int rowInChunk, int end);
+    }
+
+    /// Walks the logical range `[offset, offset + length)` chunk by chunk,
+    /// calling `visitor` once per chunk with the local `[rowInChunk, end)` span.
+    ///
+    /// Centralises the FastLanes chunk-boundary arithmetic shared by every
+    /// `LazyRleXxxArray` record's `forEach` / `fold`. The visitor — not this
+    /// method — owns the per-row loop, so the typed `values[...]` read stays a
+    /// direct, monomorphic array access; this call fires once per chunk
+    /// (≈ `length / 1024` times), never per row.
+    ///
+    /// @param length    logical row count to emit
+    /// @param offset    starting absolute position
+    /// @param numChunks total chunk count
+    /// @param visitor   receives each chunk's local row span
+    static void walkChunks(long length, int offset, int numChunks, ChunkVisitor visitor) {
+        long emitted = 0;
+        int absRow = offset;
+        int startChunk = absRow >>> FL_LOG2;
+        for (int chunkIdx = startChunk; chunkIdx < numChunks && emitted < length; chunkIdx++) {
+            int rowInChunk = absRow - chunkIdx * FL_CHUNK_SIZE;
+            int end = Math.min(FL_CHUNK_SIZE, rowInChunk + (int) (length - emitted));
+            visitor.visit(chunkIdx, rowInChunk, end);
+            int count = end - rowInChunk;
+            emitted += count;
+            absRow += count;
+        }
+    }
 }
