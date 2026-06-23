@@ -113,7 +113,7 @@ class ZigZagEncodingEncoderTest {
         // Given / When / Then
         assertThat(ENCODER.accepts(DTypes.U32)).isFalse();
         assertThat(ENCODER.accepts(DTypes.F64)).isFalse();
-        assertThat(ENCODER.accepts(new DType.Utf8(false))).isFalse();
+        assertThat(ENCODER.accepts(DType.UTF8)).isFalse();
     }
 
     @Nested

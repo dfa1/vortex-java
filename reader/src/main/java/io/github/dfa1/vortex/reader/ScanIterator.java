@@ -504,7 +504,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                 BoolArray validity = m.validity();
                 BoolArray validitySlice = validity == null
                         ? null
-                        : (BoolArray) sliceArray(validity, offset, length, new DType.Bool(false));
+                        : (BoolArray) sliceArray(validity, offset, length, DType.BOOL);
                 yield new MaskedArray(innerSlice, validitySlice);
             }
             case LongArray a -> new OffsetLongArray(dtype, length, a, offset);

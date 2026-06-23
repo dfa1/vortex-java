@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.reader.extension;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.TimeUnit;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
@@ -90,7 +89,7 @@ class ExtensionStorageTest {
         }
 
         private DType.Extension ext(ByteBuffer meta) {
-            return new DType.Extension("vortex.timestamp", new DType.Primitive(PType.I64, false), meta, false);
+            return new DType.Extension("vortex.timestamp", DType.I64, meta, false);
         }
     }
 

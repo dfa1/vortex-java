@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
 import org.junit.jupiter.api.Test;
@@ -26,7 +25,7 @@ class GlobalDictF64Test {
 
     private static final DType.Struct SCHEMA = new DType.Struct(
             List.of("rate"),
-            List.of(new DType.Primitive(PType.F64, false)),
+            List.of(DType.F64),
             false);
 
     @Test

@@ -2,7 +2,6 @@ package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -16,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class LazyForLongArrayTest {
 
 
-    private static final DType I64 = new DType.Primitive(PType.I64, false);
+    private static final DType I64 = DType.I64;
 
     private static LazyForLongArray of(long ref, long... encoded) {
         MemorySegment seg = Arena.ofAuto().allocate((long) encoded.length * 8, 8);

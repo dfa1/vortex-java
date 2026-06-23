@@ -22,9 +22,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class TypedChunkBuilderTest {
 
     private static final DType.Struct SCHEMA = DType.structBuilder()
-            .field("timestamp", DType.i64())
-            .field("symbol", DType.utf8())
-            .field("price", DType.f64())
+            .field("timestamp", DType.I64)
+            .field("symbol", DType.UTF8)
+            .field("price", DType.F64)
             .build();
 
     @Test
@@ -98,7 +98,7 @@ class TypedChunkBuilderTest {
         // Given
         Path file = tmp.resolve("nullable.vortex");
         DType.Struct nullableSchema = DType.structBuilder()
-                .field("v", DType.i64().asNullable())
+                .field("v", DType.I64.asNullable())
                 .build();
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);

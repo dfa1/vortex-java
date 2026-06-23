@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import org.junit.jupiter.api.Nested;
@@ -18,14 +17,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class DictRecordSmokeTest {
 
-    private static final DType I64 = new DType.Primitive(PType.I64, false);
-    private static final DType I32 = new DType.Primitive(PType.I32, false);
-    private static final DType F64 = new DType.Primitive(PType.F64, false);
-    private static final DType F32 = new DType.Primitive(PType.F32, false);
-    private static final DType U8 = new DType.Primitive(PType.U8, false);
-    private static final DType U16 = new DType.Primitive(PType.U16, false);
-    private static final DType U32 = new DType.Primitive(PType.U32, false);
-    private static final DType U64 = new DType.Primitive(PType.U64, false);
+    private static final DType I64 = DType.I64;
+    private static final DType I32 = DType.I32;
+    private static final DType F64 = DType.F64;
+    private static final DType F32 = DType.F32;
+    private static final DType U8 = DType.U8;
+    private static final DType U16 = DType.U16;
+    private static final DType U32 = DType.U32;
+    private static final DType U64 = DType.U64;
 
     @Nested
     class Validation {
@@ -545,6 +544,6 @@ class DictRecordSmokeTest {
                 seg.set(ValueLayout.JAVA_BYTE, byteIdx, (byte) (cur | (1 << bitIdx)));
             }
         }
-        return new MaterializedBoolArray(new DType.Bool(false), values.length, seg.asReadOnly());
+        return new MaterializedBoolArray(DType.BOOL, values.length, seg.asReadOnly());
     }
 }

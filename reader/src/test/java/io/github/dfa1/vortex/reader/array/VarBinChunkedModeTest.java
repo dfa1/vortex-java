@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class VarBinChunkedModeTest {
 
-    private static final DType UTF8 = new DType.Utf8(false);
+    private static final DType UTF8 = DType.UTF8;
 
     @Nested
     class Construction {
@@ -47,7 +47,7 @@ class VarBinChunkedModeTest {
                 MemorySegment seg = arena.allocate(8L);
                 seg.setAtIndex(ValueLayout.JAVA_LONG, 0, 42L);
                 LongArray notVarBin = new MaterializedLongArray(
-                        new DType.Primitive(PType.I64, false), 1, seg.asReadOnly());
+                        DType.I64, 1, seg.asReadOnly());
 
                 // When / Then
                 assertThatThrownBy(() -> VarBinArray.ChunkedMode.of(UTF8, 1, List.of(notVarBin)))

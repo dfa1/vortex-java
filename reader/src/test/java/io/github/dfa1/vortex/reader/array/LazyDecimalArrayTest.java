@@ -2,7 +2,6 @@ package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import org.junit.jupiter.api.Test;
 
@@ -121,7 +120,7 @@ class LazyDecimalArrayTest {
         try (Arena arena = Arena.ofConfined()) {
             MemorySegment buf = arena.allocate(8);
             LazyDecimalArray sut = new LazyDecimalArray(
-                    new DType.Primitive(PType.I64, false), 1, buf, 8);
+                    DType.I64, 1, buf, 8);
 
             // When / Then
             assertThatThrownBy(() -> sut.getDecimal(0))

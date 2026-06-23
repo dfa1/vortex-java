@@ -45,7 +45,7 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
         DType nonNullable = dtype.withNullable(false);
         EncodingEncoder inner = pickInner(nonNullable);
         EncodeResult valuesResult = inner.encode(nonNullable, nd.values(), ctx);
-        EncodeResult validityResult = new BoolEncodingEncoder().encode(new DType.Bool(false), nd.validity(), ctx);
+        EncodeResult validityResult = new BoolEncodingEncoder().encode(DType.BOOL, nd.validity(), ctx);
 
         int valuesBufCount = valuesResult.buffers().size();
         EncodeNode validityNode = EncodeNode.remapBufferIndices(validityResult.rootNode(), valuesBufCount);

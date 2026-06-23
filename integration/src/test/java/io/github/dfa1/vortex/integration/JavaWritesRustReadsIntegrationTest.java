@@ -82,65 +82,65 @@ class JavaWritesRustReadsIntegrationTest {
     private static final BufferAllocator ALLOCATOR = ArrowAllocation.rootAllocator();
     private static final DType.Struct SCHEMA = new DType.Struct(
             List.of("id", "value"),
-            List.of(new DType.Primitive(PType.I64, false),
-                    new DType.Primitive(PType.F64, false)),
+            List.of(DType.I64,
+                    DType.F64),
             false);
 
     private static final DType.Struct I32_SCHEMA = new DType.Struct(
             List.of("v"),
-            List.of(new DType.Primitive(PType.I32, false)),
+            List.of(DType.I32),
             false);
 
     private static final DType.Struct STRING_SCHEMA = new DType.Struct(
             List.of("s"),
-            List.of(new DType.Utf8(false)),
+            List.of(DType.UTF8),
             false);
 
     private static final DType.Struct TS_SCHEMA = new DType.Struct(
             List.of("ts"),
-            List.of(new DType.Primitive(PType.I64, false)),
+            List.of(DType.I64),
             false);
 
     private static final DType.Struct F32_SCHEMA = new DType.Struct(
             List.of("v"),
-            List.of(new DType.Primitive(PType.F32, false)),
+            List.of(DType.F32),
             false);
 
     private static final DType.Struct F64_SCHEMA = new DType.Struct(
             List.of("v"),
-            List.of(new DType.Primitive(PType.F64, false)),
+            List.of(DType.F64),
             false);
 
     private static final DType.Struct F16_SCHEMA = new DType.Struct(
             List.of("v"),
-            List.of(new DType.Primitive(PType.F16, false)),
+            List.of(DType.F16),
             false);
 
     private static final DType.Struct BOOL_SCHEMA = new DType.Struct(
             List.of("b"),
-            List.of(new DType.Bool(false)),
+            List.of(DType.BOOL),
             false);
 
     private static final DType.Struct NULL_SCHEMA = new DType.Struct(
             List.of("n"),
-            List.of(new DType.Null(false)),
+            List.of(DType.NULL),
             false);
 
     private static final DType.Struct LIST_I64_SCHEMA = new DType.Struct(
             List.of("items"),
-            List.of(new DType.List(new DType.Primitive(PType.I64, false), false)),
+            List.of(new DType.List(DType.I64, false)),
             false);
 
     private static final DType.Struct OHLC_SCHEMA = new DType.Struct(
             List.of("date", "symbol", "open", "high", "low", "close", "volume"),
             List.of(
-                    new DType.Primitive(PType.I32, false),
-                    new DType.Utf8(false),
-                    new DType.Primitive(PType.F64, false),
-                    new DType.Primitive(PType.F64, false),
-                    new DType.Primitive(PType.F64, false),
-                    new DType.Primitive(PType.F64, false),
-                    new DType.Primitive(PType.I64, false)),
+                    DType.I32,
+                    DType.UTF8,
+                    DType.F64,
+                    DType.F64,
+                    DType.F64,
+                    DType.F64,
+                    DType.I64),
             false);
 
     static {
@@ -1238,7 +1238,7 @@ class JavaWritesRustReadsIntegrationTest {
         Path file = tmp.resolve("java_globaldict_i64.vtx");
         DType.Struct schema = new DType.Struct(
                 List.of("v"),
-                List.of(new DType.Primitive(PType.I64, false)),
+                List.of(DType.I64),
                 false);
         long[] chunk1 = {1L, 2L, 3L, 1L, 2L, 3L, 1L, 2L};
         long[] chunk2 = {3L, 1L, 2L, 3L, 1L, 2L, 3L, 1L};
@@ -1263,7 +1263,7 @@ class JavaWritesRustReadsIntegrationTest {
         Path file = tmp.resolve("java_globaldict_f64.vtx");
         DType.Struct schema = new DType.Struct(
                 List.of("v"),
-                List.of(new DType.Primitive(PType.F64, false)),
+                List.of(DType.F64),
                 false);
         double[] chunk1 = {1.0, 2.0, 3.0, 1.0, 2.0, 3.0, 1.0, 2.0};
         double[] chunk2 = {3.0, 1.0, 2.0, 3.0, 1.0, 2.0, 3.0, 1.0};

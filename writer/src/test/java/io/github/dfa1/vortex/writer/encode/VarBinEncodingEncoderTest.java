@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
@@ -67,7 +66,7 @@ class VarBinEncodingEncoderTest {
         void accepts_primitiveDtype_returnsFalse() {
             // Given
             // When
-            boolean result = ENCODER.accepts(new DType.Primitive(PType.I64, false));
+            boolean result = ENCODER.accepts(DType.I64);
 
             // Then
             assertThat(result).isFalse();

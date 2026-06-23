@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class VarBinArrayTest {
 
-    private static final DType UTF8 = new DType.Utf8(false);
+    private static final DType UTF8 = DType.UTF8;
 
     private static VarBinArray.OffsetMode of(String... values) {
         byte[] allBytes = String.join("", values).getBytes(StandardCharsets.UTF_8);

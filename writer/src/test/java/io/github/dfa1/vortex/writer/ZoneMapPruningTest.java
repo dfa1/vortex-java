@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.RowFilter;
@@ -28,7 +27,7 @@ class ZoneMapPruningTest {
 
     private static final DType.Struct SCHEMA = new DType.Struct(
             List.of("id"),
-            List.of(new DType.Primitive(PType.I64, false)),
+            List.of(DType.I64),
             false);
 
     // Three chunks: id in [1..50], [51..100], [101..150]

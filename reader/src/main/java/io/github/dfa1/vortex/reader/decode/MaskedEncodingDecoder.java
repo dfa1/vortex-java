@@ -35,7 +35,7 @@ public final class MaskedEncodingDecoder implements EncodingDecoder {
 
         BoolArray validity = null;
         if (numChildren == 2) {
-            Array validityArray = ctx.decodeChild(1, new DType.Bool(false), ctx.rowCount());
+            Array validityArray = ctx.decodeChild(1, DType.BOOL, ctx.rowCount());
             if (!(validityArray instanceof BoolArray ba)) {
                 throw new VortexException(EncodingId.VORTEX_MASKED,
                         "validity child decoded to unexpected type: " + validityArray.getClass().getSimpleName());

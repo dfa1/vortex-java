@@ -559,7 +559,7 @@ class RustWritesJavaReadsIntegrationTest {
             // Then — correct dtype, correct values
             assertThat(vf.dtype()).isInstanceOf(DType.Struct.class);
             assertThat(((DType.Struct) vf.dtype()).field("v"))
-                    .isEqualTo(new DType.Primitive(PType.F16, false));
+                    .isEqualTo(DType.F16);
             assertThat(results).hasSize(1);
             // F16 column snapshots as a short[] (raw float16 bits)
             short[] decoded = (short[]) results.getFirst().columns().get("v");

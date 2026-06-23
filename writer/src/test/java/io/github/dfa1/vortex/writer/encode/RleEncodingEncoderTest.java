@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
@@ -49,7 +48,7 @@ class RleEncodingEncoderTest {
         @Test
         void roundTrip_empty_i32() {
             // Given
-            DType dtype = new DType.Primitive(PType.I32, false);
+            DType dtype = DType.I32;
             EncodeResult encoded = ENCODER.encode(dtype, new int[0], EncodeTestHelper.testCtx());
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, 0, dtype, REGISTRY);
 
@@ -63,7 +62,7 @@ class RleEncodingEncoderTest {
         @Test
         void roundTrip_singleElement_i32() {
             // Given
-            DType dtype = new DType.Primitive(PType.I32, false);
+            DType dtype = DType.I32;
             int[] data = {42};
             EncodeResult encoded = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, dtype, REGISTRY);
@@ -79,7 +78,7 @@ class RleEncodingEncoderTest {
         @Test
         void roundTrip_constantArray_i32() {
             // Given
-            DType dtype = new DType.Primitive(PType.I32, false);
+            DType dtype = DType.I32;
             int n = 2048;
             int[] data = new int[n];
             for (int i = 0; i < n; i++) {
@@ -101,7 +100,7 @@ class RleEncodingEncoderTest {
         @Test
         void roundTrip_classicRunLengthData_i32() {
             // Given
-            DType dtype = new DType.Primitive(PType.I32, false);
+            DType dtype = DType.I32;
             int[] data = {1, 1, 1, 2, 2, 3};
             EncodeResult encoded = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, dtype, REGISTRY);
@@ -118,7 +117,7 @@ class RleEncodingEncoderTest {
         @Test
         void roundTrip_multipleChunks_i32() {
             // Given
-            DType dtype = new DType.Primitive(PType.I32, false);
+            DType dtype = DType.I32;
             int n = 3000;
             int[] data = new int[n];
             for (int i = 0; i < n; i++) {
@@ -140,7 +139,7 @@ class RleEncodingEncoderTest {
         @Test
         void roundTrip_i64() {
             // Given
-            DType dtype = new DType.Primitive(PType.I64, false);
+            DType dtype = DType.I64;
             long[] data = {100L, 100L, 200L, 300L, 300L, 300L};
             EncodeResult encoded = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, dtype, REGISTRY);
@@ -158,7 +157,7 @@ class RleEncodingEncoderTest {
         @ValueSource(ints = {1, 512, 1023, 1024, 1025, 2048, 2049})
         void roundTrip_variousLengths_i32(int n) {
             // Given
-            DType dtype = new DType.Primitive(PType.I32, false);
+            DType dtype = DType.I32;
             int[] data = new int[n];
             for (int i = 0; i < n; i++) {
                 data[i] = i / 50;
@@ -179,7 +178,7 @@ class RleEncodingEncoderTest {
         @Test
         void roundTrip_allDifferent_u16() {
             // Given
-            DType dtype = new DType.Primitive(PType.U16, false);
+            DType dtype = DType.U16;
             short[] data = new short[256];
             for (int i = 0; i < 256; i++) {
                 data[i] = (short) i;
@@ -200,7 +199,7 @@ class RleEncodingEncoderTest {
         @Test
         void roundTrip_negativeValues_i32() {
             // Given
-            DType dtype = new DType.Primitive(PType.I32, false);
+            DType dtype = DType.I32;
             int[] data = {-3, -3, -1, -1, 0, 0, 5};
             EncodeResult encoded = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(encoded, data.length, dtype, REGISTRY);
@@ -221,7 +220,7 @@ class RleEncodingEncoderTest {
         @Test
         void decode_exactlyOneChunk_correctLength() {
             // Given
-            DType dtype = new DType.Primitive(PType.I32, false);
+            DType dtype = DType.I32;
             int[] data = new int[1024];
             for (int i = 0; i < 1024; i++) {
                 data[i] = i / 10;
@@ -239,7 +238,7 @@ class RleEncodingEncoderTest {
         @Test
         void decode_crossesChunkBoundary_correctValues() {
             // Given
-            DType dtype = new DType.Primitive(PType.I32, false);
+            DType dtype = DType.I32;
             int n = 2048;
             int[] data = new int[n];
             for (int i = 0; i < n; i++) {
@@ -260,7 +259,7 @@ class RleEncodingEncoderTest {
         @Test
         void decode_nullableIndices_returnsMaskedArrayWithCorrectValidity() {
             // Given
-            DType dtype = new DType.Primitive(PType.I32, false);
+            DType dtype = DType.I32;
             int[] data = {10, 10, 20, 20};
             EncodeResult encoded = ENCODER.encode(dtype, data, EncodeTestHelper.testCtx());
 
@@ -302,7 +301,7 @@ class RleEncodingEncoderTest {
         @Test
         void decode_partialLastChunk_correctLength() {
             // Given
-            DType dtype = new DType.Primitive(PType.I32, false);
+            DType dtype = DType.I32;
             int n = 1500;
             int[] data = new int[n];
             for (int i = 0; i < n; i++) {

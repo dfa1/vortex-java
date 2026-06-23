@@ -32,7 +32,7 @@ class MaskedEncodingEncoderTest {
     private static final ReadRegistry REGISTRY = TestRegistry.ofDecoders(DECODER, new PrimitiveEncodingDecoder(), new BoolEncodingDecoder());
 
     private static EncodeResult maskedResult(int[] values, boolean[] validity) {
-        DType i32 = new DType.Primitive(PType.I32, false);
+        DType i32 = DType.I32;
         EncodeResult childResult = PRIM_ENCODER.encode(i32, values, EncodeTestHelper.testCtx());
 
         List<MemorySegment> allBuffers = new ArrayList<>(childResult.buffers());
@@ -41,7 +41,7 @@ class MaskedEncodingEncoderTest {
         if (validity == null) {
             children = new EncodeNode[]{childResult.rootNode()};
         } else {
-            DType boolDtype = new DType.Bool(false);
+            DType boolDtype = DType.BOOL;
             EncodeResult validityResult = BOOL_ENCODER.encode(boolDtype, validity, EncodeTestHelper.testCtx());
             EncodeNode remapped = EncodeNode.remapBufferIndices(
                     validityResult.rootNode(), childResult.buffers().size());
@@ -161,7 +161,7 @@ class MaskedEncodingEncoderTest {
         // Given
         DType i32Nullable = new DType.Primitive(PType.I32, true);
 
-        DType i32 = new DType.Primitive(PType.I32, false);
+        DType i32 = DType.I32;
         EncodeResult childResult = PRIM_ENCODER.encode(i32, new int[]{1}, EncodeTestHelper.testCtx());
         EncodeNode childNode = childResult.rootNode();
         EncodeNode maskedNode = new EncodeNode(

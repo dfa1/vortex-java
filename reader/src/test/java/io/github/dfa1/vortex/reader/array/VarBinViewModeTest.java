@@ -17,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// referenced views into shared data buffers, length-only reads, and truncate.
 class VarBinViewModeTest {
 
-    private static final DType UTF8 = new DType.Utf8(false);
+    private static final DType UTF8 = DType.UTF8;
     private static final int VIEW_SIZE = 16;
 
     @Nested

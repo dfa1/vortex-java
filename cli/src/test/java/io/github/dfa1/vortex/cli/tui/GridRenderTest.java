@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.cli.tui;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.encoding.TimeUnit;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ByteArray;
@@ -27,9 +26,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// arrays without a terminal or fixture file.
 class GridRenderTest {
 
-    private static final DType I64 = new DType.Primitive(PType.I64, false);
-    private static final DType F64 = new DType.Primitive(PType.F64, false);
-    private static final DType BOOL = new DType.Bool(false);
+    private static final DType I64 = DType.I64;
+    private static final DType F64 = DType.F64;
+    private static final DType BOOL = DType.BOOL;
 
     @Test
     void nullArrayRendersEmpty() {
@@ -77,7 +76,7 @@ class GridRenderTest {
         try (Arena arena = Arena.ofConfined()) {
             // Given — vortex.date over I32 epoch-day storage: day 0 = 1970-01-01
             DType dateExt = new DType.Extension("vortex.date",
-                    new DType.Primitive(PType.I32, false), null, false);
+                    DType.I32, null, false);
             IntArray storage = ArrayFixtures.ints(arena, 0, 1);
 
             // When / Then
@@ -117,7 +116,7 @@ class GridRenderTest {
             DType uuidExt = UuidExtensionDecoder.INSTANCE.dtype(false);
             ByteArray elems = ArrayFixtures.bytes(arena, new byte[16]);
             FixedSizeListArray storage = new FixedSizeListArray(
-                    new DType.FixedSizeList(new DType.Primitive(PType.U8, false), 16, false), 1, elems);
+                    new DType.FixedSizeList(DType.U8, 16, false), 1, elems);
 
             // When / Then
             assertThat(GridRender.formatCell(storage, 0, uuidExt))
@@ -145,8 +144,8 @@ class GridRenderTest {
             Array sut = ArrayFixtures.utf8(arena, "héllo", "x");
 
             // When / Then
-            assertThat(GridRender.formatCell(sut, 0, new DType.Utf8(false))).isEqualTo("héllo");
-            assertThat(GridRender.formatCell(sut, 1, new DType.Utf8(false))).isEqualTo("x");
+            assertThat(GridRender.formatCell(sut, 0, DType.UTF8)).isEqualTo("héllo");
+            assertThat(GridRender.formatCell(sut, 1, DType.UTF8)).isEqualTo("x");
         }
     }
 
@@ -157,7 +156,7 @@ class GridRenderTest {
             Array sut = ArrayFixtures.binary(arena, new byte[]{0x01, (byte) 0xab, 0x02});
 
             // When / Then
-            assertThat(GridRender.formatCell(sut, 0, new DType.Binary(false))).isEqualTo("0x01ab02");
+            assertThat(GridRender.formatCell(sut, 0, DType.BINARY)).isEqualTo("0x01ab02");
         }
     }
 
@@ -169,7 +168,7 @@ class GridRenderTest {
             Array sut = ArrayFixtures.binary(arena, twenty);
 
             // When
-            String cell = GridRender.formatCell(sut, 0, new DType.Binary(false));
+            String cell = GridRender.formatCell(sut, 0, DType.BINARY);
 
             // Then — "0x" + 16*"00" + "..."
             assertThat(cell).isEqualTo("0x" + "00".repeat(16) + "...");
@@ -181,7 +180,7 @@ class GridRenderTest {
         try (Arena arena = Arena.ofConfined()) {
             // Given — vortex.date declared but storage is F64, which epochInteger rejects
             DType dateExt = new DType.Extension("vortex.date",
-                    new DType.Primitive(PType.I32, false), null, false);
+                    DType.I32, null, false);
             Array badStorage = ArrayFixtures.doubles(arena, 1.5);
 
             // When — the decode throws and is caught
@@ -197,7 +196,7 @@ class GridRenderTest {
         try (Arena arena = Arena.ofConfined()) {
             // Given — an extension id this reader does not know: render the raw storage value
             DType unknownExt = new DType.Extension("custom.thing",
-                    new DType.Primitive(PType.I32, false), null, false);
+                    DType.I32, null, false);
             IntArray storage = ArrayFixtures.ints(arena, 42);
 
             // When / Then — no extension formatting, falls to the IntArray branch

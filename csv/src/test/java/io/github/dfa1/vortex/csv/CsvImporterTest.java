@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.csv;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -34,10 +33,10 @@ class CsvImporterTest {
             assertThat(reader.dtype()).isInstanceOf(DType.Struct.class);
             DType.Struct schema = (DType.Struct) reader.dtype();
             assertThat(schema.fieldNames()).containsExactly("id", "price", "active", "name");
-            assertThat(schema.fieldTypes().get(0)).isEqualTo(new DType.Primitive(PType.I64, false));
-            assertThat(schema.fieldTypes().get(1)).isEqualTo(new DType.Primitive(PType.F64, false));
-            assertThat(schema.fieldTypes().get(2)).isEqualTo(new DType.Bool(false));
-            assertThat(schema.fieldTypes().get(3)).isEqualTo(new DType.Utf8(false));
+            assertThat(schema.fieldTypes().get(0)).isEqualTo(DType.I64);
+            assertThat(schema.fieldTypes().get(1)).isEqualTo(DType.F64);
+            assertThat(schema.fieldTypes().get(2)).isEqualTo(DType.BOOL);
+            assertThat(schema.fieldTypes().get(3)).isEqualTo(DType.UTF8);
 
             try (ScanIterator iter = reader.scan(ScanOptions.all())) {
                 assertThat(iter.hasNext()).isTrue();
@@ -96,7 +95,7 @@ class CsvImporterTest {
         Path vortex = tmp.resolve("data.vortex");
         DType.Struct forcedSchema = new DType.Struct(
                 java.util.List.of("value"),
-                java.util.List.of(new DType.Utf8(false)),
+                java.util.List.of(DType.UTF8),
                 false);
 
         // When
@@ -105,7 +104,7 @@ class CsvImporterTest {
         // Then
         try (VortexReader reader = VortexReader.open(vortex)) {
             DType.Struct schema = (DType.Struct) reader.dtype();
-            assertThat(schema.fieldTypes().getFirst()).isEqualTo(new DType.Utf8(false));
+            assertThat(schema.fieldTypes().getFirst()).isEqualTo(DType.UTF8);
             try (ScanIterator iter = reader.scan(ScanOptions.all())) {
                 assertThat(iter.hasNext()).isTrue();
                 try (Chunk chunk = iter.next()) {

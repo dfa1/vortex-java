@@ -64,17 +64,17 @@ class SchemaCommandTest {
     }
 
     static Stream<Arguments> dtypeCases() {
-        DType i64 = new DType.Primitive(PType.I64, false);
+        DType i64 = DType.I64;
         return Stream.of(
-                arguments(new DType.Primitive(PType.I64, false), "I64"),
+                arguments(DType.I64, "I64"),
                 arguments(new DType.Primitive(PType.I32, true), "I32?"),
-                arguments(new DType.Utf8(false), "utf8"),
+                arguments(DType.UTF8, "utf8"),
                 arguments(new DType.Utf8(true), "utf8?"),
-                arguments(new DType.Binary(false), "binary"),
+                arguments(DType.BINARY, "binary"),
                 arguments(new DType.Binary(true), "binary?"),
-                arguments(new DType.Bool(false), "bool"),
+                arguments(DType.BOOL, "bool"),
                 arguments(new DType.Bool(true), "bool?"),
-                arguments(new DType.Null(false), "null"),
+                arguments(DType.NULL, "null"),
                 arguments(new DType.Decimal((byte) 10, (byte) 2, false), "decimal(10,2)"),
                 arguments(new DType.Decimal((byte) 10, (byte) 2, true), "decimal(10,2)?"),
                 arguments(new DType.List(i64, false), "list<I64>"),
@@ -83,9 +83,9 @@ class SchemaCommandTest {
                 arguments(new DType.FixedSizeList(i64, 4, true), "list<I64>[4]?"),
                 arguments(new DType.Extension("vortex.uuid", i64, null, false), "ext<vortex.uuid>"),
                 arguments(new DType.Extension("vortex.uuid", i64, null, true), "ext<vortex.uuid>?"),
-                arguments(new DType.Variant(false), "variant"),
+                arguments(DType.VARIANT, "variant"),
                 arguments(new DType.Variant(true), "variant?"),
-                arguments(new DType.Struct(List.of("a", "b"), List.of(i64, new DType.Utf8(false)), false),
+                arguments(new DType.Struct(List.of("a", "b"), List.of(i64, DType.UTF8), false),
                         "struct<a: I64, b: utf8>"));
     }
 

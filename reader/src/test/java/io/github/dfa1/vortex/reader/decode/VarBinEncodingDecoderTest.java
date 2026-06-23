@@ -29,7 +29,7 @@ class VarBinEncodingDecoderTest {
         // children[0] = offsets (primitive, segment index 1); bufferIndices[0] -> bytes (index 0)
         ArrayNode offsetsNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1});
         ArrayNode varbinNode = ArrayNode.of(EncodingId.VORTEX_VARBIN, meta, new ArrayNode[]{offsetsNode}, new int[]{0});
-        return new DecodeContext(varbinNode, new DType.Utf8(false), n,
+        return new DecodeContext(varbinNode, DType.UTF8, n,
                 new MemorySegment[]{bytes, offsets}, REGISTRY, Arena.ofAuto());
     }
 

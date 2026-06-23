@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.reader.extension;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.extension.ExtensionId;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
@@ -39,7 +38,7 @@ class DateExtensionDecoderTest {
 
         // Then
         assertThat(dtype.extensionId()).isEqualTo("vortex.date");
-        assertThat(dtype.storageDType()).isEqualTo(new DType.Primitive(PType.I32, false));
+        assertThat(dtype.storageDType()).isEqualTo(DType.I32);
         assertThat(dtype.metadata()).isNotNull();
         assertThat(dtype.metadata().remaining()).isEqualTo(1);
         assertThat(dtype.metadata().duplicate().get()).isEqualTo((byte) 4); // TimeUnit.Days ordinal
@@ -84,7 +83,7 @@ class DateExtensionDecoderTest {
             IntArray inner = new MaterializedIntArray(I32, 3, buf);
             MemorySegment validityBuf = arena.allocate(1);
             validityBuf.set(ValueLayout.JAVA_BYTE, 0, (byte) 0b0000_0101);
-            BoolArray validity = new MaterializedBoolArray(new DType.Bool(false), 3, validityBuf);
+            BoolArray validity = new MaterializedBoolArray(DType.BOOL, 3, validityBuf);
 
             // When
             List<LocalDate> out = sut.decodeAll(new MaskedArray(inner, validity));

@@ -56,8 +56,7 @@ public final class ChunkedEncodingDecoder implements EncodingDecoder {
     }
 
     private static long[] readOffsets(DecodeContext ctx, int nchunks) {
-        DType u64 = new DType.Primitive(PType.U64, false);
-        MemorySegment offsetsBuf = ctx.decodeChildSegment(0, u64, nchunks + 1L);
+        MemorySegment offsetsBuf = ctx.decodeChildSegment(0, DType.U64, nchunks + 1L);
         long cap = SegmentBroadcast.capacity(offsetsBuf, 8);
         long[] offsets = new long[nchunks + 1];
         for (int i = 0; i <= nchunks; i++) {

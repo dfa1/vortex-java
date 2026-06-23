@@ -79,8 +79,8 @@ public final class PatchedEncodingEncoder implements EncodingEncoder {
             EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_PATCHED,
                     ByteBuffer.wrap(metaBytes), new EncodeNode[]{null, null, null, null}, new int[]{});
 
-            DType u32Dtype = new DType.Primitive(PType.U32, false);
-            DType u16Dtype = new DType.Primitive(PType.U16, false);
+            DType u32Dtype = DType.U32;
+            DType u16Dtype = DType.U16;
 
             return new CascadeStep(partialRoot, List.of(),
                     List.of(

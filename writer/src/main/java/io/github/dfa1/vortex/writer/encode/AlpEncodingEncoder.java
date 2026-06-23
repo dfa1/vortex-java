@@ -19,8 +19,6 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
     private static final double[] IF10_F64 = {1e-0, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8, 1e-9, 1e-10, 1e-11, 1e-12, 1e-13, 1e-14, 1e-15, 1e-16, 1e-17, 1e-18, 1e-19, 1e-20, 1e-21, 1e-22, 1e-23};
     private static final float[] F10_F32 = {1e0f, 1e1f, 1e2f, 1e3f, 1e4f, 1e5f, 1e6f, 1e7f, 1e8f, 1e9f, 1e10f};
     private static final float[] IF10_F32 = {1e-0f, 1e-1f, 1e-2f, 1e-3f, 1e-4f, 1e-5f, 1e-6f, 1e-7f, 1e-8f, 1e-9f, 1e-10f};
-    private static final DType I64_DTYPE = new DType.Primitive(PType.I64, false);
-    private static final DType I32_DTYPE = new DType.Primitive(PType.I32, false);
 
     private static final int MAX_EXPONENT_F64 = 18;
     private static final int MAX_EXPONENT_F32 = 10;
@@ -237,7 +235,7 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
             byte[] metaBytes = new ALPMetadata(d.expE(), d.expF(), null).encode();
             EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_ALP,
                 ByteBuffer.wrap(metaBytes), new EncodeNode[1], new int[0]);
-            ChildSlot slot = new ChildSlot(I64_DTYPE, d.encodedArr(), 0);
+            ChildSlot slot = new ChildSlot(DType.I64, d.encodedArr(), 0);
             return new CascadeStep(partialRoot, List.of(), List.of(slot), d.statsMin(), d.statsMax(), true);
         }
 
@@ -256,7 +254,7 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         EncodeNode valNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
         EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_ALP,
             ByteBuffer.wrap(metaBytes), new EncodeNode[]{null, idxNode, valNode}, new int[0]);
-        ChildSlot slot = new ChildSlot(I64_DTYPE, d.encodedArr(), 0);
+        ChildSlot slot = new ChildSlot(DType.I64, d.encodedArr(), 0);
         return new CascadeStep(partialRoot, List.of(idxBuf, valBuf), List.of(slot), d.statsMin(), d.statsMax(), true);
     }
 

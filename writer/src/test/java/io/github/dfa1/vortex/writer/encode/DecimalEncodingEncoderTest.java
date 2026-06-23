@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
@@ -52,7 +51,7 @@ class DecimalEncodingEncoderTest {
         // Given
         // When / Then
         assertThat(ENCODER.accepts(new DType.Decimal((byte) 18, (byte) 2, false))).isTrue();
-        assertThat(ENCODER.accepts(new DType.Primitive(PType.I64, false))).isFalse();
+        assertThat(ENCODER.accepts(DType.I64)).isFalse();
     }
 
     @ParameterizedTest(name = "precision={0} → valuesType={1}")

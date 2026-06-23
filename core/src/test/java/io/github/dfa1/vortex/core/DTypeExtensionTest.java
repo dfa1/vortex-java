@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class DTypeExtensionTest {
 
-    private static final DType.Primitive I32 = new DType.Primitive(PType.I32, false);
+    private static final DType.Primitive I32 = DType.I32;
 
     @Test
     void metadataAtCap_accepted() {

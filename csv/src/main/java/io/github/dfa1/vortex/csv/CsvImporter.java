@@ -197,15 +197,15 @@ public final class CsvImporter {
 
     private static DType resolveType(boolean canBeLong, boolean canBeDouble, boolean canBeBool) {
         if (canBeLong) {
-            return new DType.Primitive(PType.I64, false);
+            return DType.I64;
         }
         if (canBeDouble) {
-            return new DType.Primitive(PType.F64, false);
+            return DType.F64;
         }
         if (canBeBool) {
-            return new DType.Bool(false);
+            return DType.BOOL;
         }
-        return new DType.Utf8(false);
+        return DType.UTF8;
     }
 
     static Map<String, Object> buildChunk(DType.Struct schema, List<String[]> rows) {

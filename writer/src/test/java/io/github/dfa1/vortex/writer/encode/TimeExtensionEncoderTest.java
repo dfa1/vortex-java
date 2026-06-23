@@ -34,7 +34,7 @@ class TimeExtensionEncoderTest {
 
         // Then
         assertThat(TimeDtype.readUnit(result)).isEqualTo(TimeUnit.Milliseconds);
-        assertThat(result.storageDType()).isEqualTo(new DType.Primitive(PType.I32, false));
+        assertThat(result.storageDType()).isEqualTo(DType.I32);
     }
 
     @Test
@@ -54,7 +54,7 @@ class TimeExtensionEncoderTest {
 
         // Then
         assertThat(TimeDtype.readUnit(result)).isEqualTo(TimeUnit.Nanoseconds);
-        assertThat(result.storageDType()).isEqualTo(new DType.Primitive(PType.I64, false));
+        assertThat(result.storageDType()).isEqualTo(DType.I64);
     }
 
     @Test
@@ -157,7 +157,7 @@ class TimeExtensionEncoderTest {
         ByteBuffer meta = ByteBuffer.allocate(1);
         meta.put(0, (byte) TimeUnit.Days.ordinal());
         DType.Extension dtype = new DType.Extension(
-                ExtensionId.VORTEX_TIME.id(), new DType.Primitive(PType.I32, false), meta, false);
+                ExtensionId.VORTEX_TIME.id(), DType.I32, meta, false);
 
         // When / Then
         assertThatThrownBy(() -> SUT.encodeAll(dtype, List.of(T)))

@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.reader.extension;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
@@ -17,9 +16,9 @@ import java.nio.charset.StandardCharsets;
 /// Shared fixtures for the per-extension decoder test classes.
 final class ExtensionTestSupport {
 
-    static final DType.Primitive I32 = new DType.Primitive(PType.I32, false);
-    static final DType.Primitive I64 = new DType.Primitive(PType.I64, false);
-    static final DType.Primitive U8 = new DType.Primitive(PType.U8, false);
+    static final DType.Primitive I32 = DType.I32;
+    static final DType.Primitive I64 = DType.I64;
+    static final DType.Primitive U8 = DType.U8;
 
     private ExtensionTestSupport() {
     }

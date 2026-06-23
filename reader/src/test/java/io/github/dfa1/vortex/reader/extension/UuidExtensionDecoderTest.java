@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.reader.extension;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.extension.ExtensionId;
 import io.github.dfa1.vortex.reader.array.BoolArray;
@@ -40,7 +39,7 @@ class UuidExtensionDecoderTest {
         DType.Extension dtype = sut.dtype(true);
 
         // Then
-        DType.Primitive u8 = new DType.Primitive(PType.U8, false);
+        DType.Primitive u8 = DType.U8;
         assertThat(dtype.storageDType()).isEqualTo(new DType.FixedSizeList(u8, 16, true));
         assertThat(dtype.metadata()).isNotNull();
         assertThat(dtype.metadata().remaining()).isZero();
@@ -106,7 +105,7 @@ class UuidExtensionDecoderTest {
                     new DType.FixedSizeList(U8, 16, false), 2, innerBytes);
             MemorySegment validityBuf = arena.allocate(1);
             validityBuf.set(ValueLayout.JAVA_BYTE, 0, (byte) 0b0000_0001);
-            BoolArray validity = new MaterializedBoolArray(new DType.Bool(false), 2, validityBuf);
+            BoolArray validity = new MaterializedBoolArray(DType.BOOL, 2, validityBuf);
 
             // When
             List<UUID> out = sut.decodeAll(new MaskedArray(innerFsl, validity));

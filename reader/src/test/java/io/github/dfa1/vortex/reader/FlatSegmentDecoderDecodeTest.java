@@ -2,7 +2,6 @@ package io.github.dfa1.vortex.reader;
 
 import com.google.flatbuffers.FlatBufferBuilder;
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.fbs.ArrayNode;
 import io.github.dfa1.vortex.fbs.Buffer;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -44,7 +43,7 @@ class FlatSegmentDecoderDecodeTest {
 
             // When — encoding index 0 maps to an id no decoder handles
             Array result = sut.decode(seg, List.of("vortex.nonexistent"),
-                    new DType.Primitive(PType.I32, false), 0, arena);
+                    DType.I32, 0, arena);
 
             // Then — the allow-unknown path produced an UnknownArray (proves both the +padding
             // walk and the UnknownArrayNode fallback ran)

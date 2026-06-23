@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
@@ -61,7 +60,7 @@ class BitpackedConstantPatchesBroadcastTest {
             ArrayNode root = ArrayNode.of(EncodingId.FASTLANES_BITPACKED, metaBuf,
                     new ArrayNode[]{idxChild, valChild}, new int[]{0});
 
-            DType dtype = new DType.Primitive(PType.I64, false);
+            DType dtype = DType.I64;
             ReadRegistry registry = ReadRegistry.loadAll();
             DecodeContext ctx = new DecodeContext(root, dtype, n,
                     new MemorySegment[]{packedSeg, idxBufSeg, valBufSeg},

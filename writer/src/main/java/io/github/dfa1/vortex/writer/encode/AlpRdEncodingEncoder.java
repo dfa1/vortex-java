@@ -15,9 +15,6 @@ import java.util.Map;
 
 /// Write-only encoder for `vortex.alprd`.
 public final class AlpRdEncodingEncoder implements EncodingEncoder {
-    private static final DType U16_DTYPE = new DType.Primitive(PType.U16, false);
-    private static final DType U32_DTYPE = new DType.Primitive(PType.U32, false);
-    private static final DType U64_DTYPE = new DType.Primitive(PType.U64, false);
 
     private static final int SAMPLE_SIZE = 512;
     private static final int MAX_CUT = 16;
@@ -53,7 +50,7 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
     private static EncodeResult encodeF64(double[] values, EncodeContext ctx) {
         int n = values.length;
         if (n == 0) {
-            return emptyResult(U64_DTYPE, ctx);
+            return emptyResult(DType.U64, ctx);
         }
 
         int sampleLen = Math.min(SAMPLE_SIZE, n);
@@ -83,7 +80,7 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
 
         return buildEncodeResult(
             best.dict, best.rightBitWidth, leftCodes, rightParts,
-            U64_DTYPE, excPos, excVals, ctx);
+            DType.U64, excPos, excVals, ctx);
     }
 
     private static Dictionary64 findBestDictionaryF64(double[] values, int sampleLen) {
@@ -132,7 +129,7 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
     private static EncodeResult encodeF32(float[] values, EncodeContext ctx) {
         int n = values.length;
         if (n == 0) {
-            return emptyResult(U32_DTYPE, ctx);
+            return emptyResult(DType.U32, ctx);
         }
 
         int sampleLen = Math.min(SAMPLE_SIZE, n);
@@ -162,7 +159,7 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
 
         return buildEncodeResult(
             best.dict, best.rightBitWidth, leftCodes, rightParts,
-            U32_DTYPE, excPos, excVals, ctx);
+            DType.U32, excPos, excVals, ctx);
     }
 
     private static Dictionary32 findBestDictionaryF32(float[] values, int sampleLen) {
@@ -233,7 +230,7 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
         List<Long> excPos, List<Short> excVals, EncodeContext ctx) {
 
         EncodingEncoder bp = ctx.lookupEncoder(EncodingId.FASTLANES_BITPACKED);
-        EncodeResult leftResult = bp.encode(U16_DTYPE, leftCodes, ctx);
+        EncodeResult leftResult = bp.encode(DType.U16, leftCodes, ctx);
         EncodeResult rightResult = bp.encode(rightDtype, rightPartsData, ctx);
 
         List<MemorySegment> allBuffers = new ArrayList<>(leftResult.buffers());
@@ -259,8 +256,8 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
                 excValsArr[i] = excVals.get(i);
             }
 
-            EncodeResult idxResult = bp.encode(U64_DTYPE, excPosArr, ctx);
-            EncodeResult valResult = bp.encode(U16_DTYPE, excValsArr, ctx);
+            EncodeResult idxResult = bp.encode(DType.U64, excPosArr, ctx);
+            EncodeResult valResult = bp.encode(DType.U16, excValsArr, ctx);
 
             int idxOffset = allBuffers.size();
             allBuffers.addAll(idxResult.buffers());
@@ -292,9 +289,9 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
 
     private static EncodeResult emptyResult(DType rightDtype, EncodeContext ctx) {
         EncodingEncoder bp = ctx.lookupEncoder(EncodingId.FASTLANES_BITPACKED);
-        EncodeResult leftResult = bp.encode(U16_DTYPE, new short[0], ctx);
+        EncodeResult leftResult = bp.encode(DType.U16, new short[0], ctx);
         EncodeResult rightResult = bp.encode(rightDtype,
-            rightDtype.equals(U32_DTYPE) ? new int[0] : new long[0], ctx);
+            rightDtype.equals(DType.U32) ? new int[0] : new long[0], ctx);
 
         List<MemorySegment> allBuffers = new ArrayList<>(leftResult.buffers());
         int leftBufCount = allBuffers.size();

@@ -40,7 +40,7 @@ public final class StructEncodingDecoder implements EncodingDecoder {
             BoolArray structValidity = null;
             if (hasValidity) {
                 ArrayNode validityNode = ctx.node().children()[0];
-                var validityCtx = new DecodeContext(validityNode, new DType.Bool(false),
+                var validityCtx = new DecodeContext(validityNode, DType.BOOL,
                         ctx.rowCount(), ctx.segmentBuffers(), ctx.registry(), ctx.arena());
                 Array va = ctx.registry().decode(validityCtx);
                 if (!(va instanceof BoolArray ba)) {
@@ -79,7 +79,7 @@ public final class StructEncodingDecoder implements EncodingDecoder {
             return ctx.registry().decode(valuesCtx);
         } else if (numChildren == 2) {
             ArrayNode validityNode = ctx.node().children()[0];
-            var validityCtx = new DecodeContext(validityNode, new DType.Bool(false),
+            var validityCtx = new DecodeContext(validityNode, DType.BOOL,
                     ctx.rowCount(), ctx.segmentBuffers(), ctx.registry(), ctx.arena());
             Array va = ctx.registry().decode(validityCtx);
             if (!(va instanceof BoolArray validity)) {

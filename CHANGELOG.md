@@ -5,6 +5,16 @@ All notable changes to **vortex-java** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Canonical non-nullable `DType` constants: primitives `DType.I8` … `DType.I64`, `DType.U8` … `DType.U64`, `DType.F16`/`F32`/`F64`, plus `DType.BOOL`, `DType.UTF8`, `DType.BINARY`, `DType.NULL`, `DType.VARIANT`. Shared immutable instances — prefer them over `new DType.Primitive(pt, false)` / `new DType.Utf8(false)` etc.; build a nullable column with `DType.I64.asNullable()`. The encoders/decoders that each declared private `*_DTYPE` fields now reference these.
+
+### Removed
+
+- **Breaking (minor):** the no-arg factory methods `DType.i8()` … `DType.f64()`, `DType.bool_()`, `DType.utf8()`, `DType.binary()`, `DType.null_()`, `DType.variant()` are replaced by the constants above (`DType.i64()` → `DType.I64`, `DType.utf8()` → `DType.UTF8`). The `DType.decimal(..)`/`DType.structBuilder()` factories and the record constructors are unchanged.
+
 ## [0.8.3] — 2026-06-23
 
 A **Sonar-driven refactoring** release: no new file-format capability, but a focused pass using SonarCloud findings to drive cleanups — dead code removed, duplication factored out, and one hot-loop micro-optimisation. Each finding was triaged (lead, not verdict) so the changes preserve behaviour and the JIT vectorisation of the hot decode loops. The interpretation framework behind this is now documented in `docs/testing.md`.

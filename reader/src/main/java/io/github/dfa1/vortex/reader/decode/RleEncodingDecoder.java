@@ -107,7 +107,7 @@ public final class RleEncodingDecoder implements EncodingDecoder {
         if (indicesValidity == null) {
             return result;
         }
-        BoolArray outputValidity = new OffsetBoolArray(new DType.Bool(false), rowCount, indicesValidity, offset);
+        BoolArray outputValidity = new OffsetBoolArray(DType.BOOL, rowCount, indicesValidity, offset);
         return new MaskedArray(result, outputValidity);
     }
 

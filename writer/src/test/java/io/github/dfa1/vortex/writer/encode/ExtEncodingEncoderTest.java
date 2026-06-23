@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
@@ -33,7 +32,7 @@ class ExtEncodingEncoderTest {
         void accepts_extensionDtype_returnsTrue() {
             // Given
             DType extDType = new DType.Extension("vortex.timestamp",
-                    new DType.Primitive(PType.I64, false), null, false);
+                    DType.I64, null, false);
 
             // When / Then
             assertThat(ENCODER.accepts(extDType)).isTrue();
@@ -42,14 +41,14 @@ class ExtEncodingEncoderTest {
         @Test
         void accepts_primitiveDtype_returnsFalse() {
             // Given / When / Then
-            assertThat(ENCODER.accepts(new DType.Primitive(PType.I64, false))).isFalse();
+            assertThat(ENCODER.accepts(DType.I64)).isFalse();
         }
 
         @Test
         void encode_extensionWrappingI64_roundTrips() {
             // Given
             long[] data = {100L, 200L, 300L, 400L};
-            DType storageDType = new DType.Primitive(PType.I64, false);
+            DType storageDType = DType.I64;
             DType extDType = new DType.Extension("vortex.timestamp", storageDType, null, false);
 
             // When
@@ -90,7 +89,7 @@ class ExtEncodingEncoderTest {
         void encodeCascade_exposesStorageAsOpenChild() {
             // Given
             long[] data = {100L, 200L, 300L, 400L};
-            DType storageDType = new DType.Primitive(PType.I64, false);
+            DType storageDType = DType.I64;
             DType extDType = new DType.Extension("vortex.timestamp", storageDType, null, false);
 
             // When
@@ -112,7 +111,7 @@ class ExtEncodingEncoderTest {
         void encodeCascade_rejectsNonExtensionDtype() {
             // Given / When / Then
             org.assertj.core.api.Assertions.assertThatThrownBy(() ->
-                    ENCODER.encodeCascade(new DType.Primitive(PType.I64, false), new long[]{1L},
+                    ENCODER.encodeCascade(DType.I64, new long[]{1L},
                             EncodeTestHelper.testCtx()))
                     .isInstanceOf(io.github.dfa1.vortex.core.VortexException.class)
                     .hasMessageContaining("expected extension dtype");
@@ -128,7 +127,7 @@ class ExtEncodingEncoderTest {
             long[] values = {10L, 20L, 30L, 40L};
             MemorySegment buf = TestSegments.leLongs(values);
 
-            DType storageDType = new DType.Primitive(PType.I64, false);
+            DType storageDType = DType.I64;
             DType extDType = new DType.Extension("vortex.timestamp", storageDType, null, false);
 
             ArrayNode primitiveNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});

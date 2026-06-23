@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.csv;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import org.junit.jupiter.api.Test;
@@ -25,7 +24,7 @@ class CsvExporterTest {
         Path vortex = tmp.resolve("data.vortex");
         DType.Struct schema = new DType.Struct(
                 List.of("id", "name"),
-                List.of(new DType.Primitive(PType.I64, false), new DType.Utf8(false)),
+                List.of(DType.I64, DType.UTF8),
                 false);
         try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
@@ -50,7 +49,7 @@ class CsvExporterTest {
         Path vortex = tmp.resolve("data.vortex");
         DType.Struct schema = new DType.Struct(
                 List.of("x"),
-                List.of(new DType.Primitive(PType.F64, false)),
+                List.of(DType.F64),
                 false);
         try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
@@ -75,7 +74,7 @@ class CsvExporterTest {
         Path vortex = tmp.resolve("data.vortex");
         DType.Struct schema = new DType.Struct(
                 List.of("id"),
-                List.of(new DType.Primitive(PType.I64, false)),
+                List.of(DType.I64),
                 false);
         try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {

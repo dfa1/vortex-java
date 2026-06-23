@@ -21,9 +21,6 @@ import java.nio.ByteBuffer;
 
 /// Read-only decoder for `vortex.alprd`.
 public final class AlpRdEncodingDecoder implements EncodingDecoder {
-    private static final DType U16_DTYPE = new DType.Primitive(PType.U16, false);
-    private static final DType U32_DTYPE = new DType.Primitive(PType.U32, false);
-    private static final DType U64_DTYPE = new DType.Primitive(PType.U64, false);
 
     /// Public no-arg constructor required by [java.util.ServiceLoader].
     public AlpRdEncodingDecoder() {
@@ -55,20 +52,20 @@ public final class AlpRdEncodingDecoder implements EncodingDecoder {
 
         // Lazy path: keep left/right as typed Arrays + patches as a small short[] +
         // a lazy indices Array. No n-sized output buffer allocated.
-        Array leftRaw = ctx.decodeChild(0, U16_DTYPE, n);
+        Array leftRaw = ctx.decodeChild(0, DType.U16, n);
         ShortArray leftArr = (ShortArray) unwrap(leftRaw);
 
         Patches patches = decodePatches(ctx, meta.patches());
 
         return switch (ptype) {
             case F64 -> {
-                Array rightRaw = ctx.decodeChild(1, U64_DTYPE, n);
+                Array rightRaw = ctx.decodeChild(1, DType.U64, n);
                 LongArray rightArr = (LongArray) unwrap(rightRaw);
                 yield new LazyAlpRdDoubleArray(ctx.dtype(), n, dict, rightBitWidth,
                         leftArr, rightArr, patches.indices, patches.leftValues, patches.offset);
             }
             case F32 -> {
-                Array rightRaw = ctx.decodeChild(1, U32_DTYPE, n);
+                Array rightRaw = ctx.decodeChild(1, DType.U32, n);
                 IntArray rightArr = (IntArray) unwrap(rightRaw);
                 yield new LazyAlpRdFloatArray(ctx.dtype(), n, dict, rightBitWidth,
                         leftArr, rightArr, patches.indices, patches.leftValues, patches.offset);
@@ -102,7 +99,7 @@ public final class AlpRdEncodingDecoder implements EncodingDecoder {
 
         // Pull the small left-values table into a short[] so lookups don't pay an
         // Array-dispatch per patch hit. Patches are typically <1% of rows.
-        MemorySegment valSeg = ctx.decodeChildSegment(3, U16_DTYPE, numPatches);
+        MemorySegment valSeg = ctx.decodeChildSegment(3, DType.U16, numPatches);
         long valCap = SegmentBroadcast.capacity(valSeg, 2);
         short[] leftValues = new short[(int) numPatches];
         for (int j = 0; j < numPatches; j++) {

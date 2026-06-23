@@ -65,8 +65,8 @@ import java.util.Set;
 /// Usage:
 /// ```java
 /// var schema = new DType.Struct(List.of("id", "value"),
-///                               List.of(new DType.Primitive(PType.I64, false),
-///                                       new DType.Primitive(PType.F64, false)), false);
+///                               List.of(DType.I64,
+///                                       DType.F64), false);
 /// try (var channel = FileChannel.open(path, CREATE, WRITE);
 ///      var writer = VortexWriter.create(channel, schema, WriteOptions.defaults())) {
 ///     writer.writeChunk(Map.of("id", idArray, "value", valueArray));
@@ -760,13 +760,13 @@ public final class VortexWriter implements Closeable {
             types.add(minMaxDtype);
             fields.add(new NullableData(zoneStatValues(minMaxDtype, maxBytes), allValid.clone()));
             names.add("max_is_truncated");
-            types.add(new DType.Bool(false));
+            types.add(DType.BOOL);
             fields.add(notTruncated);
             names.add("min");
             types.add(minMaxDtype);
             fields.add(new NullableData(zoneStatValues(minMaxDtype, minBytes), allValid.clone()));
             names.add("min_is_truncated");
-            types.add(new DType.Bool(false));
+            types.add(DType.BOOL);
             fields.add(notTruncated.clone());
         }
         if (sumDtype != null) {

@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.integration;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -32,7 +31,7 @@ class JavaRoundTripIntegrationTest {
 
     private static final DType.Struct I32_SCHEMA = new DType.Struct(
             List.of("v"),
-            List.of(new DType.Primitive(PType.I32, false)),
+            List.of(DType.I32),
             false);
 
     @Test
