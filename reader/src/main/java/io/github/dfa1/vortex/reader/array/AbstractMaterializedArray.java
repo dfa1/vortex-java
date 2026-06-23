@@ -51,6 +51,7 @@ abstract class AbstractMaterializedArray {
     ///
     /// @param arena unused; the existing buffer is returned as-is
     /// @return the backing segment
+    @SuppressWarnings("java:S1172") // arena is contractual: this implements Array#materialize(SegmentAllocator) for the leaf classes; unused only because the buffer is already materialized.
     public final MemorySegment materialize(SegmentAllocator arena) {
         return buffer;
     }
