@@ -122,3 +122,47 @@ SonarCloud daily. Generated `fbs/`/`proto/` sources and the `performance/` bench
 are excluded — they have no hand-written behaviour worth covering. The quality gate requires
 zero bugs and zero vulnerabilities; the build itself fails on any javac warning
 (`-Xlint:all -Werror`), zero Checkstyle violations, and zero Javadoc warnings.
+
+## Reading the signals: Sonar and PIT as data, not verdicts
+
+SonarCloud and PIT both report facts, not judgements. A Sonar finding ("this line is
+uncovered", "these blocks are duplicated") is a pointer to look, not a defect by itself —
+the interpretation is the engineering work. Two patterns recur often enough to be worth
+naming.
+
+### An uncovered line is one of three things
+
+When Sonar flags a line as not covered, it is exactly one of:
+
+1. **Missing test** — reachable by valid input, just never exercised. Add the test.
+2. **Dead code** — unreachable by any input. Delete it; a test would only pin behaviour
+   that can never run.
+3. **Defensive-by-contract** — reachable only if an invariant is already broken: the
+   `default -> throw new VortexException(...)` arms, the `catch (IOException)` on metadata
+   decode, the `logicalIdx < 0 || >= rowCount` guards on malformed offsets. Not dead (it
+   guards a real corruption case), but unreachable through the *writer*, which only emits
+   valid files. Keep it, and either cover it with a hand-crafted malformed-input test or
+   leave a comment stating the invariant it defends.
+
+Coverage alone cannot tell these apart — it only says "not executed". The deciding question
+is *can any input reach this line?* **Mutation testing answers it where line coverage cannot:**
+a mutant that survives on a covered line is either an untested-reachable edge (bucket 1) or
+an equivalent mutant on a clause that can never change the outcome (bucket 2, dead code).
+That is why PIT is scoped to the bounds/parse classes — those are dense with bucket-3 guards,
+and the kill rate tells us which guards are genuinely load-bearing. Read a survivor
+**simplify-first**: prefer deleting the clause over writing an unkillable test.
+
+### Duplication can be real or deliberate
+
+Sonar's duplication metric is also a pointer, not an order. Most flagged duplication is real
+and should be factored out — e.g. the four `unpackLoop8/16/32/64` methods in
+`BitpackedEncodingDecoder` each rebuilt an identical per-row schedule, now hoisted into one
+`schedule(typeBits, bitWidth)` helper. But some duplication is the price of a hard
+constraint: the per-element inner unpack loops in those same methods stay specialised per
+width on purpose, because a generic `ValueLayout`/accessor would stop C2 from constant-folding
+the typed access and block superword vectorisation (the hot-loop rule). When duplication and a
+performance or safety invariant conflict, the invariant wins — factor out the cold,
+run-once part and leave the hot, specialised part alone, with a comment saying why.
+
+The throughline: let the tools point at the data, then decide with the context they do not
+have.
