@@ -100,36 +100,71 @@ public final class BitpackedEncodingDecoder implements EncodingDecoder {
         }
     }
 
+    /// Per-row unpack schedule for one FastLanes block, precomputed once per decode call. Every
+    /// array is indexed by `row` in `[0, typeBits)`. This setup is identical for the 8/16/32/64-bit
+    /// unpackers, so it lives here; the per-element unpack loops stay specialised per width because
+    /// their typed `ValueLayout` access must constant-fold for the JIT to vectorise them.
+    ///
+    /// @param shifts            low-bit shift to apply to the current word, per row
+    /// @param remainingBits     bits spilling into the next word (0 when the value fits one word)
+    /// @param currentBits       bits taken from the current word (`bitWidth - remainingBits`)
+    /// @param loMasks           mask for the low part read from the current word
+    /// @param hiMasks           mask for the high part read from the next word
+    /// @param currWordByteBase  byte offset of the current word within the block
+    /// @param nextWordByteBase  byte offset of the next word within the block
+    /// @param outRowByteOff     byte offset of the row within the transposed output block
+    private record UnpackSchedule(
+            int[] shifts, int[] remainingBits, int[] currentBits,
+            long[] loMasks, long[] hiMasks,
+            long[] currWordByteBase, long[] nextWordByteBase, long[] outRowByteOff) {
+    }
+
+    private static UnpackSchedule schedule(int typeBits, int bitWidth) {
+        int lanes = 1024 / typeBits;
+        int elemBytes = typeBits / 8;
+        int[] shifts = new int[typeBits];
+        int[] remainingBits = new int[typeBits];
+        int[] currentBits = new int[typeBits];
+        long[] loMasks = new long[typeBits];
+        long[] hiMasks = new long[typeBits];
+        long[] currWordByteBase = new long[typeBits];
+        long[] nextWordByteBase = new long[typeBits];
+        long[] outRowByteOff = new long[typeBits];
+        for (int row = 0; row < typeBits; row++) {
+            int currWord = (row * bitWidth) / typeBits;
+            int nextWord = ((row + 1) * bitWidth) / typeBits;
+            shifts[row] = (row * bitWidth) % typeBits;
+            int rem = (nextWord > currWord) ? ((row + 1) * bitWidth) % typeBits : 0;
+            remainingBits[row] = rem;
+            int curr = bitWidth - rem;
+            currentBits[row] = curr;
+            loMasks[row] = rem > 0 ? (1L << curr) - 1L : 0L;
+            hiMasks[row] = rem > 0 ? (1L << rem) - 1L : 0L;
+            currWordByteBase[row] = (long) lanes * currWord * elemBytes;
+            nextWordByteBase[row] = rem > 0 ? (long) lanes * nextWord * elemBytes : 0L;
+            int o = row / 8;
+            int s = row % 8;
+            outRowByteOff[row] = (long) (FL_ORDER[o] * 16 + s * 128) * elemBytes;
+        }
+        return new UnpackSchedule(shifts, remainingBits, currentBits, loMasks, hiMasks,
+                currWordByteBase, nextWordByteBase, outRowByteOff);
+    }
+
     private static void unpackLoop8(MemorySegment buf, int bitWidth, int offset, long rowCount, MemorySegment out) {
         final int lanes = 128;
         long totalElems = rowCount + offset;
         int blockCount = (int) ((totalElems + 1023) / 1024);
         long bitMask = (1L << bitWidth) - 1L;
 
-        int[] shifts = new int[8];
-        int[] remainingBits = new int[8];
-        int[] currentBits = new int[8];
-        long[] loMasks = new long[8];
-        long[] hiMasks = new long[8];
-        long[] currWordByteBase = new long[8];
-        long[] nextWordByteBase = new long[8];
-        long[] outRowByteOff = new long[8];
-        for (int row = 0; row < 8; row++) {
-            int currWord = (row * bitWidth) / 8;
-            int nextWord = ((row + 1) * bitWidth) / 8;
-            shifts[row] = (row * bitWidth) % 8;
-            int rem = (nextWord > currWord) ? ((row + 1) * bitWidth) % 8 : 0;
-            remainingBits[row] = rem;
-            int curr = bitWidth - rem;
-            currentBits[row] = curr;
-            loMasks[row] = rem > 0 ? (1L << curr) - 1L : 0L;
-            hiMasks[row] = rem > 0 ? (1L << rem) - 1L : 0L;
-            currWordByteBase[row] = (long) lanes * currWord;
-            nextWordByteBase[row] = rem > 0 ? (long) lanes * nextWord : 0L;
-            int o = row / 8;
-            int s = row % 8;
-            outRowByteOff[row] = (long) FL_ORDER[o] * 16 + (long) s * 128;
-        }
+        UnpackSchedule sch = schedule(8, bitWidth);
+        int[] shifts = sch.shifts();
+        int[] remainingBits = sch.remainingBits();
+        int[] currentBits = sch.currentBits();
+        long[] loMasks = sch.loMasks();
+        long[] hiMasks = sch.hiMasks();
+        long[] currWordByteBase = sch.currWordByteBase();
+        long[] nextWordByteBase = sch.nextWordByteBase();
+        long[] outRowByteOff = sch.outRowByteOff();
 
         long blockByteOff = 0L;
         long blockByteStride = 128L * bitWidth;
@@ -199,30 +234,15 @@ public final class BitpackedEncodingDecoder implements EncodingDecoder {
         int blockCount = (int) ((totalElems + 1023) / 1024);
         long bitMask = (1L << bitWidth) - 1L;
 
-        int[] shifts = new int[16];
-        int[] remainingBits = new int[16];
-        int[] currentBits = new int[16];
-        long[] loMasks = new long[16];
-        long[] hiMasks = new long[16];
-        long[] currWordByteBase = new long[16];
-        long[] nextWordByteBase = new long[16];
-        long[] outRowByteOff = new long[16];
-        for (int row = 0; row < 16; row++) {
-            int currWord = (row * bitWidth) / 16;
-            int nextWord = ((row + 1) * bitWidth) / 16;
-            shifts[row] = (row * bitWidth) % 16;
-            int rem = (nextWord > currWord) ? ((row + 1) * bitWidth) % 16 : 0;
-            remainingBits[row] = rem;
-            int curr = bitWidth - rem;
-            currentBits[row] = curr;
-            loMasks[row] = rem > 0 ? (1L << curr) - 1L : 0L;
-            hiMasks[row] = rem > 0 ? (1L << rem) - 1L : 0L;
-            currWordByteBase[row] = (long) lanes * currWord * 2L;
-            nextWordByteBase[row] = rem > 0 ? (long) lanes * nextWord * 2L : 0L;
-            int o = row / 8;
-            int s = row % 8;
-            outRowByteOff[row] = (FL_ORDER[o] * 16 + s * 128) * 2L;
-        }
+        UnpackSchedule sch = schedule(16, bitWidth);
+        int[] shifts = sch.shifts();
+        int[] remainingBits = sch.remainingBits();
+        int[] currentBits = sch.currentBits();
+        long[] loMasks = sch.loMasks();
+        long[] hiMasks = sch.hiMasks();
+        long[] currWordByteBase = sch.currWordByteBase();
+        long[] nextWordByteBase = sch.nextWordByteBase();
+        long[] outRowByteOff = sch.outRowByteOff();
 
         long blockByteOff = 0L;
         long blockByteStride = 128L * bitWidth;
@@ -295,30 +315,15 @@ public final class BitpackedEncodingDecoder implements EncodingDecoder {
         int blockCount = (int) ((totalElems + 1023) / 1024);
         long bitMask = (1L << bitWidth) - 1L;
 
-        int[] shifts = new int[32];
-        int[] remainingBits = new int[32];
-        int[] currentBits = new int[32];
-        long[] loMasks = new long[32];
-        long[] hiMasks = new long[32];
-        long[] currWordByteBase = new long[32];
-        long[] nextWordByteBase = new long[32];
-        long[] outRowByteOff = new long[32];
-        for (int row = 0; row < 32; row++) {
-            int currWord = (row * bitWidth) / 32;
-            int nextWord = ((row + 1) * bitWidth) / 32;
-            shifts[row] = (row * bitWidth) % 32;
-            int rem = (nextWord > currWord) ? ((row + 1) * bitWidth) % 32 : 0;
-            remainingBits[row] = rem;
-            int curr = bitWidth - rem;
-            currentBits[row] = curr;
-            loMasks[row] = rem > 0 ? (1L << curr) - 1L : 0L;
-            hiMasks[row] = rem > 0 ? (1L << rem) - 1L : 0L;
-            currWordByteBase[row] = (long) lanes * currWord * 4L;
-            nextWordByteBase[row] = rem > 0 ? (long) lanes * nextWord * 4L : 0L;
-            int o = row / 8;
-            int s = row % 8;
-            outRowByteOff[row] = (FL_ORDER[o] * 16 + s * 128) * 4L;
-        }
+        UnpackSchedule sch = schedule(32, bitWidth);
+        int[] shifts = sch.shifts();
+        int[] remainingBits = sch.remainingBits();
+        int[] currentBits = sch.currentBits();
+        long[] loMasks = sch.loMasks();
+        long[] hiMasks = sch.hiMasks();
+        long[] currWordByteBase = sch.currWordByteBase();
+        long[] nextWordByteBase = sch.nextWordByteBase();
+        long[] outRowByteOff = sch.outRowByteOff();
 
         long blockByteOff = 0L;
         long blockByteStride = 128L * bitWidth;
@@ -391,30 +396,15 @@ public final class BitpackedEncodingDecoder implements EncodingDecoder {
         int blockCount = (int) ((totalElems + 1023) / 1024);
         long bitMask = bitWidth == 64 ? -1L : (1L << bitWidth) - 1L;
 
-        int[] shifts = new int[64];
-        int[] remainingBits = new int[64];
-        int[] currentBits = new int[64];
-        long[] loMasks = new long[64];
-        long[] hiMasks = new long[64];
-        long[] currWordByteBase = new long[64];
-        long[] nextWordByteBase = new long[64];
-        long[] outRowByteOff = new long[64];
-        for (int row = 0; row < 64; row++) {
-            int currWord = (row * bitWidth) / 64;
-            int nextWord = ((row + 1) * bitWidth) / 64;
-            shifts[row] = (row * bitWidth) % 64;
-            int rem = (nextWord > currWord) ? ((row + 1) * bitWidth) % 64 : 0;
-            remainingBits[row] = rem;
-            int curr = bitWidth - rem;
-            currentBits[row] = curr;
-            loMasks[row] = rem > 0 ? (1L << curr) - 1L : 0L;
-            hiMasks[row] = rem > 0 ? (1L << rem) - 1L : 0L;
-            currWordByteBase[row] = (long) lanes * currWord * 8L;
-            nextWordByteBase[row] = rem > 0 ? (long) lanes * nextWord * 8L : 0L;
-            int o = row / 8;
-            int s = row % 8;
-            outRowByteOff[row] = (FL_ORDER[o] * 16 + s * 128) * 8L;
-        }
+        UnpackSchedule sch = schedule(64, bitWidth);
+        int[] shifts = sch.shifts();
+        int[] remainingBits = sch.remainingBits();
+        int[] currentBits = sch.currentBits();
+        long[] loMasks = sch.loMasks();
+        long[] hiMasks = sch.hiMasks();
+        long[] currWordByteBase = sch.currWordByteBase();
+        long[] nextWordByteBase = sch.nextWordByteBase();
+        long[] outRowByteOff = sch.outRowByteOff();
 
         long blockByteOff = 0L;
         long blockByteStride = 128L * bitWidth;
