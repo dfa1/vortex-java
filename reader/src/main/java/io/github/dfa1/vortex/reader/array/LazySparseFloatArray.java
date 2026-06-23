@@ -29,32 +29,10 @@ public record LazySparseFloatArray(
     @Override
     public double fold(double identity, DoubleBinaryOperator op) {
         double[] acc = {identity};
-        if (patchValues == null) {
-            for (long r = 0; r < length; r++) {
-                acc[0] = op.applyAsDouble(acc[0], fillValue);
-            }
-            return acc[0];
-        }
-        long numPatches = patchValues.length();
-        long absStart = offset;
-        long absEnd = offset + length;
-        int p = SparseArrays.findFirstAtOrAfter(patchIndices, numPatches, absStart);
-        long pos = absStart;
-        while (pos < absEnd && p < numPatches) {
-            long patchAbs = SparseArrays.readPatchIdx(patchIndices, p);
-            if (patchAbs >= absEnd) {
-                break;
-            }
-            for (long r = pos; r < patchAbs; r++) {
-                acc[0] = op.applyAsDouble(acc[0], fillValue);
-            }
-            acc[0] = op.applyAsDouble(acc[0], patchValues.getFloat(p));
-            pos = patchAbs + 1;
-            p++;
-        }
-        for (long r = pos; r < absEnd; r++) {
-            acc[0] = op.applyAsDouble(acc[0], fillValue);
-        }
+        long numPatches = patchValues == null ? 0 : patchValues.length();
+        SparseArrays.walkPatches(patchIndices, numPatches, offset, offset + length,
+                () -> acc[0] = op.applyAsDouble(acc[0], fillValue),
+                p -> acc[0] = op.applyAsDouble(acc[0], patchValues.getFloat(p)));
         return acc[0];
     }
 }

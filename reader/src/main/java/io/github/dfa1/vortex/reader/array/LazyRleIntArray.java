@@ -42,18 +42,8 @@ public record LazyRleIntArray(
 
     @Override
     public void forEachInt(IntConsumer c) {
-        long n = length;
-        long emitted = 0;
-        int absRow = offset;
-        int startChunk = absRow >>> RleArrays.FL_LOG2;
-        for (int chunkIdx = startChunk; chunkIdx < numChunks && emitted < n; chunkIdx++) {
-            int rowInChunk = absRow - chunkIdx * RleArrays.FL_CHUNK_SIZE;
-            int end = Math.min(RleArrays.FL_CHUNK_SIZE, rowInChunk + (int) (n - emitted));
-            processChunk(chunkIdx, rowInChunk, end, c);
-            int count = end - rowInChunk;
-            emitted += count;
-            absRow += count;
-        }
+        RleArrays.walkChunks(length, offset, numChunks,
+                (chunkIdx, rowInChunk, end) -> processChunk(chunkIdx, rowInChunk, end, c));
     }
 
     private void processChunk(int chunkIdx, int rowInChunk, int end, IntConsumer c) {
