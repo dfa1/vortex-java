@@ -37,7 +37,9 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 /// implement first).
 class PcoFixtureInspectionIntegrationTest {
 
-    private static final String BASE = "https://vortex-compat-fixtures.s3.amazonaws.com/v0.72.0/arrays/";
+    private static final String FIXTURE_VERSION = "v0.75.0";
+    private static final String BASE =
+            "https://vortex-compat-fixtures.s3.amazonaws.com/" + FIXTURE_VERSION + "/arrays/";
     private static final String[] FIXTURES = {
             "pco.vortex",
             "tpch_lineitem.compact.vortex",
@@ -303,8 +305,11 @@ class PcoFixtureInspectionIntegrationTest {
     }
 
     private static Path downloadIfMissing(Path tmp, String name) throws Exception {
-        // Reuse /tmp/pco-fixtures cache if present.
-        Path cached = Path.of("/tmp/pco-fixtures", name);
+        // Reuse the version-keyed /tmp/pco-fixtures cache if present. The version
+        // segment matters: the Rust reference rewrites identical file names with
+        // different bytes across versions, so a version-less cache would serve
+        // stale bytes after a bump.
+        Path cached = Path.of("/tmp/pco-fixtures", FIXTURE_VERSION, name);
         if (Files.exists(cached)) {
             return cached;
         }

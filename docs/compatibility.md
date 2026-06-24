@@ -213,14 +213,16 @@ For unsupported extension ids the inspector falls back to a placeholder cell
 correctly via the primitive accessors, callers just have to format the value
 themselves.
 
-## S3 Fixture Status (v0.72.0)
+## S3 Fixture Status (v0.75.0)
 
-> **Note:** the fixture matrix below is locked to `v0.72.0/`. The Rust reference is
-> now at `v0.74.0`; re-run the integration suite against `v0.74.0/arrays/` once
-> upstream publishes the corresponding fixture set, and refresh this section.
+> **Note:** the oracle round-trip suite is pinned to `v0.75.0/` (current Rust
+> release). The bucket reuses identical fixture file names across versions but
+> rewrites the bytes, so the `/tmp/pco-fixtures` cache is version-keyed; bump the
+> `FIXTURE_VERSION` constant in the integration tests and refresh this section
+> when a newer set is published.
 
 Cross-language round-trips tested against Rust-written fixture files hosted at
-`s3://vortex-compat-fixtures/v0.72.0/arrays/`.
+`s3://vortex-compat-fixtures/v0.75.0/arrays/`.
 
 | Fixture                             | Status |
 |-------------------------------------|--------|
@@ -259,6 +261,6 @@ Cross-language round-trips tested against Rust-written fixture files hosted at
 | `pco.vortex`                        | ✅      |
 | `clickbench_hits_5k.compact.vortex` | ✅      |
 | `clickbench_hits_5k.regular.vortex` | ✅      |
-| `masked.vortex`                     | ❓      | No fixture in v0.72.0 |
-| `patched.vortex`                    | ❓      | No fixture in v0.72.0 |
-| `variant.vortex`                    | ❓      | No fixture in v0.72.0 |
+| `masked.vortex`                     | ❓      | No fixture through v0.75.0 |
+| `patched.vortex`                    | ❓      | No fixture through v0.75.0 |
+| `variant.vortex`                    | ❓      | No fixture through v0.75.0 |
