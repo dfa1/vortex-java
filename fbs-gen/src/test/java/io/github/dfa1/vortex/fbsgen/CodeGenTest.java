@@ -95,10 +95,10 @@ class CodeGenTest {
     private static void generate(Path out) throws IOException {
         Path root = repoRoot();
         List<Ast.SchemaFile> files = List.of(
-                parse(root.resolve("core/src/main/flatbuffers/vortex-array/array.fbs")),
-                parse(root.resolve("core/src/main/flatbuffers/vortex-dtype/dtype.fbs")),
-                parse(root.resolve("core/src/main/flatbuffers/vortex-file/footer.fbs")),
-                parse(root.resolve("core/src/main/flatbuffers/vortex-layout/layout.fbs"))
+                parse(root.resolve("core/src/main/fbs/array.fbs")),
+                parse(root.resolve("core/src/main/fbs/dtype.fbs")),
+                parse(root.resolve("core/src/main/fbs/footer.fbs")),
+                parse(root.resolve("core/src/main/fbs/layout.fbs"))
         );
         new CodeGen(new TypeRegistry(files)).emit(out);
     }
