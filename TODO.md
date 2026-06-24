@@ -5,11 +5,11 @@
 - [ ] Move project to a dedicated organization
 - [ ] Create website
    - build something like hardwood.dev but for vortex files
-- [ ] **Benchmark publishing** — drop CI workflow, add `bench-publish` script; see [ADR-0006](docs/adr/0006-benchmark-publishing.md).
 
 ## Performance
 
-- [ ] Performance tests must be peer reviewed
+- [ ] **Benchmark publishing** — drop CI workflow, add `bench-publish` script; see [ADR-0006](docs/adr/0006-benchmark-publishing.md).
+- [ ] Performance tests must be peer-reviewed
 - [ ] Run performance tests on other machines (I have access only to Apple M5)
 - [ ] **Vector API adoption** — deferred; see [ADR-0005](docs/adr/0005-vector-api-adoption.md) for adoption criteria and candidate loops.
 
@@ -74,9 +74,7 @@ Per-encoding gotchas:
 
 ## Build
 
-- [ ] switch back to module-path, but keep in mind these 2 blockers:
--    [ ] 'dfa1' in package name is rejected by maven central
--    [ ] automatic module names for flatbuffers is rejected by maven central
+- [ ] use JPMS, watch out for "dfa1" in package name
 
 ## Tooling
 
@@ -92,11 +90,6 @@ Per-encoding gotchas:
     - See [ADR-0008](docs/adr/0008-domain-primitives-unsigned-integers.md) and https://dfa1.github.io/articles/rethink-domain-primitives-with-valhalla
     - Candidates: `PType` integer kinds, buffer offsets, row indices, byte lengths
     - Goal: type-safety at zero cost (value class = no heap alloc, no boxing)
-- [ ] **Generalize `Array.limited(rows)` → `Array.slice(offset, length)`** — single verb, matches `MemorySegment.asSlice` / `ByteBuffer.slice` / `List.subList`; `limited(rows)` becomes `slice(0, rows)`.
-    - Zero-copy: buffer-backed (`Materialized*`, `length == elementCount`) slices the segment via `asSlice` (no per-element indirection); broadcast + view families fall back to `Offset*` wrappers
-    - Fold nested slices (`slice` of an `Offset*` composes offsets — never stack `Offset(Offset(...))`)
-    - Validate, fail fast (no silent clamp): consumer-facing `slice` throws `IllegalArgumentException` on `offset < 0 || length < 0 || offset + length > length()`; scan-internal `Offset*` construction fed by untrusted layout metadata throws `VortexException`
-    - Add the matching compact-constructor bounds guard to all `Offset*` records (currently document `inner length >= offset + length` but enforce nothing — broadcast inner silently wraps via `i % cap`)
 
 ## Compute
 
@@ -119,6 +112,4 @@ See [docs/compatibility.md](docs/compatibility.md) for the full encoding support
   Fix: accept nullable input (e.g. `Integer[]` or a validity mask alongside the data array). Strip null positions before
   compression. Encode the validity bitmap as a Bool child (child[0]) in the `EncodeNode`. Mirrors what Rust does: only
   valid values go into the compressed payload.
-
-- [ ] **`vortex.pco` encode — FloatMult / FloatQuant modes** — Classic + Consecutive delta + IntMult ship; FloatMult/FloatQuant deferred. Marginal gain over existing Classic+ALP cascade; significant complexity (approx pair-GCD, false position root finder, trailing-zero detector).
 
