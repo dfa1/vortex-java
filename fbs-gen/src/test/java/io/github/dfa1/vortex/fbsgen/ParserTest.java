@@ -21,10 +21,10 @@ class ParserTest {
         /// not a synthetic subset.
         @ParameterizedTest
         @ValueSource(strings = {
-                "core/src/main/flatbuffers/vortex-array/array.fbs",
-                "core/src/main/flatbuffers/vortex-dtype/dtype.fbs",
-                "core/src/main/flatbuffers/vortex-file/footer.fbs",
-                "core/src/main/flatbuffers/vortex-layout/layout.fbs"
+                "core/src/main/fbs/array.fbs",
+                "core/src/main/fbs/dtype.fbs",
+                "core/src/main/fbs/footer.fbs",
+                "core/src/main/fbs/layout.fbs"
         })
         void parsesEveryVortexSchema(String relPath) throws IOException {
             // Given
@@ -39,7 +39,7 @@ class ParserTest {
         void parsesDtypeUnionAndTable() throws IOException {
             // Given — dtype.fbs is the richest: enum-with-underlying, a 12-member union,
             // and tables that reference each other recursively.
-            Ast.SchemaFile sut = parse(repoRoot().resolve("core/src/main/flatbuffers/vortex-dtype/dtype.fbs"));
+            Ast.SchemaFile sut = parse(repoRoot().resolve("core/src/main/fbs/dtype.fbs"));
 
             // Then — the underlying-typed enum is captured with all 11 PType values.
             Ast.EnumDecl ptype = (Ast.EnumDecl) declNamed(sut, "PType");
@@ -62,7 +62,7 @@ class ParserTest {
         void parsesArrayStructVectorAndDefaults() throws IOException {
             // Given — array.fbs exercises a struct (inline), vectors, an enum field,
             // and `bool = null` three-state defaults.
-            Ast.SchemaFile sut = parse(repoRoot().resolve("core/src/main/flatbuffers/vortex-array/array.fbs"));
+            Ast.SchemaFile sut = parse(repoRoot().resolve("core/src/main/fbs/array.fbs"));
 
             // Then — Buffer is a struct, and its compression field references the enum.
             Ast.StructDecl buffer = (Ast.StructDecl) declNamed(sut, "Buffer");
@@ -82,10 +82,10 @@ class ParserTest {
         @Test
         void capturesIncludesAndRootTypes() throws IOException {
             // Given — footer.fbs includes the other schemas and declares three root types.
-            Ast.SchemaFile sut = parse(repoRoot().resolve("core/src/main/flatbuffers/vortex-file/footer.fbs"));
+            Ast.SchemaFile sut = parse(repoRoot().resolve("core/src/main/fbs/footer.fbs"));
 
             // Then
-            assertThat(sut.includes()).containsExactly("vortex-array/array.fbs", "vortex-layout/layout.fbs");
+            assertThat(sut.includes()).containsExactly("array.fbs", "layout.fbs");
             assertThat(sut.rootTypes()).containsExactly("FileStatistics", "Footer", "Postscript");
         }
     }

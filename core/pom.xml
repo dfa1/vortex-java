@@ -92,10 +92,10 @@
 										<argument>io.github.dfa1.vortex.fbsgen.Main</argument>
 										<argument>--out</argument>
 										<argument>${project.basedir}/src/main/java/io/github/dfa1/vortex/fbs</argument>
-										<argument>${project.basedir}/src/main/flatbuffers/vortex-array/array.fbs</argument>
-										<argument>${project.basedir}/src/main/flatbuffers/vortex-dtype/dtype.fbs</argument>
-										<argument>${project.basedir}/src/main/flatbuffers/vortex-file/footer.fbs</argument>
-										<argument>${project.basedir}/src/main/flatbuffers/vortex-layout/layout.fbs</argument>
+										<argument>${project.basedir}/src/main/fbs/array.fbs</argument>
+										<argument>${project.basedir}/src/main/fbs/dtype.fbs</argument>
+										<argument>${project.basedir}/src/main/fbs/footer.fbs</argument>
+										<argument>${project.basedir}/src/main/fbs/layout.fbs</argument>
 									</arguments>
 								</configuration>
 							</execution>
