@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.core.error;
 
 import io.github.dfa1.vortex.core.model.EncodingId;
 
+import java.io.Serial;
 import java.util.Optional;
 
 /// Unrecoverable Vortex error: malformed file, unsupported feature, or encoding failure.
@@ -15,6 +16,7 @@ import java.util.Optional;
 /// for recovery logic.
 public final class VortexException extends RuntimeException {
 
+    @Serial
     private static final long serialVersionUID = 1L;
 
     /// The encoding that raised this exception, or `null` if not attributed to a specific encoding.
