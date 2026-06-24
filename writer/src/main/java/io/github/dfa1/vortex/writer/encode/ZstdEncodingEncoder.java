@@ -2,13 +2,13 @@ package io.github.dfa1.vortex.writer.encode;
 
 import io.airlift.compress.v3.zstd.ZstdCompressor;
 import io.airlift.compress.v3.zstd.ZstdJavaCompressor;
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.proto.ProtoZstdFrameMetadata;
-import io.github.dfa1.vortex.proto.ProtoZstdMetadata;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.proto.ProtoZstdFrameMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoZstdMetadata;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;

@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.writer;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -162,7 +162,7 @@ class VortexWriterTest {
         // TimeExtension.encodeAll; ns / μs branches go through I64 (not asserted here
         // to keep the test focused — TimeExtension tests cover both).
         DType.Extension timeDtype = io.github.dfa1.vortex.writer.encode.TimeExtensionEncoder.INSTANCE.dtype(
-                io.github.dfa1.vortex.encoding.TimeUnit.Milliseconds, false);
+                io.github.dfa1.vortex.core.model.TimeUnit.Milliseconds, false);
         var schema = new DType.Struct(List.of("clock"), List.of(timeDtype), false);
         List<java.time.LocalTime> times = List.of(
                 java.time.LocalTime.of(0, 0, 0, 0),
@@ -191,7 +191,7 @@ class VortexWriterTest {
     void writeChunk_roundTripsTimestampExtension(@TempDir Path tmp) throws IOException {
         // Given — pre-epoch + epoch + future to exercise sign + boundary; ms resolution
         DType.Extension tsDtype = io.github.dfa1.vortex.writer.encode.TimestampExtensionEncoder.INSTANCE.dtype(
-                io.github.dfa1.vortex.encoding.TimeUnit.Milliseconds, null, false);
+                io.github.dfa1.vortex.core.model.TimeUnit.Milliseconds, null, false);
         var schema = new DType.Struct(List.of("events"), List.of(tsDtype), false);
         List<java.time.Instant> instants = List.of(
                 java.time.Instant.ofEpochMilli(-1_500L),
@@ -235,7 +235,7 @@ class VortexWriterTest {
             try (Chunk chunk = iter.next()) {
                 // When / Then — the accessor must fail-fast, not return a wrongly-cast list
                 assertThatThrownBy(() -> chunk.as("birthdays", java.time.Instant.class))
-                        .isInstanceOf(io.github.dfa1.vortex.core.VortexException.class)
+                        .isInstanceOf(io.github.dfa1.vortex.core.error.VortexException.class)
                         .hasMessageContaining("decodes to LocalDate, not Instant");
             }
         }
@@ -274,7 +274,7 @@ class VortexWriterTest {
         // Given — monotonically increasing timestamps that cascade should reduce via
         // FrameOfReference + Bitpacked. Without cascade, storage stays as flat U64.
         DType.Extension tsDtype = io.github.dfa1.vortex.writer.encode.TimestampExtensionEncoder.INSTANCE.dtype(
-                io.github.dfa1.vortex.encoding.TimeUnit.Milliseconds, null, false);
+                io.github.dfa1.vortex.core.model.TimeUnit.Milliseconds, null, false);
         var schema = new DType.Struct(List.of("events"), List.of(tsDtype), false);
         long base = 1_733_000_000_000L;
         List<java.time.Instant> instants = new ArrayList<>(4096);

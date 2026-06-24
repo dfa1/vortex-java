@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: Copyright the Vortex contributors
 
-namespace io.github.dfa1.vortex.fbs;
+namespace io.github.dfa1.vortex.core.fbs;
 
 enum PType: uint8 {
     U8,

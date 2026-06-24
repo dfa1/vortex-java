@@ -31,7 +31,7 @@ class ParserTest {
             Ast.SchemaFile sut = parse(repoRoot().resolve(relPath));
 
             // Then — every schema shares this namespace and declares at least one type.
-            assertThat(sut.namespace()).isEqualTo("io.github.dfa1.vortex.fbs");
+            assertThat(sut.namespace()).isEqualTo("io.github.dfa1.vortex.core.fbs");
             assertThat(sut.decls()).isNotEmpty();
         }
 

@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.writer;
 
-import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.model.PType;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;

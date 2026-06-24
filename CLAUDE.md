@@ -22,8 +22,12 @@ Benchmark classes follow this: `JavaVsJni{Read,Write,Filter}Benchmark`,
 ## Module structure
 
 ```
-core    — DType, PType, VortexException, VortexFormat + generated fbs/proto
-          encoding: EncodingId, TimeUnit, PTypeIO   extension: ExtensionId
+core    — everything lives under `io.github.dfa1.vortex.core.*`:
+          core.model    DType, PType, TimeUnit, EncodingId, ExtensionId, TimeDtype, TimestampDtype
+          core.io       IoBounds, PTypeIO, VortexFormat
+          core.error    VortexException
+          core.compute  FastLanes, PrimitiveArrays
+          core.fbs / core.proto — generated wire codecs + their runtimes
 reader  — VortexReader, VortexHttpReader, VortexHandle, ReadRegistry, ExtensionDecoder,
           Chunk, ArrayStats, ScanOptions, RowFilter; file internals (Footer, Layout, Trailer,
           PostscriptParser, …)
@@ -71,7 +75,7 @@ Both schema languages are compiled in-process to MemorySegment-native Java, with
 `flatc`/`protoc` and no `com.google.flatbuffers`/`protobuf-java` runtime (ADR 0017):
 - **`.fbs` → `fbs-gen`** (`io.github.dfa1.vortex.fbsgen`): generates readers extending
   `FbsTable`/`FbsStruct` and builders over `FbsBuilder`, all in the same generated package
-  `io.github.dfa1.vortex.fbs`. The runtime base classes `FbsTable`/`FbsStruct` are
+  `io.github.dfa1.vortex.core.fbs`. The runtime base classes `FbsTable`/`FbsStruct` are
   package-private (only generated readers extend them); `FbsBuilder` is public because the
   writer module assembles FlatBuffers with it.
 - **`.proto` → `proto-gen`**: one record per message with static `decode(MemorySegment, long,
@@ -246,7 +250,7 @@ MemorySegment metaSeg = MemorySegment.ofBuffer(ctx.metadata().duplicate());
 FooMetadata meta = FooMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 ```
 
-Generated proto records live in `io.github.dfa1.vortex.proto`; the runtime (`ProtoReader`,
+Generated proto records live in `io.github.dfa1.vortex.core.proto`; the runtime (`ProtoReader`,
 `ProtoWriter`) is package-private. For oneof messages (e.g. `ScalarValue`) prefer the static
 `ofXxxValue(v)` factory over the multi-arg constructor.
 

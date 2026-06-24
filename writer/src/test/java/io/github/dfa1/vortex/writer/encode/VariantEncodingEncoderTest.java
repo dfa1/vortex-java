@@ -1,12 +1,12 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.proto.ProtoPrimitive;
-import io.github.dfa1.vortex.proto.ProtoScalar;
-import io.github.dfa1.vortex.proto.ProtoScalarValue;
-import io.github.dfa1.vortex.proto.ProtoVariantMetadata;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.proto.ProtoPrimitive;
+import io.github.dfa1.vortex.core.proto.ProtoScalar;
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.core.proto.ProtoVariantMetadata;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -26,8 +26,8 @@ class VariantEncodingEncoderTest {
         // Inner typed scalar carrying its own i32 dtype, wrapped as a variant value
         // (mirrors Rust ProtoScalar::variant(ProtoScalar::primitive(value))).
         return new ProtoScalar(
-                io.github.dfa1.vortex.proto.ProtoDType.ofPrimitive(
-                        new ProtoPrimitive(io.github.dfa1.vortex.proto.ProtoPType.I32, false)),
+                io.github.dfa1.vortex.core.proto.ProtoDType.ofPrimitive(
+                        new ProtoPrimitive(io.github.dfa1.vortex.core.proto.ProtoPType.I32, false)),
                 ProtoScalarValue.ofInt64Value(value));
     }
 
@@ -43,7 +43,7 @@ class VariantEncodingEncoderTest {
         @Test
         void trueForVariant_falseForPrimitive() {
             assertThat(SUT.accepts(VARIANT)).isTrue();
-            assertThat(SUT.accepts(new DType.Primitive(io.github.dfa1.vortex.core.PType.I64, false))).isFalse();
+            assertThat(SUT.accepts(new DType.Primitive(io.github.dfa1.vortex.core.model.PType.I64, false))).isFalse();
         }
     }
 
@@ -178,7 +178,7 @@ class VariantEncodingEncoderTest {
             assertThat(variant.length()).isEqualTo(4);
             assertThat(variant.shredded()).isNull();
             var core = (io.github.dfa1.vortex.reader.array.IntArray) variant.coreStorage();
-            assertThat(core.dtype()).isEqualTo(new DType.Primitive(io.github.dfa1.vortex.core.PType.I32, false));
+            assertThat(core.dtype()).isEqualTo(new DType.Primitive(io.github.dfa1.vortex.core.model.PType.I32, false));
             for (long i = 0; i < 4; i++) {
                 assertThat(core.getInt(i)).isEqualTo(7);
             }
@@ -200,7 +200,7 @@ class VariantEncodingEncoderTest {
         @Test
         void shreddedColumn_decodesShreddedTypedChild() {
             // Given/When a column with a shredded i32 projection is encoded then decoded
-            DType i32 = new DType.Primitive(io.github.dfa1.vortex.core.PType.I32, false);
+            DType i32 = new DType.Primitive(io.github.dfa1.vortex.core.model.PType.I32, false);
             var data = VariantData.shredded(
                     List.of(i32Scalar(10L), i32Scalar(20L), i32Scalar(30L)), new int[]{10, 20, 30}, i32);
             var variant = decode(SUT.encode(VARIANT, data, EncodeTestHelper.testCtx()), 3);
@@ -221,7 +221,7 @@ class VariantEncodingEncoderTest {
         @Test
         void emitsSecondChildAndRecordsShreddedDtype() throws Exception {
             // Given a column with a shredded i32 projection
-            DType i32 = new DType.Primitive(io.github.dfa1.vortex.core.PType.I32, false);
+            DType i32 = new DType.Primitive(io.github.dfa1.vortex.core.model.PType.I32, false);
             var data = VariantData.shredded(
                     List.of(i32Scalar(10L), i32Scalar(20L), i32Scalar(30L)), new int[]{10, 20, 30}, i32);
 
@@ -238,7 +238,7 @@ class VariantEncodingEncoderTest {
             ProtoVariantMetadata vm = ProtoVariantMetadata.decode(meta, 0, meta.byteSize());
             assertThat(vm.shredded_dtype()).isNotNull();
             assertThat(vm.shredded_dtype().primitive()).isNotNull();
-            assertThat(vm.shredded_dtype().primitive().type()).isEqualTo(io.github.dfa1.vortex.proto.ProtoPType.I32);
+            assertThat(vm.shredded_dtype().primitive().type()).isEqualTo(io.github.dfa1.vortex.core.proto.ProtoPType.I32);
         }
 
         @Test
@@ -258,7 +258,7 @@ class VariantEncodingEncoderTest {
         void wrongDtype_throws() {
             VariantData data = VariantData.constant(1, i32Scalar(1L));
             assertThatThrownBy(() -> SUT.encode(
-                    new DType.Primitive(io.github.dfa1.vortex.core.PType.I64, false), data, EncodeTestHelper.testCtx()))
+                    new DType.Primitive(io.github.dfa1.vortex.core.model.PType.I64, false), data, EncodeTestHelper.testCtx()))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("Variant dtype");
         }

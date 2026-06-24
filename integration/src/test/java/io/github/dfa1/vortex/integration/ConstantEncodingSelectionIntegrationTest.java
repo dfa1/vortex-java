@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.integration;
 
-import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.inspect.VortexInspector;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;

@@ -1,10 +1,10 @@
 package io.github.dfa1.vortex.reader;
 
-import static io.github.dfa1.vortex.encoding.PTypeIO.LE_INT;
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.IoBounds;
-import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.core.VortexFormat;
+import static io.github.dfa1.vortex.core.io.PTypeIO.LE_INT;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.io.IoBounds;
+import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 
 import java.io.IOException;
 import java.lang.foreign.Arena;
@@ -227,7 +227,7 @@ public final class VortexReader implements VortexHandle {
             return ArrayStats.empty();
         }
         long fbStart = segLen - 4L - fbLen;
-        var fbArray = io.github.dfa1.vortex.fbs.FbsArray.getRootAsFbsArray(IoBounds.slice(seg, fbStart, fbLen));
+        var fbArray = io.github.dfa1.vortex.core.fbs.FbsArray.getRootAsFbsArray(IoBounds.slice(seg, fbStart, fbLen));
         var root = fbArray.root();
         if (root == null) {
             return ArrayStats.empty();

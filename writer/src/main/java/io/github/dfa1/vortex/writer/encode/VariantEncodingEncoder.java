@@ -1,11 +1,11 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.proto.ProtoScalar;
-import io.github.dfa1.vortex.proto.ProtoScalarValue;
-import io.github.dfa1.vortex.proto.ProtoVariantMetadata;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.proto.ProtoScalar;
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.core.proto.ProtoVariantMetadata;
 
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
@@ -62,7 +62,7 @@ public final class VariantEncodingEncoder implements EncodingEncoder {
                 : chunkedConstants(runValues, runLengths, ctx, buffers);
 
         EncodeNode[] children;
-        io.github.dfa1.vortex.proto.ProtoDType shreddedProto = null;
+        io.github.dfa1.vortex.core.proto.ProtoDType shreddedProto = null;
         if (variantData.shreddedData() != null) {
             children = new EncodeNode[]{coreStorage, encodeShredded(variantData, ctx, buffers)};
             shreddedProto = toProtoDtype(variantData.shreddedDtype());
@@ -101,17 +101,17 @@ public final class VariantEncodingEncoder implements EncodingEncoder {
     }
 
     /// Converts a shreddable scalar dtype to its protobuf form for `ProtoVariantMetadata`.
-    private static io.github.dfa1.vortex.proto.ProtoDType toProtoDtype(DType dtype) {
+    private static io.github.dfa1.vortex.core.proto.ProtoDType toProtoDtype(DType dtype) {
         return switch (dtype) {
-            case DType.Primitive p -> io.github.dfa1.vortex.proto.ProtoDType.ofPrimitive(
-                    new io.github.dfa1.vortex.proto.ProtoPrimitive(
-                            io.github.dfa1.vortex.proto.ProtoPType.fromValue(p.ptype().ordinal()), p.nullable()));
-            case DType.Bool b -> io.github.dfa1.vortex.proto.ProtoDType.ofBool(
-                    new io.github.dfa1.vortex.proto.ProtoBool(b.nullable()));
-            case DType.Utf8 u -> io.github.dfa1.vortex.proto.ProtoDType.ofUtf8(
-                    new io.github.dfa1.vortex.proto.ProtoUtf8(u.nullable()));
-            case DType.Binary bin -> io.github.dfa1.vortex.proto.ProtoDType.ofBinary(
-                    new io.github.dfa1.vortex.proto.ProtoBinary(bin.nullable()));
+            case DType.Primitive p -> io.github.dfa1.vortex.core.proto.ProtoDType.ofPrimitive(
+                    new io.github.dfa1.vortex.core.proto.ProtoPrimitive(
+                            io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(p.ptype().ordinal()), p.nullable()));
+            case DType.Bool b -> io.github.dfa1.vortex.core.proto.ProtoDType.ofBool(
+                    new io.github.dfa1.vortex.core.proto.ProtoBool(b.nullable()));
+            case DType.Utf8 u -> io.github.dfa1.vortex.core.proto.ProtoDType.ofUtf8(
+                    new io.github.dfa1.vortex.core.proto.ProtoUtf8(u.nullable()));
+            case DType.Binary bin -> io.github.dfa1.vortex.core.proto.ProtoDType.ofBinary(
+                    new io.github.dfa1.vortex.core.proto.ProtoBinary(bin.nullable()));
             default -> throw new VortexException(EncodingId.VORTEX_VARIANT,
                     "shredded dtype not supported: " + dtype);
         };

@@ -119,7 +119,7 @@ public interface DType {                 // no longer sealed
 public final class DTypeRegistry {
     public static DTypeRegistry builder() { ... }
     public DTypeRegistry register(DTypeSpec spec) { ... }
-    public DType resolve(io.github.dfa1.vortex.proto.DType proto) { ... }
+    public DType resolve(io.github.dfa1.vortex.core.proto.DType proto) { ... }
 }
 ```
 

@@ -1,12 +1,12 @@
 package io.github.dfa1.vortex.reader;
 
-import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.core.VortexFormat;
+import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.UnknownArray;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 import io.github.dfa1.vortex.reader.decode.EncodingDecoder;
-import io.github.dfa1.vortex.encoding.EncodingId;
+import io.github.dfa1.vortex.core.model.EncodingId;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

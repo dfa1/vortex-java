@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.reader.array;
 
-import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.model.DType;
 
 /// Sliced view over a [FloatArray]: `getFloat(i) = inner.getFloat(i + offset)`.
 ///

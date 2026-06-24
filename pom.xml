@@ -365,7 +365,7 @@
 					<artifactId>maven-javadoc-plugin</artifactId>
 					<version>${maven-javadoc-plugin.version}</version>
 					<configuration>
-						<excludePackageNames>io.github.dfa1.vortex.fbs:io.github.dfa1.vortex.proto</excludePackageNames>
+						<excludePackageNames>io.github.dfa1.vortex.core.fbs:io.github.dfa1.vortex.core.proto</excludePackageNames>
 					</configuration>
 				</plugin>
 				<plugin>

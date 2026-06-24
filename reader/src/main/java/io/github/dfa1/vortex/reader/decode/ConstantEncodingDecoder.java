@@ -1,11 +1,11 @@
 package io.github.dfa1.vortex.reader.decode;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LazyConstantBoolArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantByteArray;
@@ -58,7 +58,7 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
             // A constant variant wraps a typed inner scalar (Scalar::variant(inner)); the
             // physical storage is the inner-typed constant array. The VariantArray wrapper
             // re-applies the logical Variant dtype.
-            io.github.dfa1.vortex.proto.ProtoScalar inner = scalar.variant_value();
+            io.github.dfa1.vortex.core.proto.ProtoScalar inner = scalar.variant_value();
             if (inner == null || inner.value() == null) {
                 throw new VortexException(EncodingId.VORTEX_CONSTANT, "constant variant missing variant_value");
             }

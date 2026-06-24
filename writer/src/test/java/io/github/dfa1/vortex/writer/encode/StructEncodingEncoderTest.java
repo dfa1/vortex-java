@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
@@ -9,8 +9,8 @@ import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.encoding.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
-import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.encoding.PTypeIO;
+import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.io.PTypeIO;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.encoding.TestSegments;
@@ -106,7 +106,7 @@ class StructEncodingEncoderTest {
             // When
             // Then
             org.junit.jupiter.api.Assertions.assertThrows(
-                    io.github.dfa1.vortex.core.VortexException.class,
+                    io.github.dfa1.vortex.core.error.VortexException.class,
                     () -> ENCODER.encode(dtype, data, EncodeTestHelper.testCtx()));
         }
     }

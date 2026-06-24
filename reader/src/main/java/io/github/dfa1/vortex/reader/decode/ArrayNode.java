@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.reader.decode;
 
-import io.github.dfa1.vortex.encoding.EncodingId;
+import io.github.dfa1.vortex.core.model.EncodingId;
 
 import java.lang.foreign.MemorySegment;
 

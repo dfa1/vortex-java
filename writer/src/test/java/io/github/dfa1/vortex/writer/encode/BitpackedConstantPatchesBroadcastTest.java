@@ -1,15 +1,15 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
-import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.encoding.PTypeIO;
+import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.io.PTypeIO;
 import io.github.dfa1.vortex.reader.ReadRegistry;
-import io.github.dfa1.vortex.proto.ProtoBitPackedMetadata;
-import io.github.dfa1.vortex.proto.ProtoPatchesMetadata;
-import io.github.dfa1.vortex.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.core.proto.ProtoBitPackedMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.reader.decode.BitpackedEncodingDecoder;
 import org.junit.jupiter.api.Test;
 
@@ -39,7 +39,7 @@ class BitpackedConstantPatchesBroadcastTest {
         byte[] valScalarBytes = valScalar.encode();
 
         ProtoPatchesMetadata patches = new ProtoPatchesMetadata(numPatches, 0,
-                io.github.dfa1.vortex.proto.ProtoPType.U32, null, null, null);
+                io.github.dfa1.vortex.core.proto.ProtoPType.U32, null, null, null);
         ProtoBitPackedMetadata meta = new ProtoBitPackedMetadata(1, 0, patches);
         MemorySegment metaBuf = MemorySegment.ofArray(meta.encode());
 

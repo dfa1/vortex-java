@@ -1,22 +1,22 @@
 package io.github.dfa1.vortex.reader;
 
-import io.github.dfa1.vortex.fbs.FbsBuilder;
+import io.github.dfa1.vortex.core.fbs.FbsBuilder;
 import static io.github.dfa1.vortex.reader.MalformedFiles.buildFooter;
 import static io.github.dfa1.vortex.reader.MalformedFiles.buildI64Dtype;
 import static io.github.dfa1.vortex.reader.MalformedFiles.buildFlatLayout;
 import static io.github.dfa1.vortex.reader.MalformedFiles.buildPostscript;
 import static io.github.dfa1.vortex.reader.MalformedFiles.slice;
-import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LazyConstantLongArray;
 
 import io.github.dfa1.vortex.reader.decode.ConstantEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
-import io.github.dfa1.vortex.fbs.FbsArrayNode;
-import io.github.dfa1.vortex.fbs.FbsLayout;
+import io.github.dfa1.vortex.core.fbs.FbsArrayNode;
+import io.github.dfa1.vortex.core.fbs.FbsLayout;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import io.github.dfa1.vortex.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * and trigger an 8 GB allocation on the first `iter.hasNext()` call.
  *
  * <p>Both attacks are fixed: tests use small row counts safe for CI and assert the
- * expected post-fix behavior (no OOM; either completes or throws [io.github.dfa1.vortex.core.VortexException]).
+ * expected post-fix behavior (no OOM; either completes or throws [io.github.dfa1.vortex.core.error.VortexException]).
  */
 class ZipBombSecurityTest {
 
@@ -182,7 +182,7 @@ class ZipBombSecurityTest {
         int nodeOff = FbsArrayNode.createFbsArrayNode(fbb, 0, 0, 0, bufIdxVec, 0);
 
         // Array.buffers: one Buffer struct describing rawData
-        io.github.dfa1.vortex.fbs.FbsArray.startBuffersVector(fbb, 1);
+        io.github.dfa1.vortex.core.fbs.FbsArray.startBuffersVector(fbb, 1);
         // FlatBuffers builds inline structs in reverse; struct layout (LE):
         // padding(u16) | alignmentExponent(u8) | compression(u8) | length(u32)
         fbb.prep(4, 8);
@@ -192,8 +192,8 @@ class ZipBombSecurityTest {
         fbb.putShort((short) 0);   // padding = 0
         int bufsVec = fbb.endVector();
 
-        int arrOff = io.github.dfa1.vortex.fbs.FbsArray.createFbsArray(fbb, nodeOff, bufsVec);
-        io.github.dfa1.vortex.fbs.FbsArray.finishFbsArrayBuffer(fbb, arrOff);
+        int arrOff = io.github.dfa1.vortex.core.fbs.FbsArray.createFbsArray(fbb, nodeOff, bufsVec);
+        io.github.dfa1.vortex.core.fbs.FbsArray.finishFbsArrayBuffer(fbb, arrOff);
 
         // Segment = rawData + FlatBuffer bytes + 4-byte LE fbLen
         byte[] fbBytes = fbb.sizedByteArray();

@@ -1,13 +1,13 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.proto.ProtoDictMetadata;
-import io.github.dfa1.vortex.proto.ProtoScalarValue;
-import io.github.dfa1.vortex.proto.ProtoVarBinMetadata;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.proto.ProtoDictMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.core.proto.ProtoVarBinMetadata;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -144,13 +144,13 @@ public final class DictEncodingEncoder implements EncodingEncoder {
 
         byte[] metaBytes = new ProtoDictMetadata(
                 dictSize,
-                io.github.dfa1.vortex.proto.ProtoPType.fromValue(codePType.ordinal()),
+                io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(codePType.ordinal()),
                 null,
                 null
         ).encode();
 
         byte[] varBinMetaBytes = new ProtoVarBinMetadata(
-                io.github.dfa1.vortex.proto.ProtoPType.fromValue(PType.I64.ordinal())
+                io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.I64.ordinal())
         ).encode();
 
         EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);

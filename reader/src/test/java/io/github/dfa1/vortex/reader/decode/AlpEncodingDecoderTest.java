@@ -1,9 +1,9 @@
 package io.github.dfa1.vortex.reader.decode;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.proto.ProtoALPMetadata;
-import io.github.dfa1.vortex.proto.ProtoPatchesMetadata;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.proto.ProtoALPMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
@@ -121,7 +121,7 @@ class AlpEncodingDecoderTest {
     void decode_f64_patches_withU8Indices() {
         // Given patches whose index child uses U8 storage — exercises the U8 arm of
         // readUnsigned (the encoder always emits U32 indices)
-        ProtoPatchesMetadata pm = new ProtoPatchesMetadata(1L, 0L, io.github.dfa1.vortex.proto.ProtoPType.U8, null, null, null);
+        ProtoPatchesMetadata pm = new ProtoPatchesMetadata(1L, 0L, io.github.dfa1.vortex.core.proto.ProtoPType.U8, null, null, null);
         byte[] meta = new ProtoALPMetadata(2, 0, pm).encode(); // *0.01
 
         ArrayNode enc = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
@@ -146,7 +146,7 @@ class AlpEncodingDecoderTest {
     @Test
     void decode_patches_nonUnsignedIndexPtype_throws() {
         // Given a signed (I32) patch-index ptype — readUnsigned rejects it
-        ProtoPatchesMetadata pm = new ProtoPatchesMetadata(1L, 0L, io.github.dfa1.vortex.proto.ProtoPType.I32, null, null, null);
+        ProtoPatchesMetadata pm = new ProtoPatchesMetadata(1L, 0L, io.github.dfa1.vortex.core.proto.ProtoPType.I32, null, null, null);
         byte[] meta = new ProtoALPMetadata(2, 0, pm).encode();
 
         ArrayNode enc = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});

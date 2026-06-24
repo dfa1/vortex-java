@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.reader.extension;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.extension.ExtensionId;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;

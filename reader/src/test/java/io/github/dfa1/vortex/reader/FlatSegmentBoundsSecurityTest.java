@@ -1,12 +1,12 @@
 package io.github.dfa1.vortex.reader;
 
-import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.fbs.FbsBuilder;
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.fbs.FbsArray;
-import io.github.dfa1.vortex.fbs.FbsArrayNode;
-import io.github.dfa1.vortex.fbs.FbsBuffer;
+import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.fbs.FbsBuilder;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.fbs.FbsArray;
+import io.github.dfa1.vortex.core.fbs.FbsArrayNode;
+import io.github.dfa1.vortex.core.fbs.FbsBuffer;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;

@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.performance;
 
 import dev.vortex.api.Session;
 import dev.vortex.jni.NativeLoader;
-import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.Layout;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.SegmentSpec;

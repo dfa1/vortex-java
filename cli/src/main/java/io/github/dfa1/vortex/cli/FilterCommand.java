@@ -56,7 +56,7 @@ final class FilterCommand {
             CsvExporter.exportCsvFiltered(path, stdout, ExportOptions.defaults(), scanOptions, rowPred);
             stdout.flush();
             return ExitStatus.OK;
-        } catch (IOException | io.github.dfa1.vortex.core.VortexException e) {
+        } catch (IOException | io.github.dfa1.vortex.core.error.VortexException e) {
             // VortexException is unchecked but surfaces user-facing failures (e.g. unknown
             // column on a typo'd filter); catching it here keeps the CLI from dumping a
             // stack trace and lets shell pipelines branch on the exit code.

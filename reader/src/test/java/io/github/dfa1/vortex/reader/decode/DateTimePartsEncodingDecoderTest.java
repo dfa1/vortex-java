@@ -1,11 +1,11 @@
 package io.github.dfa1.vortex.reader.decode;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.encoding.EncodingId;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.encoding.TestSegments;
-import io.github.dfa1.vortex.encoding.TimeUnit;
-import io.github.dfa1.vortex.proto.ProtoDateTimePartsMetadata;
+import io.github.dfa1.vortex.core.model.TimeUnit;
+import io.github.dfa1.vortex.core.proto.ProtoDateTimePartsMetadata;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import org.junit.jupiter.api.Test;
@@ -25,9 +25,9 @@ class DateTimePartsEncodingDecoderTest {
 
     private static MemorySegment i64Meta() {
         return MemorySegment.ofArray(new ProtoDateTimePartsMetadata(
-                io.github.dfa1.vortex.proto.ProtoPType.I64,
-                io.github.dfa1.vortex.proto.ProtoPType.I64,
-                io.github.dfa1.vortex.proto.ProtoPType.I64).encode());
+                io.github.dfa1.vortex.core.proto.ProtoPType.I64,
+                io.github.dfa1.vortex.core.proto.ProtoPType.I64,
+                io.github.dfa1.vortex.core.proto.ProtoPType.I64).encode());
     }
 
     private static DType timestampDType(TimeUnit unit, boolean nullable) {

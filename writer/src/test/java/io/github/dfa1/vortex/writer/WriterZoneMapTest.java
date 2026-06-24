@@ -1,11 +1,11 @@
 package io.github.dfa1.vortex.writer;
 
-import static io.github.dfa1.vortex.encoding.PTypeIO.LE_INT;
+import static io.github.dfa1.vortex.core.io.PTypeIO.LE_INT;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.Layout;
 import io.github.dfa1.vortex.reader.SegmentSpec;
 import io.github.dfa1.vortex.reader.VortexReader;

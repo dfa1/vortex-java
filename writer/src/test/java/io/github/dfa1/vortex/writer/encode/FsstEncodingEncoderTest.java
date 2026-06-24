@@ -1,17 +1,17 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.encoding.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
-import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.encoding.PTypeIO;
+import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.io.PTypeIO;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
-import io.github.dfa1.vortex.proto.ProtoFSSTMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoFSSTMetadata;
 import io.github.dfa1.vortex.reader.decode.FsstEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
 import org.junit.jupiter.api.Nested;
@@ -154,7 +154,7 @@ class FsstEncodingEncoderTest {
 
             MemorySegment[] segs = {symBuf, symLenBuf, compBuf, uncompLenBuf, codesOffBuf};
 
-            byte[] metaBytes = new ProtoFSSTMetadata(io.github.dfa1.vortex.proto.ProtoPType.fromValue(PType.I32.ordinal()), io.github.dfa1.vortex.proto.ProtoPType.fromValue(PType.I32.ordinal())).encode();
+            byte[] metaBytes = new ProtoFSSTMetadata(io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.I32.ordinal()), io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.I32.ordinal())).encode();
 
             ArrayNode uncompLensNode = ArrayNode.of(
                     EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{3});

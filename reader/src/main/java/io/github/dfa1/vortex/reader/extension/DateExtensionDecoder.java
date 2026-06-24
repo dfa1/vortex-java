@@ -1,12 +1,12 @@
 package io.github.dfa1.vortex.reader.extension;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.IoBounds;
-import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.encoding.TimeUnit;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.io.IoBounds;
+import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.model.TimeUnit;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
-import io.github.dfa1.vortex.extension.ExtensionId;
+import io.github.dfa1.vortex.core.model.ExtensionId;
 
 import io.github.dfa1.vortex.reader.ExtensionDecoder;
 
@@ -47,7 +47,7 @@ public final class DateExtensionDecoder implements ExtensionDecoder {
     /// @param storage signed-integer storage (Byte/Short/Int/Long, possibly Masked)
     /// @param i       row index, `0 <= i < storage.length()`
     /// @return decoded date
-    /// @throws io.github.dfa1.vortex.core.VortexException if storage isn't an integer primitive
+    /// @throws io.github.dfa1.vortex.core.error.VortexException if storage isn't an integer primitive
     public LocalDate decode(Array storage, long i) {
         ExtensionStorage.checkBounds(i, storage.length());
         return LocalDate.ofEpochDay(ExtensionStorage.epochInteger(storage, i));

@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.model.DType;
 
 /// An open slot in a partially-assembled encoding tree.
 /// The cascading compressor fills each slot recursively, then splices the result

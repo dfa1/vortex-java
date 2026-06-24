@@ -1,14 +1,14 @@
 package io.github.dfa1.vortex.reader.extension;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
-import io.github.dfa1.vortex.encoding.TimeUnit;
+import io.github.dfa1.vortex.core.model.TimeUnit;
 
 import java.time.Instant;
 import java.util.Objects;

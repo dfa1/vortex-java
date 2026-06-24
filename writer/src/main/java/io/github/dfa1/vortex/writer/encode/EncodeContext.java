@@ -1,8 +1,8 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.encoding.EncodingId;
+import io.github.dfa1.vortex.core.model.EncodingId;
 
-import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.writer.WriteRegistry;
 
 import java.lang.foreign.Arena;

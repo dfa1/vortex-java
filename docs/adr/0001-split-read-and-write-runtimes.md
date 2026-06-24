@@ -26,8 +26,8 @@ io.github.dfa1.vortex.encoding       — Encoding (encode + decode on one type),
                                        30+ concrete *Encoding.java classes
 io.github.dfa1.vortex.extension      — Extension interface, ExtensionId,
                                        4 spec extension impls
-io.github.dfa1.vortex.proto          — generated proto records (in-tree codec)
-io.github.dfa1.vortex.fbs            — generated flatbuffer types
+io.github.dfa1.vortex.core.proto          — generated proto records (in-tree codec)
+io.github.dfa1.vortex.core.fbs            — generated flatbuffer types
 ```
 
 ### The smell

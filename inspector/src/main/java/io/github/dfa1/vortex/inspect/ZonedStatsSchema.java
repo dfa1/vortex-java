@@ -1,8 +1,8 @@
 package io.github.dfa1.vortex.inspect;
 
-import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.model.DType;
 
-import static io.github.dfa1.vortex.encoding.PTypeIO.LE_INT;
+import static io.github.dfa1.vortex.core.io.PTypeIO.LE_INT;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -119,7 +119,7 @@ public final class ZonedStatsSchema {
     /// Reconstructs the per-zone stats-table dtype for the given column dtype
     /// and metadata.
     ///
-    /// The result is a [io.github.dfa1.vortex.core.DType.Struct] mirroring
+    /// The result is a [io.github.dfa1.vortex.core.model.DType.Struct] mirroring
     /// the order produced by Rust's `stats_table_dtype`: for every present stat
     /// in ordinal order, append a `(name, nullable dtype)` field; Max/Min each
     /// add a trailing `_is_truncated` Bool (non-nullable) flag.

@@ -1,11 +1,11 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.proto.ProtoScalarValue;
-import io.github.dfa1.vortex.proto.ProtoVarBinMetadata;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.core.proto.ProtoVarBinMetadata;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -53,7 +53,7 @@ public final class VarBinEncodingEncoder implements EncodingEncoder {
             offsetsBuf.setAtIndex(PTypeIO.LE_LONG, (long) i + 1, pos);
         }
 
-        byte[] metaBytes = new ProtoVarBinMetadata(io.github.dfa1.vortex.proto.ProtoPType.fromValue(PType.I64.ordinal())).encode();
+        byte[] metaBytes = new ProtoVarBinMetadata(io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.I64.ordinal())).encode();
 
         byte[][] stats = minMaxStats(strings);
         byte[] statsMin = stats != null ? stats[0] : null;

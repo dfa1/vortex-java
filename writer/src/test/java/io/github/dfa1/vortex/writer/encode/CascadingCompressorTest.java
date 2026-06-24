@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
@@ -8,7 +8,7 @@ import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 import io.github.dfa1.vortex.encoding.DTypes;
-import io.github.dfa1.vortex.encoding.EncodingId;
+import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

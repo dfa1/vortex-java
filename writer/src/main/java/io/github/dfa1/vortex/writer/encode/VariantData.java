@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.proto.ProtoScalar;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.proto.ProtoScalar;
 
 import java.util.Collections;
 import java.util.List;

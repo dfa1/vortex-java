@@ -1,9 +1,9 @@
 package io.github.dfa1.vortex.reader;
 
-import io.github.dfa1.vortex.fbs.FbsArrayNode;
-import io.github.dfa1.vortex.fbs.FbsBuffer;
-import io.github.dfa1.vortex.fbs.FbsBuilder;
-import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.fbs.FbsArrayNode;
+import io.github.dfa1.vortex.core.fbs.FbsBuffer;
+import io.github.dfa1.vortex.core.fbs.FbsBuilder;
+import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.UnknownArray;
 import org.junit.jupiter.api.Test;
@@ -12,7 +12,7 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.util.List;
 
-import static io.github.dfa1.vortex.encoding.PTypeIO.LE_INT;
+import static io.github.dfa1.vortex.core.io.PTypeIO.LE_INT;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// Successful flat-segment decode path — complements [FlatSegmentBoundsSecurityTest] (which only
@@ -59,12 +59,12 @@ class FlatSegmentDecoderDecodeTest {
         int rootBuffers = FbsArrayNode.createBuffersVector(b, new int[]{0});
         int root = FbsArrayNode.createFbsArrayNode(b, 0, 0, rootChildren, rootBuffers, 0);
 
-        io.github.dfa1.vortex.fbs.FbsArray.startBuffersVector(b, 1);
+        io.github.dfa1.vortex.core.fbs.FbsArray.startBuffersVector(b, 1);
         FbsBuffer.createFbsBuffer(b, padding, 0, 0, length);
         int buffers = b.endVector();
 
-        int array = io.github.dfa1.vortex.fbs.FbsArray.createFbsArray(b, root, buffers);
-        io.github.dfa1.vortex.fbs.FbsArray.finishFbsArrayBuffer(b, array);
+        int array = io.github.dfa1.vortex.core.fbs.FbsArray.createFbsArray(b, root, buffers);
+        io.github.dfa1.vortex.core.fbs.FbsArray.finishFbsArrayBuffer(b, array);
         return b.sizedByteArray();
     }
 }

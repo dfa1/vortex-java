@@ -1,8 +1,8 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.encoding.EncodingId;
+import io.github.dfa1.vortex.core.model.EncodingId;
 
-import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.model.DType;
 
 /// Write-side surface of an encoding. Exposes only the metadata required to pick an
 /// encoder for a dtype and the [#encode(DType, Object, EncodeContext)] entry

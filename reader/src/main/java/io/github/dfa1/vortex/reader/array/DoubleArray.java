@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.reader.array;
 
 
-import io.github.dfa1.vortex.encoding.PTypeIO;
+import io.github.dfa1.vortex.core.io.PTypeIO;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;

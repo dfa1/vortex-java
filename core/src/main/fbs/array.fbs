@@ -3,7 +3,7 @@
 
 /// An Array describes the hierarchy of an array as well as the locations of the data buffers that appear
 /// immediately after the message in the byte stream.
-namespace io.github.dfa1.vortex.fbs;
+namespace io.github.dfa1.vortex.core.fbs;
 
 table Array {
     /// The array's hierarchical definition.

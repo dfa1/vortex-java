@@ -1,13 +1,13 @@
 package io.github.dfa1.vortex.reader.extension;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.IoBounds;
-import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.io.IoBounds;
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
-import io.github.dfa1.vortex.encoding.TimeUnit;
-import io.github.dfa1.vortex.extension.ExtensionId;
-import io.github.dfa1.vortex.extension.TimestampDtype;
+import io.github.dfa1.vortex.core.model.TimeUnit;
+import io.github.dfa1.vortex.core.model.ExtensionId;
+import io.github.dfa1.vortex.core.model.TimestampDtype;
 
 import io.github.dfa1.vortex.reader.ExtensionDecoder;
 

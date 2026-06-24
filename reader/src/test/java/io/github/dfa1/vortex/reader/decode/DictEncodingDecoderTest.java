@@ -1,12 +1,12 @@
 package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.encoding.TestSegments;
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.proto.ProtoDictMetadata;
-import io.github.dfa1.vortex.proto.ProtoVarBinMetadata;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.proto.ProtoDictMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoVarBinMetadata;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ByteArray;
@@ -462,8 +462,8 @@ class DictEncodingDecoderTest {
         return ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{bufferIndex});
     }
 
-    private static io.github.dfa1.vortex.proto.ProtoPType protoPType(PType core) {
-        return io.github.dfa1.vortex.proto.ProtoPType.valueOf(core.name());
+    private static io.github.dfa1.vortex.core.proto.ProtoPType protoPType(PType core) {
+        return io.github.dfa1.vortex.core.proto.ProtoPType.valueOf(core.name());
     }
 
     // ── segment builders (little-endian) ───────────────────────────────────────

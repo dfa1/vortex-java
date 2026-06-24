@@ -16,7 +16,7 @@ For task-oriented usage see [how-to.md](how-to.md); for design rationale see [ex
 
 ## Core types
 
-### `PType` (`io.github.dfa1.vortex.core.PType`)
+### `PType` (`io.github.dfa1.vortex.core.model.PType`)
 
 Physical primitive type — wire-level numeric kind for a column.
 
@@ -29,7 +29,7 @@ Physical primitive type — wire-level numeric kind for a column.
 
 Methods: `byteSize()`, `isFloating()`, `isSigned()`.
 
-### `DType` (`io.github.dfa1.vortex.core.DType`)
+### `DType` (`io.github.dfa1.vortex.core.model.DType`)
 
 Sealed logical type. All variants take a trailing `boolean nullable`.
 

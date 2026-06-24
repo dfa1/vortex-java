@@ -1,14 +1,14 @@
 package io.github.dfa1.vortex.reader;
 
-import io.github.dfa1.vortex.fbs.FbsBuilder;
+import io.github.dfa1.vortex.core.fbs.FbsBuilder;
 import static io.github.dfa1.vortex.reader.MalformedFiles.buildFooter;
 import static io.github.dfa1.vortex.reader.MalformedFiles.buildI64Dtype;
 import static io.github.dfa1.vortex.reader.MalformedFiles.buildPostscript;
 import static io.github.dfa1.vortex.reader.MalformedFiles.slice;
-import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.core.VortexFormat;
+import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 
-import io.github.dfa1.vortex.fbs.FbsLayout;
+import io.github.dfa1.vortex.core.fbs.FbsLayout;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

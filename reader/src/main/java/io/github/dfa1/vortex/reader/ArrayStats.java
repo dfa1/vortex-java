@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.reader;
 
-import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -32,12 +32,12 @@ public record ArrayStats(
         return EMPTY;
     }
 
-    /// Parses stats from a FlatBuffers [io.github.dfa1.vortex.fbs.FbsArrayStats] table.
+    /// Parses stats from a FlatBuffers [io.github.dfa1.vortex.core.fbs.FbsArrayStats] table.
     /// Returns an empty instance when `fbs` is `null` or carries no min/max and no null count.
     ///
     /// @param fbs the FlatBuffers stats table, or `null`
     /// @return parsed stats, or an empty instance if no usable data is present
-    public static ArrayStats fromFbs(io.github.dfa1.vortex.fbs.FbsArrayStats fbs) {
+    public static ArrayStats fromFbs(io.github.dfa1.vortex.core.fbs.FbsArrayStats fbs) {
         if (fbs == null) {
             return EMPTY;
         }

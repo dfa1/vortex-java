@@ -1,10 +1,10 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.encoding.TimeUnit;
-import io.github.dfa1.vortex.extension.ExtensionId;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.model.TimeUnit;
+import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.writer.ExtensionEncoder;
 
 import java.lang.foreign.MemorySegment;

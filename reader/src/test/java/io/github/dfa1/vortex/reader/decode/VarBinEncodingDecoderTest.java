@@ -1,9 +1,9 @@
 package io.github.dfa1.vortex.reader.decode;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.encoding.EncodingId;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.encoding.TestSegments;
-import io.github.dfa1.vortex.proto.ProtoVarBinMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoVarBinMetadata;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
@@ -21,7 +21,7 @@ class VarBinEncodingDecoderTest {
     private static final ReadRegistry REGISTRY = TestRegistry.ofDecoders(SUT, new PrimitiveEncodingDecoder());
 
     private static MemorySegment i32OffsetsMeta() {
-        return MemorySegment.ofArray(new ProtoVarBinMetadata(io.github.dfa1.vortex.proto.ProtoPType.I32).encode());
+        return MemorySegment.ofArray(new ProtoVarBinMetadata(io.github.dfa1.vortex.core.proto.ProtoPType.I32).encode());
     }
 
     private static DecodeContext ctx(MemorySegment meta, MemorySegment bytes, MemorySegment offsets, long n) {

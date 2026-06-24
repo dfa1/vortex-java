@@ -1,10 +1,10 @@
 package io.github.dfa1.vortex.reader.decode;
 
-import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LazyDecimalArray;
-import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.proto.ProtoDecimalMetadata;
+import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.proto.ProtoDecimalMetadata;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;

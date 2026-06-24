@@ -1,10 +1,10 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.proto.ProtoALPRDMetadata;
-import io.github.dfa1.vortex.proto.ProtoPatchesMetadata;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.proto.ProtoALPRDMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
 
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
@@ -269,7 +269,7 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
             patchesMeta = new ProtoPatchesMetadata(
                     excPos.size(),
                     0L,
-                    io.github.dfa1.vortex.proto.ProtoPType.fromValue(PType.U64.ordinal()),
+                    io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.U64.ordinal()),
                     null, null, null);
             children = new EncodeNode[]{leftNode, rightNode, idxNode, valNode};
         }
@@ -278,7 +278,7 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
                 rightBitWidth,
                 dict.length,
                 dictList,
-                io.github.dfa1.vortex.proto.ProtoPType.fromValue(PType.U16.ordinal()),
+                io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.U16.ordinal()),
                 patchesMeta
         ).encode();
         EncodeNode root = new EncodeNode(
@@ -303,7 +303,7 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
                 48,
                 0,
                 List.of(),
-                io.github.dfa1.vortex.proto.ProtoPType.fromValue(PType.U16.ordinal()),
+                io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.U16.ordinal()),
                 null).encode();
 
         EncodeNode root = new EncodeNode(

@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.reader.array;
 
-import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.core.error.VortexException;
 import org.junit.jupiter.api.Test;
 
 import static io.github.dfa1.vortex.reader.array.TestArrays.bools;

@@ -1,12 +1,12 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.encoding.FastLanes;
-import io.github.dfa1.vortex.encoding.PrimitiveArrays;
-import io.github.dfa1.vortex.proto.ProtoDeltaMetadata;
-import io.github.dfa1.vortex.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.compute.FastLanes;
+import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
+import io.github.dfa1.vortex.core.proto.ProtoDeltaMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 
 import java.lang.foreign.MemorySegment;
 import java.util.List;
