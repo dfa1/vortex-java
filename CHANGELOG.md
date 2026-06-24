@@ -7,9 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Vortex now ships with **no FlatBuffers or Protobuf runtime dependency**: the `.fbs` and `.proto` schemas are compiled in-house to `MemorySegment`-native Java. This drops `com.google.flatbuffers:flatbuffers-java` — the last automatic-module dependency — unblocking a named JPMS module, and the generated wire classes are prefixed so they no longer collide on your classpath (ADR 0017).
+
 ### Added
 
-- Canonical non-nullable `DType` constants: primitives `DType.I8` … `DType.I64`, `DType.U8` … `DType.U64`, `DType.F16`/`F32`/`F64`, plus `DType.BOOL`, `DType.UTF8`, `DType.BINARY`, `DType.NULL`, `DType.VARIANT`. Shared immutable instances — prefer them over `new DType.Primitive(pt, false)` / `new DType.Utf8(false)` etc.; build a nullable column with `DType.I64.asNullable()`. The encoders/decoders that each declared private `*_DTYPE` fields now reference these.
+- Canonical non-nullable `DType` constants: primitives `DType.I8` … `DType.I64`, `DType.U8` … `DType.U64`, `DType.F16`/`F32`/`F64`, plus `DType.BOOL`, `DType.UTF8`, `DType.BINARY`, `DType.NULL`, `DType.VARIANT`. Shared immutable instances — prefer them over `new DType.Primitive(pt, false)` / `new DType.Utf8(false)` etc.; build a nullable column with `DType.I64.asNullable()`.
+
+### Changed
+
+- Removed the `com.google.flatbuffers:flatbuffers-java` runtime dependency. The `.fbs`/`.proto` schemas are now compiled in-house to `MemorySegment`-native Java, dropping the last automatic-module dependency so a named JPMS `module-info` is viable (ADR 0017).
+- Generated FlatBuffers/Protobuf wire classes are prefixed `Fbs*`/`Proto*`, so the generic type names (`Array`, `Buffer`, `DType`, `Null`, …) no longer collide on the consumer classpath.
 
 ### Removed
 
