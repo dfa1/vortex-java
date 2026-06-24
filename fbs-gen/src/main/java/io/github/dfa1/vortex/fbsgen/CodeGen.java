@@ -78,22 +78,26 @@ public final class CodeGen {
         sb.append(GENERATED_ANNOTATION);
         sb.append("public final class ").append(name).append(" extends FbsTable {\n\n");
 
-        sb.append("    /// Positions a reader at the root table of a finished buffer.\n");
-        sb.append("    /// @param seg the buffer\n");
-        sb.append("    /// @return a reader positioned at the root\n");
-        sb.append("    public static ").append(name).append(" getRootAs").append(name)
-                .append("(MemorySegment seg) {\n");
-        sb.append("        return new ").append(name).append("().assign(seg, FbsTable.rootPosition(seg, 0));\n");
-        sb.append("    }\n\n");
+        sb.append("""
+                    /// Positions a reader at the root table of a finished buffer.
+                    /// @param seg the buffer
+                    /// @return a reader positioned at the root
+                    public static %1$s getRootAs%1$s(MemorySegment seg) {
+                        return new %1$s().assign(seg, FbsTable.rootPosition(seg, 0));
+                    }
 
-        sb.append("    /// Positions this reader at a table.\n");
-        sb.append("    /// @param seg the buffer\n");
-        sb.append("    /// @param position the table position\n");
-        sb.append("    /// @return this\n");
-        sb.append("    public ").append(name).append(" assign(MemorySegment seg, long position) {\n");
-        sb.append("        init(seg, position);\n");
-        sb.append("        return this;\n");
-        sb.append("    }\n");
+                """.formatted(name));
+
+        sb.append("""
+                    /// Positions this reader at a table.
+                    /// @param seg the buffer
+                    /// @param position the table position
+                    /// @return this
+                    public %s assign(MemorySegment seg, long position) {
+                        init(seg, position);
+                        return this;
+                    }
+                """.formatted(name));
 
         int vtableIndex = 0;
         for (Ast.Field field : table.fields()) {
@@ -147,57 +151,74 @@ public final class CodeGen {
         sb.append("\n    /// @return the `").append(accessor).append("` field\n");
         if (scalar == Ast.Scalar.BOOL) {
             boolean def = "true".equals(defaultValue);
-            sb.append("    public boolean ").append(accessor).append("() {\n");
-            sb.append("        int o = fieldOffset(").append(vt).append(");\n");
-            sb.append("        return o != 0 ? readByte(pos + o) != 0 : ").append(def).append(";\n");
-            sb.append("    }\n");
+            sb.append("""
+                        public boolean %1$s() {
+                            int o = fieldOffset(%2$d);
+                            return o != 0 ? readByte(pos + o) != 0 : %3$b;
+                        }
+                    """.formatted(accessor, vt, def));
         } else {
             String def = defaultLiteral(io, defaultValue);
-            sb.append("    public ").append(io.javaType).append(" ").append(accessor).append("() {\n");
-            sb.append("        int o = fieldOffset(").append(vt).append(");\n");
-            sb.append("        return o != 0 ? ").append(read).append(" : ").append(def).append(";\n");
-            sb.append("    }\n");
+            sb.append("""
+                        public %1$s %2$s() {
+                            int o = fieldOffset(%3$d);
+                            return o != 0 ? %4$s : %5$s;
+                        }
+                    """.formatted(io.javaType, accessor, vt, read, def));
         }
         if ("null".equals(defaultValue)) {
-            sb.append("\n    /// @return whether the optional `").append(accessor).append("` field is present\n");
-            sb.append("    public boolean has").append(capitalize(accessor)).append("() {\n");
-            sb.append("        return fieldOffset(").append(vt).append(") != 0;\n");
-            sb.append("    }\n");
+            sb.append("""
+
+                        /// @return whether the optional `%1$s` field is present
+                        public boolean has%2$s() {
+                            return fieldOffset(%3$d) != 0;
+                        }
+                    """.formatted(accessor, capitalize(accessor), vt));
         }
     }
 
     private void emitObjectField(StringBuilder sb, String accessor, String typeName, int vt, boolean indirect) {
         String target = indirect ? "indirect(pos + o)" : "pos + o";
-        sb.append("\n    /// @return the `").append(accessor).append("` child, or null if absent\n");
-        sb.append("    public ").append(typeName).append(" ").append(accessor).append("() {\n");
-        sb.append("        int o = fieldOffset(").append(vt).append(");\n");
-        sb.append("        return o != 0 ? new ").append(typeName).append("().assign(seg, ").append(target).append(") : null;\n");
-        sb.append("    }\n");
+        sb.append("""
+
+                    /// @return the `%1$s` child, or null if absent
+                    public %2$s %1$s() {
+                        int o = fieldOffset(%3$d);
+                        return o != 0 ? new %2$s().assign(seg, %4$s) : null;
+                    }
+                """.formatted(accessor, typeName, vt, target));
     }
 
     private void emitUnionField(StringBuilder sb, String accessor, int vtType) {
         int vtValue = vtType + 2;
-        sb.append("\n    /// @return the union discriminator for `").append(accessor).append("` (0 = none)\n");
-        sb.append("    public int ").append(accessor).append("Type() {\n");
-        sb.append("        int o = fieldOffset(").append(vtType).append(");\n");
-        sb.append("        return o != 0 ? readByte(pos + o) & 0xFF : 0;\n");
-        sb.append("    }\n");
-        sb.append("\n    /// Projects the selected `").append(accessor).append("` member onto the given reader.\n");
-        sb.append("    /// @param obj a reader for the expected member type\n");
-        sb.append("    /// @param <T> the member reader type\n");
-        sb.append("    /// @return the positioned reader, or null if the union is absent\n");
-        sb.append("    public <T extends FbsTable> T ").append(accessor).append("(T obj) {\n");
-        sb.append("        int o = fieldOffset(").append(vtValue).append(");\n");
-        sb.append("        return o != 0 ? locate(obj, unionMemberPosition(o)) : null;\n");
-        sb.append("    }\n");
+        sb.append("""
+
+                    /// @return the union discriminator for `%1$s` (0 = none)
+                    public int %1$sType() {
+                        int o = fieldOffset(%2$d);
+                        return o != 0 ? readByte(pos + o) & 0xFF : 0;
+                    }
+
+                    /// Projects the selected `%1$s` member onto the given reader.
+                    /// @param obj a reader for the expected member type
+                    /// @param <T> the member reader type
+                    /// @return the positioned reader, or null if the union is absent
+                    public <T extends FbsTable> T %1$s(T obj) {
+                        int o = fieldOffset(%3$d);
+                        return o != 0 ? locate(obj, unionMemberPosition(o)) : null;
+                    }
+                """.formatted(accessor, vtType, vtValue));
     }
 
     private void emitVectorField(StringBuilder sb, String accessor, Ast.FieldType element, int vt) {
-        sb.append("\n    /// @return the length of the `").append(accessor).append("` vector\n");
-        sb.append("    public int ").append(accessor).append("Length() {\n");
-        sb.append("        int o = fieldOffset(").append(vt).append(");\n");
-        sb.append("        return o != 0 ? vectorLength(o) : 0;\n");
-        sb.append("    }\n");
+        sb.append("""
+
+                    /// @return the length of the `%1$s` vector
+                    public int %1$sLength() {
+                        int o = fieldOffset(%2$d);
+                        return o != 0 ? vectorLength(o) : 0;
+                    }
+                """.formatted(accessor, vt));
 
         if (element instanceof Ast.Scalar scalar) {
             emitScalarVectorElements(sb, accessor, scalar, vt);
@@ -215,37 +236,52 @@ public final class CodeGen {
 
     private void emitScalarVectorElements(StringBuilder sb, String accessor, Ast.Scalar scalar, int vt) {
         if (scalar == Ast.Scalar.STRING) {
-            sb.append("\n    /// @param j element index\n    /// @return the j-th `").append(accessor).append("` string\n");
-            sb.append("    public String ").append(accessor).append("(int j) {\n");
-            sb.append("        int o = fieldOffset(").append(vt).append(");\n");
-            sb.append("        return readStringAt(vectorElements(o) + (long) j * 4);\n");
-            sb.append("    }\n");
+            sb.append("""
+
+                        /// @param j element index
+                        /// @return the j-th `%1$s` string
+                        public String %1$s(int j) {
+                            int o = fieldOffset(%2$d);
+                            return readStringAt(vectorElements(o) + (long) j * 4);
+                        }
+                    """.formatted(accessor, vt));
             return;
         }
         ScalarIo io = scalarIo(scalar);
         int size = TypeRegistry.sizeOf(scalar);
-        sb.append("\n    /// @param j element index\n    /// @return the j-th `").append(accessor).append("` element\n");
-        sb.append("    public ").append(io.javaType).append(" ").append(accessor).append("(int j) {\n");
-        sb.append("        int o = fieldOffset(").append(vt).append(");\n");
-        sb.append("        return ").append(io.vectorRead(size)).append(";\n");
-        sb.append("    }\n");
+        sb.append("""
+
+                    /// @param j element index
+                    /// @return the j-th `%1$s` element
+                    public %2$s %1$s(int j) {
+                        int o = fieldOffset(%3$d);
+                        return %4$s;
+                    }
+                """.formatted(accessor, io.javaType, vt, io.vectorRead(size)));
         if (scalar == Ast.Scalar.UINT8 || scalar == Ast.Scalar.INT8) {
-            sb.append("\n    /// @return a zero-copy slice of the `").append(accessor).append("` byte vector, or null if absent\n");
-            sb.append("    public MemorySegment ").append(accessor).append("AsSegment() {\n");
-            sb.append("        int o = fieldOffset(").append(vt).append(");\n");
-            sb.append("        return o != 0 ? byteVector(o) : null;\n");
-            sb.append("    }\n");
+            sb.append("""
+
+                        /// @return a zero-copy slice of the `%1$s` byte vector, or null if absent
+                        public MemorySegment %1$sAsSegment() {
+                            int o = fieldOffset(%2$d);
+                            return o != 0 ? byteVector(o) : null;
+                        }
+                    """.formatted(accessor, vt));
         }
     }
 
     private void emitObjectVectorElement(StringBuilder sb, String accessor, String typeName, int vt, int stride, boolean indirect) {
         String base = "vectorElements(o) + (long) j * " + stride;
         String target = indirect ? "indirect(" + base + ")" : base;
-        sb.append("\n    /// @param j element index\n    /// @return the j-th `").append(accessor).append("` element\n");
-        sb.append("    public ").append(typeName).append(" ").append(accessor).append("(int j) {\n");
-        sb.append("        int o = fieldOffset(").append(vt).append(");\n");
-        sb.append("        return new ").append(typeName).append("().assign(seg, ").append(target).append(");\n");
-        sb.append("    }\n");
+        sb.append("""
+
+                    /// @param j element index
+                    /// @return the j-th `%1$s` element
+                    public %2$s %1$s(int j) {
+                        int o = fieldOffset(%3$d);
+                        return new %2$s().assign(seg, %4$s);
+                    }
+                """.formatted(accessor, typeName, vt, target));
     }
 
     // ---- structs --------------------------------------------------------------
@@ -259,14 +295,16 @@ public final class CodeGen {
                 .append(layout.size()).append(" bytes).\n");
         sb.append(GENERATED_ANNOTATION);
         sb.append("public final class ").append(name).append(" extends FbsStruct {\n\n");
-        sb.append("    /// Positions this reader at a struct.\n");
-        sb.append("    /// @param seg the buffer\n");
-        sb.append("    /// @param position the struct position\n");
-        sb.append("    /// @return this\n");
-        sb.append("    public ").append(name).append(" assign(MemorySegment seg, long position) {\n");
-        sb.append("        init(seg, position);\n");
-        sb.append("        return this;\n");
-        sb.append("    }\n");
+        sb.append("""
+                    /// Positions this reader at a struct.
+                    /// @param seg the buffer
+                    /// @param position the struct position
+                    /// @return this
+                    public %s assign(MemorySegment seg, long position) {
+                        init(seg, position);
+                        return this;
+                    }
+                """.formatted(name));
 
         for (int i = 0; i < struct.fields().size(); i++) {
             Ast.Field field = struct.fields().get(i);
@@ -290,13 +328,17 @@ public final class CodeGen {
         ScalarIo io = scalarIo(scalar);
         sb.append("\n    /// @return the `").append(accessor).append("` field\n");
         if (scalar == Ast.Scalar.BOOL) {
-            sb.append("    public boolean ").append(accessor).append("() {\n");
-            sb.append("        return readByte(").append(off).append(") != 0;\n");
-            sb.append("    }\n");
+            sb.append("""
+                        public boolean %1$s() {
+                            return readByte(%2$d) != 0;
+                        }
+                    """.formatted(accessor, off));
         } else {
-            sb.append("    public ").append(io.javaType).append(" ").append(accessor).append("() {\n");
-            sb.append("        return ").append(io.structRead(off)).append(";\n");
-            sb.append("    }\n");
+            sb.append("""
+                        public %1$s %2$s() {
+                            return %3$s;
+                        }
+                    """.formatted(io.javaType, accessor, io.structRead(off)));
         }
     }
 
@@ -315,9 +357,11 @@ public final class CodeGen {
         for (Ast.EnumVal v : e.values()) {
             long value = v.number().isPresent() ? v.number().getAsInt() : next;
             next = value + 1;
-            sb.append("\n    /// `").append(v.name()).append("` = ").append(value).append("\n");
-            sb.append("    public static final ").append(constType).append(" ").append(v.name())
-                    .append(" = ").append(literal(constType, value)).append(";\n");
+            sb.append("""
+
+                        /// `%1$s` = %2$d
+                        public static final %3$s %1$s = %4$s;
+                    """.formatted(v.name(), value, constType, literal(constType, value)));
         }
         sb.append("}\n");
         return sb.toString();
@@ -338,8 +382,11 @@ public final class CodeGen {
             long value = m.number().isPresent() ? m.number().getAsInt() : next;
             next = value + 1;
             String member = className(simpleName(m.typeName()));
-            sb.append("\n    /// Member `").append(simpleName(m.typeName())).append("` = ").append(value).append("\n");
-            sb.append("    public static final byte ").append(member).append(" = ").append(literal("byte", value)).append(";\n");
+            sb.append("""
+
+                        /// Member `%1$s` = %2$d
+                        public static final byte %3$s = %4$s;
+                    """.formatted(simpleName(m.typeName()), value, member, literal("byte", value)));
         }
         sb.append("}\n");
         return sb.toString();
@@ -385,20 +432,28 @@ public final class CodeGen {
         }
         sb.append("        return b.endTable();\n    }\n");
 
-        sb.append("\n    /// Begins a `").append(name).append("` table.\n");
-        sb.append("    /// @param b the builder\n");
-        sb.append("    public static void start").append(name).append("(FbsBuilder b) {\n");
-        sb.append("        b.startTable(").append(slots).append(");\n    }\n");
+        sb.append("""
 
-        sb.append("\n    /// Finishes a `").append(name).append("` table.\n");
-        sb.append("    /// @param b the builder\n    /// @return the table offset\n");
-        sb.append("    public static int end").append(name).append("(FbsBuilder b) {\n");
-        sb.append("        return b.endTable();\n    }\n");
+                    /// Begins a `%1$s` table.
+                    /// @param b the builder
+                    public static void start%1$s(FbsBuilder b) {
+                        b.startTable(%2$d);
+                    }
 
-        sb.append("\n    /// Finishes the buffer with a `").append(name).append("` root.\n");
-        sb.append("    /// @param b the builder\n    /// @param offset the root table offset\n");
-        sb.append("    public static void finish").append(name).append("Buffer(FbsBuilder b, int offset) {\n");
-        sb.append("        b.finish(offset);\n    }\n");
+                    /// Finishes a `%1$s` table.
+                    /// @param b the builder
+                    /// @return the table offset
+                    public static int end%1$s(FbsBuilder b) {
+                        return b.endTable();
+                    }
+
+                    /// Finishes the buffer with a `%1$s` root.
+                    /// @param b the builder
+                    /// @param offset the root table offset
+                    public static void finish%1$sBuffer(FbsBuilder b, int offset) {
+                        b.finish(offset);
+                    }
+                """.formatted(name, slots));
     }
 
     /// One add-call emitted inside `createX`, tagged with its alignment and declaration
@@ -467,58 +522,91 @@ public final class CodeGen {
         String value = sbuild.cast + accessor;
         params.add(paramType + " " + accessor);
         adds.add(new AddEntry("b." + sbuild.method + "(" + slot + ", " + value + ", " + def + ");", TypeRegistry.sizeOf(scalar), adds.size()));
-        sb.append("\n    /// Sets the `").append(accessor).append("` field.\n");
-        sb.append("    /// @param b the builder\n    /// @param ").append(accessor).append(" value\n");
-        sb.append("    public static void add").append(capital).append("(FbsBuilder b, ").append(paramType)
-                .append(" ").append(accessor).append(") {\n");
-        sb.append("        b.").append(sbuild.method).append("(").append(slot).append(", ").append(value)
-                .append(", ").append(def).append(");\n    }\n");
+        sb.append("""
+
+                    /// Sets the `%1$s` field.
+                    /// @param b the builder
+                    /// @param %1$s value
+                    public static void add%2$s(FbsBuilder b, %3$s %1$s) {
+                        b.%4$s(%5$d, %6$s, %7$s);
+                    }
+                """.formatted(accessor, capital, paramType, sbuild.method, slot, value, def));
     }
 
     private void emitAddOffsetMethod(StringBuilder sb, String accessor, String capital, int slot) {
-        sb.append("\n    /// Sets the `").append(accessor).append("` offset field.\n");
-        sb.append("    /// @param b the builder\n    /// @param offset the referenced offset\n");
-        sb.append("    public static void add").append(capital).append("(FbsBuilder b, int offset) {\n");
-        sb.append("        b.addOffset(").append(slot).append(", offset, 0);\n    }\n");
+        sb.append("""
+
+                    /// Sets the `%1$s` offset field.
+                    /// @param b the builder
+                    /// @param offset the referenced offset
+                    public static void add%2$s(FbsBuilder b, int offset) {
+                        b.addOffset(%3$d, offset, 0);
+                    }
+                """.formatted(accessor, capital, slot));
     }
 
     private void emitAddByteMethod(StringBuilder sb, String accessor, String capital, int slot) {
-        sb.append("\n    /// Sets the `").append(accessor).append("` field.\n");
-        sb.append("    /// @param b the builder\n    /// @param value the value\n");
-        sb.append("    public static void add").append(capital).append("(FbsBuilder b, byte value) {\n");
-        sb.append("        b.addByte(").append(slot).append(", value, 0);\n    }\n");
+        sb.append("""
+
+                    /// Sets the `%1$s` field.
+                    /// @param b the builder
+                    /// @param value the value
+                    public static void add%2$s(FbsBuilder b, byte value) {
+                        b.addByte(%3$d, value, 0);
+                    }
+                """.formatted(accessor, capital, slot));
     }
 
     private void emitVectorBuilders(StringBuilder sb, String accessor, String capital, Ast.FieldType element) {
         if (element instanceof Ast.Scalar scalar && (scalar == Ast.Scalar.UINT8 || scalar == Ast.Scalar.INT8)) {
-            sb.append("\n    /// Creates the `").append(accessor).append("` byte vector.\n");
-            sb.append("    /// @param b the builder\n    /// @param data the bytes\n    /// @return the vector offset\n");
-            sb.append("    public static int create").append(capital).append("Vector(FbsBuilder b, byte[] data) {\n");
-            sb.append("        return b.createByteVector(data);\n    }\n");
+            sb.append("""
+
+                        /// Creates the `%1$s` byte vector.
+                        /// @param b the builder
+                        /// @param data the bytes
+                        /// @return the vector offset
+                        public static int create%2$sVector(FbsBuilder b, byte[] data) {
+                            return b.createByteVector(data);
+                        }
+                    """.formatted(accessor, capital));
             emitStartVector(sb, accessor, capital, 1, 1);
             return;
         }
         if (element instanceof Ast.Scalar scalar && scalar != Ast.Scalar.STRING) {
             VectorElem ve = scalarVectorElem(scalar);
-            sb.append("\n    /// Creates the `").append(accessor).append("` vector.\n");
-            sb.append("    /// @param b the builder\n    /// @param data the elements\n    /// @return the vector offset\n");
-            sb.append("    public static int create").append(capital).append("Vector(FbsBuilder b, ").append(ve.arrayType).append(" data) {\n");
-            sb.append("        b.startVector(").append(ve.size).append(", data.length, ").append(ve.size).append(");\n");
-            sb.append("        for (int i = data.length - 1; i >= 0; i--) {\n");
-            sb.append("            b.").append(ve.add).append("(").append(ve.cast).append("data[i]);\n        }\n");
-            sb.append("        return b.endVector();\n    }\n");
+            sb.append("""
+
+                        /// Creates the `%1$s` vector.
+                        /// @param b the builder
+                        /// @param data the elements
+                        /// @return the vector offset
+                        public static int create%2$sVector(FbsBuilder b, %3$s data) {
+                            b.startVector(%4$d, data.length, %4$d);
+                            for (int i = data.length - 1; i >= 0; i--) {
+                                b.%5$s(%6$sdata[i]);
+                            }
+                            return b.endVector();
+                        }
+                    """.formatted(accessor, capital, ve.arrayType, ve.size, ve.add, ve.cast));
             emitStartVector(sb, accessor, capital, ve.size, ve.size);
             return;
         }
         // string or table-ref element -> offset vector; struct-ref element -> start only
         if (element instanceof Ast.Scalar || isOffsetElement(element)) {
-            sb.append("\n    /// Creates the `").append(accessor).append("` offset vector.\n");
-            sb.append("    /// @param b the builder\n    /// @param data element offsets\n    /// @return the vector offset\n");
-            sb.append("    public static int create").append(capital).append("Vector(FbsBuilder b, int[] data) {\n");
-            sb.append("        b.startVector(4, data.length, 4);\n");
-            sb.append("        for (int i = data.length - 1; i >= 0; i--) {\n");
-            sb.append("            b.addOffset(data[i]);\n        }\n");
-            sb.append("        return b.endVector();\n    }\n");
+            sb.append("""
+
+                        /// Creates the `%1$s` offset vector.
+                        /// @param b the builder
+                        /// @param data element offsets
+                        /// @return the vector offset
+                        public static int create%2$sVector(FbsBuilder b, int[] data) {
+                            b.startVector(4, data.length, 4);
+                            for (int i = data.length - 1; i >= 0; i--) {
+                                b.addOffset(data[i]);
+                            }
+                            return b.endVector();
+                        }
+                    """.formatted(accessor, capital));
             emitStartVector(sb, accessor, capital, 4, 4);
             return;
         }
@@ -532,10 +620,15 @@ public final class CodeGen {
     }
 
     private void emitStartVector(StringBuilder sb, String accessor, String capital, int elemSize, int alignment) {
-        sb.append("\n    /// Begins the `").append(accessor).append("` vector.\n");
-        sb.append("    /// @param b the builder\n    /// @param numElems element count\n");
-        sb.append("    public static void start").append(capital).append("Vector(FbsBuilder b, int numElems) {\n");
-        sb.append("        b.startVector(").append(elemSize).append(", numElems, ").append(alignment).append(");\n    }\n");
+        sb.append("""
+
+                    /// Begins the `%1$s` vector.
+                    /// @param b the builder
+                    /// @param numElems element count
+                    public static void start%2$sVector(FbsBuilder b, int numElems) {
+                        b.startVector(%3$d, numElems, %4$d);
+                    }
+                """.formatted(accessor, capital, elemSize, alignment));
     }
 
     // ---- struct builder -------------------------------------------------------
