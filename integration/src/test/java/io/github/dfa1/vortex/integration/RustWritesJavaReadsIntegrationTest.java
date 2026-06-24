@@ -57,7 +57,9 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 /// Cross-compatibility: Rust (JNI) writer → Java reader.
 class RustWritesJavaReadsIntegrationTest {
 
-    private static final String S3_BASE = "https://vortex-compat-fixtures.s3.amazonaws.com/v0.72.0/arrays/";
+    private static final String FIXTURE_VERSION = "v0.75.0";
+    private static final String S3_BASE =
+            "https://vortex-compat-fixtures.s3.amazonaws.com/" + FIXTURE_VERSION + "/arrays/";
 
     private static final Session SESSION = Session.create();
     private static final BufferAllocator ALLOCATOR = ArrowAllocation.rootAllocator();
@@ -218,7 +220,10 @@ class RustWritesJavaReadsIntegrationTest {
     }
 
     private static Path downloadIfMissing(Path tmp, String name) throws Exception {
-        Path cached = Path.of("/tmp/pco-fixtures", name);
+        // Cache is keyed by fixture version: the Rust reference rewrites the same
+        // file names with different bytes across versions, so a version-less cache
+        // would silently serve stale bytes after a version bump.
+        Path cached = Path.of("/tmp/pco-fixtures", FIXTURE_VERSION, name);
         if (Files.exists(cached)) {
             return cached;
         }

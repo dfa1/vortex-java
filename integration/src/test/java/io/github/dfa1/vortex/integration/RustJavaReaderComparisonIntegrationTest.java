@@ -59,7 +59,7 @@ import static org.assertj.core.data.Percentage.withPercentage;
 class RustJavaReaderComparisonIntegrationTest {
 
     private static final URI BASE =
-            URI.create("https://vortex-compat-fixtures.s3.amazonaws.com/v0.72.0/arrays/");
+            URI.create("https://vortex-compat-fixtures.s3.amazonaws.com/v0.75.0/arrays/");
 
     private static final Session SESSION = Session.create();
     private static final BufferAllocator ALLOCATOR = ArrowAllocation.rootAllocator();
