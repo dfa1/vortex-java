@@ -95,6 +95,15 @@
 			**/fbs/**,
 			**/proto/**
 		</sonar.exclusions>
+		<!-- The two in-house code generators (fbs-gen, proto-gen) are build-only developer
+		     tooling, not shipped runtime. Their lexers/parsers share the same tokenizer
+		     shape by design (scan char, classify token, advance), which the duplication
+		     metric counts as cross-module copy-paste. Exclude from CPD only — smell and
+		     bug analysis on this hand-written code is kept. -->
+		<sonar.cpd.exclusions>
+			**/fbsgen/**,
+			**/protogen/**
+		</sonar.cpd.exclusions>
 		<!-- Coverage sources:
 		     1. per-module surefire (unit tests)
 		     2. per-module failsafe (module-local integration tests)

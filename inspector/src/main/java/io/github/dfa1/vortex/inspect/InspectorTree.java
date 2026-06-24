@@ -255,8 +255,8 @@ public record InspectorTree(
 
     private static Peek peekFlatRoot(MemorySegment seg, List<String> arraySpecs) {
         int segLen = (int) seg.byteSize();
-        int fbLen = seg.get(LE_INT, segLen - 4);
-        int fbStart = segLen - 4 - fbLen;
+        int fbLen = seg.get(LE_INT, segLen - 4L);
+        long fbStart = segLen - 4L - fbLen;
         FbsArray fbArray = FbsArray.getRootAsFbsArray(seg.asSlice(fbStart, fbLen));
         FbsArrayNode root = fbArray.root();
         if (root == null) {
