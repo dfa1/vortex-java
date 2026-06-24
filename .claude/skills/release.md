@@ -1,6 +1,6 @@
 ---
 name: release
-description: Cut a vortex-java release. Runs preflight checks, extracts the CHANGELOG section for the target version, drives `mvn release:prepare` to tag, pushes the tag (which triggers Maven Central deploy via GitHub Actions), and creates the matching GitHub release with notes pulled from CHANGELOG.md. Triggers when the user says "release", "cut a release", "tag a release", "release X.Y.Z", or invokes `/release`.
+description: Cut a vortex-java release. Runs preflight checks, finalizes the CHANGELOG section for the target version, drives `mvn release:prepare` to tag, and pushes the tag — which triggers `publish.yml` to deploy to Maven Central AND create the GitHub release (notes auto-pulled from CHANGELOG.md). Triggers when the user says "release", "cut a release", "tag a release", "release X.Y.Z", or invokes `/release`.
 ---
 
 ## Overview
@@ -86,54 +86,25 @@ git push && git push --tags
 
 Once the tag is on origin, the deploy workflow starts. Capture the run URL for the next step.
 
-### 5. GitHub release
+### 5. GitHub release — automated, do not create by hand
 
-Extract the version's section from `CHANGELOG.md` into a temp file. The `awk` block stops at the next `## [` heading so the body contains exactly one version's notes:
+The tag push triggers `.github/workflows/publish.yml`, which does **both**:
 
-```bash
-awk -v ver="<releaseVersion>" '
-  $0 ~ "^## \\[" ver "\\]" { in_sec=1; next }
-  in_sec && /^## \[/ { exit }
-  in_sec { print }
-' CHANGELOG.md > /tmp/release-notes-<releaseVersion>.md
-```
+1. `./mvnw deploy -Prelease` → signs + uploads to Maven Central.
+2. **Creates the GitHub release itself** — it `awk`-extracts the `## [<releaseVersion>]` section from `CHANGELOG.md` and runs `gh release create "$GITHUB_REF_NAME" --notes "$NOTES" --verify-tag`.
 
-**Condense before publishing.** CHANGELOG entries carry full context (attack details, rationale, file refs); the GitHub release body must stay scannable — aim ~30 lines, ~one line per bullet. Rewrite the extracted file in place, applying these rules:
-
-- **First line is the headline.** One sentence stating the technical themes. No `The headline themes for this release are…`. Replace the opening paragraph with a single technical sentence.
-  - Good: `Security-hardening sweep of the parser, Array interface slimmed, cascading writer features.`
-  - Bad: `The headline themes for this release are a security-hardening sweep of the file-format parser…`
-- **Sections in this order, omit empty ones:** `Security`, `Added`, `Breaking`, `Removed`, `Performance`, `Fixed`, `Build`. Use `Breaking` (not `Changed`) for source/binary-breaking changes — readers scan for it.
-- **One line per bullet.** No sub-bullets. If a bullet needs two sentences, the detail belongs in CHANGELOG, not GH release.
-  - Good: `Layout-tree depth capped at 64; metadata capped at 4 MiB.`
-  - Bad: `Layout-tree depth cap — PostscriptParser.convertLayout is capped at depth 64, preventing both unbounded nesting and self-referential FlatBuffer cycles (a ~120-byte cycle attack previously triggered StackOverflowError).`
-- **Drop `see docs/X.md` / `documented in …` references.** Readers click compare diffs, not doc cross-refs.
-- **Drop benchmark prose.** Keep the number, drop the surrounding sentence.
-  - Good: `ALP + Dict broadcast modulo gated by cap == n check (~5–10× recovery).`
-- **Migration hints stay terse.** `old → new`, one line. e.g. `ScanResult → renamed Chunk (scan.ScanResult → scan.Chunk).`
-- **Preserve trailing commit SHAs.** Each bullet inherits `(sha)` / `(sha, sha)` from CHANGELOG; do not strip them. GitHub auto-links bare 7+ char SHAs in release bodies.
-- **Footer:** keep the compare link only: `[<version>]: https://github.com/<owner>/<repo>/compare/v<prev>...v<version>`.
-
-CHANGELOG stays long-form; do not force the two to match.
-
-Then create the release:
-
-```bash
-gh release create v<releaseVersion> \
-    --title "v<releaseVersion>" \
-    --notes-file /tmp/release-notes-<releaseVersion>.md
-```
-
-Do **not** pass `--draft` unless the user asked for one.
+So there is **no manual `gh release create` step** — running one would collide with the workflow. The release body is exactly the CHANGELOG section, which is why step 2 keeps that section brief, client-visible, and SHA-linked (GitHub auto-links bare 7+ char SHAs). Whatever you write in `## [<releaseVersion>]` is what users see.
 
 ### 6. Monitor the deploy
 
-Tail the workflow run kicked off by the tag push. Report success or surface failures:
+Tail the publish run kicked off by the tag push. Report success or surface failures:
 
 ```bash
-gh run list --workflow=release.yml --limit 1
+gh run list --workflow=publish.yml --limit 1
 gh run watch <run-id>
 ```
+
+`publish.yml` runs ~10 min (deploy + GitHub release). When green, confirm the release page exists: `gh release view v<releaseVersion>`.
 
 If the Maven Central step fails, do **not** delete the tag. Stop and report the failure — re-publishing the same version requires hand intervention via Sonatype.
 
