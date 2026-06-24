@@ -26,6 +26,20 @@ public sealed interface DType
     /// @return `true` if null values are permitted
     boolean nullable();
 
+    /// Returns whether this is an unsigned integer type (`U8`–`U64`). `false` for every other
+    /// type, including signed integers, floats, and the composite/extension types. Useful where
+    /// unsigned values are stored in a signed `long` (e.g. zone-map comparisons), so the caller
+    /// knows to use unsigned ordering.
+    ///
+    /// @return `true` if this is an unsigned-integer [Primitive]
+    default boolean isUnsigned() {
+        return switch (this) {
+            case Primitive(var pt, _) -> pt.isUnsigned();
+            case Null _, Bool _, Decimal _, Utf8 _, Binary _, Struct _, List _,
+                 FixedSizeList _, Extension _, Variant _ -> false;
+        };
+    }
+
     /// Returns a copy of this type marked nullable. Sugar over
     /// [#withNullable(boolean)] so call sites read as a fluent adjective:
     /// `DType.I64.asNullable()`.
