@@ -5,23 +5,22 @@ All notable changes to **vortex-java** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.9.0] — 2026-06-24
 
-Vortex now ships with **no FlatBuffers or Protobuf runtime dependency**: the `.fbs` and `.proto` schemas are compiled in-house to `MemorySegment`-native Java. This drops `com.google.flatbuffers:flatbuffers-java` — the last automatic-module dependency — unblocking a named JPMS module, and the generated wire classes are prefixed so they no longer collide on your classpath (ADR 0017).
+Two import-only breaking changes — the `vortex-core` types moved under `io.github.dfa1.vortex.core.*`, and the no-arg `DType` factories became constants. In return, Vortex now ships with **no FlatBuffers or Protobuf runtime dependency**: the `.fbs`/`.proto` schemas compile in-house to `MemorySegment`-native Java, dropping `com.google.flatbuffers:flatbuffers-java` — the last automatic-module dependency — so a named JPMS `module-info` is viable, and the generated wire classes are prefixed so they no longer collide on your classpath (ADR 0017).
 
 ### Added
 
-- Canonical non-nullable `DType` constants: primitives `DType.I8` … `DType.I64`, `DType.U8` … `DType.U64`, `DType.F16`/`F32`/`F64`, plus `DType.BOOL`, `DType.UTF8`, `DType.BINARY`, `DType.NULL`, `DType.VARIANT`. Shared immutable instances — prefer them over `new DType.Primitive(pt, false)` / `new DType.Utf8(false)` etc.; build a nullable column with `DType.I64.asNullable()`.
+- Canonical non-nullable `DType` constants: `DType.I8` … `I64`, `U8` … `U64`, `F16`/`F32`/`F64`, plus `BOOL`, `UTF8`, `BINARY`, `NULL`, `VARIANT`; build a nullable column with `DType.I64.asNullable()`. ([f4b22e42](https://github.com/dfa1/vortex-java/commit/f4b22e42))
 
 ### Changed
 
-- **Breaking:** every `vortex-core` type now lives under `io.github.dfa1.vortex.core.*` — `core.model` (`DType`, `PType`, `TimeUnit`, `EncodingId`, `ExtensionId`, `TimeDtype`, `TimestampDtype`), `core.io` (`IoBounds`, `PTypeIO`, `VortexFormat`), `core.error` (`VortexException`), `core.compute` (`FastLanes`, `PrimitiveArrays`), and `core.fbs` / `core.proto` for the wire codecs. Update imports accordingly (e.g. `io.github.dfa1.vortex.core.DType` → `io.github.dfa1.vortex.core.model.DType`).
-- Removed the `com.google.flatbuffers:flatbuffers-java` runtime dependency. The `.fbs`/`.proto` schemas are now compiled in-house to `MemorySegment`-native Java, dropping the last automatic-module dependency so a named JPMS `module-info` is viable (ADR 0017).
-- Generated FlatBuffers/Protobuf wire classes are prefixed `Fbs*`/`Proto*`, so the generic type names (`Array`, `Buffer`, `DType`, `Null`, …) no longer collide on the consumer classpath.
+- **Breaking (imports):** every `vortex-core` type moved under `io.github.dfa1.vortex.core.*` — `core.model` (`DType`, `PType`, `TimeUnit`, `EncodingId`, `ExtensionId`, `Time*Dtype`), `core.io` (`IoBounds`, `PTypeIO`, `VortexFormat`), `core.error` (`VortexException`), `core.compute` (`FastLanes`, `PrimitiveArrays`), `core.fbs`/`core.proto` (wire codecs). E.g. `io.github.dfa1.vortex.core.DType` → `io.github.dfa1.vortex.core.model.DType`. ([52f30c16](https://github.com/dfa1/vortex-java/commit/52f30c16))
+- Dropped the `com.google.flatbuffers:flatbuffers-java` runtime dependency; the `.fbs`/`.proto` schemas compile in-house to `MemorySegment`-native Java, and the generated wire classes are prefixed `Fbs*`/`Proto*` so the generic names (`Array`, `Buffer`, `DType`, …) no longer collide on your classpath (ADR 0017). ([5907302e](https://github.com/dfa1/vortex-java/commit/5907302e))
 
 ### Removed
 
-- **Breaking (minor):** the no-arg factory methods `DType.i8()` … `DType.f64()`, `DType.bool_()`, `DType.utf8()`, `DType.binary()`, `DType.null_()`, `DType.variant()` are replaced by the constants above (`DType.i64()` → `DType.I64`, `DType.utf8()` → `DType.UTF8`). The `DType.decimal(..)`/`DType.structBuilder()` factories and the record constructors are unchanged.
+- **Breaking (imports):** the no-arg `DType` factories (`DType.i64()`, `DType.utf8()`, …) — use the constants above (`DType.i64()` → `DType.I64`). `DType.decimal(..)`/`DType.structBuilder()` and the record constructors are unchanged. ([f4b22e42](https://github.com/dfa1/vortex-java/commit/f4b22e42))
 
 ## [0.8.3] — 2026-06-23
 
