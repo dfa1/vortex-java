@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.reader.ReadRegistry;
 
 import io.github.dfa1.vortex.reader.array.NullArray;
 import io.github.dfa1.vortex.encoding.DTypes;
-import io.github.dfa1.vortex.encoding.EncodingId;
+import io.github.dfa1.vortex.core.model.EncodingId;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;

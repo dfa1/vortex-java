@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.reader.array;
 
-import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.encoding.PTypeIO;
+import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.io.PTypeIO;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 

@@ -1,12 +1,12 @@
 package io.github.dfa1.vortex.integration;
 
-import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.Layout;
 import io.github.dfa1.vortex.reader.SegmentSpec;
 import io.github.dfa1.vortex.reader.ReadRegistry;
-import io.github.dfa1.vortex.fbs.FbsArray;
-import io.github.dfa1.vortex.fbs.FbsArrayNode;
-import io.github.dfa1.vortex.fbs.FbsBuffer;
+import io.github.dfa1.vortex.core.fbs.FbsArray;
+import io.github.dfa1.vortex.core.fbs.FbsArrayNode;
+import io.github.dfa1.vortex.core.fbs.FbsBuffer;
 import io.github.dfa1.vortex.reader.VortexReader;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

@@ -1,12 +1,12 @@
 package io.github.dfa1.vortex.reader.extension;
 
-import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
 import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
 
-import static io.github.dfa1.vortex.encoding.PTypeIO.LE_SHORT;
+import static io.github.dfa1.vortex.core.io.PTypeIO.LE_SHORT;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;

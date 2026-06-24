@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.writer;
 
-import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.writer.encode.DictEncodingEncoder;
 import io.github.dfa1.vortex.reader.ReadRegistry;

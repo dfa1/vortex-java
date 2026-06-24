@@ -20,7 +20,7 @@ class ParserTest {
             String src = """
                     syntax = "proto3";
                     package vortex.test;
-                    option java_package = "io.github.dfa1.vortex.proto";
+                    option java_package = "io.github.dfa1.vortex.core.proto";
                     message Foo {
                         uint32 bit_width = 1;
                         optional bytes meta = 2;
@@ -33,7 +33,7 @@ class ParserTest {
 
             // Then
             assertThat(sut.protoPackage()).isEqualTo("vortex.test");
-            assertThat(sut.javaPackage()).isEqualTo("io.github.dfa1.vortex.proto");
+            assertThat(sut.javaPackage()).isEqualTo("io.github.dfa1.vortex.core.proto");
             assertThat(sut.decls()).hasSize(1);
             Ast.MessageDecl foo = (Ast.MessageDecl) sut.decls().get(0);
             assertThat(foo.name()).isEqualTo("Foo");
@@ -127,7 +127,7 @@ class ParserTest {
 
             // Then
             assertThat(sut.protoPackage()).isEqualTo("vortex.dtype");
-            assertThat(sut.javaPackage()).isEqualTo("io.github.dfa1.vortex.proto");
+            assertThat(sut.javaPackage()).isEqualTo("io.github.dfa1.vortex.core.proto");
             assertThat(sut.decls()).extracting(d ->
                     switch (d) {
                         case Ast.MessageDecl m -> m.name();

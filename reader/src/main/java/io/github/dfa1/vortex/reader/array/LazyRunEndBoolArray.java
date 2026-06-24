@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.reader.array;
 
-import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.model.DType;
 
 /// Lazy RunEnd-encoded [BoolArray]. `getBoolean(i) = values.getBoolean(findRun(i + offset))`.
 /// `forEachBoolean` walks runs (one binary search at start, then per-run loops)

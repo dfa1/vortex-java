@@ -91,7 +91,7 @@
 										<argument>${project.basedir}/../fbs-gen/target/classes</argument>
 										<argument>io.github.dfa1.vortex.fbsgen.Main</argument>
 										<argument>--out</argument>
-										<argument>${project.basedir}/src/main/java/io/github/dfa1/vortex/fbs</argument>
+										<argument>${project.basedir}/src/main/java/io/github/dfa1/vortex/core/fbs</argument>
 										<argument>${project.basedir}/src/main/fbs/array.fbs</argument>
 										<argument>${project.basedir}/src/main/fbs/dtype.fbs</argument>
 										<argument>${project.basedir}/src/main/fbs/footer.fbs</argument>
@@ -112,7 +112,7 @@
 										<argument>${project.basedir}/../proto-gen/target/classes</argument>
 										<argument>io.github.dfa1.vortex.protogen.Main</argument>
 										<argument>--out</argument>
-										<argument>${project.basedir}/src/main/java/io/github/dfa1/vortex/proto</argument>
+										<argument>${project.basedir}/src/main/java/io/github/dfa1/vortex/core/proto</argument>
 										<argument>${project.basedir}/src/main/proto/dtype.proto</argument>
 										<argument>${project.basedir}/src/main/proto/scalar.proto</argument>
 										<argument>${project.basedir}/src/main/proto/encodings.proto</argument>
@@ -138,8 +138,8 @@
 						<artifactId>pitest-maven</artifactId>
 						<configuration>
 							<targetClasses>
-								<param>io.github.dfa1.vortex.core.IoBounds</param>
-								<param>io.github.dfa1.vortex.encoding.PTypeIO</param>
+								<param>io.github.dfa1.vortex.core.io.IoBounds</param>
+								<param>io.github.dfa1.vortex.core.io.PTypeIO</param>
 							</targetClasses>
 						</configuration>
 					</plugin>

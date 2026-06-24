@@ -2,15 +2,15 @@ package io.github.dfa1.vortex.reader;
 
 import java.lang.foreign.MemorySegment;
 
-import io.github.dfa1.vortex.fbs.FbsBuilder;
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.fbs.FbsArraySpec;
-import io.github.dfa1.vortex.fbs.FbsDecimal;
-import io.github.dfa1.vortex.fbs.FbsFooter;
-import io.github.dfa1.vortex.fbs.FbsLayout;
-import io.github.dfa1.vortex.fbs.FbsLayoutSpec;
-import io.github.dfa1.vortex.fbs.FbsType;
+import io.github.dfa1.vortex.core.fbs.FbsBuilder;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.fbs.FbsArraySpec;
+import io.github.dfa1.vortex.core.fbs.FbsDecimal;
+import io.github.dfa1.vortex.core.fbs.FbsFooter;
+import io.github.dfa1.vortex.core.fbs.FbsLayout;
+import io.github.dfa1.vortex.core.fbs.FbsLayoutSpec;
+import io.github.dfa1.vortex.core.fbs.FbsType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -217,8 +217,8 @@ class PostscriptParserParseBlobsBoundsTest {
     private static MemorySegment decimalDtype(int precision, byte scale) {
         var fbb = new FbsBuilder(64);
         int dec = FbsDecimal.createFbsDecimal(fbb, precision, scale, false);
-        int off = io.github.dfa1.vortex.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsDecimal, dec);
-        io.github.dfa1.vortex.fbs.FbsDType.finishFbsDTypeBuffer(fbb, off);
+        int off = io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsDecimal, dec);
+        io.github.dfa1.vortex.core.fbs.FbsDType.finishFbsDTypeBuffer(fbb, off);
         return slice(fbb);
     }
 

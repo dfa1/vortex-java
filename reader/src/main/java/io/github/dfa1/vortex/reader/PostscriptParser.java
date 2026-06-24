@@ -1,20 +1,20 @@
 package io.github.dfa1.vortex.reader;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.IoBounds;
-import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.fbs.FbsBinary;
-import io.github.dfa1.vortex.fbs.FbsBool;
-import io.github.dfa1.vortex.fbs.FbsDecimal;
-import io.github.dfa1.vortex.fbs.FbsExtension;
-import io.github.dfa1.vortex.fbs.FbsFixedSizeList;
-import io.github.dfa1.vortex.fbs.FbsPostscript;
-import io.github.dfa1.vortex.fbs.FbsPrimitive;
-import io.github.dfa1.vortex.fbs.FbsStruct_;
-import io.github.dfa1.vortex.fbs.FbsType;
-import io.github.dfa1.vortex.fbs.FbsUtf8;
-import io.github.dfa1.vortex.fbs.FbsVariant;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.io.IoBounds;
+import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.fbs.FbsBinary;
+import io.github.dfa1.vortex.core.fbs.FbsBool;
+import io.github.dfa1.vortex.core.fbs.FbsDecimal;
+import io.github.dfa1.vortex.core.fbs.FbsExtension;
+import io.github.dfa1.vortex.core.fbs.FbsFixedSizeList;
+import io.github.dfa1.vortex.core.fbs.FbsPostscript;
+import io.github.dfa1.vortex.core.fbs.FbsPrimitive;
+import io.github.dfa1.vortex.core.fbs.FbsStruct_;
+import io.github.dfa1.vortex.core.fbs.FbsType;
+import io.github.dfa1.vortex.core.fbs.FbsUtf8;
+import io.github.dfa1.vortex.core.fbs.FbsVariant;
 
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
@@ -25,7 +25,7 @@ final class PostscriptParser {
     /// Hard cap on layout-tree recursion depth. Real-world layouts are typically four levels
     /// (Struct → Zoned → Chunked → Flat); 64 is well past any expected schema and prevents
     /// adversarial inputs — deeply nested trees or self-referential FlatBuffer cycles — from
-    /// blowing the JVM stack during [#convertLayout(io.github.dfa1.vortex.fbs.FbsLayout, List, int)].
+    /// blowing the JVM stack during [#convertLayout(io.github.dfa1.vortex.core.fbs.FbsLayout, List, int)].
     static final int MAX_LAYOUT_DEPTH = 64;
 
     /// Hard cap on per-layout metadata size. The FlatBuffer runtime returns an unbounded slice
@@ -102,15 +102,15 @@ final class PostscriptParser {
 
     static ParsedFile parseBlobs(MemorySegment footerBuf, MemorySegment layoutBuf, MemorySegment dtypeBuf) {
         try {
-            var fbsFooter = io.github.dfa1.vortex.fbs.FbsFooter.getRootAsFbsFooter(footerBuf);
-            var fbsLayout = io.github.dfa1.vortex.fbs.FbsLayout.getRootAsFbsLayout(layoutBuf);
+            var fbsFooter = io.github.dfa1.vortex.core.fbs.FbsFooter.getRootAsFbsFooter(footerBuf);
+            var fbsLayout = io.github.dfa1.vortex.core.fbs.FbsLayout.getRootAsFbsLayout(layoutBuf);
 
             Footer footer = convertFooter(fbsFooter);
             Layout layout = convertLayout(fbsLayout, footer.layoutSpecs(), 0);
 
             DType dtype = null;
             if (dtypeBuf != null && dtypeBuf.byteSize() > 0) {
-                dtype = convertDType(io.github.dfa1.vortex.fbs.FbsDType.getRootAsFbsDType(dtypeBuf));
+                dtype = convertDType(io.github.dfa1.vortex.core.fbs.FbsDType.getRootAsFbsDType(dtypeBuf));
             }
 
             return new ParsedFile(footer, dtype, layout);
@@ -125,7 +125,7 @@ final class PostscriptParser {
         return IoBounds.slice(seg, offset, length);
     }
 
-    static Footer convertFooter(io.github.dfa1.vortex.fbs.FbsFooter f) {
+    static Footer convertFooter(io.github.dfa1.vortex.core.fbs.FbsFooter f) {
         var arraySpecs = new ArrayList<String>(f.arraySpecsLength());
         for (int i = 0; i < f.arraySpecsLength(); i++) {
             arraySpecs.add(f.arraySpecs(i).id());
@@ -155,7 +155,7 @@ final class PostscriptParser {
                 List.copyOf(segmentSpecs), List.copyOf(compressionSpecs));
     }
 
-    private static Layout convertLayout(io.github.dfa1.vortex.fbs.FbsLayout l, List<String> layoutSpecs, int depth) {
+    private static Layout convertLayout(io.github.dfa1.vortex.core.fbs.FbsLayout l, List<String> layoutSpecs, int depth) {
         if (depth > MAX_LAYOUT_DEPTH) {
             throw new VortexException(
                     "layout tree depth exceeds limit (" + MAX_LAYOUT_DEPTH + ")");
@@ -188,7 +188,7 @@ final class PostscriptParser {
         return new Layout(encodingId, l.rowCount(), metadata, List.copyOf(children), List.copyOf(segments));
     }
 
-    private static DType convertDType(io.github.dfa1.vortex.fbs.FbsDType fbs) {
+    private static DType convertDType(io.github.dfa1.vortex.core.fbs.FbsDType fbs) {
         int typeType = fbs.typeType();
         return switch (typeType) {
             case FbsType.FbsNull -> new DType.Null(true);
@@ -229,7 +229,7 @@ final class PostscriptParser {
                 yield new DType.Struct(List.copyOf(names), List.copyOf(types), s.nullable());
             }
             case FbsType.FbsList -> {
-                var l = fbs.type(new io.github.dfa1.vortex.fbs.FbsList());
+                var l = fbs.type(new io.github.dfa1.vortex.core.fbs.FbsList());
                 yield new DType.List(convertDType(l.elementType()), l.nullable());
             }
             case FbsType.FbsFixedSizeList -> {
@@ -252,17 +252,17 @@ final class PostscriptParser {
 
     private static PType convertPType(int fbsPType) {
         return switch (fbsPType) {
-            case io.github.dfa1.vortex.fbs.FbsPType.U8 -> PType.U8;
-            case io.github.dfa1.vortex.fbs.FbsPType.U16 -> PType.U16;
-            case io.github.dfa1.vortex.fbs.FbsPType.U32 -> PType.U32;
-            case io.github.dfa1.vortex.fbs.FbsPType.U64 -> PType.U64;
-            case io.github.dfa1.vortex.fbs.FbsPType.I8 -> PType.I8;
-            case io.github.dfa1.vortex.fbs.FbsPType.I16 -> PType.I16;
-            case io.github.dfa1.vortex.fbs.FbsPType.I32 -> PType.I32;
-            case io.github.dfa1.vortex.fbs.FbsPType.I64 -> PType.I64;
-            case io.github.dfa1.vortex.fbs.FbsPType.F16 -> PType.F16;
-            case io.github.dfa1.vortex.fbs.FbsPType.F32 -> PType.F32;
-            case io.github.dfa1.vortex.fbs.FbsPType.F64 -> PType.F64;
+            case io.github.dfa1.vortex.core.fbs.FbsPType.U8 -> PType.U8;
+            case io.github.dfa1.vortex.core.fbs.FbsPType.U16 -> PType.U16;
+            case io.github.dfa1.vortex.core.fbs.FbsPType.U32 -> PType.U32;
+            case io.github.dfa1.vortex.core.fbs.FbsPType.U64 -> PType.U64;
+            case io.github.dfa1.vortex.core.fbs.FbsPType.I8 -> PType.I8;
+            case io.github.dfa1.vortex.core.fbs.FbsPType.I16 -> PType.I16;
+            case io.github.dfa1.vortex.core.fbs.FbsPType.I32 -> PType.I32;
+            case io.github.dfa1.vortex.core.fbs.FbsPType.I64 -> PType.I64;
+            case io.github.dfa1.vortex.core.fbs.FbsPType.F16 -> PType.F16;
+            case io.github.dfa1.vortex.core.fbs.FbsPType.F32 -> PType.F32;
+            case io.github.dfa1.vortex.core.fbs.FbsPType.F64 -> PType.F64;
             default -> throw new VortexException("unrecognized PType=" + fbsPType);
         };
     }

@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.siegmar.fastcsv.reader.CsvReader;
 import de.siegmar.fastcsv.reader.CsvRecord;
 import de.siegmar.fastcsv.writer.CsvWriter;
-import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.csv.CsvExporter;
 import io.github.dfa1.vortex.csv.CsvImporter;
 import io.github.dfa1.vortex.csv.ExportOptions;

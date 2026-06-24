@@ -1,15 +1,15 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.encoding.FastLanes;
-import io.github.dfa1.vortex.encoding.PrimitiveArrays;
-import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.proto.ProtoBitPackedMetadata;
-import io.github.dfa1.vortex.proto.ProtoPatchesMetadata;
-import io.github.dfa1.vortex.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.compute.FastLanes;
+import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
+import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.proto.ProtoBitPackedMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -128,7 +128,7 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
 
         ProtoPatchesMetadata patches = new ProtoPatchesMetadata(
                 numPatches, 0L,
-                io.github.dfa1.vortex.proto.ProtoPType.fromValue(idxPtype.ordinal()),
+                io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(idxPtype.ordinal()),
                 null, null, null);
         byte[] metaBytes = new ProtoBitPackedMetadata(bitWidth, 0, patches).encode();
 

@@ -34,7 +34,7 @@ Maven Central metadata.
 In scope:
 
 - Any malformed `.vortex` input that causes the reader to throw an exception other than
-  `io.github.dfa1.vortex.core.VortexException` (e.g. `IndexOutOfBoundsException`,
+  `io.github.dfa1.vortex.core.error.VortexException` (e.g. `IndexOutOfBoundsException`,
   `NegativeArraySizeException`, `OutOfMemoryError`, `StackOverflowError`, raw FlatBuffer
   runtime exceptions, raw `IOException` from the proto3 reader, or a JVM crash via the FFM layer).
 - Any malformed `.vortex` input that causes the reader to allocate memory disproportionate

@@ -45,7 +45,7 @@ Set the compiler to Java 25:
 A Vortex file is a typed struct — every column has a declared type before any data is written.
 
 ```java
-import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.model.DType;
 
 DType.Struct schema = DType.structBuilder()
     .field("timestamp", DType.I64)                     // unix epoch millis

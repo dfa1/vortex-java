@@ -15,6 +15,7 @@ Vortex now ships with **no FlatBuffers or Protobuf runtime dependency**: the `.f
 
 ### Changed
 
+- **Breaking:** every `vortex-core` type now lives under `io.github.dfa1.vortex.core.*` — `core.model` (`DType`, `PType`, `TimeUnit`, `EncodingId`, `ExtensionId`, `TimeDtype`, `TimestampDtype`), `core.io` (`IoBounds`, `PTypeIO`, `VortexFormat`), `core.error` (`VortexException`), `core.compute` (`FastLanes`, `PrimitiveArrays`), and `core.fbs` / `core.proto` for the wire codecs. Update imports accordingly (e.g. `io.github.dfa1.vortex.core.DType` → `io.github.dfa1.vortex.core.model.DType`).
 - Removed the `com.google.flatbuffers:flatbuffers-java` runtime dependency. The `.fbs`/`.proto` schemas are now compiled in-house to `MemorySegment`-native Java, dropping the last automatic-module dependency so a named JPMS `module-info` is viable (ADR 0017).
 - Generated FlatBuffers/Protobuf wire classes are prefixed `Fbs*`/`Proto*`, so the generic type names (`Array`, `Buffer`, `DType`, `Null`, …) no longer collide on the consumer classpath.
 

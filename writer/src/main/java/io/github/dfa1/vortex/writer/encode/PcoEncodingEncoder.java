@@ -1,12 +1,12 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.proto.ProtoPcoChunkInfo;
-import io.github.dfa1.vortex.proto.ProtoPcoMetadata;
-import io.github.dfa1.vortex.proto.ProtoPcoPageInfo;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.proto.ProtoPcoChunkInfo;
+import io.github.dfa1.vortex.core.proto.ProtoPcoMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoPcoPageInfo;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;

@@ -1,8 +1,8 @@
 package io.github.dfa1.vortex.reader;
 
-import io.github.dfa1.vortex.fbs.FbsBuilder;
-import io.github.dfa1.vortex.fbs.FbsArraySpec;
-import io.github.dfa1.vortex.fbs.FbsLayoutSpec;
+import io.github.dfa1.vortex.core.fbs.FbsBuilder;
+import io.github.dfa1.vortex.core.fbs.FbsArraySpec;
+import io.github.dfa1.vortex.core.fbs.FbsLayoutSpec;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
@@ -15,19 +15,19 @@ class PostscriptParserBigSegmentTest {
         var fbb = new FbsBuilder(256);
 
         // Empty array_specs + layout_specs vectors (required tables, no entries).
-        int asv = io.github.dfa1.vortex.fbs.FbsFooter.createArraySpecsVector(fbb, new int[]{
+        int asv = io.github.dfa1.vortex.core.fbs.FbsFooter.createArraySpecsVector(fbb, new int[]{
                 FbsArraySpec.createFbsArraySpec(fbb, fbb.createString("vortex.flat"))
         });
-        int lsv = io.github.dfa1.vortex.fbs.FbsFooter.createLayoutSpecsVector(fbb, new int[]{
+        int lsv = io.github.dfa1.vortex.core.fbs.FbsFooter.createLayoutSpecsVector(fbb, new int[]{
                 FbsLayoutSpec.createFbsLayoutSpec(fbb, fbb.createString("vortex.flat"))
         });
 
         // One segment_spec with the big length.
-        io.github.dfa1.vortex.fbs.FbsFooter.startSegmentSpecsVector(fbb, 1);
-        io.github.dfa1.vortex.fbs.FbsSegmentSpec.createFbsSegmentSpec(fbb, segOffset, segLength, 6, 0, 0);
+        io.github.dfa1.vortex.core.fbs.FbsFooter.startSegmentSpecsVector(fbb, 1);
+        io.github.dfa1.vortex.core.fbs.FbsSegmentSpec.createFbsSegmentSpec(fbb, segOffset, segLength, 6, 0, 0);
         int ssv = fbb.endVector();
 
-        int off = io.github.dfa1.vortex.fbs.FbsFooter.createFbsFooter(fbb, asv, lsv, ssv, 0, 0);
+        int off = io.github.dfa1.vortex.core.fbs.FbsFooter.createFbsFooter(fbb, asv, lsv, ssv, 0, 0);
         fbb.finish(off);
         return fbb.dataSegment().asByteBuffer().order(java.nio.ByteOrder.LITTLE_ENDIAN);
     }
@@ -40,8 +40,8 @@ class PostscriptParserBigSegmentTest {
         long bigLength = 0xC000_0000L;
         long bigOffset = 0x1_0000_0000L; // 4 GB into the file
         ByteBuffer fbsFooterBytes = buildMinimalFooter(bigOffset, bigLength);
-        io.github.dfa1.vortex.fbs.FbsFooter fbsFooter =
-                io.github.dfa1.vortex.fbs.FbsFooter.getRootAsFbsFooter(java.lang.foreign.MemorySegment.ofBuffer(fbsFooterBytes));
+        io.github.dfa1.vortex.core.fbs.FbsFooter fbsFooter =
+                io.github.dfa1.vortex.core.fbs.FbsFooter.getRootAsFbsFooter(java.lang.foreign.MemorySegment.ofBuffer(fbsFooterBytes));
 
         // When
         Footer footer = PostscriptParser.convertFooter(fbsFooter);

@@ -1,9 +1,9 @@
 package io.github.dfa1.vortex.reader;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.extension.ExtensionId;
+import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.reader.extension.DateExtensionDecoder;
 import io.github.dfa1.vortex.reader.extension.TimeExtensionDecoder;
 import io.github.dfa1.vortex.reader.extension.TimestampExtensionDecoder;
@@ -76,7 +76,7 @@ public final class Chunk implements AutoCloseable {
     /// Looks up a column by name with a checked cast to the caller's expected
     /// [Array] subtype.
     ///
-    /// @param name column name as declared in the file's [io.github.dfa1.vortex.core.DType] schema
+    /// @param name column name as declared in the file's [io.github.dfa1.vortex.core.model.DType] schema
     /// @param <T>  expected concrete [Array] subtype
     /// @return the column array
     /// @throws VortexException if no column with the given name is present in this chunk

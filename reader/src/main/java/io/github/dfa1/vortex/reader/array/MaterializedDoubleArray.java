@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.reader.array;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.encoding.PTypeIO;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.io.PTypeIO;
 
 import java.lang.foreign.MemorySegment;
 import java.util.function.DoubleBinaryOperator;
@@ -13,7 +13,7 @@ public final class MaterializedDoubleArray extends AbstractMaterializedArray imp
 
     /// Constructs a `MaterializedDoubleArray` backed by the given buffer.
     ///
-    /// @param dtype  logical type, must be a [io.github.dfa1.vortex.core.DType.Primitive] with ptype F64
+    /// @param dtype  logical type, must be a [io.github.dfa1.vortex.core.model.DType.Primitive] with ptype F64
     /// @param length number of logical elements
     /// @param buffer raw double data (8 bytes per element, little-endian)
     public MaterializedDoubleArray(DType dtype, long length, MemorySegment buffer) {

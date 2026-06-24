@@ -1,12 +1,12 @@
 package io.github.dfa1.vortex.reader;
 
-import static io.github.dfa1.vortex.encoding.PTypeIO.LE_INT;
+import static io.github.dfa1.vortex.core.io.PTypeIO.LE_INT;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.IoBounds;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.io.IoBounds;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.fbs.FbsBuffer;
+import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.fbs.FbsBuffer;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 import io.github.dfa1.vortex.reader.decode.KnownArrayNode;
@@ -52,7 +52,7 @@ public final class FlatSegmentDecoder {
         int fbLen = seg.get(LE_INT, segLen - 4L);
         long fbStart = segLen - 4L - fbLen;
         IoBounds.checkRange(fbStart, fbLen, segLen);
-        var fbArray = io.github.dfa1.vortex.fbs.FbsArray.getRootAsFbsArray(seg.asSlice(fbStart, fbLen));
+        var fbArray = io.github.dfa1.vortex.core.fbs.FbsArray.getRootAsFbsArray(seg.asSlice(fbStart, fbLen));
 
         int numBuffers = IoBounds.checkCount(fbArray.buffersLength());
         MemorySegment[] bufs = new MemorySegment[numBuffers];
@@ -70,7 +70,7 @@ public final class FlatSegmentDecoder {
     }
 
     private static ArrayNode convertArrayNode(
-            io.github.dfa1.vortex.fbs.FbsArrayNode fbs,
+            io.github.dfa1.vortex.core.fbs.FbsArrayNode fbs,
             List<String> encodingSpecs
     ) {
         String rawEncodingId = encodingSpecs.get(fbs.encoding());

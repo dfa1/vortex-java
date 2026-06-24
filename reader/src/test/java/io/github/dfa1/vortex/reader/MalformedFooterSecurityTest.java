@@ -4,8 +4,8 @@ import static io.github.dfa1.vortex.reader.MalformedFiles.buildFooter;
 import static io.github.dfa1.vortex.reader.MalformedFiles.buildI64Dtype;
 import static io.github.dfa1.vortex.reader.MalformedFiles.buildFlatLayout;
 import static io.github.dfa1.vortex.reader.MalformedFiles.buildPostscript;
-import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.core.VortexFormat;
+import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;

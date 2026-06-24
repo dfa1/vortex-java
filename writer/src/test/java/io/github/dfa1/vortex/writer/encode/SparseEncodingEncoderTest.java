@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
@@ -11,14 +11,14 @@ import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.encoding.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
-import io.github.dfa1.vortex.encoding.EncodingId;
+import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
-import io.github.dfa1.vortex.proto.ProtoNullValue;
-import io.github.dfa1.vortex.proto.ProtoPatchesMetadata;
-import io.github.dfa1.vortex.proto.ProtoScalarValue;
-import io.github.dfa1.vortex.proto.ProtoSparseMetadata;
-import io.github.dfa1.vortex.proto.ProtoVarBinMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoNullValue;
+import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.core.proto.ProtoSparseMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoVarBinMetadata;
 import io.github.dfa1.vortex.reader.decode.BoolEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.SparseEncodingDecoder;
@@ -194,7 +194,7 @@ class SparseEncodingEncoderTest {
 
         private static byte[] buildSparseMetaBytes(long numPatches, long offset, PType idxPtype) {
             ProtoPatchesMetadata patchesMeta = new ProtoPatchesMetadata(numPatches, offset,
-                    io.github.dfa1.vortex.proto.ProtoPType.fromValue(idxPtype.ordinal()), null, null, null);
+                    io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(idxPtype.ordinal()), null, null, null);
             return new ProtoSparseMetadata(patchesMeta).encode();
         }
 
@@ -346,7 +346,7 @@ class SparseEncodingEncoderTest {
             byte[] idxBuf = toLEBytes(new long[]{1L, 3L}, PType.U32);
             byte[] strBytes = "hibye".getBytes(StandardCharsets.UTF_8);
             byte[] offsets = intLEBytes(new int[]{0, 2, 5});
-            byte[] varBinMeta = new ProtoVarBinMetadata(io.github.dfa1.vortex.proto.ProtoPType.fromValue(PType.I32.ordinal())).encode();
+            byte[] varBinMeta = new ProtoVarBinMetadata(io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.I32.ordinal())).encode();
 
             ArrayNode offsetsNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
                     new ArrayNode[0], new int[]{3});

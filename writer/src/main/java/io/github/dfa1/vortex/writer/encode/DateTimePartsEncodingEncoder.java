@@ -1,11 +1,11 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.encoding.TimeUnit;
-import io.github.dfa1.vortex.proto.ProtoDateTimePartsMetadata;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.model.TimeUnit;
+import io.github.dfa1.vortex.core.proto.ProtoDateTimePartsMetadata;
 
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
@@ -15,8 +15,8 @@ import java.util.List;
 public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
 
     private static final long SECONDS_PER_DAY = 86_400L;
-    private static final io.github.dfa1.vortex.proto.ProtoPType I64_PROTO =
-            io.github.dfa1.vortex.proto.ProtoPType.fromValue(PType.I64.ordinal());
+    private static final io.github.dfa1.vortex.core.proto.ProtoPType I64_PROTO =
+            io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.I64.ordinal());
 
     /// Public no-arg constructor required by [java.util.ServiceLoader].
     public DateTimePartsEncodingEncoder() {

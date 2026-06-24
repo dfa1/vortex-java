@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.reader.array;
 
 import java.math.BigDecimal;
 
-/// [Array] for [io.github.dfa1.vortex.core.DType.Decimal] columns.
+/// [Array] for [io.github.dfa1.vortex.core.model.DType.Decimal] columns.
 ///
 /// Concrete subtypes include [LazyDecimalArray] (direct LE-byte buffer),
 /// [LazyDecimalBytePartsArray] (byte-parts reassembly), and

@@ -3,7 +3,7 @@ syntax = "proto3";
 
 package vortex.encodings;
 
-option java_package = "io.github.dfa1.vortex.proto";
+option java_package = "io.github.dfa1.vortex.core.proto";
 option java_outer_classname = "EncodingProtos";
 
 import "scalar.proto";

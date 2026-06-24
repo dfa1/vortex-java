@@ -1,12 +1,12 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.encoding.PrimitiveArrays;
-import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.proto.ProtoRLEMetadata;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
+import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.proto.ProtoRLEMetadata;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
@@ -87,9 +87,9 @@ public final class RleEncodingEncoder implements EncodingEncoder {
         byte[] metaBytes = new ProtoRLEMetadata(
                 globalValuesCount,
                 paddedLen,
-                io.github.dfa1.vortex.proto.ProtoPType.fromValue(indicesPtype.ordinal()),
+                io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(indicesPtype.ordinal()),
                 numChunks,
-                io.github.dfa1.vortex.proto.ProtoPType.fromValue(offsetsPtype.ordinal()),
+                io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(offsetsPtype.ordinal()),
                 0L
         ).encode();
 
@@ -131,9 +131,9 @@ public final class RleEncodingEncoder implements EncodingEncoder {
         byte[] metaBytes = new ProtoRLEMetadata(
                 0L,
                 0L,
-                io.github.dfa1.vortex.proto.ProtoPType.fromValue(indicesPtype.ordinal()),
+                io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(indicesPtype.ordinal()),
                 0L,
-                io.github.dfa1.vortex.proto.ProtoPType.fromValue(offsetsPtype.ordinal()),
+                io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(offsetsPtype.ordinal()),
                 0L
         ).encode();
         EncodeNode valuesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);

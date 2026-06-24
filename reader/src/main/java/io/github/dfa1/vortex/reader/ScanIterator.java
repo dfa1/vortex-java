@@ -1,13 +1,13 @@
 package io.github.dfa1.vortex.reader;
 
-import static io.github.dfa1.vortex.encoding.PTypeIO.LE_SHORT;
-import static io.github.dfa1.vortex.encoding.PTypeIO.LE_INT;
-import static io.github.dfa1.vortex.encoding.PTypeIO.LE_LONG;
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.IoBounds;
-import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.encoding.EncodingId;
+import static io.github.dfa1.vortex.core.io.PTypeIO.LE_SHORT;
+import static io.github.dfa1.vortex.core.io.PTypeIO.LE_INT;
+import static io.github.dfa1.vortex.core.io.PTypeIO.LE_LONG;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.io.IoBounds;
+import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
@@ -817,9 +817,9 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             return ArrayStats.empty();
         }
         long fbStart = segLen - 4L - fbLen;
-        var fbArray = io.github.dfa1.vortex.fbs.FbsArray.getRootAsFbsArray(IoBounds.slice(seg, fbStart, fbLen));
+        var fbArray = io.github.dfa1.vortex.core.fbs.FbsArray.getRootAsFbsArray(IoBounds.slice(seg, fbStart, fbLen));
 
-        io.github.dfa1.vortex.fbs.FbsArrayNode root = fbArray.root();
+        io.github.dfa1.vortex.core.fbs.FbsArrayNode root = fbArray.root();
         if (root == null) {
             return ArrayStats.empty();
         }

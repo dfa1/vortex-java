@@ -1,12 +1,12 @@
 package io.github.dfa1.vortex.reader.decode;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.VariantArray;
-import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.proto.ProtoVariantMetadata;
+import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.proto.ProtoVariantMetadata;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -61,7 +61,7 @@ public final class VariantEncodingDecoder implements EncodingDecoder {
         }
     }
 
-    static DType dtypeFromProto(io.github.dfa1.vortex.proto.ProtoDType proto) {
+    static DType dtypeFromProto(io.github.dfa1.vortex.core.proto.ProtoDType proto) {
         if (proto.null_() != null) {
             return new DType.Null(true);
         }
@@ -90,7 +90,7 @@ public final class VariantEncodingDecoder implements EncodingDecoder {
             var names = new ArrayList<String>(s.names().size());
             var types = new ArrayList<DType>(s.dtypes().size());
             names.addAll(s.names());
-            for (io.github.dfa1.vortex.proto.ProtoDType child : s.dtypes()) {
+            for (io.github.dfa1.vortex.core.proto.ProtoDType child : s.dtypes()) {
                 types.add(dtypeFromProto(child));
             }
             return new DType.Struct(List.copyOf(names), List.copyOf(types), s.nullable());

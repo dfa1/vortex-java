@@ -25,7 +25,7 @@ public final class TypeRegistry {
                 .map(Ast.ProtoFile::javaPackage)
                 .filter(s -> !s.isEmpty())
                 .findFirst()
-                .orElse("io.github.dfa1.vortex.proto");
+                .orElse("io.github.dfa1.vortex.core.proto");
         Ast.EnumDecl nullValueDecl = new Ast.EnumDecl(
                 "NullValue", List.of(new Ast.EnumValue("NULL_VALUE", 0)));
         ResolvedType.Enum nullValue = new ResolvedType.Enum(nullValueDecl, "google.protobuf.NullValue", wellKnownJavaPkg);

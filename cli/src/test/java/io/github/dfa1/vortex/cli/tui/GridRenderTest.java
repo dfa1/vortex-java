@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.cli.tui;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.encoding.TimeUnit;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.TimeUnit;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.FixedSizeListArray;

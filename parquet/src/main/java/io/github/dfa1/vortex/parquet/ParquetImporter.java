@@ -8,11 +8,11 @@ import dev.hardwood.reader.RowReader;
 import dev.hardwood.schema.ColumnProjection;
 import dev.hardwood.schema.ColumnSchema;
 import dev.hardwood.schema.FileSchema;
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.encode.DateTimePartsData;
-import io.github.dfa1.vortex.encoding.TimeUnit;
-import io.github.dfa1.vortex.extension.TimestampDtype;
+import io.github.dfa1.vortex.core.model.TimeUnit;
+import io.github.dfa1.vortex.core.model.TimestampDtype;
 import io.github.dfa1.vortex.writer.VortexWriter;
 
 import java.io.IOException;

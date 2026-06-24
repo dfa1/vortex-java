@@ -1,10 +1,10 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.encoding.EncodingId;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.model.EncodingId;
 import java.lang.foreign.MemorySegment;
-import io.github.dfa1.vortex.proto.ProtoDecimalBytePartsMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoDecimalBytePartsMetadata;
 
 import java.util.List;
 
@@ -33,7 +33,7 @@ public final class DecimalBytePartsEncodingEncoder implements EncodingEncoder {
         EncodeResult mspResult = ctx.lookupEncoder(EncodingId.VORTEX_PRIMITIVE).encode(mspDtype, longs, ctx);
 
         ProtoDecimalBytePartsMetadata proto = new ProtoDecimalBytePartsMetadata(
-                io.github.dfa1.vortex.proto.ProtoPType.fromValue(PType.I64.ordinal()),
+                io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.I64.ordinal()),
                 0);
         MemorySegment metaBuf = MemorySegment.ofArray(proto.encode());
 

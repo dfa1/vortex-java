@@ -1,13 +1,13 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.proto.ProtoPatchesMetadata;
-import io.github.dfa1.vortex.proto.ProtoScalarValue;
-import io.github.dfa1.vortex.proto.ProtoSparseMetadata;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.core.proto.ProtoSparseMetadata;
 
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
@@ -97,7 +97,7 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
         ProtoPatchesMetadata patchesMeta = new ProtoPatchesMetadata(
                 numPatches,
                 0L,
-                io.github.dfa1.vortex.proto.ProtoPType.fromValue(idxPtype.ordinal()),
+                io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(idxPtype.ordinal()),
                 null,
                 null,
                 null
@@ -221,7 +221,7 @@ public final class SparseEncodingEncoder implements EncodingEncoder {
         ProtoPatchesMetadata patchesMeta = new ProtoPatchesMetadata(
                 numPatches,
                 0L,
-                io.github.dfa1.vortex.proto.ProtoPType.fromValue(idxPtype.ordinal()),
+                io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(idxPtype.ordinal()),
                 null,
                 null,
                 null

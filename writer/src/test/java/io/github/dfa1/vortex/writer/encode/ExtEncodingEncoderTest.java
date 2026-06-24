@@ -1,11 +1,11 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
-import io.github.dfa1.vortex.encoding.EncodingId;
+import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.encoding.TestSegments;
@@ -113,7 +113,7 @@ class ExtEncodingEncoderTest {
             org.assertj.core.api.Assertions.assertThatThrownBy(() ->
                     ENCODER.encodeCascade(DType.I64, new long[]{1L},
                             EncodeTestHelper.testCtx()))
-                    .isInstanceOf(io.github.dfa1.vortex.core.VortexException.class)
+                    .isInstanceOf(io.github.dfa1.vortex.core.error.VortexException.class)
                     .hasMessageContaining("expected extension dtype");
         }
     }

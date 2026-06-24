@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.reader.array;
 
 
-import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.model.DType;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -12,7 +12,7 @@ public final class MaterializedBoolArray extends AbstractMaterializedArray imple
 
     /// Constructs a `MaterializedBoolArray` backed by the given bit-packed buffer.
     ///
-    /// @param dtype  logical type, must be [io.github.dfa1.vortex.core.DType.Bool]
+    /// @param dtype  logical type, must be [io.github.dfa1.vortex.core.model.DType.Bool]
     /// @param length number of logical boolean elements
     /// @param buffer bit-packed boolean data (LSB-first, one byte per 8 elements)
     public MaterializedBoolArray(DType dtype, long length, MemorySegment buffer) {

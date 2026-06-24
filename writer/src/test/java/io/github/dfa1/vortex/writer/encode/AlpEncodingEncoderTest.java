@@ -7,11 +7,11 @@ import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.encoding.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
-import io.github.dfa1.vortex.encoding.EncodingId;
+import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
-import io.github.dfa1.vortex.proto.ProtoALPMetadata;
-import io.github.dfa1.vortex.proto.ProtoPatchesMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoALPMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.reader.decode.AlpEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
 import org.junit.jupiter.api.Nested;
@@ -44,7 +44,7 @@ class AlpEncodingEncoderTest {
         ) {
             ProtoPatchesMetadata pm = patchIndices != null
                     ? new ProtoPatchesMetadata((long) patchIndices.length, 0L,
-                            io.github.dfa1.vortex.proto.ProtoPType.U32, null, null, null)
+                            io.github.dfa1.vortex.core.proto.ProtoPType.U32, null, null, null)
                     : null;
             byte[] metaBytes = new ProtoALPMetadata(expE, expF, pm).encode();
 

@@ -1,8 +1,8 @@
 package io.github.dfa1.vortex.reader.decode;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.encoding.PTypeIO;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.io.PTypeIO;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
@@ -54,7 +54,7 @@ class VarBinViewEncodingDecoderTest {
     void decode_wrongDtype_throws() {
         // Given a primitive dtype
         ArrayNode node = ArrayNode.of(EncodingId.VORTEX_VARBINVIEW, null, new ArrayNode[0], new int[]{0});
-        DecodeContext ctx = new DecodeContext(node, new DType.Primitive(io.github.dfa1.vortex.core.PType.I32, false),
+        DecodeContext ctx = new DecodeContext(node, new DType.Primitive(io.github.dfa1.vortex.core.model.PType.I32, false),
                 0, new MemorySegment[]{Arena.ofAuto().allocate(16)}, ReadRegistry.empty(), Arena.ofAuto());
 
         // When / Then

@@ -1,12 +1,12 @@
 package io.github.dfa1.vortex.reader.decode;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.proto.ProtoALPRDMetadata;
-import io.github.dfa1.vortex.proto.ProtoPatchesMetadata;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.proto.ProtoALPRDMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LazyAlpRdDoubleArray;
@@ -111,7 +111,7 @@ public final class AlpRdEncodingDecoder implements EncodingDecoder {
         MemorySegment rawMeta = ctx.metadata();
         if (rawMeta == null || rawMeta.byteSize() == 0) {
             return new ProtoALPRDMetadata(0, 0, java.util.List.of(),
-                    io.github.dfa1.vortex.proto.ProtoPType.fromValue(PType.U16.ordinal()), null);
+                    io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.U16.ordinal()), null);
         }
         try {
             MemorySegment metaSeg = rawMeta;

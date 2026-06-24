@@ -1,8 +1,8 @@
 package io.github.dfa1.vortex.reader;
 
-import io.github.dfa1.vortex.core.IoBounds;
-import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.core.VortexFormat;
+import io.github.dfa1.vortex.core.io.IoBounds;
+import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;

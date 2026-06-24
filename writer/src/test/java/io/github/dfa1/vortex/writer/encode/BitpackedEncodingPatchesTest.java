@@ -5,12 +5,12 @@ import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.encoding.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
-import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.encoding.PTypeIO;
+import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.io.PTypeIO;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
-import io.github.dfa1.vortex.proto.ProtoBitPackedMetadata;
-import io.github.dfa1.vortex.proto.ProtoPatchesMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoBitPackedMetadata;
+import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.reader.decode.BitpackedEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
 import org.junit.jupiter.api.Nested;
@@ -42,7 +42,7 @@ class BitpackedEncodingPatchesTest {
             byte[] packedBytes = packedSeg.toArray(java.lang.foreign.ValueLayout.JAVA_BYTE);
 
             ProtoPatchesMetadata patches = new ProtoPatchesMetadata(2L, 0L,
-                    io.github.dfa1.vortex.proto.ProtoPType.U32, null, null, null);
+                    io.github.dfa1.vortex.core.proto.ProtoPType.U32, null, null, null);
             byte[] metaBytes = new ProtoBitPackedMetadata(6, 0, patches).encode();
 
             byte[] idxBuf = new byte[2 * 4];

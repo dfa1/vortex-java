@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.reader.decode;
 
-import io.github.dfa1.vortex.encoding.PTypeIO;
+import io.github.dfa1.vortex.core.io.PTypeIO;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 

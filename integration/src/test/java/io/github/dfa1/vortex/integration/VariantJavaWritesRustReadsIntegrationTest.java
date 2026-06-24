@@ -4,10 +4,10 @@ import dev.vortex.api.DataSource;
 import dev.vortex.api.Session;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.proto.ProtoPrimitive;
-import io.github.dfa1.vortex.proto.ProtoScalar;
-import io.github.dfa1.vortex.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.proto.ProtoPrimitive;
+import io.github.dfa1.vortex.core.proto.ProtoScalar;
+import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import io.github.dfa1.vortex.writer.encode.VariantData;
@@ -115,8 +115,8 @@ class VariantJavaWritesRustReadsIntegrationTest {
         // Inner typed scalar carrying its own i32 dtype, wrapped as a variant value
         // (mirrors Rust ProtoScalar::variant(ProtoScalar::primitive(value))).
         return new ProtoScalar(
-                io.github.dfa1.vortex.proto.ProtoDType.ofPrimitive(
-                        new ProtoPrimitive(io.github.dfa1.vortex.proto.ProtoPType.I32, false)),
+                io.github.dfa1.vortex.core.proto.ProtoDType.ofPrimitive(
+                        new ProtoPrimitive(io.github.dfa1.vortex.core.proto.ProtoPType.I32, false)),
                 ProtoScalarValue.ofInt64Value(value));
     }
 }

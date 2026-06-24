@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.proto;
+package io.github.dfa1.vortex.core.proto;
 
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

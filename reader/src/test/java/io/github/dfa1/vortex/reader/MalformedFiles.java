@@ -1,15 +1,15 @@
 package io.github.dfa1.vortex.reader;
 
-import io.github.dfa1.vortex.fbs.FbsBuilder;
-import io.github.dfa1.vortex.fbs.FbsArraySpec;
-import io.github.dfa1.vortex.fbs.FbsFooter;
-import io.github.dfa1.vortex.fbs.FbsLayout;
-import io.github.dfa1.vortex.fbs.FbsLayoutSpec;
-import io.github.dfa1.vortex.fbs.FbsPostscript;
-import io.github.dfa1.vortex.fbs.FbsPostscriptSegment;
-import io.github.dfa1.vortex.fbs.FbsPrimitive;
-import io.github.dfa1.vortex.fbs.FbsSegmentSpec;
-import io.github.dfa1.vortex.fbs.FbsType;
+import io.github.dfa1.vortex.core.fbs.FbsBuilder;
+import io.github.dfa1.vortex.core.fbs.FbsArraySpec;
+import io.github.dfa1.vortex.core.fbs.FbsFooter;
+import io.github.dfa1.vortex.core.fbs.FbsLayout;
+import io.github.dfa1.vortex.core.fbs.FbsLayoutSpec;
+import io.github.dfa1.vortex.core.fbs.FbsPostscript;
+import io.github.dfa1.vortex.core.fbs.FbsPostscriptSegment;
+import io.github.dfa1.vortex.core.fbs.FbsPrimitive;
+import io.github.dfa1.vortex.core.fbs.FbsSegmentSpec;
+import io.github.dfa1.vortex.core.fbs.FbsType;
 
 import java.nio.ByteBuffer;
 
@@ -28,9 +28,9 @@ final class MalformedFiles {
     /// @return the finished DType FlatBuffer
     static ByteBuffer buildI64Dtype() {
         var fbb = new FbsBuilder(64);
-        int prim = FbsPrimitive.createFbsPrimitive(fbb, io.github.dfa1.vortex.fbs.FbsPType.I64, false);
-        int off = io.github.dfa1.vortex.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsPrimitive, prim);
-        io.github.dfa1.vortex.fbs.FbsDType.finishFbsDTypeBuffer(fbb, off);
+        int prim = FbsPrimitive.createFbsPrimitive(fbb, io.github.dfa1.vortex.core.fbs.FbsPType.I64, false);
+        int off = io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsPrimitive, prim);
+        io.github.dfa1.vortex.core.fbs.FbsDType.finishFbsDTypeBuffer(fbb, off);
         return slice(fbb);
     }
 

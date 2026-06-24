@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.reader.array;
 
-import io.github.dfa1.vortex.core.DType;
+import io.github.dfa1.vortex.core.model.DType;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
@@ -57,7 +57,7 @@ public sealed interface Array
     /// [io.github.dfa1.vortex.reader.decode.DecodeContext#materialize(Array)].
     ///
     /// Array families with no row-addressable primary segment (struct, list, variant,
-    /// the byte-parts decimal layout) throw [io.github.dfa1.vortex.core.VortexException].
+    /// the byte-parts decimal layout) throw [io.github.dfa1.vortex.core.error.VortexException].
     ///
     /// @param arena allocator used to materialise lazy variants
     /// @return the primary [MemorySegment]

@@ -2,8 +2,8 @@ package io.github.dfa1.vortex.reader.array;
 
 
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.VortexException;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.error.VortexException;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
@@ -195,7 +195,7 @@ class GenericArrayTest {
 
             // When / Then
             assertThatThrownBy(() -> sut.getDecimal(0))
-                    .isInstanceOf(io.github.dfa1.vortex.core.VortexException.class)
+                    .isInstanceOf(io.github.dfa1.vortex.core.error.VortexException.class)
                     .hasMessageContaining("not a multiple");
         }
     }

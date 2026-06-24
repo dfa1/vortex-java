@@ -1,11 +1,11 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.core.PType;
-import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.proto.ProtoRunEndMetadata;
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.proto.ProtoRunEndMetadata;
 
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
@@ -90,7 +90,7 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
         }
 
         byte[] metaBytes = new ProtoRunEndMetadata(
-                io.github.dfa1.vortex.proto.ProtoPType.fromValue(PType.U32.ordinal()),
+                io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.U32.ordinal()),
                 numRuns,
                 0L
         ).encode();

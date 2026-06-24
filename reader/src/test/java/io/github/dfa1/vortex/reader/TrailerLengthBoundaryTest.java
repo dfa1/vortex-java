@@ -1,12 +1,12 @@
 package io.github.dfa1.vortex.reader;
 
-import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.core.VortexFormat;
+import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.MemorySegment;
 
-import static io.github.dfa1.vortex.encoding.PTypeIO.LE_SHORT;
+import static io.github.dfa1.vortex.core.io.PTypeIO.LE_SHORT;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
