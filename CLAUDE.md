@@ -70,7 +70,10 @@ Regenerate after editing `.fbs`/`.proto` (both generators are in-house, no exter
 Both schema languages are compiled in-process to MemorySegment-native Java, with no
 `flatc`/`protoc` and no `com.google.flatbuffers`/`protobuf-java` runtime (ADR 0017):
 - **`.fbs` → `fbs-gen`** (`io.github.dfa1.vortex.fbsgen`): generates readers extending
-  `FbsTable`/`FbsStruct` and builders over `FbsBuilder` (all in `io.github.dfa1.vortex.fbsrt`).
+  `FbsTable`/`FbsStruct` and builders over `FbsBuilder`, all in the same generated package
+  `io.github.dfa1.vortex.fbs`. The runtime base classes `FbsTable`/`FbsStruct` are
+  package-private (only generated readers extend them); `FbsBuilder` is public because the
+  writer module assembles FlatBuffers with it.
 - **`.proto` → `proto-gen`**: one record per message with static `decode(MemorySegment, long,
   long)` + `encode()` operating directly on a segment.
 

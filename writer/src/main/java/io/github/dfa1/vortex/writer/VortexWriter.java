@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.writer;
 
-import io.github.dfa1.vortex.fbsrt.FbsBuilder;
+import io.github.dfa1.vortex.fbs.FbsBuilder;
 import io.github.dfa1.vortex.writer.encode.DateTimePartsData;
 import io.github.dfa1.vortex.writer.encode.FixedSizeListData;
 import io.github.dfa1.vortex.writer.encode.ListData;

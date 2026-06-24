@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.fbsrt;
+package io.github.dfa1.vortex.fbs;
 
 import static io.github.dfa1.vortex.encoding.PTypeIO.LE_DOUBLE;
 import static io.github.dfa1.vortex.encoding.PTypeIO.LE_FLOAT;

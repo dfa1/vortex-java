@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.fbs.FbsArrayNode;
 import io.github.dfa1.vortex.fbs.FbsBuffer;
-import io.github.dfa1.vortex.fbsrt.FbsBuilder;
+import io.github.dfa1.vortex.fbs.FbsBuilder;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.UnknownArray;

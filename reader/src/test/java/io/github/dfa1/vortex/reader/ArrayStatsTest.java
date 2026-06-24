@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.reader;
 
-import io.github.dfa1.vortex.fbsrt.FbsBuilder;
+import io.github.dfa1.vortex.fbs.FbsBuilder;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.proto.ProtoScalarValue;
 import org.junit.jupiter.api.Nested;

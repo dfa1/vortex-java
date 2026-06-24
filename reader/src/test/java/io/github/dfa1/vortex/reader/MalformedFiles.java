@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.reader;
 
-import io.github.dfa1.vortex.fbsrt.FbsBuilder;
+import io.github.dfa1.vortex.fbs.FbsBuilder;
 import io.github.dfa1.vortex.fbs.FbsArraySpec;
 import io.github.dfa1.vortex.fbs.FbsFooter;
 import io.github.dfa1.vortex.fbs.FbsLayout;

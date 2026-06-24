@@ -131,7 +131,7 @@ the in-house path matches byte-for-byte on the full integration suite.
 
 ## Known limitations
 
-- **No intra-FlatBuffer bounds checks** in the `fbsrt` read path (e.g.
+- **No intra-FlatBuffer bounds checks** in the `FbsTable`/`FbsStruct` read path (e.g.
   `FbsTable.readStringAt` allocates `new byte[len]` with `len` from the blob).
   Same posture as the previous `com.google.flatbuffers` runtime; file-level framing
   is range-checked upstream by `IoBounds`, intra-FlatBuffer fields are not. Trusted-blob
