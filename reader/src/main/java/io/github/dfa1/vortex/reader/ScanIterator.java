@@ -43,6 +43,7 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -85,6 +86,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     private List<ChunkSpec> chunks;
     private List<String> projectedNames;
     private List<DType> projectedDtypes;
+    private Map<String, DType> columnDtypes;
     private int chunkIndex;
     private int peekedChunkIdx = -1;
     private long rowsReturned;
@@ -182,12 +184,55 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     // ── Layout tree traversal ─────────────────────────────────────────────────
 
     @SuppressWarnings("unchecked")
-    private static int compareValues(Object a, Object b) {
+    private static int compareValues(Object a, Object b, DType column) {
+        // Key the compare mode off the *column* type, not the boxed operand type. Stats decode
+        // integers as Long and floats as Float/Double, and a caller may box a filter value at the
+        // column's natural width (Integer for I32) or in a different width entirely. Letting the
+        // column decide keeps pruning width-agnostic (issue #159) without ever routing an integer
+        // column through double-compare (which would lose precision past 2^53 and mis-prune).
+        if (a instanceof Number na && b instanceof Number nb) {
+            if (column instanceof DType.Primitive prim) {
+                if (prim.ptype().isFloating()) {
+                    return Double.compare(na.doubleValue(), nb.doubleValue());
+                }
+                // U64 stats/values store the raw 64 bits, so a value >= 2^63 is a negative Long; an
+                // unsigned column must compare unsigned. U8/U16/U32 are zero-extended to a positive
+                // Long where signed == unsigned, so this stays correct for them too.
+                return column.isUnsigned()
+                        ? Long.compareUnsigned(na.longValue(), nb.longValue())
+                        : Long.compare(na.longValue(), nb.longValue());
+            }
+            // Column type unresolved (not a struct field) — fall back to a width-agnostic compare
+            // keyed off the operands so two valid numbers never drop into the throwing path.
+            if (a instanceof Double || a instanceof Float || b instanceof Double || b instanceof Float) {
+                return Double.compare(na.doubleValue(), nb.doubleValue());
+            }
+            return Long.compare(na.longValue(), nb.longValue());
+        }
         try {
             return ((Comparable<Object>) a).compareTo(b);
-        } catch (ClassCastException _) {
-            return 0;
+        } catch (ClassCastException e) {
+            // A genuinely incomparable filter value (e.g. a String against a numeric column) is a
+            // caller error — surface it instead of swallowing it into a silent no-prune.
+            throw new VortexException("filter value of type " + b.getClass().getSimpleName()
+                    + " is not comparable to the column's zone-map statistic of type "
+                    + a.getClass().getSimpleName(), e);
         }
+    }
+
+    /// Returns the declared [DType] of column `col`, or `null` if the file is not a struct or has
+    /// no such column. Resolved once from the file's struct schema and cached; used to drive
+    /// zone-map comparisons by the column's true type rather than the filter value's boxing.
+    private DType columnDType(String col) {
+        if (columnDtypes == null) {
+            columnDtypes = new HashMap<>();
+            if (file.dtype() instanceof DType.Struct struct) {
+                for (int i = 0; i < struct.fieldNames().size(); i++) {
+                    columnDtypes.put(struct.fieldNames().get(i), struct.fieldTypes().get(i));
+                }
+            }
+        }
+        return columnDtypes.get(col);
     }
 
     private static Map<String, Array> expandStruct(StructArray sa) {
@@ -708,7 +753,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                     yield false;
                 }
                 Object max = readFlatStats(flat).max();
-                yield max != null && compareValues(max, val) <= 0;
+                yield max != null && compareValues(max, val, columnDType(col)) <= 0;
             }
             case RowFilter.Gte(var col, var val) -> {
                 Layout flat = chunk.layoutFor(col);
@@ -716,7 +761,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                     yield false;
                 }
                 Object max = readFlatStats(flat).max();
-                yield max != null && compareValues(max, val) < 0;
+                yield max != null && compareValues(max, val, columnDType(col)) < 0;
             }
             case RowFilter.Lt(var col, var val) -> {
                 Layout flat = chunk.layoutFor(col);
@@ -724,7 +769,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                     yield false;
                 }
                 Object min = readFlatStats(flat).min();
-                yield min != null && compareValues(min, val) >= 0;
+                yield min != null && compareValues(min, val, columnDType(col)) >= 0;
             }
             case RowFilter.Lte(var col, var val) -> {
                 Layout flat = chunk.layoutFor(col);
@@ -732,7 +777,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                     yield false;
                 }
                 Object min = readFlatStats(flat).min();
-                yield min != null && compareValues(min, val) > 0;
+                yield min != null && compareValues(min, val, columnDType(col)) > 0;
             }
             case RowFilter.Eq(var col, var val) -> {
                 Layout flat = chunk.layoutFor(col);
@@ -745,13 +790,10 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                 if (min == null || max == null) {
                     yield false;
                 }
-                try {
-                    @SuppressWarnings("unchecked")
-                    Comparable<Object> cv = (Comparable<Object>) val;
-                    yield cv.compareTo(min) < 0 || cv.compareTo(max) > 0;
-                } catch (ClassCastException _) {
-                    yield false;
-                }
+                // val < min || val > max → no row in this chunk can equal val. Route through the
+                // shared comparator so this path is width-agnostic and unsigned-aware too (#159).
+                DType ct = columnDType(col);
+                yield compareValues(val, min, ct) < 0 || compareValues(val, max, ct) > 0;
             }
             case RowFilter.Neq(var col, var val) -> {
                 Layout flat = chunk.layoutFor(col);
@@ -764,13 +806,9 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                 if (min == null || max == null) {
                     yield false;
                 }
-                try {
-                    @SuppressWarnings("unchecked")
-                    Comparable<Object> cv = (Comparable<Object>) val;
-                    yield cv.compareTo(min) == 0 && cv.compareTo(max) == 0;
-                } catch (ClassCastException _) {
-                    yield false;
-                }
+                // Every row equals val (min == max == val) → no row is != val.
+                DType ct = columnDType(col);
+                yield compareValues(val, min, ct) == 0 && compareValues(val, max, ct) == 0;
             }
             case RowFilter.IsNull(var col) -> {
                 Layout flat = chunk.layoutFor(col);

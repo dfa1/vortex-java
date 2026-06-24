@@ -5,6 +5,16 @@ All notable changes to **vortex-java** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `DType.isUnsigned()` — `true` for the unsigned integer primitives (`U8`–`U64`), `false` otherwise. ([#159](https://github.com/dfa1/vortex-java/issues/159))
+
+### Fixed
+
+- Zone-map pruning now compares filter values in the *column's* type domain rather than by the boxed value's type. A predicate whose value is boxed at a different width (e.g. `Integer` on an `I64` column) — or any value on a `U64` column — previously pruned nothing and silently degraded to a full scan; it now prunes correctly (unsigned columns by unsigned order). As part of this, a filter value genuinely incomparable to its column (e.g. a `String` against a numeric column) now raises `VortexException` during the scan instead of silently disabling pruning — a behaviour change for callers that relied on the previous silent full scan. ([#159](https://github.com/dfa1/vortex-java/issues/159))
+
 ## [0.9.0] — 2026-06-24
 
 Two import-only breaking changes — the `vortex-core` types moved under `io.github.dfa1.vortex.core.*`, and the no-arg `DType` factories became constants. In return, Vortex now ships with **no FlatBuffers or Protobuf runtime dependency**: the `.fbs`/`.proto` schemas compile in-house to `MemorySegment`-native Java, dropping `com.google.flatbuffers:flatbuffers-java` — the last automatic-module dependency — so a named JPMS `module-info` is viable, and the generated wire classes are prefixed so they no longer collide on your classpath (ADR 0017).
