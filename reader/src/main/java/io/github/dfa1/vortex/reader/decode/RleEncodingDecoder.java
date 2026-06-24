@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.proto.RLEMetadata;
+import io.github.dfa1.vortex.proto.ProtoRLEMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantByteArray;
@@ -22,7 +22,6 @@ import io.github.dfa1.vortex.reader.array.OffsetBoolArray;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.nio.ByteBuffer;
 
 /// Read-only decoder for `fastlanes.rle`.
 public final class RleEncodingDecoder implements EncodingDecoder {
@@ -40,11 +39,11 @@ public final class RleEncodingDecoder implements EncodingDecoder {
 
     @Override
     public Array decode(DecodeContext ctx) {
-        ByteBuffer rawMeta = ctx.metadata();
-        RLEMetadata meta;
+        MemorySegment rawMeta = ctx.metadata();
+        ProtoRLEMetadata meta;
         try {
-            MemorySegment metaSeg = MemorySegment.ofBuffer(rawMeta.duplicate());
-            meta = RLEMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            MemorySegment metaSeg = rawMeta;
+            meta = ProtoRLEMetadata.decode(metaSeg, 0, metaSeg.byteSize());
         } catch (IOException e) {
             throw new VortexException(EncodingId.FASTLANES_RLE, "invalid metadata", e);
         }

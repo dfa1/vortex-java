@@ -4,9 +4,9 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.reader.Layout;
 import io.github.dfa1.vortex.reader.SegmentSpec;
 import io.github.dfa1.vortex.reader.ReadRegistry;
-import io.github.dfa1.vortex.fbs.Array;
-import io.github.dfa1.vortex.fbs.ArrayNode;
-import io.github.dfa1.vortex.fbs.Buffer;
+import io.github.dfa1.vortex.fbs.FbsArray;
+import io.github.dfa1.vortex.fbs.FbsArrayNode;
+import io.github.dfa1.vortex.fbs.FbsBuffer;
 import io.github.dfa1.vortex.reader.VortexReader;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 /// Phase 0 scoping for `vortex.pco` decode port.
 ///
 /// Inspects each pco-blocked fixture: walks layout, locates `vortex.pco`-encoded
-/// `ArrayNode`s, hand-parses the `PcoMetadata` proto (no generated stub needed yet),
+/// `FbsArrayNode`s, hand-parses the `PcoMetadata` proto (no generated stub needed yet),
 /// and dumps mode/delta nibbles from the first chunk_meta buffer.
 ///
 /// Output drives the Phase 5 scope decision (which pco modes / delta encodings to
@@ -118,7 +118,7 @@ class PcoFixtureInspectionIntegrationTest {
         int fbLen = bb.getInt(segLen - 4);
         int fbStart = segLen - 4 - fbLen;
         ByteBuffer fbBuf = bb.slice(fbStart, fbLen).order(ByteOrder.LITTLE_ENDIAN);
-        Array fbArray = Array.getRootAsArray(fbBuf);
+        FbsArray fbArray = FbsArray.getRootAsFbsArray(java.lang.foreign.MemorySegment.ofBuffer(fbBuf));
 
         // Materialize per-buffer offsets (need to read chunk_meta buffer for pco arrays).
         int numBuffers = fbArray.buffersLength();
@@ -126,7 +126,7 @@ class PcoFixtureInspectionIntegrationTest {
         long[] bufLengths = new long[numBuffers];
         long dataOffset = 0;
         for (int i = 0; i < numBuffers; i++) {
-            Buffer bufDesc = fbArray.buffers(i);
+            FbsBuffer bufDesc = fbArray.buffers(i);
             dataOffset += bufDesc.padding();
             bufOffsets[i] = dataOffset;
             bufLengths[i] = bufDesc.length();
@@ -136,7 +136,7 @@ class PcoFixtureInspectionIntegrationTest {
         visitNode(fbArray.root(), arraySpecs, seg, bufOffsets, bufLengths, stats, columnPath);
     }
 
-    private static void visitNode(ArrayNode node, List<String> arraySpecs, MemorySegment seg,
+    private static void visitNode(FbsArrayNode node, List<String> arraySpecs, MemorySegment seg,
             long[] bufOffsets, long[] bufLengths, PcoStats stats, String columnPath) {
         if (node == null) {
             return;
@@ -150,14 +150,14 @@ class PcoFixtureInspectionIntegrationTest {
         }
     }
 
-    private static void recordPco(ArrayNode node, MemorySegment seg,
+    private static void recordPco(FbsArrayNode node, MemorySegment seg,
             long[] bufOffsets, long[] bufLengths,
             PcoStats stats, String columnPath) {
         stats.pcoArrayCount++;
         stats.columnPaths.add(columnPath);
 
-        ByteBuffer meta = node.metadataAsByteBuffer();
-        ByteBuffer metaSlice = meta != null ? meta.slice() : null;
+        java.lang.foreign.MemorySegment metaSeg = node.metadataAsSegment();
+        ByteBuffer metaSlice = metaSeg != null ? metaSeg.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN) : null;
         PcoMeta pm = metaSlice != null ? parsePcoMetadata(metaSlice) : new PcoMeta();
         stats.chunksPerArray.add(pm.chunkCount);
         stats.pagesPerArray.add(pm.pageCount);

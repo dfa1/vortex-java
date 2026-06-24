@@ -5,11 +5,10 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.FastLanes;
 import io.github.dfa1.vortex.encoding.PrimitiveArrays;
-import io.github.dfa1.vortex.proto.DeltaMetadata;
-import io.github.dfa1.vortex.proto.ScalarValue;
+import io.github.dfa1.vortex.proto.ProtoDeltaMetadata;
+import io.github.dfa1.vortex.proto.ProtoScalarValue;
 
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
 import java.util.List;
 
 /// Write-only encoder for `fastlanes.delta`.
@@ -94,14 +93,14 @@ public final class DeltaEncodingEncoder implements EncodingEncoder {
         MemorySegment basesSeg = PrimitiveArrays.fromLongs(basesAll, ptype, ctx.arena());
         MemorySegment deltasSeg = PrimitiveArrays.fromLongs(deltasAll, ptype, ctx.arena());
 
-        byte[] metaBytes = new DeltaMetadata(paddedLen, 0).encode();
+        byte[] metaBytes = new ProtoDeltaMetadata(paddedLen, 0).encode();
 
         byte[] statsMin = n > 0 ? statsBytes(ptype, minVal) : null;
         byte[] statsMax = n > 0 ? statsBytes(ptype, maxVal) : null;
 
         EncodeNode basesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
         EncodeNode deltasNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
-        EncodeNode root = new EncodeNode(EncodingId.FASTLANES_DELTA, ByteBuffer.wrap(metaBytes),
+        EncodeNode root = new EncodeNode(EncodingId.FASTLANES_DELTA, MemorySegment.ofArray(metaBytes),
                 new EncodeNode[]{basesNode, deltasNode}, new int[0]);
         return new EncodeResult(root, List.of(basesSeg, deltasSeg), statsMin, statsMax);
     }
@@ -120,9 +119,9 @@ public final class DeltaEncodingEncoder implements EncodingEncoder {
 
     private static byte[] statsBytes(PType ptype, long value) {
         if (ptype.isUnsigned()) {
-            return ScalarValue.ofUint64Value(value).encode();
+            return ProtoScalarValue.ofUint64Value(value).encode();
         }
-        return ScalarValue.ofInt64Value(value).encode();
+        return ProtoScalarValue.ofInt64Value(value).encode();
     }
 
 }

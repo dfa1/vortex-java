@@ -42,7 +42,7 @@ class UuidExtensionDecoderTest {
         DType.Primitive u8 = DType.U8;
         assertThat(dtype.storageDType()).isEqualTo(new DType.FixedSizeList(u8, 16, true));
         assertThat(dtype.metadata()).isNotNull();
-        assertThat(dtype.metadata().remaining()).isZero();
+        assertThat(dtype.metadata().byteSize()).isZero();
     }
 
     @Test

@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.proto.DictMetadata;
+import io.github.dfa1.vortex.proto.ProtoDictMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
 import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
@@ -18,7 +18,6 @@ import io.github.dfa1.vortex.reader.array.VarBinArray;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.nio.ByteBuffer;
 
 /// Read-only decoder for `vortex.dict`.
 ///
@@ -45,29 +44,29 @@ public final class DictEncodingDecoder implements EncodingDecoder {
 
     @Override
     public Array decode(DecodeContext ctx) {
-        ByteBuffer meta = ctx.metadata();
+        MemorySegment meta = ctx.metadata();
 
         if (ctx.dtype() instanceof DType.Utf8) {
             if (ctx.node().children().length == 0) {
-                if (meta == null || !meta.hasRemaining()) {
+                if (meta == null || meta.byteSize() == 0) {
                     throw new VortexException(EncodingId.VORTEX_DICT, "missing metadata for legacy utf8 dict");
                 }
                 return decodeUtf8DictLegacy(ctx, meta);
             }
-            if (meta == null || !meta.hasRemaining()) {
+            if (meta == null || meta.byteSize() == 0) {
                 throw new VortexException(EncodingId.VORTEX_DICT, "missing metadata for utf8 dict");
             }
-            return decodeUtf8DictProto(ctx, meta.duplicate());
+            return decodeUtf8DictProto(ctx, meta);
         }
 
-        if (meta == null || !meta.hasRemaining()) {
+        if (meta == null || meta.byteSize() == 0) {
             throw new VortexException(EncodingId.VORTEX_DICT, "missing metadata");
         }
 
-        if (meta.remaining() == 1) {
-            return decodeLegacyJava(ctx, meta.get(0));
+        if (meta.byteSize() == 1) {
+            return decodeLegacyJava(ctx, meta.get(ValueLayout.JAVA_BYTE, 0));
         }
-        return decodeRustProto(ctx, meta.duplicate());
+        return decodeRustProto(ctx, meta);
     }
 
     private static Array decodeLegacyJava(DecodeContext ctx, byte codeTypeByte) {
@@ -91,11 +90,11 @@ public final class DictEncodingDecoder implements EncodingDecoder {
         return typedArray(ctx.dtype(), valPType, rowCount, out.asReadOnly());
     }
 
-    private static Array decodeRustProto(DecodeContext ctx, ByteBuffer metaBuf) {
-        DictMetadata meta;
+    private static Array decodeRustProto(DecodeContext ctx, MemorySegment metaBuf) {
+        ProtoDictMetadata meta;
         try {
-            MemorySegment metaSeg = MemorySegment.ofBuffer(metaBuf);
-            meta = DictMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            MemorySegment metaSeg = metaBuf;
+            meta = ProtoDictMetadata.decode(metaSeg, 0, metaSeg.byteSize());
         } catch (IOException e) {
             throw new VortexException(EncodingId.VORTEX_DICT, "invalid proto metadata", e);
         }
@@ -120,8 +119,8 @@ public final class DictEncodingDecoder implements EncodingDecoder {
         return typedArray(ctx.dtype(), valPType, rowCount, out.asReadOnly());
     }
 
-    private static Array decodeUtf8DictLegacy(DecodeContext ctx, ByteBuffer meta) {
-        PType codePType = PType.fromOrdinal(Byte.toUnsignedInt(meta.get(0)));
+    private static Array decodeUtf8DictLegacy(DecodeContext ctx, MemorySegment meta) {
+        PType codePType = PType.fromOrdinal(Byte.toUnsignedInt(meta.get(ValueLayout.JAVA_BYTE, 0)));
         long n = ctx.rowCount();
 
         MemorySegment dictBytes = ctx.buffer(0);
@@ -133,11 +132,11 @@ public final class DictEncodingDecoder implements EncodingDecoder {
                 codes, codePType);
     }
 
-    private static Array decodeUtf8DictProto(DecodeContext ctx, ByteBuffer metaBuf) {
-        DictMetadata meta;
+    private static Array decodeUtf8DictProto(DecodeContext ctx, MemorySegment metaBuf) {
+        ProtoDictMetadata meta;
         try {
-            MemorySegment metaSeg = MemorySegment.ofBuffer(metaBuf);
-            meta = DictMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            MemorySegment metaSeg = metaBuf;
+            meta = ProtoDictMetadata.decode(metaSeg, 0, metaSeg.byteSize());
         } catch (IOException e) {
             throw new VortexException(EncodingId.VORTEX_DICT, "invalid utf8 dict proto metadata", e);
         }

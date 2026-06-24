@@ -10,7 +10,6 @@ import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.encoding.TimeUnit;
 
-import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.Objects;
 
@@ -52,11 +51,11 @@ public final class ExtensionStorage {
     /// @return decoded time unit
     /// @throws VortexException if the metadata is missing
     public static TimeUnit readUnit(DType.Extension ext) {
-        ByteBuffer meta = ext.metadata();
-        if (meta == null || !meta.hasRemaining()) {
+        java.lang.foreign.MemorySegment meta = ext.metadata();
+        if (meta == null || meta.byteSize() == 0) {
             throw new VortexException("missing TimeUnit metadata byte for " + ext.extensionId());
         }
-        return TimeUnit.fromTag(meta.get(meta.position()));
+        return TimeUnit.fromTag(meta.get(java.lang.foreign.ValueLayout.JAVA_BYTE, 0));
     }
 
     /// Constructs an [Instant] from a signed epoch count in the given unit.

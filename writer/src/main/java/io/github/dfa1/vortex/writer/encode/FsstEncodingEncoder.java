@@ -4,12 +4,11 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.proto.FSSTMetadata;
+import io.github.dfa1.vortex.proto.ProtoFSSTMetadata;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
@@ -113,16 +112,16 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
             codesOffBuf.setAtIndex(PTypeIO.LE_INT, (long) i + 1, (int) off);
         }
 
-        byte[] metaBytes = new FSSTMetadata(
-                io.github.dfa1.vortex.proto.PType.fromValue(PType.I32.ordinal()),
-                io.github.dfa1.vortex.proto.PType.fromValue(PType.I32.ordinal())
+        byte[] metaBytes = new ProtoFSSTMetadata(
+                io.github.dfa1.vortex.proto.ProtoPType.fromValue(PType.I32.ordinal()),
+                io.github.dfa1.vortex.proto.ProtoPType.fromValue(PType.I32.ordinal())
         ).encode();
 
         EncodeNode uncompLensNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 3);
         EncodeNode codesOffNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 4);
         EncodeNode root = new EncodeNode(
                 EncodingId.VORTEX_FSST,
-                ByteBuffer.wrap(metaBytes),
+                MemorySegment.ofArray(metaBytes),
                 new EncodeNode[]{uncompLensNode, codesOffNode},
                 new int[]{0, 1, 2});
 

@@ -4,10 +4,10 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.proto.ScalarValue;
-import io.github.dfa1.vortex.proto.SequenceMetadata;
+import java.lang.foreign.MemorySegment;
+import io.github.dfa1.vortex.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.proto.ProtoSequenceMetadata;
 
-import java.nio.ByteBuffer;
 import java.util.List;
 
 /// Write-only encoder for `vortex.sequence` — arithmetic sequences as (base, multiplier).
@@ -55,8 +55,8 @@ public final class SequenceEncodingEncoder implements EncodingEncoder {
                 }
             }
         }
-        ScalarValue baseScalar = buildIntScalar(pt, base);
-        ScalarValue mulScalar = buildIntScalar(pt, multiplier);
+        ProtoScalarValue baseScalar = buildIntScalar(pt, base);
+        ProtoScalarValue mulScalar = buildIntScalar(pt, multiplier);
         return buildResult(baseScalar, mulScalar);
     }
 
@@ -68,7 +68,7 @@ public final class SequenceEncodingEncoder implements EncodingEncoder {
                 throw new VortexException(EncodingId.VORTEX_SEQUENCE, "not an arithmetic sequence at index " + i);
             }
         }
-        return buildResult(ScalarValue.ofF32Value(base), ScalarValue.ofF32Value(mul));
+        return buildResult(ProtoScalarValue.ofF32Value(base), ProtoScalarValue.ofF32Value(mul));
     }
 
     private static EncodeResult encodeF64(double[] data) {
@@ -79,7 +79,7 @@ public final class SequenceEncodingEncoder implements EncodingEncoder {
                 throw new VortexException(EncodingId.VORTEX_SEQUENCE, "not an arithmetic sequence at index " + i);
             }
         }
-        return buildResult(ScalarValue.ofF64Value(base), ScalarValue.ofF64Value(mul));
+        return buildResult(ProtoScalarValue.ofF64Value(base), ProtoScalarValue.ofF64Value(mul));
     }
 
     private static EncodeResult encodeF16(short[] data) {
@@ -94,21 +94,21 @@ public final class SequenceEncodingEncoder implements EncodingEncoder {
             }
         }
         return buildResult(
-                ScalarValue.ofF16Value(Short.toUnsignedLong(baseShort)),
-                ScalarValue.ofF16Value(Short.toUnsignedLong(mulShort)));
+                ProtoScalarValue.ofF16Value(Short.toUnsignedLong(baseShort)),
+                ProtoScalarValue.ofF16Value(Short.toUnsignedLong(mulShort)));
     }
 
-    private static EncodeResult buildResult(ScalarValue base, ScalarValue mul) {
-        SequenceMetadata meta = new SequenceMetadata(base, mul);
-        ByteBuffer metaBuf = ByteBuffer.wrap(meta.encode());
+    private static EncodeResult buildResult(ProtoScalarValue base, ProtoScalarValue mul) {
+        ProtoSequenceMetadata meta = new ProtoSequenceMetadata(base, mul);
+        MemorySegment metaBuf = MemorySegment.ofArray(meta.encode());
         EncodeNode node = new EncodeNode(EncodingId.VORTEX_SEQUENCE, metaBuf, new EncodeNode[0], new int[]{});
         return new EncodeResult(node, List.of(), null, null);
     }
 
-    private static ScalarValue buildIntScalar(PType pt, long value) {
+    private static ProtoScalarValue buildIntScalar(PType pt, long value) {
         return switch (pt) {
-            case U8, U16, U32, U64 -> ScalarValue.ofUint64Value(value);
-            default -> ScalarValue.ofInt64Value(value);
+            case U8, U16, U32, U64 -> ProtoScalarValue.ofUint64Value(value);
+            default -> ProtoScalarValue.ofInt64Value(value);
         };
     }
 

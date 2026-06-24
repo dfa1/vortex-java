@@ -10,8 +10,8 @@ import io.github.dfa1.vortex.reader.decode.DecodeContext;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
-import io.github.dfa1.vortex.proto.ALPMetadata;
-import io.github.dfa1.vortex.proto.PatchesMetadata;
+import io.github.dfa1.vortex.proto.ProtoALPMetadata;
+import io.github.dfa1.vortex.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.reader.decode.AlpEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
 import org.junit.jupiter.api.Nested;
@@ -42,11 +42,11 @@ class AlpEncodingEncoderTest {
                 int expE, int expF, long[] encodedVals,
                 long[] patchIndices, double[] patchValues
         ) {
-            PatchesMetadata pm = patchIndices != null
-                    ? new PatchesMetadata((long) patchIndices.length, 0L,
-                            io.github.dfa1.vortex.proto.PType.U32, null, null, null)
+            ProtoPatchesMetadata pm = patchIndices != null
+                    ? new ProtoPatchesMetadata((long) patchIndices.length, 0L,
+                            io.github.dfa1.vortex.proto.ProtoPType.U32, null, null, null)
                     : null;
-            byte[] metaBytes = new ALPMetadata(expE, expF, pm).encode();
+            byte[] metaBytes = new ProtoALPMetadata(expE, expF, pm).encode();
 
             byte[] encBuf = new byte[encodedVals.length * 8];
             ByteBuffer bb = ByteBuffer.wrap(encBuf).order(ByteOrder.LITTLE_ENDIAN);
@@ -82,20 +82,20 @@ class AlpEncodingEncoderTest {
             }
 
             ArrayNode alpNode = ArrayNode.of(EncodingId.VORTEX_ALP,
-                    ByteBuffer.wrap(metaBytes), children, new int[0]);
+                    MemorySegment.ofArray(metaBytes), children, new int[0]);
 
             return new DecodeContext(alpNode, DTypes.F64, encodedVals.length, segments, REGISTRY, java.lang.foreign.Arena.global());
         }
 
         private static DecodeContext buildAlpCtxF32(int expE, int expF, int[] encodedVals) {
-            byte[] metaBytes = new ALPMetadata(expE, expF, null).encode();
+            byte[] metaBytes = new ProtoALPMetadata(expE, expF, null).encode();
             byte[] encBuf = new byte[encodedVals.length * 4];
             ByteBuffer bb = ByteBuffer.wrap(encBuf).order(ByteOrder.LITTLE_ENDIAN);
             for (int v : encodedVals) {
                 bb.putInt(v);
             }
             ArrayNode encNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
-            ArrayNode alpNode = ArrayNode.of(EncodingId.VORTEX_ALP, ByteBuffer.wrap(metaBytes),
+            ArrayNode alpNode = ArrayNode.of(EncodingId.VORTEX_ALP, MemorySegment.ofArray(metaBytes),
                     new ArrayNode[]{encNode}, new int[0]);
             MemorySegment[] segments = {MemorySegment.ofArray(encBuf)};
             return new DecodeContext(alpNode, DTypes.F32, encodedVals.length, segments, REGISTRY, java.lang.foreign.Arena.global());
@@ -240,8 +240,8 @@ class AlpEncodingEncoderTest {
             EncodeResult result = ENCODER.encode(DTypes.F64, values, EncodeTestHelper.testCtx());
 
             // Then
-            MemorySegment metaSeg = MemorySegment.ofBuffer(result.rootNode().metadata().duplicate());
-            ALPMetadata meta = ALPMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            MemorySegment metaSeg = result.rootNode().metadata();
+            ProtoALPMetadata meta = ProtoALPMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 
             assertThat(meta.exp_e()).isGreaterThan(0);
         }

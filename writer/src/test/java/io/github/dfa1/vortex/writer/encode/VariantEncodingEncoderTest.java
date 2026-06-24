@@ -3,10 +3,10 @@ package io.github.dfa1.vortex.writer.encode;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.proto.Primitive;
-import io.github.dfa1.vortex.proto.Scalar;
-import io.github.dfa1.vortex.proto.ScalarValue;
-import io.github.dfa1.vortex.proto.VariantMetadata;
+import io.github.dfa1.vortex.proto.ProtoPrimitive;
+import io.github.dfa1.vortex.proto.ProtoScalar;
+import io.github.dfa1.vortex.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.proto.ProtoVariantMetadata;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -22,17 +22,17 @@ class VariantEncodingEncoderTest {
     private static final VariantEncodingEncoder SUT = new VariantEncodingEncoder();
     private static final DType.Variant VARIANT = DType.VARIANT;
 
-    private static Scalar i32Scalar(long value) {
+    private static ProtoScalar i32Scalar(long value) {
         // Inner typed scalar carrying its own i32 dtype, wrapped as a variant value
-        // (mirrors Rust Scalar::variant(Scalar::primitive(value))).
-        return new Scalar(
-                io.github.dfa1.vortex.proto.DType.ofPrimitive(
-                        new Primitive(io.github.dfa1.vortex.proto.PType.I32, false)),
-                ScalarValue.ofInt64Value(value));
+        // (mirrors Rust ProtoScalar::variant(ProtoScalar::primitive(value))).
+        return new ProtoScalar(
+                io.github.dfa1.vortex.proto.ProtoDType.ofPrimitive(
+                        new ProtoPrimitive(io.github.dfa1.vortex.proto.ProtoPType.I32, false)),
+                ProtoScalarValue.ofInt64Value(value));
     }
 
     private static long innerInt(MemorySegment buf) throws Exception {
-        ScalarValue scalar = ScalarValue.decode(buf, 0, buf.byteSize());
+        ProtoScalarValue scalar = ProtoScalarValue.decode(buf, 0, buf.byteSize());
         assertThat(scalar.variant_value()).isNotNull();
         return scalar.variant_value().value().int64_value();
     }
@@ -75,8 +75,8 @@ class VariantEncodingEncoderTest {
         void metadataHasNoShreddedDtype() throws Exception {
             EncodeResult result = SUT.encode(VARIANT, VariantData.constant(3, i32Scalar(7L)), EncodeTestHelper.testCtx());
 
-            MemorySegment meta = MemorySegment.ofBuffer(result.rootNode().metadata().duplicate());
-            VariantMetadata decoded = VariantMetadata.decode(meta, 0, meta.byteSize());
+            MemorySegment meta = result.rootNode().metadata();
+            ProtoVariantMetadata decoded = ProtoVariantMetadata.decode(meta, 0, meta.byteSize());
             assertThat(decoded.shredded_dtype()).isNull();
         }
     }
@@ -234,11 +234,11 @@ class VariantEncodingEncoderTest {
             assertThat(root.children()[1].encodingId()).isEqualTo(EncodingId.VORTEX_PRIMITIVE);
 
             // ...and the metadata records shredded_dtype = i32.
-            MemorySegment meta = MemorySegment.ofBuffer(root.metadata().duplicate());
-            VariantMetadata vm = VariantMetadata.decode(meta, 0, meta.byteSize());
+            MemorySegment meta = root.metadata();
+            ProtoVariantMetadata vm = ProtoVariantMetadata.decode(meta, 0, meta.byteSize());
             assertThat(vm.shredded_dtype()).isNotNull();
             assertThat(vm.shredded_dtype().primitive()).isNotNull();
-            assertThat(vm.shredded_dtype().primitive().type()).isEqualTo(io.github.dfa1.vortex.proto.PType.I32);
+            assertThat(vm.shredded_dtype().primitive().type()).isEqualTo(io.github.dfa1.vortex.proto.ProtoPType.I32);
         }
 
         @Test

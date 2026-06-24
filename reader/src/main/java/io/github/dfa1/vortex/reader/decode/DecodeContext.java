@@ -6,7 +6,6 @@ import io.github.dfa1.vortex.reader.ReadRegistry;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
-import java.nio.ByteBuffer;
 
 /// Decoding context passed to each [EncodingDecoder].
 ///
@@ -101,8 +100,8 @@ public record DecodeContext(
 
     /// Returns the encoding-specific metadata bytes for this node, or `null` if absent.
     ///
-    /// @return the metadata [ByteBuffer], or `null`
-    public ByteBuffer metadata() {
+    /// @return the metadata [MemorySegment], or `null`
+    public MemorySegment metadata() {
         return node.metadata();
     }
 }

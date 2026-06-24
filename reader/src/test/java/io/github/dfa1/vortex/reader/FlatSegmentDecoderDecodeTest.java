@@ -1,9 +1,9 @@
 package io.github.dfa1.vortex.reader;
 
-import com.google.flatbuffers.FlatBufferBuilder;
+import io.github.dfa1.vortex.fbs.FbsArrayNode;
+import io.github.dfa1.vortex.fbs.FbsBuffer;
+import io.github.dfa1.vortex.fbsrt.FbsBuilder;
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.fbs.ArrayNode;
-import io.github.dfa1.vortex.fbs.Buffer;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.UnknownArray;
 import org.junit.jupiter.api.Test;
@@ -53,18 +53,18 @@ class FlatSegmentDecoderDecodeTest {
 
     /// Builds an `Array` FlatBuffer with a single buffer descriptor of the given padding/length.
     private static byte[] arrayFlatBufferOneBuffer(int padding, long length) {
-        FlatBufferBuilder b = new FlatBufferBuilder();
+        FbsBuilder b = new FbsBuilder();
 
-        int rootChildren = ArrayNode.createChildrenVector(b, new int[0]);
-        int rootBuffers = ArrayNode.createBuffersVector(b, new int[]{0});
-        int root = ArrayNode.createArrayNode(b, 0, 0, rootChildren, rootBuffers, 0);
+        int rootChildren = FbsArrayNode.createChildrenVector(b, new int[0]);
+        int rootBuffers = FbsArrayNode.createBuffersVector(b, new int[]{0});
+        int root = FbsArrayNode.createFbsArrayNode(b, 0, 0, rootChildren, rootBuffers, 0);
 
-        io.github.dfa1.vortex.fbs.Array.startBuffersVector(b, 1);
-        Buffer.createBuffer(b, padding, 0, 0, length);
+        io.github.dfa1.vortex.fbs.FbsArray.startBuffersVector(b, 1);
+        FbsBuffer.createFbsBuffer(b, padding, 0, 0, length);
         int buffers = b.endVector();
 
-        int array = io.github.dfa1.vortex.fbs.Array.createArray(b, root, buffers);
-        io.github.dfa1.vortex.fbs.Array.finishArrayBuffer(b, array);
+        int array = io.github.dfa1.vortex.fbs.FbsArray.createFbsArray(b, root, buffers);
+        io.github.dfa1.vortex.fbs.FbsArray.finishFbsArrayBuffer(b, array);
         return b.sizedByteArray();
     }
 }

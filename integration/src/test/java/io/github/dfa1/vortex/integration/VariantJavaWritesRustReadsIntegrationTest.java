@@ -5,9 +5,9 @@ import dev.vortex.api.Session;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.proto.Primitive;
-import io.github.dfa1.vortex.proto.Scalar;
-import io.github.dfa1.vortex.proto.ScalarValue;
+import io.github.dfa1.vortex.proto.ProtoPrimitive;
+import io.github.dfa1.vortex.proto.ProtoScalar;
+import io.github.dfa1.vortex.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import io.github.dfa1.vortex.writer.encode.VariantData;
@@ -48,7 +48,7 @@ class VariantJavaWritesRustReadsIntegrationTest {
     @Test
     void javaWriter_jniReader_constantVariantColumn(@TempDir Path tmp) throws IOException {
         // Given — a constant variant column: every one of N rows is the i32 variant value 7.
-        // Built as Rust's Scalar::variant(Scalar::primitive(7i32)): the inner Scalar carries
+        // Built as Rust's ProtoScalar::variant(ProtoScalar::primitive(7i32)): the inner ProtoScalar carries
         // its own i32 dtype so the reference reader knows the wrapped value's type.
         Path file = tmp.resolve("java_variant.vtx");
         int rows = 5;
@@ -75,7 +75,7 @@ class VariantJavaWritesRustReadsIntegrationTest {
         // lays this out as core_storage = vortex.chunked of one vortex.constant per row,
         // exactly the representation the Rust reference uses for a row-varying variant array.
         Path file = tmp.resolve("java_variant_varying.vtx");
-        List<Scalar> values = List.of(i32Variant(10L), i32Variant(20L), i32Variant(30L), i32Variant(40L));
+        List<ProtoScalar> values = List.of(i32Variant(10L), i32Variant(20L), i32Variant(30L), i32Variant(40L));
         VariantData data = new VariantData(values);
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
@@ -95,7 +95,7 @@ class VariantJavaWritesRustReadsIntegrationTest {
         // Given — a variant column with a row-aligned shredded i32 projection. The container
         // gains a second (shredded) typed child plus shredded_dtype in its metadata.
         Path file = tmp.resolve("java_variant_shredded.vtx");
-        List<Scalar> values = List.of(i32Variant(10L), i32Variant(20L), i32Variant(30L));
+        List<ProtoScalar> values = List.of(i32Variant(10L), i32Variant(20L), i32Variant(30L));
         VariantData data = VariantData.shredded(
                 values, new int[]{10, 20, 30}, DType.I32);
 
@@ -111,12 +111,12 @@ class VariantJavaWritesRustReadsIntegrationTest {
         assertThat(ds.arrowSchema(ALLOCATOR).getFields()).extracting(Field::getName).contains("v");
     }
 
-    private static Scalar i32Variant(long value) {
+    private static ProtoScalar i32Variant(long value) {
         // Inner typed scalar carrying its own i32 dtype, wrapped as a variant value
-        // (mirrors Rust Scalar::variant(Scalar::primitive(value))).
-        return new Scalar(
-                io.github.dfa1.vortex.proto.DType.ofPrimitive(
-                        new Primitive(io.github.dfa1.vortex.proto.PType.I32, false)),
-                ScalarValue.ofInt64Value(value));
+        // (mirrors Rust ProtoScalar::variant(ProtoScalar::primitive(value))).
+        return new ProtoScalar(
+                io.github.dfa1.vortex.proto.ProtoDType.ofPrimitive(
+                        new ProtoPrimitive(io.github.dfa1.vortex.proto.ProtoPType.I32, false)),
+                ProtoScalarValue.ofInt64Value(value));
     }
 }

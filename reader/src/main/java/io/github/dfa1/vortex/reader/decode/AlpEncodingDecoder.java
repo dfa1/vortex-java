@@ -5,8 +5,8 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.proto.ALPMetadata;
-import io.github.dfa1.vortex.proto.PatchesMetadata;
+import io.github.dfa1.vortex.proto.ProtoALPMetadata;
+import io.github.dfa1.vortex.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LazyAlpDoubleArray;
 import io.github.dfa1.vortex.reader.array.LazyAlpFloatArray;
@@ -18,7 +18,6 @@ import io.github.dfa1.vortex.reader.array.MaterializedFloatArray;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.nio.ByteBuffer;
 
 /// Read-only decoder for `vortex.alp`.
 public final class AlpEncodingDecoder implements EncodingDecoder {
@@ -38,14 +37,14 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
 
     @Override
     public Array decode(DecodeContext ctx) {
-        ByteBuffer rawMeta = ctx.metadata();
-        ALPMetadata meta;
-        if (rawMeta == null || !rawMeta.hasRemaining()) {
-            meta = new ALPMetadata(0, 0, null);
+        MemorySegment rawMeta = ctx.metadata();
+        ProtoALPMetadata meta;
+        if (rawMeta == null || rawMeta.byteSize() == 0) {
+            meta = new ProtoALPMetadata(0, 0, null);
         } else {
             try {
-                MemorySegment metaSeg = MemorySegment.ofBuffer(rawMeta.duplicate());
-                meta = ALPMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+                MemorySegment metaSeg = rawMeta;
+                meta = ProtoALPMetadata.decode(metaSeg, 0, metaSeg.byteSize());
             } catch (IOException e) {
                 throw new VortexException(EncodingId.VORTEX_ALP, "invalid metadata", e);
             }
@@ -67,7 +66,7 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
         };
     }
 
-    private static Array decodeF64(DecodeContext ctx, ALPMetadata meta, int expE, int expF, long n) {
+    private static Array decodeF64(DecodeContext ctx, ProtoALPMetadata meta, int expE, int expF, long n) {
         // Decode formula mirrors the Rust reference (`ALPFloat::decode_single`): two-step
         // `encoded * F10[f] * IF10[e]`. A pre-multiplied `scale = F10[f] * IF10[e]`
         // gives different IEEE rounding for non-trivial `expF`, breaking round-trip with
@@ -101,7 +100,7 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
         return new MaterializedDoubleArray(ctx.dtype(), n, buf.asReadOnly());
     }
 
-    private static Array decodeF32(DecodeContext ctx, ALPMetadata meta, int expE, int expF, long n) {
+    private static Array decodeF32(DecodeContext ctx, ProtoALPMetadata meta, int expE, int expF, long n) {
         float df = F10_F32[expF];
         float de = IF10_F32[expE];
         MemorySegment src = ctx.decodeChildSegment(0, DType.I32, n);
@@ -131,7 +130,7 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
         return new MaterializedFloatArray(ctx.dtype(), n, buf.asReadOnly());
     }
 
-    private static void applyPatches(DecodeContext ctx, PatchesMetadata pm, MemorySegment out, int elemBytes) {
+    private static void applyPatches(DecodeContext ctx, ProtoPatchesMetadata pm, MemorySegment out, int elemBytes) {
         long numPatches = pm.len();
         long offset = pm.offset();
         PType idxPtype = PType.fromOrdinal(pm.indices_ptype().value());

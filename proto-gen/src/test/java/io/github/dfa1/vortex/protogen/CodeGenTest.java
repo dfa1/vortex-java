@@ -27,11 +27,11 @@ class CodeGenTest {
         sut.emit(tmp);
 
         // Then — a few expected files were emitted.
-        assertThat(Files.exists(tmp.resolve("PType.java"))).isTrue();
-        assertThat(Files.exists(tmp.resolve("DType.java"))).isTrue();
-        assertThat(Files.exists(tmp.resolve("ScalarValue.java"))).isTrue();
-        assertThat(Files.exists(tmp.resolve("BitPackedMetadata.java"))).isTrue();
-        assertThat(Files.exists(tmp.resolve("NullValue.java"))).isTrue();
+        assertThat(Files.exists(tmp.resolve("ProtoPType.java"))).isTrue();
+        assertThat(Files.exists(tmp.resolve("ProtoDType.java"))).isTrue();
+        assertThat(Files.exists(tmp.resolve("ProtoScalarValue.java"))).isTrue();
+        assertThat(Files.exists(tmp.resolve("ProtoBitPackedMetadata.java"))).isTrue();
+        assertThat(Files.exists(tmp.resolve("ProtoNullValue.java"))).isTrue();
     }
 
     @Test
@@ -46,14 +46,14 @@ class CodeGenTest {
         new CodeGen(new TypeRegistry(files)).emit(tmp);
 
         // When
-        String src = Files.readString(tmp.resolve("BitPackedMetadata.java"));
+        String src = Files.readString(tmp.resolve("ProtoBitPackedMetadata.java"));
 
         // Then
-        assertThat(src).contains("public record BitPackedMetadata(");
+        assertThat(src).contains("public record ProtoBitPackedMetadata(");
         assertThat(src).contains("int bit_width");
         assertThat(src).contains("int offset");
-        assertThat(src).contains("PatchesMetadata patches");
-        assertThat(src).contains("public static BitPackedMetadata decode(MemorySegment __seg, long __off, long __len)");
+        assertThat(src).contains("ProtoPatchesMetadata patches");
+        assertThat(src).contains("public static ProtoBitPackedMetadata decode(MemorySegment __seg, long __off, long __len)");
         assertThat(src).contains("public byte[] encode()");
     }
 

@@ -15,11 +15,6 @@
 	</description>
 
 	<dependencies>
-		<!-- production -->
-		<dependency>
-			<groupId>com.google.flatbuffers</groupId>
-			<artifactId>flatbuffers-java</artifactId>
-		</dependency>
 		<!-- testing -->
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>
@@ -59,53 +54,51 @@
 
 	<!--
 	  Generated sources (src/main/java/…/fbs and …/proto) are committed to the repo.
-	  Normal builds need no external tools.
+	  Normal builds need no external tools — both generators are pure in-house Java.
 
 	  To regenerate after editing .fbs or .proto schemas:
-	    brew install flatbuffers
+	    ./mvnw compile -pl fbs-gen,proto-gen
 	    ./mvnw generate-sources -pl core -P regenerate-sources
 	  Then commit the updated files.
-	  Any flatc version works — the profile strips the version guard automatically.
 	-->
 	<profiles>
 		<profile>
 			<id>regenerate-sources</id>
 			<build>
 				<plugins>
-					<!-- 1. Generate Java from FlatBuffer schemas -->
+					<!--
+						Generate MemorySegment-native Java from the .fbs (FlatBuffers) and .proto
+						(Protobuf) schemas via the in-house vortex-fbs-gen / vortex-proto-gen tools.
+
+						Pre-step: run `./mvnw compile -pl fbs-gen,proto-gen` once so these execs find
+						the classes. We use direct execs (rather than declaring the generators as Maven
+						deps) to avoid artificial provided-scope deps leaking into the published core POM.
+					-->
 					<plugin>
 						<groupId>org.codehaus.mojo</groupId>
 						<artifactId>exec-maven-plugin</artifactId>
 						<executions>
 							<execution>
-								<id>flatc-generate</id>
+								<id>fbsgen-generate</id>
 								<phase>generate-sources</phase>
 								<goals>
 									<goal>exec</goal>
 								</goals>
 								<configuration>
-									<executable>flatc</executable>
-									<workingDirectory>${project.basedir}/src/main/flatbuffers</workingDirectory>
+									<executable>java</executable>
 									<arguments>
-										<argument>--java</argument>
-										<argument>-I</argument>
-										<argument>.</argument>
-										<argument>-o</argument>
-										<argument>${project.basedir}/src/main/java</argument>
-										<argument>vortex-file/footer.fbs</argument>
-										<argument>vortex-layout/layout.fbs</argument>
-										<argument>vortex-array/array.fbs</argument>
-										<argument>vortex-dtype/dtype.fbs</argument>
+										<argument>-cp</argument>
+										<argument>${project.basedir}/../fbs-gen/target/classes</argument>
+										<argument>io.github.dfa1.vortex.fbsgen.Main</argument>
+										<argument>--out</argument>
+										<argument>${project.basedir}/src/main/java/io/github/dfa1/vortex/fbs</argument>
+										<argument>${project.basedir}/src/main/flatbuffers/vortex-array/array.fbs</argument>
+										<argument>${project.basedir}/src/main/flatbuffers/vortex-dtype/dtype.fbs</argument>
+										<argument>${project.basedir}/src/main/flatbuffers/vortex-file/footer.fbs</argument>
+										<argument>${project.basedir}/src/main/flatbuffers/vortex-layout/layout.fbs</argument>
 									</arguments>
 								</configuration>
 							</execution>
-							<!--
-								2. Generate MemorySegment-native Java from Protobuf schemas via vortex-proto-gen.
-
-								Pre-step: run `./mvnw compile -pl proto-gen` once so this exec finds the classes.
-								We use a direct exec (rather than declaring vortex-proto-gen as a Maven dep) to avoid
-								an artificial provided-scope dep that would leak into the published core POM.
-							-->
 							<execution>
 								<id>protogen-generate</id>
 								<phase>generate-sources</phase>
@@ -124,51 +117,6 @@
 										<argument>${project.basedir}/src/main/proto/scalar.proto</argument>
 										<argument>${project.basedir}/src/main/proto/encodings.proto</argument>
 									</arguments>
-								</configuration>
-							</execution>
-						</executions>
-					</plugin>
-
-					<!--
-					  Why we strip ValidateVersion():
-					  flatc injects a `public static void ValidateVersion()` into every generated
-					  class that calls `Constants.FLATBUFFERS_25_X_Y()` — a method that only exists
-					  in the flatbuffers-java jar built from the *same* flatc release. This is a
-					  developer-experience guard: it prevents accidentally pairing a stale generated
-					  file with a newer runtime jar.
-
-					  The problem: flatbuffers-java on Maven Central lags the flatc CLI by months.
-					  As of 2026-06, Maven Central tops out at 25.2.10 while `brew install flatbuffers`
-					  installs 25.12.19. Any attempt to compile freshly generated code against the
-					  Maven Central jar fails with "cannot find symbol: Constants.FLATBUFFERS_25_12_19".
-
-					  The strip is safe because:
-					  - The FlatBuffers binary wire format is stable across releases; 25.2.10 can
-					    read bytes written by code generated with any 25.x flatc.
-					  - We commit the stripped files, so the check is irrelevant at compile time for
-					    normal builds (no flatc involved).
-					  - The strip only runs inside the `regenerate-sources` profile, not during
-					    normal `./mvnw verify` builds.
-
-					  Re-evaluate if flatbuffers-java is ever published to Maven Central in lock-step
-					  with flatc releases — at that point the antrun step can be removed.
-					-->
-					<plugin>
-						<groupId>org.apache.maven.plugins</groupId>
-						<artifactId>maven-antrun-plugin</artifactId>
-						<executions>
-							<execution>
-								<id>flatc-strip-version-guard</id>
-								<phase>generate-sources</phase>
-								<goals>
-									<goal>run</goal>
-								</goals>
-								<configuration>
-									<target>
-										<replaceregexp match=" public static void ValidateVersion\(\) \{ Constants\.[^}]+\}&#xA;" replace="" flags="g">
-											<fileset dir="${project.basedir}/src/main/java/io/github/dfa1/vortex/fbs" includes="*.java" />
-										</replaceregexp>
-									</target>
 								</configuration>
 							</execution>
 						</executions>

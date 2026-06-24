@@ -7,12 +7,11 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.proto.FSSTMetadata;
+import io.github.dfa1.vortex.proto.ProtoFSSTMetadata;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.nio.ByteBuffer;
 
 /// Read-only decoder for `vortex.fsst`.
 public final class FsstEncodingDecoder implements EncodingDecoder {
@@ -30,14 +29,14 @@ public final class FsstEncodingDecoder implements EncodingDecoder {
 
     @Override
     public Array decode(DecodeContext ctx) {
-        ByteBuffer rawMeta = ctx.metadata();
+        MemorySegment rawMeta = ctx.metadata();
         if (rawMeta == null) {
             throw new VortexException(EncodingId.VORTEX_FSST, "missing metadata");
         }
-        FSSTMetadata meta;
+        ProtoFSSTMetadata meta;
         try {
-            MemorySegment metaSeg = MemorySegment.ofBuffer(rawMeta.duplicate());
-            meta = FSSTMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            MemorySegment metaSeg = rawMeta;
+            meta = ProtoFSSTMetadata.decode(metaSeg, 0, metaSeg.byteSize());
         } catch (IOException e) {
             throw new VortexException(EncodingId.VORTEX_FSST, "invalid metadata", e);
         }

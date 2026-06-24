@@ -10,7 +10,7 @@ import io.github.dfa1.vortex.reader.decode.DecodeContext;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
-import io.github.dfa1.vortex.proto.ListMetadata;
+import io.github.dfa1.vortex.proto.ProtoListMetadata;
 import io.github.dfa1.vortex.reader.decode.ListEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
 import org.junit.jupiter.api.Nested;
@@ -167,7 +167,7 @@ class ListEncodingEncoderTest {
             ArrayNode child = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
                     new ArrayNode[0], new int[0]);
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_LIST,
-                    java.nio.ByteBuffer.wrap(new byte[0]),
+                    MemorySegment.ofArray(new byte[0]),
                     new ArrayNode[]{child}, new int[0]);
             DecodeContext ctx = new DecodeContext(node, DTypes.LIST_I32, 0, new MemorySegment[0], REGISTRY, Arena.global());
 
@@ -190,8 +190,8 @@ class ListEncodingEncoderTest {
             EncodeResult result = ENCODER.encode(DTypes.LIST_I32, data, EncodeTestHelper.testCtx());
 
             // Then
-            var metaSeg = java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate());
-            ListMetadata meta = ListMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            var metaSeg = result.rootNode().metadata();
+            ProtoListMetadata meta = ProtoListMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 
             assertThat(meta.elements_len()).isEqualTo(5);
         }

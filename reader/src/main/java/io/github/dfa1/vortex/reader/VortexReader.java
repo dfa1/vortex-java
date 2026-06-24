@@ -9,7 +9,7 @@ import io.github.dfa1.vortex.core.VortexFormat;
 import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteOrder;
+import java.lang.foreign.ValueLayout;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -81,12 +81,11 @@ public final class VortexReader implements VortexHandle {
         Trailer trailer = Trailer.parse(trailerSeg, bodyBytes);
 
         long postscriptOffset = bodyBytes - trailer.postscriptLen();
-        var postscriptBuf = IoBounds.slice(seg, postscriptOffset, trailer.postscriptLen())
-                                    .asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
+        var postscriptSeg = IoBounds.slice(seg, postscriptOffset, trailer.postscriptLen());
 
         PostscriptParser.ParsedFile parsed;
         try {
-            parsed = PostscriptParser.parse(postscriptBuf, seg, size);
+            parsed = PostscriptParser.parse(postscriptSeg, seg, size);
         } catch (VortexException e) {
             throw e;
         } catch (RuntimeException e) {
@@ -107,8 +106,8 @@ public final class VortexReader implements VortexHandle {
             collectFlats(layout.children().getFirst(), out);
         } else if (layout.isChunked()) {
             int start = (layout.metadata() != null
-                                 && layout.metadata().hasRemaining()
-                                 && layout.metadata().get(0) == 1) ? 1 : 0;
+                                 && layout.metadata().byteSize() > 0
+                                 && layout.metadata().get(ValueLayout.JAVA_BYTE, 0) == 1) ? 1 : 0;
             for (int i = start; i < layout.children().size(); i++) {
                 collectFlats(layout.children().get(i), out);
             }
@@ -228,8 +227,7 @@ public final class VortexReader implements VortexHandle {
             return ArrayStats.empty();
         }
         long fbStart = segLen - 4L - fbLen;
-        var fbBuf = IoBounds.slice(seg, fbStart, fbLen).asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
-        var fbArray = io.github.dfa1.vortex.fbs.Array.getRootAsArray(fbBuf);
+        var fbArray = io.github.dfa1.vortex.fbs.FbsArray.getRootAsFbsArray(IoBounds.slice(seg, fbStart, fbLen));
         var root = fbArray.root();
         if (root == null) {
             return ArrayStats.empty();

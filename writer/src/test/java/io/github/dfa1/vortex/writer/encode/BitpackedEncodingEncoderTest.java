@@ -7,7 +7,7 @@ import io.github.dfa1.vortex.reader.decode.DecodeContext;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
-import io.github.dfa1.vortex.proto.BitPackedMetadata;
+import io.github.dfa1.vortex.proto.ProtoBitPackedMetadata;
 import io.github.dfa1.vortex.reader.decode.BitpackedEncodingDecoder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -79,8 +79,8 @@ class BitpackedEncodingEncoderTest {
         int[] data = {1, 2, 3, 4, 5};
 
         EncodeResult result = ENCODER.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
-        var metaSeg = java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate());
-        BitPackedMetadata meta = BitPackedMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+        var metaSeg = result.rootNode().metadata();
+        ProtoBitPackedMetadata meta = ProtoBitPackedMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 
         assertThat(meta.bit_width()).isGreaterThan(0);
     }

@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.core;
 
 import org.junit.jupiter.api.Test;
 
-import java.nio.ByteBuffer;
+import java.lang.foreign.MemorySegment;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -15,10 +15,10 @@ class DTypeExtensionTest {
     void metadataAtCap_accepted() {
         // Given — exact boundary must pass so legitimate large-but-bounded metadata
         // is not falsely rejected
-        ByteBuffer meta = ByteBuffer.allocate(DType.Extension.MAX_METADATA_SIZE);
+        MemorySegment meta = MemorySegment.ofArray(new byte[DType.Extension.MAX_METADATA_SIZE]);
 
         // When / Then
-        assertThat(new DType.Extension("acme.big", I32, meta, false).metadata().remaining())
+        assertThat(new DType.Extension("acme.big", I32, meta, false).metadata().byteSize())
                 .isEqualTo(DType.Extension.MAX_METADATA_SIZE);
     }
 
@@ -26,7 +26,7 @@ class DTypeExtensionTest {
     void metadataOverCap_rejected() {
         // Given — one byte past the cap; defends parser against attacker-supplied
         // multi-megabyte metadata blobs that would inflate parse-time allocations
-        ByteBuffer meta = ByteBuffer.allocate(DType.Extension.MAX_METADATA_SIZE + 1);
+        MemorySegment meta = MemorySegment.ofArray(new byte[DType.Extension.MAX_METADATA_SIZE + 1]);
 
         // When / Then
         assertThatThrownBy(() -> new DType.Extension("acme.big", I32, meta, false))

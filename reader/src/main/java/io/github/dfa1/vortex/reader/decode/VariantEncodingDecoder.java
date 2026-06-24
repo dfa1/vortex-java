@@ -6,11 +6,10 @@ import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.VariantArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.proto.VariantMetadata;
+import io.github.dfa1.vortex.proto.ProtoVariantMetadata;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -46,13 +45,13 @@ public final class VariantEncodingDecoder implements EncodingDecoder {
         return new VariantArray(ctx.dtype(), ctx.rowCount(), coreStorage, shredded);
     }
 
-    private static DType parseShreddedDtype(ByteBuffer rawMeta) {
-        if (rawMeta == null || !rawMeta.hasRemaining()) {
+    private static DType parseShreddedDtype(MemorySegment rawMeta) {
+        if (rawMeta == null || rawMeta.byteSize() == 0) {
             return null;
         }
         try {
-            MemorySegment metaSeg = MemorySegment.ofBuffer(rawMeta.duplicate());
-            VariantMetadata meta = VariantMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            MemorySegment metaSeg = rawMeta;
+            ProtoVariantMetadata meta = ProtoVariantMetadata.decode(metaSeg, 0, metaSeg.byteSize());
             if (meta.shredded_dtype() == null) {
                 return null;
             }
@@ -62,7 +61,7 @@ public final class VariantEncodingDecoder implements EncodingDecoder {
         }
     }
 
-    static DType dtypeFromProto(io.github.dfa1.vortex.proto.DType proto) {
+    static DType dtypeFromProto(io.github.dfa1.vortex.proto.ProtoDType proto) {
         if (proto.null_() != null) {
             return new DType.Null(true);
         }
@@ -91,7 +90,7 @@ public final class VariantEncodingDecoder implements EncodingDecoder {
             var names = new ArrayList<String>(s.names().size());
             var types = new ArrayList<DType>(s.dtypes().size());
             names.addAll(s.names());
-            for (io.github.dfa1.vortex.proto.DType child : s.dtypes()) {
+            for (io.github.dfa1.vortex.proto.ProtoDType child : s.dtypes()) {
                 types.add(dtypeFromProto(child));
             }
             return new DType.Struct(List.copyOf(names), List.copyOf(types), s.nullable());
@@ -111,7 +110,7 @@ public final class VariantEncodingDecoder implements EncodingDecoder {
             return new DType.Extension(
                     proto.extension().id(),
                     dtypeFromProto(proto.extension().storage_dtype()),
-                    ByteBuffer.wrap(proto.extension().metadata() != null ? proto.extension().metadata() : new byte[0]).asReadOnlyBuffer(),
+                    MemorySegment.ofArray(proto.extension().metadata() != null ? proto.extension().metadata() : new byte[0]).asReadOnly(),
                     false);
         }
         if (proto.variant() != null) {

@@ -40,8 +40,8 @@ class DateExtensionDecoderTest {
         assertThat(dtype.extensionId()).isEqualTo("vortex.date");
         assertThat(dtype.storageDType()).isEqualTo(DType.I32);
         assertThat(dtype.metadata()).isNotNull();
-        assertThat(dtype.metadata().remaining()).isEqualTo(1);
-        assertThat(dtype.metadata().duplicate().get()).isEqualTo((byte) 4); // TimeUnit.Days ordinal
+        assertThat(dtype.metadata().byteSize()).isEqualTo(1);
+        assertThat(dtype.metadata().get(java.lang.foreign.ValueLayout.JAVA_BYTE, 0)).isEqualTo((byte) 4); // TimeUnit.Days ordinal
     }
 
     @Test

@@ -9,8 +9,8 @@ import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
-import io.github.dfa1.vortex.proto.BitPackedMetadata;
-import io.github.dfa1.vortex.proto.PatchesMetadata;
+import io.github.dfa1.vortex.proto.ProtoBitPackedMetadata;
+import io.github.dfa1.vortex.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.reader.decode.BitpackedEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
 import org.junit.jupiter.api.Nested;
@@ -41,9 +41,9 @@ class BitpackedEncodingPatchesTest {
             MemorySegment packedSeg = packed.buffers().getFirst();
             byte[] packedBytes = packedSeg.toArray(java.lang.foreign.ValueLayout.JAVA_BYTE);
 
-            PatchesMetadata patches = new PatchesMetadata(2L, 0L,
-                    io.github.dfa1.vortex.proto.PType.U32, null, null, null);
-            byte[] metaBytes = new BitPackedMetadata(6, 0, patches).encode();
+            ProtoPatchesMetadata patches = new ProtoPatchesMetadata(2L, 0L,
+                    io.github.dfa1.vortex.proto.ProtoPType.U32, null, null, null);
+            byte[] metaBytes = new ProtoBitPackedMetadata(6, 0, patches).encode();
 
             byte[] idxBuf = new byte[2 * 4];
             ByteBuffer.wrap(idxBuf).order(ByteOrder.LITTLE_ENDIAN).putInt(1).putInt(3);
@@ -55,7 +55,7 @@ class BitpackedEncodingPatchesTest {
             ArrayNode valNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
                     new ArrayNode[0], new int[]{2});
             ArrayNode bpNode = ArrayNode.of(EncodingId.FASTLANES_BITPACKED,
-                    ByteBuffer.wrap(metaBytes),
+                    MemorySegment.ofArray(metaBytes),
                     new ArrayNode[]{idxNode, valNode},
                     new int[]{0});
 

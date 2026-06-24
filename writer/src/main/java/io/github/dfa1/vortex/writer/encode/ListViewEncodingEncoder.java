@@ -10,10 +10,9 @@ import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 
 
-import io.github.dfa1.vortex.proto.ListViewMetadata;
+import io.github.dfa1.vortex.proto.ProtoListViewMetadata;
 
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -67,15 +66,15 @@ public final class ListViewEncodingEncoder implements EncodingEncoder {
         EncodeNode sizesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, elemBufCount + 1);
 
         long elementsLen = java.lang.reflect.Array.getLength(lvd.elements());
-        byte[] metaBytes = new ListViewMetadata(
+        byte[] metaBytes = new ProtoListViewMetadata(
                 elementsLen,
-                io.github.dfa1.vortex.proto.PType.fromValue(PType.I32.ordinal()),
-                io.github.dfa1.vortex.proto.PType.fromValue(PType.I32.ordinal())
+                io.github.dfa1.vortex.proto.ProtoPType.fromValue(PType.I32.ordinal()),
+                io.github.dfa1.vortex.proto.ProtoPType.fromValue(PType.I32.ordinal())
         ).encode();
 
         EncodeNode root = new EncodeNode(
                 EncodingId.VORTEX_LISTVIEW,
-                ByteBuffer.wrap(metaBytes),
+                MemorySegment.ofArray(metaBytes),
                 new EncodeNode[]{elemNode, offsetsNode, sizesNode},
                 new int[]{});
         return new EncodeResult(root, List.copyOf(allBuffers), null, null);

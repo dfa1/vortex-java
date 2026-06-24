@@ -7,14 +7,13 @@ import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.FastLanes;
 import io.github.dfa1.vortex.encoding.PrimitiveArrays;
 import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.proto.BitPackedMetadata;
-import io.github.dfa1.vortex.proto.PatchesMetadata;
-import io.github.dfa1.vortex.proto.ScalarValue;
+import io.github.dfa1.vortex.proto.ProtoBitPackedMetadata;
+import io.github.dfa1.vortex.proto.ProtoPatchesMetadata;
+import io.github.dfa1.vortex.proto.ProtoScalarValue;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -81,11 +80,11 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
         if (hasNegative) {
             int wideBitWidth = typeBits;
             MemorySegment widePacked = packFastLanes(longs, n, wideBitWidth, typeBits, ctx.arena());
-            byte[] wideMeta = new BitPackedMetadata(wideBitWidth, 0, null).encode();
+            byte[] wideMeta = new ProtoBitPackedMetadata(wideBitWidth, 0, null).encode();
             byte[] wideMin = statsBytes(ptype, signedMin);
             byte[] wideMax = statsBytes(ptype, signedMax);
             EncodeNode wideRoot = new EncodeNode(EncodingId.FASTLANES_BITPACKED,
-                    ByteBuffer.wrap(wideMeta), new EncodeNode[0], new int[]{0});
+                    MemorySegment.ofArray(wideMeta), new EncodeNode[0], new int[]{0});
             return new EncodeResult(wideRoot, List.of(widePacked), wideMin, wideMax);
         }
 
@@ -98,8 +97,8 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
 
         if (bitWidth >= typeBits) {
             // Packed width covers full type range — no overflow possible, no patches needed.
-            byte[] metaBytes = new BitPackedMetadata(bitWidth, 0, null).encode();
-            EncodeNode root = new EncodeNode(EncodingId.FASTLANES_BITPACKED, ByteBuffer.wrap(metaBytes),
+            byte[] metaBytes = new ProtoBitPackedMetadata(bitWidth, 0, null).encode();
+            EncodeNode root = new EncodeNode(EncodingId.FASTLANES_BITPACKED, MemorySegment.ofArray(metaBytes),
                     new EncodeNode[0], new int[]{0});
             return new EncodeResult(root, List.of(packed), statsMin, statsMax);
         }
@@ -116,8 +115,8 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
         }
 
         if (patchIdx.isEmpty()) {
-            byte[] metaBytes = new BitPackedMetadata(bitWidth, 0, null).encode();
-            EncodeNode root = new EncodeNode(EncodingId.FASTLANES_BITPACKED, ByteBuffer.wrap(metaBytes),
+            byte[] metaBytes = new ProtoBitPackedMetadata(bitWidth, 0, null).encode();
+            EncodeNode root = new EncodeNode(EncodingId.FASTLANES_BITPACKED, MemorySegment.ofArray(metaBytes),
                     new EncodeNode[0], new int[]{0});
             return new EncodeResult(root, List.of(packed), statsMin, statsMax);
         }
@@ -127,15 +126,15 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
         MemorySegment idxBuf = buildPatchIdxBuf(patchIdx, idxPtype, ctx.arena());
         MemorySegment valBuf = buildPatchValBuf(patchVal, ptype, ctx.arena());
 
-        PatchesMetadata patches = new PatchesMetadata(
+        ProtoPatchesMetadata patches = new ProtoPatchesMetadata(
                 numPatches, 0L,
-                io.github.dfa1.vortex.proto.PType.fromValue(idxPtype.ordinal()),
+                io.github.dfa1.vortex.proto.ProtoPType.fromValue(idxPtype.ordinal()),
                 null, null, null);
-        byte[] metaBytes = new BitPackedMetadata(bitWidth, 0, patches).encode();
+        byte[] metaBytes = new ProtoBitPackedMetadata(bitWidth, 0, patches).encode();
 
         EncodeNode idxNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
         EncodeNode valNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
-        EncodeNode root = new EncodeNode(EncodingId.FASTLANES_BITPACKED, ByteBuffer.wrap(metaBytes),
+        EncodeNode root = new EncodeNode(EncodingId.FASTLANES_BITPACKED, MemorySegment.ofArray(metaBytes),
                 new EncodeNode[]{idxNode, valNode}, new int[]{0});
         return new EncodeResult(root, List.of(packed, idxBuf, valBuf), statsMin, statsMax);
     }
@@ -243,9 +242,9 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
 
     private static byte[] statsBytes(PType ptype, long value) {
         if (ptype.isUnsigned()) {
-            return ScalarValue.ofUint64Value(value).encode();
+            return ProtoScalarValue.ofUint64Value(value).encode();
         }
-        return ScalarValue.ofInt64Value(value).encode();
+        return ProtoScalarValue.ofInt64Value(value).encode();
     }
 
     private static long readWordFromSeg(MemorySegment seg, int off, int typeBits) {

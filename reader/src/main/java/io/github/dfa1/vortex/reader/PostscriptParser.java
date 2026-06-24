@@ -4,21 +4,19 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.IoBounds;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.fbs.Binary;
-import io.github.dfa1.vortex.fbs.Bool;
-import io.github.dfa1.vortex.fbs.Decimal;
-import io.github.dfa1.vortex.fbs.Extension;
-import io.github.dfa1.vortex.fbs.FixedSizeList;
-import io.github.dfa1.vortex.fbs.Postscript;
-import io.github.dfa1.vortex.fbs.Primitive;
-import io.github.dfa1.vortex.fbs.Struct_;
-import io.github.dfa1.vortex.fbs.Type;
-import io.github.dfa1.vortex.fbs.Utf8;
-import io.github.dfa1.vortex.fbs.Variant;
+import io.github.dfa1.vortex.fbs.FbsBinary;
+import io.github.dfa1.vortex.fbs.FbsBool;
+import io.github.dfa1.vortex.fbs.FbsDecimal;
+import io.github.dfa1.vortex.fbs.FbsExtension;
+import io.github.dfa1.vortex.fbs.FbsFixedSizeList;
+import io.github.dfa1.vortex.fbs.FbsPostscript;
+import io.github.dfa1.vortex.fbs.FbsPrimitive;
+import io.github.dfa1.vortex.fbs.FbsStruct_;
+import io.github.dfa1.vortex.fbs.FbsType;
+import io.github.dfa1.vortex.fbs.FbsUtf8;
+import io.github.dfa1.vortex.fbs.FbsVariant;
 
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -27,11 +25,11 @@ final class PostscriptParser {
     /// Hard cap on layout-tree recursion depth. Real-world layouts are typically four levels
     /// (Struct → Zoned → Chunked → Flat); 64 is well past any expected schema and prevents
     /// adversarial inputs — deeply nested trees or self-referential FlatBuffer cycles — from
-    /// blowing the JVM stack during [#convertLayout(io.github.dfa1.vortex.fbs.Layout, List, int)].
+    /// blowing the JVM stack during [#convertLayout(io.github.dfa1.vortex.fbs.FbsLayout, List, int)].
     static final int MAX_LAYOUT_DEPTH = 64;
 
     /// Hard cap on per-layout metadata size. The FlatBuffer runtime returns an unbounded slice
-    /// from `metadataAsByteBuffer()`; a crafted file can claim a multi-gigabyte metadata
+    /// from `metadataAsSegment()`; a crafted file can claim a multi-gigabyte metadata
     /// blob and force later allocators into pathological behaviour. 4 MiB is well above any
     /// real encoding's metadata footprint (the largest is FSST's symbol table at ~32 KiB).
     static final int MAX_LAYOUT_METADATA_BYTES = 4 * 1024 * 1024;
@@ -39,8 +37,8 @@ final class PostscriptParser {
     private PostscriptParser() {
     }
 
-    static ParsedFile parse(ByteBuffer postscriptBuf, MemorySegment fileSegment, long fileSize) {
-        var ps = Postscript.getRootAsPostscript(postscriptBuf);
+    static ParsedFile parse(MemorySegment postscriptSeg, MemorySegment fileSegment, long fileSize) {
+        var ps = FbsPostscript.getRootAsFbsPostscript(postscriptSeg);
 
         var footerSeg = ps.footer();
         if (footerSeg == null) {
@@ -58,9 +56,9 @@ final class PostscriptParser {
             checkBlobBounds("dtype", dtypeSeg.offset(), dtypeSeg.length(), fileSize);
         }
 
-        ByteBuffer footerBuf = slice(fileSegment, footerSeg.offset(), footerSeg.length());
-        ByteBuffer layoutBuf = slice(fileSegment, layoutSeg.offset(), layoutSeg.length());
-        ByteBuffer dtypeBuf = (dtypeSeg != null && dtypeSeg.length() > 0)
+        MemorySegment footerBuf = slice(fileSegment, footerSeg.offset(), footerSeg.length());
+        MemorySegment layoutBuf = slice(fileSegment, layoutSeg.offset(), layoutSeg.length());
+        MemorySegment dtypeBuf = (dtypeSeg != null && dtypeSeg.length() > 0)
                                       ? slice(fileSegment, dtypeSeg.offset(), dtypeSeg.length())
                                       : null;
 
@@ -102,17 +100,17 @@ final class PostscriptParser {
         }
     }
 
-    static ParsedFile parseBlobs(ByteBuffer footerBuf, ByteBuffer layoutBuf, ByteBuffer dtypeBuf) {
+    static ParsedFile parseBlobs(MemorySegment footerBuf, MemorySegment layoutBuf, MemorySegment dtypeBuf) {
         try {
-            var fbsFooter = io.github.dfa1.vortex.fbs.Footer.getRootAsFooter(footerBuf);
-            var fbsLayout = io.github.dfa1.vortex.fbs.Layout.getRootAsLayout(layoutBuf);
+            var fbsFooter = io.github.dfa1.vortex.fbs.FbsFooter.getRootAsFbsFooter(footerBuf);
+            var fbsLayout = io.github.dfa1.vortex.fbs.FbsLayout.getRootAsFbsLayout(layoutBuf);
 
             Footer footer = convertFooter(fbsFooter);
             Layout layout = convertLayout(fbsLayout, footer.layoutSpecs(), 0);
 
             DType dtype = null;
-            if (dtypeBuf != null && dtypeBuf.hasRemaining()) {
-                dtype = convertDType(io.github.dfa1.vortex.fbs.DType.getRootAsDType(dtypeBuf));
+            if (dtypeBuf != null && dtypeBuf.byteSize() > 0) {
+                dtype = convertDType(io.github.dfa1.vortex.fbs.FbsDType.getRootAsFbsDType(dtypeBuf));
             }
 
             return new ParsedFile(footer, dtype, layout);
@@ -123,11 +121,11 @@ final class PostscriptParser {
         }
     }
 
-    private static ByteBuffer slice(MemorySegment seg, long offset, long length) {
-        return IoBounds.slice(seg, offset, length).asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
+    private static MemorySegment slice(MemorySegment seg, long offset, long length) {
+        return IoBounds.slice(seg, offset, length);
     }
 
-    static Footer convertFooter(io.github.dfa1.vortex.fbs.Footer f) {
+    static Footer convertFooter(io.github.dfa1.vortex.fbs.FbsFooter f) {
         var arraySpecs = new ArrayList<String>(f.arraySpecsLength());
         for (int i = 0; i < f.arraySpecsLength(); i++) {
             arraySpecs.add(f.arraySpecs(i).id());
@@ -144,7 +142,7 @@ final class PostscriptParser {
             segmentSpecs.add(new SegmentSpec(
                     s.offset(), s.length(),
                     (byte) s.alignmentExponent(),
-                    CompressionScheme.of(s._Compression())));
+                    CompressionScheme.of(s.compression())));
         }
 
         var compressionSpecs = new ArrayList<CompressionScheme>(f.compressionSpecsLength());
@@ -157,7 +155,7 @@ final class PostscriptParser {
                 List.copyOf(segmentSpecs), List.copyOf(compressionSpecs));
     }
 
-    private static Layout convertLayout(io.github.dfa1.vortex.fbs.Layout l, List<String> layoutSpecs, int depth) {
+    private static Layout convertLayout(io.github.dfa1.vortex.fbs.FbsLayout l, List<String> layoutSpecs, int depth) {
         if (depth > MAX_LAYOUT_DEPTH) {
             throw new VortexException(
                     "layout tree depth exceeds limit (" + MAX_LAYOUT_DEPTH + ")");
@@ -170,10 +168,10 @@ final class PostscriptParser {
         }
         String encodingId = layoutSpecs.get(encIdx);
 
-        ByteBuffer metadata = l.metadataAsByteBuffer();
-        if (metadata != null && metadata.remaining() > MAX_LAYOUT_METADATA_BYTES) {
+        MemorySegment metadata = l.metadataAsSegment();
+        if (metadata != null && metadata.byteSize() > MAX_LAYOUT_METADATA_BYTES) {
             throw new VortexException(
-                    "layout metadata size " + metadata.remaining()
+                    "layout metadata size " + metadata.byteSize()
                             + " exceeds limit (" + MAX_LAYOUT_METADATA_BYTES + ")");
         }
 
@@ -190,17 +188,17 @@ final class PostscriptParser {
         return new Layout(encodingId, l.rowCount(), metadata, List.copyOf(children), List.copyOf(segments));
     }
 
-    private static DType convertDType(io.github.dfa1.vortex.fbs.DType fbs) {
-        byte typeType = fbs.typeType();
+    private static DType convertDType(io.github.dfa1.vortex.fbs.FbsDType fbs) {
+        int typeType = fbs.typeType();
         return switch (typeType) {
-            case Type.Null -> new DType.Null(true);
-            case Type.Bool -> new DType.Bool(((Bool) fbs.type(new Bool())).nullable());
-            case Type.Primitive -> {
-                var p = (Primitive) fbs.type(new Primitive());
+            case FbsType.FbsNull -> new DType.Null(true);
+            case FbsType.FbsBool -> new DType.Bool(fbs.type(new FbsBool()).nullable());
+            case FbsType.FbsPrimitive -> {
+                var p = fbs.type(new FbsPrimitive());
                 yield new DType.Primitive(convertPType(p.ptype()), p.nullable());
             }
-            case Type.Decimal -> {
-                var d = (Decimal) fbs.type(new Decimal());
+            case FbsType.FbsDecimal -> {
+                var d = fbs.type(new FbsDecimal());
                 int precision = d.precision();
                 int scale = d.scale();
                 // IEEE 754-2008 decimal128 covers precision up to 38 digits; scale must be in
@@ -216,59 +214,55 @@ final class PostscriptParser {
                 }
                 yield new DType.Decimal((byte) precision, (byte) scale, d.nullable());
             }
-            case Type.Utf8 -> new DType.Utf8(((Utf8) fbs.type(new Utf8())).nullable());
-            case Type.Binary -> new DType.Binary(((Binary) fbs.type(new Binary())).nullable());
-            case Type.Struct_ -> {
-                var s = (Struct_) fbs.type(new Struct_());
+            case FbsType.FbsUtf8 -> new DType.Utf8(fbs.type(new FbsUtf8()).nullable());
+            case FbsType.FbsBinary -> new DType.Binary(fbs.type(new FbsBinary()).nullable());
+            case FbsType.FbsStruct_ -> {
+                var s = fbs.type(new FbsStruct_());
                 var names = new ArrayList<String>(s.namesLength());
                 var types = new ArrayList<DType>(s.dtypesLength());
                 for (int i = 0; i < s.namesLength(); i++) {
                     names.add(s.names(i));
                 }
                 for (int i = 0; i < s.dtypesLength(); i++) {
-                    types.add(convertDType(s.dtypes(new io.github.dfa1.vortex.fbs.DType(), i)));
+                    types.add(convertDType(s.dtypes(i)));
                 }
                 yield new DType.Struct(List.copyOf(names), List.copyOf(types), s.nullable());
             }
-            case Type.List -> {
-                var l = (io.github.dfa1.vortex.fbs.List) fbs.type(new io.github.dfa1.vortex.fbs.List());
-                yield new DType.List(
-                        convertDType(l.elementType(new io.github.dfa1.vortex.fbs.DType())),
-                        l.nullable());
+            case FbsType.FbsList -> {
+                var l = fbs.type(new io.github.dfa1.vortex.fbs.FbsList());
+                yield new DType.List(convertDType(l.elementType()), l.nullable());
             }
-            case Type.FixedSizeList -> {
-                var fsl = (FixedSizeList) fbs.type(new FixedSizeList());
-                yield new DType.FixedSizeList(
-                        convertDType(fsl.elementType(new io.github.dfa1.vortex.fbs.DType())),
-                        (int) fsl.size(), fsl.nullable());
+            case FbsType.FbsFixedSizeList -> {
+                var fsl = fbs.type(new FbsFixedSizeList());
+                yield new DType.FixedSizeList(convertDType(fsl.elementType()), (int) fsl.size(), fsl.nullable());
             }
-            case Type.Extension -> {
-                var e = (Extension) fbs.type(new Extension());
-                DType storage = convertDType(e.storageDtype(new io.github.dfa1.vortex.fbs.DType()));
+            case FbsType.FbsExtension -> {
+                var e = fbs.type(new FbsExtension());
+                DType storage = convertDType(e.storageDtype());
                 yield new DType.Extension(
                         e.id(),
                         storage,
-                        e.metadataAsByteBuffer(),
+                        e.metadataAsSegment(),
                         storage.nullable());
             }
-            case Type.Variant -> new DType.Variant(((Variant) fbs.type(new Variant())).nullable());
+            case FbsType.FbsVariant -> new DType.Variant(fbs.type(new FbsVariant()).nullable());
             default -> throw new VortexException("unsupported DType typeType=" + typeType);
         };
     }
 
     private static PType convertPType(int fbsPType) {
         return switch (fbsPType) {
-            case io.github.dfa1.vortex.fbs.PType.U8 -> PType.U8;
-            case io.github.dfa1.vortex.fbs.PType.U16 -> PType.U16;
-            case io.github.dfa1.vortex.fbs.PType.U32 -> PType.U32;
-            case io.github.dfa1.vortex.fbs.PType.U64 -> PType.U64;
-            case io.github.dfa1.vortex.fbs.PType.I8 -> PType.I8;
-            case io.github.dfa1.vortex.fbs.PType.I16 -> PType.I16;
-            case io.github.dfa1.vortex.fbs.PType.I32 -> PType.I32;
-            case io.github.dfa1.vortex.fbs.PType.I64 -> PType.I64;
-            case io.github.dfa1.vortex.fbs.PType.F16 -> PType.F16;
-            case io.github.dfa1.vortex.fbs.PType.F32 -> PType.F32;
-            case io.github.dfa1.vortex.fbs.PType.F64 -> PType.F64;
+            case io.github.dfa1.vortex.fbs.FbsPType.U8 -> PType.U8;
+            case io.github.dfa1.vortex.fbs.FbsPType.U16 -> PType.U16;
+            case io.github.dfa1.vortex.fbs.FbsPType.U32 -> PType.U32;
+            case io.github.dfa1.vortex.fbs.FbsPType.U64 -> PType.U64;
+            case io.github.dfa1.vortex.fbs.FbsPType.I8 -> PType.I8;
+            case io.github.dfa1.vortex.fbs.FbsPType.I16 -> PType.I16;
+            case io.github.dfa1.vortex.fbs.FbsPType.I32 -> PType.I32;
+            case io.github.dfa1.vortex.fbs.FbsPType.I64 -> PType.I64;
+            case io.github.dfa1.vortex.fbs.FbsPType.F16 -> PType.F16;
+            case io.github.dfa1.vortex.fbs.FbsPType.F32 -> PType.F32;
+            case io.github.dfa1.vortex.fbs.FbsPType.F64 -> PType.F64;
             default -> throw new VortexException("unrecognized PType=" + fbsPType);
         };
     }

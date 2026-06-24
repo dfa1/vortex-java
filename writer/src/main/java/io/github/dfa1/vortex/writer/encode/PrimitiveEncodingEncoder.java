@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.proto.ScalarValue;
+import io.github.dfa1.vortex.proto.ProtoScalarValue;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -86,7 +86,7 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
         };
     }
 
-    /// Computes the serialised min/max [io.github.dfa1.vortex.proto.ScalarValue] pair for a raw
+    /// Computes the serialised min/max [io.github.dfa1.vortex.proto.ProtoScalarValue] pair for a raw
     /// primitive array, in the same signed/unsigned/float shape the per-segment stats use. Returns
     /// `null` for an empty array. Shared so the dictionary zone-map path computes per-chunk min/max
     /// identically to the flat path.
@@ -290,7 +290,7 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
         };
     }
 
-    /// Computes the serialised SUM [io.github.dfa1.vortex.proto.ScalarValue] for a raw primitive
+    /// Computes the serialised SUM [io.github.dfa1.vortex.proto.ProtoScalarValue] for a raw primitive
     /// array, in the widened shape Rust uses for zone-map sums: signed ints → `i64`, unsigned ints
     /// → `u64`, floats → `f64`. Returns `null` on integer overflow (Rust drops the zone's sum) and
     /// for an empty array. Floats never overflow to `null` (they saturate to infinity).
@@ -436,18 +436,18 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
     }
 
     private static byte[] scalarI64(long v) {
-        return ScalarValue.ofInt64Value(v).encode();
+        return ProtoScalarValue.ofInt64Value(v).encode();
     }
 
     private static byte[] scalarU64(long v) {
-        return ScalarValue.ofUint64Value(v).encode();
+        return ProtoScalarValue.ofUint64Value(v).encode();
     }
 
     private static byte[] scalarF32(float v) {
-        return ScalarValue.ofF32Value(v).encode();
+        return ProtoScalarValue.ofF32Value(v).encode();
     }
 
     private static byte[] scalarF64(double v) {
-        return ScalarValue.ofF64Value(v).encode();
+        return ProtoScalarValue.ofF64Value(v).encode();
     }
 }

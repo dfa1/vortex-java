@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.proto.PatchedMetadata;
+import io.github.dfa1.vortex.proto.ProtoPatchedMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
 import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
@@ -16,7 +16,6 @@ import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
 
 /// Read-only decoder for `vortex.patched`.
 public final class PatchedEncodingDecoder implements EncodingDecoder {
@@ -32,8 +31,8 @@ public final class PatchedEncodingDecoder implements EncodingDecoder {
 
     @Override
     public Array decode(DecodeContext ctx) {
-        ByteBuffer rawMeta = ctx.metadata();
-        if (rawMeta == null || !rawMeta.hasRemaining()) {
+        MemorySegment rawMeta = ctx.metadata();
+        if (rawMeta == null || rawMeta.byteSize() == 0) {
             throw new VortexException(EncodingId.VORTEX_PATCHED, "missing metadata");
         }
 
@@ -41,8 +40,8 @@ public final class PatchedEncodingDecoder implements EncodingDecoder {
         long nLanes;
         long offset;
         try {
-            MemorySegment metaSeg = MemorySegment.ofBuffer(rawMeta.duplicate());
-            PatchedMetadata meta = PatchedMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            MemorySegment metaSeg = rawMeta;
+            ProtoPatchedMetadata meta = ProtoPatchedMetadata.decode(metaSeg, 0, metaSeg.byteSize());
             nPatches = Integer.toUnsignedLong(meta.n_patches());
             nLanes = Integer.toUnsignedLong(meta.n_lanes());
             offset = Integer.toUnsignedLong(meta.offset());

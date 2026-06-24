@@ -13,7 +13,6 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -26,11 +25,11 @@ class DecimalEncodingDecoderTest {
     private static Array decode(int valuesType, int rowCount, int bufferBytes) {
         // Encode values_type explicitly (field 1, varint) so even the proto3 default (0) is
         // present on the wire — DecimalMetadata(0).encode() would omit it and read as empty.
-        ByteBuffer meta = ByteBuffer.wrap(new byte[]{0x08, (byte) valuesType});
+        MemorySegment meta = MemorySegment.ofArray(new byte[]{0x08, (byte) valuesType});
         return decode(meta, rowCount, bufferBytes);
     }
 
-    private static Array decode(ByteBuffer meta, int rowCount, int bufferBytes) {
+    private static Array decode(MemorySegment meta, int rowCount, int bufferBytes) {
         MemorySegment buf = MemorySegment.ofArray(new byte[bufferBytes]);
         ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DECIMAL, meta, new ArrayNode[0], new int[]{0});
         DecodeContext ctx = new DecodeContext(node, DECIMAL, rowCount,
@@ -80,7 +79,7 @@ class DecimalEncodingDecoderTest {
         @Test
         void missingMetadata_throws() {
             // When / Then — null metadata
-            assertThatThrownBy(() -> decode((ByteBuffer) null, 1, 8))
+            assertThatThrownBy(() -> decode((MemorySegment) null, 1, 8))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("missing metadata");
         }
@@ -88,7 +87,7 @@ class DecimalEncodingDecoderTest {
         @Test
         void emptyMetadata_throws() {
             // When / Then — present but zero remaining
-            assertThatThrownBy(() -> decode(ByteBuffer.allocate(0), 1, 8))
+            assertThatThrownBy(() -> decode(MemorySegment.ofArray(new byte[0]), 1, 8))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("missing metadata");
         }
@@ -96,7 +95,7 @@ class DecimalEncodingDecoderTest {
         @Test
         void invalidMetadata_throws() {
             // Given — a truncated varint that proto decode rejects
-            ByteBuffer bad = ByteBuffer.wrap(new byte[]{0x08, (byte) 0x80});
+            MemorySegment bad = MemorySegment.ofArray(new byte[]{0x08, (byte) 0x80});
 
             // When / Then
             assertThatThrownBy(() -> decode(bad, 1, 8))

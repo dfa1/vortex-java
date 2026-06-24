@@ -3,11 +3,10 @@ package io.github.dfa1.vortex.writer.encode;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.proto.ALPRDMetadata;
-import io.github.dfa1.vortex.proto.PatchesMetadata;
+import io.github.dfa1.vortex.proto.ProtoALPRDMetadata;
+import io.github.dfa1.vortex.proto.ProtoPatchesMetadata;
 
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -246,7 +245,7 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
         }
 
         EncodeNode[] children;
-        PatchesMetadata patchesMeta = null;
+        ProtoPatchesMetadata patchesMeta = null;
         if (excPos.isEmpty()) {
             children = new EncodeNode[]{leftNode, rightNode};
         } else {
@@ -267,23 +266,23 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
             EncodeNode idxNode = EncodeNode.remapBufferIndices(idxResult.rootNode(), idxOffset);
             EncodeNode valNode = EncodeNode.remapBufferIndices(valResult.rootNode(), idxOffset + idxBufCount);
 
-            patchesMeta = new PatchesMetadata(
+            patchesMeta = new ProtoPatchesMetadata(
                     excPos.size(),
                     0L,
-                    io.github.dfa1.vortex.proto.PType.fromValue(PType.U64.ordinal()),
+                    io.github.dfa1.vortex.proto.ProtoPType.fromValue(PType.U64.ordinal()),
                     null, null, null);
             children = new EncodeNode[]{leftNode, rightNode, idxNode, valNode};
         }
 
-        byte[] metaBytes = new ALPRDMetadata(
+        byte[] metaBytes = new ProtoALPRDMetadata(
                 rightBitWidth,
                 dict.length,
                 dictList,
-                io.github.dfa1.vortex.proto.PType.fromValue(PType.U16.ordinal()),
+                io.github.dfa1.vortex.proto.ProtoPType.fromValue(PType.U16.ordinal()),
                 patchesMeta
         ).encode();
         EncodeNode root = new EncodeNode(
-            EncodingId.VORTEX_ALPRD, ByteBuffer.wrap(metaBytes), children, new int[]{});
+            EncodingId.VORTEX_ALPRD, MemorySegment.ofArray(metaBytes), children, new int[]{});
         return new EncodeResult(root, List.copyOf(allBuffers), null, null);
     }
 
@@ -300,15 +299,15 @@ public final class AlpRdEncodingEncoder implements EncodingEncoder {
         EncodeNode leftNode = EncodeNode.remapBufferIndices(leftResult.rootNode(), 0);
         EncodeNode rightNode = EncodeNode.remapBufferIndices(rightResult.rootNode(), leftBufCount);
 
-        byte[] metaBytes = new ALPRDMetadata(
+        byte[] metaBytes = new ProtoALPRDMetadata(
                 48,
                 0,
                 List.of(),
-                io.github.dfa1.vortex.proto.PType.fromValue(PType.U16.ordinal()),
+                io.github.dfa1.vortex.proto.ProtoPType.fromValue(PType.U16.ordinal()),
                 null).encode();
 
         EncodeNode root = new EncodeNode(
-            EncodingId.VORTEX_ALPRD, ByteBuffer.wrap(metaBytes),
+            EncodingId.VORTEX_ALPRD, MemorySegment.ofArray(metaBytes),
             new EncodeNode[]{leftNode, rightNode}, new int[]{});
         return new EncodeResult(root, List.copyOf(allBuffers), null, null);
     }

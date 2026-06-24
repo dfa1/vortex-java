@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.reader.decode;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.proto.ScalarValue;
+import io.github.dfa1.vortex.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.LazyForByteArray;
@@ -14,7 +14,6 @@ import io.github.dfa1.vortex.reader.array.MaskedArray;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
 
 /// Read-only decoder for `fastlanes.for` (Frame of Reference).
 public final class FrameOfReferenceEncodingDecoder implements EncodingDecoder {
@@ -30,14 +29,14 @@ public final class FrameOfReferenceEncodingDecoder implements EncodingDecoder {
 
     @Override
     public Array decode(DecodeContext ctx) {
-        ByteBuffer rawMeta = ctx.metadata();
-        if (rawMeta == null || !rawMeta.hasRemaining()) {
+        MemorySegment rawMeta = ctx.metadata();
+        if (rawMeta == null || rawMeta.byteSize() == 0) {
             throw new VortexException(EncodingId.FASTLANES_FOR, "missing metadata");
         }
-        ScalarValue scalar;
+        ProtoScalarValue scalar;
         try {
-            MemorySegment metaSeg = MemorySegment.ofBuffer(rawMeta.duplicate());
-            scalar = ScalarValue.decode(metaSeg, 0, metaSeg.byteSize());
+            MemorySegment metaSeg = rawMeta;
+            scalar = ProtoScalarValue.decode(metaSeg, 0, metaSeg.byteSize());
         } catch (IOException e) {
             throw new VortexException(EncodingId.FASTLANES_FOR, "invalid metadata", e);
         }
@@ -72,7 +71,7 @@ public final class FrameOfReferenceEncodingDecoder implements EncodingDecoder {
         return validity != null ? new MaskedArray(result, validity) : result;
     }
 
-    private static long referenceValue(ScalarValue scalar) {
+    private static long referenceValue(ProtoScalarValue scalar) {
         if (scalar.int64_value() != null) {
             return scalar.int64_value();
         }

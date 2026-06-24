@@ -5,15 +5,13 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.TestSegments;
 import io.github.dfa1.vortex.encoding.TimeUnit;
-import io.github.dfa1.vortex.proto.DateTimePartsMetadata;
+import io.github.dfa1.vortex.proto.ProtoDateTimePartsMetadata;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -25,24 +23,21 @@ class DateTimePartsEncodingDecoderTest {
 
     private static final long SECONDS_PER_DAY = 86_400L;
 
-    private static ByteBuffer i64Meta() {
-        return ByteBuffer.wrap(new DateTimePartsMetadata(
-                io.github.dfa1.vortex.proto.PType.I64,
-                io.github.dfa1.vortex.proto.PType.I64,
-                io.github.dfa1.vortex.proto.PType.I64).encode());
+    private static MemorySegment i64Meta() {
+        return MemorySegment.ofArray(new ProtoDateTimePartsMetadata(
+                io.github.dfa1.vortex.proto.ProtoPType.I64,
+                io.github.dfa1.vortex.proto.ProtoPType.I64,
+                io.github.dfa1.vortex.proto.ProtoPType.I64).encode());
     }
 
     private static DType timestampDType(TimeUnit unit, boolean nullable) {
-        ByteBuffer meta = ByteBuffer.allocate(3).order(ByteOrder.LITTLE_ENDIAN);
-        meta.put((byte) unit.ordinal());
-        meta.putShort((short) 0);
-        meta.flip();
+        MemorySegment meta = MemorySegment.ofArray(new byte[]{(byte) unit.ordinal(), 0, 0});
         return new DType.Extension("vortex.timestamp",
                 new DType.Primitive(PType.I64, nullable), meta, nullable);
     }
 
     /// Builds a context with three I64 part-children backed by the given segments.
-    private static DecodeContext ctx(ByteBuffer meta, DType dtype, long n,
+    private static DecodeContext ctx(MemorySegment meta, DType dtype, long n,
             MemorySegment days, MemorySegment seconds, MemorySegment subseconds) {
         ArrayNode d = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
         ArrayNode s = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1});

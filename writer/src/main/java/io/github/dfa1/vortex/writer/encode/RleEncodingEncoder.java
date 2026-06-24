@@ -6,11 +6,10 @@ import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PrimitiveArrays;
 import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.proto.RLEMetadata;
+import io.github.dfa1.vortex.proto.ProtoRLEMetadata;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
-import java.nio.ByteBuffer;
 import java.util.List;
 
 /// Write-only encoder for `fastlanes.rle`.
@@ -85,12 +84,12 @@ public final class RleEncodingEncoder implements EncodingEncoder {
         PType indicesPtype = PType.U16;
         PType offsetsPtype = PType.U64;
 
-        byte[] metaBytes = new RLEMetadata(
+        byte[] metaBytes = new ProtoRLEMetadata(
                 globalValuesCount,
                 paddedLen,
-                io.github.dfa1.vortex.proto.PType.fromValue(indicesPtype.ordinal()),
+                io.github.dfa1.vortex.proto.ProtoPType.fromValue(indicesPtype.ordinal()),
                 numChunks,
-                io.github.dfa1.vortex.proto.PType.fromValue(offsetsPtype.ordinal()),
+                io.github.dfa1.vortex.proto.ProtoPType.fromValue(offsetsPtype.ordinal()),
                 0L
         ).encode();
 
@@ -99,7 +98,7 @@ public final class RleEncodingEncoder implements EncodingEncoder {
         EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
         EncodeNode root = new EncodeNode(
                 EncodingId.FASTLANES_RLE,
-                ByteBuffer.wrap(metaBytes),
+                MemorySegment.ofArray(metaBytes),
                 new EncodeNode[]{valuesNode, indicesNode, offsetsNode},
                 new int[0]);
         return new EncodeResult(root, List.of(valuesSeg, indicesSeg, offsetsSeg), null, null);
@@ -129,12 +128,12 @@ public final class RleEncodingEncoder implements EncodingEncoder {
         MemorySegment empty = ctx.arena().allocate(0);
         PType indicesPtype = PType.U16;
         PType offsetsPtype = PType.U64;
-        byte[] metaBytes = new RLEMetadata(
+        byte[] metaBytes = new ProtoRLEMetadata(
                 0L,
                 0L,
-                io.github.dfa1.vortex.proto.PType.fromValue(indicesPtype.ordinal()),
+                io.github.dfa1.vortex.proto.ProtoPType.fromValue(indicesPtype.ordinal()),
                 0L,
-                io.github.dfa1.vortex.proto.PType.fromValue(offsetsPtype.ordinal()),
+                io.github.dfa1.vortex.proto.ProtoPType.fromValue(offsetsPtype.ordinal()),
                 0L
         ).encode();
         EncodeNode valuesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
@@ -142,7 +141,7 @@ public final class RleEncodingEncoder implements EncodingEncoder {
         EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
         EncodeNode root = new EncodeNode(
                 EncodingId.FASTLANES_RLE,
-                ByteBuffer.wrap(metaBytes),
+                MemorySegment.ofArray(metaBytes),
                 new EncodeNode[]{valuesNode, indicesNode, offsetsNode},
                 new int[0]);
         return new EncodeResult(root, List.of(empty, empty, empty), null, null);

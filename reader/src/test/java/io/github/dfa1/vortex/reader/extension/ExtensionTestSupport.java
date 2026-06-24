@@ -6,11 +6,11 @@ import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
 import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
 
+import static io.github.dfa1.vortex.encoding.PTypeIO.LE_SHORT;
+
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 
 /// Shared fixtures for the per-extension decoder test classes.
@@ -23,24 +23,20 @@ final class ExtensionTestSupport {
     private ExtensionTestSupport() {
     }
 
-    static DType.Extension ext(String id, DType storage, ByteBuffer meta) {
+    static DType.Extension ext(String id, DType storage, MemorySegment meta) {
         return new DType.Extension(id, storage, meta, false);
     }
 
-    static ByteBuffer unitByte(byte tag) {
-        ByteBuffer meta = ByteBuffer.allocate(1);
-        meta.put(0, tag);
-        return meta;
+    static MemorySegment unitByte(byte tag) {
+        return MemorySegment.ofArray(new byte[]{tag});
     }
 
-    static ByteBuffer tzMeta(byte unitTag, String tz) {
+    static MemorySegment tzMeta(byte unitTag, String tz) {
         byte[] tzBytes = tz == null ? new byte[0] : tz.getBytes(StandardCharsets.UTF_8);
-        ByteBuffer meta = ByteBuffer.allocate(3 + tzBytes.length).order(ByteOrder.LITTLE_ENDIAN);
-        meta.put(0, unitTag);
-        meta.putShort(1, (short) tzBytes.length);
-        for (int k = 0; k < tzBytes.length; k++) {
-            meta.put(3 + k, tzBytes[k]);
-        }
+        MemorySegment meta = MemorySegment.ofArray(new byte[3 + tzBytes.length]);
+        meta.set(ValueLayout.JAVA_BYTE, 0, unitTag);
+        meta.set(LE_SHORT, 1, (short) tzBytes.length);
+        MemorySegment.copy(tzBytes, 0, meta, ValueLayout.JAVA_BYTE, 3, tzBytes.length);
         return meta;
     }
 

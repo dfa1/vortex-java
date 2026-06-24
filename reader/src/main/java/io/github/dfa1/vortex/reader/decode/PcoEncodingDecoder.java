@@ -5,8 +5,8 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.proto.PcoChunkInfo;
-import io.github.dfa1.vortex.proto.PcoMetadata;
+import io.github.dfa1.vortex.proto.ProtoPcoChunkInfo;
+import io.github.dfa1.vortex.proto.ProtoPcoMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
@@ -20,7 +20,6 @@ import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
-import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 /// Read-only decoder for `vortex.pco` — port of pcodec.
@@ -45,7 +44,7 @@ public final class PcoEncodingDecoder implements EncodingDecoder {
 
     @Override
     public Array decode(DecodeContext ctx) {
-        PcoMetadata meta = parseMeta(ctx);
+        ProtoPcoMetadata meta = parseMeta(ctx);
         validateHeader(meta);
 
         DType dtype = ctx.dtype();
@@ -90,7 +89,7 @@ public final class PcoEncodingDecoder implements EncodingDecoder {
         int[] batchOffsetBits2 = new int[PcoTansDecoder.BATCH_N];
 
         for (int c = 0; c < nChunks; c++) {
-            PcoChunkInfo chunkInfo = meta.chunks().get(c);
+            ProtoPcoChunkInfo chunkInfo = meta.chunks().get(c);
             MemorySegment chunkMetaBuf = ctx.buffer(c); // chunk metas at indices 0..nChunks-1
             PcoChunkMeta chunkMeta = readChunkMeta(chunkMetaBuf, dtypeSize);
 
@@ -743,21 +742,21 @@ public final class PcoEncodingDecoder implements EncodingDecoder {
         return bins;
     }
 
-    private static PcoMetadata parseMeta(DecodeContext ctx) {
-        ByteBuffer raw = ctx.metadata();
+    private static ProtoPcoMetadata parseMeta(DecodeContext ctx) {
+        MemorySegment raw = ctx.metadata();
         if (raw == null) {
-            throw new VortexException(EncodingId.VORTEX_PCO, "missing PcoMetadata");
+            throw new VortexException(EncodingId.VORTEX_PCO, "missing ProtoPcoMetadata");
         }
         try {
-            MemorySegment metaSeg = MemorySegment.ofBuffer(raw.duplicate());
-            return PcoMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            MemorySegment metaSeg = raw;
+            return ProtoPcoMetadata.decode(metaSeg, 0, metaSeg.byteSize());
         } catch (IOException e) {
             throw new VortexException(EncodingId.VORTEX_PCO,
-                    "invalid PcoMetadata: " + e.getMessage());
+                    "invalid ProtoPcoMetadata: " + e.getMessage());
         }
     }
 
-    private static void validateHeader(PcoMetadata meta) {
+    private static void validateHeader(ProtoPcoMetadata meta) {
         byte[] header = meta.header();
         if (header.length < 2) {
             throw new VortexException(EncodingId.VORTEX_PCO,

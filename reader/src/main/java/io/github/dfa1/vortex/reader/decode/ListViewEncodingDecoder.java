@@ -6,7 +6,7 @@ import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ListViewArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.proto.ListViewMetadata;
+import io.github.dfa1.vortex.proto.ProtoListViewMetadata;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -36,10 +36,10 @@ public final class ListViewEncodingDecoder implements EncodingDecoder {
                     "expected 3 or 4 children, got " + nchildren);
         }
 
-        ListViewMetadata meta;
+        ProtoListViewMetadata meta;
         try {
-            MemorySegment metaSeg = MemorySegment.ofBuffer(ctx.metadata().duplicate());
-            meta = ListViewMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            MemorySegment metaSeg = ctx.metadata();
+            meta = ProtoListViewMetadata.decode(metaSeg, 0, metaSeg.byteSize());
         } catch (IOException e) {
             throw new VortexException(EncodingId.VORTEX_LISTVIEW, "invalid metadata", e);
         }

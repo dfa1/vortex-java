@@ -16,8 +16,8 @@ import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.reader.ReadRegistry;
-import io.github.dfa1.vortex.proto.ScalarValue;
-import io.github.dfa1.vortex.proto.SequenceMetadata;
+import io.github.dfa1.vortex.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.proto.ProtoSequenceMetadata;
 import io.github.dfa1.vortex.reader.decode.SequenceEncodingDecoder;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -27,7 +27,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -42,7 +41,7 @@ class SequenceEncodingEncoderTest {
     class Encode {
 
         private static DecodeContext encodeResultToCtx(EncodeResult result, DType dtype, long n) {
-            ByteBuffer meta = result.rootNode().metadata();
+            MemorySegment meta = result.rootNode().metadata();
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_SEQUENCE, meta, new ArrayNode[0], new int[0]);
             return new DecodeContext(node, dtype, n, new MemorySegment[0], ReadRegistry.empty(), Arena.ofAuto());
         }
@@ -120,8 +119,8 @@ class SequenceEncodingEncoderTest {
 
             // When
             EncodeResult resultEncoded = ENCODER.encode(DTypes.U64, data, EncodeTestHelper.testCtx());
-            MemorySegment metaSeg = MemorySegment.ofBuffer(resultEncoded.rootNode().metadata().duplicate());
-            SequenceMetadata meta = SequenceMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            MemorySegment metaSeg = resultEncoded.rootNode().metadata();
+            ProtoSequenceMetadata meta = ProtoSequenceMetadata.decode(metaSeg, 0, metaSeg.byteSize());
             DecodeContext ctx = encodeResultToCtx(resultEncoded, DTypes.U64, data.length);
             LongArray result = (LongArray) DECODER.decode(ctx);
 
@@ -316,26 +315,26 @@ class SequenceEncodingEncoderTest {
 
         private static DecodeContext makeCtx(byte[] meta, DType dtype, long n) {
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_SEQUENCE,
-                    ByteBuffer.wrap(meta), new ArrayNode[0], new int[0]);
+                    MemorySegment.ofArray(meta), new ArrayNode[0], new int[0]);
             return new DecodeContext(node, dtype, n, new MemorySegment[0], ReadRegistry.empty(), Arena.ofAuto());
         }
 
         private static byte[] intMeta(long base, long mul) {
-            return new SequenceMetadata(ScalarValue.ofInt64Value(base), ScalarValue.ofInt64Value(mul)).encode();
+            return new ProtoSequenceMetadata(ProtoScalarValue.ofInt64Value(base), ProtoScalarValue.ofInt64Value(mul)).encode();
         }
 
         private static byte[] f64Meta(double base, double mul) {
-            return new SequenceMetadata(ScalarValue.ofF64Value(base), ScalarValue.ofF64Value(mul)).encode();
+            return new ProtoSequenceMetadata(ProtoScalarValue.ofF64Value(base), ProtoScalarValue.ofF64Value(mul)).encode();
         }
 
         private static byte[] f32Meta(float base, float mul) {
-            return new SequenceMetadata(ScalarValue.ofF32Value(base), ScalarValue.ofF32Value(mul)).encode();
+            return new ProtoSequenceMetadata(ProtoScalarValue.ofF32Value(base), ProtoScalarValue.ofF32Value(mul)).encode();
         }
 
         private static byte[] f16Meta(short baseShort, short mulShort) {
-            return new SequenceMetadata(
-                    ScalarValue.ofF16Value(Short.toUnsignedLong(baseShort)),
-                    ScalarValue.ofF16Value(Short.toUnsignedLong(mulShort))).encode();
+            return new ProtoSequenceMetadata(
+                    ProtoScalarValue.ofF16Value(Short.toUnsignedLong(baseShort)),
+                    ProtoScalarValue.ofF16Value(Short.toUnsignedLong(mulShort))).encode();
         }
 
         @ParameterizedTest
@@ -438,8 +437,8 @@ class SequenceEncodingEncoderTest {
         void encode_i64_metadata_base_andMultiplier_areSet() throws Exception {
             long[] data = {10L, 12L, 14L, 16L};
             EncodeResult result = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
-            MemorySegment metaSeg = MemorySegment.ofBuffer(result.rootNode().metadata().duplicate());
-            SequenceMetadata meta = SequenceMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            MemorySegment metaSeg = result.rootNode().metadata();
+            ProtoSequenceMetadata meta = ProtoSequenceMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 
             assertThat(meta.base()).isNotNull();
             assertThat(meta.multiplier()).isNotNull();

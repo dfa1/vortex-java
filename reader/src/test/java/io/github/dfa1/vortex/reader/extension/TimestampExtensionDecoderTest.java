@@ -15,8 +15,6 @@ import org.junit.jupiter.api.Test;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -47,8 +45,8 @@ class TimestampExtensionDecoderTest {
 
         // Then — byte 0 = ms ordinal, bytes 1..3 = 0 (tz_len = 0)
         assertThat(dtype.storageDType()).isEqualTo(DType.I64);
-        assertThat(dtype.metadata().get(0)).isEqualTo((byte) TimeUnit.Milliseconds.ordinal());
-        assertThat(dtype.metadata().getShort(1)).isEqualTo((short) 0);
+        assertThat(dtype.metadata().get(java.lang.foreign.ValueLayout.JAVA_BYTE, 0)).isEqualTo((byte) TimeUnit.Milliseconds.ordinal());
+        assertThat(dtype.metadata().get(io.github.dfa1.vortex.encoding.PTypeIO.LE_SHORT, 1)).isEqualTo((short) 0);
     }
 
     @Test
@@ -57,7 +55,7 @@ class TimestampExtensionDecoderTest {
         DType.Extension dtype = sut.dtype(TimeUnit.Microseconds, ZoneId.of("Europe/Paris"), false);
 
         // Then — header tz_len matches the UTF-8 length; the actual bytes follow
-        int tzLen = Short.toUnsignedInt(dtype.metadata().getShort(1));
+        int tzLen = Short.toUnsignedInt(dtype.metadata().get(io.github.dfa1.vortex.encoding.PTypeIO.LE_SHORT, 1));
         assertThat(tzLen).isEqualTo("Europe/Paris".getBytes().length);
         assertThat(sut.timezone(dtype)).contains(ZoneId.of("Europe/Paris"));
     }
@@ -149,12 +147,7 @@ class TimestampExtensionDecoderTest {
     @Test
     void timezone_truncatedMetadata_throws() {
         // Given — declared tz_len longer than buffer can carry
-        ByteBuffer meta = ByteBuffer.allocate(6).order(ByteOrder.LITTLE_ENDIAN);
-        meta.put(0, (byte) 2);
-        meta.putShort(1, (short) 5);
-        meta.put(3, (byte) 'U');
-        meta.put(4, (byte) 'T');
-        meta.put(5, (byte) 'C');
+        MemorySegment meta = MemorySegment.ofArray(new byte[]{2, 5, 0, (byte) 0x55, (byte) 0x54, (byte) 0x43});
         DType.Extension truncated = ext("vortex.timestamp", I64, meta);
 
         // When / Then

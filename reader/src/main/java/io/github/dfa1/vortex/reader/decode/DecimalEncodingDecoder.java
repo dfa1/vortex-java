@@ -4,11 +4,10 @@ import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LazyDecimalArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.proto.DecimalMetadata;
+import io.github.dfa1.vortex.proto.ProtoDecimalMetadata;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
 
 /// Read-only decoder for `vortex.decimal`.
 public final class DecimalEncodingDecoder implements EncodingDecoder {
@@ -24,14 +23,14 @@ public final class DecimalEncodingDecoder implements EncodingDecoder {
 
     @Override
     public Array decode(DecodeContext ctx) {
-        ByteBuffer meta = ctx.metadata();
-        if (meta == null || meta.remaining() == 0) {
+        MemorySegment meta = ctx.metadata();
+        if (meta == null || meta.byteSize() == 0) {
             throw new VortexException(EncodingId.VORTEX_DECIMAL, "missing metadata");
         }
-        DecimalMetadata decoded;
+        ProtoDecimalMetadata decoded;
         try {
-            MemorySegment metaSeg = MemorySegment.ofBuffer(meta.duplicate());
-            decoded = DecimalMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            MemorySegment metaSeg = meta;
+            decoded = ProtoDecimalMetadata.decode(metaSeg, 0, metaSeg.byteSize());
         } catch (IOException e) {
             throw new VortexException(EncodingId.VORTEX_DECIMAL, "invalid metadata: " + e.getMessage());
         }

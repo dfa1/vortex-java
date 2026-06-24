@@ -1,16 +1,18 @@
 package io.github.dfa1.vortex.performance;
 
+import static io.github.dfa1.vortex.encoding.PTypeIO.LE_INT;
+
 import dev.vortex.api.Session;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.fbs.Array;
-import io.github.dfa1.vortex.fbs.ArrayNode;
-import io.github.dfa1.vortex.fbs.Buffer;
+import io.github.dfa1.vortex.fbs.FbsArray;
+import io.github.dfa1.vortex.fbs.FbsArrayNode;
+import io.github.dfa1.vortex.fbs.FbsBuffer;
 import io.github.dfa1.vortex.parquet.ParquetImporter;
-import io.github.dfa1.vortex.proto.ALPMetadata;
-import io.github.dfa1.vortex.proto.BitPackedMetadata;
-import io.github.dfa1.vortex.proto.PatchesMetadata;
+import io.github.dfa1.vortex.proto.ProtoALPMetadata;
+import io.github.dfa1.vortex.proto.ProtoBitPackedMetadata;
+import io.github.dfa1.vortex.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.reader.Footer;
 import io.github.dfa1.vortex.reader.Layout;
 import io.github.dfa1.vortex.reader.ReadRegistry;
@@ -25,7 +27,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
-/// Per-column encoding-tree diff: prints the full ArrayNode chain (encoding id +
+/// Per-column encoding-tree diff: prints the full FbsArrayNode chain (encoding id +
 /// decoded metadata + buffer byte counts) for a single column in the Rust JNI
 /// file and the Java file side-by-side. Use to investigate why a column is
 /// larger in Java by comparing the encoding choices chunk-by-chunk.
@@ -122,15 +124,13 @@ public final class TaxiColumnTreeDiff {
 
     private static void dumpFlatRoot(MemorySegment seg, List<String> arraySpecs, String indent) {
         int segLen = (int) seg.byteSize();
-        ByteBuffer bb = seg.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
-        int fbLen = bb.getInt(segLen - 4);
+        int fbLen = seg.get(LE_INT, segLen - 4);
         int fbStart = segLen - 4 - fbLen;
-        ByteBuffer fbBuf = bb.slice(fbStart, fbLen).order(ByteOrder.LITTLE_ENDIAN);
-        Array arr = Array.getRootAsArray(fbBuf);
+        FbsArray arr = FbsArray.getRootAsFbsArray(seg.asSlice(fbStart, fbLen));
         int bufCount = arr.buffersLength();
         long[] bufBytes = new long[bufCount];
         for (int i = 0; i < bufCount; i++) {
-            Buffer b = arr.buffers(i);
+            FbsBuffer b = arr.buffers(i);
             bufBytes[i] = b.length();
         }
         long dataBytes = (long) segLen - 4L - fbLen;
@@ -141,7 +141,7 @@ public final class TaxiColumnTreeDiff {
         dumpNode(arr.root(), arraySpecs, bufBytes, indent + "  ");
     }
 
-    private static void dumpNode(ArrayNode node, List<String> arraySpecs, long[] bufBytes, String indent) {
+    private static void dumpNode(FbsArrayNode node, List<String> arraySpecs, long[] bufBytes, String indent) {
         if (node == null) {
             return;
         }
@@ -158,7 +158,8 @@ public final class TaxiColumnTreeDiff {
             line.append("  buf=").append(java.util.Arrays.toString(bufs));
             line.append("  bytes=").append(String.format("%,d", nodeBytes));
         }
-        ByteBuffer meta = node.metadataAsByteBuffer();
+        java.lang.foreign.MemorySegment metaSeg = node.metadataAsSegment();
+        ByteBuffer meta = metaSeg != null ? metaSeg.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN) : null;
         if (meta != null && meta.remaining() > 0) {
             line.append("  ").append(decodeMeta(id, meta));
         }
@@ -172,12 +173,12 @@ public final class TaxiColumnTreeDiff {
         try {
             MemorySegment seg = MemorySegment.ofBuffer(meta.duplicate());
             if (EncodingId.FASTLANES_BITPACKED.id().equals(id)) {
-                BitPackedMetadata m = BitPackedMetadata.decode(seg, 0, seg.byteSize());
+                ProtoBitPackedMetadata m = ProtoBitPackedMetadata.decode(seg, 0, seg.byteSize());
                 return "bitWidth=" + m.bit_width() + " offset=" + m.offset()
                         + " patches=" + describePatches(m.patches());
             }
             if (EncodingId.VORTEX_ALP.id().equals(id)) {
-                ALPMetadata m = ALPMetadata.decode(seg, 0, seg.byteSize());
+                ProtoALPMetadata m = ProtoALPMetadata.decode(seg, 0, seg.byteSize());
                 return "expE=" + m.exp_e() + " expF=" + m.exp_f()
                         + " patches=" + describePatches(m.patches());
             }
@@ -187,7 +188,7 @@ public final class TaxiColumnTreeDiff {
         }
     }
 
-    private static String describePatches(PatchesMetadata p) {
+    private static String describePatches(ProtoPatchesMetadata p) {
         if (p == null) {
             return "none";
         }

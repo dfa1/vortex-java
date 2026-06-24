@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.core;
 
-import java.nio.ByteBuffer;
+import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 
@@ -267,7 +267,7 @@ public sealed interface DType
     record Extension(
             String extensionId,
             DType storageDType,
-            ByteBuffer metadata,
+            MemorySegment metadata,
             boolean nullable
     ) implements DType {
 
@@ -280,10 +280,51 @@ public sealed interface DType
         /// @throws VortexException if `metadata` carries more than
         ///         [#MAX_METADATA_SIZE] readable bytes
         public Extension {
-            if (metadata != null && metadata.remaining() > MAX_METADATA_SIZE) {
+            if (metadata != null && metadata.byteSize() > MAX_METADATA_SIZE) {
                 throw new VortexException("extension metadata too large: "
-                        + metadata.remaining() + " > " + MAX_METADATA_SIZE);
+                        + metadata.byteSize() + " > " + MAX_METADATA_SIZE);
             }
+        }
+
+        /// Value equality with content-based metadata comparison.
+        ///
+        /// [MemorySegment] uses identity equality, so the default record `equals` would
+        /// treat a heap-built dtype and the same dtype read back from a mapped file as
+        /// unequal. Extension is a value type (compared in schema round-trips and as a
+        /// component of [Struct]/[List] dtypes), so metadata is compared by bytes —
+        /// matching the content semantics the previous `ByteBuffer` component had.
+        ///
+        /// @param o other object
+        /// @return whether `o` is an Extension with equal id, storage, nullability and metadata bytes
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (!(o instanceof Extension other)) {
+                return false;
+            }
+            return nullable == other.nullable
+                    && extensionId.equals(other.extensionId)
+                    && storageDType.equals(other.storageDType)
+                    && metadataEquals(metadata, other.metadata);
+        }
+
+        /// @return a hash consistent with [#equals(Object)] (metadata hashed by content)
+        @Override
+        public int hashCode() {
+            int h = java.util.Objects.hash(extensionId, storageDType, nullable);
+            if (metadata != null) {
+                h = 31 * h + java.util.Arrays.hashCode(metadata.toArray(java.lang.foreign.ValueLayout.JAVA_BYTE));
+            }
+            return h;
+        }
+
+        private static boolean metadataEquals(MemorySegment a, MemorySegment b) {
+            if (a == null || b == null) {
+                return a == b;
+            }
+            return a.byteSize() == b.byteSize() && a.mismatch(b) == -1;
         }
     }
 

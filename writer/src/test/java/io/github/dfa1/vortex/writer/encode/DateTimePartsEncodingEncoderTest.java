@@ -10,7 +10,7 @@ import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.encoding.TimeUnit;
-import io.github.dfa1.vortex.proto.DateTimePartsMetadata;
+import io.github.dfa1.vortex.proto.ProtoDateTimePartsMetadata;
 import io.github.dfa1.vortex.reader.decode.DateTimePartsEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
 import org.junit.jupiter.api.Nested;
@@ -20,8 +20,6 @@ import org.junit.jupiter.params.provider.EnumSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -36,10 +34,7 @@ class DateTimePartsEncodingEncoderTest {
     private static final DType EXT_TIMESTAMP_NS = timestampDType(TimeUnit.Nanoseconds);
 
     private static DType timestampDType(TimeUnit unit) {
-        ByteBuffer meta = ByteBuffer.allocate(3).order(ByteOrder.LITTLE_ENDIAN);
-        meta.put((byte) unit.ordinal());
-        meta.putShort((short) 0);
-        meta.flip();
+        MemorySegment meta = MemorySegment.ofArray(new byte[]{(byte) unit.ordinal(), 0, 0});
         return new DType.Extension("vortex.timestamp",
                 DType.I64, meta, false);
     }
@@ -212,8 +207,8 @@ class DateTimePartsEncodingEncoderTest {
             EncodeResult result = ENCODER.encode(EXT_TIMESTAMP_MS, data, EncodeTestHelper.testCtx());
 
             // Then
-            var metaSeg = java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate());
-            DateTimePartsMetadata meta = DateTimePartsMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            var metaSeg = result.rootNode().metadata();
+            ProtoDateTimePartsMetadata meta = ProtoDateTimePartsMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 
             assertThat(meta.days_ptype().value()).isEqualTo(7);
             assertThat(meta.seconds_ptype().value()).isEqualTo(7);

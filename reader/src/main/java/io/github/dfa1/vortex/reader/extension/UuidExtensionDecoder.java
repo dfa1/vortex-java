@@ -11,7 +11,6 @@ import io.github.dfa1.vortex.extension.ExtensionId;
 
 import io.github.dfa1.vortex.reader.ExtensionDecoder;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -40,7 +39,7 @@ public final class UuidExtensionDecoder implements ExtensionDecoder {
         return new DType.Extension(
                 ExtensionId.VORTEX_UUID.id(),
                 new DType.FixedSizeList(u8, 16, nullable),
-                ByteBuffer.allocate(0),
+                java.lang.foreign.MemorySegment.ofArray(new byte[0]),
                 nullable);
     }
 

@@ -272,16 +272,16 @@ class ProtoRuntimeTest {
 
         @Test
         void unknownPTypeValueIsCheckedIOException() {
-            // Given — Primitive { type = 99 } where PType has no constant for 99.
-            // Field tag 1, wire type VARINT (0): tag byte = (1 << 3) | 0 = 0x08, value 99 = 0x63.
+            // Given — ProtoPrimitive { type = 99 } where ProtoPType has no constant for 99.
+            // ProtoField tag 1, wire type VARINT (0): tag byte = (1 << 3) | 0 = 0x08, value 99 = 0x63.
             byte[] wire = new byte[]{0x08, 0x63};
             MemorySegment seg = MemorySegment.ofArray(wire);
 
             // When + Then — must be checked IOException (per SECURITY.md guarantee),
             // not the underlying IllegalArgumentException from Enum.fromValue.
-            assertThatThrownBy(() -> Primitive.decode(seg, 0, wire.length))
+            assertThatThrownBy(() -> ProtoPrimitive.decode(seg, 0, wire.length))
                     .isInstanceOf(IOException.class)
-                    .hasMessageContaining("PType");
+                    .hasMessageContaining("ProtoPType");
         }
     }
 
@@ -290,10 +290,10 @@ class ProtoRuntimeTest {
 
         @Test
         void singleStringNullEncodesEmpty() {
-            // Given — Extension with all SINGLE fields null. Pre-fix this NPE'd on
+            // Given — ProtoExtension with all SINGLE fields null. Pre-fix this NPE'd on
             // String.isEmpty() / byte[].length. Default-value SINGLE fields must skip
             // emitting the tag entirely.
-            Extension ext = new Extension(null, null, null);
+            ProtoExtension ext = new ProtoExtension(null, null, null);
 
             // When
             byte[] wire = ext.encode();
@@ -311,8 +311,8 @@ class ProtoRuntimeTest {
             // Given — records auto-equals would do reference compare on byte[]. The
             // generator overrides equals/hashCode with Arrays.equals/Arrays.hashCode
             // so structurally equal records compare equal.
-            ScalarValue a = ScalarValue.ofBytesValue(new byte[]{1, 2, 3});
-            ScalarValue b = ScalarValue.ofBytesValue(new byte[]{1, 2, 3});
+            ProtoScalarValue a = ProtoScalarValue.ofBytesValue(new byte[]{1, 2, 3});
+            ProtoScalarValue b = ProtoScalarValue.ofBytesValue(new byte[]{1, 2, 3});
 
             // When + Then
             assertThat(a).isEqualTo(b);
@@ -322,8 +322,8 @@ class ProtoRuntimeTest {
         @Test
         void recordsWithDifferentByteArraysAreNotEqual() {
             // Given
-            ScalarValue a = ScalarValue.ofBytesValue(new byte[]{1, 2, 3});
-            ScalarValue b = ScalarValue.ofBytesValue(new byte[]{1, 2, 4});
+            ProtoScalarValue a = ProtoScalarValue.ofBytesValue(new byte[]{1, 2, 3});
+            ProtoScalarValue b = ProtoScalarValue.ofBytesValue(new byte[]{1, 2, 4});
 
             // When + Then
             assertThat(a).isNotEqualTo(b);

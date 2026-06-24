@@ -7,7 +7,7 @@ import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
-import io.github.dfa1.vortex.proto.ALPRDMetadata;
+import io.github.dfa1.vortex.proto.ProtoALPRDMetadata;
 import io.github.dfa1.vortex.reader.decode.AlpRdEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.BitpackedEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
@@ -74,8 +74,8 @@ class AlpRdEncodingEncoderTest {
 
         // When
         EncodeResult result = sut.encode(DTypes.F64, values, EncodeTestHelper.testCtx());
-        var metaSeg = java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate());
-        ALPRDMetadata meta = ALPRDMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+        var metaSeg = result.rootNode().metadata();
+        ProtoALPRDMetadata meta = ProtoALPRDMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 
         // Then
         assertThat(meta.right_bit_width()).isGreaterThan(0);

@@ -10,7 +10,6 @@ import io.github.dfa1.vortex.extension.ExtensionId;
 
 import io.github.dfa1.vortex.reader.ExtensionDecoder;
 
-import java.nio.ByteBuffer;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -35,8 +34,7 @@ public final class DateExtensionDecoder implements ExtensionDecoder {
     @Override
     public DType.Extension dtype(boolean nullable) {
         // Rust vortex.date metadata: 1 byte = TimeUnit tag (Days = 4), required by Rust reader.
-        ByteBuffer meta = ByteBuffer.allocate(1);
-        meta.put(0, (byte) TimeUnit.Days.ordinal());
+        java.lang.foreign.MemorySegment meta = java.lang.foreign.MemorySegment.ofArray(new byte[]{(byte) TimeUnit.Days.ordinal()});
         return new DType.Extension(
                 ExtensionId.VORTEX_DATE.id(),
                 new DType.Primitive(PType.I32, nullable),

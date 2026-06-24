@@ -13,7 +13,7 @@ import io.github.dfa1.vortex.reader.decode.DecodeContext;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
-import io.github.dfa1.vortex.proto.ScalarValue;
+import io.github.dfa1.vortex.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.reader.decode.BoolEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.FrameOfReferenceEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
@@ -42,7 +42,7 @@ class FrameOfReferenceEncodingEncoderTest {
         private static DecodeContext buildForContext(
                 DType dtype, long reference, long[] residuals, PType ptype
         ) {
-            byte[] metaBytes = ScalarValue.ofInt64Value(reference).encode();
+            byte[] metaBytes = ProtoScalarValue.ofInt64Value(reference).encode();
 
             int elemBytes = ptype.byteSize();
             byte[] childBytes = new byte[residuals.length * elemBytes];
@@ -58,7 +58,7 @@ class FrameOfReferenceEncodingEncoderTest {
             ArrayNode childNode = ArrayNode.of(
                     EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
             ArrayNode forNode = ArrayNode.of(
-                    EncodingId.FASTLANES_FOR, ByteBuffer.wrap(metaBytes),
+                    EncodingId.FASTLANES_FOR, MemorySegment.ofArray(metaBytes),
                     new ArrayNode[]{childNode}, new int[0]);
 
             MemorySegment[] segments = {MemorySegment.ofArray(childBytes)};
@@ -150,9 +150,9 @@ class FrameOfReferenceEncodingEncoderTest {
                     EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{1});
             ArrayNode primNode = ArrayNode.of(
                     EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[]{validityNode}, new int[]{0});
-            byte[] metaBytes = ScalarValue.ofInt64Value(reference).encode();
+            byte[] metaBytes = ProtoScalarValue.ofInt64Value(reference).encode();
             ArrayNode forNode = ArrayNode.of(
-                    EncodingId.FASTLANES_FOR, ByteBuffer.wrap(metaBytes), new ArrayNode[]{primNode}, new int[0]);
+                    EncodingId.FASTLANES_FOR, MemorySegment.ofArray(metaBytes), new ArrayNode[]{primNode}, new int[0]);
 
             ReadRegistry registry = TestRegistry.ofDecoders(
                     new FrameOfReferenceEncodingDecoder(), new PrimitiveEncodingDecoder(), new BoolEncodingDecoder());

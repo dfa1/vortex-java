@@ -1,10 +1,12 @@
 package io.github.dfa1.vortex.reader;
 
+import static io.github.dfa1.vortex.encoding.PTypeIO.LE_INT;
+
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.IoBounds;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.fbs.Buffer;
+import io.github.dfa1.vortex.fbs.FbsBuffer;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 import io.github.dfa1.vortex.reader.decode.KnownArrayNode;
@@ -12,8 +14,6 @@ import io.github.dfa1.vortex.reader.decode.UnknownArrayNode;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.List;
 
 /// Parses a flat segment from the memory-mapped file region and dispatches to the
@@ -46,21 +46,19 @@ public final class FlatSegmentDecoder {
     public Array decode(MemorySegment seg, List<String> encodingSpecs,
             DType dtype, long rowCount, SegmentAllocator arena) {
         int segLen = IoBounds.toIntSize(seg.byteSize());
-        ByteBuffer bb = seg.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
 
         // The trailing u32 length field must itself be in range before we read it.
         IoBounds.checkRange(segLen - 4L, 4, segLen);
-        int fbLen = bb.getInt(segLen - 4);
+        int fbLen = seg.get(LE_INT, segLen - 4);
         long fbStart = segLen - 4L - fbLen;
         IoBounds.checkRange(fbStart, fbLen, segLen);
-        ByteBuffer fbBuf = bb.slice((int) fbStart, fbLen).order(ByteOrder.LITTLE_ENDIAN);
-        var fbArray = io.github.dfa1.vortex.fbs.Array.getRootAsArray(fbBuf);
+        var fbArray = io.github.dfa1.vortex.fbs.FbsArray.getRootAsFbsArray(seg.asSlice(fbStart, fbLen));
 
         int numBuffers = IoBounds.checkCount(fbArray.buffersLength());
         MemorySegment[] bufs = new MemorySegment[numBuffers];
         long dataOffset = 0;
         for (int i = 0; i < numBuffers; i++) {
-            Buffer bufDesc = fbArray.buffers(i);
+            FbsBuffer bufDesc = fbArray.buffers(i);
             dataOffset += bufDesc.padding();
             bufs[i] = IoBounds.slice(seg, dataOffset, bufDesc.length());
             dataOffset += bufDesc.length();
@@ -72,7 +70,7 @@ public final class FlatSegmentDecoder {
     }
 
     private static ArrayNode convertArrayNode(
-            io.github.dfa1.vortex.fbs.ArrayNode fbs,
+            io.github.dfa1.vortex.fbs.FbsArrayNode fbs,
             List<String> encodingSpecs
     ) {
         String rawEncodingId = encodingSpecs.get(fbs.encoding());
@@ -87,8 +85,7 @@ public final class FlatSegmentDecoder {
             bufferIndices[i] = fbs.buffers(i);
         }
 
-        ByteBuffer rawMeta = fbs.metadataAsByteBuffer();
-        ByteBuffer meta = (rawMeta != null) ? rawMeta.slice() : null;
+        MemorySegment meta = fbs.metadataAsSegment();
         return EncodingId.parse(rawEncodingId)
                 .<ArrayNode>map(known -> new KnownArrayNode(known, meta, children, bufferIndices))
                 .orElseGet(() -> new UnknownArrayNode(rawEncodingId, meta, children, bufferIndices));

@@ -42,8 +42,6 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -114,8 +112,8 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         } else if (layout.isChunked()) {
             // metadata[0] == 1 means children[0] is the per-chunk stats layout; skip it
             int start = (layout.metadata() != null
-                                 && layout.metadata().hasRemaining()
-                                 && layout.metadata().get(0) == 1) ? 1 : 0;
+                                 && layout.metadata().byteSize() > 0
+                                 && layout.metadata().get(ValueLayout.JAVA_BYTE, 0) == 1) ? 1 : 0;
             for (int i = start; i < layout.children().size(); i++) {
                 collectFlats(layout.children().get(i), out);
             }
@@ -581,7 +579,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     }
 
     private Array decodeDictLayout(Layout dictLayout, DType dtype, SegmentAllocator arena) {
-        ByteBuffer rawMeta = dictLayout.metadata();
+        MemorySegment rawMeta = dictLayout.metadata();
         // DictLayoutMetadata proto (Rust format): field 1 = codes_ptype (PType varint).
         // Read the varint directly to avoid field-number mismatch with the array-level DictMetadata proto.
         PType codesPType = readDictLayoutCodesPType(rawMeta);
@@ -676,17 +674,16 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         };
     }
 
-    private static PType readDictLayoutCodesPType(ByteBuffer rawMeta) {
+    private static PType readDictLayoutCodesPType(MemorySegment rawMeta) {
         // DictLayoutMetadata (Rust): field 1 = codes_ptype, wire type 0 (varint).
         // Tag byte = (field_number << 3) | wire_type = (1 << 3) | 0 = 0x08.
         // Proto3 omits field 1 when it holds the default value (0 = U8), so empty metadata means U8.
-        if (rawMeta == null || !rawMeta.hasRemaining()) {
+        if (rawMeta == null || rawMeta.byteSize() == 0) {
             return PType.U8;
         }
-        ByteBuffer buf = rawMeta.duplicate();
-        byte tag = buf.get();
-        if (tag == 0x08 && buf.hasRemaining()) {
-            int ordinal = buf.get() & 0xFF;
+        byte tag = rawMeta.get(ValueLayout.JAVA_BYTE, 0);
+        if (tag == 0x08 && rawMeta.byteSize() > 1) {
+            int ordinal = rawMeta.get(ValueLayout.JAVA_BYTE, 1) & 0xFF;
             PType[] values = PType.values();
             if (ordinal < values.length) {
                 return values[ordinal];
@@ -820,10 +817,9 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             return ArrayStats.empty();
         }
         long fbStart = segLen - 4L - fbLen;
-        ByteBuffer fbBuf = IoBounds.slice(seg, fbStart, fbLen).asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
-        var fbArray = io.github.dfa1.vortex.fbs.Array.getRootAsArray(fbBuf);
+        var fbArray = io.github.dfa1.vortex.fbs.FbsArray.getRootAsFbsArray(IoBounds.slice(seg, fbStart, fbLen));
 
-        io.github.dfa1.vortex.fbs.ArrayNode root = fbArray.root();
+        io.github.dfa1.vortex.fbs.FbsArrayNode root = fbArray.root();
         if (root == null) {
             return ArrayStats.empty();
         }

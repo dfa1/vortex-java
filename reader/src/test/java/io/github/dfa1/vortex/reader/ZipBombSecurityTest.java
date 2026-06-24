@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.reader;
 
-import com.google.flatbuffers.FlatBufferBuilder;
+import io.github.dfa1.vortex.fbsrt.FbsBuilder;
 import static io.github.dfa1.vortex.reader.MalformedFiles.buildFooter;
 import static io.github.dfa1.vortex.reader.MalformedFiles.buildI64Dtype;
 import static io.github.dfa1.vortex.reader.MalformedFiles.buildFlatLayout;
@@ -12,11 +12,11 @@ import io.github.dfa1.vortex.reader.array.LazyConstantLongArray;
 
 import io.github.dfa1.vortex.reader.decode.ConstantEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
-import io.github.dfa1.vortex.fbs.ArrayNode;
-import io.github.dfa1.vortex.fbs.Layout;
+import io.github.dfa1.vortex.fbs.FbsArrayNode;
+import io.github.dfa1.vortex.fbs.FbsLayout;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import io.github.dfa1.vortex.proto.ScalarValue;
+import io.github.dfa1.vortex.proto.ProtoScalarValue;
 
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
@@ -107,14 +107,14 @@ class ZipBombSecurityTest {
      * [Footer: arraySpecs=["vortex.constant"], layoutSpecs=["vortex.flat"],
      *          segmentSpecs=[{offset=0, length=segLen}]]
      * [DType: I64 primitive]
-     * [Layout: flat { encoding=0, row_count=claimedRows, segments=[0] }]
+     * [FbsLayout: flat { encoding=0, row_count=claimedRows, segments=[0] }]
      * [Postscript]
      * [8-byte trailer]
      * </pre>
      */
     private static Path buildConstantBomb(Path dir, long claimedRows) throws Exception {
         // ConstantEncoding stores the scalar value in buffer 0 as protobuf bytes.
-        byte[] protoBytes = ScalarValue.ofInt64Value(42L).encode();
+        byte[] protoBytes = ProtoScalarValue.ofInt64Value(42L).encode();
         byte[] seg = buildOneBufferSegment(protoBytes);
 
         ByteBuffer footerBuf = buildFooter(
@@ -138,7 +138,7 @@ class ZipBombSecurityTest {
      *          layoutSpecs=["vortex.flat","vortex.chunked","vortex.struct","vortex.dict"],
      *          segmentSpecs=[{0, seg0Len}, {seg0Len, seg1Len}]]
      * [DType: I64 primitive]
-     * [Layout: dict { encoding=3, row_count=claimedRows,
+     * [FbsLayout: dict { encoding=3, row_count=claimedRows,
      *            children=[values_flat(enc=0,row_count=1,seg=0),
      *                      codes_flat(enc=0,row_count=claimedRows,seg=1)] }]
      * [Postscript]
@@ -172,17 +172,17 @@ class ZipBombSecurityTest {
      * Builds: `[rawData][Array FlatBuffer (1 buffer)][4-byte LE fbLen]`.
      *
      * <p>The Array FlatBuffer describes one buffer at offset 0 with length `rawData.length`.
-     * Buffer index 0 in the ArrayNode refers to this buffer.
+     * Buffer index 0 in the FbsArrayNode refers to this buffer.
      */
     private static byte[] buildOneBufferSegment(byte[] rawData) {
-        var fbb = new FlatBufferBuilder(128);
+        var fbb = new FbsBuilder(128);
 
-        // ArrayNode: encoding index 0, buffers=[0], no children, no metadata
-        int bufIdxVec = ArrayNode.createBuffersVector(fbb, new int[]{0});
-        int nodeOff = ArrayNode.createArrayNode(fbb, 0, 0, 0, bufIdxVec, 0);
+        // FbsArrayNode: encoding index 0, buffers=[0], no children, no metadata
+        int bufIdxVec = FbsArrayNode.createBuffersVector(fbb, new int[]{0});
+        int nodeOff = FbsArrayNode.createFbsArrayNode(fbb, 0, 0, 0, bufIdxVec, 0);
 
         // Array.buffers: one Buffer struct describing rawData
-        io.github.dfa1.vortex.fbs.Array.startBuffersVector(fbb, 1);
+        io.github.dfa1.vortex.fbs.FbsArray.startBuffersVector(fbb, 1);
         // FlatBuffers builds inline structs in reverse; struct layout (LE):
         // padding(u16) | alignmentExponent(u8) | compression(u8) | length(u32)
         fbb.prep(4, 8);
@@ -192,14 +192,12 @@ class ZipBombSecurityTest {
         fbb.putShort((short) 0);   // padding = 0
         int bufsVec = fbb.endVector();
 
-        int arrOff = io.github.dfa1.vortex.fbs.Array.createArray(fbb, nodeOff, bufsVec);
-        io.github.dfa1.vortex.fbs.Array.finishArrayBuffer(fbb, arrOff);
+        int arrOff = io.github.dfa1.vortex.fbs.FbsArray.createFbsArray(fbb, nodeOff, bufsVec);
+        io.github.dfa1.vortex.fbs.FbsArray.finishFbsArrayBuffer(fbb, arrOff);
 
         // Segment = rawData + FlatBuffer bytes + 4-byte LE fbLen
-        ByteBuffer data = fbb.dataBuffer();
-        int fbLen = data.remaining();
-        byte[] fbBytes = new byte[fbLen];
-        data.get(fbBytes);
+        byte[] fbBytes = fbb.sizedByteArray();
+        int fbLen = fbBytes.length;
 
         byte[] seg = new byte[rawData.length + fbLen + 4];
         System.arraycopy(rawData, 0, seg, 0, rawData.length);
@@ -225,15 +223,15 @@ class ZipBombSecurityTest {
      * then calls `expandDictPrimitive(..., n, arena)` which allocates `n * elemBytes`.
      */
     private static ByteBuffer buildDictLayout(long claimedRows) {
-        var fbb = new FlatBufferBuilder(256);
+        var fbb = new FbsBuilder(256);
         // Children must be built before the parent table
-        int vSegV = Layout.createSegmentsVector(fbb, new long[]{0});
-        int valuesFlat = Layout.createLayout(fbb, 0, 1L, 0, 0, vSegV);
-        int cSegV = Layout.createSegmentsVector(fbb, new long[]{1});
-        int codesFlat = Layout.createLayout(fbb, 0, claimedRows, 0, 0, cSegV);
-        int childV = Layout.createChildrenVector(fbb, new int[]{valuesFlat, codesFlat});
-        int dictOff = Layout.createLayout(fbb, 3, claimedRows, 0, childV, 0);
-        Layout.finishLayoutBuffer(fbb, dictOff);
+        int vSegV = FbsLayout.createSegmentsVector(fbb, new long[]{0});
+        int valuesFlat = FbsLayout.createFbsLayout(fbb, 0, 1L, 0, 0, vSegV);
+        int cSegV = FbsLayout.createSegmentsVector(fbb, new long[]{1});
+        int codesFlat = FbsLayout.createFbsLayout(fbb, 0, claimedRows, 0, 0, cSegV);
+        int childV = FbsLayout.createChildrenVector(fbb, new int[]{valuesFlat, codesFlat});
+        int dictOff = FbsLayout.createFbsLayout(fbb, 3, claimedRows, 0, childV, 0);
+        FbsLayout.finishFbsLayoutBuffer(fbb, dictOff);
         return slice(fbb);
     }
 

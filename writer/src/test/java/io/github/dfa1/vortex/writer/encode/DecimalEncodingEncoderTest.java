@@ -9,7 +9,7 @@ import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.encoding.TestSegments;
-import io.github.dfa1.vortex.proto.DecimalMetadata;
+import io.github.dfa1.vortex.proto.ProtoDecimalMetadata;
 import io.github.dfa1.vortex.reader.decode.DecimalEncodingDecoder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -85,9 +85,8 @@ class DecimalEncodingEncoderTest {
         EncodeResult encoded = ENCODER.encode(dtype, input, EncodeTestHelper.testCtx());
 
         // Then
-        byte[] metaBytes = new byte[encoded.rootNode().metadata().remaining()];
-        encoded.rootNode().metadata().duplicate().get(metaBytes);
-        DecimalMetadata meta = DecimalMetadata.decode(java.lang.foreign.MemorySegment.ofArray(metaBytes), 0, metaBytes.length);
+        java.lang.foreign.MemorySegment metaSeg = encoded.rootNode().metadata();
+        ProtoDecimalMetadata meta = ProtoDecimalMetadata.decode(metaSeg, 0, metaSeg.byteSize());
         assertThat(meta.values_type()).isEqualTo(expectedValuesType);
     }
 

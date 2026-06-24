@@ -9,9 +9,9 @@ import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
 
-import io.github.dfa1.vortex.proto.PcoChunkInfo;
-import io.github.dfa1.vortex.proto.PcoMetadata;
-import io.github.dfa1.vortex.proto.PcoPageInfo;
+import io.github.dfa1.vortex.proto.ProtoPcoChunkInfo;
+import io.github.dfa1.vortex.proto.ProtoPcoMetadata;
+import io.github.dfa1.vortex.proto.ProtoPcoPageInfo;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -22,7 +22,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.nio.ByteBuffer;
 import java.util.Random;
 import java.util.stream.Stream;
 
@@ -34,18 +33,18 @@ class PcoEncodingDecoderTest {
 
     private static final PcoEncodingDecoder SUT = new PcoEncodingDecoder();
 
-    private static ByteBuffer validMetaBuffer() {
-        PcoMetadata meta = new PcoMetadata(new byte[]{PcoEncodingDecoder.PCO_FORMAT_MAJOR, PcoEncodingDecoder.PCO_FORMAT_MINOR}, java.util.List.of());
-        return ByteBuffer.wrap(meta.encode());
+    private static MemorySegment validMetaBuffer() {
+        ProtoPcoMetadata meta = new ProtoPcoMetadata(new byte[]{PcoEncodingDecoder.PCO_FORMAT_MAJOR, PcoEncodingDecoder.PCO_FORMAT_MINOR}, java.util.List.of());
+        return MemorySegment.ofArray(meta.encode());
     }
 
-    private static DecodeContext ctxWith(ByteBuffer meta, DType dtype, long rowCount, MemorySegment[] buffers) {
+    private static DecodeContext ctxWith(MemorySegment meta, DType dtype, long rowCount, MemorySegment[] buffers) {
         ArrayNode node = ArrayNode.of(EncodingId.VORTEX_PCO, meta, new ArrayNode[0],
                 bufferIndices(buffers.length));
         return new DecodeContext(node, dtype, rowCount, buffers, ReadRegistry.empty(), Arena.ofAuto());
     }
 
-    private static DecodeContext ctxWithValidity(ByteBuffer meta, DType dtype, long rowCount,
+    private static DecodeContext ctxWithValidity(MemorySegment meta, DType dtype, long rowCount,
             MemorySegment validityBuf, MemorySegment[] pcoBuffers) {
         MemorySegment[] allBuffers = new MemorySegment[1 + pcoBuffers.length];
         allBuffers[0] = validityBuf;
@@ -81,11 +80,11 @@ class PcoEncodingDecoderTest {
         return seg;
     }
 
-    private static ByteBuffer metaWithOneChunk(int nValues) {
-        PcoMetadata meta = new PcoMetadata(
+    private static MemorySegment metaWithOneChunk(int nValues) {
+        ProtoPcoMetadata meta = new ProtoPcoMetadata(
                 new byte[]{PcoEncodingDecoder.PCO_FORMAT_MAJOR, PcoEncodingDecoder.PCO_FORMAT_MINOR},
-                java.util.List.of(new PcoChunkInfo(java.util.List.of(new PcoPageInfo(nValues)))));
-        return ByteBuffer.wrap(meta.encode());
+                java.util.List.of(new ProtoPcoChunkInfo(java.util.List.of(new ProtoPcoPageInfo(nValues)))));
+        return MemorySegment.ofArray(meta.encode());
     }
 
     private static MemorySegment chunkMetaConsecutive(int order) {
@@ -173,13 +172,13 @@ class PcoEncodingDecoderTest {
             DecodeContext ctx = ctxWith(null, DType.I64, 0, new MemorySegment[0]);
             assertThatThrownBy(() -> SUT.decode(ctx))
                     .isInstanceOf(VortexException.class)
-                    .hasMessageContaining("missing PcoMetadata");
+                    .hasMessageContaining("missing ProtoPcoMetadata");
         }
 
         @Test
         void decode_invalidHeaderVersion_throwsUnsupported() {
-            PcoMetadata meta = new PcoMetadata(new byte[]{0x03, 0x00}, java.util.List.of());
-            DecodeContext ctx = ctxWith(ByteBuffer.wrap(meta.encode()),
+            ProtoPcoMetadata meta = new ProtoPcoMetadata(new byte[]{0x03, 0x00}, java.util.List.of());
+            DecodeContext ctx = ctxWith(MemorySegment.ofArray(meta.encode()),
                     DType.I64, 0, new MemorySegment[0]);
             assertThatThrownBy(() -> SUT.decode(ctx))
                     .isInstanceOf(VortexException.class)
@@ -232,10 +231,10 @@ class PcoEncodingDecoderTest {
 
         @Test
         void decode_multiPage_singleChunk_decodes() {
-            PcoMetadata meta = new PcoMetadata(
+            ProtoPcoMetadata meta = new ProtoPcoMetadata(
                     new byte[]{PcoEncodingDecoder.PCO_FORMAT_MAJOR, PcoEncodingDecoder.PCO_FORMAT_MINOR},
-                    java.util.List.of(new PcoChunkInfo(java.util.List.of(new PcoPageInfo(1), new PcoPageInfo(1)))));
-            DecodeContext ctx = ctxWith(ByteBuffer.wrap(meta.encode()), DType.U64, 2,
+                    java.util.List.of(new ProtoPcoChunkInfo(java.util.List.of(new ProtoPcoPageInfo(1), new ProtoPcoPageInfo(1)))));
+            DecodeContext ctx = ctxWith(MemorySegment.ofArray(meta.encode()), DType.U64, 2,
                     new MemorySegment[]{chunkMetaConsecutive(1), pageWithMoments(10L), pageWithMoments(20L)});
             var result = SUT.decode(ctx);
             assertThat(result.length()).isEqualTo(2);
@@ -246,12 +245,12 @@ class PcoEncodingDecoderTest {
         @Test
         void decode_multiChunk_decodes() {
             // Buffer layout: all chunk metas first, then all pages (matches Rust vortex PcoArray).
-            PcoMetadata meta = new PcoMetadata(
+            ProtoPcoMetadata meta = new ProtoPcoMetadata(
                     new byte[]{PcoEncodingDecoder.PCO_FORMAT_MAJOR, PcoEncodingDecoder.PCO_FORMAT_MINOR},
                     java.util.List.of(
-                            new PcoChunkInfo(java.util.List.of(new PcoPageInfo(1))),
-                            new PcoChunkInfo(java.util.List.of(new PcoPageInfo(1)))));
-            DecodeContext ctx = ctxWith(ByteBuffer.wrap(meta.encode()), DType.U64, 2,
+                            new ProtoPcoChunkInfo(java.util.List.of(new ProtoPcoPageInfo(1))),
+                            new ProtoPcoChunkInfo(java.util.List.of(new ProtoPcoPageInfo(1)))));
+            DecodeContext ctx = ctxWith(MemorySegment.ofArray(meta.encode()), DType.U64, 2,
                     new MemorySegment[]{chunkMetaConsecutive(1), chunkMetaConsecutive(1),
                             pageWithMoments(100L), pageWithMoments(200L)});
             var result = SUT.decode(ctx);
@@ -266,12 +265,12 @@ class PcoEncodingDecoderTest {
 
         @Test
         void decode_nullable_someNulls_scattersCorrectly() {
-            PcoMetadata meta = new PcoMetadata(
+            ProtoPcoMetadata meta = new ProtoPcoMetadata(
                     new byte[]{PcoEncodingDecoder.PCO_FORMAT_MAJOR, PcoEncodingDecoder.PCO_FORMAT_MINOR},
-                    java.util.List.of(new PcoChunkInfo(java.util.List.of(new PcoPageInfo(1), new PcoPageInfo(1)))));
+                    java.util.List.of(new ProtoPcoChunkInfo(java.util.List.of(new ProtoPcoPageInfo(1), new ProtoPcoPageInfo(1)))));
             MemorySegment validityBuf = segmentOf((byte) 0x05);
             DecodeContext ctx = ctxWithValidity(
-                    ByteBuffer.wrap(meta.encode()), new DType.Primitive(PType.U64, true), 3, validityBuf,
+                    MemorySegment.ofArray(meta.encode()), new DType.Primitive(PType.U64, true), 3, validityBuf,
                     new MemorySegment[]{chunkMetaConsecutive(1), pageWithMoments(100L), pageWithMoments(200L)});
             var result = SUT.decode(ctx);
 

@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.reader.decode;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.TestSegments;
-import io.github.dfa1.vortex.proto.VarBinMetadata;
+import io.github.dfa1.vortex.proto.ProtoVarBinMetadata;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
@@ -11,7 +11,6 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -21,11 +20,11 @@ class VarBinEncodingDecoderTest {
     private static final VarBinEncodingDecoder SUT = new VarBinEncodingDecoder();
     private static final ReadRegistry REGISTRY = TestRegistry.ofDecoders(SUT, new PrimitiveEncodingDecoder());
 
-    private static ByteBuffer i32OffsetsMeta() {
-        return ByteBuffer.wrap(new VarBinMetadata(io.github.dfa1.vortex.proto.PType.I32).encode());
+    private static MemorySegment i32OffsetsMeta() {
+        return MemorySegment.ofArray(new ProtoVarBinMetadata(io.github.dfa1.vortex.proto.ProtoPType.I32).encode());
     }
 
-    private static DecodeContext ctx(ByteBuffer meta, MemorySegment bytes, MemorySegment offsets, long n) {
+    private static DecodeContext ctx(MemorySegment meta, MemorySegment bytes, MemorySegment offsets, long n) {
         // children[0] = offsets (primitive, segment index 1); bufferIndices[0] -> bytes (index 0)
         ArrayNode offsetsNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1});
         ArrayNode varbinNode = ArrayNode.of(EncodingId.VORTEX_VARBIN, meta, new ArrayNode[]{offsetsNode}, new int[]{0});

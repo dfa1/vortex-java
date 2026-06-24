@@ -9,8 +9,8 @@ import io.github.dfa1.vortex.reader.decode.DecodeContext;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
-import io.github.dfa1.vortex.proto.DeltaMetadata;
-import io.github.dfa1.vortex.proto.ScalarValue;
+import io.github.dfa1.vortex.proto.ProtoDeltaMetadata;
+import io.github.dfa1.vortex.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.reader.decode.DeltaEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
 import org.junit.jupiter.api.Test;
@@ -122,8 +122,8 @@ class DeltaEncodingEncoderTest {
 
         // When
         EncodeResult result = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
-        MemorySegment metaSeg = MemorySegment.ofBuffer(result.rootNode().metadata().duplicate());
-        DeltaMetadata meta = DeltaMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+        MemorySegment metaSeg = result.rootNode().metadata();
+        ProtoDeltaMetadata meta = ProtoDeltaMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 
         // Then
         assertThat(meta.deltas_len()).isGreaterThan(0);
@@ -212,9 +212,9 @@ class DeltaEncodingEncoderTest {
         assertThat(result.hasStats()).isFalse();
     }
 
-    private static ScalarValue scalar(byte[] bytes) throws java.io.IOException {
+    private static ProtoScalarValue scalar(byte[] bytes) throws java.io.IOException {
         MemorySegment seg = MemorySegment.ofArray(bytes);
-        return ScalarValue.decode(seg, 0, seg.byteSize());
+        return ProtoScalarValue.decode(seg, 0, seg.byteSize());
     }
 
     private static Stream<Arguments> randomIntegerArrays() {

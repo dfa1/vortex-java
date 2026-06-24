@@ -13,7 +13,6 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -27,7 +26,7 @@ class ReadRegistryTest {
         // Given
         ReadRegistry sut = ReadRegistry.empty();
         ArrayNode node = new UnknownArrayNode("some.unknown",
-                ByteBuffer.allocate(0), new ArrayNode[0], new int[0]);
+                MemorySegment.ofArray(new byte[0]), new ArrayNode[0], new int[0]);
         DecodeContext ctx = new DecodeContext(node, DTypes.I32, 0L,
                 new MemorySegment[0], sut, Arena.ofAuto());
 
@@ -42,7 +41,7 @@ class ReadRegistryTest {
         // Given — EncodingId is known but no decoder registered for it
         ReadRegistry sut = ReadRegistry.empty();
         ArrayNode node = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE,
-                ByteBuffer.allocate(0), new ArrayNode[0], new int[0]);
+                MemorySegment.ofArray(new byte[0]), new ArrayNode[0], new int[0]);
         DecodeContext ctx = new DecodeContext(node, DTypes.I32, 0L,
                 new MemorySegment[0], sut, Arena.ofAuto());
 
@@ -57,7 +56,7 @@ class ReadRegistryTest {
         // Given
         ReadRegistry sut = ReadRegistry.builder().allowUnknown().build();
         ArrayNode node = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE,
-                ByteBuffer.allocate(0), new ArrayNode[0], new int[0]);
+                MemorySegment.ofArray(new byte[0]), new ArrayNode[0], new int[0]);
         DecodeContext ctx = new DecodeContext(node, DTypes.I32, 0L,
                 new MemorySegment[0], sut, Arena.ofAuto());
 
@@ -73,7 +72,7 @@ class ReadRegistryTest {
     void decodeUnknownEncodingReturnsUnknownArrayWhenAllowed() {
         // Given
         ReadRegistry sut = ReadRegistry.builder().allowUnknown().build();
-        ByteBuffer metadata = ByteBuffer.wrap(new byte[]{1, 2, 3});
+        MemorySegment metadata = MemorySegment.ofArray(new byte[]{1, 2, 3});
         MemorySegment buf = Arena.ofAuto().allocate(4);
         buf.set(java.lang.foreign.ValueLayout.JAVA_INT, 0, 42);
         ArrayNode node = new UnknownArrayNode("some.unknown",
@@ -103,9 +102,9 @@ class ReadRegistryTest {
         // Child uses a known id; allow-unknown still wraps it unknown because
         // its parent is unknown — mirrors Rust decode_foreign in vortex-array/src/serde.rs:380.
         ArrayNode child = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE,
-                ByteBuffer.allocate(0), new ArrayNode[0], new int[0]);
+                MemorySegment.ofArray(new byte[0]), new ArrayNode[0], new int[0]);
         ArrayNode parent = new UnknownArrayNode("some.unknown",
-                ByteBuffer.allocate(0), new ArrayNode[]{child}, new int[0]);
+                MemorySegment.ofArray(new byte[0]), new ArrayNode[]{child}, new int[0]);
         DecodeContext ctx = new DecodeContext(parent, DTypes.I32, 0L,
                 new MemorySegment[0], sut, Arena.ofAuto());
 

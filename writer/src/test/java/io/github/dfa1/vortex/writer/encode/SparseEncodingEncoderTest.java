@@ -14,11 +14,11 @@ import io.github.dfa1.vortex.reader.decode.DecodeContext;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
-import io.github.dfa1.vortex.proto.NullValue;
-import io.github.dfa1.vortex.proto.PatchesMetadata;
-import io.github.dfa1.vortex.proto.ScalarValue;
-import io.github.dfa1.vortex.proto.SparseMetadata;
-import io.github.dfa1.vortex.proto.VarBinMetadata;
+import io.github.dfa1.vortex.proto.ProtoNullValue;
+import io.github.dfa1.vortex.proto.ProtoPatchesMetadata;
+import io.github.dfa1.vortex.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.proto.ProtoSparseMetadata;
+import io.github.dfa1.vortex.proto.ProtoVarBinMetadata;
 import io.github.dfa1.vortex.reader.decode.BoolEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.SparseEncodingDecoder;
@@ -72,8 +72,8 @@ class SparseEncodingEncoderTest {
             EncodeResult result = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
 
             // Then
-            var metaSeg = java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate());
-            SparseMetadata meta = SparseMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            var metaSeg = result.rootNode().metadata();
+            ProtoSparseMetadata meta = ProtoSparseMetadata.decode(metaSeg, 0, metaSeg.byteSize());
             assertThat(meta.patches().len()).isZero();
         }
 
@@ -86,8 +86,8 @@ class SparseEncodingEncoderTest {
             EncodeResult result = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
 
             // Then
-            var metaSeg = java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate());
-            SparseMetadata meta = SparseMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            var metaSeg = result.rootNode().metadata();
+            ProtoSparseMetadata meta = ProtoSparseMetadata.decode(metaSeg, 0, metaSeg.byteSize());
             assertThat(meta.patches().len()).isEqualTo(2);
         }
 
@@ -133,8 +133,8 @@ class SparseEncodingEncoderTest {
             EncodeResult result = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
 
             // Then
-            var metaSeg = java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate());
-            SparseMetadata meta = SparseMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            var metaSeg = result.rootNode().metadata();
+            ProtoSparseMetadata meta = ProtoSparseMetadata.decode(metaSeg, 0, metaSeg.byteSize());
             assertThat(meta.patches().len()).isZero();
         }
     }
@@ -153,7 +153,7 @@ class SparseEncodingEncoderTest {
                 DType dtype, long rowCount, long fillLong, PType idxPtype,
                 long[] patchIndices, long[] patchValues, long offset
         ) {
-            byte[] fillBytes = ScalarValue.ofInt64Value(fillLong).encode();
+            byte[] fillBytes = ProtoScalarValue.ofInt64Value(fillLong).encode();
             byte[] metaBytes = buildSparseMetaBytes(patchIndices.length, offset, idxPtype);
             byte[] idxBuf = toLEBytes(patchIndices, idxPtype);
             byte[] valBuf = toLEBytes(patchValues, PType.I64);
@@ -165,7 +165,7 @@ class SparseEncodingEncoderTest {
                 DType dtype, long rowCount, double fillDouble,
                 long[] patchIndices, double[] patchValues
         ) {
-            byte[] fillBytes = ScalarValue.ofF64Value(fillDouble).encode();
+            byte[] fillBytes = ProtoScalarValue.ofF64Value(fillDouble).encode();
             byte[] metaBytes = buildSparseMetaBytes(patchIndices.length, 0L, PType.U32);
             byte[] idxBuf = toLEBytes(patchIndices, PType.U32);
             byte[] valBuf = f64LEBytes(patchValues);
@@ -180,7 +180,7 @@ class SparseEncodingEncoderTest {
             ArrayNode valNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
                     new ArrayNode[0], new int[]{2});
             ArrayNode sparseNode = ArrayNode.of(EncodingId.VORTEX_SPARSE,
-                    ByteBuffer.wrap(metaBytes),
+                    MemorySegment.ofArray(metaBytes),
                     new ArrayNode[]{idxNode, valNode},
                     new int[]{0});
 
@@ -193,9 +193,9 @@ class SparseEncodingEncoderTest {
         }
 
         private static byte[] buildSparseMetaBytes(long numPatches, long offset, PType idxPtype) {
-            PatchesMetadata patchesMeta = new PatchesMetadata(numPatches, offset,
-                    io.github.dfa1.vortex.proto.PType.fromValue(idxPtype.ordinal()), null, null, null);
-            return new SparseMetadata(patchesMeta).encode();
+            ProtoPatchesMetadata patchesMeta = new ProtoPatchesMetadata(numPatches, offset,
+                    io.github.dfa1.vortex.proto.ProtoPType.fromValue(idxPtype.ordinal()), null, null, null);
+            return new ProtoSparseMetadata(patchesMeta).encode();
         }
 
         private static byte[] toLEBytes(long[] values, PType ptype) {
@@ -303,7 +303,7 @@ class SparseEncodingEncoderTest {
         @Test
         void decode_nullValueFill_treatedAsZero() {
             // Given
-            byte[] nullFill = ScalarValue.ofNullValue(NullValue.NULL_VALUE).encode();
+            byte[] nullFill = ProtoScalarValue.ofNullValue(ProtoNullValue.NULL_VALUE).encode();
             byte[] meta = buildSparseMetaBytes(0, 0L, PType.U32);
             DecodeContext ctx = buildCtx(DTypes.I64, 4, nullFill, meta, new byte[0], new byte[0]);
 
@@ -321,7 +321,7 @@ class SparseEncodingEncoderTest {
         void decode_utf8_noPatches_allEmpty() {
             // Given
             DType utf8 = new DType.Utf8(true);
-            byte[] nullFill = ScalarValue.ofNullValue(NullValue.NULL_VALUE).encode();
+            byte[] nullFill = ProtoScalarValue.ofNullValue(ProtoNullValue.NULL_VALUE).encode();
             byte[] meta = buildSparseMetaBytes(0, 0L, PType.U32);
             DecodeContext ctx = buildCtx(utf8, 3, nullFill, meta, new byte[0], new byte[0]);
 
@@ -340,23 +340,23 @@ class SparseEncodingEncoderTest {
         void decode_utf8_withPatches_writesStringsAtIndices() {
             // Given
             DType utf8 = new DType.Utf8(true);
-            byte[] nullFill = ScalarValue.ofNullValue(NullValue.NULL_VALUE).encode();
+            byte[] nullFill = ProtoScalarValue.ofNullValue(ProtoNullValue.NULL_VALUE).encode();
             byte[] meta = buildSparseMetaBytes(2, 0L, PType.U32);
 
             byte[] idxBuf = toLEBytes(new long[]{1L, 3L}, PType.U32);
             byte[] strBytes = "hibye".getBytes(StandardCharsets.UTF_8);
             byte[] offsets = intLEBytes(new int[]{0, 2, 5});
-            byte[] varBinMeta = new VarBinMetadata(io.github.dfa1.vortex.proto.PType.fromValue(PType.I32.ordinal())).encode();
+            byte[] varBinMeta = new ProtoVarBinMetadata(io.github.dfa1.vortex.proto.ProtoPType.fromValue(PType.I32.ordinal())).encode();
 
             ArrayNode offsetsNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
                     new ArrayNode[0], new int[]{3});
             ArrayNode valNode = ArrayNode.of(EncodingId.VORTEX_VARBIN,
-                    ByteBuffer.wrap(varBinMeta),
+                    MemorySegment.ofArray(varBinMeta),
                     new ArrayNode[]{offsetsNode}, new int[]{2});
             ArrayNode idxNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
                     new ArrayNode[0], new int[]{1});
             ArrayNode sparseNode = ArrayNode.of(EncodingId.VORTEX_SPARSE,
-                    ByteBuffer.wrap(meta),
+                    MemorySegment.ofArray(meta),
                     new ArrayNode[]{idxNode, valNode}, new int[]{0});
 
             ReadRegistry registry = TestRegistry.ofDecoders(DECODER, new PrimitiveEncodingDecoder(), new VarBinEncodingDecoder());
@@ -386,7 +386,7 @@ class SparseEncodingEncoderTest {
         void decode_bool_withPatches_setsBitsAtIndices() {
             // Given
             DType bool = new DType.Bool(true);
-            byte[] nullFill = ScalarValue.ofNullValue(NullValue.NULL_VALUE).encode();
+            byte[] nullFill = ProtoScalarValue.ofNullValue(ProtoNullValue.NULL_VALUE).encode();
             byte[] meta = buildSparseMetaBytes(2, 0L, PType.U32);
             byte[] idxBuf = toLEBytes(new long[]{2L, 5L}, PType.U32);
             byte[] boolBits = new byte[]{0b00000011};
@@ -396,7 +396,7 @@ class SparseEncodingEncoderTest {
             ArrayNode idxNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
                     new ArrayNode[0], new int[]{1});
             ArrayNode sparseNode = ArrayNode.of(EncodingId.VORTEX_SPARSE,
-                    ByteBuffer.wrap(meta),
+                    MemorySegment.ofArray(meta),
                     new ArrayNode[]{idxNode, valNode}, new int[]{0});
 
             ReadRegistry registry = TestRegistry.ofDecoders(DECODER, new PrimitiveEncodingDecoder(), new BoolEncodingDecoder());

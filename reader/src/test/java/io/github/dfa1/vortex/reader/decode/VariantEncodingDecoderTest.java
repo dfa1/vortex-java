@@ -9,14 +9,13 @@ import io.github.dfa1.vortex.reader.array.NullArray;
 import io.github.dfa1.vortex.reader.array.VariantArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
 
-import io.github.dfa1.vortex.proto.Primitive;
-import io.github.dfa1.vortex.proto.VariantMetadata;
+import io.github.dfa1.vortex.proto.ProtoPrimitive;
+import io.github.dfa1.vortex.proto.ProtoVariantMetadata;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -29,8 +28,8 @@ class VariantEncodingDecoderTest {
 
     private static final VariantEncodingDecoder SUT = new VariantEncodingDecoder();
 
-    private static ByteBuffer variantMetaWithShredded(io.github.dfa1.vortex.proto.DType shredded) {
-        return ByteBuffer.wrap(new VariantMetadata(shredded).encode());
+    private static MemorySegment variantMetaWithShredded(io.github.dfa1.vortex.proto.ProtoDType shredded) {
+        return MemorySegment.ofArray(new ProtoVariantMetadata(shredded).encode());
     }
 
     private static ArrayNode primitiveChildNode(int segIdx) {
@@ -68,9 +67,9 @@ class VariantEncodingDecoderTest {
     @Test
     void decode_withShredded_decodesSecondChild() {
         // Given
-        io.github.dfa1.vortex.proto.DType shreddedProto = io.github.dfa1.vortex.proto.DType.ofPrimitive(
-                new Primitive(io.github.dfa1.vortex.proto.PType.I32, false));
-        ByteBuffer meta = variantMetaWithShredded(shreddedProto);
+        io.github.dfa1.vortex.proto.ProtoDType shreddedProto = io.github.dfa1.vortex.proto.ProtoDType.ofPrimitive(
+                new ProtoPrimitive(io.github.dfa1.vortex.proto.ProtoPType.I32, false));
+        MemorySegment meta = variantMetaWithShredded(shreddedProto);
 
         ArrayNode coreNode = nullChildNode();
         ArrayNode shreddedNode = primitiveChildNode(0);
@@ -97,7 +96,7 @@ class VariantEncodingDecoderTest {
     void decode_emptyMetadata_noShredded() {
         // Given
         ArrayNode coreNode = nullChildNode();
-        ArrayNode variantNode = ArrayNode.of(EncodingId.VORTEX_VARIANT, ByteBuffer.allocate(0),
+        ArrayNode variantNode = ArrayNode.of(EncodingId.VORTEX_VARIANT, MemorySegment.ofArray(new byte[0]),
                 new ArrayNode[]{coreNode}, new int[]{});
 
         ReadRegistry registry = TestRegistry.ofDecoders(SUT, new NullEncodingDecoder());
@@ -152,15 +151,15 @@ class VariantEncodingDecoderTest {
     @Nested
     class DtypeFromProto {
 
-        private static io.github.dfa1.vortex.proto.DType prim(io.github.dfa1.vortex.proto.PType pt, boolean nullable) {
-            return io.github.dfa1.vortex.proto.DType.ofPrimitive(new Primitive(pt, nullable));
+        private static io.github.dfa1.vortex.proto.ProtoDType prim(io.github.dfa1.vortex.proto.ProtoPType pt, boolean nullable) {
+            return io.github.dfa1.vortex.proto.ProtoDType.ofPrimitive(new ProtoPrimitive(pt, nullable));
         }
 
         @Test
         void nullType() {
             // Given / When
             DType result = VariantEncodingDecoder.dtypeFromProto(
-                    io.github.dfa1.vortex.proto.DType.ofNull(new io.github.dfa1.vortex.proto.Null()));
+                    io.github.dfa1.vortex.proto.ProtoDType.ofNull(new io.github.dfa1.vortex.proto.ProtoNull()));
 
             // Then null is always nullable
             assertThat(result).isEqualTo(new DType.Null(true));
@@ -170,7 +169,7 @@ class VariantEncodingDecoderTest {
         void bool() {
             // Given / When
             DType result = VariantEncodingDecoder.dtypeFromProto(
-                    io.github.dfa1.vortex.proto.DType.ofBool(new io.github.dfa1.vortex.proto.Bool(true)));
+                    io.github.dfa1.vortex.proto.ProtoDType.ofBool(new io.github.dfa1.vortex.proto.ProtoBool(true)));
 
             // Then
             assertThat(result).isEqualTo(new DType.Bool(true));
@@ -179,7 +178,7 @@ class VariantEncodingDecoderTest {
         @Test
         void primitive() {
             // Given / When
-            DType result = VariantEncodingDecoder.dtypeFromProto(prim(io.github.dfa1.vortex.proto.PType.I64, false));
+            DType result = VariantEncodingDecoder.dtypeFromProto(prim(io.github.dfa1.vortex.proto.ProtoPType.I64, false));
 
             // Then
             assertThat(result).isEqualTo(DType.I64);
@@ -189,7 +188,7 @@ class VariantEncodingDecoderTest {
         void decimal() {
             // Given / When
             DType result = VariantEncodingDecoder.dtypeFromProto(
-                    io.github.dfa1.vortex.proto.DType.ofDecimal(new io.github.dfa1.vortex.proto.Decimal(10, 2, false)));
+                    io.github.dfa1.vortex.proto.ProtoDType.ofDecimal(new io.github.dfa1.vortex.proto.ProtoDecimal(10, 2, false)));
 
             // Then precision/scale narrow to byte
             assertThat(result).isEqualTo(new DType.Decimal((byte) 10, (byte) 2, false));
@@ -199,7 +198,7 @@ class VariantEncodingDecoderTest {
         void utf8() {
             // Given / When
             DType result = VariantEncodingDecoder.dtypeFromProto(
-                    io.github.dfa1.vortex.proto.DType.ofUtf8(new io.github.dfa1.vortex.proto.Utf8(true)));
+                    io.github.dfa1.vortex.proto.ProtoDType.ofUtf8(new io.github.dfa1.vortex.proto.ProtoUtf8(true)));
 
             // Then
             assertThat(result).isEqualTo(new DType.Utf8(true));
@@ -209,7 +208,7 @@ class VariantEncodingDecoderTest {
         void binary() {
             // Given / When
             DType result = VariantEncodingDecoder.dtypeFromProto(
-                    io.github.dfa1.vortex.proto.DType.ofBinary(new io.github.dfa1.vortex.proto.Binary(false)));
+                    io.github.dfa1.vortex.proto.ProtoDType.ofBinary(new io.github.dfa1.vortex.proto.ProtoBinary(false)));
 
             // Then
             assertThat(result).isEqualTo(DType.BINARY);
@@ -218,10 +217,10 @@ class VariantEncodingDecoderTest {
         @Test
         void struct() {
             // Given a two-field struct with mixed child types
-            var proto = io.github.dfa1.vortex.proto.DType.ofStruct(new io.github.dfa1.vortex.proto.Struct(
+            var proto = io.github.dfa1.vortex.proto.ProtoDType.ofStruct(new io.github.dfa1.vortex.proto.ProtoStruct(
                     List.of("a", "b"),
-                    List.of(prim(io.github.dfa1.vortex.proto.PType.I32, false),
-                            io.github.dfa1.vortex.proto.DType.ofUtf8(new io.github.dfa1.vortex.proto.Utf8(true))),
+                    List.of(prim(io.github.dfa1.vortex.proto.ProtoPType.I32, false),
+                            io.github.dfa1.vortex.proto.ProtoDType.ofUtf8(new io.github.dfa1.vortex.proto.ProtoUtf8(true))),
                     false));
 
             // When children are translated recursively
@@ -238,8 +237,8 @@ class VariantEncodingDecoderTest {
         void list() {
             // Given / When element type is translated recursively
             DType result = VariantEncodingDecoder.dtypeFromProto(
-                    io.github.dfa1.vortex.proto.DType.ofList(new io.github.dfa1.vortex.proto.List(
-                            prim(io.github.dfa1.vortex.proto.PType.I32, false), true)));
+                    io.github.dfa1.vortex.proto.ProtoDType.ofList(new io.github.dfa1.vortex.proto.ProtoList(
+                            prim(io.github.dfa1.vortex.proto.ProtoPType.I32, false), true)));
 
             // Then
             assertThat(result).isEqualTo(new DType.List(DType.I32, true));
@@ -249,8 +248,8 @@ class VariantEncodingDecoderTest {
         void fixedSizeList() {
             // Given / When
             DType result = VariantEncodingDecoder.dtypeFromProto(
-                    io.github.dfa1.vortex.proto.DType.ofFixedSizeList(new io.github.dfa1.vortex.proto.FixedSizeList(
-                            prim(io.github.dfa1.vortex.proto.PType.F64, false), 4, false)));
+                    io.github.dfa1.vortex.proto.ProtoDType.ofFixedSizeList(new io.github.dfa1.vortex.proto.ProtoFixedSizeList(
+                            prim(io.github.dfa1.vortex.proto.ProtoPType.F64, false), 4, false)));
 
             // Then size is carried through
             assertThat(result).isEqualTo(
@@ -260,8 +259,8 @@ class VariantEncodingDecoderTest {
         @Test
         void extension_withMetadata() {
             // Given an extension with non-null metadata bytes
-            var proto = io.github.dfa1.vortex.proto.DType.ofExtension(new io.github.dfa1.vortex.proto.Extension(
-                    "ip.address", prim(io.github.dfa1.vortex.proto.PType.I32, false), new byte[]{1, 2, 3}));
+            var proto = io.github.dfa1.vortex.proto.ProtoDType.ofExtension(new io.github.dfa1.vortex.proto.ProtoExtension(
+                    "ip.address", prim(io.github.dfa1.vortex.proto.ProtoPType.I32, false), new byte[]{1, 2, 3}));
 
             // When
             DType result = VariantEncodingDecoder.dtypeFromProto(proto);
@@ -271,27 +270,27 @@ class VariantEncodingDecoderTest {
             DType.Extension ext = (DType.Extension) result;
             assertThat(ext.extensionId()).isEqualTo("ip.address");
             assertThat(ext.storageDType()).isEqualTo(DType.I32);
-            assertThat(ext.metadata().remaining()).isEqualTo(3);
+            assertThat(ext.metadata().byteSize()).isEqualTo(3);
         }
 
         @Test
         void extension_nullMetadata_becomesEmptyBuffer() {
             // Given null metadata — must not NPE, maps to an empty read-only buffer
-            var proto = io.github.dfa1.vortex.proto.DType.ofExtension(new io.github.dfa1.vortex.proto.Extension(
-                    "uuid", prim(io.github.dfa1.vortex.proto.PType.I64, false), null));
+            var proto = io.github.dfa1.vortex.proto.ProtoDType.ofExtension(new io.github.dfa1.vortex.proto.ProtoExtension(
+                    "uuid", prim(io.github.dfa1.vortex.proto.ProtoPType.I64, false), null));
 
             // When
             DType.Extension result = (DType.Extension) VariantEncodingDecoder.dtypeFromProto(proto);
 
             // Then
-            assertThat(result.metadata().remaining()).isZero();
+            assertThat(result.metadata().byteSize()).isZero();
         }
 
         @Test
         void variant() {
             // Given / When
             DType result = VariantEncodingDecoder.dtypeFromProto(
-                    io.github.dfa1.vortex.proto.DType.ofVariant(new io.github.dfa1.vortex.proto.Variant(false)));
+                    io.github.dfa1.vortex.proto.ProtoDType.ofVariant(new io.github.dfa1.vortex.proto.ProtoVariant(false)));
 
             // Then
             assertThat(result).isEqualTo(DType.VARIANT);
@@ -300,7 +299,7 @@ class VariantEncodingDecoderTest {
         @Test
         void noFieldSet_throws() {
             // Given a proto DType with no oneof arm populated
-            var empty = new io.github.dfa1.vortex.proto.DType(
+            var empty = new io.github.dfa1.vortex.proto.ProtoDType(
                     null, null, null, null, null, null, null, null, null, null, null, null);
 
             // When / Then

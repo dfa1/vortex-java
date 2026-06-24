@@ -6,11 +6,10 @@ import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LazyDecimalBytePartsArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.proto.DecimalBytePartsMetadata;
+import io.github.dfa1.vortex.proto.ProtoDecimalBytePartsMetadata;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
 
 /// Read-only decoder for `vortex.decimal_byte_parts`.
 public final class DecimalBytePartsEncodingDecoder implements EncodingDecoder {
@@ -26,14 +25,14 @@ public final class DecimalBytePartsEncodingDecoder implements EncodingDecoder {
 
     @Override
     public Array decode(DecodeContext ctx) {
-        ByteBuffer meta = ctx.metadata();
-        if (meta == null || meta.remaining() == 0) {
+        MemorySegment meta = ctx.metadata();
+        if (meta == null || meta.byteSize() == 0) {
             throw new VortexException(EncodingId.VORTEX_DECIMAL_BYTE_PARTS, "missing metadata");
         }
-        DecimalBytePartsMetadata decoded;
+        ProtoDecimalBytePartsMetadata decoded;
         try {
-            MemorySegment metaSeg = MemorySegment.ofBuffer(meta.duplicate());
-            decoded = DecimalBytePartsMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            MemorySegment metaSeg = meta;
+            decoded = ProtoDecimalBytePartsMetadata.decode(metaSeg, 0, metaSeg.byteSize());
         } catch (IOException e) {
             throw new VortexException(EncodingId.VORTEX_DECIMAL_BYTE_PARTS, "invalid metadata: " + e.getMessage());
         }

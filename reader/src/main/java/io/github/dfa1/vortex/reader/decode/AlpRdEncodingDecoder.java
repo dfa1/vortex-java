@@ -5,8 +5,8 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.proto.ALPRDMetadata;
-import io.github.dfa1.vortex.proto.PatchesMetadata;
+import io.github.dfa1.vortex.proto.ProtoALPRDMetadata;
+import io.github.dfa1.vortex.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LazyAlpRdDoubleArray;
@@ -17,7 +17,6 @@ import io.github.dfa1.vortex.reader.array.ShortArray;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
 
 /// Read-only decoder for `vortex.alprd`.
 public final class AlpRdEncodingDecoder implements EncodingDecoder {
@@ -33,7 +32,7 @@ public final class AlpRdEncodingDecoder implements EncodingDecoder {
 
     @Override
     public Array decode(DecodeContext ctx) {
-        ALPRDMetadata meta = parseMeta(ctx);
+        ProtoALPRDMetadata meta = parseMeta(ctx);
 
         if (!(ctx.dtype() instanceof DType.Primitive p)) {
             throw new VortexException(EncodingId.VORTEX_ALPRD,
@@ -85,7 +84,7 @@ public final class AlpRdEncodingDecoder implements EncodingDecoder {
         static final Patches EMPTY = new Patches(null, new short[0], 0L);
     }
 
-    private static Patches decodePatches(DecodeContext ctx, PatchesMetadata pm) {
+    private static Patches decodePatches(DecodeContext ctx, ProtoPatchesMetadata pm) {
         if (pm == null || pm.len() == 0) {
             return Patches.EMPTY;
         }
@@ -108,15 +107,15 @@ public final class AlpRdEncodingDecoder implements EncodingDecoder {
         return new Patches(idxData, leftValues, offset);
     }
 
-    private static ALPRDMetadata parseMeta(DecodeContext ctx) {
-        ByteBuffer rawMeta = ctx.metadata();
-        if (rawMeta == null || !rawMeta.hasRemaining()) {
-            return new ALPRDMetadata(0, 0, java.util.List.of(),
-                    io.github.dfa1.vortex.proto.PType.fromValue(PType.U16.ordinal()), null);
+    private static ProtoALPRDMetadata parseMeta(DecodeContext ctx) {
+        MemorySegment rawMeta = ctx.metadata();
+        if (rawMeta == null || rawMeta.byteSize() == 0) {
+            return new ProtoALPRDMetadata(0, 0, java.util.List.of(),
+                    io.github.dfa1.vortex.proto.ProtoPType.fromValue(PType.U16.ordinal()), null);
         }
         try {
-            MemorySegment metaSeg = MemorySegment.ofBuffer(rawMeta.duplicate());
-            return ALPRDMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            MemorySegment metaSeg = rawMeta;
+            return ProtoALPRDMetadata.decode(metaSeg, 0, metaSeg.byteSize());
         } catch (IOException e) {
             throw new VortexException(EncodingId.VORTEX_ALPRD, "invalid metadata", e);
         }

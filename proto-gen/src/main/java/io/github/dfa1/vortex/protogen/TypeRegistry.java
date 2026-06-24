@@ -122,11 +122,25 @@ public final class TypeRegistry {
     /// A resolved type — either a message or an enum — carrying enough context for code emission.
     public sealed interface ResolvedType {
 
+        /// Prefix applied to every emitted Java class name so that the generated proto
+        /// records (`DType`, `Bool`, `List`, …) do not collide with project or JDK types
+        /// of the same name on the consumer classpath.
+        String JAVA_NAME_PREFIX = "Proto";
+
         /// @return Java package for the emitted class
         String javaPackage();
 
         /// @return Java simple class name
         String javaName();
+
+        /// Extracts the last dot-separated segment of a fully-qualified proto name.
+        ///
+        /// @param fqn fully-qualified proto name
+        /// @return the trailing segment (the proto type's own name)
+        private static String simpleName(String fqn) {
+            int dot = fqn.lastIndexOf('.');
+            return dot >= 0 ? fqn.substring(dot + 1) : fqn;
+        }
 
         /// A resolved message type.
         ///
@@ -136,8 +150,7 @@ public final class TypeRegistry {
         record Message(Ast.MessageDecl decl, String fqn, String javaPackage) implements ResolvedType {
             @Override
             public String javaName() {
-                int dot = fqn.lastIndexOf('.');
-                return dot >= 0 ? fqn.substring(dot + 1) : fqn;
+                return JAVA_NAME_PREFIX + simpleName(fqn);
             }
         }
 
@@ -149,8 +162,7 @@ public final class TypeRegistry {
         record Enum(Ast.EnumDecl decl, String fqn, String javaPackage) implements ResolvedType {
             @Override
             public String javaName() {
-                int dot = fqn.lastIndexOf('.');
-                return dot >= 0 ? fqn.substring(dot + 1) : fqn;
+                return JAVA_NAME_PREFIX + simpleName(fqn);
             }
         }
     }

@@ -1,19 +1,18 @@
 package io.github.dfa1.vortex.reader;
 
-import com.google.flatbuffers.FlatBufferBuilder;
+import io.github.dfa1.vortex.fbsrt.FbsBuilder;
 import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.fbs.ArraySpec;
-import io.github.dfa1.vortex.fbs.Footer;
-import io.github.dfa1.vortex.fbs.Layout;
-import io.github.dfa1.vortex.fbs.LayoutSpec;
-import io.github.dfa1.vortex.fbs.Postscript;
-import io.github.dfa1.vortex.fbs.PostscriptSegment;
-import io.github.dfa1.vortex.fbs.Primitive;
-import io.github.dfa1.vortex.fbs.Type;
+import io.github.dfa1.vortex.fbs.FbsArraySpec;
+import io.github.dfa1.vortex.fbs.FbsFooter;
+import io.github.dfa1.vortex.fbs.FbsLayout;
+import io.github.dfa1.vortex.fbs.FbsLayoutSpec;
+import io.github.dfa1.vortex.fbs.FbsPostscript;
+import io.github.dfa1.vortex.fbs.FbsPostscriptSegment;
+import io.github.dfa1.vortex.fbs.FbsPrimitive;
+import io.github.dfa1.vortex.fbs.FbsType;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -44,12 +43,12 @@ class PostscriptParserBlobBoundsTest {
     }
 
     private static Fixture validFile() {
-        ByteBuffer layout = buildFlatLayout();
-        ByteBuffer dtype = buildI64Dtype();
-        ByteBuffer footer = buildFooter();
-        int layoutLen = layout.remaining();
-        int dtypeLen = dtype.remaining();
-        int footerLen = footer.remaining();
+        MemorySegment layout = buildFlatLayout();
+        MemorySegment dtype = buildI64Dtype();
+        MemorySegment footer = buildFooter();
+        int layoutLen = (int) layout.byteSize();
+        int dtypeLen = (int) dtype.byteSize();
+        int footerLen = (int) footer.byteSize();
 
         int layoutOff = 0;
         int dtypeOff = layoutOff + layoutLen;
@@ -69,7 +68,7 @@ class PostscriptParserBlobBoundsTest {
     void parse_validInBoundsBlobs_succeeds() {
         // Given — every blob pointer fits; footer ends exactly at EOF (length == fileSize - offset)
         Fixture f = validFile();
-        ByteBuffer ps = buildPostscript(f.footerOff, f.footerLen, f.dtypeOff, f.dtypeLen,
+        MemorySegment ps = buildPostscript(f.footerOff, f.footerLen, f.dtypeOff, f.dtypeLen,
                 f.layoutOff, f.layoutLen);
 
         // When / Then — the largest legal footer range must not be rejected
@@ -81,7 +80,7 @@ class PostscriptParserBlobBoundsTest {
     void parse_footerBlobPastEof_throwsNamingFooter() {
         // Given — footer pointer one byte past EOF; everything else valid
         Fixture f = validFile();
-        ByteBuffer ps = buildPostscript(f.fileSize + 1, f.footerLen, f.dtypeOff, f.dtypeLen,
+        MemorySegment ps = buildPostscript(f.fileSize + 1, f.footerLen, f.dtypeOff, f.dtypeLen,
                 f.layoutOff, f.layoutLen);
 
         // When / Then — rejected by the footer-specific check, not the later slice
@@ -94,7 +93,7 @@ class PostscriptParserBlobBoundsTest {
     void parse_layoutBlobLengthOverrunsEof_throwsNamingLayout() {
         // Given — layout length reaches one byte past EOF (offset valid, offset + length > fileSize)
         Fixture f = validFile();
-        ByteBuffer ps = buildPostscript(f.footerOff, f.footerLen, f.dtypeOff, f.dtypeLen,
+        MemorySegment ps = buildPostscript(f.footerOff, f.footerLen, f.dtypeOff, f.dtypeLen,
                 f.layoutOff, (int) (f.fileSize - f.layoutOff + 1));
 
         // When / Then
@@ -110,7 +109,7 @@ class PostscriptParserBlobBoundsTest {
         // different answers — this is what kills the `fileSize - offset` → `+` math mutant that a
         // zero-offset overrun (the layout case) cannot distinguish.
         Fixture f = validFile();
-        ByteBuffer ps = buildPostscript(f.footerOff, (int) (f.fileSize - f.footerOff + 1),
+        MemorySegment ps = buildPostscript(f.footerOff, (int) (f.fileSize - f.footerOff + 1),
                 f.dtypeOff, f.dtypeLen, f.layoutOff, f.layoutLen);
 
         // When / Then
@@ -123,7 +122,7 @@ class PostscriptParserBlobBoundsTest {
     void parse_dtypeBlobPastEof_throwsNamingDtype() {
         // Given — dtype pointer past EOF with non-zero length, so the dtype check runs
         Fixture f = validFile();
-        ByteBuffer ps = buildPostscript(f.footerOff, f.footerLen, f.fileSize + 1, f.dtypeLen,
+        MemorySegment ps = buildPostscript(f.footerOff, f.footerLen, f.fileSize + 1, f.dtypeLen,
                 f.layoutOff, f.layoutLen);
 
         // When / Then
@@ -139,7 +138,7 @@ class PostscriptParserBlobBoundsTest {
         // offset and the file still parses (dtype absent). Kills the `length > 0` boundary/negate
         // mutants that would otherwise run the check on an empty dtype.
         Fixture f = validFile();
-        ByteBuffer ps = buildPostscript(f.footerOff, f.footerLen, f.fileSize + 999, 0,
+        MemorySegment ps = buildPostscript(f.footerOff, f.footerLen, f.fileSize + 999, 0,
                 f.layoutOff, f.layoutLen);
 
         // When
@@ -151,55 +150,53 @@ class PostscriptParserBlobBoundsTest {
 
     // ── FlatBuffer blob builders (minimal, just enough to parse) ────────────────
 
-    private static ByteBuffer buildFooter() {
-        var fbb = new FlatBufferBuilder(256);
-        int asv = Footer.createArraySpecsVector(fbb, new int[]{
-                ArraySpec.createArraySpec(fbb, fbb.createString("vortex.primitive"))});
-        int lsv = Footer.createLayoutSpecsVector(fbb, new int[]{
-                LayoutSpec.createLayoutSpec(fbb, fbb.createString(io.github.dfa1.vortex.reader.Layout.FLAT))});
+    private static MemorySegment buildFooter() {
+        var fbb = new FbsBuilder(256);
+        int asv = FbsFooter.createArraySpecsVector(fbb, new int[]{
+                FbsArraySpec.createFbsArraySpec(fbb, fbb.createString("vortex.primitive"))});
+        int lsv = FbsFooter.createLayoutSpecsVector(fbb, new int[]{
+                FbsLayoutSpec.createFbsLayoutSpec(fbb, fbb.createString(io.github.dfa1.vortex.reader.Layout.FLAT))});
         // No segment_specs: validateSegmentSpecs has its own dedicated test; keep this fixture
         // focused on the blob-pointer bounds.
-        Footer.startSegmentSpecsVector(fbb, 0);
+        FbsFooter.startSegmentSpecsVector(fbb, 0);
         int ssv = fbb.endVector();
-        int footOff = Footer.createFooter(fbb, asv, lsv, ssv, 0, 0);
+        int footOff = FbsFooter.createFbsFooter(fbb, asv, lsv, ssv, 0, 0);
         fbb.finish(footOff);
         return slice(fbb);
     }
 
-    private static ByteBuffer buildI64Dtype() {
-        var fbb = new FlatBufferBuilder(64);
-        int prim = Primitive.createPrimitive(fbb, io.github.dfa1.vortex.fbs.PType.I64, false);
-        int off = io.github.dfa1.vortex.fbs.DType.createDType(fbb, Type.Primitive, prim);
-        io.github.dfa1.vortex.fbs.DType.finishDTypeBuffer(fbb, off);
+    private static MemorySegment buildI64Dtype() {
+        var fbb = new FbsBuilder(64);
+        int prim = FbsPrimitive.createFbsPrimitive(fbb, io.github.dfa1.vortex.fbs.FbsPType.I64, false);
+        int off = io.github.dfa1.vortex.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsPrimitive, prim);
+        io.github.dfa1.vortex.fbs.FbsDType.finishFbsDTypeBuffer(fbb, off);
         return slice(fbb);
     }
 
-    private static ByteBuffer buildFlatLayout() {
-        var fbb = new FlatBufferBuilder(128);
-        int segV = Layout.createSegmentsVector(fbb, new long[]{0});
-        int layoutOff = Layout.createLayout(fbb, 0, 1L, 0, 0, segV);
-        Layout.finishLayoutBuffer(fbb, layoutOff);
+    private static MemorySegment buildFlatLayout() {
+        var fbb = new FbsBuilder(128);
+        int segV = FbsLayout.createSegmentsVector(fbb, new long[]{0});
+        int layoutOff = FbsLayout.createFbsLayout(fbb, 0, 1L, 0, 0, segV);
+        FbsLayout.finishFbsLayoutBuffer(fbb, layoutOff);
         return slice(fbb);
     }
 
-    private static ByteBuffer buildPostscript(
+    private static MemorySegment buildPostscript(
             long footerOff, int footerLen, long dtypeOff, int dtypeLen, long layoutOff, int layoutLen) {
-        var fbb = new FlatBufferBuilder(128);
-        int footSeg = PostscriptSegment.createPostscriptSegment(fbb, footerOff, footerLen, 0, 0, 0);
-        int dtypeSeg = PostscriptSegment.createPostscriptSegment(fbb, dtypeOff, dtypeLen, 0, 0, 0);
-        int layoutSeg = PostscriptSegment.createPostscriptSegment(fbb, layoutOff, layoutLen, 0, 0, 0);
-        int psOff = Postscript.createPostscript(fbb, dtypeSeg, layoutSeg, 0, footSeg);
-        Postscript.finishPostscriptBuffer(fbb, psOff);
+        var fbb = new FbsBuilder(128);
+        int footSeg = FbsPostscriptSegment.createFbsPostscriptSegment(fbb, footerOff, footerLen, 0, 0, 0);
+        int dtypeSeg = FbsPostscriptSegment.createFbsPostscriptSegment(fbb, dtypeOff, dtypeLen, 0, 0, 0);
+        int layoutSeg = FbsPostscriptSegment.createFbsPostscriptSegment(fbb, layoutOff, layoutLen, 0, 0, 0);
+        int psOff = FbsPostscript.createFbsPostscript(fbb, dtypeSeg, layoutSeg, 0, footSeg);
+        FbsPostscript.finishFbsPostscriptBuffer(fbb, psOff);
         return slice(fbb);
     }
 
-    private static ByteBuffer slice(FlatBufferBuilder fbb) {
-        ByteBuffer data = fbb.dataBuffer();
-        return data.slice(data.position(), data.remaining());
+    private static MemorySegment slice(FbsBuilder fbb) {
+        return fbb.dataSegment();
     }
 
-    private static void copyInto(byte[] dst, int offset, ByteBuffer src) {
-        ByteBuffer dup = src.duplicate();
-        dup.get(dst, offset, dup.remaining());
+    private static void copyInto(byte[] dst, int offset, MemorySegment src) {
+        MemorySegment.copy(src, java.lang.foreign.ValueLayout.JAVA_BYTE, 0, dst, offset, (int) src.byteSize());
     }
 }

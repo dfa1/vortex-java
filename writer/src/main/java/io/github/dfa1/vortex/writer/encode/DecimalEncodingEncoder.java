@@ -3,10 +3,9 @@ package io.github.dfa1.vortex.writer.encode;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.proto.DecimalMetadata;
+import io.github.dfa1.vortex.proto.ProtoDecimalMetadata;
 
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
 import java.util.List;
 
 /// Write-only encoder for `vortex.decimal`.
@@ -36,7 +35,7 @@ public final class DecimalEncodingEncoder implements EncodingEncoder {
             throw new VortexException(EncodingId.VORTEX_DECIMAL,
                     "buffer size %d not multiple of byteWidth %d".formatted(seg.byteSize(), bw));
         }
-        ByteBuffer metaBuf = ByteBuffer.wrap(new DecimalMetadata(valuesType).encode());
+        MemorySegment metaBuf = MemorySegment.ofArray(new ProtoDecimalMetadata(valuesType).encode());
         EncodeNode node = new EncodeNode(EncodingId.VORTEX_DECIMAL, metaBuf, new EncodeNode[0], new int[]{0});
         return new EncodeResult(node, List.of(seg), null, null);
     }

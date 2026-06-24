@@ -12,7 +12,7 @@ import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.reader.decode.KnownArrayNode;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
-import io.github.dfa1.vortex.proto.RLEMetadata;
+import io.github.dfa1.vortex.proto.ProtoRLEMetadata;
 import io.github.dfa1.vortex.reader.decode.BoolEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.RleEncodingDecoder;
@@ -329,8 +329,8 @@ class RleEncodingEncoderTest {
             EncodeResult result = ENCODER.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
 
             // Then
-            var metaSeg = MemorySegment.ofBuffer(result.rootNode().metadata().duplicate());
-            RLEMetadata meta = RLEMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            var metaSeg = result.rootNode().metadata();
+            ProtoRLEMetadata meta = ProtoRLEMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 
             assertThat(meta.values_len()).isEqualTo(2);
             assertThat(meta.indices_len()).isGreaterThan(0);

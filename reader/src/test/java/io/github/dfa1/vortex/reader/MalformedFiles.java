@@ -1,15 +1,15 @@
 package io.github.dfa1.vortex.reader;
 
-import com.google.flatbuffers.FlatBufferBuilder;
-import io.github.dfa1.vortex.fbs.ArraySpec;
-import io.github.dfa1.vortex.fbs.Footer;
-import io.github.dfa1.vortex.fbs.Layout;
-import io.github.dfa1.vortex.fbs.LayoutSpec;
-import io.github.dfa1.vortex.fbs.Postscript;
-import io.github.dfa1.vortex.fbs.PostscriptSegment;
-import io.github.dfa1.vortex.fbs.Primitive;
-import io.github.dfa1.vortex.fbs.SegmentSpec;
-import io.github.dfa1.vortex.fbs.Type;
+import io.github.dfa1.vortex.fbsrt.FbsBuilder;
+import io.github.dfa1.vortex.fbs.FbsArraySpec;
+import io.github.dfa1.vortex.fbs.FbsFooter;
+import io.github.dfa1.vortex.fbs.FbsLayout;
+import io.github.dfa1.vortex.fbs.FbsLayoutSpec;
+import io.github.dfa1.vortex.fbs.FbsPostscript;
+import io.github.dfa1.vortex.fbs.FbsPostscriptSegment;
+import io.github.dfa1.vortex.fbs.FbsPrimitive;
+import io.github.dfa1.vortex.fbs.FbsSegmentSpec;
+import io.github.dfa1.vortex.fbs.FbsType;
 
 import java.nio.ByteBuffer;
 
@@ -27,64 +27,64 @@ final class MalformedFiles {
     ///
     /// @return the finished DType FlatBuffer
     static ByteBuffer buildI64Dtype() {
-        var fbb = new FlatBufferBuilder(64);
-        int prim = Primitive.createPrimitive(fbb, io.github.dfa1.vortex.fbs.PType.I64, false);
-        int off = io.github.dfa1.vortex.fbs.DType.createDType(fbb, Type.Primitive, prim);
-        io.github.dfa1.vortex.fbs.DType.finishDTypeBuffer(fbb, off);
+        var fbb = new FbsBuilder(64);
+        int prim = FbsPrimitive.createFbsPrimitive(fbb, io.github.dfa1.vortex.fbs.FbsPType.I64, false);
+        int off = io.github.dfa1.vortex.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsPrimitive, prim);
+        io.github.dfa1.vortex.fbs.FbsDType.finishFbsDTypeBuffer(fbb, off);
         return slice(fbb);
     }
 
-    /// Builds a Footer with the given array/layout spec ids and inline segment specs.
+    /// Builds a FbsFooter with the given array/layout spec ids and inline segment specs.
     ///
     /// @param arraySpecs  encoding ids, one per array spec
     /// @param layoutSpecs layout ids, one per layout spec
     /// @param segOffsets  per-segment byte offsets
     /// @param segLengths  per-segment byte lengths
-    /// @return the finished Footer FlatBuffer
+    /// @return the finished FbsFooter FlatBuffer
     static ByteBuffer buildFooter(
             String[] arraySpecs, String[] layoutSpecs,
             long[] segOffsets, long[] segLengths) {
-        var fbb = new FlatBufferBuilder(256);
+        var fbb = new FbsBuilder(256);
 
         int[] asOffs = new int[arraySpecs.length];
         for (int i = 0; i < arraySpecs.length; i++) {
-            asOffs[i] = ArraySpec.createArraySpec(fbb, fbb.createString(arraySpecs[i]));
+            asOffs[i] = FbsArraySpec.createFbsArraySpec(fbb, fbb.createString(arraySpecs[i]));
         }
-        int asv = Footer.createArraySpecsVector(fbb, asOffs);
+        int asv = FbsFooter.createArraySpecsVector(fbb, asOffs);
 
         int[] lsOffs = new int[layoutSpecs.length];
         for (int i = 0; i < layoutSpecs.length; i++) {
-            lsOffs[i] = LayoutSpec.createLayoutSpec(fbb, fbb.createString(layoutSpecs[i]));
+            lsOffs[i] = FbsLayoutSpec.createFbsLayoutSpec(fbb, fbb.createString(layoutSpecs[i]));
         }
-        int lsv = Footer.createLayoutSpecsVector(fbb, lsOffs);
+        int lsv = FbsFooter.createLayoutSpecsVector(fbb, lsOffs);
 
-        // SegmentSpec is an inline struct — write in reverse order.
-        Footer.startSegmentSpecsVector(fbb, segOffsets.length);
+        // FbsSegmentSpec is an inline struct — write in reverse order.
+        FbsFooter.startSegmentSpecsVector(fbb, segOffsets.length);
         for (int i = segOffsets.length - 1; i >= 0; i--) {
-            SegmentSpec.createSegmentSpec(fbb, segOffsets[i], segLengths[i], 6, 0, 0);
+            FbsSegmentSpec.createFbsSegmentSpec(fbb, segOffsets[i], segLengths[i], 6, 0, 0);
         }
         int ssv = fbb.endVector();
 
-        int footOff = Footer.createFooter(fbb, asv, lsv, ssv, 0, 0);
+        int footOff = FbsFooter.createFbsFooter(fbb, asv, lsv, ssv, 0, 0);
         fbb.finish(footOff);
         return slice(fbb);
     }
 
-    /// Builds a flat Layout referencing a single segment.
+    /// Builds a flat FbsLayout referencing a single segment.
     ///
     /// @param layoutSpecIdx index into the footer's layout-spec vector
     /// @param rowCount      declared row count
     /// @param segIdx        index into the footer's segment-spec vector
-    /// @return the finished Layout FlatBuffer
+    /// @return the finished FbsLayout FlatBuffer
     static ByteBuffer buildFlatLayout(int layoutSpecIdx, long rowCount, int segIdx) {
-        var fbb = new FlatBufferBuilder(128);
-        int segV = Layout.createSegmentsVector(fbb, new long[]{segIdx});
-        int layoutOff = Layout.createLayout(fbb, layoutSpecIdx, rowCount, 0, 0, segV);
-        Layout.finishLayoutBuffer(fbb, layoutOff);
+        var fbb = new FbsBuilder(128);
+        int segV = FbsLayout.createSegmentsVector(fbb, new long[]{segIdx});
+        int layoutOff = FbsLayout.createFbsLayout(fbb, layoutSpecIdx, rowCount, 0, 0, segV);
+        FbsLayout.finishFbsLayoutBuffer(fbb, layoutOff);
         return slice(fbb);
     }
 
-    /// Builds a Postscript pointing at the footer, dtype, and layout blobs.
+    /// Builds a FbsPostscript pointing at the footer, dtype, and layout blobs.
     ///
     /// @param footerOff footer byte offset
     /// @param footerLen footer byte length
@@ -92,17 +92,17 @@ final class MalformedFiles {
     /// @param dtypeLen  dtype byte length
     /// @param layoutOff layout byte offset
     /// @param layoutLen layout byte length
-    /// @return the finished Postscript FlatBuffer
+    /// @return the finished FbsPostscript FlatBuffer
     static ByteBuffer buildPostscript(
             long footerOff, int footerLen,
             long dtypeOff, int dtypeLen,
             long layoutOff, int layoutLen) {
-        var fbb = new FlatBufferBuilder(128);
-        int footSeg = PostscriptSegment.createPostscriptSegment(fbb, footerOff, footerLen, 0, 0, 0);
-        int dtypeSeg = PostscriptSegment.createPostscriptSegment(fbb, dtypeOff, dtypeLen, 0, 0, 0);
-        int layoutSeg = PostscriptSegment.createPostscriptSegment(fbb, layoutOff, layoutLen, 0, 0, 0);
-        int psOff = Postscript.createPostscript(fbb, dtypeSeg, layoutSeg, 0, footSeg);
-        Postscript.finishPostscriptBuffer(fbb, psOff);
+        var fbb = new FbsBuilder(128);
+        int footSeg = FbsPostscriptSegment.createFbsPostscriptSegment(fbb, footerOff, footerLen, 0, 0, 0);
+        int dtypeSeg = FbsPostscriptSegment.createFbsPostscriptSegment(fbb, dtypeOff, dtypeLen, 0, 0, 0);
+        int layoutSeg = FbsPostscriptSegment.createFbsPostscriptSegment(fbb, layoutOff, layoutLen, 0, 0, 0);
+        int psOff = FbsPostscript.createFbsPostscript(fbb, dtypeSeg, layoutSeg, 0, footSeg);
+        FbsPostscript.finishFbsPostscriptBuffer(fbb, psOff);
         return slice(fbb);
     }
 
@@ -110,8 +110,7 @@ final class MalformedFiles {
     ///
     /// @param fbb a builder whose root has been finished
     /// @return a [ByteBuffer] view of the finished bytes
-    static ByteBuffer slice(FlatBufferBuilder fbb) {
-        ByteBuffer data = fbb.dataBuffer();
-        return data.slice(data.position(), data.remaining());
+    static ByteBuffer slice(FbsBuilder fbb) {
+        return fbb.dataSegment().asByteBuffer().order(java.nio.ByteOrder.LITTLE_ENDIAN);
     }
 }

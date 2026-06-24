@@ -5,8 +5,10 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.TimeUnit;
 
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
+import static io.github.dfa1.vortex.encoding.PTypeIO.LE_SHORT;
+
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
 import java.time.ZoneId;
 import java.util.Optional;
@@ -37,12 +39,10 @@ public final class TimestampDtype {
     /// @return matching extension dtype
     public static DType.Extension of(TimeUnit unit, ZoneId zone, boolean nullable) {
         byte[] tzBytes = zone == null ? new byte[0] : zone.getId().getBytes(StandardCharsets.UTF_8);
-        ByteBuffer meta = ByteBuffer.allocate(3 + tzBytes.length).order(ByteOrder.LITTLE_ENDIAN);
-        meta.put(0, (byte) unit.ordinal());
-        meta.putShort(1, (short) tzBytes.length);
-        for (int k = 0; k < tzBytes.length; k++) {
-            meta.put(3 + k, tzBytes[k]);
-        }
+        MemorySegment meta = MemorySegment.ofArray(new byte[3 + tzBytes.length]);
+        meta.set(ValueLayout.JAVA_BYTE, 0, (byte) unit.ordinal());
+        meta.set(LE_SHORT, 1, (short) tzBytes.length);
+        MemorySegment.copy(tzBytes, 0, meta, ValueLayout.JAVA_BYTE, 3, tzBytes.length);
         return new DType.Extension(
                 ExtensionId.VORTEX_TIMESTAMP.id(),
                 new DType.Primitive(PType.I64, nullable),
@@ -56,11 +56,11 @@ public final class TimestampDtype {
     /// @return the recorded time unit
     /// @throws VortexException if metadata is missing or empty
     public static TimeUnit readUnit(DType.Extension ext) {
-        ByteBuffer meta = ext.metadata();
-        if (meta == null || !meta.hasRemaining()) {
+        MemorySegment meta = ext.metadata();
+        if (meta == null || meta.byteSize() == 0) {
             throw new VortexException("missing TimeUnit metadata byte for " + ext.extensionId());
         }
-        return TimeUnit.fromTag(meta.get(meta.position()));
+        return TimeUnit.fromTag(meta.get(ValueLayout.JAVA_BYTE, 0));
     }
 
     /// Reads the optional IANA timezone from the metadata's UTF-8 suffix.
@@ -69,25 +69,20 @@ public final class TimestampDtype {
     /// @return parsed zone id, or empty when no timezone is recorded
     /// @throws VortexException if the metadata is truncated mid-string
     public static Optional<ZoneId> timezone(DType.Extension ext) {
-        ByteBuffer meta = ext.metadata();
-        if (meta == null || meta.remaining() < 3) {
+        MemorySegment meta = ext.metadata();
+        if (meta == null || meta.byteSize() < 3) {
             return Optional.empty();
         }
-        ByteBuffer le = meta.duplicate().order(ByteOrder.LITTLE_ENDIAN);
-        int basePos = le.position();
-        int tzLen = Short.toUnsignedInt(le.getShort(basePos + 1));
+        int tzLen = Short.toUnsignedInt(meta.get(LE_SHORT, 1));
         if (tzLen == 0) {
             return Optional.empty();
         }
-        if (le.remaining() < 3 + tzLen) {
+        if (meta.byteSize() < 3 + tzLen) {
             throw new VortexException(
                     "timestamp metadata truncated: declared tz_len="
-                            + tzLen + " but only " + (le.remaining() - 3) + " bytes available");
+                            + tzLen + " but only " + (meta.byteSize() - 3) + " bytes available");
         }
-        byte[] tzBytes = new byte[tzLen];
-        for (int k = 0; k < tzLen; k++) {
-            tzBytes[k] = le.get(basePos + 3 + k);
-        }
+        byte[] tzBytes = meta.asSlice(3, tzLen).toArray(ValueLayout.JAVA_BYTE);
         return Optional.of(ZoneId.of(new String(tzBytes, StandardCharsets.UTF_8)));
     }
 }

@@ -191,8 +191,9 @@ public final class VortexInspectorTui {
         }
 
         private static boolean hasLeadingStats(Layout layout) {
-            java.nio.ByteBuffer meta = layout.metadata();
-            return meta != null && meta.hasRemaining() && meta.get(meta.position()) == 1;
+            MemorySegment meta = layout.metadata();
+            return meta != null && meta.byteSize() > 0
+                    && meta.get(java.lang.foreign.ValueLayout.JAVA_BYTE, 0) == 1;
         }
 
         private void prefetchTopColumns() {
@@ -671,8 +672,7 @@ public final class VortexInspectorTui {
                     statsCache.put(anchor, new DataState.Failed("no column dtype"));
                     return;
                 }
-                DType.Struct statsDtype = ZonedStatsSchema.statsTableDtype(
-                        columnDtype, anchorLayout.metadata());
+                DType.Struct statsDtype = ZonedStatsSchema.statsTableDtype(columnDtype, anchorLayout.metadata());
                 if (statsDtype.fieldNames().isEmpty()) {
                     statsCache.put(anchor, new DataState.Failed("no stats present in metadata"));
                     return;

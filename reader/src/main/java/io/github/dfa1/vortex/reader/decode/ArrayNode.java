@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.encoding.EncodingId;
 
-import java.nio.ByteBuffer;
+import java.lang.foreign.MemorySegment;
 
 /// Encoded array node as stored in a Flat layout segment.
 /// In-file representation before decoding; mirrors the Go ArrayNode struct.
@@ -21,13 +21,13 @@ public sealed interface ArrayNode permits KnownArrayNode, UnknownArrayNode {
     /// @param children      child nodes
     /// @param bufferIndices segment buffer indices for this node
     /// @return a [KnownArrayNode] with the given fields
-    static ArrayNode of(EncodingId encodingId, ByteBuffer metadata, ArrayNode[] children,
+    static ArrayNode of(EncodingId encodingId, MemorySegment metadata, ArrayNode[] children,
             int[] bufferIndices) {
         return new KnownArrayNode(encodingId, metadata, children, bufferIndices);
     }
 
     /// @return encoding-specific metadata bytes, or `null`
-    ByteBuffer metadata();
+    MemorySegment metadata();
 
     /// @return child nodes
     ArrayNode[] children();

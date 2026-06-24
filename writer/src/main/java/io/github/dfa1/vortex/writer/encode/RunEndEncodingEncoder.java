@@ -5,10 +5,9 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.proto.RunEndMetadata;
+import io.github.dfa1.vortex.proto.ProtoRunEndMetadata;
 
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -90,15 +89,15 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
             PTypeIO.set(valuesBuf, (long) i * elemBytes, ptype, values.get(i));
         }
 
-        byte[] metaBytes = new RunEndMetadata(
-                io.github.dfa1.vortex.proto.PType.fromValue(PType.U32.ordinal()),
+        byte[] metaBytes = new ProtoRunEndMetadata(
+                io.github.dfa1.vortex.proto.ProtoPType.fromValue(PType.U32.ordinal()),
                 numRuns,
                 0L
         ).encode();
 
         EncodeNode endsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
         EncodeNode valuesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
-        EncodeNode root = new EncodeNode(EncodingId.VORTEX_RUNEND, ByteBuffer.wrap(metaBytes),
+        EncodeNode root = new EncodeNode(EncodingId.VORTEX_RUNEND, MemorySegment.ofArray(metaBytes),
                 new EncodeNode[]{endsNode, valuesNode}, new int[0]);
         return new EncodeResult(root, List.of(endsBuf, valuesBuf), null, null);
     }

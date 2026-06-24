@@ -6,7 +6,7 @@ import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ListArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.proto.ListMetadata;
+import io.github.dfa1.vortex.proto.ProtoListMetadata;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
@@ -36,10 +36,10 @@ public final class ListEncodingDecoder implements EncodingDecoder {
                     "expected 2 or 3 children, got " + nchildren);
         }
 
-        ListMetadata meta;
+        ProtoListMetadata meta;
         try {
-            MemorySegment metaSeg = MemorySegment.ofBuffer(ctx.metadata().duplicate());
-            meta = ListMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            MemorySegment metaSeg = ctx.metadata();
+            meta = ProtoListMetadata.decode(metaSeg, 0, metaSeg.byteSize());
         } catch (IOException e) {
             throw new VortexException(EncodingId.VORTEX_LIST, "invalid metadata", e);
         }

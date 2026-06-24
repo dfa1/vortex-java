@@ -8,14 +8,13 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.proto.PatchedMetadata;
+import io.github.dfa1.vortex.proto.ProtoPatchedMetadata;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -25,8 +24,8 @@ class PatchedEncodingDecoderTest {
     private static final PatchedEncodingDecoder SUT = new PatchedEncodingDecoder();
     private static final ReadRegistry REGISTRY = TestRegistry.ofDecoders(SUT, new PrimitiveEncodingDecoder());
 
-    private static ByteBuffer patchedMeta(int nPatches, int nLanes, int offset) {
-        return ByteBuffer.wrap(new PatchedMetadata(nPatches, nLanes, offset).encode());
+    private static MemorySegment patchedMeta(int nPatches, int nLanes, int offset) {
+        return MemorySegment.ofArray(new ProtoPatchedMetadata(nPatches, nLanes, offset).encode());
     }
 
 
@@ -45,7 +44,7 @@ class PatchedEncodingDecoderTest {
             MemorySegment patchIndices, MemorySegment patchValues,
             int nLanes) {
         int nPatches = (int) (patchIndices.byteSize() / 2);
-        ByteBuffer meta = patchedMeta(nPatches, nLanes, 0);
+        MemorySegment meta = patchedMeta(nPatches, nLanes, 0);
 
         MemorySegment[] segments = {inner, laneOffsets, patchIndices, patchValues};
 

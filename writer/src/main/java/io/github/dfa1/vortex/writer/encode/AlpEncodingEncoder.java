@@ -4,12 +4,11 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.proto.ALPMetadata;
-import io.github.dfa1.vortex.proto.PatchesMetadata;
-import io.github.dfa1.vortex.proto.ScalarValue;
+import io.github.dfa1.vortex.proto.ProtoALPMetadata;
+import io.github.dfa1.vortex.proto.ProtoPatchesMetadata;
+import io.github.dfa1.vortex.proto.ProtoScalarValue;
 
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -203,9 +202,9 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         EncodeNode encodedNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
 
         if (d.patchIndices().isEmpty()) {
-            byte[] metaBytes = new ALPMetadata(d.expE(), d.expF(), null).encode();
+            byte[] metaBytes = new ProtoALPMetadata(d.expE(), d.expF(), null).encode();
             EncodeNode root = new EncodeNode(EncodingId.VORTEX_ALP,
-                ByteBuffer.wrap(metaBytes), new EncodeNode[]{encodedNode}, new int[0]);
+                MemorySegment.ofArray(metaBytes), new EncodeNode[]{encodedNode}, new int[0]);
             return new EncodeResult(root, List.of(encodedBuf), d.statsMin(), d.statsMax());
         }
 
@@ -217,13 +216,13 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
             valBuf.setAtIndex(PTypeIO.LE_DOUBLE, i, d.patchValues().get(i));
         }
 
-        PatchesMetadata patches = buildPatchesMeta(numPatches);
-        byte[] metaBytes = new ALPMetadata(d.expE(), d.expF(), patches).encode();
+        ProtoPatchesMetadata patches = buildPatchesMeta(numPatches);
+        byte[] metaBytes = new ProtoALPMetadata(d.expE(), d.expF(), patches).encode();
 
         EncodeNode idxNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
         EncodeNode valNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_ALP,
-            ByteBuffer.wrap(metaBytes),
+            MemorySegment.ofArray(metaBytes),
             new EncodeNode[]{encodedNode, idxNode, valNode},
             new int[0]);
         return new EncodeResult(root, List.of(encodedBuf, idxBuf, valBuf), d.statsMin(), d.statsMax());
@@ -232,9 +231,9 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
     private static CascadeStep encodeCascadeF64(double[] values, EncodeContext ctx) {
         AlpF64Data d = computeF64(values);
         if (d.patchIndices().isEmpty()) {
-            byte[] metaBytes = new ALPMetadata(d.expE(), d.expF(), null).encode();
+            byte[] metaBytes = new ProtoALPMetadata(d.expE(), d.expF(), null).encode();
             EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_ALP,
-                ByteBuffer.wrap(metaBytes), new EncodeNode[1], new int[0]);
+                MemorySegment.ofArray(metaBytes), new EncodeNode[1], new int[0]);
             ChildSlot slot = new ChildSlot(DType.I64, d.encodedArr(), 0);
             return new CascadeStep(partialRoot, List.of(), List.of(slot), d.statsMin(), d.statsMax(), true);
         }
@@ -247,13 +246,13 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
             valBuf.setAtIndex(PTypeIO.LE_DOUBLE, i, d.patchValues().get(i));
         }
 
-        PatchesMetadata patches = buildPatchesMeta(numPatches);
-        byte[] metaBytes = new ALPMetadata(d.expE(), d.expF(), patches).encode();
+        ProtoPatchesMetadata patches = buildPatchesMeta(numPatches);
+        byte[] metaBytes = new ProtoALPMetadata(d.expE(), d.expF(), patches).encode();
 
         EncodeNode idxNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
         EncodeNode valNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
         EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_ALP,
-            ByteBuffer.wrap(metaBytes), new EncodeNode[]{null, idxNode, valNode}, new int[0]);
+            MemorySegment.ofArray(metaBytes), new EncodeNode[]{null, idxNode, valNode}, new int[0]);
         ChildSlot slot = new ChildSlot(DType.I64, d.encodedArr(), 0);
         return new CascadeStep(partialRoot, List.of(idxBuf, valBuf), List.of(slot), d.statsMin(), d.statsMax(), true);
     }
@@ -372,9 +371,9 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         EncodeNode encodedNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
 
         if (patchIndices.isEmpty()) {
-            byte[] metaBytes = new ALPMetadata(expE, expF, null).encode();
+            byte[] metaBytes = new ProtoALPMetadata(expE, expF, null).encode();
             EncodeNode root = new EncodeNode(EncodingId.VORTEX_ALP,
-                ByteBuffer.wrap(metaBytes), new EncodeNode[]{encodedNode}, new int[0]);
+                MemorySegment.ofArray(metaBytes), new EncodeNode[]{encodedNode}, new int[0]);
             return new EncodeResult(root, List.of(encodedBuf), statsMin, statsMax);
         }
 
@@ -386,36 +385,36 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
             valBuf.setAtIndex(PTypeIO.LE_FLOAT, i, patchValues.get(i));
         }
 
-        PatchesMetadata patches = new PatchesMetadata(
+        ProtoPatchesMetadata patches = new ProtoPatchesMetadata(
                 numPatches,
                 0L,
-                io.github.dfa1.vortex.proto.PType.fromValue(PType.U32.ordinal()),
+                io.github.dfa1.vortex.proto.ProtoPType.fromValue(PType.U32.ordinal()),
                 null, null, null);
-        byte[] metaBytes = new ALPMetadata(expE, expF, patches).encode();
+        byte[] metaBytes = new ProtoALPMetadata(expE, expF, patches).encode();
 
         EncodeNode idxNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
         EncodeNode valNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_ALP,
-            ByteBuffer.wrap(metaBytes),
+            MemorySegment.ofArray(metaBytes),
             new EncodeNode[]{encodedNode, idxNode, valNode},
             new int[0]);
         return new EncodeResult(root, List.of(encodedBuf, idxBuf, valBuf), statsMin, statsMax);
     }
 
-    private static PatchesMetadata buildPatchesMeta(int numPatches) {
-        return new PatchesMetadata(
+    private static ProtoPatchesMetadata buildPatchesMeta(int numPatches) {
+        return new ProtoPatchesMetadata(
                 numPatches,
                 0L,
-                io.github.dfa1.vortex.proto.PType.fromValue(PType.U32.ordinal()),
+                io.github.dfa1.vortex.proto.ProtoPType.fromValue(PType.U32.ordinal()),
                 null, null, null);
     }
 
     private static byte[] scalarF64(double v) {
-        return ScalarValue.ofF64Value(v).encode();
+        return ProtoScalarValue.ofF64Value(v).encode();
     }
 
     private static byte[] scalarF32(float v) {
-        return ScalarValue.ofF32Value(v).encode();
+        return ProtoScalarValue.ofF32Value(v).encode();
     }
 
     @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.

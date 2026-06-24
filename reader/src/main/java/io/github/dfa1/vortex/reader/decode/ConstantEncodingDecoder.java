@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.proto.ScalarValue;
+import io.github.dfa1.vortex.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LazyConstantBoolArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantByteArray;
@@ -38,9 +38,9 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
     @Override
     public Array decode(DecodeContext ctx) {
         MemorySegment scalarBuf = ctx.buffer(0);
-        ScalarValue scalar;
+        ProtoScalarValue scalar;
         try {
-            scalar = ScalarValue.decode(scalarBuf, 0, scalarBuf.byteSize());
+            scalar = ProtoScalarValue.decode(scalarBuf, 0, scalarBuf.byteSize());
         } catch (IOException e) {
             throw new VortexException(EncodingId.VORTEX_CONSTANT, "invalid scalar value", e);
         }
@@ -50,7 +50,7 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
 
     /// Builds the constant array for `scalar` interpreted as `dtype`, broadcast to `n` rows.
     /// Recurses for Extension (its storage dtype) and Variant (the wrapped inner scalar).
-    private static Array arrayFromScalar(DecodeContext ctx, ScalarValue scalar, DType dtype, long n) {
+    private static Array arrayFromScalar(DecodeContext ctx, ProtoScalarValue scalar, DType dtype, long n) {
         if (dtype instanceof DType.Null) {
             return new NullArray(dtype, n);
         }
@@ -58,7 +58,7 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
             // A constant variant wraps a typed inner scalar (Scalar::variant(inner)); the
             // physical storage is the inner-typed constant array. The VariantArray wrapper
             // re-applies the logical Variant dtype.
-            io.github.dfa1.vortex.proto.Scalar inner = scalar.variant_value();
+            io.github.dfa1.vortex.proto.ProtoScalar inner = scalar.variant_value();
             if (inner == null || inner.value() == null) {
                 throw new VortexException(EncodingId.VORTEX_CONSTANT, "constant variant missing variant_value");
             }
@@ -99,7 +99,7 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
     /// @param scalar   the constant scalar value
     /// @param n        row count
     /// @return a lazy constant array of length `n`
-    private static Array constantPrimitive(DType outDtype, PType ptype, ScalarValue scalar, long n) {
+    private static Array constantPrimitive(DType outDtype, PType ptype, ProtoScalarValue scalar, long n) {
         long rawBits = scalarToRawBits(scalar, ptype);
         return switch (ptype) {
             case I64, U64 -> new LazyConstantLongArray(outDtype, n, rawBits);
@@ -112,7 +112,7 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
         };
     }
 
-    private static Array decodeDecimal(DType dtype, ScalarValue scalar, long n) {
+    private static Array decodeDecimal(DType dtype, ProtoScalarValue scalar, long n) {
         byte[] elemBytes = scalar.bytes_value();
         int elemLen = elemBytes.length;
         // Decode the single scalar value via LazyDecimalArray (reuses its LE byte-order logic),
@@ -121,12 +121,12 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
         return new LazyConstantDecimalArray(dtype, n, value, elemLen);
     }
 
-    private static Array decodeBool(DType dtype, ScalarValue scalar, long n) {
+    private static Array decodeBool(DType dtype, ProtoScalarValue scalar, long n) {
         boolean value = scalar.bool_value() != null && scalar.bool_value();
         return new LazyConstantBoolArray(dtype, n, value);
     }
 
-    private static Array decodeString(DecodeContext ctx, ScalarValue scalar, DType dtype, long n) {
+    private static Array decodeString(DecodeContext ctx, ProtoScalarValue scalar, DType dtype, long n) {
         byte[] strBytes = scalar.string_value() != null
                               ? scalar.string_value().getBytes(StandardCharsets.UTF_8)
                               : (scalar.bytes_value() != null ? scalar.bytes_value() : new byte[0]);
@@ -146,7 +146,7 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
         return new VarBinArray.OffsetMode(dtype, n, bytesSeg.asReadOnly(), offsetsSeg.asReadOnly(), PType.I32);
     }
 
-    private static long scalarToRawBits(ScalarValue scalar, PType ptype) {
+    private static long scalarToRawBits(ProtoScalarValue scalar, PType ptype) {
         if (scalar.int64_value() != null) {
             return scalar.int64_value();
         }

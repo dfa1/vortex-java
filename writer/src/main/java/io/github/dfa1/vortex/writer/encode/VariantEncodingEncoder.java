@@ -3,19 +3,18 @@ package io.github.dfa1.vortex.writer.encode;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.proto.Scalar;
-import io.github.dfa1.vortex.proto.ScalarValue;
-import io.github.dfa1.vortex.proto.VariantMetadata;
+import io.github.dfa1.vortex.proto.ProtoScalar;
+import io.github.dfa1.vortex.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.proto.ProtoVariantMetadata;
 
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
 /// Write-only encoder for `vortex.variant`.
 ///
 /// Emits the canonical variant container: a single `core_storage` child holding the
-/// full value per row, no shredded child, and `VariantMetadata` with no `shredded_dtype`.
+/// full value per row, no shredded child, and `ProtoVariantMetadata` with no `shredded_dtype`.
 /// The container itself owns no buffers.
 ///
 /// `core_storage` is built from the per-row scalars in [VariantData], coalescing adjacent
@@ -52,8 +51,8 @@ public final class VariantEncodingEncoder implements EncodingEncoder {
                     "encode requires VariantData, got " + (data == null ? "null" : data.getClass().getName()));
         }
 
-        List<Scalar> values = variantData.values();
-        List<Scalar> runValues = new ArrayList<>();
+        List<ProtoScalar> values = variantData.values();
+        List<ProtoScalar> runValues = new ArrayList<>();
         List<Long> runLengths = new ArrayList<>();
         coalesceRuns(values, runValues, runLengths);
 
@@ -63,7 +62,7 @@ public final class VariantEncodingEncoder implements EncodingEncoder {
                 : chunkedConstants(runValues, runLengths, ctx, buffers);
 
         EncodeNode[] children;
-        io.github.dfa1.vortex.proto.DType shreddedProto = null;
+        io.github.dfa1.vortex.proto.ProtoDType shreddedProto = null;
         if (variantData.shreddedData() != null) {
             children = new EncodeNode[]{coreStorage, encodeShredded(variantData, ctx, buffers)};
             shreddedProto = toProtoDtype(variantData.shreddedDtype());
@@ -71,7 +70,7 @@ public final class VariantEncodingEncoder implements EncodingEncoder {
             children = new EncodeNode[]{coreStorage};
         }
 
-        ByteBuffer containerMeta = ByteBuffer.wrap(new VariantMetadata(shreddedProto).encode());
+        MemorySegment containerMeta = MemorySegment.ofArray(new ProtoVariantMetadata(shreddedProto).encode());
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_VARIANT, containerMeta, children, new int[0]);
         return new EncodeResult(root, List.copyOf(buffers), null, null);
     }
@@ -101,28 +100,28 @@ public final class VariantEncodingEncoder implements EncodingEncoder {
         return child;
     }
 
-    /// Converts a shreddable scalar dtype to its protobuf form for `VariantMetadata`.
-    private static io.github.dfa1.vortex.proto.DType toProtoDtype(DType dtype) {
+    /// Converts a shreddable scalar dtype to its protobuf form for `ProtoVariantMetadata`.
+    private static io.github.dfa1.vortex.proto.ProtoDType toProtoDtype(DType dtype) {
         return switch (dtype) {
-            case DType.Primitive p -> io.github.dfa1.vortex.proto.DType.ofPrimitive(
-                    new io.github.dfa1.vortex.proto.Primitive(
-                            io.github.dfa1.vortex.proto.PType.fromValue(p.ptype().ordinal()), p.nullable()));
-            case DType.Bool b -> io.github.dfa1.vortex.proto.DType.ofBool(
-                    new io.github.dfa1.vortex.proto.Bool(b.nullable()));
-            case DType.Utf8 u -> io.github.dfa1.vortex.proto.DType.ofUtf8(
-                    new io.github.dfa1.vortex.proto.Utf8(u.nullable()));
-            case DType.Binary bin -> io.github.dfa1.vortex.proto.DType.ofBinary(
-                    new io.github.dfa1.vortex.proto.Binary(bin.nullable()));
+            case DType.Primitive p -> io.github.dfa1.vortex.proto.ProtoDType.ofPrimitive(
+                    new io.github.dfa1.vortex.proto.ProtoPrimitive(
+                            io.github.dfa1.vortex.proto.ProtoPType.fromValue(p.ptype().ordinal()), p.nullable()));
+            case DType.Bool b -> io.github.dfa1.vortex.proto.ProtoDType.ofBool(
+                    new io.github.dfa1.vortex.proto.ProtoBool(b.nullable()));
+            case DType.Utf8 u -> io.github.dfa1.vortex.proto.ProtoDType.ofUtf8(
+                    new io.github.dfa1.vortex.proto.ProtoUtf8(u.nullable()));
+            case DType.Binary bin -> io.github.dfa1.vortex.proto.ProtoDType.ofBinary(
+                    new io.github.dfa1.vortex.proto.ProtoBinary(bin.nullable()));
             default -> throw new VortexException(EncodingId.VORTEX_VARIANT,
                     "shredded dtype not supported: " + dtype);
         };
     }
 
     /// Groups adjacent equal scalars into runs, appending each run's value and length.
-    private static void coalesceRuns(List<Scalar> values, List<Scalar> runValues, List<Long> runLengths) {
-        Scalar prev = null;
+    private static void coalesceRuns(List<ProtoScalar> values, List<ProtoScalar> runValues, List<Long> runLengths) {
+        ProtoScalar prev = null;
         long runLen = 0;
-        for (Scalar s : values) {
+        for (ProtoScalar s : values) {
             if (prev != null && prev.equals(s)) {
                 runLen++;
             } else {
@@ -140,8 +139,8 @@ public final class VariantEncodingEncoder implements EncodingEncoder {
 
     /// Builds a buffer-backed `vortex.constant` child for one variant scalar, appending
     /// its serialized scalar to `buffers`.
-    private static EncodeNode constantChild(Scalar value, List<MemorySegment> buffers) {
-        ScalarValue scalar = ScalarValue.ofVariantValue(value);
+    private static EncodeNode constantChild(ProtoScalar value, List<MemorySegment> buffers) {
+        ProtoScalarValue scalar = ProtoScalarValue.ofVariantValue(value);
         int bufIdx = buffers.size();
         buffers.add(MemorySegment.ofArray(scalar.encode()));
         return EncodeNode.leaf(EncodingId.VORTEX_CONSTANT, bufIdx);
@@ -149,7 +148,7 @@ public final class VariantEncodingEncoder implements EncodingEncoder {
 
     /// Builds a `vortex.chunked` node: child 0 is the cumulative `u64` run offsets, the
     /// rest are one constant child per run. Appends all buffers to `buffers`.
-    private static EncodeNode chunkedConstants(List<Scalar> runValues, List<Long> runLengths,
+    private static EncodeNode chunkedConstants(List<ProtoScalar> runValues, List<Long> runLengths,
             EncodeContext ctx, List<MemorySegment> buffers) {
         int nruns = runValues.size();
         long[] offsets = new long[nruns + 1];
@@ -165,6 +164,6 @@ public final class VariantEncodingEncoder implements EncodingEncoder {
         for (int i = 0; i < nruns; i++) {
             children[i + 1] = constantChild(runValues.get(i), buffers);
         }
-        return new EncodeNode(EncodingId.VORTEX_CHUNKED, ByteBuffer.wrap(new byte[0]), children, new int[0]);
+        return new EncodeNode(EncodingId.VORTEX_CHUNKED, MemorySegment.ofArray(new byte[0]), children, new int[0]);
     }
 }

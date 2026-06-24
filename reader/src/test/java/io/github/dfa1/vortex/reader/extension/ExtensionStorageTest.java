@@ -8,7 +8,7 @@ import io.github.dfa1.vortex.reader.array.MaskedArray;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-import java.nio.ByteBuffer;
+import java.lang.foreign.MemorySegment;
 import java.time.Instant;
 
 import static io.github.dfa1.vortex.reader.array.TestArrays.bools;
@@ -70,7 +70,7 @@ class ExtensionStorageTest {
         @Test
         void readsTagByte() {
             // Given — tag 3 = Seconds (ordinal)
-            DType.Extension ext = ext(ByteBuffer.wrap(new byte[]{3}));
+            DType.Extension ext = ext(java.lang.foreign.MemorySegment.ofArray(new byte[]{3}));
 
             // When / Then
             assertThat(ExtensionStorage.readUnit(ext)).isEqualTo(TimeUnit.Seconds);
@@ -84,11 +84,11 @@ class ExtensionStorageTest {
 
         @Test
         void emptyMetadata_throws() {
-            assertThatThrownBy(() -> ExtensionStorage.readUnit(ext(ByteBuffer.allocate(0))))
+            assertThatThrownBy(() -> ExtensionStorage.readUnit(ext(MemorySegment.ofArray(new byte[0]))))
                     .isInstanceOf(VortexException.class).hasMessageContaining("missing TimeUnit");
         }
 
-        private DType.Extension ext(ByteBuffer meta) {
+        private DType.Extension ext(java.lang.foreign.MemorySegment meta) {
             return new DType.Extension("vortex.timestamp", DType.I64, meta, false);
         }
     }
