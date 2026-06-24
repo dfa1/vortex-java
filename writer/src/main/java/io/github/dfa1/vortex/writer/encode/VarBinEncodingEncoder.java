@@ -4,12 +4,11 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.proto.ScalarValue;
-import io.github.dfa1.vortex.proto.VarBinMetadata;
+import io.github.dfa1.vortex.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.proto.ProtoVarBinMetadata;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
@@ -54,19 +53,19 @@ public final class VarBinEncodingEncoder implements EncodingEncoder {
             offsetsBuf.setAtIndex(PTypeIO.LE_LONG, (long) i + 1, pos);
         }
 
-        byte[] metaBytes = new VarBinMetadata(io.github.dfa1.vortex.proto.PType.fromValue(PType.I64.ordinal())).encode();
+        byte[] metaBytes = new ProtoVarBinMetadata(io.github.dfa1.vortex.proto.ProtoPType.fromValue(PType.I64.ordinal())).encode();
 
         byte[][] stats = minMaxStats(strings);
         byte[] statsMin = stats != null ? stats[0] : null;
         byte[] statsMax = stats != null ? stats[1] : null;
 
         EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
-        EncodeNode root = new EncodeNode(EncodingId.VORTEX_VARBIN, ByteBuffer.wrap(metaBytes),
+        EncodeNode root = new EncodeNode(EncodingId.VORTEX_VARBIN, MemorySegment.ofArray(metaBytes),
                 new EncodeNode[]{offsetsNode}, new int[]{0});
         return new EncodeResult(root, List.of(bytesBuf, offsetsBuf), statsMin, statsMax);
     }
 
-    /// Computes the serialised min/max string [ScalarValue] pair for a string array, skipping
+    /// Computes the serialised min/max string [ProtoScalarValue] pair for a string array, skipping
     /// `null` entries (lexicographic by [String#compareTo]). Returns `null` when every entry is
     /// `null`. Shared so the dictionary zone-map path computes per-chunk string min/max identically
     /// to the flat path.
@@ -90,6 +89,6 @@ public final class VarBinEncodingEncoder implements EncodingEncoder {
         if (minStr == null) {
             return null;
         }
-        return new byte[][]{ScalarValue.ofStringValue(minStr).encode(), ScalarValue.ofStringValue(maxStr).encode()};
+        return new byte[][]{ProtoScalarValue.ofStringValue(minStr).encode(), ProtoScalarValue.ofStringValue(maxStr).encode()};
     }
 }

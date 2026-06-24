@@ -2,8 +2,8 @@ package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.proto.ALPMetadata;
-import io.github.dfa1.vortex.proto.PatchesMetadata;
+import io.github.dfa1.vortex.proto.ProtoALPMetadata;
+import io.github.dfa1.vortex.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
@@ -56,7 +56,7 @@ class AlpEncodingDecoderTest {
     @Test
     void decode_nonPrimitiveDtype_throws() {
         // Given a Utf8 dtype on an ALP node
-        ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ALP, ByteBuffer.wrap(new ALPMetadata(0, 0, null).encode()),
+        ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ALP, MemorySegment.ofArray(new ProtoALPMetadata(0, 0, null).encode()),
                 new ArrayNode[0], new int[0]);
         DecodeContext ctx = new DecodeContext(node, DType.UTF8, 1,
                 new MemorySegment[0], REGISTRY, Arena.ofAuto());
@@ -85,8 +85,8 @@ class AlpEncodingDecoderTest {
         // Given a single encoded value but 4 logical rows (capacity < n) and no patches:
         // the decoder broadcasts it into a constant array
         ArrayNode enc = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
-        byte[] meta = new ALPMetadata(2, 0, null).encode(); // exp_e=2 -> *0.01
-        ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ALP, ByteBuffer.wrap(meta), new ArrayNode[]{enc}, new int[0]);
+        byte[] meta = new ProtoALPMetadata(2, 0, null).encode(); // exp_e=2 -> *0.01
+        ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ALP, MemorySegment.ofArray(meta), new ArrayNode[]{enc}, new int[0]);
         DecodeContext ctx = new DecodeContext(node, F64, 4, new MemorySegment[]{leLongs(123L)}, REGISTRY, Arena.ofAuto());
 
         // When
@@ -103,8 +103,8 @@ class AlpEncodingDecoderTest {
     void decode_f32_broadcastNoPatches_returnsConstant() {
         // Given single value, 3 rows, no patches
         ArrayNode enc = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
-        byte[] meta = new ALPMetadata(1, 0, null).encode(); // exp_e=1 -> *0.1
-        ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ALP, ByteBuffer.wrap(meta), new ArrayNode[]{enc}, new int[0]);
+        byte[] meta = new ProtoALPMetadata(1, 0, null).encode(); // exp_e=1 -> *0.1
+        ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ALP, MemorySegment.ofArray(meta), new ArrayNode[]{enc}, new int[0]);
         DecodeContext ctx = new DecodeContext(node, F32, 3, new MemorySegment[]{leInts(25)}, REGISTRY, Arena.ofAuto());
 
         // When
@@ -121,13 +121,13 @@ class AlpEncodingDecoderTest {
     void decode_f64_patches_withU8Indices() {
         // Given patches whose index child uses U8 storage — exercises the U8 arm of
         // readUnsigned (the encoder always emits U32 indices)
-        PatchesMetadata pm = new PatchesMetadata(1L, 0L, io.github.dfa1.vortex.proto.PType.U8, null, null, null);
-        byte[] meta = new ALPMetadata(2, 0, pm).encode(); // *0.01
+        ProtoPatchesMetadata pm = new ProtoPatchesMetadata(1L, 0L, io.github.dfa1.vortex.proto.ProtoPType.U8, null, null, null);
+        byte[] meta = new ProtoALPMetadata(2, 0, pm).encode(); // *0.01
 
         ArrayNode enc = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
         ArrayNode idx = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1});
         ArrayNode val = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{2});
-        ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ALP, ByteBuffer.wrap(meta),
+        ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ALP, MemorySegment.ofArray(meta),
                 new ArrayNode[]{enc, idx, val}, new int[0]);
 
         MemorySegment idxSeg = MemorySegment.ofArray(new byte[]{1}); // patch row 1
@@ -146,13 +146,13 @@ class AlpEncodingDecoderTest {
     @Test
     void decode_patches_nonUnsignedIndexPtype_throws() {
         // Given a signed (I32) patch-index ptype — readUnsigned rejects it
-        PatchesMetadata pm = new PatchesMetadata(1L, 0L, io.github.dfa1.vortex.proto.PType.I32, null, null, null);
-        byte[] meta = new ALPMetadata(2, 0, pm).encode();
+        ProtoPatchesMetadata pm = new ProtoPatchesMetadata(1L, 0L, io.github.dfa1.vortex.proto.ProtoPType.I32, null, null, null);
+        byte[] meta = new ProtoALPMetadata(2, 0, pm).encode();
 
         ArrayNode enc = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
         ArrayNode idx = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1});
         ArrayNode val = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{2});
-        ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ALP, ByteBuffer.wrap(meta),
+        ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ALP, MemorySegment.ofArray(meta),
                 new ArrayNode[]{enc, idx, val}, new int[0]);
 
         MemorySegment[] segs = {leLongs(100L, 0L), leInts(1), leDoubles(9.0)};

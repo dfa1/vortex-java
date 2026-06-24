@@ -7,16 +7,14 @@ import io.github.dfa1.vortex.reader.decode.DecodeContext;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.reader.ReadRegistry;
-import io.github.dfa1.vortex.proto.BitPackedMetadata;
-import io.github.dfa1.vortex.proto.PatchesMetadata;
-import io.github.dfa1.vortex.proto.ScalarValue;
+import io.github.dfa1.vortex.proto.ProtoBitPackedMetadata;
+import io.github.dfa1.vortex.proto.ProtoPatchesMetadata;
+import io.github.dfa1.vortex.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.reader.decode.BitpackedEncodingDecoder;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -34,16 +32,16 @@ class BitpackedConstantPatchesBroadcastTest {
 
         byte[] packed = new byte[128];
 
-        ScalarValue idxScalar = ScalarValue.ofUint64Value(2L);
+        ProtoScalarValue idxScalar = ProtoScalarValue.ofUint64Value(2L);
         byte[] idxScalarBytes = idxScalar.encode();
 
-        ScalarValue valScalar = ScalarValue.ofInt64Value(constantPatchValue);
+        ProtoScalarValue valScalar = ProtoScalarValue.ofInt64Value(constantPatchValue);
         byte[] valScalarBytes = valScalar.encode();
 
-        PatchesMetadata patches = new PatchesMetadata(numPatches, 0,
-                io.github.dfa1.vortex.proto.PType.U32, null, null, null);
-        BitPackedMetadata meta = new BitPackedMetadata(1, 0, patches);
-        ByteBuffer metaBuf = ByteBuffer.wrap(meta.encode()).order(ByteOrder.LITTLE_ENDIAN);
+        ProtoPatchesMetadata patches = new ProtoPatchesMetadata(numPatches, 0,
+                io.github.dfa1.vortex.proto.ProtoPType.U32, null, null, null);
+        ProtoBitPackedMetadata meta = new ProtoBitPackedMetadata(1, 0, patches);
+        MemorySegment metaBuf = MemorySegment.ofArray(meta.encode());
 
         try (Arena arena = Arena.ofConfined()) {
             MemorySegment packedSeg = arena.allocate(packed.length, 8);

@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.IoBounds;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.VortexFormat;
-import io.github.dfa1.vortex.fbs.Postscript;
+import io.github.dfa1.vortex.fbs.FbsPostscript;
 
 import java.io.IOException;
 import java.lang.foreign.Arena;
@@ -13,8 +13,6 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 
 /// Handle to a remote Vortex file read via HTTP Range requests.
 ///
@@ -105,10 +103,9 @@ public final class VortexHttpReader implements VortexHandle {
                     .formatted(trailer.postscriptLen(), TAIL_SIZE));
         }
 
-        ByteBuffer postscriptBuf = IoBounds.slice(tailSeg, psOffInTail, trailer.postscriptLen())
-                                       .asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
+        MemorySegment postscriptSeg = IoBounds.slice(tailSeg, psOffInTail, trailer.postscriptLen());
 
-        var ps = Postscript.getRootAsPostscript(postscriptBuf);
+        var ps = FbsPostscript.getRootAsFbsPostscript(postscriptSeg);
 
         var footerSpec = ps.footer();
         if (footerSpec == null) {
@@ -120,9 +117,9 @@ public final class VortexHttpReader implements VortexHandle {
         }
         var dtypeSpec = ps.dtype();
 
-        ByteBuffer footerBuf = fetchBlob(footerSpec.offset(), footerSpec.length(), tailStart, tail, uri, client);
-        ByteBuffer layoutBuf = fetchBlob(layoutSpec.offset(), layoutSpec.length(), tailStart, tail, uri, client);
-        ByteBuffer dtypeBuf = (dtypeSpec != null && dtypeSpec.length() > 0)
+        MemorySegment footerBuf = fetchBlob(footerSpec.offset(), footerSpec.length(), tailStart, tail, uri, client);
+        MemorySegment layoutBuf = fetchBlob(layoutSpec.offset(), layoutSpec.length(), tailStart, tail, uri, client);
+        MemorySegment dtypeBuf = (dtypeSpec != null && dtypeSpec.length() > 0)
                                   ? fetchBlob(dtypeSpec.offset(), dtypeSpec.length(), tailStart, tail, uri, client)
                                   : null;
 
@@ -205,21 +202,20 @@ public final class VortexHttpReader implements VortexHandle {
         }
     }
 
-    /// Returns a ByteBuffer for a blob at absolute file `offset` of `length` bytes.
+    /// Returns a MemorySegment for a blob at absolute file `offset` of `length` bytes.
     /// If the blob falls within the already-fetched `tail`, extracts it directly;
     /// otherwise fires an additional Range request.
-    private static ByteBuffer fetchBlob(
+    private static MemorySegment fetchBlob(
         long offset, long length,
         long tailStart, byte[] tail,
         URI uri, HttpClient client
     ) throws IOException {
         if (offset >= tailStart) {
             int relOffset = (int) (offset - tailStart);
-            return ByteBuffer.wrap(tail, relOffset, (int) length)
-                       .slice().order(ByteOrder.LITTLE_ENDIAN);
+            return MemorySegment.ofArray(tail).asSlice(relOffset, length);
         }
         byte[] bytes = fetchRange(uri, offset, offset + length - 1, client);
-        return ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
+        return MemorySegment.ofArray(bytes);
     }
 
     @Override

@@ -6,11 +6,10 @@ import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.proto.VarBinMetadata;
+import io.github.dfa1.vortex.proto.ProtoVarBinMetadata;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
 
 /// Read-only decoder for `vortex.varbin`.
 public final class VarBinEncodingDecoder implements EncodingDecoder {
@@ -26,14 +25,14 @@ public final class VarBinEncodingDecoder implements EncodingDecoder {
 
     @Override
     public Array decode(DecodeContext ctx) {
-        ByteBuffer rawMeta = ctx.metadata();
+        MemorySegment rawMeta = ctx.metadata();
         if (rawMeta == null) {
             throw new VortexException(EncodingId.VORTEX_VARBIN, "missing metadata");
         }
-        VarBinMetadata meta;
+        ProtoVarBinMetadata meta;
         try {
-            MemorySegment metaSeg = MemorySegment.ofBuffer(rawMeta.duplicate());
-            meta = VarBinMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            MemorySegment metaSeg = rawMeta;
+            meta = ProtoVarBinMetadata.decode(metaSeg, 0, metaSeg.byteSize());
         } catch (IOException e) {
             throw new VortexException(EncodingId.VORTEX_VARBIN, "invalid metadata", e);
         }

@@ -6,10 +6,9 @@ import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PrimitiveArrays;
 import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.proto.ScalarValue;
+import io.github.dfa1.vortex.proto.ProtoScalarValue;
 
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
 import java.util.List;
 
 /// Write-only encoder for `fastlanes.for` (Frame of Reference).
@@ -40,7 +39,7 @@ public final class FrameOfReferenceEncodingEncoder implements EncodingEncoder {
 
         long ref = computeRef(longs, n);
         MemorySegment residuals = toResidualBuffer(longs, ref, ptype, ctx);
-        ByteBuffer meta = buildForMeta(ref, ptype);
+        MemorySegment meta = buildForMeta(ref, ptype);
 
         EncodeNode child = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
         EncodeNode root = new EncodeNode(EncodingId.FASTLANES_FOR, meta, new EncodeNode[]{child}, new int[0]);
@@ -63,7 +62,7 @@ public final class FrameOfReferenceEncodingEncoder implements EncodingEncoder {
         if (ref == 0L && ptype.isUnsigned()) {
             return CascadeStep.notApplicable();
         }
-        ByteBuffer meta = buildForMeta(ref, ptype);
+        MemorySegment meta = buildForMeta(ref, ptype);
 
         EncodeNode partialRoot = new EncodeNode(EncodingId.FASTLANES_FOR, meta, new EncodeNode[1], new int[0]);
         ChildSlot slot = new ChildSlot(dtype, residualsAsNativeArray(longs, ref, ptype), 0);
@@ -81,13 +80,13 @@ public final class FrameOfReferenceEncodingEncoder implements EncodingEncoder {
         return ref;
     }
 
-    private static ByteBuffer buildForMeta(long ref, PType ptype) {
+    private static MemorySegment buildForMeta(long ref, PType ptype) {
         boolean unsigned = switch (ptype) {
             case U8, U16, U32, U64 -> true;
             default -> false;
         };
-        ScalarValue scalar = unsigned ? ScalarValue.ofUint64Value(ref) : ScalarValue.ofInt64Value(ref);
-        return ByteBuffer.wrap(scalar.encode());
+        ProtoScalarValue scalar = unsigned ? ProtoScalarValue.ofUint64Value(ref) : ProtoScalarValue.ofInt64Value(ref);
+        return MemorySegment.ofArray(scalar.encode());
     }
 
     private static Object residualsAsNativeArray(long[] longs, long ref, PType ptype) {

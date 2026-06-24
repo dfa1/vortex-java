@@ -5,7 +5,8 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.TimeUnit;
 
-import java.nio.ByteBuffer;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 
 /// Static factories and metadata accessors for `vortex.time` extension dtypes.
 ///
@@ -36,8 +37,7 @@ public final class TimeDtype {
             case Microseconds, Nanoseconds -> PType.I64;
             case Days -> throw new IllegalArgumentException("Days unit not valid for vortex.time");
         };
-        ByteBuffer meta = ByteBuffer.allocate(1);
-        meta.put(0, (byte) unit.ordinal());
+        MemorySegment meta = MemorySegment.ofArray(new byte[]{(byte) unit.ordinal()});
         return new DType.Extension(
                 ExtensionId.VORTEX_TIME.id(),
                 new DType.Primitive(storage, nullable),
@@ -51,10 +51,10 @@ public final class TimeDtype {
     /// @return the recorded time unit
     /// @throws VortexException if metadata is missing or empty
     public static TimeUnit readUnit(DType.Extension ext) {
-        ByteBuffer meta = ext.metadata();
-        if (meta == null || !meta.hasRemaining()) {
+        MemorySegment meta = ext.metadata();
+        if (meta == null || meta.byteSize() == 0) {
             throw new VortexException("missing TimeUnit metadata byte for " + ext.extensionId());
         }
-        return TimeUnit.fromTag(meta.get(meta.position()));
+        return TimeUnit.fromTag(meta.get(ValueLayout.JAVA_BYTE, 0));
     }
 }

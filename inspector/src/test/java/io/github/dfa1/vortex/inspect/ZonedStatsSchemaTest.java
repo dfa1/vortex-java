@@ -1,12 +1,12 @@
 package io.github.dfa1.vortex.inspect;
 
+import java.lang.foreign.MemorySegment;
+
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.EnumSet;
 import java.util.List;
 
@@ -19,8 +19,8 @@ class ZonedStatsSchemaTest {
         @Test
         void readsLittleEndianU32() {
             // Given — 8192 = 0x2000 stored as LE u32
-            ByteBuffer meta = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
-            meta.putInt(0, 8192);
+            MemorySegment meta = MemorySegment.ofArray(new byte[4]);
+            meta.set(io.github.dfa1.vortex.encoding.PTypeIO.LE_INT, 0, 8192);
 
             // When
             long result = ZonedStatsSchema.zoneLength(meta);
@@ -41,7 +41,7 @@ class ZonedStatsSchemaTest {
         @Test
         void returnsZeroForShortMetadata() {
             // Given — only 2 bytes (insufficient for a u32)
-            ByteBuffer meta = ByteBuffer.allocate(2);
+            MemorySegment meta = MemorySegment.ofArray(new byte[2]);
 
             // When
             long result = ZonedStatsSchema.zoneLength(meta);
@@ -56,7 +56,7 @@ class ZonedStatsSchemaTest {
         @Test
         void decodesBitsetLsbFirst() {
             // Given — bits for Min (4) and Max (3) set: 0b0001_1000 = 0x18
-            ByteBuffer meta = metaWithBitset(8192, 0x18);
+            MemorySegment meta = metaWithBitset(8192, 0x18);
 
             // When
             List<ZonedStatsSchema.Stat> stats = ZonedStatsSchema.presentStats(meta);
@@ -70,10 +70,10 @@ class ZonedStatsSchemaTest {
             // Given — set bits for MAX (3), MIN (4), NULL_COUNT (6), NAN_COUNT (8)
             // byte 0: 0b0101_1000 = 0x58 (bits 3,4,6)
             // byte 1: 0b0000_0001 = 0x01 (bit 8 → bit 0 of second byte)
-            ByteBuffer meta = ByteBuffer.allocate(4 + 2).order(ByteOrder.LITTLE_ENDIAN);
-            meta.putInt(0, 8192);
-            meta.put(4, (byte) 0x58);
-            meta.put(5, (byte) 0x01);
+            MemorySegment meta = MemorySegment.ofArray(new byte[4 + 2]);
+            meta.set(io.github.dfa1.vortex.encoding.PTypeIO.LE_INT, 0, 8192);
+            meta.set(java.lang.foreign.ValueLayout.JAVA_BYTE, 4, (byte) 0x58);
+            meta.set(java.lang.foreign.ValueLayout.JAVA_BYTE, 5, (byte) 0x01);
 
             // When
             List<ZonedStatsSchema.Stat> stats = ZonedStatsSchema.presentStats(meta);
@@ -89,7 +89,7 @@ class ZonedStatsSchemaTest {
         @Test
         void returnsEmptyWhenMetadataHasNoBitset() {
             // Given — exactly 4 bytes (zone length only, no bitset trailer)
-            ByteBuffer meta = ByteBuffer.allocate(4);
+            MemorySegment meta = MemorySegment.ofArray(new byte[4]);
 
             // When
             List<ZonedStatsSchema.Stat> stats = ZonedStatsSchema.presentStats(meta);
@@ -102,10 +102,10 @@ class ZonedStatsSchemaTest {
         void ignoresFutureStatBits() {
             // Given — bit 31 set (beyond any known stat) plus MAX/MIN
             // byte 0: 0x18 (MAX|MIN), bytes 1-2: 0, byte 3: 0x80 (bit 31)
-            ByteBuffer meta = ByteBuffer.allocate(4 + 4).order(ByteOrder.LITTLE_ENDIAN);
-            meta.putInt(0, 8192);
-            meta.put(4, (byte) 0x18);
-            meta.put(7, (byte) 0x80);
+            MemorySegment meta = MemorySegment.ofArray(new byte[4 + 4]);
+            meta.set(io.github.dfa1.vortex.encoding.PTypeIO.LE_INT, 0, 8192);
+            meta.set(java.lang.foreign.ValueLayout.JAVA_BYTE, 4, (byte) 0x18);
+            meta.set(java.lang.foreign.ValueLayout.JAVA_BYTE, 7, (byte) 0x80);
 
             // When
             List<ZonedStatsSchema.Stat> stats = ZonedStatsSchema.presentStats(meta);
@@ -244,10 +244,10 @@ class ZonedStatsSchemaTest {
         }
     }
 
-    private static ByteBuffer metaWithBitset(int zoneLen, int firstByte) {
-        ByteBuffer meta = ByteBuffer.allocate(4 + 1).order(ByteOrder.LITTLE_ENDIAN);
-        meta.putInt(0, zoneLen);
-        meta.put(4, (byte) firstByte);
+    private static MemorySegment metaWithBitset(int zoneLen, int firstByte) {
+        MemorySegment meta = MemorySegment.ofArray(new byte[4 + 1]);
+        meta.set(io.github.dfa1.vortex.encoding.PTypeIO.LE_INT, 0, zoneLen);
+        meta.set(java.lang.foreign.ValueLayout.JAVA_BYTE, 4, (byte) firstByte);
         return meta;
     }
 }

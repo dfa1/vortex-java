@@ -5,10 +5,9 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.TimeUnit;
-import io.github.dfa1.vortex.proto.DateTimePartsMetadata;
+import io.github.dfa1.vortex.proto.ProtoDateTimePartsMetadata;
 
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -16,8 +15,8 @@ import java.util.List;
 public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
 
     private static final long SECONDS_PER_DAY = 86_400L;
-    private static final io.github.dfa1.vortex.proto.PType I64_PROTO =
-            io.github.dfa1.vortex.proto.PType.fromValue(PType.I64.ordinal());
+    private static final io.github.dfa1.vortex.proto.ProtoPType I64_PROTO =
+            io.github.dfa1.vortex.proto.ProtoPType.fromValue(PType.I64.ordinal());
 
     /// Public no-arg constructor required by [java.util.ServiceLoader].
     public DateTimePartsEncodingEncoder() {
@@ -38,13 +37,12 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
         DType.Extension ext = (DType.Extension) dtype;
         DateTimePartsData d = (DateTimePartsData) data;
 
-        ByteBuffer extMeta = ext.metadata();
-        if (extMeta == null || extMeta.remaining() < 3) {
+        MemorySegment extMeta = ext.metadata();
+        if (extMeta == null || extMeta.byteSize() < 3) {
             throw new VortexException(EncodingId.VORTEX_DATETIMEPARTS,
                     "extension metadata missing or too short");
         }
-        byte[] extBytes = new byte[extMeta.remaining()];
-        extMeta.duplicate().get(extBytes);
+        byte[] extBytes = extMeta.toArray(java.lang.foreign.ValueLayout.JAVA_BYTE);
         TimeUnit unit = TimeUnit.fromTag(extBytes[0]);
 
         long divisor = unit.divisor();
@@ -87,11 +85,11 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
         EncodeNode secondsNode = EncodeNode.remapBufferIndices(secondsResult.rootNode(), off1);
         EncodeNode subsecondsNode = EncodeNode.remapBufferIndices(subsecondsResult.rootNode(), off2);
 
-        byte[] metaBytes = new DateTimePartsMetadata(I64_PROTO, I64_PROTO, I64_PROTO).encode();
+        byte[] metaBytes = new ProtoDateTimePartsMetadata(I64_PROTO, I64_PROTO, I64_PROTO).encode();
 
         EncodeNode root = new EncodeNode(
                 EncodingId.VORTEX_DATETIMEPARTS,
-                ByteBuffer.wrap(metaBytes),
+                MemorySegment.ofArray(metaBytes),
                 new EncodeNode[]{daysNode, secondsNode, subsecondsNode},
                 new int[]{});
         return new EncodeResult(root, List.copyOf(allBuffers), null, null);
@@ -103,9 +101,8 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
             return CascadeStep.notApplicable();
         }
         DType.Extension ext = (DType.Extension) dtype;
-        ByteBuffer extMeta = ext.metadata();
-        byte[] extBytes = new byte[extMeta.remaining()];
-        extMeta.duplicate().get(extBytes);
+        MemorySegment extMeta = ext.metadata();
+        byte[] extBytes = extMeta.toArray(java.lang.foreign.ValueLayout.JAVA_BYTE);
         TimeUnit unit = TimeUnit.fromTag(extBytes[0]);
 
         long divisor = unit.divisor();
@@ -129,11 +126,11 @@ public final class DateTimePartsEncodingEncoder implements EncodingEncoder {
             subseconds[i] = rem % divisor;
         }
 
-        byte[] metaBytes = new DateTimePartsMetadata(I64_PROTO, I64_PROTO, I64_PROTO).encode();
+        byte[] metaBytes = new ProtoDateTimePartsMetadata(I64_PROTO, I64_PROTO, I64_PROTO).encode();
 
         EncodeNode partialRoot = new EncodeNode(
                 EncodingId.VORTEX_DATETIMEPARTS,
-                ByteBuffer.wrap(metaBytes),
+                MemorySegment.ofArray(metaBytes),
                 new EncodeNode[3],
                 new int[0]);
 

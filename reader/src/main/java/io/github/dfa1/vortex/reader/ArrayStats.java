@@ -1,11 +1,10 @@
 package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.proto.ScalarValue;
+import io.github.dfa1.vortex.proto.ProtoScalarValue;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
 /// Per-array statistics embedded in the encoding tree.
@@ -33,17 +32,17 @@ public record ArrayStats(
         return EMPTY;
     }
 
-    /// Parses stats from a FlatBuffers [io.github.dfa1.vortex.fbs.ArrayStats] table.
+    /// Parses stats from a FlatBuffers [io.github.dfa1.vortex.fbs.FbsArrayStats] table.
     /// Returns an empty instance when `fbs` is `null` or carries no min/max and no null count.
     ///
     /// @param fbs the FlatBuffers stats table, or `null`
     /// @return parsed stats, or an empty instance if no usable data is present
-    public static ArrayStats fromFbs(io.github.dfa1.vortex.fbs.ArrayStats fbs) {
+    public static ArrayStats fromFbs(io.github.dfa1.vortex.fbs.FbsArrayStats fbs) {
         if (fbs == null) {
             return EMPTY;
         }
-        Object min = decodeScalar(fbs.minAsByteBuffer());
-        Object max = decodeScalar(fbs.maxAsByteBuffer());
+        Object min = decodeScalar(fbs.minAsSegment());
+        Object max = decodeScalar(fbs.maxAsSegment());
         Long nullCount = fbs.hasNullCount() ? fbs.nullCount() : null;
         if (min == null && max == null && nullCount == null) {
             return EMPTY;
@@ -51,13 +50,12 @@ public record ArrayStats(
         return new ArrayStats(min, max, null, nullCount, null, null);
     }
 
-    private static Object decodeScalar(ByteBuffer bytes) {
-        if (bytes == null || !bytes.hasRemaining()) {
+    private static Object decodeScalar(MemorySegment seg) {
+        if (seg == null || seg.byteSize() == 0) {
             return null;
         }
         try {
-            MemorySegment seg = MemorySegment.ofBuffer(bytes.duplicate());
-            ScalarValue sv = ScalarValue.decode(seg, 0, seg.byteSize());
+            ProtoScalarValue sv = ProtoScalarValue.decode(seg, 0, seg.byteSize());
             if (sv.int64_value() != null) {
                 return sv.int64_value();
             }

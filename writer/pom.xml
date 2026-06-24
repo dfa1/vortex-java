@@ -21,10 +21,6 @@
 			<artifactId>vortex-core</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>com.google.flatbuffers</groupId>
-			<artifactId>flatbuffers-java</artifactId>
-		</dependency>
-		<dependency>
 			<groupId>io.airlift</groupId>
 			<artifactId>aircompressor-v3</artifactId>
 			<optional>true</optional>

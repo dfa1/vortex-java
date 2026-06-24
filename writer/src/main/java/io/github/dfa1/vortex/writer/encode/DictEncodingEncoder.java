@@ -5,14 +5,13 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.proto.DictMetadata;
-import io.github.dfa1.vortex.proto.ScalarValue;
-import io.github.dfa1.vortex.proto.VarBinMetadata;
+import io.github.dfa1.vortex.proto.ProtoDictMetadata;
+import io.github.dfa1.vortex.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.proto.ProtoVarBinMetadata;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -74,7 +73,7 @@ public final class DictEncodingEncoder implements EncodingEncoder {
             writeCodeToSeg(codesBuf, codePType, i, readCodeFromArr(d.codesArr(), codePType, i));
         }
 
-        ByteBuffer meta = ByteBuffer.allocate(1).put(0, (byte) codePType.ordinal());
+        MemorySegment meta = MemorySegment.ofArray(new byte[]{(byte) codePType.ordinal()});
         EncodeNode valuesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
         EncodeNode codesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
         EncodeNode rootNode = new EncodeNode(
@@ -93,7 +92,7 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         DictData d = buildDictData(dtype, data, ctx);
         PType codePType = d.codePType();
 
-        ByteBuffer meta = ByteBuffer.allocate(1).put(0, (byte) codePType.ordinal());
+        MemorySegment meta = MemorySegment.ofArray(new byte[]{(byte) codePType.ordinal()});
         EncodeNode valuesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
         EncodeNode partialRoot = new EncodeNode(
                 EncodingId.VORTEX_DICT, meta,
@@ -143,32 +142,32 @@ public final class DictEncodingEncoder implements EncodingEncoder {
             writeCodeToSeg(codesBuf, codePType, i, valueMap.get(strings[i]));
         }
 
-        byte[] metaBytes = new DictMetadata(
+        byte[] metaBytes = new ProtoDictMetadata(
                 dictSize,
-                io.github.dfa1.vortex.proto.PType.fromValue(codePType.ordinal()),
+                io.github.dfa1.vortex.proto.ProtoPType.fromValue(codePType.ordinal()),
                 null,
                 null
         ).encode();
 
-        byte[] varBinMetaBytes = new VarBinMetadata(
-                io.github.dfa1.vortex.proto.PType.fromValue(PType.I64.ordinal())
+        byte[] varBinMetaBytes = new ProtoVarBinMetadata(
+                io.github.dfa1.vortex.proto.ProtoPType.fromValue(PType.I64.ordinal())
         ).encode();
 
         EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
         EncodeNode valuesNode = new EncodeNode(EncodingId.VORTEX_VARBIN,
-                ByteBuffer.wrap(varBinMetaBytes),
+                MemorySegment.ofArray(varBinMetaBytes),
                 new EncodeNode[]{offsetsNode},
                 new int[]{0});
         EncodeNode codesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
         EncodeNode root = new EncodeNode(
-                EncodingId.VORTEX_DICT, ByteBuffer.wrap(metaBytes),
+                EncodingId.VORTEX_DICT, MemorySegment.ofArray(metaBytes),
                 new EncodeNode[]{codesNode, valuesNode},
                 new int[0]);
 
         String minStr = valueMap.keySet().stream().min(String::compareTo).orElse(null);
         String maxStr = valueMap.keySet().stream().max(String::compareTo).orElse(null);
-        byte[] statsMin = minStr != null ? ScalarValue.ofStringValue(minStr).encode() : null;
-        byte[] statsMax = maxStr != null ? ScalarValue.ofStringValue(maxStr).encode() : null;
+        byte[] statsMin = minStr != null ? ProtoScalarValue.ofStringValue(minStr).encode() : null;
+        byte[] statsMax = maxStr != null ? ProtoScalarValue.ofStringValue(maxStr).encode() : null;
         return new EncodeResult(root, List.of(dictBytesBuf, dictOffsetsBuf, codesBuf), statsMin, statsMax);
     }
 

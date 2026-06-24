@@ -29,3 +29,4 @@ Each ADR is a Markdown file named `NNNN-short-title.md`. Use `template.md` as th
 | 0014 | Variant encoding: chunked constants now, parquet.variant later | Completed   | 0.8.0 |
 | 0015 | Drop Materialized fallbacks once Lazy has shipped | Completed | 0.8.0 |
 | 0016 | vortex-arrow bridge module for Arrow interop  | Proposed  |          |
+| 0017 | In-house FlatBuffers codegen + MemorySegment runtime | Accepted  |          |

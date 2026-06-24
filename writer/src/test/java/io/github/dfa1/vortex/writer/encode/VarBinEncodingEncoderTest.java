@@ -10,7 +10,7 @@ import io.github.dfa1.vortex.reader.decode.DecodeContext;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
-import io.github.dfa1.vortex.proto.VarBinMetadata;
+import io.github.dfa1.vortex.proto.ProtoVarBinMetadata;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.VarBinEncodingDecoder;
 import org.junit.jupiter.api.Nested;
@@ -182,8 +182,8 @@ class VarBinEncodingEncoderTest {
             EncodeResult result = ENCODER.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
 
             // Then
-            var metaSeg = java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate());
-            VarBinMetadata meta = VarBinMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            var metaSeg = result.rootNode().metadata();
+            ProtoVarBinMetadata meta = ProtoVarBinMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 
             assertThat(meta.offsets_ptype().value()).isEqualTo(7);
         }

@@ -24,10 +24,6 @@
 			<groupId>io.github.dfa1.vortex</groupId>
 			<artifactId>vortex-reader</artifactId>
 		</dependency>
-		<dependency>
-			<groupId>com.google.flatbuffers</groupId>
-			<artifactId>flatbuffers-java</artifactId>
-		</dependency>
 
 		<!-- testing -->
 		<dependency>

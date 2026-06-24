@@ -5,8 +5,8 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.proto.ScalarValue;
-import io.github.dfa1.vortex.proto.SequenceMetadata;
+import io.github.dfa1.vortex.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.proto.ProtoSequenceMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
 import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
@@ -20,7 +20,6 @@ import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
-import java.nio.ByteBuffer;
 
 /// Read-only decoder for `vortex.sequence` — `A[i] = base + i * multiplier`.
 public final class SequenceEncodingDecoder implements EncodingDecoder {
@@ -36,14 +35,14 @@ public final class SequenceEncodingDecoder implements EncodingDecoder {
 
     @Override
     public Array decode(DecodeContext ctx) {
-        ByteBuffer metaBuf = ctx.metadata();
-        if (metaBuf == null || !metaBuf.hasRemaining()) {
+        MemorySegment metaBuf = ctx.metadata();
+        if (metaBuf == null || metaBuf.byteSize() == 0) {
             throw new VortexException(EncodingId.VORTEX_SEQUENCE, "missing metadata");
         }
-        SequenceMetadata meta;
+        ProtoSequenceMetadata meta;
         try {
-            MemorySegment seg = MemorySegment.ofBuffer(metaBuf.duplicate());
-            meta = SequenceMetadata.decode(seg, 0, seg.byteSize());
+            MemorySegment seg = metaBuf;
+            meta = ProtoSequenceMetadata.decode(seg, 0, seg.byteSize());
         } catch (IOException e) {
             throw new VortexException(EncodingId.VORTEX_SEQUENCE, "invalid metadata", e);
         }
@@ -63,7 +62,7 @@ public final class SequenceEncodingDecoder implements EncodingDecoder {
     }
 
     private static Array decodeInteger(
-            SequenceMetadata meta, PType pt, long n, DType dtype, SegmentAllocator arena
+            ProtoSequenceMetadata meta, PType pt, long n, DType dtype, SegmentAllocator arena
     ) {
         long base = signedValue(meta.base());
         long mul = signedValue(meta.multiplier());
@@ -88,7 +87,7 @@ public final class SequenceEncodingDecoder implements EncodingDecoder {
         };
     }
 
-    private static Array decodeF32(SequenceMetadata meta, long n, DType dtype, SegmentAllocator arena) {
+    private static Array decodeF32(ProtoSequenceMetadata meta, long n, DType dtype, SegmentAllocator arena) {
         float base = meta.base().f32_value();
         float mul = meta.multiplier().f32_value();
         MemorySegment seg = arena.allocate(n * 4L);
@@ -98,7 +97,7 @@ public final class SequenceEncodingDecoder implements EncodingDecoder {
         return new MaterializedFloatArray(dtype, n, seg);
     }
 
-    private static Array decodeF64(SequenceMetadata meta, long n, DType dtype, SegmentAllocator arena) {
+    private static Array decodeF64(ProtoSequenceMetadata meta, long n, DType dtype, SegmentAllocator arena) {
         double base = meta.base().f64_value();
         double mul = meta.multiplier().f64_value();
         MemorySegment seg = arena.allocate(n * 8L);
@@ -108,7 +107,7 @@ public final class SequenceEncodingDecoder implements EncodingDecoder {
         return new MaterializedDoubleArray(dtype, n, seg);
     }
 
-    private static Array decodeF16(SequenceMetadata meta, long n, DType dtype, SegmentAllocator arena) {
+    private static Array decodeF16(ProtoSequenceMetadata meta, long n, DType dtype, SegmentAllocator arena) {
         short baseShort = (short) meta.base().f16_value().longValue();
         short mulShort = (short) meta.multiplier().f16_value().longValue();
         float base = Float.float16ToFloat(baseShort);
@@ -120,7 +119,7 @@ public final class SequenceEncodingDecoder implements EncodingDecoder {
         return new MaterializedFloat16Array(dtype, n, seg);
     }
 
-    private static long signedValue(ScalarValue sv) {
+    private static long signedValue(ProtoScalarValue sv) {
         if (sv == null) {
             return 0L;
         }

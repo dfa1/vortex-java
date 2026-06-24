@@ -7,13 +7,12 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.proto.ZstdFrameMetadata;
-import io.github.dfa1.vortex.proto.ZstdMetadata;
+import io.github.dfa1.vortex.proto.ProtoZstdFrameMetadata;
+import io.github.dfa1.vortex.proto.ProtoZstdMetadata;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
@@ -60,11 +59,11 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
 
     private static EncodeResult buildResult(byte[] raw, long n) {
         byte[] compressed = compress(raw);
-        byte[] meta = new ZstdMetadata(
+        byte[] meta = new ProtoZstdMetadata(
                 0,
-                java.util.List.of(new ZstdFrameMetadata(raw.length, n))
+                java.util.List.of(new ProtoZstdFrameMetadata(raw.length, n))
         ).encode();
-        EncodeNode root = new EncodeNode(EncodingId.VORTEX_ZSTD, ByteBuffer.wrap(meta),
+        EncodeNode root = new EncodeNode(EncodingId.VORTEX_ZSTD, MemorySegment.ofArray(meta),
                 new EncodeNode[0], new int[]{0});
         return new EncodeResult(root, List.of(MemorySegment.ofArray(compressed)), null, null);
     }

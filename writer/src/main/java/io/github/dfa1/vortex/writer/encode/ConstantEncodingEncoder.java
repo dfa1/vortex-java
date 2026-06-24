@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.proto.ScalarValue;
+import io.github.dfa1.vortex.proto.ProtoScalarValue;
 
 import java.lang.foreign.MemorySegment;
 
@@ -54,7 +54,7 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
             throw new VortexException(EncodingId.VORTEX_CONSTANT, "not a constant array");
         }
         long firstRaw = readFirstRaw(data, ptype);
-        ScalarValue scalar = buildScalar(ptype, firstRaw);
+        ProtoScalarValue scalar = buildScalar(ptype, firstRaw);
         return EncodeResult.simple(EncodingId.VORTEX_CONSTANT, MemorySegment.ofArray(scalar.encode()));
     }
 
@@ -106,12 +106,12 @@ public final class ConstantEncodingEncoder implements EncodingEncoder {
         return true;
     }
 
-    private static ScalarValue buildScalar(PType ptype, long rawBits) {
+    private static ProtoScalarValue buildScalar(PType ptype, long rawBits) {
         return switch (ptype) {
-            case U8, U16, U32, U64 -> ScalarValue.ofUint64Value(rawBits);
-            case I8, I16, I32, I64 -> ScalarValue.ofInt64Value(rawBits);
-            case F32 -> ScalarValue.ofF32Value(Float.intBitsToFloat((int) rawBits));
-            case F64 -> ScalarValue.ofF64Value(Double.longBitsToDouble(rawBits));
+            case U8, U16, U32, U64 -> ProtoScalarValue.ofUint64Value(rawBits);
+            case I8, I16, I32, I64 -> ProtoScalarValue.ofInt64Value(rawBits);
+            case F32 -> ProtoScalarValue.ofF32Value(Float.intBitsToFloat((int) rawBits));
+            case F64 -> ProtoScalarValue.ofF64Value(Double.longBitsToDouble(rawBits));
             default -> throw new VortexException(EncodingId.VORTEX_CONSTANT, "unsupported ptype: " + ptype);
         };
     }

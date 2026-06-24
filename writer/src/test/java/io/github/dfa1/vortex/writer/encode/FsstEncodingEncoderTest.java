@@ -11,7 +11,7 @@ import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
-import io.github.dfa1.vortex.proto.FSSTMetadata;
+import io.github.dfa1.vortex.proto.ProtoFSSTMetadata;
 import io.github.dfa1.vortex.reader.decode.FsstEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
 import org.junit.jupiter.api.Nested;
@@ -23,7 +23,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.stream.Stream;
 
@@ -155,14 +154,14 @@ class FsstEncodingEncoderTest {
 
             MemorySegment[] segs = {symBuf, symLenBuf, compBuf, uncompLenBuf, codesOffBuf};
 
-            byte[] metaBytes = new FSSTMetadata(io.github.dfa1.vortex.proto.PType.fromValue(PType.I32.ordinal()), io.github.dfa1.vortex.proto.PType.fromValue(PType.I32.ordinal())).encode();
+            byte[] metaBytes = new ProtoFSSTMetadata(io.github.dfa1.vortex.proto.ProtoPType.fromValue(PType.I32.ordinal()), io.github.dfa1.vortex.proto.ProtoPType.fromValue(PType.I32.ordinal())).encode();
 
             ArrayNode uncompLensNode = ArrayNode.of(
                     EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{3});
             ArrayNode codesOffNode = ArrayNode.of(
                     EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{4});
             ArrayNode root = ArrayNode.of(
-                    EncodingId.VORTEX_FSST, ByteBuffer.wrap(metaBytes),
+                    EncodingId.VORTEX_FSST, MemorySegment.ofArray(metaBytes),
                     new ArrayNode[]{uncompLensNode, codesOffNode}, new int[]{0, 1, 2});
 
             return new DecodeContext(root, DTypes.UTF8, n, segs, REGISTRY, arena);
@@ -249,8 +248,8 @@ class FsstEncodingEncoderTest {
 
             // When
             EncodeResult result = ENCODER.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
-            var metaSeg = java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate());
-            FSSTMetadata meta = FSSTMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            var metaSeg = result.rootNode().metadata();
+            ProtoFSSTMetadata meta = ProtoFSSTMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 
             // Then
             assertThat(meta.uncompressed_lengths_ptype().value()).isEqualTo(6);

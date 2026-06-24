@@ -5,8 +5,8 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.proto.BitPackedMetadata;
-import io.github.dfa1.vortex.proto.PatchesMetadata;
+import io.github.dfa1.vortex.proto.ProtoBitPackedMetadata;
+import io.github.dfa1.vortex.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
 import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
@@ -16,7 +16,6 @@ import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.nio.ByteBuffer;
 
 /// Read-only decoder for `fastlanes.bitpacked`.
 public final class BitpackedEncodingDecoder implements EncodingDecoder {
@@ -33,18 +32,18 @@ public final class BitpackedEncodingDecoder implements EncodingDecoder {
 
     @Override
     public Array decode(DecodeContext ctx) {
-        ByteBuffer rawMeta = ctx.metadata();
-        // proto3 elides default-valued fields, so BitPackedMetadata(0, 0, null) serialises
+        MemorySegment rawMeta = ctx.metadata();
+        // proto3 elides default-valued fields, so ProtoBitPackedMetadata(0, 0, null) serialises
         // to a 0-byte payload and the writer skips the empty vector. Treat absent metadata
         // as all-defaults rather than rejecting — happens when bit_width=0 (constant
         // residuals nested under FoR / RLE).
-        BitPackedMetadata meta;
-        if (rawMeta == null || !rawMeta.hasRemaining()) {
-            meta = new BitPackedMetadata(0, 0, null);
+        ProtoBitPackedMetadata meta;
+        if (rawMeta == null || rawMeta.byteSize() == 0) {
+            meta = new ProtoBitPackedMetadata(0, 0, null);
         } else {
             try {
-                MemorySegment metaSeg = MemorySegment.ofBuffer(rawMeta.duplicate());
-                meta = BitPackedMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+                MemorySegment metaSeg = rawMeta;
+                meta = ProtoBitPackedMetadata.decode(metaSeg, 0, metaSeg.byteSize());
             } catch (IOException e) {
                 throw new VortexException(EncodingId.FASTLANES_BITPACKED, "invalid metadata", e);
             }
@@ -461,7 +460,7 @@ public final class BitpackedEncodingDecoder implements EncodingDecoder {
         }
     }
 
-    private static void applyPatches(DecodeContext ctx, PatchesMetadata pm,
+    private static void applyPatches(DecodeContext ctx, ProtoPatchesMetadata pm,
             MemorySegment out, int elemBytes) {
         long numPatches = pm.len();
         if (numPatches == 0) {
@@ -497,7 +496,7 @@ public final class BitpackedEncodingDecoder implements EncodingDecoder {
         };
     }
 
-    private static PType ptypeFromProto(io.github.dfa1.vortex.proto.PType proto) {
+    private static PType ptypeFromProto(io.github.dfa1.vortex.proto.ProtoPType proto) {
         return PType.fromOrdinal(proto.value());
     }
 }

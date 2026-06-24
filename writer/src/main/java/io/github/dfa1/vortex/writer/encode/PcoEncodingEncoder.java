@@ -4,13 +4,12 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.proto.PcoChunkInfo;
-import io.github.dfa1.vortex.proto.PcoMetadata;
-import io.github.dfa1.vortex.proto.PcoPageInfo;
+import io.github.dfa1.vortex.proto.ProtoPcoChunkInfo;
+import io.github.dfa1.vortex.proto.ProtoPcoMetadata;
+import io.github.dfa1.vortex.proto.ProtoPcoPageInfo;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -89,7 +88,7 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
 
             List<MemorySegment> chunkMetas = new ArrayList<>();
             List<MemorySegment> pages = new ArrayList<>();
-            List<PcoChunkInfo> chunks = new ArrayList<>();
+            List<ProtoPcoChunkInfo> chunks = new ArrayList<>();
 
             int chunkStart = 0;
             while (chunkStart < n) {
@@ -98,14 +97,14 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
                 ChunkResult result = encodeChunk(chunkLatents, ptype, dtypeSize, ctx.arena());
                 chunkMetas.add(result.chunkMeta());
                 pages.add(result.page());
-                chunks.add(new PcoChunkInfo(List.of(new PcoPageInfo(result.pageN()))));
+                chunks.add(new ProtoPcoChunkInfo(List.of(new ProtoPcoPageInfo(result.pageN()))));
                 chunkStart = chunkEnd;
             }
 
             List<MemorySegment> buffers = new ArrayList<>(chunkMetas);
             buffers.addAll(pages);
             int[] allBufIdxs = IntStream.range(0, buffers.size()).toArray();
-            ByteBuffer metaBuf = buildMetadata(chunks);
+            MemorySegment metaBuf = buildMetadata(chunks);
             EncodeNode node = new EncodeNode(EncodingId.VORTEX_PCO, metaBuf, new EncodeNode[0], allBufIdxs);
             return new EncodeResult(node, buffers, null, null);
         }
@@ -576,16 +575,16 @@ public final class PcoEncodingEncoder implements EncodingEncoder {
 
         private static EncodeResult encodeEmpty() {
             byte[] header = {PCO_FORMAT_MAJOR, PCO_FORMAT_MINOR};
-            PcoMetadata meta = new PcoMetadata(header, List.of());
-            ByteBuffer metaBuf = ByteBuffer.wrap(meta.encode());
+            ProtoPcoMetadata meta = new ProtoPcoMetadata(header, List.of());
+            MemorySegment metaBuf = MemorySegment.ofArray(meta.encode());
             EncodeNode node = new EncodeNode(EncodingId.VORTEX_PCO, metaBuf, new EncodeNode[0], new int[0]);
             return new EncodeResult(node, List.of(), null, null);
         }
 
-        private static ByteBuffer buildMetadata(List<PcoChunkInfo> chunks) {
+        private static MemorySegment buildMetadata(List<ProtoPcoChunkInfo> chunks) {
             byte[] header = {PCO_FORMAT_MAJOR, PCO_FORMAT_MINOR};
-            PcoMetadata meta = new PcoMetadata(header, chunks);
-            return ByteBuffer.wrap(meta.encode());
+            ProtoPcoMetadata meta = new ProtoPcoMetadata(header, chunks);
+            return MemorySegment.ofArray(meta.encode());
         }
 
         // ── latent conversion ─────────────────────────────────────────────────

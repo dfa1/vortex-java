@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.encoding.TestSegments;
-import io.github.dfa1.vortex.proto.DeltaMetadata;
+import io.github.dfa1.vortex.proto.ProtoDeltaMetadata;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LongArray;
@@ -15,7 +15,6 @@ import org.junit.jupiter.params.provider.EnumSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -57,7 +56,7 @@ class DeltaEncodingDecoderTest {
         // means every decoded row is zero.
         PType ptype = PType.I64;
         long deltasLen = FL_CHUNK_SIZE;
-        ByteBuffer meta = ByteBuffer.wrap(new DeltaMetadata(deltasLen, 0).encode());
+        MemorySegment meta = MemorySegment.ofArray(new ProtoDeltaMetadata(deltasLen, 0).encode());
 
         ArrayNode bases = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
         ArrayNode deltas = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1});
@@ -82,7 +81,7 @@ class DeltaEncodingDecoderTest {
         // Given a constant base of 5 broadcast across all 16 lanes with zero deltas:
         // every row decodes to the base value 5. Reads from an offset into the chunk.
         PType ptype = PType.I64;
-        ByteBuffer meta = ByteBuffer.wrap(new DeltaMetadata(FL_CHUNK_SIZE, 0).encode());
+        MemorySegment meta = MemorySegment.ofArray(new ProtoDeltaMetadata(FL_CHUNK_SIZE, 0).encode());
 
         ArrayNode bases = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
         ArrayNode deltas = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1});

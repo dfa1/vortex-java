@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.DType;
-import io.github.dfa1.vortex.proto.Scalar;
+import io.github.dfa1.vortex.proto.ProtoScalar;
 
 import java.util.Collections;
 import java.util.List;
@@ -9,7 +9,7 @@ import java.util.List;
 /// Input data for encoding a `vortex.variant` column.
 ///
 /// `values` holds one inner typed scalar per row, each wrapped as a variant value
-/// (mirroring Rust `Scalar::variant(inner)`). The encoder coalesces adjacent equal
+/// (mirroring Rust `ProtoScalar::variant(inner)`). The encoder coalesces adjacent equal
 /// values into constant runs: an all-equal column becomes a single `vortex.constant`
 /// child, while a varying column becomes a `vortex.chunked` of per-run constants.
 ///
@@ -23,7 +23,7 @@ import java.util.List;
 /// @param values       one inner scalar per row, in row order
 /// @param shreddedData  optional typed column data for the shredded child, or `null`
 /// @param shreddedDtype dtype of `shreddedData`, or `null`
-public record VariantData(List<Scalar> values, Object shreddedData, DType shreddedDtype) {
+public record VariantData(List<ProtoScalar> values, Object shreddedData, DType shreddedDtype) {
 
     /// Validates and defensively copies the per-row values; rejects empty input and a
     /// half-specified shredded column.
@@ -40,7 +40,7 @@ public record VariantData(List<Scalar> values, Object shreddedData, DType shredd
     /// Creates unshredded input from per-row scalars.
     ///
     /// @param values one inner scalar per row, in row order
-    public VariantData(List<Scalar> values) {
+    public VariantData(List<ProtoScalar> values) {
         this(values, null, null);
     }
 
@@ -49,7 +49,7 @@ public record VariantData(List<Scalar> values, Object shreddedData, DType shredd
     /// @param length number of rows; must be positive
     /// @param value  the inner scalar repeated on every row
     /// @return variant input describing a constant column
-    public static VariantData constant(int length, Scalar value) {
+    public static VariantData constant(int length, ProtoScalar value) {
         if (length <= 0) {
             throw new IllegalArgumentException("length must be positive, got " + length);
         }
@@ -65,7 +65,7 @@ public record VariantData(List<Scalar> values, Object shreddedData, DType shredd
     /// @param shreddedData  typed column data (encoder-input shape for `shreddedDtype`)
     /// @param shreddedDtype dtype of `shreddedData`
     /// @return variant input carrying a shredded child
-    public static VariantData shredded(List<Scalar> values, Object shreddedData, DType shreddedDtype) {
+    public static VariantData shredded(List<ProtoScalar> values, Object shreddedData, DType shreddedDtype) {
         if (shreddedData == null || shreddedDtype == null) {
             throw new IllegalArgumentException("shreddedData and shreddedDtype are required");
         }

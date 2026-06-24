@@ -10,10 +10,9 @@ import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 
 
-import io.github.dfa1.vortex.proto.ListMetadata;
+import io.github.dfa1.vortex.proto.ProtoListMetadata;
 
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -59,14 +58,14 @@ public final class ListEncodingEncoder implements EncodingEncoder {
         EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, elemBufCount);
 
         long elementsLen = ld.offsets()[(int) ld.outerLen()];
-        byte[] metaBytes = new ListMetadata(
+        byte[] metaBytes = new ProtoListMetadata(
                 elementsLen,
-                io.github.dfa1.vortex.proto.PType.fromValue(PType.I64.ordinal())
+                io.github.dfa1.vortex.proto.ProtoPType.fromValue(PType.I64.ordinal())
         ).encode();
 
         EncodeNode root = new EncodeNode(
                 EncodingId.VORTEX_LIST,
-                ByteBuffer.wrap(metaBytes),
+                MemorySegment.ofArray(metaBytes),
                 new EncodeNode[]{elemNode, offsetsNode},
                 new int[]{});
         return new EncodeResult(root, List.copyOf(allBuffers), null, null);

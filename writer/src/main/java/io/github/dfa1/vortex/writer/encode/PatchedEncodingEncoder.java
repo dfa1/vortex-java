@@ -7,10 +7,9 @@ import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.FastLanes;
 import io.github.dfa1.vortex.encoding.PrimitiveArrays;
 import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.proto.PatchedMetadata;
+import io.github.dfa1.vortex.proto.ProtoPatchedMetadata;
 
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
 import java.util.List;
 
 /// Write-only encoder for `vortex.patched`.
@@ -75,9 +74,9 @@ public final class PatchedEncodingEncoder implements EncodingEncoder {
                 return CascadeStep.notApplicable();
             }
 
-            byte[] metaBytes = new PatchedMetadata(pd.nPatches, N_LANES, 0).encode();
+            byte[] metaBytes = new ProtoPatchedMetadata(pd.nPatches, N_LANES, 0).encode();
             EncodeNode partialRoot = new EncodeNode(EncodingId.VORTEX_PATCHED,
-                    ByteBuffer.wrap(metaBytes), new EncodeNode[]{null, null, null, null}, new int[]{});
+                    MemorySegment.ofArray(metaBytes), new EncodeNode[]{null, null, null, null}, new int[]{});
 
             DType u32Dtype = DType.U32;
             DType u16Dtype = DType.U16;
@@ -128,13 +127,13 @@ public final class PatchedEncodingEncoder implements EncodingEncoder {
                 PTypeIO.set(patchValBuf, (long) i * elemBytes, ptype, pd.patchValues[i]);
             }
 
-            byte[] metaBytes = new PatchedMetadata(pd.nPatches, N_LANES, 0).encode();
+            byte[] metaBytes = new ProtoPatchedMetadata(pd.nPatches, N_LANES, 0).encode();
 
             EncodeNode innerNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
             EncodeNode laneNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 1);
             EncodeNode idxNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 2);
             EncodeNode valNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 3);
-            EncodeNode root = new EncodeNode(EncodingId.VORTEX_PATCHED, ByteBuffer.wrap(metaBytes),
+            EncodeNode root = new EncodeNode(EncodingId.VORTEX_PATCHED, MemorySegment.ofArray(metaBytes),
                     new EncodeNode[]{innerNode, laneNode, idxNode, valNode}, new int[]{});
 
             return new EncodeResult(root, List.of(innerBuf, laneOffsBuf, patchIdxBuf, patchValBuf), null, null);

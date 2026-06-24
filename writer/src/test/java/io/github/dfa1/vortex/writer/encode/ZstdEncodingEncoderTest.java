@@ -16,8 +16,8 @@ import io.github.dfa1.vortex.reader.decode.DecodeContext;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
-import io.github.dfa1.vortex.proto.ZstdFrameMetadata;
-import io.github.dfa1.vortex.proto.ZstdMetadata;
+import io.github.dfa1.vortex.proto.ProtoZstdFrameMetadata;
+import io.github.dfa1.vortex.proto.ProtoZstdMetadata;
 import io.github.dfa1.vortex.reader.decode.BoolEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.ZstdEncodingDecoder;
 import org.junit.jupiter.api.Nested;
@@ -107,7 +107,7 @@ class ZstdEncodingEncoderTest {
                 segments[i + 1] = MemorySegment.ofArray(compressedFrames[i]);
                 bufIndices[i + 1] = i + 1;
             }
-            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ZSTD, ByteBuffer.wrap(meta),
+            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ZSTD, MemorySegment.ofArray(meta),
                     new ArrayNode[0], bufIndices);
             return new DecodeContext(node, dtype, n, segments, ReadRegistry.empty(), Arena.ofAuto());
         }
@@ -128,7 +128,7 @@ class ZstdEncodingEncoderTest {
             allSegments.addAll(validityResult.buffers());
 
             ArrayNode validityNode = toArrayNode(remappedValidity);
-            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ZSTD, ByteBuffer.wrap(meta),
+            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ZSTD, MemorySegment.ofArray(meta),
                     new ArrayNode[]{validityNode}, bufIndices);
 
             ReadRegistry registry = TestRegistry.ofDecoders(new BoolEncodingDecoder());
@@ -153,11 +153,11 @@ class ZstdEncodingEncoderTest {
         }
 
         private static byte[] metaNoDict(long[] uncompressedSizes, long[] nValues) {
-            java.util.List<ZstdFrameMetadata> frames = new java.util.ArrayList<>();
+            java.util.List<ProtoZstdFrameMetadata> frames = new java.util.ArrayList<>();
             for (int i = 0; i < uncompressedSizes.length; i++) {
-                frames.add(new ZstdFrameMetadata(uncompressedSizes[i], nValues[i]));
+                frames.add(new ProtoZstdFrameMetadata(uncompressedSizes[i], nValues[i]));
             }
-            return new ZstdMetadata(0, frames).encode();
+            return new ProtoZstdMetadata(0, frames).encode();
         }
 
         private static byte[] toLeBytes(int[] values) {
@@ -187,8 +187,8 @@ class ZstdEncodingEncoderTest {
             // Given — metadata with non-zero dictionary_size; pure-Java decoder doesn't support
             // dictionary-compressed Zstd (no JNI dependency)
             byte[] compressed = compress(toLeBytes(new int[]{1, 2, 3}));
-            byte[] meta = new ZstdMetadata(256,
-                    java.util.List.of(new ZstdFrameMetadata(12, 3))).encode();
+            byte[] meta = new ProtoZstdMetadata(256,
+                    java.util.List.of(new ProtoZstdFrameMetadata(12, 3))).encode();
             DecodeContext ctx = makeDictCtx(meta, DTypes.I32, 3, new byte[256], compressed);
 
             // When / Then
@@ -280,8 +280,8 @@ class ZstdEncodingEncoderTest {
                 data[i] = i;
             }
             EncodeResult result = ENCODER.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
-            var metaSeg = java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate());
-            ZstdMetadata meta = ZstdMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            var metaSeg = result.rootNode().metadata();
+            ProtoZstdMetadata meta = ProtoZstdMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 
             assertThat(meta.frames()).isNotEmpty();
         }

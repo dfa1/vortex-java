@@ -5,9 +5,9 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.proto.PatchesMetadata;
-import io.github.dfa1.vortex.proto.ScalarValue;
-import io.github.dfa1.vortex.proto.SparseMetadata;
+import io.github.dfa1.vortex.proto.ProtoPatchesMetadata;
+import io.github.dfa1.vortex.proto.ProtoScalarValue;
+import io.github.dfa1.vortex.proto.ProtoSparseMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
@@ -29,7 +29,6 @@ import io.github.dfa1.vortex.reader.array.VarBinArray;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.nio.ByteBuffer;
 
 /// Read-only decoder for `vortex.sparse`.
 public final class SparseEncodingDecoder implements EncodingDecoder {
@@ -45,19 +44,19 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
 
     @Override
     public Array decode(DecodeContext ctx) {
-        ByteBuffer rawMeta = ctx.metadata();
-        if (rawMeta == null || !rawMeta.hasRemaining()) {
+        MemorySegment rawMeta = ctx.metadata();
+        if (rawMeta == null || rawMeta.byteSize() == 0) {
             throw new VortexException(EncodingId.VORTEX_SPARSE, "missing metadata");
         }
-        SparseMetadata sparseMeta;
+        ProtoSparseMetadata sparseMeta;
         try {
-            MemorySegment metaSeg = MemorySegment.ofBuffer(rawMeta.duplicate());
-            sparseMeta = SparseMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            MemorySegment metaSeg = rawMeta;
+            sparseMeta = ProtoSparseMetadata.decode(metaSeg, 0, metaSeg.byteSize());
         } catch (IOException e) {
             throw new VortexException(EncodingId.VORTEX_SPARSE, "invalid metadata", e);
         }
 
-        PatchesMetadata patches = sparseMeta.patches();
+        ProtoPatchesMetadata patches = sparseMeta.patches();
         long numPatches = patches.len();
         long offset = patches.offset();
         PType indicesPtype = PType.fromOrdinal(patches.indices_ptype().value());
@@ -83,9 +82,9 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
         PType valuePtype = ((DType.Primitive) ctx.dtype()).ptype();
 
         MemorySegment fillBuf = ctx.buffer(0);
-        ScalarValue fillScalar;
+        ProtoScalarValue fillScalar;
         try {
-            fillScalar = ScalarValue.decode(fillBuf, 0, fillBuf.byteSize());
+            fillScalar = ProtoScalarValue.decode(fillBuf, 0, fillBuf.byteSize());
         } catch (IOException e) {
             throw new VortexException(EncodingId.VORTEX_SPARSE, "invalid fill value", e);
         }
@@ -186,7 +185,7 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
         };
     }
 
-    private static long scalarToLong(ScalarValue scalar) {
+    private static long scalarToLong(ProtoScalarValue scalar) {
         if (scalar.int64_value() != null) {
             return scalar.int64_value();
         }

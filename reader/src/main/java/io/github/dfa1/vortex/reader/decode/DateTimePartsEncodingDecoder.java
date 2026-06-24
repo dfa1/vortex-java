@@ -5,13 +5,12 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.TimeUnit;
-import io.github.dfa1.vortex.proto.DateTimePartsMetadata;
+import io.github.dfa1.vortex.proto.ProtoDateTimePartsMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LazyDateTimePartsLongArray;
 
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
 
 /// Read-only decoder for `vortex.datetimeparts`.
 ///
@@ -35,14 +34,14 @@ public final class DateTimePartsEncodingDecoder implements EncodingDecoder {
 
     @Override
     public Array decode(DecodeContext ctx) {
-        ByteBuffer meta = ctx.metadata();
-        if (meta == null || meta.remaining() == 0) {
+        MemorySegment meta = ctx.metadata();
+        if (meta == null || meta.byteSize() == 0) {
             throw new VortexException(EncodingId.VORTEX_DATETIMEPARTS, "missing metadata");
         }
-        DateTimePartsMetadata decoded;
+        ProtoDateTimePartsMetadata decoded;
         try {
-            MemorySegment metaSeg = MemorySegment.ofBuffer(meta.duplicate());
-            decoded = DateTimePartsMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            MemorySegment metaSeg = meta;
+            decoded = ProtoDateTimePartsMetadata.decode(metaSeg, 0, metaSeg.byteSize());
         } catch (IOException e) {
             throw new VortexException(EncodingId.VORTEX_DATETIMEPARTS, "invalid metadata: " + e.getMessage());
         }
@@ -71,12 +70,12 @@ public final class DateTimePartsEncodingDecoder implements EncodingDecoder {
     /// `1` when the unit is [TimeUnit#Days] (days carry no sub-second
     /// component; seconds and subseconds children are expected to be zero).
     private static long readUnitsPerSecond(DType.Extension ext) {
-        ByteBuffer extMeta = ext.metadata();
-        if (extMeta == null || !extMeta.hasRemaining()) {
+        MemorySegment extMeta = ext.metadata();
+        if (extMeta == null || extMeta.byteSize() == 0) {
             throw new VortexException(EncodingId.VORTEX_DATETIMEPARTS,
                     "extension " + ext.extensionId() + " missing TimeUnit metadata byte");
         }
-        TimeUnit unit = TimeUnit.fromTag(extMeta.get(extMeta.position()));
+        TimeUnit unit = TimeUnit.fromTag(extMeta.get(java.lang.foreign.ValueLayout.JAVA_BYTE, 0));
         return unit == TimeUnit.Days ? 1L : unit.divisor();
     }
 }

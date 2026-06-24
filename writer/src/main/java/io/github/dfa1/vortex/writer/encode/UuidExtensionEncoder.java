@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.extension.ExtensionId;
 import io.github.dfa1.vortex.writer.ExtensionEncoder;
 
-import java.nio.ByteBuffer;
+import java.lang.foreign.MemorySegment;
 import java.util.Collection;
 import java.util.UUID;
 
@@ -34,7 +34,7 @@ public final class UuidExtensionEncoder implements ExtensionEncoder {
         return new DType.Extension(
                 ExtensionId.VORTEX_UUID.id(),
                 new DType.FixedSizeList(u8, 16, nullable),
-                ByteBuffer.allocate(0),
+                MemorySegment.ofArray(new byte[0]),
                 nullable);
     }
 

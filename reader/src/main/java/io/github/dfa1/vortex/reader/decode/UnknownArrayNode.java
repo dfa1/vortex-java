@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.reader.decode;
 
-import java.nio.ByteBuffer;
+import java.lang.foreign.MemorySegment;
 
 /// Array node whose encoding id is not a recognised [io.github.dfa1.vortex.encoding.EncodingId].
 /// Produced when a file uses an encoding this build does not know about. Decoded as
@@ -14,7 +14,7 @@ import java.nio.ByteBuffer;
 @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record UnknownArrayNode(
         String rawEncodingId,
-        ByteBuffer metadata,
+        MemorySegment metadata,
         ArrayNode[] children,
         int[] bufferIndices
 ) implements ArrayNode {

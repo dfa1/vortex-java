@@ -12,7 +12,6 @@ import io.github.dfa1.vortex.encoding.EncodingId;
 
 
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -75,7 +74,7 @@ public final class ChunkedEncodingEncoder implements EncodingEncoder {
 
         EncodeNode root = new EncodeNode(
                 EncodingId.VORTEX_CHUNKED,
-                ByteBuffer.wrap(new byte[0]),
+                MemorySegment.ofArray(new byte[0]),
                 children,
                 new int[]{});
         return new EncodeResult(root, List.copyOf(allBuffers), null, null);

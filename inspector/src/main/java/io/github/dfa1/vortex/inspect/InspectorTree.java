@@ -1,17 +1,17 @@
 package io.github.dfa1.vortex.inspect;
 
+import static io.github.dfa1.vortex.encoding.PTypeIO.LE_INT;
+
 import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.reader.Footer;
 import io.github.dfa1.vortex.reader.Layout;
 import io.github.dfa1.vortex.reader.SegmentSpec;
-import io.github.dfa1.vortex.fbs.Array;
-import io.github.dfa1.vortex.fbs.ArrayNode;
+import io.github.dfa1.vortex.fbs.FbsArray;
+import io.github.dfa1.vortex.fbs.FbsArrayNode;
 import io.github.dfa1.vortex.reader.VortexHandle;
 
 import java.lang.foreign.MemorySegment;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -255,12 +255,10 @@ public record InspectorTree(
 
     private static Peek peekFlatRoot(MemorySegment seg, List<String> arraySpecs) {
         int segLen = (int) seg.byteSize();
-        ByteBuffer bb = seg.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
-        int fbLen = bb.getInt(segLen - 4);
+        int fbLen = seg.get(LE_INT, segLen - 4);
         int fbStart = segLen - 4 - fbLen;
-        ByteBuffer fbBuf = bb.slice(fbStart, fbLen).order(ByteOrder.LITTLE_ENDIAN);
-        Array fbArray = Array.getRootAsArray(fbBuf);
-        ArrayNode root = fbArray.root();
+        FbsArray fbArray = FbsArray.getRootAsFbsArray(seg.asSlice(fbStart, fbLen));
+        FbsArrayNode root = fbArray.root();
         if (root == null) {
             return new Peek(null, ArrayStats.empty());
         }

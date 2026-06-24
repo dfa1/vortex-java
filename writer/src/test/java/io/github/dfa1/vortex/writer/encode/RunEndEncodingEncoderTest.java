@@ -10,7 +10,7 @@ import io.github.dfa1.vortex.reader.decode.DecodeContext;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
-import io.github.dfa1.vortex.proto.RunEndMetadata;
+import io.github.dfa1.vortex.proto.ProtoRunEndMetadata;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.RunEndEncodingDecoder;
 import org.junit.jupiter.api.Nested;
@@ -38,8 +38,8 @@ class RunEndEncodingEncoderTest {
                 DType dtype, long rowCount,
                 long[] ends, long[] values, PType endsPtype, long offset
         ) {
-            byte[] metaBytes = new RunEndMetadata(
-                    io.github.dfa1.vortex.proto.PType.fromValue(endsPtype.ordinal()), ends.length, offset).encode();
+            byte[] metaBytes = new ProtoRunEndMetadata(
+                    io.github.dfa1.vortex.proto.ProtoPType.fromValue(endsPtype.ordinal()), ends.length, offset).encode();
 
             byte[] endsBuf = toLEBytes(ends, endsPtype);
             byte[] valBuf = toLEBytes(values, PType.I64);
@@ -49,7 +49,7 @@ class RunEndEncodingEncoderTest {
             ArrayNode valsNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
                     new ArrayNode[0], new int[]{1});
             ArrayNode reNode = ArrayNode.of(EncodingId.VORTEX_RUNEND,
-                    ByteBuffer.wrap(metaBytes),
+                    MemorySegment.ofArray(metaBytes),
                     new ArrayNode[]{endsNode, valsNode},
                     new int[0]);
 
@@ -168,8 +168,8 @@ class RunEndEncodingEncoderTest {
 
             // When
             EncodeResult result = ENCODER.encode(DTypes.I64, data, EncodeTestHelper.testCtx());
-            var metaSeg = java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate());
-            RunEndMetadata meta = RunEndMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            var metaSeg = result.rootNode().metadata();
+            ProtoRunEndMetadata meta = ProtoRunEndMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 
             // Then
             assertThat(meta.num_runs()).isEqualTo(3);

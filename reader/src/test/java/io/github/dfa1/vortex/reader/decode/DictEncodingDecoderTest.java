@@ -5,8 +5,8 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
-import io.github.dfa1.vortex.proto.DictMetadata;
-import io.github.dfa1.vortex.proto.VarBinMetadata;
+import io.github.dfa1.vortex.proto.ProtoDictMetadata;
+import io.github.dfa1.vortex.proto.ProtoVarBinMetadata;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ByteArray;
@@ -25,7 +25,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.stream.Stream;
 
@@ -150,7 +149,7 @@ class DictEncodingDecoderTest {
         @Test
         void emptyMetadata_throws() {
             // Given — metadata present but with zero remaining bytes (exercises !hasRemaining)
-            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DICT, ByteBuffer.allocate(0),
+            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DICT, MemorySegment.ofArray(new byte[0]),
                     new ArrayNode[0], new int[]{});
             DecodeContext ctx = new DecodeContext(node, DType.I32,
                     1, new MemorySegment[0], REGISTRY, Arena.ofAuto());
@@ -164,7 +163,7 @@ class DictEncodingDecoderTest {
         @Test
         void malformedProtoMetadata_throws() {
             // Given — >1 byte (routes to proto path) but a truncated varint that proto decode rejects
-            ByteBuffer meta = ByteBuffer.wrap(new byte[]{0x08, (byte) 0x80});
+            MemorySegment meta = MemorySegment.ofArray(new byte[]{0x08, (byte) 0x80});
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DICT, meta,
                     new ArrayNode[]{primitiveNode(0), primitiveNode(1)}, new int[]{});
             DecodeContext ctx = new DecodeContext(node, DType.I32,
@@ -298,7 +297,7 @@ class DictEncodingDecoderTest {
             MemorySegment offsets = TestSegments.leLongs(0, 2, 5);
             MemorySegment codes = u8Codes(1, 0, 1);
 
-            ByteBuffer meta = ByteBuffer.wrap(new byte[]{(byte) PType.U8.ordinal()});
+            MemorySegment meta = MemorySegment.ofArray(new byte[]{(byte) PType.U8.ordinal()});
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DICT, meta, new ArrayNode[0], new int[]{0, 1, 2});
             DecodeContext ctx = new DecodeContext(node, DType.UTF8, 3,
                     new MemorySegment[]{bytes, offsets, codes}, REGISTRY, Arena.ofAuto());
@@ -321,9 +320,9 @@ class DictEncodingDecoderTest {
             MemorySegment codes = u8Codes(0, 1, 0);
             MemorySegment[] segs = {codes, bytes, offsets};
 
-            ByteBuffer dictMeta = ByteBuffer.wrap(
-                    new DictMetadata(2, protoPType(PType.U8), null, null).encode());
-            ByteBuffer varBinMeta = ByteBuffer.wrap(new VarBinMetadata(protoPType(PType.I64)).encode());
+            MemorySegment dictMeta = MemorySegment.ofArray(
+                    new ProtoDictMetadata(2, protoPType(PType.U8), null, null).encode());
+            MemorySegment varBinMeta = MemorySegment.ofArray(new ProtoVarBinMetadata(protoPType(PType.I64)).encode());
 
             ArrayNode codesNode = primitiveNode(0);
             ArrayNode offsetsNode = primitiveNode(2);
@@ -360,7 +359,7 @@ class DictEncodingDecoderTest {
         @Test
         void protoLayout_malformedMetadata_throws() {
             // Given — children present, metadata is an invalid (truncated varint) proto blob
-            ByteBuffer meta = ByteBuffer.wrap(new byte[]{0x08, (byte) 0x80});
+            MemorySegment meta = MemorySegment.ofArray(new byte[]{0x08, (byte) 0x80});
             ArrayNode child = primitiveNode(0);
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DICT, meta,
                     new ArrayNode[]{child, child}, new int[]{});
@@ -390,7 +389,7 @@ class DictEncodingDecoderTest {
         @Test
         void legacyLayout_emptyMetadata_throws() {
             // Given — no children and zero-remaining metadata (exercises !hasRemaining)
-            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DICT, ByteBuffer.allocate(0),
+            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DICT, MemorySegment.ofArray(new byte[0]),
                     new ArrayNode[0], new int[]{});
             DecodeContext ctx = new DecodeContext(node, DType.UTF8, 0,
                     new MemorySegment[0], REGISTRY, Arena.ofAuto());
@@ -405,7 +404,7 @@ class DictEncodingDecoderTest {
         void protoLayout_emptyMetadata_throws() {
             // Given — children present, zero-remaining metadata
             ArrayNode child = primitiveNode(0);
-            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DICT, ByteBuffer.allocate(0),
+            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DICT, MemorySegment.ofArray(new byte[0]),
                     new ArrayNode[]{child, child}, new int[]{});
             DecodeContext ctx = new DecodeContext(node, DType.UTF8, 1,
                     new MemorySegment[]{u8Codes(0)}, REGISTRY, Arena.ofAuto());
@@ -441,7 +440,7 @@ class DictEncodingDecoderTest {
 
     private static Array decodeProtoSegments(DType dtype, PType codePType, MemorySegment codes,
             MemorySegment values, int valuesLen, int rowCount) {
-        ByteBuffer meta = ByteBuffer.wrap(new DictMetadata(valuesLen, protoPType(codePType), null, null).encode());
+        MemorySegment meta = MemorySegment.ofArray(new ProtoDictMetadata(valuesLen, protoPType(codePType), null, null).encode());
         MemorySegment[] segs = {codes, values};
         ArrayNode dictNode = ArrayNode.of(EncodingId.VORTEX_DICT, meta,
                 new ArrayNode[]{primitiveNode(0), primitiveNode(1)}, new int[]{});
@@ -451,7 +450,7 @@ class DictEncodingDecoderTest {
 
     private static Array decodeLegacy(DType dtype, PType codePType, MemorySegment values,
             MemorySegment codes, int rowCount) {
-        ByteBuffer meta = ByteBuffer.wrap(new byte[]{(byte) codePType.ordinal()});
+        MemorySegment meta = MemorySegment.ofArray(new byte[]{(byte) codePType.ordinal()});
         MemorySegment[] segs = {values, codes};
         ArrayNode dictNode = ArrayNode.of(EncodingId.VORTEX_DICT, meta,
                 new ArrayNode[]{primitiveNode(0), primitiveNode(1)}, new int[]{});
@@ -463,8 +462,8 @@ class DictEncodingDecoderTest {
         return ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{bufferIndex});
     }
 
-    private static io.github.dfa1.vortex.proto.PType protoPType(PType core) {
-        return io.github.dfa1.vortex.proto.PType.valueOf(core.name());
+    private static io.github.dfa1.vortex.proto.ProtoPType protoPType(PType core) {
+        return io.github.dfa1.vortex.proto.ProtoPType.valueOf(core.name());
     }
 
     // ── segment builders (little-endian) ───────────────────────────────────────

@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.reader;
 
-import java.nio.ByteBuffer;
+import java.lang.foreign.MemorySegment;
 import java.util.List;
 
 /// Node in the Vortex layout tree. Describes physical arrangement of data in the file.
@@ -18,7 +18,7 @@ import java.util.List;
 public record Layout(
         String encodingId,
         long rowCount,
-        ByteBuffer metadata,
+        MemorySegment metadata,
         List<Layout> children,
         List<Integer> segments
 ) {

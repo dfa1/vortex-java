@@ -1,5 +1,9 @@
 package io.github.dfa1.vortex.writer;
 
+import static io.github.dfa1.vortex.encoding.PTypeIO.LE_INT;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.reader.Layout;
@@ -16,8 +20,6 @@ import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.IOException;
 import java.lang.foreign.Arena;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -61,9 +63,9 @@ class WriterZoneMapTest {
             // Then the column is a vortex.stats layout: [data, zones], zone_len=4, MAX+MIN+NULL_COUNT
             assertThat(column.isZoned()).isTrue();
             assertThat(column.children()).hasSize(2);
-            ByteBuffer meta = column.metadata().duplicate().order(ByteOrder.LITTLE_ENDIAN);
-            assertThat(meta.getInt(meta.position())).isEqualTo(4);           // zone_len
-            assertThat(meta.get(meta.position() + 4)).isEqualTo((byte) 0x78); // bits 3(MAX)+4(MIN)+5(SUM)+6(NULL_COUNT)
+            MemorySegment meta = column.metadata();
+            assertThat(meta.get(LE_INT, 0)).isEqualTo(4);           // zone_len
+            assertThat(meta.get(ValueLayout.JAVA_BYTE, 4)).isEqualTo((byte) 0x78); // bits 3(MAX)+4(MIN)+5(SUM)+6(NULL_COUNT)
         }
     }
 
@@ -223,8 +225,8 @@ class WriterZoneMapTest {
         try (VortexReader reader = VortexReader.open(file)) {
             Layout column = reader.layout().children().get(0);
             assertThat(column.isZoned()).isTrue();
-            ByteBuffer meta = column.metadata().duplicate().order(ByteOrder.LITTLE_ENDIAN);
-            assertThat(meta.get(meta.position() + 4)).isEqualTo((byte) 0x60);
+            MemorySegment meta = column.metadata();
+            assertThat(meta.get(ValueLayout.JAVA_BYTE, 4)).isEqualTo((byte) 0x60);
         }
     }
 
@@ -247,8 +249,8 @@ class WriterZoneMapTest {
         try (VortexReader reader = VortexReader.open(file)) {
             Layout column = reader.layout().children().get(0);
             assertThat(column.isZoned()).isTrue();
-            ByteBuffer meta = column.metadata().duplicate().order(ByteOrder.LITTLE_ENDIAN);
-            assertThat(meta.get(meta.position() + 4)).isEqualTo((byte) 0x58); // MAX+MIN+NULL_COUNT
+            MemorySegment meta = column.metadata();
+            assertThat(meta.get(ValueLayout.JAVA_BYTE, 4)).isEqualTo((byte) 0x58); // MAX+MIN+NULL_COUNT
 
             Layout zonesFlat = column.children().get(1);
             SegmentSpec spec = reader.footer().segmentSpecs().get(zonesFlat.segments().getFirst());
@@ -285,8 +287,8 @@ class WriterZoneMapTest {
         try (VortexReader reader = VortexReader.open(file)) {
             Layout column = reader.layout().children().get(0);
             assertThat(column.isZoned()).isTrue();
-            ByteBuffer meta = column.metadata().duplicate().order(ByteOrder.LITTLE_ENDIAN);
-            assertThat(meta.get(meta.position() + 4)).isEqualTo((byte) 0x58); // MAX+MIN+NULL_COUNT
+            MemorySegment meta = column.metadata();
+            assertThat(meta.get(ValueLayout.JAVA_BYTE, 4)).isEqualTo((byte) 0x58); // MAX+MIN+NULL_COUNT
 
             Layout zonesFlat = column.children().get(1);
             SegmentSpec spec = reader.footer().segmentSpecs().get(zonesFlat.segments().getFirst());
@@ -323,8 +325,8 @@ class WriterZoneMapTest {
             Layout column = reader.layout().children().get(0);
             assertThat(column.isZoned()).isTrue();
             assertThat(column.children().get(0).isDict()).isTrue();
-            ByteBuffer meta = column.metadata().duplicate().order(ByteOrder.LITTLE_ENDIAN);
-            assertThat(meta.get(meta.position() + 4)).isEqualTo((byte) 0x58); // MAX+MIN+NULL_COUNT
+            MemorySegment meta = column.metadata();
+            assertThat(meta.get(ValueLayout.JAVA_BYTE, 4)).isEqualTo((byte) 0x58); // MAX+MIN+NULL_COUNT
 
             Layout zonesFlat = column.children().get(1);
             SegmentSpec spec = reader.footer().segmentSpecs().get(zonesFlat.segments().getFirst());
@@ -360,8 +362,8 @@ class WriterZoneMapTest {
             Layout column = reader.layout().children().get(0);
             assertThat(column.isZoned()).isTrue();
             assertThat(column.children().get(0).isDict()).isTrue();
-            ByteBuffer meta = column.metadata().duplicate().order(ByteOrder.LITTLE_ENDIAN);
-            assertThat(meta.get(meta.position() + 4)).isEqualTo((byte) 0x78);
+            MemorySegment meta = column.metadata();
+            assertThat(meta.get(ValueLayout.JAVA_BYTE, 4)).isEqualTo((byte) 0x78);
 
             Layout zonesFlat = column.children().get(1);
             SegmentSpec spec = reader.footer().segmentSpecs().get(zonesFlat.segments().getFirst());

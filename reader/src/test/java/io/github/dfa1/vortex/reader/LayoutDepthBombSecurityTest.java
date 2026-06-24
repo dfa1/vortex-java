@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.reader;
 
-import com.google.flatbuffers.FlatBufferBuilder;
+import io.github.dfa1.vortex.fbsrt.FbsBuilder;
 import static io.github.dfa1.vortex.reader.MalformedFiles.buildFooter;
 import static io.github.dfa1.vortex.reader.MalformedFiles.buildI64Dtype;
 import static io.github.dfa1.vortex.reader.MalformedFiles.buildPostscript;
@@ -8,7 +8,7 @@ import static io.github.dfa1.vortex.reader.MalformedFiles.slice;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.core.VortexFormat;
 
-import io.github.dfa1.vortex.fbs.Layout;
+import io.github.dfa1.vortex.fbs.FbsLayout;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * [PostscriptParser]'s `convertLayout`.
  *
  * <p>The reader walks the layout tree recursively when materialising a file's
- * `Layout` object. Without a depth cap a crafted file with thousands of
+ * `FbsLayout` object. Without a depth cap a crafted file with thousands of
  * nested children produces a [StackOverflowError] during `VortexReader.open`,
  * breaking the contract that every malformed input must surface as a [VortexException].
  *
@@ -51,7 +51,7 @@ class LayoutDepthBombSecurityTest {
     // ── File builders ─────────────────────────────────────────────────────────
 
     /**
-     * Builds a .vtx file whose root Layout has `depth` levels of single-child nesting,
+     * Builds a .vtx file whose root FbsLayout has `depth` levels of single-child nesting,
      * each level reusing the same `vortex.flat` layout spec.
      */
     private static Path buildDeeplyNestedFile(Path dir, int depth) throws Exception {
@@ -68,15 +68,15 @@ class LayoutDepthBombSecurityTest {
     }
 
     private static ByteBuffer buildNestedLayout(int depth) {
-        var fbb = new FlatBufferBuilder(depth * 32);
-        int segV = Layout.createSegmentsVector(fbb, new long[]{0L});
+        var fbb = new FbsBuilder(depth * 32);
+        int segV = FbsLayout.createSegmentsVector(fbb, new long[]{0L});
         // Build leaf first; FlatBuffer requires children be finished before parents.
-        int current = Layout.createLayout(fbb, 0, 1L, 0, 0, segV);
+        int current = FbsLayout.createFbsLayout(fbb, 0, 1L, 0, 0, segV);
         for (int i = 0; i < depth; i++) {
-            int childV = Layout.createChildrenVector(fbb, new int[]{current});
-            current = Layout.createLayout(fbb, 0, 1L, 0, childV, 0);
+            int childV = FbsLayout.createChildrenVector(fbb, new int[]{current});
+            current = FbsLayout.createFbsLayout(fbb, 0, 1L, 0, childV, 0);
         }
-        Layout.finishLayoutBuffer(fbb, current);
+        FbsLayout.finishFbsLayoutBuffer(fbb, current);
         return slice(fbb);
     }
 

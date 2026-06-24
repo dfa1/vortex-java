@@ -8,7 +8,7 @@ import io.github.dfa1.vortex.reader.decode.DecodeContext;
 import io.github.dfa1.vortex.encoding.PTypeIO;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
-import io.github.dfa1.vortex.proto.DictMetadata;
+import io.github.dfa1.vortex.proto.ProtoDictMetadata;
 import io.github.dfa1.vortex.reader.decode.DictEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.VarBinEncodingDecoder;
@@ -172,8 +172,8 @@ class DictEncodingEncoderTest {
 
         // When
         EncodeResult result = ENCODER.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
-        var metaSeg = java.lang.foreign.MemorySegment.ofBuffer(result.rootNode().metadata().duplicate());
-        DictMetadata meta = DictMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+        var metaSeg = result.rootNode().metadata();
+        ProtoDictMetadata meta = ProtoDictMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 
         // Then
         assertThat(meta.values_len()).isEqualTo(2);

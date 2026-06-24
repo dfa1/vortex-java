@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.writer;
 
-import com.google.flatbuffers.FlatBufferBuilder;
+import io.github.dfa1.vortex.fbsrt.FbsBuilder;
 import io.github.dfa1.vortex.writer.encode.DateTimePartsData;
 import io.github.dfa1.vortex.writer.encode.FixedSizeListData;
 import io.github.dfa1.vortex.writer.encode.ListData;
@@ -11,7 +11,7 @@ import io.github.dfa1.vortex.core.VortexFormat;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.writer.encode.EncodeContext;
 import io.github.dfa1.vortex.writer.encode.EncodeNode;
-import io.github.dfa1.vortex.proto.ScalarValue;
+import io.github.dfa1.vortex.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.writer.encode.EncodeResult;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 import io.github.dfa1.vortex.writer.encode.StructData;
@@ -35,15 +35,15 @@ import io.github.dfa1.vortex.writer.encode.RunEndEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.SparseEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.VarBinEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.ZstdEncodingEncoder;
-import io.github.dfa1.vortex.fbs.ArraySpec;
-import io.github.dfa1.vortex.fbs.Extension;
-import io.github.dfa1.vortex.fbs.Footer;
-import io.github.dfa1.vortex.fbs.Layout;
-import io.github.dfa1.vortex.fbs.LayoutSpec;
-import io.github.dfa1.vortex.fbs.Postscript;
-import io.github.dfa1.vortex.fbs.PostscriptSegment;
-import io.github.dfa1.vortex.fbs.SegmentSpec;
-import io.github.dfa1.vortex.fbs.Type;
+import io.github.dfa1.vortex.fbs.FbsArraySpec;
+import io.github.dfa1.vortex.fbs.FbsExtension;
+import io.github.dfa1.vortex.fbs.FbsFooter;
+import io.github.dfa1.vortex.fbs.FbsLayout;
+import io.github.dfa1.vortex.fbs.FbsLayoutSpec;
+import io.github.dfa1.vortex.fbs.FbsPostscript;
+import io.github.dfa1.vortex.fbs.FbsPostscriptSegment;
+import io.github.dfa1.vortex.fbs.FbsSegmentSpec;
+import io.github.dfa1.vortex.fbs.FbsType;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -74,7 +74,7 @@ import java.util.Set;
 /// ```
 public final class VortexWriter implements Closeable {
 
-    // Indices into layout_specs list in the Footer
+    // Indices into layout_specs list in the FbsFooter
     private static final int LAYOUT_FLAT = 0;
     private static final int LAYOUT_CHUNKED = 1;
     private static final int LAYOUT_STRUCT = 2;
@@ -120,7 +120,7 @@ public final class VortexWriter implements Closeable {
 
     // Per-column zone-maps, populated by flushZoneMaps() in close() when enableZoneMaps is set.
     private final Map<String, ZoneMapRef> zoneMaps = new LinkedHashMap<>();
-    // Stats (ScalarValue bytes) of the most recently written segment, captured for ChunkRef.
+    // Stats (ProtoScalarValue bytes) of the most recently written segment, captured for ChunkRef.
     private byte[] lastStatsMin;
     private byte[] lastStatsMax;
     private byte[] lastStatsSum;
@@ -157,7 +157,7 @@ public final class VortexWriter implements Closeable {
 
     private static List<EncodingEncoder> buildCascadeCodecs(WriteOptions options) {
         List<EncodingEncoder> codecs = new ArrayList<>();
-        // Extension-dtype dispatch order matters: findPrimitiveEncoding picks the first
+        // FbsExtension-dtype dispatch order matters: findPrimitiveEncoding picks the first
         // accepting codec. DateTimePartsEncoding goes first because it consumes
         // pre-decomposed DateTimePartsData (Parquet importer path); when the data is
         // raw primitive storage (JDBC's long[] via TimestampExtension.encodeAll) it
@@ -272,27 +272,27 @@ public final class VortexWriter implements Closeable {
     }
 
     private static ByteBuffer buildDType(DType dtype) {
-        var fbb = new FlatBufferBuilder(128);
+        var fbb = new FbsBuilder(128);
         int off = serializeDType(fbb, dtype);
-        io.github.dfa1.vortex.fbs.DType.finishDTypeBuffer(fbb, off);
-        return fbb.dataBuffer().slice(fbb.dataBuffer().position(), fbb.dataBuffer().remaining());
+        io.github.dfa1.vortex.fbs.FbsDType.finishFbsDTypeBuffer(fbb, off);
+        return fbb.dataSegment().asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
     }
 
-    private static int serializeDType(FlatBufferBuilder fbb, DType dtype) {
+    private static int serializeDType(FbsBuilder fbb, DType dtype) {
         return switch (dtype) {
             case DType.Null _ -> {
-                io.github.dfa1.vortex.fbs.Null.startNull(fbb);
-                int inner = io.github.dfa1.vortex.fbs.Null.endNull(fbb);
-                yield io.github.dfa1.vortex.fbs.DType.createDType(fbb, Type.Null, inner);
+                io.github.dfa1.vortex.fbs.FbsNull.startFbsNull(fbb);
+                int inner = io.github.dfa1.vortex.fbs.FbsNull.endFbsNull(fbb);
+                yield io.github.dfa1.vortex.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsNull, inner);
             }
             case DType.Bool b -> {
-                int inner = io.github.dfa1.vortex.fbs.Bool.createBool(fbb, b.nullable());
-                yield io.github.dfa1.vortex.fbs.DType.createDType(fbb, Type.Bool, inner);
+                int inner = io.github.dfa1.vortex.fbs.FbsBool.createFbsBool(fbb, b.nullable());
+                yield io.github.dfa1.vortex.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsBool, inner);
             }
             case DType.Primitive p -> {
-                int inner = io.github.dfa1.vortex.fbs.Primitive.createPrimitive(
+                int inner = io.github.dfa1.vortex.fbs.FbsPrimitive.createFbsPrimitive(
                         fbb, p.ptype().ordinal(), p.nullable());
-                yield io.github.dfa1.vortex.fbs.DType.createDType(fbb, Type.Primitive, inner);
+                yield io.github.dfa1.vortex.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsPrimitive, inner);
             }
             case DType.Struct s -> {
                 // Build child DType tables first (FlatBuffers bottom-up requirement)
@@ -304,42 +304,41 @@ public final class VortexWriter implements Closeable {
                 for (int i = 0; i < nameOffsets.length; i++) {
                     nameOffsets[i] = fbb.createString(s.fieldNames().get(i));
                 }
-                int namesVec = io.github.dfa1.vortex.fbs.Struct_.createNamesVector(fbb, nameOffsets);
-                int dtypesVec = io.github.dfa1.vortex.fbs.Struct_.createDtypesVector(fbb, fieldOffsets);
-                int inner = io.github.dfa1.vortex.fbs.Struct_.createStruct_(
+                int namesVec = io.github.dfa1.vortex.fbs.FbsStruct_.createNamesVector(fbb, nameOffsets);
+                int dtypesVec = io.github.dfa1.vortex.fbs.FbsStruct_.createDtypesVector(fbb, fieldOffsets);
+                int inner = io.github.dfa1.vortex.fbs.FbsStruct_.createFbsStruct_(
                         fbb, namesVec, dtypesVec, s.nullable());
-                yield io.github.dfa1.vortex.fbs.DType.createDType(fbb, Type.Struct_, inner);
+                yield io.github.dfa1.vortex.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsStruct_, inner);
             }
             case DType.Utf8 u -> {
-                int inner = io.github.dfa1.vortex.fbs.Utf8.createUtf8(fbb, u.nullable());
-                yield io.github.dfa1.vortex.fbs.DType.createDType(fbb, Type.Utf8, inner);
+                int inner = io.github.dfa1.vortex.fbs.FbsUtf8.createFbsUtf8(fbb, u.nullable());
+                yield io.github.dfa1.vortex.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsUtf8, inner);
             }
             case DType.List l -> {
                 int elemTypeOff = serializeDType(fbb, l.elementType());
-                int inner = io.github.dfa1.vortex.fbs.List.createList(fbb, elemTypeOff, l.nullable());
-                yield io.github.dfa1.vortex.fbs.DType.createDType(fbb, Type.List, inner);
+                int inner = io.github.dfa1.vortex.fbs.FbsList.createFbsList(fbb, elemTypeOff, l.nullable());
+                yield io.github.dfa1.vortex.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsList, inner);
             }
             case DType.FixedSizeList fsl -> {
                 int elemTypeOff = serializeDType(fbb, fsl.elementType());
-                int inner = io.github.dfa1.vortex.fbs.FixedSizeList.createFixedSizeList(
+                int inner = io.github.dfa1.vortex.fbs.FbsFixedSizeList.createFbsFixedSizeList(
                         fbb, elemTypeOff, fsl.fixedSize(), fsl.nullable());
-                yield io.github.dfa1.vortex.fbs.DType.createDType(fbb, Type.FixedSizeList, inner);
+                yield io.github.dfa1.vortex.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsFixedSizeList, inner);
             }
             case DType.Extension e -> {
                 int idOff = fbb.createString(e.extensionId());
                 int storageDtypeOff = serializeDType(fbb, e.storageDType());
                 int metaOff = 0;
                 if (e.metadata() != null) {
-                    byte[] metaBytes = new byte[e.metadata().remaining()];
-                    e.metadata().duplicate().get(metaBytes);
-                    metaOff = Extension.createMetadataVector(fbb, metaBytes);
+                    byte[] metaBytes = e.metadata().toArray(java.lang.foreign.ValueLayout.JAVA_BYTE);
+                    metaOff = FbsExtension.createMetadataVector(fbb, metaBytes);
                 }
-                int inner = Extension.createExtension(fbb, idOff, storageDtypeOff, metaOff);
-                yield io.github.dfa1.vortex.fbs.DType.createDType(fbb, Type.Extension, inner);
+                int inner = FbsExtension.createFbsExtension(fbb, idOff, storageDtypeOff, metaOff);
+                yield io.github.dfa1.vortex.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsExtension, inner);
             }
             case DType.Variant v -> {
-                int inner = io.github.dfa1.vortex.fbs.Variant.createVariant(fbb, v.nullable());
-                yield io.github.dfa1.vortex.fbs.DType.createDType(fbb, Type.Variant, inner);
+                int inner = io.github.dfa1.vortex.fbs.FbsVariant.createFbsVariant(fbb, v.nullable());
+                yield io.github.dfa1.vortex.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsVariant, inner);
             }
             default -> throw new UnsupportedOperationException("unsupported DType: " + dtype);
         };
@@ -350,18 +349,18 @@ public final class VortexWriter implements Closeable {
             long dtypeOff, int dtypeLen,
             long layoutOff, int layoutLen
     ) {
-        var fbb = new FlatBufferBuilder(256);
+        var fbb = new FbsBuilder(256);
 
-        int footerSegOff = PostscriptSegment.createPostscriptSegment(
+        int footerSegOff = FbsPostscriptSegment.createFbsPostscriptSegment(
                 fbb, footerOff, footerLen, 0, 0, 0);
-        int dtypeSegOff = PostscriptSegment.createPostscriptSegment(
+        int dtypeSegOff = FbsPostscriptSegment.createFbsPostscriptSegment(
                 fbb, dtypeOff, dtypeLen, 0, 0, 0);
-        int layoutSegOff = PostscriptSegment.createPostscriptSegment(
+        int layoutSegOff = FbsPostscriptSegment.createFbsPostscriptSegment(
                 fbb, layoutOff, layoutLen, 0, 0, 0);
 
-        int psOff = Postscript.createPostscript(fbb, dtypeSegOff, layoutSegOff, 0, footerSegOff);
-        Postscript.finishPostscriptBuffer(fbb, psOff);
-        return fbb.dataBuffer().slice(fbb.dataBuffer().position(), fbb.dataBuffer().remaining());
+        int psOff = FbsPostscript.createFbsPostscript(fbb, dtypeSegOff, layoutSegOff, 0, footerSegOff);
+        FbsPostscript.finishFbsPostscriptBuffer(fbb, psOff);
+        return fbb.dataSegment().asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
     }
 
     // ── Segment encoding ─────────────────────────────────────────────────────
@@ -519,7 +518,7 @@ public final class VortexWriter implements Closeable {
     /// cannot unwrap).
     private int writeSegment(DType dtype, Object data, EncodingEncoder encodingOverride) throws IOException {
         // Non-extension nullable columns (Primitive, Utf8) wrap with MaskedEncodingEncoder here.
-        // Extension columns route through ExtEncodingEncoder.encode which itself delegates to
+        // FbsExtension columns route through ExtEncodingEncoder.encode which itself delegates to
         // MaskedEncodingEncoder when its storage data is NullableData — handled inside ExtEncoding.
         if (encodingOverride == null
                 && data instanceof io.github.dfa1.vortex.writer.encode.NullableData
@@ -621,35 +620,35 @@ public final class VortexWriter implements Closeable {
     }
 
     private ByteBuffer buildArrayFlatBuffer(EncodeResult result, long nullCount) {
-        var fbb = new FlatBufferBuilder(256);
+        var fbb = new FbsBuilder(256);
 
         // Stats for the root node only (build vectors before the ArrayStats table). null_count is
         // always recorded; min/max only when the encoder produced them.
         int minVec = result.hasStats()
-                ? io.github.dfa1.vortex.fbs.ArrayStats.createMinVector(fbb, result.statsMin()) : 0;
+                ? io.github.dfa1.vortex.fbs.FbsArrayStats.createMinVector(fbb, result.statsMin()) : 0;
         int maxVec = result.hasStats()
-                ? io.github.dfa1.vortex.fbs.ArrayStats.createMaxVector(fbb, result.statsMax()) : 0;
+                ? io.github.dfa1.vortex.fbs.FbsArrayStats.createMaxVector(fbb, result.statsMax()) : 0;
         // forceDefaults only while building ArrayStats, so null_count = 0 is serialised (flatbuffers
         // omits a scalar equal to its default otherwise) — matching the Rust writer and letting the
         // reader prune IS NULL on zero-null chunks. Reset immediately so the Array/ArrayNode tables
         // keep their normal (offset-default-omitting) layout.
         fbb.forceDefaults(true);
-        io.github.dfa1.vortex.fbs.ArrayStats.startArrayStats(fbb);
+        io.github.dfa1.vortex.fbs.FbsArrayStats.startFbsArrayStats(fbb);
         if (result.hasStats()) {
-            io.github.dfa1.vortex.fbs.ArrayStats.addMin(fbb, minVec);
-            io.github.dfa1.vortex.fbs.ArrayStats.addMax(fbb, maxVec);
+            io.github.dfa1.vortex.fbs.FbsArrayStats.addMin(fbb, minVec);
+            io.github.dfa1.vortex.fbs.FbsArrayStats.addMax(fbb, maxVec);
         }
-        io.github.dfa1.vortex.fbs.ArrayStats.addNullCount(fbb, nullCount);
-        int statsOff = io.github.dfa1.vortex.fbs.ArrayStats.endArrayStats(fbb);
+        io.github.dfa1.vortex.fbs.FbsArrayStats.addNullCount(fbb, nullCount);
+        int statsOff = io.github.dfa1.vortex.fbs.FbsArrayStats.endFbsArrayStats(fbb);
         fbb.forceDefaults(false);
 
         int rootNodeOff = buildArrayNodeFlatBuffer(fbb, result.rootNode(), statsOff);
 
         // Buffer struct vector — one entry per buffer in result.
-        // Layout (LE): padding(u16) | alignment_exponent(u8) | compression(u8) | length(u32)
+        // FbsLayout (LE): padding(u16) | alignment_exponent(u8) | compression(u8) | length(u32)
         // FlatBuffers builds backward: iterate in reverse.
         var bufs = result.buffers();
-        io.github.dfa1.vortex.fbs.Array.startBuffersVector(fbb, bufs.size());
+        io.github.dfa1.vortex.fbs.FbsArray.startBuffersVector(fbb, bufs.size());
         for (int i = bufs.size() - 1; i >= 0; i--) {
             fbb.prep(4, 8);
             fbb.putInt((int) bufs.get(i).byteSize());
@@ -659,14 +658,14 @@ public final class VortexWriter implements Closeable {
         }
         int bufVec = fbb.endVector();
 
-        int arrayOff = io.github.dfa1.vortex.fbs.Array.createArray(fbb, rootNodeOff, bufVec);
-        io.github.dfa1.vortex.fbs.Array.finishArrayBuffer(fbb, arrayOff);
-        return fbb.dataBuffer().slice(fbb.dataBuffer().position(), fbb.dataBuffer().remaining());
+        int arrayOff = io.github.dfa1.vortex.fbs.FbsArray.createFbsArray(fbb, rootNodeOff, bufVec);
+        io.github.dfa1.vortex.fbs.FbsArray.finishFbsArrayBuffer(fbb, arrayOff);
+        return fbb.dataSegment().asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
     }
 
-    // ── Footer / metadata serialization ──────────────────────────────────────
+    // ── FbsFooter / metadata serialization ──────────────────────────────────────
 
-    private int buildArrayNodeFlatBuffer(FlatBufferBuilder fbb, EncodeNode node, int statsOff) {
+    private int buildArrayNodeFlatBuffer(FbsBuilder fbb, EncodeNode node, int statsOff) {
         // Build children first (FlatBuffers bottom-up: nested objects before parent table)
         int[] childOffsets = new int[node.children().length];
         for (int i = 0; i < childOffsets.length; i++) {
@@ -674,20 +673,19 @@ public final class VortexWriter implements Closeable {
         }
 
         int metaOff = 0;
-        if (node.metadata() != null && node.metadata().hasRemaining()) {
-            byte[] metaBytes = new byte[node.metadata().remaining()];
-            node.metadata().duplicate().get(metaBytes);
-            metaOff = io.github.dfa1.vortex.fbs.ArrayNode.createMetadataVector(fbb, metaBytes);
+        if (node.metadata() != null && node.metadata().byteSize() > 0) {
+            byte[] metaBytes = node.metadata().toArray(java.lang.foreign.ValueLayout.JAVA_BYTE);
+            metaOff = io.github.dfa1.vortex.fbs.FbsArrayNode.createMetadataVector(fbb, metaBytes);
         }
 
         int childVec = 0;
         if (childOffsets.length > 0) {
-            childVec = io.github.dfa1.vortex.fbs.ArrayNode.createChildrenVector(fbb, childOffsets);
+            childVec = io.github.dfa1.vortex.fbs.FbsArrayNode.createChildrenVector(fbb, childOffsets);
         }
 
-        int bufIdxVec = io.github.dfa1.vortex.fbs.ArrayNode.createBuffersVector(fbb, node.bufferIndices());
+        int bufIdxVec = io.github.dfa1.vortex.fbs.FbsArrayNode.createBuffersVector(fbb, node.bufferIndices());
         int encIdx = encodingIdx.get(node.encodingId());
-        return io.github.dfa1.vortex.fbs.ArrayNode.createArrayNode(
+        return io.github.dfa1.vortex.fbs.FbsArrayNode.createFbsArrayNode(
                 fbb, encIdx, metaOff, childVec, bufIdxVec, statsOff);
     }
 
@@ -788,16 +786,16 @@ public final class VortexWriter implements Closeable {
 
     /// Wraps a column's data layout in a `vortex.stats` (zoned) layout when a zone-map was
     /// emitted for it; otherwise returns the data layout unchanged.
-    private int wrapZoneMap(FlatBufferBuilder fbb, String colName, int dataLayout, long colRows) {
+    private int wrapZoneMap(FbsBuilder fbb, String colName, int dataLayout, long colRows) {
         ZoneMapRef zm = zoneMaps.get(colName);
         if (zm == null) {
             return dataLayout;
         }
-        int zonesSegV = Layout.createSegmentsVector(fbb, new long[]{zm.zonesSegIdx()});
-        int zonesFlat = Layout.createLayout(fbb, LAYOUT_FLAT, zm.nZones(), 0, 0, zonesSegV);
-        int childV = Layout.createChildrenVector(fbb, new int[]{dataLayout, zonesFlat});
-        int metaV = Layout.createMetadataVector(fbb, zonedMetadataBytes(zm.zoneLen(), zm.hasMinMax(), zm.hasSum()));
-        return Layout.createLayout(fbb, LAYOUT_ZONED, colRows, metaV, childV, 0);
+        int zonesSegV = FbsLayout.createSegmentsVector(fbb, new long[]{zm.zonesSegIdx()});
+        int zonesFlat = FbsLayout.createFbsLayout(fbb, LAYOUT_FLAT, zm.nZones(), 0, 0, zonesSegV);
+        int childV = FbsLayout.createChildrenVector(fbb, new int[]{dataLayout, zonesFlat});
+        int metaV = FbsLayout.createMetadataVector(fbb, zonedMetadataBytes(zm.zoneLen(), zm.hasMinMax(), zm.hasSum()));
+        return FbsLayout.createFbsLayout(fbb, LAYOUT_ZONED, colRows, metaV, childV, 0);
     }
 
     /// `vortex.stats` metadata: `u32` zone length (LE) + a 1-byte stat bitset (LSB-first) with the
@@ -868,7 +866,7 @@ public final class VortexWriter implements Closeable {
     }
 
     /// Builds the per-zone min (or max) values array for the resolved min/max `dtype`, decoding each
-    /// zone's serialised [ScalarValue] stat into the array shape its encoder expects.
+    /// zone's serialised [ProtoScalarValue] stat into the array shape its encoder expects.
     private static Object zoneStatValues(DType minMaxDtype, List<byte[]> statBytes) throws IOException {
         return switch (minMaxDtype) {
             case DType.Primitive p -> statColumn(p.ptype(), statBytes);
@@ -899,7 +897,7 @@ public final class VortexWriter implements Closeable {
         return a;
     }
 
-    /// Builds the per-zone string array by decoding each zone's serialised string [ScalarValue]
+    /// Builds the per-zone string array by decoding each zone's serialised string [ProtoScalarValue]
     /// stat. Used for Utf8 columns whose `vortex.varbin` encoder records full string min/max scalars.
     private static String[] statStringColumn(List<byte[]> statBytes) throws IOException {
         String[] out = new String[statBytes.size()];
@@ -910,7 +908,7 @@ public final class VortexWriter implements Closeable {
     }
 
     /// Builds the per-zone values array in the storage shape the primitive encoder expects, decoding
-    /// each zone's serialised [ScalarValue] stat.
+    /// each zone's serialised [ProtoScalarValue] stat.
     private static Object statColumn(PType ptype, List<byte[]> statBytes) throws IOException {
         int n = statBytes.size();
         return switch (ptype) {
@@ -969,27 +967,27 @@ public final class VortexWriter implements Closeable {
 
     private static long scalarLong(byte[] bytes) throws IOException {
         // Integer columns serialise min/max as int64 (signed) or uint64 (unsigned).
-        ScalarValue sv = decodeScalar(bytes);
+        ProtoScalarValue sv = decodeScalar(bytes);
         return sv.int64_value() != null ? sv.int64_value() : sv.uint64_value();
     }
 
     private static double scalarDouble(byte[] bytes) throws IOException {
         // Float columns serialise min/max as f64 (F64) or f32 (F32). Branch rather than use a
         // ternary so the F32 path widens Float -> double explicitly instead of mixing boxed types.
-        ScalarValue sv = decodeScalar(bytes);
+        ProtoScalarValue sv = decodeScalar(bytes);
         if (sv.f64_value() != null) {
             return sv.f64_value();
         }
         return sv.f32_value();
     }
 
-    private static ScalarValue decodeScalar(byte[] bytes) throws IOException {
+    private static ProtoScalarValue decodeScalar(byte[] bytes) throws IOException {
         MemorySegment seg = MemorySegment.ofArray(bytes);
-        return ScalarValue.decode(seg, 0, seg.byteSize());
+        return ProtoScalarValue.decode(seg, 0, seg.byteSize());
     }
 
     private ByteBuffer buildFooter() {
-        var fbb = new FlatBufferBuilder(512);
+        var fbb = new FbsBuilder(512);
 
         // array_specs: all encoding IDs used across all written segments, in registration order
         EncodingId[] encIds = encodingIdx.entrySet().stream()
@@ -998,33 +996,33 @@ public final class VortexWriter implements Closeable {
                                       .toArray(EncodingId[]::new);
         int[] asOffsets = new int[encIds.length];
         for (int i = 0; i < encIds.length; i++) {
-            asOffsets[i] = ArraySpec.createArraySpec(fbb, fbb.createString(encIds[i].id()));
+            asOffsets[i] = FbsArraySpec.createFbsArraySpec(fbb, fbb.createString(encIds[i].id()));
         }
-        int asv = Footer.createArraySpecsVector(fbb, asOffsets);
+        int asv = FbsFooter.createArraySpecsVector(fbb, asOffsets);
 
         // layout_specs: ["vortex.flat", "vortex.chunked", "vortex.struct", "vortex.dict"]
-        int ls0 = LayoutSpec.createLayoutSpec(fbb, fbb.createString("vortex.flat"));
-        int ls1 = LayoutSpec.createLayoutSpec(fbb, fbb.createString("vortex.chunked"));
-        int ls2 = LayoutSpec.createLayoutSpec(fbb, fbb.createString("vortex.struct"));
-        int ls3 = LayoutSpec.createLayoutSpec(fbb, fbb.createString("vortex.dict"));
-        int ls4 = LayoutSpec.createLayoutSpec(fbb, fbb.createString("vortex.stats"));
-        int lsv = Footer.createLayoutSpecsVector(fbb, new int[]{ls0, ls1, ls2, ls3, ls4});
+        int ls0 = FbsLayoutSpec.createFbsLayoutSpec(fbb, fbb.createString("vortex.flat"));
+        int ls1 = FbsLayoutSpec.createFbsLayoutSpec(fbb, fbb.createString("vortex.chunked"));
+        int ls2 = FbsLayoutSpec.createFbsLayoutSpec(fbb, fbb.createString("vortex.struct"));
+        int ls3 = FbsLayoutSpec.createFbsLayoutSpec(fbb, fbb.createString("vortex.dict"));
+        int ls4 = FbsLayoutSpec.createFbsLayoutSpec(fbb, fbb.createString("vortex.stats"));
+        int lsv = FbsFooter.createLayoutSpecsVector(fbb, new int[]{ls0, ls1, ls2, ls3, ls4});
 
         // segment_specs (inline struct vector — write in reverse order)
-        Footer.startSegmentSpecsVector(fbb, segs.size());
+        FbsFooter.startSegmentSpecsVector(fbb, segs.size());
         for (int i = segs.size() - 1; i >= 0; i--) {
             SegRef s = segs.get(i);
-            SegmentSpec.createSegmentSpec(fbb, s.offset(), s.len(), 6, 0, 0);
+            FbsSegmentSpec.createFbsSegmentSpec(fbb, s.offset(), s.len(), 6, 0, 0);
         }
         int ssv = fbb.endVector();
 
-        int off = Footer.createFooter(fbb, asv, lsv, ssv, 0, 0);
+        int off = FbsFooter.createFbsFooter(fbb, asv, lsv, ssv, 0, 0);
         fbb.finish(off);
-        return fbb.dataBuffer().slice(fbb.dataBuffer().position(), fbb.dataBuffer().remaining());
+        return fbb.dataSegment().asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
     }
 
     private ByteBuffer buildLayout() {
-        var fbb = new FlatBufferBuilder(256);
+        var fbb = new FbsBuilder(256);
         int colCount = schema.fieldNames().size();
 
         int[] colLayouts = new int[colCount];
@@ -1045,12 +1043,12 @@ public final class VortexWriter implements Closeable {
                 int[] flats = new int[chunks.size()];
                 for (int i = 0; i < chunks.size(); i++) {
                     ChunkRef cr = chunks.get(i);
-                    int segV = Layout.createSegmentsVector(fbb, new long[]{cr.segIdx()});
-                    flats[i] = Layout.createLayout(fbb, LAYOUT_FLAT, cr.rowCount(), 0, 0, segV);
+                    int segV = FbsLayout.createSegmentsVector(fbb, new long[]{cr.segIdx()});
+                    flats[i] = FbsLayout.createFbsLayout(fbb, LAYOUT_FLAT, cr.rowCount(), 0, 0, segV);
                     colRows += cr.rowCount();
                 }
-                int childV = Layout.createChildrenVector(fbb, flats);
-                int dataChunked = Layout.createLayout(fbb, LAYOUT_CHUNKED, colRows, 0, childV, 0);
+                int childV = FbsLayout.createChildrenVector(fbb, flats);
+                int dataChunked = FbsLayout.createFbsLayout(fbb, LAYOUT_CHUNKED, colRows, 0, childV, 0);
                 colLayouts[c] = wrapZoneMap(fbb, colName, dataChunked, colRows);
                 if (totalRows == 0) {
                     totalRows = colRows;
@@ -1058,39 +1056,39 @@ public final class VortexWriter implements Closeable {
             }
         }
 
-        int rootChildV = Layout.createChildrenVector(fbb, colLayouts);
-        int rootLayout = Layout.createLayout(fbb, LAYOUT_STRUCT, totalRows, 0, rootChildV, 0);
-        Layout.finishLayoutBuffer(fbb, rootLayout);
-        return fbb.dataBuffer().slice(fbb.dataBuffer().position(), fbb.dataBuffer().remaining());
+        int rootChildV = FbsLayout.createChildrenVector(fbb, colLayouts);
+        int rootLayout = FbsLayout.createFbsLayout(fbb, LAYOUT_STRUCT, totalRows, 0, rootChildV, 0);
+        FbsLayout.finishFbsLayoutBuffer(fbb, rootLayout);
+        return fbb.dataSegment().asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
     }
 
-    private int buildDictColLayout(FlatBufferBuilder fbb, DictColRef ref) {
+    private int buildDictColLayout(FbsBuilder fbb, DictColRef ref) {
         // Build codes Chunked layout: children are one Flat per original chunk
         int numChunks = ref.codesSegIdxes().size();
         int[] codesFlats = new int[numChunks];
         long totalCodesRows = 0;
         for (int j = 0; j < numChunks; j++) {
             long rowCount = ref.chunkRowCounts().get(j);
-            int segV = Layout.createSegmentsVector(fbb, new long[]{ref.codesSegIdxes().get(j)});
-            codesFlats[j] = Layout.createLayout(fbb, LAYOUT_FLAT, rowCount, 0, 0, segV);
+            int segV = FbsLayout.createSegmentsVector(fbb, new long[]{ref.codesSegIdxes().get(j)});
+            codesFlats[j] = FbsLayout.createFbsLayout(fbb, LAYOUT_FLAT, rowCount, 0, 0, segV);
             totalCodesRows += rowCount;
         }
-        int codesChildV = Layout.createChildrenVector(fbb, codesFlats);
-        int codesChunked = Layout.createLayout(fbb, LAYOUT_CHUNKED, totalCodesRows, 0, codesChildV, 0);
+        int codesChildV = FbsLayout.createChildrenVector(fbb, codesFlats);
+        int codesChunked = FbsLayout.createFbsLayout(fbb, LAYOUT_CHUNKED, totalCodesRows, 0, codesChildV, 0);
 
         // Build values Flat layout
-        int valSegV = Layout.createSegmentsVector(fbb, new long[]{ref.valuesSegIdx()});
-        int valuesFlat = Layout.createLayout(fbb, LAYOUT_FLAT, ref.valuesLen(), 0, 0, valSegV);
+        int valSegV = FbsLayout.createSegmentsVector(fbb, new long[]{ref.valuesSegIdx()});
+        int valuesFlat = FbsLayout.createFbsLayout(fbb, LAYOUT_FLAT, ref.valuesLen(), 0, 0, valSegV);
 
         // DictLayoutMetadata proto (matches Rust): field 1 = codes_ptype (PType varint)
         PType codePType = codePTypeForSize((int) ref.valuesLen());
         byte[] metaBytes = buildDictLayoutMetaBytes(codePType);
-        int metaVec = metaBytes.length > 0 ? Layout.createMetadataVector(fbb, metaBytes) : 0;
+        int metaVec = metaBytes.length > 0 ? FbsLayout.createMetadataVector(fbb, metaBytes) : 0;
 
         // Dict layout: child[0]=values, child[1]=codes (matches Rust DictLayout child order)
         int[] dictChildren = {valuesFlat, codesChunked};
-        int dictChildV = Layout.createChildrenVector(fbb, dictChildren);
-        return Layout.createLayout(fbb, LAYOUT_DICT, totalCodesRows, metaVec, dictChildV, 0);
+        int dictChildV = FbsLayout.createChildrenVector(fbb, dictChildren);
+        return FbsLayout.createFbsLayout(fbb, LAYOUT_DICT, totalCodesRows, metaVec, dictChildV, 0);
     }
 
     private static byte[] buildDictLayoutMetaBytes(PType codePType) {

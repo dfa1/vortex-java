@@ -6,7 +6,7 @@ import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
-import io.github.dfa1.vortex.proto.DecimalBytePartsMetadata;
+import io.github.dfa1.vortex.proto.ProtoDecimalBytePartsMetadata;
 import io.github.dfa1.vortex.reader.decode.DecimalBytePartsEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
 import org.junit.jupiter.api.Test;
@@ -67,10 +67,9 @@ class DecimalBytePartsEncodingEncoderTest {
         EncodeResult result = sut.encode(dtype, values, EncodeTestHelper.testCtx());
 
         // Then
-        byte[] metaBytes = new byte[result.rootNode().metadata().remaining()];
-        result.rootNode().metadata().duplicate().get(metaBytes);
-        DecimalBytePartsMetadata meta =
-                DecimalBytePartsMetadata.decode(java.lang.foreign.MemorySegment.ofArray(metaBytes), 0, metaBytes.length);
+        java.lang.foreign.MemorySegment metaSeg = result.rootNode().metadata();
+        ProtoDecimalBytePartsMetadata meta =
+                ProtoDecimalBytePartsMetadata.decode(metaSeg, 0, metaSeg.byteSize());
         assertThat(meta.zeroth_child_ptype().value()).isEqualTo(7); // I64 ordinal
         assertThat(meta.lower_part_count()).isZero();
     }

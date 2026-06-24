@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.core.VortexException;
 import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.proto.ZstdMetadata;
+import io.github.dfa1.vortex.proto.ProtoZstdMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
@@ -24,7 +24,6 @@ import io.airlift.compress.v3.zstd.ZstdJavaDecompressor;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.nio.ByteBuffer;
 
 /// Read-only decoder for `vortex.zstd`.
 public final class ZstdEncodingDecoder implements EncodingDecoder {
@@ -40,14 +39,14 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
 
     @Override
     public Array decode(DecodeContext ctx) {
-        ByteBuffer rawMeta = ctx.metadata();
+        MemorySegment rawMeta = ctx.metadata();
         if (rawMeta == null) {
             throw new VortexException(EncodingId.VORTEX_ZSTD, "missing metadata");
         }
-        ZstdMetadata meta;
+        ProtoZstdMetadata meta;
         try {
-            MemorySegment metaSeg = MemorySegment.ofBuffer(rawMeta.duplicate());
-            meta = ZstdMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            MemorySegment metaSeg = rawMeta;
+            meta = ProtoZstdMetadata.decode(metaSeg, 0, metaSeg.byteSize());
         } catch (IOException e) {
             throw new VortexException(EncodingId.VORTEX_ZSTD, "invalid metadata", e);
         }
@@ -146,7 +145,7 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
 
     private static MemorySegment decompressFrames(
             DecodeContext ctx,
-            ZstdMetadata meta,
+            ProtoZstdMetadata meta,
             int frameCount,
             long totalUncompressed
     ) {

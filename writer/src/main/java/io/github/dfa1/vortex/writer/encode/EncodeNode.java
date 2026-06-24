@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.encoding.EncodingId;
 
-import java.nio.ByteBuffer;
+import java.lang.foreign.MemorySegment;
 
 /// Describes the ArrayNode tree written into a flat segment's FlatBuffer.
 /// Mirrors ArrayNode for the encode path.
@@ -14,7 +14,7 @@ import java.nio.ByteBuffer;
 @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record EncodeNode(
         EncodingId encodingId,
-        ByteBuffer metadata,
+        MemorySegment metadata,
         EncodeNode[] children,
         int[] bufferIndices
 ) {

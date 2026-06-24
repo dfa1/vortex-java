@@ -1,12 +1,12 @@
 package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.encoding.PTypeIO;
-import com.google.flatbuffers.FlatBufferBuilder;
+import io.github.dfa1.vortex.fbsrt.FbsBuilder;
 import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.VortexException;
-import io.github.dfa1.vortex.fbs.Array;
-import io.github.dfa1.vortex.fbs.ArrayNode;
-import io.github.dfa1.vortex.fbs.Buffer;
+import io.github.dfa1.vortex.fbs.FbsArray;
+import io.github.dfa1.vortex.fbs.FbsArrayNode;
+import io.github.dfa1.vortex.fbs.FbsBuffer;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
@@ -17,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /// Adversarial tests for the flat-segment decode path's offset/length arithmetic.
 ///
-/// A flat segment is `buffer_data... | FlatBuffer(Array) | u32 LE = FlatBuffer byte length`.
+/// A flat segment is `buffer_data... | FlatBuffer(FbsArray) | u32 LE = FlatBuffer byte length`.
 /// Both the trailing length field and each buffer descriptor's offset/length come straight
 /// from untrusted file bytes. After ADR 0003 Phase E, every malformed value must surface as
 /// a [VortexException], never a raw `IndexOutOfBoundsException` from `MemorySegment.asSlice`.
@@ -70,7 +70,7 @@ class FlatSegmentBoundsSecurityTest {
     @Test
     void bufferDescriptorLengthPastSegment_throwsVortexException() {
         try (Arena arena = Arena.ofConfined()) {
-            // Given a well-formed Array FlatBuffer whose single buffer descriptor claims a
+            // Given a well-formed FbsArray FlatBuffer whose single buffer descriptor claims a
             // 1 000 000-byte payload that cannot fit the actual segment.
             byte[] fb = arrayFlatBufferWithOneBuffer(1_000_000L);
             MemorySegment seg = arena.allocate(fb.length + 4L);
@@ -83,20 +83,20 @@ class FlatSegmentBoundsSecurityTest {
         }
     }
 
-    /// Builds a minimal valid `Array` FlatBuffer with one buffer descriptor of the given length.
+    /// Builds a minimal valid `FbsArray` FlatBuffer with one buffer descriptor of the given length.
     private static byte[] arrayFlatBufferWithOneBuffer(long bufferLength) {
-        FlatBufferBuilder b = new FlatBufferBuilder();
+        FbsBuilder b = new FbsBuilder();
 
-        int rootChildren = ArrayNode.createChildrenVector(b, new int[0]);
-        int rootBuffers = ArrayNode.createBuffersVector(b, new int[]{0});
-        int root = ArrayNode.createArrayNode(b, 0, 0, rootChildren, rootBuffers, 0);
+        int rootChildren = FbsArrayNode.createChildrenVector(b, new int[0]);
+        int rootBuffers = FbsArrayNode.createBuffersVector(b, new int[]{0});
+        int root = FbsArrayNode.createFbsArrayNode(b, 0, 0, rootChildren, rootBuffers, 0);
 
-        Array.startBuffersVector(b, 1);
-        Buffer.createBuffer(b, 0, 0, 0, bufferLength);
+        FbsArray.startBuffersVector(b, 1);
+        FbsBuffer.createFbsBuffer(b, 0, 0, 0, bufferLength);
         int buffers = b.endVector();
 
-        int array = Array.createArray(b, root, buffers);
-        Array.finishArrayBuffer(b, array);
+        int array = FbsArray.createFbsArray(b, root, buffers);
+        FbsArray.finishFbsArrayBuffer(b, array);
         return b.sizedByteArray();
     }
 }

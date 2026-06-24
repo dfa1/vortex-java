@@ -7,7 +7,7 @@ import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.encoding.FastLanes;
 import io.github.dfa1.vortex.encoding.PrimitiveArrays;
 import io.github.dfa1.vortex.encoding.PTypeIO;
-import io.github.dfa1.vortex.proto.DeltaMetadata;
+import io.github.dfa1.vortex.proto.ProtoDeltaMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
 import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
@@ -17,7 +17,6 @@ import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.nio.ByteBuffer;
 
 /// Read-only decoder for `fastlanes.delta`.
 public final class DeltaEncodingDecoder implements EncodingDecoder {
@@ -33,14 +32,14 @@ public final class DeltaEncodingDecoder implements EncodingDecoder {
 
     @Override
     public Array decode(DecodeContext ctx) {
-        ByteBuffer rawMeta = ctx.metadata();
-        DeltaMetadata meta;
-        if (rawMeta == null || !rawMeta.hasRemaining()) {
-            meta = new DeltaMetadata(0L, 0);
+        MemorySegment rawMeta = ctx.metadata();
+        ProtoDeltaMetadata meta;
+        if (rawMeta == null || rawMeta.byteSize() == 0) {
+            meta = new ProtoDeltaMetadata(0L, 0);
         } else {
             try {
-                MemorySegment metaSeg = MemorySegment.ofBuffer(rawMeta.duplicate());
-                meta = DeltaMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+                MemorySegment metaSeg = rawMeta;
+                meta = ProtoDeltaMetadata.decode(metaSeg, 0, metaSeg.byteSize());
             } catch (IOException e) {
                 throw new VortexException(EncodingId.FASTLANES_DELTA, "invalid metadata", e);
             }

@@ -10,7 +10,7 @@ import io.github.dfa1.vortex.encoding.EncodingId;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestDecodeContexts;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
-import io.github.dfa1.vortex.proto.ListViewMetadata;
+import io.github.dfa1.vortex.proto.ProtoListViewMetadata;
 import io.github.dfa1.vortex.reader.decode.ListViewEncodingDecoder;
 import io.github.dfa1.vortex.reader.decode.PrimitiveEncodingDecoder;
 import org.junit.jupiter.api.Nested;
@@ -163,7 +163,7 @@ class ListViewEncodingEncoderTest {
             ArrayNode child = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
                     new ArrayNode[0], new int[0]);
             ArrayNode node = ArrayNode.of(EncodingId.VORTEX_LISTVIEW,
-                    java.nio.ByteBuffer.wrap(new byte[0]),
+                    MemorySegment.ofArray(new byte[0]),
                     new ArrayNode[]{child}, new int[0]);
             DecodeContext ctx = TestDecodeContexts.of(node, DTypes.LIST_I32).registry(REGISTRY).build();
 
@@ -185,9 +185,8 @@ class ListViewEncodingEncoderTest {
 
             // When
             EncodeResult result = ENCODER.encode(DTypes.LIST_I32, data, EncodeTestHelper.testCtx());
-            java.nio.ByteBuffer metaBuf = result.rootNode().metadata().duplicate();
-            java.lang.foreign.MemorySegment metaSeg = java.lang.foreign.MemorySegment.ofBuffer(metaBuf);
-            ListViewMetadata meta = ListViewMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            java.lang.foreign.MemorySegment metaSeg = result.rootNode().metadata();
+            ProtoListViewMetadata meta = ProtoListViewMetadata.decode(metaSeg, 0, metaSeg.byteSize());
 
             // Then
             assertThat(meta.elements_len()).isEqualTo(5);

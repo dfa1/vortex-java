@@ -7,7 +7,7 @@ import io.github.dfa1.vortex.encoding.TimeUnit;
 import io.github.dfa1.vortex.extension.ExtensionId;
 import io.github.dfa1.vortex.writer.ExtensionEncoder;
 
-import java.nio.ByteBuffer;
+import java.lang.foreign.MemorySegment;
 import java.time.LocalDate;
 import java.util.Collection;
 
@@ -31,8 +31,7 @@ public final class DateExtensionEncoder implements ExtensionEncoder {
     @Override
     public DType.Extension dtype(boolean nullable) {
         // Rust vortex.date metadata: 1 byte = TimeUnit tag (Days = 4), required by Rust reader.
-        ByteBuffer meta = ByteBuffer.allocate(1);
-        meta.put(0, (byte) TimeUnit.Days.ordinal());
+        MemorySegment meta = MemorySegment.ofArray(new byte[]{(byte) TimeUnit.Days.ordinal()});
         return new DType.Extension(
                 ExtensionId.VORTEX_DATE.id(),
                 new DType.Primitive(PType.I32, nullable),

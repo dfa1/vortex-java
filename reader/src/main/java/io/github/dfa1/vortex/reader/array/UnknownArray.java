@@ -5,7 +5,6 @@ import io.github.dfa1.vortex.core.VortexException;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
-import java.nio.ByteBuffer;
 
 /// Opaque passthrough array for encodings unknown to this reader.
 ///
@@ -27,7 +26,7 @@ public record UnknownArray(
         String encodingId,
         DType dtype,
         long length,
-        ByteBuffer metadata,
+        MemorySegment metadata,
         MemorySegment[] buffers,
         Array[] children
 ) implements Array {

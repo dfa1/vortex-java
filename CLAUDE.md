@@ -60,18 +60,19 @@ Trunk-based. PRs fine but always squash or rebase — no merge commits. Keep com
 ./bench JavaVsJniReadBenchmark.javaReadVolume   # benchmark — always ClassName.methodName filter
 ```
 
-Regenerate after editing `.fbs`/`.proto`:
+Regenerate after editing `.fbs`/`.proto` (both generators are in-house, no external tools):
 
 ```bash
-brew install flatbuffers              # only for .fbs edits (any flatc version; guard auto-stripped)
-./mvnw compile -pl proto-gen          # only on .proto edits
+./mvnw compile -pl fbs-gen,proto-gen                     # build the generators
 ./mvnw generate-sources -pl core -P regenerate-sources   # then commit
 ```
 
-`flatc` runs whenever the profile is active; if you only changed `.proto`, revert spurious
-`fbs/` diffs: `git checkout -- core/src/main/java/io/github/dfa1/vortex/fbs/`. Proto-to-Java
-is in-process via `proto-gen` (no `protoc`/`protobuf-java`): one record per message with static
-`decode(MemorySegment, long, long)` + `encode()` operating directly on a segment.
+Both schema languages are compiled in-process to MemorySegment-native Java, with no
+`flatc`/`protoc` and no `com.google.flatbuffers`/`protobuf-java` runtime (ADR 0017):
+- **`.fbs` → `fbs-gen`** (`io.github.dfa1.vortex.fbsgen`): generates readers extending
+  `FbsTable`/`FbsStruct` and builders over `FbsBuilder` (all in `io.github.dfa1.vortex.fbsrt`).
+- **`.proto` → `proto-gen`**: one record per message with static `decode(MemorySegment, long,
+  long)` + `encode()` operating directly on a segment.
 
 ### Mutation testing
 

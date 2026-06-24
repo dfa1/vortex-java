@@ -2,7 +2,10 @@ package io.github.dfa1.vortex.inspect;
 
 import io.github.dfa1.vortex.core.DType;
 
-import java.nio.ByteBuffer;
+import static io.github.dfa1.vortex.encoding.PTypeIO.LE_INT;
+
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -79,12 +82,11 @@ public final class ZonedStatsSchema {
     ///
     /// @param metadata raw `vortex.stats` layout metadata, possibly `null`
     /// @return decoded zone length, or `0` when absent
-    public static long zoneLength(ByteBuffer metadata) {
-        if (metadata == null || metadata.remaining() < 4) {
+    public static long zoneLength(MemorySegment metadata) {
+        if (metadata == null || metadata.byteSize() < 4) {
             return 0L;
         }
-        ByteBuffer mb = metadata.duplicate().order(java.nio.ByteOrder.LITTLE_ENDIAN);
-        return Integer.toUnsignedLong(mb.getInt(mb.position()));
+        return Integer.toUnsignedLong(metadata.get(LE_INT, 0));
     }
 
     /// Returns the stats present in the layout metadata bitset, in ordinal order.
@@ -95,19 +97,17 @@ public final class ZonedStatsSchema {
     ///
     /// @param metadata raw `vortex.stats` layout metadata, possibly `null`
     /// @return present stats in ascending ordinal order; empty if metadata carries no bitset
-    public static List<Stat> presentStats(ByteBuffer metadata) {
-        if (metadata == null || metadata.remaining() <= 4) {
+    public static List<Stat> presentStats(MemorySegment metadata) {
+        if (metadata == null || metadata.byteSize() <= 4) {
             return List.of();
         }
-        ByteBuffer mb = metadata.duplicate();
-        mb.position(mb.position() + 4);
         Stat[] all = Stat.values();
         List<Stat> out = new ArrayList<>(all.length);
         int bitIndex = 0;
-        while (mb.hasRemaining()) {
-            byte b = mb.get();
+        for (long pos = 4; pos < metadata.byteSize(); pos++) {
+            int b = metadata.get(ValueLayout.JAVA_BYTE, pos) & 0xff;
             for (int bit = 0; bit < 8; bit++) {
-                if (((b & 0xff) & (1 << bit)) != 0 && bitIndex < all.length) {
+                if ((b & (1 << bit)) != 0 && bitIndex < all.length) {
                     out.add(all[bitIndex]);
                 }
                 bitIndex++;
@@ -130,7 +130,7 @@ public final class ZonedStatsSchema {
     /// @param columnDtype the column's logical dtype (the `data` child's dtype)
     /// @param metadata    raw `vortex.stats` layout metadata
     /// @return reconstructed non-nullable struct dtype, or empty struct when nothing is present
-    public static DType.Struct statsTableDtype(DType columnDtype, ByteBuffer metadata) {
+    public static DType.Struct statsTableDtype(DType columnDtype, MemorySegment metadata) {
         return statsTableDtype(columnDtype, presentStats(metadata));
     }
 

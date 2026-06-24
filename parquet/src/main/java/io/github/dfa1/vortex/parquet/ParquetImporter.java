@@ -12,11 +12,10 @@ import io.github.dfa1.vortex.core.DType;
 import io.github.dfa1.vortex.core.PType;
 import io.github.dfa1.vortex.writer.encode.DateTimePartsData;
 import io.github.dfa1.vortex.encoding.TimeUnit;
+import io.github.dfa1.vortex.extension.TimestampDtype;
 import io.github.dfa1.vortex.writer.VortexWriter;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -157,12 +156,8 @@ public final class ParquetImporter {
             case MICROS -> TimeUnit.Microseconds;
             case NANOS -> TimeUnit.Nanoseconds;
         };
-        // Extension metadata: byte[0]=unit tag, bytes[1-2]=tz_len u16 LE (0 = no tz)
-        ByteBuffer meta = ByteBuffer.allocate(3).order(ByteOrder.LITTLE_ENDIAN);
-        meta.put((byte) unit.ordinal());
-        meta.putShort((short) 0);
-        meta.flip();
-        return new DType.Extension("vortex.timestamp", new DType.Primitive(PType.I64, nullable), meta, nullable);
+        // The wire layout (TimeUnit tag + tz_len + tz UTF-8) lives in TimestampDtype — reuse it.
+        return TimestampDtype.of(unit, null, nullable);
     }
 
     private static DType mapByteArray(LogicalType logical, boolean nullable, String colName) {
