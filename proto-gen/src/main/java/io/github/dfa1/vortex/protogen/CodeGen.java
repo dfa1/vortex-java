@@ -69,26 +69,31 @@ public final class CodeGen {
             sb.append("    ").append(v.name()).append("(").append(v.number()).append(")");
             sb.append(i == values.size() - 1 ? ";\n\n" : ",\n");
         }
-        sb.append("    private final int value;\n\n");
-        sb.append("    ").append(e.javaName()).append("(int value) {\n");
-        sb.append("        this.value = value;\n");
-        sb.append("    }\n\n");
-        sb.append("    /// @return the wire-format integer value\n");
-        sb.append("    public int value() {\n");
-        sb.append("        return value;\n");
-        sb.append("    }\n\n");
-        sb.append("    /// Resolves a wire-format integer back to its enum constant.\n");
-        sb.append("    /// @param value wire-format integer\n");
-        sb.append("    /// @return matching enum constant\n");
-        sb.append("    /// @throws IllegalArgumentException if no constant matches\n");
-        sb.append("    public static ").append(e.javaName()).append(" fromValue(int value) {\n");
-        sb.append("        for (").append(e.javaName()).append(" v : values()) {\n");
-        sb.append("            if (v.value == value) {\n");
-        sb.append("                return v;\n");
-        sb.append("            }\n");
-        sb.append("        }\n");
-        sb.append("        throw new IllegalArgumentException(\"unknown ").append(e.javaName()).append(" value: \" + value);\n");
-        sb.append("    }\n");
+        sb.append("""
+                    private final int value;
+
+                    %1$s(int value) {
+                        this.value = value;
+                    }
+
+                    /// @return the wire-format integer value
+                    public int value() {
+                        return value;
+                    }
+
+                    /// Resolves a wire-format integer back to its enum constant.
+                    /// @param value wire-format integer
+                    /// @return matching enum constant
+                    /// @throws IllegalArgumentException if no constant matches
+                    public static %1$s fromValue(int value) {
+                        for (%1$s v : values()) {
+                            if (v.value == value) {
+                                return v;
+                            }
+                        }
+                        throw new IllegalArgumentException("unknown %1$s value: " + value);
+                    }
+                """.formatted(e.javaName()));
         sb.append("}\n");
         return sb.toString();
     }
@@ -135,14 +140,17 @@ public final class CodeGen {
     /// reference equality for `byte[]` components. Override with `Arrays.equals`/
     /// `Arrays.hashCode` so structurally equal records compare equal.
     private void emitByteArrayEqualsHashCode(StringBuilder sb, TypeRegistry.ResolvedType.Message m, List<Field> fields) {
-        sb.append("\n    @Override\n");
-        sb.append("    public boolean equals(Object __o) {\n");
-        sb.append("        if (this == __o) {\n");
-        sb.append("            return true;\n");
-        sb.append("        }\n");
-        sb.append("        if (!(__o instanceof ").append(m.javaName()).append(" __that)) {\n");
-        sb.append("            return false;\n");
-        sb.append("        }\n");
+        sb.append("""
+
+                    @Override
+                    public boolean equals(Object __o) {
+                        if (this == __o) {
+                            return true;
+                        }
+                        if (!(__o instanceof %1$s __that)) {
+                            return false;
+                        }
+                """.formatted(m.javaName()));
         for (int i = 0; i < fields.size(); i++) {
             Field f = fields.get(i);
             String cmp = fieldEquals(f, "__that");
@@ -245,13 +253,15 @@ public final class CodeGen {
 
     private void emitDecode(StringBuilder sb, TypeRegistry.ResolvedType.Message m, List<Field> fields) {
         sb.append("    /// Decodes a {@code ").append(m.fqn()).append("} from a slice of a memory segment.\n");
-        sb.append("    /// @param __seg backing segment\n");
-        sb.append("    /// @param __off start offset in bytes\n");
-        sb.append("    /// @param __len payload length in bytes\n");
-        sb.append("    /// @return decoded record\n");
-        sb.append("    /// @throws IOException if the slice is malformed or truncated\n");
-        sb.append("    public static ").append(m.javaName()).append(" decode(MemorySegment __seg, long __off, long __len) throws IOException {\n");
-        sb.append("        ProtoReader r = new ProtoReader(__seg, __off, __len);\n");
+        sb.append("""
+                    /// @param __seg backing segment
+                    /// @param __off start offset in bytes
+                    /// @param __len payload length in bytes
+                    /// @return decoded record
+                    /// @throws IOException if the slice is malformed or truncated
+                    public static %1$s decode(MemorySegment __seg, long __off, long __len) throws IOException {
+                        ProtoReader r = new ProtoReader(__seg, __off, __len);
+                """.formatted(m.javaName()));
         for (Field f : fields) {
             sb.append("        ").append(f.javaType).append(" ").append(f.name).append(" = ").append(f.initExpr).append(";\n");
         }
@@ -278,13 +288,16 @@ public final class CodeGen {
     }
 
     private void emitEncode(StringBuilder sb, List<Field> fields) {
-        sb.append("    /// Encodes this record to a proto3-wire-format byte array.\n");
-        sb.append("    /// @return encoded bytes\n");
-        sb.append("    public byte[] encode() {\n");
-        sb.append("        ProtoWriter w = new ProtoWriter();\n");
-        sb.append("        encodeTo(w);\n");
-        sb.append("        return w.toByteArray();\n");
-        sb.append("    }\n\n");
+        sb.append("""
+                    /// Encodes this record to a proto3-wire-format byte array.
+                    /// @return encoded bytes
+                    public byte[] encode() {
+                        ProtoWriter w = new ProtoWriter();
+                        encodeTo(w);
+                        return w.toByteArray();
+                    }
+
+                """);
         // Package-private encoder that writes the record's wire bytes into the caller's
         // ProtoWriter. Used by nested-message emitters to avoid the alloc/copy round-trip
         // of creating a temporary writer and calling toByteArray() per nested field.
