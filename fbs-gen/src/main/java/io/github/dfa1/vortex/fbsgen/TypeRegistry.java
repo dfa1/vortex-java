@@ -116,6 +116,7 @@ public final class TypeRegistry {
     /// @param fieldOffsets byte offset of each field, parallel to the struct's field list
     /// @param size         total padded struct size in bytes
     /// @param alignment    struct alignment (the maximum field alignment)
+    @SuppressWarnings("java:S6218") // codegen-internal data carrier; fieldOffsets is an array of immutable primitives consumed by the generator and never compared.
     public record StructLayout(int[] fieldOffsets, int size, int alignment) {
     }
 }

@@ -49,7 +49,7 @@ public final class FlatSegmentDecoder {
 
         // The trailing u32 length field must itself be in range before we read it.
         IoBounds.checkRange(segLen - 4L, 4, segLen);
-        int fbLen = seg.get(LE_INT, segLen - 4);
+        int fbLen = seg.get(LE_INT, segLen - 4L);
         long fbStart = segLen - 4L - fbLen;
         IoBounds.checkRange(fbStart, fbLen, segLen);
         var fbArray = io.github.dfa1.vortex.fbs.FbsArray.getRootAsFbsArray(seg.asSlice(fbStart, fbLen));

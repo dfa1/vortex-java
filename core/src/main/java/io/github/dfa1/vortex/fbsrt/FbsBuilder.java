@@ -328,7 +328,7 @@ public final class FbsBuilder {
                 continue;
             }
             for (int k = SIZEOF_SHORT; k < len; k += SIZEOF_SHORT) {
-                if (buf.get(LE_SHORT, vt1 + k) != buf.get(LE_SHORT, vt2 + k)) {
+                if (buf.get(LE_SHORT, (long) vt1 + k) != buf.get(LE_SHORT, (long) vt2 + k)) {
                     continue outer;
                 }
             }
@@ -344,7 +344,7 @@ public final class FbsBuilder {
                 vtables = Arrays.copyOf(vtables, numVtables * 2);
             }
             vtables[numVtables++] = offset();
-            buf.set(LE_INT, cap - vtableloc, offset() - vtableloc);
+            buf.set(LE_INT, (long) cap - vtableloc, offset() - vtableloc);
         }
         return vtableloc;
     }
