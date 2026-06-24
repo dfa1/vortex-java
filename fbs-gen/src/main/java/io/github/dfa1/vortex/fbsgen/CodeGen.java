@@ -19,8 +19,6 @@ import java.util.List;
 /// The wire layout is the standard FlatBuffers binary format — see [FbsTable]/[FbsBuilder].
 public final class CodeGen {
 
-    private static final String RUNTIME_PACKAGE = "io.github.dfa1.vortex.fbsrt";
-
     /// Prefix applied to every emitted Java class name so the generated wire-format
     /// classes (`Array`, `DType`, `Bool`, `List`, …) do not collide with project or JDK
     /// types of the same name. Schema files keep the upstream (unprefixed) names; the
@@ -75,8 +73,7 @@ public final class CodeGen {
     private String emitTable(Ast.TableDecl table) {
         String name = className(table.name());
         StringBuilder sb = new StringBuilder();
-        sb.append(preamble("import " + RUNTIME_PACKAGE + ".FbsBuilder;\nimport " + RUNTIME_PACKAGE
-                + ".FbsTable;\nimport java.lang.foreign.MemorySegment;\n"));
+        sb.append(preamble("import java.lang.foreign.MemorySegment;\n"));
         sb.append("/// Reader and builder for the `").append(table.name()).append("` FlatBuffers table.\n");
         sb.append(GENERATED_ANNOTATION);
         sb.append("public final class ").append(name).append(" extends FbsTable {\n\n");
@@ -257,8 +254,7 @@ public final class CodeGen {
         String name = className(struct.name());
         TypeRegistry.StructLayout layout = registry.layoutOf(struct);
         StringBuilder sb = new StringBuilder();
-        sb.append(preamble("import " + RUNTIME_PACKAGE + ".FbsBuilder;\nimport " + RUNTIME_PACKAGE
-                + ".FbsStruct;\nimport java.lang.foreign.MemorySegment;\n"));
+        sb.append(preamble("import java.lang.foreign.MemorySegment;\n"));
         sb.append("/// Reader and builder for the `").append(struct.name()).append("` FlatBuffers struct (inline, ")
                 .append(layout.size()).append(" bytes).\n");
         sb.append(GENERATED_ANNOTATION);

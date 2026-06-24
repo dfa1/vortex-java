@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.fbsrt;
+package io.github.dfa1.vortex.fbs;
 
 import static io.github.dfa1.vortex.encoding.PTypeIO.LE_DOUBLE;
 import static io.github.dfa1.vortex.encoding.PTypeIO.LE_FLOAT;
@@ -15,7 +15,9 @@ import java.lang.foreign.ValueLayout;
 /// vtable: every field lives at a compile-time-constant byte offset from the
 /// struct position, and every field is always present. Generated accessors read
 /// directly at `position + fieldOffset`.
-public class FbsStruct {
+///
+/// Package-private: only the generated struct accessors in this package extend it.
+class FbsStruct {
 
     /// The backing buffer.
     protected MemorySegment seg;

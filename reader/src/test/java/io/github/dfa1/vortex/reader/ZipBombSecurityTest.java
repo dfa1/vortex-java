@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.reader;
 
-import io.github.dfa1.vortex.fbsrt.FbsBuilder;
+import io.github.dfa1.vortex.fbs.FbsBuilder;
 import static io.github.dfa1.vortex.reader.MalformedFiles.buildFooter;
 import static io.github.dfa1.vortex.reader.MalformedFiles.buildI64Dtype;
 import static io.github.dfa1.vortex.reader.MalformedFiles.buildFlatLayout;

@@ -2,8 +2,6 @@
 
 package io.github.dfa1.vortex.fbs;
 
-import io.github.dfa1.vortex.fbsrt.FbsBuilder;
-import io.github.dfa1.vortex.fbsrt.FbsStruct;
 import java.lang.foreign.MemorySegment;
 import javax.annotation.processing.Generated;
 

@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.fbsrt;
+package io.github.dfa1.vortex.fbs;
 
 import static io.github.dfa1.vortex.encoding.PTypeIO.LE_DOUBLE;
 import static io.github.dfa1.vortex.encoding.PTypeIO.LE_FLOAT;
@@ -28,7 +28,9 @@ import java.nio.charset.StandardCharsets;
 /// expected to have framed the FlatBuffer from a trusted region. File-level framing
 /// (segment offsets/lengths, trailer, postscript) is range-checked upstream by the
 /// reader's `IoBounds`; intra-FlatBuffer fields are not.
-public class FbsTable {
+///
+/// Package-private: only the generated table accessors in this package extend it.
+class FbsTable {
 
     /// The backing buffer (typically a zero-copy slice of the mmap'd file).
     protected MemorySegment seg;
@@ -54,7 +56,7 @@ public class FbsTable {
     /// @param segment buffer whose first 4 bytes hold the uoffset to the root table
     /// @param start   byte position of the buffer start within `segment`
     /// @return the absolute position of the root table
-    public static long rootPosition(MemorySegment segment, long start) {
+    static long rootPosition(MemorySegment segment, long start) {
         return start + segment.get(LE_INT, start);
     }
 
