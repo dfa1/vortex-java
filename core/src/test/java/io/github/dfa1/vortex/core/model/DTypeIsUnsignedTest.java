@@ -33,6 +33,6 @@ class DTypeIsUnsignedTest {
                 new DType.Struct(List.of("u"), List.of(DType.U64), false));
 
         // When / Then
-        assertThat(types).allSatisfy(t -> assertThat(t.isUnsigned()).isFalse());
+        assertThat(types).hasSize(7).allSatisfy(t -> assertThat(t.isUnsigned()).isFalse());
     }
 }
