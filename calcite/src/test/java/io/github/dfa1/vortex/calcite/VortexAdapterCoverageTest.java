@@ -131,6 +131,52 @@ class VortexAdapterCoverageTest {
         assertThat(table.statsOf("i64")).isNotNull();
     }
 
+    @Test
+    void enumerator_resetUnsupportedAndCloseReleasesOpenChunk() {
+        // Given a scan positioned inside the first chunk
+        Enumerator<Object[]> en = new VortexTable(file).scan(null, List.of(), null).enumerator();
+        assertThat(en.moveNext()).isTrue();
+
+        // When / Then — reset is unsupported, and close must release the still-open chunk cleanly
+        assertThatThrownBy(en::reset).isInstanceOf(UnsupportedOperationException.class);
+        en.close();
+    }
+
+    @Nested
+    class MissingFile {
+
+        // A path that does not exist makes VortexReader.open throw IOException, which every entry
+        // point wraps as UncheckedIOException — these are the file-open failure branches.
+        private final VortexTable table = new VortexTable(tmp.resolve("does-not-exist.vortex"));
+
+        @Test
+        void getRowType_wrapsOpenFailure() {
+            // When / Then
+            assertThatThrownBy(() -> table.getRowType(new JavaTypeFactoryImpl()))
+                    .isInstanceOf(java.io.UncheckedIOException.class);
+        }
+
+        @Test
+        void statsOf_wrapsOpenFailure() {
+            // When / Then
+            assertThatThrownBy(() -> table.statsOf("i64"))
+                    .isInstanceOf(java.io.UncheckedIOException.class);
+        }
+
+        @Test
+        void totalRows_wrapsOpenFailure() {
+            // When / Then
+            assertThatThrownBy(table::totalRows).isInstanceOf(java.io.UncheckedIOException.class);
+        }
+
+        @Test
+        void scan_wrapsOpenFailure() {
+            // When / Then — the enumerator constructor opens the reader and wraps the failure
+            assertThatThrownBy(() -> table.scan(null, List.of(), null).enumerator())
+                    .isInstanceOf(java.io.UncheckedIOException.class);
+        }
+    }
+
     @Nested
     class Schema {
 
@@ -185,6 +231,39 @@ class VortexAdapterCoverageTest {
                 assertThat(s.sum()).isInstanceOf(Double.class);
                 assertThat(s.sum().doubleValue()).isEqualTo(6.75);
                 assertThat(s.avg()).isEqualTo(2.25);
+            }
+        }
+
+        @Test
+        void narrowIntColumn_sumsViaIntArrayIntoLong() throws Exception {
+            // Given / When — i32 decodes to IntArray, summed into a long (exact)
+            try (VortexReader reader = VortexReader.open(file, registry())) {
+                VortexAggregates.Summary s = VortexAggregates.of(reader, "i32");
+
+                // Then
+                assertThat(s.sum()).isInstanceOf(Long.class).isEqualTo(600L); // 100+200+300
+            }
+        }
+
+        @Test
+        void floatColumn_sumsViaFloatArrayIntoDouble() throws Exception {
+            // Given / When — f32 decodes to FloatArray, accumulated into a double
+            try (VortexReader reader = VortexReader.open(file, registry())) {
+                VortexAggregates.Summary s = VortexAggregates.of(reader, "f32");
+
+                // Then
+                assertThat(s.sum()).isInstanceOf(Double.class);
+                assertThat(s.sum().doubleValue()).isEqualTo(7.5); // 1.5+2.5+3.5
+            }
+        }
+
+        @Test
+        void nonNumericColumn_throws() throws Exception {
+            // Given / When / Then — a UTF8 column has no numeric array branch
+            try (VortexReader reader = VortexReader.open(file, registry())) {
+                assertThatThrownBy(() -> VortexAggregates.of(reader, "s"))
+                        .isInstanceOf(IllegalArgumentException.class)
+                        .hasMessageContaining("not a numeric column");
             }
         }
     }
