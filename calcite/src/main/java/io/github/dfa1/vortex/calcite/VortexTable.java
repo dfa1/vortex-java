@@ -1,0 +1,319 @@
+package io.github.dfa1.vortex.calcite;
+
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.reader.Chunk;
+import io.github.dfa1.vortex.reader.RowFilter;
+import io.github.dfa1.vortex.reader.ScanIterator;
+import io.github.dfa1.vortex.reader.ScanOptions;
+import io.github.dfa1.vortex.reader.VortexReader;
+import io.github.dfa1.vortex.reader.array.BoolArray;
+import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.FloatArray;
+import io.github.dfa1.vortex.reader.array.IntArray;
+import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.VarBinArray;
+
+import org.apache.calcite.DataContext;
+import org.apache.calcite.jdbc.JavaTypeFactoryImpl;
+import org.apache.calcite.linq4j.Enumerable;
+import org.apache.calcite.linq4j.Linq4j;
+import org.apache.calcite.rel.type.RelDataType;
+import org.apache.calcite.rel.type.RelDataTypeFactory;
+import org.apache.calcite.rex.RexBuilder;
+import org.apache.calcite.rex.RexCall;
+import org.apache.calcite.rex.RexInputRef;
+import org.apache.calcite.rex.RexLiteral;
+import org.apache.calcite.rex.RexNode;
+import org.apache.calcite.rex.RexUtil;
+import org.apache.calcite.schema.ProjectableFilterableTable;
+import org.apache.calcite.schema.impl.AbstractTable;
+import org.apache.calcite.sql.type.SqlTypeName;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicLong;
+
+/// A single Vortex file exposed to Calcite as a flat SQL table with column projection and
+/// zone-map filter push-down.
+///
+/// Projection (`projects`) is honoured exactly — only the requested columns are decoded and
+/// returned. Filters (`filters`) that translate to a [RowFilter] are pushed into the scan for
+/// *chunk skipping* via zone-map statistics, but are **left in Calcite's list** rather than
+/// consumed: zone-map pruning is approximate (it drops whole chunks that cannot match, not
+/// individual rows), so Calcite must still apply the predicate row-by-row for exactness. The
+/// win is decoding far fewer chunks when the filter is selective on a clustered column.
+public final class VortexTable extends AbstractTable implements ProjectableFilterableTable {
+
+    /// Used only to expand `SEARCH`/`Sarg` predicates (e.g. `BETWEEN`, `IN`) back into ordinary
+    /// comparison trees the [RowFilter] translation understands.
+    private static final RexBuilder REX_BUILDER = new RexBuilder(new JavaTypeFactoryImpl());
+
+    private final Path file;
+    private final AtomicLong chunksScannedLastQuery = new AtomicLong();
+
+    /// Creates a table backed by the Vortex file at `file`.
+    ///
+    /// @param file path to the `.vortex` file
+    public VortexTable(Path file) {
+        this.file = file;
+    }
+
+    /// Number of chunks actually decoded by the most recent [#scan] — the rest were pruned by
+    /// zone-map statistics. Used by the demo to show push-down skipping work.
+    ///
+    /// @return chunks decoded in the last query
+    public long chunksScannedLastQuery() {
+        return chunksScannedLastQuery.get();
+    }
+
+    /// Per-column zone-map statistics (global min/max and null count), read from the footer
+    /// without decoding data. Used by the aggregate push-down rule to answer `MIN`/`MAX`/`COUNT`.
+    ///
+    /// @param column the column name
+    /// @return the column's aggregated statistics
+    public io.github.dfa1.vortex.reader.ArrayStats statsOf(String column) {
+        try (VortexReader reader = VortexReader.open(file)) {
+            return reader.columnStats().getOrDefault(column, io.github.dfa1.vortex.reader.ArrayStats.empty());
+        } catch (IOException e) {
+            throw new UncheckedIOException("cannot read stats of " + file, e);
+        }
+    }
+
+    /// Total row count across all chunks, read from chunk metadata without decoding data.
+    ///
+    /// @return the number of rows in the file
+    public long totalRows() {
+        try (VortexReader reader = VortexReader.open(file);
+             ScanIterator scan = reader.scan(ScanOptions.all())) {
+            long total = 0;
+            for (long c : scan.chunkRowCounts()) {
+                total += c;
+            }
+            return total;
+        } catch (IOException e) {
+            throw new UncheckedIOException("cannot count rows of " + file, e);
+        }
+    }
+
+    @Override
+    public RelDataType getRowType(RelDataTypeFactory typeFactory) {
+        DType.Struct struct = struct();
+        RelDataTypeFactory.Builder builder = typeFactory.builder();
+        for (int i = 0; i < struct.fieldNames().size(); i++) {
+            builder.add(struct.fieldNames().get(i), toSqlType(typeFactory, struct.fieldTypes().get(i)));
+        }
+        return builder.build();
+    }
+
+    @Override
+    public Enumerable<Object[]> scan(DataContext root, List<RexNode> filters, int[] projects) {
+        DType.Struct struct = struct();
+        List<String> allNames = struct.fieldNames();
+
+        // Projection: the columns to decode and emit, in the order Calcite asked for. A null
+        // projects array means "all columns".
+        int[] cols = projects != null ? projects : allColumns(allNames.size());
+        String[] outNames = new String[cols.length];
+        DType[] outTypes = new DType[cols.length];
+        for (int i = 0; i < cols.length; i++) {
+            outNames[i] = allNames.get(cols[i]);
+            outTypes[i] = struct.fieldTypes().get(cols[i]);
+        }
+
+        // Filter push-down: build a RowFilter from the predicates we understand (for chunk skip).
+        // Do NOT remove anything from `filters` — pruning is approximate, Calcite re-checks rows.
+        Optional<RowFilter> pushed = toRowFilter(filters, allNames, struct.fieldTypes());
+
+        // The scan must include any column the filter prunes on, even when it is not projected —
+        // chunk pruning reads that column's zone-map stats. Output still emits only outNames.
+        java.util.LinkedHashSet<String> scanColumns = new java.util.LinkedHashSet<>(List.of(outNames));
+        ScanOptions options;
+        if (pushed.isPresent()) {
+            collectColumns(pushed.get(), scanColumns);
+            options = ScanOptions.columns(scanColumns.toArray(String[]::new)).withFilter(pushed.get());
+        } else {
+            options = ScanOptions.columns(outNames);
+        }
+
+        List<Object[]> rows = new ArrayList<>();
+        long scanned = 0;
+        try (VortexReader reader = VortexReader.open(file);
+             ScanIterator scan = reader.scan(options)) {
+            while (scan.hasNext()) {
+                try (Chunk chunk = scan.next()) {
+                    scanned++;
+                    appendChunk(chunk, outNames, outTypes, rows);
+                }
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException("cannot scan " + file, e);
+        }
+        chunksScannedLastQuery.set(scanned);
+        return Linq4j.asEnumerable(rows);
+    }
+
+    private DType.Struct struct() {
+        try (VortexReader reader = VortexReader.open(file)) {
+            if (!(reader.dtype() instanceof DType.Struct s)) {
+                throw new IllegalStateException("top-level Vortex dtype is not a struct: " + reader.dtype());
+            }
+            return s;
+        } catch (IOException e) {
+            throw new UncheckedIOException("cannot read schema of " + file, e);
+        }
+    }
+
+    private static int[] allColumns(int n) {
+        int[] all = new int[n];
+        for (int i = 0; i < n; i++) {
+            all[i] = i;
+        }
+        return all;
+    }
+
+    private static void appendChunk(Chunk chunk, String[] names, DType[] types, List<Object[]> rows) {
+        long n = chunk.rowCount();
+        Object[] arrays = new Object[names.length];
+        for (int c = 0; c < names.length; c++) {
+            arrays[c] = chunk.column(names[c]);
+        }
+        for (long r = 0; r < n; r++) {
+            Object[] row = new Object[names.length];
+            for (int c = 0; c < names.length; c++) {
+                row[c] = value(arrays[c], types[c], r);
+            }
+            rows.add(row);
+        }
+    }
+
+    private static Object value(Object array, DType type, long r) {
+        return switch (type) {
+            case DType.Primitive p -> switch (p.ptype()) {
+                case F64 -> ((DoubleArray) array).getDouble(r);
+                case F32 -> (double) ((FloatArray) array).getFloat(r);
+                case I64, U64 -> ((LongArray) array).getLong(r);
+                case I32, U32, I16, U16, I8, U8 -> ((IntArray) array).getInt(r);
+                default -> throw new IllegalStateException("unsupported ptype: " + p.ptype());
+            };
+            case DType.Utf8 _ -> ((VarBinArray) array).getString(r);
+            case DType.Bool _ -> ((BoolArray) array).getBoolean(r);
+            default -> throw new IllegalStateException("unsupported column dtype: " + type);
+        };
+    }
+
+    /// Translates the Calcite predicates into a zone-map [RowFilter], keeping only the comparisons
+    /// we can prune on (`=`, `<>`, `<`, `<=`, `>`, `>=` between a column and a literal, plus `AND`).
+    /// Predicates we don't understand are simply not pushed — Calcite still applies them.
+    private static Optional<RowFilter> toRowFilter(List<RexNode> filters, List<String> names, List<DType> types) {
+        List<RowFilter> pushed = new ArrayList<>();
+        for (RexNode node : filters) {
+            // Calcite encodes BETWEEN / IN / range unions as SEARCH(ref, Sarg); expand back to a
+            // comparison tree (>=, <=, AND, OR) before translating.
+            RexNode expanded = RexUtil.expandSearch(REX_BUILDER, null, node);
+            toComparison(expanded, names, types).ifPresent(pushed::add);
+        }
+        if (pushed.isEmpty()) {
+            return Optional.empty();
+        }
+        if (pushed.size() == 1) {
+            return Optional.of(pushed.getFirst());
+        }
+        return Optional.of(RowFilter.and(pushed.toArray(RowFilter[]::new)));
+    }
+
+    /// Collects every column the filter references into `out`, so the scan can include them for
+    /// zone-map pruning regardless of projection.
+    private static void collectColumns(RowFilter filter, java.util.Set<String> out) {
+        switch (filter) {
+            case RowFilter.And(var parts) -> parts.forEach(f -> collectColumns(f, out));
+            case RowFilter.Eq(var col, var ignored) -> out.add(col);
+            case RowFilter.Neq(var col, var ignored) -> out.add(col);
+            case RowFilter.Gt(var col, var ignored) -> out.add(col);
+            case RowFilter.Gte(var col, var ignored) -> out.add(col);
+            case RowFilter.Lt(var col, var ignored) -> out.add(col);
+            case RowFilter.Lte(var col, var ignored) -> out.add(col);
+            case RowFilter.IsNull(var col) -> out.add(col);
+            case RowFilter.IsNotNull(var col) -> out.add(col);
+        }
+    }
+
+    private static Optional<RowFilter> toComparison(RexNode node, List<String> names, List<DType> types) {
+        if (!(node instanceof RexCall call)) {
+            return Optional.empty();
+        }
+        return switch (call.getKind()) {
+            case AND -> {
+                List<RowFilter> parts = new ArrayList<>();
+                for (RexNode operand : call.getOperands()) {
+                    toComparison(operand, names, types).ifPresent(parts::add);
+                }
+                yield parts.isEmpty() ? Optional.empty()
+                        : Optional.of(RowFilter.and(parts.toArray(RowFilter[]::new)));
+            }
+            case EQUALS, NOT_EQUALS, LESS_THAN, LESS_THAN_OR_EQUAL, GREATER_THAN, GREATER_THAN_OR_EQUAL ->
+                    binary(call, names, types);
+            default -> Optional.empty();
+        };
+    }
+
+    private static Optional<RowFilter> binary(RexCall call, List<String> names, List<DType> types) {
+        List<RexNode> ops = call.getOperands();
+        if (ops.size() != 2 || !(ops.get(0) instanceof RexInputRef ref) || !(ops.get(1) instanceof RexLiteral lit)) {
+            return Optional.empty();
+        }
+        Object val = literalValue(lit, types.get(ref.getIndex()));
+        if (val == null) {
+            return Optional.empty();
+        }
+        String col = names.get(ref.getIndex());
+        Comparable<?> cmp = (Comparable<?>) val;
+        return Optional.of(switch (call.getKind()) {
+            case EQUALS -> RowFilter.eq(col, val);
+            case NOT_EQUALS -> RowFilter.neq(col, val);
+            case LESS_THAN -> RowFilter.lt(col, cmp);
+            case LESS_THAN_OR_EQUAL -> RowFilter.lte(col, cmp);
+            case GREATER_THAN -> RowFilter.gt(col, cmp);
+            case GREATER_THAN_OR_EQUAL -> RowFilter.gte(col, cmp);
+            default -> throw new IllegalStateException("unreachable kind: " + call.getKind());
+        });
+    }
+
+    /// Coerces a SQL literal to the Java type the column's zone-map statistics are stored as, so
+    /// the comparison in [RowFilter] is type-compatible. Integer scalars are stored as `Long` and
+    /// floats as `Double` in the stats, regardless of the column's physical width — a mismatched
+    /// boxed type silently disables pruning (the comparator swallows the `ClassCastException`).
+    /// Returns `null` for unsupported columns.
+    private static Object literalValue(RexLiteral lit, DType type) {
+        return switch (type) {
+            case DType.Utf8 _ -> lit.getValueAs(String.class);
+            case DType.Primitive p -> switch (p.ptype()) {
+                case F64, F32 -> lit.getValueAs(Double.class);
+                case I64, U64, I32, U32, I16, U16, I8, U8 -> lit.getValueAs(Long.class);
+                default -> null;
+            };
+            default -> null;
+        };
+    }
+
+    private static RelDataType toSqlType(RelDataTypeFactory factory, DType type) {
+        RelDataType sql = switch (type) {
+            case DType.Primitive p -> switch (p.ptype()) {
+                case F64 -> factory.createSqlType(SqlTypeName.DOUBLE);
+                case F32 -> factory.createSqlType(SqlTypeName.REAL);
+                case I64, U64 -> factory.createSqlType(SqlTypeName.BIGINT);
+                case I32, U32 -> factory.createSqlType(SqlTypeName.INTEGER);
+                case I16, U16 -> factory.createSqlType(SqlTypeName.SMALLINT);
+                case I8, U8 -> factory.createSqlType(SqlTypeName.TINYINT);
+                default -> throw new IllegalStateException("unsupported ptype: " + p.ptype());
+            };
+            case DType.Utf8 _ -> factory.createSqlType(SqlTypeName.VARCHAR);
+            case DType.Bool _ -> factory.createSqlType(SqlTypeName.BOOLEAN);
+            default -> throw new IllegalStateException("unsupported column dtype: " + type);
+        };
+        return factory.createTypeWithNullability(sql, type.nullable());
+    }
+}
