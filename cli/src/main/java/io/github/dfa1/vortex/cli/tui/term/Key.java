@@ -57,6 +57,12 @@ public sealed interface Key {
         INSTANCE
     }
 
+    /// Backspace / Delete (`0x7F` DEL or `0x08` BS) - erases the character before the cursor.
+    enum Backspace implements Key {
+        /// Singleton instance.
+        INSTANCE
+    }
+
     /// Bare Escape key press (no CSI sequence followed).
     enum Escape implements Key {
         /// Singleton instance.

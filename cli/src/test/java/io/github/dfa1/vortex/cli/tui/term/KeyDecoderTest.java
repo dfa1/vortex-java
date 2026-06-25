@@ -70,6 +70,13 @@ class KeyDecoderTest {
     }
 
     @Test
+    void next_delAndBs_bothDecodeToBackspace() throws IOException {
+        // Given / When / Then — DEL (0x7F) is the common Backspace code, 0x08 the legacy BS.
+        assertThat(KeyDecoder.next(bytes(0x7F))).isEqualTo(Key.Backspace.INSTANCE);
+        assertThat(KeyDecoder.next(bytes(0x08))).isEqualTo(Key.Backspace.INSTANCE);
+    }
+
+    @Test
     void next_printableChar_returnsChar() throws IOException {
         // Given
         ByteArrayInputStream in = bytes('q');

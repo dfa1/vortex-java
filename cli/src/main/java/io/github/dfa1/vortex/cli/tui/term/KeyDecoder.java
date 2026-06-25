@@ -57,6 +57,11 @@ public final class KeyDecoder {
         if (b == '\r' || b == '\n') {
             return Key.Enter.INSTANCE;
         }
+        // DEL (0x7F) is what most terminals send for the Backspace key; 0x08 (BS) is the
+        // legacy code some emit. Treat both as one editing key so the line editor can erase.
+        if (b == 0x7F || b == 0x08) {
+            return Key.Backspace.INSTANCE;
+        }
         return new Key.Char((char) b);
     }
 

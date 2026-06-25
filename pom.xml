@@ -180,6 +180,11 @@
 				<version>${project.version}</version>
 			</dependency>
 			<dependency>
+				<groupId>io.github.dfa1.vortex</groupId>
+				<artifactId>vortex-calcite</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
 				<groupId>de.siegmar</groupId>
 				<artifactId>fastcsv</artifactId>
 				<version>${fastcsv.version}</version>

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `vortex sql <file.vortex> [more...]` — interactive SQL shell over Vortex files, backed by Calcite. Multiline editor (psql-style: queries run on `;`), a scrollable result grid (`Tab` to focus, arrows/PgUp/PgDn to scroll), and `Up`/`Down` recall of the last 100 queries persisted at `~/.vortex/sql_history`.
 - `DType.isUnsigned()` — `true` for the unsigned integer primitives (`U8`–`U64`), `false` otherwise. ([#159](https://github.com/dfa1/vortex-java/issues/159))
 
 ### Fixed

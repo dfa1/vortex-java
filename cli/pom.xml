@@ -34,6 +34,12 @@
 			<artifactId>vortex-inspector</artifactId>
 		</dependency>
 		<dependency>
+			<!-- Backs the `sql` subcommand: Calcite JDBC over Vortex files. Pulls calcite-core
+			     and its transitives (avatica, guava, …) into the shaded uber-jar. -->
+			<groupId>io.github.dfa1.vortex</groupId>
+			<artifactId>vortex-calcite</artifactId>
+		</dependency>
+		<dependency>
 			<groupId>io.airlift</groupId>
 			<artifactId>aircompressor-v3</artifactId>
 		</dependency>

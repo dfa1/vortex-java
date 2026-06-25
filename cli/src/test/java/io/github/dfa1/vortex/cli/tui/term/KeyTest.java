@@ -67,6 +67,7 @@ class KeyTest {
                 case Key.Home _ -> "home";
                 case Key.End _ -> "end";
                 case Key.Enter _ -> "enter";
+                case Key.Backspace _ -> "backspace";
                 case Key.Escape _ -> "esc";
                 case Key.Eof _ -> "eof";
                 case Key.Char(var c) -> "char:" + c;
