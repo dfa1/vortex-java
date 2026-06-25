@@ -217,3 +217,7 @@ throughput belongs to the Arrow door.
 - [ADR 0017 — in-house FlatBuffers codegen](0017-in-house-flatbuffers-codegen.md) (JDK 25 /
   generated-code pressure that motivated the Janino smoke test)
 - Apache Calcite adapter SPI — https://calcite.apache.org/docs/adapter.html
+- [Proposal: Adding Vortex as an Iceberg File Format](https://docs.google.com/document/d/1g0EJDr3DkSmfAce8C94zA2JyWRj2SeNeAeiYOotnSww/edit)
+  — Iceberg's File Format API (1.11.0) integration plan; this adapter is the working
+  demonstration of the projection/filter/aggregate push-down it relies on (push-down source,
+  metrics from zone-map statistics)
