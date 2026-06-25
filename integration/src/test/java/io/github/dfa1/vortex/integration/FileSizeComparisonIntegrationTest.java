@@ -4,6 +4,7 @@ import dev.vortex.api.Session;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.testing.OhlcData;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -83,13 +84,13 @@ class FileSizeComparisonIntegrationTest {
 
     // ── Writers ───────────────────────────────────────────────────────────────
 
-    private static Path writeCsv(Path dir, List<OhlcGenerator.OhlcBatch> batches) throws IOException {
+    private static Path writeCsv(Path dir, List<OhlcData.Batch> batches) throws IOException {
         Path file = dir.resolve("ohlc.csv");
         try (BufferedWriter csv = Files.newBufferedWriter(file)) {
             csv.write("symbol,date,open,high,low,close,volume\n");
-            for (OhlcGenerator.OhlcBatch b : batches) {
-                for (int i = 0; i < b.dates().length; i++) {
-                    csv.write(b.symbols()[i] + "," + LocalDate.ofEpochDay(b.dates()[i]) + ","
+            for (OhlcData.Batch b : batches) {
+                for (int i = 0; i < b.date().length; i++) {
+                    csv.write(b.symbol()[i] + "," + LocalDate.ofEpochDay(b.date()[i]) + ","
                                       + b.open()[i] + "," + b.high()[i] + ","
                                       + b.low()[i] + "," + b.close()[i] + "," + b.volume()[i] + "\n");
                 }
@@ -98,28 +99,28 @@ class FileSizeComparisonIntegrationTest {
         return file;
     }
 
-    private static Path writeJava(Path dir, List<OhlcGenerator.OhlcBatch> batches) throws IOException {
+    private static Path writeJava(Path dir, List<OhlcData.Batch> batches) throws IOException {
         return writeJava(dir, "ohlc-java.vtx", WriteOptions.cascading(3), batches);
     }
 
-    private static Path writeJavaZstd(Path dir, List<OhlcGenerator.OhlcBatch> batches) throws IOException {
+    private static Path writeJavaZstd(Path dir, List<OhlcData.Batch> batches) throws IOException {
         return writeJava(dir, "ohlc-java-zstd.vtx", WriteOptions.cascading(3).withZstd(true), batches);
     }
 
     private static Path writeJavaGlobalDict(Path dir, boolean globalDict,
-            List<OhlcGenerator.OhlcBatch> batches) throws IOException {
+            List<OhlcData.Batch> batches) throws IOException {
         String name = globalDict ? "ohlc-java-globaldict.vtx" : "ohlc-java-perchunkdict.vtx";
         return writeJava(dir, name, WriteOptions.cascading(3).withGlobalDict(globalDict), batches);
     }
 
     private static Path writeJava(Path dir, String filename, WriteOptions opts,
-            List<OhlcGenerator.OhlcBatch> batches) throws IOException {
+            List<OhlcData.Batch> batches) throws IOException {
         Path file = dir.resolve(filename);
         try (FileChannel ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, JAVA_SCHEMA, opts)) {
-            for (OhlcGenerator.OhlcBatch b : batches) {
+            for (OhlcData.Batch b : batches) {
                 writer.writeChunk(Map.of(
-                        "symbol", b.symbols(), "date", b.dates(),
+                        "symbol", b.symbol(), "date", b.date(),
                         "open", b.open(), "high", b.high(),
                         "low", b.low(), "close", b.close(), "volume", b.volume()));
             }
@@ -127,12 +128,12 @@ class FileSizeComparisonIntegrationTest {
         return file;
     }
 
-    private static Path writeJni(Path dir, List<OhlcGenerator.OhlcBatch> batches) throws IOException {
+    private static Path writeJni(Path dir, List<OhlcData.Batch> batches) throws IOException {
         Path file = dir.resolve("ohlc-jni.vtx");
         String uri = file.toAbsolutePath().toUri().toString();
         try (dev.vortex.api.VortexWriter writer = dev.vortex.api.VortexWriter.create(
                 SESSION, uri, JNI_SCHEMA, new HashMap<>(), ALLOCATOR)) {
-            for (OhlcGenerator.OhlcBatch b : batches) {
+            for (OhlcData.Batch b : batches) {
                 try (VectorSchemaRoot root = VectorSchemaRoot.create(JNI_SCHEMA, ALLOCATOR)) {
                     VarCharVector symbolVec = (VarCharVector) root.getVector("symbol");
                     DateDayVector dateVec = (DateDayVector) root.getVector("date");
@@ -142,7 +143,7 @@ class FileSizeComparisonIntegrationTest {
                     Float8Vector closeVec = (Float8Vector) root.getVector("close");
                     BigIntVector volVec = (BigIntVector) root.getVector("volume");
 
-                    int n = b.dates().length;
+                    int n = b.date().length;
                     symbolVec.allocateNew();
                     dateVec.allocateNew(n);
                     openVec.allocateNew(n);
@@ -152,8 +153,8 @@ class FileSizeComparisonIntegrationTest {
                     volVec.allocateNew(n);
 
                     for (int i = 0; i < n; i++) {
-                        symbolVec.setSafe(i, b.symbols()[i].getBytes(StandardCharsets.UTF_8));
-                        dateVec.setSafe(i, b.dates()[i]);
+                        symbolVec.setSafe(i, b.symbol()[i].getBytes(StandardCharsets.UTF_8));
+                        dateVec.setSafe(i, b.date()[i]);
                         openVec.setSafe(i, b.open()[i]);
                         highVec.setSafe(i, b.high()[i]);
                         lowVec.setSafe(i, b.low()[i]);
@@ -178,7 +179,7 @@ class FileSizeComparisonIntegrationTest {
     @Test
     void fileSizeComparison(@TempDir Path tmp) throws IOException {
         // Given
-        List<OhlcGenerator.OhlcBatch> batches = OhlcGenerator.generate(TOTAL_ROWS, BATCH_SIZE);
+        List<OhlcData.Batch> batches = OhlcData.generate(TOTAL_ROWS, BATCH_SIZE);
 
         // When
         Path csvFile = writeCsv(tmp, batches);
@@ -217,7 +218,7 @@ class FileSizeComparisonIntegrationTest {
     @Test
     void withZstd_smallerFile_and_readable(@TempDir Path tmp) throws IOException {
         // Given
-        List<OhlcGenerator.OhlcBatch> batches = OhlcGenerator.generate(TOTAL_ROWS, BATCH_SIZE);
+        List<OhlcData.Batch> batches = OhlcData.generate(TOTAL_ROWS, BATCH_SIZE);
 
         // When
         Path noZstd = writeJava(tmp, batches);
@@ -246,12 +247,12 @@ class FileSizeComparisonIntegrationTest {
 
     @Test
     void globalDict_multiSymbol_smallerThanPerChunkDict(@TempDir Path tmp) throws IOException {
-        // Given — multi-symbol OHLC (30 tickers from OhlcGenerator) split across multiple chunks
+        // Given — multi-symbol OHLC (30 tickers from OhlcData) split across multiple chunks
         // so per-chunk-dict mode emits the same ticker dictionary in every chunk while global-dict
         // mode emits it once. Small chunkSize amplifies the saving.
         int rows = 200_000;
         int batch = 20_000;
-        List<OhlcGenerator.OhlcBatch> batches = OhlcGenerator.generate(rows, batch);
+        List<OhlcData.Batch> batches = OhlcData.generate(rows, batch);
 
         // When
         Path globalDictFile = writeJavaGlobalDict(tmp, true, batches);
