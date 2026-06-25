@@ -7,10 +7,12 @@ import io.github.dfa1.vortex.reader.ScanIterator;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.array.BoolArray;
+import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 
 import org.apache.calcite.DataContext;
@@ -269,7 +271,11 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                 case F64 -> ((DoubleArray) array).getDouble(r);
                 case F32 -> (double) ((FloatArray) array).getFloat(r);
                 case I64, U64 -> ((LongArray) array).getLong(r);
-                case I32, U32, I16, U16, I8, U8 -> ((IntArray) array).getInt(r);
+                // Narrow ints decode to their own array width (Byte/Short/Int), not IntArray —
+                // each exposes getInt(r) with the correct sign/zero extension.
+                case I32, U32 -> ((IntArray) array).getInt(r);
+                case I16, U16 -> ((ShortArray) array).getInt(r);
+                case I8, U8 -> ((ByteArray) array).getInt(r);
                 default -> throw new IllegalStateException("unsupported ptype: " + p.ptype());
             };
             case DType.Utf8 _ -> ((VarBinArray) array).getString(r);
