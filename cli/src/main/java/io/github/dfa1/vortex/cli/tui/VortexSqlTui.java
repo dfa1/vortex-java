@@ -25,7 +25,7 @@ import java.util.Properties;
 /// editor follows the psql convention: `Enter` inserts a newline and a query runs only when the
 /// accumulated text ends with `;`. `Tab` moves focus between the editor and the result grid;
 /// `Up`/`Down` at the editor's top/bottom edge recall previous queries from [QueryHistory].
-/// `Ctrl-D` quits.
+/// `Esc` or `Ctrl-D` quits from either pane, matching the inspector and grid TUIs.
 ///
 /// Queries execute synchronously on the render thread - the UI briefly shows `running…` and then
 /// repaints with the result. Vortex readers open and close inside the scan, so no separate I/O
@@ -110,7 +110,7 @@ public final class VortexSqlTui {
         private ResultGrid result;
         private long resultRowOffset;
         private int resultColOffset;
-        private String status = "Enter SQL; end with ';' to run.  Tab: focus  Ctrl-D: quit";
+        private String status = "Enter SQL; end with ';' to run.  Tab: focus  Esc/Ctrl-D: quit";
         private boolean dirty = true;
 
         Loop(Terminal term, Connection conn, String tableLabel, QueryHistory history) {
@@ -142,7 +142,7 @@ public final class VortexSqlTui {
         }
 
         private boolean handle(Key key) throws IOException {
-            if (key instanceof Key.Eof) {
+            if (key instanceof Key.Eof || key instanceof Key.Escape) {
                 return false;
             }
             if (key instanceof Key.Char c && c.value() == CTRL_D) {
@@ -158,14 +158,16 @@ public final class VortexSqlTui {
         private boolean handleEditor(Key key) throws IOException {
             switch (key) {
                 case Key.Char c when c.value() == '\t' -> focusResults();
-                case Key.Char c -> insertChar(c.value());
+                // Drop other control bytes (Ctrl-A, Ctrl-U, …) - they would otherwise land in the
+                // SQL buffer as literal, invisible characters. Enter/Backspace/Tab/Ctrl-D are their
+                // own keys and handled above or in handle().
+                case Key.Char c when c.value() >= ' ' -> insertChar(c.value());
                 case Key.Enter _ -> onEnter();
                 case Key.Backspace _ -> backspace();
                 case Key.ArrowLeft _ -> moveLeft();
                 case Key.ArrowRight _ -> moveRight();
                 case Key.ArrowUp _ -> upOrHistory();
                 case Key.ArrowDown _ -> downOrHistory();
-                case Key.Escape _ -> clearBuffer();
                 default -> { /* ignore other keys in the editor */ }
             }
             return true;
@@ -185,10 +187,6 @@ public final class VortexSqlTui {
                 case Key.ArrowLeft _ -> scrollResultCol(-1);
                 case Key.ArrowRight _ -> scrollResultCol(1);
                 case Key.Char c when c.value() == '\t' -> {
-                    focus = Focus.EDITOR;
-                    dirty = true;
-                }
-                case Key.Escape _ -> {
                     focus = Focus.EDITOR;
                     dirty = true;
                 }
@@ -531,8 +529,8 @@ public final class VortexSqlTui {
 
         private void renderStatus(StringBuilder out, int cols) {
             String hint = focus == Focus.EDITOR
-                    ? " Enter: newline  ;Enter: run  ↑↓: history  Tab: results  Ctrl-D: quit "
-                    : " ↑↓←→/PgUp/PgDn: scroll  Tab/Esc: editor  Ctrl-D: quit ";
+                    ? " Enter: newline  ;Enter: run  ↑↓: history  Tab: results  Esc/Ctrl-D: quit "
+                    : " ↑↓←→/PgUp/PgDn: scroll  Tab: editor  Esc/Ctrl-D: quit ";
             out.append(Ansi.bg(44)).append(Ansi.fg(97));
             appendPadded(out, hint, cols);
             out.append(Ansi.RESET);

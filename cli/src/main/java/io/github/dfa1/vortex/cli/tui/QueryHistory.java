@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.cli.tui;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -14,6 +13,9 @@ import java.util.List;
 /// multiline query survives a round-trip through the flat history file. Consecutive duplicates are
 /// collapsed - re-running the same query does not grow the list. The buffer is rewritten on every
 /// [#add(String)] so an interrupted session still keeps everything up to the last run query.
+///
+/// Persistence is best-effort: like [#load(Path)], a failed write is swallowed so history never
+/// aborts the running shell - the in-memory recall buffer stays usable for the rest of the session.
 public final class QueryHistory {
 
     /// Maximum number of queries retained; older entries are dropped on overflow.
@@ -101,8 +103,10 @@ public final class QueryHistory {
                 lines.add(escape(e));
             }
             Files.write(file, lines);
-        } catch (IOException e) {
-            throw new UncheckedIOException("cannot write history file " + file, e);
+        } catch (IOException _) {
+            // History is best-effort: a failed write (read-only home, full disk) must never abort
+            // the running shell. The in-memory entries are already updated, so recall still works
+            // this session; only cross-session persistence is lost. Mirrors the swallow in load.
         }
     }
 

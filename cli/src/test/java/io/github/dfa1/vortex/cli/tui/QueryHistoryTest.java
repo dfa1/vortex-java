@@ -3,9 +3,12 @@ package io.github.dfa1.vortex.cli.tui;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 class QueryHistoryTest {
 
@@ -91,6 +94,19 @@ class QueryHistoryTest {
 
         // Then
         assertThat(QueryHistory.load(file).entries()).containsExactly(multiline);
+    }
+
+    @Test
+    void add_unwritableFile_doesNotThrowAndKeepsInMemoryEntry(@TempDir Path dir) throws IOException {
+        // Given — a history path whose parent is a regular file, so createDirectories/write fail.
+        // History is best-effort: a write failure must never abort the running shell.
+        Path blocker = dir.resolve("blocker");
+        Files.createFile(blocker);
+        QueryHistory sut = QueryHistory.load(blocker.resolve("hist"));
+
+        // When / Then — add swallows the I/O failure but still records the query in memory.
+        assertThatCode(() -> sut.add("select 1")).doesNotThrowAnyException();
+        assertThat(sut.entries()).containsExactly("select 1");
     }
 
     @Test

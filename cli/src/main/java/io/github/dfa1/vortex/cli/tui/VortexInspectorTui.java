@@ -406,7 +406,7 @@ public final class VortexInspectorTui {
         private void drawFooter(StringBuilder buf, int width, int height) {
             buf.append(Ansi.moveTo(height, 1));
             buf.append(Ansi.bg(47)).append(Ansi.fg(30));
-            buf.append(InspectorRender.pad(" ↑↓ nav   →/Enter expand   ← collapse   q quit ", width));
+            buf.append(InspectorRender.pad(" ↑↓ nav   →/Enter expand   ← collapse   Esc/q quit ", width));
             buf.append(Ansi.RESET);
         }
 

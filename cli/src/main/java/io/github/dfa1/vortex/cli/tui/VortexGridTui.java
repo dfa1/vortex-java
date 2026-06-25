@@ -343,7 +343,7 @@ public final class VortexGridTui {
         private void renderStatus(StringBuilder out, String[][] window, int viewportRows, int termCols) {
             String col = cursorCol < totalCols ? data.columns().get(cursorCol) : "-";
             String cellValue = currentCellValue(window, viewportRows);
-            String right = " arrows/PgUp/PgDn move  g/G top/bot  q quit ";
+            String right = " arrows/PgUp/PgDn move  g/G top/bot  Esc/q quit ";
             int rightRoom = right.length() < termCols ? right.length() : 0;
             int leftBudget = termCols - rightRoom;
             String leftFull = " R" + (cursorRow + 1) + " C" + (cursorCol + 1)

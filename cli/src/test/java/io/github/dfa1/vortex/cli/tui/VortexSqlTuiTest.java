@@ -115,6 +115,40 @@ class VortexSqlTuiTest {
     }
 
     @Test
+    void run_escapeQuitsImmediately(@TempDir Path dir) throws Exception {
+        // Given — Esc is the universal quit key (as in the inspector/grid TUIs). A query scripted
+        // after the Esc must never run, proving the loop exits on Esc rather than processing on.
+        Path file = writeFixture(dir);
+        List<Key> script = new ArrayList<>();
+        script.add(Key.Escape.INSTANCE);
+        script.addAll(type("select name from vtx.t;\n"));
+        FakeTerminal term = new FakeTerminal(SIZE, script);
+
+        // When
+        runWith(term, file, QueryHistory.load(dir.resolve("hist")));
+
+        // Then — nothing after Esc executed, so no result rows were rendered.
+        assertThat(term.output()).doesNotContain("alice");
+    }
+
+    @Test
+    void run_controlCharInEditorIsDroppedNotInsertedAsText(@TempDir Path dir) throws Exception {
+        // Given — a stray control byte (Ctrl-A) typed mid-query. If inserted literally it would
+        // corrupt the SQL into a parse error; the editor must drop non-printable input instead.
+        Path file = writeFixture(dir);
+        List<Key> script = new ArrayList<>(type("select name"));
+        script.add(new Key.Char((char) 1));        // Ctrl-A: must be ignored
+        script.addAll(type(" from vtx.t;\n"));
+        FakeTerminal term = new FakeTerminal(SIZE, script);
+
+        // When
+        runWith(term, file, QueryHistory.load(dir.resolve("hist")));
+
+        // Then — the query parses and runs; no error is reported.
+        assertThat(term.output()).contains("alice").doesNotContain("ERROR:");
+    }
+
+    @Test
     void run_invalidSql_reportsErrorWithoutCrashing(@TempDir Path dir) throws Exception {
         // Given — a query against a non-existent column.
         Path file = writeFixture(dir);
