@@ -10,6 +10,7 @@ import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
+import io.github.dfa1.vortex.core.testing.OhlcData;
 import io.github.dfa1.vortex.writer.encode.BoolEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.PcoEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.ByteBoolEncodingEncoder;
@@ -428,14 +429,14 @@ class JavaWritesRustReadsIntegrationTest {
     void javaWriter_jniReader_cascading_ohlc(@TempDir Path tmp) throws IOException {
         // Given — OHLC data written with cascading(3): exercises ALP→FOR→bitpacked chain
         Path file = tmp.resolve("java_cascade_ohlc.vtx");
-        List<OhlcGenerator.OhlcBatch> batches = OhlcGenerator.generate(10_000, 1_000);
+        List<OhlcData.Batch> batches = OhlcData.generate(10_000, 1_000);
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, OHLC_SCHEMA, WriteOptions.cascading(3))) {
-            for (OhlcGenerator.OhlcBatch b : batches) {
+            for (OhlcData.Batch b : batches) {
                 sut.writeChunk(Map.of(
-                        "date", b.dates(),
-                        "symbol", b.symbols(),
+                        "date", b.date(),
+                        "symbol", b.symbol(),
                         "open", b.open(),
                         "high", b.high(),
                         "low", b.low(),
@@ -708,12 +709,12 @@ class JavaWritesRustReadsIntegrationTest {
     void javaWriter_jniReader_cascading_ohlc_columnProjection(@TempDir Path tmp) throws IOException {
         // Given
         Path file = tmp.resolve("java_cascade_proj.vtx");
-        List<OhlcGenerator.OhlcBatch> batches = OhlcGenerator.generate(2_000, 1_000);
+        List<OhlcData.Batch> batches = OhlcData.generate(2_000, 1_000);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, OHLC_SCHEMA, WriteOptions.cascading(3))) {
-            for (OhlcGenerator.OhlcBatch b : batches) {
+            for (OhlcData.Batch b : batches) {
                 sut.writeChunk(Map.of(
-                        "date", b.dates(), "symbol", b.symbols(),
+                        "date", b.date(), "symbol", b.symbol(),
                         "open", b.open(), "high", b.high(),
                         "low", b.low(), "close", b.close(), "volume", b.volume()));
             }
