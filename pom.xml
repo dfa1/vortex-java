@@ -49,6 +49,7 @@
 		<module>bom</module>
 		<module>cli</module>
 		<module>inspector</module>
+		<module>calcite</module>
 		<module>integration</module>
 		<module>performance</module>
 	</modules>

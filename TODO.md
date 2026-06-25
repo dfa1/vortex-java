@@ -6,6 +6,16 @@
 - [ ] Create website
    - build something like hardwood.dev but for vortex files
 
+## Testing
+
+- [ ] **Finish OHLC test-data dedup** — the random-walk generator is single-sourced in
+  `core.testing.OhlcData` (core test-jar). `integration`'s `OhlcGenerator` is now a thin adapter
+  that maps `OhlcData.Batch` to its own `OhlcBatch` (`symbols`/`dates` field names) only to avoid
+  churning the JNI/Arrow callers. Align fully: drop `OhlcGenerator`/`OhlcBatch`, switch the
+  integration callers (`FileSizeComparisonIntegrationTest`, `JavaWritesRustReadsIntegrationTest`)
+  to `OhlcData.Batch` directly so there is one shape, not two. Verify with the JNI integration
+  suite (needs vortex-jni native libs).
+
 ## Performance
 
 - [ ] **Benchmark publishing** — drop CI workflow, add `bench-publish` script; see [ADR-0006](docs/adr/0006-benchmark-publishing.md).
