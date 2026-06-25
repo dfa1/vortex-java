@@ -120,6 +120,11 @@ public final class VortexAggregates {
                 }
             }
         }
-        return isFloating ? Double.valueOf(doubleSum) : Long.valueOf(longSum);
+        // Return via if/else, not a ?: ternary: a numeric conditional unboxes both branches and
+        // widens the Long to double, silently turning an integer-column sum into a Double.
+        if (isFloating) {
+            return doubleSum;
+        }
+        return longSum;
     }
 }
