@@ -15,8 +15,9 @@ import io.github.dfa1.vortex.reader.array.VarBinArray;
 
 import org.apache.calcite.DataContext;
 import org.apache.calcite.jdbc.JavaTypeFactoryImpl;
+import org.apache.calcite.linq4j.AbstractEnumerable;
 import org.apache.calcite.linq4j.Enumerable;
-import org.apache.calcite.linq4j.Linq4j;
+import org.apache.calcite.linq4j.Enumerator;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rex.RexBuilder;
@@ -139,21 +140,108 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
             options = ScanOptions.columns(outNames);
         }
 
-        List<Object[]> rows = new ArrayList<>();
-        long scanned = 0;
-        try (VortexReader reader = VortexReader.open(file);
-             ScanIterator scan = reader.scan(options)) {
-            while (scan.hasNext()) {
-                try (Chunk chunk = scan.next()) {
-                    scanned++;
-                    appendChunk(chunk, outNames, outTypes, rows);
+        // Stream rows lazily: decode one chunk at a time and yield a fresh row, so rows die young
+        // (in G1's young gen) instead of piling a whole-result List<Object[]> into the old gen — the
+        // dominant cost an async-profiler run showed for the full-scan path (~72% in GC).
+        ScanOptions scanOptions = options;
+        return new AbstractEnumerable<>() {
+            @Override
+            public Enumerator<Object[]> enumerator() {
+                return new VortexEnumerator(scanOptions, outNames, outTypes);
+            }
+        };
+    }
+
+    /// Streaming [Enumerator] over a Vortex scan: advances chunk by chunk, decoding each requested
+    /// column once per chunk and materialising one `Object[]` row per [#moveNext()]. Rows are not
+    /// retained, so the working set stays at one chunk rather than the whole result.
+    private final class VortexEnumerator implements Enumerator<Object[]> {
+
+        private final String[] names;
+        private final DType[] types;
+        private final VortexReader reader;
+        private final ScanIterator scan;
+        private Chunk chunk;
+        private Object[] columns;
+        private long rowInChunk;
+        private long chunkRows;
+        private Object[] current;
+
+        private VortexEnumerator(ScanOptions options, String[] names, DType[] types) {
+            this.names = names;
+            this.types = types;
+            chunksScannedLastQuery.set(0);
+            VortexReader openedReader = null;
+            try {
+                openedReader = VortexReader.open(file);
+                this.reader = openedReader;
+                this.scan = openedReader.scan(options);
+            } catch (IOException e) {
+                closeQuietly(openedReader);
+                throw new UncheckedIOException("cannot scan " + file, e);
+            } catch (RuntimeException e) {
+                closeQuietly(openedReader);
+                throw e;
+            }
+        }
+
+        private void closeQuietly(VortexReader r) {
+            if (r != null) {
+                r.close();
+            }
+        }
+
+        @Override
+        public Object[] current() {
+            return current;
+        }
+
+        @Override
+        public boolean moveNext() {
+            while (true) {
+                if (chunk != null && rowInChunk < chunkRows) {
+                    Object[] row = new Object[names.length];
+                    for (int c = 0; c < names.length; c++) {
+                        row[c] = value(columns[c], types[c], rowInChunk);
+                    }
+                    rowInChunk++;
+                    current = row;
+                    return true;
+                }
+                if (chunk != null) {
+                    chunk.close();
+                    chunk = null;
+                }
+                if (!scan.hasNext()) {
+                    return false;
+                }
+                chunk = scan.next();
+                chunksScannedLastQuery.incrementAndGet();
+                chunkRows = chunk.rowCount();
+                rowInChunk = 0;
+                columns = new Object[names.length];
+                for (int c = 0; c < names.length; c++) {
+                    columns[c] = chunk.column(names[c]);
                 }
             }
-        } catch (IOException e) {
-            throw new UncheckedIOException("cannot scan " + file, e);
         }
-        chunksScannedLastQuery.set(scanned);
-        return Linq4j.asEnumerable(rows);
+
+        @Override
+        public void reset() {
+            throw new UnsupportedOperationException("VortexEnumerator does not support reset");
+        }
+
+        @Override
+        public void close() {
+            try {
+                if (chunk != null) {
+                    chunk.close();
+                }
+            } finally {
+                scan.close();
+                reader.close();
+            }
+        }
     }
 
     private DType.Struct struct() {
@@ -173,21 +261,6 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
             all[i] = i;
         }
         return all;
-    }
-
-    private static void appendChunk(Chunk chunk, String[] names, DType[] types, List<Object[]> rows) {
-        long n = chunk.rowCount();
-        Object[] arrays = new Object[names.length];
-        for (int c = 0; c < names.length; c++) {
-            arrays[c] = chunk.column(names[c]);
-        }
-        for (long r = 0; r < n; r++) {
-            Object[] row = new Object[names.length];
-            for (int c = 0; c < names.length; c++) {
-                row[c] = value(arrays[c], types[c], r);
-            }
-            rows.add(row);
-        }
     }
 
     private static Object value(Object array, DType type, long r) {
