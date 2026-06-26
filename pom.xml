@@ -476,6 +476,23 @@
 			</dependencies>
 		</profile>
 		<profile>
+			<id>zstd-native-windows-x86_64</id>
+			<activation>
+				<os>
+					<family>windows</family>
+					<arch>amd64</arch>
+				</os>
+			</activation>
+			<dependencies>
+				<dependency>
+					<groupId>io.github.dfa1.zstd</groupId>
+					<artifactId>zstd-native-windows-x86_64</artifactId>
+					<version>${zstd.version}</version>
+					<scope>runtime</scope>
+				</dependency>
+			</dependencies>
+		</profile>
+		<profile>
 			<!-- Activated in CI: ./mvnw verify -P coverage  -->
 			<!-- Attaches the JaCoCo agent to surefire/failsafe and writes one
 			     {@code target/site/jacoco/jacoco.xml} per module so Codecov / Coveralls
