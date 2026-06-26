@@ -7,9 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.1] — 2026-06-27
+
+Security hardening of the untrusted-input parse paths: every malformed-file path now surfaces as a `VortexException` instead of an unchecked `Error`, a raw JDK exception, or a resource leak (ADR 0003). Plus a `vortex.zstd` binding bump.
+
+### Security
+
+- `DType`-tree and array-node decoding are now depth-capped (64, matching the layout-tree guard): a crafted or self-referential FlatBuffer surfaces as a `VortexException` instead of a `StackOverflowError` — which, being an `Error`, previously escaped sanitization and leaked the reader's memory-mapped `Arena`. ([93f8d5f4](https://github.com/dfa1/vortex-java/commit/93f8d5f4), [428026d3](https://github.com/dfa1/vortex-java/commit/428026d3))
+- The HTTP reader validates footer `segmentSpecs` against the file size before any `Range` request is built from them, matching the local-file path. ([1d8ddebc](https://github.com/dfa1/vortex-java/commit/1d8ddebc))
+- `vortex.zstd` decode bounds-checks each frame's declared uncompressed size and overflow-checks the total before allocating, and range-checks VarBin length prefixes — a crafted payload can no longer under-allocate or read out of bounds. ([2df4e3a7](https://github.com/dfa1/vortex-java/commit/2df4e3a7), [adc445e8](https://github.com/dfa1/vortex-java/commit/adc445e8))
+- The HTTP reader parses the server-controlled `Content-Range` header and slices the tail buffer defensively, so a malformed response yields a `VortexException` rather than a raw `NumberFormatException`/`IndexOutOfBoundsException`. ([feac99b7](https://github.com/dfa1/vortex-java/commit/feac99b7))
+
 ### Changed
 
-- Bumped `io.github.dfa1.zstd` (the `vortex.zstd` FFM bindings, pinned by the BOM) 0.3 → 0.4. ([5bf14475](https://github.com/dfa1/vortex-java/commit/5bf14475))
+- Bumped `io.github.dfa1.zstd` (the `vortex.zstd` FFM bindings, pinned by the BOM) 0.3 → 0.4. ([677c2cf7](https://github.com/dfa1/vortex-java/commit/677c2cf7))
 
 ## [0.10.0] — 2026-06-26
 
