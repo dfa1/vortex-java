@@ -159,18 +159,7 @@ public final class VortexHttpReader implements VortexHandle {
             // Content-Range: bytes <start>-<end>/<total>
             String cr = resp.headers().firstValue("Content-Range")
                             .orElseThrow(() -> new VortexException("206 response missing Content-Range from " + uri));
-            String spec = cr.substring("bytes ".length()); // "<start>-<end>/<total>"
-            int slash = spec.indexOf('/');
-            long total = Long.parseLong(spec.substring(slash + 1));
-            long start = Long.parseLong(spec.substring(0, spec.indexOf('-')));
-            long end = Long.parseLong(spec.substring(spec.indexOf('-') + 1, slash));
-            long expected = end - start + 1;
-            if (body.length != expected) {
-                throw new VortexException(
-                    "HTTP tail from %s: Content-Range declares %d bytes but body has %d"
-                        .formatted(uri, expected, body.length));
-            }
-            return new TailFetch(body, start, total);
+            return parseContentRange(cr, body, uri);
         }
 
         if (status == 200) {
@@ -179,6 +168,37 @@ public final class VortexHttpReader implements VortexHandle {
         }
 
         throw new VortexException("HTTP " + status + " fetching tail of " + uri);
+    }
+
+    /// Parses a `bytes <start>-<end>/<total>` Content-Range header from an untrusted server.
+    /// Any structural defect (missing `bytes ` prefix, missing `-`/`/`, non-numeric fields)
+    /// surfaces as a [VortexException] rather than a raw [NumberFormatException] or
+    /// [StringIndexOutOfBoundsException].
+    private static TailFetch parseContentRange(String contentRange, byte[] body, URI uri) {
+        try {
+            String prefix = "bytes ";
+            if (!contentRange.startsWith(prefix)) {
+                throw new VortexException("malformed Content-Range '" + contentRange + "' from " + uri);
+            }
+            String spec = contentRange.substring(prefix.length()); // "<start>-<end>/<total>"
+            int dash = spec.indexOf('-');
+            int slash = spec.indexOf('/');
+            if (dash < 0 || slash < 0 || dash > slash) {
+                throw new VortexException("malformed Content-Range '" + contentRange + "' from " + uri);
+            }
+            long start = Long.parseLong(spec.substring(0, dash));
+            long end = Long.parseLong(spec.substring(dash + 1, slash));
+            long total = Long.parseLong(spec.substring(slash + 1));
+            long expected = end - start + 1;
+            if (body.length != expected) {
+                throw new VortexException(
+                    "HTTP tail from %s: Content-Range declares %d bytes but body has %d"
+                        .formatted(uri, expected, body.length));
+            }
+            return new TailFetch(body, start, total);
+        } catch (NumberFormatException e) {
+            throw new VortexException("malformed Content-Range '" + contentRange + "' from " + uri, e);
+        }
     }
 
     private static byte[] fetchRange(URI uri, long from, long to, HttpClient client) throws IOException {
@@ -215,8 +235,8 @@ public final class VortexHttpReader implements VortexHandle {
         URI uri, HttpClient client
     ) throws IOException {
         if (offset >= tailStart) {
-            int relOffset = (int) (offset - tailStart);
-            return MemorySegment.ofArray(tail).asSlice(relOffset, length);
+            long relOffset = offset - tailStart;
+            return IoBounds.slice(MemorySegment.ofArray(tail), relOffset, length);
         }
         byte[] bytes = fetchRange(uri, offset, offset + length - 1, client);
         return MemorySegment.ofArray(bytes);
