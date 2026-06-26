@@ -124,8 +124,16 @@ final class ChunkImpl implements Chunk {
                             "non-nullable column '" + column + "' received null at row " + i);
                 }
             }
+            return arr;
         }
-        return arr;
+        // Nullable utf8/binary unifies on the NullableData carrier like the primitive paths: the
+        // raw String[] (null elements preserved) plus a derived validity bitmap. The writer then
+        // routes it through MaskedEncoding (or a nullable-capable encoder such as vortex.zstd).
+        boolean[] validity = new boolean[arr.length];
+        for (int i = 0; i < arr.length; i++) {
+            validity[i] = arr[i] != null;
+        }
+        return new NullableData(arr, validity);
     }
 
     private static Object adaptBool(String column, DType.Bool dtype, Object value) {

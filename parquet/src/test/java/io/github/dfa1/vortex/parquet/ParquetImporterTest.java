@@ -12,6 +12,7 @@ import io.github.dfa1.vortex.reader.ScanIterator;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -218,10 +219,13 @@ class ParquetImporterTest {
                     assertThat(sk.getLong(1)).isEqualTo(99L);
                     assertThat(sk.getLong(2)).isEqualTo(98L);
 
-                    VarBinArray name = first.column("c_first_name");
-                    assertThat(name.getString(0)).isEqualTo("Jeannette");
-                    assertThat(name.getString(1)).isEqualTo("Austin");
-                    assertThat(name.getString(2)).isEqualTo("David");
+                    // c_first_name is nullable Utf8, so it round-trips as a MaskedArray (validity +
+                    // VarBin values child), like nullable primitives. The first three rows are non-null.
+                    MaskedArray name = first.column("c_first_name");
+                    VarBinArray nameValues = (VarBinArray) name.inner();
+                    assertThat(nameValues.getString(0)).isEqualTo("Jeannette");
+                    assertThat(nameValues.getString(1)).isEqualTo("Austin");
+                    assertThat(nameValues.getString(2)).isEqualTo("David");
                 }
             }
         }

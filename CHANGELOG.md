@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Writing a nullable `Utf8`/`Binary` column no longer throws `NullPointerException` (or silently drops nulls): nullable string columns now carry their validity like nullable primitives and round-trip through `vortex.masked`. As a result they decode as `MaskedArray` (validity + values child) rather than a bare `VarBinArray`. ([#168](https://github.com/dfa1/vortex-java/pull/168))
+- CSV export now handles nullable columns (`MaskedArray`): null rows export as an empty field instead of failing with "unsupported array type for CSV export". ([#168](https://github.com/dfa1/vortex-java/pull/168))
 - Zone-map pruning now compares filter values in the *column's* type domain rather than by the boxed value's type. A predicate whose value is boxed at a different width (e.g. `Integer` on an `I64` column) — or any value on a `U64` column — previously pruned nothing and silently degraded to a full scan; it now prunes correctly (unsigned columns by unsigned order). As part of this, a filter value genuinely incomparable to its column (e.g. a `String` against a numeric column) now raises `VortexException` during the scan instead of silently disabling pruning — a behaviour change for callers that relied on the previous silent full scan. ([#159](https://github.com/dfa1/vortex-java/issues/159))
 
 ## [0.9.0] — 2026-06-24

@@ -15,6 +15,8 @@ import java.util.List;
 /// Write-only encoder for `vortex.varbin`.
 public final class VarBinEncodingEncoder implements EncodingEncoder {
 
+    private static final byte[] EMPTY_BYTES = new byte[0];
+
     /// Public no-arg constructor required by [java.util.ServiceLoader].
     public VarBinEncodingEncoder() {
     }
@@ -37,7 +39,9 @@ public final class VarBinEncodingEncoder implements EncodingEncoder {
         byte[][] byteArrays = new byte[n][];
         int totalBytes = 0;
         for (int i = 0; i < n; i++) {
-            byteArrays[i] = strings[i].getBytes(StandardCharsets.UTF_8);
+            // Null entries (this encoder is the values child of a masked/nullable layout, where
+            // validity carries nullity) contribute a zero-length slot, not an NPE.
+            byteArrays[i] = strings[i] == null ? EMPTY_BYTES : strings[i].getBytes(StandardCharsets.UTF_8);
             totalBytes += byteArrays[i].length;
         }
 

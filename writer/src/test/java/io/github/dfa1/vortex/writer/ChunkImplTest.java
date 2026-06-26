@@ -178,8 +178,14 @@ class ChunkImplTest {
         }
 
         @Test
-        void nullableAllowsNullElements() {
-            assertThat(putGet(new DType.Utf8(true), new String[]{"a", null})).isInstanceOf(String[].class);
+        void nullableConvertsToNullableData() {
+            // Nullable utf8 unifies on the NullableData carrier (like nullable primitives/bools):
+            // the raw String[] with null elements preserved, plus a derived validity bitmap.
+            Object result = putGet(new DType.Utf8(true), new String[]{"a", null, "c"});
+
+            assertThat(result).isInstanceOf(NullableData.class);
+            assertThat(((NullableData) result).validity()).containsExactly(true, false, true);
+            assertThat((String[]) ((NullableData) result).values()).containsExactly("a", null, "c");
         }
 
         @Test
