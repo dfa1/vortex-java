@@ -34,6 +34,13 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
     }
 
     @Override
+    public boolean acceptsNullable(DType dtype) {
+        // Nullable utf8/binary arrive as a String[] carrying nulls (handled in encode), not a
+        // NullableData carrier; only primitive nullable columns are routed here as NullableData.
+        return dtype instanceof DType.Primitive;
+    }
+
+    @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
         if (data instanceof NullableData nd) {
             if (!(dtype instanceof DType.Primitive dt)) {
@@ -48,6 +55,10 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
         if (dtype instanceof DType.Utf8 || dtype instanceof DType.Binary) {
             String[] strings = (String[]) data;
             if (containsNull(strings)) {
+                if (!dtype.nullable()) {
+                    throw new VortexException(EncodingId.VORTEX_ZSTD,
+                            "non-nullable " + dtype + " contains null");
+                }
                 return encodeNullableVarBin(strings, ctx);
             }
             return encodeVarBin(strings, ctx.arena());

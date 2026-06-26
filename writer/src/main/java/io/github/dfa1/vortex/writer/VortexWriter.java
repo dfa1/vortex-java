@@ -520,10 +520,13 @@ public final class VortexWriter implements Closeable {
         // Non-extension nullable columns (Primitive, Utf8) wrap with MaskedEncodingEncoder here.
         // FbsExtension columns route through ExtEncodingEncoder.encode which itself delegates to
         // MaskedEncodingEncoder when its storage data is NullableData — handled inside ExtEncoding.
+        // Exception: a configured encoder that embeds validity itself (acceptsNullable, e.g.
+        // vortex.zstd) takes the NullableData straight, so no masked wrapper is inserted.
         if (encodingOverride == null
                 && data instanceof io.github.dfa1.vortex.writer.encode.NullableData
                 && !(dtype instanceof DType.Extension)) {
-            encodingOverride = new MaskedEncodingEncoder();
+            EncodingEncoder nullableCapable = nullableCapableEncoder(dtype);
+            encodingOverride = nullableCapable != null ? nullableCapable : new MaskedEncodingEncoder();
         }
         // Variant columns bypass the cascade: the container encoding is structural, not a
         // compressible primitive codec, so route straight to the dedicated encoder.
@@ -593,6 +596,22 @@ public final class VortexWriter implements Closeable {
             }
         }
         throw new UnsupportedOperationException("no encoder for dtype: " + dtype);
+    }
+
+    /// Returns the configured encoder for `dtype` that consumes a [NullableData] carrier directly
+    /// (embedding its own validity), or `null` to fall back to `vortex.masked` wrapping. Only the
+    /// first-match flat path is considered; with cascading enabled the compressor owns selection,
+    /// so nullable columns keep the masked layout.
+    private EncodingEncoder nullableCapableEncoder(DType dtype) {
+        if (options.allowedCascading() > 0) {
+            return null;
+        }
+        for (EncodingEncoder c : encodings) {
+            if (c.accepts(dtype) && c.acceptsNullable(dtype)) {
+                return c;
+            }
+        }
+        return null;
     }
 
     private void write(MemorySegment seg) throws IOException {

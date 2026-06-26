@@ -19,6 +19,20 @@ public interface EncodingEncoder {
     /// @return `true` if this encoding can encode arrays of `dtype`
     boolean accepts(DType dtype);
 
+    /// Whether this encoder consumes a [NullableData] carrier directly for `dtype`, embedding
+    /// the validity bitmap itself (as a Bool child) rather than relying on an enclosing
+    /// `vortex.masked` wrapper.
+    ///
+    /// The writer uses this to route nullable columns: an encoder returning `true` receives the
+    /// [NullableData] straight, otherwise the column is masked-wrapped over a non-nullable child.
+    /// Default `false` — most encoders only handle dense data.
+    ///
+    /// @param dtype the dtype to test
+    /// @return `true` if this encoding can encode nullable `dtype` from a [NullableData] carrier
+    default boolean acceptsNullable(DType dtype) {
+        return false;
+    }
+
     /// Encodes `data` to bytes using the provided arena for output buffer allocation.
     ///
     /// @param dtype logical type of the data
