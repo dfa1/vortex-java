@@ -209,6 +209,25 @@ class ZstdEncodingEncoderTest {
         }
 
         @Test
+        void decode_withDictionarySizeMismatch_throws() {
+            // Given — metadata declares a dictionary_size that does not match the dict buffer's
+            // actual byte size; the decoder must fail fast rather than digest a malformed
+            // dictionary (the Rust reference enforces the same invariant).
+            byte[] dict = "common-zstd-dictionary-content-for-test".getBytes(StandardCharsets.UTF_8);
+            int[] values = {1, 2, 3};
+            byte[] raw = toLeBytes(values);
+            byte[] compressed = compressWithDict(raw, dict);
+            byte[] meta = new ProtoZstdMetadata(dict.length + 1,
+                    java.util.List.of(new ProtoZstdFrameMetadata(raw.length, values.length))).encode();
+            DecodeContext ctx = makeDictCtx(meta, DTypes.I32, values.length, dict, compressed);
+
+            // When / Then
+            assertThatThrownBy(() -> DECODER.decode(ctx))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("dictionary size metadata");
+        }
+
+        @Test
         void decode_nullable_primitive_scattersValuesCorrectly() {
             boolean[] validityBits = {true, false, true, false};
             byte[] raw = toLeBytes(new int[]{10, 30});

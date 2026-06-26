@@ -158,7 +158,7 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
         MemorySegment out = ctx.arena().allocate(totalUncompressed);
         try (ZstdDecompressCtx dctx = new ZstdDecompressCtx();
              Arena scratch = Arena.ofConfined()) {
-            ZstdDecompressDict dictionary = hasDictionary ? digestDictionary(ctx.buffer(0)) : null;
+            ZstdDecompressDict dictionary = hasDictionary ? digestDictionary(ctx.buffer(0), meta.dictionary_size()) : null;
             try {
                 long outOffset = 0;
                 for (int i = 0; i < frameCount; i++) {
@@ -190,7 +190,16 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
     /// (not per frame or per row) over a small buffer, and `ZSTD_createDDict` re-copies into its
     /// own native allocation regardless. Switch to a `MemorySegment` overload once the zstd
     /// bindings expose one.
-    private static ZstdDecompressDict digestDictionary(MemorySegment dictBuffer) {
+    ///
+    /// `declaredSize` is the metadata's `dictionary_size`; it must match the dictionary buffer's
+    /// byte size (the Rust reference enforces the same invariant), otherwise the segment is
+    /// malformed and we fail fast rather than digest a truncated dictionary.
+    private static ZstdDecompressDict digestDictionary(MemorySegment dictBuffer, long declaredSize) {
+        if (dictBuffer.byteSize() != declaredSize) {
+            throw new VortexException(EncodingId.VORTEX_ZSTD,
+                    "dictionary size metadata " + declaredSize
+                            + " does not match buffer size " + dictBuffer.byteSize());
+        }
         byte[] raw = dictBuffer.toArray(ValueLayout.JAVA_BYTE);
         return new ZstdDecompressDict(ZstdDictionary.of(raw));
     }

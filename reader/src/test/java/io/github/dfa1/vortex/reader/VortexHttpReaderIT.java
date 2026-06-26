@@ -112,7 +112,6 @@ class VortexHttpReaderIT {
         assertThat(totalRows).isGreaterThan(0);
     }
 
-
     // vortex.masked / vortex.patched / vortex.variant: decoders implemented, but no S3 fixture
     // is published (still absent at v0.75.0) — enable this test once fixtures exist upstream.
 
