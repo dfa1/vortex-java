@@ -123,7 +123,7 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
         long scanPos = 0;
         for (long i = 0; i < rowCount; i++) {
             if (validity.getBoolean(i)) {
-                int len = validValues.get(PTypeIO.LE_INT, scanPos);
+                int len = readVarBinLen(validValues, scanPos);
                 scanPos += 4L + len;
                 totalDataBytes += len;
             }
@@ -247,11 +247,28 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
         };
     }
 
+    /// Reads a 4-byte little-endian length prefix at `pos` from a decompressed VarBin payload and
+    /// validates that both the prefix and the `len` bytes that follow lie within `src`. Without this,
+    /// a crafted payload with a negative or oversized length would advance the cursor out of bounds
+    /// and surface as a raw [IndexOutOfBoundsException] instead of a
+    /// [io.github.dfa1.vortex.core.error.VortexException].
+    ///
+    /// @param src the decompressed VarBin payload segment
+    /// @param pos byte offset of the length prefix within `src`
+    /// @return the validated element length in bytes
+    private static int readVarBinLen(MemorySegment src, long pos) {
+        IoBounds.checkRange(pos, 4, src.byteSize());
+        int len = src.get(PTypeIO.LE_INT, pos);
+        // checkRange rejects len < 0 and a [pos+4, pos+4+len) range that overruns src.
+        IoBounds.checkRange(pos + 4L, len, src.byteSize());
+        return len;
+    }
+
     private static VarBinArray buildVarBin(DType dtype, long n, MemorySegment decompressed, DecodeContext ctx) {
         long totalDataBytes = 0;
         long pos = 0;
         for (long i = 0; i < n; i++) {
-            int len = decompressed.get(PTypeIO.LE_INT, pos);
+            int len = readVarBinLen(decompressed, pos);
             pos += 4 + len;
             totalDataBytes += len;
         }
