@@ -11,6 +11,7 @@ import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.ScanIterator;
@@ -144,6 +145,9 @@ public final class CsvExporter {
             case FloatArray fa -> Float.toString(fa.getFloat(rowIdx));
             case BoolArray ba -> Boolean.toString(ba.getBoolean(rowIdx));
             case VarBinArray va -> va.getString(rowIdx);
+            // Nullable columns decode as MaskedArray: null rows export as an empty field, valid
+            // rows defer to the inner values array.
+            case MaskedArray ma -> ma.isValid(rowIdx) ? cellValue(ma.inner(), rowIdx) : "";
             default -> throw new VortexException(
                     "unsupported array type for CSV export: " + arr.getClass().getSimpleName());
         };

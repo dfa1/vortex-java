@@ -115,15 +115,18 @@ class ZstdEncodingEncoderTest {
 
         @Test
         void encode_nullableUtf8_roundTrips() {
-            // Given — a String[] carrying nulls; the encoder must strip them, compress only the
-            // valid strings, and emit the validity bitmap as child[0].
-            String[] data = {"hello", null, "world", null};
+            // Given — nullable utf8 as a NullableData carrier (String[] with null elements + the
+            // derived validity), the unified nullable shape. The encoder strips nulls, compresses
+            // only the valid strings, and emits the validity bitmap as child[0].
+            String[] storage = {"hello", null, "world", null};
+            boolean[] validity = {true, false, true, false};
             DType utf8Nullable = new DType.Utf8(true);
+            NullableData data = new NullableData(storage, validity);
 
             // When
             EncodeResult result = ENCODER.encode(utf8Nullable, data, EncodeTestHelper.testCtx());
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(
-                    result, data.length, utf8Nullable, TestRegistry.ofDecoders(new BoolEncodingDecoder()));
+                    result, validity.length, utf8Nullable, TestRegistry.ofDecoders(new BoolEncodingDecoder()));
             MaskedArray decoded = (MaskedArray) DECODER.decode(ctx);
 
             // Then
@@ -164,13 +167,15 @@ class ZstdEncodingEncoderTest {
         void encode_allNullUtf8_roundTrips() {
             // Given — every string null: stripNulls yields an empty array, so the length-prefixed
             // payload is 0 bytes. Guards the empty-payload corner of the nullable varbin path.
-            String[] data = {null, null, null};
+            String[] storage = {null, null, null};
+            boolean[] validity = {false, false, false};
             DType utf8Nullable = new DType.Utf8(true);
+            NullableData data = new NullableData(storage, validity);
 
             // When
             EncodeResult result = ENCODER.encode(utf8Nullable, data, EncodeTestHelper.testCtx());
             DecodeContext ctx = DecodeTestHelper.toDecodeContext(
-                    result, data.length, utf8Nullable, TestRegistry.ofDecoders(new BoolEncodingDecoder()));
+                    result, validity.length, utf8Nullable, TestRegistry.ofDecoders(new BoolEncodingDecoder()));
             MaskedArray decoded = (MaskedArray) DECODER.decode(ctx);
 
             // Then

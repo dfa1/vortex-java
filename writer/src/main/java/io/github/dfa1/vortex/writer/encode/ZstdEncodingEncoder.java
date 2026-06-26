@@ -35,19 +35,22 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
 
     @Override
     public boolean acceptsNullable(DType dtype) {
-        // Nullable utf8/binary arrive as a String[] carrying nulls (handled in encode), not a
-        // NullableData carrier; only primitive nullable columns are routed here as NullableData.
-        return dtype instanceof DType.Primitive;
+        // Nullable primitive, utf8 and binary columns all arrive as a NullableData carrier and are
+        // encoded directly here (validity emitted as Bool child[0]) rather than masked-wrapped.
+        return dtype instanceof DType.Primitive || dtype instanceof DType.Utf8 || dtype instanceof DType.Binary;
     }
 
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
         if (data instanceof NullableData nd) {
-            if (!(dtype instanceof DType.Primitive dt)) {
-                throw new VortexException(EncodingId.VORTEX_ZSTD,
-                        "NullableData is only supported for primitive dtypes, got " + dtype);
+            if (dtype instanceof DType.Primitive dt) {
+                return encodeNullablePrimitive(dt, nd, ctx);
             }
-            return encodeNullablePrimitive(dt, nd, ctx);
+            if (dtype instanceof DType.Utf8 || dtype instanceof DType.Binary) {
+                return encodeNullableVarBin(nd, ctx);
+            }
+            throw new VortexException(EncodingId.VORTEX_ZSTD,
+                    "NullableData is unsupported for dtype: " + dtype);
         }
         if (dtype instanceof DType.Primitive dt) {
             return encodePrimitive(dt, data, ctx.arena());
@@ -55,11 +58,8 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
         if (dtype instanceof DType.Utf8 || dtype instanceof DType.Binary) {
             String[] strings = (String[]) data;
             if (containsNull(strings)) {
-                if (!dtype.nullable()) {
-                    throw new VortexException(EncodingId.VORTEX_ZSTD,
-                            "non-nullable " + dtype + " contains null");
-                }
-                return encodeNullableVarBin(strings, ctx);
+                throw new VortexException(EncodingId.VORTEX_ZSTD,
+                        "non-nullable " + dtype + " contains null");
             }
             return encodeVarBin(strings, ctx.arena());
         }
@@ -104,11 +104,12 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
         return buildNullableResult(packed, countValid(validity), validity, ctx);
     }
 
-    private static EncodeResult encodeNullableVarBin(String[] strings, EncodeContext ctx) {
-        boolean[] validity = validityOf(strings);
-        String[] valid = stripNulls(strings);
+    private static EncodeResult encodeNullableVarBin(NullableData nd, EncodeContext ctx) {
+        // Strip null positions: only valid strings reach the compressed payload (mirrors the Rust
+        // reference). The decoder scatters them back over the validity mask carried by child[0].
+        String[] valid = stripNulls((String[]) nd.values());
         MemorySegment packed = buildLengthPrefixed(valid, ctx.arena());
-        return buildNullableResult(packed, valid.length, validity, ctx);
+        return buildNullableResult(packed, valid.length, nd.validity(), ctx);
     }
 
     private static EncodeResult buildNullableResult(
@@ -168,14 +169,6 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
             }
         }
         return false;
-    }
-
-    private static boolean[] validityOf(String[] strings) {
-        boolean[] validity = new boolean[strings.length];
-        for (int i = 0; i < strings.length; i++) {
-            validity[i] = strings[i] != null;
-        }
-        return validity;
     }
 
     private static String[] stripNulls(String[] strings) {

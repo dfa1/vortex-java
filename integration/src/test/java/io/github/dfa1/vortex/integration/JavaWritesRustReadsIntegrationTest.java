@@ -1088,6 +1088,41 @@ class JavaWritesRustReadsIntegrationTest {
     }
 
     @Test
+    void javaWriter_rustReader_masked_nullableUtf8(@TempDir Path tmp) throws IOException {
+        // Given — nullable Utf8 via the default write path. Nullable utf8 now unifies on the
+        // NullableData carrier, so it routes through MaskedEncoding → VarBin (values + validity)
+        // like nullable primitives. Regression guard: this path used to NPE in VarBin on the null
+        // element because no masked wrapper was inserted for String[]-with-nulls.
+        Path file = tmp.resolve("java_masked_utf8.vtx");
+        DType.Struct schema = new DType.Struct(List.of("s"), List.of(new DType.Utf8(true)), false);
+        String[] data = {"alpha", null, "gamma", null, "epsilon"};
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            // When
+            sut.writeChunk(Map.of("s", data));
+        }
+
+        // Then — Rust reads the nullable Utf8 vector; null positions survive, values round-trip
+        String uri = file.toAbsolutePath().toUri().toString();
+        DataSource ds = DataSource.open(SESSION, uri);
+        Scan scan = ds.scan(ScanOptions.of());
+        var values = new ArrayList<String>();
+        while (scan.hasNext()) {
+            Partition partition = scan.next();
+            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
+                while (reader.loadNextBatch()) {
+                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
+                    VarCharVector vec = (VarCharVector) root.getVector("s");
+                    for (int i = 0; i < root.getRowCount(); i++) {
+                        values.add(vec.isNull(i) ? null : vec.getObject(i).toString());
+                    }
+                }
+            }
+        }
+        assertThat(values).containsExactly("alpha", null, "gamma", null, "epsilon");
+    }
+
+    @Test
     void javaWriter_rustReader_bool_boolEncoding(@TempDir Path tmp) throws IOException {
         // Given — BoolEncoding: bit-packed boolean column
         Path file = tmp.resolve("java_bool.vtx");
