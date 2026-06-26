@@ -18,11 +18,11 @@
 	<dependencyManagement>
 		<dependencies>
 			<!-- optional transitive deps: consumers who use vortex.zstd must declare
-			     aircompressor explicitly; the BOM pins the tested version. -->
+			     the zstd FFM bindings explicitly; the BOM pins the tested version. -->
 			<dependency>
-				<groupId>io.airlift</groupId>
-				<artifactId>aircompressor-v3</artifactId>
-				<version>${aircompressor.version}</version>
+				<groupId>io.github.dfa1.zstd</groupId>
+				<artifactId>zstd</artifactId>
+				<version>${zstd.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>io.github.dfa1.vortex</groupId>

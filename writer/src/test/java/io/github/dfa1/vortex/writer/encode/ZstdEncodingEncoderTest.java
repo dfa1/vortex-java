@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.airlift.compress.v3.zstd.ZstdCompressor;
-import io.airlift.compress.v3.zstd.ZstdJavaCompressor;
+import io.github.dfa1.zstd.Zstd;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
@@ -29,7 +28,6 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -146,10 +144,7 @@ class ZstdEncodingEncoderTest {
         }
 
         private static byte[] compress(byte[] input) {
-            ZstdCompressor compressor = new ZstdJavaCompressor();
-            byte[] out = new byte[compressor.maxCompressedLength(input.length)];
-            int len = compressor.compress(input, 0, input.length, out, 0, out.length);
-            return Arrays.copyOf(out, len);
+            return Zstd.compress(input);
         }
 
         private static byte[] metaNoDict(long[] uncompressedSizes, long[] nValues) {

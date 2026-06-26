@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `DType.isUnsigned()` — `true` for the unsigned integer primitives (`U8`–`U64`), `false` otherwise. ([#159](https://github.com/dfa1/vortex-java/issues/159))
 
+### Changed
+
+- The `vortex.zstd` encoding now compresses and decompresses through `io.github.dfa1.zstd:zstd` (FFM bindings to the native `libzstd`) instead of `io.airlift:aircompressor-v3`. Consumers of `vortex.zstd` must declare the `zstd` dependency plus the `zstd-native-<platform>` artifact for their platform (e.g. `zstd-native-osx-aarch64`, `zstd-native-linux-x86_64`).
+
 ### Fixed
 
 - Zone-map pruning now compares filter values in the *column's* type domain rather than by the boxed value's type. A predicate whose value is boxed at a different width (e.g. `Integer` on an `I64` column) — or any value on a `U64` column — previously pruned nothing and silently degraded to a full scan; it now prunes correctly (unsigned columns by unsigned order). As part of this, a filter value genuinely incomparable to its column (e.g. a `String` against a numeric column) now raises `VortexException` during the scan instead of silently disabling pruning — a behaviour change for callers that relied on the previous silent full scan. ([#159](https://github.com/dfa1/vortex-java/issues/159))

@@ -35,10 +35,10 @@
 			<artifactId>vortex-reader</artifactId>
 			<scope>test</scope>
 		</dependency>
-		<!-- reader declares aircompressor-v3 optional; pull it in so the test can decode ZSTD chunks -->
+		<!-- reader declares the zstd bindings optional; pull it in so the test can decode ZSTD chunks -->
 		<dependency>
-			<groupId>io.airlift</groupId>
-			<artifactId>aircompressor-v3</artifactId>
+			<groupId>io.github.dfa1.zstd</groupId>
+			<artifactId>zstd</artifactId>
 			<scope>test</scope>
 		</dependency>
 		<dependency>

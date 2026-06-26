@@ -18,12 +18,11 @@ import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
 import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 
-import io.airlift.compress.v3.zstd.ZstdDecompressor;
-import io.airlift.compress.v3.zstd.ZstdJavaDecompressor;
+import io.github.dfa1.zstd.ZstdDecompressCtx;
 
 import java.io.IOException;
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 
 /// Read-only decoder for `vortex.zstd`.
 public final class ZstdEncodingDecoder implements EncodingDecoder {
@@ -52,7 +51,7 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
         }
         if (meta.dictionary_size() != 0) {
             throw new VortexException(EncodingId.VORTEX_ZSTD,
-                    "dictionary-compressed Zstd segments are not supported (pure-Java decoder)");
+                    "dictionary-compressed Zstd segments are not supported");
         }
 
         BoolArray validity = null;
@@ -149,23 +148,36 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
             int frameCount,
             long totalUncompressed
     ) {
+        // Zero-copy: decompress each native frame straight into its slice of the arena output,
+        // no heap byte[] bounce. The mmap'd file buffers are already native; the scratch arena
+        // only services the heap segments unit tests hand in.
         MemorySegment out = ctx.arena().allocate(totalUncompressed);
-        ZstdDecompressor decompressor = new ZstdJavaDecompressor();
-        long outOffset = 0;
-        for (int i = 0; i < frameCount; i++) {
-            MemorySegment frameSeg = ctx.buffer(i);
-            byte[] compressed = frameSeg.toArray(ValueLayout.JAVA_BYTE);
-            int uncompSize = (int) meta.frames().get(i).uncompressed_size();
-            byte[] temp = new byte[uncompSize];
-            int written = decompressor.decompress(compressed, 0, compressed.length, temp, 0, uncompSize);
-            if (written != uncompSize) {
-                throw new VortexException(EncodingId.VORTEX_ZSTD,
-                        "frame " + i + ": expected " + uncompSize + " bytes, got " + written);
+        try (ZstdDecompressCtx dctx = new ZstdDecompressCtx();
+             Arena scratch = Arena.ofConfined()) {
+            long outOffset = 0;
+            for (int i = 0; i < frameCount; i++) {
+                MemorySegment src = asNative(ctx.buffer(i), scratch);
+                int uncompSize = (int) meta.frames().get(i).uncompressed_size();
+                long written = dctx.decompress(out.asSlice(outOffset, uncompSize), src);
+                if (written != uncompSize) {
+                    throw new VortexException(EncodingId.VORTEX_ZSTD,
+                            "frame " + i + ": expected " + uncompSize + " bytes, got " + written);
+                }
+                outOffset += uncompSize;
             }
-            MemorySegment.copy(MemorySegment.ofArray(temp), 0, out, outOffset, uncompSize);
-            outOffset += uncompSize;
         }
         return out;
+    }
+
+    /// Returns `seg` unchanged when it is already native (the production mmap path); otherwise
+    /// copies it into `scratch` so the zero-copy native API can read it.
+    private static MemorySegment asNative(MemorySegment seg, Arena scratch) {
+        if (seg.isNative()) {
+            return seg;
+        }
+        MemorySegment copy = scratch.allocate(Math.max(seg.byteSize(), 1));
+        MemorySegment.copy(seg, 0, copy, 0, seg.byteSize());
+        return copy.asSlice(0, seg.byteSize());
     }
 
     private static Array buildArray(DType dtype, long n, MemorySegment decompressed, DecodeContext ctx) {

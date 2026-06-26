@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
-import io.airlift.compress.v3.zstd.ZstdCompressor;
-import io.airlift.compress.v3.zstd.ZstdJavaCompressor;
+import io.github.dfa1.zstd.ZstdCompressCtx;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
@@ -14,7 +13,6 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.List;
 
 /// Write-only encoder for `vortex.zstd`.
@@ -37,47 +35,49 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
         if (dtype instanceof DType.Primitive dt) {
-            return encodePrimitive(dt, data);
+            return encodePrimitive(dt, data, ctx.arena());
         }
         if (dtype instanceof DType.Utf8 || dtype instanceof DType.Binary) {
-            return encodeVarBin((String[]) data);
+            return encodeVarBin((String[]) data, ctx.arena());
         }
         throw new VortexException(EncodingId.VORTEX_ZSTD, "unsupported dtype: " + dtype);
     }
 
-    private static EncodeResult encodePrimitive(DType.Primitive dt, Object data) {
-        MemorySegment raw = primitiveToLeBytes(dt.ptype(), data, Arena.ofAuto());
+    private static EncodeResult encodePrimitive(DType.Primitive dt, Object data, Arena arena) {
+        MemorySegment raw = primitiveToLeBytes(dt.ptype(), data, arena);
         long n = primitiveLength(dt.ptype(), data);
-        byte[] rawBytes = raw.toArray(ValueLayout.JAVA_BYTE);
-        return buildResult(rawBytes, n);
+        return buildResult(raw, n, arena);
     }
 
-    private static EncodeResult encodeVarBin(String[] strings) {
-        byte[] raw = buildLengthPrefixed(strings);
-        return buildResult(raw, strings.length);
+    private static EncodeResult encodeVarBin(String[] strings, Arena arena) {
+        MemorySegment raw = buildLengthPrefixed(strings, arena);
+        return buildResult(raw, strings.length, arena);
     }
 
-    private static EncodeResult buildResult(byte[] raw, long n) {
-        byte[] compressed = compress(raw);
+    private static EncodeResult buildResult(MemorySegment raw, long n, Arena arena) {
+        // Zero-copy: compress the arena-native raw segment straight into another arena segment,
+        // no heap byte[] bounce on either side. The compressed slice is owned by the caller arena.
+        MemorySegment compressed;
+        try (ZstdCompressCtx cctx = new ZstdCompressCtx()) {
+            compressed = cctx.compress(arena, raw);
+        }
         byte[] meta = new ProtoZstdMetadata(
                 0,
-                java.util.List.of(new ProtoZstdFrameMetadata(raw.length, n))
+                List.of(new ProtoZstdFrameMetadata(raw.byteSize(), n))
         ).encode();
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_ZSTD, MemorySegment.ofArray(meta),
                 new EncodeNode[0], new int[]{0});
-        return new EncodeResult(root, List.of(MemorySegment.ofArray(compressed)), null, null);
-    }
-
-    private static byte[] compress(byte[] input) {
-        ZstdCompressor compressor = new ZstdJavaCompressor();
-        byte[] out = new byte[compressor.maxCompressedLength(input.length)];
-        int len = compressor.compress(input, 0, input.length, out, 0, out.length);
-        return Arrays.copyOf(out, len);
+        return new EncodeResult(root, List.of(compressed), null, null);
     }
 
     private static MemorySegment primitiveToLeBytes(PType ptype, Object data, Arena arena) {
         return switch (ptype) {
-            case I8, U8 -> MemorySegment.ofArray((byte[]) data);
+            case I8, U8 -> {
+                byte[] arr = (byte[]) data;
+                MemorySegment seg = arena.allocate(arr.length);
+                MemorySegment.copy(arr, 0, seg, ValueLayout.JAVA_BYTE, 0, arr.length);
+                yield seg;
+            }
             case I16, U16, F16 -> {
                 short[] arr = (short[]) data;
                 MemorySegment seg = arena.allocate((long) arr.length * 2, 2);
@@ -132,23 +132,21 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
         };
     }
 
-    private static byte[] buildLengthPrefixed(String[] strings) {
+    private static MemorySegment buildLengthPrefixed(String[] strings, Arena arena) {
         int total = 0;
         byte[][] encoded = new byte[strings.length][];
         for (int i = 0; i < strings.length; i++) {
             encoded[i] = strings[i].getBytes(StandardCharsets.UTF_8);
             total += 4 + encoded[i].length;
         }
-        try (Arena scratch = Arena.ofConfined()) {
-            MemorySegment seg = scratch.allocate(total > 0 ? total : 1);
-            long pos = 0;
-            for (byte[] bytes : encoded) {
-                seg.set(PTypeIO.LE_INT, pos, bytes.length);
-                pos += 4;
-                MemorySegment.copy(MemorySegment.ofArray(bytes), 0, seg, pos, bytes.length);
-                pos += bytes.length;
-            }
-            return seg.asSlice(0, total).toArray(ValueLayout.JAVA_BYTE);
+        MemorySegment seg = arena.allocate(total > 0 ? total : 1);
+        long pos = 0;
+        for (byte[] bytes : encoded) {
+            seg.set(PTypeIO.LE_INT, pos, bytes.length);
+            pos += 4;
+            MemorySegment.copy(MemorySegment.ofArray(bytes), 0, seg, pos, bytes.length);
+            pos += bytes.length;
         }
+        return seg.asSlice(0, total);
     }
 }

@@ -34,8 +34,8 @@
 			<artifactId>vortex-inspector</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>io.airlift</groupId>
-			<artifactId>aircompressor-v3</artifactId>
+			<groupId>io.github.dfa1.zstd</groupId>
+			<artifactId>zstd</artifactId>
 		</dependency>
 		<dependency>
 			<!-- Required by hardwood-core (via vortex-parquet) for ZSTD-compressed
