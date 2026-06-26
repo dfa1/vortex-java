@@ -101,10 +101,3 @@ Per-encoding gotchas:
 
 See [docs/compatibility.md](docs/compatibility.md) for the full encoding support table and S3 fixture status.
 
-### `vortex.zstd` known limitations
-
-- [ ] **Multi-frame encode** — `ZstdEncoding.Encoder` always produces a single frame for the whole array.
-  Fix: accept a `valuesPerFrame` parameter (default: all values in one frame). Split the raw byte buffer at frame
-  boundaries (`valuesPerFrame * byteWidth`), compress each slice independently, emit one `ZstdFrameMetadata` per frame.
-  Enables partial decompression during slice scans.
-

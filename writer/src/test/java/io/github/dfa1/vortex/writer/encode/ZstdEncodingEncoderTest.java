@@ -427,4 +427,86 @@ class ZstdEncodingEncoderTest {
             assertThat(meta.frames()).isNotEmpty();
         }
     }
+
+    @Nested
+    class MultiFrame {
+
+        private static final ZstdEncodingEncoder FRAMED = new ZstdEncodingEncoder(4);
+
+        @Test
+        void encode_i32_splitsIntoFrames_andRoundTrips() throws Exception {
+            // Given — 10 values, 4 per frame: 3 frames (4, 4, 2), one compressed buffer each.
+            int[] data = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+            // When
+            EncodeResult result = FRAMED.encode(DTypes.I32, data, EncodeTestHelper.testCtx());
+
+            // Then
+            var metaSeg = result.rootNode().metadata();
+            ProtoZstdMetadata meta = ProtoZstdMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            assertThat(meta.frames()).hasSize(3);
+            assertThat(meta.frames().get(0).n_values()).isEqualTo(4);
+            assertThat(meta.frames().get(2).n_values()).isEqualTo(2);
+            assertThat(result.buffers()).hasSize(3);
+
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(result, data.length, DTypes.I32, ReadRegistry.empty());
+            IntArray decoded = (IntArray) DECODER.decode(ctx);
+            for (int i = 0; i < data.length; i++) {
+                assertThat(decoded.getInt(i)).as("index %d", i).isEqualTo(data[i]);
+            }
+        }
+
+        @Test
+        void encode_varBin_splitsOnValueBoundaries_andRoundTrips() throws Exception {
+            // Given — 5 strings, 2 per frame: 3 frames (2, 2, 1). Entries vary in length, so the
+            // frame byte spans must be found by walking the length prefixes, not a fixed stride.
+            ZstdEncodingEncoder framedByTwo = new ZstdEncodingEncoder(2);
+            String[] data = {"a", "bb", "ccc", "d", "eeeee"};
+
+            // When
+            EncodeResult result = framedByTwo.encode(DTypes.UTF8, data, EncodeTestHelper.testCtx());
+
+            // Then
+            var metaSeg = result.rootNode().metadata();
+            ProtoZstdMetadata meta = ProtoZstdMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            assertThat(meta.frames()).hasSize(3);
+
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(result, data.length, DTypes.UTF8, ReadRegistry.empty());
+            VarBinArray decoded = (VarBinArray) DECODER.decode(ctx);
+            for (int i = 0; i < data.length; i++) {
+                assertThat(decoded.getString(i)).as("index %d", i).isEqualTo(data[i]);
+            }
+        }
+
+        @Test
+        void encode_nullablePrimitive_framesOverValidValues_andRoundTrips() throws Exception {
+            // Given — 7 rows, 5 valid. Frames cover only the packed valid values (4 + 1), and the
+            // validity child's buffers must trail the two frame buffers.
+            int[] storage = {10, 0, 20, 30, 0, 40, 50};
+            boolean[] validity = {true, false, true, true, false, true, true};
+            DType i32Nullable = new DType.Primitive(PType.I32, true);
+            NullableData data = new NullableData(storage, validity);
+
+            // When
+            EncodeResult result = FRAMED.encode(i32Nullable, data, EncodeTestHelper.testCtx());
+
+            // Then
+            var metaSeg = result.rootNode().metadata();
+            ProtoZstdMetadata meta = ProtoZstdMetadata.decode(metaSeg, 0, metaSeg.byteSize());
+            assertThat(meta.frames()).hasSize(2);
+            assertThat(meta.frames().get(0).n_values()).isEqualTo(4);
+            assertThat(meta.frames().get(1).n_values()).isEqualTo(1);
+
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(
+                    result, validity.length, i32Nullable, TestRegistry.ofDecoders(new BoolEncodingDecoder()));
+            MaskedArray decoded = (MaskedArray) DECODER.decode(ctx);
+            assertThat(decoded.length()).isEqualTo(7);
+            assertThat(decoded.isValid(1)).isFalse();
+            assertThat(decoded.isValid(4)).isFalse();
+            IntArray child = (IntArray) decoded.inner();
+            assertThat(child.getInt(0)).isEqualTo(10);
+            assertThat(child.getInt(2)).isEqualTo(20);
+            assertThat(child.getInt(6)).isEqualTo(50);
+        }
+    }
 }

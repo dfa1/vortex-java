@@ -1210,6 +1210,25 @@ class JavaWritesRustReadsIntegrationTest {
     }
 
     @Test
+    void javaWriter_rustReader_zstd_multiFrameI64(@TempDir Path tmp) throws IOException {
+        // Given — ZstdEncoding split into frames of 3 values: 7 values -> 3 frames (3, 3, 1), each
+        // an independently compressed zstd frame with its own ZstdFrameMetadata. Verifies the
+        // multi-frame wire layout against the Rust reader.
+        Path file = tmp.resolve("java_zstd_multiframe_i64.vtx");
+        long[] data = {1L, 2L, 3L, 4L, 5L, 6L, 7L};
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.defaults(),
+                     List.of(new ZstdEncodingEncoder(3)))) {
+            // When
+            sut.writeChunk(Map.of("ts", data));
+        }
+
+        // Then
+        long[] decoded = readLongColumn(file, "ts");
+        assertThat(decoded).containsExactly(data);
+    }
+
+    @Test
     void javaWriter_rustReader_zstd_nullableI64(@TempDir Path tmp) throws IOException {
         // Given — nullable primitive I64 written with ZstdEncoding. A configured zstd encoder
         // declares acceptsNullable, so the writer routes the NullableData straight to it instead
