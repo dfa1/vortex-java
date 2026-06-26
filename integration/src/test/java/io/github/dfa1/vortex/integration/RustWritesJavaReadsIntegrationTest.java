@@ -38,6 +38,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.ValueLayout;
+import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.ByteOrder;
 import java.nio.file.Files;
@@ -228,7 +229,13 @@ class RustWritesJavaReadsIntegrationTest {
             return cached;
         }
         Path dest = tmp.resolve(name);
-        try (var in = URI.create(S3_BASE + name).toURL().openStream()) {
+        var conn = (HttpURLConnection) URI.create(S3_BASE + name).toURL().openConnection();
+        int code = conn.getResponseCode();
+        // S3 occasionally returns a transient 5xx; that is infrastructure noise, not
+        // an interop regression, so skip rather than redden the build. A 4xx (e.g. the
+        // fixture was removed/renamed) is a genuine signal and still fails.
+        assumeTrue(code < 500, () -> "transient S3 error " + code + " for " + name);
+        try (var in = conn.getInputStream()) {
             Files.copy(in, dest, StandardCopyOption.REPLACE_EXISTING);
         }
         return dest;
