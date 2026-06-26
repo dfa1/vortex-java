@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `DType.isUnsigned()` — `true` for the unsigned integer primitives (`U8`–`U64`), `false` otherwise. ([#159](https://github.com/dfa1/vortex-java/issues/159))
+- The `vortex.zstd` encoder now writes nullable columns: null positions are stripped before compression and the validity bitmap is emitted as a Bool child, round-tripping with the reader's nullable decode path.
 
 ### Changed
 
