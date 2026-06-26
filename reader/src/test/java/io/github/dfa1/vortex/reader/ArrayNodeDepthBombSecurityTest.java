@@ -14,13 +14,17 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/// Adversarial test for the encoded-array-tree recursion in
+/// Adversarial tests for the encoded-array-tree recursion in
 /// [FlatSegmentDecoder]'s `convertArrayNode`.
 ///
 /// The decoder walks the array node tree recursively (validity, patches, run-ends, dictionary
 /// codes/values, …). Without the [FlatSegmentDecoder#MAX_ARRAY_TREE_DEPTH] cap a crafted segment
 /// with thousands of nested children produces a [StackOverflowError] — an `Error` that escapes the
-/// "malformed input must surface as [VortexException]" contract (ADR 0003). This pins that contract.
+/// "malformed input must surface as [VortexException]" contract (ADR 0003).
+///
+/// The two cases bracket the exact `depth > MAX_ARRAY_TREE_DEPTH` boundary: a tree whose deepest
+/// node sits at exactly the limit must clear the guard (and then fail later for an unrelated reason
+/// — no decoder), while one node deeper must be rejected by the depth guard itself.
 class ArrayNodeDepthBombSecurityTest {
 
     private static final DType DTYPE = DType.I32;
@@ -28,20 +32,42 @@ class ArrayNodeDepthBombSecurityTest {
     private final FlatSegmentDecoder sut = new FlatSegmentDecoder(ReadRegistry.empty());
 
     @Test
-    void deeplyNestedArrayTree_throwsVortexException() {
+    void arrayTreeAtDepthLimit_clearsGuard() {
         try (Arena arena = Arena.ofConfined()) {
-            // Given — a flat segment whose FbsArray root nests 65536 levels of single-child nodes.
-            // Real encodings nest only a handful of levels; 65536 reliably blows the JVM stack on
-            // the recursive convertArrayNode walk if the depth cap is removed.
-            byte[] fb = deeplyNestedArrayFlatBuffer(65536);
-            MemorySegment seg = arena.allocate(fb.length + 4L);
-            MemorySegment.copy(MemorySegment.ofArray(fb), 0, seg, 0, fb.length);
-            seg.set(PTypeIO.LE_INT, fb.length, fb.length);
+            // Given — deepest node at exactly MAX_ARRAY_TREE_DEPTH: convertArrayNode is entered with
+            // depth == limit there, and `limit > limit` is false. The walk completes and only then
+            // fails because the empty registry has no decoder. Kills `depth >` relaxed to `>=`,
+            // which would wrongly reject this legal max-depth tree with the depth message.
+            byte[] fb = deeplyNestedArrayFlatBuffer(FlatSegmentDecoder.MAX_ARRAY_TREE_DEPTH);
+            MemorySegment seg = wrapAsSegment(fb, arena);
+
+            // When / Then
+            assertThatThrownBy(() -> sut.decode(seg, List.of("vortex.flat"), DTYPE, 1, arena))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("no decoder");
+        }
+    }
+
+    @Test
+    void arrayTreeOneOverDepthLimit_throwsVortexException() {
+        try (Arena arena = Arena.ofConfined()) {
+            // Given — one level deeper: the deepest node reaches limit + 1, tripping the guard
+            // before any StackOverflowError can escape.
+            byte[] fb = deeplyNestedArrayFlatBuffer(FlatSegmentDecoder.MAX_ARRAY_TREE_DEPTH + 1);
+            MemorySegment seg = wrapAsSegment(fb, arena);
 
             // When / Then — must surface as VortexException, not StackOverflowError
             assertThatThrownBy(() -> sut.decode(seg, List.of("vortex.flat"), DTYPE, 1, arena))
-                    .isInstanceOf(VortexException.class);
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("depth");
         }
+    }
+
+    private static MemorySegment wrapAsSegment(byte[] fb, Arena arena) {
+        MemorySegment seg = arena.allocate(fb.length + 4L);
+        MemorySegment.copy(MemorySegment.ofArray(fb), 0, seg, 0, fb.length);
+        seg.set(PTypeIO.LE_INT, fb.length, fb.length);
+        return seg;
     }
 
     /// Builds a minimal `FbsArray` whose root node has `depth` levels of single-child nesting,

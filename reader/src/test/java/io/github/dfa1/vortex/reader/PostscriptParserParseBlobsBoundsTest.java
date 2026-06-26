@@ -10,6 +10,8 @@ import io.github.dfa1.vortex.core.fbs.FbsDecimal;
 import io.github.dfa1.vortex.core.fbs.FbsFooter;
 import io.github.dfa1.vortex.core.fbs.FbsLayout;
 import io.github.dfa1.vortex.core.fbs.FbsLayoutSpec;
+import io.github.dfa1.vortex.core.fbs.FbsList;
+import io.github.dfa1.vortex.core.fbs.FbsPrimitive;
 import io.github.dfa1.vortex.core.fbs.FbsType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -158,6 +160,51 @@ class PostscriptParserParseBlobsBoundsTest {
                 .hasMessageContaining("metadata size");
     }
 
+    // ── FbsDType depth bound: depth > MAX_DTYPE_DEPTH (64) ──────────────────────────
+
+    @Test
+    void parseBlobs_dtypeDepth_atLimit_parses() {
+        // Given — a single-child List chain whose deepest node sits at exactly MAX_DTYPE_DEPTH.
+        // convertDType is entered with depth == 64 there, and `64 > 64` is false. Kills the
+        // `depth >` relaxed to `depth >=` mutant, which would reject the legal max-depth dtype.
+        MemorySegment dtype = nestedListDtype(PostscriptParser.MAX_DTYPE_DEPTH);
+
+        // When
+        DType result = parseDtype(dtype);
+
+        // Then
+        assertThat(result).isInstanceOf(DType.List.class);
+    }
+
+    @Test
+    void parseBlobs_dtypeDepth_oneOverLimit_throws() {
+        // Given — one level deeper: the deepest node reaches depth 65, tripping `65 > 64`
+        MemorySegment dtype = nestedListDtype(PostscriptParser.MAX_DTYPE_DEPTH + 1);
+
+        // When / Then
+        assertThatThrownBy(() -> parseDtype(dtype))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("depth");
+    }
+
+    // ── parseBlobs dtype-presence guard: dtypeBuf != null && byteSize() > 0 ──────────
+
+    @Test
+    void parseBlobs_emptyDtypeBlob_yieldsNullDtype() {
+        // Given — a present but zero-length dtype blob. The guard treats an empty blob as "no dtype"
+        // (`byteSize() > 0`); relaxing `> 0` to `>= 0` would instead feed the empty buffer to
+        // getRootAsFbsDType and throw. Pins that an empty blob parses to a null dtype.
+        MemorySegment footer = footerWithLayoutSpecs("vortex.flat");
+        MemorySegment layout = flatLayout(0);
+        MemorySegment emptyDtype = MemorySegment.ofArray(new byte[0]);
+
+        // When
+        DType result = PostscriptParser.parseBlobs(footer, layout, emptyDtype).dtype();
+
+        // Then
+        assertThat(result).isNull();
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────────────
 
     /// Parses a dtype blob through the full parseBlobs path, paired with a minimal valid
@@ -211,6 +258,20 @@ class PostscriptParserParseBlobsBoundsTest {
             current = FbsLayout.createFbsLayout(fbb, 0, 1L, 0, childV, 0);
         }
         FbsLayout.finishFbsLayoutBuffer(fbb, current);
+        return slice(fbb);
+    }
+
+    private static MemorySegment nestedListDtype(int depth) {
+        var fbb = new FbsBuilder(depth * 32 + 64);
+        // Leaf first; FlatBuffer requires children be finished before parents.
+        int prim = FbsPrimitive.createFbsPrimitive(fbb, io.github.dfa1.vortex.core.fbs.FbsPType.I64, false);
+        int current = io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsPrimitive, prim);
+        // Wrap `depth` times: the innermost leaf ends up at recursion depth == `depth`.
+        for (int i = 0; i < depth; i++) {
+            int list = FbsList.createFbsList(fbb, current, false);
+            current = io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsList, list);
+        }
+        io.github.dfa1.vortex.core.fbs.FbsDType.finishFbsDTypeBuffer(fbb, current);
         return slice(fbb);
     }
 
