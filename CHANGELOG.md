@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Bumped `io.github.dfa1.zstd` (the `vortex.zstd` FFM bindings, pinned by the BOM) 0.3 → 0.4. ([5bf14475](https://github.com/dfa1/vortex-java/commit/5bf14475))
+
 ## [0.10.0] — 2026-06-26
 
 A **`vortex.zstd` overhaul**: compression now runs through FFM bindings to the native `libzstd`, gaining framed (sliceable) payloads, nullable-column support, and shared-dictionary decode. Alongside it, zone-map pruning is fixed to compare in the column's type domain.
