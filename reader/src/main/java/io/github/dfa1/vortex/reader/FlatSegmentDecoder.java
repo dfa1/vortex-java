@@ -26,6 +26,13 @@ import java.util.List;
 /// FlatBuffer parsing, buffer-offset arithmetic, and encoding-spec lookup.
 public final class FlatSegmentDecoder {
 
+    /// Hard cap on array-node recursion depth. The encoded array tree nests through child nodes
+    /// (validity, patches, run-ends, dictionary codes/values, …); a crafted or self-referential
+    /// FlatBuffer can drive [#convertArrayNode] into unbounded recursion and a [StackOverflowError]
+    /// — an `Error`, so it would bypass the [io.github.dfa1.vortex.core.error.VortexException]
+    /// contract. 64 is well past any real encoding's nesting.
+    static final int MAX_ARRAY_TREE_DEPTH = 64;
+
     private final ReadRegistry registry;
 
     /// Creates a decoder backed by the given registry.
@@ -64,20 +71,25 @@ public final class FlatSegmentDecoder {
             dataOffset += bufDesc.length();
         }
 
-        ArrayNode rootNode = convertArrayNode(fbArray.root(), encodingSpecs);
+        ArrayNode rootNode = convertArrayNode(fbArray.root(), encodingSpecs, 0);
         var ctx = new DecodeContext(rootNode, dtype, rowCount, bufs, registry, arena);
         return registry.decode(ctx);
     }
 
     private static ArrayNode convertArrayNode(
             io.github.dfa1.vortex.core.fbs.FbsArrayNode fbs,
-            List<String> encodingSpecs
+            List<String> encodingSpecs,
+            int depth
     ) {
+        if (depth > MAX_ARRAY_TREE_DEPTH) {
+            throw new io.github.dfa1.vortex.core.error.VortexException(
+                    "array tree depth exceeds limit (" + MAX_ARRAY_TREE_DEPTH + ")");
+        }
         String rawEncodingId = encodingSpecs.get(fbs.encoding());
 
         ArrayNode[] children = new ArrayNode[fbs.childrenLength()];
         for (int i = 0; i < children.length; i++) {
-            children[i] = convertArrayNode(fbs.children(i), encodingSpecs);
+            children[i] = convertArrayNode(fbs.children(i), encodingSpecs, depth + 1);
         }
 
         int[] bufferIndices = new int[fbs.buffersLength()];
