@@ -114,9 +114,9 @@ class VortexHttpReaderIT {
         assertThat(totalRows).isGreaterThan(0);
     }
 
-    // The published zstd.vortex fixture is dictionary-compressed; the pure-Java decoder has no
-    // Zstd dictionary support and must fail fast with a clear message rather than mis-decode.
-    // Tracked by https://github.com/dfa1/vortex-java/issues/104 (upstream airlift/aircompressor#119).
+    // The published zstd.vortex fixture is dictionary-compressed; the decoder has no Zstd
+    // dictionary support and must fail fast with a clear message rather than mis-decode.
+    // Tracked by https://github.com/dfa1/vortex-java/issues/104.
     @Test
     void scan_zstdVortex_rejectsDictionaryCompression() throws Exception {
         // Given

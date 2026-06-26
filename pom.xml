@@ -58,7 +58,8 @@
 		<maven.compiler.release>25</maven.compiler.release>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<!-- production -->
-		<aircompressor.version>3.6</aircompressor.version>
+		<zstd.version>0.1</zstd.version>
+
 
 		<fastcsv.version>4.3.0</fastcsv.version>
 		<hardwood.version>1.0.0.CR2</hardwood.version>
@@ -190,9 +191,9 @@
 				<version>${hardwood.version}</version>
 			</dependency>
 			<dependency>
-				<groupId>io.airlift</groupId>
-				<artifactId>aircompressor-v3</artifactId>
-				<version>${aircompressor.version}</version>
+				<groupId>io.github.dfa1.zstd</groupId>
+				<artifactId>zstd</artifactId>
+				<version>${zstd.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>com.github.luben</groupId>
@@ -435,6 +436,45 @@
 	</build>
 
 	<profiles>
+		<profile>
+			<!-- io.github.dfa1.zstd:zstd ships no bundled native; its FFM loader reads
+			     libzstd from a /native/<platform>/ classpath resource carried by a separate
+			     zstd-native-<platform> artifact. Pull in the one matching the build host.
+			     Add more platforms as needed. -->
+			<id>zstd-native-osx-aarch64</id>
+			<activation>
+				<os>
+					<family>mac</family>
+					<arch>aarch64</arch>
+				</os>
+			</activation>
+			<dependencies>
+				<dependency>
+					<groupId>io.github.dfa1.zstd</groupId>
+					<artifactId>zstd-native-osx-aarch64</artifactId>
+					<version>${zstd.version}</version>
+					<scope>runtime</scope>
+				</dependency>
+			</dependencies>
+		</profile>
+		<profile>
+			<id>zstd-native-linux-x86_64</id>
+			<activation>
+				<os>
+					<family>unix</family>
+					<name>linux</name>
+					<arch>amd64</arch>
+				</os>
+			</activation>
+			<dependencies>
+				<dependency>
+					<groupId>io.github.dfa1.zstd</groupId>
+					<artifactId>zstd-native-linux-x86_64</artifactId>
+					<version>${zstd.version}</version>
+					<scope>runtime</scope>
+				</dependency>
+			</dependencies>
+		</profile>
 		<profile>
 			<!-- Activated in CI: ./mvnw verify -P coverage  -->
 			<!-- Attaches the JaCoCo agent to surefire/failsafe and writes one

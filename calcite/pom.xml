@@ -40,8 +40,8 @@
 			<scope>test</scope>
 		</dependency>
 		<dependency>
-			<groupId>io.airlift</groupId>
-			<artifactId>aircompressor-v3</artifactId>
+			<groupId>io.github.dfa1.zstd</groupId>
+			<artifactId>zstd</artifactId>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
