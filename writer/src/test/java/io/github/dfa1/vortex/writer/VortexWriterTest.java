@@ -51,6 +51,32 @@ class VortexWriterTest {
                 .build();
     }
 
+    @Test
+    void writeSegments_are64ByteAligned(@TempDir Path tmp) throws IOException {
+        // Given a multi-chunk, multi-column file whose encoded buffers are not 64-byte multiples.
+        // VortexWriter pads before each segment so every buffer starts 64-aligned (Arrow-compatible);
+        // a broken pad — wrong modulus arithmetic or a skipped writePadding — leaves a segment offset
+        // off a 64-byte boundary.
+        WriteOptions opts = new WriteOptions(3, false, 0.90, 0, false, false);
+        Path file = tmp.resolve("aligned.vtx");
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, SCHEMA, opts)) {
+            for (int c = 0; c < 3; c++) {
+                long[] id = {c * 3L, c * 3L + 1, c * 3L + 2};
+                double[] value = {c + 0.5, c + 1.5, c + 2.5};
+                sut.writeChunk(Map.of("id", id, "value", value));
+            }
+        }
+
+        // When / Then every data segment starts at a 64-byte boundary
+        try (VortexReader reader = VortexReader.open(file)) {
+            assertThat(reader.footer().segmentSpecs()).isNotEmpty();
+            for (var spec : reader.footer().segmentSpecs()) {
+                assertThat(spec.offset() % 64).as("segment offset %d aligned", spec.offset()).isZero();
+            }
+        }
+    }
+
     // ── writeChunk validation ─────────────────────────────────────────────────
 
     @Test
