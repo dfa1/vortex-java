@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-06-26
+
+A **`vortex.zstd` overhaul**: compression now runs through FFM bindings to the native `libzstd`, gaining framed (sliceable) payloads, nullable-column support, and shared-dictionary decode. Alongside it, zone-map pruning is fixed to compare in the column's type domain.
+
 ### Added
 
 - `DType.isUnsigned()` — `true` for the unsigned integer primitives (`U8`–`U64`), `false` otherwise. ([#159](https://github.com/dfa1/vortex-java/issues/159))
