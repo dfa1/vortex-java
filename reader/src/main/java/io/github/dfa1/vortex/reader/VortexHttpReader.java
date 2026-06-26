@@ -124,6 +124,10 @@ public final class VortexHttpReader implements VortexHandle {
                                   : null;
 
         var parsed = PostscriptParser.parseBlobs(footerBuf, layoutBuf, dtypeBuf);
+        // Reject footer segmentSpecs that fall outside the file before any rawSegment() builds a
+        // Range request from them. The local-file path runs this inside PostscriptParser.parse;
+        // the HTTP path calls parseBlobs directly and must validate here too.
+        PostscriptParser.validateSegmentSpecs(parsed.footer().segmentSpecs(), fileSize);
 
         return new VortexHttpReader(
             uri, client, fileSize, trailer.version(),
