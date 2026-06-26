@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- The `vortex.zstd` encoding now compresses and decompresses through `io.github.dfa1.zstd:zstd` (FFM bindings to the native `libzstd`) instead of `io.airlift:aircompressor-v3`. Consumers of `vortex.zstd` must declare the `zstd` dependency plus the `zstd-native-<platform>` artifact for their platform (e.g. `zstd-native-osx-aarch64`, `zstd-native-linux-x86_64`).
+- The `vortex.zstd` encoding now compresses and decompresses through `io.github.dfa1.zstd:zstd` (FFM bindings to the native `libzstd`) instead of `io.airlift:aircompressor-v3`. Consumers of `vortex.zstd` declare a single dependency, `io.github.dfa1.zstd:zstd-platform`, which transitively brings the `zstd` binding plus the native `libzstd` for every supported platform (replacing the former per-platform `zstd-native-<platform>` artifacts).
 
 ### Fixed
 

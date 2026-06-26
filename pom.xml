@@ -58,7 +58,7 @@
 		<maven.compiler.release>25</maven.compiler.release>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<!-- production -->
-		<zstd.version>0.2</zstd.version>
+		<zstd.version>0.3</zstd.version>
 
 
 		<fastcsv.version>4.3.0</fastcsv.version>
@@ -196,6 +196,14 @@
 				<version>${zstd.version}</version>
 			</dependency>
 			<dependency>
+				<!-- Marker jar that transitively pulls zstd plus the native libzstd for every
+				     supported platform; the zstd FFM loader picks the one matching the runtime
+				     platform. Replaces the former per-platform zstd-native-<platform> artifacts. -->
+				<groupId>io.github.dfa1.zstd</groupId>
+				<artifactId>zstd-platform</artifactId>
+				<version>${zstd.version}</version>
+			</dependency>
+			<dependency>
 				<groupId>com.github.luben</groupId>
 				<artifactId>zstd-jni</artifactId>
 				<version>${zstd-jni.version}</version>
@@ -284,6 +292,16 @@
 			<artifactId>byte-buddy-agent</artifactId>
 			<version>${bytebuddy.version}</version>
 			<scope>test</scope>
+		</dependency>
+		<!-- Native libzstd for every supported platform, bundled by the zstd-platform marker
+		     jar; provides the runtime library the zstd FFM bindings load during our own build
+		     and tests. Optional like the zstd binding itself: not forced on downstream consumers,
+		     who add zstd-platform themselves (version pinned by the BOM). No per-OS profile. -->
+		<dependency>
+			<groupId>io.github.dfa1.zstd</groupId>
+			<artifactId>zstd-platform</artifactId>
+			<scope>runtime</scope>
+			<optional>true</optional>
 		</dependency>
 	</dependencies>
 
@@ -436,62 +454,6 @@
 	</build>
 
 	<profiles>
-		<profile>
-			<!-- io.github.dfa1.zstd:zstd ships no bundled native; its FFM loader reads
-			     libzstd from a /native/<platform>/ classpath resource carried by a separate
-			     zstd-native-<platform> artifact. Pull in the one matching the build host.
-			     Add more platforms as needed. -->
-			<id>zstd-native-osx-aarch64</id>
-			<activation>
-				<os>
-					<family>mac</family>
-					<arch>aarch64</arch>
-				</os>
-			</activation>
-			<dependencies>
-				<dependency>
-					<groupId>io.github.dfa1.zstd</groupId>
-					<artifactId>zstd-native-osx-aarch64</artifactId>
-					<version>${zstd.version}</version>
-					<scope>runtime</scope>
-				</dependency>
-			</dependencies>
-		</profile>
-		<profile>
-			<id>zstd-native-linux-x86_64</id>
-			<activation>
-				<os>
-					<family>unix</family>
-					<name>linux</name>
-					<arch>amd64</arch>
-				</os>
-			</activation>
-			<dependencies>
-				<dependency>
-					<groupId>io.github.dfa1.zstd</groupId>
-					<artifactId>zstd-native-linux-x86_64</artifactId>
-					<version>${zstd.version}</version>
-					<scope>runtime</scope>
-				</dependency>
-			</dependencies>
-		</profile>
-		<profile>
-			<id>zstd-native-windows-x86_64</id>
-			<activation>
-				<os>
-					<family>windows</family>
-					<arch>amd64</arch>
-				</os>
-			</activation>
-			<dependencies>
-				<dependency>
-					<groupId>io.github.dfa1.zstd</groupId>
-					<artifactId>zstd-native-windows-x86_64</artifactId>
-					<version>${zstd.version}</version>
-					<scope>runtime</scope>
-				</dependency>
-			</dependencies>
-		</profile>
 		<profile>
 			<!-- Activated in CI: ./mvnw verify -P coverage  -->
 			<!-- Attaches the JaCoCo agent to surefire/failsafe and writes one
