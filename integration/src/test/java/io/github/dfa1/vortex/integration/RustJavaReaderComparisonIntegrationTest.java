@@ -356,7 +356,10 @@ class RustJavaReaderComparisonIntegrationTest {
     // ── Java side ─────────────────────────────────────────────────────────────
 
     private static Long stringByteLength(Array arr) {
-        if (!(arr instanceof VarBinArray v)) {
+        // Nullable Utf8 columns decode as a MaskedArray over a VarBin values child (null rows
+        // contribute zero-length entries); unwrap to count the same bytes Rust reports.
+        Array values = arr instanceof MaskedArray m ? m.inner() : arr;
+        if (!(values instanceof VarBinArray v)) {
             return null;
         }
         if (!(v.dtype() instanceof DType.Utf8)) {
@@ -394,7 +397,7 @@ class RustJavaReaderComparisonIntegrationTest {
             "varbin.vortex",
             "varbinview.vortex",
             "zigzag.vortex",
-            // zstd.vortex excluded: ZstdEncoding dictionary mode not yet implemented
+            "zstd.vortex",
     })
     void rust_vs_javaReader_statsMatch(String fixture, @TempDir Path tmp) throws Exception {
         // Given
