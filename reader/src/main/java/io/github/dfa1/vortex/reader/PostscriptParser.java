@@ -34,6 +34,14 @@ final class PostscriptParser {
     /// real encoding's metadata footprint (the largest is FSST's symbol table at ~32 KiB).
     static final int MAX_LAYOUT_METADATA_BYTES = 4 * 1024 * 1024;
 
+    /// Hard cap on DType-tree recursion depth. A `DType` nests through Struct fields, List/
+    /// FixedSizeList element types, and Extension storage types; like the layout tree, a crafted
+    /// or self-referential FlatBuffer can drive [#convertDType(io.github.dfa1.vortex.core.fbs.FbsDType, int)]
+    /// into unbounded recursion and a [StackOverflowError] — which, being an `Error`, would escape
+    /// the [VortexException] sanitization and leak the reader's memory-mapped Arena. 64 is well past
+    /// any real schema's nesting.
+    static final int MAX_DTYPE_DEPTH = 64;
+
     private PostscriptParser() {
     }
 
@@ -110,7 +118,7 @@ final class PostscriptParser {
 
             DType dtype = null;
             if (dtypeBuf != null && dtypeBuf.byteSize() > 0) {
-                dtype = convertDType(io.github.dfa1.vortex.core.fbs.FbsDType.getRootAsFbsDType(dtypeBuf));
+                dtype = convertDType(io.github.dfa1.vortex.core.fbs.FbsDType.getRootAsFbsDType(dtypeBuf), 0);
             }
 
             return new ParsedFile(footer, dtype, layout);
@@ -188,7 +196,11 @@ final class PostscriptParser {
         return new Layout(encodingId, l.rowCount(), metadata, List.copyOf(children), List.copyOf(segments));
     }
 
-    private static DType convertDType(io.github.dfa1.vortex.core.fbs.FbsDType fbs) {
+    private static DType convertDType(io.github.dfa1.vortex.core.fbs.FbsDType fbs, int depth) {
+        if (depth > MAX_DTYPE_DEPTH) {
+            throw new VortexException(
+                    "DType tree depth exceeds limit (" + MAX_DTYPE_DEPTH + ")");
+        }
         int typeType = fbs.typeType();
         return switch (typeType) {
             case FbsType.FbsNull -> new DType.Null(true);
@@ -224,21 +236,21 @@ final class PostscriptParser {
                     names.add(s.names(i));
                 }
                 for (int i = 0; i < s.dtypesLength(); i++) {
-                    types.add(convertDType(s.dtypes(i)));
+                    types.add(convertDType(s.dtypes(i), depth + 1));
                 }
                 yield new DType.Struct(List.copyOf(names), List.copyOf(types), s.nullable());
             }
             case FbsType.FbsList -> {
                 var l = fbs.type(new io.github.dfa1.vortex.core.fbs.FbsList());
-                yield new DType.List(convertDType(l.elementType()), l.nullable());
+                yield new DType.List(convertDType(l.elementType(), depth + 1), l.nullable());
             }
             case FbsType.FbsFixedSizeList -> {
                 var fsl = fbs.type(new FbsFixedSizeList());
-                yield new DType.FixedSizeList(convertDType(fsl.elementType()), (int) fsl.size(), fsl.nullable());
+                yield new DType.FixedSizeList(convertDType(fsl.elementType(), depth + 1), (int) fsl.size(), fsl.nullable());
             }
             case FbsType.FbsExtension -> {
                 var e = fbs.type(new FbsExtension());
-                DType storage = convertDType(e.storageDtype());
+                DType storage = convertDType(e.storageDtype(), depth + 1);
                 yield new DType.Extension(
                         e.id(),
                         storage,
