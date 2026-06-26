@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.core.fbs.FbsArraySpec;
 import io.github.dfa1.vortex.core.fbs.FbsFooter;
 import io.github.dfa1.vortex.core.fbs.FbsLayout;
 import io.github.dfa1.vortex.core.fbs.FbsLayoutSpec;
+import io.github.dfa1.vortex.core.fbs.FbsList;
 import io.github.dfa1.vortex.core.fbs.FbsPostscript;
 import io.github.dfa1.vortex.core.fbs.FbsPostscriptSegment;
 import io.github.dfa1.vortex.core.fbs.FbsPrimitive;
@@ -31,6 +32,23 @@ final class MalformedFiles {
         int prim = FbsPrimitive.createFbsPrimitive(fbb, io.github.dfa1.vortex.core.fbs.FbsPType.I64, false);
         int off = io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsPrimitive, prim);
         io.github.dfa1.vortex.core.fbs.FbsDType.finishFbsDTypeBuffer(fbb, off);
+        return slice(fbb);
+    }
+
+    /// Builds a DType blob nesting `depth` levels of `List` around an I64 primitive leaf.
+    ///
+    /// @param depth number of nested `List` wrappers around the leaf
+    /// @return the finished DType FlatBuffer
+    static ByteBuffer buildDeeplyNestedListDtype(int depth) {
+        var fbb = new FbsBuilder(depth * 32);
+        // Leaf first; FlatBuffer requires children be finished before parents.
+        int prim = FbsPrimitive.createFbsPrimitive(fbb, io.github.dfa1.vortex.core.fbs.FbsPType.I64, false);
+        int current = io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsPrimitive, prim);
+        for (int i = 0; i < depth; i++) {
+            int list = FbsList.createFbsList(fbb, current, false);
+            current = io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsList, list);
+        }
+        io.github.dfa1.vortex.core.fbs.FbsDType.finishFbsDTypeBuffer(fbb, current);
         return slice(fbb);
     }
 

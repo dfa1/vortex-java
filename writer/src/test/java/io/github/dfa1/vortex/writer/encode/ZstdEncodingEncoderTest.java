@@ -409,6 +409,78 @@ class ZstdEncodingEncoderTest {
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("missing metadata");
         }
+
+        @Test
+        void decode_negativeFrameSize_throwsVortexException() {
+            // Given — metadata declares a negative per-frame uncompressed_size. A raw
+            // arena.allocate(negative) would throw IllegalArgumentException; the per-frame
+            // IoBounds.toIntSize guard must convert it to a VortexException first.
+            byte[] compressed = compress(toLeBytes(new int[]{0}));
+            byte[] meta = metaNoDict(new long[]{-1}, new long[]{1});
+            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ZSTD, MemorySegment.ofArray(meta),
+                    new ArrayNode[0], new int[]{0});
+            DecodeContext ctx = new DecodeContext(node, DTypes.I32, 1,
+                    new MemorySegment[]{MemorySegment.ofArray(compressed)}, ReadRegistry.empty(), Arena.ofAuto());
+
+            // When / Then
+            assertThatThrownBy(() -> DECODER.decode(ctx))
+                    .isInstanceOf(VortexException.class);
+        }
+
+        @Test
+        void decode_oversizedFrameSize_throwsVortexException() {
+            // Given — metadata declares a per-frame uncompressed_size above the 2 GB int cap.
+            // Caught by IoBounds.toIntSize before it can drive the (int) narrowing negative at the
+            // asSlice site in decompressFrames.
+            byte[] compressed = compress(toLeBytes(new int[]{0}));
+            byte[] meta = metaNoDict(new long[]{(long) Integer.MAX_VALUE + 1}, new long[]{1});
+            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ZSTD, MemorySegment.ofArray(meta),
+                    new ArrayNode[0], new int[]{0});
+            DecodeContext ctx = new DecodeContext(node, DTypes.I32, 1,
+                    new MemorySegment[]{MemorySegment.ofArray(compressed)}, ReadRegistry.empty(), Arena.ofAuto());
+
+            // When / Then
+            assertThatThrownBy(() -> DECODER.decode(ctx))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("2 GB");
+        }
+
+        @Test
+        void decode_varBinOversizedLengthPrefix_throwsVortexException() {
+            // Given — a non-nullable VarBin payload whose single 4-byte length prefix claims
+            // 1 000 000 bytes that the 4-byte decompressed buffer cannot hold. readVarBinLen must
+            // reject the overrun as a VortexException instead of leaking an IndexOutOfBoundsException
+            // when the cursor advances past the segment.
+            byte[] raw = toLeBytes(new int[]{1_000_000});
+            byte[] compressed = compress(raw);
+            byte[] meta = metaNoDict(new long[]{raw.length}, new long[]{1});
+            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ZSTD, MemorySegment.ofArray(meta),
+                    new ArrayNode[0], new int[]{0});
+            DecodeContext ctx = new DecodeContext(node, new DType.Utf8(false), 1,
+                    new MemorySegment[]{MemorySegment.ofArray(compressed)}, ReadRegistry.empty(), Arena.ofAuto());
+
+            // When / Then
+            assertThatThrownBy(() -> DECODER.decode(ctx))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("out of bounds");
+        }
+
+        @Test
+        void decode_scatteredVarBinOversizedLengthPrefix_throwsVortexException() {
+            // Given — the nullable (scattered) VarBin path: one valid element whose length prefix
+            // claims 1 000 000 bytes the buffer cannot hold. The same readVarBinLen guard must fire
+            // on the scatter scan, not only the contiguous path.
+            boolean[] validityBits = {true};
+            byte[] raw = toLeBytes(new int[]{1_000_000});
+            byte[] compressed = compress(raw);
+            byte[] meta = metaNoDict(new long[]{raw.length}, new long[]{1});
+            DecodeContext ctx = makeNullableCtx(meta, new DType.Utf8(true), 1, validityBits, compressed);
+
+            // When / Then
+            assertThatThrownBy(() -> DECODER.decode(ctx))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("out of bounds");
+        }
     }
 
     @Nested
