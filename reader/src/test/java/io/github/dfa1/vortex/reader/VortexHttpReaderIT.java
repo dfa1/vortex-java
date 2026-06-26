@@ -1,7 +1,6 @@
 package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.reader.array.ListArray;
 import io.github.dfa1.vortex.reader.array.ListViewArray;
@@ -15,7 +14,6 @@ import java.net.URI;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /// Integration test: reads real Vortex files from the public S3 compatibility bucket
 /// via HTTP Range requests and validates structure + data.
@@ -91,9 +89,9 @@ class VortexHttpReaderIT {
             "decimal.vortex", "decimal_byte_parts.vortex", "dict.vortex", "fixed_size_list.vortex",
             "fsst.vortex", "null.vortex", "pco.vortex", "primitives.vortex", "rle.vortex",
             "runend.vortex", "sequence.vortex", "sparse.vortex", "struct_nested.vortex",
-            "varbin.vortex", "varbinview.vortex", "zigzag.vortex"
-            // zstd.vortex omitted: dictionary-compressed, unsupported by the pure-Java decoder
-            // (see scan_zstdVortex_rejectsDictionaryCompression).
+            "varbin.vortex", "varbinview.vortex", "zigzag.vortex", "zstd.vortex"
+            // zstd.vortex is dictionary-compressed; decoded against its shared dictionary via the
+            // native libzstd bindings.
     })
     void scan_publishedFixture_decodesAllRows(String fixture) throws Exception {
         // Given
@@ -114,28 +112,6 @@ class VortexHttpReaderIT {
         assertThat(totalRows).isGreaterThan(0);
     }
 
-    // The published zstd.vortex fixture is dictionary-compressed; the decoder has no Zstd
-    // dictionary support and must fail fast with a clear message rather than mis-decode.
-    // Tracked by https://github.com/dfa1/vortex-java/issues/104.
-    @Test
-    void scan_zstdVortex_rejectsDictionaryCompression() throws Exception {
-        // Given
-        URI uri = BASE.resolve("zstd.vortex");
-
-        // When / Then
-        try (var sut = VortexHttpReader.open(uri);
-             var iter = sut.scan(ScanOptions.all())) {
-            assertThatThrownBy(() -> {
-                while (iter.hasNext()) {
-                    try (var c = iter.next()) {
-                        c.rowCount();
-                    }
-                }
-            })
-                    .isInstanceOf(VortexException.class)
-                    .hasMessageContaining("dictionary-compressed Zstd segments are not supported");
-        }
-    }
 
     // vortex.masked / vortex.patched / vortex.variant: decoders implemented, but no S3 fixture
     // is published (still absent at v0.75.0) — enable this test once fixtures exist upstream.

@@ -19,10 +19,13 @@ import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 
 import io.github.dfa1.zstd.ZstdDecompressCtx;
+import io.github.dfa1.zstd.ZstdDecompressDict;
+import io.github.dfa1.zstd.ZstdDictionary;
 
 import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 
 /// Read-only decoder for `vortex.zstd`.
 public final class ZstdEncodingDecoder implements EncodingDecoder {
@@ -49,11 +52,6 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
         } catch (IOException e) {
             throw new VortexException(EncodingId.VORTEX_ZSTD, "invalid metadata", e);
         }
-        if (meta.dictionary_size() != 0) {
-            throw new VortexException(EncodingId.VORTEX_ZSTD,
-                    "dictionary-compressed Zstd segments are not supported");
-        }
-
         BoolArray validity = null;
         if (ctx.node().children().length > 0) {
             Array validityArray = ctx.decodeChild(0, DType.BOOL, ctx.rowCount());
@@ -151,22 +149,50 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
         // Zero-copy: decompress each native frame straight into its slice of the arena output,
         // no heap byte[] bounce. The mmap'd file buffers are already native; the scratch arena
         // only services the heap segments unit tests hand in.
+        //
+        // Buffer layout mirrors the Rust reference: with a shared dictionary, buffer[0] is the
+        // dictionary and the frames follow at buffer[1..]; without one, the frames start at
+        // buffer[0]. The frames count is metadata-driven either way.
+        boolean hasDictionary = meta.dictionary_size() != 0;
+        int frameBufferBase = hasDictionary ? 1 : 0;
         MemorySegment out = ctx.arena().allocate(totalUncompressed);
         try (ZstdDecompressCtx dctx = new ZstdDecompressCtx();
              Arena scratch = Arena.ofConfined()) {
-            long outOffset = 0;
-            for (int i = 0; i < frameCount; i++) {
-                MemorySegment src = asNative(ctx.buffer(i), scratch);
-                int uncompSize = (int) meta.frames().get(i).uncompressed_size();
-                long written = dctx.decompress(out.asSlice(outOffset, uncompSize), src);
-                if (written != uncompSize) {
-                    throw new VortexException(EncodingId.VORTEX_ZSTD,
-                            "frame " + i + ": expected " + uncompSize + " bytes, got " + written);
+            ZstdDecompressDict dictionary = hasDictionary ? digestDictionary(ctx.buffer(0)) : null;
+            try {
+                long outOffset = 0;
+                for (int i = 0; i < frameCount; i++) {
+                    MemorySegment src = asNative(ctx.buffer(frameBufferBase + i), scratch);
+                    int uncompSize = (int) meta.frames().get(i).uncompressed_size();
+                    MemorySegment dst = out.asSlice(outOffset, uncompSize);
+                    long written = dictionary == null
+                            ? dctx.decompress(dst, src)
+                            : dctx.decompress(dst, src, dictionary);
+                    if (written != uncompSize) {
+                        throw new VortexException(EncodingId.VORTEX_ZSTD,
+                                "frame " + i + ": expected " + uncompSize + " bytes, got " + written);
+                    }
+                    outOffset += uncompSize;
                 }
-                outOffset += uncompSize;
+            } finally {
+                if (dictionary != null) {
+                    dictionary.close();
+                }
             }
         }
         return out;
+    }
+
+    /// Digests the raw dictionary bytes carried in `dictBuffer` into a reusable native
+    /// decompression dictionary shared by every frame in this segment.
+    ///
+    /// The one heap copy here is off the hot path: the dictionary is digested once per segment
+    /// (not per frame or per row) over a small buffer, and `ZSTD_createDDict` re-copies into its
+    /// own native allocation regardless. Switch to a `MemorySegment` overload once the zstd
+    /// bindings expose one.
+    private static ZstdDecompressDict digestDictionary(MemorySegment dictBuffer) {
+        byte[] raw = dictBuffer.toArray(ValueLayout.JAVA_BYTE);
+        return new ZstdDecompressDict(ZstdDictionary.of(raw));
     }
 
     /// Returns `seg` unchanged when it is already native (the production mmap path); otherwise

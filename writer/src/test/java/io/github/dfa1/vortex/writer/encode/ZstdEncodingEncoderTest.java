@@ -1,6 +1,8 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.zstd.Zstd;
+import io.github.dfa1.zstd.ZstdCompressCtx;
+import io.github.dfa1.zstd.ZstdDictionary;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
@@ -147,6 +149,12 @@ class ZstdEncodingEncoderTest {
             return Zstd.compress(input);
         }
 
+        private static byte[] compressWithDict(byte[] input, byte[] dict) {
+            try (ZstdCompressCtx cctx = new ZstdCompressCtx()) {
+                return cctx.compress(input, ZstdDictionary.of(dict));
+            }
+        }
+
         private static byte[] metaNoDict(long[] uncompressedSizes, long[] nValues) {
             java.util.List<ProtoZstdFrameMetadata> frames = new java.util.ArrayList<>();
             for (int i = 0; i < uncompressedSizes.length; i++) {
@@ -178,18 +186,26 @@ class ZstdEncodingEncoderTest {
         }
 
         @Test
-        void decode_withDictionary_throws() {
-            // Given — metadata with non-zero dictionary_size; pure-Java decoder doesn't support
-            // dictionary-compressed Zstd (no JNI dependency)
-            byte[] compressed = compress(toLeBytes(new int[]{1, 2, 3}));
-            byte[] meta = new ProtoZstdMetadata(256,
-                    java.util.List.of(new ProtoZstdFrameMetadata(12, 3))).encode();
-            DecodeContext ctx = makeDictCtx(meta, DTypes.I32, 3, new byte[256], compressed);
+        void decode_withDictionary_roundTrips() {
+            // Given — a frame compressed against a shared dictionary; metadata carries the
+            // dictionary size and the dict bytes live in buffer[0], frames in buffer[1..]
+            // (mirrors the Rust reference layout).
+            byte[] dict = "common-zstd-dictionary-content-for-test".getBytes(StandardCharsets.UTF_8);
+            int[] values = {1, 2, 3};
+            byte[] raw = toLeBytes(values);
+            byte[] compressed = compressWithDict(raw, dict);
+            byte[] meta = new ProtoZstdMetadata(dict.length,
+                    java.util.List.of(new ProtoZstdFrameMetadata(raw.length, values.length))).encode();
+            DecodeContext ctx = makeDictCtx(meta, DTypes.I32, values.length, dict, compressed);
 
-            // When / Then
-            assertThatThrownBy(() -> DECODER.decode(ctx))
-                    .isInstanceOf(VortexException.class)
-                    .hasMessageContaining("dictionary");
+            // When
+            IntArray result = (IntArray) DECODER.decode(ctx);
+
+            // Then
+            assertThat(result.length()).isEqualTo(values.length);
+            for (int i = 0; i < values.length; i++) {
+                assertThat(result.getInt(i)).as("index %d", i).isEqualTo(values[i]);
+            }
         }
 
         @Test
