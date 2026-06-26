@@ -87,6 +87,57 @@ class ZstdEncodingEncoderTest {
         }
 
         @Test
+        void encode_nullablePrimitive_roundTrips() {
+            // Given — nulls at positions 1 and 3; the storage array holds zero placeholders there,
+            // validity marks the real rows. Only valid values must reach the compressed payload,
+            // so the decoder can scatter them back over the validity mask carried by child[0].
+            int[] storage = {10, 0, 30, 0};
+            boolean[] validity = {true, false, true, false};
+            DType i32Nullable = new DType.Primitive(PType.I32, true);
+            NullableData data = new NullableData(storage, validity);
+
+            // When
+            EncodeResult result = ENCODER.encode(i32Nullable, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(
+                    result, validity.length, i32Nullable, TestRegistry.ofDecoders(new BoolEncodingDecoder()));
+            MaskedArray decoded = (MaskedArray) DECODER.decode(ctx);
+
+            // Then
+            assertThat(decoded.length()).isEqualTo(4);
+            assertThat(decoded.isValid(0)).isTrue();
+            assertThat(decoded.isValid(1)).isFalse();
+            assertThat(decoded.isValid(2)).isTrue();
+            assertThat(decoded.isValid(3)).isFalse();
+            IntArray child = (IntArray) decoded.inner();
+            assertThat(child.getInt(0)).isEqualTo(10);
+            assertThat(child.getInt(2)).isEqualTo(30);
+        }
+
+        @Test
+        void encode_nullableUtf8_roundTrips() {
+            // Given — a String[] carrying nulls; the encoder must strip them, compress only the
+            // valid strings, and emit the validity bitmap as child[0].
+            String[] data = {"hello", null, "world", null};
+            DType utf8Nullable = new DType.Utf8(true);
+
+            // When
+            EncodeResult result = ENCODER.encode(utf8Nullable, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(
+                    result, data.length, utf8Nullable, TestRegistry.ofDecoders(new BoolEncodingDecoder()));
+            MaskedArray decoded = (MaskedArray) DECODER.decode(ctx);
+
+            // Then
+            assertThat(decoded.length()).isEqualTo(4);
+            assertThat(decoded.isValid(0)).isTrue();
+            assertThat(decoded.isValid(1)).isFalse();
+            assertThat(decoded.isValid(2)).isTrue();
+            assertThat(decoded.isValid(3)).isFalse();
+            VarBinArray child = (VarBinArray) decoded.inner();
+            assertThat(child.getString(0)).isEqualTo("hello");
+            assertThat(child.getString(2)).isEqualTo("world");
+        }
+
+        @Test
         void encode_unsupportedDtype_throwsVortexException() {
             assertThatThrownBy(() -> ENCODER.encode(DType.NULL, null, EncodeTestHelper.testCtx()))
                     .isInstanceOf(VortexException.class);

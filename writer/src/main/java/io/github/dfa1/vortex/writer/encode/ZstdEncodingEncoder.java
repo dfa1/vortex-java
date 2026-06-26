@@ -13,6 +13,7 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 
 /// Write-only encoder for `vortex.zstd`.
@@ -34,11 +35,22 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
 
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+        if (data instanceof NullableData nd) {
+            if (!(dtype instanceof DType.Primitive dt)) {
+                throw new VortexException(EncodingId.VORTEX_ZSTD,
+                        "NullableData is only supported for primitive dtypes, got " + dtype);
+            }
+            return encodeNullablePrimitive(dt, nd, ctx);
+        }
         if (dtype instanceof DType.Primitive dt) {
             return encodePrimitive(dt, data, ctx.arena());
         }
         if (dtype instanceof DType.Utf8 || dtype instanceof DType.Binary) {
-            return encodeVarBin((String[]) data, ctx.arena());
+            String[] strings = (String[]) data;
+            if (containsNull(strings)) {
+                return encodeNullableVarBin(strings, ctx);
+            }
+            return encodeVarBin(strings, ctx.arena());
         }
         throw new VortexException(EncodingId.VORTEX_ZSTD, "unsupported dtype: " + dtype);
     }
@@ -68,6 +80,112 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_ZSTD, MemorySegment.ofArray(meta),
                 new EncodeNode[0], new int[]{0});
         return new EncodeResult(root, List.of(compressed), null, null);
+    }
+
+    private static EncodeResult encodeNullablePrimitive(DType.Primitive dt, NullableData nd, EncodeContext ctx) {
+        Arena arena = ctx.arena();
+        int byteWidth = dt.ptype().byteSize();
+        boolean[] validity = nd.validity();
+        // Strip null positions: only valid values reach the compressed payload (mirrors the Rust
+        // reference). The decoder scatters them back over the validity mask carried by child[0].
+        MemorySegment full = primitiveToLeBytes(dt.ptype(), nd.values(), arena);
+        MemorySegment packed = packValidBytes(full, validity, byteWidth, arena);
+        return buildNullableResult(packed, countValid(validity), validity, ctx);
+    }
+
+    private static EncodeResult encodeNullableVarBin(String[] strings, EncodeContext ctx) {
+        boolean[] validity = validityOf(strings);
+        String[] valid = stripNulls(strings);
+        MemorySegment packed = buildLengthPrefixed(valid, ctx.arena());
+        return buildNullableResult(packed, valid.length, validity, ctx);
+    }
+
+    private static EncodeResult buildNullableResult(
+            MemorySegment raw, long nValues, boolean[] validity, EncodeContext ctx) {
+        // Zero-copy: compress the arena-native packed segment into another arena segment.
+        MemorySegment compressed;
+        try (ZstdCompressCtx cctx = new ZstdCompressCtx()) {
+            compressed = cctx.compress(ctx.arena(), raw);
+        }
+        byte[] meta = new ProtoZstdMetadata(
+                0,
+                List.of(new ProtoZstdFrameMetadata(raw.byteSize(), nValues))
+        ).encode();
+
+        EncodeResult validityResult = new BoolEncodingEncoder().encode(DType.BOOL, validity, ctx);
+        // The frame payload owns buffer[0]; the validity child's buffers follow, so shift its
+        // buffer indices by one.
+        EncodeNode validityNode = EncodeNode.remapBufferIndices(validityResult.rootNode(), 1);
+
+        List<MemorySegment> buffers = new ArrayList<>(1 + validityResult.buffers().size());
+        buffers.add(compressed);
+        buffers.addAll(validityResult.buffers());
+
+        EncodeNode root = new EncodeNode(EncodingId.VORTEX_ZSTD, MemorySegment.ofArray(meta),
+                new EncodeNode[]{validityNode}, new int[]{0});
+        return new EncodeResult(root, buffers, null, null);
+    }
+
+    private static MemorySegment packValidBytes(
+            MemorySegment full, boolean[] validity, int byteWidth, Arena arena) {
+        long validBytes = (long) countValid(validity) * byteWidth;
+        MemorySegment packed = arena.allocate(Math.max(validBytes, 1), byteWidth);
+        long pos = 0;
+        for (int i = 0; i < validity.length; i++) {
+            if (validity[i]) {
+                MemorySegment.copy(full, (long) i * byteWidth, packed, pos, byteWidth);
+                pos += byteWidth;
+            }
+        }
+        return packed.asSlice(0, validBytes);
+    }
+
+    private static int countValid(boolean[] validity) {
+        int count = 0;
+        for (boolean valid : validity) {
+            if (valid) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private static boolean containsNull(String[] strings) {
+        for (String s : strings) {
+            if (s == null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean[] validityOf(String[] strings) {
+        boolean[] validity = new boolean[strings.length];
+        for (int i = 0; i < strings.length; i++) {
+            validity[i] = strings[i] != null;
+        }
+        return validity;
+    }
+
+    private static String[] stripNulls(String[] strings) {
+        String[] valid = new String[countNonNull(strings)];
+        int j = 0;
+        for (String s : strings) {
+            if (s != null) {
+                valid[j++] = s;
+            }
+        }
+        return valid;
+    }
+
+    private static int countNonNull(String[] strings) {
+        int count = 0;
+        for (String s : strings) {
+            if (s != null) {
+                count++;
+            }
+        }
+        return count;
     }
 
     private static MemorySegment primitiveToLeBytes(PType ptype, Object data, Arena arena) {

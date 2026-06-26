@@ -108,8 +108,3 @@ See [docs/compatibility.md](docs/compatibility.md) for the full encoding support
   boundaries (`valuesPerFrame * byteWidth`), compress each slice independently, emit one `ZstdFrameMetadata` per frame.
   Enables partial decompression during slice scans.
 
-- [ ] **Nullable arrays (encode)** — `ZstdEncoding.Encoder` has no null handling.
-  Fix: accept nullable input (e.g. `Integer[]` or a validity mask alongside the data array). Strip null positions before
-  compression. Encode the validity bitmap as a Bool child (child[0]) in the `EncodeNode`. Mirrors what Rust does: only
-  valid values go into the compressed payload.
-
