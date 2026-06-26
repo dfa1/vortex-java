@@ -133,6 +133,9 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
         MemorySegment offsets = ctx.arena().allocate((rowCount + 1) * 4L, 4);
         offsets.setAtIndex(PTypeIO.LE_INT, 0, 0);
 
+        // Second pass reads the same positions the first pass already bounds-checked via
+        // readVarBinLen, so a raw get/copy here cannot overrun; values is sized to the validated
+        // total. Keep both passes in lockstep — any edit to the cursor advance must stay identical.
         long readPos = 0;
         long dataPos = 0;
         for (long i = 0; i < rowCount; i++) {
@@ -277,6 +280,9 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
         MemorySegment offsets = ctx.arena().allocate((n + 1) * 4L, 4);
         offsets.setAtIndex(PTypeIO.LE_INT, 0, 0);
 
+        // Second pass reads the same positions the first pass already bounds-checked via
+        // readVarBinLen, so a raw get/copy here cannot overrun; values is sized to the validated
+        // total. Keep both passes in lockstep — any edit to the cursor advance must stay identical.
         pos = 0;
         long dataPos = 0;
         for (long i = 0; i < n; i++) {

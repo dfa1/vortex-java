@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.reader;
 
 import static io.github.dfa1.vortex.core.io.PTypeIO.LE_INT;
 
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.io.IoBounds;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -29,7 +30,7 @@ public final class FlatSegmentDecoder {
     /// Hard cap on array-node recursion depth. The encoded array tree nests through child nodes
     /// (validity, patches, run-ends, dictionary codes/values, …); a crafted or self-referential
     /// FlatBuffer can drive [#convertArrayNode] into unbounded recursion and a [StackOverflowError]
-    /// — an `Error`, so it would bypass the [io.github.dfa1.vortex.core.error.VortexException]
+    /// — an `Error`, so it would bypass the [VortexException]
     /// contract. 64 is well past any real encoding's nesting.
     static final int MAX_ARRAY_TREE_DEPTH = 64;
 
@@ -82,7 +83,7 @@ public final class FlatSegmentDecoder {
             int depth
     ) {
         if (depth > MAX_ARRAY_TREE_DEPTH) {
-            throw new io.github.dfa1.vortex.core.error.VortexException(
+            throw new VortexException(
                     "array tree depth exceeds limit (" + MAX_ARRAY_TREE_DEPTH + ")");
         }
         String rawEncodingId = encodingSpecs.get(fbs.encoding());

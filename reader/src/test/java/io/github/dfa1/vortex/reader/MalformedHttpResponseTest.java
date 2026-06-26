@@ -3,6 +3,8 @@ package io.github.dfa1.vortex.reader;
 import io.github.dfa1.vortex.core.error.VortexException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -60,6 +62,29 @@ class MalformedHttpResponseTest {
     void tailFetch_missingContentRange_throws() throws Exception {
         // Given — 206 but no Content-Range header
         doReturn(response206(null, new byte[64])).when(client).send(any(), any());
+
+        // When / Then
+        assertThatThrownBy(() -> VortexHttpReader.open(URI, ReadRegistry.empty(), client))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("Content-Range");
+    }
+
+    @ParameterizedTest(name = "[{index}] {0}")
+    @ValueSource(strings = {
+            "0-63/64",        // missing the "bytes " prefix
+            "bytes 0631/64",  // no '-' and no '/' separators
+            "bytes 0-63",     // missing the '/total' field
+            "bytes x-63/64",  // non-numeric start
+            "bytes 0-y/64",   // non-numeric end
+            "bytes 0-63/z",   // non-numeric total
+            "bytes 63/0-/64", // '/' before '-' — reversed separators (dash > slash)
+            "bytes -/64"      // empty start and end fields
+    })
+    void tailFetch_malformedContentRange_throws(String contentRange) throws Exception {
+        // Given — a 206 whose server-controlled Content-Range is structurally broken. The parse
+        // must surface as a VortexException, never a raw NumberFormatException or
+        // StringIndexOutOfBoundsException leaking from substring/Long.parseLong.
+        doReturn(response206(contentRange, new byte[64])).when(client).send(any(), any());
 
         // When / Then
         assertThatThrownBy(() -> VortexHttpReader.open(URI, ReadRegistry.empty(), client))
