@@ -14,7 +14,9 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 
 /// Write-only encoder for `vortex.zstd`.
 ///
@@ -145,10 +147,41 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
 
     /// Byte spans and value counts of each frame; spans sum to the payload size.
     private record FrameLayout(long[] byteLengths, long[] valueCounts) {
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof FrameLayout(long[] bl, long[] vc)
+                    && Arrays.equals(byteLengths, bl) && Arrays.equals(valueCounts, vc);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * Arrays.hashCode(byteLengths) + Arrays.hashCode(valueCounts);
+        }
+
+        @Override
+        public String toString() {
+            return "FrameLayout[byteLengths=" + Arrays.toString(byteLengths)
+                    + ", valueCounts=" + Arrays.toString(valueCounts) + "]";
+        }
     }
 
     /// Compressed frame payloads paired with the encoded `ZstdMetadata` describing them.
     private record Frames(List<MemorySegment> compressed, byte[] metadata) {
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof Frames(List<MemorySegment> c, byte[] m)
+                    && Objects.equals(compressed, c) && Arrays.equals(metadata, m);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * Objects.hashCode(compressed) + Arrays.hashCode(metadata);
+        }
+
+        @Override
+        public String toString() {
+            return "Frames[compressed=" + compressed + ", metadata=" + Arrays.toString(metadata) + "]";
+        }
     }
 
     private static int[] frameBufferIndices(int frameCount, int base) {
