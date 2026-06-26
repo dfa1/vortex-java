@@ -20,12 +20,10 @@ import io.github.dfa1.vortex.reader.array.VarBinArray;
 
 import io.github.dfa1.zstd.ZstdDecompressCtx;
 import io.github.dfa1.zstd.ZstdDecompressDict;
-import io.github.dfa1.zstd.ZstdDictionary;
 
 import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 
 /// Read-only decoder for `vortex.zstd`.
 public final class ZstdEncodingDecoder implements EncodingDecoder {
@@ -158,7 +156,9 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
         MemorySegment out = ctx.arena().allocate(totalUncompressed);
         try (ZstdDecompressCtx dctx = new ZstdDecompressCtx();
              Arena scratch = Arena.ofConfined()) {
-            ZstdDecompressDict dictionary = hasDictionary ? digestDictionary(ctx.buffer(0), meta.dictionary_size()) : null;
+            ZstdDecompressDict dictionary = hasDictionary
+                    ? digestDictionary(asNative(ctx.buffer(0), scratch), meta.dictionary_size())
+                    : null;
             try {
                 long outOffset = 0;
                 for (int i = 0; i < frameCount; i++) {
@@ -186,10 +186,9 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
     /// Digests the raw dictionary bytes carried in `dictBuffer` into a reusable native
     /// decompression dictionary shared by every frame in this segment.
     ///
-    /// The one heap copy here is off the hot path: the dictionary is digested once per segment
-    /// (not per frame or per row) over a small buffer, and `ZSTD_createDDict` re-copies into its
-    /// own native allocation regardless. Switch to a `MemorySegment` overload once the zstd
-    /// bindings expose one.
+    /// Zero-copy: the dictionary buffer (an mmap'd native slice in production) is handed straight
+    /// to `ZSTD_createDDict`, which copies it into its own native allocation. No heap `byte[]`
+    /// bounce.
     ///
     /// `declaredSize` is the metadata's `dictionary_size`; it must match the dictionary buffer's
     /// byte size (the Rust reference enforces the same invariant), otherwise the segment is
@@ -200,8 +199,7 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
                     "dictionary size metadata " + declaredSize
                             + " does not match buffer size " + dictBuffer.byteSize());
         }
-        byte[] raw = dictBuffer.toArray(ValueLayout.JAVA_BYTE);
-        return new ZstdDecompressDict(ZstdDictionary.of(raw));
+        return new ZstdDecompressDict(dictBuffer);
     }
 
     /// Returns `seg` unchanged when it is already native (the production mmap path); otherwise
