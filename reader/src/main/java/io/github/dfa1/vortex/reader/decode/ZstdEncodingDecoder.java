@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.io.IoBounds;
 import io.github.dfa1.vortex.core.io.PTypeIO;
 import io.github.dfa1.vortex.core.proto.ProtoZstdMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -63,7 +64,17 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
         int frameCount = meta.frames().size();
         long totalUncompressed = 0;
         for (int i = 0; i < frameCount; i++) {
-            totalUncompressed += meta.frames().get(i).uncompressed_size();
+            // Validate each frame's declared size (rejects negative / >2 GB) and accumulate
+            // overflow-safely, so a crafted metadata cannot wrap the total to a small positive
+            // value and under-allocate, nor drive arena.allocate negative. The per-frame cap also
+            // guards the (int) narrowing at the asSlice call site in decompressFrames.
+            int frameSize = IoBounds.toIntSize(meta.frames().get(i).uncompressed_size());
+            try {
+                totalUncompressed = Math.addExact(totalUncompressed, frameSize);
+            } catch (ArithmeticException e) {
+                throw new VortexException(EncodingId.VORTEX_ZSTD,
+                        "total uncompressed size overflows", e);
+            }
         }
 
         MemorySegment decompressed = decompressFrames(ctx, meta, frameCount, totalUncompressed);
@@ -163,7 +174,7 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
                 long outOffset = 0;
                 for (int i = 0; i < frameCount; i++) {
                     MemorySegment src = asNative(ctx.buffer(frameBufferBase + i), scratch);
-                    int uncompSize = (int) meta.frames().get(i).uncompressed_size();
+                    int uncompSize = IoBounds.toIntSize(meta.frames().get(i).uncompressed_size());
                     MemorySegment dst = out.asSlice(outOffset, uncompSize);
                     long written = dictionary == null
                             ? dctx.decompress(dst, src)
