@@ -23,6 +23,10 @@ import java.util.List;
 /// @param values       one inner scalar per row, in row order
 /// @param shreddedData  optional typed column data for the shredded child, or `null`
 /// @param shreddedDtype dtype of `shreddedData`, or `null`
+// Variant authoring takes inner scalars as the generated ProtoScalar (mirroring Rust), which core
+// only qualified-exports. Suppress the exports-leak lint rather than widen the core proto export
+// (which would publish the whole generated codec) or invent a parallel public scalar type.
+@SuppressWarnings("exports")
 public record VariantData(List<ProtoScalar> values, Object shreddedData, DType shreddedDtype) {
 
     /// Validates and defensively copies the per-row values; rejects empty input and a

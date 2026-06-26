@@ -61,6 +61,38 @@
 		</dependency>
 	</dependencies>
 
+	<build>
+		<plugins>
+			<!-- The writer is a JPMS module that (correctly) does not require the reader. Its tests,
+			     however, decode-verify round-trips and so use reader types via the test-scope reader
+			     dependency. Let the test-patched module read the whole module path at test compile,
+			     and run the tests on the classpath so the test JVM sees reader + its services. -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>default-testCompile</id>
+						<configuration>
+							<compilerArgs>
+								<arg>-Xlint:all</arg>
+								<arg>--add-reads</arg>
+								<arg>io.github.dfa1.vortex.writer=ALL-MODULE-PATH</arg>
+							</compilerArgs>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<useModulePath>false</useModulePath>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+
 	<profiles>
 		<!-- Mutation testing (opt-in: -P pitest). Common PIT setup is inherited from the parent
 		     `pitest` profile; only the scope differs. Run: ./mvnw -pl writer -am -P pitest verify
