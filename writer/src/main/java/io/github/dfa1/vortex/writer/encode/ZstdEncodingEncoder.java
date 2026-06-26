@@ -17,10 +17,28 @@ import java.util.ArrayList;
 import java.util.List;
 
 /// Write-only encoder for `vortex.zstd`.
+///
+/// By default the whole array compresses into a single zstd frame. Construct with a positive
+/// `valuesPerFrame` to split the payload into independently compressed frames of that many values
+/// each (the last frame holds the remainder), emitting one `ZstdFrameMetadata` per frame. Multiple
+/// frames let a slice scan decompress only the frames overlapping its row range.
 public final class ZstdEncodingEncoder implements EncodingEncoder {
 
-    /// Public no-arg constructor required by [java.util.ServiceLoader].
+    /// Values per zstd frame; `0` (or any non-positive value) means a single frame for the whole array.
+    private final long valuesPerFrame;
+
+    /// Public no-arg constructor required by [java.util.ServiceLoader]; compresses each array into
+    /// a single frame.
     public ZstdEncodingEncoder() {
+        this(0);
+    }
+
+    /// Creates an encoder that splits the payload into frames of `valuesPerFrame` values each.
+    ///
+    /// @param valuesPerFrame the number of values per zstd frame; non-positive means a single frame
+    ///                       for the whole array
+    public ZstdEncodingEncoder(long valuesPerFrame) {
+        this.valuesPerFrame = valuesPerFrame;
     }
 
     @Override
@@ -66,34 +84,28 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
         throw new VortexException(EncodingId.VORTEX_ZSTD, "unsupported dtype: " + dtype);
     }
 
-    private static EncodeResult encodePrimitive(DType.Primitive dt, Object data, Arena arena) {
+    private EncodeResult encodePrimitive(DType.Primitive dt, Object data, Arena arena) {
+        int byteWidth = dt.ptype().byteSize();
         MemorySegment raw = primitiveToLeBytes(dt.ptype(), data, arena);
         long n = primitiveLength(dt.ptype(), data);
-        return buildResult(raw, n, arena);
+        return buildResult(raw, uniformLayout(n, byteWidth), arena);
     }
 
-    private static EncodeResult encodeVarBin(String[] strings, Arena arena) {
+    private EncodeResult encodeVarBin(String[] strings, Arena arena) {
         MemorySegment raw = buildLengthPrefixed(strings, arena);
-        return buildResult(raw, strings.length, arena);
+        return buildResult(raw, varBinLayout(raw, strings.length), arena);
     }
 
-    private static EncodeResult buildResult(MemorySegment raw, long n, Arena arena) {
-        // Zero-copy: compress the arena-native raw segment straight into another arena segment,
-        // no heap byte[] bounce on either side. The compressed slice is owned by the caller arena.
-        MemorySegment compressed;
-        try (ZstdCompressCtx cctx = new ZstdCompressCtx()) {
-            compressed = cctx.compress(arena, raw);
-        }
-        byte[] meta = new ProtoZstdMetadata(
-                0,
-                List.of(new ProtoZstdFrameMetadata(raw.byteSize(), n))
-        ).encode();
-        EncodeNode root = new EncodeNode(EncodingId.VORTEX_ZSTD, MemorySegment.ofArray(meta),
-                new EncodeNode[0], new int[]{0});
-        return new EncodeResult(root, List.of(compressed), null, null);
+    private EncodeResult buildResult(MemorySegment raw, FrameLayout layout, Arena arena) {
+        // Zero-copy: each frame is an arena-native slice of raw, compressed straight into another
+        // arena segment. A single-value-per-array config yields one frame (the prior behaviour).
+        Frames frames = compressFrames(raw, layout, arena);
+        EncodeNode root = new EncodeNode(EncodingId.VORTEX_ZSTD, MemorySegment.ofArray(frames.metadata()),
+                new EncodeNode[0], frameBufferIndices(frames.compressed().size(), 0));
+        return new EncodeResult(root, List.copyOf(frames.compressed()), null, null);
     }
 
-    private static EncodeResult encodeNullablePrimitive(DType.Primitive dt, NullableData nd, EncodeContext ctx) {
+    private EncodeResult encodeNullablePrimitive(DType.Primitive dt, NullableData nd, EncodeContext ctx) {
         Arena arena = ctx.arena();
         int byteWidth = dt.ptype().byteSize();
         boolean[] validity = nd.validity();
@@ -101,41 +113,111 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
         // reference). The decoder scatters them back over the validity mask carried by child[0].
         MemorySegment full = primitiveToLeBytes(dt.ptype(), nd.values(), arena);
         MemorySegment packed = packValidBytes(full, validity, byteWidth, arena);
-        return buildNullableResult(packed, countValid(validity), validity, ctx);
+        return buildNullableResult(packed, uniformLayout(countValid(validity), byteWidth), validity, ctx);
     }
 
-    private static EncodeResult encodeNullableVarBin(NullableData nd, EncodeContext ctx) {
+    private EncodeResult encodeNullableVarBin(NullableData nd, EncodeContext ctx) {
         // Strip null positions: only valid strings reach the compressed payload (mirrors the Rust
         // reference). The decoder scatters them back over the validity mask carried by child[0].
         String[] valid = stripNulls((String[]) nd.values());
         MemorySegment packed = buildLengthPrefixed(valid, ctx.arena());
-        return buildNullableResult(packed, valid.length, nd.validity(), ctx);
+        return buildNullableResult(packed, varBinLayout(packed, valid.length), nd.validity(), ctx);
     }
 
-    private static EncodeResult buildNullableResult(
-            MemorySegment raw, long nValues, boolean[] validity, EncodeContext ctx) {
-        // Zero-copy: compress the arena-native packed segment into another arena segment.
-        MemorySegment compressed;
-        try (ZstdCompressCtx cctx = new ZstdCompressCtx()) {
-            compressed = cctx.compress(ctx.arena(), raw);
-        }
-        byte[] meta = new ProtoZstdMetadata(
-                0,
-                List.of(new ProtoZstdFrameMetadata(raw.byteSize(), nValues))
-        ).encode();
+    private EncodeResult buildNullableResult(
+            MemorySegment raw, FrameLayout layout, boolean[] validity, EncodeContext ctx) {
+        Frames frames = compressFrames(raw, layout, ctx.arena());
+        int frameCount = frames.compressed().size();
 
         EncodeResult validityResult = new BoolEncodingEncoder().encode(DType.BOOL, validity, ctx);
-        // The frame payload owns buffer[0]; the validity child's buffers follow, so shift its
-        // buffer indices by one.
-        EncodeNode validityNode = EncodeNode.remapBufferIndices(validityResult.rootNode(), 1);
+        // The frame payloads own buffer[0..frameCount-1]; the validity child's buffers follow, so
+        // shift its buffer indices past them.
+        EncodeNode validityNode = EncodeNode.remapBufferIndices(validityResult.rootNode(), frameCount);
 
-        List<MemorySegment> buffers = new ArrayList<>(1 + validityResult.buffers().size());
-        buffers.add(compressed);
+        List<MemorySegment> buffers = new ArrayList<>(frameCount + validityResult.buffers().size());
+        buffers.addAll(frames.compressed());
         buffers.addAll(validityResult.buffers());
 
-        EncodeNode root = new EncodeNode(EncodingId.VORTEX_ZSTD, MemorySegment.ofArray(meta),
-                new EncodeNode[]{validityNode}, new int[]{0});
+        EncodeNode root = new EncodeNode(EncodingId.VORTEX_ZSTD, MemorySegment.ofArray(frames.metadata()),
+                new EncodeNode[]{validityNode}, frameBufferIndices(frameCount, 0));
         return new EncodeResult(root, buffers, null, null);
+    }
+
+    /// Byte spans and value counts of each frame; spans sum to the payload size.
+    private record FrameLayout(long[] byteLengths, long[] valueCounts) {
+    }
+
+    /// Compressed frame payloads paired with the encoded `ZstdMetadata` describing them.
+    private record Frames(List<MemorySegment> compressed, byte[] metadata) {
+    }
+
+    private static int[] frameBufferIndices(int frameCount, int base) {
+        int[] indices = new int[frameCount];
+        for (int i = 0; i < frameCount; i++) {
+            indices[i] = base + i;
+        }
+        return indices;
+    }
+
+    /// Frame layout for `n` fixed-width values (`byteWidth` bytes each): `valuesPerFrame` values
+    /// per frame, the last frame holding the remainder. One frame when framing is disabled.
+    private FrameLayout uniformLayout(long n, int byteWidth) {
+        if (valuesPerFrame <= 0 || n <= valuesPerFrame) {
+            return new FrameLayout(new long[]{n * byteWidth}, new long[]{n});
+        }
+        int frameCount = (int) ((n + valuesPerFrame - 1) / valuesPerFrame);
+        long[] byteLengths = new long[frameCount];
+        long[] valueCounts = new long[frameCount];
+        long remaining = n;
+        for (int f = 0; f < frameCount; f++) {
+            long count = Math.min(valuesPerFrame, remaining);
+            valueCounts[f] = count;
+            byteLengths[f] = count * byteWidth;
+            remaining -= count;
+        }
+        return new FrameLayout(byteLengths, valueCounts);
+    }
+
+    /// Frame layout for a length-prefixed varbin payload: `valuesPerFrame` values per frame, with
+    /// each frame's byte span found by walking the 4-byte length prefixes to a value boundary.
+    private FrameLayout varBinLayout(MemorySegment raw, long nValues) {
+        if (valuesPerFrame <= 0 || nValues <= valuesPerFrame) {
+            return new FrameLayout(new long[]{raw.byteSize()}, new long[]{nValues});
+        }
+        int frameCount = (int) ((nValues + valuesPerFrame - 1) / valuesPerFrame);
+        long[] byteLengths = new long[frameCount];
+        long[] valueCounts = new long[frameCount];
+        long pos = 0;
+        long valueIdx = 0;
+        for (int f = 0; f < frameCount; f++) {
+            long count = Math.min(valuesPerFrame, nValues - valueIdx);
+            long start = pos;
+            for (long k = 0; k < count; k++) {
+                int len = raw.get(PTypeIO.LE_INT, pos);
+                pos += 4L + len;
+            }
+            byteLengths[f] = pos - start;
+            valueCounts[f] = count;
+            valueIdx += count;
+        }
+        return new FrameLayout(byteLengths, valueCounts);
+    }
+
+    private static Frames compressFrames(MemorySegment raw, FrameLayout layout, Arena arena) {
+        int frameCount = layout.byteLengths().length;
+        List<MemorySegment> compressed = new ArrayList<>(frameCount);
+        List<ProtoZstdFrameMetadata> metas = new ArrayList<>(frameCount);
+        long offset = 0;
+        try (ZstdCompressCtx cctx = new ZstdCompressCtx()) {
+            for (int f = 0; f < frameCount; f++) {
+                long len = layout.byteLengths()[f];
+                compressed.add(cctx.compress(arena, raw.asSlice(offset, len)));
+                metas.add(new ProtoZstdFrameMetadata(len, layout.valueCounts()[f]));
+                offset += len;
+            }
+        }
+        byte[] metadata = new ProtoZstdMetadata(0, List.copyOf(metas)).encode();
+        return new Frames(compressed, metadata);
     }
 
     private static MemorySegment packValidBytes(
