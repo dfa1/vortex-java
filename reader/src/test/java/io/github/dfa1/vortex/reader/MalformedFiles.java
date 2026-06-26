@@ -5,7 +5,10 @@ import io.github.dfa1.vortex.core.fbs.FbsArraySpec;
 import io.github.dfa1.vortex.core.fbs.FbsFooter;
 import io.github.dfa1.vortex.core.fbs.FbsLayout;
 import io.github.dfa1.vortex.core.fbs.FbsLayoutSpec;
+import io.github.dfa1.vortex.core.fbs.FbsExtension;
+import io.github.dfa1.vortex.core.fbs.FbsFixedSizeList;
 import io.github.dfa1.vortex.core.fbs.FbsList;
+import io.github.dfa1.vortex.core.fbs.FbsStruct_;
 import io.github.dfa1.vortex.core.fbs.FbsPostscript;
 import io.github.dfa1.vortex.core.fbs.FbsPostscriptSegment;
 import io.github.dfa1.vortex.core.fbs.FbsPrimitive;
@@ -35,18 +38,50 @@ final class MalformedFiles {
         return slice(fbb);
     }
 
-    /// Builds a DType blob nesting `depth` levels of `List` around an I64 primitive leaf.
+    /// The recursive DType variant used to wrap each level of a depth-bomb dtype. Each constant
+    /// exercises a different recursion arm of `PostscriptParser.convertDType`.
+    enum NestKind {
+        /// Nest via `List` element type.
+        LIST,
+        /// Nest via single-field `Struct` field type.
+        STRUCT,
+        /// Nest via `FixedSizeList` element type.
+        FIXED_SIZE_LIST,
+        /// Nest via `Extension` storage type.
+        EXTENSION
+    }
+
+    /// Builds a DType blob nesting `depth` levels of `kind` around an I64 primitive leaf.
     ///
-    /// @param depth number of nested `List` wrappers around the leaf
+    /// @param depth number of nested wrappers around the leaf
+    /// @param kind  the recursive DType variant to wrap each level with
     /// @return the finished DType FlatBuffer
-    static ByteBuffer buildDeeplyNestedListDtype(int depth) {
-        var fbb = new FbsBuilder(depth * 32);
+    static ByteBuffer buildDeeplyNestedDtype(int depth, NestKind kind) {
+        var fbb = new FbsBuilder(depth * 64);
         // Leaf first; FlatBuffer requires children be finished before parents.
         int prim = FbsPrimitive.createFbsPrimitive(fbb, io.github.dfa1.vortex.core.fbs.FbsPType.I64, false);
         int current = io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsPrimitive, prim);
         for (int i = 0; i < depth; i++) {
-            int list = FbsList.createFbsList(fbb, current, false);
-            current = io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsList, list);
+            current = switch (kind) {
+                case LIST -> {
+                    int list = FbsList.createFbsList(fbb, current, false);
+                    yield io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsList, list);
+                }
+                case STRUCT -> {
+                    int names = FbsStruct_.createNamesVector(fbb, new int[]{fbb.createString("f")});
+                    int dtypes = FbsStruct_.createDtypesVector(fbb, new int[]{current});
+                    int struct = FbsStruct_.createFbsStruct_(fbb, names, dtypes, false);
+                    yield io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsStruct_, struct);
+                }
+                case FIXED_SIZE_LIST -> {
+                    int fsl = FbsFixedSizeList.createFbsFixedSizeList(fbb, current, 1L, false);
+                    yield io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsFixedSizeList, fsl);
+                }
+                case EXTENSION -> {
+                    int ext = FbsExtension.createFbsExtension(fbb, fbb.createString("x"), current, 0);
+                    yield io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsExtension, ext);
+                }
+            };
         }
         io.github.dfa1.vortex.core.fbs.FbsDType.finishFbsDTypeBuffer(fbb, current);
         return slice(fbb);

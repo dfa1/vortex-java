@@ -2,8 +2,10 @@ package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.io.VortexFormat;
-import org.junit.jupiter.api.Test;
+import io.github.dfa1.vortex.reader.MalformedFiles.NestKind;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
@@ -11,7 +13,7 @@ import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-import static io.github.dfa1.vortex.reader.MalformedFiles.buildDeeplyNestedListDtype;
+import static io.github.dfa1.vortex.reader.MalformedFiles.buildDeeplyNestedDtype;
 import static io.github.dfa1.vortex.reader.MalformedFiles.buildFlatLayout;
 import static io.github.dfa1.vortex.reader.MalformedFiles.buildFooter;
 import static io.github.dfa1.vortex.reader.MalformedFiles.buildPostscript;
@@ -29,25 +31,28 @@ class DTypeDepthBombSecurityTest {
 
     private static final ReadRegistry REGISTRY = ReadRegistry.empty();
 
-    @Test
-    void deeplyNestedDtype_throwsVortexException(@TempDir Path tmp) throws Exception {
-        // Given — a file whose DType nests 65536 levels of List. Real schemas nest a handful of
-        // levels; 65536 reliably blows the JVM stack on the recursive convertDType walk.
-        Path file = buildDeeplyNestedDtypeFile(tmp, 65536);
+    @ParameterizedTest(name = "nested via {0}")
+    @EnumSource(NestKind.class)
+    void deeplyNestedDtype_throwsVortexException(NestKind kind, @TempDir Path tmp) throws Exception {
+        // Given — a file whose DType nests 65536 levels of `kind`. Real schemas nest a handful of
+        // levels; 65536 reliably blows the JVM stack on the recursive convertDType walk. Each kind
+        // drives a different recursion arm (List/Struct/FixedSizeList/Extension), so all four must
+        // increment the depth counter for the MAX_DTYPE_DEPTH guard to bound them.
+        Path file = buildDeeplyNestedDtypeFile(tmp, 65536, kind);
 
         // When / Then — must surface as VortexException, not StackOverflowError
         assertThatThrownBy(() -> VortexReader.open(file, REGISTRY))
                 .isInstanceOf(VortexException.class);
     }
 
-    private static Path buildDeeplyNestedDtypeFile(Path dir, int depth) throws Exception {
+    private static Path buildDeeplyNestedDtypeFile(Path dir, int depth, NestKind kind) throws Exception {
         byte[] body = new byte[8]; // unused placeholder
         ByteBuffer footerBuf = buildFooter(
                 new String[]{"vortex.primitive"},
                 new String[]{"vortex.flat"},
                 new long[]{0L},
                 new long[]{(long) body.length});
-        ByteBuffer dtypeBuf = buildDeeplyNestedListDtype(depth);
+        ByteBuffer dtypeBuf = buildDeeplyNestedDtype(depth, kind);
         ByteBuffer layoutBuf = buildFlatLayout(0, 1L, 0);
 
         long footerOff = body.length;
