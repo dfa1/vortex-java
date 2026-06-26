@@ -1175,6 +1175,78 @@ class JavaWritesRustReadsIntegrationTest {
     }
 
     @Test
+    void javaWriter_rustReader_zstd_nullableI64(@TempDir Path tmp) throws IOException {
+        // Given — nullable primitive I64 written with ZstdEncoding. A configured zstd encoder
+        // declares acceptsNullable, so the writer routes the NullableData straight to it instead
+        // of masked-wrapping: zstd strips nulls before compression and emits validity as child[0].
+        // Verifies that nullable-zstd layout against the Rust reader.
+        Path file = tmp.resolve("java_zstd_nullable_i64.vtx");
+        DType.Struct schema = new DType.Struct(List.of("v"), List.of(new DType.Primitive(PType.I64, true)), false);
+        Long[] data = {10L, null, 30L, null, 50L, 60L};
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.defaults(),
+                     List.of(new ZstdEncodingEncoder()))) {
+            // When
+            sut.writeChunk(Map.of("v", data));
+        }
+
+        // Then — Rust reads a nullable BigInt vector; null positions survive, values round-trip
+        String uri = file.toAbsolutePath().toUri().toString();
+        DataSource ds = DataSource.open(SESSION, uri);
+        Scan scan = ds.scan(ScanOptions.of());
+        var values = new ArrayList<Long>();
+        while (scan.hasNext()) {
+            Partition partition = scan.next();
+            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
+                while (reader.loadNextBatch()) {
+                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
+                    BigIntVector vec = (BigIntVector) root.getVector("v");
+                    for (int i = 0; i < root.getRowCount(); i++) {
+                        values.add(vec.isNull(i) ? null : vec.get(i));
+                    }
+                }
+            }
+        }
+        assertThat(values).containsExactly(10L, null, 30L, null, 50L, 60L);
+    }
+
+    @Test
+    void javaWriter_rustReader_zstd_nullableUtf8(@TempDir Path tmp) throws IOException {
+        // Given — nullable Utf8 written with ZstdEncoding. Nullable string columns reach the zstd
+        // encoder directly (a String[] carrying nulls is not the NullableData shape that
+        // writeSegment masked-wraps), so this exercises the encoder's nullable varbin path against
+        // the Rust reader: nulls stripped before compression, validity emitted as child[0].
+        Path file = tmp.resolve("java_zstd_nullable_utf8.vtx");
+        DType.Struct schema = new DType.Struct(List.of("s"), List.of(new DType.Utf8(true)), false);
+        String[] data = {"hello", null, "world", null};
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var sut = VortexWriter.create(ch, schema, WriteOptions.defaults(),
+                     List.of(new ZstdEncodingEncoder()))) {
+            // When
+            sut.writeChunk(Map.of("s", data));
+        }
+
+        // Then — Rust reads the nullable Utf8 vector; null positions survive, values round-trip
+        String uri = file.toAbsolutePath().toUri().toString();
+        DataSource ds = DataSource.open(SESSION, uri);
+        Scan scan = ds.scan(ScanOptions.of());
+        var values = new ArrayList<String>();
+        while (scan.hasNext()) {
+            Partition partition = scan.next();
+            try (ArrowReader reader = partition.scanArrow(ALLOCATOR)) {
+                while (reader.loadNextBatch()) {
+                    VectorSchemaRoot root = reader.getVectorSchemaRoot();
+                    VarCharVector vec = (VarCharVector) root.getVector("s");
+                    for (int i = 0; i < root.getRowCount(); i++) {
+                        values.add(vec.isNull(i) ? null : vec.getObject(i).toString());
+                    }
+                }
+            }
+        }
+        assertThat(values).containsExactly("hello", null, "world", null);
+    }
+
+    @Test
     void javaWriter_rustReader_list_i64(@TempDir Path tmp) throws IOException {
         // Given — ListEncoding: exercises elements_len + offset_ptype proto fields (byte-order risk)
         Path file = tmp.resolve("java_list_i64.vtx");

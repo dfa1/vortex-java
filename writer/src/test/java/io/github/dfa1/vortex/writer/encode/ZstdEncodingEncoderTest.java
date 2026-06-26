@@ -138,6 +138,61 @@ class ZstdEncodingEncoderTest {
         }
 
         @Test
+        void encode_allNullPrimitive_roundTrips() {
+            // Given — every row null: zero valid values reach the payload, so the compressed frame
+            // is built from a 0-byte slice. Guards the empty-payload corner of packValidBytes /
+            // zstd compress-empty, and the all-false validity bitmap.
+            int[] storage = {0, 0, 0};
+            boolean[] validity = {false, false, false};
+            DType i32Nullable = new DType.Primitive(PType.I32, true);
+            NullableData data = new NullableData(storage, validity);
+
+            // When
+            EncodeResult result = ENCODER.encode(i32Nullable, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(
+                    result, validity.length, i32Nullable, TestRegistry.ofDecoders(new BoolEncodingDecoder()));
+            MaskedArray decoded = (MaskedArray) DECODER.decode(ctx);
+
+            // Then
+            assertThat(decoded.length()).isEqualTo(3);
+            assertThat(decoded.isValid(0)).isFalse();
+            assertThat(decoded.isValid(1)).isFalse();
+            assertThat(decoded.isValid(2)).isFalse();
+        }
+
+        @Test
+        void encode_allNullUtf8_roundTrips() {
+            // Given — every string null: stripNulls yields an empty array, so the length-prefixed
+            // payload is 0 bytes. Guards the empty-payload corner of the nullable varbin path.
+            String[] data = {null, null, null};
+            DType utf8Nullable = new DType.Utf8(true);
+
+            // When
+            EncodeResult result = ENCODER.encode(utf8Nullable, data, EncodeTestHelper.testCtx());
+            DecodeContext ctx = DecodeTestHelper.toDecodeContext(
+                    result, data.length, utf8Nullable, TestRegistry.ofDecoders(new BoolEncodingDecoder()));
+            MaskedArray decoded = (MaskedArray) DECODER.decode(ctx);
+
+            // Then
+            assertThat(decoded.length()).isEqualTo(3);
+            assertThat(decoded.isValid(0)).isFalse();
+            assertThat(decoded.isValid(1)).isFalse();
+            assertThat(decoded.isValid(2)).isFalse();
+        }
+
+        @Test
+        void encode_nonNullableUtf8WithNull_throwsVortexException() {
+            // Given — a non-nullable Utf8 dtype whose data carries a stray null. The encoder must
+            // reject it rather than silently emit a nullable layout the dtype does not declare.
+            String[] data = {"a", null, "c"};
+            DType utf8 = new DType.Utf8(false);
+
+            // When / Then
+            assertThatThrownBy(() -> ENCODER.encode(utf8, data, EncodeTestHelper.testCtx()))
+                    .isInstanceOf(VortexException.class);
+        }
+
+        @Test
         void encode_unsupportedDtype_throwsVortexException() {
             assertThatThrownBy(() -> ENCODER.encode(DType.NULL, null, EncodeTestHelper.testCtx()))
                     .isInstanceOf(VortexException.class);
