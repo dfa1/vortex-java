@@ -1,6 +1,6 @@
 # ADR 0014: Variant encoding strategy — chunked constants now, parquet.variant later
 
-- **Status:** Completed
+- **Status:** Accepted
 - **Date:** 2026-06-18
 - **Deciders:** project maintainer
 - **Supersedes:** —

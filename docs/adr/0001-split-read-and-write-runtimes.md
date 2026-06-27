@@ -1,6 +1,6 @@
 # ADR 0001: Split read and write runtimes out of `core`
 
-- **Status:** Completed (all phases done as of 2026-06-13)
+- **Status:** Accepted (all phases done as of 2026-06-13)
 - **Date:** 2026-06-11
 - **Deciders:** project maintainer
 - **Supersedes:** —

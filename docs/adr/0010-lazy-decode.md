@@ -1,6 +1,6 @@
 # ADR 0010: Lazy decode for 1:1 transform encodings
 
-- **Status:** Completed
+- **Status:** Accepted
 - **Date:** 2026-06-13
 - **Implemented:** 2026-06-14 — 2026-06-15
 - **Deciders:** project maintainer
