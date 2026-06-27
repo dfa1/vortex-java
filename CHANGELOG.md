@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `ScanIterator.columnZoneStats(column)` surfaces per-zone min/max/sum/null-count from a column's `vortex.stats` zone-map table without decoding any data segment — the read side of aggregate push-down (ADR 0013 §6). `ArrayStats` gains a `sum` component, decoded from the zone-map table (where the Rust reference stores it too), so the Calcite adapter now answers `SUM`/`AVG` metadata-only when every zone carries a sum, falling back to a streaming scan only for columns without a zone map. ([05dd9204](https://github.com/dfa1/vortex-java/commit/05dd9204))
+
 ### Changed
 
 - Bumped `io.github.dfa1.zstd` (the `vortex.zstd` FFM bindings, pinned by the BOM) 0.4 → 0.5, which ships smaller jars (native debug symbols stripped). ([6dcdbe94](https://github.com/dfa1/vortex-java/commit/6dcdbe94))
