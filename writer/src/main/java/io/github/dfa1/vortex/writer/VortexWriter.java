@@ -821,7 +821,7 @@ public final class VortexWriter implements Closeable {
 
     /// `vortex.stats` metadata: `u32` zone length (LE) + a 1-byte stat bitset (LSB-first) with the
     /// NULL_COUNT bit always set and the MAX/MIN and SUM bits set when present, matching
-    /// [io.github.dfa1.vortex.inspect] `ZonedStatsSchema`.
+    /// [io.github.dfa1.vortex.reader] `ZonedStatsSchema`.
     private static byte[] zonedMetadataBytes(long zoneLen, boolean hasMinMax, boolean hasSum) {
         byte[] meta = new byte[5];
         ByteBuffer.wrap(meta).order(ByteOrder.LITTLE_ENDIAN).putInt((int) zoneLen);
