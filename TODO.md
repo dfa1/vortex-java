@@ -20,14 +20,6 @@ throw `VortexException`, never `ArrayIndexOutOfBoundsException`, `NegativeArrayS
 `OutOfMemoryError`, `StackOverflowError`, a raw FlatBuffer runtime exception, or a Protobuf
 parser exception. Each entry below is either a known gap, a contract audit, or supporting infra.
 
-### Parser hardening
-
-- [ ] **Checkstyle rule rejecting raw `MemorySegment.asSlice` on untrusted offsets** —
-  the `IoBounds.slice(seg, off, len)` helper shipped (ADR-0003 Phase E) and the untrusted
-  file-structure + decode call sites already route through it. Remaining: add the Checkstyle
-  rule blocking raw `asSlice` in the reader file-structure / decode packages, then a final
-  `grep -rn 'asSlice' core/src/main reader/src/main` sweep to catch any site the migration missed.
-
 ### Per-encoding adversarial tests
 
 Each encoding's `decode(DecodeContext)` should be exercised against:
