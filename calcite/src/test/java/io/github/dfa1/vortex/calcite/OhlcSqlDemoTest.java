@@ -148,12 +148,13 @@ class OhlcSqlDemoTest {
             String windowed = "select count(*) c, max(high) h from vtx.ohlc "
                     + "where `date` between " + lo + " and " + hi;
 
-            // When a full-scan baseline runs, every chunk is decoded. A `WHERE high > -1` matches
-            // every row (high is always positive) so zone maps prune nothing — and the predicate
-            // also stops the aggregate rule from answering count(*) from stats, which would
-            // otherwise decode zero chunks.
+            // When a full-scan baseline runs, every chunk is decoded. The predicate `high > low` is
+            // a column-vs-column comparison: it is not a zone-map RowFilter (so nothing is pruned)
+            // and not a column-vs-literal the aggregate rule can fold (so count(*) is not answered
+            // from stats — a simple `high > -1` now would be, since every zone is fully selected).
+            // Both escapes force the count to actually scan and decode all chunks.
             try (Statement st = conn.createStatement();
-                 ResultSet rs = st.executeQuery("select count(*) c from vtx.ohlc where high > -1")) {
+                 ResultSet rs = st.executeQuery("select count(*) c from vtx.ohlc where high > low")) {
                 rs.next();
             }
             long chunksFull = schema.table("ohlc").chunksScannedLastQuery();

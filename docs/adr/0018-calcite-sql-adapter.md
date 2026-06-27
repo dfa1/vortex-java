@@ -119,6 +119,14 @@ Phases 0–2 are implemented and tested:
   planner first sees the node, so a plain `jdbc:calcite:` connection rewrites these aggregates with
   no caller wiring. The scan immediately expands to a stock `LogicalTableScan`, leaving the
   Bindable filter/projection push-down untouched.
+- **WHERE-filtered push-down (clean partition).** A `WHERE` no longer blanket-abandons the rewrite.
+  When the pushed predicate translates fully to a `RowFilter` and partitions the zones cleanly —
+  every chunk either entirely matches or entirely fails it, with no boundary chunk it partially
+  selects — the rule folds `SUM`/`COUNT`/`MIN`/`MAX` from only the kept zones' statistics, still a
+  scan-free `LogicalValues`. Classification applies SQL three-valued logic (a `NULL` in a compared
+  column does not match, so a zone is fully selected by a comparison only if it also provably
+  carries no nulls). The moment one zone is a boundary, the rewrite is abandoned to the scan — so
+  the common selective-range case (one or two boundary chunks) still scans for now; see below.
 
 Gotchas found and recorded for the production adapter:
 
@@ -143,8 +151,13 @@ The Phase-2 rule now auto-registers over the bare `jdbc:calcite:` planner via
 `VortexTableScan.register()` (a `TranslatableTable` translating to a custom scan that expands back
 to `LogicalTableScan`), so SQL over JDBC is rewritten with no caller wiring — the former main
 productionisation gap. The unit tests still drive the rule through a `HepPlanner` directly for
-focused branch coverage. The remaining Phase-2+ work is the residual tier (ADR 0013 §6): pushing
-`SUM`/`COUNT` **with a `WHERE`** by folding fully-selected zones and streaming only boundary zones.
+focused branch coverage. A `WHERE` whose predicate partitions the zones cleanly is now answered
+from the kept zones' stats (above); the remaining Phase-2+ work is the **boundary** tier (ADR 0013
+§6): folding the fully-selected zones **and streaming only the boundary zones** a selective range
+partially selects. That needs a reader primitive the current API lacks — the ability to decode a
+chosen subset of chunks (so the fully-covered zones are not decoded) plus row-level predicate
+evaluation — without which a boundary-bearing filter decodes the same chunks as a plain scan and so
+gains nothing. Until then a filter with any boundary chunk abandons to the (zone-map-pruned) scan.
 
 **Two doors, chosen by query shape.** Calcite is the right tool for *reducing* queries (filter
 / aggregate / group-by), where push-down shrinks the result and the `Object[]` boundary

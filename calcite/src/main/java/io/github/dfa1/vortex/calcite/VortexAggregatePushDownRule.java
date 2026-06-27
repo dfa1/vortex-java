@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.calcite;
 
-import io.github.dfa1.vortex.reader.ArrayStats;
+import io.github.dfa1.vortex.reader.RowFilter;
 
 import com.google.common.collect.ImmutableList;
 import org.apache.calcite.interpreter.Bindables;
@@ -10,6 +10,7 @@ import org.apache.calcite.plan.RelOptRuleOperand;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.core.Aggregate;
 import org.apache.calcite.rel.core.AggregateCall;
+import org.apache.calcite.rel.core.Filter;
 import org.apache.calcite.rel.core.Project;
 import org.apache.calcite.rel.core.TableScan;
 import org.apache.calcite.rel.logical.LogicalValues;
@@ -24,6 +25,7 @@ import org.apache.calcite.sql.SqlKind;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /// Rewrites a whole-table `MIN`/`MAX`/`COUNT`/`SUM` aggregate over a [VortexTable] into a
 /// single-row [LogicalValues] computed from the footer zone-map statistics — answering the query
@@ -54,8 +56,24 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
             operand(Aggregate.class, operand(TableScan.class, none())),
             "VortexAggregatePushDownRule:scan");
 
+    /// Matches `Aggregate(Project(Filter(TableScan)))` — a `WHERE`-filtered aggregate with a column
+    /// projection (e.g. `SUM(val) ... WHERE id < k`). At the logical level the predicate is a
+    /// `Filter` node; it only folds into the scan in the physical plan, so the rule must match it
+    /// here to answer the filtered aggregate from the kept zones' statistics.
+    public static final VortexAggregatePushDownRule PROJECT_FILTER = new VortexAggregatePushDownRule(
+            operand(Aggregate.class, operand(Project.class,
+                    operand(Filter.class, operand(TableScan.class, none())))),
+            "VortexAggregatePushDownRule:project-filter");
+
+    /// Matches `Aggregate(Filter(TableScan))` — a `WHERE`-filtered aggregate with no projection
+    /// (e.g. `COUNT(*) ... WHERE id < k`).
+    public static final VortexAggregatePushDownRule FILTER_ONLY = new VortexAggregatePushDownRule(
+            operand(Aggregate.class, operand(Filter.class, operand(TableScan.class, none()))),
+            "VortexAggregatePushDownRule:filter");
+
     /// Every rule variant, for registering with a planner in one call.
-    public static final java.util.List<RelOptRule> RULES = java.util.List.of(WITH_PROJECT, NO_PROJECT);
+    public static final java.util.List<RelOptRule> RULES =
+            java.util.List.of(WITH_PROJECT, NO_PROJECT, PROJECT_FILTER, FILTER_ONLY);
 
     private VortexAggregatePushDownRule(RelOptRuleOperand operand, String description) {
         super(operand, description);
@@ -67,26 +85,45 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
         if (aggregate.getGroupCount() != 0) {
             return;
         }
-        // Explicit operands give concrete rels under both Hep and Volcano: rel(1) is either the
-        // Project (then rel(2) is the scan) or the scan directly.
-        Project project;
-        TableScan scan;
-        if (call.rel(1) instanceof Project p) {
+        // Explicit operands give concrete rels under both Hep and Volcano. Walk the optional
+        // Project and Filter nodes between the Aggregate and the TableScan; each rule variant fixes
+        // the shape, so the levels present here are exactly those its operand declared.
+        Project project = null;
+        Filter filter = null;
+        RelNode current = call.rel(1);
+        int index = 1;
+        if (current instanceof Project p) {
             project = p;
-            scan = call.rel(2);
-        } else {
-            project = null;
-            scan = call.rel(1);
+            current = call.rel(++index);
         }
+        if (current instanceof Filter f) {
+            filter = f;
+            current = call.rel(++index);
+        }
+        TableScan scan = (TableScan) current;
         VortexTable table = scan.getTable().unwrap(VortexTable.class);
         if (table == null) {
             return;
         }
-        // Whole-table stats are only valid for a whole-table scan. If a WHERE predicate was pushed
-        // into the scan (BindableTableScan.filters), answering from stats would ignore it and return
-        // the wrong MIN/MAX/COUNT — leave the plan to compute it over the filtered rows.
-        if (scan instanceof Bindables.BindableTableScan bindable && !bindable.filters.isEmpty()) {
-            return;
+        // A WHERE makes whole-table stats invalid. The predicate is the Filter node's condition at
+        // the logical level (and BindableTableScan.filters once folded into a physical scan).
+        // Translate it strictly; if every predicate is captured we may still answer from the zones
+        // it selects (filteredFold), but only when it partitions them cleanly. An untranslatable
+        // predicate abandons the rewrite so the scan computes the result over the filtered rows.
+        List<RexNode> predicates = new ArrayList<>();
+        if (filter != null) {
+            predicates.add(filter.getCondition());
+        }
+        if (scan instanceof Bindables.BindableTableScan bindable) {
+            predicates.addAll(bindable.filters);
+        }
+        RowFilter pushedFilter = null;
+        if (!predicates.isEmpty()) {
+            Optional<RowFilter> translated = table.translatePushedFilters(predicates);
+            if (translated.isEmpty()) {
+                return;
+            }
+            pushedFilter = translated.get();
         }
         RelDataType scanRowType = scan.getRowType();
         List<String> scanColumns = scanRowType.getFieldNames();
@@ -99,7 +136,7 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
         List<AggregateCall> calls = aggregate.getAggCallList();
         for (int i = 0; i < calls.size(); i++) {
             RexLiteral literal = evaluate(calls.get(i), outTypes.get(i), table, scanColumns, scanRowType,
-                    project, rexBuilder);
+                    project, rexBuilder, pushedFilter);
             if (literal == null) {
                 return; // an aggregate we can't answer from stats — abandon the rewrite
             }
@@ -113,29 +150,38 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
     }
 
     /// Evaluates one aggregate call from zone-map stats, returning a literal of `outType`, or
-    /// `null` if it cannot be answered (so the caller abandons the rewrite).
+    /// `null` if it cannot be answered (so the caller abandons the rewrite). When `filter` is
+    /// non-null the answer is folded from only the zones the filter fully selects, which exists
+    /// only if the filter partitions the zones cleanly — otherwise the fold is empty and the call
+    /// abandons.
     private static RexLiteral evaluate(AggregateCall agg, RelDataType outType, VortexTable table,
                                        List<String> scanColumns, RelDataType scanRowType,
-                                       Project project, RexBuilder rexBuilder) {
+                                       Project project, RexBuilder rexBuilder, RowFilter filter) {
         return switch (agg.getAggregation().getKind()) {
             case COUNT -> {
-                if (agg.getArgList().isEmpty()) {
-                    yield exact(rexBuilder, table.totalRows(), outType);   // COUNT(*)
+                if (agg.getArgList().isEmpty()) {                  // COUNT(*)
+                    if (filter == null) {
+                        yield exact(rexBuilder, table.totalRows(), outType);
+                    }
+                    Optional<VortexTable.FilteredFold> fold = table.filteredFold(filter, null);
+                    yield fold.map(f -> exact(rexBuilder, f.rows(), outType)).orElse(null);
                 }
                 String col = resolveColumn(agg.getArgList().getFirst(), scanColumns, project);
                 if (col == null) {
                     yield null;
                 }
-                VortexTable.ColumnStats columnStats = table.statsAndRows(col);
-                Long nullCount = columnStats.stats().nullCount();
+                ColumnFold fold = columnFold(table, col, filter);
+                if (fold == null) {
+                    yield null;
+                }
                 // COUNT(col) = rows − nulls. Without a NULL_COUNT stat we cannot assume zero nulls
                 // for a nullable column (we would overcount), so abandon; a non-nullable column has
                 // no nulls and is safe.
-                if (nullCount == null && isNullable(scanRowType, col)) {
+                if (fold.nullCount() == null && isNullable(scanRowType, col)) {
                     yield null;
                 }
-                long nulls = nullCount == null ? 0L : nullCount;
-                yield exact(rexBuilder, columnStats.totalRows() - nulls, outType);
+                long nulls = fold.nullCount() == null ? 0L : fold.nullCount();
+                yield exact(rexBuilder, fold.rows() - nulls, outType);
             }
             case MIN, MAX -> {
                 if (agg.getArgList().size() != 1) {
@@ -145,16 +191,17 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
                 if (col == null) {
                     yield null;
                 }
-                VortexTable.ColumnStats columnStats = table.statsAndRows(col);
-                ArrayStats stats = columnStats.stats();
-                Object value = agg.getAggregation().getKind() == SqlKind.MIN ? stats.min() : stats.max();
+                ColumnFold fold = columnFold(table, col, filter);
+                if (fold == null) {
+                    yield null;
+                }
+                Object value = agg.getAggregation().getKind() == SqlKind.MIN ? fold.min() : fold.max();
                 if (value == null) {
-                    // No MIN/MAX stat. A genuine SQL NULL is only correct when the column provably has
-                    // no non-null rows (empty table, or every row null); otherwise the stat is merely
-                    // absent and we must abandon so the scan computes the real value.
-                    long total = columnStats.totalRows();
-                    Long nullCount = stats.nullCount();
-                    boolean provablyNoValues = total == 0 || (nullCount != null && nullCount == total);
+                    // No MIN/MAX stat. A genuine SQL NULL is only correct when the (selected) rows
+                    // provably have no non-null value — empty set, or every row null; otherwise the
+                    // stat is merely absent and we must abandon so the scan computes the real value.
+                    boolean provablyNoValues = fold.rows() == 0
+                            || (fold.nullCount() != null && fold.nullCount() == fold.rows());
                     yield provablyNoValues ? rexBuilder.makeNullLiteral(outType) : null;
                 }
                 yield numericLiteral(rexBuilder, value, outType);
@@ -167,34 +214,57 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
                 if (col == null) {
                     yield null;
                 }
-                // Fold the per-zone SUM rows (metadata-only), with the null and row counts read in
-                // the same pass. A null fold means a zone carries no usable sum (no zone map, or an
-                // overflowed zone) — abandon so the scan computes it.
-                VortexTable.ZoneSum zoneSum = table.zoneSum(col);
-                Number sum = zoneSum.sum();
-                if (sum == null) {
+                ColumnFold fold = columnFold(table, col, filter);
+                if (fold == null) {
                     yield null;
                 }
-                // SQL SUM over zero non-null rows is NULL, not 0 — but the writer records an all-null
-                // zone's sum as a sum-neutral 0 (validity placeholders are zero), so the fold cannot
-                // tell an all-null column from a genuine 0. Resolve it from the null count:
-                //   - provably all-null (empty table, or nullCount == rows) → emit the NULL literal;
-                //   - fold is a non-zero value → at least one non-null row, the number is correct;
-                //   - fold is 0 but the null count is unknown for a nullable column → ambiguous
-                //     (real 0 vs all-null), so abandon and let the scan decide.
-                // A non-nullable column has no nulls, so any fold is the true sum.
-                Long nullCount = zoneSum.nullCount();
-                long total = zoneSum.totalRows();
-                if (total == 0 || (nullCount != null && nullCount == total)) {
-                    yield rexBuilder.makeNullLiteral(outType);
-                }
-                if (isZero(sum) && nullCount == null && isNullable(scanRowType, col)) {
-                    yield null;
-                }
-                yield numericLiteral(rexBuilder, sum, outType);
+                yield sumLiteral(rexBuilder, outType, fold.sum(), fold.nullCount(), fold.rows(),
+                        isNullable(scanRowType, col));
             }
             default -> null;
         };
+    }
+
+    /// The sum, min, max, null count and row count of a column over either the whole table
+    /// (`filter == null`) or the rows a clean-partitioning `filter` selects — the common shape the
+    /// `SUM`/`MIN`/`MAX`/`COUNT(col)` branches read. `null` for a filtered call whose zones the
+    /// filter does not partition cleanly (so the caller abandons to the scan).
+    private record ColumnFold(Number sum, Object min, Object max, Long nullCount, long rows) {
+    }
+
+    private static ColumnFold columnFold(VortexTable table, String column, RowFilter filter) {
+        if (filter == null) {
+            VortexTable.ColumnStats stats = table.statsAndRows(column);
+            VortexTable.ZoneSum zoneSum = table.zoneSum(column);
+            return new ColumnFold(zoneSum.sum(), stats.stats().min(), stats.stats().max(),
+                    stats.stats().nullCount(), stats.totalRows());
+        }
+        return table.filteredFold(filter, column)
+                .map(f -> new ColumnFold(f.sum(), f.min(), f.max(), f.nullCount(), f.rows()))
+                .orElse(null);
+    }
+
+    /// Builds the literal for a `SUM`, resolving the all-null-vs-genuine-zero ambiguity from the
+    /// null count. SQL `SUM` over zero non-null rows is `NULL`, but the writer records an all-null
+    /// zone's sum as a sum-neutral `0` (validity placeholders are zero), so a `0` fold alone cannot
+    /// tell an all-null column from a genuine zero:
+    ///   - `sum == null` — a folded zone carried no usable sum → abandon to the scan;
+    ///   - provably no non-null rows (empty, or `nullCount == rows`) → the SQL `NULL` literal;
+    ///   - a non-zero fold → at least one non-null row, the number is correct;
+    ///   - a `0` fold with an unknown null count over a nullable column → ambiguous, so abandon.
+    /// A non-nullable column has no nulls, so any fold is the true sum.
+    private static RexLiteral sumLiteral(RexBuilder rexBuilder, RelDataType outType, Number sum,
+                                         Long nullCount, long rows, boolean nullable) {
+        if (sum == null) {
+            return null;
+        }
+        if (rows == 0 || (nullCount != null && nullCount == rows)) {
+            return rexBuilder.makeNullLiteral(outType);
+        }
+        if (isZero(sum) && nullCount == null && nullable) {
+            return null;
+        }
+        return numericLiteral(rexBuilder, sum, outType);
     }
 
     /// Returns whether column `col` is nullable per the scan's row type.
