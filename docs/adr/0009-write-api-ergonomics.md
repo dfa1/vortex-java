@@ -1,6 +1,6 @@
 # ADR 0009: Write API ergonomics — DType factories and typed chunk builder
 
-- **Status:** Completed (parts 1-3 shipped 2026-06-14; part 4 split out to ADR 0011)
+- **Status:** Accepted (parts 1-3 shipped 2026-06-14; part 4 split out to ADR 0011)
 - **Date:** 2026-06-13
 - **Deciders:** project maintainer
 - **Supersedes:** —

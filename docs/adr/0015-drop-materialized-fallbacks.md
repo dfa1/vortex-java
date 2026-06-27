@@ -1,6 +1,6 @@
 # ADR 0015: Drop Materialized fallbacks once Lazy has shipped
 
-- **Status:** Completed
+- **Status:** Accepted
 - **Date:** 2026-06-16
 - **Deciders:** project maintainer
 - **Supersedes:** —
