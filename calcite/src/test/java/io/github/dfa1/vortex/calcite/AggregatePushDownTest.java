@@ -96,6 +96,48 @@ class AggregatePushDownTest {
     }
 
     @Test
+    void sumRewritesToValuesFromZoneStats() throws Exception {
+        // Given a whole-table SUM over an integer column (volume, I64 → exact Long) and a floating
+        // column (low, F64 → Double) — both answerable by folding the per-zone SUM rows
+        SchemaPlus root = Frameworks.createRootSchema(true);
+        SchemaPlus vtx = root.add("vtx", new VortexSchema(Map.of("ohlc", file)));
+        FrameworkConfig config = Frameworks.newConfigBuilder()
+                .defaultSchema(vtx)
+                .parserConfig(org.apache.calcite.sql.parser.SqlParser.config()
+                        .withUnquotedCasing(org.apache.calcite.avatica.util.Casing.UNCHANGED))
+                .build();
+        Planner planner = Frameworks.getPlanner(config);
+        SqlNode parsed = planner.parse("select sum(volume), sum(low) from ohlc");
+        RelNode logical = planner.rel(planner.validate(parsed)).rel;
+
+        // When the aggregate push-down rule runs
+        HepProgram program = new HepProgramBuilder()
+                .addRuleCollection(VortexAggregatePushDownRule.RULES)
+                .build();
+        HepPlanner hep = new HepPlanner(program);
+        hep.setRoot(logical);
+        RelNode optimized = hep.findBestExp();
+
+        // Then the plan is a single-row Values — no scan, no aggregate, no data segment decoded
+        String plan = RelOptUtil.toString(optimized);
+        assertThat(plan).contains("LogicalValues").doesNotContain("TableScan").doesNotContain("Aggregate");
+
+        Values values = findValues(optimized);
+        assertThat(values).isNotNull();
+        List<RexLiteral> sumRow = values.getTuples().getFirst();
+
+        // And the folded sums equal what ZoneReducer computes — exact Long for volume (not widened
+        // to Double), Double for low
+        try (VortexReader reader = VortexReader.open(file)) {
+            Number volumeSum = VortexAggregates.of(reader, "volume").sum();
+            Number lowSum = VortexAggregates.of(reader, "low").sum();
+            assertThat(volumeSum).isInstanceOf(Long.class);
+            assertThat(sumRow.get(0).getValueAs(Long.class)).isEqualTo(volumeSum.longValue());
+            assertThat(sumRow.get(1).getValueAs(Double.class)).isEqualTo(lowSum.doubleValue());
+        }
+    }
+
+    @Test
     @SuppressWarnings("try") // the Hook.Closeable is used only for its scope (deregister on close)
     void pushDownRunsEndToEndThroughJdbcPlanner() throws Exception {
         // Given a JDBC Calcite connection over the OHLC schema with the rule registered on the
