@@ -13,7 +13,7 @@
 	<description>Apache Calcite SQL adapter over the Vortex columnar file format (demo: filter/project/aggregate push-down).</description>
 
 	<properties>
-		<calcite.version>1.40.0</calcite.version>
+		<calcite.version>1.42.0</calcite.version>
 	</properties>
 
 	<dependencies>
