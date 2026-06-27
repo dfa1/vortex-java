@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.calcite;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.RowFilter;
 import io.github.dfa1.vortex.reader.ScanIterator;
@@ -82,9 +83,9 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     ///
     /// @param column the column name
     /// @return the column's aggregated statistics
-    public io.github.dfa1.vortex.reader.ArrayStats statsOf(String column) {
+    public ArrayStats statsOf(String column) {
         try (VortexReader reader = VortexReader.open(file)) {
-            return reader.columnStats().getOrDefault(column, io.github.dfa1.vortex.reader.ArrayStats.empty());
+            return reader.columnStats().getOrDefault(column, ArrayStats.empty());
         } catch (IOException e) {
             throw new UncheckedIOException("cannot read stats of " + file, e);
         }
@@ -117,14 +118,8 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         try (VortexReader reader = VortexReader.open(file)) {
             Number sum = new ZoneReducer(reader).sum(column);
             Long nullCount = reader.columnStats()
-                    .getOrDefault(column, io.github.dfa1.vortex.reader.ArrayStats.empty()).nullCount();
-            long total = 0;
-            try (ScanIterator scan = reader.scan(ScanOptions.all())) {
-                for (long c : scan.chunkRowCounts()) {
-                    total += c;
-                }
-            }
-            return new ZoneSum(sum, nullCount, total);
+                    .getOrDefault(column, ArrayStats.empty()).nullCount();
+            return new ZoneSum(sum, nullCount, countRows(reader));
         } catch (IOException e) {
             throw new UncheckedIOException("cannot read zone sum of " + file, e);
         }
@@ -134,16 +129,23 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     ///
     /// @return the number of rows in the file
     public long totalRows() {
-        try (VortexReader reader = VortexReader.open(file);
-             ScanIterator scan = reader.scan(ScanOptions.all())) {
-            long total = 0;
-            for (long c : scan.chunkRowCounts()) {
-                total += c;
-            }
-            return total;
+        try (VortexReader reader = VortexReader.open(file)) {
+            return countRows(reader);
         } catch (IOException e) {
             throw new UncheckedIOException("cannot count rows of " + file, e);
         }
+    }
+
+    /// Sums the chunk row counts of `reader` from chunk metadata, without decoding data — shared by
+    /// [#totalRows()] and [#zoneSum(String)] so both read the count from a single open reader.
+    private static long countRows(VortexReader reader) throws IOException {
+        long total = 0;
+        try (ScanIterator scan = reader.scan(ScanOptions.all())) {
+            for (long c : scan.chunkRowCounts()) {
+                total += c;
+            }
+        }
+        return total;
     }
 
     /// Translates a reference to this table into a [VortexTableScan] — the seam that auto-registers
