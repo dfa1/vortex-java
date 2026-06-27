@@ -27,6 +27,13 @@
 			<artifactId>calcite-core</artifactId>
 			<version>${calcite.version}</version>
 		</dependency>
+		<!-- Babel SQL parser: lets reserved-word column names (date, close, open, …) be queried
+		     unquoted through VortexCalcite.connect. Adds no transitive deps beyond calcite-core. -->
+		<dependency>
+			<groupId>org.apache.calcite</groupId>
+			<artifactId>calcite-babel</artifactId>
+			<version>${calcite.version}</version>
+		</dependency>
 		<!-- testing -->
 		<dependency>
 			<groupId>io.github.dfa1.vortex</groupId>

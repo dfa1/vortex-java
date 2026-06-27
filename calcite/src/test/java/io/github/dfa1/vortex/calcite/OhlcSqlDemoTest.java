@@ -195,12 +195,7 @@ class OhlcSqlDemoTest {
     }
 
     private static Connection connect() throws Exception {
-        Properties info = new Properties();
-        info.setProperty("lex", "JAVA");
-        Connection conn = DriverManager.getConnection("jdbc:calcite:", info);
-        conn.unwrap(CalciteConnection.class).getRootSchema()
-                .add("vtx", new VortexSchema(Map.of("ohlc", file)));
-        return conn;
+        return VortexCalcite.connect("vtx", Map.of("ohlc", file));
     }
 
     private static SqlAggs runSql(Connection conn) throws Exception {

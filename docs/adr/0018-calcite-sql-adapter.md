@@ -122,8 +122,12 @@ Phases 0–2 are implemented and tested:
 
 Gotchas found and recorded for the production adapter:
 
-- **Reserved words.** Beyond `date`, the OHLC columns `close`/`open` (CLOSE/OPEN cursor) must be
-  quoted. A production adapter should quote all identifiers it emits.
+- **Reserved words.** Column names that are SQL keywords (`close`/`open`, `value`, `year`, …)
+  break unquoted queries under the stock parser. Resolved by `VortexCalcite.connect`, which wires
+  the Babel parser (`calcite-babel`) so reserved words parse as identifiers unquoted — the adapter
+  emits no SQL of its own, so there is nothing for it to quote; the lever is the parser, owned by
+  the connection. The residual exceptions are the typed-literal keywords (`date`, `time`,
+  `timestamp`, `interval`), which stay reserved even under Babel and still need back-tick quoting.
 - **Integer stats are `Long`.** Zone-map integer stats decode as `Long`, floats as `Double`,
   regardless of column width. A filter literal boxed at the column's natural width (`Integer` for
   `I32`) silently disables pruning because `ScanIterator.compareValues` swallows the resulting
