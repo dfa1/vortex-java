@@ -202,6 +202,18 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         }
         try (VortexReader reader = VortexReader.open(file);
              ScanIterator scan = reader.scan(ScanOptions.columns(columns.toArray(String[]::new)))) {
+            // Unsigned columns store stats whose boxed (signed) order disagrees with the unsigned
+            // value order past the high bit, so a signed compare here could fold the wrong zones —
+            // a wrong answer. Abandon the fold for any unsigned column involved and let the scan
+            // (whose comparator is unsigned-aware) compute it.
+            if (!(reader.dtype() instanceof DType.Struct struct)) {
+                return Optional.empty();
+            }
+            for (String column : columns) {
+                if (isUnsigned(struct, column)) {
+                    return Optional.empty();
+                }
+            }
             long[] rowCounts = scan.chunkRowCounts();
             int zones = rowCounts.length;
             java.util.Map<String, List<ArrayStats>> zoneStats = new java.util.HashMap<>();
@@ -257,7 +269,14 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                     }
                 }
             }
-            Number foldedSum = !sumUsable ? null : floatingSum ? Double.valueOf(doubleSum) : Long.valueOf(longSum);
+            Number foldedSum;
+            if (!sumUsable) {
+                foldedSum = null;             // a kept zone carried no usable sum
+            } else if (floatingSum) {
+                foldedSum = doubleSum;
+            } else {
+                foldedSum = longSum;
+            }
             Long foldedNulls = nullCountKnown ? nullCount : null;
             return Optional.of(new FilteredFold(foldedSum, min, max, foldedNulls, keptRows));
         } catch (IOException e) {
@@ -399,11 +418,19 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         return Match.BOUNDARY;
     }
 
-    /// Whether a zone's min/max are missing or not the same boxed type as `value` — either way the
-    /// zone cannot be classified against `value`, so the caller must treat it as a boundary.
+    /// Whether `column` is an unsigned primitive, whose signed stat ordering [#compareStat] cannot
+    /// safely classify (the fold abandons such columns to the scan).
+    private static boolean isUnsigned(DType.Struct struct, String column) {
+        int idx = struct.fieldNames().indexOf(column);
+        return idx >= 0 && struct.fieldTypes().get(idx) instanceof DType.Primitive p && p.ptype().isUnsigned();
+    }
+
+    /// Whether a zone's min/max are missing, or are a different kind of value than `value` (one
+    /// numeric, the other a string) — either way the zone cannot be classified against `value`, so
+    /// the caller must treat it as a boundary.
     private static boolean uncomparable(ArrayStats s, Object value) {
         return s.min() == null || s.max() == null || value == null
-                || s.min().getClass() != value.getClass();
+                || value instanceof Number != s.min() instanceof Number;
     }
 
     /// Whether the zone provably carries no nulls (its null count is recorded and zero).
@@ -411,8 +438,19 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         return s.nullCount() != null && s.nullCount() == 0;
     }
 
+    /// Compares two scalar stat/filter values by their natural order, widening across boxed widths:
+    /// the zone-map stats box at the column's own width ([Integer] for an `I32` column, [Short] for
+    /// `I16`, …) while a filter literal arrives as [Long]/[Double], so a same-type comparison would
+    /// reject narrower columns. Signed-integer widening is exact; unsigned columns are excluded
+    /// upstream ([#isUnsigned]). Strings compare lexicographically.
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static int compareStat(Object a, Object b) {
+        if (a instanceof Number na && b instanceof Number nb) {
+            if (a instanceof Double || a instanceof Float || b instanceof Double || b instanceof Float) {
+                return Double.compare(na.doubleValue(), nb.doubleValue());
+            }
+            return Long.compare(na.longValue(), nb.longValue());
+        }
         return ((Comparable) a).compareTo(b);
     }
 

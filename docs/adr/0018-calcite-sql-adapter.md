@@ -127,6 +127,11 @@ Phases 0–2 are implemented and tested:
   column does not match, so a zone is fully selected by a comparison only if it also provably
   carries no nulls). The moment one zone is a boundary, the rewrite is abandoned to the scan — so
   the common selective-range case (one or two boundary chunks) still scans for now; see below.
+  Comparisons widen across boxed stat widths (the zone-map boxes at the column's own width — an
+  `I32` stat is an `Integer`, not the `Long` the filter literal coerces to), so narrow signed
+  columns fold too. Unsigned columns are excluded: their stats box signed, and a signed order
+  disagrees with the unsigned value order past the high bit, so the fold abandons them to the
+  scan, whose comparator is unsigned-aware.
 
 Gotchas found and recorded for the production adapter:
 

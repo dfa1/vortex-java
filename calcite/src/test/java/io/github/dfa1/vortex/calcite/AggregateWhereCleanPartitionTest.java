@@ -1,8 +1,10 @@
 package io.github.dfa1.vortex.calcite;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
+import io.github.dfa1.vortex.writer.encode.NullableData;
 
 import org.apache.calcite.jdbc.CalciteConnection;
 import org.junit.jupiter.api.BeforeAll;
@@ -16,6 +18,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
@@ -138,6 +141,116 @@ class AggregateWhereCleanPartitionTest {
                 assertThat(rs.getLong("c")).isEqualTo(boundary);
             }
         }
+    }
+
+    @Test
+    void narrowIntegerKeyFoldsFromStats() throws Exception {
+        // Given a clustered I32 key (and I32 value): the zone-map stats box as Integer, not Long, so
+        // a same-type comparison would never fire — this guards that the widening compare folds
+        // narrow columns. Two chunks: ids 0..3, then 10..13.
+        DType.Struct schema = new DType.Struct(
+                List.of("id", "val"),
+                List.of(new DType.Primitive(PType.I32, false), new DType.Primitive(PType.I32, false)),
+                false);
+        Path f = tmp.resolve("i32.vortex");
+        writeChunks(f, schema,
+                Map.of("id", new int[]{0, 1, 2, 3}, "val", new int[]{0, 1, 2, 3}),
+                Map.of("id", new int[]{10, 11, 12, 13}, "val", new int[]{10, 11, 12, 13}));
+
+        try (Connection conn = connect(f)) {
+            // When the first chunk is selected (id < 10), the aggregates fold from stats — no scan
+            String plan = explain(conn, "select sum(val), count(*), min(val), max(val) from vtx.t where id < 10");
+            assertThat(plan).containsIgnoringCase("Values").doesNotContain("TableScan");
+
+            // Then the values match the first chunk (ids 0..3)
+            try (Statement st = conn.createStatement();
+                 ResultSet rs = st.executeQuery(
+                         "select sum(val) s, count(*) c, min(val) mn, max(val) mx from vtx.t where id < 10")) {
+                rs.next();
+                assertThat(rs.getLong("s")).isEqualTo(6);     // 0+1+2+3
+                assertThat(rs.getLong("c")).isEqualTo(4);
+                assertThat(rs.getLong("mn")).isZero();
+                assertThat(rs.getLong("mx")).isEqualTo(3);
+            }
+        }
+    }
+
+    @Test
+    void nullAwareSumAndCountOverKeptZones() throws Exception {
+        // Given a non-null clustered key and a nullable value with two nulls in the kept chunk
+        DType.Struct schema = new DType.Struct(
+                List.of("id", "val"),
+                List.of(new DType.Primitive(PType.I64, false), new DType.Primitive(PType.I64, true)),
+                false);
+        Path f = tmp.resolve("nullable.vortex");
+        writeChunks(f, schema,
+                Map.of("id", new long[]{0, 1, 2, 3},
+                        "val", new NullableData(new long[]{10, 0, 30, 0}, new boolean[]{true, false, true, false})),
+                Map.of("id", new long[]{10, 11, 12, 13},
+                        "val", new NullableData(new long[]{1, 2, 3, 4}, new boolean[]{true, true, true, true})));
+
+        try (Connection conn = connect(f)) {
+            // When the first chunk is selected (id < 10) — folded from stats, no scan
+            String plan = explain(conn, "select sum(val), count(*), count(val) from vtx.t where id < 10");
+            assertThat(plan).containsIgnoringCase("Values").doesNotContain("TableScan");
+
+            // Then SUM ignores the nulls (10+30), COUNT(*) counts every row, COUNT(val) the non-null
+            try (Statement st = conn.createStatement();
+                 ResultSet rs = st.executeQuery(
+                         "select sum(val) s, count(*) c, count(val) cv from vtx.t where id < 10")) {
+                rs.next();
+                assertThat(rs.getLong("s")).isEqualTo(40);    // 10 + 30, the two nulls skipped
+                assertThat(rs.getLong("c")).isEqualTo(4);
+                assertThat(rs.getLong("cv")).isEqualTo(2);
+            }
+        }
+    }
+
+    @Test
+    void unsignedKeyColumnAbandonsToScan() throws Exception {
+        // Given a clustered U64 key: a signed stat compare could fold the wrong zones past the high
+        // bit, so the fold must abandon unsigned columns to the (unsigned-aware) scan
+        DType.Struct schema = new DType.Struct(
+                List.of("id", "val"),
+                List.of(new DType.Primitive(PType.U64, false), new DType.Primitive(PType.I64, false)),
+                false);
+        Path f = tmp.resolve("u64.vortex");
+        writeChunks(f, schema,
+                Map.of("id", new long[]{0, 1, 2, 3}, "val", new long[]{0, 1, 2, 3}),
+                Map.of("id", new long[]{10, 11, 12, 13}, "val", new long[]{10, 11, 12, 13}));
+
+        try (Connection conn = connect(f)) {
+            // When id < 10 over the unsigned key — a scan is present (no stats fold)
+            String sql = "select sum(val) s, count(*) c from vtx.t where id < 10";
+            assertThat(explain(conn, sql)).contains("TableScan");
+
+            // And the scan still produces the exact result over the first chunk
+            try (Statement st = conn.createStatement();
+                 ResultSet rs = st.executeQuery(sql)) {
+                rs.next();
+                assertThat(rs.getLong("s")).isEqualTo(6);
+                assertThat(rs.getLong("c")).isEqualTo(4);
+            }
+        }
+    }
+
+    private static void writeChunks(Path file, DType.Struct schema, Map<String, Object> chunk0,
+                                    Map<String, Object> chunk1) throws Exception {
+        // chunkSize large so each writeChunk is exactly one chunk (one zone).
+        WriteOptions opts = new WriteOptions(1024, true, 0.90, 0, false, false);
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             VortexWriter writer = VortexWriter.create(ch, schema, opts)) {
+            writer.writeChunk(chunk0);
+            writer.writeChunk(chunk1);
+        }
+    }
+
+    private static Connection connect(Path f) throws Exception {
+        Properties info = new Properties();
+        info.setProperty("lex", "JAVA");
+        Connection conn = DriverManager.getConnection("jdbc:calcite:", info);
+        conn.unwrap(CalciteConnection.class).getRootSchema().add("vtx", new VortexSchema(Map.of("t", f)));
+        return conn;
     }
 
     private static Connection connect() throws Exception {
