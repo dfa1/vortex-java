@@ -128,7 +128,9 @@ class VortexAdapterCoverageTest {
         // Given / When / Then
         VortexTable table = new VortexTable(file);
         assertThat(table.totalRows()).isEqualTo(3);
-        assertThat(table.statsOf("i64")).isNotNull();
+        VortexTable.ColumnStats columnStats = table.statsAndRows("i64");
+        assertThat(columnStats.stats()).isNotNull();
+        assertThat(columnStats.totalRows()).isEqualTo(3);
     }
 
     @Test
@@ -157,9 +159,9 @@ class VortexAdapterCoverageTest {
         }
 
         @Test
-        void statsOf_wrapsOpenFailure() {
+        void statsAndRows_wrapsOpenFailure() {
             // When / Then
-            assertThatThrownBy(() -> table.statsOf("i64"))
+            assertThatThrownBy(() -> table.statsAndRows("i64"))
                     .isInstanceOf(java.io.UncheckedIOException.class);
         }
 

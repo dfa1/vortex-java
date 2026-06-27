@@ -78,14 +78,27 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         return chunksScannedLastQuery.get();
     }
 
-    /// Per-column zone-map statistics (global min/max and null count), read from the footer
-    /// without decoding data. Used by the aggregate push-down rule to answer `MIN`/`MAX`/`COUNT`.
+    /// A column's footer zone-map statistics paired with the file's total row count — the two facts
+    /// the aggregate push-down rule reads together to answer `MIN`/`MAX`/`COUNT(col)` (a `COUNT`
+    /// needs `rows − nulls`; a `MIN`/`MAX` with no stat needs the row count to prove the column is
+    /// empty). Read in one reader pass so the rule opens the file once per aggregate.
+    ///
+    /// @param stats     the column's aggregated statistics (global min/max, null count), or
+    ///                  [ArrayStats#empty()] when the column carries no zone map
+    /// @param totalRows the total row count across all chunks
+    public record ColumnStats(ArrayStats stats, long totalRows) {
+    }
+
+    /// Per-column zone-map statistics (global min/max and null count) together with the total row
+    /// count, read from the footer and chunk metadata without decoding data, in a single pass over
+    /// one open reader. Used by the aggregate push-down rule to answer `MIN`/`MAX`/`COUNT`.
     ///
     /// @param column the column name
-    /// @return the column's aggregated statistics
-    public ArrayStats statsOf(String column) {
+    /// @return the column's aggregated statistics paired with the file's total row count
+    public ColumnStats statsAndRows(String column) {
         try (VortexReader reader = VortexReader.open(file)) {
-            return reader.columnStats().getOrDefault(column, ArrayStats.empty());
+            ArrayStats stats = reader.columnStats().getOrDefault(column, ArrayStats.empty());
+            return new ColumnStats(stats, countRows(reader));
         } catch (IOException e) {
             throw new UncheckedIOException("cannot read stats of " + file, e);
         }

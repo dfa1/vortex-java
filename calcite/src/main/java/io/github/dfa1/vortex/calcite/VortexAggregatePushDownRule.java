@@ -126,7 +126,8 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
                 if (col == null) {
                     yield null;
                 }
-                Long nullCount = table.statsOf(col).nullCount();
+                VortexTable.ColumnStats columnStats = table.statsAndRows(col);
+                Long nullCount = columnStats.stats().nullCount();
                 // COUNT(col) = rows − nulls. Without a NULL_COUNT stat we cannot assume zero nulls
                 // for a nullable column (we would overcount), so abandon; a non-nullable column has
                 // no nulls and is safe.
@@ -134,7 +135,7 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
                     yield null;
                 }
                 long nulls = nullCount == null ? 0L : nullCount;
-                yield exact(rexBuilder, table.totalRows() - nulls, outType);
+                yield exact(rexBuilder, columnStats.totalRows() - nulls, outType);
             }
             case MIN, MAX -> {
                 if (agg.getArgList().size() != 1) {
@@ -144,13 +145,14 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
                 if (col == null) {
                     yield null;
                 }
-                ArrayStats stats = table.statsOf(col);
+                VortexTable.ColumnStats columnStats = table.statsAndRows(col);
+                ArrayStats stats = columnStats.stats();
                 Object value = agg.getAggregation().getKind() == SqlKind.MIN ? stats.min() : stats.max();
                 if (value == null) {
                     // No MIN/MAX stat. A genuine SQL NULL is only correct when the column provably has
                     // no non-null rows (empty table, or every row null); otherwise the stat is merely
                     // absent and we must abandon so the scan computes the real value.
-                    long total = table.totalRows();
+                    long total = columnStats.totalRows();
                     Long nullCount = stats.nullCount();
                     boolean provablyNoValues = total == 0 || (nullCount != null && nullCount == total);
                     yield provablyNoValues ? rexBuilder.makeNullLiteral(outType) : null;
