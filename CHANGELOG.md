@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Bumped `io.github.dfa1.zstd` (the `vortex.zstd` FFM bindings, pinned by the BOM) 0.4 → 0.5, which ships smaller jars (native debug symbols stripped). ([6dcdbe94](https://github.com/dfa1/vortex-java/commit/6dcdbe94))
+
 ## [0.10.1] — 2026-06-27
 
 Security hardening of the untrusted-input parse paths: every malformed-file path now surfaces as a `VortexException` instead of an unchecked `Error`, a raw JDK exception, or a resource leak (ADR 0003). Plus a `vortex.zstd` binding bump.
