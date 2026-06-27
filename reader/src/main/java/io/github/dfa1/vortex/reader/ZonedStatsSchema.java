@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.inspect;
+package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.core.model.DType;
 
@@ -14,15 +14,15 @@ import java.util.List;
 ///
 /// The shape is sourced from the Rust reference implementation:
 /// - Metadata format
-///       (<a href="https://github.com/spiraldb/vortex/blob/develop/vortex-layout/src/layouts/zoned/mod.rs">
-///       vortex-layout/src/layouts/zoned/mod.rs</a> — `ZonedMetadata`):
+///       ([vortex-layout/src/layouts/zoned/mod.rs](https://github.com/spiraldb/vortex/blob/develop/vortex-layout/src/layouts/zoned/mod.rs)
+///       — `ZonedMetadata`):
 ///       bytes [0..4) are the zone length as a little-endian `u32`;
 ///       remaining bytes form a `Stat` bitset (LSB-first per byte). Each
 ///       set bit at index `i` indicates that the [Stat] with that
 ///       ordinal is present in the auxiliary stats table.
 /// - Schema construction
-///       (<a href="https://github.com/spiraldb/vortex/blob/develop/vortex-layout/src/layouts/zoned/schema.rs">
-///       vortex-layout/src/layouts/zoned/schema.rs</a> — `stats_table_dtype`):
+///       ([vortex-layout/src/layouts/zoned/schema.rs](https://github.com/spiraldb/vortex/blob/develop/vortex-layout/src/layouts/zoned/schema.rs)
+///       — `stats_table_dtype`):
 ///       for each present stat in ordinal order, append a struct field with the
 ///       stat's name and the stat's nullable dtype. `Max` and `Min`
 ///       each get an extra trailing field `max_is_truncated` /
@@ -167,8 +167,7 @@ public final class ZonedStatsSchema {
     ///
     /// Mirrors Rust's `Stat::dtype(&DType)` plus the aggregate-function
     /// return-type rules (see
-    /// <a href="https://github.com/spiraldb/vortex/blob/develop/vortex-array/src/aggregate_fn/fns">
-    /// vortex-array/src/aggregate_fn/fns</a>):
+    /// [vortex-array/src/aggregate_fn/fns](https://github.com/spiraldb/vortex/blob/develop/vortex-array/src/aggregate_fn/fns)):
     /// - min/max → same dtype as column (except DType.Null → null);
     /// - is_constant/is_sorted/is_strict_sorted → non-nullable Bool;
     /// - null_count → non-nullable U64;

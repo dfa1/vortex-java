@@ -395,6 +395,150 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         return out;
     }
 
+    /// Returns the per-zone statistics for one column, one entry per zone in scan order.
+    ///
+    /// When the column carries a `vortex.stats` (zone-map) layout, the rows come from that
+    /// table — min/max/sum/null count per zone — decoded once from the small stats segment
+    /// without touching any data segment. This is the source Rust populates for `SUM`, so the
+    /// values match files written by either implementation. When no zone map is present the
+    /// list falls back to each chunk's embedded `ArrayStats` (min/max/null count; `sum` is
+    /// `null`, since the flat writer does not retain it). Either way the result has one entry
+    /// per chunk/zone, positionally aligned with [#chunkRowCounts()]; a column that is absent
+    /// or carries no stats yields [ArrayStats#empty()] per zone.
+    ///
+    /// This is the read-side surface for aggregate push-down (ADR 0013 §6): a reduction can
+    /// fold whole zones from these rows and fall back to a streaming decode only for the
+    /// boundary zones a predicate partially selects.
+    ///
+    /// Like [#chunkRowCounts()], filter pruning and `ScanOptions.limit()` are not applied —
+    /// the list reflects the raw layout shape.
+    ///
+    /// @param column the column name
+    /// @return per-zone stats in zone order; empty list if the file has no chunks
+    public List<ArrayStats> columnZoneStats(String column) {
+        if (chunks == null) {
+            initialize();
+        }
+        List<ArrayStats> fromTable = decodeZoneTable(column);
+        if (fromTable != null) {
+            return fromTable;
+        }
+        // No zone-map table — surface each chunk's embedded ArrayStats (sum absent).
+        List<ArrayStats> out = new ArrayList<>(chunks.size());
+        for (ChunkSpec spec : chunks) {
+            Layout flat = spec.layoutFor(column);
+            out.add(flat == null ? ArrayStats.empty() : readFlatStats(flat));
+        }
+        return out;
+    }
+
+    /// Decodes the column's `vortex.stats` zone-map table into one [ArrayStats] per zone, or
+    /// returns `null` when the column has no zone map (so the caller falls back to per-chunk
+    /// node stats). The table is a single flat segment encoding a struct with a subset of the
+    /// `min`/`max`/`sum`/`null_count` fields (see [ZonedStatsSchema]); it is decoded into a
+    /// short-lived confined arena and the scalar values are boxed out before the arena closes.
+    private List<ArrayStats> decodeZoneTable(String column) {
+        Layout zoned = findZonedLayout(file.layout(), column);
+        if (zoned == null || zoned.children().size() < 2) {
+            return null;
+        }
+        Layout statsFlat = zoned.children().get(1);
+        if (!statsFlat.isFlat() || statsFlat.segments().isEmpty()) {
+            return null;
+        }
+        DType columnDtype = columnDType(column);
+        if (columnDtype == null) {
+            return null;
+        }
+        int segIdx = statsFlat.segments().getFirst();
+        if (segIdx < 0 || segIdx >= file.footer().segmentSpecs().size()) {
+            return null;
+        }
+        DType.Struct statsDtype = ZonedStatsSchema.statsTableDtype(columnDtype, zoned.metadata());
+        long nZones = statsFlat.rowCount();
+        SegmentSpec spec = file.footer().segmentSpecs().get(segIdx);
+        try (Arena tableArena = Arena.ofConfined()) {
+            Array decoded = file.decodeFlatSegment(spec, statsDtype, nZones, tableArena);
+            if (!(decoded instanceof StructArray table)) {
+                return null;
+            }
+            Array minA = fieldOrNull(table, "min");
+            Array maxA = fieldOrNull(table, "max");
+            Array sumA = fieldOrNull(table, "sum");
+            Array nullCountA = fieldOrNull(table, "null_count");
+            List<ArrayStats> out = new ArrayList<>((int) nZones);
+            for (long i = 0; i < nZones; i++) {
+                Object nullCount = boxedScalar(nullCountA, i);
+                out.add(new ArrayStats(
+                        boxedScalar(minA, i),
+                        boxedScalar(maxA, i),
+                        boxedScalar(sumA, i),
+                        null,
+                        nullCount == null ? null : ((Number) nullCount).longValue(),
+                        null, null));
+            }
+            return out;
+        }
+    }
+
+    /// Finds the first `vortex.stats` layout in the subtree of `column`'s top-level layout, or
+    /// `null` when the column is not zone-mapped.
+    private Layout findZonedLayout(Layout root, String column) {
+        if (!(file.dtype() instanceof DType.Struct struct) || !root.isStruct()) {
+            return null;
+        }
+        int idx = struct.fieldNames().indexOf(column);
+        if (idx < 0 || idx >= root.children().size()) {
+            return null;
+        }
+        return firstZoned(root.children().get(idx));
+    }
+
+    private static Layout firstZoned(Layout layout) {
+        if (layout.isZoned()) {
+            return layout;
+        }
+        for (Layout child : layout.children()) {
+            Layout found = firstZoned(child);
+            if (found != null) {
+                return found;
+            }
+        }
+        return null;
+    }
+
+    private static Array fieldOrNull(StructArray table, String field) {
+        if (((DType.Struct) table.dtype()).fieldNames().contains(field)) {
+            return table.field(field);
+        }
+        return null;
+    }
+
+    /// Reads the boxed scalar at index `i` from a (possibly nullable) stats column, or `null`
+    /// when the array is absent or the position is invalid.
+    private static Object boxedScalar(Array array, long i) {
+        if (array == null) {
+            return null;
+        }
+        if (array instanceof MaskedArray masked) {
+            if (!masked.isValid(i)) {
+                return null;
+            }
+            return boxedScalar(masked.inner(), i);
+        }
+        return switch (array) {
+            case LongArray a -> a.getLong(i);
+            case IntArray a -> a.getInt(i);
+            case DoubleArray a -> a.getDouble(i);
+            case FloatArray a -> a.getFloat(i);
+            case ShortArray a -> a.getShort(i);
+            case ByteArray a -> a.getByte(i);
+            case BoolArray a -> a.getBoolean(i);
+            case VarBinArray a -> a.getString(i);
+            default -> null;
+        };
+    }
+
     /// Runs `action` on each remaining chunk inside a try-with-resources
     /// block so every chunk's [Arena] is released before the next iteration.
     /// Prefer this over a manual `while (hasNext()) { next(); `} loop

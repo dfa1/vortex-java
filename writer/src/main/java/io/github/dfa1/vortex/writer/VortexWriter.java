@@ -642,7 +642,9 @@ public final class VortexWriter implements Closeable {
         var fbb = new FbsBuilder(256);
 
         // Stats for the root node only (build vectors before the ArrayStats table). null_count is
-        // always recorded; min/max only when the encoder produced them.
+        // always recorded; min/max only when the encoder produced them. Sum is not embedded per-flat
+        // (Rust's flat writer doesn't either — flat/writer.rs retains only pre-computed stats); the
+        // per-zone sum lives in the vortex.stats zone-map table emitted by flushZoneMaps().
         int minVec = result.hasStats()
                 ? io.github.dfa1.vortex.core.fbs.FbsArrayStats.createMinVector(fbb, result.statsMin()) : 0;
         int maxVec = result.hasStats()

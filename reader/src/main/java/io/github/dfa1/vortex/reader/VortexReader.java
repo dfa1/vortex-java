@@ -180,8 +180,8 @@ public final class VortexReader implements VortexHandle {
     private ArrayStats aggregateStats(List<Layout> flats) {
         Object globalMin = null;
         Object globalMax = null;
-        // Sum is meaningful only when every chunk carries a null count; one missing makes the
-        // column total unknown (null), so don't report a partial sum.
+        // Null count is meaningful only when every chunk carries it; one missing makes the column
+        // total unknown (null), so don't report a partial count.
         long totalNullCount = 0L;
         boolean allHaveNullCount = !flats.isEmpty();
         for (Layout flat : flats) {
@@ -202,7 +202,9 @@ public final class VortexReader implements VortexHandle {
         if (globalMin == null && globalMax == null && nullCount == null) {
             return ArrayStats.empty();
         }
-        return new ArrayStats(globalMin, globalMax, null, nullCount, null, null);
+        // Sum is left null at the file level: it lives in the per-zone stats table, surfaced by
+        // ScanIterator.columnZoneStats rather than folded here.
+        return new ArrayStats(globalMin, globalMax, null, null, nullCount, null, null);
     }
 
     private ArrayStats readFlatStats(Layout flat) {

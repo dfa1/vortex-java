@@ -133,9 +133,9 @@ class VortexInspectorTest {
         Layout structLayout = new Layout("vortex.struct", 1000, null, List.of(chunked), List.of());
 
         InspectorTree.Node c1 = new InspectorTree.Node(chunk1, Optional.empty(), Set.of(),
-                new ArrayStats(10L, 50L, null, null, null, null), List.of());
+                new ArrayStats(10L, 50L, null, null, null, null, null), List.of());
         InspectorTree.Node c2 = new InspectorTree.Node(chunk2, Optional.empty(), Set.of(),
-                new ArrayStats(5L, 100L, null, null, null, null), List.of());
+                new ArrayStats(5L, 100L, null, null, null, null, null), List.of());
         InspectorTree.Node chunkedN = new InspectorTree.Node(chunked, Optional.of("id"),
                 Set.of("vortex.flat"), ArrayStats.empty(), List.of(c1, c2));
         InspectorTree.Node rootN = new InspectorTree.Node(structLayout, Optional.empty(),
