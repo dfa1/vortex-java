@@ -234,6 +234,107 @@ class AggregateWhereCleanPartitionTest {
         }
     }
 
+    @Test
+    void isNullFoldsFromStatsOnCleanPartition() throws Exception {
+        // Given a nullable val whose null-ness partitions the zones cleanly: chunk 0 is entirely
+        // NULL, chunk 1 entirely non-null. `val IS NULL` then selects chunk 0 whole and excludes
+        // chunk 1 whole — a clean partition the zone-map null counts decide without a decode.
+        Path f = nullPartitionedFile("isnull-clean.vortex");
+
+        try (Connection conn = connect(f)) {
+            // When the aggregates are taken over the rows where val IS NULL — answered from stats
+            String plan = explain(conn, "select sum(val), count(*), count(val) from vtx.t where val is null");
+            assertThat(plan).containsIgnoringCase("Values").doesNotContain("TableScan");
+
+            // Then SUM over the all-null selection is SQL NULL, COUNT(*) is the kept chunk's 4 rows,
+            // and COUNT(val) is 0 (every selected val is null)
+            try (Statement st = conn.createStatement();
+                 ResultSet rs = st.executeQuery(
+                         "select sum(val) s, count(*) c, count(val) cv from vtx.t where val is null")) {
+                rs.next();
+                assertThat(rs.getLong("s")).isZero();
+                assertThat(rs.wasNull()).isTrue();   // SUM over an all-null selection is SQL NULL
+                assertThat(rs.getLong("c")).isEqualTo(4);
+                assertThat(rs.getLong("cv")).isZero();
+            }
+        }
+    }
+
+    @Test
+    void isNotNullFoldsFromStatsOnCleanPartition() throws Exception {
+        // Given the same clean partition (chunk 0 all NULL, chunk 1 all non-null {10,20,30,40}):
+        // `val IS NOT NULL` selects chunk 1 whole and excludes chunk 0 whole.
+        Path f = nullPartitionedFile("isnotnull-clean.vortex");
+
+        try (Connection conn = connect(f)) {
+            // When SUM/COUNT/MIN/MAX are taken over the non-null rows — answered from stats
+            String plan = explain(conn,
+                    "select sum(val), count(*), count(val), min(val), max(val) from vtx.t where val is not null");
+            assertThat(plan).containsIgnoringCase("Values").doesNotContain("TableScan");
+
+            // Then every value equals the ground truth over chunk 1's {10,20,30,40}
+            try (Statement st = conn.createStatement();
+                 ResultSet rs = st.executeQuery(
+                         "select sum(val) s, count(*) c, count(val) cv, min(val) mn, max(val) mx "
+                                 + "from vtx.t where val is not null")) {
+                rs.next();
+                assertThat(rs.getLong("s")).isEqualTo(100);  // 10+20+30+40
+                assertThat(rs.getLong("c")).isEqualTo(4);
+                assertThat(rs.getLong("cv")).isEqualTo(4);
+                assertThat(rs.getLong("mn")).isEqualTo(10);
+                assertThat(rs.getLong("mx")).isEqualTo(40);
+            }
+        }
+    }
+
+    @Test
+    void isNotNullBoundaryChunkAbandonsToTheScan() throws Exception {
+        // Given a chunk the null predicate cuts through: chunk 0 mixes non-null {5,7} with two
+        // nulls, so its null count is neither 0 nor the row count — a boundary zone `IS NOT NULL`
+        // only partially selects, which must abandon the fold to the scan. Chunk 1 is all non-null.
+        DType.Struct schema = new DType.Struct(
+                List.of("id", "val"),
+                List.of(new DType.Primitive(PType.I64, false), new DType.Primitive(PType.I64, true)),
+                false);
+        Path f = tmp.resolve("isnotnull-boundary.vortex");
+        writeChunks(f, schema,
+                Map.of("id", new long[]{0, 1, 2, 3},
+                        "val", new NullableData(new long[]{5, 0, 7, 0}, new boolean[]{true, false, true, false})),
+                Map.of("id", new long[]{10, 11, 12, 13},
+                        "val", new NullableData(new long[]{10, 20, 30, 40}, new boolean[]{true, true, true, true})));
+
+        try (Connection conn = connect(f)) {
+            // When EXPLAIN runs, a scan is present — the boundary chunk forced a decode
+            String sql = "select sum(val) s, count(*) c from vtx.t where val is not null";
+            assertThat(explain(conn, sql)).contains("TableScan");
+
+            // And the scan still produces the exact result over every non-null val ({5,7}+{10,20,30,40})
+            try (Statement st = conn.createStatement();
+                 ResultSet rs = st.executeQuery(sql)) {
+                rs.next();
+                assertThat(rs.getLong("s")).isEqualTo(112);  // 5+7 + 10+20+30+40
+                assertThat(rs.getLong("c")).isEqualTo(6);
+            }
+        }
+    }
+
+    /// Writes a two-chunk file whose nullable `val` partitions the zones cleanly by null-ness:
+    /// chunk 0 entirely NULL, chunk 1 entirely non-null `{10,20,30,40}`. Shared by the
+    /// `IS NULL` / `IS NOT NULL` clean-partition tests.
+    private static Path nullPartitionedFile(String name) throws Exception {
+        DType.Struct schema = new DType.Struct(
+                List.of("id", "val"),
+                List.of(new DType.Primitive(PType.I64, false), new DType.Primitive(PType.I64, true)),
+                false);
+        Path f = tmp.resolve(name);
+        writeChunks(f, schema,
+                Map.of("id", new long[]{0, 1, 2, 3},
+                        "val", new NullableData(new long[]{0, 0, 0, 0}, new boolean[]{false, false, false, false})),
+                Map.of("id", new long[]{10, 11, 12, 13},
+                        "val", new NullableData(new long[]{10, 20, 30, 40}, new boolean[]{true, true, true, true})));
+        return f;
+    }
+
     private static void writeChunks(Path file, DType.Struct schema, Map<String, Object> chunk0,
                                     Map<String, Object> chunk1) throws Exception {
         // chunkSize large so each writeChunk is exactly one chunk (one zone).

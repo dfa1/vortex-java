@@ -14,6 +14,7 @@ import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 
@@ -35,6 +36,7 @@ import org.apache.calcite.rex.RexUtil;
 import org.apache.calcite.schema.ProjectableFilterableTable;
 import org.apache.calcite.schema.TranslatableTable;
 import org.apache.calcite.schema.impl.AbstractTable;
+import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.type.SqlTypeName;
 
 import java.io.IOException;
@@ -645,6 +647,11 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     }
 
     private static Object value(Object array, DType type, long r) {
+        // A nullable column decodes to a MaskedArray wrapping the payload plus a validity mask;
+        // emit SQL NULL for an invalid row, otherwise read the row from the inner payload array.
+        if (array instanceof MaskedArray masked) {
+            return masked.isValid(r) ? value(masked.inner(), type, r) : null;
+        }
         return switch (type) {
             case DType.Primitive p -> switch (p.ptype()) {
                 case F64 -> ((DoubleArray) array).getDouble(r);
@@ -741,8 +748,24 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
             }
             case EQUALS, NOT_EQUALS, LESS_THAN, LESS_THAN_OR_EQUAL, GREATER_THAN, GREATER_THAN_OR_EQUAL ->
                     binary(call, names, types);
+            case IS_NULL, IS_NOT_NULL -> nullCheck(call, names);
             default -> Optional.empty();
         };
+    }
+
+    /// Translates `col IS NULL` / `col IS NOT NULL` over a bare column reference into the matching
+    /// [RowFilter], which the zone-map fold answers from each zone's null count. Anything other than
+    /// a direct [RexInputRef] operand (e.g. `IS NULL` over an expression) abandons the translation —
+    /// fail-closed, mirroring [#binary].
+    private static Optional<RowFilter> nullCheck(RexCall call, List<String> names) {
+        List<RexNode> ops = call.getOperands();
+        if (ops.size() != 1 || !(ops.getFirst() instanceof RexInputRef ref)) {
+            return Optional.empty();
+        }
+        String col = names.get(ref.getIndex());
+        return Optional.of(call.getKind() == SqlKind.IS_NULL
+                ? RowFilter.isNull(col)
+                : RowFilter.isNotNull(col));
     }
 
     private static Optional<RowFilter> binary(RexCall call, List<String> names, List<DType> types) {
