@@ -81,7 +81,7 @@ class ZoneReducerTest {
     void noZoneMapYieldsNull(@TempDir Path tmp) throws IOException {
         // Given — zone maps disabled, so no per-zone SUM exists to fold
         Path file = tmp.resolve("nostats.vtx");
-        WriteOptions noZoneMaps = new WriteOptions(65_536, false, 0.90, 0, true, false);
+        WriteOptions noZoneMaps = WriteOptions.defaults().withZoneMaps(false);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var w = VortexWriter.create(ch, I64_SCHEMA, noZoneMaps)) {
             w.writeChunk(Map.of("id", range(1L, 50L)));
@@ -92,6 +92,27 @@ class ZoneReducerTest {
             Number result = new ZoneReducer(reader).sum("id");
 
             // Then — null signals "not answerable from zones", caller must stream
+            assertThat(result).isNull();
+        }
+    }
+
+    @Test
+    void overflowedZoneYieldsNull(@TempDir Path tmp) throws IOException {
+        // Given — zone maps ON, but one zone's I64 SUM overflows long (Math.addExact in the writer
+        // drops it), so a zone map exists yet a zone carries no usable sum. Distinct from
+        // noZoneMapYieldsNull: there the table is absent; here it is present but incomplete.
+        Path file = tmp.resolve("overflow.vtx");
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             var w = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults())) {
+            w.writeChunk(Map.of("id", range(1L, 50L)));                                // sums fine
+            w.writeChunk(Map.of("id", new long[]{Long.MAX_VALUE, Long.MAX_VALUE}));    // overflows
+        }
+
+        // When
+        try (VortexReader reader = VortexReader.open(file, registry())) {
+            Number result = new ZoneReducer(reader).sum("id");
+
+            // Then — one unusable zone forces the whole fold to bail; no partial sum returned
             assertThat(result).isNull();
         }
     }
