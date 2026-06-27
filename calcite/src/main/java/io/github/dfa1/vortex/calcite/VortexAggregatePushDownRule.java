@@ -25,15 +25,16 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
-/// Rewrites a whole-table `MIN`/`MAX`/`COUNT` aggregate over a [VortexTable] into a single-row
-/// [LogicalValues] computed from the footer zone-map statistics — answering the query without
-/// decoding a single data segment (ADR 0013 §6, ADR 0018 Phase 2).
+/// Rewrites a whole-table `MIN`/`MAX`/`COUNT`/`SUM` aggregate over a [VortexTable] into a
+/// single-row [LogicalValues] computed from the footer zone-map statistics — answering the query
+/// without decoding a single data segment (ADR 0013 §6, ADR 0018 Phase 2).
 ///
-/// Fires only when it can answer *every* aggregate from statistics: no `GROUP BY`, and each
-/// call is `COUNT(*)`, `COUNT(col)`, `MIN(col)`, or `MAX(col)` over a numeric column. Anything
-/// else (e.g. `SUM`, a grouped aggregate, `MIN` on a non-numeric column) leaves the plan
-/// untouched for the normal scan path. `SUM`/`AVG` join this tier once the writer emits a
-/// per-zone `SUM` statistic.
+/// Fires only when it can answer *every* aggregate from statistics: no `GROUP BY`, and each call
+/// is `COUNT(*)`, `COUNT(col)`, `MIN(col)`, `MAX(col)`, or `SUM(col)` over a numeric column. `SUM`
+/// folds the per-zone `SUM` rows via [VortexTable#zoneSum(String)]; it abandons (falling back to
+/// the scan) for a column whose zone-map table cannot answer it — no zone map, or an overflowed
+/// zone. Anything else (a grouped aggregate, `MIN` on a non-numeric column, `AVG` that was not
+/// reduced to `SUM`/`COUNT`) leaves the plan untouched for the normal scan path.
 // Calcite 1.40 removed RelRule.Config.EMPTY; the modern RelRule.Config path requires the
 // Immutables annotation processor. The classic operand() constructor is deprecated but fully
 // supported and far lighter for a single adapter rule — suppression is localized and justified.
@@ -153,6 +154,24 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
                     yield provablyNoValues ? rexBuilder.makeNullLiteral(outType) : null;
                 }
                 yield numericLiteral(rexBuilder, value, outType);
+            }
+            case SUM -> {
+                if (agg.getArgList().size() != 1) {
+                    yield null;
+                }
+                String col = resolveColumn(agg.getArgList().getFirst(), scanColumns, project);
+                if (col == null) {
+                    yield null;
+                }
+                // Fold the per-zone SUM rows (metadata-only). A null fold means a zone carries no
+                // usable sum (no zone map, or an overflowed zone) — abandon so the scan computes it.
+                // It also covers SQL's empty/all-null SUM = NULL: zero zones fold to null and the
+                // scan path produces the NULL literal, so the rule need not special-case it.
+                Number sum = table.zoneSum(col);
+                if (sum == null) {
+                    yield null;
+                }
+                yield numericLiteral(rexBuilder, sum, outType);
             }
             default -> null;
         };

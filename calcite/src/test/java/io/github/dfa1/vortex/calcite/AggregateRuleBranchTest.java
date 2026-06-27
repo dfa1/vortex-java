@@ -56,11 +56,19 @@ class AggregateRuleBranchTest {
     }
 
     @Test
-    void sum_hasNoZoneStat_abandonsRewrite() {
-        // Given SUM(volume) — no SUM zone statistic exists, so evaluate() yields null and the whole
-        // rewrite is abandoned
+    void sum_withZoneStat_rewritesToValues() {
+        // Given SUM(volume) — the Java writer emits a per-zone SUM stat, so ZoneReducer folds every
+        // zone metadata-only and the whole rewrite succeeds
+        // When / Then — answered from the zone-map table, no Aggregate/TableScan left
+        assertThat(optimize("select sum(volume) from ohlc")).contains("LogicalValues").doesNotContain("Aggregate");
+    }
+
+    @Test
+    void sumOverComputedExpression_abandonsRewrite() {
+        // Given SUM(volume + 1) — the projected input is an expression, not a bare column ref, so
+        // resolveColumn returns null and the SUM branch abandons
         // When / Then — the Aggregate survives for the normal scan path
-        assertThat(optimize("select sum(volume) from ohlc")).contains("Aggregate");
+        assertThat(optimize("select sum(volume + 1) from ohlc")).contains("Aggregate");
     }
 
     @Test

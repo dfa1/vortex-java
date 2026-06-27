@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.reader.RowFilter;
 import io.github.dfa1.vortex.reader.ScanIterator;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
+import io.github.dfa1.vortex.reader.compute.ZoneReducer;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
@@ -83,6 +84,23 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
             return reader.columnStats().getOrDefault(column, io.github.dfa1.vortex.reader.ArrayStats.empty());
         } catch (IOException e) {
             throw new UncheckedIOException("cannot read stats of " + file, e);
+        }
+    }
+
+    /// Folds the per-zone `SUM` statistics for `column` without decoding any data segment, or
+    /// returns `null` when the zone-map table cannot answer the reduction — a column with no zone
+    /// map, or a zone whose sum was not retained (e.g. an overflowed zone) — so the caller scans.
+    ///
+    /// Integer columns fold into a [Long] (exact); floating columns into a [Double]. Used by the
+    /// aggregate push-down rule to answer `SUM` (ADR 0013 §6).
+    ///
+    /// @param column the numeric column name
+    /// @return the column sum as a [Long] or [Double], or `null` if no zone carries a usable sum
+    public Number zoneSum(String column) {
+        try (VortexReader reader = VortexReader.open(file)) {
+            return new ZoneReducer(reader).sum(column);
+        } catch (IOException e) {
+            throw new UncheckedIOException("cannot read zone sum of " + file, e);
         }
     }
 
