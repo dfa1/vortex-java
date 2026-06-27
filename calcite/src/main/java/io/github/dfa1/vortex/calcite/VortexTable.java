@@ -87,18 +87,41 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         }
     }
 
-    /// Folds the per-zone `SUM` statistics for `column` without decoding any data segment, or
-    /// returns `null` when the zone-map table cannot answer the reduction — a column with no zone
-    /// map, or a zone whose sum was not retained (e.g. an overflowed zone) — so the caller scans.
+    /// The folded `SUM` of a column together with the two facts needed to interpret a zero fold:
+    /// SQL `SUM` over zero non-null rows is `NULL`, but an all-null zone records a sum-neutral `0`,
+    /// so `sum == 0` alone cannot tell an all-null column from a genuine zero. The `nullCount` and
+    /// `totalRows` resolve it.
     ///
-    /// Integer columns fold into a [Long] (exact); floating columns into a [Double]. Used by the
-    /// aggregate push-down rule to answer `SUM` (ADR 0013 §6).
+    /// @param sum       the folded column sum ([Long] for integer columns, [Double] for floating),
+    ///                  or `null` when no zone carries a usable sum (no zone map, or an overflowed
+    ///                  zone)
+    /// @param nullCount the column's total null count from the zone map, or `null` if not recorded
+    /// @param totalRows the total row count across all chunks
+    public record ZoneSum(Number sum, Long nullCount, long totalRows) {
+    }
+
+    /// Folds the per-zone `SUM` statistics for `column` without decoding any data segment, reading
+    /// the fold, null count, and row count in a single pass over the open reader so the caller can
+    /// answer `SUM` null-correctly. Used by the aggregate push-down rule (ADR 0013 §6).
+    ///
+    /// Integer columns fold into a [Long] (exact); floating columns into a [Double]. The
+    /// [ZoneSum#sum()] is `null` when the zone-map table cannot answer the reduction — a column
+    /// with no zone map, or a zone whose sum was not retained (e.g. an overflowed zone).
     ///
     /// @param column the numeric column name
-    /// @return the column sum as a [Long] or [Double], or `null` if no zone carries a usable sum
-    public Number zoneSum(String column) {
+    /// @return the folded sum with the null and row counts needed to interpret a zero
+    public ZoneSum zoneSum(String column) {
         try (VortexReader reader = VortexReader.open(file)) {
-            return new ZoneReducer(reader).sum(column);
+            Number sum = new ZoneReducer(reader).sum(column);
+            Long nullCount = reader.columnStats()
+                    .getOrDefault(column, io.github.dfa1.vortex.reader.ArrayStats.empty()).nullCount();
+            long total = 0;
+            try (ScanIterator scan = reader.scan(ScanOptions.all())) {
+                for (long c : scan.chunkRowCounts()) {
+                    total += c;
+                }
+            }
+            return new ZoneSum(sum, nullCount, total);
         } catch (IOException e) {
             throw new UncheckedIOException("cannot read zone sum of " + file, e);
         }

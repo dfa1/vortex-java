@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- The Calcite aggregate push-down rule now rewrites a whole-table `SUM(col)` to a single-row `Values` computed from the zone-map table (via `VortexTable.zoneSum`), so `SELECT SUM(col)` answers metadata-only with no data segment decoded — joining the existing `MIN`/`MAX`/`COUNT` push-down. It abandons to a normal scan when a zone carries no usable sum (no zone map, or an overflowed zone) or when a `WHERE` filters the aggregate. ([24b64b32](https://github.com/dfa1/vortex-java/commit/24b64b32))
+- The Calcite aggregate push-down rule now rewrites a whole-table `SUM(col)` to a single-row `Values` computed from the zone-map table (via `VortexTable.zoneSum`), so `SELECT SUM(col)` answers metadata-only with no data segment decoded — joining the existing `MIN`/`MAX`/`COUNT` push-down. `SUM` over an all-null (or empty) column answers the SQL `NULL`, and the rule abandons to a normal scan when a zone carries no usable sum (no zone map, or an overflowed zone) or when a `WHERE` filters the aggregate. ([24b64b32](https://github.com/dfa1/vortex-java/commit/24b64b32))
 - `ScanIterator.columnZoneStats(column)` surfaces per-zone min/max/sum/null-count from a column's `vortex.stats` zone-map table without decoding any data segment — the read side of aggregate push-down (ADR 0013 §6). `ArrayStats` gains a `sum` component, decoded from the zone-map table (where the Rust reference stores it too), so the Calcite adapter now answers `SUM`/`AVG` metadata-only when every zone carries a sum, falling back to a streaming scan only for columns without a zone map. ([05dd9204](https://github.com/dfa1/vortex-java/commit/05dd9204))
 
 ### Changed

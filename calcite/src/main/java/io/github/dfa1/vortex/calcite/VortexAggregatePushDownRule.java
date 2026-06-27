@@ -31,10 +31,12 @@ import java.util.List;
 ///
 /// Fires only when it can answer *every* aggregate from statistics: no `GROUP BY`, and each call
 /// is `COUNT(*)`, `COUNT(col)`, `MIN(col)`, `MAX(col)`, or `SUM(col)` over a numeric column. `SUM`
-/// folds the per-zone `SUM` rows via [VortexTable#zoneSum(String)]; it abandons (falling back to
-/// the scan) for a column whose zone-map table cannot answer it — no zone map, or an overflowed
-/// zone. Anything else (a grouped aggregate, `MIN` on a non-numeric column, `AVG` that was not
-/// reduced to `SUM`/`COUNT`) leaves the plan untouched for the normal scan path.
+/// folds the per-zone `SUM` rows via [VortexTable#zoneSum(String)]; it emits the SQL `NULL` of an
+/// all-null (or empty) column, and abandons (falling back to the scan) for a column whose zone-map
+/// table cannot answer it — no zone map, an overflowed zone, or a zero fold whose null count is
+/// unknown (a genuine zero is indistinguishable from all-null). Anything else (a grouped aggregate,
+/// `MIN` on a non-numeric column, `AVG` that was not reduced to `SUM`/`COUNT`) leaves the plan
+/// untouched for the normal scan path.
 // Calcite 1.40 removed RelRule.Config.EMPTY; the modern RelRule.Config path requires the
 // Immutables annotation processor. The classic operand() constructor is deprecated but fully
 // supported and far lighter for a single adapter rule — suppression is localized and justified.
@@ -163,12 +165,28 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
                 if (col == null) {
                     yield null;
                 }
-                // Fold the per-zone SUM rows (metadata-only). A null fold means a zone carries no
-                // usable sum (no zone map, or an overflowed zone) — abandon so the scan computes it.
-                // It also covers SQL's empty/all-null SUM = NULL: zero zones fold to null and the
-                // scan path produces the NULL literal, so the rule need not special-case it.
-                Number sum = table.zoneSum(col);
+                // Fold the per-zone SUM rows (metadata-only), with the null and row counts read in
+                // the same pass. A null fold means a zone carries no usable sum (no zone map, or an
+                // overflowed zone) — abandon so the scan computes it.
+                VortexTable.ZoneSum zoneSum = table.zoneSum(col);
+                Number sum = zoneSum.sum();
                 if (sum == null) {
+                    yield null;
+                }
+                // SQL SUM over zero non-null rows is NULL, not 0 — but the writer records an all-null
+                // zone's sum as a sum-neutral 0 (validity placeholders are zero), so the fold cannot
+                // tell an all-null column from a genuine 0. Resolve it from the null count:
+                //   - provably all-null (empty table, or nullCount == rows) → emit the NULL literal;
+                //   - fold is a non-zero value → at least one non-null row, the number is correct;
+                //   - fold is 0 but the null count is unknown for a nullable column → ambiguous
+                //     (real 0 vs all-null), so abandon and let the scan decide.
+                // A non-nullable column has no nulls, so any fold is the true sum.
+                Long nullCount = zoneSum.nullCount();
+                long total = zoneSum.totalRows();
+                if (total == 0 || (nullCount != null && nullCount == total)) {
+                    yield rexBuilder.makeNullLiteral(outType);
+                }
+                if (isZero(sum) && nullCount == null && isNullable(scanRowType, col)) {
                     yield null;
                 }
                 yield numericLiteral(rexBuilder, sum, outType);
@@ -194,6 +212,16 @@ public final class VortexAggregatePushDownRule extends RelOptRule {
             return scanColumns.get(ref.getIndex());
         }
         return null;
+    }
+
+    /// Returns whether a folded sum is numerically zero (`0L` or `0.0`) — the value an all-null zone
+    /// records, indistinguishable from a genuine zero sum without a null count.
+    private static boolean isZero(Number sum) {
+        return switch (sum) {
+            case Long l -> l == 0L;
+            case Double d -> d == 0.0;
+            default -> sum.doubleValue() == 0.0;
+        };
     }
 
     private static RexLiteral exact(RexBuilder rexBuilder, long value, RelDataType type) {
