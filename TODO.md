@@ -100,7 +100,11 @@ Per-encoding gotchas:
   min/max/sum/null count, decoding sum from the `vortex.stats` zone-map table (matches files from
   Rust, whose flat writer omits per-flat sum). Calcite `VortexAggregates.SUM`/`AVG` now fold those
   per-zone sums (metadata-only), falling back to a full scan only when a column has no zone map.
-  Next: `Mask`/`Predicate`/kernel vocab and the two-tier whole-zone+residual reduce.
+  The fold is now a reusable `reader.compute.ZoneReducer.sum(col)` (the seam a future
+  `vortex-compute` extracts); Calcite consumes it.
+  Next: the residual tier needs a consumer first — wire Calcite aggregate+`WHERE` push-down, then
+  add `ZoneReducer` predicate support (whole-zone fold + boundary-zone streaming) and the
+  `Mask`/`Predicate`/kernel vocab on top.
 
 ## Encodings
 
