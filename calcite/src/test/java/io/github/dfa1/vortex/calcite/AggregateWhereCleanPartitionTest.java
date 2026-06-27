@@ -10,6 +10,8 @@ import org.apache.calcite.jdbc.CalciteConnection;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
@@ -314,6 +316,88 @@ class AggregateWhereCleanPartitionTest {
                 rs.next();
                 assertThat(rs.getLong("s")).isEqualTo(112);  // 5+7 + 10+20+30+40
                 assertThat(rs.getLong("c")).isEqualTo(6);
+            }
+        }
+    }
+
+    /// One untranslatable `WHERE` shape: its predicate, the SQL `SUM(val)` ground truth (`null` for
+    /// an empty selection, where `SUM` is SQL NULL), and the `COUNT(*)` ground truth. All run over
+    /// the shared 8-chunk `id == val` fixture (`0 .. ROWS-1`, non-null).
+    private record AbandonCase(String label, String where, Long expectedSum, long expectedCount) {
+        @Override
+        public String toString() {
+            return label;
+        }
+    }
+
+    static java.util.stream.Stream<AbandonCase> untranslatableShapes() {
+        // Each shape is a predicate strictComparison cannot fully translate to a RowFilter, so the
+        // aggregate rewrite must abandon and let the scan compute the answer. The ground truth uses
+        // val == id over 0..ROWS-1.
+        return java.util.stream.Stream.of(
+                // OR has no case in strictComparison's switch (only AND / comparison / null check),
+                // so it hits the default -> empty. ids 0..999 match; val<0 never does.
+                new AbandonCase("OR predicate", "id < 1000 or val < 0",
+                        999L * 1000 / 2, 1000),
+                // column-vs-column: binary() requires a RexInputRef + a RexLiteral; two refs abandon.
+                // id <= val is always true, so the scan reduces over the whole table.
+                new AbandonCase("column <= column (all rows)", "id <= val",
+                        (long) (ROWS - 1) * ROWS / 2, ROWS),
+                // column-vs-column with an empty selection (id < val is never true): still abandons,
+                // and the scan over zero rows makes SUM the SQL NULL, COUNT(*) zero.
+                new AbandonCase("column < column (no rows)", "id < val", null, 0));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("untranslatableShapes")
+    void untranslatablePredicateAbandonsToScan(AbandonCase shape) throws Exception {
+        String sql = "select sum(val) s, count(*) c from vtx.t where " + shape.where();
+
+        try (Connection conn = connect()) {
+            // When the predicate is not fully translatable, the rewrite is abandoned: the plan keeps
+            // a scan (BindableTableScan) rather than folding to a Values row
+            assertThat(explain(conn, sql))
+                    .as("abandon for %s", shape.label())
+                    .contains("TableScan");
+
+            // And the scan still produces the exact aggregate over the filtered rows
+            try (Statement st = conn.createStatement();
+                 ResultSet rs = st.executeQuery(sql)) {
+                rs.next();
+                long sum = rs.getLong("s");
+                if (shape.expectedSum() == null) {
+                    assertThat(rs.wasNull()).as("SUM over empty selection is SQL NULL").isTrue();
+                } else {
+                    assertThat(sum).as("SUM for %s", shape.label()).isEqualTo(shape.expectedSum());
+                }
+                assertThat(rs.getLong("c")).as("COUNT(*) for %s", shape.label())
+                        .isEqualTo(shape.expectedCount());
+            }
+        }
+    }
+
+    @Test
+    void isNullOverExpressionAbandonsToScan() throws Exception {
+        // Given a nullable val: `abs(val) IS NULL` is an IS NULL over a *computed* expression, not a
+        // bare column ref, so nullCheck's RexInputRef guard rejects it and the rewrite abandons.
+        // (abs() is chosen deliberately — Calcite simplifies `(val + 1) IS NULL` down to a bare
+        // `val IS NULL`, which would translate and fold, but it leaves `IS NULL(ABS(val))` intact.)
+        Path f = nullPartitionedFile("isnull-expr.vortex");
+        String sql = "select sum(val) s, count(*) c, count(val) cv from vtx.t where abs(val) is null";
+
+        try (Connection conn = connect(f)) {
+            // When EXPLAIN runs, a scan is present — the expression IS NULL did not translate
+            assertThat(explain(conn, sql)).contains("TableScan");
+
+            // And the scan computes the exact result: abs(val) IS NULL selects chunk 0's all-null
+            // rows, so SUM is SQL NULL, COUNT(*) the 4 rows, COUNT(val) zero
+            try (Statement st = conn.createStatement();
+                 ResultSet rs = st.executeQuery(sql)) {
+                rs.next();
+                assertThat(rs.getLong("s")).isZero();
+                assertThat(rs.wasNull()).isTrue();   // SUM over an all-null selection is SQL NULL
+                assertThat(rs.getLong("c")).isEqualTo(4);
+                assertThat(rs.getLong("cv")).isZero();
             }
         }
     }
