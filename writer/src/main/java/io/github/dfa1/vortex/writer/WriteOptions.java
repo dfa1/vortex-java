@@ -37,6 +37,14 @@ public record WriteOptions(
         return new WriteOptions(65_536, true, 0.90, depth, true, false);
     }
 
+    /// Returns a copy of these options with zone-map statistics set to `enabled`.
+    ///
+    /// @param enabled `true` to write per-chunk min/max/sum statistics for zone-map pruning
+    /// @return a new `WriteOptions` with the zone-map flag updated
+    public WriteOptions withZoneMaps(boolean enabled) {
+        return new WriteOptions(chunkSize, enabled, compressionRatioThreshold, allowedCascading, globalDict, enableZstd);
+    }
+
     /// Returns a copy of these options with global dictionary encoding set to `enabled`.
     ///
     /// @param enabled `true` to enable global dictionary encoding across chunks
