@@ -1,6 +1,7 @@
 # ADR 0018: Apache Calcite SQL adapter — be a push-down source, not an engine
 
-- **Status:** Proposed
+- **Status:** Accepted — Phases 0–2 (schema/scan, filter + projection push-down, MIN/MAX/COUNT
+  aggregate push-down) implemented in the `calcite/` module; SUM/AVG push-down pending
 - **Date:** 2026-06-24
 - **Deciders:** project maintainer
 - **Supersedes:** —
@@ -98,7 +99,7 @@ Phased productionisation:
   `MIN`/`MAX`/`COUNT` work now; `SUM`/`AVG` need the writer to emit a per-zone `SUM` stat first
   (ADR 0013 §6 — the same increment that also wants `NULL_COUNT`).
 
-### Prototype status (branch `feat/vortex-calcite-demo`)
+### Implementation status (landed in the `calcite/` module)
 
 Phases 0–2 are implemented and tested:
 
