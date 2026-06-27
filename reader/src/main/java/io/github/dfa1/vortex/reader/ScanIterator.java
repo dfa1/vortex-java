@@ -402,9 +402,14 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     /// without touching any data segment. This is the source Rust populates for `SUM`, so the
     /// values match files written by either implementation. When no zone map is present the
     /// list falls back to each chunk's embedded `ArrayStats` (min/max/null count; `sum` is
-    /// `null`, since the flat writer does not retain it). Either way the result has one entry
-    /// per chunk/zone, positionally aligned with [#chunkRowCounts()]; a column that is absent
+    /// `null`, since the flat writer does not retain it). Either way a column that is absent
     /// or carries no stats yields [ArrayStats#empty()] per zone.
+    ///
+    /// Zone granularity is the layout's, not the scan's. The fallback path is one entry per
+    /// chunk, positionally aligned with [#chunkRowCounts()]. The zone-map path is one entry per
+    /// zone of the stats table: this writer emits one zone per chunk (so the same alignment
+    /// holds), but a file from another writer may use a fixed zone length independent of chunk
+    /// boundaries, in which case the zone count need not match [#chunkRowCounts()].
     ///
     /// This is the read-side surface for aggregate push-down (ADR 0013 §6): a reduction can
     /// fold whole zones from these rows and fall back to a streaming decode only for the
