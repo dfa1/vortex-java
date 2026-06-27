@@ -14,6 +14,7 @@ import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
 import org.apache.arrow.c.ArrowArray;
@@ -266,6 +267,35 @@ class RustWritesJavaReadsIntegrationTest {
             assertThat(results.getFirst().rowCount()).isEqualTo(3L);
             assertThat(ids(results.getFirst())).containsExactly(1L, 2L, 3L);
             assertThat(values(results.getFirst())).containsExactly(1.1, 2.2, 3.3);
+        }
+    }
+
+    @Test
+    void jniWriter_perZoneSum_readFromZoneMapTable(@TempDir Path tmp) throws IOException {
+        // Given — a Rust-written file large enough that the JNI writer emits a multi-zone column.
+        // Sum lives only in Rust's vortex.stats zone-map table (its flat writer doesn't retain it),
+        // so this proves the Java reader decodes that table for per-zone SUM (ADR 0013 §6 parity).
+        int n = 200_000;
+        long[] ids = new long[n];
+        double[] vals = new double[n];
+        for (int i = 0; i < n; i++) {
+            ids[i] = i;
+            vals[i] = i;
+        }
+        Path file = tmp.resolve("jni_zones.vtx");
+        writeJni(file, ids, vals);
+        long expected = (long) n * (n - 1) / 2; // Σ 0..n-1
+
+        // When — fold the per-zone SUM rows the reader surfaces from the zone-map table
+        try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
+             var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.all())) {
+            List<ArrayStats> zones = iter.columnZoneStats("id");
+
+            // Then — every zone carries a SUM (came from Rust's table, not a Java-side recompute)
+            // and the whole-zone fold equals the column total.
+            assertThat(zones).isNotEmpty().allSatisfy(z -> assertThat(z.sum()).isNotNull());
+            long total = zones.stream().mapToLong(z -> (Long) z.sum()).sum();
+            assertThat(total).isEqualTo(expected);
         }
     }
 

@@ -217,7 +217,8 @@ class VortexAdapterCoverageTest {
                 assertThat(((Number) s.min()).longValue()).isEqualTo(1000L);
                 assertThat(((Number) s.max()).longValue()).isEqualTo(3000L);
                 assertThat(s.minMaxSource()).isEqualTo(VortexAggregates.Source.ZONE_STATS_PUSHDOWN);
-                assertThat(s.sumSource()).isEqualTo(VortexAggregates.Source.FULL_SCAN);
+                // SUM now folds the per-zone zone-map sum the Java writer emits — no data decoded.
+                assertThat(s.sumSource()).isEqualTo(VortexAggregates.Source.ZONE_STATS_PUSHDOWN);
             }
         }
 
@@ -264,6 +265,38 @@ class VortexAdapterCoverageTest {
                 assertThatThrownBy(() -> VortexAggregates.of(reader, "s"))
                         .isInstanceOf(IllegalArgumentException.class)
                         .hasMessageContaining("not a numeric column");
+            }
+        }
+
+        @Test
+        void noZoneMap_sumFallsBackToFullScan(@TempDir Path noStats) throws Exception {
+            // Given — a file written with zone maps off, so no per-zone SUM exists to fold
+            Path bare = noStats.resolve("nostats.vortex");
+            WriteOptions noZoneMaps = new WriteOptions(65_536, false, 0.90, 0, true, false);
+            try (var ch = FileChannel.open(bare, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                 var w = VortexWriter.create(ch, SCHEMA, noZoneMaps)) {
+                w.writeChunk(Map.ofEntries(
+                        Map.entry("i8", new byte[]{1, 2, 3}),
+                        Map.entry("i16", new short[]{10, 20, 30}),
+                        Map.entry("i32", new int[]{100, 200, 300}),
+                        Map.entry("i64", new long[]{1000L, 2000L, 3000L}),
+                        Map.entry("u8", new byte[]{4, 5, 6}),
+                        Map.entry("u16", new short[]{40, 50, 60}),
+                        Map.entry("u32", new int[]{400, 500, 600}),
+                        Map.entry("u64", new long[]{4000L, 5000L, 6000L}),
+                        Map.entry("f32", new float[]{1.5f, 2.5f, 3.5f}),
+                        Map.entry("f64", new double[]{1.25, 2.25, 3.25}),
+                        Map.entry("s", new String[]{"a", "b", "c"}),
+                        Map.entry("b", new boolean[]{true, false, true})));
+            }
+
+            // When
+            try (VortexReader reader = VortexReader.open(bare, registry())) {
+                VortexAggregates.Summary s = VortexAggregates.of(reader, "i64");
+
+                // Then — sum still exact, but sourced from a streaming scan, not the (absent) zone map
+                assertThat(s.sum()).isInstanceOf(Long.class).isEqualTo(6000L);
+                assertThat(s.sumSource()).isEqualTo(VortexAggregates.Source.FULL_SCAN);
             }
         }
     }

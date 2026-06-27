@@ -11,13 +11,16 @@ import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 
+import java.util.List;
+
 /// Column aggregates answered with the cheapest available source.
 ///
 /// `MIN` / `MAX` / `COUNT` are read from the per-segment zone-map statistics embedded in the
-/// file footer — no data segment is decoded. `SUM` (and therefore `AVG`) has no zone statistic
-/// in the current writer, so it falls back to a streaming scan. This split is the whole point
-/// of the demo: the stats-backed aggregates are effectively free, and `SUM`/`AVG` show what the
-/// next writer increment (emit a per-zone `SUM`) would make free too (ADR 0013 §6).
+/// file footer — no data segment is decoded. `SUM` (and therefore `AVG`) folds the per-zone
+/// `SUM` rows surfaced by [ScanIterator#columnZoneStats(String)] (ADR 0013 §6): when every zone
+/// carries a sum the answer is metadata-only too, with no data segment touched. Only when a zone
+/// lacks a sum — a column with no zone map, whose flat nodes do not retain it — does it fall back
+/// to a streaming scan.
 public final class VortexAggregates {
 
     /// Where an aggregate's value came from.
@@ -65,13 +68,52 @@ public final class VortexAggregates {
         Object min = stats.min();
         Object max = stats.max();
 
-        // SUM/AVG: no SUM zone-stat exists today, so stream the column once. Integer columns sum
-        // into a long (exact); floating columns into a double.
-        Number sum = scanSum(reader, column);
+        // SUM/AVG: fold the per-zone SUM rows when every zone carries one (metadata-only); fall
+        // back to a single streaming scan otherwise. Integer columns sum into a long (exact);
+        // floating columns into a double.
+        Number sum = zoneSum(reader, column);
+        Source sumSource = Source.ZONE_STATS_PUSHDOWN;
+        if (sum == null) {
+            sum = scanSum(reader, column);
+            sumSource = Source.FULL_SCAN;
+        }
         Double avg = count == 0 ? null : sum.doubleValue() / count;
 
         return new Summary(column, min, max, count, sum, avg,
-                Source.ZONE_STATS_PUSHDOWN, Source.FULL_SCAN);
+                Source.ZONE_STATS_PUSHDOWN, sumSource);
+    }
+
+    /// Folds the per-zone `SUM` statistics for `column`, or returns `null` when any zone lacks a
+    /// sum (so the caller streams the column instead). Integer columns fold into a [Long] (exact),
+    /// floating columns into a [Double]; the zone-stat boxing already distinguishes the two.
+    private static Number zoneSum(VortexReader reader, String column) {
+        try (ScanIterator scan = reader.scan(ScanOptions.columns(column))) {
+            List<ArrayStats> zones = scan.columnZoneStats(column);
+            if (zones.isEmpty()) {
+                return null;
+            }
+            long longSum = 0L;
+            double doubleSum = 0.0;
+            boolean isFloating = false;
+            for (ArrayStats zone : zones) {
+                switch (zone.sum()) {
+                    case Long l -> longSum += l;
+                    case Double d -> {
+                        isFloating = true;
+                        doubleSum += d;
+                    }
+                    case null, default -> {
+                        // A zone with no usable sum (no zone map, or an unhandled stat type) —
+                        // can't push down, let the caller fall back to a full scan.
+                        return null;
+                    }
+                }
+            }
+            if (isFloating) {
+                return doubleSum;
+            }
+            return longSum;
+        }
     }
 
     private static long totalRows(VortexReader reader) {

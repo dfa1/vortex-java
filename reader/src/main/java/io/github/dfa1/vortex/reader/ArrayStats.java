@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 ///
 /// @param min            minimum value in the array, or `null` if unknown
 /// @param max            maximum value in the array, or `null` if unknown
+/// @param sum            sum of values (`Long` for integer columns, `Double` for floats), or `null` if unknown
 /// @param trueCount      number of `true` values for bool columns, or `null` if unknown
 /// @param nullCount      number of null values, or `null` if unknown
 /// @param isSorted       `true` if the array is sorted in ascending order, or `null` if unknown
@@ -18,12 +19,13 @@ import java.nio.charset.StandardCharsets;
 public record ArrayStats(
         Object min,
         Object max,
+        Object sum,
         Long trueCount,
         Long nullCount,
         Boolean isSorted,
         Boolean isStrictSorted
 ) {
-    private static final ArrayStats EMPTY = new ArrayStats(null, null, null, null, null, null);
+    private static final ArrayStats EMPTY = new ArrayStats(null, null, null, null, null, null, null);
 
     /// Returns an empty stats instance with all fields set to `null`.
     ///
@@ -43,11 +45,12 @@ public record ArrayStats(
         }
         Object min = decodeScalar(fbs.minAsSegment());
         Object max = decodeScalar(fbs.maxAsSegment());
+        Object sum = decodeScalar(fbs.sumAsSegment());
         Long nullCount = fbs.hasNullCount() ? fbs.nullCount() : null;
-        if (min == null && max == null && nullCount == null) {
+        if (min == null && max == null && sum == null && nullCount == null) {
             return EMPTY;
         }
-        return new ArrayStats(min, max, null, nullCount, null, null);
+        return new ArrayStats(min, max, sum, null, nullCount, null, null);
     }
 
     private static Object decodeScalar(MemorySegment seg) {

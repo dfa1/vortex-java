@@ -96,6 +96,11 @@ Per-encoding gotchas:
 - [ ] **Compute primitives — masks, kernels, no-materialise** — pushdown filter/compare/aggregate
   kernels operating on Lazy arrays without materialising. See [ADR-0013](docs/adr/0013-compute-primitives.md)
   (Proposed). Gate: a concrete downstream consumer (e.g. the vortex-arrow bridge or filter pushdown).
+  Done: §6 read-side surface — `ScanIterator.columnZoneStats(col)` exposes per-zone
+  min/max/sum/null count, decoding sum from the `vortex.stats` zone-map table (matches files from
+  Rust, whose flat writer omits per-flat sum). Calcite `VortexAggregates.SUM`/`AVG` now fold those
+  per-zone sums (metadata-only), falling back to a full scan only when a column has no zone map.
+  Next: `Mask`/`Predicate`/kernel vocab and the two-tier whole-zone+residual reduce.
 
 ## Encodings
 
