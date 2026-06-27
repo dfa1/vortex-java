@@ -3,7 +3,6 @@ package io.github.dfa1.vortex.calcite;
 import io.github.dfa1.vortex.reader.VortexReader;
 
 import org.apache.calcite.jdbc.CalciteConnection;
-import org.apache.calcite.plan.RelOptPlanner;
 import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.plan.hep.HepPlanner;
 import org.apache.calcite.plan.hep.HepProgram;
@@ -11,7 +10,6 @@ import org.apache.calcite.plan.hep.HepProgramBuilder;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.core.Values;
 import org.apache.calcite.rex.RexLiteral;
-import org.apache.calcite.runtime.Hook;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.tools.FrameworkConfig;
@@ -29,7 +27,6 @@ import java.sql.Statement;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -138,17 +135,14 @@ class AggregatePushDownTest {
     }
 
     @Test
-    @SuppressWarnings("try") // the Hook.Closeable is used only for its scope (deregister on close)
     void pushDownRunsEndToEndThroughJdbcPlanner() throws Exception {
-        // Given a JDBC Calcite connection over the OHLC schema with the rule registered on the
-        // (Volcano) planner via Hook.PLANNER
+        // Given a plain JDBC Calcite connection over the OHLC schema — no rule is wired by hand; the
+        // VortexTableScan auto-registers the push-down rules when the planner first sees it
         Properties info = new Properties();
         info.setProperty("lex", "JAVA");
         String sql = "select min(low) lo, max(high) hi, count(*) c from vtx.ohlc";
 
-        try (Hook.Closeable ignored = Hook.PLANNER.addThread(
-                (Consumer<RelOptPlanner>) planner -> VortexAggregatePushDownRule.RULES.forEach(planner::addRule));
-             Connection conn = DriverManager.getConnection("jdbc:calcite:", info)) {
+        try (Connection conn = DriverManager.getConnection("jdbc:calcite:", info)) {
             conn.unwrap(CalciteConnection.class).getRootSchema()
                     .add("vtx", new VortexSchema(Map.of("ohlc", file)));
 
@@ -186,15 +180,12 @@ class AggregatePushDownTest {
     }
 
     @Test
-    @SuppressWarnings("try") // the Hook.Closeable is used only for its scope (deregister on close)
     void filteredAggregateIsNotAnsweredFromWholeTableStats() throws Exception {
-        // Given the rule on the JDBC (Volcano) planner and a WHERE that pushes a predicate into the
-        // scan — whole-table stats must not be used to answer a filtered aggregate
+        // Given the auto-registered rule and a WHERE that pushes a predicate into the scan — whole-
+        // table stats must not be used to answer a filtered aggregate
         Properties info = new Properties();
         info.setProperty("lex", "JAVA");
-        try (Hook.Closeable ignored = Hook.PLANNER.addThread(
-                (Consumer<RelOptPlanner>) planner -> VortexAggregatePushDownRule.RULES.forEach(planner::addRule));
-             Connection conn = DriverManager.getConnection("jdbc:calcite:", info)) {
+        try (Connection conn = DriverManager.getConnection("jdbc:calcite:", info)) {
             conn.unwrap(CalciteConnection.class).getRootSchema()
                     .add("vtx", new VortexSchema(Map.of("ohlc", file)));
 
@@ -209,6 +200,42 @@ class AggregatePushDownTest {
             // Then it is the filtered minimum (> 10), not the whole-table MIN (≈ 0.x) the rule would
             // wrongly return if it ignored the pushed-down filter
             assertThat(min).isGreaterThan(10.0);
+        }
+    }
+
+    @Test
+    void avgRewritesViaSumAndCountWithNoScan() throws Exception {
+        // Given a plain JDBC connection — AVG must be reduced to SUM/COUNT by the auto-registered
+        // AggregateReduceFunctionsRule so both halves ride the zone-map push-down, leaving no scan
+        Properties info = new Properties();
+        info.setProperty("lex", "JAVA");
+        try (Connection conn = DriverManager.getConnection("jdbc:calcite:", info)) {
+            conn.unwrap(CalciteConnection.class).getRootSchema()
+                    .add("vtx", new VortexSchema(Map.of("ohlc", file)));
+
+            // When EXPLAIN runs over AVG of a non-null DOUBLE column
+            String plan;
+            try (Statement st = conn.createStatement();
+                 ResultSet rs = st.executeQuery("explain plan for select avg(low) a from vtx.ohlc")) {
+                rs.next();
+                plan = rs.getString(1);
+            }
+
+            // Then the plan decodes no data segment — the SUM and COUNT were both answered from stats
+            assertThat(plan).doesNotContain("TableScan");
+
+            // And the value equals sum/count folded from the zone-map stats (low is non-null, so
+            // COUNT = ROWS); AVG over a DOUBLE column is exact double division, no integer truncation
+            double avg;
+            try (Statement st = conn.createStatement();
+                 ResultSet rs = st.executeQuery("select avg(low) a from vtx.ohlc")) {
+                rs.next();
+                avg = rs.getDouble("a");
+            }
+            try (VortexReader reader = VortexReader.open(file)) {
+                double sum = VortexAggregates.of(reader, "low").sum().doubleValue();
+                assertThat(avg).isEqualTo(sum / ROWS);
+            }
         }
     }
 

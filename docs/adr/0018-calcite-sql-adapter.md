@@ -1,7 +1,8 @@
 # ADR 0018: Apache Calcite SQL adapter — be a push-down source, not an engine
 
-- **Status:** Accepted — Phases 0–2 (schema/scan, filter + projection push-down, MIN/MAX/COUNT
-  aggregate push-down) implemented in the `calcite/` module; SUM/AVG push-down pending
+- **Status:** Accepted — Phases 0–2 (schema/scan, filter + projection push-down, and
+  MIN/MAX/COUNT/SUM/AVG aggregate push-down) implemented in the `calcite/` module; the rule
+  auto-registers over a bare `jdbc:calcite:` connection
 - **Date:** 2026-06-24
 - **Deciders:** project maintainer
 - **Supersedes:** —
@@ -94,10 +95,11 @@ Phased productionisation:
   encoded-domain compare). Unsupported `RexNode`s are left for Calcite — push-down is
   best-effort, never a parse failure.
 - **Phase 2 — aggregate push-down (the payoff).** A `RelOptRule` matching `Aggregate(TableScan)`
-  for `MIN`/`MAX`/`SUM`/`COUNT` rewrites to a stats-backed physical scan folding the zone-map
-  stats table — promoting today's `VortexAggregates` from a side helper to a planner rule.
-  `MIN`/`MAX`/`COUNT` work now; `SUM`/`AVG` need the writer to emit a per-zone `SUM` stat first
-  (ADR 0013 §6 — the same increment that also wants `NULL_COUNT`).
+  for `MIN`/`MAX`/`SUM`/`COUNT` rewrites to a single-row `Values` folded from the zone-map stats
+  table — promoting today's `VortexAggregates` from a side helper to a planner rule. `AVG` rides
+  the same path once `AggregateReduceFunctionsRule` reduces it to `SUM`/`COUNT`. All of
+  `MIN`/`MAX`/`COUNT`/`SUM`/`AVG` work now (ADR 0013 §6 — the increment that emitted the per-zone
+  `SUM` + `NULL_COUNT` stats the fold needs).
 
 ### Implementation status (landed in the `calcite/` module)
 
@@ -108,10 +110,15 @@ Phases 0–2 are implemented and tested:
   skipping. Filters are pushed but **not consumed** (whole-chunk pruning is approximate, so
   Calcite still row-filters). Demo: a `date` range over 1M rows decodes **1 of 100 chunks** (99%
   pruned), exact result, and `EXPLAIN` shows `filters`/`projects` folded into `BindableTableScan`.
-- **Phase 2 landed (MIN/MAX/COUNT).** `VortexAggregatePushDownRule` rewrites a whole-table
-  `MIN`/`MAX`/`COUNT` (no `GROUP BY`, numeric columns) into a single-row `LogicalValues` from the
-  stats — the optimized plan has **no scan and no aggregate**. `SUM`/`AVG` remain a scan pending
-  the writer per-zone `SUM` stat.
+- **Phase 2 landed (MIN/MAX/COUNT/SUM/AVG).** `VortexAggregatePushDownRule` rewrites a whole-table
+  `MIN`/`MAX`/`COUNT`/`SUM` (no `GROUP BY`, numeric columns) into a single-row `LogicalValues` from
+  the stats — the optimized plan has **no scan and no aggregate**. `SUM` folds the per-zone `SUM`
+  rows and answers an all-null column as SQL `NULL`; `AVG` reduces to `SUM`/`COUNT`
+  (`AggregateReduceFunctionsRule`) and rides the same path. The rule **auto-registers**: a
+  `VortexTable` translates to a `VortexTableScan` whose `register()` installs the rules when the
+  planner first sees the node, so a plain `jdbc:calcite:` connection rewrites these aggregates with
+  no caller wiring. The scan immediately expands to a stock `LogicalTableScan`, leaving the
+  Bindable filter/projection push-down untouched.
 
 Gotchas found and recorded for the production adapter:
 
@@ -128,9 +135,12 @@ Gotchas found and recorded for the production adapter:
   Immutables annotation processor; the deprecated `RelOptRule` operand constructor is lighter for
   a single adapter rule (localized `@SuppressWarnings("deprecation")`).
 
-The prototype registers the Phase-2 rule through a `HepPlanner` in a test. Wiring it into the
-bare `jdbc:calcite:` planner (so SQL over JDBC is auto-rewritten) is the main remaining
-productionisation step, alongside the writer `SUM` zone-stat.
+The Phase-2 rule now auto-registers over the bare `jdbc:calcite:` planner via
+`VortexTableScan.register()` (a `TranslatableTable` translating to a custom scan that expands back
+to `LogicalTableScan`), so SQL over JDBC is rewritten with no caller wiring — the former main
+productionisation gap. The unit tests still drive the rule through a `HepPlanner` directly for
+focused branch coverage. The remaining Phase-2+ work is the residual tier (ADR 0013 §6): pushing
+`SUM`/`COUNT` **with a `WHERE`** by folding fully-selected zones and streaming only boundary zones.
 
 **Two doors, chosen by query shape.** Calcite is the right tool for *reducing* queries (filter
 / aggregate / group-by), where push-down shrinks the result and the `Object[]` boundary

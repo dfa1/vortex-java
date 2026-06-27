@@ -101,10 +101,12 @@ Per-encoding gotchas:
   Rust, whose flat writer omits per-flat sum). Calcite `VortexAggregates.SUM`/`AVG` now fold those
   per-zone sums (metadata-only), falling back to a full scan only when a column has no zone map.
   The fold is a reusable `reader.compute.ZoneReducer.sum(col)` (the seam a future `vortex-compute`
-  extracts), now consumed by the planner: `VortexAggregatePushDownRule` rewrites a whole-table
-  `SUM(col)` to a single-row `Values` via `VortexTable.zoneSum`, abandoning to the scan only when a
-  zone carries no usable sum. A `SUM` with a `WHERE` still abandons (whole-zone stats can't answer a
-  filtered aggregate) — that is the residual tier below.
+  extracts), consumed by the planner: `VortexAggregatePushDownRule` rewrites a whole-table
+  `MIN`/`MAX`/`COUNT`/`SUM`/`AVG` to a single-row `Values`, abandoning to the scan only when a zone
+  carries no usable sum (an all-null column answers SQL `NULL`; `AVG` reduces to `SUM`/`COUNT`). The
+  rule auto-registers over a bare `jdbc:calcite:` connection via `VortexTableScan.register()`, so
+  SQL over JDBC is rewritten with no caller wiring. A `SUM` with a `WHERE` still abandons (whole-zone
+  stats can't answer a filtered aggregate) — that is the residual tier below.
   Next: the residual tier — give `ZoneReducer` predicate support (whole-zone fold for fully-selected
   zones + boundary-zone streaming for partially-selected ones), then let the rule push `SUM` with a
   `WHERE`. `Mask`/`Predicate`/kernel vocab on top.

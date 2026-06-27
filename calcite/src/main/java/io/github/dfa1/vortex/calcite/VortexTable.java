@@ -21,6 +21,8 @@ import org.apache.calcite.jdbc.JavaTypeFactoryImpl;
 import org.apache.calcite.linq4j.AbstractEnumerable;
 import org.apache.calcite.linq4j.Enumerable;
 import org.apache.calcite.linq4j.Enumerator;
+import org.apache.calcite.plan.RelOptTable;
+import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rex.RexBuilder;
@@ -30,6 +32,7 @@ import org.apache.calcite.rex.RexLiteral;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.rex.RexUtil;
 import org.apache.calcite.schema.ProjectableFilterableTable;
+import org.apache.calcite.schema.TranslatableTable;
 import org.apache.calcite.schema.impl.AbstractTable;
 import org.apache.calcite.sql.type.SqlTypeName;
 
@@ -50,7 +53,7 @@ import java.util.concurrent.atomic.AtomicLong;
 /// consumed: zone-map pruning is approximate (it drops whole chunks that cannot match, not
 /// individual rows), so Calcite must still apply the predicate row-by-row for exactness. The
 /// win is decoding far fewer chunks when the filter is selective on a clustered column.
-public final class VortexTable extends AbstractTable implements ProjectableFilterableTable {
+public final class VortexTable extends AbstractTable implements ProjectableFilterableTable, TranslatableTable {
 
     /// Used only to expand `SEARCH`/`Sarg` predicates (e.g. `BETWEEN`, `IN`) back into ordinary
     /// comparison trees the [RowFilter] translation understands.
@@ -141,6 +144,19 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         } catch (IOException e) {
             throw new UncheckedIOException("cannot count rows of " + file, e);
         }
+    }
+
+    /// Translates a reference to this table into a [VortexTableScan] — the seam that auto-registers
+    /// the aggregate push-down rules on the planner (see [VortexTableScan#register]). The scan
+    /// immediately expands to a stock `LogicalTableScan`, so projection and filter push-down run
+    /// through Calcite's `Bindables` convention unchanged.
+    ///
+    /// @param context     the planning context supplying the cluster
+    /// @param relOptTable the planner's handle to this table
+    /// @return a `VortexTableScan` over this table
+    @Override
+    public RelNode toRel(RelOptTable.ToRelContext context, RelOptTable relOptTable) {
+        return VortexTableScan.create(context.getCluster(), relOptTable);
     }
 
     @Override
