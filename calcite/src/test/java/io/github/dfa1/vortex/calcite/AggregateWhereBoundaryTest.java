@@ -111,6 +111,65 @@ class AggregateWhereBoundaryTest {
     }
 
     @Test
+    void allBoundaryNoInteriorZoneAbandonsButScanIsCorrect() throws Exception {
+        // Given a narrow range that straddles a chunk edge yet leaves NO fully-contained chunk:
+        // id between 2500 and 3499 cuts chunk 2 ([2000,2999], keeps 2500..2999) and chunk 3
+        // ([3000,3999], keeps 3000..3499) — both BOUNDARY zones — with every other chunk OUT and not
+        // a single IN zone. The fold's only win over a scan is folding IN zones from stats without
+        // decoding them; with zero IN zones it would decode exactly chunks 2 and 3 — the same chunks
+        // the scan decodes — and only add the stats-table classify and mask-building cost on top
+        // (the ~5x regression CalciteBoundaryAggregateBenchmark surfaced). So the rewrite abandons
+        // and a scan remains in the plan. This is correctness-neutral: the scan computes the answer.
+        long lo = 2_500;
+        long hi = 3_499;
+        String where = "where id between " + lo + " and " + hi;
+        Ground truth = reduce(i -> i >= lo && i <= hi);
+
+        try (Connection conn = connect()) {
+            // When the aggregates are taken over the all-boundary range — a scan remains in the plan
+            // (the performance abandon: no interior zone means the fold saves no decode over a scan)
+            String sql = "select sum(val) s, count(*) c, min(val) mn, max(val) mx from vtx.t " + where;
+            assertThat(explain(conn, sql)).contains("TableScan");
+
+            // And the zone-map-pruned scan still produces the exact ground-truth reduction
+            try (Statement st = conn.createStatement();
+                 ResultSet rs = st.executeQuery(sql)) {
+                rs.next();
+                assertThat(rs.getLong("s")).isEqualTo(truth.sum());
+                assertThat(rs.getLong("c")).isEqualTo(truth.count());
+                assertThat(rs.getLong("mn")).isEqualTo(truth.min());
+                assertThat(rs.getLong("mx")).isEqualTo(truth.max());
+            }
+        }
+    }
+
+    @Test
+    void singleChunkInteriorRangeAbandonsButScanIsCorrect() throws Exception {
+        // Given a range falling entirely WITHIN one chunk: id between 2300 and 2700 lies inside chunk
+        // 2 ([2000,2999]) alone — chunk 2 is the only matching zone and it is a BOUNDARY (neither
+        // endpoint on a chunk edge), with no IN zone anywhere. Same reasoning as the straddling case:
+        // the fold would decode the single chunk a scan decodes and add overhead, so it abandons.
+        long lo = 2_300;
+        long hi = 2_700;
+        String where = "where id between " + lo + " and " + hi;
+        Ground truth = reduce(i -> i >= lo && i <= hi);
+
+        try (Connection conn = connect()) {
+            // When the aggregates are taken — a scan remains in the plan (no interior zone to fold)
+            String sql = "select sum(val) s, count(*) c from vtx.t " + where;
+            assertThat(explain(conn, sql)).contains("TableScan");
+
+            // And the scan produces the exact ground-truth reduction over the one cut chunk
+            try (Statement st = conn.createStatement();
+                 ResultSet rs = st.executeQuery(sql)) {
+                rs.next();
+                assertThat(rs.getLong("s")).isEqualTo(truth.sum());
+                assertThat(rs.getLong("c")).isEqualTo(truth.count());
+            }
+        }
+    }
+
+    @Test
     void halfOpenRangeWithOneBoundaryFoldsViaDecode() throws Exception {
         // Given a single-sided range cutting one chunk: id < 4321 keeps chunks 0-3 whole (IN) and
         // cuts chunk 4 ([4000,4999]) after id 4320 — exactly one boundary zone, chunks 5-7 OUT.

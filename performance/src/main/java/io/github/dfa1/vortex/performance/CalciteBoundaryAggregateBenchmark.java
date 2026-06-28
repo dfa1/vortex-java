@@ -51,7 +51,8 @@ import java.util.concurrent.TimeUnit;
 /// - `medium` `id ∈ [245_000, 755_000]` → chunk 24 BOUNDARY, chunks 25..74 IN (50), chunk 75
 ///   BOUNDARY. Baseline decodes chunks 24..75 = 52; fold decodes 2.
 /// - `narrow` `id ∈ [495_000, 505_000]` → chunk 49 BOUNDARY, chunk 50 BOUNDARY, no IN zone.
-///   Baseline decodes chunks 49,50 = 2; fold decodes 2 (parity — no interior to skip).
+///   With zero interior zones the fold would decode the same two chunks as a scan for no gain, so
+///   it ABANDONS and [#boundaryFold] falls back to the scan — both paths decode chunks 49,50 = 2.
 ///
 /// - [#boundaryFold] is the optimized path: [VortexTable#filteredFold] folds the INTERIOR zones from
 ///   their footer `SUM` statistics with no decode and only decodes the two BOUNDARY chunks under a
@@ -129,14 +130,19 @@ public class CalciteBoundaryAggregateBenchmark {
     }
 
     /// Optimized path: fold the filtered `SUM(val)` over the boundary-zone tiers, decoding only the
-    /// two boundary chunks while the interior zones are summed from footer statistics.
+    /// two boundary chunks while the interior zones are summed from footer statistics. When the fold
+    /// abandons — including the no-interior-zone case where it would decode the same chunks as a scan
+    /// for no gain — it falls back to the full-scan path, exactly as the Calcite planner does.
     ///
     /// @return the filtered sum of `val`
+    /// @throws IOException if the fallback scan cannot read the file
     @Benchmark
-    public long boundaryFold() {
+    public long boundaryFold() throws IOException {
         Optional<VortexTable.FilteredFold> fold = table.filteredFold(filter, AGG_COLUMN);
-        return fold.orElseThrow(() -> new IllegalStateException("fold abandoned for range=" + range))
-                .sum().longValue();
+        if (fold.isEmpty()) {
+            return fullScanBaseline();
+        }
+        return fold.get().sum().longValue();
     }
 
     /// Baseline path: scan with the same range filter (zone-map pruning drops fully-out chunks), then

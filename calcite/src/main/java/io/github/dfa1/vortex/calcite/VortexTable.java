@@ -203,6 +203,13 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// column involved (whose signed stat order [#isUnsigned] cannot classify), a zone-map zone count
     /// that does not align 1:1 with the chunks, or a boundary zone whose mask cannot be built.
     ///
+    /// The fold also abandons for performance, not correctness, when there is at least one boundary
+    /// zone but no fully-selected (IN) zone: the only win the fold has over a scan is folding IN zones
+    /// from statistics without decoding them, so with zero IN zones it would decode exactly the chunks
+    /// a scan decodes and only add the stats-table classify and mask-building overhead. The
+    /// zone-map-pruned scan is the cheaper answer. An all-OUT selection (no IN, no boundary) is not
+    /// this case — it folds to a correct empty aggregate with no decode and is kept.
+    ///
     /// @param filter    the pushed predicate, already translated to the reader's [RowFilter]
     /// @param aggColumn the column to reduce over the selected rows, or `null` for a row-count-only
     ///                  fold
@@ -256,10 +263,33 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                 zoneStats.put(column, perZone);
             }
 
+            // Classify every zone first, so the IN count is known before any boundary decode. The
+            // fold's only win over a scan is folding IN zones from statistics with no decode; a
+            // BOUNDARY zone is decoded exactly as a scan would decode it. So when there is at least
+            // one BOUNDARY zone but no IN zone, the fold decodes the same chunks a scan does and adds
+            // the stats-table classify + mask-building overhead on top — a net loss. Abandon to the
+            // (zone-map-pruned) scan in that case. The all-OUT case (no IN, no BOUNDARY) is NOT this
+            // case: it folds to a correct empty/zero aggregate with no decode at all, so it is kept.
+            Match[] matches = new Match[zones];
+            int inZones = 0;
+            int boundaryZones = 0;
+            for (int zone = 0; zone < zones; zone++) {
+                Match match = classify(filter, zone, zoneStats, rowCounts[zone]);
+                matches[zone] = match;
+                if (match == Match.IN) {
+                    inZones++;
+                } else if (match == Match.BOUNDARY) {
+                    boundaryZones++;
+                }
+            }
+            if (boundaryZones >= 1 && inZones == 0) {
+                return Optional.empty(); // every match is a boundary decode — no fold win over a scan
+            }
+
             List<String> decodeColumns = new ArrayList<>(columns);
             Fold fold = new Fold();
             for (int zone = 0; zone < zones; zone++) {
-                Match match = classify(filter, zone, zoneStats, rowCounts[zone]);
+                Match match = matches[zone];
                 if (match == Match.OUT) {
                     continue;
                 }
