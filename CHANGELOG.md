@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-06-28
+
+SQL over Vortex grows a **compute layer**: a Calcite `WHERE`-filtered `SUM`/`COUNT`/`MIN`/`MAX` is now answered from the zone-map statistics — folding the chunks the predicate fully selects without decoding them and decoding only the one or two chunks its range cuts through (ADR 0013 §6 / ADR 0018 boundary tier). On a 100-chunk file a `SELECT SUM(x) WHERE id BETWEEN …` answers ~12× faster than a full scan when the range is wide. Plus the security hardening of the untrusted-input parse paths (ADR 0003) and a `vortex.zstd` binding bump.
+
 ### Added
 
 - `VortexCalcite.connect(schemaName, tables)` opens a Calcite JDBC connection with the `VortexSchema` registered in one call, folding away the `DriverManager` / `unwrap` / `getRootSchema().add(...)` boilerplate. It wires the **Babel** SQL parser, so columns whose names are reserved words (`close`, `open`, `value`, `year`, …) are queryable **unquoted** — `select close, open from vtx.ohlc` — which columnar files routinely need; only the typed-literal keywords (`date`, `time`, `timestamp`, `interval`) still require back-tick quoting. ([24b64b32](https://github.com/dfa1/vortex-java/commit/24b64b32))
@@ -19,11 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Bumped `io.github.dfa1.zstd` (the `vortex.zstd` FFM bindings, pinned by the BOM) 0.4 → 0.5, which ships smaller jars (native debug symbols stripped). ([6dcdbe94](https://github.com/dfa1/vortex-java/commit/6dcdbe94))
-
-## [0.10.1] — 2026-06-27
-
-Security hardening of the untrusted-input parse paths: every malformed-file path now surfaces as a `VortexException` instead of an unchecked `Error`, a raw JDK exception, or a resource leak (ADR 0003). Plus a `vortex.zstd` binding bump.
+- Bumped `io.github.dfa1.zstd` (the `vortex.zstd` FFM bindings, pinned by the BOM) 0.3 → 0.6, which ships smaller jars (native debug symbols stripped). ([677c2cf7](https://github.com/dfa1/vortex-java/commit/677c2cf7), [6dcdbe94](https://github.com/dfa1/vortex-java/commit/6dcdbe94), [fec0a0d3](https://github.com/dfa1/vortex-java/commit/fec0a0d3))
+- Bumped Apache Calcite (the SQL adapter's engine) 1.40 → 1.42. ([2f9f02c6](https://github.com/dfa1/vortex-java/commit/2f9f02c6))
 
 ### Security
 
@@ -31,10 +32,6 @@ Security hardening of the untrusted-input parse paths: every malformed-file path
 - The HTTP reader validates footer `segmentSpecs` against the file size before any `Range` request is built from them, matching the local-file path. ([1d8ddebc](https://github.com/dfa1/vortex-java/commit/1d8ddebc))
 - `vortex.zstd` decode bounds-checks each frame's declared uncompressed size and overflow-checks the total before allocating, and range-checks VarBin length prefixes — a crafted payload can no longer under-allocate or read out of bounds. ([2df4e3a7](https://github.com/dfa1/vortex-java/commit/2df4e3a7), [adc445e8](https://github.com/dfa1/vortex-java/commit/adc445e8))
 - The HTTP reader parses the server-controlled `Content-Range` header and slices the tail buffer defensively, so a malformed response yields a `VortexException` rather than a raw `NumberFormatException`/`IndexOutOfBoundsException`. ([feac99b7](https://github.com/dfa1/vortex-java/commit/feac99b7))
-
-### Changed
-
-- Bumped `io.github.dfa1.zstd` (the `vortex.zstd` FFM bindings, pinned by the BOM) 0.3 → 0.4. ([677c2cf7](https://github.com/dfa1/vortex-java/commit/677c2cf7))
 
 ## [0.10.0] — 2026-06-26
 
