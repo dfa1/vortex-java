@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.calcite;
 
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.Chunk;
@@ -7,7 +8,11 @@ import io.github.dfa1.vortex.reader.RowFilter;
 import io.github.dfa1.vortex.reader.ScanIterator;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
+import io.github.dfa1.vortex.reader.compute.Compute;
+import io.github.dfa1.vortex.reader.compute.Mask;
+import io.github.dfa1.vortex.reader.compute.Predicate;
 import io.github.dfa1.vortex.reader.compute.ZoneReducer;
+import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
@@ -41,6 +46,9 @@ import org.apache.calcite.sql.type.SqlTypeName;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -163,11 +171,12 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         return total;
     }
 
-    /// A fold of the zones a pushed `WHERE` filter selects, returned by
-    /// [#filteredFold(RowFilter, String)] only when the filter classifies every zone all-or-nothing
-    /// — no boundary zone it partially selects. The aggregate rule reads the field its aggregate
-    /// needs; the values cover exactly the rows the filter matches, so the fold answers
-    /// `SUM`/`COUNT`/`MIN`/`MAX` over the filtered table with no data segment decoded.
+    /// A fold of the rows a pushed `WHERE` filter selects, returned by
+    /// [#filteredFold(RowFilter, String)]. A zone the filter selects entirely is folded from its
+    /// statistics with no decode; a boundary zone the filter only partially selects is decoded and
+    /// reduced under a row-level selection mask (ADR 0013 §6 tier-2). The aggregate rule reads the
+    /// field its aggregate needs; the values cover exactly the rows the filter matches, so the fold
+    /// answers `SUM`/`COUNT`/`MIN`/`MAX` over the filtered table — decoding only the boundary zones.
     ///
     /// @param sum       folded sum of the kept zones ([Long] for integer columns, [Double] for
     ///                  floating), or `null` when a kept zone carries no usable sum
@@ -180,25 +189,28 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     public record FilteredFold(Number sum, Object min, Object max, Long nullCount, long rows) {
     }
 
-    /// Folds the zone-map statistics of the zones a pushed `WHERE` `filter` fully selects, reading
-    /// only footer metadata — answering an aggregate over the filtered table without decoding a data
-    /// segment. Returns empty unless the filter partitions **every** zone cleanly into kept (all
-    /// rows match) or dropped (no row matches): the moment one zone is a boundary the filter only
-    /// partially selects, the fold is abandoned so the caller scans, because that zone's matching
-    /// rows can be known only by decoding it.
+    /// Folds an aggregate over the rows a pushed `WHERE` `filter` selects, in two tiers (ADR 0013 §6).
+    /// A zone the filter selects entirely (or excludes entirely) is folded from — or skipped via — its
+    /// footer statistics with no decode; a boundary zone the filter only partially selects is decoded
+    /// for the aggregate and filter columns, a row-level selection [Mask] is built by evaluating the
+    /// filter through the compute kernels, and the aggregate is reduced over the masked rows. The two
+    /// tiers combine into one fold, so the caller answers the filtered aggregate while decoding only
+    /// the boundary zones.
     ///
-    /// `aggColumn` is the column whose stats are folded over the kept zones (`null` for `COUNT(*)`,
-    /// which needs only the kept row count). The result is also empty when a zone cannot be
-    /// classified — a missing min/max or null count leaves the all-or-nothing decision undecidable
-    /// — or when the zone-map zone count does not align 1:1 with the chunks (a file from a writer
-    /// that uses a fixed zone length).
+    /// `aggColumn` is the column whose values are reduced over the selected rows (`null` for
+    /// `COUNT(*)`, which needs only the selected row count). The result is empty — abandoning to a
+    /// full scan, which is always correctness-safe — when the fold cannot be trusted: an unsigned
+    /// column involved (whose signed stat order [#isUnsigned] cannot classify), a zone-map zone count
+    /// that does not align 1:1 with the chunks, or a boundary zone whose mask cannot be built.
     ///
     /// @param filter    the pushed predicate, already translated to the reader's [RowFilter]
-    /// @param aggColumn the column to fold over the kept zones, or `null` for a row-count-only fold
-    /// @return the kept-zone fold, or empty when the filter does not partition the zones cleanly
+    /// @param aggColumn the column to reduce over the selected rows, or `null` for a row-count-only
+    ///                  fold
+    /// @return the fold over the selected rows, or empty when it cannot be answered soundly
     public Optional<FilteredFold> filteredFold(RowFilter filter, String aggColumn) {
-        java.util.LinkedHashSet<String> columns = new java.util.LinkedHashSet<>();
-        collectColumns(filter, columns);
+        java.util.LinkedHashSet<String> filterColumns = new java.util.LinkedHashSet<>();
+        collectColumns(filter, filterColumns);
+        java.util.LinkedHashSet<String> columns = new java.util.LinkedHashSet<>(filterColumns);
         if (aggColumn != null) {
             columns.add(aggColumn);
         }
@@ -207,12 +219,29 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
             // Unsigned columns store stats whose boxed (signed) order disagrees with the unsigned
             // value order past the high bit, so a signed compare here could fold the wrong zones —
             // a wrong answer. Abandon the fold for any unsigned column involved and let the scan
-            // (whose comparator is unsigned-aware) compute it.
+            // (whose comparator is unsigned-aware) compute it. The boundary tier inherits this guard:
+            // it never decodes an unsigned column, so its compute compare stays correct too.
             if (!(reader.dtype() instanceof DType.Struct struct)) {
                 return Optional.empty();
             }
             for (String column : columns) {
                 if (isUnsigned(struct, column)) {
+                    return Optional.empty();
+                }
+            }
+            // A boundary zone's row mask evaluates the filter through the compute kernel, whose
+            // Compare.values uses Double.compare — where NaN sorts as the maximum. So a predicate
+            // like `f >= v` (lowered to Eq OR Gt) would SELECT a NaN row, but SQL (and Calcite's own
+            // row filter) treats `NaN >= v` as false. Since the boundary fold REPLACES the scan (it
+            // is the final answer, with no per-row recheck), a NaN in a partially-selected float
+            // filter column would be a silent wrong answer. Conservatively abandon the push-down for
+            // any floating-point FILTER column and let the scan (NaN-correct) compute it. Scoped to
+            // the mask columns: a floating-point AGG column is fine (NaN data sums to NaN, exactly as
+            // a scan would). The proper follow-up is a SQL-NaN-correct compare in the kernel, but
+            // Compare.values is shared with the tier-1 classify and copied from ScanIterator — out
+            // of scope here.
+            for (String column : filterColumns) {
+                if (isFloating(struct, column)) {
                     return Optional.empty();
                 }
             }
@@ -227,62 +256,233 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                 zoneStats.put(column, perZone);
             }
 
-            long longSum = 0L;
-            double doubleSum = 0.0;
-            boolean floatingSum = false;
-            boolean sumUsable = true;
-            Object min = null;
-            Object max = null;
-            long nullCount = 0;
-            boolean nullCountKnown = true;
-            long keptRows = 0;
+            List<String> decodeColumns = new ArrayList<>(columns);
+            Fold fold = new Fold();
             for (int zone = 0; zone < zones; zone++) {
                 Match match = classify(filter, zone, zoneStats, rowCounts[zone]);
-                if (match == Match.BOUNDARY) {
-                    return Optional.empty(); // a partially-selected zone — only a decode can fold it
-                }
                 if (match == Match.OUT) {
                     continue;
                 }
-                keptRows += rowCounts[zone];
-                if (aggColumn == null) {
+                if (match == Match.BOUNDARY) {
+                    // Tier 2: a partially-selected zone. Decode this chunk (and the filter columns),
+                    // build a row mask from the filter, and reduce the masked rows. The chunk index
+                    // equals the zone index — the perZone.size() == zones guard above proved the
+                    // zone-map rows align 1:1 with the chunks.
+                    foldBoundaryZone(reader, zone, decodeColumns, filter, aggColumn, fold);
                     continue;
                 }
-                ArrayStats stats = zoneStats.get(aggColumn).get(zone);
-                if (sumUsable) {
-                    Object zoneSum = stats.sum();
-                    if (zoneSum == null) {
-                        sumUsable = false;
-                    } else if (zoneSum instanceof Double d) {
-                        floatingSum = true;
-                        doubleSum += d;
-                    } else {
-                        longSum += ((Number) zoneSum).longValue();
-                    }
-                }
-                min = pickExtreme(min, stats.min(), true);
-                max = pickExtreme(max, stats.max(), false);
-                if (nullCountKnown) {
-                    Long zoneNulls = stats.nullCount();
-                    if (zoneNulls == null) {
-                        nullCountKnown = false;
-                    } else {
-                        nullCount += zoneNulls;
-                    }
+                // Tier 1 (Match.IN): every row matches — fold the whole zone from its statistics.
+                fold.keptRows += rowCounts[zone];
+                if (aggColumn != null) {
+                    ArrayStats stats = zoneStats.get(aggColumn).get(zone);
+                    fold.addSum(stats.sum());
+                    fold.addMin(stats.min());
+                    fold.addMax(stats.max());
+                    fold.addNulls(stats.nullCount());
                 }
             }
+            return Optional.of(fold.result());
+        } catch (IOException e) {
+            throw new UncheckedIOException("cannot fold filtered zones of " + file, e);
+        }
+    }
+
+    /// Decodes one boundary chunk and folds the aggregate over the rows the filter selects in it,
+    /// contributing to the running [Fold]. The chunk and a fresh confined [Arena] for the mask
+    /// bitmaps are released per zone via try-with-resources, so nothing outlives the reduction.
+    ///
+    /// `SUM` is guarded: the compute kernel throws on a non-numeric aggregate column, so a thrown
+    /// [VortexException] disables the sum (mirroring a zone that records no usable sum) rather than
+    /// failing the whole fold — a `MIN`/`MAX` over the same column still folds. The aggregate
+    /// column's null count among the selected rows is the selected count minus the non-null count.
+    private static void foldBoundaryZone(VortexReader reader, int zone, List<String> columns,
+                                         RowFilter filter, String aggColumn, Fold fold) {
+        try (Chunk chunk = reader.decodeChunk(zone, columns);
+             Arena maskArena = Arena.ofConfined()) {
+            Mask mask = buildMask(chunk, filter, maskArena);
+            long selected = mask.trueCount();
+            fold.keptRows += selected;
+            if (aggColumn == null) {
+                return;
+            }
+            Array aggArray = chunk.column(aggColumn);
+            if (fold.sumUsable) {
+                try {
+                    fold.addSum(Compute.sum(aggArray, mask));
+                } catch (VortexException e) {
+                    fold.sumUsable = false; // non-numeric agg column — sum unanswerable, like a missing zone sum
+                }
+            }
+            fold.addMin(Compute.min(aggArray, mask));
+            fold.addMax(Compute.max(aggArray, mask));
+            fold.addNulls(selected - Compute.count(aggArray, mask));
+        }
+    }
+
+    /// Builds the row-level selection [Mask] for a boundary chunk by evaluating `filter` through the
+    /// compute kernels: each comparison or null-test leaf becomes a [Predicate] filtered against its
+    /// column's decoded array, and an n-ary `AND` intersects the per-leaf masks (a row is selected
+    /// only when every leaf accepts it). The kernels apply SQL three-valued logic, so a null row
+    /// never satisfies a value predicate — matching the fold's null semantics.
+    private static Mask buildMask(Chunk chunk, RowFilter filter, Arena arena) {
+        long n = chunk.rowCount();
+        List<Mask> masks = new ArrayList<>();
+        collectLeafMasks(chunk, filter, arena, masks);
+        if (masks.isEmpty()) {
+            return Mask.allTrue(n); // an AND with no leaves constrains nothing (never reached for a boundary)
+        }
+        if (masks.size() == 1) {
+            return masks.getFirst();
+        }
+        return intersect(masks, n, arena);
+    }
+
+    /// Walks the filter tree, evaluating each leaf into a per-column [Mask] and collecting them into
+    /// `out`; the conjuncts of an n-ary `AND` are flattened so [#buildMask] intersects them together.
+    private static void collectLeafMasks(Chunk chunk, RowFilter filter, Arena arena, List<Mask> out) {
+        if (filter instanceof RowFilter.And(var parts)) {
+            for (RowFilter part : parts) {
+                collectLeafMasks(chunk, part, arena, out);
+            }
+            return;
+        }
+        out.add(Compute.filter(chunk.column(leafColumn(filter)), toPredicate(filter), arena));
+    }
+
+    /// The column a leaf [RowFilter] references (never called for an `AND`, which has no single
+    /// column).
+    private static String leafColumn(RowFilter leaf) {
+        return switch (leaf) {
+            case RowFilter.Eq(var col, var ignored) -> col;
+            case RowFilter.Neq(var col, var ignored) -> col;
+            case RowFilter.Gt(var col, var ignored) -> col;
+            case RowFilter.Gte(var col, var ignored) -> col;
+            case RowFilter.Lt(var col, var ignored) -> col;
+            case RowFilter.Lte(var col, var ignored) -> col;
+            case RowFilter.IsNull(var col) -> col;
+            case RowFilter.IsNotNull(var col) -> col;
+            case RowFilter.And ignored ->
+                    throw new IllegalArgumentException("leafColumn called on a composite AND filter");
+        };
+    }
+
+    /// Translates a leaf [RowFilter] into the equivalent compute [Predicate]. The compute vocabulary
+    /// has no direct `>=`, `<=`, or `<>`, so each is composed from the ops it does have — all
+    /// null-correct because every component excludes nulls:
+    /// - `>= v` is `= v OR > v`;
+    /// - `<= v` is `= v OR < v`;
+    /// - `<> v` is `< v OR > v`.
+    /// This keeps a `BETWEEN` (which Calcite lowers to `>= a AND <= b`) foldable on a boundary zone
+    /// rather than abandoning it.
+    private static Predicate toPredicate(RowFilter leaf) {
+        return switch (leaf) {
+            case RowFilter.Eq(var ignored, var value) -> new Predicate.Eq(value);
+            case RowFilter.Neq(var ignored, var value) ->
+                    new Predicate.Or(new Predicate.Lt(asComparable(value)), new Predicate.Gt(asComparable(value)));
+            case RowFilter.Gt(var ignored, var value) -> new Predicate.Gt(value);
+            case RowFilter.Gte(var ignored, var value) ->
+                    new Predicate.Or(new Predicate.Eq(value), new Predicate.Gt(value));
+            case RowFilter.Lt(var ignored, var value) -> new Predicate.Lt(value);
+            case RowFilter.Lte(var ignored, var value) ->
+                    new Predicate.Or(new Predicate.Eq(value), new Predicate.Lt(value));
+            case RowFilter.IsNull(var ignored) -> new Predicate.IsNull();
+            case RowFilter.IsNotNull(var ignored) -> new Predicate.IsNotNull();
+            case RowFilter.And ignored ->
+                    throw new IllegalArgumentException("toPredicate called on a composite AND filter");
+        };
+    }
+
+    /// Casts a leaf's value to [Comparable] for the ordering predicates (`< v` / `> v`). The values
+    /// the filter translation produces are always [Long] / [Double] / [String], all comparable.
+    private static Comparable<?> asComparable(Object value) {
+        return (Comparable<?>) value;
+    }
+
+    /// Intersects per-leaf masks into one [Mask] over `n` rows, selecting a row only when every mask
+    /// selects it (the n-ary `AND` of a multi-leaf filter). The bitmap is allocated off-heap from
+    /// `arena`, whose zero-fill seeds the rejected bits.
+    private static Mask intersect(List<Mask> masks, long n, Arena arena) {
+        MemorySegment bits = arena.allocate((n + 7) >>> 3);
+        for (long i = 0; i < n; i++) {
+            boolean all = true;
+            for (Mask mask : masks) {
+                if (!mask.get(i)) {
+                    all = false;
+                    break;
+                }
+            }
+            if (all) {
+                long byteIndex = i >>> 3;
+                int existing = bits.get(ValueLayout.JAVA_BYTE, byteIndex) & 0xff;
+                bits.set(ValueLayout.JAVA_BYTE, byteIndex, (byte) (existing | (1 << (i & 7))));
+            }
+        }
+        return new Mask.BitmapMask(bits, n);
+    }
+
+    /// Mutable accumulator for a filtered fold, shared by the whole-zone (tier 1) and boundary-zone
+    /// (tier 2) paths so both contribute to one running result. Integer sums fold into a [Long]
+    /// (wrapping like SQL `SUM(BIGINT)`), floating sums into a [Double]; a missing or unanswerable
+    /// component disables only that component, never the whole fold.
+    private static final class Fold {
+        private long longSum;
+        private double doubleSum;
+        private boolean floatingSum;
+        private boolean sumUsable = true;
+        private Object min;
+        private Object max;
+        private long nullCount;
+        private boolean nullCountKnown = true;
+        private long keptRows;
+
+        /// Adds a zone's or chunk's sum contribution; a `null` contribution marks the sum
+        /// unanswerable (a zone that retained no usable sum). Accepts [Object] because a zone's
+        /// `ArrayStats.sum()` is boxed as one, while the boundary tier passes a [Number].
+        private void addSum(Object contribution) {
+            if (!sumUsable) {
+                return;
+            }
+            if (contribution == null) {
+                sumUsable = false;
+            } else if (contribution instanceof Double d) {
+                floatingSum = true;
+                doubleSum += d;
+            } else {
+                longSum += ((Number) contribution).longValue();
+            }
+        }
+
+        private void addMin(Object candidate) {
+            min = pickExtreme(min, candidate, true);
+        }
+
+        private void addMax(Object candidate) {
+            max = pickExtreme(max, candidate, false);
+        }
+
+        /// Adds a null-count contribution; a `null` contribution marks the null count unknown.
+        private void addNulls(Long contribution) {
+            if (!nullCountKnown) {
+                return;
+            }
+            if (contribution == null) {
+                nullCountKnown = false;
+            } else {
+                nullCount += contribution;
+            }
+        }
+
+        private FilteredFold result() {
             Number foldedSum;
             if (!sumUsable) {
-                foldedSum = null;             // a kept zone carried no usable sum
+                foldedSum = null;             // a contributing zone carried no usable sum
             } else if (floatingSum) {
                 foldedSum = doubleSum;
             } else {
                 foldedSum = longSum;
             }
             Long foldedNulls = nullCountKnown ? nullCount : null;
-            return Optional.of(new FilteredFold(foldedSum, min, max, foldedNulls, keptRows));
-        } catch (IOException e) {
-            throw new UncheckedIOException("cannot fold filtered zones of " + file, e);
+            return new FilteredFold(foldedSum, min, max, foldedNulls, keptRows);
         }
     }
 
@@ -425,6 +625,14 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     private static boolean isUnsigned(DType.Struct struct, String column) {
         int idx = struct.fieldNames().indexOf(column);
         return idx >= 0 && struct.fieldTypes().get(idx) instanceof DType.Primitive p && p.ptype().isUnsigned();
+    }
+
+    /// Whether `column` is a floating-point primitive, whose compute-kernel compare ([#buildMask])
+    /// sorts NaN as the maximum and so cannot soundly build a boundary row mask (the fold abandons
+    /// such a filter column to the NaN-correct scan).
+    private static boolean isFloating(DType.Struct struct, String column) {
+        int idx = struct.fieldNames().indexOf(column);
+        return idx >= 0 && struct.fieldTypes().get(idx) instanceof DType.Primitive p && p.ptype().isFloating();
     }
 
     /// Whether a zone's min/max are missing, or are a different kind of value than `value` (one

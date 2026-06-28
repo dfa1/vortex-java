@@ -29,8 +29,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// Proves the WHERE-filtered aggregate push-down (ADR 0018): when a pushed predicate partitions the
 /// zones cleanly — every chunk fully selected or fully excluded, no boundary — `SUM`/`COUNT`/`MIN`/
 /// `MAX` are folded from the kept zones' statistics with no data segment decoded, and the answer
-/// matches the full-scan ground truth. When the predicate cuts through a chunk the rewrite is
-/// abandoned and the scan computes the result.
+/// matches the full-scan ground truth. When the predicate cuts through a chunk, the boundary tier
+/// (ADR 0013 §6 step B) decodes only that chunk and reduces its selected rows, still folding to a
+/// `Values` without a full scan; the broader boundary coverage lives in [AggregateWhereBoundaryTest].
+/// A predicate the translation cannot capture in full still abandons to the scan.
 ///
 /// The fixture is a clustered key `id` (monotone `0..ROWS`, one contiguous run per chunk) with
 /// `val == id`. A predicate `id < k*CHUNK` then selects exactly the first `k` chunks, so its zone
@@ -125,17 +127,19 @@ class AggregateWhereCleanPartitionTest {
     }
 
     @Test
-    void boundaryCuttingAChunkAbandonsToTheScan() throws Exception {
-        // Given a boundary one row into chunk 3 (id < 3*CHUNK + 1): chunk 3 is a boundary zone the
-        // filter only partially selects, so the fold must be abandoned
+    void boundaryCuttingAChunkFoldsViaDecode() throws Exception {
+        // Given a boundary one row into chunk 3 (id < 3*CHUNK + 1): chunks 0-2 are IN (folded from
+        // stats), chunks 4-7 are OUT (skipped), and chunk 3 is a boundary the filter cuts after its
+        // first row. The boundary tier (ADR 0013 §6 step B) decodes only chunk 3 and reduces the one
+        // selected row, so the rewrite folds to a Values without a full scan.
         long boundary = (long) 3 * CHUNK + 1;
         String sql = "select sum(val) s, count(*) c from vtx.t where id < " + boundary;
 
         try (Connection conn = connect()) {
-            // When EXPLAIN runs, a scan is present — the rule did not answer from stats
-            assertThat(explain(conn, sql)).contains("TableScan");
+            // When EXPLAIN runs, no scan is present — the boundary chunk was decoded and folded
+            assertThat(explain(conn, sql)).containsIgnoringCase("Values").doesNotContain("TableScan");
 
-            // And the scan still produces the exact filtered result (ids 0 .. boundary-1)
+            // And the folded result equals the full-scan ground truth over ids 0 .. boundary-1
             try (Statement st = conn.createStatement();
                  ResultSet rs = st.executeQuery(sql)) {
                 rs.next();
@@ -290,10 +294,12 @@ class AggregateWhereCleanPartitionTest {
     }
 
     @Test
-    void isNotNullBoundaryChunkAbandonsToTheScan() throws Exception {
+    void isNotNullBoundaryChunkFoldsViaDecode() throws Exception {
         // Given a chunk the null predicate cuts through: chunk 0 mixes non-null {5,7} with two
         // nulls, so its null count is neither 0 nor the row count — a boundary zone `IS NOT NULL`
-        // only partially selects, which must abandon the fold to the scan. Chunk 1 is all non-null.
+        // only partially selects. Chunk 1 is all non-null (IN). The boundary tier decodes chunk 0,
+        // builds an IS NOT NULL mask, and reduces only its selected rows, so the fold answers
+        // without a full scan.
         DType.Struct schema = new DType.Struct(
                 List.of("id", "val"),
                 List.of(new DType.Primitive(PType.I64, false), new DType.Primitive(PType.I64, true)),
@@ -306,11 +312,11 @@ class AggregateWhereCleanPartitionTest {
                         "val", new NullableData(new long[]{10, 20, 30, 40}, new boolean[]{true, true, true, true})));
 
         try (Connection conn = connect(f)) {
-            // When EXPLAIN runs, a scan is present — the boundary chunk forced a decode
+            // When EXPLAIN runs, no scan is present — the boundary chunk was decoded and folded
             String sql = "select sum(val) s, count(*) c from vtx.t where val is not null";
-            assertThat(explain(conn, sql)).contains("TableScan");
+            assertThat(explain(conn, sql)).containsIgnoringCase("Values").doesNotContain("TableScan");
 
-            // And the scan still produces the exact result over every non-null val ({5,7}+{10,20,30,40})
+            // And the folded result equals the ground truth over every non-null val ({5,7}+{10,20,30,40})
             try (Statement st = conn.createStatement();
                  ResultSet rs = st.executeQuery(sql)) {
                 rs.next();

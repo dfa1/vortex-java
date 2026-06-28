@@ -141,32 +141,38 @@ class OhlcSqlDemoTest {
         try (Connection conn = DriverManager.getConnection("jdbc:calcite:", info)) {
             conn.unwrap(CalciteConnection.class).getRootSchema().add("vtx", schema);
 
-            // A narrow date window: ~101 days out of ~33,333, landing in a single 10k-row chunk.
+            // A narrow date window: ~101 days out of ~33,333, landing in a single 10k-row chunk. The
+            // query projects rows (no aggregate) so it exercises filter push-down — zone-map chunk
+            // pruning during the scan — rather than the aggregate fold, which would answer a
+            // `count(*)/max(high)` over this window by decoding only the boundary chunk at plan time
+            // (ADR 0013 §6 step B) and so never run the streaming scan this demo measures.
             int startDay = (int) java.time.LocalDate.of(2020, 1, 2).toEpochDay();
             int lo = startDay + 10_000;
             int hi = startDay + 10_100;
-            String windowed = "select count(*) c, max(high) h from vtx.ohlc "
-                    + "where `date` between " + lo + " and " + hi;
+            String windowed = "select high from vtx.ohlc where `date` between " + lo + " and " + hi;
 
-            // When a full-scan baseline runs, every chunk is decoded. The predicate `high > low` is
-            // a column-vs-column comparison: it is not a zone-map RowFilter (so nothing is pruned)
-            // and not a column-vs-literal the aggregate rule can fold (so count(*) is not answered
-            // from stats — a simple `high > -1` now would be, since every zone is fully selected).
-            // Both escapes force the count to actually scan and decode all chunks.
+            // When a full-scan baseline runs, every chunk is decoded. The predicate `high > low` is a
+            // column-vs-column comparison: it is not a zone-map RowFilter (so nothing is pruned). It
+            // projects a row column too, so no aggregate fold intercepts it — the scan decodes every
+            // chunk.
             try (Statement st = conn.createStatement();
-                 ResultSet rs = st.executeQuery("select count(*) c from vtx.ohlc where high > low")) {
-                rs.next();
+                 ResultSet rs = st.executeQuery("select high from vtx.ohlc where high > low")) {
+                while (rs.next()) {
+                    // drain the scan so every chunk is decoded
+                }
             }
             long chunksFull = schema.table("ohlc").chunksScannedLastQuery();
 
-            // And the date-windowed query runs, pruning chunks via zone-map stats
-            long windowCount;
-            double windowMaxHigh;
+            // And the date-windowed query runs, pruning chunks via zone-map stats; the count and max
+            // are reduced over the returned rows
+            long windowCount = 0;
+            double windowMaxHigh = Double.NEGATIVE_INFINITY;
             try (Statement st = conn.createStatement();
                  ResultSet rs = st.executeQuery(windowed)) {
-                rs.next();
-                windowCount = rs.getLong("c");
-                windowMaxHigh = rs.getDouble("h");
+                while (rs.next()) {
+                    windowCount++;
+                    windowMaxHigh = Math.max(windowMaxHigh, rs.getDouble("high"));
+                }
             }
             long chunksPruned = schema.table("ohlc").chunksScannedLastQuery();
 
