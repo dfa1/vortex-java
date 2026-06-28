@@ -8,9 +8,11 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.util.Objects;
 
-/// The generic streaming [FilterKernel] — the tier-2 baseline of ADR 0013 §3 that works for any
-/// [Array] through the per-element accessor, with no encoded-domain specialisation (that is the
-/// deferred performance escalation).
+/// The streaming [FilterKernel] of ADR 0013 §3. A primitive numeric column takes the boxing-free,
+/// type-specialised fast lane in [PrimitiveFilter]; every other [Array] falls back to the generic
+/// tier-2 path here, which works for any array through the per-element boxing accessor (no
+/// encoded-domain specialisation — that is the deferred performance escalation). The two paths are
+/// behaviourally identical, so the fast lane is a pure performance choice gated by a type check.
 ///
 /// The kernel honours the incoming mask (an excluded position is never evaluated) and mirrors the
 /// Rust three-valued-logic filter semantics: a null value makes every value predicate false, so the
@@ -34,6 +36,33 @@ final class StreamingFilterKernel implements FilterKernel {
             // Nothing can be selected — return an allocation-free all-false of the same length.
             return Mask.allFalse(n);
         }
+        // Fast lane: a primitive numeric column runs the boxing-free, type-specialised loops. A null
+        // return means the input is not specialisable (Decimal, Utf8, an unhandled type, or a
+        // non-numeric predicate value), so the generic per-element path below takes over.
+        Mask specialised = PrimitiveFilter.tryFilter(array, current, predicate, arena);
+        if (specialised != null) {
+            return specialised;
+        }
+        return applyGeneric(array, current, predicate, arena, n);
+    }
+
+    /// Runs the generic boxing baseline directly, the oracle the specialised fast lane must match.
+    /// Package-private so an equivalence test can assert `specialised == generic` against it.
+    ///
+    /// @param array     the array to filter
+    /// @param current   the incoming selection mask, already validated to match `array`'s length
+    /// @param predicate the predicate to evaluate
+    /// @param arena     the arena for the result bitmap
+    /// @return the selection mask the generic per-element path produces
+    Mask applyGeneric(Array array, Mask current, Predicate predicate, Arena arena) {
+        long n = array.length();
+        if (n == 0 || current instanceof Mask.AllFalse) {
+            return Mask.allFalse(n);
+        }
+        return applyGeneric(array, current, predicate, arena, n);
+    }
+
+    private Mask applyGeneric(Array array, Mask current, Predicate predicate, Arena arena, long n) {
         long bytes = (n + 7) >>> 3;
         // Arena.allocate zero-fills (FFM spec), so the unselected bits are already 0 — the loop
         // below only ever sets the selected bits.
