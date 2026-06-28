@@ -11,23 +11,26 @@ import io.github.dfa1.vortex.core.model.DType;
 /// as doubles, and everything else through the natural [Comparable] order. Keying off the column
 /// keeps the compare width-agnostic — a caller may box a filter value at any integer width — and
 /// never routes an integer column through double-compare, which would lose precision past 2^53.
-final class Compare {
+///
+/// This is the single source of truth for scalar ordering across the reader module: zone-map chunk
+/// pruning, the compute filter / `MIN` / `MAX` kernels, and the Calcite aggregate push-down all route
+/// through it, so the same operand order can never drift between pruning and the result it gates.
+public final class Compare {
 
     private Compare() {
     }
 
-    // TODO unify with the private ScanIterator.compareValues, which carries an identical dtype-aware
-    // compare for zone-map pruning; ADR 0013 §5 (RowFilter / Predicate unification) is the place to
-    // collapse the two into this single helper.
     /// Compares `a` against `b` under the ordering implied by `column`.
     ///
     /// @param a      the left value, typically the array element under test
     /// @param b      the right value, typically the predicate operand
-    /// @param column the dtype that decides the comparison mode (unsigned, floating, or natural)
+    /// @param column the dtype that decides the comparison mode (unsigned, floating, or natural), or
+    ///               `null` to compare width-agnostically off the operands (numbers as longs unless
+    ///               either side is floating, otherwise the natural [Comparable] order)
     /// @return a negative, zero, or positive integer as `a` is less than, equal to, or greater than `b`
     /// @throws VortexException if the two values are not mutually comparable
     @SuppressWarnings("unchecked")
-    static int values(Object a, Object b, DType column) {
+    public static int values(Object a, Object b, DType column) {
         if (a instanceof Number na && b instanceof Number nb) {
             if (column instanceof DType.Primitive prim) {
                 if (prim.ptype().isFloating()) {

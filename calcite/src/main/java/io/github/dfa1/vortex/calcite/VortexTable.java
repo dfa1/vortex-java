@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.reader.RowFilter;
 import io.github.dfa1.vortex.reader.ScanIterator;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
+import io.github.dfa1.vortex.reader.compute.Compare;
 import io.github.dfa1.vortex.reader.compute.Compute;
 import io.github.dfa1.vortex.reader.compute.Mask;
 import io.github.dfa1.vortex.reader.compute.Predicate;
@@ -47,8 +48,6 @@ import org.apache.calcite.sql.type.SqlTypeName;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.lang.foreign.Arena;
-import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -364,7 +363,14 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         if (masks.size() == 1) {
             return masks.getFirst();
         }
-        return intersect(masks, n, arena);
+        // Fold the per-leaf masks with the reader's Mask.and combinator (logical intersect): a row
+        // survives only when every leaf accepts it (the n-ary AND). The combinator allocates the
+        // result bitmap off-heap from this boundary zone's arena.
+        Mask result = masks.getFirst();
+        for (int k = 1; k < masks.size(); k++) {
+            result = result.and(masks.get(k), arena);
+        }
+        return result;
     }
 
     /// Walks the filter tree, evaluating each leaf into a per-column [Mask] and collecting them into
@@ -426,28 +432,6 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// the filter translation produces are always [Long] / [Double] / [String], all comparable.
     private static Comparable<?> asComparable(Object value) {
         return (Comparable<?>) value;
-    }
-
-    /// Intersects per-leaf masks into one [Mask] over `n` rows, selecting a row only when every mask
-    /// selects it (the n-ary `AND` of a multi-leaf filter). The bitmap is allocated off-heap from
-    /// `arena`, whose zero-fill seeds the rejected bits.
-    private static Mask intersect(List<Mask> masks, long n, Arena arena) {
-        MemorySegment bits = arena.allocate((n + 7) >>> 3);
-        for (long i = 0; i < n; i++) {
-            boolean all = true;
-            for (Mask mask : masks) {
-                if (!mask.get(i)) {
-                    all = false;
-                    break;
-                }
-            }
-            if (all) {
-                long byteIndex = i >>> 3;
-                int existing = bits.get(ValueLayout.JAVA_BYTE, byteIndex) & 0xff;
-                bits.set(ValueLayout.JAVA_BYTE, byteIndex, (byte) (existing | (1 << (i & 7))));
-            }
-        }
-        return new Mask.BitmapMask(bits, n);
     }
 
     /// Mutable accumulator for a filtered fold, shared by the whole-zone (tier 1) and boundary-zone
@@ -683,15 +667,15 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// `I16`, …) while a filter literal arrives as [Long]/[Double], so a same-type comparison would
     /// reject narrower columns. Signed-integer widening is exact; unsigned columns are excluded
     /// upstream ([#isUnsigned]). Strings compare lexicographically.
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    ///
+    /// Delegates to the reader's [Compare#values(Object, Object, DType)] — the single scalar
+    /// comparator shared with zone-map pruning and the compute kernels — passing a `null` column so it
+    /// takes the width-agnostic, operand-keyed branch that is byte-for-byte this method's former body.
+    /// That branch is signed-only, which is exactly right here: every unsigned column is rejected
+    /// upstream ([#isUnsigned], [#filteredFold]) before any [#classify] / [#pickExtreme] call reaches
+    /// this helper, so no unsigned value is ever ordered through it.
     private static int compareStat(Object a, Object b) {
-        if (a instanceof Number na && b instanceof Number nb) {
-            if (a instanceof Double || a instanceof Float || b instanceof Double || b instanceof Float) {
-                return Double.compare(na.doubleValue(), nb.doubleValue());
-            }
-            return Long.compare(na.longValue(), nb.longValue());
-        }
-        return ((Comparable) a).compareTo(b);
+        return Compare.values(a, b, null);
     }
 
     private static Object pickExtreme(Object current, Object candidate, boolean min) {
@@ -944,30 +928,42 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         }
     }
 
+    /// Lenient translation for the scan path ([#toRowFilter]): an unrecognised node (or `AND`
+    /// conjunct) is simply dropped, since the scan re-checks every row so a partially captured filter
+    /// is still correct, just less selective for zone-map pruning. Delegates to the shared
+    /// [#comparison] dispatch with `strict = false`.
     private static Optional<RowFilter> toComparison(RexNode node, List<String> names, List<DType> types) {
-        if (!(node instanceof RexCall call)) {
-            return Optional.empty();
-        }
-        return switch (call.getKind()) {
-            case AND -> {
-                List<RowFilter> parts = new ArrayList<>();
-                for (RexNode operand : call.getOperands()) {
-                    toComparison(operand, names, types).ifPresent(parts::add);
-                }
-                yield parts.isEmpty() ? Optional.empty()
-                        : Optional.of(RowFilter.and(parts.toArray(RowFilter[]::new)));
-            }
-            case EQUALS, NOT_EQUALS, LESS_THAN, LESS_THAN_OR_EQUAL, GREATER_THAN, GREATER_THAN_OR_EQUAL ->
-                    binary(call, names, types);
-            default -> Optional.empty();
-        };
+        return comparison(node, names, types, false);
     }
 
     /// Strict counterpart of [#toComparison]: the same column-vs-literal / `AND` grammar, but a
     /// single unrecognised node (or one `AND` conjunct) collapses the whole result to empty rather
-    /// than being dropped. Used by [#translatePushedFilters] so aggregate push-down answers from
-    /// stats only when the [RowFilter] captures the predicate in full.
+    /// than being dropped, and bare `IS NULL` / `IS NOT NULL` are also translatable. Used by
+    /// [#translatePushedFilters] so aggregate push-down answers from stats only when the [RowFilter]
+    /// captures the predicate in full. Delegates to the shared [#comparison] dispatch with
+    /// `strict = true`.
     private static Optional<RowFilter> strictComparison(RexNode node, List<String> names, List<DType> types) {
+        return comparison(node, names, types, true);
+    }
+
+    /// Shared comparison-kind dispatch behind [#toComparison] (lenient) and [#strictComparison]
+    /// (strict). The two differ only in how an untranslatable node is handled and whether the null
+    /// tests are accepted, both keyed off `strict`:
+    /// - in an `AND`, a `strict` walk abandons the whole predicate on the first untranslatable
+    ///   conjunct, while a lenient walk drops it and keeps the rest;
+    /// - bare `IS NULL` / `IS NOT NULL` translate only in the `strict` walk (the lenient scan path has
+    ///   no zone-map use for them and drops them).
+    /// The column-vs-literal comparison kinds (`=`, `<>`, `<`, `<=`, `>`, `>=`) translate identically
+    /// in both walks through [#binary].
+    ///
+    /// @param node   the (already `SEARCH`-expanded) predicate node
+    /// @param names  the table's column names, by field index
+    /// @param types  the table's column dtypes, by field index
+    /// @param strict `true` to fail-closed on any untranslatable node and accept null tests, `false`
+    ///               to drop untranslatable nodes
+    /// @return the translated filter, or empty per the `strict` policy above
+    private static Optional<RowFilter> comparison(RexNode node, List<String> names, List<DType> types,
+                                                  boolean strict) {
         if (!(node instanceof RexCall call)) {
             return Optional.empty();
         }
@@ -975,18 +971,19 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
             case AND -> {
                 List<RowFilter> parts = new ArrayList<>();
                 for (RexNode operand : call.getOperands()) {
-                    Optional<RowFilter> part = strictComparison(operand, names, types);
-                    if (part.isEmpty()) {
+                    Optional<RowFilter> part = comparison(operand, names, types, strict);
+                    if (part.isPresent()) {
+                        parts.add(part.get());
+                    } else if (strict) {
                         yield Optional.empty(); // one untranslatable conjunct abandons the whole predicate
                     }
-                    parts.add(part.get());
                 }
                 yield parts.isEmpty() ? Optional.empty()
                         : Optional.of(RowFilter.and(parts.toArray(RowFilter[]::new)));
             }
             case EQUALS, NOT_EQUALS, LESS_THAN, LESS_THAN_OR_EQUAL, GREATER_THAN, GREATER_THAN_OR_EQUAL ->
                     binary(call, names, types);
-            case IS_NULL, IS_NOT_NULL -> nullCheck(call, names);
+            case IS_NULL, IS_NOT_NULL -> strict ? nullCheck(call, names) : Optional.empty();
             default -> Optional.empty();
         };
     }

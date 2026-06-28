@@ -15,8 +15,6 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 
-import static io.github.dfa1.vortex.core.io.PTypeIO.LE_LONG;
-
 /// The type-specialised fast lane of [StreamingFilterKernel]: for a primitive numeric column it runs
 /// a monomorphic, boxing-free loop with the comparison value unboxed once outside the loop, instead
 /// of the generic [Values#valueAt(Array, long)] / [Compare#values(Object, Object, DType)] path that
@@ -121,13 +119,13 @@ final class PrimitiveFilter {
             case Predicate.And and -> {
                 MemorySegment left = eval(data, validity, and.left(), n, arena);
                 MemorySegment right = eval(data, validity, and.right(), n, arena);
-                andWords(left, right, n);
+                Bits.andInto(left, right, n);
                 yield left;
             }
             case Predicate.Or or -> {
                 MemorySegment left = eval(data, validity, or.left(), n, arena);
                 MemorySegment right = eval(data, validity, or.right(), n, arena);
-                orWords(left, right, n);
+                Bits.orInto(left, right, n);
                 yield left;
             }
             case Predicate.IsNull ignored -> nullLeaf(validity, n, arena, true);
@@ -388,43 +386,6 @@ final class PrimitiveFilter {
             if (!current.get(i)) {
                 clearBit(bits, i);
             }
-        }
-    }
-
-    /// Ands `right` into `left` word-wise; padding bits past the row count stay zero because every
-    /// setter only ever writes positions in `[0, n)`.
-    ///
-    /// @param left  the destination bitmap, mutated in place
-    /// @param right the source bitmap
-    /// @param n     the row count
-    private static void andWords(MemorySegment left, MemorySegment right, long n) {
-        long bytes = (n + 7) >>> 3;
-        long words = bytes >>> 3;
-        for (long w = 0; w < words; w++) {
-            long off = w << 3;
-            left.set(LE_LONG, off, left.get(LE_LONG, off) & right.get(LE_LONG, off));
-        }
-        for (long b = words << 3; b < bytes; b++) {
-            left.set(ValueLayout.JAVA_BYTE, b,
-                    (byte) (left.get(ValueLayout.JAVA_BYTE, b) & right.get(ValueLayout.JAVA_BYTE, b)));
-        }
-    }
-
-    /// Ors `right` into `left` word-wise.
-    ///
-    /// @param left  the destination bitmap, mutated in place
-    /// @param right the source bitmap
-    /// @param n     the row count
-    private static void orWords(MemorySegment left, MemorySegment right, long n) {
-        long bytes = (n + 7) >>> 3;
-        long words = bytes >>> 3;
-        for (long w = 0; w < words; w++) {
-            long off = w << 3;
-            left.set(LE_LONG, off, left.get(LE_LONG, off) | right.get(LE_LONG, off));
-        }
-        for (long b = words << 3; b < bytes; b++) {
-            left.set(ValueLayout.JAVA_BYTE, b,
-                    (byte) (left.get(ValueLayout.JAVA_BYTE, b) | right.get(ValueLayout.JAVA_BYTE, b)));
         }
     }
 

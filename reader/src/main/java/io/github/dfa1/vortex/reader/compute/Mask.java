@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.reader.compute;
 
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
+import java.lang.foreign.SegmentAllocator;
 import java.util.Objects;
 
 import static io.github.dfa1.vortex.core.io.PTypeIO.LE_LONG;
@@ -39,6 +39,56 @@ public sealed interface Mask permits Mask.AllTrue, Mask.AllFalse, Mask.RangeMask
     /// @return `true` if the row at `i` is selected
     /// @throws IndexOutOfBoundsException if `i` is outside `[0, length())`
     boolean get(long i);
+
+    /// Intersects this mask with `other`, selecting a position only when **both** masks select it
+    /// (logical `AND`). Both masks must cover the same number of positions.
+    ///
+    /// The all-selected / all-rejected operands short-circuit allocation-free — `allFalse AND x` is
+    /// `allFalse`, `allTrue AND x` is `x` — so a fresh bitmap is built from `allocator` only when both
+    /// operands carry per-position bits. When both are [Mask.BitmapMask] the combine is word-wise; a
+    /// (rare) range operand falls back to a per-position combine.
+    ///
+    /// @param other     the mask to intersect with, of the same length as this one
+    /// @param allocator the allocator for the result bitmap when one must be built (its zero-fill
+    ///                  seeds the rejected bits)
+    /// @return a mask selecting the positions both masks select
+    /// @throws IllegalArgumentException if `other` covers a different number of positions
+    default Mask and(Mask other, SegmentAllocator allocator) {
+        Objects.requireNonNull(other, "other");
+        Objects.requireNonNull(allocator, "allocator");
+        requireSameLength(this, other);
+        if (this instanceof AllFalse || other instanceof AllTrue) {
+            return this;
+        }
+        if (other instanceof AllFalse || this instanceof AllTrue) {
+            return other;
+        }
+        return BitmapMask.combine(this, other, allocator, true);
+    }
+
+    /// Unions this mask with `other`, selecting a position when **either** mask selects it (logical
+    /// `OR`). Both masks must cover the same number of positions.
+    ///
+    /// The all-selected / all-rejected operands short-circuit allocation-free — `allTrue OR x` is
+    /// `allTrue`, `allFalse OR x` is `x` — so a fresh bitmap is built from `allocator` only when both
+    /// operands carry per-position bits.
+    ///
+    /// @param other     the mask to union with, of the same length as this one
+    /// @param allocator the allocator for the result bitmap when one must be built
+    /// @return a mask selecting the positions either mask selects
+    /// @throws IllegalArgumentException if `other` covers a different number of positions
+    default Mask or(Mask other, SegmentAllocator allocator) {
+        Objects.requireNonNull(other, "other");
+        Objects.requireNonNull(allocator, "allocator");
+        requireSameLength(this, other);
+        if (this instanceof AllTrue || other instanceof AllFalse) {
+            return this;
+        }
+        if (other instanceof AllTrue || this instanceof AllFalse) {
+            return other;
+        }
+        return BitmapMask.combine(this, other, allocator, false);
+    }
 
     /// Creates a mask that selects every one of `length` positions.
     ///
@@ -178,7 +228,7 @@ public sealed interface Mask permits Mask.AllTrue, Mask.AllFalse, Mask.RangeMask
             }
             this.bits = bits;
             this.length = length;
-            this.trueCount = popcount(bits, length);
+            this.trueCount = Bits.popcount(bits, length);
         }
 
         @Override
@@ -194,8 +244,7 @@ public sealed interface Mask permits Mask.AllTrue, Mask.AllFalse, Mask.RangeMask
         @Override
         public boolean get(long i) {
             Objects.checkIndex(i, length);
-            int b = bits.get(ValueLayout.JAVA_BYTE, i >>> 3) & 0xff;
-            return (b & (1 << (i & 7))) != 0;
+            return Bits.get(bits, i);
         }
 
         @Override
@@ -214,7 +263,8 @@ public sealed interface Mask permits Mask.AllTrue, Mask.AllFalse, Mask.RangeMask
             }
             int remaining = (int) (length & 63);
             return remaining == 0
-                    || partialWord(bits, fullWords, remaining) == partialWord(other.bits, fullWords, remaining);
+                    || Bits.partialWord(bits, fullWords, remaining)
+                            == Bits.partialWord(other.bits, fullWords, remaining);
         }
 
         @Override
@@ -226,7 +276,7 @@ public sealed interface Mask permits Mask.AllTrue, Mask.AllFalse, Mask.RangeMask
             }
             int remaining = (int) (length & 63);
             if (remaining != 0) {
-                h = 31 * h + partialWord(bits, fullWords, remaining);
+                h = 31 * h + Bits.partialWord(bits, fullWords, remaining);
             }
             return Long.hashCode(h);
         }
@@ -236,41 +286,35 @@ public sealed interface Mask permits Mask.AllTrue, Mask.AllFalse, Mask.RangeMask
             return "BitmapMask[length=" + length + ", trueCount=" + trueCount + "]";
         }
 
-        /// Counts the set bits in the first `length` positions, reading full 8-byte words with
-        /// [Long#bitCount(long)] and masking off any trailing garbage bits in the final partial
-        /// word so they cannot inflate the count.
+        /// Combines two per-position masks into a fresh [BitmapMask] from `allocator`, ANDing or ORing
+        /// them. When both are [BitmapMask] the combine is word-wise (via [Bits]); a range operand is
+        /// handled by a per-position fallback. The reduced trivial operands never reach here — they are
+        /// short-circuited in [Mask#and(Mask, SegmentAllocator)] / [Mask#or(Mask, SegmentAllocator)].
         ///
-        /// @param bits   the validity bitmap
-        /// @param length the number of positions to count
-        /// @return the number of set bits in `[0, length)`
-        private static long popcount(MemorySegment bits, long length) {
-            long fullWords = length >>> 6;
-            long count = 0L;
-            for (long w = 0; w < fullWords; w++) {
-                count += Long.bitCount(bits.get(LE_LONG, w << 3));
+        /// @param a         the first operand, of the same length as `b`
+        /// @param b         the second operand
+        /// @param allocator the allocator for the result bitmap (its zero-fill seeds the cleared bits)
+        /// @param and       `true` to AND the operands, `false` to OR them
+        /// @return the combined mask
+        static Mask combine(Mask a, Mask b, SegmentAllocator allocator, boolean and) {
+            long n = a.length();
+            MemorySegment out = allocator.allocate((n + 7) >>> 3);
+            if (a instanceof BitmapMask ba && b instanceof BitmapMask bb) {
+                MemorySegment.copy(ba.bits, 0, out, 0, (n + 7) >>> 3);
+                if (and) {
+                    Bits.andInto(out, bb.bits, n);
+                } else {
+                    Bits.orInto(out, bb.bits, n);
+                }
+            } else {
+                for (long i = 0; i < n; i++) {
+                    boolean selected = and ? (a.get(i) && b.get(i)) : (a.get(i) || b.get(i));
+                    if (selected) {
+                        Bits.set(out, i);
+                    }
+                }
             }
-            int remaining = (int) (length & 63);
-            if (remaining != 0) {
-                count += Long.bitCount(partialWord(bits, fullWords, remaining));
-            }
-            return count;
-        }
-
-        /// Assembles the final partial word from the available tail bytes, masking it to the
-        /// `remainingBits` live low bits so padding past `length` is cleared.
-        ///
-        /// @param bits         the validity bitmap
-        /// @param wordIndex    the index of the partial word (number of preceding full words)
-        /// @param remainingBits the count of live bits in this word, in `[1, 63]`
-        /// @return the assembled word with only the live bits retained
-        private static long partialWord(MemorySegment bits, long wordIndex, int remainingBits) {
-            long byteBase = wordIndex << 3;
-            int availBytes = (remainingBits + 7) >>> 3;
-            long w = 0L;
-            for (int b = 0; b < availBytes; b++) {
-                w |= (bits.get(ValueLayout.JAVA_BYTE, byteBase + b) & 0xffL) << (b << 3);
-            }
-            return w & ((1L << remainingBits) - 1);
+            return new BitmapMask(out, n);
         }
     }
 
@@ -281,6 +325,19 @@ public sealed interface Mask permits Mask.AllTrue, Mask.AllFalse, Mask.RangeMask
     private static void requireNonNegativeLength(long length) {
         if (length < 0) {
             throw new IllegalArgumentException("length must be >= 0, got " + length);
+        }
+    }
+
+    /// Rejects two masks of differing length, the precondition the [#and(Mask, SegmentAllocator)] and
+    /// [#or(Mask, SegmentAllocator)] combinators share.
+    ///
+    /// @param a the first mask
+    /// @param b the second mask
+    /// @throws IllegalArgumentException if the masks cover a different number of positions
+    private static void requireSameLength(Mask a, Mask b) {
+        if (a.length() != b.length()) {
+            throw new IllegalArgumentException(
+                    "mask lengths differ: " + a.length() + " != " + b.length());
         }
     }
 }
