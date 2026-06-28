@@ -61,6 +61,17 @@ import org.openjdk.jmh.annotations.Warmup;
 /// `@Setup` asserts each decoded column is the expected encoded type and fails loudly otherwise,
 /// so the baseline can never silently measure a plain column.
 ///
+/// Each `filterX`/`sumX` kernel method is paired with a `forLoopX` method holding the true control:
+/// the obvious hand-written accessor loop a developer writes WITHOUT the compute layer — no [Mask],
+/// no [Compute], no off-heap bitmap, just `getDouble(i)`/`getLong(i)` and a counter. The paired
+/// methods share the exact predicate and threshold constant so they cannot drift, giving three
+/// reference points:
+/// - `forLoopX` — the naive decode-per-element loop, the developer's baseline.
+/// - `filterX` — the current kernel, which still decodes through the accessor; the `forLoopX`→
+///   `filterX` gap is the kernel's overhead (or benefit) today.
+/// - the future encoded-domain specialisation — measured against `forLoopX`, which it must beat by
+///   comparing and reducing in the integer domain instead of decoding every element.
+///
 /// Run: java -jar performance/target/benchmarks.jar ComputeKernelBenchmark
 @State(Scope.Benchmark)
 @BenchmarkMode(Mode.AverageTime)
@@ -220,6 +231,90 @@ public class ComputeKernelBenchmark {
             Mask mask = Compute.filter(price, new Predicate.Gt(PRICE_THRESHOLD), arena);
             return Compute.sum(measure, mask);
         }
+    }
+
+    /// Naive baseline for [#filterAlpDouble()]: the hand-written `price > 500` count loop over the
+    /// ALP accessor, with no [Mask], no [Compute] and no off-heap bitmap. Decodes every double per
+    /// element. Returns the count so JMH cannot eliminate the loop.
+    ///
+    /// @return the number of rows with `price > 500`
+    @Benchmark
+    public long forLoopAlpDouble() {
+        LazyAlpDoubleArray array = price;
+        long n = array.length();
+        long count = 0;
+        for (long i = 0; i < n; i++) {
+            if (array.getDouble(i) > PRICE_THRESHOLD) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /// Naive baseline for [#filterForLong()]: the hand-written `measure > base + spread/2` count loop
+    /// over the Frame-of-Reference accessor, reconstructing each `offset + ref` long per element.
+    ///
+    /// @return the number of rows with `measure > base + spread/2`
+    @Benchmark
+    public long forLoopForLong() {
+        LazyForLongArray array = measure;
+        long n = array.length();
+        long count = 0;
+        for (long i = 0; i < n; i++) {
+            if (array.getLong(i) > MEASURE_THRESHOLD) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /// Naive baseline for [#filterDict()]: the hand-written `category == 7` count loop over the
+    /// dictionary accessor, resolving each code through the dictionary per element.
+    ///
+    /// @return the number of rows with `category == 7`
+    @Benchmark
+    public long forLoopDict() {
+        DictLongArray array = category;
+        long n = array.length();
+        long count = 0;
+        for (long i = 0; i < n; i++) {
+            if (array.getLong(i) == CATEGORY_VALUE) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /// Naive baseline for [#filterPlainControl()]: the hand-written `plain > 0` count loop over the
+    /// materialised accessor, reading each long straight from the segment per element.
+    ///
+    /// @return the number of rows with `plain > 0`
+    @Benchmark
+    public long forLoopPlainControl() {
+        MaterializedLongArray array = plain;
+        long n = array.length();
+        long count = 0;
+        for (long i = 0; i < n; i++) {
+            if (array.getLong(i) > 0L) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /// Naive baseline for [#sumAlpDouble()]: the hand-written running sum over the ALP accessor,
+    /// decoding every double per element. Returns the sum so JMH cannot eliminate the loop.
+    ///
+    /// @return the sum of all `price` values
+    @Benchmark
+    public double forLoopSumAlp() {
+        LazyAlpDoubleArray array = price;
+        long n = array.length();
+        double acc = 0;
+        for (long i = 0; i < n; i++) {
+            acc += array.getDouble(i);
+        }
+        return acc;
     }
 
     private void write(Path path) throws IOException {
