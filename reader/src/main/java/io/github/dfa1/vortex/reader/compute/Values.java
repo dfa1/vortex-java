@@ -7,6 +7,7 @@ import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.DecimalArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
+import io.github.dfa1.vortex.reader.array.Float16Array;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
@@ -43,8 +44,8 @@ final class Values {
     /// A [MaskedArray] is unwrapped to its inner payload first — validity is a separate concern
     /// handled by [#isNullAt(Array, long)]. Integer values are returned as zero-extended [Long]s for
     /// unsigned columns so a narrow unsigned value never reads back as a negative number; floating
-    /// values keep their natural [Float] / [Double] box, decimals a [java.math.BigDecimal], and
-    /// var-binary columns a [String].
+    /// values keep their natural [Float] / [Double] box (an `f16` half-precision value widens to a
+    /// [Float]), decimals a [java.math.BigDecimal], and var-binary columns a [String].
     ///
     /// @param array the array to read from
     /// @param i     the zero-based position
@@ -63,6 +64,7 @@ final class Values {
             case ByteArray ba -> widenInteger(ba.getByte(i), data.dtype());
             case DoubleArray da -> da.getDouble(i);
             case FloatArray fa -> fa.getFloat(i);
+            case Float16Array f16 -> f16.getFloat(i);
             case BoolArray bo -> bo.getBoolean(i);
             case DecimalArray de -> de.getDecimal(i);
             case VarBinArray vb -> vb.getString(i);

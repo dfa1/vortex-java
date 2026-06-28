@@ -197,7 +197,7 @@ final class Reductions {
     /// @param unsigned whether the column is unsigned
     /// @param i        the zero-based position
     /// @return the widened element value
-    private static long widenLong(Array data, boolean unsigned, long i) {
+    static long widenLong(Array data, boolean unsigned, long i) {
         if (data instanceof LongArray la) {
             return la.getLong(i);
         }

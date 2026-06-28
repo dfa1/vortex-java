@@ -1,5 +1,7 @@
 package io.github.dfa1.vortex.reader.compute;
 
+import io.github.dfa1.vortex.reader.Chunk;
+import io.github.dfa1.vortex.reader.RowFilter;
 import io.github.dfa1.vortex.reader.array.Array;
 
 import java.lang.foreign.Arena;
@@ -85,6 +87,32 @@ public final class Compute {
         Objects.requireNonNull(predicate, "predicate");
         Objects.requireNonNull(aggColumn, "aggColumn");
         return FusedFilterSum.filteredSum(filterColumn, predicate, aggColumn);
+    }
+
+    /// Evaluates `filter` over `chunk` and folds `aggColumn` over the rows it selects, in one fused
+    /// pass — the multi-column counterpart of [#filteredSum(Array, Predicate, Array)] and the
+    /// replacement for building per-leaf [Mask]s, intersecting them, and reducing under the result.
+    ///
+    /// The `filter` is the whole chunk predicate: an n-ary `AND` of column-bound [Predicate] leaves
+    /// (or a single leaf). A row is selected only when every leaf accepts it under SQL three-valued
+    /// logic — a null in any filter column rejects that leaf. Over the selected rows whose aggregate
+    /// value is non-null, the kernel folds the aggregate column's `SUM`, `MIN`, `MAX` and non-null
+    /// count in the same scan, with no intermediate bitmap.
+    ///
+    /// `aggColumn` may be `null` for a `COUNT(*)`-style fold that only counts selected rows; the
+    /// returned [FilteredAggregate]'s aggregate fields are then empty. `SUM` is `null` for a
+    /// non-numeric aggregate column (an unanswerable sum); `MIN` / `MAX` are `null` when no selected
+    /// row is non-null. The aggregate's null count among the selected rows is
+    /// `selectedRows − aggNonNullCount`.
+    ///
+    /// @param chunk     the decoded chunk holding the filter and aggregate columns
+    /// @param filter    the whole chunk predicate to evaluate
+    /// @param aggColumn the column to reduce over the selected rows, or `null` to count rows only
+    /// @return the fold over the rows `filter` selects
+    public static FilteredAggregate filteredAggregate(Chunk chunk, RowFilter filter, String aggColumn) {
+        Objects.requireNonNull(chunk, "chunk");
+        Objects.requireNonNull(filter, "filter");
+        return FusedFilterAggregate.aggregate(chunk, filter, aggColumn);
     }
 
     /// Counts the selected non-null values of `array`.

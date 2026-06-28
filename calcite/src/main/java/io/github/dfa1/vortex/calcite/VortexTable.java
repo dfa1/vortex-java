@@ -1,6 +1,5 @@
 package io.github.dfa1.vortex.calcite;
 
-import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.Chunk;
@@ -10,10 +9,9 @@ import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.compute.Compare;
 import io.github.dfa1.vortex.reader.compute.Compute;
-import io.github.dfa1.vortex.reader.compute.Mask;
+import io.github.dfa1.vortex.reader.compute.FilteredAggregate;
 import io.github.dfa1.vortex.reader.compute.Predicate;
 import io.github.dfa1.vortex.reader.compute.ZoneReducer;
-import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
@@ -47,7 +45,6 @@ import org.apache.calcite.sql.type.SqlTypeName;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.lang.foreign.Arena;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -191,10 +188,11 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// Folds an aggregate over the rows a pushed `WHERE` `filter` selects, in two tiers (ADR 0013 §6).
     /// A zone the filter selects entirely (or excludes entirely) is folded from — or skipped via — its
     /// footer statistics with no decode; a boundary zone the filter only partially selects is decoded
-    /// for the aggregate and filter columns, a row-level selection [Mask] is built by evaluating the
-    /// filter through the compute kernels, and the aggregate is reduced over the masked rows. The two
-    /// tiers combine into one fold, so the caller answers the filtered aggregate while decoding only
-    /// the boundary zones.
+    /// for the aggregate and filter columns and reduced in one fused pass — the whole filter and the
+    /// aggregate fold evaluated together via
+    /// [Compute#filteredAggregate(Chunk, RowFilter, String)], with no intermediate selection bitmap.
+    /// The two tiers combine into one fold, so the caller answers the filtered aggregate while decoding
+    /// only the boundary zones.
     ///
     /// `aggColumn` is the column whose values are reduced over the selected rows (`null` for
     /// `COUNT(*)`, which needs only the selected row count). The result is empty — abandoning to a
@@ -317,79 +315,30 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     }
 
     /// Decodes one boundary chunk and folds the aggregate over the rows the filter selects in it,
-    /// contributing to the running [Fold]. The chunk and a fresh confined [Arena] for the mask
-    /// bitmaps are released per zone via try-with-resources, so nothing outlives the reduction.
+    /// contributing to the running [Fold]. The chunk is released per zone via try-with-resources, so
+    /// nothing outlives the reduction.
     ///
-    /// `SUM` is guarded: the compute kernel throws on a non-numeric aggregate column, so a thrown
-    /// [VortexException] disables the sum (mirroring a zone that records no usable sum) rather than
-    /// failing the whole fold — a `MIN`/`MAX` over the same column still folds. The aggregate
-    /// column's null count among the selected rows is the selected count minus the non-null count.
-    @SuppressWarnings("removal") // transitional — uses the deprecated Mask until the fused multi-column filteredReduce lands
+    /// The whole filter — an n-ary `AND` of column-bound [Predicate] leaves — and the aggregate fold
+    /// run in one fused pass over the chunk's rows via
+    /// [Compute#filteredAggregate(Chunk, RowFilter, String)], with no intermediate selection bitmap.
+    /// `SUM` is guarded: the fused kernel reports a `null` sum for a non-numeric aggregate column,
+    /// which disables the sum (mirroring a zone that records no usable sum) rather than failing the
+    /// whole fold — a `MIN`/`MAX` over the same column still folds. The aggregate column's null count
+    /// among the selected rows is the selected count minus the non-null count.
     private static void foldBoundaryZone(VortexReader reader, int zone, List<String> columns,
                                          RowFilter filter, String aggColumn, Fold fold) {
-        try (Chunk chunk = reader.decodeChunk(zone, columns);
-             Arena maskArena = Arena.ofConfined()) {
-            Mask mask = buildMask(chunk, filter, maskArena);
-            long selected = mask.trueCount();
-            fold.keptRows += selected;
+        try (Chunk chunk = reader.decodeChunk(zone, columns)) {
+            FilteredAggregate aggregate = Compute.filteredAggregate(chunk, filter, aggColumn);
+            fold.keptRows += aggregate.selectedRows();
             if (aggColumn == null) {
                 return;
             }
-            Array aggArray = chunk.column(aggColumn);
-            if (fold.sumUsable) {
-                try {
-                    fold.addSum(Compute.sum(aggArray, mask));
-                } catch (VortexException e) {
-                    fold.sumUsable = false; // non-numeric agg column — sum unanswerable, like a missing zone sum
-                }
-            }
-            fold.addMin(Compute.min(aggArray, mask));
-            fold.addMax(Compute.max(aggArray, mask));
-            fold.addNulls(selected - Compute.count(aggArray, mask));
-        }
-    }
-
-    /// Builds the row-level selection [Mask] for a boundary chunk by evaluating `filter` through the
-    /// compute kernels: each comparison or null-test leaf becomes a [Predicate] filtered against its
-    /// column's decoded array, and an n-ary `AND` intersects the per-leaf masks (a row is selected
-    /// only when every leaf accepts it). The kernels apply SQL three-valued logic, so a null row
-    /// never satisfies a value predicate — matching the fold's null semantics.
-    @SuppressWarnings("removal") // transitional — uses the deprecated Mask until the fused multi-column filteredReduce lands
-    private static Mask buildMask(Chunk chunk, RowFilter filter, Arena arena) {
-        long n = chunk.rowCount();
-        List<Mask> masks = new ArrayList<>();
-        collectLeafMasks(chunk, filter, arena, masks);
-        if (masks.isEmpty()) {
-            return Mask.allTrue(n); // an AND with no leaves constrains nothing (never reached for a boundary)
-        }
-        if (masks.size() == 1) {
-            return masks.getFirst();
-        }
-        // Fold the per-leaf masks with the reader's Mask.and combinator (logical intersect): a row
-        // survives only when every leaf accepts it (the n-ary AND). The combinator allocates the
-        // result bitmap off-heap from this boundary zone's arena.
-        Mask result = masks.getFirst();
-        for (int k = 1; k < masks.size(); k++) {
-            result = result.and(masks.get(k), arena);
-        }
-        return result;
-    }
-
-    /// Walks the filter tree, evaluating each leaf into a per-column [Mask] and collecting them into
-    /// `out`; the conjuncts of an n-ary `AND` are flattened so [#buildMask] intersects them together.
-    /// A [RowFilter.Column] already holds the exact compute [Predicate], so the kernel runs it
-    /// directly against the bound column — no translation seam, since `>=`, `<=` and `<>` are now
-    /// first-class predicate variants.
-    @SuppressWarnings("removal") // transitional — uses the deprecated Mask and Compute.filter until the fused multi-column filteredReduce lands
-    private static void collectLeafMasks(Chunk chunk, RowFilter filter, Arena arena, List<Mask> out) {
-        switch (filter) {
-            case RowFilter.And(var parts) -> {
-                for (RowFilter part : parts) {
-                    collectLeafMasks(chunk, part, arena, out);
-                }
-            }
-            case RowFilter.Column(var col, var predicate) ->
-                    out.add(Compute.filter(chunk.column(col), predicate, arena));
+            // A null sum marks a non-numeric aggregate column — unanswerable, like a missing zone sum;
+            // addSum(null) disables only the sum, leaving MIN/MAX to fold.
+            fold.addSum(aggregate.sum());
+            fold.addMin(aggregate.min());
+            fold.addMax(aggregate.max());
+            fold.addNulls(aggregate.selectedRows() - aggregate.aggNonNullCount());
         }
     }
 
@@ -622,9 +571,9 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         return idx >= 0 && struct.fieldTypes().get(idx) instanceof DType.Primitive p && p.ptype().isUnsigned();
     }
 
-    /// Whether `column` is a floating-point primitive, whose compute-kernel compare ([#buildMask])
-    /// sorts NaN as the maximum and so cannot soundly build a boundary row mask (the fold abandons
-    /// such a filter column to the NaN-correct scan).
+    /// Whether `column` is a floating-point primitive, whose compute-kernel compare
+    /// ([Compare#values(Object, Object, DType)]) sorts NaN as the maximum and so cannot soundly fold a
+    /// boundary partition (the fold abandons such a filter column to the NaN-correct scan).
     private static boolean isFloating(DType.Struct struct, String column) {
         int idx = struct.fieldNames().indexOf(column);
         return idx >= 0 && struct.fieldTypes().get(idx) instanceof DType.Primitive p && p.ptype().isFloating();
