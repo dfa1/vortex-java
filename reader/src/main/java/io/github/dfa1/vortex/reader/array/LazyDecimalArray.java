@@ -83,7 +83,7 @@ public record LazyDecimalArray(DType dtype, long length, MemorySegment buf, int 
         return buf;
     }
 
-    /// Returns the backing buffer directly — already materialised, no allocation.
+    /// Returns the backing buffer directly — already materialized, no allocation.
     ///
     /// @return the backing little-endian two's-complement segment
     @Override

@@ -10,7 +10,7 @@ import java.math.BigInteger;
 /// decimal mantissa as a single signed-integer child column whose ptype the
 /// encoder picks (one of `i8 / i16 / i32 / i64`). The child may be wrapped
 /// in [MaskedArray] for nullable columns. [#readMantissa(Array, long)]
-/// centralises the per-row dispatch so the record itself stays compact.
+/// centralizes the per-row dispatch so the record itself stays compact.
 final class DecimalBytePartsArrays {
 
     private DecimalBytePartsArrays() {

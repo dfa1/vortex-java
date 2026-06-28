@@ -6,7 +6,7 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
 import java.util.Optional;
 
-/// Decoded columnar data. Concrete subtypes specialise element access for the JIT;
+/// Decoded columnar data. Concrete subtypes specialize element access for the JIT;
 /// each covers a specific dtype family.
 ///
 /// Buffers are `MemorySegment` slices backed by the memory-mapped file; lifetime
@@ -45,21 +45,21 @@ public sealed interface Array
     /// @return an array of length `rows`
     Array limited(long rows);
 
-    /// Materialises this array into its primary backing [MemorySegment],
+    /// Materializes this array into its primary backing [MemorySegment],
     /// allocating from `arena` for lazy variants.
     ///
     /// Segment-backed arrays (the `Materialized*` records, `VarBinArray`,
     /// `GenericArray`, `LazyDecimalArray`) return their existing buffer with no
     /// copy. Lazy primitive arrays decode element-by-element, the `Lazy*`
     /// frame-of-reference / zigzag / ALP variants apply their inlined formula in a
-    /// vectorisable loop, and composite arrays (chunked, dict) concatenate or gather
-    /// their children. This is the single materialisation contract behind
+    /// vectorizable loop, and composite arrays (chunked, dict) concatenate or gather
+    /// their children. This is the single materialization contract behind
     /// [io.github.dfa1.vortex.reader.decode.DecodeContext#materialize(Array)].
     ///
     /// Array families with no row-addressable primary segment (struct, list, variant,
     /// the byte-parts decimal layout) throw [io.github.dfa1.vortex.core.error.VortexException].
     ///
-    /// @param arena allocator used to materialise lazy variants
+    /// @param arena allocator used to materialize lazy variants
     /// @return the primary [MemorySegment]
     MemorySegment materialize(SegmentAllocator arena);
 
@@ -83,7 +83,7 @@ public sealed interface Array
     /// otherwise empty — a non-allocating probe.
     ///
     /// Unlike [#materialize(java.lang.foreign.SegmentAllocator)], this never allocates or
-    /// decodes: lazy and composite arrays return empty rather than being materialised. The
+    /// decodes: lazy and composite arrays return empty rather than being materialized. The
     /// default is empty; segment-backed types (the `Materialized*` records, `VarBinArray`,
     /// `GenericArray`, `LazyDecimalArray`) override to return their existing buffer, and
     /// [MaskedArray] delegates to its inner data. The scan layer's dictionary zip-bomb guard

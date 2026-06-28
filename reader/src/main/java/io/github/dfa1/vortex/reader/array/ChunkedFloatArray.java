@@ -77,8 +77,8 @@ public record ChunkedFloatArray(DType dtype, long length, FloatArray[] children,
         return ChunkedFloatArray.of(dtype, rows, ChunkedArrays.limitedChildren(children, offsets, rows));
     }
 
-    /// Materialises by concatenating each child's segment into one contiguous
-    /// little-endian `f32` buffer, each child materialised through its own
+    /// Materializes by concatenating each child's segment into one contiguous
+    /// little-endian `f32` buffer, each child materialized through its own
     /// [FloatArray#materialize(SegmentAllocator)].
     ///
     /// @param arena allocator for the output segment

@@ -15,17 +15,17 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 
-/// The type-specialised fast lane of [StreamingFilterKernel]: for a primitive numeric column it runs
+/// The type-specialized fast lane of [StreamingFilterKernel]: for a primitive numeric column it runs
 /// a monomorphic, boxing-free loop with the comparison value unboxed once outside the loop, instead
 /// of the generic [Values#valueAt(Array, long)] / [Compare#values(Object, Object, DType)] path that
 /// boxes every element to an [Object].
 ///
-/// The ADR 0013 §3 tier-2 contract still holds — nothing is materialised, the only allocation is the
+/// The ADR 0013 §3 tier-2 contract still holds — nothing is materialized, the only allocation is the
 /// result bitmap from the caller's [Arena] — but the per-element decode is the typed accessor
 /// (`getLong`, `getInt`, `getDouble`, …) read straight into a primitive. All type, signedness, and
 /// predicate-operator decisions are hoisted out of the per-row loop (the hot-loop rule's
-/// branch-split idiom); only types this class recognises take the fast lane, everything else returns
-/// `null` so the caller falls back to the generic kernel with no behavioural drift.
+/// branch-split idiom); only types this class recognizes take the fast lane, everything else returns
+/// `null` so the caller falls back to the generic kernel with no behavioral drift.
 ///
 /// Two value domains cover the numerics:
 /// - long domain — [LongArray] / [IntArray] / [ShortArray] / [ByteArray], read and widened to a
@@ -40,15 +40,15 @@ final class PrimitiveFilter {
     private PrimitiveFilter() {
     }
 
-    /// Filters `array` by `predicate` through the specialised primitive loops, or returns `null` if
-    /// the array or predicate is not one this class specialises (the caller then uses the generic
+    /// Filters `array` by `predicate` through the specialized primitive loops, or returns `null` if
+    /// the array or predicate is not one this class specializes (the caller then uses the generic
     /// kernel).
     ///
     /// @param array     the array to filter, possibly a [MaskedArray] over a primitive child
     /// @param current   the incoming selection mask, applied once over the whole predicate result
     /// @param predicate the predicate to evaluate
     /// @param arena     the arena for the result bitmap; its zero-fill seeds the unselected bits to 0
-    /// @return the selection mask, or `null` if the input is not specialisable
+    /// @return the selection mask, or `null` if the input is not specializable
     static Mask tryFilter(Array array, Mask current, Predicate predicate, Arena arena) {
         Array data;
         BoolArray validity;
@@ -59,7 +59,7 @@ final class PrimitiveFilter {
             data = array;
             validity = null;
         }
-        if (!canSpecialise(data, predicate)) {
+        if (!canSpecialize(data, predicate)) {
             return null;
         }
         long n = array.length();
@@ -70,14 +70,14 @@ final class PrimitiveFilter {
         return new Mask.BitmapMask(bits, n);
     }
 
-    /// Reports whether the concrete array and the full predicate tree can take the specialised path:
+    /// Reports whether the concrete array and the full predicate tree can take the specialized path:
     /// the array must be a primitive long- or double-domain column and every comparison leaf must
     /// carry a [Number] value (so it unboxes to a primitive exactly as the generic path would).
     ///
     /// @param data      the unwrapped (non-masked) array
     /// @param predicate the predicate to inspect
-    /// @return `true` if both the array and the predicate are specialisable
-    private static boolean canSpecialise(Array data, Predicate predicate) {
+    /// @return `true` if both the array and the predicate are specializable
+    private static boolean canSpecialize(Array data, Predicate predicate) {
         if (!(data.dtype() instanceof DType.Primitive)) {
             return false;
         }
@@ -109,7 +109,7 @@ final class PrimitiveFilter {
 
     /// Evaluates the predicate tree into a fresh bitmap that encodes null semantics (a null position
     /// is excluded from a value leaf) but not the incoming mask. Composites combine child bitmaps
-    /// word-wise; leaves run the specialised value or validity loops.
+    /// word-wise; leaves run the specialized value or validity loops.
     ///
     /// @param data      the unwrapped array
     /// @param validity  the validity bitmap, or `null` when every position is valid
@@ -137,7 +137,7 @@ final class PrimitiveFilter {
         };
     }
 
-    /// Runs a value comparison leaf: the specialised match loop fills the bitmap, then any null
+    /// Runs a value comparison leaf: the specialized match loop fills the bitmap, then any null
     /// positions are cleared (three-valued logic — a null never satisfies a value predicate).
     ///
     /// @param data      the unwrapped array

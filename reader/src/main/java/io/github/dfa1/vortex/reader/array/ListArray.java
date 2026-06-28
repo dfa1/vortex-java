@@ -74,7 +74,7 @@ public final class ListArray implements Array {
     }
 
     /// Always throws: a list array is offsets plus a flat elements child, not a
-    /// single primary segment. Materialise [#elements()] and [#offsets()] separately.
+    /// single primary segment. Materialize [#elements()] and [#offsets()] separately.
     ///
     /// @param arena unused
     /// @return never returns

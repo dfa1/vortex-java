@@ -48,7 +48,7 @@ public record DictIntArray(DType dtype, long length, IntArray values, Array code
         return values.getInt(DictArrays.readCode(codes, i));
     }
 
-    /// Materialises by gathering one dictionary value per code into a fresh
+    /// Materializes by gathering one dictionary value per code into a fresh
     /// little-endian `i32` segment. The codes switch is hoisted outside the loop so
     /// each branch is a uniform gather over a single code width.
     ///

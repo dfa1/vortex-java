@@ -45,7 +45,7 @@ public final class LazyGridSource implements AutoCloseable {
     ///
     /// @param handle open Vortex file handle owned by `worker`
     /// @param worker I/O dispatcher for the handle's confined thread
-    /// @return initialised source
+    /// @return initialized source
     /// @throws InterruptedException if the calling thread is interrupted while
     ///                              waiting for the worker
     public static LazyGridSource open(VortexHandle handle, IoWorker worker)

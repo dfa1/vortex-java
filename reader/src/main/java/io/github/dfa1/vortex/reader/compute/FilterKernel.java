@@ -27,7 +27,7 @@ interface FilterKernel {
 
     /// Evaluates `predicate` over `array`, keeping only positions `current` already selects.
     ///
-    /// @param array     the input array, possibly a lazy variant; never materialised whole
+    /// @param array     the input array, possibly a lazy variant; never materialized whole
     /// @param current   the incoming selection mask, must have the same length as `array`
     /// @param predicate the predicate to evaluate per position
     /// @param arena     the arena for the output bitmap; its [Arena#allocate(long)] zero-fills, which

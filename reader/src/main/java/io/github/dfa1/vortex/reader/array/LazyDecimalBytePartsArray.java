@@ -16,7 +16,7 @@ import java.util.Objects;
 /// scale. [#getDecimal(long)] reads one cell from the child via
 /// [DecimalBytePartsArrays#readMantissa(Array, long)] and combines it with
 /// the dtype scale to produce a [BigDecimal] on demand — no buffer
-/// materialisation occurs at construction time.
+/// materialization occurs at construction time.
 ///
 /// @param dtype  the parent [DType.Decimal] dtype (precision + scale + nullable)
 /// @param length total logical row count

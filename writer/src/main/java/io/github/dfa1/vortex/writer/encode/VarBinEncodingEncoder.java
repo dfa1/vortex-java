@@ -69,7 +69,7 @@ public final class VarBinEncodingEncoder implements EncodingEncoder {
         return new EncodeResult(root, List.of(bytesBuf, offsetsBuf), statsMin, statsMax);
     }
 
-    /// Computes the serialised min/max string [ProtoScalarValue] pair for a string array, skipping
+    /// Computes the serialized min/max string [ProtoScalarValue] pair for a string array, skipping
     /// `null` entries (lexicographic by [String#compareTo]). Returns `null` when every entry is
     /// `null`. Shared so the dictionary zone-map path computes per-chunk string min/max identically
     /// to the flat path.

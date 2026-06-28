@@ -302,7 +302,7 @@ of CI / integration-test fallout, plus reviewer time. Not a weekend.
 
 - **Side-by-side period drift.** Phases 1–3 leave both the old `Registry`
   and the new `ReadRegistry`/`WriteRegistry` registered for each encoding
-  during transition. Risk: divergent behaviour if a bug fix lands on one
+  during transition. Risk: divergent behavior if a bug fix lands on one
   side and not the other. Mitigation: integration tests run against both
   paths during the transition; the old `Registry` becomes a thin forwarder
   early in Phase 1.

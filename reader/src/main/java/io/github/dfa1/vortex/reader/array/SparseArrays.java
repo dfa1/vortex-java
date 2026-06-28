@@ -8,7 +8,7 @@ import java.util.function.LongToIntFunction;
 
 /// Package-private helpers shared by the `LazySparseXxxArray` records.
 ///
-/// Centralises:
+/// Centralizes:
 /// - the patch-indices array-type switch in [#readPatchIdx(Array, long)] so all six
 ///   records agree on supported patch-index Array types (U8/U16/U32/U64 backed by
 ///   [ByteArray]/[ShortArray]/[IntArray]/[LongArray]);

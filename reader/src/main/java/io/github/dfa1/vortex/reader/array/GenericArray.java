@@ -58,7 +58,7 @@ public final class GenericArray implements Array {
 
     /// Returns a view of this array clamped to the first `rows` logical rows.
     /// Buffers and children are reused as-is; callers are expected to respect
-    /// [#length()] when reading. Used by the scan iterator to honour
+    /// [#length()] when reading. Used by the scan iterator to honor
     /// `ScanOptions.limit` for dtypes that don't have a typed array.
     ///
     /// @param rows desired logical length; must be `<= length()`
@@ -85,7 +85,7 @@ public final class GenericArray implements Array {
         return buffers[0];
     }
 
-    /// Returns the primary (index 0) raw buffer — already materialised, no allocation.
+    /// Returns the primary (index 0) raw buffer — already materialized, no allocation.
     ///
     /// @return the first backing [MemorySegment]
     @Override
@@ -155,7 +155,7 @@ public final class GenericArray implements Array {
 
     private static BigInteger readSigned128Le(MemorySegment buf, long offset) {
         // Two's-complement i128 on disk in little-endian; BigInteger ingests big-endian.
-        // No SIMD intrinsic for 16-byte signed integer, so we materialise into a heap
+        // No SIMD intrinsic for 16-byte signed integer, so we materialize into a heap
         // buffer here. Only fires for decimal(>18, _) — narrow-precision fast paths above
         // stay allocation-free.
         byte[] be = new byte[16];

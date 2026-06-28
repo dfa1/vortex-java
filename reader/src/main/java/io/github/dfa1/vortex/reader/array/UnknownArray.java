@@ -15,7 +15,7 @@ import java.lang.foreign.SegmentAllocator;
 /// Constructed by `Registry` when `allowUnknown()` is set and an encoding id is not
 /// in the registry. Data access beyond `buffer(i)` and `child(i)` is not supported.
 ///
-/// @param encodingId the unrecognised encoding id string
+/// @param encodingId the unrecognized encoding id string
 /// @param dtype      logical type of the array
 /// @param length     number of logical rows
 /// @param metadata   raw encoding metadata bytes, or `null`

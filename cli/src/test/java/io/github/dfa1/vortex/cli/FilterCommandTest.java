@@ -107,7 +107,7 @@ class FilterCommandTest {
 
     @Test
     void unknownOperator_returnsUsageError() {
-        // Given — a lone '!' is a recognised operator char but not a valid operator
+        // Given — a lone '!' is a recognized operator char but not a valid operator
         // When
         CliTestSupport.Captured result = capture(() ->
                 FilterCommand.run(new String[]{"filter", file.toString(), "id", "!", "1"}));

@@ -87,7 +87,7 @@ public final class ListViewArray implements Array {
     }
 
     /// Always throws: a list-view array is offsets, sizes, and a flat elements child,
-    /// not a single primary segment. Materialise [#elements()], [#offsets()], and
+    /// not a single primary segment. Materialize [#elements()], [#offsets()], and
     /// [#sizes()] separately.
     ///
     /// @param arena unused

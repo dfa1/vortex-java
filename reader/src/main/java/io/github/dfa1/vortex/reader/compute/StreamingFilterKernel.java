@@ -9,12 +9,12 @@ import java.lang.foreign.ValueLayout;
 import java.util.Objects;
 
 /// The streaming [FilterKernel] of ADR 0013 §3. A primitive numeric column takes the boxing-free,
-/// type-specialised fast lane in [PrimitiveFilter]; every other [Array] falls back to the generic
+/// type-specialized fast lane in [PrimitiveFilter]; every other [Array] falls back to the generic
 /// tier-2 path here, which works for any array through the per-element boxing accessor (no
-/// encoded-domain specialisation — that is the deferred performance escalation). The two paths are
-/// behaviourally identical, so the fast lane is a pure performance choice gated by a type check.
+/// encoded-domain specialization — that is the deferred performance escalation). The two paths are
+/// behaviorally identical, so the fast lane is a pure performance choice gated by a type check.
 ///
-/// The kernel honours the incoming mask (an excluded position is never evaluated) and mirrors the
+/// The kernel honors the incoming mask (an excluded position is never evaluated) and mirrors the
 /// Rust three-valued-logic filter semantics: a null value makes every value predicate false, so the
 /// row is excluded; the dedicated null tests select on validity directly. The output is a
 /// [Mask.BitmapMask] of `array.length()` bits, allocated off-heap from the caller's [Arena] — the
@@ -36,18 +36,18 @@ final class StreamingFilterKernel implements FilterKernel {
             // Nothing can be selected — return an allocation-free all-false of the same length.
             return Mask.allFalse(n);
         }
-        // Fast lane: a primitive numeric column runs the boxing-free, type-specialised loops. A null
-        // return means the input is not specialisable (Decimal, Utf8, an unhandled type, or a
+        // Fast lane: a primitive numeric column runs the boxing-free, type-specialized loops. A null
+        // return means the input is not specializable (Decimal, Utf8, an unhandled type, or a
         // non-numeric predicate value), so the generic per-element path below takes over.
-        Mask specialised = PrimitiveFilter.tryFilter(array, current, predicate, arena);
-        if (specialised != null) {
-            return specialised;
+        Mask specialized = PrimitiveFilter.tryFilter(array, current, predicate, arena);
+        if (specialized != null) {
+            return specialized;
         }
         return applyGeneric(array, current, predicate, arena, n);
     }
 
-    /// Runs the generic boxing baseline directly, the oracle the specialised fast lane must match.
-    /// Package-private so an equivalence test can assert `specialised == generic` against it.
+    /// Runs the generic boxing baseline directly, the oracle the specialized fast lane must match.
+    /// Package-private so an equivalence test can assert `specialized == generic` against it.
     ///
     /// @param array     the array to filter
     /// @param current   the incoming selection mask, already validated to match `array`'s length
@@ -85,7 +85,7 @@ final class StreamingFilterKernel implements FilterKernel {
     /// @param i         the zero-based position
     /// @param predicate the predicate to evaluate
     /// @return `true` if the value at `i` satisfies `predicate`
-    private static boolean evaluate(Array array, long i, Predicate predicate) {
+    static boolean evaluate(Array array, long i, Predicate predicate) {
         return switch (predicate) {
             case Predicate.Eq eq -> !Values.isNullAt(array, i)
                     && Compare.values(Values.valueAt(array, i), eq.value(), array.dtype()) == 0;

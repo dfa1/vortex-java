@@ -60,7 +60,7 @@ class LazyDecimalBytePartsArrayTest {
     @Test
     void getDecimal_nullCellInMaskedChild_throws() {
         // Given — nullable decimal columns wrap the mantissa child in MaskedArray.
-        // Without honouring the validity bitmap, getDecimal would happily return
+        // Without honoring the validity bitmap, getDecimal would happily return
         // a garbage BigDecimal for a row whose mantissa bytes are undefined.
         try (Arena arena = Arena.ofConfined()) {
             MemorySegment mspBuf = arena.allocate(16);

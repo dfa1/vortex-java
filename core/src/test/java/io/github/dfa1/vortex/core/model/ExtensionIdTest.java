@@ -23,7 +23,7 @@ class ExtensionIdTest {
 
     @Test
     void parse_unknownId_returnsEmpty() {
-        // Given — open-world extension id; library doesn't recognise it
+        // Given — open-world extension id; library doesn't recognize it
         // When / Then — non-throwing miss so the registry can route to passthrough
         assertThat(ExtensionId.parse("acme.geopoint")).isEmpty();
     }

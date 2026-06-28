@@ -63,12 +63,12 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         return CascadeStep.terminal(encode(dtype, data, ctx));
     }
 
-    /// Picks `(expE, expF)` by minimising the estimated post-cascade byte size
+    /// Picks `(expE, expF)` by minimizing the estimated post-cascade byte size
     /// (FoR + bitpack on the encoded integers, plus per-exception patch overhead) on a
-    /// stratified sample, breaking ties in favour of the smaller `e - f` gap.
+    /// stratified sample, breaking ties in favor of the smaller `e - f` gap.
     /// Mirrors Rust's `ALPFloat::find_best_exponents`.
     ///
-    /// The previous heuristic (minimise exception count) picked combinations like
+    /// The previous heuristic (minimize exception count) picked combinations like
     /// `(e=14, f=0)` that produced few exceptions but huge encoded mantissas, forcing
     /// the cascade into Dict+FoR+BitPacked instead of a clean ALP→BitPacked chain.
     private static int[] findExponentsF64(double[] values) {

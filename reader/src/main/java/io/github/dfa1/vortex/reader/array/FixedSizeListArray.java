@@ -69,7 +69,7 @@ public final class FixedSizeListArray implements Array {
     }
 
     /// Always throws: a fixed-size list wraps a flat elements child, not a single
-    /// primary segment of its own. Materialise [#elements()] instead.
+    /// primary segment of its own. Materialize [#elements()] instead.
     ///
     /// @param arena unused
     /// @return never returns

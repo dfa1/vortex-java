@@ -14,9 +14,9 @@ import io.github.dfa1.vortex.reader.array.ShortArray;
 
 /// The concrete streaming [ReduceKernel] instances — `SUM`, `COUNT`, `MIN`, `MAX` — of ADR 0013 §3.
 ///
-/// Each reduction has a type-specialised fast lane (a boxing-free primitive accumulation loop) and a
+/// Each reduction has a type-specialized fast lane (a boxing-free primitive accumulation loop) and a
 /// generic boxing fallback (`*Generic`) for the types the fast lane does not cover (Decimal, Utf8,
-/// `f16`, …). The specialised lane unwraps a [MaskedArray] once, hoists the column's signedness and
+/// `f16`, …). The specialized lane unwraps a [MaskedArray] once, hoists the column's signedness and
 /// the validity / all-true-mask decisions out of the per-row loop (the hot-loop rule's branch-split
 /// idiom), and reads each element through the concrete typed accessor — no [Object] box, no
 /// [Comparable#compareTo(Object)], no autobox. The result is boxed once at the end.
@@ -45,7 +45,7 @@ final class Reductions {
     private Reductions() {
     }
 
-    /// Sums the selected non-null values, taking the specialised primitive lane when possible.
+    /// Sums the selected non-null values, taking the specialized primitive lane when possible.
     ///
     /// @param array   the array to fold
     /// @param current the selection mask
@@ -62,7 +62,7 @@ final class Reductions {
         if (isLongDomain(data)) {
             return sumLongDomain(data, data.dtype().isUnsigned(), validity, current, n);
         }
-        // f16 and any other numeric primitive without a specialised accessor stay on the boxing path.
+        // f16 and any other numeric primitive without a specialized accessor stay on the boxing path.
         return sumGeneric(array, current);
     }
 
@@ -89,7 +89,7 @@ final class Reductions {
         return count;
     }
 
-    /// Finds the extreme selected non-null value, taking the specialised primitive lane when possible.
+    /// Finds the extreme selected non-null value, taking the specialized primitive lane when possible.
     ///
     /// @param array   the array to fold
     /// @param current the selection mask
@@ -109,7 +109,7 @@ final class Reductions {
     }
 
     // ----------------------------------------------------------------------------------------------
-    // Specialised long-domain lanes.
+    // Specialized long-domain lanes.
     // ----------------------------------------------------------------------------------------------
 
     /// Sums a long-domain column. The hot path (no nulls, all-true mask) is a tight monomorphic loop;
@@ -210,7 +210,7 @@ final class Reductions {
     }
 
     // ----------------------------------------------------------------------------------------------
-    // Specialised double-domain lanes.
+    // Specialized double-domain lanes.
     // ----------------------------------------------------------------------------------------------
 
     /// Sums a double-domain column into a [Double], skipping nulls and unselected positions.
@@ -305,7 +305,7 @@ final class Reductions {
     // ----------------------------------------------------------------------------------------------
 
     /// Folds the selected non-null values into a sum through the boxing accessor — the fallback for
-    /// types without a specialised lane and the oracle the fast lane is tested against.
+    /// types without a specialized lane and the oracle the fast lane is tested against.
     ///
     /// @param array   the array to fold
     /// @param current the selection mask
@@ -349,7 +349,7 @@ final class Reductions {
     }
 
     /// Finds the extreme selected non-null value through the boxing accessor — the fallback for types
-    /// without a specialised lane and the oracle the fast lane is tested against.
+    /// without a specialized lane and the oracle the fast lane is tested against.
     ///
     /// @param array   the array to fold
     /// @param current the selection mask
@@ -385,7 +385,7 @@ final class Reductions {
     ///
     /// @param array the array to unwrap
     /// @return the underlying value array
-    private static Array unwrap(Array array) {
+    static Array unwrap(Array array) {
         return array instanceof MaskedArray masked ? masked.inner() : array;
     }
 
@@ -393,15 +393,15 @@ final class Reductions {
     ///
     /// @param array the array to inspect
     /// @return the validity bitmap, or `null`
-    private static BoolArray validityOf(Array array) {
+    static BoolArray validityOf(Array array) {
         return array instanceof MaskedArray masked ? masked.validity() : null;
     }
 
-    /// Reports whether the unwrapped array is a specialised long-domain primitive.
+    /// Reports whether the unwrapped array is a specialized long-domain primitive.
     ///
     /// @param data the unwrapped array
     /// @return `true` for [LongArray] / [IntArray] / [ShortArray] / [ByteArray]
-    private static boolean isLongDomain(Array data) {
+    static boolean isLongDomain(Array data) {
         return data instanceof LongArray || data instanceof IntArray
                 || data instanceof ShortArray || data instanceof ByteArray;
     }
@@ -415,7 +415,7 @@ final class Reductions {
     ///
     /// @param dtype the column dtype to validate
     /// @throws VortexException if `dtype` is not a numeric primitive column
-    private static void requireNumeric(DType dtype) {
+    static void requireNumeric(DType dtype) {
         if (!(dtype instanceof DType.Primitive)) {
             throw new VortexException("compute: SUM is not supported on a non-numeric column of dtype "
                     + dtype);
@@ -426,7 +426,7 @@ final class Reductions {
     ///
     /// @param array the array to inspect
     /// @return `true` if the column is a floating-point primitive
-    private static boolean isFloating(Array array) {
+    static boolean isFloating(Array array) {
         return array.dtype() instanceof DType.Primitive prim && prim.ptype().isFloating();
     }
 

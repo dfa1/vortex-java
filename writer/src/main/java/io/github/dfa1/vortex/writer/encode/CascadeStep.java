@@ -18,8 +18,8 @@ import java.util.List;
 /// @param partialRoot  partially-assembled root encode node (may be `null` when not applicable)
 /// @param ownedBuffers buffers owned directly by the root node, before child buffers are appended
 /// @param openChildren child slots to be filled recursively by the cascading compressor
-/// @param statsMin     serialised minimum stat bytes, or `null`
-/// @param statsMax     serialised maximum stat bytes, or `null`
+/// @param statsMin     serialized minimum stat bytes, or `null`
+/// @param statsMax     serialized maximum stat bytes, or `null`
 /// @param applicable   `false` if this encoding cannot handle the input data
 @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record CascadeStep(

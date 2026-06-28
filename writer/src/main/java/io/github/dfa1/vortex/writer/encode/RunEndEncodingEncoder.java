@@ -45,7 +45,7 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
         }
         // Skip rule: if every value is distinct, each row is its own run — pure overhead.
         // Defer to the sample-encoded path otherwise; RunEnd's actual compression depends
-        // on run-length distribution which is not summarised by distinct count alone.
+        // on run-length distribution which is not summarized by distinct count alone.
         if (distinct >= n) {
             return Estimate.SKIP;
         }

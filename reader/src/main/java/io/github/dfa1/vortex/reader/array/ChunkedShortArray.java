@@ -91,8 +91,8 @@ public record ChunkedShortArray(DType dtype, long length, ShortArray[] children,
         return ChunkedShortArray.of(dtype, rows, ChunkedArrays.limitedChildren(children, offsets, rows));
     }
 
-    /// Materialises by concatenating each child's segment into one contiguous
-    /// little-endian `i16` buffer, each child materialised through its own
+    /// Materializes by concatenating each child's segment into one contiguous
+    /// little-endian `i16` buffer, each child materialized through its own
     /// [ShortArray#materialize(SegmentAllocator)].
     ///
     /// @param arena allocator for the output segment

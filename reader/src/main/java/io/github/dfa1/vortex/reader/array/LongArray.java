@@ -11,7 +11,7 @@ import java.util.function.LongConsumer;
 /// [Array] for I64/U64 primitive columns.
 ///
 /// The default impl is [MaterializedLongArray], a buffer-backed record
-/// returned when an encoding decoder either materialises values eagerly or
+/// returned when an encoding decoder either materializes values eagerly or
 /// has no lazy variant of its own.
 public non-sealed interface LongArray extends Array {
 
@@ -58,7 +58,7 @@ public non-sealed interface LongArray extends Array {
     /// Scalar fallback: decodes every element through [#getLong(long)] into a fresh
     /// little-endian segment. Buffer-backed ([MaterializedLongArray]) and lazy
     /// formula-based variants ([LazyForLongArray], [LazyZigZagLongArray], …)
-    /// override with a zero-copy or vectorised path.
+    /// override with a zero-copy or vectorized path.
     ///
     /// @param arena allocator for the output segment
     /// @return a little-endian `i64` segment of `length()` elements

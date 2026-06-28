@@ -10,7 +10,7 @@ import java.util.function.DoubleBinaryOperator;
 /// [Array] for F32 primitive columns.
 ///
 /// The default impl is [MaterializedFloatArray], a buffer-backed record
-/// returned when an encoding decoder either materialises values eagerly or
+/// returned when an encoding decoder either materializes values eagerly or
 /// has no lazy variant of its own.
 public non-sealed interface FloatArray extends Array {
 
@@ -47,7 +47,7 @@ public non-sealed interface FloatArray extends Array {
     /// Scalar fallback: decodes every element through [#getFloat(long)] into a fresh
     /// little-endian segment. Buffer-backed ([MaterializedFloatArray]) and lazy
     /// formula-based variants ([LazyAlpFloatArray], …) override with a zero-copy or
-    /// vectorised path.
+    /// vectorized path.
     ///
     /// @param arena allocator for the output segment
     /// @return a little-endian `f32` segment of `length()` elements

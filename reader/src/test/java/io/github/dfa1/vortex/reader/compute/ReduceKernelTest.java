@@ -51,7 +51,7 @@ class ReduceKernelTest {
     }
 
     @Test
-    void reductionsHonourMaskedSubset() {
+    void reductionsHonorMaskedSubset() {
         // Given a long array and a range mask selecting only indices 1 and 2
         Array array = ComputeArrays.longArray(ARENA, 10, 20, 30, 40);
         Mask subset = new Mask.RangeMask(1, 3, array.length());
@@ -143,7 +143,7 @@ class ReduceKernelTest {
         Object min = Reductions.MIN.apply(array, all);
         Object max = Reductions.MAX.apply(array, all);
 
-        // Then MIN/MAX honour unsigned order and SUM wraps in two's complement like ZoneReducer
+        // Then MIN/MAX honor unsigned order and SUM wraps in two's complement like ZoneReducer
         assertThat(min).isEqualTo(1L);
         assertThat(max).isEqualTo(highBit);
         assertThat(sum).isEqualTo(1L + highBit + 5L);

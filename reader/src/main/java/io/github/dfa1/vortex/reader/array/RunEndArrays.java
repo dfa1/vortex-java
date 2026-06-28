@@ -7,7 +7,7 @@ import java.util.function.LongToIntFunction;
 
 /// Package-private helpers shared by the `LazyRunEndXxxArray` records.
 ///
-/// Centralises:
+/// Centralizes:
 /// - the run-ends array-type switch in [#readRunEnd(Array, long)] so all four records
 ///   agree on supported run-ends Array types (U8/U16/U32/U64 backed by
 ///   [ByteArray]/[ShortArray]/[IntArray]/[LongArray]);

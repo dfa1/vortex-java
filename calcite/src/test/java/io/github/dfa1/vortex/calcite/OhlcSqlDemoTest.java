@@ -228,7 +228,7 @@ class OhlcSqlDemoTest {
         }
     }
 
-    /// Runs a query, prints every row as a labelled table, and returns the row count.
+    /// Runs a query, prints every row as a labeled table, and returns the row count.
     private static long printAndCount(Connection conn, String title, String sql) throws Exception {
         System.out.printf("%n[%s]%n", title);
         long rows = 0;

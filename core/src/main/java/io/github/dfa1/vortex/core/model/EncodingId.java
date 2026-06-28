@@ -95,7 +95,7 @@ public enum EncodingId {
     /// callers that demand a known id chain `.orElseThrow(...)`.
     ///
     /// @param id raw encoding id string (e.g. `"vortex.primitive"`)
-    /// @return matching constant, or empty if not recognised
+    /// @return matching constant, or empty if not recognized
     public static Optional<EncodingId> parse(String id) {
         return Optional.ofNullable(LOOKUP.get(id));
     }

@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// which fixes each method's return to its `encodingId` rather than a constant.
 class LayoutKindTest {
 
-    /// Each layout kind paired with its encoding id and the predicate that should recognise it.
+    /// Each layout kind paired with its encoding id and the predicate that should recognize it.
     private enum Kind {
         FLAT(Layout.FLAT, Layout::isFlat),
         CHUNKED(Layout.CHUNKED, Layout::isChunked),
@@ -39,7 +39,7 @@ class LayoutKindTest {
 
     @ParameterizedTest
     @EnumSource(Kind.class)
-    void predicate_recognisesOnlyItsOwnEncodingId(Kind kind) {
+    void predicate_recognizesOnlyItsOwnEncodingId(Kind kind) {
         // Given — a layout carrying this kind's encoding id
         Layout sut = layout(kind.encodingId);
 

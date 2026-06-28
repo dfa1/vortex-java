@@ -20,7 +20,7 @@ import java.nio.ByteBuffer;
 /// Shared FlatBuffer builders for hand-constructing (well-formed and malformed)
 /// Vortex metadata blobs in the reader security tests. Each returns a sliced
 /// little-endian [ByteBuffer] positioned at the finished root, ready to splice
-/// into a file body. Centralised here so the bounds/depth/zip-bomb suites build
+/// into a file body. Centralized here so the bounds/depth/zip-bomb suites build
 /// their fixtures the same way instead of each copy-pasting the kit.
 final class MalformedFiles {
 

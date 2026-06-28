@@ -9,7 +9,7 @@ package io.github.dfa1.vortex.writer.encode;
 /// alongside real data. `validity` has the same logical length: `true`
 /// for valid rows, `false` for nulls.
 ///
-/// The writer recognises this shape and emits the `vortex.masked`
+/// The writer recognizes this shape and emits the `vortex.masked`
 /// wire layout: a non-nullable child (the storage) plus an optional Bool
 /// validity child. Readers reconstruct a [io.github.dfa1.vortex.reader.array.MaskedArray].
 ///

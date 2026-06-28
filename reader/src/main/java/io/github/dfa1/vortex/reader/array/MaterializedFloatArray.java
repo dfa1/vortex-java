@@ -8,7 +8,7 @@ import java.lang.foreign.MemorySegment;
 import java.util.function.DoubleBinaryOperator;
 
 /// Buffer-backed [FloatArray] — the fallback used when an encoding decoder
-/// either materialises the output eagerly or has no lazy variant of its own.
+/// either materializes the output eagerly or has no lazy variant of its own.
 public final class MaterializedFloatArray extends AbstractMaterializedArray implements FloatArray {
 
     /// Creates a new `MaterializedFloatArray` backed by the given memory segment.

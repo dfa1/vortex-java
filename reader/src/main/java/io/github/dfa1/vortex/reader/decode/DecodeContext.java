@@ -77,14 +77,14 @@ public record DecodeContext(
         return registry.decodeAsSegment(childCtx);
     }
 
-    /// Materialises an already-decoded array into a flat primary segment, allocating lazy
+    /// Materializes an already-decoded array into a flat primary segment, allocating lazy
     /// variants from this context's arena.
     ///
     /// Use when a decoder already holds a decoded child — e.g. after unwrapping a
     /// [io.github.dfa1.vortex.reader.array.MaskedArray] for its validity — and needs the
     /// raw buffer for a bulk read, rather than re-decoding via [#decodeChildSegment(int)].
     ///
-    /// @param arr the decoded array to materialise
+    /// @param arr the decoded array to materialize
     /// @return the array's primary [MemorySegment]
     public MemorySegment materialize(Array arr) {
         return arr.materialize(arena);

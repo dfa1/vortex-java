@@ -9,7 +9,7 @@ import java.lang.foreign.ValueLayout;
 import java.util.function.LongBinaryOperator;
 
 /// Buffer-backed [ByteArray] — the fallback used when an encoding decoder
-/// either materialises the output eagerly or has no lazy variant of its own.
+/// either materializes the output eagerly or has no lazy variant of its own.
 public final class MaterializedByteArray extends AbstractMaterializedArray implements ByteArray {
 
     /// Constructs a `MaterializedByteArray` backed by the given buffer.

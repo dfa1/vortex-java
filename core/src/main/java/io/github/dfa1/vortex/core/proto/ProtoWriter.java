@@ -104,7 +104,7 @@ final class ProtoWriter {
         return mark;
     }
 
-    /// Finalises a length-delimited region opened by [#beginLenDelim()].
+    /// Finalizes a length-delimited region opened by [#beginLenDelim()].
     /// Writes the payload length as a varint at the reserved offset and shifts the payload
     /// left if the varint is shorter than 5 bytes.
     void endLenDelim(int mark) {

@@ -12,7 +12,7 @@ import java.lang.foreign.ValueLayout;
 /// allocates a little-endian, read-only segment from an auto [Arena] (GC-managed —
 /// test data is short-lived, so callers need no try-with-resources) with the
 /// default signed dtype (from [DTypes]) for its width. Tests that need an unsigned
-/// dtype (U8/U16) for widening behaviour build the array inline instead.
+/// dtype (U8/U16) for widening behavior build the array inline instead.
 public final class TestArrays {
 
     private TestArrays() {

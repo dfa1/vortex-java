@@ -84,7 +84,7 @@ decoder falls into one of three shapes:
   No arena allocation, no per-element copy.
 - **Lazy** — output is a `LazyXxxArray` / `ChunkedXxxArray` record that holds the encoded child
   plus the transform parameters. Per-row `getXxx(i)` applies the transform on demand. No
-  output buffer is allocated unless a caller explicitly materialises via
+  output buffer is allocated unless a caller explicitly materializes via
   `ArraySegments.of(arr, arena)`.
 - **Materialized** — output is a buffer allocated from `ctx.arena()` populated during `decode()`.
   Required for decompression-style encodings (Bitpacked, Pco, Zstd, etc.) where reading element
@@ -115,7 +115,7 @@ decoder falls into one of three shapes:
 | `vortex.fixed_size_list`    | Lazy          | Lazy          | `FixedSizeListArray` wraps flat elements child; no per-row alloc          |
 | `vortex.zstd`               | Materialized  | Materialized  | block decompression                                                      |
 | `vortex.masked`             | Zero-copy     | Zero-copy     | wraps inner + validity                                                   |
-| `vortex.decimal`            | Lazy          | Lazy          | `LazyDecimalArray` — `BigDecimal` materialised per row on `getDecimal(i)` |
+| `vortex.decimal`            | Lazy          | Lazy          | `LazyDecimalArray` — `BigDecimal` materialized per row on `getDecimal(i)` |
 | `vortex.decimal_byte_parts` | Lazy          | Lazy          | `LazyDecimalBytePartsArray` — reassembles byte parts on access           |
 | `vortex.datetimeparts`      | Lazy          | Lazy          | `LazyDateTimePartsLongArray` — reassembles parts on access               |
 | `vortex.pco`                | Materialized  | Materialized  | range-encoded decompression                                              |
@@ -134,7 +134,7 @@ Bitpacked produces `LazyAlp(MaterializedXxx)`).
 
 ### Unknown encodings
 
-Files containing unrecognised encoding IDs throw `VortexException` by default. Opt in to
+Files containing unrecognized encoding IDs throw `VortexException` by default. Opt in to
 passthrough mode to read such files without failing:
 
 ```java
@@ -150,7 +150,7 @@ try (VortexReader vf = VortexReader.open(path, registry)) {
 ## Extension types
 
 Extension dtypes wrap a primitive storage array with a logical-id tag plus optional
-metadata. The Rust catalogue lives in
+metadata. The Rust catalog lives in
 [`vortex-array/src/extension/`](https://github.com/vortex-data/vortex/tree/develop/vortex-array/src/extension);
 each subdir below names a canonical extension id and its on-disk shape.
 

@@ -57,7 +57,7 @@ import java.util.concurrent.atomic.AtomicLong;
 /// A single Vortex file exposed to Calcite as a flat SQL table with column projection and
 /// zone-map filter push-down.
 ///
-/// Projection (`projects`) is honoured exactly — only the requested columns are decoded and
+/// Projection (`projects`) is honored exactly — only the requested columns are decoded and
 /// returned. Filters (`filters`) that translate to a [RowFilter] are pushed into the scan for
 /// *chunk skipping* via zone-map statistics, but are **left in Calcite's list** rather than
 /// consumed: zone-map pruning is approximate (it drops whole chunks that cannot match, not
@@ -521,7 +521,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
 
     /// Classifies one zone against a column-bound [Predicate] from the zone's statistics `s`. The
     /// comparison ops carry the same three-valued-logic semantics as before the [RowFilter] /
-    /// [Predicate] unification: an unrecognised stat shape or a partially-overlapping zone is
+    /// [Predicate] unification: an unrecognized stat shape or a partially-overlapping zone is
     /// [Match#BOUNDARY], a zone provably outside the predicate is [Match#OUT], and a zone every row
     /// of which matches (which, for a value comparison, also requires the zone to carry no nulls) is
     /// [Match#IN]. The composite and range predicates ([Predicate.Between] / [Predicate.And] /
@@ -736,7 +736,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     }
 
     /// Streaming [Enumerator] over a Vortex scan: advances chunk by chunk, decoding each requested
-    /// column once per chunk and materialising one `Object[]` row per [#moveNext()]. Rows are not
+    /// column once per chunk and materializing one `Object[]` row per [#moveNext()]. Rows are not
     /// retained, so the working set stays at one chunk rather than the whole result.
     private final class VortexEnumerator implements Enumerator<Object[]> {
 
@@ -899,7 +899,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         }
     }
 
-    /// Lenient translation for the scan path ([#toRowFilter]): an unrecognised node (or `AND`
+    /// Lenient translation for the scan path ([#toRowFilter]): an unrecognized node (or `AND`
     /// conjunct) is simply dropped, since the scan re-checks every row so a partially captured filter
     /// is still correct, just less selective for zone-map pruning. Delegates to the shared
     /// [#comparison] dispatch with `strict = false`.
@@ -908,7 +908,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     }
 
     /// Strict counterpart of [#toComparison]: the same column-vs-literal / `AND` grammar, but a
-    /// single unrecognised node (or one `AND` conjunct) collapses the whole result to empty rather
+    /// single unrecognized node (or one `AND` conjunct) collapses the whole result to empty rather
     /// than being dropped, and bare `IS NULL` / `IS NOT NULL` are also translatable. Used by
     /// [#translatePushedFilters] so aggregate push-down answers from stats only when the [RowFilter]
     /// captures the predicate in full. Delegates to the shared [#comparison] dispatch with

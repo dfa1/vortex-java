@@ -144,7 +144,7 @@ going through an interface to reach the lazy variant.
 
 **PoC measurement rejected this gate.** Lazy decode is *strictly
 faster* than eager on full fold (+9.5% on `javaReadClose`) because
-the materialisation write/read intermediate buffer disappears — the
+the materialization write/read intermediate buffer disappears — the
 lazy variant returns the encoded segment directly and applies the
 transform on access; the fused variant unpacks bitpacked → double in
 one pass. Net halving of memory traffic on the OHLC chain. The gate
@@ -155,7 +155,7 @@ is dropped; lazy is the default whenever the chain pattern matches.
 Today each primitive Array is a `public final class` with a
 `MemorySegment` buffer field. Lazy variants cannot extend it. Convert
 every numeric and bool Array to a **non-sealed interface** and move
-the current behaviour into a **public** `MaterializedXxxArray` record.
+the current behavior into a **public** `MaterializedXxxArray` record.
 No static factory on the interface — encoders construct
 `new MaterializedXxxArray(...)` directly, keeping the interface a
 pure contract:
@@ -283,14 +283,14 @@ back to `MaterializedDoubleArray` (see the fused-chain subsection
 below). Checking a patch bitmap or a sorted patch-index on every
 access would add a per-row branch inside `getDouble`, which the
 codebase's hot-loop rule (see CLAUDE.md) bans because it kills
-auto-vectorisation in the million-row inner loops. Patched chunks
-are the majority of the OHLC dataset today, so eager materialisation
+auto-vectorization in the million-row inner loops. Patched chunks
+are the majority of the OHLC dataset today, so eager materialization
 for them stays the dominant cost; "Extended fusion" in the Future
 section is the path to recover it without paying the per-row branch.
 
 **No filter gate.** The PoC measurement showed lazy is *strictly
 faster* than the eager path even on full-fold workloads (+9.5% on
-`javaReadClose`, OHLC chain), because the materialisation write/read
+`javaReadClose`, OHLC chain), because the materialization write/read
 intermediate buffer is skipped entirely. The earlier "gate lazy behind
 `hasFilter()`" idea is dropped in the final design — lazy is the
 default whenever the chain pattern matches:
@@ -312,10 +312,10 @@ intermediate FoR/ALP buffers entirely and returns a
 `(bitWidth, offset, ref, scale)`. Public surface is `compareGt`:
 unpack each row, apply `+ref`, compare against the threshold in the
 encoded int domain, emit a bit into the result `BoolArray`. The full
-double materialisation is deferred to `sumMasked` (or any other
+double materialization is deferred to `sumMasked` (or any other
 generic reduction) which only touches the matching rows. The
 full-fold path (`getDouble`/`fold`/`forEachDouble`) lazily
-materialises through one pass that writes doubles directly from the
+materializes through one pass that writes doubles directly from the
 bitpacked unpack — halving the memory traffic vs the old eager chain
 (one decode pass instead of bitpacked→FoR→ALP). The class keeps a
 package-private fused `sumWhereGt` for the hot
@@ -397,7 +397,7 @@ decoded just enough to test and are not delivered to the consumer.
 where possible. This is the half of compute pushdown that Rust calls
 the "filter kernel" (`vortex-array/src/arrays/filter/kernel.rs`);
 keeping it separate from `compareXxx` matches the Rust shape and
-lets the framework decide how to materialise.
+lets the framework decide how to materialize.
 
 The Rust experience to reuse: most encodings can answer **without
 reading buffers** (metadata-only). Frame the operator so they
@@ -467,8 +467,8 @@ encoding. No interface change — each new variant is just another
 - `ForLongArray`, `ForIntArray` — Frame-of-Reference, lazy
 - `ZigZagLongArray`, `ZigZagIntArray` — XOR/shift on access (order
   not preserved, so no pushdown — but lazy still skips the
-  materialisation pass)
-- Additional fused classes for other common chains, modelled on
+  materialization pass)
+- Additional fused classes for other common chains, modeled on
   `FusedAlpForBitpackedDoubleArray` from the Phase 2 PoC
 - Extended fusion: handle bitpacked patches inside the fused kernel,
   closing the patched-chunk path that today falls back to
@@ -505,7 +505,7 @@ encoding. No interface change — each new variant is just another
 - **Patched chunks lose the lazy win.** Lazy `AlpDoubleArray` does
   not carry a patch index — adding one would force a per-row branch
   inside `getDouble`, which the codebase's hot-loop rule bans for
-  vectorisation reasons. So patched chunks fall back to
+  vectorization reasons. So patched chunks fall back to
   `MaterializedDoubleArray` and pay the full eager decode. Patched
   chunks dominate the OHLC dataset today; closing this gap needs the
   "Extended fusion" follow-up that handles patches inside the
@@ -617,7 +617,7 @@ Phases 0/1/2 (lazy decode for the 1:1 transforms) shipped over 2026-06-14 — 20
 - **Phase 2 — Lazy ALP / FoR / ZigZag.** `LazyAlpDoubleArray`, `LazyAlpFloatArray`,
   `LazyForLongArray`, `LazyForIntArray`, `LazyZigZagLongArray`, `LazyZigZagIntArray`
   shipped. Each holds the encoded child + transform parameters; per-row dispatch applies
-  the transform on demand. `ArraySegments.of(arr, arena)` materialises into a fresh segment
+  the transform on demand. `ArraySegments.of(arr, arena)` materializes into a fresh segment
   only when a downstream caller demands a contiguous buffer.
 
 The lazy-storage pattern generalised beyond the 1:1 transform scope of this ADR. Adjacent
@@ -625,7 +625,7 @@ encodings adopted the same top-level record shape:
 
 - [ADR 0012 — Lazy Chunked / Dict / VarBin layouts](0012-zero-copy-layout-decoding.md).
 - `vortex.runend`, `vortex.sparse`, `fastlanes.rle` (lazy lookup tables; not 1:1 transforms
-  but the same lazy-record + `ArraySegments` materialise pattern; see
+  but the same lazy-record + `ArraySegments` materialize pattern; see
   `LazyRunEndXxxArray`, `LazySparseXxxArray`, `LazyRleXxxArray` in `reader.array`).
 
 `docs/compatibility.md` Decode shape table tracks per-encoding status.
@@ -634,7 +634,7 @@ encodings adopted the same top-level record shape:
 
 The compute-pushdown phase (per-encoding `compareXxx` / `take` / `filter` operating on the
 encoded form) is **superseded by [ADR 0013 — Compute primitives: masks, kernels,
-no-materialise](0013-compute-primitives.md)**. ADR 0013 lands the masks-and-kernels
+no-materialize](0013-compute-primitives.md)**. ADR 0013 lands the masks-and-kernels
 framework that Phase 3 sketched, plus the wider design needed to make pushdown compose
 across the lazy storage types from ADRs 0010 and 0012.
 

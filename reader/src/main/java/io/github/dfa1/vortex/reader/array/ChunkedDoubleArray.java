@@ -87,8 +87,8 @@ public record ChunkedDoubleArray(DType dtype, long length, DoubleArray[] childre
         return ChunkedDoubleArray.of(dtype, rows, ChunkedArrays.limitedChildren(children, offsets, rows));
     }
 
-    /// Materialises by concatenating each child's segment into one contiguous
-    /// little-endian `f64` buffer, each child materialised through its own
+    /// Materializes by concatenating each child's segment into one contiguous
+    /// little-endian `f64` buffer, each child materialized through its own
     /// [DoubleArray#materialize(SegmentAllocator)].
     ///
     /// @param arena allocator for the output segment

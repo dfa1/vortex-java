@@ -8,7 +8,7 @@ import java.lang.foreign.ValueLayout;
 /// [Array] for bit-packed boolean columns (LSB-first, one byte per 8 elements).
 ///
 /// The default impl is [MaterializedBoolArray], a buffer-backed record
-/// returned when an encoding decoder either materialises values eagerly or
+/// returned when an encoding decoder either materializes values eagerly or
 /// has no lazy variant of its own.
 public non-sealed interface BoolArray extends Array {
 

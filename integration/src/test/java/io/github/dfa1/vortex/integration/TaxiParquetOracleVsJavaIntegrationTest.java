@@ -104,7 +104,7 @@ class TaxiParquetOracleVsJavaIntegrationTest {
     ///
     /// Null values map to the same defaults as `ParquetImporter.fillRow`:
     /// 0 for numeric types, `false` for booleans, and `""` for strings.
-    /// `CsvExporter` then serialises these defaults as their string equivalents.
+    /// `CsvExporter` then serializes these defaults as their string equivalents.
     ///
     /// @param col    the column schema
     /// @param reader the row reader positioned at the current row

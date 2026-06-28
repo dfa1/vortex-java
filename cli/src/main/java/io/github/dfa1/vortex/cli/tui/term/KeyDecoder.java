@@ -7,9 +7,9 @@ import java.util.Optional;
 
 /// Translates raw stdin bytes into [Key] events.
 ///
-/// Recognises common CSI sequences emitted by xterm-compatible terminals:
+/// Recognizes common CSI sequences emitted by xterm-compatible terminals:
 /// `ESC [ A/B/C/D` for arrows, `ESC [ 5~ / 6~` for PgUp/PgDn,
-/// `ESC [ H / F` and `ESC [ 1~ / 4~` for Home/End. Any unrecognised
+/// `ESC [ H / F` and `ESC [ 1~ / 4~` for Home/End. Any unrecognized
 /// escape sequence is dropped and decoding continues with the next byte.
 ///
 /// Stateless across reads - call [#next(InputStream)] for each event.

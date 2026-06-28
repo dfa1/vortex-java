@@ -412,7 +412,7 @@ public final class VortexWriter implements Closeable {
         }
 
         // Pre-validate row counts so a length mismatch is rejected with a clear error
-        // before any data is serialised. Without this check, the writer would produce a
+        // before any data is serialized. Without this check, the writer would produce a
         // file whose column chunks claim different row counts — readable but logically
         // inconsistent.
         long expectedLen = -1L;
@@ -649,7 +649,7 @@ public final class VortexWriter implements Closeable {
                 ? io.github.dfa1.vortex.core.fbs.FbsArrayStats.createMinVector(fbb, result.statsMin()) : 0;
         int maxVec = result.hasStats()
                 ? io.github.dfa1.vortex.core.fbs.FbsArrayStats.createMaxVector(fbb, result.statsMax()) : 0;
-        // forceDefaults only while building ArrayStats, so null_count = 0 is serialised (flatbuffers
+        // forceDefaults only while building ArrayStats, so null_count = 0 is serialized (flatbuffers
         // omits a scalar equal to its default otherwise) — matching the Rust writer and letting the
         // reader prune IS NULL on zero-null chunks. Reset immediately so the Array/ArrayNode tables
         // keep their normal (offset-default-omitting) layout.
@@ -760,7 +760,7 @@ public final class VortexWriter implements Closeable {
 
     /// Writes one `vortex.stats` zone-map for `colName`: one zone per chunk, with NULL_COUNT always,
     /// MAX/MIN (plus always-false `_is_truncated` flags) when `minMaxDtype` is non-null, and SUM when
-    /// `sumDtype` is non-null. `minBytes`/`maxBytes`/`sumBytes` hold each zone's serialised scalar —
+    /// `sumDtype` is non-null. `minBytes`/`maxBytes`/`sumBytes` hold each zone's serialized scalar —
     /// read only when the matching dtype is set; a `null` `sumBytes` entry marks an overflowed zone
     /// (recorded as a null sum). Field/bit order follows ZonedStatsSchema: MAX(3), MIN(4), SUM(5),
     /// NULL_COUNT(6).
@@ -875,7 +875,7 @@ public final class VortexWriter implements Closeable {
         };
     }
 
-    /// The serialised per-chunk SUM scalar for `data` of logical type `dtype`, or `null` when the
+    /// The serialized per-chunk SUM scalar for `data` of logical type `dtype`, or `null` when the
     /// column is not summable (non-primitive) or the sum overflowed. Validity placeholders are zero
     /// and therefore sum-neutral, so a nullable carrier sums correctly via its values.
     private static byte[] columnSum(DType dtype, Object data) {
@@ -887,7 +887,7 @@ public final class VortexWriter implements Closeable {
     }
 
     /// Builds the per-zone min (or max) values array for the resolved min/max `dtype`, decoding each
-    /// zone's serialised [ProtoScalarValue] stat into the array shape its encoder expects.
+    /// zone's serialized [ProtoScalarValue] stat into the array shape its encoder expects.
     private static Object zoneStatValues(DType minMaxDtype, List<byte[]> statBytes) throws IOException {
         return switch (minMaxDtype) {
             case DType.Primitive p -> statColumn(p.ptype(), statBytes);
@@ -897,7 +897,7 @@ public final class VortexWriter implements Closeable {
     }
 
     /// Builds the per-zone SUM array for `sumDtype` (i64/u64 → `long[]`, f64 → `double[]`), decoding
-    /// each zone's serialised scalar. Zones whose sum overflowed carry a `null` entry in `sumBytes`;
+    /// each zone's serialized scalar. Zones whose sum overflowed carry a `null` entry in `sumBytes`;
     /// `valid[i]` is set accordingly so the stat field reports them as null.
     private static Object sumColumn(DType sumDtype, List<byte[]> sumBytes, boolean[] valid) throws IOException {
         PType ptype = ((DType.Primitive) sumDtype).ptype();
@@ -918,7 +918,7 @@ public final class VortexWriter implements Closeable {
         return a;
     }
 
-    /// Builds the per-zone string array by decoding each zone's serialised string [ProtoScalarValue]
+    /// Builds the per-zone string array by decoding each zone's serialized string [ProtoScalarValue]
     /// stat. Used for Utf8 columns whose `vortex.varbin` encoder records full string min/max scalars.
     private static String[] statStringColumn(List<byte[]> statBytes) throws IOException {
         String[] out = new String[statBytes.size()];
@@ -929,7 +929,7 @@ public final class VortexWriter implements Closeable {
     }
 
     /// Builds the per-zone values array in the storage shape the primitive encoder expects, decoding
-    /// each zone's serialised [ProtoScalarValue] stat.
+    /// each zone's serialized [ProtoScalarValue] stat.
     private static Object statColumn(PType ptype, List<byte[]> statBytes) throws IOException {
         int n = statBytes.size();
         return switch (ptype) {
@@ -976,7 +976,7 @@ public final class VortexWriter implements Closeable {
                 yield a;
             }
             case F16 -> {
-                // F16 min/max are serialised as f32 scalars; re-pack to float16 storage.
+                // F16 min/max are serialized as f32 scalars; re-pack to float16 storage.
                 short[] a = new short[n];
                 for (int i = 0; i < n; i++) {
                     a[i] = Float.floatToFloat16((float) scalarDouble(statBytes.get(i)));
@@ -987,13 +987,13 @@ public final class VortexWriter implements Closeable {
     }
 
     private static long scalarLong(byte[] bytes) throws IOException {
-        // Integer columns serialise min/max as int64 (signed) or uint64 (unsigned).
+        // Integer columns serialize min/max as int64 (signed) or uint64 (unsigned).
         ProtoScalarValue sv = decodeScalar(bytes);
         return sv.int64_value() != null ? sv.int64_value() : sv.uint64_value();
     }
 
     private static double scalarDouble(byte[] bytes) throws IOException {
-        // Float columns serialise min/max as f64 (F64) or f32 (F32). Branch rather than use a
+        // Float columns serialize min/max as f64 (F64) or f32 (F32). Branch rather than use a
         // ternary so the F32 path widens Float -> double explicitly instead of mixing boxed types.
         ProtoScalarValue sv = decodeScalar(bytes);
         if (sv.f64_value() != null) {

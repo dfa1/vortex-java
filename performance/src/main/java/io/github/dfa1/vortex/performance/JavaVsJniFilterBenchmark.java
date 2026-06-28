@@ -75,7 +75,7 @@ public class JavaVsJniFilterBenchmark {
 
     /// Target fraction of rows that should satisfy `close > threshold`.
     /// The threshold is computed in [#setup()] from a sample of the
-    /// "close" column; the realised selectivity is reported in the setup log
+    /// "close" column; the realized selectivity is reported in the setup log
     /// and may differ slightly from this value on small samples.
     @Param({"0.001", "0.01", "0.1", "1.0"})
     public double selectivity;

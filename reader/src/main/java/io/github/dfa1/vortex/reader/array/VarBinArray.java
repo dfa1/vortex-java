@@ -89,7 +89,7 @@ public sealed interface VarBinArray extends Array
     MemorySegment bytesSegment();
 
     /// Returns the concatenated raw bytes segment directly — the primary data
-    /// buffer is already materialised, so no copy or allocation is needed.
+    /// buffer is already materialized, so no copy or allocation is needed.
     /// Note this is the data buffer only; the per-row offsets are exposed
     /// separately by [OffsetMode#offsetsSegment()].
     ///
@@ -100,7 +100,7 @@ public sealed interface VarBinArray extends Array
         return bytesSegment();
     }
 
-    /// Returns the concatenated raw bytes segment — already materialised, no allocation.
+    /// Returns the concatenated raw bytes segment — already materialized, no allocation.
     ///
     /// @return the bytes [MemorySegment]
     @Override
@@ -137,7 +137,7 @@ public sealed interface VarBinArray extends Array
     /// @return a `VarBinArray` containing the first `rows` elements
     VarBinArray limited(long rows);
 
-    /// Materialises any `VarBinArray` into a flat [OffsetMode]. The fast path
+    /// Materializes any `VarBinArray` into a flat [OffsetMode]. The fast path
     /// returns `src` unchanged when it is already an [OffsetMode]. Other modes
     /// (ViewMode in particular) walk every row through the typed accessors, copy the bytes
     /// into a fresh contiguous segment allocated from `arena`, and build an I64
@@ -145,7 +145,7 @@ public sealed interface VarBinArray extends Array
     /// depends on the bytes-plus-offsets shape.
     ///
     /// @param src   any VarBinArray
-    /// @param arena allocator for the materialised bytes and offsets segments
+    /// @param arena allocator for the materialized bytes and offsets segments
     /// @return an OffsetMode view over the same logical content
     static OffsetMode toOffsetMode(VarBinArray src, SegmentAllocator arena) {
         if (src instanceof OffsetMode om) {
@@ -341,7 +341,7 @@ public sealed interface VarBinArray extends Array
     ///
     /// [#bytesSegment()] is the [MemorySegment#NULL] sentinel — chunked
     /// arrays have no single contiguous bytes segment. Callers that need contiguous
-    /// bytes must materialise via the chunked children.
+    /// bytes must materialize via the chunked children.
     ///
     /// @param dtype    logical element type (Utf8 or Binary)
     /// @param length   total logical row count
@@ -463,10 +463,10 @@ public sealed interface VarBinArray extends Array
     /// bytes 4-7 hold a 4-byte prefix (ignored on read), bytes 8-11 the u32 buffer
     /// index into `dataBufs`, and bytes 12-15 the u32 offset within that
     /// buffer. Per-row accessors resolve the view on demand — no concat or
-    /// materialisation at construction time.
+    /// materialization at construction time.
     ///
     /// [#bytesSegment()] returns [MemorySegment#NULL] because there is
-    /// no single contiguous bytes segment; callers needing one must materialise via
+    /// no single contiguous bytes segment; callers needing one must materialize via
     /// the typed accessors.
     ///
     /// @param dtype    logical element type (Utf8 or Binary)

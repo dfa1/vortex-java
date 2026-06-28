@@ -1,12 +1,12 @@
-# ADR 0013: Compute primitives — masks, kernels, no-materialise contract
+# ADR 0013: Compute primitives — masks, kernels, no-materialize contract
 
 - **Status:** Accepted — §1 (Mask), §4 (Predicate), §2/§3 (filter/reduce kernels, a generic
-  streaming baseline plus a type-specialised boxing-free fast lane, behind a minimal `Compute`
+  streaming baseline plus a type-specialized boxing-free fast lane, behind a minimal `Compute`
   entry point), §5 (`RowFilter` unified over `Predicate` — a `RowFilter.Column` binds a column to a
   shared public `Predicate`; the same predicate is compiled against zone-map stats for pruning and
   against the decoded array for the boundary fold), and §6 (zone-map aggregate push-down, both the
   whole-zone and boundary-zone tiers) are implemented in `reader.compute`. Deferred: encoded-domain
-  kernel specialisation (perf escalation — pushing the predicate into the ALP/FoR/Dict integer
+  kernel specialization (perf escalation — pushing the predicate into the ALP/FoR/Dict integer
   domain without decoding), and the ergonomic façade (a columnar transducer — its own ADR).
   `MapKernel` is unbuilt (no consumer yet).
 - **Date:** 2026-06-15
@@ -30,11 +30,11 @@ The lazy infrastructure stops at the `Array` boundary. Once a caller pulls
 a chunk out of the scan, the natural next step is filter / project / reduce.
 Today the only way to do that is element-by-element via the per-type
 accessor (`DoubleArray.getDouble`, `LongArray.getLong`, …) or by forcing
-materialisation through `ArraySegments.of(Array)`. Neither composes:
+materialization through `ArraySegments.of(Array)`. Neither composes:
 
 - Per-element accessors fight loop fusion — JIT cannot see across user code
   boundaries, so `filter` then `sum` decode twice.
-- Forced materialisation discards the lazy gain. A filter that retains 1%
+- Forced materialization discards the lazy gain. A filter that retains 1%
   of rows still pays the full decode cost the moment a downstream stage
   asks for a buffer.
 
@@ -77,9 +77,9 @@ public sealed interface Mask permits AllTrue, AllFalse, RangeMask, BitmapMask {
   `compare` / `between` / `is_null` kernels.
 
 A `Chunk` returned by the scan carries an optional `Mask`. Successive
-filter kernels intersect masks in place; downstream kernels honour the
+filter kernels intersect masks in place; downstream kernels honor the
 mask (skip excluded positions during reduce, emit a smaller result for
-`take`). Nothing materialises until a sink demands it.
+`take`). Nothing materializes until a sink demands it.
 
 ### 2. Kernel signatures
 
@@ -101,12 +101,12 @@ public interface ReduceKernel<A extends Array, R> {
   selection mask, and operator-specific parameters.
 - Implementations dispatch on the concrete `Array` subtype via pattern
   switch (e.g. `LazyAlpDoubleArray` → encoded-domain compare, fallback
-  arrays → materialised path).
+  arrays → materialized path).
 - Output is an `Array` or `Mask` of the **same length** as the input —
   positional alignment is preserved through the pipeline so masks remain
   meaningful across stages.
 
-### 3. No-materialise contract
+### 3. No-materialize contract
 
 A kernel that operates on a lazy `Array` variant **must not** call
 `ArraySegments.of(array)` unless every fallback path has been exhausted.
@@ -117,7 +117,7 @@ The contract:
    encodes the scalar, compares longs.)
 2. Streaming per-element implementation using the accessor if (1) is not
    possible. Allocates only the result.
-3. Forced materialisation only as a last resort, gated by a debug log /
+3. Forced materialization only as a last resort, gated by a debug log /
    counter so regressions are visible.
 
 This is the rule that prevents the lazy gain from leaking. A new kernel
@@ -191,7 +191,7 @@ the same per-zone rows to the kernel rather than (only) to the inspector.
 
 ### Positive
 
-- Filter / project / aggregate compose without materialising intermediates.
+- Filter / project / aggregate compose without materializing intermediates.
   A `filter(close > 100).sum(volume)` pipeline touches the close column's
   encoded i64s once and the volume column's encoded i64s once.
 - The lazy decoders introduced by ADR 0010 / 0012 become useful for more
@@ -217,8 +217,8 @@ the same per-zone rows to the kernel rather than (only) to the inspector.
 ### Risks to manage
 
 - **Kernel matrix explosion.** Mitigate by writing one generic streaming
-  path that works for any `Array` via accessors, then specialising only
-  the hot encodings (ALP, FoR, BitPacked, Dict). Specialisation is a
+  path that works for any `Array` via accessors, then specializing only
+  the hot encodings (ALP, FoR, BitPacked, Dict). Specialization is a
   performance escalation, not a correctness requirement.
 - **User-facing API churn.** Without a decided façade (transducer vs
   Stream vs builder), early callers of `vortex-compute` end up depending
@@ -235,7 +235,7 @@ the same per-zone rows to the kernel rather than (only) to the inspector.
 ### A. Push everything through the Stream API
 
 Reuse `Stream<Double>` etc. with custom Spliterators that respect masks.
-Rejected: Stream forces autoboxing on primitive specialisations (no
+Rejected: Stream forces autoboxing on primitive specializations (no
 `DoubleStream.filter(DoublePredicate)` that emits a packed mask), and the
 internal Spliterator state isn't a natural place to carry encoded-domain
 short-circuits. Worth offering as a *convenience* sink on top of the
@@ -255,7 +255,7 @@ a syntax layer; they cannot replace the kernels.
 ADR 0002 is marked Deferred and covers compute *pluggability*. This ADR
 covers the **primitives** that pluggable compute would plug into. We can
 ship the primitives now without committing to user-installable kernels.
-Pluggability is a later question — the no-materialise contract and
+Pluggability is a later question — the no-materialize contract and
 predicate vocabulary stand on their own.
 
 ## References

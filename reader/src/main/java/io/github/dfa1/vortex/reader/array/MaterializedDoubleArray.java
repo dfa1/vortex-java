@@ -8,7 +8,7 @@ import java.util.function.DoubleBinaryOperator;
 import java.util.function.DoubleConsumer;
 
 /// Buffer-backed [DoubleArray] — the fallback used when an encoding decoder
-/// either materialises the output eagerly or has no lazy variant of its own.
+/// either materializes the output eagerly or has no lazy variant of its own.
 public final class MaterializedDoubleArray extends AbstractMaterializedArray implements DoubleArray {
 
     /// Constructs a `MaterializedDoubleArray` backed by the given buffer.

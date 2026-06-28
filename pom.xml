@@ -79,7 +79,7 @@
 		     Update this when bumping mockito.version (run: mvn dependency:tree -pl reader | grep byte-buddy-agent). -->
 		<bytebuddy.version>1.18.10</bytebuddy.version>
 		<!-- Generated sources (FlatBuffers + Protobuf) live under fbs/ and proto/. They
-		     are emitted by external code-gen and have no hand-written behaviour worth
+		     are emitted by external code-gen and have no hand-written behavior worth
 		     covering; counting them tanks the project-wide coverage ratio without
 		     reflecting real test gaps. The performance module is JMH benchmark main code
 		     with no tests by design — excluded for the same reason. -->

@@ -927,7 +927,7 @@ class JavaWritesRustReadsIntegrationTest {
 
     @Test
     void javaWriter_rustReader_runEnd_i32(@TempDir Path tmp) throws IOException {
-        // Given — RunEnd: runs of same value exercise the run-length proto serialisation
+        // Given — RunEnd: runs of same value exercise the run-length proto serialization
         Path file = tmp.resolve("java_runend_i32.vtx");
         int[] data = {10, 10, 10, 20, 20, 30, 30, 30, 30};
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
@@ -995,7 +995,7 @@ class JavaWritesRustReadsIntegrationTest {
 
     @Test
     void javaWriter_rustReader_constant_i32(@TempDir Path tmp) throws IOException {
-        // Given — Constant: scalar proto serialisation and row count metadata
+        // Given — Constant: scalar proto serialization and row count metadata
         Path file = tmp.resolve("java_constant_i32.vtx");
         int[] data = {42, 42, 42, 42, 42};
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
@@ -1334,7 +1334,7 @@ class JavaWritesRustReadsIntegrationTest {
             sut.writeChunk(Map.of("items", data));
         }
 
-        // Then — Rust normalises ListView to List on read; verify flattened elements
+        // Then — Rust normalizes ListView to List on read; verify flattened elements
         long[] flatElements = readListLongColumn(file, "items");
         assertThat(flatElements).containsExactly(elements);
     }

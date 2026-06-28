@@ -100,7 +100,7 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
 
     private EncodeResult buildResult(MemorySegment raw, FrameLayout layout, Arena arena) {
         // Zero-copy: each frame is an arena-native slice of raw, compressed straight into another
-        // arena segment. A single-value-per-array config yields one frame (the prior behaviour).
+        // arena segment. A single-value-per-array config yields one frame (the prior behavior).
         Frames frames = compressFrames(raw, layout, arena);
         EncodeNode root = new EncodeNode(EncodingId.VORTEX_ZSTD, MemorySegment.ofArray(frames.metadata()),
                 new EncodeNode[0], frameBufferIndices(frames.compressed().size(), 0));

@@ -67,7 +67,7 @@ public final class ChunkedEncodingDecoder implements EncodingDecoder {
 
     /// Wraps the decoded chunk children in a zero-copy view: a `ChunkedXxxArray`
     /// for primitives and Bool, a [StructArray] of per-field chunked views for
-    /// [DType.Struct]. No concat / no per-row materialise.
+    /// [DType.Struct]. No concat / no per-row materialize.
     private static Array wrap(List<Array> chunks, DType dtype, long totalRows) {
         if (dtype instanceof DType.Primitive pt) {
             return wrapPrimitive(chunks, pt, dtype, totalRows);
@@ -79,7 +79,7 @@ public final class ChunkedEncodingDecoder implements EncodingDecoder {
             return wrapStruct(chunks, struct, totalRows);
         }
         if (dtype instanceof DType.Variant) {
-            // Each chunk decoded as Variant materialises to its inner-typed constant array
+            // Each chunk decoded as Variant materializes to its inner-typed constant array
             // (see ConstantEncodingDecoder). Wrap the chunks under that inner dtype; the
             // VariantArray container re-applies the logical Variant dtype.
             if (chunks.isEmpty()) {

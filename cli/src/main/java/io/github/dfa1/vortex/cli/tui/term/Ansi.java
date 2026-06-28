@@ -48,17 +48,17 @@ public final class Ansi {
         return CSI + row + ";" + col + "H";
     }
 
-    /// Standard SGR foreground colour (codes 30-37 normal, 90-97 bright).
+    /// Standard SGR foreground color (codes 30-37 normal, 90-97 bright).
     ///
-    /// @param code SGR colour code
+    /// @param code SGR color code
     /// @return CSI sequence
     public static String fg(int code) {
         return CSI + code + "m";
     }
 
-    /// Standard SGR background colour (codes 40-47 normal, 100-107 bright).
+    /// Standard SGR background color (codes 40-47 normal, 100-107 bright).
     ///
-    /// @param code SGR colour code
+    /// @param code SGR color code
     /// @return CSI sequence
     public static String bg(int code) {
         return CSI + code + "m";

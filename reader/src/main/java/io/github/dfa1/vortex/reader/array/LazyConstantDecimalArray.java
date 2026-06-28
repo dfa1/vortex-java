@@ -37,7 +37,7 @@ public record LazyConstantDecimalArray(DType dtype, long length, BigDecimal valu
         return new LazyConstantDecimalArray(dtype, rows, value, byteWidth);
     }
 
-    /// Materialises by writing the single constant value, in little-endian
+    /// Materializes by writing the single constant value, in little-endian
     /// two's-complement, `length` times into a fresh `byteWidth`-per-row segment.
     ///
     /// @param arena allocator for the output segment

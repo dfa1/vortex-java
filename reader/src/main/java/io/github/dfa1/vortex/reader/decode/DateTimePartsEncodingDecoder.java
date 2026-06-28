@@ -16,7 +16,7 @@ import java.lang.foreign.MemorySegment;
 ///
 /// Reassembles the three children (days, seconds, subseconds) into a
 /// [LazyDateTimePartsLongArray] of epoch counts in the extension's
-/// [TimeUnit]. No per-row materialisation happens at decode time —
+/// [TimeUnit]. No per-row materialization happens at decode time —
 /// the downstream extension decoder reads the reassembled long via the
 /// lazy `getLong` accessor.
 public final class DateTimePartsEncodingDecoder implements EncodingDecoder {

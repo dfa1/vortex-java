@@ -62,7 +62,7 @@ Per-encoding gotchas:
   and `vortex-jni`; assert both throw or both return identical row count + values. Reuse
   `RustWritesJavaReadsIntegrationTest` harness.
 - [ ] **OSS-Fuzz submission** — Jazzer is a first-class OSS-Fuzz engine; submit the project
-  once the corpus + targets stabilise. Free continuous fuzzing.
+  once the corpus + targets stabilize. Free continuous fuzzing.
 
 ## Build
 
@@ -85,8 +85,8 @@ Per-encoding gotchas:
 
 ## Compute
 
-- [ ] **Compute primitives — masks, kernels, no-materialise** — pushdown filter/compare/aggregate
-  kernels operating on Lazy arrays without materialising. See [ADR-0013](docs/adr/0013-compute-primitives.md)
+- [ ] **Compute primitives — masks, kernels, no-materialize** — pushdown filter/compare/aggregate
+  kernels operating on Lazy arrays without materializing. See [ADR-0013](docs/adr/0013-compute-primitives.md)
   (Proposed). Gate: a concrete downstream consumer (e.g. the vortex-arrow bridge or filter pushdown).
   Done: §6 read-side surface — `ScanIterator.columnZoneStats(col)` exposes per-zone
   min/max/sum/null count, decoding sum from the `vortex.stats` zone-map table (matches files from

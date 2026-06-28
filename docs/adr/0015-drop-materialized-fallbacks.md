@@ -21,10 +21,10 @@ The cost compounds:
   duplicated across unit + integration suites.
 - **Decoder churn.** `ZigZag`, `FoR`, `ALP`, `RunEnd`, `Sparse`, `RLE`,
   `Dict`, `Chunked`, `VarBinView`, `DateTimeParts`, `DecimalByteParts`,
-  `Decimal`, `Constant` each have a non-trivial materialised branch that
+  `Decimal`, `Constant` each have a non-trivial materialized branch that
   must keep up with format changes — without ever firing in production.
 - **Surprise factor for contributors.** New decoders default to the
-  pattern they read in neighbouring files; if the neighbouring file still
+  pattern they read in neighboring files; if the neighboring file still
   has a Materialized branch, the new encoding inherits the obsolete shape
   by mimicry.
 - **Real-file fragility.** The per-column chunking misalignment fix in
@@ -65,7 +65,7 @@ A Materialized branch may be deleted when **all** of these hold:
   instance-of assertions, byte-level segment comparisons that only the
   eager path produces).
 - Helper methods that exist only to support the eager path (e.g.
-  `applyReference`, per-ptype materialisers in
+  `applyReference`, per-ptype materializers in
   `FrameOfReferenceEncodingDecoder`).
 
 ### What stays
@@ -74,7 +74,7 @@ A Materialized branch may be deleted when **all** of these hold:
   `delta`, `patched` — keep their Materialized output. ADR 0010 §
   "Decompression encodings stay eager" applies; ADR 0015 does not change
   it.
-- Materialisation fallbacks inside `ArraySegments.of(arr, arena)` stay —
+- Materialization fallbacks inside `ArraySegments.of(arr, arena)` stay —
   they exist for callers that explicitly request a `MemorySegment` from a
   Lazy array, not for default decode.
 
@@ -90,10 +90,10 @@ A Materialized branch may be deleted when **all** of these hold:
 ### Negative
 
 - Loss of an in-tree A/B comparison point. Mitigation: keep the
-  Materialised path live in benchmarks only, never in production decode.
-- Encoding-specific micro-optimisations that the eager path enabled
+  Materialized path live in benchmarks only, never in production decode.
+- Encoding-specific micro-optimizations that the eager path enabled
   (e.g. SIMD-friendly `applyReference` in FoR) need to migrate to the
-  Lazy path or to a `materialiseXxx` helper in `ArraySegments`.
+  Lazy path or to a `materializeXxx` helper in `ArraySegments`.
 
 ## Rollout
 
