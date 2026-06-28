@@ -51,6 +51,11 @@
 			<scope>compile</scope>
 		</dependency>
 		<dependency>
+			<groupId>io.github.dfa1.vortex</groupId>
+			<artifactId>vortex-calcite</artifactId>
+			<scope>compile</scope>
+		</dependency>
+		<dependency>
 			<groupId>dev.vortex</groupId>
 			<artifactId>vortex-jni</artifactId>
 			<scope>compile</scope>
