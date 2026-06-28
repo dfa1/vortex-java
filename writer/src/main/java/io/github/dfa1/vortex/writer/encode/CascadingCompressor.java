@@ -153,7 +153,7 @@ public final class CascadingCompressor {
         }
         // Non-primitives (extension types): find the accepting encoding and splice
         // through it so its cascaded children (e.g. datetimeparts → days/seconds/subseconds)
-        // are recursively compressed rather than stored as raw primitives. Honour the
+        // are recursively compressed rather than stored as raw primitives. Honor the
         // excluded set so spliceResult's notApplicable retry can rotate to the next
         // accepting encoding (e.g. DateTimePartsEncoding → ExtEncoding when the input
         // is raw storage rather than DateTimePartsData).
@@ -316,7 +316,7 @@ public final class CascadingCompressor {
                 return enc;
             }
         }
-        // Fall through to any accepting encoding (still honouring exclusions so that
+        // Fall through to any accepting encoding (still honoring exclusions so that
         // spliceResult's notApplicable retry rotates to the next candidate).
         for (EncodingEncoder enc : encodings) {
             if (excluded.contains(enc.encodingId())) {

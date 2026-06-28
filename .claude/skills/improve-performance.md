@@ -17,7 +17,7 @@ performance improvements in Java/Maven projects.
 ## Workflow Overview
 
 ```
-setup → benchmark → profile → analyse → change → repeat
+setup → benchmark → profile → analyze → change → repeat
 ```
 
 ---
@@ -63,7 +63,7 @@ Store the baseline score. Compare every subsequent run against it.
 
 ---
 
-## Step 4 — Analyse results
+## Step 4 — Analyze results
 
 Key things to look for:
 
@@ -128,7 +128,7 @@ Common optimizations to consider (in order of typical impact):
    constant-folds the stride / alignment / order. Inline `ValueLayout.JAVA_LONG_UNALIGNED` on each
    call defeats this.
 4. **Use `getAtIndex` / `setAtIndex`** in tight loops over a `MemorySegment` — stride is implicit,
-   bounds check hoists, and the auto-vectoriser reads the shape cleanly.
+   bounds check hoists, and the auto-vectorizer reads the shape cleanly.
 5. **Aligned arena allocation** — `arena.allocate(n, 64)` keeps SIMD-friendly addresses.
 6. **Improve data locality** — colocate fields accessed together, prefer flat arrays / segments
    over linked structures.

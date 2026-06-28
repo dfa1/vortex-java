@@ -27,7 +27,7 @@ public record LazyForIntArray(DType dtype, long length, MemorySegment encoded, i
     /// Bulk-decodes through [#getInt(long)] into a fresh little-endian `i32` segment.
     /// The decode formula lives only in [#getInt(long)]; this override exists solely to
     /// give the JIT a monomorphic, inlinable call site (the shared [IntArray] default is
-    /// megamorphic across every implementation and will not inline or auto-vectorise).
+    /// megamorphic across every implementation and will not inline or auto-vectorize).
     ///
     /// @param arena allocator for the output segment
     /// @return a little-endian `i32` segment of decoded values

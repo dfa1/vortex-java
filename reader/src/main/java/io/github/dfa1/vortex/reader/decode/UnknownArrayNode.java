@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.reader.decode;
 
 import java.lang.foreign.MemorySegment;
 
-/// Array node whose encoding id is not a recognised [io.github.dfa1.vortex.core.model.EncodingId].
+/// Array node whose encoding id is not a recognized [io.github.dfa1.vortex.core.model.EncodingId].
 /// Produced when a file uses an encoding this build does not know about. Decoded as
 /// [io.github.dfa1.vortex.reader.array.UnknownArray] when
 /// [io.github.dfa1.vortex.reader.ReadRegistry#isAllowUnknown()] is set; otherwise the decode call throws.

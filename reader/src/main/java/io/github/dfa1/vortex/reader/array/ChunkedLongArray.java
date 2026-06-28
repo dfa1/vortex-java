@@ -31,7 +31,7 @@ public record ChunkedLongArray(DType dtype, long length, LongArray[] children, l
 
     /// Builds a [ChunkedLongArray] from a list of chunk arrays. Nested
     /// chunked arrays are flattened; [MaskedArray] chunks are unwrapped
-    /// to their inner data (validity dropped — matches prior concat behaviour).
+    /// to their inner data (validity dropped — matches prior concat behavior).
     ///
     /// @param dtype     logical element type
     /// @param totalRows expected total row count across all chunks
@@ -110,8 +110,8 @@ public record ChunkedLongArray(DType dtype, long length, LongArray[] children, l
         return ChunkedLongArray.of(dtype, rows, ChunkedArrays.limitedChildren(children, offsets, rows));
     }
 
-    /// Materialises by concatenating each child's segment into one contiguous
-    /// little-endian `i64` buffer. Each child is materialised through its own
+    /// Materializes by concatenating each child's segment into one contiguous
+    /// little-endian `i64` buffer. Each child is materialized through its own
     /// [LongArray#materialize(SegmentAllocator)], so lazy children decode straight
     /// into the shared destination via a bulk copy.
     ///

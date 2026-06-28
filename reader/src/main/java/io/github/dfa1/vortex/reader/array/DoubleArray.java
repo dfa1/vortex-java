@@ -11,7 +11,7 @@ import java.util.function.DoubleConsumer;
 /// [Array] for F64 primitive columns.
 ///
 /// The default impl is [MaterializedDoubleArray], a buffer-backed record
-/// returned when an encoding decoder either materialises values eagerly or
+/// returned when an encoding decoder either materializes values eagerly or
 /// has no lazy variant of its own.
 public non-sealed interface DoubleArray extends Array {
 
@@ -58,7 +58,7 @@ public non-sealed interface DoubleArray extends Array {
     /// Scalar fallback: decodes every element through [#getDouble(long)] into a fresh
     /// little-endian segment. Buffer-backed ([MaterializedDoubleArray]) and lazy
     /// formula-based variants ([LazyAlpDoubleArray], …) override with a zero-copy or
-    /// vectorised path.
+    /// vectorized path.
     ///
     /// @param arena allocator for the output segment
     /// @return a little-endian `f64` segment of `length()` elements

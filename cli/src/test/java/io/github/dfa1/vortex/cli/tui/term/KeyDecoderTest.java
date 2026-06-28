@@ -96,7 +96,7 @@ class KeyDecoderTest {
 
     @Test
     void next_unknownCsiLetter_yieldsEscape() throws IOException {
-        // Given — ESC [ Z is xterm reverse-tab; we don't recognise it
+        // Given — ESC [ Z is xterm reverse-tab; we don't recognize it
         ByteArrayInputStream in = bytes(0x1B, '[', 'Z');
 
         // When
@@ -135,7 +135,7 @@ class KeyDecoderTest {
 
     @Test
     void next_unknownEscapePrefix_yieldsEscape() throws IOException {
-        // Given — `ESC X` (X is neither '[' nor 'O') is not a recognised
+        // Given — `ESC X` (X is neither '[' nor 'O') is not a recognized
         // CSI or SS3 sequence. Must return Escape rather than try to decode further.
         ByteArrayInputStream in = bytes(0x1B, 'X', 'A');
 

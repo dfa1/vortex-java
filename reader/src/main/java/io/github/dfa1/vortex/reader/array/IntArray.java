@@ -11,7 +11,7 @@ import java.util.function.IntConsumer;
 /// [Array] for I32/U32 primitive columns.
 ///
 /// The default impl is [MaterializedIntArray], a buffer-backed record
-/// returned when an encoding decoder either materialises values eagerly or
+/// returned when an encoding decoder either materializes values eagerly or
 /// has no lazy variant of its own.
 public non-sealed interface IntArray extends Array {
 
@@ -58,7 +58,7 @@ public non-sealed interface IntArray extends Array {
     /// Scalar fallback: decodes every element through [#getInt(long)] into a fresh
     /// little-endian segment. Buffer-backed ([MaterializedIntArray]) and lazy
     /// formula-based variants ([LazyForIntArray], [LazyZigZagIntArray], …) override
-    /// with a zero-copy or vectorised path.
+    /// with a zero-copy or vectorized path.
     ///
     /// @param arena allocator for the output segment
     /// @return a little-endian `i32` segment of `length()` elements

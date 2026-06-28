@@ -9,7 +9,7 @@ import java.util.function.IntBinaryOperator;
 import java.util.function.IntConsumer;
 
 /// Buffer-backed [IntArray] — the fallback used when an encoding decoder
-/// either materialises the output eagerly or has no lazy variant of its own.
+/// either materializes the output eagerly or has no lazy variant of its own.
 public final class MaterializedIntArray extends AbstractMaterializedArray implements IntArray {
 
     /// Creates a new `MaterializedIntArray` backed by the given memory segment.

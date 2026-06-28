@@ -57,7 +57,7 @@ final class RleArrays {
     /// Walks the logical range `[offset, offset + length)` chunk by chunk,
     /// calling `visitor` once per chunk with the local `[rowInChunk, end)` span.
     ///
-    /// Centralises the FastLanes chunk-boundary arithmetic shared by every
+    /// Centralizes the FastLanes chunk-boundary arithmetic shared by every
     /// `LazyRleXxxArray` record's `forEach` / `fold`. The visitor — not this
     /// method — owns the per-row loop, so the typed `values[...]` read stays a
     /// direct, monomorphic array access; this call fires once per chunk

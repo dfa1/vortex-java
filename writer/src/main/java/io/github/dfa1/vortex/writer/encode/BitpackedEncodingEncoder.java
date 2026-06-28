@@ -139,7 +139,7 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
         return new EncodeResult(root, List.of(packed, idxBuf, valBuf), statsMin, statsMax);
     }
 
-    /// Picks the bit-width that minimises `packed_bytes + exceptions_bytes`.
+    /// Picks the bit-width that minimizes `packed_bytes + exceptions_bytes`.
     /// Mirrors `vortex-fastlanes::bitpack_compress::best_bit_width`.
     private static int bestBitWidth(int[] bitWidthFreq, int bytesPerException, int n) {
         if (n == 0) {

@@ -204,6 +204,9 @@ in the Rust source for the exact schema, then implement from spec.
 ## Code style
 
 - 4-space indent, **zero SonarQube bugs/smells**, no `sun.misc.Unsafe` or internal JDK APIs.
+- **American English everywhere** (javadoc, comments, identifiers):
+  `recognize`/`optimize`/`finalize`/`serialize`/`normalize`/`behavior`/`color` — never
+  `-ise`/`-isation`/`-our`. Matches the JDK (`Object.finalize`, `Serializable`).
 - Prefer explicit over clever; fail fast on unhandled cases.
 - Idiomatic modern Java: reuse the JDK (override `Iterator.forEachRemaining`, don't invent
   `forEachChunk`; use `Optional`, records, sealed types, pattern switches, virtual threads, FFM).

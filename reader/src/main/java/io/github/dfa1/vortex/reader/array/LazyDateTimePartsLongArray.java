@@ -19,7 +19,7 @@ import java.util.function.LongConsumer;
 /// `unitsPerDay` = `86_400 * unitsPerSecond`. The reassembled long carries the
 /// same epoch count the downstream extension decoder
 /// (`TimestampExtensionDecoder`, `DateExtensionDecoder`, etc.) expects;
-/// no buffer materialisation occurs at construction time.
+/// no buffer materialization occurs at construction time.
 ///
 /// The record's [#dtype()] is the parent Extension dtype (e.g.
 /// `vortex.timestamp`) so it slots transparently into the extension-decode

@@ -189,7 +189,7 @@ class RustWritesJavaReadsIntegrationTest {
     }
 
     /// Scans `file` through the JNI Arrow reader and hands every loaded
-    /// [VectorSchemaRoot] batch to `batch`. Centralises the
+    /// [VectorSchemaRoot] batch to `batch`. Centralizes the
     /// open → scan → partition → loadNextBatch boilerplate shared by the
     /// JNI-reader assertions.
     private static void forEachArrowBatch(Path file, ScanOptions opts, Consumer<VectorSchemaRoot> batch)

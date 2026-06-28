@@ -33,7 +33,7 @@ public final class BitpackedEncodingDecoder implements EncodingDecoder {
     @Override
     public Array decode(DecodeContext ctx) {
         MemorySegment rawMeta = ctx.metadata();
-        // proto3 elides default-valued fields, so ProtoBitPackedMetadata(0, 0, null) serialises
+        // proto3 elides default-valued fields, so ProtoBitPackedMetadata(0, 0, null) serializes
         // to a 0-byte payload and the writer skips the empty vector. Treat absent metadata
         // as all-defaults rather than rejecting — happens when bit_width=0 (constant
         // residuals nested under FoR / RLE).
@@ -90,8 +90,8 @@ public final class BitpackedEncodingDecoder implements EncodingDecoder {
 
     /// Per-row unpack schedule for one FastLanes block, precomputed once per decode call. Every
     /// array is indexed by `row` in `[0, typeBits)`. This setup is identical for the 8/16/32/64-bit
-    /// unpackers, so it lives here; the per-element unpack loops stay specialised per width because
-    /// their typed `ValueLayout` access must constant-fold for the JIT to vectorise them.
+    /// unpackers, so it lives here; the per-element unpack loops stay specialized per width because
+    /// their typed `ValueLayout` access must constant-fold for the JIT to vectorize them.
     ///
     /// @param shifts            low-bit shift to apply to the current word, per row
     /// @param remainingBits     bits spilling into the next word (0 when the value fits one word)

@@ -6,7 +6,7 @@ import io.github.dfa1.vortex.core.error.VortexException;
 ///
 /// `days`, `seconds` and `subseconds` children can each be one of
 /// the four signed-integer typed array interfaces; the writer picks the narrowest
-/// ptype that fits. [#readLong(Array, long)] centralises the per-row read so
+/// ptype that fits. [#readLong(Array, long)] centralizes the per-row read so
 /// the record itself stays compact.
 final class DateTimePartsArrays {
 

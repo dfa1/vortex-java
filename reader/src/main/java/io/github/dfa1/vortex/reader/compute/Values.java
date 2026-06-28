@@ -16,11 +16,11 @@ import io.github.dfa1.vortex.reader.array.VarBinArray;
 
 /// The single generic value-access path shared by every streaming kernel: one element read and one
 /// null test that work for *any* [Array] via its typed accessor, the matrix-explosion mitigation
-/// ADR 0013 prescribes (one generic path over the encodings, specialise the hot ones later).
+/// ADR 0013 prescribes (one generic path over the encodings, specialize the hot ones later).
 ///
 /// Reads decode through the per-type accessor a single element at a time — the tier-2 streaming
 /// contract of ADR 0013 §3. No method here ever calls [Array#materialize(java.lang.foreign.SegmentAllocator)]:
-/// a full-buffer materialise is the forbidden tier-3 last resort and the kernels do not need it.
+/// a full-buffer materialize is the forbidden tier-3 last resort and the kernels do not need it.
 final class Values {
 
     private Values() {
@@ -54,7 +54,7 @@ final class Values {
         Array data = array instanceof MaskedArray masked ? masked.inner() : array;
         // NOTE: this boxing path is the correctness baseline of ADR 0013 §3 tier 2 — one generic
         // accessor read that works for every encoding. It deliberately violates the hot-loop
-        // "no per-element boxing" ideal; encoded-domain specialisation of the hot encodings (ALP,
+        // "no per-element boxing" ideal; encoded-domain specialization of the hot encodings (ALP,
         // FoR, BitPacked, Dict) is the deferred performance escalation, not part of this step.
         return switch (data) {
             case LongArray la -> la.getLong(i);

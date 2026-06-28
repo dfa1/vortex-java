@@ -86,7 +86,7 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
         };
     }
 
-    /// Computes the serialised min/max [io.github.dfa1.vortex.core.proto.ProtoScalarValue] pair for a raw
+    /// Computes the serialized min/max [io.github.dfa1.vortex.core.proto.ProtoScalarValue] pair for a raw
     /// primitive array, in the same signed/unsigned/float shape the per-segment stats use. Returns
     /// `null` for an empty array. Shared so the dictionary zone-map path computes per-chunk min/max
     /// identically to the flat path.
@@ -290,7 +290,7 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
         };
     }
 
-    /// Computes the serialised SUM [io.github.dfa1.vortex.core.proto.ProtoScalarValue] for a raw primitive
+    /// Computes the serialized SUM [io.github.dfa1.vortex.core.proto.ProtoScalarValue] for a raw primitive
     /// array, in the widened shape Rust uses for zone-map sums: signed ints → `i64`, unsigned ints
     /// → `u64`, floats → `f64`. Returns `null` on integer overflow (Rust drops the zone's sum) and
     /// for an empty array. Floats never overflow to `null` (they saturate to infinity).

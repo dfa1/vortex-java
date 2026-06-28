@@ -34,7 +34,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/// Verifies Registry.allowUnknown() passthrough behaviour end-to-end
+/// Verifies Registry.allowUnknown() passthrough behavior end-to-end
 /// using a JNI-written file whose encodings are deliberately absent from the registry.
 class AllowUnknownIntegrationTest {
 

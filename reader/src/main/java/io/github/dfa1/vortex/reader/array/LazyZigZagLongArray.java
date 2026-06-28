@@ -27,7 +27,7 @@ public record LazyZigZagLongArray(DType dtype, long length, MemorySegment encode
     /// Bulk-decodes through [#getLong(long)] into a fresh little-endian `i64` segment.
     /// The decode formula lives only in [#getLong(long)]; this override exists solely to
     /// give the JIT a monomorphic, inlinable call site (the shared [LongArray] default is
-    /// megamorphic across every implementation and will not inline or auto-vectorise).
+    /// megamorphic across every implementation and will not inline or auto-vectorize).
     ///
     /// @param arena allocator for the output segment
     /// @return a little-endian `i64` segment of decoded values

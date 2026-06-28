@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * Adversarial tests for the layout-tree recursion in
  * [PostscriptParser]'s `convertLayout`.
  *
- * <p>The reader walks the layout tree recursively when materialising a file's
+ * <p>The reader walks the layout tree recursively when materializing a file's
  * `FbsLayout` object. Without a depth cap a crafted file with thousands of
  * nested children produces a [StackOverflowError] during `VortexReader.open`,
  * breaking the contract that every malformed input must surface as a [VortexException].

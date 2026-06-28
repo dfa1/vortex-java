@@ -9,7 +9,7 @@ import java.util.function.LongBinaryOperator;
 import java.util.function.LongConsumer;
 
 /// Buffer-backed [LongArray] — the fallback used when an encoding decoder
-/// either materialises the output eagerly or has no lazy variant of its own.
+/// either materializes the output eagerly or has no lazy variant of its own.
 public final class MaterializedLongArray extends AbstractMaterializedArray implements LongArray {
 
     /// Creates a new `MaterializedLongArray` backed by the given memory segment.

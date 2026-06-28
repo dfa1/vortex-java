@@ -24,12 +24,12 @@ import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// Randomised oracle test: the type-specialised fast lane of [StreamingFilterKernel] /
+/// Randomised oracle test: the type-specialized fast lane of [StreamingFilterKernel] /
 /// [Reductions] must be bit-identical to the generic boxing path for every primitive input. For each
 /// seeded scenario it builds a random primitive column (each integer width signed and unsigned,
 /// `f32` / `f64`, with and without nulls), a random incoming mask, and a random predicate, then
-/// asserts the specialised `filter` / `sum` / `count` / `min` / `max` results equal what the generic
-/// path produces. Catching any divergence here guards against behavioural drift, the one thing the
+/// asserts the specialized `filter` / `sum` / `count` / `min` / `max` results equal what the generic
+/// path produces. Catching any divergence here guards against behavioral drift, the one thing the
 /// fast lane must never introduce.
 class ComputeEquivalenceTest {
 
@@ -48,14 +48,14 @@ class ComputeEquivalenceTest {
 
     @ParameterizedTest
     @MethodSource("seeds")
-    void specialisedMatchesGeneric(int seed) {
+    void specializedMatchesGeneric(int seed) {
         // Given a randomly shaped primitive column, incoming mask and predicate for this seed
         Random random = new Random(seed);
         Array array = randomColumn(random);
         Mask incoming = randomMask(random, array.length());
         Predicate predicate = randomPredicate(random, array, 0);
 
-        // When the specialised fast lane and the generic oracle both run
+        // When the specialized fast lane and the generic oracle both run
         // Then filter and every reduction agree, position by position and value for value
         assertFilterAgrees(array, incoming, predicate);
         assertReductionsAgree(array, incoming);
@@ -98,15 +98,15 @@ class ComputeEquivalenceTest {
     }
 
     private void assertFilterAgrees(Array array, Mask incoming, Predicate predicate) {
-        Mask specialised = filterKernel.apply(array, incoming, predicate, ARENA);
+        Mask specialized = filterKernel.apply(array, incoming, predicate, ARENA);
         Mask generic = filterKernel.applyGeneric(array, incoming, predicate, ARENA);
         long n = array.length();
         for (long i = 0; i < n; i++) {
-            assertThat(specialised.get(i))
+            assertThat(specialized.get(i))
                     .as("position %d for predicate %s on %s", i, predicate, array.dtype())
                     .isEqualTo(generic.get(i));
         }
-        assertThat(specialised.trueCount()).isEqualTo(generic.trueCount());
+        assertThat(specialized.trueCount()).isEqualTo(generic.trueCount());
     }
 
     private void assertReductionsAgree(Array array, Mask mask) {

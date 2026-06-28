@@ -25,7 +25,7 @@ import java.lang.foreign.ValueLayout;
 /// eagerly expand `codes` and `values` into a contiguous output segment
 /// via `expandU8/U16/U32` — these mirror the broadcast-aware scatter loop
 /// with `SegmentBroadcast.capacity` (ConstantEncoding fan-out), so the
-/// output is materialised at decode time. ADR 0012's lazy-dict scope is the
+/// output is materialized at decode time. ADR 0012's lazy-dict scope is the
 /// layout-level path in `ScanIterator.decodeDictLayout`, which is now lazy
 /// via `DictXxxArray`; this encoding-level path runs only when a parent
 /// decoder explicitly calls `decodeChild` on a `vortex.dict` segment,

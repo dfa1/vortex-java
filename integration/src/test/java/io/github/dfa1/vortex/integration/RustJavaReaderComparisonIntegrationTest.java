@@ -217,7 +217,7 @@ class RustJavaReaderComparisonIntegrationTest {
              var iter = reader.scan(io.github.dfa1.vortex.reader.ScanOptions.all())) {
             // Skip extension columns: Rust's stats path reports them under their logical
             // type (timestamp etc.), so summing their storage longs would diverge from
-            // Rust's per-column report. Match Rust's behaviour by ignoring them.
+            // Rust's per-column report. Match Rust's behavior by ignoring them.
             java.util.Set<String> extensionCols = new java.util.HashSet<>();
             if (reader.dtype() instanceof DType.Struct schema) {
                 for (int i = 0; i < schema.fieldNames().size(); i++) {

@@ -32,7 +32,7 @@ final class PcoIntMultDetector {
     ///
     /// @param latents  unsigned-ordered latent values
     /// @param dtypeSize physical width in bits (16/32/64) — restricts GCD search
-    /// @return the chosen base if IntMult is favourable, otherwise empty
+    /// @return the chosen base if IntMult is favorable, otherwise empty
     static OptionalLong choose(long[] latents, int dtypeSize) {
         long[] sample = sample(latents);
         if (sample == null) {

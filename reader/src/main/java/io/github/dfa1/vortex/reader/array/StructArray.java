@@ -73,7 +73,7 @@ public final class StructArray implements Array {
     }
 
     /// Always throws: a struct has one segment per field, not a single primary
-    /// segment. Materialise each [#field(int)] separately.
+    /// segment. Materialize each [#field(int)] separately.
     ///
     /// @param arena unused
     /// @return never returns

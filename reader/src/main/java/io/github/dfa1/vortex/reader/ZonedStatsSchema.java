@@ -93,7 +93,7 @@ public final class ZonedStatsSchema {
     ///
     /// Unknown bits (set at an index past [Stat#values()]'s length, which
     /// would mean a newer Vortex writer) are silently skipped — matching the Rust
-    /// reader's forward-compatibility behaviour.
+    /// reader's forward-compatibility behavior.
     ///
     /// @param metadata raw `vortex.stats` layout metadata, possibly `null`
     /// @return present stats in ascending ordinal order; empty if metadata carries no bitset

@@ -66,11 +66,11 @@ public final class MaskedArray implements Array {
         return new MaskedArray(truncChild, truncValidity);
     }
 
-    /// Materialises the inner (data) payload, ignoring the validity mask — the
+    /// Materializes the inner (data) payload, ignoring the validity mask — the
     /// segment returned is the data buffer only. Unwraps to the inner array's own
-    /// materialisation; callers that need validity must read [#validity()] separately.
+    /// materialization; callers that need validity must read [#validity()] separately.
     ///
-    /// @param arena allocator used to materialise lazy inner variants
+    /// @param arena allocator used to materialize lazy inner variants
     /// @return the inner payload's primary [MemorySegment]
     @Override
     public MemorySegment materialize(SegmentAllocator arena) {

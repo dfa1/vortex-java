@@ -203,33 +203,33 @@ class StreamingFilterKernelTest {
     }
 
     @Test
-    void dictEncodingAlignsWithMaterialisedEquivalent() {
-        // Given a dict array [10,20,30,10,20] and its materialised twin — the ADR risk-note check
+    void dictEncodingAlignsWithMaterializedEquivalent() {
+        // Given a dict array [10,20,30,10,20] and its materialized twin — the ADR risk-note check
         // that a mask stays positionally aligned under a cascaded encoding
         Array dict = ComputeArrays.dictLongArray(ARENA, new long[]{10, 20, 30}, new int[]{0, 1, 2, 0, 1});
-        Array materialised = ComputeArrays.longArray(ARENA, 10, 20, 30, 10, 20);
+        Array materialized = ComputeArrays.longArray(ARENA, 10, 20, 30, 10, 20);
 
         // When the same predicate runs over both representations
         Mask dictMask = filter(dict, new Predicate.Gt(15L));
-        Mask materialisedMask = filter(materialised, new Predicate.Gt(15L));
+        Mask materializedMask = filter(materialized, new Predicate.Gt(15L));
 
         // Then the masks are identical
-        assertThat(dictMask).isEqualTo(materialisedMask);
+        assertThat(dictMask).isEqualTo(materializedMask);
         assertThat(selected(dictMask)).containsExactly(1L, 2L, 4L);
     }
 
     @Test
-    void chunkedEncodingAlignsWithMaterialisedEquivalent() {
-        // Given a chunked array [[1,2],[3,4,5]] and its materialised twin
+    void chunkedEncodingAlignsWithMaterializedEquivalent() {
+        // Given a chunked array [[1,2],[3,4,5]] and its materialized twin
         Array chunked = ComputeArrays.chunkedLongArray(ARENA, new long[]{1, 2}, new long[]{3, 4, 5});
-        Array materialised = ComputeArrays.longArray(ARENA, 1, 2, 3, 4, 5);
+        Array materialized = ComputeArrays.longArray(ARENA, 1, 2, 3, 4, 5);
 
         // When the same predicate runs over both representations
         Mask chunkedMask = filter(chunked, new Predicate.Gt(2L));
-        Mask materialisedMask = filter(materialised, new Predicate.Gt(2L));
+        Mask materializedMask = filter(materialized, new Predicate.Gt(2L));
 
         // Then the masks are identical across the chunk boundary
-        assertThat(chunkedMask).isEqualTo(materialisedMask);
+        assertThat(chunkedMask).isEqualTo(materializedMask);
         assertThat(selected(chunkedMask)).containsExactly(2L, 3L, 4L);
     }
 

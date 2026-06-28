@@ -342,7 +342,7 @@ class PredicateTest {
                 new Predicate.Or(new Predicate.IsNull(), new Predicate.IsNotNull())
             };
 
-            // When labelling each variant through an exhaustive, default-free pattern switch
+            // When labeling each variant through an exhaustive, default-free pattern switch
             String result = label(all[0]);
 
             // Then every variant resolves to a distinct label

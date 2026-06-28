@@ -15,7 +15,7 @@ Use GitHub's private vulnerability reporting:
 1. Open <https://github.com/dfa1/vortex-java/security/advisories/new>.
 2. Fill in the form. Include a minimal reproduction (a `.vortex` file or the bytes that
    trigger the issue) where possible.
-3. You'll receive an acknowledgement within **3 business days**.
+3. You'll receive an acknowledgment within **3 business days**.
 
 If GitHub's reporting flow is unavailable, email the maintainer at the address on the project's
 Maven Central metadata.
@@ -42,7 +42,7 @@ In scope:
 - Any malformed `.vortex` input that causes silent data corruption — wrong row count,
   wrong values, or a misaligned column with a successful return.
 - Any vulnerability in `VortexWriter` that produces files which would later trigger the
-  above behaviours when read.
+  above behaviors when read.
 
 Out of scope:
 

@@ -17,7 +17,7 @@ results to `gh-pages/dev/bench` via `benchmark-action/github-action-benchmark`.
 GitHub Actions shared runners share physical hosts with other tenants. JMH
 benchmarks are sensitive to CPU frequency scaling, SMT contention, and OS
 scheduler noise. Typical variance on shared runners is **20–40%** per run —
-larger than the signal for a 10–15% decode optimisation. A number published
+larger than the signal for a 10–15% decode optimization. A number published
 from a shared runner cannot be cited, compared across commits, or used to
 claim a performance target is met.
 
@@ -25,7 +25,7 @@ The current workflow does carry a regression threshold (`alert-threshold: 130%`)
 with `comment-on-alert: true`. That is a **2.3 σ** guard relative to the noise
 floor — it catches catastrophic regressions (5–10×) but misses 10–30%
 regressions, which are the ones that actually matter during encoder
-optimisation work.
+optimization work.
 
 ### The alternative: local-run publish
 
@@ -95,7 +95,7 @@ cd -
 
 Without the CI workflow, regressions are caught by:
 
-1. **Running `bench-publish` before and after an optimisation PR.** The
+1. **Running `bench-publish` before and after an optimization PR.** The
    commit SHAs in the filenames make A/B comparison mechanical.
 2. **Adding a JMH regression test** (`@BenchmarkMode(Throughput)` with an
    `assert` or a baseline comparison in the performance module) — not
@@ -141,13 +141,13 @@ longer updated.
 - `bench-publish` requires local Java + Maven build; not runnable from a
   mobile device / tablet.
 - Numbers accumulate only when the developer actively publishes. Long
-  gaps between optimisation cycles leave stale README tables.
+  gaps between optimization cycles leave stale README tables.
 
 ### Risk
 - If a second contributor joins and cannot reproduce numbers on different
   hardware, the single-machine baseline becomes a coordination problem.
   Mitigation: `benchmark-meta.json` documents the reference hardware;
-  normalise by throughput ratio (new hardware / reference) rather than
+  normalize by throughput ratio (new hardware / reference) rather than
   absolute scores.
 
 ## References

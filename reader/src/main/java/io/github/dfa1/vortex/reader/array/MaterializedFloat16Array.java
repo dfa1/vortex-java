@@ -7,7 +7,7 @@ import io.github.dfa1.vortex.core.io.PTypeIO;
 import java.lang.foreign.MemorySegment;
 
 /// Buffer-backed [Float16Array] — the fallback used when an encoding decoder
-/// either materialises the output eagerly or has no lazy variant of its own.
+/// either materializes the output eagerly or has no lazy variant of its own.
 public final class MaterializedFloat16Array extends AbstractMaterializedArray implements Float16Array {
 
     /// Creates a new `MaterializedFloat16Array` backed by the given memory segment.

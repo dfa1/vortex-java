@@ -25,7 +25,7 @@ caught at the lowest layer that can see them.
 
 | Layer | Runner | ~Executions | Scope |
 |-------|--------|-------------|-------|
-| Unit | surefire | ~2,690 | One class/behaviour, in-memory, no I/O |
+| Unit | surefire | ~2,690 | One class/behavior, in-memory, no I/O |
 | Property-based | surefire | (subset of unit) | Seeded-random sweeps over encode/decode |
 | Integration | failsafe | ~271 | Java↔Rust interop + real files + CLI end-to-end |
 | Mutation | PIT (opt-in) | — | Adequacy of tests for bounds/parse classes |
@@ -42,7 +42,7 @@ I/O, no network, no sleep — mock or use in-memory `MemorySegment`s. Each test 
 
 What they cover, by module:
 
-- **core** (256) — `DType`/`PType` modelling, `IoBounds` guards, `PTypeIO` little-endian
+- **core** (256) — `DType`/`PType` modeling, `IoBounds` guards, `PTypeIO` little-endian
   segment reads/writes, proto record encode/decode.
 - **reader** (780) — every `EncodingDecoder` and `Array` subtype, the file-structure
   parsers (`Footer`, `Trailer`, `PostscriptParser`, `Layout`), and the lazy/chunked/dict
@@ -69,7 +69,7 @@ Seeds are fixed so any failure reproduces. Current property suites:
 - `CascadingCompressorTest.RoundTripProperty` — the full encoder-selection + nesting
   pipeline, every codec at cascade depth 0–3.
 - `PcoEncodingEncoderTest` / `PcoEncodingDecoderTest` — Pco mode pickers (delta, IntMult),
-  bin optimiser, and ANS/patch paths over mixed distributions.
+  bin optimizer, and ANS/patch paths over mixed distributions.
 
 ## Integration tests (`./mvnw verify -pl integration -am`)
 
@@ -134,13 +134,13 @@ explicit `ClassName.methodName` filter.
 
 Coverage (JaCoCo, aggregated across surefire + failsafe) is ~81% and is reported to
 SonarCloud daily. Generated `fbs/`/`proto/` sources and the `performance/` benchmark module
-are excluded — they have no hand-written behaviour worth covering. The quality gate requires
+are excluded — they have no hand-written behavior worth covering. The quality gate requires
 zero bugs and zero vulnerabilities; the build itself fails on any javac warning
 (`-Xlint:all -Werror`), zero Checkstyle violations, and zero Javadoc warnings.
 
 ## Reading the signals: Sonar and PIT as data, not verdicts
 
-SonarCloud and PIT both report facts, not judgements. A Sonar finding ("this line is
+SonarCloud and PIT both report facts, not judgments. A Sonar finding ("this line is
 uncovered", "these blocks are duplicated") is a pointer to look, not a defect by itself —
 the interpretation is the engineering work. Two patterns recur often enough to be worth
 naming.
@@ -150,7 +150,7 @@ naming.
 When Sonar flags a line as not covered, it is exactly one of:
 
 1. **Missing test** — reachable by valid input, just never exercised. Add the test.
-2. **Dead code** — unreachable by any input. Delete it; a test would only pin behaviour
+2. **Dead code** — unreachable by any input. Delete it; a test would only pin behavior
    that can never run.
 3. **Defensive-by-contract** — reachable only if an invariant is already broken: the
    `default -> throw new VortexException(...)` arms, the `catch (IOException)` on metadata
@@ -173,11 +173,11 @@ Sonar's duplication metric is also a pointer, not an order. Most flagged duplica
 and should be factored out — e.g. the four `unpackLoop8/16/32/64` methods in
 `BitpackedEncodingDecoder` each rebuilt an identical per-row schedule, now hoisted into one
 `schedule(typeBits, bitWidth)` helper. But some duplication is the price of a hard
-constraint: the per-element inner unpack loops in those same methods stay specialised per
+constraint: the per-element inner unpack loops in those same methods stay specialized per
 width on purpose, because a generic `ValueLayout`/accessor would stop C2 from constant-folding
-the typed access and block superword vectorisation (the hot-loop rule). When duplication and a
+the typed access and block superword vectorization (the hot-loop rule). When duplication and a
 performance or safety invariant conflict, the invariant wins — factor out the cold,
-run-once part and leave the hot, specialised part alone, with a comment saying why.
+run-once part and leave the hot, specialized part alone, with a comment saying why.
 
 The throughline: let the tools point at the data, then decide with the context they do not
 have.

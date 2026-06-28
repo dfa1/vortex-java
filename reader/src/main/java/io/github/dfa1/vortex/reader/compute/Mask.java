@@ -10,9 +10,9 @@ import static io.github.dfa1.vortex.core.io.PTypeIO.LE_LONG;
 /// sketched in ADR 0013 §1.
 ///
 /// A mask answers, for each logical position in `[0, length())`, whether that row is selected.
-/// Kernels intersect masks across pipeline stages and downstream stages honour them (skip
+/// Kernels intersect masks across pipeline stages and downstream stages honor them (skip
 /// excluded positions during a reduce, emit a smaller result for a take) so that nothing
-/// materialises until a sink demands it.
+/// materializes until a sink demands it.
 ///
 /// The four variants trade representation for the producer that creates them:
 /// - [Mask.AllTrue] / [Mask.AllFalse] — every position selected / rejected, allocation-free.

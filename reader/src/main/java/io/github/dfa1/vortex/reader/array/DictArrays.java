@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.error.VortexException;
 
 /// Package-private helpers shared by the `DictXxxArray` records.
 ///
-/// Centralises the codes-type validation (so the four record `of`
+/// Centralizes the codes-type validation (so the four record `of`
 /// factories agree on what counts as a valid codes array) and the scalar
 /// `readCode` dispatch (so a single update fixes all four records).
 final class DictArrays {

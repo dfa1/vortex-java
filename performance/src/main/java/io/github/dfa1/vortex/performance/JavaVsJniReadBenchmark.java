@@ -65,7 +65,7 @@ import java.util.concurrent.TimeUnit;
 /// file with whatever encodings the Rust implementation chooses.
 ///
 /// Both benchmarks project onto the "close" column (F64) and sum all values so
-/// the JVM can't optimise away the decode work.
+/// the JVM can't optimize away the decode work.
 ///
 /// Run: java -jar performance/target/benchmarks.jar JavaVsJniReadBenchmark
 ///
@@ -346,7 +346,7 @@ public class JavaVsJniReadBenchmark {
         return sum[0];
     }
 
-    // ── Top-N reads: amortise open + footer/layout decode over N rows ────────
+    // ── Top-N reads: amortize open + footer/layout decode over N rows ────────
 
     /// Java read: project on "volume", consume only the first 10 rows.
     @Benchmark

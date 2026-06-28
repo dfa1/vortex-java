@@ -387,7 +387,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
 
     /// Returns the row count of every chunk in scan order, without decoding values.
     ///
-    /// Walks the file's layout tree (initialising internal state on first call) and
+    /// Walks the file's layout tree (initializing internal state on first call) and
     /// returns one element per chunk that the iterator would yield, in the same
     /// order. Useful for tooling that needs to navigate by absolute row index
     /// (e.g. an interactive grid viewer) before deciding which chunks to actually
@@ -859,7 +859,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             // Zip-bomb guard (lazy path): the codes Array has already been decoded above;
             // its length() reflects the claimed rowCount but its backing buffer may be
             // mmap-bounded. Validate by inspecting the underlying segment without forcing
-            // materialisation of non-segment-backed codes (lazy variants).
+            // materialization of non-segment-backed codes (lazy variants).
             validateDictCodesCapacity(codes, codesPType, n);
             return buildLazyDictPrimitive(pDtype, n, values, codes);
         }

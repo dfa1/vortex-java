@@ -130,7 +130,7 @@ class DictRecordSmokeTest {
         }
 
         @Test
-        void forEachLongMaterialisesInOrder() {
+        void forEachLongMaterializesInOrder() {
             try (Arena arena = Arena.ofConfined()) {
                 LongArray values = longArray(arena, 100L, 200L);
                 ByteArray codes = byteArray(arena, (byte) 1, (byte) 0, (byte) 1);
@@ -226,7 +226,7 @@ class DictRecordSmokeTest {
         }
 
         @Test
-        void forEachIntMaterialisesInOrder() {
+        void forEachIntMaterializesInOrder() {
             try (Arena arena = Arena.ofConfined()) {
                 IntArray values = intArray(arena, I32, 10, 20);
                 ByteArray codes = byteArray(arena, (byte) 1, (byte) 0, (byte) 1);
@@ -314,7 +314,7 @@ class DictRecordSmokeTest {
         }
 
         @Test
-        void forEachDoubleMaterialisesInOrder() {
+        void forEachDoubleMaterializesInOrder() {
             try (Arena arena = Arena.ofConfined()) {
                 DoubleArray values = doubleArray(arena, 1.5, 2.5);
                 ByteArray codes = byteArray(arena, (byte) 0, (byte) 1, (byte) 0);

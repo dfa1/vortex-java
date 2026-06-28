@@ -12,7 +12,7 @@ import java.util.Optional;
 ///
 /// Subclasses keep their own typed element access and the branch-split hot loops
 /// (`getX` / `fold` / `forEach`): those must stay monomorphic in the leaf class so the
-/// JIT can vectorise them, and so are deliberately not hoisted here. This base only
+/// JIT can vectorize them, and so are deliberately not hoisted here. This base only
 /// holds the cold boilerplate.
 ///
 /// Not `implements Array`: that interface is sealed to the typed element families

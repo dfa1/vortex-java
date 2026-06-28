@@ -26,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /// Coverage for the adapter surface across every column type: SQL type mapping
-/// ([VortexTable#getRowType]), row materialisation ([VortexTable] scan + enumerator),
+/// ([VortexTable#getRowType]), row materialization ([VortexTable] scan + enumerator),
 /// [VortexSchema] lookup, and [VortexAggregates].
 class VortexAdapterCoverageTest {
 
@@ -94,7 +94,7 @@ class VortexAdapterCoverageTest {
     }
 
     @Test
-    void scan_materialisesEveryColumnToItsJavaType() {
+    void scan_materializesEveryColumnToItsJavaType() {
         // Given
         VortexTable table = new VortexTable(file);
 

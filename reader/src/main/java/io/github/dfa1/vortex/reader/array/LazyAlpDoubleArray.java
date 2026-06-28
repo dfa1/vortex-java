@@ -35,7 +35,7 @@ public record LazyAlpDoubleArray(DType dtype, long length, MemorySegment encoded
     /// The decode formula (including the two-step factor application that preserves IEEE
     /// rounding) lives only in [#getDouble(long)]; this override exists solely to give the
     /// JIT a monomorphic, inlinable call site (the shared [DoubleArray] default is
-    /// megamorphic across every implementation and will not inline or auto-vectorise).
+    /// megamorphic across every implementation and will not inline or auto-vectorize).
     ///
     /// @param arena allocator for the output segment
     /// @return a little-endian `f64` segment of decoded values

@@ -52,7 +52,7 @@ A **`vortex.zstd` overhaul**: compression now runs through FFM bindings to the n
 - `vortex.zstd` segments compressed with a shared (trained) dictionary now decode, via the native `libzstd` dictionary support, instead of being rejected. The upstream `zstd.vortex` compatibility fixture is read end-to-end and matches the Rust reference. ([#104](https://github.com/dfa1/vortex-java/issues/104))
 - Writing a nullable `Utf8`/`Binary` column no longer throws `NullPointerException` (or silently drops nulls): nullable string columns now carry their validity like nullable primitives and round-trip through `vortex.masked`. As a result they decode as `MaskedArray` (validity + values child) rather than a bare `VarBinArray`. ([#168](https://github.com/dfa1/vortex-java/pull/168))
 - CSV export now handles nullable columns (`MaskedArray`): null rows export as an empty field instead of failing with "unsupported array type for CSV export". ([#168](https://github.com/dfa1/vortex-java/pull/168))
-- Zone-map pruning now compares filter values in the *column's* type domain rather than by the boxed value's type. A predicate whose value is boxed at a different width (e.g. `Integer` on an `I64` column) — or any value on a `U64` column — previously pruned nothing and silently degraded to a full scan; it now prunes correctly (unsigned columns by unsigned order). As part of this, a filter value genuinely incomparable to its column (e.g. a `String` against a numeric column) now raises `VortexException` during the scan instead of silently disabling pruning — a behaviour change for callers that relied on the previous silent full scan. ([#159](https://github.com/dfa1/vortex-java/issues/159))
+- Zone-map pruning now compares filter values in the *column's* type domain rather than by the boxed value's type. A predicate whose value is boxed at a different width (e.g. `Integer` on an `I64` column) — or any value on a `U64` column — previously pruned nothing and silently degraded to a full scan; it now prunes correctly (unsigned columns by unsigned order). As part of this, a filter value genuinely incomparable to its column (e.g. a `String` against a numeric column) now raises `VortexException` during the scan instead of silently disabling pruning — a behavior change for callers that relied on the previous silent full scan. ([#159](https://github.com/dfa1/vortex-java/issues/159))
 
 ## [0.9.0] — 2026-06-24
 
@@ -73,11 +73,11 @@ Two import-only breaking changes — the `vortex-core` types moved under `io.git
 
 ## [0.8.3] — 2026-06-23
 
-A **Sonar-driven refactoring** release: no new file-format capability, but a focused pass using SonarCloud findings to drive cleanups — dead code removed, duplication factored out, and one hot-loop micro-optimisation. Each finding was triaged (lead, not verdict) so the changes preserve behaviour and the JIT vectorisation of the hot decode loops. The interpretation framework behind this is now documented in `docs/testing.md`.
+A **Sonar-driven refactoring** release: no new file-format capability, but a focused pass using SonarCloud findings to drive cleanups — dead code removed, duplication factored out, and one hot-loop micro-optimization. Each finding was triaged (lead, not verdict) so the changes preserve behavior and the JIT vectorization of the hot decode loops. The interpretation framework behind this is now documented in `docs/testing.md`.
 
 ### Performance
 
-- `FastLanes.transposeIndex` / `iterateIndex`: replaced the per-element `%`/`/` + `ORDER[]` indirection with permutation tables built once in a static initialiser. Faster address generation keeps more outstanding scatter misses in flight; measured 1.4×–3.4× on the transpose/undelta kernels (Apple M5, L1→DRAM working sets). The per-element decode loops stay specialised per width to preserve C2 superword vectorisation. ([089b6e36](https://github.com/dfa1/vortex-java/commit/089b6e36), [e683a634](https://github.com/dfa1/vortex-java/commit/e683a634))
+- `FastLanes.transposeIndex` / `iterateIndex`: replaced the per-element `%`/`/` + `ORDER[]` indirection with permutation tables built once in a static initializer. Faster address generation keeps more outstanding scatter misses in flight; measured 1.4×–3.4× on the transpose/undelta kernels (Apple M5, L1→DRAM working sets). The per-element decode loops stay specialized per width to preserve C2 superword vectorization. ([089b6e36](https://github.com/dfa1/vortex-java/commit/089b6e36), [e683a634](https://github.com/dfa1/vortex-java/commit/e683a634))
 
 ### Removed
 
@@ -131,7 +131,7 @@ The headline is **writer-side zone-map statistics**: the writer now emits `vorte
 
 ## [0.8.1] — 2026-06-20
 
-A hardening release: no new file-format capability, but a large step up in verification rigour. Mutation testing (PIT) now guards the security-critical bounds/parse paths in core, reader, and writer at 99–100% kill rate; the build fails on any javac warning (`-Xlint:all -Werror`); and property-based round-trips exercise every lossless encoding plus the full cascade-selection pipeline against seeded-random inputs. The one functional addition is boxed-nullable array input on the map `writeChunk` path.
+A hardening release: no new file-format capability, but a large step up in verification rigor. Mutation testing (PIT) now guards the security-critical bounds/parse paths in core, reader, and writer at 99–100% kill rate; the build fails on any javac warning (`-Xlint:all -Werror`); and property-based round-trips exercise every lossless encoding plus the full cascade-selection pipeline against seeded-random inputs. The one functional addition is boxed-nullable array input on the map `writeChunk` path.
 
 ### Added
 
@@ -169,7 +169,7 @@ Read and write Vortex Variant (semi-structured, JSON-shaped) columns from Java. 
 ### Added
 
 - Writer: `vortex.variant` encoder. Encodes a variant column as the canonical `vortex.variant` container over `core_storage` — an all-equal column becomes a single `vortex.constant`, a row-varying column a `vortex.chunked` of per-run constants — with an optional row-aligned typed `shredded` child recorded in `VariantMetadata.shredded_dtype`. Input is `VariantData(List<Scalar>)` with `.constant(n, v)` / `.shredded(...)` factories. Java↔Rust (JNI) round-trip verified for constant, row-varying, and shredded columns. Scalar values only — arbitrary nested objects need `vortex.parquet.variant` (deferred, [ADR 0014](docs/adr/0014-variant-encoding-strategy.md)). ([35da529d](https://github.com/dfa1/vortex-java/commit/35da529d), [e4e44980](https://github.com/dfa1/vortex-java/commit/e4e44980), [4566dca0](https://github.com/dfa1/vortex-java/commit/4566dca0))
-- Reader: variant columns now decode Java-side. `ConstantEncodingDecoder` and `ChunkedEncodingDecoder` handle `DType.Variant` (materialising the inner-typed array); `VariantEncodingDecoder` wraps the result as `VariantArray`, exposing `coreStorage()` and `shredded()`. ([76e4c741](https://github.com/dfa1/vortex-java/commit/76e4c741), [4566dca0](https://github.com/dfa1/vortex-java/commit/4566dca0))
+- Reader: variant columns now decode Java-side. `ConstantEncodingDecoder` and `ChunkedEncodingDecoder` handle `DType.Variant` (materializing the inner-typed array); `VariantEncodingDecoder` wraps the result as `VariantArray`, exposing `coreStorage()` and `shredded()`. ([76e4c741](https://github.com/dfa1/vortex-java/commit/76e4c741), [4566dca0](https://github.com/dfa1/vortex-java/commit/4566dca0))
 
 ### Security
 
@@ -236,7 +236,7 @@ CLI usability + reader robustness on real-world files (NYC Yellow Taxi).
 ### Added
 
 - CLI `view <file>` — scrollable Excel-like grid TUI. Streams rows on demand via a new `LazyGridSource` (one live chunk at a time, format only the visible window). Title bar shows `chunk K/N`. Default writes to alt-screen; quit with `q` / `Esc`. ([1c0311fb](https://github.com/dfa1/vortex-java/commit/1c0311fb), [b7f6b6c1](https://github.com/dfa1/vortex-java/commit/b7f6b6c1), [94e5bff8](https://github.com/dfa1/vortex-java/commit/94e5bff8), [6a8ddd3a](https://github.com/dfa1/vortex-java/commit/6a8ddd3a))
-- CLI `export` writes to a derived `<name>.csv` next to the input by default, with a stderr progress bar mirroring the import flow. `export <file.vortex> -` keeps the old stdout streaming behaviour. ([2b26da9a](https://github.com/dfa1/vortex-java/commit/2b26da9a))
+- CLI `export` writes to a derived `<name>.csv` next to the input by default, with a stderr progress bar mirroring the import flow. `export <file.vortex> -` keeps the old stdout streaming behavior. ([2b26da9a](https://github.com/dfa1/vortex-java/commit/2b26da9a))
 - Reader: `ScanIterator.chunkRowCounts()` — returns per-chunk row counts by walking the layout tree, no value decode. Used by the `view` TUI to plan navigation. ([b7f6b6c1](https://github.com/dfa1/vortex-java/commit/b7f6b6c1))
 - Reader: lazy `vortex.decimal` decode — new `LazyDecimalArray` record holds a zero-copy mmap slice and produces `BigDecimal` per `getDecimal(i)`. Replaces the `GenericArray` wrapper, no buffers / children indirection. ([6bc955d2](https://github.com/dfa1/vortex-java/commit/6bc955d2))
 - Reader: 7 `Offset*Array` records (Long / Int / Short / Byte / Double / Float / Bool) + `VarBinArray.SlicedMode` for offset-based slicing of pre-decoded shared arrays. ([5df3d9a9](https://github.com/dfa1/vortex-java/commit/5df3d9a9))
@@ -244,7 +244,7 @@ CLI usability + reader robustness on real-world files (NYC Yellow Taxi).
 ### Fixed
 
 - Reader: per-column chunking alignment — files where one column has 1 mega-flat and another has N small flats (e.g. NYC Yellow Taxi 2024-01 has a 2.96M-row VendorID flat next to 23 × 131072-row datetime flats) now decode the wide column once into a `sharedArena` and slice it per chunk via `Offset*Array`. Previously the scan iterator emitted a single chunk whose datetime columns were the first 131072 rows only — silently dropping 95.6 % of the file. ([5df3d9a9](https://github.com/dfa1/vortex-java/commit/5df3d9a9))
-- Reader: `FrameOfReferenceEncodingDecoder` now takes the arena variant of `ArraySegments.of`, so lazy children (e.g. `LazyRunEndLongArray`) materialise instead of throwing "no primary segment". ([5df3d9a9](https://github.com/dfa1/vortex-java/commit/5df3d9a9))
+- Reader: `FrameOfReferenceEncodingDecoder` now takes the arena variant of `ArraySegments.of`, so lazy children (e.g. `LazyRunEndLongArray`) materialize instead of throwing "no primary segment". ([5df3d9a9](https://github.com/dfa1/vortex-java/commit/5df3d9a9))
 
 ### Docs
 
@@ -282,7 +282,7 @@ Cleanup release on top of 0.7.0 — one more lazy encoding, a Windows TUI usabil
 
 **pco encoder** (Classic + Consecutive delta + IntMult mode, 4-way tANS, multi-chunk, all 8 ptypes),
 **writer compression** (~93% Rust JNI parity on NYC Yellow Taxi: 47.0 MB → 43.4 MB; stratified sampling, stats-driven cascade, sparse-cascade idx/val children, patched bitpacking),
-**lazy / zero-copy decode** (ADR 0010 + ADR 0012: ALP / FoR / ZigZag / Chunked / Dict / RunEnd / RLE / Sparse / ALP-RD / VarBinView / DateTimeParts / DecimalByteParts now defer transform / materialisation until access),
+**lazy / zero-copy decode** (ADR 0010 + ADR 0012: ALP / FoR / ZigZag / Chunked / Dict / RunEnd / RLE / Sparse / ALP-RD / VarBinView / DateTimeParts / DecimalByteParts now defer transform / materialization until access),
 **write API ergonomics** (`DType` static factories, `structBuilder`, typed `writeChunk(Consumer<Chunk>)` — ADR 0009),
 **Sonar pass** (Codecov → SonarCloud, Javadoc HTML → Markdown, full `S6218 / S7474 / S2184 / S3776` sweep).
 
@@ -293,7 +293,7 @@ Cleanup release on top of 0.7.0 — one more lazy encoding, a Windows TUI usabil
 - ADR 0009 — write API ergonomics: `DType` static factories + `asNullable()` ([0e9d6703](https://github.com/dfa1/vortex-java/commit/0e9d6703)), `DType.structBuilder()` ([63d66eef](https://github.com/dfa1/vortex-java/commit/63d66eef)), typed `writeChunk(Consumer<Chunk>)` builder ([ddb3e21a](https://github.com/dfa1/vortex-java/commit/ddb3e21a)); design doc ([d9c4b99](https://github.com/dfa1/vortex-java/commit/d9c4b99), [a57ea70](https://github.com/dfa1/vortex-java/commit/a57ea70)); `MemorySegment` zero-copy overload split to ADR 0011 ([6367eb37](https://github.com/dfa1/vortex-java/commit/6367eb37))
 - ADR 0010 — lazy decode for 1:1 transform encodings: `LazyAlpFloatArray`, lazy `FoR` / `ZigZag` arrays defer the transform until first element access ([cff3acb5](https://github.com/dfa1/vortex-java/commit/cff3acb5), [c47c055c](https://github.com/dfa1/vortex-java/commit/c47c055c), [c3ca6951](https://github.com/dfa1/vortex-java/commit/c3ca6951), [68186f8f](https://github.com/dfa1/vortex-java/commit/68186f8f))
 - ADR 0012 — zero-copy decode for compound encodings. `ChunkedXxxArray` wraps instead of concatenating ([dfe7aa34](https://github.com/dfa1/vortex-java/commit/dfe7aa34), [c557b8fb](https://github.com/dfa1/vortex-java/commit/c557b8fb), [e2db153d](https://github.com/dfa1/vortex-java/commit/e2db153d)); `DictXxxArray` lazy reads ([9b97a1a5](https://github.com/dfa1/vortex-java/commit/9b97a1a5)); lazy `RunEnd` ([210449b5](https://github.com/dfa1/vortex-java/commit/210449b5)), `RLE` ([f35f9a96](https://github.com/dfa1/vortex-java/commit/f35f9a96)), `Sparse` ([b604f21c](https://github.com/dfa1/vortex-java/commit/b604f21c)), `ALP-RD` ([937ade36](https://github.com/dfa1/vortex-java/commit/937ade36)); `VarBinArray.ChunkedMode` ([b3696f5a](https://github.com/dfa1/vortex-java/commit/b3696f5a)) + `ViewMode` for VarBinView ([0eea0405](https://github.com/dfa1/vortex-java/commit/0eea0405)); `LazyDateTimePartsLongArray` ([8ab9ec70](https://github.com/dfa1/vortex-java/commit/8ab9ec70)); `LazyDecimalBytePartsArray` ([22887cb2](https://github.com/dfa1/vortex-java/commit/22887cb2)); design doc ([f6a19c47](https://github.com/dfa1/vortex-java/commit/f6a19c47), [2578f892](https://github.com/dfa1/vortex-java/commit/2578f892), [1c7f5950](https://github.com/dfa1/vortex-java/commit/1c7f5950))
-- ADR 0013 — compute primitives (masks, kernels, no-materialise) design doc ([400e5b03](https://github.com/dfa1/vortex-java/commit/400e5b03))
+- ADR 0013 — compute primitives (masks, kernels, no-materialize) design doc ([400e5b03](https://github.com/dfa1/vortex-java/commit/400e5b03))
 - `forEach*` / `fold` default methods on Short / Byte / Bool array interfaces; chunked overrides iterate children directly ([7dc6567e](https://github.com/dfa1/vortex-java/commit/7dc6567e), [f500afe3](https://github.com/dfa1/vortex-java/commit/f500afe3))
 - `truncateArray` preserves zero-copy on `ChunkedXxxArray` ([6f4eaa96](https://github.com/dfa1/vortex-java/commit/6f4eaa96))
 - ALP size-based exponent search ported from Rust, two-step decode ([f9bb7373](https://github.com/dfa1/vortex-java/commit/f9bb7373))
@@ -338,7 +338,7 @@ Cleanup release on top of 0.7.0 — one more lazy encoding, a Windows TUI usabil
 ### Notes
 
 - Pco encode FloatMult / FloatQuant modes deferred — marginal gain over existing Classic+ALP cascade.
-- Remaining 0.6 MB (1.4%) writer gap vs Rust JNI on the taxi benchmark is structural — concentrated in `trip_distance` (+540 KB, per-chunk ALP encoding) and `PULocationID` (+250 KB, dict-codes layout shape). Closing it needs `vortex.stats` outer-layer support or dtype-specialised dict schemes.
+- Remaining 0.6 MB (1.4%) writer gap vs Rust JNI on the taxi benchmark is structural — concentrated in `trip_distance` (+540 KB, per-chunk ALP encoding) and `PULocationID` (+250 KB, dict-codes layout shape). Closing it needs `vortex.stats` outer-layer support or dtype-specialized dict schemes.
 
 [0.7.0]: https://github.com/dfa1/vortex-java/compare/v0.6.0...v0.7.0
 
@@ -476,7 +476,7 @@ replaces the silent `hasNext()` arena-closing footgun with closeable `Chunk` obj
   `EncodingRegistry.builder().registerServiceLoaded().register(myEncoding).build()`.
   ([64ffbaa](https://github.com/dfa1/vortex-java/commit/64ffbaa))
 - **Breaking — `inspect` split into `inspect` (text) + `tui` (interactive).**
-  Previous `inspect <file>` behaviour stays on `inspect`; interactive use is now
+  Previous `inspect <file>` behavior stays on `inspect`; interactive use is now
   on the dedicated `tui` subcommand.
   ([e8db30a](https://github.com/dfa1/vortex-java/commit/e8db30a))
 - **`Extension` sealed hierarchy** replaces the prior `Extensions` utility class.
@@ -585,7 +585,7 @@ FlatBuffer/Protobuf runtime exceptions). Regression suite lives under
   blob offsets and `Layout.encoding` index are bounds-checked at parse time.
   ([f8f89fe](https://github.com/dfa1/vortex-java/commit/f8f89fe))
 - **Footer `segmentSpecs` bounds** — every spec is validated against `fileSize` the moment
-  the footer is materialised, eliminating later `IndexOutOfBoundsException` on
+  the footer is materialized, eliminating later `IndexOutOfBoundsException` on
   `MemorySegment.asSlice`.
   ([03845ac](https://github.com/dfa1/vortex-java/commit/03845ac))
 - **PType ordinal bounds-check** — `PType.fromOrdinal(int)` replaces all 22 `PType.values()[idx]`

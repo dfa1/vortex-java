@@ -30,7 +30,7 @@ final class PostscriptParser {
 
     /// Hard cap on per-layout metadata size. The FlatBuffer runtime returns an unbounded slice
     /// from `metadataAsSegment()`; a crafted file can claim a multi-gigabyte metadata
-    /// blob and force later allocators into pathological behaviour. 4 MiB is well above any
+    /// blob and force later allocators into pathological behavior. 4 MiB is well above any
     /// real encoding's metadata footprint (the largest is FSST's symbol table at ~32 KiB).
     static final int MAX_LAYOUT_METADATA_BYTES = 4 * 1024 * 1024;
 

@@ -7,7 +7,7 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 
 /// Buffer-backed [BoolArray] — the fallback used when an encoding decoder
-/// either materialises the output eagerly or has no lazy variant of its own.
+/// either materializes the output eagerly or has no lazy variant of its own.
 public final class MaterializedBoolArray extends AbstractMaterializedArray implements BoolArray {
 
     /// Constructs a `MaterializedBoolArray` backed by the given bit-packed buffer.

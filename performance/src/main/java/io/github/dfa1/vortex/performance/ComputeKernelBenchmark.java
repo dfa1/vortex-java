@@ -42,16 +42,16 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 
-/// Baseline for the encoded-domain compute-kernel specialisation of ADR 0013.
+/// Baseline for the encoded-domain compute-kernel specialization of ADR 0013.
 ///
 /// The compute kernels ([Compute#filter(Array, Predicate, Arena)] and
 /// [Compute#sum(Array, Mask)]) today decode every element through the typed accessor: the
-/// generic streaming filter path and the type-specialised, boxing-free reduce lane both read
+/// generic streaming filter path and the type-specialized, boxing-free reduce lane both read
 /// `getLong(i)` / `getDouble(i)` per row, so an ALP or Frame-of-Reference column is fully
 /// reconstructed into the value domain before a single comparison or addition runs. The future
 /// work compares and reduces directly in the encoded integer domain (ALP residuals, FoR offsets)
 /// without decoding. This benchmark pins the CURRENT decode-via-accessor cost so that win is
-/// provable: the same `@Benchmark` methods will show the speedup once the specialised kernels land.
+/// provable: the same `@Benchmark` methods will show the speedup once the specialized kernels land.
 ///
 /// One hundred million rows are written as `TOTAL_ROWS / CHUNK_ROWS` chunks of `CHUNK_ROWS` each
 /// with `WriteOptions.cascading(3)`, so the writer picks real encodings and the four columns decode
@@ -85,7 +85,7 @@ import org.openjdk.jmh.annotations.Warmup;
 /// - `forLoopX` — the naive decode-per-element loop, the developer's baseline.
 /// - `filterX` — the current kernel, which still decodes through the accessor; the `forLoopX`→
 ///   `filterX` gap is the kernel's overhead (or benefit) today.
-/// - the future encoded-domain specialisation — measured against `forLoopX`, which it must beat by
+/// - the future encoded-domain specialization — measured against `forLoopX`, which it must beat by
 ///   comparing and reducing in the integer domain instead of decoding every element.
 ///
 /// Run: java -jar performance/target/benchmarks.jar ComputeKernelBenchmark
@@ -252,7 +252,7 @@ public class ComputeKernelBenchmark {
     }
 
     /// Control: filters the plain (non-encoded) `plain` column with `plain > 0` across every chunk,
-    /// reading each long straight from the materialised segment. Shows the cost without an encoding
+    /// reading each long straight from the materialized segment. Shows the cost without an encoding
     /// to unwind. A per-chunk confined arena holds the mask and is freed each chunk.
     ///
     /// @return the number of selected rows over the whole dataset
@@ -357,7 +357,7 @@ public class ComputeKernelBenchmark {
     }
 
     /// Naive baseline for [#filterPlainControl()]: the hand-written `plain > 0` count loop over the
-    /// materialised accessor across every chunk, reading each long straight from the segment per
+    /// materialized accessor across every chunk, reading each long straight from the segment per
     /// element.
     ///
     /// @return the number of rows with `plain > 0` over the whole dataset

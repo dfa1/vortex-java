@@ -6,7 +6,7 @@ package io.github.dfa1.vortex.reader.array;
 /// Wire format: little-endian shorts (2 bytes/element). Element access widens
 /// to `float` via [Float#float16ToFloat]. The default impl is
 /// [MaterializedFloat16Array], a buffer-backed record returned when an
-/// encoding decoder either materialises values eagerly or has no lazy
+/// encoding decoder either materializes values eagerly or has no lazy
 /// variant of its own.
 public non-sealed interface Float16Array extends Array {
 

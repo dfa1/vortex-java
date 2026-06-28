@@ -9,7 +9,7 @@ import java.lang.foreign.MemorySegment;
 import java.util.function.LongBinaryOperator;
 
 /// Buffer-backed [ShortArray] — the fallback used when an encoding decoder
-/// either materialises the output eagerly or has no lazy variant of its own.
+/// either materializes the output eagerly or has no lazy variant of its own.
 public final class MaterializedShortArray extends AbstractMaterializedArray implements ShortArray {
 
     /// Creates a new `MaterializedShortArray` backed by the given memory segment.

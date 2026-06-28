@@ -29,7 +29,7 @@ public record WriteOptions(
     }
 
     /// Enable cascading compression with up to `depth` recursive levels.
-    /// Depth 0 preserves current first-match behaviour.
+    /// Depth 0 preserves current first-match behavior.
     ///
     /// @param depth maximum cascade depth
     /// @return `WriteOptions` with cascading enabled at the given depth

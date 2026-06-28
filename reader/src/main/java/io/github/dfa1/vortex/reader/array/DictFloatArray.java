@@ -47,7 +47,7 @@ public record DictFloatArray(DType dtype, long length, FloatArray values, Array 
         return values.getFloat(DictArrays.readCode(codes, i));
     }
 
-    /// Materialises by gathering one dictionary value per code into a fresh
+    /// Materializes by gathering one dictionary value per code into a fresh
     /// little-endian `f32` segment. The codes switch is hoisted outside the loop so
     /// each branch is a uniform gather over a single code width.
     ///

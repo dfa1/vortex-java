@@ -90,8 +90,8 @@ public record ChunkedByteArray(DType dtype, long length, ByteArray[] children, l
         return ChunkedByteArray.of(dtype, rows, ChunkedArrays.limitedChildren(children, offsets, rows));
     }
 
-    /// Materialises by concatenating each child's segment into one contiguous
-    /// byte buffer, each child materialised through its own
+    /// Materializes by concatenating each child's segment into one contiguous
+    /// byte buffer, each child materialized through its own
     /// [ByteArray#materialize(SegmentAllocator)].
     ///
     /// @param arena allocator for the output segment

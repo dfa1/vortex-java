@@ -67,8 +67,8 @@ both Chunked and Dict as first-class lazy storage types:
   `DictSlots { codes: ArrayRef, values: ArrayRef }`. Never expands.
 - **Compute kernels per encoding** —
   `vortex-array/src/arrays/chunked/compute/take.rs` sorts indices by chunk,
-  takes from each child separately, assembles. No canonical materialisation.
-- **Materialisation is opt-in** — `vortex-array/src/canonical.rs` provides
+  takes from each child separately, assembles. No canonical materialization.
+- **Materialization is opt-in** — `vortex-array/src/canonical.rs` provides
   `to_canonical()` for Arrow handoff. Default reads stay in encoded form.
 
 Java today inverts this: lazy is the exception (just the six transform
@@ -93,7 +93,7 @@ public record ChunkedDoubleArray(
     }
     // fold / forEachDouble: default-method inherited from interface,
     // but override here to iterate children sequentially — each child
-    // loop stays tight and the JIT vectorises per child.
+    // loop stays tight and the JIT vectorizes per child.
     @Override public double fold(double identity, DoubleBinaryOperator op) {
         double result = identity;
         for (DoubleArray c : children) {
@@ -118,23 +118,23 @@ Scope:
   real workload demands.)
 - `DictDoubleArray`, `DictLongArray`, `DictIntArray`, `DictVarBinArray`.
 
-### Materialisation fallback
+### Materialization fallback
 
 `ArraySegments.of(arr, arena)` already handles lazy variants. Add cases:
 
 ```java
-case ChunkedDoubleArray a -> materialise(a, arena);
-case DictDoubleArray a    -> materialise(a, arena);
+case ChunkedDoubleArray a -> materialize(a, arena);
+case DictDoubleArray a    -> materialize(a, arena);
 // … etc.
 ```
 
-Each materialiser allocates `length * elemBytes` and walks
+Each materializer allocates `length * elemBytes` and walks
 children/codes — **same cost as today's eager path.** This fires only
 when a parent decoder demands a flat segment via `decodeChildSegment`
 (rare for Chunked at the outer layer; common for Dict codes flowing into
 a Bitpacked sibling).
 
-When nothing forces materialisation — projection-only reads, fold/forEach
+When nothing forces materialization — projection-only reads, fold/forEach
 on the user-facing array — no allocation happens.
 
 ### Decoder wiring
@@ -161,11 +161,11 @@ regression by a comfortable margin.
 
 ### Positive
 
-- **Zero-copy honoured on multi-chunk files.** A scan over an 8-chunk
+- **Zero-copy honored on multi-chunk files.** A scan over an 8-chunk
   10M-row F64 column avoids 80 MB of arena alloc + 80 MB of memcpy per
   scan. Projection-only scans pay zero copy cost for skipped columns.
 - **Zero-copy on dict-encoded columns.** Dictionary columns (common for
-  low-cardinality categorical data) stop materialising n elements every
+  low-cardinality categorical data) stop materializing n elements every
   scan.
 - **Java aligns with Rust.** Every encoding (per ADR 0010) and every
   layout (this ADR) is permanent storage. The mental model becomes
@@ -193,7 +193,7 @@ regression by a comfortable margin.
 - **`ArraySegments.of(arr, arena)` fallback has the same memcpy cost as
   today's eager path.** Net win only when nobody asks for a flat segment.
   Decoders that route through `decodeChildSegment` still pay the
-  materialisation cost — they just pay it through a different code path.
+  materialization cost — they just pay it through a different code path.
 
 ### Risks to manage
 
@@ -226,10 +226,10 @@ regression by a comfortable margin.
 - **`find_chunk_idx` is a per-row hot-loop branch.** Binary search over
   `offsets` runs on every `getDouble(i)` call. The CLAUDE.md hot-loop
   rule bans per-element modulo/division because it kills C2 superword
-  vectorisation. Binary search is conditional control flow with a
-  variable-target branch — also bad for vectorisation. Mitigations:
+  vectorization. Binary search is conditional control flow with a
+  variable-target branch — also bad for vectorization. Mitigations:
   use the per-child `fold` path (no `find_chunk_idx` calls); for random
-  access workloads, accept the cost — random access is non-vectorisable
+  access workloads, accept the cost — random access is non-vectorizable
   by nature.
 
 ## Alternatives considered
@@ -252,13 +252,13 @@ decision (lazy layouts vs lazy transforms), different risk profile.
 Mixing them muddles the audit trail — future readers chasing "why is
 Chunked lazy" land in a doc about ALP. Rejected; cross-link instead.
 
-### C — Strict zero-copy contract (refuse `ArraySegments.of` materialisation)
+### C — Strict zero-copy contract (refuse `ArraySegments.of` materialization)
 
-`ArraySegments.of(ChunkedXxxArray, arena)` throws instead of materialising.
+`ArraySegments.of(ChunkedXxxArray, arena)` throws instead of materializing.
 Force all decoders to use typed access (`getXxx(i)` / `fold`).
 
 Pros: strictest possible contract; impossible to accidentally pay for
-materialisation. Cons: breaks chains where a parent decoder genuinely
+materialization. Cons: breaks chains where a parent decoder genuinely
 needs a flat segment — most importantly, the dict-codes-into-bitpacked
 path where `codesSeg` flows into a tight bit-unpack loop. Forcing those
 sites to use `getInt(i)` per code would megamorphic-dispatch on every
@@ -270,7 +270,7 @@ Land Chunked first; Dict comes later.
 
 Pros: smaller blast radius (4 impls per interface instead of 5 for Long/Int
 arrays). Lower risk of inlining regression. Faster ship. Cons: defers
-half the zero-copy win. Dict workloads continue to pay full materialisation
+half the zero-copy win. Dict workloads continue to pay full materialization
 cost.
 
 This is a viable shipping order, not a rejection of Dict — recorded as an
@@ -285,7 +285,7 @@ Int.
 Pros: drops LongArray and IntArray back to 4 impls each (within reach of
 the cap with one more mitigation). Cons: adds a per-row enum branch in
 the inner loop. The earlier ADR 0010 work explicitly avoided this in
-favour of distinct types for Phase 3 compute pushdown.
+favor of distinct types for Phase 3 compute pushdown.
 
 Recorded as a mitigation, not a rejection — implementation PR decides.
 
@@ -298,10 +298,10 @@ The implementation PR resolves these; recorded here so the trail is clear:
    refactor `LazyFor`+`LazyZigZag` into a generic transform class, or
    restrict the new types to pattern-match dispatch (no interface
    exposure)?
-3. **Fallback policy:** relaxed (`ArraySegments.of(_, arena)` materialises)
+3. **Fallback policy:** relaxed (`ArraySegments.of(_, arena)` materializes)
    or strict (throws)?
 4. **Sequencing vs ADR 0010 §Phase 2 fused chain:** which lands first?
-   Both target OHLC; fused chain fixes ALP(FoR(Bitpacked)) materialisation
+   Both target OHLC; fused chain fixes ALP(FoR(Bitpacked)) materialization
    inside one chunk, Chunked fixes the cross-chunk concat. They compose
    but order matters for measurement.
 
@@ -314,17 +314,17 @@ Shipped across three PRs against `main`:
   pushed those interfaces from 1 to 2 impls, well under the JIT inline budget). `ScanIterator.decodeConcatPrimitive`
   renamed to `decodeChunkedLayout` and rewritten to construct `ChunkedXxxArray` directly; the alloc + memcpy loop
   deleted. `ChunkedEncodingDecoder.decode` rewritten the same way (`wrap`/`wrapPrimitive`/`wrapStruct` replaces
-  `concat`/`concatPrimitive`/`concatStruct`). `ArraySegments.of(arr, arena)` gained the chunked materialise cases
-  per §"Materialisation fallback". Bench gate passed: `JavaVsJniReadBenchmark` showed no statistically significant
+  `concat`/`concatPrimitive`/`concatStruct`). `ArraySegments.of(arr, arena)` gained the chunked materialize cases
+  per §"Materialization fallback". Bench gate passed: `JavaVsJniReadBenchmark` showed no statistically significant
   delta vs the previously-considered sticky-cache class shape; record shape chosen on architecture grounds
   (immutable, thread-safe, idiomatic Java). `forEach*` overrides iterate children directly so sequential scans
   bypass the per-row binary search.
 
 - **PR #39 — Dict half.** `DictLongArray`/`IntArray`/`DoubleArray`/`FloatArray` records as proposed.
-  Codes ptype variance (U8/U16/U32/U64 = Byte/Short/Int/Long Array) handled via centralised
+  Codes ptype variance (U8/U16/U32/U64 = Byte/Short/Int/Long Array) handled via centralized
   `DictArrays.readCode(codes, i)` plus per-method codes-type switches hoisted outside the inner loops per the
   CLAUDE.md hot-loop rule. `ScanIterator.expandDictPrimitive` deleted; the primitive dict-layout branch
-  returns the matching `DictXxxArray`. `ArraySegments.of(arr, arena)` gained the four dict materialise cases.
+  returns the matching `DictXxxArray`. `ArraySegments.of(arr, arena)` gained the four dict materialize cases.
   `truncateArray` got Dict cases before the per-interface catch-all so LIMIT keeps the dictionary and just
   slices codes.
 
@@ -343,7 +343,7 @@ Resolutions to the open questions:
    LazyZigZag + Chunked + Dict). `JavaVsJniReadBenchmark` between PRs showed no measurable regression because
    sequential reads use `forEach*` (single impl per call site) and the polymorphic `getXxx(i)` site isn't the
    benchmark's hot path. Re-evaluate if a real workload surfaces the cost.
-3. **Fallback policy:** relaxed — `ArraySegments.of(arr, arena)` materialises Chunked and Dict variants on
+3. **Fallback policy:** relaxed — `ArraySegments.of(arr, arena)` materializes Chunked and Dict variants on
    demand. Used internally by `decodeDictLayout` for string dict expansion (the codes side) and reserved for
    future decoders that genuinely need a contiguous segment.
 4. **Sequencing vs ADR 0010 §Phase 2:** Chunked + Dict lazy decoding landed first. Phase 2 (fused chain) is
@@ -374,9 +374,9 @@ What was **not** shipped (intentional):
   - `vortex-array/src/arrays/chunked/array.rs` — ChunkedArray storage and `find_chunk_idx`
   - `vortex-array/src/arrays/dict/array.rs` — DictArray storage
   - `vortex-array/src/arrays/chunked/compute/take.rs` — per-chunk compute kernel
-  - `vortex-array/src/canonical.rs` — `to_canonical()` opt-in materialisation
+  - `vortex-array/src/canonical.rs` — `to_canonical()` opt-in materialization
 - Local code:
   - `ScanIterator.java:447-474` — `decodeConcatPrimitive`
   - `ScanIterator.java:156-218` — `expandDictPrimitive`, `expandDictStrings`
   - `ChunkedEncodingDecoder.java:90-94` — duplicate concat path
-  - `ArraySegments.java` — two-arg `of(arr, arena)` overload (the materialisation hook)
+  - `ArraySegments.java` — two-arg `of(arr, arena)` overload (the materialization hook)

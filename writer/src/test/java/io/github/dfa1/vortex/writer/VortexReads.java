@@ -10,7 +10,7 @@ import io.github.dfa1.vortex.reader.VortexReader;
 import java.util.ArrayList;
 import java.util.List;
 
-/// Shared scan-and-collect helpers for writer round-trip tests. Materialise each
+/// Shared scan-and-collect helpers for writer round-trip tests. Materialize each
 /// chunk's values into a heap container before the chunk's arena closes; the
 /// returned arrays/lists outlive the scan lifecycle.
 final class VortexReads {

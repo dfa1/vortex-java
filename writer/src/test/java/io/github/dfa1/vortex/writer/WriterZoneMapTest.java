@@ -457,7 +457,7 @@ class WriterZoneMapTest {
         }
     }
 
-    /// Reads the per-zone stat at `idx` from a materialised min/max segment, widened to double for
+    /// Reads the per-zone stat at `idx` from a materialized min/max segment, widened to double for
     /// uniform assertion across the fixed-width primitive types.
     private static double readStat(MemorySegment seg, PType ptype, int idx) {
         return switch (ptype) {

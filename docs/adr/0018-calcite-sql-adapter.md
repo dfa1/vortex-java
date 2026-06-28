@@ -20,7 +20,7 @@ GROUP BY …` rather than hand-written scan loops.
 
 Two ways to answer that:
 
-1. **Build a SQL engine.** Parser, type system, logical plan, cost-based optimiser, join
+1. **Build a SQL engine.** Parser, type system, logical plan, cost-based optimizer, join
    algorithms, aggregation/spilling, NULL semantics. Person-years, none of it
    Vortex-specific — it is solved, generic, and not where this project's advantage lies.
 2. **Adapt to an existing engine.** Plug the Vortex scan into a mature SQL front-end and let
@@ -29,12 +29,12 @@ Two ways to answer that:
 
 The project's advantage is the **scan**, not the engine. An external engine only ever sees
 *decoded* values, so it has already paid the cost Vortex could have skipped — chunk-skipping
-via zone maps, encoded-domain comparison (`compare(ALPArray, scalar)` without materialising
+via zone maps, encoded-domain comparison (`compare(ALPArray, scalar)` without materializing
 doubles), and answering `MIN`/`MAX`/`COUNT`/`SUM` straight from the stats table. That asymmetry
 only exists *inside* Vortex. So the goal is to expose the scan + push-down to an engine, not to
 reimplement the engine.
 
-Apache Calcite is the natural JVM host: a pure-Java SQL parser + relational optimiser +
+Apache Calcite is the natural JVM host: a pure-Java SQL parser + relational optimizer +
 pluggable adapter framework (the substrate under Drill, Flink-SQL, Beam-SQL). It does the
 generic work; the adapter contributes a table that knows how to push work down.
 
@@ -169,7 +169,7 @@ floating-point filter column (NaN ordering), a non-numeric `SUM`, or a missing/m
 
 **Two doors, chosen by query shape.** Calcite is the right tool for *reducing* queries (filter
 / aggregate / group-by), where push-down shrinks the result and the `Object[]` boundary
-amortises to near-nothing. It is the wrong tool for *bulk columnar extract* (`SELECT *` over a
+amortizes to near-nothing. It is the wrong tool for *bulk columnar extract* (`SELECT *` over a
 large file, weak/no filter): every row boxes. That shape should bypass Calcite via the Arrow
 C-Data export of ADR 0016 (Option B), columnar and zero-boxing. Calcite is never Vortex's
 *execution* engine — the moment many rows flow *through* it, the wrong door was used. The
@@ -180,7 +180,7 @@ by construction.
 
 ### Positive
 
-- SQL over Vortex with no engine to build or maintain; Calcite owns parse/plan/optimise/join.
+- SQL over Vortex with no engine to build or maintain; Calcite owns parse/plan/optimize/join.
 - The push-down surface is exactly the ADR 0013 primitive set — the adapter is the first real
   consumer of that vocabulary, validating it against a real planner.
 - Dependency isolation: only consumers who add `vortex-calcite` pay the Calcite/Janino/Guava
@@ -193,11 +193,11 @@ by construction.
 ### Negative
 
 - Calcite's Enumerable execution is row-at-a-time `Object[]` with autoboxing. Acceptable for a
-  *source* (push-down does the heavy work before rows materialise), but it caps throughput on
+  *source* (push-down does the heavy work before rows materialize), but it caps throughput on
   any query that emits many rows — which is why bulk extract is pushed to the Arrow door, not
   Calcite.
 - A second public surface (SQL) with its own semantics gotchas (reserved words, `AVG` integer
-  division, three-valued logic) the adapter must honour exactly to stay consistent with the
+  division, three-valued logic) the adapter must honor exactly to stay consistent with the
   push-down path.
 - The `RelOptRule` for aggregate push-down is non-trivial Calcite-internal work; the kernel
   matrix (Array variant × Predicate variant) from ADR 0013 still has to exist underneath.
@@ -210,7 +210,7 @@ by construction.
   does.
 - **Calcite version churn.** Calcite's adapter SPI and Avatica move between releases; pin the
   version and keep the smoke test as the JDK-compatibility tripwire (re-run on JDK upgrades).
-- **Temptation to make Calcite columnar.** Bridging Vortex into a vectorised execution engine is
+- **Temptation to make Calcite columnar.** Bridging Vortex into a vectorized execution engine is
   the rabbit hole; that is DuckDB/DataFusion territory (native — the `vortex-jni` world). Resist
   it. Keep Calcite as front-end + planner only.
 - **Lifetime.** `Object[]` rows hold decoded values, but any zero-copy path (future) must keep
@@ -223,7 +223,7 @@ by construction.
 
 A hand-rolled parser + executor over the ADR 0013 kernels (single table, `WHERE`, simple
 aggregates, no joins). Attractive as a *demo* of push-down, but it dies at the first join or
-optimiser requirement and re-implements solved, generic machinery. Rejected as a product
+optimizer requirement and re-implements solved, generic machinery. Rejected as a product
 direction; the prototype's value is the adapter + push-down helper, not a query language.
 
 ### B. Hand off entirely to DuckDB / DataFusion via Arrow
@@ -237,8 +237,8 @@ replacement for JVM SQL with push-down.
 
 ### C. Apache Calcite with full custom physical convention
 
-Implement a complete `Convention` with vectorised Vortex operators so execution stays columnar
-end-to-end. Maximum performance, but it means building a vectorised execution engine inside
+Implement a complete `Convention` with vectorized Vortex operators so execution stays columnar
+end-to-end. Maximum performance, but it means building a vectorized execution engine inside
 Calcite — most of option A's cost plus Calcite-internal complexity. Deferred indefinitely; the
 `Object[]` Enumerable path plus aggressive push-down is sufficient for the source role, and bulk
 throughput belongs to the Arrow door.

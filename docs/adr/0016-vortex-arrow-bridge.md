@@ -112,8 +112,8 @@ Three pieces of work beyond just handing over the existing mmap slices:
    length rounded up to 8) plus a `null_count`. Our `MaskedArray.validity()` is a
    per-element `BoolArray`, so it must be packed; `validity == null` emits a null
    buffer pointer with `null_count = 0`.
-2. **Lazy materialisation.** Lazy arrays (ZigZag/FoR/ALP/Dict/RLE) store the
-   *encoded* form, which is not the Arrow values layout, so they must be materialised
+2. **Lazy materialization.** Lazy arrays (ZigZag/FoR/ALP/Dict/RLE) store the
+   *encoded* form, which is not the Arrow values layout, so they must be materialized
    into a contiguous LE segment first. This is exactly the producer step that
    `Array.materialize(arena)` performs (see below), so it feeds the `values` buffer
    directly. Primitive values, VarBin data+offsets, and StringView are already
@@ -128,12 +128,12 @@ Three pieces of work beyond just handing over the existing mmap slices:
 
 ### Relationship to the `Array.materialize` seam (shipped)
 
-The bulk-materialisation seam Option B builds on now exists:
+The bulk-materialization seam Option B builds on now exists:
 `Array.materialize(SegmentAllocator)` — a pure abstract method (mirroring the existing
 `Array.limited(...)` polymorphism) that turns any array, lazy or eager, into a contiguous
 LE primitive segment. Each type owns its path: segment-backed arrays return their buffer
 zero-copy, the `Lazy*` variants apply their inlined decode formula (ZigZag/FoR/ALP) in a
-vectorisable loop next to their per-element accessor, chunked/dict arrays concat/gather,
+vectorizable loop next to their per-element accessor, chunked/dict arrays concat/gather,
 and the families with no primary segment (struct, list, variant, byte-parts decimal, null,
 unknown) throw.
 
@@ -141,7 +141,7 @@ This is **not** an Arrow feature — but it is the natural producer of the Arrow
 buffer, so Option B builds on it. The contiguous LE segment it yields already matches
 Arrow's primitive values-buffer layout. Two gaps remain to a full Arrow array, both per
 the table above: validity + offsets + children; and the broadcast edge — a constant column
-materialises to a single-element buffer (`length != elementCount`), which `materialize()`
+materializes to a single-element buffer (`length != elementCount`), which `materialize()`
 returns as-is, so the Arrow producer must expand it to `length` values.
 
 `materialize` is intentionally part of the public `Array` contract (not a package-private
@@ -165,7 +165,7 @@ Ship nothing; point users at the typed views and let them copy into Arrow themse
 - Arrow interop has a recorded home and a recommended shape when the need arrives.
 
 ### Negative
-- Until built, Arrow consumers must hand-roll conversion (Option C behaviour).
+- Until built, Arrow consumers must hand-roll conversion (Option C behavior).
 
 ### Risks to manage
 - Arrow's Java buffer layout and `BufferAllocator` lifetime model must be mapped

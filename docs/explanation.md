@@ -133,9 +133,9 @@ but it is not a candidate in the numeric cascade.
 
 The JNI path pays three costs per batch: (1) a JNI boundary crossing to call into native
 code, (2) the Arrow C Data Interface handshake to pass decoded buffers back to the JVM as
-`ArrowArray`/`ArrowSchema` structs, and (3) materialising the result into Apache Arrow
+`ArrowArray`/`ArrowSchema` structs, and (3) materializing the result into Apache Arrow
 `VectorSchemaRoot` objects before the application can read a single value. The JIT cannot
-inline or optimise across the JNI boundary.
+inline or optimize across the JNI boundary.
 
 `vortex-java` eliminates all of that. The FFM API (`MemorySegment`) gives Java code a
 typed, bounds-checked view directly into the OS mmap region. Decoding reads bytes directly
@@ -155,7 +155,7 @@ is tiny and the scan is over a handful of entries, not individual rows.
 
 **1. mmap zero-copy.**
 Vortex reads directly from the mmap'd `MemorySegment` — the file bytes _are_ the decode
-input, no intermediate copies. Hardwood reads into internal page buffers and materialises
+input, no intermediate copies. Hardwood reads into internal page buffers and materializes
 values before batch hand-off. Parquet also pays per-page framing overhead: RLE-encoded
 definition/repetition levels, page header parsing, optional dictionary decode. Vortex's
 layout is a flat array of encoded values with no per-row framing.
@@ -409,7 +409,7 @@ At decode time the registry maps the ID string from the Layout node to the right
 `Encoding` instance and calls `decode(DecodeContext)`.
 
 Custom encodings can be added at build time: `Registry.builder().register(myEncoding).build()`.
-Files with unrecognised IDs throw `VortexException` unless the builder enabled `allowUnknown()`.
+Files with unrecognized IDs throw `VortexException` unless the builder enabled `allowUnknown()`.
 
 ## Testing strategy
 

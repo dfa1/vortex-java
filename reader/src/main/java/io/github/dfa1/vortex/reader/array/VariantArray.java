@@ -64,7 +64,7 @@ public final class VariantArray implements Array {
     }
 
     /// Always throws: a variant array is core-storage plus optional shredded children,
-    /// not a single primary segment. Materialise [#coreStorage()] / [#shredded()]
+    /// not a single primary segment. Materialize [#coreStorage()] / [#shredded()]
     /// separately.
     ///
     /// @param arena unused

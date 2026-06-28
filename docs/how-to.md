@@ -295,7 +295,7 @@ java -jar cli/target/vortex-cli-*-all.jar filter data.vortex "price >= 100" > ou
 
 ## Read files with unknown encodings
 
-By default, a file containing an unrecognised encoding ID throws `VortexException`.
+By default, a file containing an unrecognized encoding ID throws `VortexException`.
 Use `allowUnknown()` to read the file anyway — columns with unknown encodings are
 returned as `UnknownArray` (opaque, not decodable, but the rest of the file is readable):
 

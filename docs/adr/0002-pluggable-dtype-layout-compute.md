@@ -165,7 +165,7 @@ all of the following, in writing:
 
 1. **A named downstream consumer.** Not a hypothetical "someone might
    want X." A concrete project / team with a name and a use case.
-2. **A spec for the new variant.** Wire format, serialisation,
+2. **A spec for the new variant.** Wire format, serialization,
    round-trip semantics. Not just "register a custom type" in the
    abstract.
 3. **Confirmation the existing `Extension` mechanism does not fit.**

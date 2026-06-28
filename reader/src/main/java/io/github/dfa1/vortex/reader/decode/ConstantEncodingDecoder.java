@@ -79,7 +79,7 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
                 throw new VortexException(EncodingId.VORTEX_CONSTANT,
                         "constant extension storage must be primitive, got " + ext.storageDType());
             }
-            // Build the constant storage directly under the Extension dtype. No materialisation:
+            // Build the constant storage directly under the Extension dtype. No materialization:
             // extension consumers read storage through its family typed-getter (see
             // ExtensionStorage.epochInteger), so a lazy constant array works and stays O(1).
             return constantPrimitive(dtype, sp.ptype(), scalar, n);
@@ -91,7 +91,7 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
     }
 
     /// Builds a metadata-only constant primitive array carrying `outDtype` — used for both
-    /// bare primitive constants and extension constants (whose primitive storage is relabelled
+    /// bare primitive constants and extension constants (whose primitive storage is relabeled
     /// with the extension's logical dtype). O(1): no buffer is allocated.
     ///
     /// @param outDtype logical dtype the returned array reports

@@ -32,7 +32,7 @@ class FlatSegmentDecoderDecodeTest {
 
         try (Arena arena = Arena.ofConfined()) {
             // Given — a flat segment whose single buffer carries 8 bytes of leading padding and
-            // an unrecognised encoding id. The 8 pad bytes are the entire buffer-data region
+            // an unrecognized encoding id. The 8 pad bytes are the entire buffer-data region
             // (buffer length 0), so the decoder must advance dataOffset by +8 to slice it; a
             // subtraction would slice at offset -8.
             int padding = 8;

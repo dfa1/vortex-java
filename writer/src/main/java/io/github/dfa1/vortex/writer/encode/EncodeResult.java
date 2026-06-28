@@ -9,8 +9,8 @@ import java.util.List;
 ///
 /// @param rootNode the root encode node describing the encoding tree structure
 /// @param buffers  flat list of data buffers in the order referenced by `rootNode`
-/// @param statsMin serialised minimum value bytes for zone-map pruning, or `null`
-/// @param statsMax serialised maximum value bytes for zone-map pruning, or `null`
+/// @param statsMin serialized minimum value bytes for zone-map pruning, or `null`
+/// @param statsMax serialized maximum value bytes for zone-map pruning, or `null`
 @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record EncodeResult(
         EncodeNode rootNode,
@@ -22,8 +22,8 @@ public record EncodeResult(
     ///
     /// @param encodingId the encoding identifier for the leaf node
     /// @param data       the single data buffer
-    /// @param min        serialised minimum stat bytes, or `null`
-    /// @param max        serialised maximum stat bytes, or `null`
+    /// @param min        serialized minimum stat bytes, or `null`
+    /// @param max        serialized maximum stat bytes, or `null`
     /// @return an [EncodeResult] backed by a single-buffer leaf node
     public static EncodeResult simple(EncodingId encodingId, MemorySegment data, byte[] min, byte[] max) {
         return new EncodeResult(EncodeNode.leaf(encodingId, 0), List.of(data), min, max);
