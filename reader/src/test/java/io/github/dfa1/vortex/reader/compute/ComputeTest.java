@@ -10,6 +10,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+@SuppressWarnings("removal") // transitional — exercises the deprecated Mask / Compute.filter until the fused multi-column filteredReduce lands
 class ComputeTest {
 
     private static final Arena ARENA = Arena.ofAuto();

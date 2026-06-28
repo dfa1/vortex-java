@@ -30,6 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// every filter/aggregate domain crossing (long/double, hot lane and the narrow-int generic
 /// fall-back) is exercised. The explicit cases pin the corners — empty, an all-null filter, an
 /// all-null aggregate, zero matches, and a full match.
+@SuppressWarnings("removal") // transitional — exercises the deprecated Mask / Compute.filter until the fused multi-column filteredReduce lands
 class FusedFilterSumTest {
 
     private static final Arena ARENA = Arena.ofAuto();

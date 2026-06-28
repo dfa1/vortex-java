@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Compute.filteredSum(filterColumn, predicate, aggColumn)` fuses a filter and a sum into a single scan — a row folds into the total only when the predicate selects it (a null filter row is excluded) and the aggregate value is non-null — with no intermediate selection bitmap. It matches a hand-written fused loop and is ~1.5× faster than the two-pass `filter` + `sum`. ([57d2225b](https://github.com/dfa1/vortex-java/commit/57d2225b))
+
+### Deprecated
+
+- The selection `Mask` and `Compute.filter(Array, Predicate, Arena)` are deprecated for removal: a materialized selection mask is a slower primitive than a fused single-pass scan (it builds a positional bitmap the reduce must re-scan). Prefer the fused `Compute.filteredSum` (and the forthcoming fused multi-column `filteredReduce`), which fold filter and aggregate in one pass with no intermediate bitmap. ([319cfd97](https://github.com/dfa1/vortex-java/commit/319cfd97))
+
 ## [0.11.0] — 2026-06-28
 
 SQL over Vortex grows a **compute layer**: a Calcite `WHERE`-filtered `SUM`/`COUNT`/`MIN`/`MAX` is now answered from the zone-map statistics — folding the chunks the predicate fully selects without decoding them and decoding only the one or two chunks its range cuts through (ADR 0013 §6 / ADR 0018 boundary tier). On a 100-chunk file a `SELECT SUM(x) WHERE id BETWEEN …` answers ~12× faster than a full scan when the range is wide. Plus the security hardening of the untrusted-input parse paths (ADR 0003) and a `vortex.zstd` binding bump.

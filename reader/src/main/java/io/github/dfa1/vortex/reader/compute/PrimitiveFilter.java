@@ -49,6 +49,7 @@ final class PrimitiveFilter {
     /// @param predicate the predicate to evaluate
     /// @param arena     the arena for the result bitmap; its zero-fill seeds the unselected bits to 0
     /// @return the selection mask, or `null` if the input is not specializable
+    @SuppressWarnings("removal") // transitional — uses the deprecated Mask until the fused multi-column filteredReduce lands
     static Mask tryFilter(Array array, Mask current, Predicate predicate, Arena arena) {
         Array data;
         BoolArray validity;
@@ -427,6 +428,7 @@ final class PrimitiveFilter {
     /// @param bits    the predicate-result bitmap, mutated in place
     /// @param current the incoming selection mask
     /// @param n       the row count
+    @SuppressWarnings("removal") // transitional — uses the deprecated Mask until the fused multi-column filteredReduce lands
     private static void applyCurrent(MemorySegment bits, Mask current, long n) {
         if (current instanceof Mask.AllTrue) {
             return;

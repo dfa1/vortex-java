@@ -22,6 +22,7 @@ import java.util.Objects;
 final class StreamingFilterKernel implements FilterKernel {
 
     @Override
+    @SuppressWarnings("removal") // transitional — uses the deprecated Mask until the fused multi-column filteredReduce lands
     public Mask apply(Array array, Mask current, Predicate predicate, Arena arena) {
         Objects.requireNonNull(array, "array");
         Objects.requireNonNull(current, "current");
@@ -54,6 +55,7 @@ final class StreamingFilterKernel implements FilterKernel {
     /// @param predicate the predicate to evaluate
     /// @param arena     the arena for the result bitmap
     /// @return the selection mask the generic per-element path produces
+    @SuppressWarnings("removal") // transitional — uses the deprecated Mask until the fused multi-column filteredReduce lands
     Mask applyGeneric(Array array, Mask current, Predicate predicate, Arena arena) {
         long n = array.length();
         if (n == 0 || current instanceof Mask.AllFalse) {
@@ -62,6 +64,7 @@ final class StreamingFilterKernel implements FilterKernel {
         return applyGeneric(array, current, predicate, arena, n);
     }
 
+    @SuppressWarnings("removal") // transitional — uses the deprecated Mask until the fused multi-column filteredReduce lands
     private Mask applyGeneric(Array array, Mask current, Predicate predicate, Arena arena, long n) {
         long bytes = (n + 7) >>> 3;
         // Arena.allocate zero-fills (FFM spec), so the unselected bits are already 0 — the loop

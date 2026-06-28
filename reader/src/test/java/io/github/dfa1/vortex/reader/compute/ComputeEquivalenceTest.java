@@ -31,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// asserts the specialized `filter` / `sum` / `count` / `min` / `max` results equal what the generic
 /// path produces. Catching any divergence here guards against behavioral drift, the one thing the
 /// fast lane must never introduce.
+@SuppressWarnings("removal") // transitional — exercises the deprecated Mask until the fused multi-column filteredReduce lands
 class ComputeEquivalenceTest {
 
     private static final Arena ARENA = Arena.ofAuto();

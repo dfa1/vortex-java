@@ -8,6 +8,7 @@ import java.lang.foreign.Arena;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@SuppressWarnings("removal") // transitional — exercises the deprecated Mask until the fused multi-column filteredReduce lands
 class ReduceKernelTest {
 
     private static final Arena ARENA = Arena.ofAuto();

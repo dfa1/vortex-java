@@ -33,5 +33,6 @@ interface FilterKernel {
     /// @param arena     the arena for the output bitmap; its [Arena#allocate(long)] zero-fills, which
     ///                  seeds the unselected bits to 0
     /// @return a mask of `array.length()` positions, selected where `current` and `predicate` agree
+    @SuppressWarnings("removal") // transitional — uses the deprecated Mask until the fused multi-column filteredReduce lands
     Mask apply(Array array, Mask current, Predicate predicate, Arena arena);
 }

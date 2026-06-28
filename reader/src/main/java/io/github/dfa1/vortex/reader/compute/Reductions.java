@@ -25,6 +25,8 @@ import io.github.dfa1.vortex.reader.array.ShortArray;
 /// columns fold into a [Long] (wrapping at 2^63, like SQL `SUM(BIGINT)`), floating columns into a
 /// [Double], nulls are skipped, and the Rust empty / all-null results are mirrored exactly — `SUM` is
 /// the additive identity (`0L` or `0.0`, never null), `COUNT` is `0`, and `MIN` / `MAX` are `null`.
+// transitional — every reduction consumes the deprecated Mask until the fused multi-column filteredReduce lands
+@SuppressWarnings("removal")
 final class Reductions {
 
     /// Sums the selected non-null values: a [Long] for integer columns, a [Double] for floats.

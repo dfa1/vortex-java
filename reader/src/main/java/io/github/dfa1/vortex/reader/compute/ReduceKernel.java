@@ -21,5 +21,6 @@ interface ReduceKernel<R> {
     /// @param array   the input array, possibly a lazy variant; never materialized whole
     /// @param current the selection mask, must have the same length as `array`
     /// @return the reduction result
+    @SuppressWarnings("removal") // transitional — uses the deprecated Mask until the fused multi-column filteredReduce lands
     R apply(Array array, Mask current);
 }

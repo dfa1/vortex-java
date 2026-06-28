@@ -10,6 +10,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@SuppressWarnings("removal") // transitional — exercises the deprecated Mask / Compute.filter until the fused multi-column filteredReduce lands
 class StreamingFilterKernelTest {
 
     private static final Arena ARENA = Arena.ofAuto();

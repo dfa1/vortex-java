@@ -12,6 +12,7 @@ import java.lang.foreign.ValueLayout;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+@SuppressWarnings("removal") // transitional — exercises the deprecated Mask until the fused multi-column filteredReduce lands
 class MaskTest {
 
     @Nested

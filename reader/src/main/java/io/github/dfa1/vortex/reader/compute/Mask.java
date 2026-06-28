@@ -21,6 +21,14 @@ import static io.github.dfa1.vortex.core.io.PTypeIO.LE_LONG;
 ///   `compare` / `between` / `is_null` kernels.
 ///
 /// All variants are read-only views: a mask never copies or allocates a bitmap of its own.
+///
+/// @deprecated The materialized selection mask is a slower primitive than a fused single-pass scan:
+///             producing it forces a positional bitmap and then a second pass over the aggregate
+///             column. Prefer the fused `Compute.filteredSum` (and the forthcoming fused
+///             multi-column `filteredReduce`), which fuse filter and aggregate in one pass with no
+///             intermediate bitmap. Scheduled for removal once the Calcite boundary fold migrates
+///             off it.
+@Deprecated(since = "0.12.0", forRemoval = true)
 public sealed interface Mask permits Mask.AllTrue, Mask.AllFalse, Mask.RangeMask, Mask.BitmapMask {
 
     /// Returns the number of positions this mask covers.

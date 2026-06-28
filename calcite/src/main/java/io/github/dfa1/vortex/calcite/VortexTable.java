@@ -324,6 +324,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// [VortexException] disables the sum (mirroring a zone that records no usable sum) rather than
     /// failing the whole fold — a `MIN`/`MAX` over the same column still folds. The aggregate
     /// column's null count among the selected rows is the selected count minus the non-null count.
+    @SuppressWarnings("removal") // transitional — uses the deprecated Mask until the fused multi-column filteredReduce lands
     private static void foldBoundaryZone(VortexReader reader, int zone, List<String> columns,
                                          RowFilter filter, String aggColumn, Fold fold) {
         try (Chunk chunk = reader.decodeChunk(zone, columns);
@@ -353,6 +354,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// column's decoded array, and an n-ary `AND` intersects the per-leaf masks (a row is selected
     /// only when every leaf accepts it). The kernels apply SQL three-valued logic, so a null row
     /// never satisfies a value predicate — matching the fold's null semantics.
+    @SuppressWarnings("removal") // transitional — uses the deprecated Mask until the fused multi-column filteredReduce lands
     private static Mask buildMask(Chunk chunk, RowFilter filter, Arena arena) {
         long n = chunk.rowCount();
         List<Mask> masks = new ArrayList<>();
@@ -378,6 +380,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// A [RowFilter.Column] already holds the exact compute [Predicate], so the kernel runs it
     /// directly against the bound column — no translation seam, since `>=`, `<=` and `<>` are now
     /// first-class predicate variants.
+    @SuppressWarnings("removal") // transitional — uses the deprecated Mask and Compute.filter until the fused multi-column filteredReduce lands
     private static void collectLeafMasks(Chunk chunk, RowFilter filter, Arena arena, List<Mask> out) {
         switch (filter) {
             case RowFilter.And(var parts) -> {

@@ -100,6 +100,7 @@ import org.openjdk.jmh.annotations.Warmup;
         "--sun-misc-unsafe-memory-access=allow",
         "-Xmx4g"
 })
+@SuppressWarnings("removal") // transitional — benchmarks the deprecated Mask / Compute.filter two-pass path against the fused single-pass kernel
 public class ComputeKernelBenchmark {
 
     /// Total rows scanned per op — ≈ 800 MB per column, far larger than L3, so memory-bound.

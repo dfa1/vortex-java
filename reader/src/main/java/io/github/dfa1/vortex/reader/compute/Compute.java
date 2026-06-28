@@ -34,6 +34,14 @@ public final class Compute {
     /// @param arena     the arena for the output bitmap; its [Arena#allocate(long)] zero-fills, which
     ///                  seeds the unselected bits to 0
     /// @return a mask of `array.length()` positions selected where `predicate` holds
+    /// @deprecated Materializing a selection [Mask] is a slower primitive than a fused single-pass
+    ///             scan: it builds a positional bitmap over the whole filter column, which a later
+    ///             reduce must re-scan. Prefer the fused [#filteredSum(Array, Predicate, Array)] (and
+    ///             the forthcoming fused multi-column `filteredReduce`), which fold filter and
+    ///             aggregate in one pass with no intermediate bitmap. Scheduled for removal once the
+    ///             Calcite boundary fold migrates off it.
+    @Deprecated(since = "0.12.0", forRemoval = true)
+    @SuppressWarnings("removal") // suppresses only this method's own use of the to-be-removed Mask return type — callers still see filter() as deprecated
     public static Mask filter(Array array, Predicate predicate, Arena arena) {
         Objects.requireNonNull(array, "array");
         Objects.requireNonNull(predicate, "predicate");
@@ -43,10 +51,14 @@ public final class Compute {
 
     /// Sums the selected non-null values of `array`.
     ///
+    /// Pairs with the (deprecated) [Mask]; transitional pending the fused reductions such as
+    /// [#filteredSum(Array, Predicate, Array)].
+    ///
     /// @param array the array to reduce
     /// @param mask  the selection mask, must have the same length as `array`
     /// @return the sum as a [Long] for integer columns or a [Double] for floating columns; the
     ///         additive identity (`0`) when no selected position is non-null
+    @SuppressWarnings("removal") // transitional — consumes the deprecated Mask until the fused multi-column filteredReduce lands
     public static Number sum(Array array, Mask mask) {
         return Reductions.SUM.apply(array, requireMask(array, mask));
     }
@@ -77,27 +89,39 @@ public final class Compute {
 
     /// Counts the selected non-null values of `array`.
     ///
+    /// Pairs with the (deprecated) [Mask]; transitional pending the fused reductions such as
+    /// [#filteredSum(Array, Predicate, Array)].
+    ///
     /// @param array the array to reduce
     /// @param mask  the selection mask, must have the same length as `array`
     /// @return the count of selected non-null values, `0` when none
+    @SuppressWarnings("removal") // transitional — consumes the deprecated Mask until the fused multi-column filteredReduce lands
     public static long count(Array array, Mask mask) {
         return Reductions.COUNT.apply(array, requireMask(array, mask));
     }
 
     /// Finds the smallest selected non-null value of `array` under its dtype-aware order.
     ///
+    /// Pairs with the (deprecated) [Mask]; transitional pending the fused reductions such as
+    /// [#filteredSum(Array, Predicate, Array)].
+    ///
     /// @param array the array to reduce
     /// @param mask  the selection mask, must have the same length as `array`
     /// @return the minimum value, or `null` when no selected position is non-null
+    @SuppressWarnings("removal") // transitional — consumes the deprecated Mask until the fused multi-column filteredReduce lands
     public static Object min(Array array, Mask mask) {
         return Reductions.MIN.apply(array, requireMask(array, mask));
     }
 
     /// Finds the largest selected non-null value of `array` under its dtype-aware order.
     ///
+    /// Pairs with the (deprecated) [Mask]; transitional pending the fused reductions such as
+    /// [#filteredSum(Array, Predicate, Array)].
+    ///
     /// @param array the array to reduce
     /// @param mask  the selection mask, must have the same length as `array`
     /// @return the maximum value, or `null` when no selected position is non-null
+    @SuppressWarnings("removal") // transitional — consumes the deprecated Mask until the fused multi-column filteredReduce lands
     public static Object max(Array array, Mask mask) {
         return Reductions.MAX.apply(array, requireMask(array, mask));
     }
@@ -107,6 +131,7 @@ public final class Compute {
     /// @param array the array to reduce
     /// @param mask  the selection mask
     /// @return the validated mask
+    @SuppressWarnings("removal") // transitional — consumes the deprecated Mask until the fused multi-column filteredReduce lands
     private static Mask requireMask(Array array, Mask mask) {
         Objects.requireNonNull(array, "array");
         Objects.requireNonNull(mask, "mask");
