@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.zstd.Zstd;
-import io.github.dfa1.zstd.ZstdCompressCtx;
+import io.github.dfa1.zstd.ZstdCompressContext;
 import io.github.dfa1.zstd.ZstdDictionary;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
@@ -261,7 +261,7 @@ class ZstdEncodingEncoderTest {
         }
 
         private static byte[] compressWithDict(byte[] input, byte[] dict) {
-            try (ZstdCompressCtx cctx = new ZstdCompressCtx()) {
+            try (ZstdCompressContext cctx = new ZstdCompressContext()) {
                 return cctx.compress(input, ZstdDictionary.of(dict));
             }
         }

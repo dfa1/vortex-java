@@ -19,8 +19,8 @@ import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
 import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 
-import io.github.dfa1.zstd.ZstdDecompressCtx;
-import io.github.dfa1.zstd.ZstdDecompressDict;
+import io.github.dfa1.zstd.ZstdDecompressContext;
+import io.github.dfa1.zstd.ZstdDecompressDictionary;
 
 import java.io.IOException;
 import java.lang.foreign.Arena;
@@ -168,9 +168,9 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
         boolean hasDictionary = meta.dictionary_size() != 0;
         int frameBufferBase = hasDictionary ? 1 : 0;
         MemorySegment out = ctx.arena().allocate(totalUncompressed);
-        try (ZstdDecompressCtx dctx = new ZstdDecompressCtx();
+        try (ZstdDecompressContext dctx = new ZstdDecompressContext();
              Arena scratch = Arena.ofConfined()) {
-            ZstdDecompressDict dictionary = hasDictionary
+            ZstdDecompressDictionary dictionary = hasDictionary
                     ? digestDictionary(asNative(ctx.buffer(0), scratch), meta.dictionary_size())
                     : null;
             try {
@@ -207,13 +207,13 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
     /// `declaredSize` is the metadata's `dictionary_size`; it must match the dictionary buffer's
     /// byte size (the Rust reference enforces the same invariant), otherwise the segment is
     /// malformed and we fail fast rather than digest a truncated dictionary.
-    private static ZstdDecompressDict digestDictionary(MemorySegment dictBuffer, long declaredSize) {
+    private static ZstdDecompressDictionary digestDictionary(MemorySegment dictBuffer, long declaredSize) {
         if (dictBuffer.byteSize() != declaredSize) {
             throw new VortexException(EncodingId.VORTEX_ZSTD,
                     "dictionary size metadata " + declaredSize
                             + " does not match buffer size " + dictBuffer.byteSize());
         }
-        return new ZstdDecompressDict(dictBuffer);
+        return new ZstdDecompressDictionary(dictBuffer);
     }
 
     /// Returns `seg` unchanged when it is already native (the production mmap path); otherwise
