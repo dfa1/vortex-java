@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.reader.RowFilter;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.compute.Predicate;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -20,9 +21,11 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.function.LongPredicate;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.params.provider.Arguments.arguments;
@@ -435,6 +438,93 @@ class ZoneMapPruningTest {
             assertThatThrownBy(() -> scanRowCounts(file, make.apply("not-a-number")))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("not comparable");
+        }
+    }
+
+    /// Safety net for the recursive predicate-vs-stats pruning evaluator after the RowFilter /
+    /// Predicate unification: for every predicate the new evaluator must prune a chunk ONLY when no
+    /// row in it can match. Each case is checked against a brute-force row scan of the known chunk
+    /// data ([1..50], [51..100], [101..150], all non-null), so the survivors are exactly the chunks
+    /// the oracle says hold a match. This pins the old op set (Neq/Gte/Lte) and the variants that
+    /// are now first-class predicate leaves but unreachable through the factories — [Predicate.Between]
+    /// and [Predicate.Or] — which are built here directly over a [RowFilter.Column].
+    @Nested
+    class PredicateLevelPruning {
+
+        @Test
+        void between_prunesChunksDisjointFromRange(@TempDir Path tmp) throws IOException {
+            // Given — [40,60] overlaps chunks 1 (40..50) and 2 (51..60); chunk 3 is disjoint
+            Path file = writeThreeChunks(tmp);
+            RowFilter filter = new RowFilter.Column("id", new Predicate.Between(40L, 60L));
+
+            // When / Then — survivors match a brute-force scan (chunk 3 pruned, never wrongly)
+            assertPrunesLikeOracle(file, filter, v -> v >= 40 && v <= 60);
+        }
+
+        @Test
+        void between_disjointFromEveryChunk_prunesAll(@TempDir Path tmp) throws IOException {
+            // Given — [200,300] lies above every chunk's max
+            Path file = writeThreeChunks(tmp);
+            RowFilter filter = new RowFilter.Column("id", new Predicate.Between(200L, 300L));
+
+            // When / Then — no chunk can match, so all are pruned
+            assertPrunesLikeOracle(file, filter, v -> v >= 200 && v <= 300);
+        }
+
+        @Test
+        void or_prunesOnlyChunksDisjointFromBothSides(@TempDir Path tmp) throws IOException {
+            // Given — (id<40 OR id>120): chunk 1 matches the left, chunk 3 the right, chunk 2 neither
+            Path file = writeThreeChunks(tmp);
+            RowFilter filter = new RowFilter.Column("id",
+                    new Predicate.Or(new Predicate.Lt(40L), new Predicate.Gt(120L)));
+
+            // When / Then — only the middle chunk (no row < 40 or > 120) is pruned
+            assertPrunesLikeOracle(file, filter, v -> v < 40 || v > 120);
+        }
+
+        @Test
+        void neq_neverPrunesWhenSomeRowDiffers(@TempDir Path tmp) throws IOException {
+            // Given — id != 75: every chunk holds a row different from 75, so none may be pruned
+            Path file = writeThreeChunks(tmp);
+            RowFilter filter = RowFilter.neq("id", 75L);
+
+            // When / Then
+            assertPrunesLikeOracle(file, filter, v -> v != 75);
+        }
+
+        @Test
+        void gte_prunesOnlyChunksEntirelyBelow(@TempDir Path tmp) throws IOException {
+            // Given — id >= 75: chunk 1 (max 50) is entirely below the threshold
+            Path file = writeThreeChunks(tmp);
+            RowFilter filter = RowFilter.gte("id", 75L);
+
+            // When / Then
+            assertPrunesLikeOracle(file, filter, v -> v >= 75);
+        }
+
+        @Test
+        void lte_prunesOnlyChunksEntirelyAbove(@TempDir Path tmp) throws IOException {
+            // Given — id <= 75: chunk 3 (min 101) is entirely above the threshold
+            Path file = writeThreeChunks(tmp);
+            RowFilter filter = RowFilter.lte("id", 75L);
+
+            // When / Then
+            assertPrunesLikeOracle(file, filter, v -> v <= 75);
+        }
+
+        /// Asserts the chunks that survive `filter` are exactly those a brute-force row scan of the
+        /// known chunk data finds a match in — proving the evaluator prunes a chunk only when no row
+        /// can match it.
+        private void assertPrunesLikeOracle(Path file, RowFilter filter, LongPredicate oracle)
+                throws IOException {
+            long[][] chunks = {range(1L, 50L), range(51L, 100L), range(101L, 150L)};
+            List<Long> expected = new ArrayList<>();
+            for (long[] chunk : chunks) {
+                if (Arrays.stream(chunk).anyMatch(oracle)) {
+                    expected.add((long) chunk.length);
+                }
+            }
+            assertThat(scanRowCounts(file, filter)).containsExactlyElementsOf(expected);
         }
     }
 }

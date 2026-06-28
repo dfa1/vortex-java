@@ -24,6 +24,42 @@ class PredicateTest {
         }
 
         @Test
+        void neqRoundTripsValue() {
+            // Given an inequality predicate over a scalar
+            Predicate.Neq sut = new Predicate.Neq(42L);
+
+            // When reading the value back
+            Object result = sut.value();
+
+            // Then the accessor returns what was supplied
+            assertThat(result).isEqualTo(42L);
+        }
+
+        @Test
+        void gteRoundTripsValue() {
+            // Given an inclusive greater-than-or-equal predicate
+            Predicate.Gte sut = new Predicate.Gte(7);
+
+            // When reading the value back
+            Comparable<?> result = sut.value();
+
+            // Then the accessor returns what was supplied
+            assertThat(result).isEqualTo(7);
+        }
+
+        @Test
+        void lteRoundTripsValue() {
+            // Given an inclusive less-than-or-equal predicate
+            Predicate.Lte sut = new Predicate.Lte(9);
+
+            // When reading the value back
+            Comparable<?> result = sut.value();
+
+            // Then the accessor returns what was supplied
+            assertThat(result).isEqualTo(9);
+        }
+
+        @Test
         void ltRoundTripsValue() {
             // Given a strict less-than predicate
             Predicate.Lt sut = new Predicate.Lt(100);
@@ -124,6 +160,30 @@ class PredicateTest {
             // When constructing an equality predicate
             // Then it is rejected
             assertThatThrownBy(() -> new Predicate.Eq(null)).isInstanceOf(NullPointerException.class);
+        }
+
+        @Test
+        void neqRejectsNullValue() {
+            // Given a null value — IsNull is the dedicated null test, so null here is a programming error
+            // When constructing an inequality predicate
+            // Then it is rejected
+            assertThatThrownBy(() -> new Predicate.Neq(null)).isInstanceOf(NullPointerException.class);
+        }
+
+        @Test
+        void gteRejectsNullValue() {
+            // Given a null value
+            // When constructing a greater-than-or-equal predicate
+            // Then it is rejected
+            assertThatThrownBy(() -> new Predicate.Gte(null)).isInstanceOf(NullPointerException.class);
+        }
+
+        @Test
+        void lteRejectsNullValue() {
+            // Given a null value
+            // When constructing a less-than-or-equal predicate
+            // Then it is rejected
+            assertThatThrownBy(() -> new Predicate.Lte(null)).isInstanceOf(NullPointerException.class);
         }
 
         @Test
@@ -270,8 +330,11 @@ class PredicateTest {
             // only while the permits clause stays in sync with the cases, pinning the sealed contract
             Predicate[] all = {
                 new Predicate.Eq(1),
+                new Predicate.Neq(1),
                 new Predicate.Lt(1),
                 new Predicate.Gt(1),
+                new Predicate.Lte(1),
+                new Predicate.Gte(1),
                 new Predicate.Between(0, 2),
                 new Predicate.IsNull(),
                 new Predicate.IsNotNull(),
@@ -284,20 +347,26 @@ class PredicateTest {
 
             // Then every variant resolves to a distinct label
             assertThat(result).isEqualTo("eq");
-            assertThat(label(all[1])).isEqualTo("lt");
-            assertThat(label(all[2])).isEqualTo("gt");
-            assertThat(label(all[3])).isEqualTo("between");
-            assertThat(label(all[4])).isEqualTo("isNull");
-            assertThat(label(all[5])).isEqualTo("isNotNull");
-            assertThat(label(all[6])).isEqualTo("and");
-            assertThat(label(all[7])).isEqualTo("or");
+            assertThat(label(all[1])).isEqualTo("neq");
+            assertThat(label(all[2])).isEqualTo("lt");
+            assertThat(label(all[3])).isEqualTo("gt");
+            assertThat(label(all[4])).isEqualTo("lte");
+            assertThat(label(all[5])).isEqualTo("gte");
+            assertThat(label(all[6])).isEqualTo("between");
+            assertThat(label(all[7])).isEqualTo("isNull");
+            assertThat(label(all[8])).isEqualTo("isNotNull");
+            assertThat(label(all[9])).isEqualTo("and");
+            assertThat(label(all[10])).isEqualTo("or");
         }
 
         private static String label(Predicate predicate) {
             return switch (predicate) {
                 case Predicate.Eq ignored -> "eq";
+                case Predicate.Neq ignored -> "neq";
                 case Predicate.Lt ignored -> "lt";
                 case Predicate.Gt ignored -> "gt";
+                case Predicate.Lte ignored -> "lte";
+                case Predicate.Gte ignored -> "gte";
                 case Predicate.Between ignored -> "between";
                 case Predicate.IsNull ignored -> "isNull";
                 case Predicate.IsNotNull ignored -> "isNotNull";

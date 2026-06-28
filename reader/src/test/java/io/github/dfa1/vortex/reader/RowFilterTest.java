@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.reader;
 
+import io.github.dfa1.vortex.reader.compute.Predicate;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -12,57 +13,75 @@ class RowFilterTest {
     @Nested
     class Factories {
         @Test
-        void gt_createsGtRecord() {
+        void gt_createsColumnBoundToGt() {
             // Given / When
             RowFilter sut = RowFilter.gt("price", 100L);
 
             // Then
-            assertThat(sut).isEqualTo(new RowFilter.Gt("price", 100L));
+            assertThat(sut).isEqualTo(new RowFilter.Column("price", new Predicate.Gt(100L)));
         }
 
         @Test
-        void gte_createsGteRecord() {
+        void gte_createsColumnBoundToGte() {
             // Given / When
             RowFilter sut = RowFilter.gte("price", 100L);
 
             // Then
-            assertThat(sut).isEqualTo(new RowFilter.Gte("price", 100L));
+            assertThat(sut).isEqualTo(new RowFilter.Column("price", new Predicate.Gte(100L)));
         }
 
         @Test
-        void lt_createsLtRecord() {
+        void lt_createsColumnBoundToLt() {
             // Given / When
             RowFilter sut = RowFilter.lt("price", 500L);
 
             // Then
-            assertThat(sut).isEqualTo(new RowFilter.Lt("price", 500L));
+            assertThat(sut).isEqualTo(new RowFilter.Column("price", new Predicate.Lt(500L)));
         }
 
         @Test
-        void lte_createsLteRecord() {
+        void lte_createsColumnBoundToLte() {
             // Given / When
             RowFilter sut = RowFilter.lte("price", 500L);
 
             // Then
-            assertThat(sut).isEqualTo(new RowFilter.Lte("price", 500L));
+            assertThat(sut).isEqualTo(new RowFilter.Column("price", new Predicate.Lte(500L)));
         }
 
         @Test
-        void eq_createsEqRecord() {
+        void eq_createsColumnBoundToEq() {
             // Given / When
             RowFilter sut = RowFilter.eq("status", "open");
 
             // Then
-            assertThat(sut).isEqualTo(new RowFilter.Eq("status", "open"));
+            assertThat(sut).isEqualTo(new RowFilter.Column("status", new Predicate.Eq("open")));
         }
 
         @Test
-        void neq_createsNeqRecord() {
+        void neq_createsColumnBoundToNeq() {
             // Given / When
             RowFilter sut = RowFilter.neq("status", "closed");
 
             // Then
-            assertThat(sut).isEqualTo(new RowFilter.Neq("status", "closed"));
+            assertThat(sut).isEqualTo(new RowFilter.Column("status", new Predicate.Neq("closed")));
+        }
+
+        @Test
+        void isNull_createsColumnBoundToIsNull() {
+            // Given / When
+            RowFilter sut = RowFilter.isNull("status");
+
+            // Then
+            assertThat(sut).isEqualTo(new RowFilter.Column("status", new Predicate.IsNull()));
+        }
+
+        @Test
+        void isNotNull_createsColumnBoundToIsNotNull() {
+            // Given / When
+            RowFilter sut = RowFilter.isNotNull("status");
+
+            // Then
+            assertThat(sut).isEqualTo(new RowFilter.Column("status", new Predicate.IsNotNull()));
         }
     }
 
@@ -94,7 +113,8 @@ class RowFilterTest {
             RowFilter.And outer = (RowFilter.And) sut;
             assertThat(outer.filters()).hasSize(2);
             assertThat(outer.filters().get(0)).isInstanceOf(RowFilter.And.class);
-            assertThat(outer.filters().get(1)).isInstanceOf(RowFilter.Neq.class);
+            assertThat(outer.filters().get(1))
+                    .isEqualTo(new RowFilter.Column("status", new Predicate.Neq("cancelled")));
         }
 
         @Test

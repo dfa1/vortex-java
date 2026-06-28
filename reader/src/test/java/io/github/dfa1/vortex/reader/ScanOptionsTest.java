@@ -32,7 +32,7 @@ class ScanOptionsTest {
     @Test
     void withFilter_setsFilter() {
         // Given
-        RowFilter filter = new RowFilter.Gte("price", 100);
+        RowFilter filter = RowFilter.gte("price", 100);
 
         // When
         ScanOptions sut = ScanOptions.all().withFilter(filter);
@@ -48,7 +48,7 @@ class ScanOptionsTest {
         ScanOptions sut = ScanOptions.all()
                                   .withColumns("price", "qty")
                                   .withLimit(10)
-                                  .withFilter(new RowFilter.Gte("price", 50));
+                                  .withFilter(RowFilter.gte("price", 50));
 
         // Then
         assertThat(sut.columns()).containsExactly("price", "qty");

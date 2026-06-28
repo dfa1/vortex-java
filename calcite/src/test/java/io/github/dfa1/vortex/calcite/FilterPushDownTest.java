@@ -64,12 +64,12 @@ class FilterPushDownTest {
     @ParameterizedTest(name = "[{index}] WHERE {0} -> {1} rows")
     @CsvSource({
             // every comparison kind the RowFilter translator supports, over a Long column
-            "i64 = 1000,            1",   // EQUALS        -> RowFilter.Eq
-            "i64 <> 1000,           5",   // NOT_EQUALS    -> RowFilter.Neq
-            "i64 < 3000,            2",   // LESS_THAN     -> RowFilter.Lt
-            "i64 <= 3000,           3",   // LESS_THAN_EQ  -> RowFilter.Lte
-            "i64 > 4000,            2",   // GREATER_THAN  -> RowFilter.Gt
-            "i64 >= 4000,           3",   // GREATER_EQ    -> RowFilter.Gte
+            "i64 = 1000,            1",   // EQUALS        -> Column(i64, Predicate.Eq)
+            "i64 <> 1000,           5",   // NOT_EQUALS    -> Column(i64, Predicate.Neq)
+            "i64 < 3000,            2",   // LESS_THAN     -> Column(i64, Predicate.Lt)
+            "i64 <= 3000,           3",   // LESS_THAN_EQ  -> Column(i64, Predicate.Lte)
+            "i64 > 4000,            2",   // GREATER_THAN  -> Column(i64, Predicate.Gt)
+            "i64 >= 4000,           3",   // GREATER_EQ    -> Column(i64, Predicate.Gte)
             "s = 'a',               1",   // Utf8 literal coercion
             "f64 > 3.0,             3",   // floating literal coercion
             // multiple conjuncts arrive as separate filters -> RowFilter.and over the list

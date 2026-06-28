@@ -14,8 +14,9 @@ import java.util.Objects;
 /// the two layers unify.
 ///
 /// The leaf variants split by what they test:
-/// - [Predicate.Eq] — equality against a value.
+/// - [Predicate.Eq] / [Predicate.Neq] — equality and inequality against a value.
 /// - [Predicate.Lt] / [Predicate.Gt] — strict ordering against a value.
+/// - [Predicate.Lte] / [Predicate.Gte] — inclusive ordering against a value.
 /// - [Predicate.Between] — an inclusive range `[lo, hi]`.
 /// - [Predicate.IsNull] / [Predicate.IsNotNull] — the dedicated null tests; a `null` value is never
 ///   passed to the comparison leaves.
@@ -27,8 +28,9 @@ import java.util.Objects;
 /// Predicates are immutable records: equality, hash code and string form follow component-wise from
 /// the record contract, so two structurally identical trees are equal.
 public sealed interface Predicate
-        permits Predicate.Eq, Predicate.Lt, Predicate.Gt, Predicate.Between,
-                Predicate.IsNull, Predicate.IsNotNull, Predicate.And, Predicate.Or {
+        permits Predicate.Eq, Predicate.Neq, Predicate.Lt, Predicate.Gt, Predicate.Lte,
+                Predicate.Gte, Predicate.Between, Predicate.IsNull, Predicate.IsNotNull,
+                Predicate.And, Predicate.Or {
 
     /// Matches rows whose value equals `value`.
     ///
@@ -42,6 +44,23 @@ public sealed interface Predicate
         ///
         /// @param value the value to compare against, must be non-null
         public Eq {
+            Objects.requireNonNull(value, "value");
+        }
+    }
+
+    /// Matches rows whose value differs from `value`.
+    ///
+    /// Under three-valued logic a null row is neither equal nor unequal to `value`, so it never
+    /// satisfies this leaf; the dedicated [Predicate.IsNull] covers the null test, so `value` here
+    /// is never `null`.
+    ///
+    /// @param value the value to compare against, must be non-null
+    record Neq(Object value) implements Predicate {
+
+        /// Validates the value.
+        ///
+        /// @param value the value to compare against, must be non-null
+        public Neq {
             Objects.requireNonNull(value, "value");
         }
     }
@@ -68,6 +87,32 @@ public sealed interface Predicate
         ///
         /// @param value the exclusive lower bound, must be non-null
         public Gt {
+            Objects.requireNonNull(value, "value");
+        }
+    }
+
+    /// Matches rows whose value is less than or equal to `value`.
+    ///
+    /// @param value the inclusive upper bound, must be non-null and orderable
+    record Lte(Comparable<?> value) implements Predicate {
+
+        /// Validates the value.
+        ///
+        /// @param value the inclusive upper bound, must be non-null
+        public Lte {
+            Objects.requireNonNull(value, "value");
+        }
+    }
+
+    /// Matches rows whose value is greater than or equal to `value`.
+    ///
+    /// @param value the inclusive lower bound, must be non-null and orderable
+    record Gte(Comparable<?> value) implements Predicate {
+
+        /// Validates the value.
+        ///
+        /// @param value the inclusive lower bound, must be non-null
+        public Gte {
             Objects.requireNonNull(value, "value");
         }
     }

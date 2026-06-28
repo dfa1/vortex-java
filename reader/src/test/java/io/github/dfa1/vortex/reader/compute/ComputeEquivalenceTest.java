@@ -196,15 +196,19 @@ class ComputeEquivalenceTest {
 
     private static Predicate randomPredicate(Random random, Array array, int depth) {
         boolean floating = array.dtype() instanceof DType.Primitive prim && prim.ptype().isFloating();
-        int choice = depth >= 2 ? random.nextInt(6) : random.nextInt(8);
+        // depth>=2 picks a leaf only (cases 0..8); shallower nodes may also pick a composite (9, 10).
+        int choice = depth >= 2 ? random.nextInt(9) : random.nextInt(11);
         return switch (choice) {
             case 0 -> new Predicate.Eq(constant(random, floating));
-            case 1 -> new Predicate.Lt(constant(random, floating));
-            case 2 -> new Predicate.Gt(constant(random, floating));
-            case 3 -> new Predicate.Between(constant(random, floating), constant(random, floating));
-            case 4 -> new Predicate.IsNull();
-            case 5 -> new Predicate.IsNotNull();
-            case 6 -> new Predicate.And(randomPredicate(random, array, depth + 1),
+            case 1 -> new Predicate.Neq(constant(random, floating));
+            case 2 -> new Predicate.Lt(constant(random, floating));
+            case 3 -> new Predicate.Lte(constant(random, floating));
+            case 4 -> new Predicate.Gt(constant(random, floating));
+            case 5 -> new Predicate.Gte(constant(random, floating));
+            case 6 -> new Predicate.Between(constant(random, floating), constant(random, floating));
+            case 7 -> new Predicate.IsNull();
+            case 8 -> new Predicate.IsNotNull();
+            case 9 -> new Predicate.And(randomPredicate(random, array, depth + 1),
                     randomPredicate(random, array, depth + 1));
             default -> new Predicate.Or(randomPredicate(random, array, depth + 1),
                     randomPredicate(random, array, depth + 1));

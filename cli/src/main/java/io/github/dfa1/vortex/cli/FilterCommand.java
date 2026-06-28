@@ -15,6 +15,7 @@ import io.github.dfa1.vortex.csv.ExportOptions;
 import io.github.dfa1.vortex.csv.RowPredicate;
 import io.github.dfa1.vortex.reader.RowFilter;
 import io.github.dfa1.vortex.reader.ScanOptions;
+import io.github.dfa1.vortex.reader.compute.Predicate;
 
 import java.io.IOException;
 import java.io.OutputStreamWriter;
@@ -150,18 +151,7 @@ final class FilterCommand {
 
     private static RowPredicate toRowPredicate(RowFilter filter) {
         return switch (filter) {
-            case RowFilter.Gt(var col, var val) -> (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, val) > 0;
-            case RowFilter.Gte(var col, var val) ->
-                    (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, val) >= 0;
-            case RowFilter.Lt(var col, var val) -> (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, val) < 0;
-            case RowFilter.Lte(var col, var val) ->
-                    (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, val) <= 0;
-            case RowFilter.Eq(var col, var val) ->
-                    (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, (Comparable<?>) val) == 0;
-            case RowFilter.Neq(var col, var val) ->
-                    (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, (Comparable<?>) val) != 0;
-            case RowFilter.IsNull(var col) -> (chunk, rowIdx) -> isRowNull(chunk.column(col), rowIdx);
-            case RowFilter.IsNotNull(var col) -> (chunk, rowIdx) -> !isRowNull(chunk.column(col), rowIdx);
+            case RowFilter.Column(var col, var predicate) -> columnPredicate(col, predicate);
             case RowFilter.And(var filters) -> {
                 RowPredicate[] preds = filters.stream().map(FilterCommand::toRowPredicate).toArray(RowPredicate[]::new);
                 yield (chunk, rowIdx) -> {
@@ -173,6 +163,30 @@ final class FilterCommand {
                     return true;
                 };
             }
+        };
+    }
+
+    /// Compiles a column-bound [Predicate] into a per-row test over the decoded chunk. Only the
+    /// comparison and null-test leaves the filter grammar ([#parseFilter]) produces are supported;
+    /// the composite and range predicate variants never arise from a parsed CLI expression.
+    private static RowPredicate columnPredicate(String col, Predicate predicate) {
+        return switch (predicate) {
+            case Predicate.Gt(var val) -> (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, val) > 0;
+            case Predicate.Gte(var val) -> (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, val) >= 0;
+            case Predicate.Lt(var val) -> (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, val) < 0;
+            case Predicate.Lte(var val) -> (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, val) <= 0;
+            case Predicate.Eq(var val) ->
+                    (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, (Comparable<?>) val) == 0;
+            case Predicate.Neq(var val) ->
+                    (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, (Comparable<?>) val) != 0;
+            case Predicate.IsNull ignored -> (chunk, rowIdx) -> isRowNull(chunk.column(col), rowIdx);
+            case Predicate.IsNotNull ignored -> (chunk, rowIdx) -> !isRowNull(chunk.column(col), rowIdx);
+            case Predicate.Between ignored ->
+                    throw new IllegalArgumentException("BETWEEN filters are not supported on the command line");
+            case Predicate.And ignored ->
+                    throw new IllegalArgumentException("nested predicate AND is not supported on the command line");
+            case Predicate.Or ignored ->
+                    throw new IllegalArgumentException("nested predicate OR is not supported on the command line");
         };
     }
 

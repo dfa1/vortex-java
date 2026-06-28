@@ -94,8 +94,11 @@ final class PrimitiveFilter {
     private static boolean predicateOk(Predicate predicate) {
         return switch (predicate) {
             case Predicate.Eq eq -> eq.value() instanceof Number;
+            case Predicate.Neq neq -> neq.value() instanceof Number;
             case Predicate.Lt lt -> lt.value() instanceof Number;
             case Predicate.Gt gt -> gt.value() instanceof Number;
+            case Predicate.Lte lte -> lte.value() instanceof Number;
+            case Predicate.Gte gte -> gte.value() instanceof Number;
             case Predicate.Between between -> between.lo() instanceof Number && between.hi() instanceof Number;
             case Predicate.IsNull ignored -> true;
             case Predicate.IsNotNull ignored -> true;
@@ -172,11 +175,20 @@ final class PrimitiveFilter {
         long flip = unsigned ? Long.MIN_VALUE : 0L;
         long lc;
         long hc;
+        // Every leaf lowers to a single inclusive range on the flipped longs; Neq is that same
+        // range (the point [c, c]) tested negated, so the match is the complement of equality.
+        boolean negate = false;
         switch (predicate) {
             case Predicate.Eq eq -> {
                 long c = ((Number) eq.value()).longValue() ^ flip;
                 lc = c;
                 hc = c;
+            }
+            case Predicate.Neq neq -> {
+                long c = ((Number) neq.value()).longValue() ^ flip;
+                lc = c;
+                hc = c;
+                negate = true;
             }
             case Predicate.Lt lt -> {
                 long c = ((Number) lt.value()).longValue() ^ flip;
@@ -188,6 +200,12 @@ final class PrimitiveFilter {
                     hc = c - 1;
                 }
             }
+            case Predicate.Lte lte -> {
+                // v <= c → inclusive [MIN, c]; no underflow guard needed (c is the upper bound).
+                long c = ((Number) lte.value()).longValue() ^ flip;
+                lc = Long.MIN_VALUE;
+                hc = c;
+            }
             case Predicate.Gt gt -> {
                 long c = ((Number) gt.value()).longValue() ^ flip;
                 if (c == Long.MAX_VALUE) {
@@ -198,31 +216,42 @@ final class PrimitiveFilter {
                     hc = Long.MAX_VALUE;
                 }
             }
+            case Predicate.Gte gte -> {
+                // v >= c → inclusive [c, MAX]; no overflow guard needed (c is the lower bound).
+                long c = ((Number) gte.value()).longValue() ^ flip;
+                lc = c;
+                hc = Long.MAX_VALUE;
+            }
             default -> {
                 Predicate.Between between = (Predicate.Between) predicate;
                 lc = ((Number) between.lo()).longValue() ^ flip;
                 hc = ((Number) between.hi()).longValue() ^ flip;
             }
         }
-        dispatchLongRange(data, lc, hc, flip, unsigned, bits, n);
+        dispatchLongRange(data, lc, hc, flip, unsigned, negate, bits, n);
     }
 
-    /// Dispatches the inclusive-range match to the typed monomorphic loop for the concrete array.
+    /// Dispatches the inclusive-range match to the typed monomorphic loop for the concrete array. The
+    /// `negate` flag is loop-invariant and gates equality versus inequality (Neq): a position is set
+    /// when its in-range result differs from `negate`, so `negate == false` keeps the plain inclusive
+    /// match and `negate == true` selects everything outside the point range. C2 unswitches the
+    /// hoisted flag, so the common `negate == false` path keeps the bare range test.
     ///
     /// @param data     the unwrapped long-domain array
     /// @param lc       the inclusive lower bound in the flipped domain
     /// @param hc       the inclusive upper bound in the flipped domain (an empty range has `lc > hc`)
     /// @param flip     the order-preserving XOR flip (`Long.MIN_VALUE` unsigned, `0` signed)
     /// @param unsigned whether the column is unsigned (narrow types zero-extend)
+    /// @param negate   `true` to select the complement of the range (Neq), `false` for a direct match
     /// @param bits     the output bitmap
     /// @param n        the row count
     private static void dispatchLongRange(Array data, long lc, long hc, long flip, boolean unsigned,
-                                          MemorySegment bits, long n) {
+                                          boolean negate, MemorySegment bits, long n) {
         if (data instanceof LongArray la) {
             // No-box fast lane: read straight to long, fold sign with a hoisted XOR, single range test.
             for (long i = 0; i < n; i++) {
                 long v = la.getLong(i) ^ flip;
-                if (lc <= v && v <= hc) {
+                if ((lc <= v && v <= hc) != negate) {
                     setBit(bits, i);
                 }
             }
@@ -231,14 +260,14 @@ final class PrimitiveFilter {
             if (unsigned) {
                 for (long i = 0; i < n; i++) {
                     long v = (ia.getInt(i) & 0xFFFFFFFFL) ^ flip;
-                    if (lc <= v && v <= hc) {
+                    if ((lc <= v && v <= hc) != negate) {
                         setBit(bits, i);
                     }
                 }
             } else {
                 for (long i = 0; i < n; i++) {
                     long v = ia.getInt(i);
-                    if (lc <= v && v <= hc) {
+                    if ((lc <= v && v <= hc) != negate) {
                         setBit(bits, i);
                     }
                 }
@@ -247,14 +276,14 @@ final class PrimitiveFilter {
             if (unsigned) {
                 for (long i = 0; i < n; i++) {
                     long v = (sa.getShort(i) & 0xFFFFL) ^ flip;
-                    if (lc <= v && v <= hc) {
+                    if ((lc <= v && v <= hc) != negate) {
                         setBit(bits, i);
                     }
                 }
             } else {
                 for (long i = 0; i < n; i++) {
                     long v = sa.getShort(i);
-                    if (lc <= v && v <= hc) {
+                    if ((lc <= v && v <= hc) != negate) {
                         setBit(bits, i);
                     }
                 }
@@ -264,14 +293,14 @@ final class PrimitiveFilter {
             if (unsigned) {
                 for (long i = 0; i < n; i++) {
                     long v = (ba.getByte(i) & 0xFFL) ^ flip;
-                    if (lc <= v && v <= hc) {
+                    if ((lc <= v && v <= hc) != negate) {
                         setBit(bits, i);
                     }
                 }
             } else {
                 for (long i = 0; i < n; i++) {
                     long v = ba.getByte(i);
-                    if (lc <= v && v <= hc) {
+                    if ((lc <= v && v <= hc) != negate) {
                         setBit(bits, i);
                     }
                 }
@@ -295,13 +324,25 @@ final class PrimitiveFilter {
                 op = DoubleOp.EQ;
                 lo = ((Number) eq.value()).doubleValue();
             }
+            case Predicate.Neq neq -> {
+                op = DoubleOp.NEQ;
+                lo = ((Number) neq.value()).doubleValue();
+            }
             case Predicate.Lt lt -> {
                 op = DoubleOp.LT;
                 lo = ((Number) lt.value()).doubleValue();
             }
+            case Predicate.Lte lte -> {
+                op = DoubleOp.LTE;
+                lo = ((Number) lte.value()).doubleValue();
+            }
             case Predicate.Gt gt -> {
                 op = DoubleOp.GT;
                 lo = ((Number) gt.value()).doubleValue();
+            }
+            case Predicate.Gte gte -> {
+                op = DoubleOp.GTE;
+                lo = ((Number) gte.value()).doubleValue();
             }
             default -> {
                 Predicate.Between between = (Predicate.Between) predicate;
@@ -339,8 +380,11 @@ final class PrimitiveFilter {
     private static boolean matchDouble(double v, DoubleOp op, double lo, double hi) {
         return switch (op) {
             case EQ -> Double.compare(v, lo) == 0;
+            case NEQ -> Double.compare(v, lo) != 0;
             case LT -> Double.compare(v, lo) < 0;
+            case LTE -> Double.compare(v, lo) <= 0;
             case GT -> Double.compare(v, lo) > 0;
+            case GTE -> Double.compare(v, lo) >= 0;
             case BETWEEN -> Double.compare(v, lo) >= 0 && Double.compare(v, hi) <= 0;
         };
     }
@@ -411,6 +455,6 @@ final class PrimitiveFilter {
 
     /// The double-domain comparison operators a leaf lowers to, hoisted out of the per-row loop.
     private enum DoubleOp {
-        EQ, LT, GT, BETWEEN
+        EQ, NEQ, LT, LTE, GT, GTE, BETWEEN
     }
 }

@@ -375,63 +375,19 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
 
     /// Walks the filter tree, evaluating each leaf into a per-column [Mask] and collecting them into
     /// `out`; the conjuncts of an n-ary `AND` are flattened so [#buildMask] intersects them together.
+    /// A [RowFilter.Column] already holds the exact compute [Predicate], so the kernel runs it
+    /// directly against the bound column — no translation seam, since `>=`, `<=` and `<>` are now
+    /// first-class predicate variants.
     private static void collectLeafMasks(Chunk chunk, RowFilter filter, Arena arena, List<Mask> out) {
-        if (filter instanceof RowFilter.And(var parts)) {
-            for (RowFilter part : parts) {
-                collectLeafMasks(chunk, part, arena, out);
+        switch (filter) {
+            case RowFilter.And(var parts) -> {
+                for (RowFilter part : parts) {
+                    collectLeafMasks(chunk, part, arena, out);
+                }
             }
-            return;
+            case RowFilter.Column(var col, var predicate) ->
+                    out.add(Compute.filter(chunk.column(col), predicate, arena));
         }
-        out.add(Compute.filter(chunk.column(leafColumn(filter)), toPredicate(filter), arena));
-    }
-
-    /// The column a leaf [RowFilter] references (never called for an `AND`, which has no single
-    /// column).
-    private static String leafColumn(RowFilter leaf) {
-        return switch (leaf) {
-            case RowFilter.Eq(var col, var ignored) -> col;
-            case RowFilter.Neq(var col, var ignored) -> col;
-            case RowFilter.Gt(var col, var ignored) -> col;
-            case RowFilter.Gte(var col, var ignored) -> col;
-            case RowFilter.Lt(var col, var ignored) -> col;
-            case RowFilter.Lte(var col, var ignored) -> col;
-            case RowFilter.IsNull(var col) -> col;
-            case RowFilter.IsNotNull(var col) -> col;
-            case RowFilter.And ignored ->
-                    throw new IllegalArgumentException("leafColumn called on a composite AND filter");
-        };
-    }
-
-    /// Translates a leaf [RowFilter] into the equivalent compute [Predicate]. The compute vocabulary
-    /// has no direct `>=`, `<=`, or `<>`, so each is composed from the ops it does have — all
-    /// null-correct because every component excludes nulls:
-    /// - `>= v` is `= v OR > v`;
-    /// - `<= v` is `= v OR < v`;
-    /// - `<> v` is `< v OR > v`.
-    /// This keeps a `BETWEEN` (which Calcite lowers to `>= a AND <= b`) foldable on a boundary zone
-    /// rather than abandoning it.
-    private static Predicate toPredicate(RowFilter leaf) {
-        return switch (leaf) {
-            case RowFilter.Eq(var ignored, var value) -> new Predicate.Eq(value);
-            case RowFilter.Neq(var ignored, var value) ->
-                    new Predicate.Or(new Predicate.Lt(asComparable(value)), new Predicate.Gt(asComparable(value)));
-            case RowFilter.Gt(var ignored, var value) -> new Predicate.Gt(value);
-            case RowFilter.Gte(var ignored, var value) ->
-                    new Predicate.Or(new Predicate.Eq(value), new Predicate.Gt(value));
-            case RowFilter.Lt(var ignored, var value) -> new Predicate.Lt(value);
-            case RowFilter.Lte(var ignored, var value) ->
-                    new Predicate.Or(new Predicate.Eq(value), new Predicate.Lt(value));
-            case RowFilter.IsNull(var ignored) -> new Predicate.IsNull();
-            case RowFilter.IsNotNull(var ignored) -> new Predicate.IsNotNull();
-            case RowFilter.And ignored ->
-                    throw new IllegalArgumentException("toPredicate called on a composite AND filter");
-        };
-    }
-
-    /// Casts a leaf's value to [Comparable] for the ordering predicates (`< v` / `> v`). The values
-    /// the filter translation produces are always [Long] / [Double] / [String], all comparable.
-    private static Comparable<?> asComparable(Object value) {
-        return (Comparable<?>) value;
     }
 
     /// Mutable accumulator for a filtered fold, shared by the whole-zone (tier 1) and boundary-zone
@@ -558,8 +514,28 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                 }
                 yield allIn ? Match.IN : Match.BOUNDARY;
             }
-            case RowFilter.Eq(var col, var value) -> {
-                ArrayStats s = zoneStats.get(col).get(zone);
+            case RowFilter.Column(var col, var predicate) ->
+                    classifyColumn(predicate, zoneStats.get(col).get(zone), rowCount);
+        };
+    }
+
+    /// Classifies one zone against a column-bound [Predicate] from the zone's statistics `s`. The
+    /// comparison ops carry the same three-valued-logic semantics as before the [RowFilter] /
+    /// [Predicate] unification: an unrecognised stat shape or a partially-overlapping zone is
+    /// [Match#BOUNDARY], a zone provably outside the predicate is [Match#OUT], and a zone every row
+    /// of which matches (which, for a value comparison, also requires the zone to carry no nulls) is
+    /// [Match#IN]. The composite and range predicates ([Predicate.Between] / [Predicate.And] /
+    /// [Predicate.Or]) cannot arise from the Calcite translation — `SEARCH` / `BETWEEN` expand to an
+    /// `AND` of single-leaf columns — so they fall through to [Match#BOUNDARY], which decodes and
+    /// applies the kernel mask and is therefore always correct.
+    ///
+    /// @param predicate the column-bound value-test
+    /// @param s         the zone's statistics for that column
+    /// @param rowCount  the zone's row count
+    /// @return how the zone relates to the predicate
+    private static Match classifyColumn(Predicate predicate, ArrayStats s, long rowCount) {
+        return switch (predicate) {
+            case Predicate.Eq(var value) -> {
                 if (uncomparable(s, value)) {
                     yield Match.BOUNDARY;
                 }
@@ -571,8 +547,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                 }
                 yield Match.BOUNDARY;
             }
-            case RowFilter.Neq(var col, var value) -> {
-                ArrayStats s = zoneStats.get(col).get(zone);
+            case Predicate.Neq(var value) -> {
                 if (uncomparable(s, value)) {
                     yield Match.BOUNDARY;
                 }
@@ -584,16 +559,16 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                 }
                 yield Match.BOUNDARY;
             }
-            case RowFilter.Gt(var col, var value) -> compare(zoneStats.get(col).get(zone), value,
+            case Predicate.Gt(var value) -> compare(s, value,
                     (st, v) -> compareStat(st.max(), v) <= 0, (st, v) -> compareStat(st.min(), v) > 0);
-            case RowFilter.Gte(var col, var value) -> compare(zoneStats.get(col).get(zone), value,
+            case Predicate.Gte(var value) -> compare(s, value,
                     (st, v) -> compareStat(st.max(), v) < 0, (st, v) -> compareStat(st.min(), v) >= 0);
-            case RowFilter.Lt(var col, var value) -> compare(zoneStats.get(col).get(zone), value,
+            case Predicate.Lt(var value) -> compare(s, value,
                     (st, v) -> compareStat(st.min(), v) >= 0, (st, v) -> compareStat(st.max(), v) < 0);
-            case RowFilter.Lte(var col, var value) -> compare(zoneStats.get(col).get(zone), value,
+            case Predicate.Lte(var value) -> compare(s, value,
                     (st, v) -> compareStat(st.min(), v) > 0, (st, v) -> compareStat(st.max(), v) <= 0);
-            case RowFilter.IsNull(var col) -> {
-                Long nulls = zoneStats.get(col).get(zone).nullCount();
+            case Predicate.IsNull ignored -> {
+                Long nulls = s.nullCount();
                 if (nulls == null) {
                     yield Match.BOUNDARY;
                 }
@@ -602,8 +577,8 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                 }
                 yield nulls == 0 ? Match.OUT : Match.BOUNDARY;
             }
-            case RowFilter.IsNotNull(var col) -> {
-                Long nulls = zoneStats.get(col).get(zone).nullCount();
+            case Predicate.IsNotNull ignored -> {
+                Long nulls = s.nullCount();
                 if (nulls == null) {
                     yield Match.BOUNDARY;
                 }
@@ -612,6 +587,9 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                 }
                 yield nulls == rowCount ? Match.OUT : Match.BOUNDARY;
             }
+            case Predicate.Between ignored -> Match.BOUNDARY;
+            case Predicate.And ignored -> Match.BOUNDARY;
+            case Predicate.Or ignored -> Match.BOUNDARY;
         };
     }
 
@@ -917,14 +895,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     private static void collectColumns(RowFilter filter, java.util.Set<String> out) {
         switch (filter) {
             case RowFilter.And(var parts) -> parts.forEach(f -> collectColumns(f, out));
-            case RowFilter.Eq(var col, var ignored) -> out.add(col);
-            case RowFilter.Neq(var col, var ignored) -> out.add(col);
-            case RowFilter.Gt(var col, var ignored) -> out.add(col);
-            case RowFilter.Gte(var col, var ignored) -> out.add(col);
-            case RowFilter.Lt(var col, var ignored) -> out.add(col);
-            case RowFilter.Lte(var col, var ignored) -> out.add(col);
-            case RowFilter.IsNull(var col) -> out.add(col);
-            case RowFilter.IsNotNull(var col) -> out.add(col);
+            case RowFilter.Column(var col, var ignored) -> out.add(col);
         }
     }
 

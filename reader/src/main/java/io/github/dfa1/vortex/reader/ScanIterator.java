@@ -10,6 +10,7 @@ import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.compute.Compare;
+import io.github.dfa1.vortex.reader.compute.Predicate;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.ChunkedBoolArray;
@@ -937,6 +938,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     private boolean canPruneChunk(ChunkSpec chunk, RowFilter filter) {
         return switch (filter) {
             case RowFilter.And(var filters) -> {
+                // Conjunction: pruning any one conjunct prunes the whole chunk (short-circuit).
                 for (RowFilter f : filters) {
                     if (canPruneChunk(chunk, f)) {
                         yield true;
@@ -944,87 +946,62 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                 }
                 yield false;
             }
-            case RowFilter.Gt(var col, var val) -> {
-                Layout flat = chunk.layoutFor(col);
-                if (flat == null) {
-                    yield false;
-                }
-                Object max = readFlatStats(flat).max();
-                yield max != null && Compare.values(max, val, columnDType(col)) <= 0;
-            }
-            case RowFilter.Gte(var col, var val) -> {
-                Layout flat = chunk.layoutFor(col);
-                if (flat == null) {
-                    yield false;
-                }
-                Object max = readFlatStats(flat).max();
-                yield max != null && Compare.values(max, val, columnDType(col)) < 0;
-            }
-            case RowFilter.Lt(var col, var val) -> {
-                Layout flat = chunk.layoutFor(col);
-                if (flat == null) {
-                    yield false;
-                }
-                Object min = readFlatStats(flat).min();
-                yield min != null && Compare.values(min, val, columnDType(col)) >= 0;
-            }
-            case RowFilter.Lte(var col, var val) -> {
-                Layout flat = chunk.layoutFor(col);
-                if (flat == null) {
-                    yield false;
-                }
-                Object min = readFlatStats(flat).min();
-                yield min != null && Compare.values(min, val, columnDType(col)) > 0;
-            }
-            case RowFilter.Eq(var col, var val) -> {
+            case RowFilter.Column(var col, var predicate) -> {
                 Layout flat = chunk.layoutFor(col);
                 if (flat == null) {
                     yield false;
                 }
                 ArrayStats stats = readFlatStats(flat);
-                Object min = stats.min();
-                Object max = stats.max();
-                if (min == null || max == null) {
-                    yield false;
-                }
-                // val < min || val > max → no row in this chunk can equal val. Route through the
-                // shared comparator so this path is width-agnostic and unsigned-aware too (#159).
-                DType ct = columnDType(col);
-                yield Compare.values(val, min, ct) < 0 || Compare.values(val, max, ct) > 0;
+                yield canPrune(predicate, stats, flat.rowCount(), columnDType(col));
             }
-            case RowFilter.Neq(var col, var val) -> {
-                Layout flat = chunk.layoutFor(col);
-                if (flat == null) {
-                    yield false;
-                }
-                ArrayStats stats = readFlatStats(flat);
-                Object min = stats.min();
-                Object max = stats.max();
-                if (min == null || max == null) {
-                    yield false;
-                }
-                // Every row equals val (min == max == val) → no row is != val.
-                DType ct = columnDType(col);
-                yield Compare.values(val, min, ct) == 0 && Compare.values(val, max, ct) == 0;
-            }
-            case RowFilter.IsNull(var col) -> {
-                Layout flat = chunk.layoutFor(col);
-                if (flat == null) {
-                    yield false;
-                }
-                // Zero nulls in the chunk → no row is null → nothing can match IS NULL.
-                Long nullCount = readFlatStats(flat).nullCount();
-                yield nullCount != null && nullCount == 0;
-            }
-            case RowFilter.IsNotNull(var col) -> {
-                Layout flat = chunk.layoutFor(col);
-                if (flat == null) {
-                    yield false;
-                }
-                // Every row is null → no row is non-null → nothing can match IS NOT NULL.
-                Long nullCount = readFlatStats(flat).nullCount();
-                yield nullCount != null && nullCount == flat.rowCount();
-            }
+        };
+    }
+
+    /// Tests whether `predicate`, compiled against a chunk's zone-map statistics, can prove that no
+    /// row in the chunk can match — in which case the chunk is skipped. Pruning is strictly
+    /// conservative: every branch returns `false` (do not prune) when a needed statistic is missing
+    /// or the outcome is uncertain, so a chunk is skipped only when it provably holds no match. All
+    /// ordering routes through [Compare#values(Object, Object, DType)] so the test stays
+    /// width-agnostic and unsigned/float-aware, identically to the row-level scan it gates.
+    ///
+    /// @param predicate the value-test bound to the column
+    /// @param stats     the column's per-chunk min/max/nullCount statistics
+    /// @param rowCount  the chunk's row count
+    /// @param ct        the column's dtype, deciding the comparison mode
+    /// @return `true` if no row can match and the chunk may be pruned
+    private static boolean canPrune(Predicate predicate, ArrayStats stats, long rowCount, DType ct) {
+        Object min = stats.min();
+        Object max = stats.max();
+        Long nullCount = stats.nullCount();
+        return switch (predicate) {
+            // val < min || val > max → no row equals val.
+            case Predicate.Eq(var v) -> min != null && max != null
+                    && (Compare.values(v, min, ct) < 0 || Compare.values(v, max, ct) > 0);
+            // Every row equals val (min == max == val) and no nulls → no row differs. A null row is
+            // neither = nor != val under three-valued logic, so require a provably null-free chunk.
+            case Predicate.Neq(var v) -> min != null && max != null
+                    && nullCount != null && nullCount == 0
+                    && Compare.values(v, min, ct) == 0 && Compare.values(v, max, ct) == 0;
+            // max <= val → no row is > val.
+            case Predicate.Gt(var v) -> max != null && Compare.values(max, v, ct) <= 0;
+            // max < val → no row is >= val.
+            case Predicate.Gte(var v) -> max != null && Compare.values(max, v, ct) < 0;
+            // min >= val → no row is < val.
+            case Predicate.Lt(var v) -> min != null && Compare.values(min, v, ct) >= 0;
+            // min > val → no row is <= val.
+            case Predicate.Lte(var v) -> min != null && Compare.values(min, v, ct) > 0;
+            // hi < min || lo > max → the range and the chunk's span are disjoint.
+            case Predicate.Between(var lo, var hi) -> min != null && max != null
+                    && (Compare.values(hi, min, ct) < 0 || Compare.values(lo, max, ct) > 0);
+            // Zero nulls → no row is null → nothing can match IS NULL.
+            case Predicate.IsNull ignored -> nullCount != null && nullCount == 0;
+            // Every row is null → no row is non-null → nothing can match IS NOT NULL.
+            case Predicate.IsNotNull ignored -> nullCount != null && nullCount == rowCount;
+            // A conjunction is unsatisfiable if either side is; a disjunction only if both are.
+            case Predicate.And(var left, var right) ->
+                    canPrune(left, stats, rowCount, ct) || canPrune(right, stats, rowCount, ct);
+            case Predicate.Or(var left, var right) ->
+                    canPrune(left, stats, rowCount, ct) && canPrune(right, stats, rowCount, ct);
         };
     }
 

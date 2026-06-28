@@ -89,10 +89,16 @@ final class StreamingFilterKernel implements FilterKernel {
         return switch (predicate) {
             case Predicate.Eq eq -> !Values.isNullAt(array, i)
                     && Compare.values(Values.valueAt(array, i), eq.value(), array.dtype()) == 0;
+            case Predicate.Neq neq -> !Values.isNullAt(array, i)
+                    && Compare.values(Values.valueAt(array, i), neq.value(), array.dtype()) != 0;
             case Predicate.Lt lt -> !Values.isNullAt(array, i)
                     && Compare.values(Values.valueAt(array, i), lt.value(), array.dtype()) < 0;
             case Predicate.Gt gt -> !Values.isNullAt(array, i)
                     && Compare.values(Values.valueAt(array, i), gt.value(), array.dtype()) > 0;
+            case Predicate.Lte lte -> !Values.isNullAt(array, i)
+                    && Compare.values(Values.valueAt(array, i), lte.value(), array.dtype()) <= 0;
+            case Predicate.Gte gte -> !Values.isNullAt(array, i)
+                    && Compare.values(Values.valueAt(array, i), gte.value(), array.dtype()) >= 0;
             case Predicate.Between between -> evaluateBetween(array, i, between);
             case Predicate.IsNull ignored -> Values.isNullAt(array, i);
             case Predicate.IsNotNull ignored -> !Values.isNullAt(array, i);
