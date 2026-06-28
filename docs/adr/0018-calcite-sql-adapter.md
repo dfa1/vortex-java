@@ -157,12 +157,15 @@ The Phase-2 rule now auto-registers over the bare `jdbc:calcite:` planner via
 to `LogicalTableScan`), so SQL over JDBC is rewritten with no caller wiring — the former main
 productionisation gap. The unit tests still drive the rule through a `HepPlanner` directly for
 focused branch coverage. A `WHERE` whose predicate partitions the zones cleanly is now answered
-from the kept zones' stats (above); the remaining Phase-2+ work is the **boundary** tier (ADR 0013
-§6): folding the fully-selected zones **and streaming only the boundary zones** a selective range
-partially selects. That needs a reader primitive the current API lacks — the ability to decode a
-chosen subset of chunks (so the fully-covered zones are not decoded) plus row-level predicate
-evaluation — without which a boundary-bearing filter decodes the same chunks as a plain scan and so
-gains nothing. Until then a filter with any boundary chunk abandons to the (zone-map-pruned) scan.
+from the kept zones' stats (above); the **boundary** tier (ADR 0013 §6) is now implemented too:
+the fully-selected zones fold from stats **and only the boundary zones** a selective range partially
+selects are decoded and reduced under a row-level filter mask. The enabling reader primitive shipped
+as `VortexReader.decodeChunk(chunkIndex, columns)` (decode a chosen subset of chunks so the
+fully-covered zones are not decoded); the row-level predicate evaluation runs through the ADR 0013
+compute kernels (`Compute.filter` → `Mask`, then `Compute.sum/count/min/max`). A boundary-bearing
+filter now decodes only its one or two straddling chunks instead of every surviving chunk. The fold
+abandons to the (correct, zone-map-pruned) scan when it cannot be trusted: an unsigned or
+floating-point filter column (NaN ordering), a non-numeric `SUM`, or a missing/misaligned zone map.
 
 **Two doors, chosen by query shape.** Calcite is the right tool for *reducing* queries (filter
 / aggregate / group-by), where push-down shrinks the result and the `Object[]` boundary
