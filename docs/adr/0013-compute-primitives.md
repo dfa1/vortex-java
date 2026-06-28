@@ -1,10 +1,14 @@
 # ADR 0013: Compute primitives — masks, kernels, no-materialise contract
 
-- **Status:** Accepted — §1 (Mask), §4 (Predicate), §2/§3 (filter/reduce kernels, generic streaming
-  baseline behind a minimal `Compute` entry point), and §6 (zone-map aggregate push-down, both the
+- **Status:** Accepted — §1 (Mask), §4 (Predicate), §2/§3 (filter/reduce kernels, a generic
+  streaming baseline plus a type-specialised boxing-free fast lane, behind a minimal `Compute`
+  entry point), §5 (`RowFilter` unified over `Predicate` — a `RowFilter.Column` binds a column to a
+  shared public `Predicate`; the same predicate is compiled against zone-map stats for pruning and
+  against the decoded array for the boundary fold), and §6 (zone-map aggregate push-down, both the
   whole-zone and boundary-zone tiers) are implemented in `reader.compute`. Deferred: encoded-domain
-  kernel specialisation (perf escalation), §5 `RowFilter` unification, and the ergonomic façade
-  (a columnar transducer — its own ADR). `MapKernel` is unbuilt (no consumer yet).
+  kernel specialisation (perf escalation — pushing the predicate into the ALP/FoR/Dict integer
+  domain without decoding), and the ergonomic façade (a columnar transducer — its own ADR).
+  `MapKernel` is unbuilt (no consumer yet).
 - **Date:** 2026-06-15
 - **Deciders:** project maintainer
 - **Supersedes:** —
