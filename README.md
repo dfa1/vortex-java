@@ -66,7 +66,7 @@ line-by-line diff is zero.
 <dependency>
   <groupId>io.github.dfa1.vortex</groupId>
   <artifactId>vortex-reader</artifactId>
-  <version>0.9.0</version>
+  <version>0.11.0</version>
 </dependency>
 ```
 
@@ -99,7 +99,7 @@ try (VortexReader vf = VortexReader.open(Path.of("data/example.vortex"));
 <dependency>
   <groupId>io.github.dfa1.vortex</groupId>
   <artifactId>vortex-writer</artifactId>
-  <version>0.9.0</version>
+  <version>0.11.0</version>
 </dependency>
 ```
 
