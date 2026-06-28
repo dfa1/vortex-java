@@ -159,6 +159,63 @@ public final class VortexReader implements VortexHandle {
         return registry;
     }
 
+    /// Returns the number of chunks in this file.
+    ///
+    /// Equal to the length of [ScanIterator#chunkRowCounts()] from a full scan, and the number
+    /// of chunks a full streaming scan yields when no filter pruning or limit applies. Useful
+    /// for random-access decode via [#decodeChunk(int, List)] without streaming the whole file.
+    ///
+    /// @return number of chunks in the file
+    public int chunkCount() {
+        try (ScanIterator iter = new ScanIterator(this, ScanOptions.all())) {
+            return iter.chunkCount();
+        }
+    }
+
+    /// Decodes exactly the chunk at `chunkIndex` for the named columns, in isolation from a
+    /// full scan — the random-access counterpart to [#scan(ScanOptions)].
+    ///
+    /// The decoded [io.github.dfa1.vortex.reader.array.Array] views are byte-identical (same
+    /// length, values, and null/validity) to the chunk a full streaming scan yields at the same
+    /// index. They are zero-copy slices of either the file's memory-mapped region or the
+    /// returned [Chunk]'s own confined [java.lang.foreign.Arena].
+    ///
+    /// Lifetime: the returned [Chunk] owns a fresh arena; its arrays remain valid until the
+    /// chunk is closed (and while this reader stays open). Decoding the same chunk twice yields
+    /// two independent chunks — closing one does not affect the other. Always close the chunk
+    /// via try-with-resources.
+    ///
+    /// An empty `columns` list decodes all columns (mirroring `ScanOptions` where empty means
+    /// all). Filter pruning and `ScanOptions.limit()` do not apply.
+    ///
+    /// @param chunkIndex zero-based chunk index in `[0, chunkCount())`
+    /// @param columns    column names to decode, or empty for all columns
+    /// @return a self-contained [Chunk] holding the decoded columns for that chunk
+    /// @throws VortexException if `chunkIndex` is out of bounds or a name in `columns` is not a
+    ///         column of this file
+    public Chunk decodeChunk(int chunkIndex, List<String> columns) {
+        List<String> requested = List.copyOf(columns);
+        validateColumns(requested);
+        ScanOptions options = requested.isEmpty()
+                ? ScanOptions.all()
+                : new ScanOptions(requested, null, ScanOptions.NO_LIMIT);
+        try (ScanIterator iter = new ScanIterator(this, options)) {
+            return iter.decodeChunkAt(chunkIndex);
+        }
+    }
+
+    private void validateColumns(List<String> columns) {
+        if (columns.isEmpty() || !(dtype instanceof DType.Struct struct)) {
+            return;
+        }
+        List<String> known = struct.fieldNames();
+        for (String name : columns) {
+            if (!known.contains(name)) {
+                throw new VortexException("decodeChunk: unknown column: " + name);
+            }
+        }
+    }
+
     /// Aggregated per-column statistics (global min/max across all chunks).
     /// Returns an empty map if the root layout is not a struct.
     /// Columns with no embedded stats return [ArrayStats#empty()].

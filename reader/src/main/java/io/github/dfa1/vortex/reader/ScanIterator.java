@@ -86,6 +86,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     private List<ChunkSpec> chunks;
     private List<String> projectedNames;
     private List<DType> projectedDtypes;
+    private Map<String, Layout> columnTopLayouts;
     private Map<String, DType> columnDtypes;
     private int chunkIndex;
     private int peekedChunkIdx = -1;
@@ -359,17 +360,64 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                 columns = limitedColumns(columns, chunkRows);
             }
             rowsReturned += chunkRows;
-            Map<String, DType> chunkDtypes = new java.util.LinkedHashMap<>();
-            for (int i = 0; i < projectedNames.size(); i++) {
-                chunkDtypes.put(projectedNames.get(i), projectedDtypes.get(i));
-            }
-            Chunk chunk = new Chunk(chunkRows, columns, chunkDtypes, arena, this::onChunkClosed);
+            Chunk chunk = new Chunk(chunkRows, columns, projectedDtypeMap(), arena, this::onChunkClosed);
             openChunk = chunk;
             return chunk;
         } catch (RuntimeException e) {
             arena.close();
             throw e;
         }
+    }
+
+    /// Returns the number of chunks in the file's layout, ignoring filter pruning and
+    /// `ScanOptions.limit()`. Equal to the length of [#chunkRowCounts()].
+    ///
+    /// @return chunk count for the projected columns
+    public int chunkCount() {
+        if (chunks == null) {
+            initialize();
+        }
+        return chunks.size();
+    }
+
+    /// Decodes exactly the chunk at `chunkIndex` for the projected columns into a fresh
+    /// confined [Arena] owned by the returned [Chunk].
+    ///
+    /// Unlike [#next()] this is random access and does not advance the iterator: it ignores
+    /// filter pruning and `ScanOptions.limit()`, decoding the chunk exactly as the raw layout
+    /// shape describes it. The result is also independent of this iterator's lifetime — a
+    /// shared (non-chunked) column is decoded into the chunk's own arena rather than sliced
+    /// from the iterator's shared arena, so the [Chunk] stays valid after this iterator is
+    /// closed (until the chunk itself is closed).
+    ///
+    /// @param chunkIndex zero-based chunk index, in `[0, chunkCount())`
+    /// @return a self-contained [Chunk] for that chunk's projected columns
+    /// @throws VortexException if `chunkIndex` is out of bounds
+    Chunk decodeChunkAt(int chunkIndex) {
+        if (chunks == null) {
+            initialize();
+        }
+        if (chunkIndex < 0 || chunkIndex >= chunks.size()) {
+            throw new VortexException("decodeChunk: chunk index " + chunkIndex
+                    + " out of bounds [0, " + chunks.size() + ")");
+        }
+        ChunkSpec spec = chunks.get(chunkIndex);
+        Arena arena = Arena.ofConfined();
+        try {
+            Map<String, Array> columns = buildSelfContainedColumnMap(spec, arena);
+            return new Chunk(spec.rowCount(), columns, projectedDtypeMap(), arena, c -> { });
+        } catch (RuntimeException e) {
+            arena.close();
+            throw e;
+        }
+    }
+
+    private Map<String, DType> projectedDtypeMap() {
+        Map<String, DType> map = new LinkedHashMap<>(projectedNames.size());
+        for (int i = 0; i < projectedNames.size(); i++) {
+            map.put(projectedNames.get(i), projectedDtypes.get(i));
+        }
+        return map;
     }
 
     /// Returns the row count of every chunk in scan order, without decoding values.
@@ -615,6 +663,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
 
         projectedNames = List.copyOf(columnDtypes.keySet());
         projectedDtypes = List.copyOf(columnDtypes.values());
+        this.columnTopLayouts = Map.copyOf(columnTopLayouts);
         chunks = buildChunks(columnFlats);
         decodeSharedColumns(columnFlats, columnTopLayouts, columnDtypes);
     }
@@ -674,6 +723,41 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                     decodeOrSlice(i, layouts[i], sliceOffsets[i], chunk.rowCount(), arena));
         }
         return Map.copyOf(scratch);
+    }
+
+    /// Builds the column map for [#decodeChunkAt(int)]. Identical decode to [#buildColumnMap]
+    /// except that a shared (single-flat) column is decoded into `arena` and sliced there,
+    /// so the resulting [Chunk] owns every buffer and survives this iterator's close.
+    private Map<String, Array> buildSelfContainedColumnMap(ChunkSpec chunk, Arena arena) {
+        Layout[] layouts = chunk.columnLayouts();
+        long[] sliceOffsets = chunk.sliceOffsets();
+        int n = projectedNames.size();
+        if (n == 1) {
+            Array arr = decodeOrSliceSelfContained(0, layouts[0], sliceOffsets[0], chunk.rowCount(), arena);
+            if (arr instanceof StructArray sa) {
+                return expandStruct(sa);
+            }
+            return Map.of(projectedNames.getFirst(), arr);
+        }
+        var scratch = new LinkedHashMap<String, Array>(n);
+        for (int i = 0; i < n; i++) {
+            scratch.put(projectedNames.get(i),
+                    decodeOrSliceSelfContained(i, layouts[i], sliceOffsets[i], chunk.rowCount(), arena));
+        }
+        return Map.copyOf(scratch);
+    }
+
+    private Array decodeOrSliceSelfContained(int colIdx, Layout layout, long sliceStart,
+                                             long rowCount, Arena arena) {
+        if (layout != null) {
+            return decodeLayout(layout, projectedDtypes.get(colIdx), arena);
+        }
+        // Shared single-flat column: decode its full top layout into THIS chunk's arena and
+        // slice, so the returned Chunk does not reference the iterator's shared arena.
+        String name = projectedNames.get(colIdx);
+        DType dtype = projectedDtypes.get(colIdx);
+        Array full = decodeLayout(columnTopLayouts.get(name), dtype, arena);
+        return sliceArray(full, sliceStart, rowCount, dtype);
     }
 
     private Array decodeOrSlice(int colIdx, Layout layout, long sliceStart, long rowCount,
