@@ -51,6 +51,30 @@ public final class Compute {
         return Reductions.SUM.apply(array, requireMask(array, mask));
     }
 
+    /// Filters `filterColumn` by `predicate` and sums `aggColumn` over the selected rows in a single
+    /// fused pass, the one-pass counterpart to a [#filter(Array, Predicate, Arena)] followed by a
+    /// [#sum(Array, Mask)].
+    ///
+    /// Where the two-pass path materializes a positional [Mask] over the whole filter column and then
+    /// re-scans the aggregate column under it, this kernel evaluates the predicate and folds the
+    /// aggregate value in one loop over the rows — no intermediate mask, no bitmap, no second pass.
+    /// The result is identical to the two-pass path: a null filter row is never selected (three-valued
+    /// logic, like [#filter(Array, Predicate, Arena)]) and a null aggregate row is skipped (like
+    /// [#sum(Array, Mask)]).
+    ///
+    /// @param filterColumn the column `predicate` tests
+    /// @param predicate    the predicate that selects rows
+    /// @param aggColumn    the numeric column to total over the selected rows, of the same length as
+    ///                     `filterColumn`
+    /// @return the sum as a [Long] for an integer aggregate column or a [Double] for a floating one;
+    ///         the additive identity (`0`) when no row is both selected and non-null
+    public static Number filteredSum(Array filterColumn, Predicate predicate, Array aggColumn) {
+        Objects.requireNonNull(filterColumn, "filterColumn");
+        Objects.requireNonNull(predicate, "predicate");
+        Objects.requireNonNull(aggColumn, "aggColumn");
+        return FusedFilterSum.filteredSum(filterColumn, predicate, aggColumn);
+    }
+
     /// Counts the selected non-null values of `array`.
     ///
     /// @param array the array to reduce

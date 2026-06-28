@@ -299,6 +299,45 @@ public class ComputeKernelBenchmark {
         return acc;
     }
 
+    /// Fused one-pass pipeline: per chunk, [Compute#filteredSum(Array, Predicate, Array)] filters the
+    /// ALP-encoded `price` column with `price > 500` and totals the FoR-encoded `measure` column over
+    /// the selected rows in a single scan, with no intermediate [Mask] and no off-heap bitmap. The
+    /// one-pass counterpart to [#filterThenSumAlp()]; same semantics, same `price`/`measure` columns.
+    ///
+    /// @return the sum of `measure` over the rows where `price > 500` across the whole dataset
+    @Benchmark
+    public long fusedFilteredSumAlp() {
+        long acc = 0;
+        for (int k = 0; k < priceChunks.size(); k++) {
+            DoubleArray priceArr = priceChunks.get(k);
+            LongArray measureArr = measureChunks.get(k);
+            acc += Compute.filteredSum(priceArr, new Predicate.Gt(PRICE_THRESHOLD), measureArr).longValue();
+        }
+        return acc;
+    }
+
+    /// Hand-fused control for [#fusedFilteredSumAlp()]: the obvious developer loop a fused kernel must
+    /// match — `for i: if (price.getDouble(i) > 500) acc += measure.getLong(i)` per chunk, with no
+    /// [Mask], no [Compute] and no off-heap bitmap. Decodes each price and (when selected) each
+    /// measure through the accessor. Price and measure chunks are indexed in lockstep.
+    ///
+    /// @return the sum of `measure` over the rows where `price > 500` across the whole dataset
+    @Benchmark
+    public long forLoopFilteredSum() {
+        long acc = 0;
+        for (int k = 0; k < priceChunks.size(); k++) {
+            DoubleArray priceArr = priceChunks.get(k);
+            LongArray measureArr = measureChunks.get(k);
+            long n = priceArr.length();
+            for (long i = 0; i < n; i++) {
+                if (priceArr.getDouble(i) > PRICE_THRESHOLD) {
+                    acc += measureArr.getLong(i);
+                }
+            }
+        }
+        return acc;
+    }
+
     /// Naive baseline for [#filterAlpDouble()]: the hand-written `price > 500` count loop over the
     /// ALP accessor across every chunk, with no [Mask], no [Compute] and no off-heap bitmap. Decodes
     /// each double per element. Returns the count so JMH cannot eliminate the loop.

@@ -91,7 +91,7 @@ final class PrimitiveFilter {
     ///
     /// @param predicate the predicate to inspect
     /// @return `true` if every comparison leaf is numeric
-    private static boolean predicateOk(Predicate predicate) {
+    static boolean predicateOk(Predicate predicate) {
         return switch (predicate) {
             case Predicate.Eq eq -> eq.value() instanceof Number;
             case Predicate.Neq neq -> neq.value() instanceof Number;
@@ -173,62 +173,68 @@ final class PrimitiveFilter {
     private static void longLeaf(Array data, Predicate predicate, MemorySegment bits, long n) {
         boolean unsigned = data.dtype().isUnsigned();
         long flip = unsigned ? Long.MIN_VALUE : 0L;
-        long lc;
-        long hc;
+        LongRange range = lowerLong(predicate, flip);
+        dispatchLongRange(data, range.lo(), range.hi(), flip, unsigned, range.negate(), bits, n);
+    }
+
+    /// Lowers a long-domain comparison leaf to an inclusive range `[lo, hi]` on the order-preserving
+    /// flipped longs, with a `negate` flag for the one leaf (Neq) that selects the complement of its
+    /// range. The single source of truth shared by [#longLeaf(Array, Predicate, MemorySegment, long)]
+    /// and the fused filter+reduce kernel, so the filter and the fused kernel can never lower the same
+    /// predicate to different bounds.
+    ///
+    /// @param predicate the comparison leaf (Eq / Neq / Lt / Lte / Gt / Gte / Between)
+    /// @param flip      the order-preserving XOR flip (`Long.MIN_VALUE` unsigned, `0` signed)
+    /// @return the inclusive range on the flipped longs and whether to select its complement
+    static LongRange lowerLong(Predicate predicate, long flip) {
         // Every leaf lowers to a single inclusive range on the flipped longs; Neq is that same
         // range (the point [c, c]) tested negated, so the match is the complement of equality.
-        boolean negate = false;
-        switch (predicate) {
+        return switch (predicate) {
             case Predicate.Eq eq -> {
                 long c = ((Number) eq.value()).longValue() ^ flip;
-                lc = c;
-                hc = c;
+                yield new LongRange(c, c, false);
             }
             case Predicate.Neq neq -> {
                 long c = ((Number) neq.value()).longValue() ^ flip;
-                lc = c;
-                hc = c;
-                negate = true;
+                yield new LongRange(c, c, true);
             }
             case Predicate.Lt lt -> {
                 long c = ((Number) lt.value()).longValue() ^ flip;
-                if (c == Long.MIN_VALUE) {
-                    lc = 0L;
-                    hc = -1L;
-                } else {
-                    lc = Long.MIN_VALUE;
-                    hc = c - 1;
-                }
+                yield c == Long.MIN_VALUE
+                        ? new LongRange(0L, -1L, false)
+                        : new LongRange(Long.MIN_VALUE, c - 1, false);
             }
             case Predicate.Lte lte -> {
                 // v <= c → inclusive [MIN, c]; no underflow guard needed (c is the upper bound).
                 long c = ((Number) lte.value()).longValue() ^ flip;
-                lc = Long.MIN_VALUE;
-                hc = c;
+                yield new LongRange(Long.MIN_VALUE, c, false);
             }
             case Predicate.Gt gt -> {
                 long c = ((Number) gt.value()).longValue() ^ flip;
-                if (c == Long.MAX_VALUE) {
-                    lc = 0L;
-                    hc = -1L;
-                } else {
-                    lc = c + 1;
-                    hc = Long.MAX_VALUE;
-                }
+                yield c == Long.MAX_VALUE
+                        ? new LongRange(0L, -1L, false)
+                        : new LongRange(c + 1, Long.MAX_VALUE, false);
             }
             case Predicate.Gte gte -> {
                 // v >= c → inclusive [c, MAX]; no overflow guard needed (c is the lower bound).
                 long c = ((Number) gte.value()).longValue() ^ flip;
-                lc = c;
-                hc = Long.MAX_VALUE;
+                yield new LongRange(c, Long.MAX_VALUE, false);
             }
             default -> {
                 Predicate.Between between = (Predicate.Between) predicate;
-                lc = ((Number) between.lo()).longValue() ^ flip;
-                hc = ((Number) between.hi()).longValue() ^ flip;
+                yield new LongRange(((Number) between.lo()).longValue() ^ flip,
+                        ((Number) between.hi()).longValue() ^ flip, false);
             }
-        }
-        dispatchLongRange(data, lc, hc, flip, unsigned, negate, bits, n);
+        };
+    }
+
+    /// An inclusive range `[lo, hi]` on the order-preserving flipped longs, with `negate` selecting
+    /// the complement. A position matches when `lo <= v && v <= hi` differs from `negate`.
+    ///
+    /// @param lo     the inclusive lower bound in the flipped domain
+    /// @param hi     the inclusive upper bound in the flipped domain (an empty range has `lo > hi`)
+    /// @param negate `true` to select the complement of the range (Neq), `false` for a direct match
+    record LongRange(long lo, long hi, boolean negate) {
     }
 
     /// Dispatches the inclusive-range match to the typed monomorphic loop for the concrete array. The
@@ -316,41 +322,10 @@ final class PrimitiveFilter {
     /// @param bits      the output bitmap
     /// @param n         the row count
     private static void doubleLeaf(Array data, Predicate predicate, MemorySegment bits, long n) {
-        DoubleOp op;
-        double lo;
-        double hi = 0.0;
-        switch (predicate) {
-            case Predicate.Eq eq -> {
-                op = DoubleOp.EQ;
-                lo = ((Number) eq.value()).doubleValue();
-            }
-            case Predicate.Neq neq -> {
-                op = DoubleOp.NEQ;
-                lo = ((Number) neq.value()).doubleValue();
-            }
-            case Predicate.Lt lt -> {
-                op = DoubleOp.LT;
-                lo = ((Number) lt.value()).doubleValue();
-            }
-            case Predicate.Lte lte -> {
-                op = DoubleOp.LTE;
-                lo = ((Number) lte.value()).doubleValue();
-            }
-            case Predicate.Gt gt -> {
-                op = DoubleOp.GT;
-                lo = ((Number) gt.value()).doubleValue();
-            }
-            case Predicate.Gte gte -> {
-                op = DoubleOp.GTE;
-                lo = ((Number) gte.value()).doubleValue();
-            }
-            default -> {
-                Predicate.Between between = (Predicate.Between) predicate;
-                op = DoubleOp.BETWEEN;
-                lo = ((Number) between.lo()).doubleValue();
-                hi = ((Number) between.hi()).doubleValue();
-            }
-        }
+        DoubleBound bound = lowerDouble(predicate);
+        DoubleOp op = bound.op();
+        double lo = bound.lo();
+        double hi = bound.hi();
         // No-box fast lane: typed double read; the op is hoisted (loop-invariant) so C2 unswitches it.
         if (data instanceof DoubleArray da) {
             for (long i = 0; i < n; i++) {
@@ -368,6 +343,36 @@ final class PrimitiveFilter {
         }
     }
 
+    /// Lowers a double-domain comparison leaf to its hoisted operator and the one or two bound values
+    /// it compares against. The single source of truth shared by
+    /// [#doubleLeaf(Array, Predicate, MemorySegment, long)] and the fused filter+reduce kernel.
+    ///
+    /// @param predicate the comparison leaf (Eq / Neq / Lt / Lte / Gt / Gte / Between)
+    /// @return the lowered operator and bounds (`hi` used only for [DoubleOp#BETWEEN])
+    static DoubleBound lowerDouble(Predicate predicate) {
+        return switch (predicate) {
+            case Predicate.Eq eq -> new DoubleBound(DoubleOp.EQ, ((Number) eq.value()).doubleValue(), 0.0);
+            case Predicate.Neq neq -> new DoubleBound(DoubleOp.NEQ, ((Number) neq.value()).doubleValue(), 0.0);
+            case Predicate.Lt lt -> new DoubleBound(DoubleOp.LT, ((Number) lt.value()).doubleValue(), 0.0);
+            case Predicate.Lte lte -> new DoubleBound(DoubleOp.LTE, ((Number) lte.value()).doubleValue(), 0.0);
+            case Predicate.Gt gt -> new DoubleBound(DoubleOp.GT, ((Number) gt.value()).doubleValue(), 0.0);
+            case Predicate.Gte gte -> new DoubleBound(DoubleOp.GTE, ((Number) gte.value()).doubleValue(), 0.0);
+            default -> {
+                Predicate.Between between = (Predicate.Between) predicate;
+                yield new DoubleBound(DoubleOp.BETWEEN, ((Number) between.lo()).doubleValue(),
+                        ((Number) between.hi()).doubleValue());
+            }
+        };
+    }
+
+    /// A lowered double-domain comparison: the hoisted operator and the value(s) it tests against.
+    ///
+    /// @param op the lowered operator
+    /// @param lo the comparison value (and the inclusive lower bound for [DoubleOp#BETWEEN])
+    /// @param hi the inclusive upper bound, used only for [DoubleOp#BETWEEN]
+    record DoubleBound(DoubleOp op, double lo, double hi) {
+    }
+
     /// Tests one double value against the lowered operator, mirroring the generic
     /// [Compare#values(Object, Object, DType)] double branch's [Double#compare(double, double)]
     /// ordering.
@@ -377,7 +382,7 @@ final class PrimitiveFilter {
     /// @param lo the comparison value (and the inclusive lower bound for [DoubleOp#BETWEEN])
     /// @param hi the inclusive upper bound, used only for [DoubleOp#BETWEEN]
     /// @return `true` if `v` satisfies the operator
-    private static boolean matchDouble(double v, DoubleOp op, double lo, double hi) {
+    static boolean matchDouble(double v, DoubleOp op, double lo, double hi) {
         return switch (op) {
             case EQ -> Double.compare(v, lo) == 0;
             case NEQ -> Double.compare(v, lo) != 0;
@@ -454,7 +459,7 @@ final class PrimitiveFilter {
     }
 
     /// The double-domain comparison operators a leaf lowers to, hoisted out of the per-row loop.
-    private enum DoubleOp {
+    enum DoubleOp {
         EQ, NEQ, LT, LTE, GT, GTE, BETWEEN
     }
 }
