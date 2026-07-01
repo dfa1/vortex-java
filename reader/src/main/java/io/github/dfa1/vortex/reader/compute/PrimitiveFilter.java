@@ -1,94 +1,27 @@
 package io.github.dfa1.vortex.reader.compute;
 
-import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.reader.array.BoolArray;
-import io.github.dfa1.vortex.reader.array.ByteArray;
-import io.github.dfa1.vortex.reader.array.DoubleArray;
-import io.github.dfa1.vortex.reader.array.FloatArray;
-import io.github.dfa1.vortex.reader.array.IntArray;
-import io.github.dfa1.vortex.reader.array.LongArray;
-import io.github.dfa1.vortex.reader.array.MaskedArray;
-import io.github.dfa1.vortex.reader.array.ShortArray;
-
-import java.lang.foreign.Arena;
-import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-
-/// The type-specialized fast lane of [StreamingFilterKernel]: for a primitive numeric column it runs
-/// a monomorphic, boxing-free loop with the comparison value unboxed once outside the loop, instead
-/// of the generic [Values#valueAt(Array, long)] / [Compare#values(Object, Object, DType)] path that
-/// boxes every element to an [Object].
+/// Predicate-lowering helpers for primitive numeric filter columns, shared by the fused
+/// filter-and-aggregate kernels ([FusedFilterSum] / [FusedFilterAggregate]).
 ///
-/// The ADR 0013 §3 tier-2 contract still holds — nothing is materialized, the only allocation is the
-/// result bitmap from the caller's [Arena] — but the per-element decode is the typed accessor
-/// (`getLong`, `getInt`, `getDouble`, …) read straight into a primitive. All type, signedness, and
-/// predicate-operator decisions are hoisted out of the per-row loop (the hot-loop rule's
-/// branch-split idiom); only types this class recognizes take the fast lane, everything else returns
-/// `null` so the caller falls back to the generic kernel with no behavioral drift.
+/// A comparison leaf over a primitive column lowers, once and outside the per-row loop (the hot-loop
+/// rule's branch-split idiom), to a form the kernel tests with no boxing:
+/// - long domain — an integer column read and widened to a `long`. Signedness is folded away with an
+///   order-preserving XOR flip (`x ^ Long.MIN_VALUE` for unsigned columns, matching
+///   [Long#compareUnsigned(long, long)]); every value leaf then lowers to a single inclusive
+///   [LongRange] test on the flipped longs (with a `negate` flag for `Neq`).
+/// - double domain — a floating column read and widened to a `double` and compared with
+///   [Double#compare(double, double)] (see [#matchDouble(double, DoubleOp, double, double)]) so the
+///   NaN / signed-zero ordering matches the generic per-element path exactly.
 ///
-/// Two value domains cover the numerics:
-/// - long domain — [LongArray] / [IntArray] / [ShortArray] / [ByteArray], read and widened to a
-///   `long`. Signedness is folded away with an order-preserving XOR flip (`x ^ Long.MIN_VALUE` for
-///   unsigned columns, matching [Long#compareUnsigned(long, long)]); every value leaf then lowers to
-///   a single inclusive range test on the flipped longs.
-/// - double domain — [DoubleArray] / [FloatArray], read and widened to a `double` and compared with
-///   [Double#compare(double, double)] so the NaN / signed-zero ordering is bit-identical to the
-///   generic path.
+/// The lowering is the single source of truth for both domains, so the fused kernels can never lower a
+/// predicate to bounds that drift from one another.
 final class PrimitiveFilter {
 
     private PrimitiveFilter() {
     }
 
-    /// Filters `array` by `predicate` through the specialized primitive loops, or returns `null` if
-    /// the array or predicate is not one this class specializes (the caller then uses the generic
-    /// kernel).
-    ///
-    /// @param array     the array to filter, possibly a [MaskedArray] over a primitive child
-    /// @param current   the incoming selection mask, applied once over the whole predicate result
-    /// @param predicate the predicate to evaluate
-    /// @param arena     the arena for the result bitmap; its zero-fill seeds the unselected bits to 0
-    /// @return the selection mask, or `null` if the input is not specializable
-    @SuppressWarnings("removal") // transitional — uses the deprecated Mask until the fused multi-column filteredReduce lands
-    static Mask tryFilter(Array array, Mask current, Predicate predicate, Arena arena) {
-        Array data;
-        BoolArray validity;
-        if (array instanceof MaskedArray masked) {
-            data = masked.inner();
-            validity = masked.validity();
-        } else {
-            data = array;
-            validity = null;
-        }
-        if (!canSpecialize(data, predicate)) {
-            return null;
-        }
-        long n = array.length();
-        MemorySegment bits = eval(data, validity, predicate, n, arena);
-        // The incoming mask is positional selection independent of null semantics, so it is applied
-        // once over the whole predicate result rather than per leaf.
-        applyCurrent(bits, current, n);
-        return new Mask.BitmapMask(bits, n);
-    }
-
-    /// Reports whether the concrete array and the full predicate tree can take the specialized path:
-    /// the array must be a primitive long- or double-domain column and every comparison leaf must
-    /// carry a [Number] value (so it unboxes to a primitive exactly as the generic path would).
-    ///
-    /// @param data      the unwrapped (non-masked) array
-    /// @param predicate the predicate to inspect
-    /// @return `true` if both the array and the predicate are specializable
-    private static boolean canSpecialize(Array data, Predicate predicate) {
-        if (!(data.dtype() instanceof DType.Primitive)) {
-            return false;
-        }
-        boolean primitive = data instanceof LongArray || data instanceof IntArray
-                || data instanceof ShortArray || data instanceof ByteArray
-                || data instanceof DoubleArray || data instanceof FloatArray;
-        return primitive && predicateOk(predicate);
-    }
-
-    /// Recursively checks that every comparison leaf holds a [Number] value.
+    /// Recursively checks that every comparison leaf holds a [Number] value, so each leaf unboxes to a
+    /// primitive exactly as the generic path would.
     ///
     /// @param predicate the predicate to inspect
     /// @return `true` if every comparison leaf is numeric
@@ -108,81 +41,9 @@ final class PrimitiveFilter {
         };
     }
 
-    /// Evaluates the predicate tree into a fresh bitmap that encodes null semantics (a null position
-    /// is excluded from a value leaf) but not the incoming mask. Composites combine child bitmaps
-    /// word-wise; leaves run the specialized value or validity loops.
-    ///
-    /// @param data      the unwrapped array
-    /// @param validity  the validity bitmap, or `null` when every position is valid
-    /// @param predicate the predicate to evaluate
-    /// @param n         the row count
-    /// @param arena     the arena for the bitmap allocations
-    /// @return the predicate-result bitmap (null-aware, mask-independent)
-    private static MemorySegment eval(Array data, BoolArray validity, Predicate predicate, long n, Arena arena) {
-        return switch (predicate) {
-            case Predicate.And and -> {
-                MemorySegment left = eval(data, validity, and.left(), n, arena);
-                MemorySegment right = eval(data, validity, and.right(), n, arena);
-                Bits.andInto(left, right, n);
-                yield left;
-            }
-            case Predicate.Or or -> {
-                MemorySegment left = eval(data, validity, or.left(), n, arena);
-                MemorySegment right = eval(data, validity, or.right(), n, arena);
-                Bits.orInto(left, right, n);
-                yield left;
-            }
-            case Predicate.IsNull ignored -> nullLeaf(validity, n, arena, true);
-            case Predicate.IsNotNull ignored -> nullLeaf(validity, n, arena, false);
-            default -> valueLeaf(data, validity, predicate, n, arena);
-        };
-    }
-
-    /// Runs a value comparison leaf: the specialized match loop fills the bitmap, then any null
-    /// positions are cleared (three-valued logic — a null never satisfies a value predicate).
-    ///
-    /// @param data      the unwrapped array
-    /// @param validity  the validity bitmap, or `null` when every position is valid
-    /// @param predicate the comparison leaf (Eq / Lt / Gt / Between)
-    /// @param n         the row count
-    /// @param arena     the arena for the bitmap
-    /// @return the value-match bitmap with null positions cleared
-    private static MemorySegment valueLeaf(Array data, BoolArray validity, Predicate predicate, long n, Arena arena) {
-        MemorySegment bits = arena.allocate((n + 7) >>> 3);
-        if (data instanceof DoubleArray || data instanceof FloatArray) {
-            doubleLeaf(data, predicate, bits, n);
-        } else {
-            longLeaf(data, predicate, bits, n);
-        }
-        if (validity != null) {
-            for (long i = 0; i < n; i++) {
-                if (!validity.getBoolean(i)) {
-                    clearBit(bits, i);
-                }
-            }
-        }
-        return bits;
-    }
-
-    /// Lowers a long-domain comparison leaf to an inclusive range on the order-preserving flipped
-    /// longs, then dispatches the typed match loop once (no per-element type or sign branch).
-    ///
-    /// @param data      the unwrapped long-domain array
-    /// @param predicate the comparison leaf
-    /// @param bits      the output bitmap
-    /// @param n         the row count
-    private static void longLeaf(Array data, Predicate predicate, MemorySegment bits, long n) {
-        boolean unsigned = data.dtype().isUnsigned();
-        long flip = unsigned ? Long.MIN_VALUE : 0L;
-        LongRange range = lowerLong(predicate, flip);
-        dispatchLongRange(data, range.lo(), range.hi(), flip, unsigned, range.negate(), bits, n);
-    }
-
     /// Lowers a long-domain comparison leaf to an inclusive range `[lo, hi]` on the order-preserving
     /// flipped longs, with a `negate` flag for the one leaf (Neq) that selects the complement of its
-    /// range. The single source of truth shared by [#longLeaf(Array, Predicate, MemorySegment, long)]
-    /// and the fused filter+reduce kernel, so the filter and the fused kernel can never lower the same
-    /// predicate to different bounds.
+    /// range.
     ///
     /// @param predicate the comparison leaf (Eq / Neq / Lt / Lte / Gt / Gte / Between)
     /// @param flip      the order-preserving XOR flip (`Long.MIN_VALUE` unsigned, `0` signed)
@@ -238,115 +99,8 @@ final class PrimitiveFilter {
     record LongRange(long lo, long hi, boolean negate) {
     }
 
-    /// Dispatches the inclusive-range match to the typed monomorphic loop for the concrete array. The
-    /// `negate` flag is loop-invariant and gates equality versus inequality (Neq): a position is set
-    /// when its in-range result differs from `negate`, so `negate == false` keeps the plain inclusive
-    /// match and `negate == true` selects everything outside the point range. C2 unswitches the
-    /// hoisted flag, so the common `negate == false` path keeps the bare range test.
-    ///
-    /// @param data     the unwrapped long-domain array
-    /// @param lc       the inclusive lower bound in the flipped domain
-    /// @param hc       the inclusive upper bound in the flipped domain (an empty range has `lc > hc`)
-    /// @param flip     the order-preserving XOR flip (`Long.MIN_VALUE` unsigned, `0` signed)
-    /// @param unsigned whether the column is unsigned (narrow types zero-extend)
-    /// @param negate   `true` to select the complement of the range (Neq), `false` for a direct match
-    /// @param bits     the output bitmap
-    /// @param n        the row count
-    private static void dispatchLongRange(Array data, long lc, long hc, long flip, boolean unsigned,
-                                          boolean negate, MemorySegment bits, long n) {
-        if (data instanceof LongArray la) {
-            // No-box fast lane: read straight to long, fold sign with a hoisted XOR, single range test.
-            for (long i = 0; i < n; i++) {
-                long v = la.getLong(i) ^ flip;
-                if ((lc <= v && v <= hc) != negate) {
-                    setBit(bits, i);
-                }
-            }
-        } else if (data instanceof IntArray ia) {
-            // Sign is hoisted (loop-invariant): zero-extend unsigned then flip, else sign-extend.
-            if (unsigned) {
-                for (long i = 0; i < n; i++) {
-                    long v = (ia.getInt(i) & 0xFFFFFFFFL) ^ flip;
-                    if ((lc <= v && v <= hc) != negate) {
-                        setBit(bits, i);
-                    }
-                }
-            } else {
-                for (long i = 0; i < n; i++) {
-                    long v = ia.getInt(i);
-                    if ((lc <= v && v <= hc) != negate) {
-                        setBit(bits, i);
-                    }
-                }
-            }
-        } else if (data instanceof ShortArray sa) {
-            if (unsigned) {
-                for (long i = 0; i < n; i++) {
-                    long v = (sa.getShort(i) & 0xFFFFL) ^ flip;
-                    if ((lc <= v && v <= hc) != negate) {
-                        setBit(bits, i);
-                    }
-                }
-            } else {
-                for (long i = 0; i < n; i++) {
-                    long v = sa.getShort(i);
-                    if ((lc <= v && v <= hc) != negate) {
-                        setBit(bits, i);
-                    }
-                }
-            }
-        } else {
-            ByteArray ba = (ByteArray) data;
-            if (unsigned) {
-                for (long i = 0; i < n; i++) {
-                    long v = (ba.getByte(i) & 0xFFL) ^ flip;
-                    if ((lc <= v && v <= hc) != negate) {
-                        setBit(bits, i);
-                    }
-                }
-            } else {
-                for (long i = 0; i < n; i++) {
-                    long v = ba.getByte(i);
-                    if ((lc <= v && v <= hc) != negate) {
-                        setBit(bits, i);
-                    }
-                }
-            }
-        }
-    }
-
-    /// Runs a double-domain comparison leaf with [Double#compare(double, double)] so the NaN and
-    /// signed-zero ordering matches the generic path exactly.
-    ///
-    /// @param data      the unwrapped double-domain array
-    /// @param predicate the comparison leaf
-    /// @param bits      the output bitmap
-    /// @param n         the row count
-    private static void doubleLeaf(Array data, Predicate predicate, MemorySegment bits, long n) {
-        DoubleBound bound = lowerDouble(predicate);
-        DoubleOp op = bound.op();
-        double lo = bound.lo();
-        double hi = bound.hi();
-        // No-box fast lane: typed double read; the op is hoisted (loop-invariant) so C2 unswitches it.
-        if (data instanceof DoubleArray da) {
-            for (long i = 0; i < n; i++) {
-                if (matchDouble(da.getDouble(i), op, lo, hi)) {
-                    setBit(bits, i);
-                }
-            }
-        } else {
-            FloatArray fa = (FloatArray) data;
-            for (long i = 0; i < n; i++) {
-                if (matchDouble(fa.getFloat(i), op, lo, hi)) {
-                    setBit(bits, i);
-                }
-            }
-        }
-    }
-
     /// Lowers a double-domain comparison leaf to its hoisted operator and the one or two bound values
-    /// it compares against. The single source of truth shared by
-    /// [#doubleLeaf(Array, Predicate, MemorySegment, long)] and the fused filter+reduce kernel.
+    /// it compares against.
     ///
     /// @param predicate the comparison leaf (Eq / Neq / Lt / Lte / Gt / Gte / Between)
     /// @return the lowered operator and bounds (`hi` used only for [DoubleOp#BETWEEN])
@@ -375,8 +129,8 @@ final class PrimitiveFilter {
     }
 
     /// Tests one double value against the lowered operator, mirroring the generic
-    /// [Compare#values(Object, Object, DType)] double branch's [Double#compare(double, double)]
-    /// ordering.
+    /// [Compare#values(Object, Object, io.github.dfa1.vortex.core.model.DType)] double branch's
+    /// [Double#compare(double, double)] ordering.
     ///
     /// @param v  the value under test
     /// @param op the lowered operator
@@ -393,71 +147,6 @@ final class PrimitiveFilter {
             case GTE -> Double.compare(v, lo) >= 0;
             case BETWEEN -> Double.compare(v, lo) >= 0 && Double.compare(v, hi) <= 0;
         };
-    }
-
-    /// Builds the bitmap for a null test: [Predicate.IsNull] selects invalid positions,
-    /// [Predicate.IsNotNull] selects valid ones. With no validity bitmap every position is valid.
-    ///
-    /// @param validity the validity bitmap, or `null` when every position is valid
-    /// @param n        the row count
-    /// @param arena    the arena for the bitmap
-    /// @param isNull   `true` for IS NULL, `false` for IS NOT NULL
-    /// @return the null-test bitmap
-    private static MemorySegment nullLeaf(BoolArray validity, long n, Arena arena, boolean isNull) {
-        MemorySegment bits = arena.allocate((n + 7) >>> 3);
-        if (validity == null) {
-            if (!isNull) {
-                for (long i = 0; i < n; i++) {
-                    setBit(bits, i);
-                }
-            }
-            return bits;
-        }
-        for (long i = 0; i < n; i++) {
-            boolean valid = validity.getBoolean(i);
-            if (isNull != valid) {
-                setBit(bits, i);
-            }
-        }
-        return bits;
-    }
-
-    /// Intersects the incoming mask into the predicate-result bitmap, clearing any position the mask
-    /// rejects. An all-true mask is the common first-stage case and is skipped wholesale.
-    ///
-    /// @param bits    the predicate-result bitmap, mutated in place
-    /// @param current the incoming selection mask
-    /// @param n       the row count
-    @SuppressWarnings("removal") // transitional — uses the deprecated Mask until the fused multi-column filteredReduce lands
-    private static void applyCurrent(MemorySegment bits, Mask current, long n) {
-        if (current instanceof Mask.AllTrue) {
-            return;
-        }
-        for (long i = 0; i < n; i++) {
-            if (!current.get(i)) {
-                clearBit(bits, i);
-            }
-        }
-    }
-
-    /// Sets the validity bit for position `i` (LSB-first within each byte).
-    ///
-    /// @param bits the bitmap
-    /// @param i    the zero-based position
-    private static void setBit(MemorySegment bits, long i) {
-        long byteIndex = i >>> 3;
-        int existing = bits.get(ValueLayout.JAVA_BYTE, byteIndex) & 0xff;
-        bits.set(ValueLayout.JAVA_BYTE, byteIndex, (byte) (existing | (1 << (i & 7))));
-    }
-
-    /// Clears the validity bit for position `i`.
-    ///
-    /// @param bits the bitmap
-    /// @param i    the zero-based position
-    private static void clearBit(MemorySegment bits, long i) {
-        long byteIndex = i >>> 3;
-        int existing = bits.get(ValueLayout.JAVA_BYTE, byteIndex) & 0xff;
-        bits.set(ValueLayout.JAVA_BYTE, byteIndex, (byte) (existing & ~(1 << (i & 7))));
     }
 
     /// The double-domain comparison operators a leaf lowers to, hoisted out of the per-row loop.

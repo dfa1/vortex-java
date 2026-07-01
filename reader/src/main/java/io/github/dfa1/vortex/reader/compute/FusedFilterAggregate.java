@@ -14,44 +14,36 @@ import java.util.List;
 /// The fused, one-pass multi-column filter-and-aggregate kernel: it evaluates a whole [RowFilter]
 /// (an n-ary `AND` of column-bound [Predicate] leaves, or a single leaf) and, over the rows it
 /// selects, folds an optional aggregate column's `SUM` / `MIN` / `MAX` / non-null count — all in a
-/// single scan of the chunk's rows, with no intermediate [Mask] and no second pass.
+/// single scan of the chunk's rows, with no intermediate selection bitmap and no second pass.
 ///
 /// This generalizes [FusedFilterSum] from one filter + one aggregate to many filters + one
 /// aggregate, and adds the `MIN` / `MAX` / count folds the Calcite boundary aggregate push-down
-/// (ADR 0013 §6 tier 2) needs. Where the deprecated two-pass path built one [Mask] per filter leaf,
-/// intersected them, and then re-scanned the aggregate column under the combined mask once per
-/// reduction, this kernel resolves every leaf's column and lowers every leaf's [Predicate] once,
-/// then runs a single row loop: for each row it evaluates the leaves (short-circuiting on the first
-/// that rejects the row) and, when the whole filter accepts the row and the aggregate value is
-/// non-null, folds that value straight into the running totals. Nothing is materialized between the
-/// filter and the reduce.
-///
-/// Semantics are identical to the two-pass path, by construction:
+/// (ADR 0013 §6 tier 2) needs. The kernel resolves every leaf's column and lowers every leaf's
+/// [Predicate] once, then runs a single row loop: for each row it evaluates the leaves
+/// (short-circuiting on the first that rejects the row) and, when the whole filter accepts the row and
+/// the aggregate value is non-null, folds that value straight into the running totals. Nothing is
+/// materialized between the filter and the reduce. The semantics are:
 /// - the filter is an n-ary `AND` under three-valued logic — a row is selected only when every leaf
-///   accepts it, and a null in any filter column rejects that leaf (exactly as
-///   [Compute#filter(Array, Predicate, java.lang.foreign.Arena)] excludes null positions);
-/// - the aggregate skips its own nulls (exactly as [Compute#sum(Array, Mask)] /
-///   [Compute#count(Array, Mask)] do);
+///   accepts it, and a null in any filter column rejects that leaf;
+/// - the aggregate skips its own nulls;
 /// - `SUM` covers numeric primitives only — a [Long] for an integer aggregate, a [Double] for a
 ///   floating one (an `f16` column without a specialized lane folds a boxing `doubleValue()` total
-///   into a [Double], mirroring [Reductions#sumGeneric(Array, Mask)]), the additive identity (`0`)
-///   over zero selected non-null rows — and is reported as `null` for a non-numeric aggregate column
-///   (the caller treats that as an unanswerable sum, mirroring the two-pass path where
-///   [Reductions#requireNumeric(DType)] threw);
-/// - `MIN` / `MAX` use the column's dtype-aware order ([Reductions#widenLong(Array, boolean, long)]
-///   with unsigned-aware [Long#compareUnsigned(long, long)], [Double#compare(double, double)] for
-///   floats, [Compare#values(Object, Object, DType)] otherwise) and are `null` when no selected row
-///   is non-null.
+///   into a [Double]), the additive identity (`0`) over zero selected non-null rows — and is reported
+///   as `null` for a non-numeric aggregate column (the caller treats that as an unanswerable sum,
+///   mirroring where [NumericColumns#requireNumeric(DType)] would reject it);
+/// - `MIN` / `MAX` use the column's dtype-aware order ([NumericColumns#widenLong(Array, boolean,
+///   long)] with unsigned-aware [Long#compareUnsigned(long, long)], [Double#compare(double, double)]
+///   for floats, [Compare#values(Object, Object, DType)] otherwise) and are `null` when no selected
+///   row is non-null.
 ///
 /// The aggregate fold is type-specialized into boxing-free accumulators (a long domain, a double
 /// domain) chosen once outside the loop; only the box at the end allocates. An aggregate without a
 /// specialized lane (a non-primitive column, or an `f16` numeric primitive) folds its `SUM` and
-/// `MIN` / `MAX` through the boxing [Values#valueAt(Array, long)] / [Compare] path so it stays
-/// bit-identical to the two-pass reductions. Each filter leaf's [Predicate] is lowered once (reusing
-/// [PrimitiveFilter#lowerLong(Predicate, long)] / [PrimitiveFilter#lowerDouble(Predicate)] so the
-/// bounds can never drift from the standalone filter), with the typed accessor and validity hoisted
-/// out of the row loop; a non-primitive or composite leaf falls back to the standalone filter's
-/// per-element evaluator ([StreamingFilterKernel#evaluate(Array, long, Predicate)]).
+/// `MIN` / `MAX` through the boxing [Values#valueAt(Array, long)] / [Compare] path. Each filter leaf's
+/// [Predicate] is lowered once (reusing [PrimitiveFilter#lowerLong(Predicate, long)] /
+/// [PrimitiveFilter#lowerDouble(Predicate)]), with the typed accessor and validity hoisted out of the
+/// row loop; a non-primitive or composite leaf falls back to the per-element predicate evaluator
+/// ([PredicateEvaluator#evaluate(Array, long, Predicate)]).
 final class FusedFilterAggregate {
 
     private FusedFilterAggregate() {
@@ -93,16 +85,16 @@ final class FusedFilterAggregate {
     /// @param n      the chunk's row count
     /// @return the fold over the selected non-null aggregate rows
     private static FilteredAggregate foldAggregate(Array agg, RowPredicate[] leaves, long n) {
-        Array aggData = Reductions.unwrap(agg);
-        BoolArray aggValidity = Reductions.validityOf(agg);
+        Array aggData = NumericColumns.unwrap(agg);
+        BoolArray aggValidity = NumericColumns.validityOf(agg);
         DType aggDtype = agg.dtype();
         boolean aggDoubleDomain = aggData instanceof DoubleArray || aggData instanceof FloatArray;
         boolean aggFloat = aggData instanceof FloatArray;
-        boolean aggLongDomain = Reductions.isLongDomain(aggData);
+        boolean aggLongDomain = NumericColumns.isLongDomain(aggData);
         boolean aggUnsigned = aggLongDomain && aggData.dtype().isUnsigned();
         // A numeric primitive without a specialized long/double lane (an f16 column) still has an
         // answerable SUM: it folds a boxing doubleValue() total into a Double, mirroring
-        // Reductions.sumGeneric. A non-numeric column (Utf8/Binary/Bool/…) has no sum and reports null.
+        // NumericColumns.sumGeneric. A non-numeric column (Utf8/Binary/Bool/…) has no sum and reports null.
         boolean aggNumericPrimitive = !aggLongDomain && !aggDoubleDomain && aggDtype instanceof DType.Primitive;
 
         long selected = 0L;
@@ -127,7 +119,7 @@ final class FusedFilterAggregate {
             }
             nonNull++;
             if (aggLongDomain) {
-                long v = Reductions.widenLong(aggData, aggUnsigned, i);
+                long v = NumericColumns.widenLong(aggData, aggUnsigned, i);
                 longSum += v;
                 if (!found) {
                     minLong = v;
@@ -211,8 +203,8 @@ final class FusedFilterAggregate {
     }
 
     /// Boxes a double-domain extreme to the column's own accessor type — a [Float] for an `f32`
-    /// column, a [Double] for `f64` — to stay bit-identical to [Reductions]' `MIN` / `MAX`, or `null`
-    /// when no selected row was non-null.
+    /// column, a [Double] for `f64` — matching the column's element box, or `null` when no selected
+    /// row was non-null.
     ///
     /// @param found    whether any selected row contributed a value
     /// @param value    the accumulated extreme
@@ -266,16 +258,16 @@ final class FusedFilterAggregate {
     }
 
     /// Lowers one column-bound [Predicate] into a hoisted [RowPredicate]: a null test reads validity
-    /// directly, a numeric comparison leaf lowers once to the same range / operator the standalone
-    /// filter uses, and any other shape falls back to the standalone per-element evaluator so the
-    /// result is bit-identical to [Compute#filter(Array, Predicate, java.lang.foreign.Arena)].
+    /// directly, a numeric comparison leaf lowers once to the [PrimitiveFilter] range / operator, and
+    /// any other shape falls back to the per-element predicate evaluator
+    /// ([PredicateEvaluator#evaluate(Array, long, Predicate)]).
     ///
     /// @param column    the decoded filter column (possibly masked)
     /// @param predicate the column-bound predicate
     /// @return a row predicate that tests `predicate` against `column` at a given row
     private static RowPredicate leafTest(Array column, Predicate predicate) {
-        Array data = Reductions.unwrap(column);
-        BoolArray validity = Reductions.validityOf(column);
+        Array data = NumericColumns.unwrap(column);
+        BoolArray validity = NumericColumns.validityOf(column);
         if (predicate instanceof Predicate.IsNull) {
             return validity == null ? i -> false : i -> !validity.getBoolean(i);
         }
@@ -287,11 +279,11 @@ final class FusedFilterAggregate {
             if (data instanceof DoubleArray || data instanceof FloatArray) {
                 return doubleLeaf(data, validity, predicate);
             }
-            if (Reductions.isLongDomain(data)) {
+            if (NumericColumns.isLongDomain(data)) {
                 return longLeaf(data, validity, predicate);
             }
         }
-        return i -> StreamingFilterKernel.evaluate(column, i, predicate);
+        return i -> PredicateEvaluator.evaluate(column, i, predicate);
     }
 
     /// Builds a hoisted long-domain comparison leaf: the predicate lowers once to an inclusive range
@@ -310,7 +302,7 @@ final class FusedFilterAggregate {
         boolean negate = range.negate();
         if (validity == null) {
             return i -> {
-                long v = Reductions.widenLong(data, unsigned, i) ^ flip;
+                long v = NumericColumns.widenLong(data, unsigned, i) ^ flip;
                 return (lo <= v && v <= hi) != negate;
             };
         }
@@ -318,7 +310,7 @@ final class FusedFilterAggregate {
             if (!validity.getBoolean(i)) {
                 return false;
             }
-            long v = Reductions.widenLong(data, unsigned, i) ^ flip;
+            long v = NumericColumns.widenLong(data, unsigned, i) ^ flip;
             return (lo <= v && v <= hi) != negate;
         };
     }

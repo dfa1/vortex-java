@@ -20,17 +20,15 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// Oracle test for the fused [Compute#filteredSum(Array, Predicate, Array)] kernel: the one-pass
-/// fused result must be bit-identical to the two-pass reference it replaces — a
-/// [Compute#filter(Array, Predicate, Arena)] into a [Mask] followed by a [Compute#sum(Array, Mask)]
-/// over that mask. The two paths share no code on the hot lane, so any divergence between fusion and
-/// the materialized-mask pipeline is a correctness bug.
+/// fused result must be bit-identical to an independent boxing reference — a plain per-element
+/// `if (predicate) acc += value` loop over the same columns. The fused hot lane shares no code with
+/// that boxing reference, so any divergence is a correctness bug.
 ///
 /// The randomized cases pair a random primitive filter column (`i64` / `i32` / `f64`, with and
 /// without nulls) against a random primitive aggregate column, under each comparison predicate, so
 /// every filter/aggregate domain crossing (long/double, hot lane and the narrow-int generic
 /// fall-back) is exercised. The explicit cases pin the corners — empty, an all-null filter, an
 /// all-null aggregate, zero matches, and a full match.
-@SuppressWarnings("removal") // transitional — exercises the deprecated Mask / Compute.filter until the fused multi-column filteredReduce lands
 class FusedFilterSumTest {
 
     private static final Arena ARENA = Arena.ofAuto();
@@ -48,7 +46,7 @@ class FusedFilterSumTest {
         // The aggregate must align positionally with the filter, so build it at the filter length.
         Array agg = randomColumn(random, random.nextBoolean(), (int) filter.length());
         for (Predicate predicate : everyComparison(random, filter)) {
-            // When the fused kernel and the two-pass reference both run
+            // When the fused kernel and the boxing reference both run
             // Then they agree exactly
             assertFusedMatchesTwoPass(filter, predicate, agg);
         }
@@ -63,7 +61,7 @@ class FusedFilterSumTest {
         // When the fused kernel filters and sums nothing
         Number result = Compute.filteredSum(filter, new Predicate.Gt(0L), agg);
 
-        // Then it is the additive identity, matching the two-pass path
+        // Then it is the additive identity, matching the boxing reference
         assertThat(result).isEqualTo(0L);
         assertFusedMatchesTwoPass(filter, new Predicate.Gt(0L), agg);
     }
@@ -134,18 +132,41 @@ class FusedFilterSumTest {
         // When the fused kernel filters price > 1.0 and sums the long measure
         Number result = Compute.filteredSum(filter, new Predicate.Gt(1.0), agg);
 
-        // Then only the last three rows contribute, matching the two-pass path
+        // Then only the last three rows contribute, matching the boxing reference
         assertThat(result).isEqualTo(900L);
         assertFusedMatchesTwoPass(filter, new Predicate.Gt(1.0), agg);
     }
 
     private static void assertFusedMatchesTwoPass(Array filter, Predicate predicate, Array agg) {
-        Mask mask = Compute.filter(filter, predicate, ARENA);
-        Number twoPass = Compute.sum(agg, mask);
+        Number reference = referenceFilteredSum(filter, predicate, agg);
         Number fused = Compute.filteredSum(filter, predicate, agg);
         assertThat(fused)
                 .as("fused %s on filter %s, agg %s", predicate, filter.dtype(), agg.dtype())
-                .isEqualTo(twoPass);
+                .isEqualTo(reference);
+    }
+
+    /// Independent boxing oracle: a plain per-element filter-then-sum over the same columns, with no
+    /// fused fast lane in the path. An integer aggregate totals into a [Long], a floating one into a
+    /// [Double], matching the fused kernel's result type.
+    private static Number referenceFilteredSum(Array filter, Predicate predicate, Array agg) {
+        long n = filter.length();
+        boolean floating = agg.dtype() instanceof DType.Primitive prim && prim.ptype().isFloating();
+        if (floating) {
+            double acc = 0.0;
+            for (long i = 0; i < n; i++) {
+                if (PredicateEvaluator.evaluate(filter, i, predicate) && !Values.isNullAt(agg, i)) {
+                    acc += ((Number) Values.valueAt(agg, i)).doubleValue();
+                }
+            }
+            return acc;
+        }
+        long acc = 0L;
+        for (long i = 0; i < n; i++) {
+            if (PredicateEvaluator.evaluate(filter, i, predicate) && !Values.isNullAt(agg, i)) {
+                acc += ((Number) Values.valueAt(agg, i)).longValue();
+            }
+        }
+        return acc;
     }
 
     private static Predicate[] everyComparison(Random random, Array filter) {

@@ -12,35 +12,26 @@ import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 
 /// The fused, one-pass filter-and-sum kernel: it filters one column by a [Predicate] and totals a
-/// second column over the selected rows in a single scan, with no intermediate [Mask] and no second
-/// pass.
+/// second column over the selected rows in a single scan, with no intermediate selection bitmap and
+/// no second pass.
 ///
-/// The two-pass path ([Compute#filter(Array, Predicate, java.lang.foreign.Arena)] then
-/// [Compute#sum(Array, Mask)]) first materializes a positional bitmap over the whole filter column,
-/// then re-scans the aggregate column reading that bitmap per row. For a single filter+aggregate that
-/// bitmap is pure overhead: it costs an allocation, a popcount, and a second memory pass. This kernel
-/// fuses the two stages — for each row it evaluates the predicate on the filter value and, when the
-/// row is selected and the aggregate value is non-null, folds the aggregate value straight into the
-/// running total. Nothing is materialized between the filter and the reduce.
-///
-/// Semantics are identical to the two-pass path, by construction:
-/// - the filter uses three-valued logic — a null filter row is never selected, exactly like
-///   [Compute#filter(Array, Predicate, java.lang.foreign.Arena)];
-/// - the aggregate skips its own nulls, exactly like [Compute#sum(Array, Mask)];
-/// - the aggregate must be a numeric primitive (guarded by [Reductions#requireNumeric(DType)]), and
-///   the result is a [Long] for an integer aggregate or a [Double] for a floating one — the same
+/// For each row it evaluates the predicate on the filter value and, when the row is selected and the
+/// aggregate value is non-null, folds the aggregate value straight into the running total — nothing is
+/// materialized between the filter and the reduce. The semantics are:
+/// - the filter uses three-valued logic — a null filter row is never selected;
+/// - the aggregate skips its own nulls;
+/// - the aggregate must be a numeric primitive (guarded by [NumericColumns#requireNumeric(DType)]),
+///   and the result is a [Long] for an integer aggregate or a [Double] for a floating one — the same
 ///   return-type rule as `SUM`.
 ///
 /// The hot case is type-specialized into boxing-free loops: a primitive long- or double-domain filter
 /// column against a [LongArray] / [DoubleArray] / [FloatArray] aggregate column. The predicate is
 /// lowered once (reusing [PrimitiveFilter#lowerLong(Predicate, long)] /
-/// [PrimitiveFilter#lowerDouble(Predicate)] so the bounds can never drift from the standalone filter),
-/// the signedness flip and the aggregate accessor are hoisted out of the loop (the hot-loop rule's
-/// branch-split idiom), and the inner body is a bare `if (test) acc += agg.getLong(i)` /
-/// `agg.getDouble(i)`. Any other shape (non-primitive filter, narrow-int or `f16` aggregate, a
-/// composite or null-test predicate) falls back to the generic boxing path, which reuses
-/// [StreamingFilterKernel#evaluate(Array, long, Predicate)] and [Values] so it stays bit-identical to
-/// the two-pass path.
+/// [PrimitiveFilter#lowerDouble(Predicate)]), the signedness flip and the aggregate accessor are
+/// hoisted out of the loop (the hot-loop rule's branch-split idiom), and the inner body is a bare
+/// `if (test) acc += agg.getLong(i)` / `agg.getDouble(i)`. Any other shape (non-primitive filter,
+/// narrow-int or `f16` aggregate, a composite or null-test predicate) falls back to the generic
+/// boxing path, which reuses [PredicateEvaluator#evaluate(Array, long, Predicate)] and [Values].
 final class FusedFilterSum {
 
     private FusedFilterSum() {
@@ -62,14 +53,14 @@ final class FusedFilterSum {
             throw new VortexException("filteredSum: filter length " + n
                     + " != aggregate length " + aggColumn.length());
         }
-        Reductions.requireNumeric(aggColumn.dtype());
+        NumericColumns.requireNumeric(aggColumn.dtype());
 
-        Array aggData = Reductions.unwrap(aggColumn);
-        BoolArray aggValidity = Reductions.validityOf(aggColumn);
+        Array aggData = NumericColumns.unwrap(aggColumn);
+        BoolArray aggValidity = NumericColumns.validityOf(aggColumn);
         boolean aggDouble = aggData instanceof DoubleArray || aggData instanceof FloatArray;
 
-        Array filterData = Reductions.unwrap(filterColumn);
-        BoolArray filterValidity = Reductions.validityOf(filterColumn);
+        Array filterData = NumericColumns.unwrap(filterColumn);
+        BoolArray filterValidity = NumericColumns.validityOf(filterColumn);
 
         // Hot lane: a primitive filter column, a comparison-leaf predicate over numeric constants, and
         // an aggregate read by a single typed accessor (i64/u64 long, f64 double, or f32 float). Any
@@ -341,9 +332,9 @@ final class FusedFilterSum {
         return aggIsFloat ? ((FloatArray) aData).getFloat(i) : ((DoubleArray) aData).getDouble(i);
     }
 
-    /// The generic boxing fallback for inputs the fast lane does not specialize, reusing the standalone
-    /// filter's per-element evaluator and the boxing value accessor so it stays bit-identical to the
-    /// two-pass path.
+    /// The generic boxing fallback for inputs the fast lane does not specialize, reusing the
+    /// per-element predicate evaluator and the boxing value accessor so it stays bit-identical to the
+    /// fast lane.
     ///
     /// @param filterColumn the column the predicate tests (possibly masked or non-primitive)
     /// @param predicate    the predicate that selects rows
@@ -351,10 +342,10 @@ final class FusedFilterSum {
     /// @param n            the row count
     /// @return the sum as a [Long] (integer aggregate) or [Double] (floating aggregate)
     private static Number generic(Array filterColumn, Predicate predicate, Array aggColumn, long n) {
-        if (Reductions.isFloating(aggColumn)) {
+        if (NumericColumns.isFloating(aggColumn)) {
             double acc = 0.0;
             for (long i = 0; i < n; i++) {
-                if (StreamingFilterKernel.evaluate(filterColumn, i, predicate) && !Values.isNullAt(aggColumn, i)) {
+                if (PredicateEvaluator.evaluate(filterColumn, i, predicate) && !Values.isNullAt(aggColumn, i)) {
                     acc += ((Number) Values.valueAt(aggColumn, i)).doubleValue();
                 }
             }
@@ -362,7 +353,7 @@ final class FusedFilterSum {
         }
         long acc = 0L;
         for (long i = 0; i < n; i++) {
-            if (StreamingFilterKernel.evaluate(filterColumn, i, predicate) && !Values.isNullAt(aggColumn, i)) {
+            if (PredicateEvaluator.evaluate(filterColumn, i, predicate) && !Values.isNullAt(aggColumn, i)) {
                 acc += ((Number) Values.valueAt(aggColumn, i)).longValue();
             }
         }
@@ -388,6 +379,6 @@ final class FusedFilterSum {
     /// @return `true` for a primitive long- or double-domain array
     private static boolean isPrimitiveFilter(Array data) {
         return data.dtype() instanceof DType.Primitive
-                && (Reductions.isLongDomain(data) || data instanceof DoubleArray || data instanceof FloatArray);
+                && (NumericColumns.isLongDomain(data) || data instanceof DoubleArray || data instanceof FloatArray);
     }
 }

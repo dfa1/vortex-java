@@ -14,12 +14,10 @@ import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
 import io.github.dfa1.vortex.reader.array.OffsetDoubleArray;
 import io.github.dfa1.vortex.reader.array.OffsetLongArray;
 import io.github.dfa1.vortex.reader.compute.Compute;
-import io.github.dfa1.vortex.reader.compute.Mask;
 import io.github.dfa1.vortex.reader.compute.Predicate;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import java.io.IOException;
-import java.lang.foreign.Arena;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -44,14 +42,13 @@ import org.openjdk.jmh.annotations.Warmup;
 
 /// Baseline for the encoded-domain compute-kernel specialization of ADR 0013.
 ///
-/// The compute kernels ([Compute#filter(Array, Predicate, Arena)] and
-/// [Compute#sum(Array, Mask)]) today decode every element through the typed accessor: the
-/// generic streaming filter path and the type-specialized, boxing-free reduce lane both read
-/// `getLong(i)` / `getDouble(i)` per row, so an ALP or Frame-of-Reference column is fully
-/// reconstructed into the value domain before a single comparison or addition runs. The future
-/// work compares and reduces directly in the encoded integer domain (ALP residuals, FoR offsets)
-/// without decoding. This benchmark pins the CURRENT decode-via-accessor cost so that win is
-/// provable: the same `@Benchmark` methods will show the speedup once the specialized kernels land.
+/// The fused compute kernel ([Compute#filteredSum(Array, Predicate, Array)]) today decodes every
+/// element through the typed accessor: it reads `getLong(i)` / `getDouble(i)` per row, so an ALP or
+/// Frame-of-Reference column is fully reconstructed into the value domain before a single comparison
+/// or addition runs. The future work compares and reduces directly in the encoded integer domain
+/// (ALP residuals, FoR offsets) without decoding. This benchmark pins the CURRENT decode-via-accessor
+/// cost so that win is provable: the same `@Benchmark` methods will show the speedup once the
+/// specialized kernels land.
 ///
 /// One hundred million rows are written as `TOTAL_ROWS / CHUNK_ROWS` chunks of `CHUNK_ROWS` each
 /// with `WriteOptions.cascading(3)`, so the writer picks real encodings and the four columns decode
@@ -77,16 +74,17 @@ import org.openjdk.jmh.annotations.Warmup;
 /// `@Setup` asserts each decoded column (on the first chunk) is the expected encoded type and fails
 /// loudly otherwise, so the baseline can never silently measure a plain column.
 ///
-/// Each `filterX`/`sumX` kernel method is paired with a `forLoopX` method holding the true control:
-/// the obvious hand-written accessor loop a developer writes WITHOUT the compute layer — no [Mask],
-/// no [Compute], no off-heap bitmap, just `getDouble(i)`/`getLong(i)` and a counter. The paired
-/// methods share the exact predicate and threshold constant so they cannot drift, giving three
-/// reference points:
+/// The fused kernel method `fusedFilteredSumAlp` is paired with a `forLoopFilteredSum` control: the
+/// obvious hand-written accessor loop a developer writes WITHOUT the compute layer — no off-heap
+/// bitmap, just `getDouble(i)` / `getLong(i)` and an accumulator. The standalone `forLoopX` baselines
+/// measure the naive decode-per-element scan of each encoded column on its own. The paired methods
+/// share the exact predicate and threshold constant so they cannot drift, giving the reference
+/// points:
 /// - `forLoopX` — the naive decode-per-element loop, the developer's baseline.
-/// - `filterX` — the current kernel, which still decodes through the accessor; the `forLoopX`→
-///   `filterX` gap is the kernel's overhead (or benefit) today.
-/// - the future encoded-domain specialization — measured against `forLoopX`, which it must beat by
-///   comparing and reducing in the integer domain instead of decoding every element.
+/// - `fusedFilteredSumAlp` — the current fused kernel, which still decodes through the accessor; the
+///   `forLoopFilteredSum`→`fusedFilteredSumAlp` gap is the kernel's overhead (or benefit) today.
+/// - the future encoded-domain specialization — measured against `forLoopFilteredSum`, which it must
+///   beat by comparing and reducing in the integer domain instead of decoding every element.
 ///
 /// Run: java -jar performance/target/benchmarks.jar ComputeKernelBenchmark
 @State(Scope.Benchmark)
@@ -100,7 +98,6 @@ import org.openjdk.jmh.annotations.Warmup;
         "--sun-misc-unsafe-memory-access=allow",
         "-Xmx4g"
 })
-@SuppressWarnings("removal") // transitional — benchmarks the deprecated Mask / Compute.filter two-pass path against the fused single-pass kernel
 public class ComputeKernelBenchmark {
 
     /// Total rows scanned per op — ≈ 800 MB per column, far larger than L3, so memory-bound.
@@ -203,107 +200,11 @@ public class ComputeKernelBenchmark {
         }
     }
 
-    /// Filters the ALP-encoded `price` column with `price > 500` across every chunk, decoding each
-    /// double through the accessor before the compare. A per-chunk confined arena holds the mask and
-    /// is freed each chunk, matching a realistic streaming scan. Returns the total selected count so
-    /// the masks cannot be eliminated.
-    ///
-    /// @return the number of selected rows over the whole dataset
-    @Benchmark
-    public long filterAlpDouble() {
-        long count = 0;
-        for (DoubleArray a : priceChunks) {
-            try (Arena arena = Arena.ofConfined()) {
-                count += Compute.filter(a, new Predicate.Gt(PRICE_THRESHOLD), arena).trueCount();
-            }
-        }
-        return count;
-    }
-
-    /// Filters the Frame-of-Reference-encoded `measure` column with `measure > base + spread/2`
-    /// across every chunk, reconstructing each `offset + ref` long through the accessor before the
-    /// compare. A per-chunk confined arena holds the mask and is freed each chunk.
-    ///
-    /// @return the number of selected rows over the whole dataset
-    @Benchmark
-    public long filterForLong() {
-        long count = 0;
-        for (LongArray a : measureChunks) {
-            try (Arena arena = Arena.ofConfined()) {
-                count += Compute.filter(a, new Predicate.Gt(MEASURE_THRESHOLD), arena).trueCount();
-            }
-        }
-        return count;
-    }
-
-    /// Filters the dictionary-encoded `category` column with `category == 7` across every chunk,
-    /// resolving each code through the dictionary before the compare. A per-chunk confined arena
-    /// holds the mask and is freed each chunk.
-    ///
-    /// @return the number of selected rows over the whole dataset
-    @Benchmark
-    public long filterDict() {
-        long count = 0;
-        for (LongArray a : categoryChunks) {
-            try (Arena arena = Arena.ofConfined()) {
-                count += Compute.filter(a, new Predicate.Eq(CATEGORY_VALUE), arena).trueCount();
-            }
-        }
-        return count;
-    }
-
-    /// Control: filters the plain (non-encoded) `plain` column with `plain > 0` across every chunk,
-    /// reading each long straight from the materialized segment. Shows the cost without an encoding
-    /// to unwind. A per-chunk confined arena holds the mask and is freed each chunk.
-    ///
-    /// @return the number of selected rows over the whole dataset
-    @Benchmark
-    public long filterPlainControl() {
-        long count = 0;
-        for (LongArray a : plainChunks) {
-            try (Arena arena = Arena.ofConfined()) {
-                count += Compute.filter(a, new Predicate.Gt(0L), arena).trueCount();
-            }
-        }
-        return count;
-    }
-
-    /// Reduces the ALP-encoded `price` column over an all-selected mask across every chunk, the
-    /// boxing-free reduce lane decoding each double through the accessor before the addition.
-    ///
-    /// @return the sum of all `price` values over the whole dataset
-    @Benchmark
-    public double sumAlpDouble() {
-        double acc = 0;
-        for (DoubleArray a : priceChunks) {
-            acc += Compute.sum(a, Mask.allTrue(a.length())).doubleValue();
-        }
-        return acc;
-    }
-
-    /// Realistic pipeline: per chunk, filter the ALP-encoded `price` column, then sum the
-    /// FoR-encoded `measure` column over the resulting mask, accumulating across every chunk. Both
-    /// stages decode through the accessor today. Price and measure chunks are indexed in lockstep.
-    ///
-    /// @return the sum of `measure` over the rows where `price > 500` across the whole dataset
-    @Benchmark
-    public long filterThenSumAlp() {
-        long acc = 0;
-        for (int k = 0; k < priceChunks.size(); k++) {
-            DoubleArray priceArr = priceChunks.get(k);
-            LongArray measureArr = measureChunks.get(k);
-            try (Arena arena = Arena.ofConfined()) {
-                Mask mask = Compute.filter(priceArr, new Predicate.Gt(PRICE_THRESHOLD), arena);
-                acc += Compute.sum(measureArr, mask).longValue();
-            }
-        }
-        return acc;
-    }
-
     /// Fused one-pass pipeline: per chunk, [Compute#filteredSum(Array, Predicate, Array)] filters the
     /// ALP-encoded `price` column with `price > 500` and totals the FoR-encoded `measure` column over
-    /// the selected rows in a single scan, with no intermediate [Mask] and no off-heap bitmap. The
-    /// one-pass counterpart to [#filterThenSumAlp()]; same semantics, same `price`/`measure` columns.
+    /// the selected rows in a single scan, with no intermediate selection bitmap. Decodes each price
+    /// and (when selected) each measure through the accessor. Price and measure chunks are indexed in
+    /// lockstep.
     ///
     /// @return the sum of `measure` over the rows where `price > 500` across the whole dataset
     @Benchmark
@@ -319,8 +220,8 @@ public class ComputeKernelBenchmark {
 
     /// Hand-fused control for [#fusedFilteredSumAlp()]: the obvious developer loop a fused kernel must
     /// match — `for i: if (price.getDouble(i) > 500) acc += measure.getLong(i)` per chunk, with no
-    /// [Mask], no [Compute] and no off-heap bitmap. Decodes each price and (when selected) each
-    /// measure through the accessor. Price and measure chunks are indexed in lockstep.
+    /// off-heap bitmap. Decodes each price and (when selected) each measure through the accessor.
+    /// Price and measure chunks are indexed in lockstep.
     ///
     /// @return the sum of `measure` over the rows where `price > 500` across the whole dataset
     @Benchmark
@@ -339,9 +240,9 @@ public class ComputeKernelBenchmark {
         return acc;
     }
 
-    /// Naive baseline for [#filterAlpDouble()]: the hand-written `price > 500` count loop over the
-    /// ALP accessor across every chunk, with no [Mask], no [Compute] and no off-heap bitmap. Decodes
-    /// each double per element. Returns the count so JMH cannot eliminate the loop.
+    /// Naive `price > 500` count baseline: the hand-written count loop over the ALP accessor across
+    /// every chunk, with no off-heap bitmap. Decodes each double per element. Returns the count so JMH
+    /// cannot eliminate the loop.
     ///
     /// @return the number of rows with `price > 500` over the whole dataset
     @Benchmark
@@ -358,9 +259,9 @@ public class ComputeKernelBenchmark {
         return count;
     }
 
-    /// Naive baseline for [#filterForLong()]: the hand-written `measure > base + spread/2` count loop
-    /// over the Frame-of-Reference accessor across every chunk, reconstructing each `offset + ref`
-    /// long per element.
+    /// Naive `measure > base + spread/2` count baseline: the hand-written count loop over the
+    /// Frame-of-Reference accessor across every chunk, reconstructing each `offset + ref` long per
+    /// element.
     ///
     /// @return the number of rows with `measure > base + spread/2` over the whole dataset
     @Benchmark
@@ -377,9 +278,8 @@ public class ComputeKernelBenchmark {
         return count;
     }
 
-    /// Naive baseline for [#filterDict()]: the hand-written `category == 7` count loop over the
-    /// dictionary accessor across every chunk, resolving each code through the dictionary per
-    /// element.
+    /// Naive `category == 7` count baseline: the hand-written count loop over the dictionary accessor
+    /// across every chunk, resolving each code through the dictionary per element.
     ///
     /// @return the number of rows with `category == 7` over the whole dataset
     @Benchmark
@@ -396,9 +296,8 @@ public class ComputeKernelBenchmark {
         return count;
     }
 
-    /// Naive baseline for [#filterPlainControl()]: the hand-written `plain > 0` count loop over the
-    /// materialized accessor across every chunk, reading each long straight from the segment per
-    /// element.
+    /// Naive `plain > 0` count baseline: the hand-written count loop over the materialized accessor
+    /// across every chunk, reading each long straight from the segment per element.
     ///
     /// @return the number of rows with `plain > 0` over the whole dataset
     @Benchmark
@@ -415,9 +314,9 @@ public class ComputeKernelBenchmark {
         return count;
     }
 
-    /// Naive baseline for [#sumAlpDouble()]: the hand-written running sum over the ALP accessor
-    /// across every chunk, decoding each double per element. Returns the sum so JMH cannot eliminate
-    /// the loop.
+    /// Naive `price` running-sum baseline: the hand-written running sum over the ALP accessor across
+    /// every chunk, decoding each double per element. Returns the sum so JMH cannot eliminate the
+    /// loop.
     ///
     /// @return the sum of all `price` values over the whole dataset
     @Benchmark
