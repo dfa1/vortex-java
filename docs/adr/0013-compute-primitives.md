@@ -41,6 +41,40 @@ consumer). The `Predicate` (§4) and `RowFilter` unification (§5) vocabulary is
 these kernels consume. The sections below are preserved as the original proposal; read §1–§3 as
 history, not as the built design.
 
+### Baseline for the encoded-domain specialization (2026-07-01)
+
+`ComputeKernelBenchmark` (100M rows, ≈ 800 MB/column, memory-bound, Apple silicon, JMH avg time):
+
+| Benchmark | Score |
+| --- | --- |
+| `forLoopFilteredSum` — hand-fused accessor loop (`price > 500` ALP filter, FoR `measure` sum) | 421.4 ms/op |
+| `fusedFilteredSumAlp` — today's `Compute.filteredSum`, same predicate | 443.9 ms/op |
+
+The fused kernel carries a ≈ 5 % overhead over the naive loop because it still decodes every element
+through the typed accessor before comparing — there is no per-row win yet, by design. This is the
+control the encoded-domain specialization must beat: compare and reduce in the ALP/FoR/Dict integer
+domain, below the naive-loop number. Note the fused kernel is still ≈ 1.5× faster than the *removed*
+`Mask` two-pass path it replaced — the overhead here is only against a hand-fused single loop.
+
+A fail-fast probe measured whether encoded-domain value comparison actually wins, per encoding:
+
+| Per-encoding count baseline | Score | Data read |
+| --- | --- | --- |
+| `forLoopPlainControl` (i64, no decode) | 46.4 ms/op | 800 MB |
+| `forLoopForLong` (FoR `+ ref`) | 46.7 ms/op | 800 MB |
+| `forLoopAlpDouble` (ALP `× f × e`) | 46.5 ms/op | 800 MB |
+| `forLoopDict` (gather `values[code]`) | ≈ 420–530 ms/op | 100 MB codes |
+| `forLoopDictEncoded` (compare codes, no gather) | ≈ 520 ms/op | 100 MB codes |
+
+The finding is negative and it is why encoded-domain specialization stays deferred: ALP and FoR are
+**memory-bound** — their decode arithmetic is free under bandwidth, identical to a plain i64 scan, so
+there is nothing for an integer-domain compare to save. Dict is the only decode with real overhead
+(≈ 11× a plain scan while reading 8× less data), but comparing codes instead of gathering values
+does **not** help (`forLoopDictEncoded` ties `forLoopDict`): the gather is not the bottleneck — the
+per-element accessor dispatch is, and both paths pay it. So the lever for dict is a monomorphic /
+vectorized segment scan of the codes, not the encoded-domain compare this ADR envisioned. Encoded
+values buy a win only once the value path is compute-bound, which at these column widths it is not.
+
 ## Context
 
 ADR 0010 establishes that the reader defers transform work until access

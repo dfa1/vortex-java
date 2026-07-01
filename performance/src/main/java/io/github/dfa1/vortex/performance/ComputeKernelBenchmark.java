@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.DictLongArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.LazyAlpDoubleArray;
@@ -289,6 +290,57 @@ public class ComputeKernelBenchmark {
             long n = array.length();
             for (long i = 0; i < n; i++) {
                 if (array.getLong(i) == CATEGORY_VALUE) {
+                    count++;
+                }
+            }
+        }
+        return count;
+    }
+
+    /// Encoded-domain `category == 7` count: the ADR-0013 encoded-domain control for a dictionary
+    /// equality filter. Resolves the constant to its dictionary code **once per chunk** (a scan of
+    /// the tiny value pool), then compares the raw `u8` codes directly — skipping the per-element
+    /// `values.getLong(readCode(i))` gather that [#forLoopDict()] pays.
+    ///
+    /// Result (2026-07-01, 100M rows): this is within noise of [#forLoopDict()] (≈ 520 vs ≈ 530
+    /// ms/op), so the value gather is NOT the dict path's bottleneck — both pay the same per-element
+    /// accessor cost (≈ 500 ms for a 100 MB code scan vs ≈ 46 ms for a plain 800 MB scan). Kept as a
+    /// negative control: encoded-domain value specialization alone does not speed up dict equality;
+    /// the lever is a monomorphic / vectorized segment scan of the codes, a separate optimization.
+    ///
+    /// @return the number of rows with `category == 7` over the whole dataset
+    @Benchmark
+    public long forLoopDictEncoded() {
+        long count = 0;
+        for (LongArray array : categoryChunks) {
+            // Chunked decode wraps some chunks in an OffsetLongArray slice view; unwrap it to the
+            // DictLongArray and carry its offset into the code index (codes[i + offset]).
+            LongArray base = array;
+            long codeOffset = 0;
+            if (base instanceof OffsetLongArray off) {
+                codeOffset = off.offset();
+                base = off.inner();
+            }
+            DictLongArray dict = (DictLongArray) base;
+            LongArray values = dict.values();
+            ByteArray codes = (ByteArray) dict.codes();
+            // Resolve category==7 to its code once. The pool holds distinct values, so at most one
+            // code matches; an absent value means no row in this chunk matches.
+            long match = -1;
+            long poolSize = values.length();
+            for (long c = 0; c < poolSize; c++) {
+                if (values.getLong(c) == CATEGORY_VALUE) {
+                    match = c;
+                    break;
+                }
+            }
+            long n = array.length();
+            if (match < 0) {
+                continue;
+            }
+            byte matchByte = (byte) match;
+            for (long i = 0; i < n; i++) {
+                if (codes.getByte(i + codeOffset) == matchByte) {
                     count++;
                 }
             }
