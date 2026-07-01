@@ -76,9 +76,10 @@ final class FusedFilterAggregate {
         return foldAggregate(chunk.column(aggColumn), leaves, n);
     }
 
-    /// Runs the row loop folding `agg` over the rows every leaf accepts, with the aggregate domain
-    /// (long / double / generic) and its accessors hoisted out of the loop so the inner body is a bare
-    /// typed read plus a primitive accumulate.
+    /// Dispatches the fold on the aggregate's value domain — a boxing-free long or double lane, else the
+    /// generic boxing lane — so each specialized loop's inner body is a bare typed read plus a primitive
+    /// accumulate, the hot-loop rule's branch-split idiom (hoist the domain choice once, gate one
+    /// specialized loop per domain rather than branching per row).
     ///
     /// @param agg    the aggregate column (possibly a [io.github.dfa1.vortex.reader.array.MaskedArray])
     /// @param leaves the lowered filter leaves, all of which must accept a row for it to be selected
@@ -87,108 +88,158 @@ final class FusedFilterAggregate {
     private static FilteredAggregate foldAggregate(Array agg, RowPredicate[] leaves, long n) {
         Array aggData = NumericColumns.unwrap(agg);
         BoolArray aggValidity = NumericColumns.validityOf(agg);
-        DType aggDtype = agg.dtype();
-        boolean aggDoubleDomain = aggData instanceof DoubleArray || aggData instanceof FloatArray;
-        boolean aggFloat = aggData instanceof FloatArray;
-        boolean aggLongDomain = NumericColumns.isLongDomain(aggData);
-        boolean aggUnsigned = aggLongDomain && aggData.dtype().isUnsigned();
+        if (NumericColumns.isLongDomain(aggData)) {
+            return foldLongDomain(aggData, aggValidity, aggData.dtype().isUnsigned(), leaves, n);
+        }
+        if (aggData instanceof DoubleArray || aggData instanceof FloatArray) {
+            return foldDoubleDomain(aggData, aggValidity, aggData instanceof FloatArray, leaves, n);
+        }
         // A numeric primitive without a specialized long/double lane (an f16 column) still has an
-        // answerable SUM: it folds a boxing doubleValue() total into a Double, mirroring
-        // NumericColumns.sumGeneric. A non-numeric column (Utf8/Binary/Bool/…) has no sum and reports null.
-        boolean aggNumericPrimitive = !aggLongDomain && !aggDoubleDomain && aggDtype instanceof DType.Primitive;
+        // answerable SUM: it folds a boxing doubleValue() total into a Double. A non-numeric column
+        // (Utf8/Binary/Bool/…) has no sum and reports null.
+        DType aggDtype = agg.dtype();
+        return foldGeneric(agg, aggValidity, aggDtype, aggDtype instanceof DType.Primitive, leaves, n);
+    }
 
+    /// The long-domain lane: reads each selected non-null row through [NumericColumns#widenLong(Array,
+    /// boolean, long)] and folds a wrapping [Long] `SUM` plus an unsigned-aware `MIN` / `MAX`.
+    ///
+    /// @param aggData  the unwrapped long-domain aggregate array
+    /// @param validity the aggregate validity bitmap, or `null` when every row is valid
+    /// @param unsigned whether the column is unsigned (its order and widening zero-extend)
+    /// @param leaves   the lowered filter leaves, all of which must accept a row for it to be selected
+    /// @param n        the chunk's row count
+    /// @return the fold: selected count, non-null count, the [Long] sum, and the [Long] `MIN` / `MAX`
+    ///         (`null` when no selected row is non-null)
+    private static FilteredAggregate foldLongDomain(Array aggData, BoolArray validity, boolean unsigned,
+                                                    RowPredicate[] leaves, long n) {
         long selected = 0L;
         long nonNull = 0L;
-        long longSum = 0L;
-        double doubleSum = 0.0;
+        long sum = 0L;
         boolean found = false;
-        long minLong = 0L;
-        long maxLong = 0L;
-        double minDouble = 0.0;
-        double maxDouble = 0.0;
-        Object minObject = null;
-        Object maxObject = null;
-
+        long min = 0L;
+        long max = 0L;
         for (long i = 0; i < n; i++) {
             if (!allMatch(leaves, i)) {
                 continue;
             }
             selected++;
-            if (aggValidity != null && !aggValidity.getBoolean(i)) {
+            if (validity != null && !validity.getBoolean(i)) {
                 continue;
             }
             nonNull++;
-            if (aggLongDomain) {
-                long v = NumericColumns.widenLong(aggData, aggUnsigned, i);
-                longSum += v;
-                if (!found) {
-                    minLong = v;
-                    maxLong = v;
-                    found = true;
-                } else {
-                    if (lessLong(v, minLong, aggUnsigned)) {
-                        minLong = v;
-                    }
-                    if (lessLong(maxLong, v, aggUnsigned)) {
-                        maxLong = v;
-                    }
-                }
-            } else if (aggDoubleDomain) {
-                double v = aggFloat ? ((FloatArray) aggData).getFloat(i) : ((DoubleArray) aggData).getDouble(i);
-                doubleSum += v;
-                if (!found) {
-                    minDouble = v;
-                    maxDouble = v;
-                    found = true;
-                } else {
-                    if (Double.compare(v, minDouble) < 0) {
-                        minDouble = v;
-                    }
-                    if (Double.compare(v, maxDouble) > 0) {
-                        maxDouble = v;
-                    }
-                }
+            long v = NumericColumns.widenLong(aggData, unsigned, i);
+            sum += v;
+            if (!found) {
+                min = v;
+                max = v;
+                found = true;
             } else {
-                Object v = Values.valueAt(agg, i);
-                if (aggNumericPrimitive) {
-                    doubleSum += ((Number) v).doubleValue();
+                if (lessLong(v, min, unsigned)) {
+                    min = v;
                 }
-                if (minObject == null) {
-                    minObject = v;
-                    maxObject = v;
-                } else {
-                    if (Compare.values(v, minObject, aggDtype) < 0) {
-                        minObject = v;
-                    }
-                    if (Compare.values(v, maxObject, aggDtype) > 0) {
-                        maxObject = v;
-                    }
+                if (lessLong(max, v, unsigned)) {
+                    max = v;
                 }
             }
         }
+        return new FilteredAggregate(selected, nonNull, Long.valueOf(sum),
+                found ? Long.valueOf(min) : null, found ? Long.valueOf(max) : null);
+    }
 
-        // Explicit branches, not a ternary: a `Long : Double` conditional would binary-numeric promote
-        // both arms to double and re-box the integer sum to Double, losing the long result type.
-        Number sum;
-        Object min;
-        Object max;
-        if (aggLongDomain) {
-            sum = Long.valueOf(longSum);
-            min = found ? Long.valueOf(minLong) : null;
-            max = found ? Long.valueOf(maxLong) : null;
-        } else if (aggDoubleDomain) {
-            sum = Double.valueOf(doubleSum);
-            min = boxDouble(found, minDouble, aggFloat);
-            max = boxDouble(found, maxDouble, aggFloat);
-        } else {
-            // f16 (and any future numeric primitive without a specialized lane) sums as a Double via
-            // the boxing doubleValue() fold, the additive identity (0.0) over zero non-null rows;
-            // a genuinely non-numeric column (Utf8/Binary/Bool/…) has no answerable sum.
-            sum = aggNumericPrimitive ? Double.valueOf(doubleSum) : null;
-            min = minObject;
-            max = maxObject;
+    /// The double-domain lane: reads each selected non-null row through the hoisted `f32`/`f64` accessor
+    /// and folds a [Double] `SUM` plus a [Double#compare(double, double)]-ordered `MIN` / `MAX`.
+    ///
+    /// @param aggData  the unwrapped double-domain aggregate array
+    /// @param validity the aggregate validity bitmap, or `null` when every row is valid
+    /// @param isFloat  whether the column is an `f32` ([FloatArray]) rather than an `f64`
+    /// @param leaves   the lowered filter leaves, all of which must accept a row for it to be selected
+    /// @param n        the chunk's row count
+    /// @return the fold: selected count, non-null count, the [Double] sum, and the boxed `MIN` / `MAX`
+    ///         ([Float] for an `f32` column, `null` when no selected row is non-null)
+    private static FilteredAggregate foldDoubleDomain(Array aggData, BoolArray validity, boolean isFloat,
+                                                      RowPredicate[] leaves, long n) {
+        long selected = 0L;
+        long nonNull = 0L;
+        double sum = 0.0;
+        boolean found = false;
+        double min = 0.0;
+        double max = 0.0;
+        for (long i = 0; i < n; i++) {
+            if (!allMatch(leaves, i)) {
+                continue;
+            }
+            selected++;
+            if (validity != null && !validity.getBoolean(i)) {
+                continue;
+            }
+            nonNull++;
+            double v = isFloat ? ((FloatArray) aggData).getFloat(i) : ((DoubleArray) aggData).getDouble(i);
+            sum += v;
+            if (!found) {
+                min = v;
+                max = v;
+                found = true;
+            } else {
+                if (Double.compare(v, min) < 0) {
+                    min = v;
+                }
+                if (Double.compare(v, max) > 0) {
+                    max = v;
+                }
+            }
         }
-        return new FilteredAggregate(selected, nonNull, sum, min, max);
+        return new FilteredAggregate(selected, nonNull, Double.valueOf(sum),
+                boxDouble(found, min, isFloat), boxDouble(found, max, isFloat));
+    }
+
+    /// The generic boxing lane for an aggregate with no specialized long/double accessor: an `f16`
+    /// numeric primitive (whose `SUM` folds through a boxing `doubleValue()`) or a non-numeric column
+    /// (whose `SUM` is unanswerable and reported `null`). `MIN` / `MAX` order through
+    /// [Compare#values(Object, Object, DType)].
+    ///
+    /// @param agg              the aggregate column, read through the boxing [Values#valueAt(Array, long)]
+    /// @param validity         the aggregate validity bitmap, or `null` when every row is valid
+    /// @param aggDtype         the aggregate column's dtype, driving the `MIN` / `MAX` order
+    /// @param numericPrimitive whether the column is a numeric primitive with an answerable `SUM`
+    /// @param leaves           the lowered filter leaves, all of which must accept a row for selection
+    /// @param n                the chunk's row count
+    /// @return the fold: selected count, non-null count, the [Double] sum (or `null` when non-numeric),
+    ///         and the boxed `MIN` / `MAX` (`null` when no selected row is non-null)
+    private static FilteredAggregate foldGeneric(Array agg, BoolArray validity, DType aggDtype,
+                                                 boolean numericPrimitive, RowPredicate[] leaves, long n) {
+        long selected = 0L;
+        long nonNull = 0L;
+        double sum = 0.0;
+        Object min = null;
+        Object max = null;
+        for (long i = 0; i < n; i++) {
+            if (!allMatch(leaves, i)) {
+                continue;
+            }
+            selected++;
+            if (validity != null && !validity.getBoolean(i)) {
+                continue;
+            }
+            nonNull++;
+            Object v = Values.valueAt(agg, i);
+            if (numericPrimitive) {
+                sum += ((Number) v).doubleValue();
+            }
+            if (min == null) {
+                min = v;
+                max = v;
+            } else {
+                if (Compare.values(v, min, aggDtype) < 0) {
+                    min = v;
+                }
+                if (Compare.values(v, max, aggDtype) > 0) {
+                    max = v;
+                }
+            }
+        }
+        // The additive identity (0.0) over zero non-null rows for a numeric primitive; null sum otherwise.
+        return new FilteredAggregate(selected, nonNull, numericPrimitive ? Double.valueOf(sum) : null, min, max);
     }
 
     /// Reports whether `a` orders before `b` in the long domain, unsigned-aware so a `u64` value past

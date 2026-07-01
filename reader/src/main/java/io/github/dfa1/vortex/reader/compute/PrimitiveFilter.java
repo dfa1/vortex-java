@@ -27,17 +27,17 @@ final class PrimitiveFilter {
     /// @return `true` if every comparison leaf is numeric
     static boolean predicateOk(Predicate predicate) {
         return switch (predicate) {
-            case Predicate.Eq eq -> eq.value() instanceof Number;
-            case Predicate.Neq neq -> neq.value() instanceof Number;
-            case Predicate.Lt lt -> lt.value() instanceof Number;
-            case Predicate.Gt gt -> gt.value() instanceof Number;
-            case Predicate.Lte lte -> lte.value() instanceof Number;
-            case Predicate.Gte gte -> gte.value() instanceof Number;
-            case Predicate.Between between -> between.lo() instanceof Number && between.hi() instanceof Number;
-            case Predicate.IsNull ignored -> true;
-            case Predicate.IsNotNull ignored -> true;
-            case Predicate.And and -> predicateOk(and.left()) && predicateOk(and.right());
-            case Predicate.Or or -> predicateOk(or.left()) && predicateOk(or.right());
+            case Predicate.Eq(var value) -> value instanceof Number;
+            case Predicate.Neq(var value) -> value instanceof Number;
+            case Predicate.Lt(var value) -> value instanceof Number;
+            case Predicate.Gt(var value) -> value instanceof Number;
+            case Predicate.Lte(var value) -> value instanceof Number;
+            case Predicate.Gte(var value) -> value instanceof Number;
+            case Predicate.Between(var lo, var hi) -> lo instanceof Number && hi instanceof Number;
+            case Predicate.IsNull() -> true;
+            case Predicate.IsNotNull() -> true;
+            case Predicate.And(var left, var right) -> predicateOk(left) && predicateOk(right);
+            case Predicate.Or(var left, var right) -> predicateOk(left) && predicateOk(right);
         };
     }
 
@@ -52,34 +52,34 @@ final class PrimitiveFilter {
         // Every leaf lowers to a single inclusive range on the flipped longs; Neq is that same
         // range (the point [c, c]) tested negated, so the match is the complement of equality.
         return switch (predicate) {
-            case Predicate.Eq eq -> {
-                long c = ((Number) eq.value()).longValue() ^ flip;
+            case Predicate.Eq(var value) -> {
+                long c = ((Number) value).longValue() ^ flip;
                 yield new LongRange(c, c, false);
             }
-            case Predicate.Neq neq -> {
-                long c = ((Number) neq.value()).longValue() ^ flip;
+            case Predicate.Neq(var value) -> {
+                long c = ((Number) value).longValue() ^ flip;
                 yield new LongRange(c, c, true);
             }
-            case Predicate.Lt lt -> {
-                long c = ((Number) lt.value()).longValue() ^ flip;
+            case Predicate.Lt(var value) -> {
+                long c = ((Number) value).longValue() ^ flip;
                 yield c == Long.MIN_VALUE
                         ? new LongRange(0L, -1L, false)
                         : new LongRange(Long.MIN_VALUE, c - 1, false);
             }
-            case Predicate.Lte lte -> {
+            case Predicate.Lte(var value) -> {
                 // v <= c → inclusive [MIN, c]; no underflow guard needed (c is the upper bound).
-                long c = ((Number) lte.value()).longValue() ^ flip;
+                long c = ((Number) value).longValue() ^ flip;
                 yield new LongRange(Long.MIN_VALUE, c, false);
             }
-            case Predicate.Gt gt -> {
-                long c = ((Number) gt.value()).longValue() ^ flip;
+            case Predicate.Gt(var value) -> {
+                long c = ((Number) value).longValue() ^ flip;
                 yield c == Long.MAX_VALUE
                         ? new LongRange(0L, -1L, false)
                         : new LongRange(c + 1, Long.MAX_VALUE, false);
             }
-            case Predicate.Gte gte -> {
+            case Predicate.Gte(var value) -> {
                 // v >= c → inclusive [c, MAX]; no overflow guard needed (c is the lower bound).
-                long c = ((Number) gte.value()).longValue() ^ flip;
+                long c = ((Number) value).longValue() ^ flip;
                 yield new LongRange(c, Long.MAX_VALUE, false);
             }
             default -> {
@@ -106,12 +106,12 @@ final class PrimitiveFilter {
     /// @return the lowered operator and bounds (`hi` used only for [DoubleOp#BETWEEN])
     static DoubleBound lowerDouble(Predicate predicate) {
         return switch (predicate) {
-            case Predicate.Eq eq -> new DoubleBound(DoubleOp.EQ, ((Number) eq.value()).doubleValue(), 0.0);
-            case Predicate.Neq neq -> new DoubleBound(DoubleOp.NEQ, ((Number) neq.value()).doubleValue(), 0.0);
-            case Predicate.Lt lt -> new DoubleBound(DoubleOp.LT, ((Number) lt.value()).doubleValue(), 0.0);
-            case Predicate.Lte lte -> new DoubleBound(DoubleOp.LTE, ((Number) lte.value()).doubleValue(), 0.0);
-            case Predicate.Gt gt -> new DoubleBound(DoubleOp.GT, ((Number) gt.value()).doubleValue(), 0.0);
-            case Predicate.Gte gte -> new DoubleBound(DoubleOp.GTE, ((Number) gte.value()).doubleValue(), 0.0);
+            case Predicate.Eq(var value) -> new DoubleBound(DoubleOp.EQ, ((Number) value).doubleValue(), 0.0);
+            case Predicate.Neq(var value) -> new DoubleBound(DoubleOp.NEQ, ((Number) value).doubleValue(), 0.0);
+            case Predicate.Lt(var value) -> new DoubleBound(DoubleOp.LT, ((Number) value).doubleValue(), 0.0);
+            case Predicate.Lte(var value) -> new DoubleBound(DoubleOp.LTE, ((Number) value).doubleValue(), 0.0);
+            case Predicate.Gt(var value) -> new DoubleBound(DoubleOp.GT, ((Number) value).doubleValue(), 0.0);
+            case Predicate.Gte(var value) -> new DoubleBound(DoubleOp.GTE, ((Number) value).doubleValue(), 0.0);
             default -> {
                 Predicate.Between between = (Predicate.Between) predicate;
                 yield new DoubleBound(DoubleOp.BETWEEN, ((Number) between.lo()).doubleValue(),

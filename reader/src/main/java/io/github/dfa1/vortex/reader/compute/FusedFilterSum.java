@@ -96,12 +96,11 @@ final class FusedFilterSum {
             return Long.valueOf(doubleFilterLongAgg(fData, fVal, bound, (LongArray) aData, aVal, n));
         }
         boolean unsigned = fData.dtype().isUnsigned();
-        long flip = unsigned ? Long.MIN_VALUE : 0L;
-        PrimitiveFilter.LongRange range = PrimitiveFilter.lowerLong(predicate, flip);
+        PrimitiveFilter.LongRange range = PrimitiveFilter.lowerLong(predicate, unsigned ? Long.MIN_VALUE : 0L);
         if (aggDouble) {
-            return Double.valueOf(longFilterDoubleAgg(fData, fVal, range, flip, unsigned, aData, aVal, n));
+            return Double.valueOf(longFilterDoubleAgg(fData, fVal, range, unsigned, aData, aVal, n));
         }
-        return Long.valueOf(longFilterLongAgg(fData, fVal, range, flip, unsigned, (LongArray) aData, aVal, n));
+        return Long.valueOf(longFilterLongAgg(fData, fVal, range, unsigned, (LongArray) aData, aVal, n));
     }
 
     // -------------------------------------------------------------------------------------------------
@@ -116,14 +115,14 @@ final class FusedFilterSum {
     /// @param fData    the unwrapped long-domain filter array
     /// @param fVal     the filter validity bitmap, or `null`
     /// @param range    the lowered inclusive range on the flipped longs
-    /// @param flip     the order-preserving XOR flip (`Long.MIN_VALUE` unsigned, `0` signed)
     /// @param unsigned whether the filter column is unsigned (narrow types zero-extend)
     /// @param agg      the aggregate array
     /// @param aVal     the aggregate validity bitmap, or `null`
     /// @param n        the row count
     /// @return the wrapping integer sum over the selected non-null rows
     private static long longFilterLongAgg(Array fData, BoolArray fVal, PrimitiveFilter.LongRange range,
-                                          long flip, boolean unsigned, LongArray agg, BoolArray aVal, long n) {
+                                          boolean unsigned, LongArray agg, BoolArray aVal, long n) {
+        long flip = unsigned ? Long.MIN_VALUE : 0L;
         long lo = range.lo();
         long hi = range.hi();
         boolean negate = range.negate();
@@ -168,14 +167,14 @@ final class FusedFilterSum {
     /// @param fData    the unwrapped long-domain filter array
     /// @param fVal     the filter validity bitmap, or `null`
     /// @param range    the lowered inclusive range on the flipped longs
-    /// @param flip     the order-preserving XOR flip
     /// @param unsigned whether the filter column is unsigned
     /// @param aData    the unwrapped double-domain aggregate array
     /// @param aVal     the aggregate validity bitmap, or `null`
     /// @param n        the row count
     /// @return the floating sum over the selected non-null rows
     private static double longFilterDoubleAgg(Array fData, BoolArray fVal, PrimitiveFilter.LongRange range,
-                                              long flip, boolean unsigned, Array aData, BoolArray aVal, long n) {
+                                              boolean unsigned, Array aData, BoolArray aVal, long n) {
+        long flip = unsigned ? Long.MIN_VALUE : 0L;
         long lo = range.lo();
         long hi = range.hi();
         boolean negate = range.negate();
