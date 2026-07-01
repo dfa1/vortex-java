@@ -1,14 +1,17 @@
 # ADR 0013: Compute primitives — masks, kernels, no-materialize contract
 
-- **Status:** Accepted — §1 (Mask), §4 (Predicate), §2/§3 (filter/reduce kernels, a generic
-  streaming baseline plus a type-specialized boxing-free fast lane, behind a minimal `Compute`
-  entry point), §5 (`RowFilter` unified over `Predicate` — a `RowFilter.Column` binds a column to a
-  shared public `Predicate`; the same predicate is compiled against zone-map stats for pruning and
-  against the decoded array for the boundary fold), and §6 (zone-map aggregate push-down, both the
-  whole-zone and boundary-zone tiers) are implemented in `reader.compute`. Deferred: encoded-domain
-  kernel specialization (perf escalation — pushing the predicate into the ALP/FoR/Dict integer
-  domain without decoding), and the ergonomic façade (a columnar transducer — its own ADR).
-  `MapKernel` is unbuilt (no consumer yet).
+- **Status:** Accepted, implemented — with §1–§3 superseded in implementation (see the
+  *Implementation note* below). Built in `reader.compute`: §4 (`Predicate`), §5 (`RowFilter`
+  unified over `Predicate` — a `RowFilter.Column` binds a column to a shared public `Predicate`,
+  the same predicate compiled against zone-map stats for pruning and against the decoded array for
+  the boundary fold), and §6 (zone-map aggregate push-down, both the whole-zone and boundary-zone
+  tiers). §1 (`Mask`) and §2/§3 (the `FilterKernel`/`MapKernel`/`ReduceKernel` interfaces and the
+  mask-based no-materialize contract) were built and then **removed**: the shipped design is the
+  fused single-pass kernels `Compute.filteredSum` / `filteredAggregate`, which fold filter and
+  reduce in one scan with **no intermediate selection bitmap** — a stronger no-materialize
+  guarantee than a `Mask` could give. Deferred to their own ADRs: encoded-domain kernel
+  specialization (perf escalation — pushing the predicate into the ALP/FoR/Dict integer domain
+  without decoding) and the ergonomic façade (a columnar transducer, ADR 0019).
 - **Date:** 2026-06-15
 - **Deciders:** project maintainer
 - **Supersedes:** —
@@ -17,6 +20,26 @@
   [ADR 0005 — Vector API adoption](0005-vector-api-adoption.md),
   [ADR 0010 — Lazy decode](0010-lazy-decode.md),
   [ADR 0012 — Zero-copy layout decoding](0012-zero-copy-layout-decoding.md)
+
+## Implementation note (2026-07-01)
+
+The primitives shipped, but §1–§3 as drawn below did not survive the perf work. The `Mask` sealed
+type, the `FilterKernel` / `MapKernel` / `ReduceKernel` interfaces, and the mask-based
+no-materialize contract were implemented, benchmarked, and then removed. A materialized selection
+`Mask` is a positional bitmap the reduce must re-scan — strictly slower than fusing the filter and
+the reduce into one pass. The shipped surface is two fused kernels behind the minimal public
+`Compute` entry point, with everything else package-private:
+
+- `Compute.filteredSum(filterColumn, predicate, aggColumn)` — one filter column, one summed column.
+- `Compute.filteredAggregate(chunk, filter, aggColumn)` — an n-ary `AND` `RowFilter` and a
+  `SUM` / `MIN` / `MAX` / non-null-count fold over the rows it selects.
+
+Both fold filter and reduce in a single scan with no intermediate bitmap, honoring §3's
+no-materialize intent more strictly than a `Mask` pipeline would; each is type-specialized into
+boxing-free long / double lanes with a generic boxing fallback. `MapKernel` was never built (no
+consumer). The `Predicate` (§4) and `RowFilter` unification (§5) vocabulary is unchanged and is what
+these kernels consume. The sections below are preserved as the original proposal; read §1–§3 as
+history, not as the built design.
 
 ## Context
 

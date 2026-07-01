@@ -85,23 +85,18 @@ Per-encoding gotchas:
 
 ## Compute
 
-- [ ] **Compute primitives — masks, kernels, no-materialize** — pushdown filter/compare/aggregate
-  kernels operating on Lazy arrays without materializing. See [ADR-0013](docs/adr/0013-compute-primitives.md)
-  (Proposed). Gate: a concrete downstream consumer (e.g. the vortex-arrow bridge or filter pushdown).
-  Done: §6 read-side surface — `ScanIterator.columnZoneStats(col)` exposes per-zone
-  min/max/sum/null count, decoding sum from the `vortex.stats` zone-map table (matches files from
-  Rust, whose flat writer omits per-flat sum). Calcite `VortexAggregates.SUM`/`AVG` now fold those
-  per-zone sums (metadata-only), falling back to a full scan only when a column has no zone map.
-  The fold is a reusable `reader.compute.ZoneReducer.sum(col)` (the seam a future `vortex-compute`
-  extracts), consumed by the planner: `VortexAggregatePushDownRule` rewrites a whole-table
-  `MIN`/`MAX`/`COUNT`/`SUM`/`AVG` to a single-row `Values`, abandoning to the scan only when a zone
-  carries no usable sum (an all-null column answers SQL `NULL`; `AVG` reduces to `SUM`/`COUNT`). The
-  rule auto-registers over a bare `jdbc:calcite:` connection via `VortexTableScan.register()`, so
-  SQL over JDBC is rewritten with no caller wiring. A `SUM` with a `WHERE` still abandons (whole-zone
-  stats can't answer a filtered aggregate) — that is the residual tier below.
-  Next: the residual tier — give `ZoneReducer` predicate support (whole-zone fold for fully-selected
-  zones + boundary-zone streaming for partially-selected ones), then let the rule push `SUM` with a
-  `WHERE`. `Mask`/`Predicate`/kernel vocab on top.
+- [ ] **Compute primitives — encoded-domain specialization & façade** — the remaining ADR-0013
+  follow-ups now the fused kernels have shipped. See [ADR-0013](docs/adr/0013-compute-primitives.md).
+  Done: §4 `Predicate`; §5 `RowFilter` unified over `Predicate`; §6 zone-map aggregate push-down in
+  both tiers — the whole-zone `ZoneReducer` fold wired into `VortexAggregatePushDownRule` (rewrites a
+  whole-table `MIN`/`MAX`/`COUNT`/`SUM`/`AVG` to a single-row `Values`, auto-registered over a bare
+  `jdbc:calcite:` connection), plus the boundary/residual tier so a `SUM`/`MIN`/`MAX`/`COUNT` with a
+  `WHERE` folds fully-selected zones from stats and decodes only the straddling boundary chunks via
+  the fused `Compute.filteredAggregate`. §1–§3 (`Mask`, the `FilterKernel`/`MapKernel`/`ReduceKernel`
+  interfaces) were built then removed for the fused single-pass kernels — no intermediate bitmap.
+  Next: (1) benchmark the fused-kernel speedup (`ComputeKernelBenchmark`, 100M rows) to record §6's
+  payoff; (2) encoded-domain kernel specialization — push the predicate into the ALP/FoR/Dict integer
+  domain without decoding (its own perf ADR); (3) the columnar transducer façade (ADR 0019).
 
 ## Encodings
 
