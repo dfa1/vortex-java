@@ -222,8 +222,14 @@ final class FusedFilterAggregate {
         if (!found) {
             return null;
         }
-        // (float) round-trips a value that already came from a float accessor without loss.
-        return isFloat ? Float.valueOf((float) value) : Double.valueOf(value);
+        // Kept as separate returns, not a `?:`: a Float/Double conditional triggers binary numeric
+        // promotion (JLS 15.25), unboxing both branches to double and boxing an f32 column's extreme
+        // back to Double — silently violating the Float contract above.
+        if (isFloat) {
+            // (float) round-trips a value that already came from a float accessor without loss.
+            return Float.valueOf((float) value);
+        }
+        return Double.valueOf(value);
     }
 
     /// Reports whether every leaf accepts row `i` (the n-ary `AND`), short-circuiting on the first
