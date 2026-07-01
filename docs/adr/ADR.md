@@ -27,7 +27,7 @@ the decision shipped in (blank = not yet shipped).
 | 0010 | Lazy decode                                   | Accepted   | 0.7.0 |
 | 0011 | Writer zero-copy MemorySegment overload       | Deferred  |          |
 | 0012 | Zero-copy layout decoding: lazy Chunked/Dict  | Accepted   | 0.7.0 |
-| 0013 | Compute primitives: masks, kernels, no-materialize | Proposed  |     |
+| 0013 | Compute primitives: fused filter/aggregate kernels | Accepted  | 0.11.0 |
 | 0014 | Variant encoding: chunked constants now, parquet.variant later | Accepted   | 0.8.0 |
 | 0015 | Drop Materialized fallbacks once Lazy has shipped | Accepted | 0.8.0 |
 | 0016 | vortex-arrow bridge module for Arrow interop  | Proposed  |          |
