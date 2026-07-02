@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.ChunkedByteArray;
+import io.github.dfa1.vortex.reader.array.DictDoubleArray;
 import io.github.dfa1.vortex.reader.array.DictLongArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
@@ -304,6 +305,26 @@ class ComputeFilteredAggregateTest {
     }
 
     @Test
+    void dictDoubleFilterDrivesTheLane() {
+        // Given a double-valued dict filter (a DictDoubleArray pool) — the aggregate lane's
+        // double-domain pool lowering, which the long-dict randomized sweep never reaches
+        Array filter = dictDoubleColumn(new double[]{1.5, 2.5}, new int[]{1, 0, 1, 1});
+        Chunk chunk = chunk(4, Map.of(
+                "f0", filter,
+                "v", longArray(new Reference(new long[]{1, 2, 4, 8}, null), false)));
+
+        // When the kernel folds over the rows where the dict value is > 2.0 (code 1: rows 0, 2, 3)
+        FilteredAggregate result = Compute.filteredAggregate(chunk, RowFilter.gt("f0", 2.0), "v");
+
+        // Then the selected rows fold exactly as the value-level evaluation would
+        assertThat(result.selectedRows()).isEqualTo(3L);
+        assertThat(result.aggNonNullCount()).isEqualTo(3L);
+        assertThat(result.sum()).isEqualTo(1L + 4L + 8L);
+        assertThat(result.min()).isEqualTo(1L);
+        assertThat(result.max()).isEqualTo(8L);
+    }
+
+    @Test
     void andOfOneDictLeafUnwrapsToTheLane() {
         // Given a one-element AND around a dict comparison leaf — RowFilter.and(...) wraps a single
         // conjunct, and the dict lane must see through it to the leaf rather than falling back
@@ -493,6 +514,16 @@ class ComputeFilteredAggregateTest {
         }
         MaterializedLongArray poolArray = new MaterializedLongArray(DType.I64, pool.length, poolSeg);
         return DictLongArray.of(DType.I64, codes.length, poolArray, byteArray(codes, 0, codes.length));
+    }
+
+    /// Builds a flat-coded double-valued dict column for the double-domain dict-lane case.
+    private static Array dictDoubleColumn(double[] pool, int[] codes) {
+        MemorySegment poolSeg = ARENA.allocate(Math.max(8L, pool.length * 8L), 8);
+        for (int i = 0; i < pool.length; i++) {
+            poolSeg.setAtIndex(PTypeIO.LE_DOUBLE, i, pool[i]);
+        }
+        MaterializedDoubleArray poolArray = new MaterializedDoubleArray(DType.F64, pool.length, poolSeg);
+        return DictDoubleArray.of(DType.F64, codes.length, poolArray, byteArray(codes, 0, codes.length));
     }
 
     private static MaterializedByteArray byteArray(int[] codes, int from, int to) {
