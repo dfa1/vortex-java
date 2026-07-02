@@ -43,7 +43,10 @@ import java.util.List;
 /// [Predicate] is lowered once (reusing [PrimitiveFilter#lowerLong(Predicate, long)] /
 /// [PrimitiveFilter#lowerDouble(Predicate)]), with the typed accessor and validity hoisted out of the
 /// row loop; a non-primitive or composite leaf falls back to the per-element predicate evaluator
-/// ([PredicateEvaluator#evaluate(Array, long, Predicate)]).
+/// ([PredicateEvaluator#evaluate(Array, long, Predicate)]). A filter that is a single comparison
+/// leaf over a dict-encoded column takes the [DictFilter] code-scan lane instead of the row loop:
+/// the predicate is resolved against the value pool once and the raw `u8` codes are scanned from
+/// their backing segments.
 final class FusedFilterAggregate {
 
     private FusedFilterAggregate() {
@@ -60,6 +63,10 @@ final class FusedFilterAggregate {
     ///         among them, and (when `aggColumn` is given) its `SUM` / `MIN` / `MAX`
     static FilteredAggregate aggregate(Chunk chunk, RowFilter filter, String aggColumn) {
         long n = chunk.rowCount();
+        FilteredAggregate dictResult = tryDictLane(chunk, filter, aggColumn, n);
+        if (dictResult != null) {
+            return dictResult;
+        }
         List<RowPredicate> leafList = new ArrayList<>();
         collectLeaves(chunk, filter, leafList);
         RowPredicate[] leaves = leafList.toArray(RowPredicate[]::new);
@@ -74,6 +81,50 @@ final class FusedFilterAggregate {
             return new FilteredAggregate(selected, 0L, null, null, null);
         }
         return foldAggregate(chunk.column(aggColumn), leaves, n);
+    }
+
+    /// Attempts the [DictFilter] code-scan lane: a filter that is a SINGLE comparison leaf over a
+    /// dict-encoded column scans raw `u8` codes instead of decoding every row through the
+    /// per-element [RowPredicate]. Returns `null` — leaving the generic row loop to run — for a
+    /// multi-leaf filter, a non-comparison predicate, a non-dict filter column, or an aggregate
+    /// without a specialized long/double lane.
+    ///
+    /// @param chunk     the decoded chunk holding the filter and aggregate columns
+    /// @param filter    the whole chunk predicate
+    /// @param aggColumn the aggregate column name, or `null` to count selected rows only
+    /// @param n         the chunk's row count
+    /// @return the fold, or `null` when the shape does not qualify for the dict lane
+    private static FilteredAggregate tryDictLane(Chunk chunk, RowFilter filter, String aggColumn, long n) {
+        RowFilter.Column leaf = singleLeaf(filter);
+        if (leaf == null || !isComparisonLeaf(leaf.predicate()) || !PrimitiveFilter.predicateOk(leaf.predicate())) {
+            return null;
+        }
+        Array column = chunk.column(leaf.column());
+        Array filterData = NumericColumns.unwrap(column);
+        BoolArray filterValidity = NumericColumns.validityOf(column);
+        if (aggColumn == null) {
+            Long selected = DictFilter.tryFilteredCount(filterData, filterValidity, leaf.predicate(), n);
+            if (selected == null) {
+                return null;
+            }
+            return new FilteredAggregate(selected.longValue(), 0L, null, null, null);
+        }
+        Array agg = chunk.column(aggColumn);
+        return DictFilter.tryFilteredAggregate(filterData, filterValidity, leaf.predicate(),
+                NumericColumns.unwrap(agg), NumericColumns.validityOf(agg), n);
+    }
+
+    /// Unwraps a filter that is one column-bound leaf — a bare [RowFilter.Column] or an `AND`
+    /// chain that conjoins exactly one — the only shape the dict code-scan lane drives.
+    ///
+    /// @param filter the whole chunk predicate
+    /// @return the single leaf, or `null` when the filter conjoins several
+    private static RowFilter.Column singleLeaf(RowFilter filter) {
+        return switch (filter) {
+            case RowFilter.Column column -> column;
+            case RowFilter.And(var parts) when parts.size() == 1 -> singleLeaf(parts.getFirst());
+            case RowFilter.And ignored -> null;
+        };
     }
 
     /// Dispatches the fold on the aggregate's value domain — a boxing-free long or double lane, else the
@@ -249,7 +300,7 @@ final class FusedFilterAggregate {
     /// @param b        the right value
     /// @param unsigned whether the column is unsigned
     /// @return `true` if `a` is strictly less than `b` under the column's order
-    private static boolean lessLong(long a, long b, boolean unsigned) {
+    static boolean lessLong(long a, long b, boolean unsigned) {
         return unsigned ? Long.compareUnsigned(a, b) < 0 : a < b;
     }
 
@@ -261,7 +312,7 @@ final class FusedFilterAggregate {
     /// @param value    the accumulated extreme
     /// @param isFloat  whether the column is an `f32` ([FloatArray])
     /// @return the boxed extreme, or `null` when `found` is `false`
-    private static Object boxDouble(boolean found, double value, boolean isFloat) {
+    static Object boxDouble(boolean found, double value, boolean isFloat) {
         if (!found) {
             return null;
         }

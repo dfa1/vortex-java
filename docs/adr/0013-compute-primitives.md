@@ -85,10 +85,14 @@ backing segment — no per-element `findChunk` binary search, no broadcast-guard
 | `fusedFilteredSumDict` before (accessor chain per row) | 762.5 ± 7.4 ms/op |
 | `forLoopDictSegment` (raw segment scan ceiling) | 24.8 ms/op |
 | `fusedFilteredSumDict` after (`DictFilter` lane) | 25.5 ± 2.5 ms/op |
+| `fusedFilteredAggregateDict` before (per-leaf `RowPredicate`) | 982.5 ± 30.2 ms/op |
+| `fusedFilteredAggregateDict` after (`DictFilter` lane) | 178.3 ± 4.1 ms/op |
 
-The lane reproduces the raw-scan ceiling (≈ 30×) with no measurable kernel overhead. It covers
-`Compute.filteredSum`; extending it to `FusedFilterAggregate`'s per-leaf path is the remaining
-follow-up (tracked in TODO).
+The `filteredSum` lane reproduces the raw-scan ceiling (≈ 30×) with no measurable kernel overhead.
+The `filteredAggregate` lane (a single comparison leaf driving the same code scan, extended to the
+full `SUM`/`MIN`/`MAX`/count fold and `COUNT(*)`) lands at ≈ 5.5× — off the pure-scan ceiling
+because the per-match fold (sum, min, max, two counters) keeps its loop body scalar; specializing
+the common no-null long-aggregate fold is a possible follow-up if the boundary tier ever needs it.
 
 ## Context
 

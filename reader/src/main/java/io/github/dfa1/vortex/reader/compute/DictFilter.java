@@ -99,6 +99,80 @@ final class DictFilter {
         return Long.valueOf(sumLong(runs, table, fVal, (LongArray) aggData, aVal));
     }
 
+    /// Attempts the dict code-scan lane for a count-only fold — the `COUNT(*)` shape of
+    /// [Compute#filteredAggregate(Chunk, RowFilter, String)] with no aggregate column.
+    ///
+    /// @param filterData the unwrapped filter array (possibly an offset slice over a dict array)
+    /// @param fVal       the filter validity bitmap, or `null` when every filter row is valid
+    /// @param predicate  the comparison-leaf predicate over numeric constants
+    /// @param n          the row count
+    /// @return the selected row count, or `null` when the filter does not qualify for this lane
+    static Long tryFilteredCount(Array filterData, BoolArray fVal, Predicate predicate, long n) {
+        DictShape shape = shapeOf(filterData);
+        if (shape == null || shape.codes().length() < shape.codeStart() + n) {
+            return null;
+        }
+        CodeTable table = matchTable(shape, predicate);
+        if (table == null) {
+            return null;
+        }
+        if (table.matches() == 0) {
+            return Long.valueOf(0L);
+        }
+        return Long.valueOf(count(runsOf(shape.codes(), shape.codeStart(), n), table, fVal));
+    }
+
+    /// Attempts the dict code-scan lane for the full filtered-aggregate fold of
+    /// [Compute#filteredAggregate(Chunk, RowFilter, String)]: the selected row count, the
+    /// aggregate's non-null count among them, and its `SUM` / `MIN` / `MAX`, folded per matching
+    /// row with the same domain semantics as the kernel's own lanes (wrapping [Long] sum and
+    /// unsigned-aware order in the long domain, [Double#compare(double, double)] order and the
+    /// column's element box in the double domain).
+    ///
+    /// @param filterData the unwrapped filter array (possibly an offset slice over a dict array)
+    /// @param fVal       the filter validity bitmap, or `null` when every filter row is valid
+    /// @param predicate  the comparison-leaf predicate over numeric constants
+    /// @param aggData    the unwrapped aggregate array
+    /// @param aVal       the aggregate validity bitmap, or `null` when every aggregate row is valid
+    /// @param n          the row count
+    /// @return the fold, or `null` when the filter is not a `u8`-coded dict view or the aggregate
+    ///         has no specialized long/double lane (an `f16` or non-numeric column)
+    static FilteredAggregate tryFilteredAggregate(Array filterData, BoolArray fVal, Predicate predicate,
+                                                  Array aggData, BoolArray aVal, long n) {
+        boolean aggLong = NumericColumns.isLongDomain(aggData);
+        boolean aggDouble = aggData instanceof DoubleArray || aggData instanceof FloatArray;
+        if (!aggLong && !aggDouble) {
+            return null;
+        }
+        DictShape shape = shapeOf(filterData);
+        if (shape == null || shape.codes().length() < shape.codeStart() + n) {
+            return null;
+        }
+        CodeTable table = matchTable(shape, predicate);
+        if (table == null) {
+            return null;
+        }
+        if (table.matches() == 0) {
+            // Nothing selected: the sum is the domain identity, the extremes are null — the same
+            // fold the kernel's own lanes produce over zero selected rows. Explicit branches, not a
+            // ternary: a `Long ? : Double` conditional binary-numeric promotes both arms to double
+            // and re-boxes to Double, losing the long aggregate's result type.
+            if (aggLong) {
+                return new FilteredAggregate(0L, 0L, Long.valueOf(0L), null, null);
+            }
+            return new FilteredAggregate(0L, 0L, Double.valueOf(0.0), null, null);
+        }
+        List<Run> runs = runsOf(shape.codes(), shape.codeStart(), n);
+        if (aggLong) {
+            LongAggFold fold = new LongAggFold(aggData, aggData.dtype().isUnsigned(), fVal, aVal);
+            scanRunsLong(runs, table, fold);
+            return fold.box();
+        }
+        DoubleAggFold fold = new DoubleAggFold(aggData, aggData instanceof FloatArray, fVal, aVal);
+        scanRunsDouble(runs, table, fold);
+        return fold.box();
+    }
+
     // -------------------------------------------------------------------------------------------------
     // Shape detection and predicate lowering (once per call, outside every loop).
     // -------------------------------------------------------------------------------------------------
@@ -332,6 +406,252 @@ final class DictFilter {
             }
         }
         return acc;
+    }
+
+    /// Counts the selected rows of every run: a code match that is not a null filter row.
+    ///
+    /// @param runs  the code runs in row order
+    /// @param table the lowered match table
+    /// @param fVal  the filter validity bitmap, or `null`
+    /// @return the selected row count
+    private static long count(List<Run> runs, CodeTable table, BoolArray fVal) {
+        boolean[] match = table.match();
+        boolean single = table.matches() == 1;
+        byte only = (byte) table.only();
+        boolean noFilterNull = fVal == null;
+        long selected = 0L;
+        for (Run run : runs) {
+            MemorySegment seg = run.seg();
+            long base = run.childBase();
+            long rowBase = run.rowBase();
+            long len = run.len();
+            if (seg != null && single) {
+                for (long j = 0; j < len; j++) {
+                    if (seg.get(ValueLayout.JAVA_BYTE, base + j) == only
+                            && (noFilterNull || fVal.getBoolean(rowBase + j))) {
+                        selected++;
+                    }
+                }
+            } else if (seg != null) {
+                for (long j = 0; j < len; j++) {
+                    if (match[seg.get(ValueLayout.JAVA_BYTE, base + j) & 0xFF]
+                            && (noFilterNull || fVal.getBoolean(rowBase + j))) {
+                        selected++;
+                    }
+                }
+            } else {
+                ByteArray child = run.child();
+                for (long j = 0; j < len; j++) {
+                    if (match[child.getByte(base + j) & 0xFF]
+                            && (noFilterNull || fVal.getBoolean(rowBase + j))) {
+                        selected++;
+                    }
+                }
+            }
+        }
+        return selected;
+    }
+
+    /// Folds the long-domain aggregate accumulator over the code-matching rows of every run.
+    ///
+    /// @param runs  the code runs in row order
+    /// @param table the lowered match table
+    /// @param fold  the accumulator receiving each matching row
+    private static void scanRunsLong(List<Run> runs, CodeTable table, LongAggFold fold) {
+        boolean[] match = table.match();
+        boolean single = table.matches() == 1;
+        byte only = (byte) table.only();
+        for (Run run : runs) {
+            MemorySegment seg = run.seg();
+            long base = run.childBase();
+            long rowBase = run.rowBase();
+            long len = run.len();
+            if (seg != null && single) {
+                for (long j = 0; j < len; j++) {
+                    if (seg.get(ValueLayout.JAVA_BYTE, base + j) == only) {
+                        fold.accept(rowBase + j);
+                    }
+                }
+            } else if (seg != null) {
+                for (long j = 0; j < len; j++) {
+                    if (match[seg.get(ValueLayout.JAVA_BYTE, base + j) & 0xFF]) {
+                        fold.accept(rowBase + j);
+                    }
+                }
+            } else {
+                ByteArray child = run.child();
+                for (long j = 0; j < len; j++) {
+                    if (match[child.getByte(base + j) & 0xFF]) {
+                        fold.accept(rowBase + j);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Folds the double-domain aggregate accumulator over the code-matching rows of every run.
+    ///
+    /// @param runs  the code runs in row order
+    /// @param table the lowered match table
+    /// @param fold  the accumulator receiving each matching row
+    private static void scanRunsDouble(List<Run> runs, CodeTable table, DoubleAggFold fold) {
+        boolean[] match = table.match();
+        boolean single = table.matches() == 1;
+        byte only = (byte) table.only();
+        for (Run run : runs) {
+            MemorySegment seg = run.seg();
+            long base = run.childBase();
+            long rowBase = run.rowBase();
+            long len = run.len();
+            if (seg != null && single) {
+                for (long j = 0; j < len; j++) {
+                    if (seg.get(ValueLayout.JAVA_BYTE, base + j) == only) {
+                        fold.accept(rowBase + j);
+                    }
+                }
+            } else if (seg != null) {
+                for (long j = 0; j < len; j++) {
+                    if (match[seg.get(ValueLayout.JAVA_BYTE, base + j) & 0xFF]) {
+                        fold.accept(rowBase + j);
+                    }
+                }
+            } else {
+                ByteArray child = run.child();
+                for (long j = 0; j < len; j++) {
+                    if (match[child.getByte(base + j) & 0xFF]) {
+                        fold.accept(rowBase + j);
+                    }
+                }
+            }
+        }
+    }
+
+    /// The long-domain filtered-aggregate accumulator: mirrors the kernel's own long lane — a
+    /// wrapping sum and an unsigned-aware `MIN` / `MAX` over the selected non-null rows, reading
+    /// each value through [NumericColumns#widenLong(Array, boolean, long)]. Only invoked on code
+    /// matches, so validity is never read on the 100%-of-rows path.
+    private static final class LongAggFold {
+
+        private final Array aggData;
+        private final boolean unsigned;
+        private final BoolArray fVal;
+        private final BoolArray aVal;
+        private long selected;
+        private long nonNull;
+        private long sum;
+        private boolean found;
+        private long min;
+        private long max;
+
+        LongAggFold(Array aggData, boolean unsigned, BoolArray fVal, BoolArray aVal) {
+            this.aggData = aggData;
+            this.unsigned = unsigned;
+            this.fVal = fVal;
+            this.aVal = aVal;
+        }
+
+        /// Folds one code-matching row: skipped when the filter row is null (three-valued logic);
+        /// counted as selected, then folded when the aggregate row is non-null.
+        ///
+        /// @param row the matching row
+        void accept(long row) {
+            if (fVal != null && !fVal.getBoolean(row)) {
+                return;
+            }
+            selected++;
+            if (aVal != null && !aVal.getBoolean(row)) {
+                return;
+            }
+            nonNull++;
+            long v = NumericColumns.widenLong(aggData, unsigned, row);
+            sum += v;
+            if (!found) {
+                min = v;
+                max = v;
+                found = true;
+            } else {
+                if (FusedFilterAggregate.lessLong(v, min, unsigned)) {
+                    min = v;
+                }
+                if (FusedFilterAggregate.lessLong(max, v, unsigned)) {
+                    max = v;
+                }
+            }
+        }
+
+        /// Boxes the fold exactly as the kernel's long lane does.
+        ///
+        /// @return the fold: selected count, non-null count, the [Long] sum, and the [Long]
+        ///         `MIN` / `MAX` (`null` when no selected row is non-null)
+        FilteredAggregate box() {
+            return new FilteredAggregate(selected, nonNull, Long.valueOf(sum),
+                    found ? Long.valueOf(min) : null, found ? Long.valueOf(max) : null);
+        }
+    }
+
+    /// The double-domain filtered-aggregate accumulator: mirrors the kernel's own double lane — a
+    /// [Double] sum and a [Double#compare(double, double)]-ordered `MIN` / `MAX` over the selected
+    /// non-null rows. Only invoked on code matches, so validity is never read on the 100%-of-rows
+    /// path.
+    private static final class DoubleAggFold {
+
+        private final Array aggData;
+        private final boolean aggIsFloat;
+        private final BoolArray fVal;
+        private final BoolArray aVal;
+        private long selected;
+        private long nonNull;
+        private double sum;
+        private boolean found;
+        private double min;
+        private double max;
+
+        DoubleAggFold(Array aggData, boolean aggIsFloat, BoolArray fVal, BoolArray aVal) {
+            this.aggData = aggData;
+            this.aggIsFloat = aggIsFloat;
+            this.fVal = fVal;
+            this.aVal = aVal;
+        }
+
+        /// Folds one code-matching row: skipped when the filter row is null (three-valued logic);
+        /// counted as selected, then folded when the aggregate row is non-null.
+        ///
+        /// @param row the matching row
+        void accept(long row) {
+            if (fVal != null && !fVal.getBoolean(row)) {
+                return;
+            }
+            selected++;
+            if (aVal != null && !aVal.getBoolean(row)) {
+                return;
+            }
+            nonNull++;
+            double v = readDouble(aggData, aggIsFloat, row);
+            sum += v;
+            if (!found) {
+                min = v;
+                max = v;
+                found = true;
+            } else {
+                if (Double.compare(v, min) < 0) {
+                    min = v;
+                }
+                if (Double.compare(v, max) > 0) {
+                    max = v;
+                }
+            }
+        }
+
+        /// Boxes the fold exactly as the kernel's double lane does — the extremes carry the
+        /// column's element box ([Float] for an `f32` aggregate).
+        ///
+        /// @return the fold: selected count, non-null count, the [Double] sum, and the boxed
+        ///         `MIN` / `MAX` (`null` when no selected row is non-null)
+        FilteredAggregate box() {
+            return new FilteredAggregate(selected, nonNull, Double.valueOf(sum),
+                    FusedFilterAggregate.boxDouble(found, min, aggIsFloat),
+                    FusedFilterAggregate.boxDouble(found, max, aggIsFloat));
+        }
     }
 
     /// Reports whether a code-matching row is actually selected and countable: not a null filter

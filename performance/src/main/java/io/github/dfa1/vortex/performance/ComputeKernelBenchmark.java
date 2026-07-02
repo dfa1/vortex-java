@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.performance;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ReadRegistry;
+import io.github.dfa1.vortex.reader.RowFilter;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ByteArray;
@@ -16,6 +17,7 @@ import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
 import io.github.dfa1.vortex.reader.array.OffsetDoubleArray;
 import io.github.dfa1.vortex.reader.array.OffsetLongArray;
 import io.github.dfa1.vortex.reader.compute.Compute;
+import io.github.dfa1.vortex.reader.compute.FilteredAggregate;
 import io.github.dfa1.vortex.reader.compute.Predicate;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
@@ -241,6 +243,31 @@ public class ComputeKernelBenchmark {
             LongArray categoryArr = categoryChunks.get(k);
             LongArray measureArr = measureChunks.get(k);
             acc += Compute.filteredSum(categoryArr, new Predicate.Eq(CATEGORY_VALUE), measureArr).longValue();
+        }
+        return acc;
+    }
+
+    /// Fused dict-filtered multi-column aggregate: per chunk,
+    /// [Compute#filteredAggregate(Chunk, RowFilter, String)] evaluates `category == 7` as a whole
+    /// [RowFilter] and folds `measure`'s `SUM` / `MIN` / `MAX` / non-null count over the selected
+    /// rows — the kernel behind the Calcite boundary-chunk aggregate push-down, on the same
+    /// dict-filtered workload as [#fusedFilteredSumDict()]. Folds the selected count and sum into
+    /// the return value so JMH cannot eliminate the loop.
+    ///
+    /// Result (2026-07-02, 100M rows): 982.5 ± 30.2 ms/op through the per-leaf accessor path;
+    /// 178.3 ± 4.1 ms/op with the `DictFilter` lane — ≈ 5.5×. The gap to [#fusedFilteredSumDict()]'s
+    /// 25.5 ms is the fuller per-match fold (sum, min, max, two counters) whose heavier loop body
+    /// stays scalar; closing it is a possible follow-up specialization.
+    ///
+    /// @return the selected row count plus the sum of `measure` where `category == 7`, folded
+    ///         across the whole dataset
+    @Benchmark
+    public long fusedFilteredAggregateDict() {
+        long acc = 0;
+        for (Chunk chunk : chunks) {
+            FilteredAggregate aggregate = Compute.filteredAggregate(
+                    chunk, RowFilter.eq("category", CATEGORY_VALUE), "measure");
+            acc += aggregate.selectedRows() + aggregate.sum().longValue();
         }
         return acc;
     }
