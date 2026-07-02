@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - `Compute.filteredSum` over a dictionary-encoded filter column is ~30× faster: the predicate is resolved against the dictionary's value pool once and the raw `u8` codes are scanned directly from their backing segments, instead of decoding every row through the per-element accessor — a fused `SUM(measure) WHERE category = …` over 100M rows drops from ~760 ms to ~25 ms. ([85e251cc](https://github.com/dfa1/vortex-java/commit/85e251cc))
-- `Compute.filteredAggregate` takes the same dictionary code-scan lane when its filter is a single comparison predicate over a dict-encoded column (`COUNT(*)` included) — ~5.5× faster on the same workload (~980 ms → ~180 ms over 100M rows), which the Calcite `WHERE`-filtered aggregate push-down inherits on its boundary chunks. ([145791c7](https://github.com/dfa1/vortex-java/commit/145791c7))
+- `Compute.filteredAggregate` takes the same dictionary code-scan lane when its filter is a single comparison predicate over a dict-encoded column (`COUNT(*)` included) — ~27× faster on the same workload (~980 ms → ~36 ms over 100M rows), which the Calcite `WHERE`-filtered aggregate push-down inherits on its boundary chunks. ([145791c7](https://github.com/dfa1/vortex-java/commit/145791c7), [6e6d7dd0](https://github.com/dfa1/vortex-java/commit/6e6d7dd0))
 
 ## [0.11.0] — 2026-06-28
 
