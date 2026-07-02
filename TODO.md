@@ -97,13 +97,12 @@ Per-encoding gotchas:
   Encoded-domain value specialization was measured as a no-win (decode is dispatch-bound, see
   `forLoopDictEncoded`); the real dict lever — the monomorphic code-segment scan — shipped as the
   `DictFilter` lane in both kernels (`fusedFilteredSumDict` 762 → 25.5 ms/op ≈ 30×;
-  `fusedFilteredAggregateDict` 983 → 178 ms/op ≈ 5.5×, single-leaf filters and `COUNT(*)`).
+  `fusedFilteredAggregateDict` 983 → 36 ms/op ≈ 27× after the profile-guided monomorphic fold
+  read; single-leaf filters and `COUNT(*)`).
   Next: (1) the columnar transducer façade — [ADR-0019](docs/adr/0019-columnar-transducer-facade.md)
   drafted (Proposed): declarative column-bound stages compiled to one fused pass, multi-aggregate
-  folds for the Calcite boundary tier; review, then implement. (2) Optional: specialize the dict
-  aggregate lane's no-null long fold to close the 178 → 25 ms gap if the boundary tier needs it;
-  (3) extend the dict lane to multi-leaf `AND`s (dict leaf as the driving scan, residual leaves
-  tested per match).
+  folds for the Calcite boundary tier; review, then implement. (2) Extend the dict lane to
+  multi-leaf `AND`s (dict leaf as the driving scan, residual leaves tested per match).
 
 ## Encodings
 

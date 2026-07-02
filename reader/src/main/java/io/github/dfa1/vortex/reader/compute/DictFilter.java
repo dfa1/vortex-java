@@ -10,7 +10,9 @@ import io.github.dfa1.vortex.reader.array.DictIntArray;
 import io.github.dfa1.vortex.reader.array.DictLongArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
+import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.OffsetDoubleArray;
 import io.github.dfa1.vortex.reader.array.OffsetFloatArray;
 import io.github.dfa1.vortex.reader.array.OffsetIntArray;
@@ -454,6 +456,11 @@ final class DictFilter {
 
     /// Folds the long-domain aggregate accumulator over the code-matching rows of every run.
     ///
+    /// Each run-loop variant lives in its own method: one loop per compilation unit keeps every
+    /// loop's inline decisions independent and its profile attributable per shape. (The measured
+    /// hot-path fix was elsewhere — the fold's monomorphic aggregate read, see
+    /// [LongAggFold#read(long)] — the split itself was performance-neutral.)
+    ///
     /// @param runs  the code runs in row order
     /// @param table the lowered match table
     /// @param fold  the accumulator receiving each matching row
@@ -463,33 +470,70 @@ final class DictFilter {
         byte only = (byte) table.only();
         for (Run run : runs) {
             MemorySegment seg = run.seg();
-            long base = run.childBase();
-            long rowBase = run.rowBase();
-            long len = run.len();
             if (seg != null && single) {
-                for (long j = 0; j < len; j++) {
-                    if (seg.get(ValueLayout.JAVA_BYTE, base + j) == only) {
-                        fold.accept(rowBase + j);
-                    }
-                }
+                scanRunSingleLong(seg, run.childBase(), run.rowBase(), run.len(), only, fold);
             } else if (seg != null) {
-                for (long j = 0; j < len; j++) {
-                    if (match[seg.get(ValueLayout.JAVA_BYTE, base + j) & 0xFF]) {
-                        fold.accept(rowBase + j);
-                    }
-                }
+                scanRunTableLong(seg, run.childBase(), run.rowBase(), run.len(), match, fold);
             } else {
-                ByteArray child = run.child();
-                for (long j = 0; j < len; j++) {
-                    if (match[child.getByte(base + j) & 0xFF]) {
-                        fold.accept(rowBase + j);
-                    }
-                }
+                scanRunAccessorLong(run.child(), run.childBase(), run.rowBase(), run.len(), match, fold);
+            }
+        }
+    }
+
+    /// Single-match segment scan feeding the long-domain fold.
+    ///
+    /// @param seg     the run's backing segment
+    /// @param base    the run's first index within the segment
+    /// @param rowBase the run's first row in the scanned view
+    /// @param len     the run length
+    /// @param only    the single matching code
+    /// @param fold    the accumulator receiving each matching row
+    private static void scanRunSingleLong(MemorySegment seg, long base, long rowBase, long len,
+                                          byte only, LongAggFold fold) {
+        for (long j = 0; j < len; j++) {
+            if (seg.get(ValueLayout.JAVA_BYTE, base + j) == only) {
+                fold.accept(rowBase + j);
+            }
+        }
+    }
+
+    /// Table-lookup segment scan feeding the long-domain fold.
+    ///
+    /// @param seg     the run's backing segment
+    /// @param base    the run's first index within the segment
+    /// @param rowBase the run's first row in the scanned view
+    /// @param len     the run length
+    /// @param match   the lowered per-code match table
+    /// @param fold    the accumulator receiving each matching row
+    private static void scanRunTableLong(MemorySegment seg, long base, long rowBase, long len,
+                                         boolean[] match, LongAggFold fold) {
+        for (long j = 0; j < len; j++) {
+            if (match[seg.get(ValueLayout.JAVA_BYTE, base + j) & 0xFF]) {
+                fold.accept(rowBase + j);
+            }
+        }
+    }
+
+    /// Accessor-fallback scan feeding the long-domain fold (segmentless or broadcast children).
+    ///
+    /// @param child   the codes child owning the run
+    /// @param base    the run's first index within the child
+    /// @param rowBase the run's first row in the scanned view
+    /// @param len     the run length
+    /// @param match   the lowered per-code match table
+    /// @param fold    the accumulator receiving each matching row
+    private static void scanRunAccessorLong(ByteArray child, long base, long rowBase, long len,
+                                            boolean[] match, LongAggFold fold) {
+        for (long j = 0; j < len; j++) {
+            if (match[child.getByte(base + j) & 0xFF]) {
+                fold.accept(rowBase + j);
             }
         }
     }
 
     /// Folds the double-domain aggregate accumulator over the code-matching rows of every run.
+    ///
+    /// One run-loop variant per method, mirroring [#scanRunsLong(List, CodeTable, LongAggFold)].
     ///
     /// @param runs  the code runs in row order
     /// @param table the lowered match table
@@ -500,28 +544,63 @@ final class DictFilter {
         byte only = (byte) table.only();
         for (Run run : runs) {
             MemorySegment seg = run.seg();
-            long base = run.childBase();
-            long rowBase = run.rowBase();
-            long len = run.len();
             if (seg != null && single) {
-                for (long j = 0; j < len; j++) {
-                    if (seg.get(ValueLayout.JAVA_BYTE, base + j) == only) {
-                        fold.accept(rowBase + j);
-                    }
-                }
+                scanRunSingleDouble(seg, run.childBase(), run.rowBase(), run.len(), only, fold);
             } else if (seg != null) {
-                for (long j = 0; j < len; j++) {
-                    if (match[seg.get(ValueLayout.JAVA_BYTE, base + j) & 0xFF]) {
-                        fold.accept(rowBase + j);
-                    }
-                }
+                scanRunTableDouble(seg, run.childBase(), run.rowBase(), run.len(), match, fold);
             } else {
-                ByteArray child = run.child();
-                for (long j = 0; j < len; j++) {
-                    if (match[child.getByte(base + j) & 0xFF]) {
-                        fold.accept(rowBase + j);
-                    }
-                }
+                scanRunAccessorDouble(run.child(), run.childBase(), run.rowBase(), run.len(), match, fold);
+            }
+        }
+    }
+
+    /// Single-match segment scan feeding the double-domain fold.
+    ///
+    /// @param seg     the run's backing segment
+    /// @param base    the run's first index within the segment
+    /// @param rowBase the run's first row in the scanned view
+    /// @param len     the run length
+    /// @param only    the single matching code
+    /// @param fold    the accumulator receiving each matching row
+    private static void scanRunSingleDouble(MemorySegment seg, long base, long rowBase, long len,
+                                            byte only, DoubleAggFold fold) {
+        for (long j = 0; j < len; j++) {
+            if (seg.get(ValueLayout.JAVA_BYTE, base + j) == only) {
+                fold.accept(rowBase + j);
+            }
+        }
+    }
+
+    /// Table-lookup segment scan feeding the double-domain fold.
+    ///
+    /// @param seg     the run's backing segment
+    /// @param base    the run's first index within the segment
+    /// @param rowBase the run's first row in the scanned view
+    /// @param len     the run length
+    /// @param match   the lowered per-code match table
+    /// @param fold    the accumulator receiving each matching row
+    private static void scanRunTableDouble(MemorySegment seg, long base, long rowBase, long len,
+                                           boolean[] match, DoubleAggFold fold) {
+        for (long j = 0; j < len; j++) {
+            if (match[seg.get(ValueLayout.JAVA_BYTE, base + j) & 0xFF]) {
+                fold.accept(rowBase + j);
+            }
+        }
+    }
+
+    /// Accessor-fallback scan feeding the double-domain fold (segmentless or broadcast children).
+    ///
+    /// @param child   the codes child owning the run
+    /// @param base    the run's first index within the child
+    /// @param rowBase the run's first row in the scanned view
+    /// @param len     the run length
+    /// @param match   the lowered per-code match table
+    /// @param fold    the accumulator receiving each matching row
+    private static void scanRunAccessorDouble(ByteArray child, long base, long rowBase, long len,
+                                              boolean[] match, DoubleAggFold fold) {
+        for (long j = 0; j < len; j++) {
+            if (match[child.getByte(base + j) & 0xFF]) {
+                fold.accept(rowBase + j);
             }
         }
     }
@@ -563,7 +642,7 @@ final class DictFilter {
                 return;
             }
             nonNull++;
-            long v = NumericColumns.widenLong(aggData, unsigned, row);
+            long v = read(row);
             sum += v;
             if (!found) {
                 min = v;
@@ -577,6 +656,31 @@ final class DictFilter {
                     max = v;
                 }
             }
+        }
+
+        /// Reads aggregate position `row` widened to a `long` — a deliberate private copy of
+        /// [NumericColumns#widenLong(Array, boolean, long)]. The shared helper's receiver profile
+        /// mixes every caller: [#matchTable(DictShape, Predicate)] feeds it the (materialized)
+        /// dictionary pool, so the fold's hot aggregate read compiled as a bimorphic guard whose
+        /// lost receiver type degraded the inner segment reads to virtual calls per match
+        /// (async-profiler + PrintInlining, 2026-07-02). This copy's profile only ever sees
+        /// aggregate receivers, keeping the read monomorphic like the sum lane's.
+        ///
+        /// @param row the zero-based position
+        /// @return the widened aggregate value
+        private long read(long row) {
+            Array data = aggData;
+            if (data instanceof LongArray la) {
+                return la.getLong(row);
+            }
+            if (data instanceof IntArray ia) {
+                return unsigned ? (ia.getInt(row) & 0xFFFFFFFFL) : ia.getInt(row);
+            }
+            if (data instanceof ShortArray sa) {
+                return unsigned ? (sa.getShort(row) & 0xFFFFL) : sa.getShort(row);
+            }
+            ByteArray ba = (ByteArray) data;
+            return unsigned ? (ba.getByte(row) & 0xFFL) : ba.getByte(row);
         }
 
         /// Boxes the fold exactly as the kernel's long lane does.
@@ -626,7 +730,7 @@ final class DictFilter {
                 return;
             }
             nonNull++;
-            double v = readDouble(aggData, aggIsFloat, row);
+            double v = read(row);
             sum += v;
             if (!found) {
                 min = v;
@@ -640,6 +744,16 @@ final class DictFilter {
                     max = v;
                 }
             }
+        }
+
+        /// Reads aggregate position `row` widened to a `double` — a private copy of the shared
+        /// helper, for the same receiver-profile isolation as the long fold's read: this call
+        /// site's profile only ever sees aggregate receivers, keeping the read monomorphic.
+        ///
+        /// @param row the zero-based position
+        /// @return the aggregate value widened to a double
+        private double read(long row) {
+            return aggIsFloat ? ((FloatArray) aggData).getFloat(row) : ((DoubleArray) aggData).getDouble(row);
         }
 
         /// Boxes the fold exactly as the kernel's double lane does — the extremes carry the

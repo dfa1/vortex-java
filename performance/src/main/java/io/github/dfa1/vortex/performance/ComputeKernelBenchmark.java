@@ -255,9 +255,11 @@ public class ComputeKernelBenchmark {
     /// the return value so JMH cannot eliminate the loop.
     ///
     /// Result (2026-07-02, 100M rows): 982.5 ± 30.2 ms/op through the per-leaf accessor path;
-    /// 178.3 ± 4.1 ms/op with the `DictFilter` lane — ≈ 5.5×. The gap to [#fusedFilteredSumDict()]'s
-    /// 25.5 ms is the fuller per-match fold (sum, min, max, two counters) whose heavier loop body
-    /// stays scalar; closing it is a possible follow-up specialization.
+    /// 178.3 ± 4.1 ms/op with the `DictFilter` lane; 36.2 ± 1.1 ms/op (≈ 27×) once async-profiler +
+    /// PrintInlining exposed the fold's aggregate read as bimorphic — `NumericColumns.widenLong`
+    /// was shared with the match-table pool reads, polluting its receiver profile — and the fold
+    /// got its own monomorphic read. The remaining gap to [#fusedFilteredSumDict()]'s 25.5 ms is
+    /// the genuine per-match fold work (min, max, two counters).
     ///
     /// @return the selected row count plus the sum of `measure` where `category == 7`, folded
     ///         across the whole dataset

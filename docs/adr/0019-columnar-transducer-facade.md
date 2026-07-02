@@ -20,10 +20,10 @@ off twice:
 2. The dict code-scan lane (`DictFilter`) showed that the wins now come from **encoding-aware
    structural dispatch**: the kernel inspects the filter column's shape (an offset slice over a
    dict view with `u8` codes) and swaps the whole loop, not the per-row callback. Measured on 100M
-   rows: 762 → 25.5 ms/op for `filteredSum`, 983 → 178 ms/op for `filteredAggregate` (the fuller
-   per-match fold — sum, min, max, two counters — keeps the aggregate lane off the pure-scan
-   ceiling). A per-row lambda (`RowPredicate`) cannot express that — the lane needs to see the
-   *description* of the filter, not a compiled `test(i)`.
+   rows: 762 → 25.5 ms/op for `filteredSum`, 983 → 36 ms/op for `filteredAggregate` (the last 5×
+   of which required a profile-guided fix: the fold's aggregate read had to become monomorphic —
+   see ADR 0013's result table). A per-row lambda (`RowPredicate`) cannot express that — the lane
+   needs to see the *description* of the filter, not a compiled `test(i)`.
 
 Meanwhile the caller side is growing. The Calcite adapter (ADR 0018) invokes `filteredAggregate`
 from the boundary-chunk tier of the aggregate push-down; each new capability (a second aggregate
