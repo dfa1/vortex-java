@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Compute.filteredSum(filterColumn, predicate, aggColumn)` fuses a filter and a sum into a single scan — a row folds into the total only when the predicate selects it (a null filter row is excluded) and the aggregate value is non-null — with no intermediate selection bitmap. It matches a hand-written fused loop and is ~1.5× faster than the two-pass `filter` + `sum`. ([57d2225b](https://github.com/dfa1/vortex-java/commit/57d2225b))
 - `Compute.filteredAggregate(chunk, filter, aggColumn)` fuses a whole multi-column `RowFilter` (an n-ary `AND` of column-bound predicate leaves) and folds the selected rows' `SUM`/`MIN`/`MAX`/non-null count over an aggregate column in a single pass — the multi-column counterpart of `filteredSum`, and the row-level kernel behind the Calcite boundary-chunk aggregate push-down. A `null` aggregate column counts selected rows only (`COUNT(*)`). ([2ba54888](https://github.com/dfa1/vortex-java/commit/2ba54888))
 
+### Changed
+
+- `Compute.filteredSum` over a dictionary-encoded filter column is ~30× faster: the predicate is resolved against the dictionary's value pool once and the raw `u8` codes are scanned directly from their backing segments, instead of decoding every row through the per-element accessor — a fused `SUM(measure) WHERE category = …` over 100M rows drops from ~760 ms to ~25 ms. ([85e251cc](https://github.com/dfa1/vortex-java/commit/85e251cc))
+
 ## [0.11.0] — 2026-06-28
 
 SQL over Vortex grows a **compute layer**: a Calcite `WHERE`-filtered `SUM`/`COUNT`/`MIN`/`MAX` is now answered from the zone-map statistics — folding the chunks the predicate fully selects without decoding them and decoding only the one or two chunks its range cuts through (ADR 0013 §6 / ADR 0018 boundary tier). On a 100-chunk file a `SELECT SUM(x) WHERE id BETWEEN …` answers ~12× faster than a full scan when the range is wide. Plus the security hardening of the untrusted-input parse paths (ADR 0003) and a `vortex.zstd` binding bump.
