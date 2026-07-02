@@ -75,6 +75,21 @@ per-element accessor dispatch is, and both paths pay it. So the lever for dict i
 vectorized segment scan of the codes, not the encoded-domain compare this ADR envisioned. Encoded
 values buy a win only once the value path is compute-bound, which at these column widths it is not.
 
+That dict lever shipped (2026-07-02) as the `DictFilter` code-scan lane in `FusedFilterSum`: the
+predicate is lowered against the value pool once (through the same `PrimitiveFilter` lowering as the
+primitive lanes), then the raw `u8` codes are scanned per `ChunkedByteArray` child directly from the
+backing segment — no per-element `findChunk` binary search, no broadcast-guard modulo, no gather:
+
+| Dict `SUM(measure) WHERE category = 7`, 100M rows | Score |
+| --- | --- |
+| `fusedFilteredSumDict` before (accessor chain per row) | 762.5 ± 7.4 ms/op |
+| `forLoopDictSegment` (raw segment scan ceiling) | 24.8 ms/op |
+| `fusedFilteredSumDict` after (`DictFilter` lane) | 25.5 ± 2.5 ms/op |
+
+The lane reproduces the raw-scan ceiling (≈ 30×) with no measurable kernel overhead. It covers
+`Compute.filteredSum`; extending it to `FusedFilterAggregate`'s per-leaf path is the remaining
+follow-up (tracked in TODO).
+
 ## Context
 
 ADR 0010 establishes that the reader defers transform work until access

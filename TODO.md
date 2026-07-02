@@ -94,9 +94,12 @@ Per-encoding gotchas:
   `WHERE` folds fully-selected zones from stats and decodes only the straddling boundary chunks via
   the fused `Compute.filteredAggregate`. §1–§3 (`Mask`, the `FilterKernel`/`MapKernel`/`ReduceKernel`
   interfaces) were built then removed for the fused single-pass kernels — no intermediate bitmap.
-  Next: (1) benchmark the fused-kernel speedup (`ComputeKernelBenchmark`, 100M rows) to record §6's
-  payoff; (2) encoded-domain kernel specialization — push the predicate into the ALP/FoR/Dict integer
-  domain without decoding (its own perf ADR); (3) the columnar transducer façade (ADR 0019).
+  Encoded-domain value specialization was measured as a no-win (decode is dispatch-bound, see
+  `forLoopDictEncoded`); the real dict lever — the monomorphic code-segment scan — shipped as the
+  `DictFilter` lane in `FusedFilterSum` (762 → 25.5 ms/op on the 100M-row `fusedFilteredSumDict`).
+  Next: (1) extend the `DictFilter` code-scan lane to `FusedFilterAggregate` (the Calcite boundary
+  push-down kernel still reads dict filters through the per-element accessor; its single-leaf case
+  can reuse the run-based scan directly); (2) the columnar transducer façade (ADR 0019).
 
 ## Encodings
 

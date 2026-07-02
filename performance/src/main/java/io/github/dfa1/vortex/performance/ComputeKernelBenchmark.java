@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ByteArray;
+import io.github.dfa1.vortex.reader.array.ChunkedByteArray;
 import io.github.dfa1.vortex.reader.array.DictLongArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.LazyAlpDoubleArray;
@@ -19,6 +20,8 @@ import io.github.dfa1.vortex.reader.compute.Predicate;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
 import java.io.IOException;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -219,6 +222,29 @@ public class ComputeKernelBenchmark {
         return acc;
     }
 
+    /// Fused dict-filtered sum: per chunk, [Compute#filteredSum(Array, Predicate, Array)] filters the
+    /// dict-encoded `category` column with `category == 7` and totals the FoR-encoded `measure`
+    /// column over the selected rows (≈ 1/16 selectivity). This is the target workload of the dict
+    /// code-scan fast lane: the filter side reads 100% of the rows, so its cost is the per-element
+    /// dict accessor (chunk lookup + code read + value gather) unless the kernel scans the raw codes
+    /// segment instead. Category and measure chunks are indexed in lockstep.
+    ///
+    /// Result (2026-07-02, 100M rows): 762 ± 7 ms/op through the accessor chain; 25.5 ± 2.5 ms/op
+    /// once the kernel's dict code-scan lane (`DictFilter`) landed — ≈ 30×, matching the raw
+    /// [#forLoopDictSegment()] ceiling, so the lane adds no measurable overhead over the bare scan.
+    ///
+    /// @return the sum of `measure` over the rows where `category == 7` across the whole dataset
+    @Benchmark
+    public long fusedFilteredSumDict() {
+        long acc = 0;
+        for (int k = 0; k < categoryChunks.size(); k++) {
+            LongArray categoryArr = categoryChunks.get(k);
+            LongArray measureArr = measureChunks.get(k);
+            acc += Compute.filteredSum(categoryArr, new Predicate.Eq(CATEGORY_VALUE), measureArr).longValue();
+        }
+        return acc;
+    }
+
     /// Hand-fused control for [#fusedFilteredSumAlp()]: the obvious developer loop a fused kernel must
     /// match — `for i: if (price.getDouble(i) > 500) acc += measure.getLong(i)` per chunk, with no
     /// off-heap bitmap. Decodes each price and (when selected) each measure through the accessor.
@@ -342,6 +368,71 @@ public class ComputeKernelBenchmark {
             for (long i = 0; i < n; i++) {
                 if (codes.getByte(i + codeOffset) == matchByte) {
                     count++;
+                }
+            }
+        }
+        return count;
+    }
+
+    /// Monomorphic segment-scan `category == 7` count: the vectorized-scan candidate that
+    /// [#forLoopDictEncoded()]'s negative result points to. Same per-chunk constant-to-code
+    /// resolution, but the codes structure is unwrapped ONCE per chunk — the shared-dict codes are a
+    /// [ChunkedByteArray], so the accessor path pays a `findChunk` binary search plus a broadcast
+    /// guard (`length == elementCount ? i : i % elementCount`, a CMove-evaluated modulo) on EVERY
+    /// element. Here the chunk walk is hoisted: each overlapping child's raw [MemorySegment] is
+    /// scanned with a bare monomorphic byte compare, the shape superword can vectorize.
+    ///
+    /// Result (2026-07-02, 100M rows): ≈ 25 ms/op vs ≈ 520–690 ms/op for the accessor variants —
+    /// ≈ 20–25×, confirming the accessor dispatch (not the value gather) as the dict bottleneck.
+    /// This ceiling is what the `DictFilter` kernel lane reproduces.
+    ///
+    /// @return the number of rows with `category == 7` over the whole dataset
+    @Benchmark
+    public long forLoopDictSegment() {
+        long count = 0;
+        for (LongArray array : categoryChunks) {
+            LongArray base = array;
+            long codeOffset = 0;
+            if (base instanceof OffsetLongArray off) {
+                codeOffset = off.offset();
+                base = off.inner();
+            }
+            DictLongArray dict = (DictLongArray) base;
+            LongArray values = dict.values();
+            long match = -1;
+            long poolSize = values.length();
+            for (long c = 0; c < poolSize; c++) {
+                if (values.getLong(c) == CATEGORY_VALUE) {
+                    match = c;
+                    break;
+                }
+            }
+            if (match < 0) {
+                continue;
+            }
+            byte matchByte = (byte) match;
+            // This benchmark-chunk view covers rows [codeOffset, codeOffset + n) of the shared
+            // dict. Hoist the chunk walk: visit only the code children overlapping that range and
+            // scan each child's raw segment.
+            long start = codeOffset;
+            long end = codeOffset + array.length();
+            ChunkedByteArray chunked = (ChunkedByteArray) dict.codes();
+            ByteArray[] children = chunked.children();
+            long[] offsets = chunked.offsets();
+            for (int c = 0; c < children.length; c++) {
+                long lo = Math.max(start, offsets[c]);
+                long hi = Math.min(end, offsets[c + 1]);
+                if (lo >= hi) {
+                    continue;
+                }
+                MemorySegment seg = children[c].segmentIfPresent()
+                        .orElseThrow(() -> new IllegalStateException("codes child has no backing segment"));
+                long segBase = lo - offsets[c];
+                long m = hi - lo;
+                for (long i = 0; i < m; i++) {
+                    if (seg.get(ValueLayout.JAVA_BYTE, segBase + i) == matchByte) {
+                        count++;
+                    }
                 }
             }
         }

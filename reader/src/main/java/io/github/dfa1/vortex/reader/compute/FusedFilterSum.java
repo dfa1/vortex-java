@@ -29,9 +29,12 @@ import io.github.dfa1.vortex.reader.array.ShortArray;
 /// lowered once (reusing [PrimitiveFilter#lowerLong(Predicate, long)] /
 /// [PrimitiveFilter#lowerDouble(Predicate)]), the signedness flip and the aggregate accessor are
 /// hoisted out of the loop (the hot-loop rule's branch-split idiom), and the inner body is a bare
-/// `if (test) acc += agg.getLong(i)` / `agg.getDouble(i)`. Any other shape (non-primitive filter,
-/// narrow-int or `f16` aggregate, a composite or null-test predicate) falls back to the generic
-/// boxing path, which reuses [PredicateEvaluator#evaluate(Array, long, Predicate)] and [Values].
+/// `if (test) acc += agg.getLong(i)` / `agg.getDouble(i)`. A dict-encoded filter column takes the
+/// [DictFilter] code-scan lane first: the predicate is resolved against the value pool once and the
+/// raw `u8` codes are scanned from their backing segments, with no per-row dictionary gather. Any
+/// other shape (non-primitive filter, narrow-int or `f16` aggregate, a composite or null-test
+/// predicate) falls back to the generic boxing path, which reuses
+/// [PredicateEvaluator#evaluate(Array, long, Predicate)] and [Values].
 final class FusedFilterSum {
 
     private FusedFilterSum() {
@@ -62,13 +65,20 @@ final class FusedFilterSum {
         Array filterData = NumericColumns.unwrap(filterColumn);
         BoolArray filterValidity = NumericColumns.validityOf(filterColumn);
 
-        // Hot lane: a primitive filter column, a comparison-leaf predicate over numeric constants, and
-        // an aggregate read by a single typed accessor (i64/u64 long, f64 double, or f32 float). Any
-        // other shape drops to the generic boxing path with no behavioral drift.
+        // Hot lanes: a comparison-leaf predicate over numeric constants and an aggregate read by a
+        // single typed accessor (i64/u64 long, f64 double, or f32 float). A dict-encoded filter takes
+        // the code-scan lane ([DictFilter]); any other primitive filter takes the typed-accessor lane.
+        // Any other shape drops to the generic boxing path with no behavioral drift.
         if (isComparisonLeaf(predicate) && PrimitiveFilter.predicateOk(predicate)
-                && isPrimitiveFilter(filterData)
                 && (aggData instanceof LongArray || aggDouble)) {
-            return fused(filterData, filterValidity, predicate, aggData, aggValidity, aggDouble, n);
+            Number dictSum = DictFilter.tryFilteredSum(filterData, filterValidity, predicate,
+                    aggData, aggValidity, aggDouble, n);
+            if (dictSum != null) {
+                return dictSum;
+            }
+            if (isPrimitiveFilter(filterData)) {
+                return fused(filterData, filterValidity, predicate, aggData, aggValidity, aggDouble, n);
+            }
         }
         return generic(filterColumn, predicate, aggColumn, n);
     }
