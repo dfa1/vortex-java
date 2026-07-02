@@ -1,34 +1,42 @@
 package io.github.dfa1.vortex.reader.compute;
 
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.io.PTypeIO;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
+import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
 import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
+import io.github.dfa1.vortex.reader.array.MaterializedFloatArray;
 import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
 import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
+import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.util.Random;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 /// Oracle test for the fused [Compute#filteredSum(Array, Predicate, Array)] kernel: the one-pass
 /// fused result must be bit-identical to an independent boxing reference — a plain per-element
 /// `if (predicate) acc += value` loop over the same columns. The fused hot lane shares no code with
 /// that boxing reference, so any divergence is a correctness bug.
 ///
-/// The randomized cases pair a random primitive filter column (`i64` / `i32` / `f64`, with and
-/// without nulls) against a random primitive aggregate column, under each comparison predicate, so
-/// every filter/aggregate domain crossing (long/double, hot lane and the narrow-int generic
-/// fall-back) is exercised. The explicit cases pin the corners — empty, an all-null filter, an
-/// all-null aggregate, zero matches, and a full match.
+/// The randomized cases pair a random primitive filter column (`i64` / `i32` / `i16` / `i8` — each
+/// narrow width randomly unsigned — plus `f32` / `f64`, with and without nulls) against a random
+/// primitive aggregate column, under each comparison predicate and under composite / null-test
+/// predicates (the generic boxing path), so every filter/aggregate domain crossing (long/double,
+/// signed/unsigned, hot lane and the narrow-int generic fall-back) is exercised. The explicit cases
+/// pin the corners — empty, an all-null filter, an all-null aggregate, zero matches, a full match,
+/// mismatched column lengths, and the empty-range boundary constants of the range lowering.
 class FusedFilterSumTest {
 
     private static final Arena ARENA = Arena.ofAuto();
@@ -137,6 +145,37 @@ class FusedFilterSumTest {
         assertFusedMatchesTwoPass(filter, new Predicate.Gt(1.0), agg);
     }
 
+    @Test
+    void mismatchedColumnLengthsFailFast() {
+        // Given columns of different lengths — the kernel must reject them before any scan
+        Array filter = longColumn(new long[]{1, 2, 3}, null);
+        Array agg = longColumn(new long[]{1, 2}, null);
+
+        // When the fused kernel is asked to fold misaligned columns
+        // Then it fails fast instead of reading out of bounds
+        assertThatExceptionOfType(VortexException.class)
+                .isThrownBy(() -> Compute.filteredSum(filter, new Predicate.Gt(0L), agg))
+                .withMessageContaining("filter length");
+    }
+
+    @Test
+    void boundaryConstantsLowerToEmptyRanges() {
+        // Given the two range-lowering guards: Lt(min long) and Gt(max long) can match no value,
+        // so both must lower to the canonical empty range instead of under/overflowing the bound
+        Array filter = longColumn(new long[]{Long.MIN_VALUE, -1, 0, 1, Long.MAX_VALUE}, null);
+        Array agg = longColumn(new long[]{1, 2, 4, 8, 16}, null);
+
+        // When the fused kernel filters with each boundary constant
+        Number ltMin = Compute.filteredSum(filter, new Predicate.Lt(Long.MIN_VALUE), agg);
+        Number gtMax = Compute.filteredSum(filter, new Predicate.Gt(Long.MAX_VALUE), agg);
+
+        // Then nothing is selected either way, matching the boxing reference
+        assertThat(ltMin).isEqualTo(0L);
+        assertThat(gtMax).isEqualTo(0L);
+        assertFusedMatchesTwoPass(filter, new Predicate.Lt(Long.MIN_VALUE), agg);
+        assertFusedMatchesTwoPass(filter, new Predicate.Gt(Long.MAX_VALUE), agg);
+    }
+
     private static void assertFusedMatchesTwoPass(Array filter, Predicate predicate, Array agg) {
         Number reference = referenceFilteredSum(filter, predicate, agg);
         Number fused = Compute.filteredSum(filter, predicate, agg);
@@ -182,7 +221,13 @@ class FusedFilterSumTest {
                 new Predicate.Gt(a),
                 new Predicate.Lte(a),
                 new Predicate.Gte(a),
-                new Predicate.Between(lo, hi)
+                new Predicate.Between(lo, hi),
+                // Composite and null-test predicates have no fast lane, so these drive the whole
+                // sweep through the generic boxing path (PredicateEvaluator + Values + Compare).
+                new Predicate.And(new Predicate.Gte(lo), new Predicate.Lte(hi)),
+                new Predicate.Or(new Predicate.Lt(lo), new Predicate.Gt(hi)),
+                new Predicate.IsNull(),
+                new Predicate.IsNotNull()
         };
     }
 
@@ -204,9 +249,12 @@ class FusedFilterSumTest {
 
     private static Array randomColumn(Random random, boolean nullable, int n) {
         boolean[] valid = nullable ? randomValidity(random, n) : null;
-        return switch (random.nextInt(3)) {
+        return switch (random.nextInt(6)) {
             case 0 -> longColumn(randomLongs(random, n), valid);
             case 1 -> intColumn(randomLongs(random, n), valid);
+            case 2 -> shortColumn(randomLongs(random, n), valid, random.nextBoolean());
+            case 3 -> byteColumn(randomLongs(random, n), valid, random.nextBoolean());
+            case 4 -> floatColumn(randomDoubles(random, n), valid);
             default -> doubleColumn(randomDoubles(random, n), valid);
         };
     }
@@ -249,6 +297,30 @@ class FusedFilterSumTest {
             seg.setAtIndex(PTypeIO.LE_INT, i, (int) values[i]);
         }
         return wrap(new MaterializedIntArray(DType.I32, values.length, seg), valid);
+    }
+
+    private static Array shortColumn(long[] values, boolean[] valid, boolean unsigned) {
+        MemorySegment seg = ARENA.allocate(Math.max(2L, values.length * 2L), 2);
+        for (int i = 0; i < values.length; i++) {
+            seg.setAtIndex(PTypeIO.LE_SHORT, i, (short) values[i]);
+        }
+        return wrap(new MaterializedShortArray(unsigned ? DType.U16 : DType.I16, values.length, seg), valid);
+    }
+
+    private static Array byteColumn(long[] values, boolean[] valid, boolean unsigned) {
+        MemorySegment seg = ARENA.allocate(Math.max(1L, values.length));
+        for (int i = 0; i < values.length; i++) {
+            seg.set(ValueLayout.JAVA_BYTE, i, (byte) values[i]);
+        }
+        return wrap(new MaterializedByteArray(unsigned ? DType.U8 : DType.I8, values.length, seg), valid);
+    }
+
+    private static Array floatColumn(double[] values, boolean[] valid) {
+        MemorySegment seg = ARENA.allocate(Math.max(4L, values.length * 4L), 4);
+        for (int i = 0; i < values.length; i++) {
+            seg.setAtIndex(PTypeIO.LE_FLOAT, i, (float) values[i]);
+        }
+        return wrap(new MaterializedFloatArray(DType.F32, values.length, seg), valid);
     }
 
     private static Array doubleColumn(double[] values, boolean[] valid) {
