@@ -806,6 +806,7 @@ final class DictFilter {
     /// @param match   whether each `u8` code selects its row (codes past the pool never match)
     /// @param matches the number of matching codes
     /// @param only    the single matching code when `matches == 1`, else meaningless
+    @SuppressWarnings("java:S6218") // internal data carrier; the match table flows from the lowering to the scan loops without ever being compared.
     private record CodeTable(boolean[] match, int matches, int only) {
     }
 
