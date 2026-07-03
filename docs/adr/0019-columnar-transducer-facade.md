@@ -84,6 +84,21 @@ The Calcite `VortexAggregatePushDownRule` boundary tier is the first consumer: i
 aggregate columns one `filteredAggregate` call per column; a multi-aggregate pipeline folds them in
 one scan of the filter column.
 
+### Baseline (measured 2026-07-03, `ComputeKernelBenchmark`, 100M rows)
+
+The two levers, pinned as benchmarks the implementation must beat — expressed the only way the
+current API allows:
+
+| Workload | Today | ms/op |
+| --- | --- | --- |
+| 1 dict leaf × 2 aggregates (`fusedFilteredAggregateTwoAggregates`) | 2 kernel calls, filter re-scanned per aggregate | 137.3 ± 0.1 |
+| 2-leaf `AND` × 2 aggregates (`fusedFilteredAggregateMulti`, this ADR's example) | multi-leaf declines the dict lane → per-row `RowPredicate` path, × 2 calls | 2269.1 ± 19.8 |
+
+For scale: the single-leaf single-aggregate dict lane runs the same scan in 36.2 ms and the raw
+code scan in ~25 ms. The pipeline's compile step attacks both levers at once — the dict leaf drives
+the scan, the residual leaf is tested only on code matches, and every aggregate folds from that one
+pass — so the example workload's target is tens of milliseconds, not seconds.
+
 ## Consequences
 
 ### Positive

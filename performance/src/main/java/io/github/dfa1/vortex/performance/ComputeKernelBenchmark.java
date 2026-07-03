@@ -274,6 +274,55 @@ public class ComputeKernelBenchmark {
         return acc;
     }
 
+    /// ADR 0019 baseline, lever 1 — multi-aggregate over one filter: `SUM`/`MIN`(measure) and
+    /// `SUM`(plain) under the same single-leaf `category == 7` filter, expressed the only way the
+    /// current API allows — one [Compute#filteredAggregate(Chunk, RowFilter, String)] call PER
+    /// aggregate column, so the filter column is re-scanned once per aggregate. The transducer
+    /// façade folds every aggregate from one scan; this method is the number it must beat.
+    ///
+    /// Result (2026-07-03, 100M rows): 137.3 ± 0.1 ms/op — ≈ 2× the single-aggregate lane, the
+    /// redundant re-scan plus the second aggregate's (random-access `plain`) match reads.
+    ///
+    /// @return the two folds' selected counts and sums combined, so JMH cannot eliminate either call
+    @Benchmark
+    public long fusedFilteredAggregateTwoAggregates() {
+        long acc = 0;
+        for (Chunk chunk : chunks) {
+            RowFilter filter = RowFilter.eq("category", CATEGORY_VALUE);
+            FilteredAggregate measure = Compute.filteredAggregate(chunk, filter, "measure");
+            FilteredAggregate plain = Compute.filteredAggregate(chunk, filter, "plain");
+            acc += measure.selectedRows() + measure.sum().longValue()
+                    + ((Long) measure.min()).longValue() + plain.sum().longValue();
+        }
+        return acc;
+    }
+
+    /// ADR 0019 baseline, lever 2 — the full façade example: a two-leaf `AND`
+    /// (`category == 7 AND price > 500`, ≈ 1/32 selectivity) with two aggregate columns. A
+    /// multi-leaf filter declines the dict code-scan lane, so every row pays the per-leaf
+    /// [Compute] `RowPredicate` accessor path (dict chunk-lookup for `category`, lazy ALP decode
+    /// for `price`), twice — once per aggregate call. The façade's compile step drives the scan
+    /// with the dict leaf, tests the residual `price` leaf only on code matches, and feeds both
+    /// aggregates from that single pass.
+    ///
+    /// Result (2026-07-03, 100M rows): 2269.1 ± 19.8 ms/op — the multi-leaf decline costs ≈ 60×
+    /// the single-leaf dict lane's 36.2 ms; ADR 0019's target for this exact workload is tens of
+    /// milliseconds.
+    ///
+    /// @return the two folds' selected counts and sums combined, so JMH cannot eliminate either call
+    @Benchmark
+    public long fusedFilteredAggregateMulti() {
+        long acc = 0;
+        for (Chunk chunk : chunks) {
+            RowFilter filter = RowFilter.eq("category", CATEGORY_VALUE)
+                    .and(RowFilter.gt("price", PRICE_THRESHOLD));
+            FilteredAggregate measure = Compute.filteredAggregate(chunk, filter, "measure");
+            FilteredAggregate plain = Compute.filteredAggregate(chunk, filter, "plain");
+            acc += measure.selectedRows() + measure.sum().longValue() + plain.sum().longValue();
+        }
+        return acc;
+    }
+
     /// Hand-fused control for [#fusedFilteredSumAlp()]: the obvious developer loop a fused kernel must
     /// match — `for i: if (price.getDouble(i) > 500) acc += measure.getLong(i)` per chunk, with no
     /// off-heap bitmap. Decodes each price and (when selected) each measure through the accessor.
