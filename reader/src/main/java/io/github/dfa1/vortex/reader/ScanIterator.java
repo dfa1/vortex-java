@@ -614,7 +614,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             if (arr instanceof StructArray sa) {
                 return expandStruct(sa);
             }
-            return singleColumn(0, arr);
+            return singleColumn(arr);
         }
         var scratch = new LinkedHashMap<ColumnName, Chunk.Column>(n);
         for (int i = 0; i < n; i++) {
@@ -637,7 +637,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             if (arr instanceof StructArray sa) {
                 return expandStruct(sa);
             }
-            return singleColumn(0, arr);
+            return singleColumn(arr);
         }
         var scratch = new LinkedHashMap<ColumnName, Chunk.Column>(n);
         for (int i = 0; i < n; i++) {
@@ -648,9 +648,9 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         return unmodifiable(scratch);
     }
 
-    private SequencedMap<ColumnName, Chunk.Column> singleColumn(int colIdx, Array array) {
+    private SequencedMap<ColumnName, Chunk.Column> singleColumn(Array array) {
         var map = new LinkedHashMap<ColumnName, Chunk.Column>(1);
-        map.put(projectedNames.get(colIdx), new Chunk.Column(array, projectedDtypes.get(colIdx)));
+        map.put(projectedNames.getFirst(), new Chunk.Column(array, projectedDtypes.getFirst()));
         return unmodifiable(map);
     }
 
