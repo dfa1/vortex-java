@@ -183,13 +183,20 @@ columnar buffers; closing the chunk releases the arena. After `close()`, touchin
 any `Array` previously returned by `column(...)` or `columns()` raises FFM's scope
 check (`IllegalStateException`).
 
-| Method                                  | Notes                                                    |
-|-----------------------------------------|----------------------------------------------------------|
-| `rowCount()`                            | Rows in this chunk                                       |
-| `columns()`                             | All columns in this chunk                                |
-| `<T extends Array> column(String name)` | Typed column lookup; throws `VortexException` if unknown |
-| `isClosed()`                            | Whether `close()` has run                                |
-| `close()`                               | Releases the chunk's arena. Idempotent.                  |
+Columns are stored as one order-preserving map keyed by the validated [`ColumnName`]; each
+entry is a `Chunk.Column(Array array, DType dtype)` carrier, so a column's data and type can
+never desync. `column(String)` is boundary sugar: the name is wrapped in a `ColumnName` (a
+policy-invalid name fails fast — it could never match a certified column).
+
+| Method                                      | Notes                                                    |
+|---------------------------------------------|----------------------------------------------------------|
+| `rowCount()`                                | Rows in this chunk                                       |
+| `columns()`                                 | `SequencedMap<ColumnName, Chunk.Column>`, schema order, unmodifiable |
+| `<T extends Array> column(String name)`     | Typed column lookup; throws `VortexException` if absent  |
+| `<T extends Array> column(ColumnName name)` | Same, for callers that validated early                   |
+| `as(String name, Class<T> domainType)`      | Extension column → typed `List<T>`                       |
+| `isClosed()`                                | Whether `close()` has run                                |
+| `close()`                                   | Releases the chunk's arena. Idempotent.                  |
 
 ---
 
