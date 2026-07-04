@@ -442,7 +442,7 @@ public final class VortexInspectorTui {
             }
             String label = item.depth() == 0 && node.layout().isStruct()
                     ? "struct"
-                    : node.fieldName().map(n -> n + ": ").orElse("") + node.layout().encodingId();
+                    : node.fieldName().map(n -> n + ": ").orElse("") + node.layout().layoutId();
             String tag = statsChildren.contains(node) ? ", stats" : "";
             return " ".repeat(item.depth() * 2) + marker + label
                     + "  (" + node.layout().rowCount() + " rows" + tag + ")";
@@ -467,7 +467,7 @@ public final class VortexInspectorTui {
             List<String> lines = new ArrayList<>();
             Layout layout = node.layout();
             InspectorTree.Peek p = peek(node);
-            lines.add("Encoding:  " + (p.encoding() != null ? p.encoding() : layout.encodingId()));
+            lines.add("Encoding:  " + (p.encoding() != null ? p.encoding() : layout.layoutId().id()));
             node.fieldName().ifPresent(name -> lines.add("Field:     " + name));
             String col = columnOf.get(node);
             if (col != null && !node.fieldName().isPresent()) {
@@ -705,14 +705,14 @@ public final class VortexInspectorTui {
                     Layout child = statsLayout.children().get(i);
                     if (!child.isFlat()) {
                         throw new IllegalStateException(
-                                "non-flat stats chunk: " + child.encodingId());
+                                "non-flat stats chunk: " + child.layoutId());
                     }
                     all.addAll(decodeStatsFlat(child, statsDtype, arena));
                 }
                 return all;
             }
             throw new IllegalStateException(
-                    "unsupported stats layout: " + statsLayout.encodingId());
+                    "unsupported stats layout: " + statsLayout.layoutId());
         }
 
         private List<String> decodeStatsFlat(

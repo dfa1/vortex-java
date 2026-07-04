@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.io.IoBounds;
+import io.github.dfa1.vortex.core.model.LayoutId;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.fbs.FbsBinary;
@@ -174,7 +175,13 @@ final class PostscriptParser {
                     "layout encoding index " + encIdx
                             + " out of bounds (layoutSpecs.size=" + layoutSpecs.size() + ")");
         }
-        String encodingId = layoutSpecs.get(encIdx);
+        String rawLayoutId = layoutSpecs.get(encIdx);
+        if (rawLayoutId.isBlank()) {
+            // LayoutId.parse rejects blank ids with IllegalArgumentException; the file is
+            // untrusted input, so a blank spec entry must surface as VortexException instead.
+            throw new VortexException("blank layout id at layout spec index " + encIdx);
+        }
+        LayoutId layoutId = LayoutId.parse(rawLayoutId);
 
         MemorySegment metadata = l.metadataAsSegment();
         if (metadata != null && metadata.byteSize() > MAX_LAYOUT_METADATA_BYTES) {
@@ -193,7 +200,7 @@ final class PostscriptParser {
             segments.add((int) l.segments(i));
         }
 
-        return new Layout(encodingId, l.rowCount(), metadata, List.copyOf(children), List.copyOf(segments));
+        return new Layout(layoutId, l.rowCount(), metadata, List.copyOf(children), List.copyOf(segments));
     }
 
     private static DType convertDType(io.github.dfa1.vortex.core.fbs.FbsDType fbs, int depth) {

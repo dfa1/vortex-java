@@ -155,7 +155,7 @@ class PostscriptParserBlobBoundsTest {
         int asv = FbsFooter.createArraySpecsVector(fbb, new int[]{
                 FbsArraySpec.createFbsArraySpec(fbb, fbb.createString("vortex.primitive"))});
         int lsv = FbsFooter.createLayoutSpecsVector(fbb, new int[]{
-                FbsLayoutSpec.createFbsLayoutSpec(fbb, fbb.createString(io.github.dfa1.vortex.reader.Layout.FLAT))});
+                FbsLayoutSpec.createFbsLayoutSpec(fbb, fbb.createString(io.github.dfa1.vortex.core.model.LayoutId.FLAT.id()))});
         // No segment_specs: validateSegmentSpecs has its own dedicated test; keep this fixture
         // focused on the blob-pointer bounds.
         FbsFooter.startSegmentSpecsVector(fbb, 0);

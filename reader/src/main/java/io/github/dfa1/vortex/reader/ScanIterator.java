@@ -769,6 +769,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             return decodeDictLayout(layout, dtype, arena);
         }
         if (layout.isZoned() && !layout.children().isEmpty()) {
+            // Both vortex.zoned and its legacy vortex.stats alias wrap the data layout as child[0].
             return decodeLayout(layout.children().getFirst(), dtype, arena);
         }
         if (layout.isChunked()) {
@@ -776,7 +777,9 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             collectFlats(layout, flats);
             return decodeChunkedLayout(flats, dtype, layout.rowCount(), arena);
         }
-        throw new VortexException("cannot decode layout " + layout.encodingId());
+        // Custom (unknown) or any unhandled well-known layout id fails loudly — Rust has no
+        // allowUnknown for layouts.
+        throw new VortexException("cannot decode layout " + layout.layoutId());
     }
 
     private Array decodeChunkedLayout(List<Layout> flats, DType dtype, long totalRows, SegmentAllocator arena) {

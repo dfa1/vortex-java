@@ -102,7 +102,7 @@ public final class TaxiColumnTreeDiff {
     }
 
     private static void walkLayout(VortexReader reader, Layout layout, Footer footer, String indent) {
-        String header = indent + layout.encodingId() + " rows=" + layout.rowCount();
+        String header = indent + layout.layoutId() + " rows=" + layout.rowCount();
         if (layout.isFlat() && !layout.segments().isEmpty()) {
             int segIdx = layout.segments().getFirst();
             SegmentSpec spec = footer.segmentSpecs().get(segIdx);
@@ -203,7 +203,7 @@ public final class TaxiColumnTreeDiff {
     private static Layout unwrapToStruct(Layout layout) {
         while (!layout.isStruct()) {
             if (layout.children().isEmpty()) {
-                throw new IllegalStateException("hit leaf before struct: " + layout.encodingId());
+                throw new IllegalStateException("hit leaf before struct: " + layout.layoutId());
             }
             layout = layout.children().get(0);
         }

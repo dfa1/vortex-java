@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.inspect;
 
 import io.github.dfa1.vortex.reader.CompressionScheme;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.LayoutId;
 import io.github.dfa1.vortex.reader.Footer;
 import io.github.dfa1.vortex.reader.Layout;
 import io.github.dfa1.vortex.reader.SegmentSpec;
@@ -136,9 +137,9 @@ class InspectorTreeTest {
         // Given — struct of two compressed (skipped) + two uncompressed Flat columns.
         // Only uncompressed leaves trigger peekFlatRoot, so progress should fire twice
         // with total=2.
-        Layout c1 = new Layout("vortex.flat", 0, null, List.of(), List.of(0));
-        Layout c2 = new Layout("vortex.flat", 0, null, List.of(), List.of(1));
-        Layout c3 = new Layout("vortex.flat", 0, null, List.of(), List.of(2));
+        Layout c1 = new Layout(LayoutId.parse("vortex.flat"), 0, null, List.of(), List.of(0));
+        Layout c2 = new Layout(LayoutId.parse("vortex.flat"), 0, null, List.of(), List.of(1));
+        Layout c3 = new Layout(LayoutId.parse("vortex.flat"), 0, null, List.of(), List.of(2));
         Layout root = struct(0, List.of(c1, c2, c3));
         DType dtype = new DType.Struct(List.of("a", "b", "c"),
                 List.of(DType.I32,
@@ -178,8 +179,8 @@ class InspectorTreeTest {
         // Given — shallow build is the path the TUI uses; it must touch zero segment
         // bytes (so opening a remote file is instant) yet still populate fieldName on
         // top-level struct children.
-        Layout col0 = new Layout("vortex.flat", 10, null, List.of(), List.of(0));
-        Layout col1 = new Layout("vortex.flat", 10, null, List.of(), List.of(1));
+        Layout col0 = new Layout(LayoutId.parse("vortex.flat"), 10, null, List.of(), List.of(0));
+        Layout col1 = new Layout(LayoutId.parse("vortex.flat"), 10, null, List.of(), List.of(1));
         Layout root = struct(10, List.of(col0, col1));
         DType dtype = new DType.Struct(List.of("id", "value"),
                 List.of(DType.I64,
@@ -226,7 +227,7 @@ class InspectorTreeTest {
     void peek_compressedFlatSegment_returnsEmptyWithoutSlicing() {
         // Given — compressed segments would need the encoding to decompress before
         // their FlatBuffer can be parsed; peek skips them rather than slicing garbage.
-        Layout flat = new Layout("vortex.flat", 10, null, List.of(), List.of(0));
+        Layout flat = new Layout(LayoutId.parse("vortex.flat"), 10, null, List.of(), List.of(0));
         InspectorTree.Node node = new InspectorTree.Node(flat, java.util.Optional.empty(),
                 Set.of(), io.github.dfa1.vortex.reader.ArrayStats.empty(), List.of());
         given(handle.footer()).willReturn(new io.github.dfa1.vortex.reader.Footer(
@@ -248,7 +249,7 @@ class InspectorTreeTest {
         // Given — peekRootEncoding() reads the segment as a FlatBuffer; compressed segments
         // are intentionally skipped so a malformed or compressed payload can't crash the
         // inspector. With code != NONE we should still build a tree, with no encodings used.
-        Layout root = new Layout("vortex.flat", 0, null, List.of(), List.of(0));
+        Layout root = new Layout(LayoutId.parse("vortex.flat"), 0, null, List.of(), List.of(0));
         DType dtype = DType.I32;
         SegmentSpec compressed = new SegmentSpec(0, 1024, (byte) 0, CompressionScheme.ZSTD);
         givenHandle(dtype, root, List.of("vortex.flat"), List.of(compressed));
@@ -268,10 +269,10 @@ class InspectorTreeTest {
     }
 
     private static Layout struct(long rows, List<Layout> children) {
-        return new Layout("vortex.struct", rows, null, children, List.of());
+        return new Layout(LayoutId.parse("vortex.struct"), rows, null, children, List.of());
     }
 
     private static Layout leaf(String encodingId, long rows) {
-        return new Layout(encodingId, rows, null, List.of(), List.of());
+        return new Layout(LayoutId.parse(encodingId), rows, null, List.of(), List.of());
     }
 }

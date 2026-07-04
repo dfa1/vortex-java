@@ -9,6 +9,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.model.LayoutId;
 import io.github.dfa1.vortex.writer.encode.EncodeContext;
 import io.github.dfa1.vortex.writer.encode.EncodeNode;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
@@ -1021,12 +1022,14 @@ public final class VortexWriter implements Closeable {
         }
         int asv = FbsFooter.createArraySpecsVector(fbb, asOffsets);
 
-        // layout_specs: ["vortex.flat", "vortex.chunked", "vortex.struct", "vortex.dict"]
-        int ls0 = FbsLayoutSpec.createFbsLayoutSpec(fbb, fbb.createString("vortex.flat"));
-        int ls1 = FbsLayoutSpec.createFbsLayoutSpec(fbb, fbb.createString("vortex.chunked"));
-        int ls2 = FbsLayoutSpec.createFbsLayoutSpec(fbb, fbb.createString("vortex.struct"));
-        int ls3 = FbsLayoutSpec.createFbsLayoutSpec(fbb, fbb.createString("vortex.dict"));
-        int ls4 = FbsLayoutSpec.createFbsLayoutSpec(fbb, fbb.createString("vortex.stats"));
+        // layout_specs, in LAYOUT_* index order: FLAT, CHUNKED, STRUCT, DICT, then the zoned
+        // layout emitted as the legacy "vortex.stats" alias (old and new Rust readers accept it;
+        // "vortex.zoned" would break older readers).
+        int ls0 = FbsLayoutSpec.createFbsLayoutSpec(fbb, fbb.createString(LayoutId.FLAT.id()));
+        int ls1 = FbsLayoutSpec.createFbsLayoutSpec(fbb, fbb.createString(LayoutId.CHUNKED.id()));
+        int ls2 = FbsLayoutSpec.createFbsLayoutSpec(fbb, fbb.createString(LayoutId.STRUCT.id()));
+        int ls3 = FbsLayoutSpec.createFbsLayoutSpec(fbb, fbb.createString(LayoutId.DICT.id()));
+        int ls4 = FbsLayoutSpec.createFbsLayoutSpec(fbb, fbb.createString(LayoutId.STATS.id()));
         int lsv = FbsFooter.createLayoutSpecsVector(fbb, new int[]{ls0, ls1, ls2, ls3, ls4});
 
         // segment_specs (inline struct vector — write in reverse order)

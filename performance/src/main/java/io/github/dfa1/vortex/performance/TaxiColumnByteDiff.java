@@ -112,7 +112,7 @@ public final class TaxiColumnByteDiff {
     private static Layout unwrapToStruct(Layout layout) {
         while (!layout.isStruct()) {
             if (layout.children().isEmpty()) {
-                throw new IllegalStateException("hit leaf before struct: " + layout.encodingId());
+                throw new IllegalStateException("hit leaf before struct: " + layout.layoutId());
             }
             layout = layout.children().get(0);
         }

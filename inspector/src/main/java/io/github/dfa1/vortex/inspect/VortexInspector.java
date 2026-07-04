@@ -145,7 +145,7 @@ public final class VortexInspector {
     }
 
     private static void appendLayoutInline(StringBuilder sb, Layout layout) {
-        sb.append(layout.encodingId()).append('(').append(layout.rowCount()).append(" rows)");
+        sb.append(layout.layoutId()).append('(').append(layout.rowCount()).append(" rows)");
         if (layout.children().isEmpty()) {
             return;
         }

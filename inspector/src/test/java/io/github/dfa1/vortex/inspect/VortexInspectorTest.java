@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.inspect;
 import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.CompressionScheme;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.LayoutId;
 import io.github.dfa1.vortex.reader.Layout;
 import io.github.dfa1.vortex.reader.SegmentSpec;
 import org.junit.jupiter.api.Test;
@@ -67,7 +68,7 @@ class VortexInspectorTest {
     @Test
     void render_nonStruct_inlinesSingleColumnLayout() {
         // Given
-        Layout leaf = new Layout("vortex.flat", 100, null, List.of(), List.of());
+        Layout leaf = new Layout(LayoutId.parse("vortex.flat"), 100, null, List.of(), List.of());
         InspectorTree.Node root = new InspectorTree.Node(leaf, Optional.empty(), Set.of(), ArrayStats.empty(), List.of());
         InspectorTree sut = new InspectorTree(
                 1, 256L,
@@ -101,10 +102,10 @@ class VortexInspectorTest {
     @Test
     void render_chainsChildrenWithArrow() {
         // Given — nested zoned → chunked → flat chain
-        Layout flat = new Layout("vortex.flat", 1000, null, List.of(), List.of());
-        Layout chunked = new Layout("vortex.chunked", 1000, null, List.of(flat), List.of());
-        Layout zoned = new Layout("vortex.stats", 1000, null, List.of(chunked), List.of());
-        Layout structLayout = new Layout("vortex.struct", 1000, null, List.of(zoned), List.of());
+        Layout flat = new Layout(LayoutId.parse("vortex.flat"), 1000, null, List.of(), List.of());
+        Layout chunked = new Layout(LayoutId.parse("vortex.chunked"), 1000, null, List.of(flat), List.of());
+        Layout zoned = new Layout(LayoutId.parse("vortex.stats"), 1000, null, List.of(chunked), List.of());
+        Layout structLayout = new Layout(LayoutId.parse("vortex.struct"), 1000, null, List.of(zoned), List.of());
 
         InspectorTree.Node flatN = new InspectorTree.Node(flat, Optional.empty(), Set.of(), ArrayStats.empty(), List.of());
         InspectorTree.Node chunkedN = new InspectorTree.Node(chunked, Optional.empty(), Set.of(), ArrayStats.empty(), List.of(flatN));
@@ -127,10 +128,10 @@ class VortexInspectorTest {
     @Test
     void render_aggregatesMinMaxAcrossChunks() {
         // Given — column with two chunked Flat leaves; aggregate should fold each leaf's stats
-        Layout chunk1 = new Layout("vortex.flat", 500, null, List.of(), List.of());
-        Layout chunk2 = new Layout("vortex.flat", 500, null, List.of(), List.of());
-        Layout chunked = new Layout("vortex.chunked", 1000, null, List.of(chunk1, chunk2), List.of());
-        Layout structLayout = new Layout("vortex.struct", 1000, null, List.of(chunked), List.of());
+        Layout chunk1 = new Layout(LayoutId.parse("vortex.flat"), 500, null, List.of(), List.of());
+        Layout chunk2 = new Layout(LayoutId.parse("vortex.flat"), 500, null, List.of(), List.of());
+        Layout chunked = new Layout(LayoutId.parse("vortex.chunked"), 1000, null, List.of(chunk1, chunk2), List.of());
+        Layout structLayout = new Layout(LayoutId.parse("vortex.struct"), 1000, null, List.of(chunked), List.of());
 
         InspectorTree.Node c1 = new InspectorTree.Node(chunk1, Optional.empty(), Set.of(),
                 new ArrayStats(10L, 50L, null, null, null, null, null), List.of());
@@ -178,9 +179,9 @@ class VortexInspectorTest {
     }
 
     private static InspectorTree struct2col(int version, long fileSize, List<SegmentSpec> specs, Set<String> usedById) {
-        Layout idLeaf = new Layout("fastlanes.bitpacked", 1000, null, List.of(), List.of());
-        Layout valLeaf = new Layout("vortex.constant", 1000, null, List.of(), List.of());
-        Layout root = new Layout("vortex.struct", 1000, null, List.of(idLeaf, valLeaf), List.of());
+        Layout idLeaf = new Layout(LayoutId.parse("fastlanes.bitpacked"), 1000, null, List.of(), List.of());
+        Layout valLeaf = new Layout(LayoutId.parse("vortex.constant"), 1000, null, List.of(), List.of());
+        Layout root = new Layout(LayoutId.parse("vortex.struct"), 1000, null, List.of(idLeaf, valLeaf), List.of());
 
         InspectorTree.Node idNode = new InspectorTree.Node(idLeaf,
                 Optional.of("id"), Set.of("fastlanes.bitpacked"), ArrayStats.empty(), List.of());
