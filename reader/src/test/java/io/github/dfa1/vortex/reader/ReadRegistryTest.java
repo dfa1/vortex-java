@@ -8,6 +8,7 @@ import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 import io.github.dfa1.vortex.reader.decode.EncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.UnknownArrayNode;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
@@ -24,7 +25,7 @@ class ReadRegistryTest {
     void decodeUnknownEncodingThrowsByDefault() {
         // Given
         ReadRegistry sut = ReadRegistry.empty();
-        ArrayNode node = new ArrayNode("some.unknown",
+        ArrayNode node = new UnknownArrayNode("some.unknown",
                 MemorySegment.ofArray(new byte[0]), new ArrayNode[0], new int[0]);
         DecodeContext ctx = new DecodeContext(node, DTypes.I32, 0L,
                 new MemorySegment[0], sut, Arena.ofAuto());
@@ -74,7 +75,7 @@ class ReadRegistryTest {
         MemorySegment metadata = MemorySegment.ofArray(new byte[]{1, 2, 3});
         MemorySegment buf = Arena.ofAuto().allocate(4);
         buf.set(java.lang.foreign.ValueLayout.JAVA_INT, 0, 42);
-        ArrayNode node = new ArrayNode("some.unknown",
+        ArrayNode node = new UnknownArrayNode("some.unknown",
                 metadata, new ArrayNode[0], new int[]{0});
         DecodeContext ctx = new DecodeContext(node, DTypes.I32, 5L,
                 new MemorySegment[]{buf}, sut, Arena.ofAuto());
@@ -102,7 +103,7 @@ class ReadRegistryTest {
         // its parent is unknown — mirrors Rust decode_foreign in vortex-array/src/serde.rs:380.
         ArrayNode child = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE,
                 MemorySegment.ofArray(new byte[0]), new ArrayNode[0], new int[0]);
-        ArrayNode parent = new ArrayNode("some.unknown",
+        ArrayNode parent = new UnknownArrayNode("some.unknown",
                 MemorySegment.ofArray(new byte[0]), new ArrayNode[]{child}, new int[0]);
         DecodeContext ctx = new DecodeContext(parent, DTypes.I32, 0L,
                 new MemorySegment[0], sut, Arena.ofAuto());

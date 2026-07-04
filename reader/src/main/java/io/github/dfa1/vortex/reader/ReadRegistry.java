@@ -7,9 +7,12 @@ import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 import io.github.dfa1.vortex.reader.decode.EncodingDecoder;
+import io.github.dfa1.vortex.reader.decode.KnownArrayNode;
+import io.github.dfa1.vortex.reader.decode.UnknownArrayNode;
 
 import java.lang.foreign.MemorySegment;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.TreeMap;
@@ -20,15 +23,15 @@ import java.util.TreeMap;
 /// via the [#loadAll()] and [#empty()] convenience factories.
 public final class ReadRegistry {
 
-    private final Map<String, EncodingDecoder> decoders;
+    private final Map<EncodingId, EncodingDecoder> decoders;
     private final boolean allowUnknown;
 
     private ReadRegistry(Map<EncodingId, EncodingDecoder> decoders, boolean allowUnknown) {
-        // Keyed by the id's wire string — the same form ArrayNode carries — so decode dispatch is
-        // one map hit with no enum resolution. TreeMap keeps the stable name order mirroring
-        // WriteRegistry.
-        var sorted = new TreeMap<String, EncodingDecoder>();
-        decoders.forEach((id, decoder) -> sorted.put(id.id(), decoder));
+        // Order by encoding name, mirroring WriteRegistry (Enum.compareTo is final, so a Comparator
+        // is required to sort by id rather than ordinal). Decode dispatch is keyed, so order is not
+        // load-bearing here, but a stable order keeps the two registries consistent.
+        var sorted = new TreeMap<EncodingId, EncodingDecoder>(Comparator.comparing(EncodingId::id));
+        sorted.putAll(decoders);
         this.decoders = Collections.unmodifiableMap(sorted);
         this.allowUnknown = allowUnknown;
     }
@@ -67,7 +70,7 @@ public final class ReadRegistry {
     /// @param encodingId the encoding id to query
     /// @return `true` if a decoder is registered
     public boolean hasDecoder(EncodingId encodingId) {
-        return decoders.containsKey(encodingId.id());
+        return decoders.containsKey(encodingId);
     }
 
     /// Decodes the array described by `ctx`.
@@ -76,14 +79,21 @@ public final class ReadRegistry {
     /// @return the decoded [Array]
     public Array decode(DecodeContext ctx) {
         ArrayNode node = ctx.node();
-        EncodingDecoder decoder = decoders.get(node.encodingId());
+        EncodingDecoder decoder = switch (node) {
+            case KnownArrayNode k -> decoders.get(k.encodingId());
+            case UnknownArrayNode _ -> null;
+        };
         if (decoder != null) {
             return decoder.decode(ctx);
         }
         if (allowUnknown) {
             return decodeUnknown(ctx, node);
         }
-        throw new VortexException("no decoder registered for " + node.encodingId());
+        String id = switch (node) {
+            case KnownArrayNode k -> k.encodingId().id();
+            case UnknownArrayNode u -> u.rawEncodingId();
+        };
+        throw new VortexException("no decoder registered for " + id);
     }
 
     /// Decodes the array described by `ctx` and returns its primary backing segment.
@@ -92,16 +102,25 @@ public final class ReadRegistry {
     /// @return the primary [MemorySegment] of the decoded array
     public MemorySegment decodeAsSegment(DecodeContext ctx) {
         ArrayNode node = ctx.node();
-        EncodingDecoder decoder = decoders.get(node.encodingId());
+        EncodingDecoder decoder = switch (node) {
+            case KnownArrayNode k -> decoders.get(k.encodingId());
+            case UnknownArrayNode _ -> null;
+        };
         if (decoder != null) {
             return decoder.decode(ctx).materialize(ctx.arena());
         }
-        throw new VortexException("no decoder registered for " + node.encodingId()
-                + " (or encoding has no primary segment)");
+        String id = switch (node) {
+            case KnownArrayNode k -> k.encodingId().id();
+            case UnknownArrayNode u -> u.rawEncodingId();
+        };
+        throw new VortexException("no decoder registered for " + id + " (or encoding has no primary segment)");
     }
 
     private static UnknownArray decodeUnknown(DecodeContext ctx, ArrayNode node) {
-        String rawId = node.encodingId();
+        String rawId = switch (node) {
+            case KnownArrayNode k -> k.encodingId().id();
+            case UnknownArrayNode u -> u.rawEncodingId();
+        };
         MemorySegment[] bufs = new MemorySegment[node.bufferIndices().length];
         for (int i = 0; i < bufs.length; i++) {
             bufs[i] = ctx.buffer(i);
