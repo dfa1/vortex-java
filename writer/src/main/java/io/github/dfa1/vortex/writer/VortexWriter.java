@@ -144,18 +144,11 @@ public final class VortexWriter implements Closeable {
             if (!uniqueNames.add(name)) {
                 throw new IllegalArgumentException("duplicate field name: " + name);
             }
-            if (name.isBlank()) {
-                throw new IllegalArgumentException(
-                        "blank field name (wire-legal, but a footgun vortex-java refuses to write)");
-            }
-            for (int i = 0; i < name.length(); i++) {
-                // NUL aborts the reference toolchain's Arrow FFI export (SIGABRT in arrow-rs,
-                // measured 2026-07-04); other control characters poison SQL/CSV/log renderings.
-                if (Character.isISOControl(name.charAt(i))) {
-                    throw new IllegalArgumentException(
-                            "field name contains control character U+%04X".formatted((int) name.charAt(i)));
-                }
-            }
+            // Policy chokepoint: ColumnName.violation — NUL additionally aborts the reference
+            // toolchain's Arrow FFI export (SIGABRT in arrow-rs, measured 2026-07-04).
+            io.github.dfa1.vortex.core.model.ColumnName.violation(name).ifPresent(reason -> {
+                throw new IllegalArgumentException(reason);
+            });
         }
         this.channel = channel;
         this.schema = schema;

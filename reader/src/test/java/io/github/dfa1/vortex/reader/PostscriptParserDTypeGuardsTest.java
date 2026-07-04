@@ -57,7 +57,8 @@ class PostscriptParserDTypeGuardsTest {
         // When / Then
         assertThatThrownBy(() -> PostscriptParser.parseBlobs(minimalFooter(), flatLayout(), dtype))
                 .isInstanceOf(VortexException.class)
-                .hasMessageContaining("blank field name in file schema");
+                .hasMessageContaining("invalid field name in file schema")
+                .hasMessageContaining("blank field name");
     }
 
     @Test

@@ -164,10 +164,10 @@ public sealed interface DType
 
         /// Adds a named field to the struct under construction.
         ///
-        /// Field names follow the write-side policy, stricter than the wire format on purpose:
-        /// blank names and control characters are rejected as footguns (a foreign file may
-        /// carry them and the reader tolerates it, but vortex-java refuses to produce them —
-        /// same spirit as a JSON library refusing to write a `""` key it would happily parse).
+        /// Field names follow the [ColumnName] policy, stricter than the wire format on
+        /// purpose: blank names and control characters are rejected as footguns, on both the
+        /// write and the read side — same spirit as a JSON library refusing a `""` key it
+        /// could technically parse.
         ///
         /// @param name the field name; non-`null`, non-blank, no control characters, not
         ///             previously added
@@ -176,17 +176,17 @@ public sealed interface DType
         /// @throws IllegalArgumentException if `name` is blank, contains a control character,
         ///         or duplicates a previously added field
         public StructBuilder field(String name, DType type) {
-            if (name.isBlank()) {
-                throw new IllegalArgumentException(
-                        "blank field name (wire-legal, but a footgun vortex-java refuses to write)");
-            }
-            for (int i = 0; i < name.length(); i++) {
-                if (Character.isISOControl(name.charAt(i))) {
-                    throw new IllegalArgumentException(
-                            "field name contains control character U+%04X".formatted((int) name.charAt(i)));
-                }
-            }
-            if (fields.putIfAbsent(name, type) != null) {
+            return field(ColumnName.of(name), type);
+        }
+
+        /// Adds a named field using an already-validated [ColumnName].
+        ///
+        /// @param name the validated field name; must not have been previously added
+        /// @param type the field type
+        /// @return this builder
+        /// @throws IllegalArgumentException if `name` duplicates a previously added field
+        public StructBuilder field(ColumnName name, DType type) {
+            if (fields.putIfAbsent(name.value(), type) != null) {
                 throw new IllegalArgumentException("duplicate field name: " + name);
             }
             return this;
