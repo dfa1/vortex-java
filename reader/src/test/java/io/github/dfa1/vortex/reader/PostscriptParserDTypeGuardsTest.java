@@ -47,6 +47,31 @@ class PostscriptParserDTypeGuardsTest {
                 .hasMessageContaining("names/dtypes length mismatch");
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"", " ", "   "})
+    void convertDType_blankFieldName_throwsVortexException(String name) {
+        // Given — a file schema carrying a blank field name (wire-legal; the Rust writer can
+        // produce it) — rejected by policy with a message pointing at the producing pipeline
+        MemorySegment dtype = structDType(new String[]{name}, 1);
+
+        // When / Then
+        assertThatThrownBy(() -> PostscriptParser.parseBlobs(minimalFooter(), flatLayout(), dtype))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("blank field name in file schema");
+    }
+
+    @Test
+    void convertDType_controlCharacterFieldName_throwsVortexException() {
+        // Given — a newline inside a file schema's field name: wire-legal, but it poisons
+        // SQL/CSV/log renderings downstream, so the reader rejects it like the writer does
+        MemorySegment dtype = structDType(new String[]{"a\nb"}, 1);
+
+        // When / Then
+        assertThatThrownBy(() -> PostscriptParser.parseBlobs(minimalFooter(), flatLayout(), dtype))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("control character U+000A");
+    }
+
     // ── FlatBuffer builders ─────────────────────────────────────────────────────
 
     /// Builds a struct dtype blob with the given field names and `dtypeCount` null-typed fields.

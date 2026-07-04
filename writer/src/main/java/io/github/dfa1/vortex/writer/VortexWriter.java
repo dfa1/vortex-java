@@ -135,17 +135,26 @@ public final class VortexWriter implements Closeable {
         // names"): duplicate-name schemas are constructible via the DType.Struct record (only
         // StructBuilder validates), so guard here — colChunks below is name-keyed and would
         // silently collapse the duplicates anyway.
+        // Write-side name policy — stricter than the wire format on purpose (a JSON parser
+        // accepts a "" key; a good JSON library still refuses to encourage writing one). The
+        // reader stays tolerant: foreign files with blank or control-character names are legal
+        // and must open. Mirrored in DType.StructBuilder.field for earlier, friendlier failure.
         var uniqueNames = new java.util.HashSet<String>();
         for (String name : schema.fieldNames()) {
             if (!uniqueNames.add(name)) {
                 throw new IllegalArgumentException("duplicate field name: " + name);
             }
-            // A NUL byte in a field name aborts the reference toolchain's Arrow FFI export
-            // (panic-cannot-unwind in arrow-rs ffi_stream::get_schema, SIGABRT — measured
-            // 2026-07-04): never emit a file the canonical reader dies on. Everything else,
-            // including "" and whitespace-only names, is legal and round-trips.
-            if (name.indexOf('\u0000') >= 0) {
-                throw new IllegalArgumentException("field name contains NUL (U+0000)");
+            if (name.isBlank()) {
+                throw new IllegalArgumentException(
+                        "blank field name (wire-legal, but a footgun vortex-java refuses to write)");
+            }
+            for (int i = 0; i < name.length(); i++) {
+                // NUL aborts the reference toolchain's Arrow FFI export (SIGABRT in arrow-rs,
+                // measured 2026-07-04); other control characters poison SQL/CSV/log renderings.
+                if (Character.isISOControl(name.charAt(i))) {
+                    throw new IllegalArgumentException(
+                            "field name contains control character U+%04X".formatted((int) name.charAt(i)));
+                }
             }
         }
         this.channel = channel;

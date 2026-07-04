@@ -254,6 +254,22 @@ final class PostscriptParser {
                         // file, and the name-keyed Chunk API would silently drop a column.
                         throw new VortexException("duplicate field name in file schema: " + name);
                     }
+                    // Same strict name policy as the write side: blank and control-character
+                    // names are wire-legal but almost certainly a bug in the producing
+                    // pipeline — reject with a message that says so rather than propagate
+                    // unusable names into name-keyed APIs and SQL identifiers.
+                    if (name.isBlank()) {
+                        throw new VortexException("blank field name in file schema (field index "
+                                + i + "): wire-legal, but rejected by policy — likely a bug in "
+                                + "the pipeline that produced this file");
+                    }
+                    for (int c = 0; c < name.length(); c++) {
+                        if (Character.isISOControl(name.charAt(c))) {
+                            throw new VortexException(
+                                    "field name in file schema contains control character U+%04X (field index %d)"
+                                            .formatted((int) name.charAt(c), i));
+                        }
+                    }
                     names.add(name);
                 }
                 for (int i = 0; i < s.dtypesLength(); i++) {
