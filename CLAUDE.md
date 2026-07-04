@@ -28,12 +28,12 @@ core    — everything lives under `io.github.dfa1.vortex.core.*`:
           core.error    VortexException
           core.compute  FastLanes, PrimitiveArrays
           core.fbs / core.proto — generated wire codecs + their runtimes
-reader  — VortexReader, VortexHttpReader, VortexHandle, ReadRegistry, ExtensionDecoder,
-          Chunk, ArrayStats, ScanOptions, RowFilter; file internals (Footer, Layout, Trailer,
+reader  — VortexReader, VortexHttpReader, VortexHandle, ReadRegistry, Chunk, ArrayStats,
+          ScanOptions, RowFilter; file internals (Footer, Layout, Trailer,
           PostscriptParser, …)
           reader.array  — Array + all subtypes (decode outputs)
           reader.decode — EncodingDecoder, DecodeContext, ArrayNode + *EncodingDecoder impls
-          reader.extension — Date/Time/Timestamp/Uuid ExtensionDecoder
+          reader.extension — ExtensionDecoder + Date/Time/Timestamp/Uuid impls
 writer  — VortexWriter, WriteRegistry, WriteOptions, ExtensionEncoder
           writer.encode — EncodingEncoder, EncodeContext, NullableData + *EncodingEncoder impls,
           extension encoders
@@ -135,9 +135,9 @@ Add `EncodingId` enum constant `VORTEX_FOO("vortex.foo")`, then per side:
 ### Adding an extension type
 
 Add `ExtensionId` constant, then per side:
-- **Decode:** `FooExtensionDecoder implements ExtensionDecoder` in `reader.extension`; register via
-  `ReadRegistry.builder().register(new FooExtensionDecoder())` — **no service file**
-  (`registerServiceLoaded()` does not discover `ExtensionDecoder`).
+- **Decode:** singleton `FooExtensionDecoder implements ExtensionDecoder` in `reader.extension` +
+  a `case VORTEX_FOO` in `Chunk.as()` — not registry-managed, **no service file**
+  (`registerServiceLoaded()` only discovers `EncodingDecoder`).
 - **Encode:** `FooExtensionEncoder implements ExtensionEncoder` in `writer` + FQN in
   `writer/.../META-INF/services/io.github.dfa1.vortex.writer.ExtensionEncoder`
 

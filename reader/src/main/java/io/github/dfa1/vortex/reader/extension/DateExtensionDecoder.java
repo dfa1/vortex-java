@@ -8,7 +8,6 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.core.model.ExtensionId;
 
-import io.github.dfa1.vortex.reader.ExtensionDecoder;
 
 import java.time.LocalDate;
 import java.util.ArrayList;

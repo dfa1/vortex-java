@@ -203,14 +203,14 @@ Immutable after construction. Build via `ReadRegistry.builder()` or the static c
 | Method                       | Notes                                                                                    |
 |------------------------------|------------------------------------------------------------------------------------------|
 | `register(EncodingDecoder)`  | Add a custom encoding decoder; throws if already registered                              |
-| `register(ExtensionDecoder)` | Add a custom extension decoder; throws if already registered                             |
-| `registerServiceLoaded()`    | Add every `EncodingDecoder` and `ExtensionDecoder` discovered via `ServiceLoader`        |
+| `registerServiceLoaded()`    | Add every `EncodingDecoder` discovered via `ServiceLoader`                               |
 | `allowUnknown()`             | Switch to passthrough mode — unknown nodes (and their children) decode as `UnknownArray` |
 | `build()`                    | Produce the immutable `ReadRegistry`                                                     |
 
-Register custom decoders via `ServiceLoader` by adding the fully qualified class name to
-`META-INF/services/io.github.dfa1.vortex.reader.decode.EncodingDecoder` or
-`META-INF/services/io.github.dfa1.vortex.reader.ExtensionDecoder`.
+Register custom encoding decoders via `ServiceLoader` by adding the fully qualified class name to
+`META-INF/services/io.github.dfa1.vortex.reader.decode.EncodingDecoder`. Extension decoders
+(`io.github.dfa1.vortex.reader.extension.ExtensionDecoder`) are not registry-managed: the built-in
+implementations are singletons invoked directly by their `ExtensionId`.
 
 ---
 

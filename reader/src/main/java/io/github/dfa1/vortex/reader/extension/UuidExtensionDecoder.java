@@ -9,7 +9,6 @@ import io.github.dfa1.vortex.reader.array.FixedSizeListArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.core.model.ExtensionId;
 
-import io.github.dfa1.vortex.reader.ExtensionDecoder;
 
 import java.util.ArrayList;
 import java.util.List;

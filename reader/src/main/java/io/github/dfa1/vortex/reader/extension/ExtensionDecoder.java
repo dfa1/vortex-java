@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.reader;
+package io.github.dfa1.vortex.reader.extension;
 
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.ExtensionId;
