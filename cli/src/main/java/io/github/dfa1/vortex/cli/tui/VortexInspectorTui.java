@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.cli.tui;
 
-import io.github.dfa1.vortex.reader.Layout;
+import io.github.dfa1.vortex.reader.layout.Layout;
 import io.github.dfa1.vortex.reader.SegmentSpec;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -9,7 +9,7 @@ import io.github.dfa1.vortex.cli.tui.term.Key;
 import io.github.dfa1.vortex.cli.tui.term.Terminal;
 import io.github.dfa1.vortex.inspect.ByteSize;
 import io.github.dfa1.vortex.inspect.InspectorTree;
-import io.github.dfa1.vortex.reader.ZonedStatsSchema;
+import io.github.dfa1.vortex.reader.layout.ZonedStatsSchema;
 import io.github.dfa1.vortex.reader.VortexHandle;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ScanIterator;

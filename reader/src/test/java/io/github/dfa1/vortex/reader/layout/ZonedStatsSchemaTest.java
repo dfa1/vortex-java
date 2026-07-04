@@ -1,4 +1,4 @@
-package io.github.dfa1.vortex.reader;
+package io.github.dfa1.vortex.reader.layout;
 
 import java.lang.foreign.MemorySegment;
 

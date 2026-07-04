@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.reader.CompressionScheme;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.LayoutId;
 import io.github.dfa1.vortex.reader.Footer;
-import io.github.dfa1.vortex.reader.Layout;
+import io.github.dfa1.vortex.reader.layout.Layout;
 import io.github.dfa1.vortex.reader.SegmentSpec;
 import io.github.dfa1.vortex.reader.VortexHandle;
 import org.junit.jupiter.api.Test;

@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.inspect;
 
 import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.reader.Layout;
+import io.github.dfa1.vortex.reader.layout.Layout;
 import io.github.dfa1.vortex.reader.SegmentSpec;
 import io.github.dfa1.vortex.reader.VortexHandle;
 

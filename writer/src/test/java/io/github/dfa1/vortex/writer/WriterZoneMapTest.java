@@ -8,7 +8,7 @@ import java.lang.foreign.ValueLayout;
 
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
-import io.github.dfa1.vortex.reader.Layout;
+import io.github.dfa1.vortex.reader.layout.Layout;
 import io.github.dfa1.vortex.reader.SegmentSpec;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.array.DoubleArray;

@@ -1,5 +1,8 @@
 package io.github.dfa1.vortex.reader;
 
+import io.github.dfa1.vortex.reader.layout.Layout;
+import io.github.dfa1.vortex.reader.layout.ZonedStatsSchema;
+
 import static io.github.dfa1.vortex.core.io.PTypeIO.LE_SHORT;
 import static io.github.dfa1.vortex.core.io.PTypeIO.LE_INT;
 import static io.github.dfa1.vortex.core.io.PTypeIO.LE_LONG;

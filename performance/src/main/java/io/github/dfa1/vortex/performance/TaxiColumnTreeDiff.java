@@ -14,7 +14,7 @@ import io.github.dfa1.vortex.core.proto.ProtoALPMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoBitPackedMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.reader.Footer;
-import io.github.dfa1.vortex.reader.Layout;
+import io.github.dfa1.vortex.reader.layout.Layout;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.SegmentSpec;
 import io.github.dfa1.vortex.reader.VortexReader;
