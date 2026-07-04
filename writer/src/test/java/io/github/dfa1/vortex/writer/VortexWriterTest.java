@@ -97,6 +97,26 @@ class VortexWriterTest {
         }
     }
 
+    @Test
+    void create_fieldNameWithNulByte_throwsIllegalArgumentException(@TempDir Path tmp) throws IOException {
+        // Given — a NUL byte inside a field name. Legal in our pure-Java stack, but it aborts
+        // the reference toolchain's Arrow FFI export (panic-cannot-unwind in arrow-rs, SIGABRT,
+        // measured 2026-07-04) — so the writer must never emit it. Whitespace-only and empty
+        // names stay legal (see ColumnNameEdgeCasesIntegrationTest).
+        var schema = new DType.Struct(
+                List.of("col\u0000hidden"),
+                List.of(new DType.Primitive(PType.I64, false)),
+                false);
+        Path file = tmp.resolve("nul.vtx");
+
+        // When / Then
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
+            assertThatThrownBy(() -> VortexWriter.create(ch, schema, WriteOptions.defaults()))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("NUL");
+        }
+    }
+
     // ── writeChunk validation ─────────────────────────────────────────────────
 
     @Test

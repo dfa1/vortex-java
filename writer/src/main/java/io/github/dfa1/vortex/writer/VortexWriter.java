@@ -140,6 +140,13 @@ public final class VortexWriter implements Closeable {
             if (!uniqueNames.add(name)) {
                 throw new IllegalArgumentException("duplicate field name: " + name);
             }
+            // A NUL byte in a field name aborts the reference toolchain's Arrow FFI export
+            // (panic-cannot-unwind in arrow-rs ffi_stream::get_schema, SIGABRT — measured
+            // 2026-07-04): never emit a file the canonical reader dies on. Everything else,
+            // including "" and whitespace-only names, is legal and round-trips.
+            if (name.indexOf('\u0000') >= 0) {
+                throw new IllegalArgumentException("field name contains NUL (U+0000)");
+            }
         }
         this.channel = channel;
         this.schema = schema;
