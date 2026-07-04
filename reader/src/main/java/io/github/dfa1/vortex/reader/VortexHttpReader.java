@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.fbs.FbsPostscript;
 import io.github.dfa1.vortex.reader.layout.Layout;
+import io.github.dfa1.vortex.reader.layout.LayoutRegistry;
 
 import java.io.IOException;
 import java.lang.foreign.Arena;
@@ -47,11 +48,12 @@ public final class VortexHttpReader implements VortexHandle {
     private final DType dtype;
     private final Layout layout;
     private final ReadRegistry registry;
+    private final LayoutRegistry layoutRegistry;
 
     private VortexHttpReader(
         URI uri, HttpClient client, long fileSize,
         int version, Footer footer, DType dtype, Layout layout,
-        ReadRegistry registry
+        ReadRegistry registry, LayoutRegistry layoutRegistry
     ) {
         this.uri = uri;
         this.client = client;
@@ -62,6 +64,7 @@ public final class VortexHttpReader implements VortexHandle {
         this.dtype = dtype;
         this.layout = layout;
         this.registry = registry;
+        this.layoutRegistry = layoutRegistry;
     }
 
     public static VortexHttpReader open(URI uri) throws IOException {
@@ -83,6 +86,20 @@ public final class VortexHttpReader implements VortexHandle {
     /// @return an open handle to the remote file
     /// @throws IOException if the file cannot be opened or parsed
     public static VortexHttpReader open(URI uri, ReadRegistry registry, HttpClient client) throws IOException {
+        return open(uri, registry, LayoutRegistry.defaults(), client);
+    }
+
+    /// Opens a remote Vortex file with explicit encoding and layout registries and a
+    /// caller-supplied [HttpClient].
+    ///
+    /// @param uri            HTTP(S) URL of the Vortex file
+    /// @param registry       the encoding decode registry
+    /// @param layoutRegistry the layout decode registry (custom layouts register here)
+    /// @param client         HTTP client to use for all Range requests
+    /// @return an open handle to the remote file
+    /// @throws IOException if the file cannot be opened or parsed
+    public static VortexHttpReader open(URI uri, ReadRegistry registry, LayoutRegistry layoutRegistry,
+            HttpClient client) throws IOException {
         // Single suffix Range request — Content-Range response header gives us fileSize.
         // Avoids a separate HEAD round trip.
         TailFetch tf = fetchTail(uri, client);
@@ -133,7 +150,7 @@ public final class VortexHttpReader implements VortexHandle {
         return new VortexHttpReader(
             uri, client, fileSize, trailer.version(),
             parsed.footer(), parsed.dtype(), parsed.layout(),
-            registry
+            registry, layoutRegistry
         );
     }
 
@@ -310,6 +327,11 @@ public final class VortexHttpReader implements VortexHandle {
     @Override
     public ReadRegistry registry() {
         return registry;
+    }
+
+    @Override
+    public LayoutRegistry layoutRegistry() {
+        return layoutRegistry;
     }
 
     @Override

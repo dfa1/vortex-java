@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.reader;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.layout.Layout;
+import io.github.dfa1.vortex.reader.layout.LayoutRegistry;
 
 import java.io.Closeable;
 import java.lang.foreign.MemorySegment;
@@ -56,6 +57,13 @@ public interface VortexHandle extends Closeable {
     ///
     /// @return the registry used to resolve encoding ids during scan
     ReadRegistry registry();
+
+    /// Returns the [LayoutRegistry] this handle was opened with, dispatching full-column layout
+    /// subtree decode. Defaults to [LayoutRegistry#defaults()] unless a custom registry was
+    /// supplied at open time.
+    ///
+    /// @return the registry used to decode layout nodes during scan
+    LayoutRegistry layoutRegistry();
 
     @Override
     void close();

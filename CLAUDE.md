@@ -23,17 +23,18 @@ Benchmark classes follow this: `JavaVsJni{Read,Write,Filter}Benchmark`,
 
 ```
 core    — everything lives under `io.github.dfa1.vortex.core.*`:
-          core.model    DType, PType, TimeUnit, EncodingId, ExtensionId, TimeDtype, TimestampDtype
+          core.model    DType, PType, TimeUnit, EncodingId, LayoutId, ExtensionId, TimeDtype, TimestampDtype
           core.io       IoBounds, PTypeIO, VortexFormat
           core.error    VortexException
           core.compute  FastLanes, PrimitiveArrays
           core.fbs / core.proto — generated wire codecs + their runtimes
 reader  — VortexReader, VortexHttpReader, VortexHandle, ReadRegistry, Chunk, ArrayStats,
-          ScanOptions, RowFilter; file internals (Footer, Layout, Trailer,
-          PostscriptParser, …)
+          ScanOptions, RowFilter; file internals (Footer, Trailer, PostscriptParser, …)
           reader.array  — Array + all subtypes (decode outputs)
           reader.decode — EncodingDecoder, DecodeContext, ArrayNode + *EncodingDecoder impls
           reader.extension — ExtensionDecoder + Date/Time/Timestamp/Uuid impls
+          reader.layout — Layout, LayoutDecoder, LayoutDecodeContext, LayoutRegistry
+          + built-in *LayoutDecoder impls, ZonedStatsSchema
 writer  — VortexWriter, WriteRegistry, WriteOptions, ExtensionEncoder
           writer.encode — EncodingEncoder, EncodeContext, NullableData + *EncodingEncoder impls,
           extension encoders
@@ -194,9 +195,13 @@ in the Rust source for the exact schema, then implement from spec.
   not add variants. Use `new DType.Extension("ip.address", new DType.Primitive(PType.I32, false),
   null, false)` and register decoders/encoders on the registries (or `ServiceLoader<ExtensionEncoder>`).
   Mirrors Rust (`vortex.date`, `vortex.uuid`, …). No SPI for DType variants planned.
-- **Layout is a fixed set, no SPI.** `ScanIterator.decodeLayout()` dispatches the known IDs
-  (flat/chunked/zoned/struct/dict) and throws otherwise. Keep the fixed set; revisit only for a
-  concrete downstream case unaddressable by a different flat-segment encoding.
+- **Layout decode is pluggable via `LayoutDecoder` + `LayoutRegistry`** (`reader.layout`) — the
+  Rust reference registers layouts at runtime, so ours are open too. Builder-registered only
+  (`LayoutRegistry.builder().registerDefaults().register(custom).build()`, pass to
+  `VortexReader.open(path, readRegistry, layoutRegistry)`) — **no service file**. Unknown layouts
+  fail loudly (`VortexException`, Rust default; no allowUnknown for layouts). Scope: the SPI covers
+  full-column subtree decode; zone-map pruning, filtered scans, and chunk planning recognize the
+  built-in layouts only.
 - **Small public APIs.** Don't expose internals — when in doubt, leave it out or make it private.
 - **POM deps** grouped with comments: `<!-- production -->` then `<!-- testing -->`, each with
   project-internal (`io.github.dfa1.vortex:*`) deps first, then external. Omit empty sections.

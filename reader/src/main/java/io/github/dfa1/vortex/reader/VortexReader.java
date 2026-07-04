@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.io.IoBounds;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.reader.layout.Layout;
+import io.github.dfa1.vortex.reader.layout.LayoutRegistry;
 
 import java.io.IOException;
 import java.lang.foreign.Arena;
@@ -34,11 +35,12 @@ public final class VortexReader implements VortexHandle {
     private final DType dtype;
     private final Layout layout;
     private final ReadRegistry registry;
+    private final LayoutRegistry layoutRegistry;
 
     private VortexReader(
             Arena arena, MemorySegment fileSegment, long fileSize,
             int version, Footer footer, DType dtype, Layout layout,
-            ReadRegistry registry
+            ReadRegistry registry, LayoutRegistry layoutRegistry
     ) {
         this.arena = arena;
         this.fileSegment = fileSegment;
@@ -48,6 +50,7 @@ public final class VortexReader implements VortexHandle {
         this.dtype = dtype;
         this.layout = layout;
         this.registry = registry;
+        this.layoutRegistry = layoutRegistry;
     }
 
     /// Open a Vortex file. Memory-maps the entire file; all subsequent reads
@@ -57,6 +60,19 @@ public final class VortexReader implements VortexHandle {
     }
 
     public static VortexReader open(Path path, ReadRegistry registry) throws IOException {
+        return open(path, registry, LayoutRegistry.defaults());
+    }
+
+    /// Opens a Vortex file with explicit encoding and layout registries. Memory-maps the entire
+    /// file; all subsequent reads are zero-copy slices. Call [#close()] when done.
+    ///
+    /// @param path           the file to open
+    /// @param registry       the encoding decode registry
+    /// @param layoutRegistry the layout decode registry (custom layouts register here)
+    /// @return an open handle to the file
+    /// @throws IOException if the file cannot be opened or parsed
+    public static VortexReader open(Path path, ReadRegistry registry, LayoutRegistry layoutRegistry)
+            throws IOException {
         Arena arena = Arena.ofConfined();
         try (var channel = FileChannel.open(path, StandardOpenOption.READ)) {
             long size = channel.size();
@@ -67,7 +83,7 @@ public final class VortexReader implements VortexHandle {
             // lifetime. try-with-resources closes the file descriptor while all Array
             // buffers remain valid zero-copy slices until arena.close() is called.
             var segment = channel.map(FileChannel.MapMode.READ_ONLY, 0, size, arena);
-            return parse(segment, size, arena, registry);
+            return parse(segment, size, arena, registry, layoutRegistry);
         } catch (Exception e) {
             arena.close();
             throw e;
@@ -75,7 +91,7 @@ public final class VortexReader implements VortexHandle {
     }
 
     private static VortexReader parse(
-            MemorySegment seg, long size, Arena arena, ReadRegistry registry
+            MemorySegment seg, long size, Arena arena, ReadRegistry registry, LayoutRegistry layoutRegistry
     ) {
         long bodyBytes = size - VortexFormat.TRAILER_SIZE;
         var trailerSeg = IoBounds.slice(seg, bodyBytes, VortexFormat.TRAILER_SIZE);
@@ -96,7 +112,7 @@ public final class VortexReader implements VortexHandle {
         return new VortexReader(
                 arena, seg, size, trailer.version(),
                 parsed.footer(), parsed.dtype(), parsed.layout(),
-                registry
+                registry, layoutRegistry
         );
     }
 
@@ -158,6 +174,11 @@ public final class VortexReader implements VortexHandle {
     @Override
     public ReadRegistry registry() {
         return registry;
+    }
+
+    @Override
+    public LayoutRegistry layoutRegistry() {
+        return layoutRegistry;
     }
 
     /// Returns the number of chunks in this file.

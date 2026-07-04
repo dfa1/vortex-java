@@ -1,29 +1,14 @@
 package io.github.dfa1.vortex.reader;
 
-import static io.github.dfa1.vortex.core.io.PTypeIO.LE_SHORT;
 import static io.github.dfa1.vortex.core.io.PTypeIO.LE_INT;
-import static io.github.dfa1.vortex.core.io.PTypeIO.LE_LONG;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.io.IoBounds;
-import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
-import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.compute.Compare;
 import io.github.dfa1.vortex.reader.compute.Predicate;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
-import io.github.dfa1.vortex.reader.array.ChunkedBoolArray;
-import io.github.dfa1.vortex.reader.array.ChunkedByteArray;
-import io.github.dfa1.vortex.reader.array.ChunkedDoubleArray;
-import io.github.dfa1.vortex.reader.array.ChunkedFloatArray;
-import io.github.dfa1.vortex.reader.array.ChunkedIntArray;
-import io.github.dfa1.vortex.reader.array.ChunkedLongArray;
-import io.github.dfa1.vortex.reader.array.ChunkedShortArray;
-import io.github.dfa1.vortex.reader.array.DictDoubleArray;
-import io.github.dfa1.vortex.reader.array.DictFloatArray;
-import io.github.dfa1.vortex.reader.array.DictIntArray;
-import io.github.dfa1.vortex.reader.array.DictLongArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
@@ -40,6 +25,7 @@ import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.StructArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.layout.Layout;
+import io.github.dfa1.vortex.reader.layout.LayoutDecodeContext;
 import io.github.dfa1.vortex.reader.layout.ZonedStatsSchema;
 
 import java.lang.foreign.Arena;
@@ -53,7 +39,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.Optional;
 import java.util.function.Consumer;
 
 /// Iterates over decoded chunks from a [io.github.dfa1.vortex.reader.VortexReader].
@@ -212,59 +197,6 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             map.put(names.get(i), sa.field(i));
         }
         return Map.copyOf(map);
-    }
-
-    // ── Column map builder ────────────────────────────────────────────────────
-
-    private static Array expandDictStrings(
-            VarBinArray.OffsetMode values, MemorySegment codesSegs,
-            PType codesPType, DType dtype,
-            long n, SegmentAllocator arena
-    ) {
-        MemorySegment valBytes = values.bytesSegment();
-        MemorySegment valOffsets = values.offsetsSegment();
-        PType valOffPType = values.offsetsPtype();
-
-        // First pass: total output byte length
-        long totalBytes = 0L;
-        for (long i = 0; i < n; i++) {
-            long code = readUnsigned(codesSegs, i, codesPType);
-            long start = readUnsigned(valOffsets, code, valOffPType);
-            long end = readUnsigned(valOffsets, code + 1, valOffPType);
-            totalBytes += end - start;
-        }
-
-        MemorySegment outBytes = arena.allocate(totalBytes > 0 ? totalBytes : 1);
-        MemorySegment outOffsets = arena.allocate((n + 1) * 4L, 4);
-        outOffsets.setAtIndex(LE_INT, 0, 0);
-
-        long bytePos = 0L;
-        for (long i = 0; i < n; i++) {
-            long code = readUnsigned(codesSegs, i, codesPType);
-            long start = readUnsigned(valOffsets, code, valOffPType);
-            long end = readUnsigned(valOffsets, code + 1, valOffPType);
-            long strLen = end - start;
-            if (strLen > 0) {
-                MemorySegment.copy(valBytes, start, outBytes, bytePos, strLen);
-                bytePos += strLen;
-            }
-            outOffsets.setAtIndex(LE_INT, i + 1, (int) bytePos);
-        }
-
-        return new VarBinArray.OffsetMode(dtype, n, outBytes.asReadOnly(), outOffsets.asReadOnly(), PType.I32);
-    }
-
-    // ── Flat segment decoding ─────────────────────────────────────────────────
-
-    private static long readUnsigned(MemorySegment seg, long idx, PType ptype) {
-        return switch (ptype) {
-            case U8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, idx));
-            case U16 -> Short.toUnsignedLong(seg.get(LE_SHORT, idx * 2));
-            case U32 -> Integer.toUnsignedLong(seg.getAtIndex(LE_INT, idx));
-            case I32 -> seg.getAtIndex(LE_INT, idx);
-            case I64, U64 -> seg.getAtIndex(LE_LONG, idx);
-            default -> throw new VortexException(EncodingId.VORTEX_DICT, "layout: unsupported ptype " + ptype);
-        };
     }
 
     // ── Zone-map pruning ──────────────────────────────────────────────────────
@@ -764,181 +696,10 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     }
 
     private Array decodeLayout(Layout layout, DType dtype, SegmentAllocator arena) {
-        if (layout.isFlat()) {
-            return decodeFlat(layout, dtype, arena);
-        }
-        if (layout.isDict()) {
-            return decodeDictLayout(layout, dtype, arena);
-        }
-        if (layout.isZoned() && !layout.children().isEmpty()) {
-            // Both vortex.zoned and its legacy vortex.stats alias wrap the data layout as child[0].
-            return decodeLayout(layout.children().getFirst(), dtype, arena);
-        }
-        if (layout.isChunked()) {
-            var flats = new ArrayList<Layout>();
-            collectFlats(layout, flats);
-            return decodeChunkedLayout(flats, dtype, layout.rowCount(), arena);
-        }
-        // Custom (unknown) or any unhandled well-known layout id fails loudly — Rust has no
-        // allowUnknown for layouts.
-        throw new VortexException("cannot decode layout " + layout.layoutId());
-    }
-
-    private Array decodeChunkedLayout(List<Layout> flats, DType dtype, long totalRows, SegmentAllocator arena) {
-        if (flats.isEmpty()) {
-            throw new VortexException(EncodingId.VORTEX_CHUNKED, "no flat children");
-        }
-        if (flats.size() == 1) {
-            return decodeFlat(flats.getFirst(), dtype, arena);
-        }
-        // ADR 0012: every primitive ptype gets the zero-copy ChunkedXxxArray shape.
-        // The concat path is gone.
-        var chunkArrays = new ArrayList<Array>(flats.size());
-        for (Layout flat : flats) {
-            chunkArrays.add(decodeFlat(flat, dtype, arena));
-        }
-        if (dtype instanceof DType.Bool) {
-            return ChunkedBoolArray.of(dtype, totalRows, chunkArrays);
-        }
-        if (dtype instanceof DType.Utf8 || dtype instanceof DType.Binary) {
-            return VarBinArray.ChunkedMode.of(dtype, totalRows, chunkArrays);
-        }
-        PType ptype = ((DType.Primitive) dtype).ptype();
-        return switch (ptype) {
-            case I64, U64 -> ChunkedLongArray.of(dtype, totalRows, chunkArrays);
-            case I32, U32 -> ChunkedIntArray.of(dtype, totalRows, chunkArrays);
-            case F64 -> ChunkedDoubleArray.of(dtype, totalRows, chunkArrays);
-            case F32 -> ChunkedFloatArray.of(dtype, totalRows, chunkArrays);
-            case I16, U16 -> ChunkedShortArray.of(dtype, totalRows, chunkArrays);
-            case I8, U8 -> ChunkedByteArray.of(dtype, totalRows, chunkArrays);
-            default -> throw new VortexException("unsupported ptype for chunked layout: " + ptype);
-        };
+        return file.layoutRegistry().decode(new ScanLayoutContext(file, arena), layout, dtype);
     }
 
     // ── Limit truncation ─────────────────────────────────────────────────────
-
-    private Array decodeFlat(Layout flat, DType dtype, SegmentAllocator arena) {
-        if (flat.segments().isEmpty()) {
-            throw new VortexException("no segments");
-        }
-        int segIdx = flat.segments().getFirst();
-        SegmentSpec spec = file.footer().segmentSpecs().get(segIdx);
-        return file.decodeFlatSegment(spec, dtype, flat.rowCount(), arena);
-    }
-
-    private Array decodeDictLayout(Layout dictLayout, DType dtype, SegmentAllocator arena) {
-        MemorySegment rawMeta = dictLayout.metadata();
-        // DictLayoutMetadata proto (Rust format): field 1 = codes_ptype (PType varint).
-        // Read the varint directly to avoid field-number mismatch with the array-level DictMetadata proto.
-        PType codesPType = readDictLayoutCodesPType(rawMeta);
-
-        // child[0] = values layout; child[1] = codes layout
-        Layout valuesLayout = dictLayout.children().get(0);
-        Layout codesLayout = dictLayout.children().get(1);
-        long n = codesLayout.rowCount();
-
-        Array values = decodeLayout(valuesLayout, dtype, arena);
-        Array codes = decodeLayout(codesLayout, new DType.Primitive(codesPType, false), arena);
-
-        // VarBin (string) dict: VarBinArray is a sealed interface; ofDict returns the
-        // lazy DictMode record (no eager expansion into per-row offsets/bytes).
-        if (values instanceof VarBinArray.OffsetMode vb) {
-            // Zip-bomb guard: read the codes as a segment so we can validate the buffer
-            // before allocating the expansion output. For direct-mapped encodings (e.g.
-            // vortex.primitive), the codes buffer is mmap-bounded and can be much smaller
-            // than the claimed rowCount. Full-decode encodings (e.g. bitpacked) already
-            // wrote n * elemBytes to the arena during decodeLayout above, so their buffer
-            // matches n.
-            MemorySegment codesSeg = codes.materialize(arena);
-            long bufferCodes = codesSeg.byteSize() / codesPType.byteSize();
-            if (bufferCodes < n) {
-                throw new VortexException(EncodingId.VORTEX_DICT,
-                        "dict codes: layout row_count=" + n + " exceeds buffer capacity=" + bufferCodes);
-            }
-            MemorySegment valOffsets = vb.offsetsSegment();
-            PType valOffPType = vb.offsetsPtype();
-            return VarBinArray.ofDict(dtype, n, vb.bytesSegment(), valOffsets, valOffPType,
-                    codesSeg, codesPType);
-        }
-        if (dtype instanceof DType.Primitive pDtype) {
-            // Zip-bomb guard (lazy path): the codes Array has already been decoded above;
-            // its length() reflects the claimed rowCount but its backing buffer may be
-            // mmap-bounded. Validate by inspecting the underlying segment without forcing
-            // materialization of non-segment-backed codes (lazy variants).
-            validateDictCodesCapacity(codes, codesPType, n);
-            return buildLazyDictPrimitive(pDtype, n, values, codes);
-        }
-        // Non-Utf8, non-Primitive dict — e.g. extension types backed by VarBin. Fall through
-        // to the existing string expansion for compatibility.
-        MemorySegment codesSegFallback = codes.materialize(arena);
-        long bufferCodesFallback = codesSegFallback.byteSize() / codesPType.byteSize();
-        if (bufferCodesFallback < n) {
-            throw new VortexException(EncodingId.VORTEX_DICT,
-                    "dict codes: layout row_count=" + n + " exceeds buffer capacity=" + bufferCodesFallback);
-        }
-        return expandDictStrings(VarBinArray.toOffsetMode((VarBinArray) values, arena),
-                codesSegFallback, codesPType, dtype, n, arena);
-    }
-
-    /// Lazy-path zip-bomb guard. Inspects `codes`'s primary segment when available
-    /// (segment-backed encodings can be mmap-bounded and undersized); skips validation
-    /// for non-segment variants whose own decoder has already enforced length.
-    ///
-    /// @param codes      the decoded codes array
-    /// @param codesPType code ptype reported by the dict layout metadata
-    /// @param n          claimed dict row count
-    private static void validateDictCodesCapacity(Array codes, PType codesPType, long n) {
-        Optional<MemorySegment> maybeSeg = codes.segmentIfPresent();
-        if (maybeSeg.isEmpty()) {
-            return;
-        }
-        long bufferCodes = maybeSeg.get().byteSize() / codesPType.byteSize();
-        if (bufferCodes < n) {
-            throw new VortexException(EncodingId.VORTEX_DICT,
-                    "dict codes: layout row_count=" + n + " exceeds buffer capacity=" + bufferCodes);
-        }
-    }
-
-    /// Builds the matching `DictXxxArray` for a primitive dictionary, unwrapping
-    /// any [MaskedArray] layer on either side — dictionary lookups are keyed by code
-    /// so value-side validity is meaningless at this layer.
-    ///
-    /// @param dtype  primitive logical type of dict values
-    /// @param n      total logical row count
-    /// @param values dictionary values
-    /// @param codes  per-row codes into `values`
-    /// @return a lazy `DictXxxArray` matching the value ptype
-    private static Array buildLazyDictPrimitive(DType.Primitive dtype, long n, Array values, Array codes) {
-        Array valuesData = values instanceof MaskedArray mv ? mv.inner() : values;
-        Array codesData = codes instanceof MaskedArray mc ? mc.inner() : codes;
-        PType ptype = dtype.ptype();
-        return switch (ptype) {
-            case I64, U64 -> DictLongArray.of(dtype, n, (LongArray) valuesData, codesData);
-            case I32, U32 -> DictIntArray.of(dtype, n, (IntArray) valuesData, codesData);
-            case F64 -> DictDoubleArray.of(dtype, n, (DoubleArray) valuesData, codesData);
-            case F32 -> DictFloatArray.of(dtype, n, (FloatArray) valuesData, codesData);
-            default -> throw new VortexException(EncodingId.VORTEX_DICT,
-                    "layout: unsupported ptype for lazy dict: " + ptype);
-        };
-    }
-
-    private static PType readDictLayoutCodesPType(MemorySegment rawMeta) {
-        // DictLayoutMetadata (Rust): field 1 = codes_ptype, wire type 0 (varint).
-        // Tag byte = (field_number << 3) | wire_type = (1 << 3) | 0 = 0x08.
-        // Proto3 omits field 1 when it holds the default value (0 = U8), so empty metadata means U8.
-        if (rawMeta == null || rawMeta.byteSize() == 0) {
-            return PType.U8;
-        }
-        byte tag = rawMeta.get(ValueLayout.JAVA_BYTE, 0);
-        if (tag == 0x08 && rawMeta.byteSize() > 1) {
-            int ordinal = rawMeta.get(ValueLayout.JAVA_BYTE, 1) & 0xFF;
-            PType[] values = PType.values();
-            if (ordinal < values.length) {
-                return values[ordinal];
-            }
-        }
-        return PType.U8;
-    }
 
     private boolean canPruneChunk(ChunkSpec chunk, RowFilter filter) {
         return switch (filter) {
@@ -1041,6 +802,30 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             return ArrayStats.empty();
         }
         return ArrayStats.fromFbs(root.stats());
+    }
+
+    // ── Layout decode context ─────────────────────────────────────────────────
+
+    /// Binds a [LayoutDecodeContext] to one decode epoch (one arena). Recursion into children
+    /// routes back through the file's [LayoutRegistry] with the same arena, so nested layouts
+    /// land in the chunk the scan is currently filling.
+    private record ScanLayoutContext(VortexHandle file, SegmentAllocator arena)
+            implements LayoutDecodeContext {
+
+        @Override
+        public Array decodeChild(Layout child, DType dtype) {
+            return file.layoutRegistry().decode(this, child, dtype);
+        }
+
+        @Override
+        public Array decodeFlatSegment(SegmentSpec spec, DType dtype, long rowCount) {
+            return file.decodeFlatSegment(spec, dtype, rowCount, arena);
+        }
+
+        @Override
+        public SegmentSpec segmentSpec(int index) {
+            return file.footer().segmentSpecs().get(index);
+        }
     }
 
     // ── Internal record ───────────────────────────────────────────────────────
