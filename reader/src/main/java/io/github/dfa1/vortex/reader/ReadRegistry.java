@@ -10,6 +10,7 @@ import io.github.dfa1.vortex.reader.decode.EncodingDecoder;
 
 import java.lang.foreign.MemorySegment;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.TreeMap;
@@ -20,14 +21,17 @@ import java.util.TreeMap;
 /// via the [#loadAll()] and [#empty()] convenience factories.
 public final class ReadRegistry {
 
-    private final Map<String, EncodingDecoder> decoders;
+    // Keyed by the typed id — ArrayNode already carries a parsed EncodingId, so dispatch never
+    // round-trips through the wire string ("strings at the boundary, types inside"). Ordered by
+    // that string (EncodingId is not Comparable; a Custom key must not throw); order is not
+    // load-bearing, but stable ordering keeps the registries consistent.
+    private final Map<EncodingId, EncodingDecoder> decoders;
     private final boolean allowUnknown;
 
-    private ReadRegistry(Map<String, EncodingDecoder> decoders, boolean allowUnknown) {
-        // Keyed by the wire string, ordered naturally by it, mirroring WriteRegistry. Decode
-        // dispatch is keyed, so order is not load-bearing here, but a stable order keeps the two
-        // registries consistent.
-        this.decoders = Collections.unmodifiableMap(new TreeMap<>(decoders));
+    private ReadRegistry(Map<EncodingId, EncodingDecoder> decoders, boolean allowUnknown) {
+        var sorted = new TreeMap<EncodingId, EncodingDecoder>(Comparator.comparing(EncodingId::id));
+        sorted.putAll(decoders);
+        this.decoders = Collections.unmodifiableMap(sorted);
         this.allowUnknown = allowUnknown;
     }
 
@@ -65,7 +69,7 @@ public final class ReadRegistry {
     /// @param encodingId the encoding id to query
     /// @return `true` if a decoder is registered
     public boolean hasDecoder(EncodingId encodingId) {
-        return decoders.containsKey(encodingId.id());
+        return decoders.containsKey(encodingId);
     }
 
     /// Decodes the array described by `ctx`.
@@ -74,7 +78,7 @@ public final class ReadRegistry {
     /// @return the decoded [Array]
     public Array decode(DecodeContext ctx) {
         ArrayNode node = ctx.node();
-        EncodingDecoder decoder = decoders.get(node.encodingId().id());
+        EncodingDecoder decoder = decoders.get(node.encodingId());
         if (decoder != null) {
             return decoder.decode(ctx);
         }
@@ -90,7 +94,7 @@ public final class ReadRegistry {
     /// @return the primary [MemorySegment] of the decoded array
     public MemorySegment decodeAsSegment(DecodeContext ctx) {
         ArrayNode node = ctx.node();
-        EncodingDecoder decoder = decoders.get(node.encodingId().id());
+        EncodingDecoder decoder = decoders.get(node.encodingId());
         if (decoder != null) {
             return decoder.decode(ctx).materialize(ctx.arena());
         }
@@ -121,7 +125,7 @@ public final class ReadRegistry {
     /// Not thread-safe. Build once, use everywhere — the produced [ReadRegistry] is immutable.
     public static final class Builder {
 
-        private final Map<String, EncodingDecoder> decoders = new TreeMap<>();
+        private final Map<EncodingId, EncodingDecoder> decoders = new TreeMap<>(Comparator.comparing(EncodingId::id));
         private boolean allowUnknown = false;
 
         private Builder() {
@@ -133,7 +137,7 @@ public final class ReadRegistry {
         /// @return this builder, for chaining
         /// @throws VortexException if a decoder for the same id is already registered
         public Builder register(EncodingDecoder decoder) {
-            EncodingDecoder old = decoders.put(decoder.encodingId().id(), decoder);
+            EncodingDecoder old = decoders.put(decoder.encodingId(), decoder);
             if (old != null) {
                 throw new VortexException("decoder %s already registered".formatted(decoder.encodingId()));
             }

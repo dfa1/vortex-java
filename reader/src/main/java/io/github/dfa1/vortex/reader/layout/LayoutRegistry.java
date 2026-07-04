@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.model.LayoutId;
 import io.github.dfa1.vortex.reader.array.Array;
 
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -20,12 +21,16 @@ import java.util.TreeMap;
 /// allow-unknown mode, matching the Rust reference.
 public final class LayoutRegistry {
 
-    // Keyed by the wire string, ordered naturally by it, mirroring ReadRegistry. Decode dispatch
-    // is keyed, so order is not load-bearing, but a stable order keeps the registries consistent.
-    private final Map<String, LayoutDecoder> decoders;
+    // Keyed by the typed id — Layout already carries a parsed LayoutId, so dispatch never
+    // round-trips through the wire string. Ordered by that string (LayoutId is not Comparable;
+    // a Custom key must not throw): order is not load-bearing, but stable ordering keeps the
+    // registries consistent.
+    private final Map<LayoutId, LayoutDecoder> decoders;
 
-    private LayoutRegistry(Map<String, LayoutDecoder> decoders) {
-        this.decoders = Collections.unmodifiableMap(new TreeMap<>(decoders));
+    private LayoutRegistry(Map<LayoutId, LayoutDecoder> decoders) {
+        var sorted = new TreeMap<LayoutId, LayoutDecoder>(Comparator.comparing(LayoutId::id));
+        sorted.putAll(decoders);
+        this.decoders = Collections.unmodifiableMap(sorted);
     }
 
     /// Returns a registry populated with the four built-in layout decoders (flat, chunked,
@@ -48,7 +53,7 @@ public final class LayoutRegistry {
     /// @param layoutId the layout id to query
     /// @return `true` if a decoder is registered
     public boolean hasDecoder(LayoutId layoutId) {
-        return decoders.containsKey(layoutId.id());
+        return decoders.containsKey(layoutId);
     }
 
     /// Decodes `layout` into an [Array] of `dtype` by dispatching to the decoder registered for
@@ -60,7 +65,7 @@ public final class LayoutRegistry {
     /// @return the decoded [Array]
     /// @throws VortexException if no decoder is registered for `layout`'s id
     public Array decode(LayoutDecodeContext ctx, Layout layout, DType dtype) {
-        LayoutDecoder decoder = decoders.get(layout.layoutId().id());
+        LayoutDecoder decoder = decoders.get(layout.layoutId());
         if (decoder == null) {
             throw new VortexException("cannot decode layout " + layout.layoutId());
         }
@@ -72,7 +77,7 @@ public final class LayoutRegistry {
     /// Not thread-safe. Build once, use everywhere — the produced [LayoutRegistry] is immutable.
     public static final class Builder {
 
-        private final Map<String, LayoutDecoder> decoders = new TreeMap<>();
+        private final Map<LayoutId, LayoutDecoder> decoders = new TreeMap<>(Comparator.comparing(LayoutId::id));
 
         private Builder() {
         }
@@ -86,7 +91,7 @@ public final class LayoutRegistry {
         /// @throws VortexException if any of the decoder's ids is already registered
         public Builder register(LayoutDecoder decoder) {
             for (LayoutId id : decoder.layoutIds()) {
-                LayoutDecoder old = decoders.put(id.id(), decoder);
+                LayoutDecoder old = decoders.put(id, decoder);
                 if (old != null) {
                     throw new VortexException("layout decoder %s already registered".formatted(id));
                 }
