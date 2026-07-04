@@ -15,10 +15,15 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
 import java.util.List;
 
-/// Parses a flat segment from the memory-mapped file region and dispatches to the
-/// appropriate decoder via the [ReadRegistry].
+/// Decodes one serialized array message — the wire unit a flat layout's segment stores — by
+/// parsing its FlatBuffer scaffolding and dispatching to the appropriate decoder via the
+/// [ReadRegistry].
 ///
-/// Flat segment wire format:
+/// Named after the Rust reference's `SerializedArray` (`vortex-array/src/serde.rs`): "a parsed
+/// but not-yet-decoded deserialized array" whose `decode` resolves the encoding id against the
+/// spec table and consults the registry — exactly this class's contract.
+///
+/// Serialized array wire format:
 /// `buffer_data... | FlatBuffer(Array) | u32 LE = FlatBuffer byte length`
 ///
 /// [ReadRegistry] is pure dispatch; this class owns all file-format knowledge:
