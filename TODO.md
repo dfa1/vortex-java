@@ -67,6 +67,19 @@ Per-encoding gotchas:
 ## Build
 
 - [ ] use JPMS, watch out for "dfa1" in package name
+- [ ] **Docs need a compiler** — living prose (CLAUDE.md, `docs/*.md`) drifts from code with no
+  gate (2026-07-04 found: phantom `register(ExtensionDecoder)`, stale "not yet implemented" on
+  MASKED/PATCHED, dead service-file path, stale FQNs after package moves). Tiered plan:
+  1. Markdown link checker in CI (relative links; the `docs/adr` → `adr/` move rewrote ~40 by hand).
+  2. `DocsConsistencyTest` (integration module): extract backticked FQNs / `Class#member` refs /
+     `META-INF/services` paths from living docs, assert existence via reflection. Historical files
+     (`adr/`, released CHANGELOG sections) exempt by policy.
+  3. Golden-test or generate enumerable tables (encodings/extensions/layout ids in
+     `docs/reference.md`, `docs/compatibility.md`) from `EncodingId.WellKnown`/`LayoutId.WellKnown`/
+     service manifests — a declared capability the code lacks is a bug, in both directions.
+  4. Compile ` ```java ` blocks from living docs (defer until 1–3 pay rent).
+  Plus: standing stale-docs dimension in the vortex-reviewer agent (grep living docs for
+  identifiers a diff renames/moves/deletes).
 
 ## Tooling
 
@@ -82,6 +95,18 @@ Per-encoding gotchas:
     - See [ADR-0008](adr/0008-domain-primitives-unsigned-integers.md) and https://dfa1.github.io/articles/rethink-domain-primitives-with-valhalla
     - Candidates: `PType` integer kinds, buffer offsets, row indices, byte lengths
     - Goal: type-safety at zero cost (value class = no heap alloc, no boxing)
+- [ ] **Column identity: duplicate/empty field names (BUG + ADR candidate)** — measured 2026-07-04:
+  `""` and duplicate field names round-trip through our writer/reader (the `DType.Struct` record
+  constructor validates nothing; only `StructBuilder` rejects duplicates, and the proto decode path
+  bypasses it — it can also desync `fieldNames`/`fieldTypes` sizes). The Rust reference *documents*
+  duplicates as legal with **first**-match name resolution (`vortex-array/src/dtype/struct_.rs`),
+  but our `Chunk`'s `Map<String, Array>` silently drops columns (two `dup` fields → one entry) and
+  resolves **last**-wins — a legal Rust file loses data in our reader. Also: duplicate-name write
+  produced two chunks from one `writeChunk` (unexplained, investigate).
+  Fix direction (ADR): `Chunk` columns become ordered (list/parallel arrays) with name lookup =
+  first match, mirroring Rust; `columns()` map API rethought. Revisit `ColumnName` as a domain
+  primitive here — note the honest limit: `""` is wire-legal, so the per-value invariant is thin;
+  the real invariants are structural (ordered fields, first-match resolution, names/types arity).
 
 ## Compute
 
