@@ -48,12 +48,12 @@ class PatchedEncodingDecoderTest {
 
         MemorySegment[] segments = {inner, laneOffsets, patchIndices, patchValues};
 
-        ArrayNode innerNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
-        ArrayNode laneNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1});
-        ArrayNode idxNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{2});
-        ArrayNode valNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{3});
+        ArrayNode innerNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
+        ArrayNode laneNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1});
+        ArrayNode idxNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{2});
+        ArrayNode valNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{3});
 
-        ArrayNode patchedNode = ArrayNode.of(EncodingId.VORTEX_PATCHED, meta,
+        ArrayNode patchedNode = new ArrayNode(EncodingId.VORTEX_PATCHED, meta,
                 new ArrayNode[]{innerNode, laneNode, idxNode, valNode}, new int[]{});
 
         DecodeContext ctx = new DecodeContext(patchedNode, dtype, n, segments, REGISTRY, Arena.ofAuto());
@@ -139,8 +139,8 @@ class PatchedEncodingDecoderTest {
     @Test
     void decode_missingMetadata_throws() {
         // Given
-        ArrayNode innerNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
-        ArrayNode patchedNode = ArrayNode.of(EncodingId.VORTEX_PATCHED, null,
+        ArrayNode innerNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
+        ArrayNode patchedNode = new ArrayNode(EncodingId.VORTEX_PATCHED, null,
                 new ArrayNode[]{innerNode, innerNode, innerNode, innerNode}, new int[]{});
         MemorySegment seg = TestSegments.leInts(1, 2, 3);
         DecodeContext ctx = new DecodeContext(patchedNode, DType.I32, 3,

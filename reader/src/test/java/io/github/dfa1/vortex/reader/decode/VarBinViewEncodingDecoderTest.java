@@ -36,7 +36,7 @@ class VarBinViewEncodingDecoderTest {
         writeInlineView(views, 0, a);
         writeInlineView(views, 1, b);
 
-        ArrayNode node = ArrayNode.of(EncodingId.VORTEX_VARBINVIEW, null, new ArrayNode[0], new int[]{0});
+        ArrayNode node = new ArrayNode(EncodingId.VORTEX_VARBINVIEW, null, new ArrayNode[0], new int[]{0});
         DecodeContext ctx = new DecodeContext(node, DType.BINARY, 2,
                 new MemorySegment[]{views}, ReadRegistry.empty(), arena);
 
@@ -53,7 +53,7 @@ class VarBinViewEncodingDecoderTest {
     @Test
     void decode_wrongDtype_throws() {
         // Given a primitive dtype
-        ArrayNode node = ArrayNode.of(EncodingId.VORTEX_VARBINVIEW, null, new ArrayNode[0], new int[]{0});
+        ArrayNode node = new ArrayNode(EncodingId.VORTEX_VARBINVIEW, null, new ArrayNode[0], new int[]{0});
         DecodeContext ctx = new DecodeContext(node, new DType.Primitive(io.github.dfa1.vortex.core.model.PType.I32, false),
                 0, new MemorySegment[]{Arena.ofAuto().allocate(16)}, ReadRegistry.empty(), Arena.ofAuto());
 
@@ -65,7 +65,7 @@ class VarBinViewEncodingDecoderTest {
     @Test
     void decode_noBuffers_throws() {
         // Given a node with zero buffer indices
-        ArrayNode node = ArrayNode.of(EncodingId.VORTEX_VARBINVIEW, null, new ArrayNode[0], new int[0]);
+        ArrayNode node = new ArrayNode(EncodingId.VORTEX_VARBINVIEW, null, new ArrayNode[0], new int[0]);
         DecodeContext ctx = new DecodeContext(node, DType.UTF8, 0,
                 new MemorySegment[0], ReadRegistry.empty(), Arena.ofAuto());
 

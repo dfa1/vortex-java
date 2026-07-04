@@ -157,7 +157,7 @@ class VariantEncodingEncoderTest {
             for (int i = 0; i < children.length; i++) {
                 children[i] = toArrayNode(node.children()[i]);
             }
-            return io.github.dfa1.vortex.reader.decode.ArrayNode.of(
+            return new io.github.dfa1.vortex.reader.decode.ArrayNode(
                     node.encodingId(), node.metadata(), children, node.bufferIndices());
         }
 

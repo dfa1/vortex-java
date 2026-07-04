@@ -136,7 +136,7 @@ class DictEncodingDecoderTest {
         @Test
         void missingMetadata_throws() {
             // Given — primitive dict with no metadata
-            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DICT, null, new ArrayNode[0], new int[]{});
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_DICT, null, new ArrayNode[0], new int[]{});
             DecodeContext ctx = new DecodeContext(node, DType.I32,
                     1, new MemorySegment[0], REGISTRY, Arena.ofAuto());
 
@@ -149,7 +149,7 @@ class DictEncodingDecoderTest {
         @Test
         void emptyMetadata_throws() {
             // Given — metadata present but with zero remaining bytes (exercises !hasRemaining)
-            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DICT, MemorySegment.ofArray(new byte[0]),
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_DICT, MemorySegment.ofArray(new byte[0]),
                     new ArrayNode[0], new int[]{});
             DecodeContext ctx = new DecodeContext(node, DType.I32,
                     1, new MemorySegment[0], REGISTRY, Arena.ofAuto());
@@ -164,7 +164,7 @@ class DictEncodingDecoderTest {
         void malformedProtoMetadata_throws() {
             // Given — >1 byte (routes to proto path) but a truncated varint that proto decode rejects
             MemorySegment meta = MemorySegment.ofArray(new byte[]{0x08, (byte) 0x80});
-            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DICT, meta,
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_DICT, meta,
                     new ArrayNode[]{primitiveNode(0), primitiveNode(1)}, new int[]{});
             DecodeContext ctx = new DecodeContext(node, DType.I32,
                     1, new MemorySegment[]{u8Codes(0), TestSegments.leLongs(0)}, REGISTRY, Arena.ofAuto());
@@ -298,7 +298,7 @@ class DictEncodingDecoderTest {
             MemorySegment codes = u8Codes(1, 0, 1);
 
             MemorySegment meta = MemorySegment.ofArray(new byte[]{(byte) PType.U8.ordinal()});
-            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DICT, meta, new ArrayNode[0], new int[]{0, 1, 2});
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_DICT, meta, new ArrayNode[0], new int[]{0, 1, 2});
             DecodeContext ctx = new DecodeContext(node, DType.UTF8, 3,
                     new MemorySegment[]{bytes, offsets, codes}, REGISTRY, Arena.ofAuto());
 
@@ -326,9 +326,9 @@ class DictEncodingDecoderTest {
 
             ArrayNode codesNode = primitiveNode(0);
             ArrayNode offsetsNode = primitiveNode(2);
-            ArrayNode valuesNode = ArrayNode.of(EncodingId.VORTEX_VARBIN, varBinMeta,
+            ArrayNode valuesNode = new ArrayNode(EncodingId.VORTEX_VARBIN, varBinMeta,
                     new ArrayNode[]{offsetsNode}, new int[]{1});
-            ArrayNode dictNode = ArrayNode.of(EncodingId.VORTEX_DICT, dictMeta,
+            ArrayNode dictNode = new ArrayNode(EncodingId.VORTEX_DICT, dictMeta,
                     new ArrayNode[]{codesNode, valuesNode}, new int[]{});
 
             DecodeContext ctx = new DecodeContext(dictNode, DType.UTF8, 3,
@@ -346,7 +346,7 @@ class DictEncodingDecoderTest {
         @Test
         void legacyLayout_missingMetadata_throws() {
             // Given — no children and no metadata
-            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DICT, null, new ArrayNode[0], new int[]{});
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_DICT, null, new ArrayNode[0], new int[]{});
             DecodeContext ctx = new DecodeContext(node, DType.UTF8, 0,
                     new MemorySegment[0], REGISTRY, Arena.ofAuto());
 
@@ -361,7 +361,7 @@ class DictEncodingDecoderTest {
             // Given — children present, metadata is an invalid (truncated varint) proto blob
             MemorySegment meta = MemorySegment.ofArray(new byte[]{0x08, (byte) 0x80});
             ArrayNode child = primitiveNode(0);
-            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DICT, meta,
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_DICT, meta,
                     new ArrayNode[]{child, child}, new int[]{});
             DecodeContext ctx = new DecodeContext(node, DType.UTF8, 1,
                     new MemorySegment[]{u8Codes(0)}, REGISTRY, Arena.ofAuto());
@@ -376,7 +376,7 @@ class DictEncodingDecoderTest {
         void protoLayout_missingMetadata_throws() {
             // Given — children present but metadata absent
             ArrayNode child = primitiveNode(0);
-            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DICT, null, new ArrayNode[]{child, child}, new int[]{});
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_DICT, null, new ArrayNode[]{child, child}, new int[]{});
             DecodeContext ctx = new DecodeContext(node, DType.UTF8, 1,
                     new MemorySegment[]{u8Codes(0)}, REGISTRY, Arena.ofAuto());
 
@@ -389,7 +389,7 @@ class DictEncodingDecoderTest {
         @Test
         void legacyLayout_emptyMetadata_throws() {
             // Given — no children and zero-remaining metadata (exercises !hasRemaining)
-            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DICT, MemorySegment.ofArray(new byte[0]),
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_DICT, MemorySegment.ofArray(new byte[0]),
                     new ArrayNode[0], new int[]{});
             DecodeContext ctx = new DecodeContext(node, DType.UTF8, 0,
                     new MemorySegment[0], REGISTRY, Arena.ofAuto());
@@ -404,7 +404,7 @@ class DictEncodingDecoderTest {
         void protoLayout_emptyMetadata_throws() {
             // Given — children present, zero-remaining metadata
             ArrayNode child = primitiveNode(0);
-            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DICT, MemorySegment.ofArray(new byte[0]),
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_DICT, MemorySegment.ofArray(new byte[0]),
                     new ArrayNode[]{child, child}, new int[]{});
             DecodeContext ctx = new DecodeContext(node, DType.UTF8, 1,
                     new MemorySegment[]{u8Codes(0)}, REGISTRY, Arena.ofAuto());
@@ -442,7 +442,7 @@ class DictEncodingDecoderTest {
             MemorySegment values, int valuesLen, int rowCount) {
         MemorySegment meta = MemorySegment.ofArray(new ProtoDictMetadata(valuesLen, protoPType(codePType), null, null).encode());
         MemorySegment[] segs = {codes, values};
-        ArrayNode dictNode = ArrayNode.of(EncodingId.VORTEX_DICT, meta,
+        ArrayNode dictNode = new ArrayNode(EncodingId.VORTEX_DICT, meta,
                 new ArrayNode[]{primitiveNode(0), primitiveNode(1)}, new int[]{});
         DecodeContext ctx = new DecodeContext(dictNode, dtype, rowCount, segs, REGISTRY, Arena.ofAuto());
         return SUT.decode(ctx);
@@ -452,14 +452,14 @@ class DictEncodingDecoderTest {
             MemorySegment codes, int rowCount) {
         MemorySegment meta = MemorySegment.ofArray(new byte[]{(byte) codePType.ordinal()});
         MemorySegment[] segs = {values, codes};
-        ArrayNode dictNode = ArrayNode.of(EncodingId.VORTEX_DICT, meta,
+        ArrayNode dictNode = new ArrayNode(EncodingId.VORTEX_DICT, meta,
                 new ArrayNode[]{primitiveNode(0), primitiveNode(1)}, new int[]{});
         DecodeContext ctx = new DecodeContext(dictNode, dtype, rowCount, segs, REGISTRY, Arena.ofAuto());
         return SUT.decode(ctx);
     }
 
     private static ArrayNode primitiveNode(int bufferIndex) {
-        return ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{bufferIndex});
+        return new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{bufferIndex});
     }
 
     private static io.github.dfa1.vortex.core.proto.ProtoPType protoPType(PType core) {

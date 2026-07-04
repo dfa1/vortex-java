@@ -32,7 +32,7 @@ class FixedSizeListEncodingEncoderTest {
         for (int i = 0; i < children.length; i++) {
             children[i] = toArrayNode(node.children()[i]);
         }
-        return ArrayNode.of(node.encodingId(), node.metadata(), children, node.bufferIndices());
+        return new ArrayNode(node.encodingId(), node.metadata(), children, node.bufferIndices());
     }
 
     @Nested
@@ -123,7 +123,7 @@ class FixedSizeListEncodingEncoderTest {
         @Test
         void decode_wrongDtype_throws() {
             // Given
-            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_FIXED_SIZE_LIST, null,
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_FIXED_SIZE_LIST, null,
                     new ArrayNode[0], new int[0]);
             DecodeContext ctx = new DecodeContext(node, DTypes.I32, 0, new MemorySegment[0], REGISTRY, Arena.global());
 

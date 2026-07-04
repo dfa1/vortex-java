@@ -22,11 +22,15 @@ public sealed interface EncodingId extends Serializable permits EncodingId.WellK
     /// @return the wire string of this encoding id
     String id();
 
-    /// Total parse: every non-null string has a typed representation.
-    /// Returns the matching [WellKnown] constant, else a [Custom] wrapping the raw string.
+    /// Parses a wire string into its typed representation: the matching [WellKnown] constant,
+    /// else a [Custom] wrapping the raw string. Total over every non-blank string; blank input
+    /// is not a valid encoding id and is rejected by the [Custom] constructor — callers parsing
+    /// untrusted input must guard blank ids and raise their own domain error.
     ///
     /// @param raw the raw encoding id string (e.g. `"vortex.primitive"`)
     /// @return the matching [WellKnown] constant, or a [Custom] wrapping `raw` if none matches
+    /// @throws NullPointerException if `raw` is `null`
+    /// @throws IllegalArgumentException if `raw` is blank
     static EncodingId parse(String raw) {
         WellKnown known = WellKnown.byId(raw);
         return known != null ? known : new Custom(raw);

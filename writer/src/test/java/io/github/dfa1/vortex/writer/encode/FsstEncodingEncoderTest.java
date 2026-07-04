@@ -43,7 +43,7 @@ class FsstEncodingEncoderTest {
             for (int i = 0; i < children.length; i++) {
                 children[i] = toArrayNode(node.children()[i]);
             }
-            return ArrayNode.of(node.encodingId(), node.metadata(), children, node.bufferIndices());
+            return new ArrayNode(node.encodingId(), node.metadata(), children, node.bufferIndices());
         }
 
         static Stream<Arguments> stringArrays() {
@@ -156,11 +156,11 @@ class FsstEncodingEncoderTest {
 
             byte[] metaBytes = new ProtoFSSTMetadata(io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.I32.ordinal()), io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.I32.ordinal())).encode();
 
-            ArrayNode uncompLensNode = ArrayNode.of(
+            ArrayNode uncompLensNode = new ArrayNode(
                     EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{3});
-            ArrayNode codesOffNode = ArrayNode.of(
+            ArrayNode codesOffNode = new ArrayNode(
                     EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{4});
-            ArrayNode root = ArrayNode.of(
+            ArrayNode root = new ArrayNode(
                     EncodingId.VORTEX_FSST, MemorySegment.ofArray(metaBytes),
                     new ArrayNode[]{uncompLensNode, codesOffNode}, new int[]{0, 1, 2});
 
@@ -229,7 +229,7 @@ class FsstEncodingEncoderTest {
         @Test
         void decode_missingMetadata_throwsVortexException() {
             // Given
-            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_FSST, null, new ArrayNode[0], new int[0]);
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_FSST, null, new ArrayNode[0], new int[0]);
             DecodeContext ctx = new DecodeContext(node, DTypes.UTF8, 0, new MemorySegment[0], REGISTRY, Arena.ofAuto());
 
             // When

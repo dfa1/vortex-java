@@ -51,11 +51,11 @@ class BitpackedConstantPatchesBroadcastTest {
             MemorySegment valBufSeg = arena.allocate(valScalarBytes.length, 1);
             MemorySegment.copy(MemorySegment.ofArray(valScalarBytes), 0, valBufSeg, 0, valScalarBytes.length);
 
-            ArrayNode idxChild = ArrayNode.of(EncodingId.VORTEX_CONSTANT, null,
+            ArrayNode idxChild = new ArrayNode(EncodingId.VORTEX_CONSTANT, null,
                     new ArrayNode[0], new int[]{1});
-            ArrayNode valChild = ArrayNode.of(EncodingId.VORTEX_CONSTANT, null,
+            ArrayNode valChild = new ArrayNode(EncodingId.VORTEX_CONSTANT, null,
                     new ArrayNode[0], new int[]{2});
-            ArrayNode root = ArrayNode.of(EncodingId.FASTLANES_BITPACKED, metaBuf,
+            ArrayNode root = new ArrayNode(EncodingId.FASTLANES_BITPACKED, metaBuf,
                     new ArrayNode[]{idxChild, valChild}, new int[]{0});
 
             DType dtype = DType.I64;

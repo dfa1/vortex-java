@@ -143,9 +143,9 @@ class PrimitiveEncodingEncoderTest {
             MemorySegment valuesSeg = TestSegments.leInts(raw);
             MemorySegment validitySeg = MemorySegment.ofArray(new byte[]{0x05});
 
-            ArrayNode validityNode = ArrayNode.of(
+            ArrayNode validityNode = new ArrayNode(
                     EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{1});
-            ArrayNode primNode = ArrayNode.of(
+            ArrayNode primNode = new ArrayNode(
                     EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[]{validityNode}, new int[]{0});
 
             ReadRegistry registry = TestRegistry.ofDecoders(new PrimitiveEncodingDecoder(), new BoolEncodingDecoder());
@@ -178,7 +178,7 @@ class PrimitiveEncodingEncoderTest {
             int[] raw = {1, 2, 3};
             MemorySegment valuesSeg = TestSegments.leInts(raw);
 
-            ArrayNode primNode = ArrayNode.of(
+            ArrayNode primNode = new ArrayNode(
                     EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
 
             DType dtype = DType.I32;

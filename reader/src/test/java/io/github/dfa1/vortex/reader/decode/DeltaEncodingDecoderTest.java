@@ -37,7 +37,7 @@ class DeltaEncodingDecoderTest {
         // Given no metadata — the decoder defaults to deltas_len=0 and short-circuits
         // to an empty array of the right ptype (a path the encoder never emits, since it
         // always writes metadata)
-        ArrayNode node = ArrayNode.of(EncodingId.FASTLANES_DELTA, null, new ArrayNode[0], new int[0]);
+        ArrayNode node = new ArrayNode(EncodingId.FASTLANES_DELTA, null, new ArrayNode[0], new int[0]);
         DecodeContext ctx = new DecodeContext(node, new DType.Primitive(ptype, false), 0,
                 new MemorySegment[0], REGISTRY, Arena.ofAuto());
 
@@ -58,9 +58,9 @@ class DeltaEncodingDecoderTest {
         long deltasLen = FL_CHUNK_SIZE;
         MemorySegment meta = MemorySegment.ofArray(new ProtoDeltaMetadata(deltasLen, 0).encode());
 
-        ArrayNode bases = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
-        ArrayNode deltas = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1});
-        ArrayNode node = ArrayNode.of(EncodingId.FASTLANES_DELTA, meta, new ArrayNode[]{bases, deltas}, new int[0]);
+        ArrayNode bases = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
+        ArrayNode deltas = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1});
+        ArrayNode node = new ArrayNode(EncodingId.FASTLANES_DELTA, meta, new ArrayNode[]{bases, deltas}, new int[0]);
 
         // one element each → broadcast
         MemorySegment[] segs = {TestSegments.leLongs(0L), TestSegments.leLongs(0L)};
@@ -83,9 +83,9 @@ class DeltaEncodingDecoderTest {
         PType ptype = PType.I64;
         MemorySegment meta = MemorySegment.ofArray(new ProtoDeltaMetadata(FL_CHUNK_SIZE, 0).encode());
 
-        ArrayNode bases = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
-        ArrayNode deltas = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1});
-        ArrayNode node = ArrayNode.of(EncodingId.FASTLANES_DELTA, meta, new ArrayNode[]{bases, deltas}, new int[0]);
+        ArrayNode bases = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
+        ArrayNode deltas = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1});
+        ArrayNode node = new ArrayNode(EncodingId.FASTLANES_DELTA, meta, new ArrayNode[]{bases, deltas}, new int[0]);
 
         MemorySegment[] segs = {TestSegments.leLongs(5L), TestSegments.leLongs(0L)};
         DecodeContext ctx = new DecodeContext(node, new DType.Primitive(ptype, false), 3, segs, REGISTRY, Arena.ofAuto());

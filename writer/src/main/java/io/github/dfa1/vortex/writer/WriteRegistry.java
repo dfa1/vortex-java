@@ -88,7 +88,9 @@ public final class WriteRegistry {
     /// Not thread-safe. Build once, use everywhere — the produced [WriteRegistry] is immutable.
     public static final class Builder {
 
-        private final Map<EncodingId, EncodingEncoder> encoders = new TreeMap<>();
+        // EncodingId is not Comparable (a Custom id would throw on natural ordering); order by
+        // wire string, matching the constructor's sortedByName.
+        private final Map<EncodingId, EncodingEncoder> encoders = new TreeMap<>(Comparator.comparing(EncodingId::id));
         private final Map<ExtensionId, ExtensionEncoder> extensions = new TreeMap<>();
 
         private Builder() {

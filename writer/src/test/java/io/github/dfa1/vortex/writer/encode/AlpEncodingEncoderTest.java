@@ -54,7 +54,7 @@ class AlpEncodingEncoderTest {
                 bb.putLong(v);
             }
 
-            ArrayNode encNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
+            ArrayNode encNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
                     new ArrayNode[0], new int[]{0});
 
             MemorySegment[] segments;
@@ -71,8 +71,8 @@ class AlpEncodingEncoderTest {
                 for (double v : patchValues) {
                     vb.putDouble(v);
                 }
-                ArrayNode idxNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1});
-                ArrayNode valNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{2});
+                ArrayNode idxNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1});
+                ArrayNode valNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{2});
                 children = new ArrayNode[]{encNode, idxNode, valNode};
                 segments = new MemorySegment[]{
                         MemorySegment.ofArray(encBuf), MemorySegment.ofArray(idxBuf), MemorySegment.ofArray(valBuf)};
@@ -81,7 +81,7 @@ class AlpEncodingEncoderTest {
                 segments = new MemorySegment[]{MemorySegment.ofArray(encBuf)};
             }
 
-            ArrayNode alpNode = ArrayNode.of(EncodingId.VORTEX_ALP,
+            ArrayNode alpNode = new ArrayNode(EncodingId.VORTEX_ALP,
                     MemorySegment.ofArray(metaBytes), children, new int[0]);
 
             return new DecodeContext(alpNode, DTypes.F64, encodedVals.length, segments, REGISTRY, java.lang.foreign.Arena.global());
@@ -94,8 +94,8 @@ class AlpEncodingEncoderTest {
             for (int v : encodedVals) {
                 bb.putInt(v);
             }
-            ArrayNode encNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
-            ArrayNode alpNode = ArrayNode.of(EncodingId.VORTEX_ALP, MemorySegment.ofArray(metaBytes),
+            ArrayNode encNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
+            ArrayNode alpNode = new ArrayNode(EncodingId.VORTEX_ALP, MemorySegment.ofArray(metaBytes),
                     new ArrayNode[]{encNode}, new int[0]);
             MemorySegment[] segments = {MemorySegment.ofArray(encBuf)};
             return new DecodeContext(alpNode, DTypes.F32, encodedVals.length, segments, REGISTRY, java.lang.foreign.Arena.global());

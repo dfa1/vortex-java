@@ -55,8 +55,8 @@ class ZigZagEncodingEncoderTest {
             buf.flip();
             MemorySegment seg = MemorySegment.ofBuffer(buf);
 
-            ArrayNode primitiveNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
-            ArrayNode zigzagNode = ArrayNode.of(EncodingId.VORTEX_ZIGZAG, null, new ArrayNode[]{primitiveNode}, new int[0]);
+            ArrayNode primitiveNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
+            ArrayNode zigzagNode = new ArrayNode(EncodingId.VORTEX_ZIGZAG, null, new ArrayNode[]{primitiveNode}, new int[0]);
 
             return new DecodeContext(zigzagNode, DTypes.I32, encodedUnsigned.length,
                     new MemorySegment[]{seg}, REGISTRY, Arena.ofAuto());

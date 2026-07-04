@@ -34,7 +34,7 @@ class ChunkedEncodingEncoderTest {
         for (int i = 0; i < children.length; i++) {
             children[i] = toArrayNode(enc.children()[i]);
         }
-        return ArrayNode.of(enc.encodingId(), enc.metadata(), children, enc.bufferIndices());
+        return new ArrayNode(enc.encodingId(), enc.metadata(), children, enc.bufferIndices());
     }
 
     private static EncodeNode remapped(EncodeNode node, int offset) {
@@ -115,7 +115,7 @@ class ChunkedEncodingEncoderTest {
             ArrayNode offsetsNode = toArrayNode(offsetsResult.rootNode());
             ArrayNode chunk0Node = toArrayNode(remapped(chunk0Result.rootNode(), 1));
             ArrayNode chunk1Node = toArrayNode(remapped(chunk1Result.rootNode(), 2));
-            ArrayNode root = ArrayNode.of(
+            ArrayNode root = new ArrayNode(
                     EncodingId.VORTEX_CHUNKED, null,
                     new ArrayNode[]{offsetsNode, chunk0Node, chunk1Node},
                     new int[]{});
@@ -150,7 +150,7 @@ class ChunkedEncodingEncoderTest {
                     chunkResult.buffers().getFirst()
             };
 
-            ArrayNode root = ArrayNode.of(
+            ArrayNode root = new ArrayNode(
                     EncodingId.VORTEX_CHUNKED, null,
                     new ArrayNode[]{toArrayNode(offsetsResult.rootNode()), toArrayNode(remapped(chunkResult.rootNode(), 1))},
                     new int[]{});
@@ -172,7 +172,7 @@ class ChunkedEncodingEncoderTest {
         void noChildren_throws() {
             // Given
             DType i64 = DType.I64;
-            ArrayNode root = ArrayNode.of(EncodingId.VORTEX_CHUNKED, null, new ArrayNode[]{}, new int[]{});
+            ArrayNode root = new ArrayNode(EncodingId.VORTEX_CHUNKED, null, new ArrayNode[]{}, new int[]{});
             DecodeContext ctx = new DecodeContext(root, i64, 0L, new MemorySegment[]{}, REGISTRY, Arena.ofAuto());
 
             // When / Then

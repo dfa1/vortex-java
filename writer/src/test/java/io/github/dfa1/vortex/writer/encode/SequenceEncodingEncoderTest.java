@@ -42,7 +42,7 @@ class SequenceEncodingEncoderTest {
 
         private static DecodeContext encodeResultToCtx(EncodeResult result, DType dtype, long n) {
             MemorySegment meta = result.rootNode().metadata();
-            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_SEQUENCE, meta, new ArrayNode[0], new int[0]);
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_SEQUENCE, meta, new ArrayNode[0], new int[0]);
             return new DecodeContext(node, dtype, n, new MemorySegment[0], ReadRegistry.empty(), Arena.ofAuto());
         }
 
@@ -314,7 +314,7 @@ class SequenceEncodingEncoderTest {
         }
 
         private static DecodeContext makeCtx(byte[] meta, DType dtype, long n) {
-            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_SEQUENCE,
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_SEQUENCE,
                     MemorySegment.ofArray(meta), new ArrayNode[0], new int[0]);
             return new DecodeContext(node, dtype, n, new MemorySegment[0], ReadRegistry.empty(), Arena.ofAuto());
         }
@@ -401,7 +401,7 @@ class SequenceEncodingEncoderTest {
 
         @Test
         void decode_missingMetadata_throwsVortexException() {
-            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_SEQUENCE, null, new ArrayNode[0], new int[0]);
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_SEQUENCE, null, new ArrayNode[0], new int[0]);
             DecodeContext ctx = new DecodeContext(node, DTypes.I64, 3, new MemorySegment[0], ReadRegistry.empty(), Arena.ofAuto());
 
             assertThatThrownBy(() -> DECODER.decode(ctx)).isInstanceOf(VortexException.class);

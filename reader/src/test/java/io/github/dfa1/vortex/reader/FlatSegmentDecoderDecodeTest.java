@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.reader;
 import io.github.dfa1.vortex.core.fbs.FbsArrayNode;
 import io.github.dfa1.vortex.core.fbs.FbsBuffer;
 import io.github.dfa1.vortex.core.fbs.FbsBuilder;
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.UnknownArray;
@@ -14,15 +15,16 @@ import java.util.List;
 
 import static io.github.dfa1.vortex.core.io.PTypeIO.LE_INT;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 /// Successful flat-segment decode path — complements [FlatSegmentBoundsSecurityTest] (which only
 /// drives the rejection paths). A buffer descriptor with non-zero padding exercises the offset
-/// walk, and an unknown encoding id exercises the `UnknownArrayNode` fallback through an
+/// walk, and an unknown encoding id exercises the unknown-id passthrough through an
 /// allow-unknown registry. Together these pin two otherwise-untested spots:
 /// - the `dataOffset += padding` accumulation: with padding > 0, flipping `+=` to `-=` slices at a
 ///   negative offset and fails, so a clean decode proves the addition.
-/// - the `orElseGet(() -> new UnknownArrayNode(...))` fallback: returning `null` there yields a
-///   null node and the decode would not produce an `UnknownArray`.
+/// - the unknown-id node construction: mishandling an unresolvable id there yields a
+///   node the decode would not turn into an `UnknownArray`.
 class FlatSegmentDecoderDecodeTest {
 
     @Test
@@ -46,8 +48,33 @@ class FlatSegmentDecoderDecodeTest {
                     DType.I32, 0, arena);
 
             // Then — the allow-unknown path produced an UnknownArray (proves both the +padding
-            // walk and the UnknownArrayNode fallback ran)
+            // walk and the unknown-id passthrough ran)
             assertThat(result).isInstanceOf(UnknownArray.class);
+        }
+    }
+
+    @Test
+    void decode_blankEncodingId_throwsVortexException() {
+        ReadRegistry registry = ReadRegistry.builder().allowUnknown().build();
+        FlatSegmentDecoder sut = new FlatSegmentDecoder(registry);
+
+        try (Arena arena = Arena.ofConfined()) {
+            // Given — a zero-length FlatBuffer string in the spec table decodes to "", which
+            // EncodingId.parse rejects with IllegalArgumentException; untrusted input must
+            // surface as VortexException instead, even under allowUnknown
+            byte[] fb = arrayFlatBufferOneBuffer(0, 0L);
+            MemorySegment seg = arena.allocate((long) fb.length + 4);
+            MemorySegment.copy(MemorySegment.ofArray(fb), 0, seg, 0, fb.length);
+            seg.set(LE_INT, fb.length, fb.length);
+
+            // When
+            Throwable result = catchThrowable(() -> sut.decode(seg, List.of(""),
+                    DType.I32, 0, arena));
+
+            // Then
+            assertThat(result)
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("blank encoding id");
         }
     }
 

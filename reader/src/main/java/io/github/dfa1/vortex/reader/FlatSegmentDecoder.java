@@ -10,8 +10,6 @@ import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.fbs.FbsBuffer;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
-import io.github.dfa1.vortex.reader.decode.KnownArrayNode;
-import io.github.dfa1.vortex.reader.decode.UnknownArrayNode;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
@@ -87,6 +85,11 @@ public final class FlatSegmentDecoder {
                     "array tree depth exceeds limit (" + MAX_ARRAY_TREE_DEPTH + ")");
         }
         String rawEncodingId = encodingSpecs.get(fbs.encoding());
+        if (rawEncodingId.isBlank()) {
+            // EncodingId.parse rejects blank ids with IllegalArgumentException; the file is
+            // untrusted input, so a blank spec entry must surface as VortexException instead.
+            throw new VortexException("blank encoding id at array spec index " + fbs.encoding());
+        }
 
         ArrayNode[] children = new ArrayNode[fbs.childrenLength()];
         for (int i = 0; i < children.length; i++) {
@@ -99,11 +102,6 @@ public final class FlatSegmentDecoder {
         }
 
         MemorySegment meta = fbs.metadataAsSegment();
-        return switch (EncodingId.parse(rawEncodingId)) {
-            case EncodingId.WellKnown wellKnown ->
-                    new KnownArrayNode(wellKnown, meta, children, bufferIndices);
-            case EncodingId.Custom custom ->
-                    new UnknownArrayNode(custom.id(), meta, children, bufferIndices);
-        };
+        return new ArrayNode(EncodingId.parse(rawEncodingId), meta, children, bufferIndices);
     }
 }

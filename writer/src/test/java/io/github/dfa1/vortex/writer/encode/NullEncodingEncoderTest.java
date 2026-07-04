@@ -44,7 +44,7 @@ class NullEncodingEncoderTest {
 
             // When
             EncodeResult resultEncoded = encoder.encode(DTypes.NULL, null, EncodeTestHelper.testCtx());
-            ArrayNode node = ArrayNode.of(resultEncoded.rootNode().encodingId(), null, new ArrayNode[0], new int[0]);
+            ArrayNode node = new ArrayNode(resultEncoded.rootNode().encodingId(), null, new ArrayNode[0], new int[0]);
             DecodeContext ctx = new DecodeContext(node, DTypes.NULL, rowCount, new MemorySegment[0],
                     ReadRegistry.empty(), Arena.ofAuto());
             var result = decoder.decode(ctx);

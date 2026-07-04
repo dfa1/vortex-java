@@ -46,7 +46,7 @@ class PatchedEncodingEncoderTest {
         ArrayNode idxNode = toArrayNode(enc[2]);
         ArrayNode valNode = toArrayNode(enc[3]);
 
-        ArrayNode patchedNode = ArrayNode.of(EncodingId.VORTEX_PATCHED, root.metadata(),
+        ArrayNode patchedNode = new ArrayNode(EncodingId.VORTEX_PATCHED, root.metadata(),
                 new ArrayNode[]{innerNode, laneNode, idxNode, valNode}, new int[]{});
 
         DecodeContext ctx = new DecodeContext(patchedNode, dtype, n, segments, REGISTRY, Arena.ofAuto());
@@ -54,7 +54,7 @@ class PatchedEncodingEncoderTest {
     }
 
     private static ArrayNode toArrayNode(EncodeNode enc) {
-        return ArrayNode.of(enc.encodingId(), enc.metadata(), new ArrayNode[0], enc.bufferIndices());
+        return new ArrayNode(enc.encodingId(), enc.metadata(), new ArrayNode[0], enc.bufferIndices());
     }
 
     @Nested

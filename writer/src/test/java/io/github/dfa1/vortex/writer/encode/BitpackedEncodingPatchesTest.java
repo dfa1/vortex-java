@@ -50,11 +50,11 @@ class BitpackedEncodingPatchesTest {
             byte[] valBuf = new byte[2 * 4];
             ByteBuffer.wrap(valBuf).order(ByteOrder.LITTLE_ENDIAN).putInt(777).putInt(999);
 
-            ArrayNode idxNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
+            ArrayNode idxNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
                     new ArrayNode[0], new int[]{1});
-            ArrayNode valNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
+            ArrayNode valNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
                     new ArrayNode[0], new int[]{2});
-            ArrayNode bpNode = ArrayNode.of(EncodingId.FASTLANES_BITPACKED,
+            ArrayNode bpNode = new ArrayNode(EncodingId.FASTLANES_BITPACKED,
                     MemorySegment.ofArray(metaBytes),
                     new ArrayNode[]{idxNode, valNode},
                     new int[]{0});
@@ -103,11 +103,11 @@ class BitpackedEncodingPatchesTest {
                     result.buffers().get(1),
                     result.buffers().get(2)
             };
-            ArrayNode idxNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
+            ArrayNode idxNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
                     new ArrayNode[0], new int[]{1});
-            ArrayNode valNode = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
+            ArrayNode valNode = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
                     new ArrayNode[0], new int[]{2});
-            ArrayNode bpNode = ArrayNode.of(EncodingId.FASTLANES_BITPACKED,
+            ArrayNode bpNode = new ArrayNode(EncodingId.FASTLANES_BITPACKED,
                     result.rootNode().metadata(),
                     new ArrayNode[]{idxNode, valNode},
                     new int[]{0});

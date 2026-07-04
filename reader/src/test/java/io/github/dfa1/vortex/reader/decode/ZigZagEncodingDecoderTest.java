@@ -61,8 +61,8 @@ class ZigZagEncodingDecoderTest {
 
     private static Array decode(PType ptype, long n, MemorySegment encoded) {
         DType dtype = new DType.Primitive(ptype, false);
-        ArrayNode child = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
-        ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ZIGZAG, null, new ArrayNode[]{child}, new int[]{});
+        ArrayNode child = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
+        ArrayNode node = new ArrayNode(EncodingId.VORTEX_ZIGZAG, null, new ArrayNode[]{child}, new int[]{});
         DecodeContext ctx = new DecodeContext(node, dtype, n, new MemorySegment[]{encoded}, REGISTRY, Arena.ofAuto());
         return SUT.decode(ctx);
     }
@@ -202,7 +202,7 @@ class ZigZagEncodingDecoderTest {
     @Test
     void decode_nonPrimitiveDtype_throws() {
         // Given a non-primitive logical type on the context
-        ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ZIGZAG, null, new ArrayNode[0], new int[]{});
+        ArrayNode node = new ArrayNode(EncodingId.VORTEX_ZIGZAG, null, new ArrayNode[0], new int[]{});
         DecodeContext ctx = new DecodeContext(node, DType.BOOL, 1,
                 new MemorySegment[0], REGISTRY, Arena.ofAuto());
 

@@ -37,7 +37,7 @@ class StructEncodingEncoderTest {
         for (int i = 0; i < children.length; i++) {
             children[i] = toArrayNode(node.children()[i]);
         }
-        return ArrayNode.of(node.encodingId(), node.metadata(), children, node.bufferIndices());
+        return new ArrayNode(node.encodingId(), node.metadata(), children, node.bufferIndices());
     }
 
     @Nested
@@ -115,12 +115,12 @@ class StructEncodingEncoderTest {
     class Decode {
 
         private static ArrayNode primitiveNode(int bufferIdx) {
-            return ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0],
+            return new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0],
                     new int[]{bufferIdx});
         }
 
         private static ArrayNode boolNode(int bufferIdx) {
-            return ArrayNode.of(EncodingId.VORTEX_BOOL, null, new ArrayNode[0],
+            return new ArrayNode(EncodingId.VORTEX_BOOL, null, new ArrayNode[0],
                     new int[]{bufferIdx});
         }
 
@@ -130,7 +130,7 @@ class StructEncodingEncoderTest {
             long[] data = {10L, 20L, 30L};
             MemorySegment seg = TestSegments.leLongs(data);
             ArrayNode valuesNode = primitiveNode(0);
-            ArrayNode structNode = ArrayNode.of(EncodingId.VORTEX_STRUCT, null,
+            ArrayNode structNode = new ArrayNode(EncodingId.VORTEX_STRUCT, null,
                     new ArrayNode[]{valuesNode}, new int[0]);
             DecodeContext ctx = new DecodeContext(structNode, DTypes.I64, data.length,
                     new MemorySegment[]{seg}, REGISTRY, Arena.global());
@@ -154,7 +154,7 @@ class StructEncodingEncoderTest {
 
             ArrayNode validityNode = boolNode(0);
             ArrayNode valuesNode = primitiveNode(1);
-            ArrayNode structNode = ArrayNode.of(EncodingId.VORTEX_STRUCT, null,
+            ArrayNode structNode = new ArrayNode(EncodingId.VORTEX_STRUCT, null,
                     new ArrayNode[]{validityNode, valuesNode}, new int[0]);
 
             ReadRegistry registry = TestRegistry.ofDecoders(DECODER, new PrimitiveEncodingDecoder(), new BoolEncodingDecoder());

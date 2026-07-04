@@ -218,7 +218,7 @@ class ZstdEncodingEncoderTest {
                 segments[i + 1] = MemorySegment.ofArray(compressedFrames[i]);
                 bufIndices[i + 1] = i + 1;
             }
-            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ZSTD, MemorySegment.ofArray(meta),
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_ZSTD, MemorySegment.ofArray(meta),
                     new ArrayNode[0], bufIndices);
             return new DecodeContext(node, dtype, n, segments, ReadRegistry.empty(), Arena.ofAuto());
         }
@@ -239,7 +239,7 @@ class ZstdEncodingEncoderTest {
             allSegments.addAll(validityResult.buffers());
 
             ArrayNode validityNode = toArrayNode(remappedValidity);
-            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ZSTD, MemorySegment.ofArray(meta),
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_ZSTD, MemorySegment.ofArray(meta),
                     new ArrayNode[]{validityNode}, bufIndices);
 
             ReadRegistry registry = TestRegistry.ofDecoders(new BoolEncodingDecoder());
@@ -253,7 +253,7 @@ class ZstdEncodingEncoderTest {
             for (int i = 0; i < children.length; i++) {
                 children[i] = toArrayNode(enc.children()[i]);
             }
-            return ArrayNode.of(enc.encodingId(), enc.metadata(), children, enc.bufferIndices());
+            return new ArrayNode(enc.encodingId(), enc.metadata(), children, enc.bufferIndices());
         }
 
         private static byte[] compress(byte[] input) {
@@ -401,7 +401,7 @@ class ZstdEncodingEncoderTest {
 
         @Test
         void decode_missingMetadata_throwsVortexException() {
-            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ZSTD, null, new ArrayNode[0], new int[0]);
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_ZSTD, null, new ArrayNode[0], new int[0]);
             DecodeContext ctx = new DecodeContext(node, DTypes.I32, 0, new MemorySegment[0],
                     ReadRegistry.empty(), Arena.ofAuto());
 
@@ -417,7 +417,7 @@ class ZstdEncodingEncoderTest {
             // IoBounds.toIntSize guard must convert it to a VortexException first.
             byte[] compressed = compress(toLeBytes(new int[]{0}));
             byte[] meta = metaNoDict(new long[]{-1}, new long[]{1});
-            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ZSTD, MemorySegment.ofArray(meta),
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_ZSTD, MemorySegment.ofArray(meta),
                     new ArrayNode[0], new int[]{0});
             DecodeContext ctx = new DecodeContext(node, DTypes.I32, 1,
                     new MemorySegment[]{MemorySegment.ofArray(compressed)}, ReadRegistry.empty(), Arena.ofAuto());
@@ -434,7 +434,7 @@ class ZstdEncodingEncoderTest {
             // asSlice site in decompressFrames.
             byte[] compressed = compress(toLeBytes(new int[]{0}));
             byte[] meta = metaNoDict(new long[]{(long) Integer.MAX_VALUE + 1}, new long[]{1});
-            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ZSTD, MemorySegment.ofArray(meta),
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_ZSTD, MemorySegment.ofArray(meta),
                     new ArrayNode[0], new int[]{0});
             DecodeContext ctx = new DecodeContext(node, DTypes.I32, 1,
                     new MemorySegment[]{MemorySegment.ofArray(compressed)}, ReadRegistry.empty(), Arena.ofAuto());
@@ -454,7 +454,7 @@ class ZstdEncodingEncoderTest {
             byte[] raw = toLeBytes(new int[]{1_000_000});
             byte[] compressed = compress(raw);
             byte[] meta = metaNoDict(new long[]{raw.length}, new long[]{1});
-            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ZSTD, MemorySegment.ofArray(meta),
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_ZSTD, MemorySegment.ofArray(meta),
                     new ArrayNode[0], new int[]{0});
             DecodeContext ctx = new DecodeContext(node, new DType.Utf8(false), 1,
                     new MemorySegment[]{MemorySegment.ofArray(compressed)}, ReadRegistry.empty(), Arena.ofAuto());

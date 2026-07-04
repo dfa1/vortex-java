@@ -33,11 +33,11 @@ class VariantEncodingDecoderTest {
     }
 
     private static ArrayNode primitiveChildNode(int segIdx) {
-        return ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{segIdx});
+        return new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{segIdx});
     }
 
     private static ArrayNode nullChildNode() {
-        return ArrayNode.of(EncodingId.VORTEX_NULL, null, new ArrayNode[0], new int[]{});
+        return new ArrayNode(EncodingId.VORTEX_NULL, null, new ArrayNode[0], new int[]{});
     }
 
 
@@ -45,7 +45,7 @@ class VariantEncodingDecoderTest {
     void decode_withoutShredded_returnsCoreStorageOnly() {
         // Given
         ArrayNode coreNode = nullChildNode();
-        ArrayNode variantNode = ArrayNode.of(EncodingId.VORTEX_VARIANT, null,
+        ArrayNode variantNode = new ArrayNode(EncodingId.VORTEX_VARIANT, null,
                 new ArrayNode[]{coreNode}, new int[]{});
 
         ReadRegistry registry = TestRegistry.ofDecoders(SUT, new NullEncodingDecoder());
@@ -73,7 +73,7 @@ class VariantEncodingDecoderTest {
 
         ArrayNode coreNode = nullChildNode();
         ArrayNode shreddedNode = primitiveChildNode(0);
-        ArrayNode variantNode = ArrayNode.of(EncodingId.VORTEX_VARIANT, meta,
+        ArrayNode variantNode = new ArrayNode(EncodingId.VORTEX_VARIANT, meta,
                 new ArrayNode[]{coreNode, shreddedNode}, new int[]{});
 
         MemorySegment[] segments = {TestSegments.leInts(1, 2, 3)};
@@ -96,7 +96,7 @@ class VariantEncodingDecoderTest {
     void decode_emptyMetadata_noShredded() {
         // Given
         ArrayNode coreNode = nullChildNode();
-        ArrayNode variantNode = ArrayNode.of(EncodingId.VORTEX_VARIANT, MemorySegment.ofArray(new byte[0]),
+        ArrayNode variantNode = new ArrayNode(EncodingId.VORTEX_VARIANT, MemorySegment.ofArray(new byte[0]),
                 new ArrayNode[]{coreNode}, new int[]{});
 
         ReadRegistry registry = TestRegistry.ofDecoders(SUT, new NullEncodingDecoder());
@@ -116,7 +116,7 @@ class VariantEncodingDecoderTest {
         // Given
         DType nullableVariant = new DType.Variant(true);
         ArrayNode coreNode = nullChildNode();
-        ArrayNode variantNode = ArrayNode.of(EncodingId.VORTEX_VARIANT, null,
+        ArrayNode variantNode = new ArrayNode(EncodingId.VORTEX_VARIANT, null,
                 new ArrayNode[]{coreNode}, new int[]{});
 
         ReadRegistry registry = TestRegistry.ofDecoders(SUT, new NullEncodingDecoder());
@@ -134,7 +134,7 @@ class VariantEncodingDecoderTest {
     @Test
     void decode_wrongChildCount_throws() {
         // Given
-        ArrayNode variantNode = ArrayNode.of(EncodingId.VORTEX_VARIANT, null,
+        ArrayNode variantNode = new ArrayNode(EncodingId.VORTEX_VARIANT, null,
                 new ArrayNode[0], new int[]{});
 
         ReadRegistry registry = TestRegistry.ofDecoders(SUT);

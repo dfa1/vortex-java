@@ -33,7 +33,7 @@ class ListEncodingEncoderTest {
         for (int i = 0; i < children.length; i++) {
             children[i] = toArrayNode(node.children()[i]);
         }
-        return ArrayNode.of(node.encodingId(), node.metadata(), children, node.bufferIndices());
+        return new ArrayNode(node.encodingId(), node.metadata(), children, node.bufferIndices());
     }
 
     @Nested
@@ -153,7 +153,7 @@ class ListEncodingEncoderTest {
         @Test
         void decode_wrongDtype_throws() {
             // Given
-            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_LIST, null,
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_LIST, null,
                     new ArrayNode[0], new int[0]);
             DecodeContext ctx = new DecodeContext(node, DTypes.I32, 0, new MemorySegment[0], REGISTRY, Arena.global());
 
@@ -164,9 +164,9 @@ class ListEncodingEncoderTest {
         @Test
         void decode_wrongChildCount_throws() {
             // Given
-            ArrayNode child = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null,
+            ArrayNode child = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
                     new ArrayNode[0], new int[0]);
-            ArrayNode node = ArrayNode.of(EncodingId.VORTEX_LIST,
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_LIST,
                     MemorySegment.ofArray(new byte[0]),
                     new ArrayNode[]{child}, new int[0]);
             DecodeContext ctx = new DecodeContext(node, DTypes.LIST_I32, 0, new MemorySegment[0], REGISTRY, Arena.global());

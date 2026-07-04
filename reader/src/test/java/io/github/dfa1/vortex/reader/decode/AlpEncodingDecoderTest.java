@@ -56,7 +56,7 @@ class AlpEncodingDecoderTest {
     @Test
     void decode_nonPrimitiveDtype_throws() {
         // Given a Utf8 dtype on an ALP node
-        ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ALP, MemorySegment.ofArray(new ProtoALPMetadata(0, 0, null).encode()),
+        ArrayNode node = new ArrayNode(EncodingId.VORTEX_ALP, MemorySegment.ofArray(new ProtoALPMetadata(0, 0, null).encode()),
                 new ArrayNode[0], new int[0]);
         DecodeContext ctx = new DecodeContext(node, DType.UTF8, 1,
                 new MemorySegment[0], REGISTRY, Arena.ofAuto());
@@ -68,8 +68,8 @@ class AlpEncodingDecoderTest {
     @Test
     void decode_missingMetadata_defaultsToZeroExponents() {
         // Given no metadata — decoder falls back to exp_e=0, exp_f=0 (scale 1.0)
-        ArrayNode enc = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
-        ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ALP, null, new ArrayNode[]{enc}, new int[0]);
+        ArrayNode enc = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
+        ArrayNode node = new ArrayNode(EncodingId.VORTEX_ALP, null, new ArrayNode[]{enc}, new int[0]);
         DecodeContext ctx = new DecodeContext(node, F64, 2, new MemorySegment[]{leLongs(5L, 7L)}, REGISTRY, Arena.ofAuto());
 
         // When
@@ -84,9 +84,9 @@ class AlpEncodingDecoderTest {
     void decode_f64_broadcastNoPatches_returnsConstant() {
         // Given a single encoded value but 4 logical rows (capacity < n) and no patches:
         // the decoder broadcasts it into a constant array
-        ArrayNode enc = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
+        ArrayNode enc = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
         byte[] meta = new ProtoALPMetadata(2, 0, null).encode(); // exp_e=2 -> *0.01
-        ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ALP, MemorySegment.ofArray(meta), new ArrayNode[]{enc}, new int[0]);
+        ArrayNode node = new ArrayNode(EncodingId.VORTEX_ALP, MemorySegment.ofArray(meta), new ArrayNode[]{enc}, new int[0]);
         DecodeContext ctx = new DecodeContext(node, F64, 4, new MemorySegment[]{leLongs(123L)}, REGISTRY, Arena.ofAuto());
 
         // When
@@ -102,9 +102,9 @@ class AlpEncodingDecoderTest {
     @Test
     void decode_f32_broadcastNoPatches_returnsConstant() {
         // Given single value, 3 rows, no patches
-        ArrayNode enc = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
+        ArrayNode enc = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
         byte[] meta = new ProtoALPMetadata(1, 0, null).encode(); // exp_e=1 -> *0.1
-        ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ALP, MemorySegment.ofArray(meta), new ArrayNode[]{enc}, new int[0]);
+        ArrayNode node = new ArrayNode(EncodingId.VORTEX_ALP, MemorySegment.ofArray(meta), new ArrayNode[]{enc}, new int[0]);
         DecodeContext ctx = new DecodeContext(node, F32, 3, new MemorySegment[]{leInts(25)}, REGISTRY, Arena.ofAuto());
 
         // When
@@ -124,10 +124,10 @@ class AlpEncodingDecoderTest {
         ProtoPatchesMetadata pm = new ProtoPatchesMetadata(1L, 0L, io.github.dfa1.vortex.core.proto.ProtoPType.U8, null, null, null);
         byte[] meta = new ProtoALPMetadata(2, 0, pm).encode(); // *0.01
 
-        ArrayNode enc = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
-        ArrayNode idx = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1});
-        ArrayNode val = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{2});
-        ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ALP, MemorySegment.ofArray(meta),
+        ArrayNode enc = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
+        ArrayNode idx = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1});
+        ArrayNode val = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{2});
+        ArrayNode node = new ArrayNode(EncodingId.VORTEX_ALP, MemorySegment.ofArray(meta),
                 new ArrayNode[]{enc, idx, val}, new int[0]);
 
         MemorySegment idxSeg = MemorySegment.ofArray(new byte[]{1}); // patch row 1
@@ -149,10 +149,10 @@ class AlpEncodingDecoderTest {
         ProtoPatchesMetadata pm = new ProtoPatchesMetadata(1L, 0L, io.github.dfa1.vortex.core.proto.ProtoPType.I32, null, null, null);
         byte[] meta = new ProtoALPMetadata(2, 0, pm).encode();
 
-        ArrayNode enc = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
-        ArrayNode idx = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1});
-        ArrayNode val = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{2});
-        ArrayNode node = ArrayNode.of(EncodingId.VORTEX_ALP, MemorySegment.ofArray(meta),
+        ArrayNode enc = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
+        ArrayNode idx = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1});
+        ArrayNode val = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{2});
+        ArrayNode node = new ArrayNode(EncodingId.VORTEX_ALP, MemorySegment.ofArray(meta),
                 new ArrayNode[]{enc, idx, val}, new int[0]);
 
         MemorySegment[] segs = {leLongs(100L, 0L), leInts(1), leDoubles(9.0)};

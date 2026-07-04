@@ -55,9 +55,9 @@ class FrameOfReferenceEncodingEncoderTest {
                 }
             }
 
-            ArrayNode childNode = ArrayNode.of(
+            ArrayNode childNode = new ArrayNode(
                     EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
-            ArrayNode forNode = ArrayNode.of(
+            ArrayNode forNode = new ArrayNode(
                     EncodingId.FASTLANES_FOR, MemorySegment.ofArray(metaBytes),
                     new ArrayNode[]{childNode}, new int[0]);
 
@@ -146,12 +146,12 @@ class FrameOfReferenceEncodingEncoderTest {
                 bb.putInt((int) v);
             }
 
-            ArrayNode validityNode = ArrayNode.of(
+            ArrayNode validityNode = new ArrayNode(
                     EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{1});
-            ArrayNode primNode = ArrayNode.of(
+            ArrayNode primNode = new ArrayNode(
                     EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[]{validityNode}, new int[]{0});
             byte[] metaBytes = ProtoScalarValue.ofInt64Value(reference).encode();
-            ArrayNode forNode = ArrayNode.of(
+            ArrayNode forNode = new ArrayNode(
                     EncodingId.FASTLANES_FOR, MemorySegment.ofArray(metaBytes), new ArrayNode[]{primNode}, new int[0]);
 
             ReadRegistry registry = TestRegistry.ofDecoders(

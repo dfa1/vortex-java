@@ -31,7 +31,7 @@ class DecimalEncodingDecoderTest {
 
     private static Array decode(MemorySegment meta, int rowCount, int bufferBytes) {
         MemorySegment buf = MemorySegment.ofArray(new byte[bufferBytes]);
-        ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DECIMAL, meta, new ArrayNode[0], new int[]{0});
+        ArrayNode node = new ArrayNode(EncodingId.VORTEX_DECIMAL, meta, new ArrayNode[0], new int[]{0});
         DecodeContext ctx = new DecodeContext(node, DECIMAL, rowCount,
                 new MemorySegment[]{buf}, ReadRegistry.empty(), Arena.ofAuto());
         return SUT.decode(ctx);

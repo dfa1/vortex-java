@@ -39,10 +39,10 @@ class DateTimePartsEncodingDecoderTest {
     /// Builds a context with three I64 part-children backed by the given segments.
     private static DecodeContext ctx(MemorySegment meta, DType dtype, long n,
             MemorySegment days, MemorySegment seconds, MemorySegment subseconds) {
-        ArrayNode d = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
-        ArrayNode s = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1});
-        ArrayNode ss = ArrayNode.of(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{2});
-        ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DATETIMEPARTS, meta, new ArrayNode[]{d, s, ss}, new int[0]);
+        ArrayNode d = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{0});
+        ArrayNode s = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{1});
+        ArrayNode ss = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[0], new int[]{2});
+        ArrayNode node = new ArrayNode(EncodingId.VORTEX_DATETIMEPARTS, meta, new ArrayNode[]{d, s, ss}, new int[0]);
         return new DecodeContext(node, dtype, n, new MemorySegment[]{days, seconds, subseconds}, REGISTRY, Arena.ofAuto());
     }
 
@@ -55,7 +55,7 @@ class DateTimePartsEncodingDecoderTest {
     @Test
     void decode_missingMetadata_throws() {
         // Given a node with no metadata
-        ArrayNode node = ArrayNode.of(EncodingId.VORTEX_DATETIMEPARTS, null, new ArrayNode[0], new int[0]);
+        ArrayNode node = new ArrayNode(EncodingId.VORTEX_DATETIMEPARTS, null, new ArrayNode[0], new int[0]);
         DecodeContext c = new DecodeContext(node, timestampDType(TimeUnit.Milliseconds, false), 1,
                 new MemorySegment[0], REGISTRY, Arena.ofAuto());
 

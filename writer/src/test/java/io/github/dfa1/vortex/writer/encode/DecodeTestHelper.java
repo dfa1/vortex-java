@@ -38,6 +38,6 @@ public final class DecodeTestHelper {
         for (int i = 0; i < children.length; i++) {
             children[i] = toArrayNode(enc.children()[i]);
         }
-        return ArrayNode.of(enc.encodingId(), enc.metadata(), children, enc.bufferIndices());
+        return new ArrayNode(enc.encodingId(), enc.metadata(), children, enc.bufferIndices());
     }
 }
