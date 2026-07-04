@@ -9,7 +9,7 @@ import java.util.stream.Stream;
 
 /// Identity of an array encoding — either a spec [WellKnown] constant or a third-party [Custom] id.
 ///
-/// The wire representation is always a string (e.g. `"vortex.flat"`); [#parse(String)] maps any
+/// The wire representation is always a string (e.g. `"vortex.primitive"`); [#parse(String)] maps any
 /// such string to a typed value, and [#id()] recovers the wire string from a typed value.
 ///
 /// Extends [Serializable] so a [Custom] or [WellKnown] carried on a
@@ -17,7 +17,7 @@ import java.util.stream.Stream;
 /// enum's implicit serializability.
 public sealed interface EncodingId extends Serializable permits EncodingId.WellKnown, EncodingId.Custom {
 
-    /// Returns the wire string of this encoding id (e.g. `"vortex.flat"`).
+    /// Returns the wire string of this encoding id (e.g. `"vortex.primitive"`).
     ///
     /// @return the wire string of this encoding id
     String id();
