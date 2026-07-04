@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoPatchedMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
@@ -99,13 +99,13 @@ public final class PatchedEncodingDecoder implements EncodingDecoder {
         long valCap = SegmentBroadcast.capacity(patchValues, elemBytes);
         for (long chunk = 0; chunk < nChunks; chunk++) {
             long start = Integer.toUnsignedLong(
-                    laneOffsets.getAtIndex(PTypeIO.LE_INT, (chunk * nLanes) % laneCap));
+                    laneOffsets.getAtIndex(VortexFormat.LE_INT, (chunk * nLanes) % laneCap));
             long stop = Integer.toUnsignedLong(
-                    laneOffsets.getAtIndex(PTypeIO.LE_INT, (chunk * nLanes + nLanes) % laneCap));
+                    laneOffsets.getAtIndex(VortexFormat.LE_INT, (chunk * nLanes + nLanes) % laneCap));
 
             for (long i = start; i < stop; i++) {
                 long physicalIdx = chunk * 1024
-                        + Short.toUnsignedLong(patchIndices.getAtIndex(PTypeIO.LE_SHORT, i % idxCap));
+                        + Short.toUnsignedLong(patchIndices.getAtIndex(VortexFormat.LE_SHORT, i % idxCap));
                 if (physicalIdx < offset || physicalIdx >= offset + n) {
                     continue;
                 }

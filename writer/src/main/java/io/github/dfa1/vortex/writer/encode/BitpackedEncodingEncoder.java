@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.compute.FastLanes;
 import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.io.PTypeIO;
 import io.github.dfa1.vortex.core.proto.ProtoBitPackedMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
@@ -250,9 +251,9 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
     private static long readWordFromSeg(MemorySegment seg, int off, int typeBits) {
         return switch (typeBits) {
             case 8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, off));
-            case 16 -> Short.toUnsignedLong(seg.get(PTypeIO.LE_SHORT, off));
-            case 32 -> Integer.toUnsignedLong(seg.get(PTypeIO.LE_INT, off));
-            case 64 -> seg.get(PTypeIO.LE_LONG, off);
+            case 16 -> Short.toUnsignedLong(seg.get(VortexFormat.LE_SHORT, off));
+            case 32 -> Integer.toUnsignedLong(seg.get(VortexFormat.LE_INT, off));
+            case 64 -> seg.get(VortexFormat.LE_LONG, off);
             default ->
                     throw new VortexException(EncodingId.FASTLANES_BITPACKED, "unsupported typeBits: " + typeBits);
         };
@@ -261,9 +262,9 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
     private static void writeWordToSeg(MemorySegment seg, int off, long value, int typeBits) {
         switch (typeBits) {
             case 8 -> seg.set(ValueLayout.JAVA_BYTE, off, (byte) value);
-            case 16 -> seg.set(PTypeIO.LE_SHORT, off, (short) value);
-            case 32 -> seg.set(PTypeIO.LE_INT, off, (int) value);
-            case 64 -> seg.set(PTypeIO.LE_LONG, off, value);
+            case 16 -> seg.set(VortexFormat.LE_SHORT, off, (short) value);
+            case 32 -> seg.set(VortexFormat.LE_INT, off, (int) value);
+            case 64 -> seg.set(VortexFormat.LE_LONG, off, value);
             default ->
                     throw new VortexException(EncodingId.FASTLANES_BITPACKED, "unsupported typeBits: " + typeBits);
         }

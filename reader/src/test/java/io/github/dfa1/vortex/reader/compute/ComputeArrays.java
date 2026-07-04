@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.reader.compute;
 
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.array.ByteArray;
@@ -53,7 +53,7 @@ final class ComputeArrays {
     static MaterializedDoubleArray doubleArray(Arena arena, double... values) {
         MemorySegment seg = arena.allocate(Math.max(1, values.length * 8L), 8);
         for (int i = 0; i < values.length; i++) {
-            seg.setAtIndex(PTypeIO.LE_DOUBLE, i, values[i]);
+            seg.setAtIndex(VortexFormat.LE_DOUBLE, i, values[i]);
         }
         return new MaterializedDoubleArray(DType.F64, values.length, seg);
     }
@@ -127,10 +127,10 @@ final class ComputeArrays {
         MemorySegment.copy(MemorySegment.ofArray(allBytes), 0, bytes, 0, allBytes.length);
         MemorySegment offsets = arena.allocate((values.length + 1) * Integer.BYTES, Integer.BYTES);
         int running = 0;
-        offsets.setAtIndex(PTypeIO.LE_INT, 0, 0);
+        offsets.setAtIndex(VortexFormat.LE_INT, 0, 0);
         for (int i = 0; i < values.length; i++) {
             running += values[i].getBytes(StandardCharsets.UTF_8).length;
-            offsets.setAtIndex(PTypeIO.LE_INT, i + 1, running);
+            offsets.setAtIndex(VortexFormat.LE_INT, i + 1, running);
         }
         return new VarBinArray.OffsetMode(DType.UTF8, values.length, bytes.asReadOnly(),
                 offsets, PType.I32);
@@ -139,7 +139,7 @@ final class ComputeArrays {
     private static MemorySegment longSegment(Arena arena, long... values) {
         MemorySegment seg = arena.allocate(Math.max(1, values.length * 8L), 8);
         for (int i = 0; i < values.length; i++) {
-            seg.setAtIndex(PTypeIO.LE_LONG, i, values[i]);
+            seg.setAtIndex(VortexFormat.LE_LONG, i, values[i]);
         }
         return seg;
     }

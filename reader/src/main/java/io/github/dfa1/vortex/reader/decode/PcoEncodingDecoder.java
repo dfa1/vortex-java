@@ -19,8 +19,8 @@ import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
+
+import static io.github.dfa1.vortex.core.io.VortexFormat.LE_LONG;
 
 /// Read-only decoder for `vortex.pco` — port of pcodec.
 public final class PcoEncodingDecoder implements EncodingDecoder {
@@ -30,8 +30,6 @@ public final class PcoEncodingDecoder implements EncodingDecoder {
     static final int BITS_TO_ENCODE_OFFSET_BITS_32 = 6;
     static final int BITS_TO_ENCODE_OFFSET_BITS_16 = 5;
 
-    private static final ValueLayout.OfLong LE_LONG =
-            ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     /// Public no-arg constructor required by [java.util.ServiceLoader].
     public PcoEncodingDecoder() {

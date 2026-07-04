@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.io.PTypeIO;
 import io.github.dfa1.vortex.core.proto.ProtoDictMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
@@ -130,11 +131,11 @@ public final class DictEncodingEncoder implements EncodingEncoder {
         MemorySegment dictOffsetsBuf = arena.allocate((long) (dictSize + 1) * Long.BYTES, Long.BYTES);
 
         long pos = 0;
-        dictOffsetsBuf.setAtIndex(PTypeIO.LE_LONG, 0, 0L);
+        dictOffsetsBuf.setAtIndex(VortexFormat.LE_LONG, 0, 0L);
         for (int i = 0; i < dictSize; i++) {
             MemorySegment.copy(MemorySegment.ofArray(dictByteArrays[i]), 0, dictBytesBuf, pos, dictByteArrays[i].length);
             pos += dictByteArrays[i].length;
-            dictOffsetsBuf.setAtIndex(PTypeIO.LE_LONG, (long) i + 1, pos);
+            dictOffsetsBuf.setAtIndex(VortexFormat.LE_LONG, (long) i + 1, pos);
         }
 
         MemorySegment codesBuf = arena.allocate((long) n * codeBytes);
@@ -205,14 +206,14 @@ public final class DictEncodingEncoder implements EncodingEncoder {
             case U16 -> {
                 short[] a = new short[len];
                 for (int i = 0; i < len; i++) {
-                    a[i] = codesBuf.get(PTypeIO.LE_SHORT, (long) i * 2);
+                    a[i] = codesBuf.get(VortexFormat.LE_SHORT, (long) i * 2);
                 }
                 yield a;
             }
             default -> {
                 int[] a = new int[len];
                 for (int i = 0; i < len; i++) {
-                    a[i] = codesBuf.get(PTypeIO.LE_INT, (long) i * 4);
+                    a[i] = codesBuf.get(VortexFormat.LE_INT, (long) i * 4);
                 }
                 yield a;
             }
@@ -317,8 +318,8 @@ public final class DictEncodingEncoder implements EncodingEncoder {
     private static void writeCodeToSeg(MemorySegment seg, PType codePType, int idx, int code) {
         switch (codePType) {
             case U8 -> seg.set(ValueLayout.JAVA_BYTE, idx, (byte) code);
-            case U16 -> seg.set(PTypeIO.LE_SHORT, (long) idx * 2, (short) code);
-            case U32 -> seg.set(PTypeIO.LE_INT, (long) idx * 4, code);
+            case U16 -> seg.set(VortexFormat.LE_SHORT, (long) idx * 2, (short) code);
+            case U32 -> seg.set(VortexFormat.LE_INT, (long) idx * 4, code);
             default -> throw new VortexException(EncodingId.VORTEX_DICT, "unexpected code type: " + codePType);
         }
     }

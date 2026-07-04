@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -52,13 +52,13 @@ public final class VarBinViewEncodingEncoder implements EncodingEncoder {
         for (int i = 0; i < n; i++) {
             byte[] b = bytes[i];
             long viewOff = (long) i * VIEW_SIZE;
-            viewsBuf.set(PTypeIO.LE_INT, viewOff, b.length);
+            viewsBuf.set(VortexFormat.LE_INT, viewOff, b.length);
             if (b.length <= MAX_INLINED_SIZE) {
                 MemorySegment.copy(MemorySegment.ofArray(b), 0, viewsBuf, viewOff + 4, b.length);
             } else {
                 MemorySegment.copy(MemorySegment.ofArray(b), 0, viewsBuf, viewOff + 4, 4);
-                viewsBuf.set(PTypeIO.LE_INT, viewOff + 8, 0);
-                viewsBuf.set(PTypeIO.LE_INT, viewOff + 12, dataOffset);
+                viewsBuf.set(VortexFormat.LE_INT, viewOff + 8, 0);
+                viewsBuf.set(VortexFormat.LE_INT, viewOff + 12, dataOffset);
                 MemorySegment.copy(MemorySegment.ofArray(b), 0, dataBuf, dataOffset, b.length);
                 dataOffset += b.length;
             }

@@ -1,6 +1,9 @@
 package io.github.dfa1.vortex.core.io;
 
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+
+import java.nio.ByteOrder;
 
 /// Wire-format constants for the Vortex file format.
 ///
@@ -23,6 +26,22 @@ public final class VortexFormat {
     /// File-format version this implementation reads and writes.
     /// Files with any other version are rejected up front rather than silently mis-parsed.
     public static final int VERSION = 1;
+
+    // All multi-byte integers in the Vortex wire format are little-endian — trailer fields,
+    // spec-table indexes, buffer scaffolding, and element values alike. These unaligned
+    // little-endian layouts are the single source for every wire read/write; nothing outside
+    // this class defines its own withOrder(LITTLE_ENDIAN) copy.
+
+    /// Unaligned little-endian layout for 16-bit shorts.
+    public static final ValueLayout.OfShort LE_SHORT = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+    /// Unaligned little-endian layout for 32-bit ints.
+    public static final ValueLayout.OfInt LE_INT = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+    /// Unaligned little-endian layout for 64-bit longs.
+    public static final ValueLayout.OfLong LE_LONG = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+    /// Unaligned little-endian layout for 32-bit floats.
+    public static final ValueLayout.OfFloat LE_FLOAT = ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+    /// Unaligned little-endian layout for 64-bit doubles.
+    public static final ValueLayout.OfDouble LE_DOUBLE = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     private VortexFormat() {
     }

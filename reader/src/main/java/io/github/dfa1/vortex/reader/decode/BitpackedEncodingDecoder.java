@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoBitPackedMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -253,15 +253,15 @@ public final class BitpackedEncodingDecoder implements EncodingDecoder {
                         long hiMask = hiMasks[row];
                         long laneOff = 0L;
                         for (int lane = 0; lane < lanes; lane++, laneOff += 2L) {
-                            long lo = (Short.toUnsignedLong(buf.get(PTypeIO.LE_SHORT, wordBase + laneOff)) >>> shift) & loMask;
-                            long hi = Short.toUnsignedLong(buf.get(PTypeIO.LE_SHORT, hiBase + laneOff)) & hiMask;
-                            out.set(PTypeIO.LE_SHORT, outBase + laneOff, (short) (lo | (hi << curr)));
+                            long lo = (Short.toUnsignedLong(buf.get(VortexFormat.LE_SHORT, wordBase + laneOff)) >>> shift) & loMask;
+                            long hi = Short.toUnsignedLong(buf.get(VortexFormat.LE_SHORT, hiBase + laneOff)) & hiMask;
+                            out.set(VortexFormat.LE_SHORT, outBase + laneOff, (short) (lo | (hi << curr)));
                         }
                     } else {
                         long laneOff = 0L;
                         for (int lane = 0; lane < lanes; lane++, laneOff += 2L) {
-                            out.set(PTypeIO.LE_SHORT, outBase + laneOff,
-                                    (short) ((Short.toUnsignedLong(buf.get(PTypeIO.LE_SHORT, wordBase + laneOff)) >>> shift) & bitMask));
+                            out.set(VortexFormat.LE_SHORT, outBase + laneOff,
+                                    (short) ((Short.toUnsignedLong(buf.get(VortexFormat.LE_SHORT, wordBase + laneOff)) >>> shift) & bitMask));
                         }
                     }
                 }
@@ -282,16 +282,16 @@ public final class BitpackedEncodingDecoder implements EncodingDecoder {
                         if (logicalIdx < 0 || logicalIdx >= rowCount) {
                             continue;
                         }
-                        long src = Short.toUnsignedLong(buf.get(PTypeIO.LE_SHORT, wordBase + (long) lane * 2));
+                        long src = Short.toUnsignedLong(buf.get(VortexFormat.LE_SHORT, wordBase + (long) lane * 2));
                         long value;
                         if (rem > 0) {
                             long lo = (src >>> shift) & loMask;
-                            long hi = Short.toUnsignedLong(buf.get(PTypeIO.LE_SHORT, hiBase + (long) lane * 2)) & hiMask;
+                            long hi = Short.toUnsignedLong(buf.get(VortexFormat.LE_SHORT, hiBase + (long) lane * 2)) & hiMask;
                             value = lo | (hi << curr);
                         } else {
                             value = (src >>> shift) & bitMask;
                         }
-                        out.set(PTypeIO.LE_SHORT, (long) logicalIdx * 2, (short) value);
+                        out.set(VortexFormat.LE_SHORT, (long) logicalIdx * 2, (short) value);
                     }
                 }
             }
@@ -334,15 +334,15 @@ public final class BitpackedEncodingDecoder implements EncodingDecoder {
                         long hiMask = hiMasks[row];
                         long laneOff = 0L;
                         for (int lane = 0; lane < lanes; lane++, laneOff += 4L) {
-                            long lo = (Integer.toUnsignedLong(buf.get(PTypeIO.LE_INT, wordBase + laneOff)) >>> shift) & loMask;
-                            long hi = Integer.toUnsignedLong(buf.get(PTypeIO.LE_INT, hiBase + laneOff)) & hiMask;
-                            out.set(PTypeIO.LE_INT, outBase + laneOff, (int) (lo | (hi << curr)));
+                            long lo = (Integer.toUnsignedLong(buf.get(VortexFormat.LE_INT, wordBase + laneOff)) >>> shift) & loMask;
+                            long hi = Integer.toUnsignedLong(buf.get(VortexFormat.LE_INT, hiBase + laneOff)) & hiMask;
+                            out.set(VortexFormat.LE_INT, outBase + laneOff, (int) (lo | (hi << curr)));
                         }
                     } else {
                         long laneOff = 0L;
                         for (int lane = 0; lane < lanes; lane++, laneOff += 4L) {
-                            out.set(PTypeIO.LE_INT, outBase + laneOff,
-                                    (int) ((Integer.toUnsignedLong(buf.get(PTypeIO.LE_INT, wordBase + laneOff)) >>> shift) & bitMask));
+                            out.set(VortexFormat.LE_INT, outBase + laneOff,
+                                    (int) ((Integer.toUnsignedLong(buf.get(VortexFormat.LE_INT, wordBase + laneOff)) >>> shift) & bitMask));
                         }
                     }
                 }
@@ -363,16 +363,16 @@ public final class BitpackedEncodingDecoder implements EncodingDecoder {
                         if (logicalIdx < 0 || logicalIdx >= rowCount) {
                             continue;
                         }
-                        long src = Integer.toUnsignedLong(buf.get(PTypeIO.LE_INT, wordBase + (long) lane * 4));
+                        long src = Integer.toUnsignedLong(buf.get(VortexFormat.LE_INT, wordBase + (long) lane * 4));
                         long value;
                         if (rem > 0) {
                             long lo = (src >>> shift) & loMask;
-                            long hi = Integer.toUnsignedLong(buf.get(PTypeIO.LE_INT, hiBase + (long) lane * 4)) & hiMask;
+                            long hi = Integer.toUnsignedLong(buf.get(VortexFormat.LE_INT, hiBase + (long) lane * 4)) & hiMask;
                             value = lo | (hi << curr);
                         } else {
                             value = (src >>> shift) & bitMask;
                         }
-                        out.set(PTypeIO.LE_INT, (long) logicalIdx * 4, (int) value);
+                        out.set(VortexFormat.LE_INT, (long) logicalIdx * 4, (int) value);
                     }
                 }
             }
@@ -415,15 +415,15 @@ public final class BitpackedEncodingDecoder implements EncodingDecoder {
                         long hiMask = hiMasks[row];
                         long laneOff = 0L;
                         for (int lane = 0; lane < lanes; lane++, laneOff += 8L) {
-                            long lo = (buf.get(PTypeIO.LE_LONG, wordBase + laneOff) >>> shift) & loMask;
-                            long hi = buf.get(PTypeIO.LE_LONG, hiBase + laneOff) & hiMask;
-                            out.set(PTypeIO.LE_LONG, outBase + laneOff, lo | (hi << curr));
+                            long lo = (buf.get(VortexFormat.LE_LONG, wordBase + laneOff) >>> shift) & loMask;
+                            long hi = buf.get(VortexFormat.LE_LONG, hiBase + laneOff) & hiMask;
+                            out.set(VortexFormat.LE_LONG, outBase + laneOff, lo | (hi << curr));
                         }
                     } else {
                         long laneOff = 0L;
                         for (int lane = 0; lane < lanes; lane++, laneOff += 8L) {
-                            out.set(PTypeIO.LE_LONG, outBase + laneOff,
-                                    (buf.get(PTypeIO.LE_LONG, wordBase + laneOff) >>> shift) & bitMask);
+                            out.set(VortexFormat.LE_LONG, outBase + laneOff,
+                                    (buf.get(VortexFormat.LE_LONG, wordBase + laneOff) >>> shift) & bitMask);
                         }
                     }
                 }
@@ -444,16 +444,16 @@ public final class BitpackedEncodingDecoder implements EncodingDecoder {
                         if (logicalIdx < 0 || logicalIdx >= rowCount) {
                             continue;
                         }
-                        long src = buf.get(PTypeIO.LE_LONG, wordBase + (long) lane * 8);
+                        long src = buf.get(VortexFormat.LE_LONG, wordBase + (long) lane * 8);
                         long value;
                         if (rem > 0) {
                             long lo = (src >>> shift) & loMask;
-                            long hi = buf.get(PTypeIO.LE_LONG, hiBase + (long) lane * 8) & hiMask;
+                            long hi = buf.get(VortexFormat.LE_LONG, hiBase + (long) lane * 8) & hiMask;
                             value = lo | (hi << curr);
                         } else {
                             value = (src >>> shift) & bitMask;
                         }
-                        out.set(PTypeIO.LE_LONG, (long) logicalIdx * 8, value);
+                        out.set(VortexFormat.LE_LONG, (long) logicalIdx * 8, value);
                     }
                 }
             }
@@ -488,9 +488,9 @@ public final class BitpackedEncodingDecoder implements EncodingDecoder {
     private static long readUnsignedIdx(MemorySegment seg, long off, PType ptype) {
         return switch (ptype) {
             case U8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, off));
-            case U16 -> Short.toUnsignedLong(seg.get(PTypeIO.LE_SHORT, off));
-            case U32 -> Integer.toUnsignedLong(seg.get(PTypeIO.LE_INT, off));
-            case U64 -> seg.get(PTypeIO.LE_LONG, off);
+            case U16 -> Short.toUnsignedLong(seg.get(VortexFormat.LE_SHORT, off));
+            case U32 -> Integer.toUnsignedLong(seg.get(VortexFormat.LE_INT, off));
+            case U64 -> seg.get(VortexFormat.LE_LONG, off);
             default -> throw new VortexException(EncodingId.FASTLANES_BITPACKED,
                     "non-unsigned patch index ptype " + ptype);
         };

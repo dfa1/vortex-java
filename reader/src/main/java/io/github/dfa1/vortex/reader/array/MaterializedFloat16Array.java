@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.reader.array;
 
 
 import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 
 import java.lang.foreign.MemorySegment;
 
@@ -21,7 +21,7 @@ public final class MaterializedFloat16Array extends AbstractMaterializedArray im
 
     @Override
     public float getFloat(long i) {
-        return Float.float16ToFloat(buffer.getAtIndex(PTypeIO.LE_SHORT, i));
+        return Float.float16ToFloat(buffer.getAtIndex(VortexFormat.LE_SHORT, i));
     }
 
     @Override

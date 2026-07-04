@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.reader;
 
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.fbs.FbsBuilder;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.error.VortexException;
@@ -46,7 +46,7 @@ class SerializedArrayBoundsSecurityTest {
             // Given a 16-byte segment whose trailing u32 claims a 1 000 000-byte FlatBuffer;
             // fbStart = segLen - 4 - fbLen would go deeply negative.
             MemorySegment seg = arena.allocate(16);
-            seg.set(PTypeIO.LE_INT, 12, 1_000_000);
+            seg.set(VortexFormat.LE_INT, 12, 1_000_000);
 
             // When / Then
             assertThatThrownBy(() -> sut.decode(seg, List.of("vortex.flat"), DTYPE, 1, arena))
@@ -59,7 +59,7 @@ class SerializedArrayBoundsSecurityTest {
         try (Arena arena = Arena.ofConfined()) {
             // Given a trailing u32 of 0xFFFFFFFF — reads back as a signed int of -1
             MemorySegment seg = arena.allocate(16);
-            seg.set(PTypeIO.LE_INT, 12, -1);
+            seg.set(VortexFormat.LE_INT, 12, -1);
 
             // When / Then the negative length is rejected (checkRange len < 0)
             assertThatThrownBy(() -> sut.decode(seg, List.of("vortex.flat"), DTYPE, 1, arena))
@@ -75,7 +75,7 @@ class SerializedArrayBoundsSecurityTest {
             byte[] fb = arrayFlatBufferWithOneBuffer(1_000_000L);
             MemorySegment seg = arena.allocate(fb.length + 4L);
             MemorySegment.copy(MemorySegment.ofArray(fb), 0, seg, 0, fb.length);
-            seg.set(PTypeIO.LE_INT, fb.length, fb.length);
+            seg.set(VortexFormat.LE_INT, fb.length, fb.length);
 
             // When / Then the buffer slice is bounds-checked before asSlice
             assertThatThrownBy(() -> sut.decode(seg, List.of("vortex.flat"), DTYPE, 1, arena))

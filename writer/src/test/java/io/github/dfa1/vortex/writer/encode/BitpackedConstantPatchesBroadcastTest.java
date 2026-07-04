@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.core.proto.ProtoBitPackedMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
@@ -70,12 +70,12 @@ class BitpackedConstantPatchesBroadcastTest {
             // Then
             assertThat(result.length()).isEqualTo(n);
             MemorySegment data = result.materialize(Arena.ofAuto());
-            assertThat(data.getAtIndex(PTypeIO.LE_LONG, 2)).isEqualTo(constantPatchValue);
+            assertThat(data.getAtIndex(VortexFormat.LE_LONG, 2)).isEqualTo(constantPatchValue);
             for (long i = 0; i < n; i++) {
                 if (i == 2) {
                     continue;
                 }
-                assertThat(data.getAtIndex(PTypeIO.LE_LONG, i)).as("non-patched index %d", i).isZero();
+                assertThat(data.getAtIndex(VortexFormat.LE_LONG, i)).as("non-patched index %d", i).isZero();
             }
         }
     }

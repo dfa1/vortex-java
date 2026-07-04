@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.reader.array;
 
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
 import org.junit.jupiter.api.Test;
 
@@ -19,7 +19,7 @@ class LazyZigZagIntArrayTest {
     private static LazyZigZagIntArray of(int... encoded) {
         MemorySegment seg = Arena.ofAuto().allocate((long) encoded.length * 4, 4);
         for (int i = 0; i < encoded.length; i++) {
-            seg.setAtIndex(PTypeIO.LE_INT, i, encoded[i]);
+            seg.setAtIndex(VortexFormat.LE_INT, i, encoded[i]);
         }
         return new LazyZigZagIntArray(I32, encoded.length, seg);
     }
@@ -73,7 +73,7 @@ class LazyZigZagIntArrayTest {
 
             // Then — materialized rows match the lazy getter
             for (int i = 0; i < 5; i++) {
-                assertThat(seg.getAtIndex(PTypeIO.LE_INT, i)).as("row %d", i).isEqualTo(sut.getInt(i));
+                assertThat(seg.getAtIndex(VortexFormat.LE_INT, i)).as("row %d", i).isEqualTo(sut.getInt(i));
             }
         }
     }

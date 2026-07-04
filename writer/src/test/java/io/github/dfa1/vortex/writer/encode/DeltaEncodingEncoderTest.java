@@ -6,7 +6,7 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.encoding.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.core.proto.ProtoDeltaMetadata;
@@ -77,7 +77,7 @@ class DeltaEncodingEncoderTest {
         // Then
         assertThat(result.length()).isEqualTo(data.length);
         for (int i = 0; i < data.length; i++) {
-            assertThat(result.materialize(Arena.ofAuto()).get(PTypeIO.LE_LONG, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
+            assertThat(result.materialize(Arena.ofAuto()).get(VortexFormat.LE_LONG, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
         }
     }
 
@@ -94,7 +94,7 @@ class DeltaEncodingEncoderTest {
         // Then
         assertThat(result.length()).isEqualTo(data.length);
         for (int i = 0; i < data.length; i++) {
-            assertThat(result.materialize(Arena.ofAuto()).get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
+            assertThat(result.materialize(Arena.ofAuto()).get(VortexFormat.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
         }
     }
 
@@ -111,7 +111,7 @@ class DeltaEncodingEncoderTest {
         // Then
         assertThat(result.length()).isEqualTo(data.length);
         for (int i = 0; i < data.length; i++) {
-            assertThat(result.materialize(Arena.ofAuto()).get(PTypeIO.LE_LONG, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
+            assertThat(result.materialize(Arena.ofAuto()).get(VortexFormat.LE_LONG, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
         }
     }
 
@@ -151,9 +151,9 @@ class DeltaEncodingEncoderTest {
             long off = (long) i * ptype.byteSize();
             switch (ptype) {
                 case I8, U8 -> assertThat(seg.get(ValueLayout.JAVA_BYTE, off)).as("idx %d", i).isEqualTo(((byte[]) data)[i]);
-                case I16, U16 -> assertThat(seg.get(PTypeIO.LE_SHORT, off)).as("idx %d", i).isEqualTo(((short[]) data)[i]);
-                case I32, U32 -> assertThat(seg.get(PTypeIO.LE_INT, off)).as("idx %d", i).isEqualTo(((int[]) data)[i]);
-                case I64, U64 -> assertThat(seg.get(PTypeIO.LE_LONG, off)).as("idx %d", i).isEqualTo(((long[]) data)[i]);
+                case I16, U16 -> assertThat(seg.get(VortexFormat.LE_SHORT, off)).as("idx %d", i).isEqualTo(((short[]) data)[i]);
+                case I32, U32 -> assertThat(seg.get(VortexFormat.LE_INT, off)).as("idx %d", i).isEqualTo(((int[]) data)[i]);
+                case I64, U64 -> assertThat(seg.get(VortexFormat.LE_LONG, off)).as("idx %d", i).isEqualTo(((long[]) data)[i]);
                 default -> throw new AssertionError(ptype);
             }
         }

@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.reader.array;
 
 
 import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 
 import java.lang.foreign.MemorySegment;
 import java.util.function.DoubleBinaryOperator;
@@ -22,7 +22,7 @@ public final class MaterializedFloatArray extends AbstractMaterializedArray impl
 
     @Override
     public float getFloat(long i) {
-        return buffer.getAtIndex(PTypeIO.LE_FLOAT, length == elementCount ? i : i % elementCount);
+        return buffer.getAtIndex(VortexFormat.LE_FLOAT, length == elementCount ? i : i % elementCount);
     }
 
     @Override
@@ -32,11 +32,11 @@ public final class MaterializedFloatArray extends AbstractMaterializedArray impl
         double result = identity;
         if (n == elementCount) {
             for (long i = 0; i < n; i++) {
-                result = op.applyAsDouble(result, buf.getAtIndex(PTypeIO.LE_FLOAT, i));
+                result = op.applyAsDouble(result, buf.getAtIndex(VortexFormat.LE_FLOAT, i));
             }
         } else {
             for (long i = 0; i < n; i++) {
-                result = op.applyAsDouble(result, buf.getAtIndex(PTypeIO.LE_FLOAT, i % elementCount));
+                result = op.applyAsDouble(result, buf.getAtIndex(VortexFormat.LE_FLOAT, i % elementCount));
             }
         }
         return result;

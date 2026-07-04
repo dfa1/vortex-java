@@ -1,8 +1,8 @@
 package io.github.dfa1.vortex.writer;
 
-import static io.github.dfa1.vortex.core.io.PTypeIO.LE_FLOAT;
-import static io.github.dfa1.vortex.core.io.PTypeIO.LE_INT;
-import static io.github.dfa1.vortex.core.io.PTypeIO.LE_SHORT;
+import static io.github.dfa1.vortex.core.io.VortexFormat.LE_FLOAT;
+import static io.github.dfa1.vortex.core.io.VortexFormat.LE_INT;
+import static io.github.dfa1.vortex.core.io.VortexFormat.LE_SHORT;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 

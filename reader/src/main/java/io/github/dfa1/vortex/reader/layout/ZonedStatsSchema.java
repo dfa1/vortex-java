@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.reader.layout;
 
 import io.github.dfa1.vortex.core.model.DType;
 
-import static io.github.dfa1.vortex.core.io.PTypeIO.LE_INT;
+import static io.github.dfa1.vortex.core.io.VortexFormat.LE_INT;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;

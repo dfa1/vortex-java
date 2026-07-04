@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.reader;
 
-import static io.github.dfa1.vortex.core.io.PTypeIO.LE_INT;
+import static io.github.dfa1.vortex.core.io.VortexFormat.LE_INT;
 
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;

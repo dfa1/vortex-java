@@ -6,7 +6,7 @@ import io.github.dfa1.vortex.encoding.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.core.proto.ProtoBitPackedMetadata;
@@ -73,11 +73,11 @@ class BitpackedEncodingPatchesTest {
 
             // Then
             assertThat(result.length()).isEqualTo(base.length);
-            assertThat(result.materialize(Arena.ofAuto()).get(PTypeIO.LE_INT, 0L)).isEqualTo(10);
-            assertThat(result.materialize(Arena.ofAuto()).get(PTypeIO.LE_INT, 4L)).isEqualTo(777);
-            assertThat(result.materialize(Arena.ofAuto()).get(PTypeIO.LE_INT, 8L)).isEqualTo(30);
-            assertThat(result.materialize(Arena.ofAuto()).get(PTypeIO.LE_INT, 12L)).isEqualTo(999);
-            assertThat(result.materialize(Arena.ofAuto()).get(PTypeIO.LE_INT, 16L)).isEqualTo(50);
+            assertThat(result.materialize(Arena.ofAuto()).get(VortexFormat.LE_INT, 0L)).isEqualTo(10);
+            assertThat(result.materialize(Arena.ofAuto()).get(VortexFormat.LE_INT, 4L)).isEqualTo(777);
+            assertThat(result.materialize(Arena.ofAuto()).get(VortexFormat.LE_INT, 8L)).isEqualTo(30);
+            assertThat(result.materialize(Arena.ofAuto()).get(VortexFormat.LE_INT, 12L)).isEqualTo(999);
+            assertThat(result.materialize(Arena.ofAuto()).get(VortexFormat.LE_INT, 16L)).isEqualTo(50);
         }
     }
 

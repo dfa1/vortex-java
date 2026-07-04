@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.writer.encode;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoALPMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
@@ -196,7 +196,7 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
 
         MemorySegment encodedBuf = ctx.arena().allocate((long) n * 8, 8);
         for (int i = 0; i < n; i++) {
-            encodedBuf.setAtIndex(PTypeIO.LE_LONG, i, d.encodedArr()[i]);
+            encodedBuf.setAtIndex(VortexFormat.LE_LONG, i, d.encodedArr()[i]);
         }
 
         EncodeNode encodedNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
@@ -212,8 +212,8 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         MemorySegment idxBuf = ctx.arena().allocate((long) numPatches * 4, 4);
         MemorySegment valBuf = ctx.arena().allocate((long) numPatches * 8, 8);
         for (int i = 0; i < numPatches; i++) {
-            idxBuf.setAtIndex(PTypeIO.LE_INT, i, d.patchIndices().get(i));
-            valBuf.setAtIndex(PTypeIO.LE_DOUBLE, i, d.patchValues().get(i));
+            idxBuf.setAtIndex(VortexFormat.LE_INT, i, d.patchIndices().get(i));
+            valBuf.setAtIndex(VortexFormat.LE_DOUBLE, i, d.patchValues().get(i));
         }
 
         ProtoPatchesMetadata patches = buildPatchesMeta(numPatches);
@@ -242,8 +242,8 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         MemorySegment idxBuf = ctx.arena().allocate((long) numPatches * 4, 4);
         MemorySegment valBuf = ctx.arena().allocate((long) numPatches * 8, 8);
         for (int i = 0; i < numPatches; i++) {
-            idxBuf.setAtIndex(PTypeIO.LE_INT, i, d.patchIndices().get(i));
-            valBuf.setAtIndex(PTypeIO.LE_DOUBLE, i, d.patchValues().get(i));
+            idxBuf.setAtIndex(VortexFormat.LE_INT, i, d.patchIndices().get(i));
+            valBuf.setAtIndex(VortexFormat.LE_DOUBLE, i, d.patchValues().get(i));
         }
 
         ProtoPatchesMetadata patches = buildPatchesMeta(numPatches);
@@ -365,7 +365,7 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
 
         MemorySegment encodedBuf = ctx.arena().allocate((long) n * 4, 4);
         for (int i = 0; i < n; i++) {
-            encodedBuf.setAtIndex(PTypeIO.LE_INT, i, encodedArr[i]);
+            encodedBuf.setAtIndex(VortexFormat.LE_INT, i, encodedArr[i]);
         }
 
         EncodeNode encodedNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, 0);
@@ -381,8 +381,8 @@ public final class AlpEncodingEncoder implements EncodingEncoder {
         MemorySegment idxBuf = ctx.arena().allocate((long) numPatches * 4, 4);
         MemorySegment valBuf = ctx.arena().allocate((long) numPatches * 4, 4);
         for (int i = 0; i < numPatches; i++) {
-            idxBuf.setAtIndex(PTypeIO.LE_INT, i, patchIndices.get(i));
-            valBuf.setAtIndex(PTypeIO.LE_FLOAT, i, patchValues.get(i));
+            idxBuf.setAtIndex(VortexFormat.LE_INT, i, patchIndices.get(i));
+            valBuf.setAtIndex(VortexFormat.LE_FLOAT, i, patchValues.get(i));
         }
 
         ProtoPatchesMetadata patches = new ProtoPatchesMetadata(

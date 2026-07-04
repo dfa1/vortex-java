@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.error.VortexException;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
@@ -66,22 +66,22 @@ public record DictLongArray(DType dtype, long length, LongArray values, Array co
         switch (codes) {
             case ByteArray ba -> {
                 for (long i = 0; i < n; i++) {
-                    dst.setAtIndex(PTypeIO.LE_LONG, i, vals.getLong(Byte.toUnsignedLong(ba.getByte(i))));
+                    dst.setAtIndex(VortexFormat.LE_LONG, i, vals.getLong(Byte.toUnsignedLong(ba.getByte(i))));
                 }
             }
             case ShortArray sa -> {
                 for (long i = 0; i < n; i++) {
-                    dst.setAtIndex(PTypeIO.LE_LONG, i, vals.getLong(Short.toUnsignedLong(sa.getShort(i))));
+                    dst.setAtIndex(VortexFormat.LE_LONG, i, vals.getLong(Short.toUnsignedLong(sa.getShort(i))));
                 }
             }
             case IntArray ia -> {
                 for (long i = 0; i < n; i++) {
-                    dst.setAtIndex(PTypeIO.LE_LONG, i, vals.getLong(Integer.toUnsignedLong(ia.getInt(i))));
+                    dst.setAtIndex(VortexFormat.LE_LONG, i, vals.getLong(Integer.toUnsignedLong(ia.getInt(i))));
                 }
             }
             case LongArray la -> {
                 for (long i = 0; i < n; i++) {
-                    dst.setAtIndex(PTypeIO.LE_LONG, i, vals.getLong(la.getLong(i)));
+                    dst.setAtIndex(VortexFormat.LE_LONG, i, vals.getLong(la.getLong(i)));
                 }
             }
             default -> throw new VortexException("DictLongArray: invalid codes type: "

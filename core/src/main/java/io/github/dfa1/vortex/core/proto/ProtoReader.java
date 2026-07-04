@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.core.proto;
 
-import static io.github.dfa1.vortex.core.io.PTypeIO.LE_INT;
-import static io.github.dfa1.vortex.core.io.PTypeIO.LE_LONG;
+import static io.github.dfa1.vortex.core.io.VortexFormat.LE_INT;
+import static io.github.dfa1.vortex.core.io.VortexFormat.LE_LONG;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;

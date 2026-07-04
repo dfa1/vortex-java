@@ -1,8 +1,8 @@
 package io.github.dfa1.vortex.reader.layout;
 
-import static io.github.dfa1.vortex.core.io.PTypeIO.LE_SHORT;
-import static io.github.dfa1.vortex.core.io.PTypeIO.LE_INT;
-import static io.github.dfa1.vortex.core.io.PTypeIO.LE_LONG;
+import static io.github.dfa1.vortex.core.io.VortexFormat.LE_SHORT;
+import static io.github.dfa1.vortex.core.io.VortexFormat.LE_INT;
+import static io.github.dfa1.vortex.core.io.VortexFormat.LE_LONG;
 
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;

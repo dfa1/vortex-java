@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 
 import java.lang.foreign.MemorySegment;
 import java.util.function.DoubleBinaryOperator;
@@ -22,7 +22,7 @@ public final class MaterializedDoubleArray extends AbstractMaterializedArray imp
 
     @Override
     public double getDouble(long i) {
-        return buffer.getAtIndex(PTypeIO.LE_DOUBLE, length == elementCount ? i : i % elementCount);
+        return buffer.getAtIndex(VortexFormat.LE_DOUBLE, length == elementCount ? i : i % elementCount);
     }
 
     @Override
@@ -31,11 +31,11 @@ public final class MaterializedDoubleArray extends AbstractMaterializedArray imp
         long n = length;
         if (n == elementCount) {
             for (long i = 0; i < n; i++) {
-                c.accept(buf.getAtIndex(PTypeIO.LE_DOUBLE, i));
+                c.accept(buf.getAtIndex(VortexFormat.LE_DOUBLE, i));
             }
         } else {
             for (long i = 0; i < n; i++) {
-                c.accept(buf.getAtIndex(PTypeIO.LE_DOUBLE, i % elementCount));
+                c.accept(buf.getAtIndex(VortexFormat.LE_DOUBLE, i % elementCount));
             }
         }
     }
@@ -47,11 +47,11 @@ public final class MaterializedDoubleArray extends AbstractMaterializedArray imp
         double result = identity;
         if (n == elementCount) {
             for (long i = 0; i < n; i++) {
-                result = op.applyAsDouble(result, buf.getAtIndex(PTypeIO.LE_DOUBLE, i));
+                result = op.applyAsDouble(result, buf.getAtIndex(VortexFormat.LE_DOUBLE, i));
             }
         } else {
             for (long i = 0; i < n; i++) {
-                result = op.applyAsDouble(result, buf.getAtIndex(PTypeIO.LE_DOUBLE, i % elementCount));
+                result = op.applyAsDouble(result, buf.getAtIndex(VortexFormat.LE_DOUBLE, i % elementCount));
             }
         }
         return result;

@@ -6,7 +6,7 @@ import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoFSSTMetadata;
 
 import java.io.IOException;
@@ -62,7 +62,7 @@ public final class FsstEncodingDecoder implements EncodingDecoder {
 
         MemorySegment outBytes = ctx.arena().allocate(totalUncompressed);
         MemorySegment outOffsets = ctx.arena().allocate((n + 1) * 4L, 4);
-        outOffsets.setAtIndex(PTypeIO.LE_INT, 0, 0);
+        outOffsets.setAtIndex(VortexFormat.LE_INT, 0, 0);
 
         long outPos = 0L;
         for (long i = 0; i < n; i++) {
@@ -70,7 +70,7 @@ public final class FsstEncodingDecoder implements EncodingDecoder {
             long cEnd = readUnsigned(codesOffsetsSeg, (i + 1) % codesOffCap, codesOffPType);
             outPos = decompressString(compressedBytes, symbolsBuf, symbolLensBuf,
                     cStart, cEnd, outBytes, outPos);
-            outOffsets.setAtIndex(PTypeIO.LE_INT, i + 1, (int) outPos);
+            outOffsets.setAtIndex(VortexFormat.LE_INT, i + 1, (int) outPos);
         }
 
         return new VarBinArray.OffsetMode(ctx.dtype(), n, outBytes.asReadOnly(), outOffsets.asReadOnly(), PType.I32);
@@ -86,7 +86,7 @@ public final class FsstEncodingDecoder implements EncodingDecoder {
                 out.set(ValueLayout.JAVA_BYTE, outPos++, compressed.get(ValueLayout.JAVA_BYTE, ++j));
             } else {
                 int symLen = Byte.toUnsignedInt(symLens.get(ValueLayout.JAVA_BYTE, b));
-                long sym = symbols.getAtIndex(PTypeIO.LE_LONG, b);
+                long sym = symbols.getAtIndex(VortexFormat.LE_LONG, b);
                 for (int k = 0; k < symLen; k++) {
                     out.set(ValueLayout.JAVA_BYTE, outPos++, (byte) (sym >>> (k * 8)));
                 }
@@ -98,10 +98,10 @@ public final class FsstEncodingDecoder implements EncodingDecoder {
     private static long readUnsigned(MemorySegment seg, long idx, PType ptype) {
         return switch (ptype) {
             case U8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, idx));
-            case U16 -> Short.toUnsignedLong(seg.get(PTypeIO.LE_SHORT, idx * 2));
-            case U32 -> Integer.toUnsignedLong(seg.getAtIndex(PTypeIO.LE_INT, idx));
-            case I32 -> seg.getAtIndex(PTypeIO.LE_INT, idx);
-            case I64, U64 -> seg.getAtIndex(PTypeIO.LE_LONG, idx);
+            case U16 -> Short.toUnsignedLong(seg.get(VortexFormat.LE_SHORT, idx * 2));
+            case U32 -> Integer.toUnsignedLong(seg.getAtIndex(VortexFormat.LE_INT, idx));
+            case I32 -> seg.getAtIndex(VortexFormat.LE_INT, idx);
+            case I64, U64 -> seg.getAtIndex(VortexFormat.LE_LONG, idx);
             default -> throw new VortexException(EncodingId.VORTEX_FSST, "unsupported ptype " + ptype);
         };
     }

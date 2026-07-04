@@ -6,7 +6,7 @@ import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
 import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
 
-import static io.github.dfa1.vortex.core.io.PTypeIO.LE_SHORT;
+import static io.github.dfa1.vortex.core.io.VortexFormat.LE_SHORT;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;

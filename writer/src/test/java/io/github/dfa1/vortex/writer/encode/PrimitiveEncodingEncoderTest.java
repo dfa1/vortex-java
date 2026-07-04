@@ -8,7 +8,7 @@ import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.encoding.TestSegments;
@@ -78,7 +78,7 @@ class PrimitiveEncodingEncoderTest {
             // Then
             assertThat(result.length()).isEqualTo(data.length);
             for (int i = 0; i < data.length; i++) {
-                assertThat(result.materialize(Arena.ofAuto()).get(PTypeIO.LE_LONG, (long) i * 8)).isEqualTo(data[i]);
+                assertThat(result.materialize(Arena.ofAuto()).get(VortexFormat.LE_LONG, (long) i * 8)).isEqualTo(data[i]);
             }
         }
 
@@ -96,7 +96,7 @@ class PrimitiveEncodingEncoderTest {
             // Then
             assertThat(result.length()).isEqualTo(data.length);
             for (int i = 0; i < data.length; i++) {
-                assertThat(result.materialize(Arena.ofAuto()).get(PTypeIO.LE_INT, (long) i * 4)).isEqualTo(data[i]);
+                assertThat(result.materialize(Arena.ofAuto()).get(VortexFormat.LE_INT, (long) i * 4)).isEqualTo(data[i]);
             }
         }
 
@@ -114,7 +114,7 @@ class PrimitiveEncodingEncoderTest {
             // Then
             assertThat(result.length()).isEqualTo(data.length);
             for (int i = 0; i < data.length; i++) {
-                assertThat(result.materialize(Arena.ofAuto()).get(PTypeIO.LE_DOUBLE, (long) i * 8)).isEqualTo(data[i]);
+                assertThat(result.materialize(Arena.ofAuto()).get(VortexFormat.LE_DOUBLE, (long) i * 8)).isEqualTo(data[i]);
             }
         }
 

@@ -5,11 +5,11 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.MemorySegment;
 
-import static io.github.dfa1.vortex.core.io.PTypeIO.LE_DOUBLE;
-import static io.github.dfa1.vortex.core.io.PTypeIO.LE_FLOAT;
-import static io.github.dfa1.vortex.core.io.PTypeIO.LE_INT;
-import static io.github.dfa1.vortex.core.io.PTypeIO.LE_LONG;
-import static io.github.dfa1.vortex.core.io.PTypeIO.LE_SHORT;
+import static io.github.dfa1.vortex.core.io.VortexFormat.LE_DOUBLE;
+import static io.github.dfa1.vortex.core.io.VortexFormat.LE_FLOAT;
+import static io.github.dfa1.vortex.core.io.VortexFormat.LE_INT;
+import static io.github.dfa1.vortex.core.io.VortexFormat.LE_LONG;
+import static io.github.dfa1.vortex.core.io.VortexFormat.LE_SHORT;
 import static java.lang.foreign.ValueLayout.JAVA_BYTE;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

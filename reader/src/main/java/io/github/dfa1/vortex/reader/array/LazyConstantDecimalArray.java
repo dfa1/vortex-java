@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.error.VortexException;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
@@ -53,9 +53,9 @@ public record LazyConstantDecimalArray(DType dtype, long length, BigDecimal valu
             long off = i * byteWidth;
             switch (byteWidth) {
                 case 1 -> dst.set(ValueLayout.JAVA_BYTE, off, (byte) rawBits);
-                case 2 -> dst.set(PTypeIO.LE_SHORT, off, (short) rawBits);
-                case 4 -> dst.set(PTypeIO.LE_INT, off, (int) rawBits);
-                case 8 -> dst.set(PTypeIO.LE_LONG, off, rawBits);
+                case 2 -> dst.set(VortexFormat.LE_SHORT, off, (short) rawBits);
+                case 4 -> dst.set(VortexFormat.LE_INT, off, (int) rawBits);
+                case 8 -> dst.set(VortexFormat.LE_LONG, off, rawBits);
                 default -> throw new VortexException("LazyConstantDecimalArray: unsupported byteWidth " + byteWidth);
             }
         }

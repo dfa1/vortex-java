@@ -7,7 +7,7 @@ import io.github.dfa1.vortex.core.model.PType;
 
 import io.github.dfa1.vortex.core.model.EncodingId;
 
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 
 
 import io.github.dfa1.vortex.core.proto.ProtoListMetadata;
@@ -52,7 +52,7 @@ public final class ListEncodingEncoder implements EncodingEncoder {
         long nOffsets = ld.outerLen() + 1;
         MemorySegment offsetsBuf = ctx.arena().allocate(nOffsets * Long.BYTES, Long.BYTES);
         for (int i = 0; i < nOffsets; i++) {
-            offsetsBuf.setAtIndex(PTypeIO.LE_LONG, i, ld.offsets()[i]);
+            offsetsBuf.setAtIndex(VortexFormat.LE_LONG, i, ld.offsets()[i]);
         }
         allBuffers.add(offsetsBuf);
         EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, elemBufCount);

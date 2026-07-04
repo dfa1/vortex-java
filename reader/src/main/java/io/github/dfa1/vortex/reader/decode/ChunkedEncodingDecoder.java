@@ -15,16 +15,14 @@ import io.github.dfa1.vortex.reader.array.ChunkedShortArray;
 import io.github.dfa1.vortex.reader.array.StructArray;
 
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.List;
+
+import static io.github.dfa1.vortex.core.io.VortexFormat.LE_LONG;
 
 /// Read-only decoder for `vortex.chunked`.
 public final class ChunkedEncodingDecoder implements EncodingDecoder {
 
-    private static final ValueLayout.OfLong LE_LONG =
-            ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     /// Public no-arg constructor required by [java.util.ServiceLoader].
     public ChunkedEncodingDecoder() {

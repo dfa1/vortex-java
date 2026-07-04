@@ -4,6 +4,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.io.PTypeIO;
 import io.github.dfa1.vortex.core.proto.ProtoRunEndMetadata;
 
@@ -80,7 +81,7 @@ public final class RunEndEncodingEncoder implements EncodingEncoder {
 
         MemorySegment endsBuf = ctx.arena().allocate((long) numRuns * 4, 4);
         for (int i = 0; i < numRuns; i++) {
-            endsBuf.setAtIndex(PTypeIO.LE_INT, i, ends.get(i));
+            endsBuf.setAtIndex(VortexFormat.LE_INT, i, ends.get(i));
         }
 
         int elemBytes = ptype.byteSize();

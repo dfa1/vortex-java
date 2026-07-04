@@ -9,7 +9,12 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.invoke.VarHandle;
-import java.nio.ByteOrder;
+
+import static io.github.dfa1.vortex.core.io.VortexFormat.LE_DOUBLE;
+import static io.github.dfa1.vortex.core.io.VortexFormat.LE_FLOAT;
+import static io.github.dfa1.vortex.core.io.VortexFormat.LE_INT;
+import static io.github.dfa1.vortex.core.io.VortexFormat.LE_LONG;
+import static io.github.dfa1.vortex.core.io.VortexFormat.LE_SHORT;
 
 /// Bulk I/O helpers for primitive ptypes, backed by `MemorySegment`/`ValueLayout`/`MethodHandle`.
 ///
@@ -18,20 +23,9 @@ import java.nio.ByteOrder;
 /// the unaligned little-endian VarHandle. This lets hot loops avoid per-element `switch`
 /// dispatch on `PType`.
 ///
-/// The LE_* layout constants are public so callers outside this package can share them
-/// without duplicating the `withOrder(LITTLE_ENDIAN)` boilerplate.
+/// The shared little-endian layouts live in [VortexFormat] — endianness is a property of the
+/// wire format, not of ptypes; this class only maps ptypes onto those layouts.
 public final class PTypeIO {
-
-    /// Unaligned little-endian layout for 16-bit shorts.
-    public static final ValueLayout.OfShort LE_SHORT = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-    /// Unaligned little-endian layout for 32-bit ints.
-    public static final ValueLayout.OfInt LE_INT = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-    /// Unaligned little-endian layout for 64-bit longs.
-    public static final ValueLayout.OfLong LE_LONG = ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-    /// Unaligned little-endian layout for 32-bit floats.
-    public static final ValueLayout.OfFloat LE_FLOAT = ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-    /// Unaligned little-endian layout for 64-bit doubles.
-    public static final ValueLayout.OfDouble LE_DOUBLE = ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     private static final MethodHandle[] SETTERS = buildSetters();
 

@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoRunEndMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
@@ -118,7 +118,7 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
 
         MemorySegment outBytes = arena.allocate(totalBytes > 0 ? totalBytes : 1);
         MemorySegment outOffsets = arena.allocate((n + 1) * 4L, 4);
-        outOffsets.setAtIndex(PTypeIO.LE_INT, 0, 0);
+        outOffsets.setAtIndex(VortexFormat.LE_INT, 0, 0);
 
         long bytePos = 0;
         long outIdx = 0;
@@ -136,7 +136,7 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
                         MemorySegment.copy(valBytes, strStart, outBytes, bytePos, strLen);
                         bytePos += strLen;
                     }
-                    outOffsets.setAtIndex(PTypeIO.LE_INT, outIdx + 1, (int) bytePos);
+                    outOffsets.setAtIndex(VortexFormat.LE_INT, outIdx + 1, (int) bytePos);
                 }
             }
             logicalPos = runEnd;
@@ -148,17 +148,17 @@ public final class RunEndEncodingDecoder implements EncodingDecoder {
     private static long readUnsigned(MemorySegment seg, long i, PType ptype) {
         return switch (ptype) {
             case U8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, i));
-            case U16 -> Short.toUnsignedLong(seg.get(PTypeIO.LE_SHORT, i * 2));
-            case U32 -> Integer.toUnsignedLong(seg.get(PTypeIO.LE_INT, i * 4));
-            case U64 -> seg.get(PTypeIO.LE_LONG, i * 8);
+            case U16 -> Short.toUnsignedLong(seg.get(VortexFormat.LE_SHORT, i * 2));
+            case U32 -> Integer.toUnsignedLong(seg.get(VortexFormat.LE_INT, i * 4));
+            case U64 -> seg.get(VortexFormat.LE_LONG, i * 8);
             default -> throw new VortexException(EncodingId.VORTEX_RUNEND, "non-unsigned ends ptype " + ptype);
         };
     }
 
     private static long readVarBinOffset(MemorySegment seg, long i, PType ptype) {
         return switch (ptype) {
-            case I32, U32 -> Integer.toUnsignedLong(seg.getAtIndex(PTypeIO.LE_INT, i));
-            case I64, U64 -> seg.getAtIndex(PTypeIO.LE_LONG, i);
+            case I32, U32 -> Integer.toUnsignedLong(seg.getAtIndex(VortexFormat.LE_INT, i));
+            case I64, U64 -> seg.getAtIndex(VortexFormat.LE_LONG, i);
             default -> throw new VortexException(EncodingId.VORTEX_RUNEND, "unsupported offset ptype " + ptype);
         };
     }

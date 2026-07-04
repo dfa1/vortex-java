@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.reader.compute;
 
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ByteArray;
@@ -187,7 +187,7 @@ class DictFilterTest {
         MemorySegment seg = ARENA.allocate(10, 2);
         int[] codes = {0, 1, 2, 1, 0};
         for (int i = 0; i < codes.length; i++) {
-            seg.setAtIndex(PTypeIO.LE_SHORT, i, (short) codes[i]);
+            seg.setAtIndex(VortexFormat.LE_SHORT, i, (short) codes[i]);
         }
         MaterializedShortArray wide = new MaterializedShortArray(DType.U16, codes.length, seg);
         Array filter = DictLongArray.of(DType.I64, codes.length, longPool(new long[]{7, 8, 9}), wide);
@@ -306,7 +306,7 @@ class DictFilterTest {
         }
         MemorySegment seg = ARENA.allocate(Math.max(8L, poolSize * 8L), 8);
         for (int i = 0; i < poolSize; i++) {
-            seg.setAtIndex(PTypeIO.LE_LONG, i, pool[i]);
+            seg.setAtIndex(VortexFormat.LE_LONG, i, pool[i]);
         }
         MaterializedLongArray values = new MaterializedLongArray(dtype, poolSize, seg);
         ByteArray codeArray = randomCodesStructure(random, codes);
@@ -322,7 +322,7 @@ class DictFilterTest {
     private static Array dictOfInts(Random random, int poolSize, int[] codes) {
         MemorySegment seg = ARENA.allocate(Math.max(4L, poolSize * 4L), 4);
         for (int i = 0; i < poolSize; i++) {
-            seg.setAtIndex(PTypeIO.LE_INT, i, random.nextInt(101) - 50);
+            seg.setAtIndex(VortexFormat.LE_INT, i, random.nextInt(101) - 50);
         }
         MaterializedIntArray values = new MaterializedIntArray(DType.I32, poolSize, seg);
         return DictIntArray.of(DType.I32, codes.length, values, randomCodesStructure(random, codes));
@@ -331,7 +331,7 @@ class DictFilterTest {
     private static Array dictOfDoubles(Random random, int poolSize, int[] codes) {
         MemorySegment seg = ARENA.allocate(Math.max(8L, poolSize * 8L), 8);
         for (int i = 0; i < poolSize; i++) {
-            seg.setAtIndex(PTypeIO.LE_DOUBLE, i, random.nextInt(101) - 50);
+            seg.setAtIndex(VortexFormat.LE_DOUBLE, i, random.nextInt(101) - 50);
         }
         MaterializedDoubleArray values = new MaterializedDoubleArray(DType.F64, poolSize, seg);
         return DictDoubleArray.of(DType.F64, codes.length, values, randomCodesStructure(random, codes));
@@ -340,7 +340,7 @@ class DictFilterTest {
     private static Array dictOfFloats(Random random, int poolSize, int[] codes) {
         MemorySegment seg = ARENA.allocate(Math.max(4L, poolSize * 4L), 4);
         for (int i = 0; i < poolSize; i++) {
-            seg.setAtIndex(PTypeIO.LE_FLOAT, i, random.nextInt(101) - 50);
+            seg.setAtIndex(VortexFormat.LE_FLOAT, i, random.nextInt(101) - 50);
         }
         MaterializedFloatArray values = new MaterializedFloatArray(DType.F32, poolSize, seg);
         return DictFloatArray.of(DType.F32, codes.length, values, randomCodesStructure(random, codes));
@@ -384,7 +384,7 @@ class DictFilterTest {
         } else {
             MemorySegment seg = ARENA.allocate(Math.max(8L, n * 8L), 8);
             for (int i = 0; i < n; i++) {
-                seg.setAtIndex(PTypeIO.LE_DOUBLE, i, random.nextInt(1001) - 500);
+                seg.setAtIndex(VortexFormat.LE_DOUBLE, i, random.nextInt(1001) - 500);
             }
             agg = new MaterializedDoubleArray(DType.F64, n, seg);
         }
@@ -428,7 +428,7 @@ class DictFilterTest {
     private static DictDoubleArray flatDoubleDict(double[] pool, int[] codes) {
         MemorySegment seg = ARENA.allocate(Math.max(8L, pool.length * 8L), 8);
         for (int i = 0; i < pool.length; i++) {
-            seg.setAtIndex(PTypeIO.LE_DOUBLE, i, pool[i]);
+            seg.setAtIndex(VortexFormat.LE_DOUBLE, i, pool[i]);
         }
         MaterializedDoubleArray values = new MaterializedDoubleArray(DType.F64, pool.length, seg);
         return DictDoubleArray.of(DType.F64, codes.length, values, byteCodes(codes));
@@ -443,7 +443,7 @@ class DictFilterTest {
     private static MaterializedLongArray longPool(long[] pool) {
         MemorySegment seg = ARENA.allocate(Math.max(8L, pool.length * 8L), 8);
         for (int i = 0; i < pool.length; i++) {
-            seg.setAtIndex(PTypeIO.LE_LONG, i, pool[i]);
+            seg.setAtIndex(VortexFormat.LE_LONG, i, pool[i]);
         }
         return new MaterializedLongArray(DType.I64, pool.length, seg);
     }
@@ -451,7 +451,7 @@ class DictFilterTest {
     private static MaterializedLongArray longAgg(long... values) {
         MemorySegment seg = ARENA.allocate(Math.max(8L, values.length * 8L), 8);
         for (int i = 0; i < values.length; i++) {
-            seg.setAtIndex(PTypeIO.LE_LONG, i, values[i]);
+            seg.setAtIndex(VortexFormat.LE_LONG, i, values[i]);
         }
         return new MaterializedLongArray(DType.I64, values.length, seg);
     }

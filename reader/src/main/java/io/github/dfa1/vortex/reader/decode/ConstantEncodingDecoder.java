@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LazyConstantBoolArray;
@@ -140,7 +140,7 @@ public final class ConstantEncodingDecoder implements EncodingDecoder {
 
         MemorySegment offsetsSeg = ctx.arena().allocate((n + 1) * 4L, 4);
         for (long i = 0; i <= n; i++) {
-            offsetsSeg.setAtIndex(PTypeIO.LE_INT, i, (int) (i * strLen));
+            offsetsSeg.setAtIndex(VortexFormat.LE_INT, i, (int) (i * strLen));
         }
 
         return new VarBinArray.OffsetMode(dtype, n, bytesSeg.asReadOnly(), offsetsSeg.asReadOnly(), PType.I32);

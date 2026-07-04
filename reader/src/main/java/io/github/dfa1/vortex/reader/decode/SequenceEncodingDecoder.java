@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.core.proto.ProtoSequenceMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -72,9 +72,9 @@ public final class SequenceEncodingDecoder implements EncodingDecoder {
             long v = base + i * mul;
             switch (pt) {
                 case I8, U8 -> seg.set(ValueLayout.JAVA_BYTE, i, (byte) v);
-                case I16, U16 -> seg.setAtIndex(PTypeIO.LE_SHORT, i, (short) v);
-                case I32, U32 -> seg.setAtIndex(PTypeIO.LE_INT, i, (int) v);
-                case I64, U64 -> seg.setAtIndex(PTypeIO.LE_LONG, i, v);
+                case I16, U16 -> seg.setAtIndex(VortexFormat.LE_SHORT, i, (short) v);
+                case I32, U32 -> seg.setAtIndex(VortexFormat.LE_INT, i, (int) v);
+                case I64, U64 -> seg.setAtIndex(VortexFormat.LE_LONG, i, v);
                 default -> throw new IllegalStateException("unreachable");
             }
         }
@@ -92,7 +92,7 @@ public final class SequenceEncodingDecoder implements EncodingDecoder {
         float mul = meta.multiplier().f32_value();
         MemorySegment seg = arena.allocate(n * 4L);
         for (long i = 0; i < n; i++) {
-            seg.setAtIndex(PTypeIO.LE_FLOAT, i, base + i * mul);
+            seg.setAtIndex(VortexFormat.LE_FLOAT, i, base + i * mul);
         }
         return new MaterializedFloatArray(dtype, n, seg);
     }
@@ -102,7 +102,7 @@ public final class SequenceEncodingDecoder implements EncodingDecoder {
         double mul = meta.multiplier().f64_value();
         MemorySegment seg = arena.allocate(n * 8L);
         for (long i = 0; i < n; i++) {
-            seg.setAtIndex(PTypeIO.LE_DOUBLE, i, base + i * mul);
+            seg.setAtIndex(VortexFormat.LE_DOUBLE, i, base + i * mul);
         }
         return new MaterializedDoubleArray(dtype, n, seg);
     }
@@ -114,7 +114,7 @@ public final class SequenceEncodingDecoder implements EncodingDecoder {
         float mul = Float.float16ToFloat(mulShort);
         MemorySegment seg = arena.allocate(n * 2L);
         for (long i = 0; i < n; i++) {
-            seg.setAtIndex(PTypeIO.LE_SHORT, i, Float.floatToFloat16(base + i * mul));
+            seg.setAtIndex(VortexFormat.LE_SHORT, i, Float.floatToFloat16(base + i * mul));
         }
         return new MaterializedFloat16Array(dtype, n, seg);
     }

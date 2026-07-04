@@ -6,7 +6,8 @@ import io.github.dfa1.vortex.core.io.VortexFormat;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
+
+import static io.github.dfa1.vortex.core.io.VortexFormat.LE_SHORT;
 
 /// Parsed Vortex file trailer.
 ///
@@ -18,8 +19,6 @@ import java.nio.ByteOrder;
 /// @param postscriptLen length in bytes of the postscript blob immediately preceding the trailer
 record Trailer(int version, int postscriptLen) {
 
-    private static final ValueLayout.OfShort LE_SHORT =
-            ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     /// Parse the 8-byte trailer from a [MemorySegment] view and validate magic, version, and
     /// postscript length against the body size.

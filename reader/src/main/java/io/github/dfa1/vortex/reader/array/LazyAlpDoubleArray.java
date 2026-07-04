@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
@@ -28,7 +28,7 @@ public record LazyAlpDoubleArray(DType dtype, long length, MemorySegment encoded
 
     @Override
     public double getDouble(long i) {
-        return encoded.getAtIndex(PTypeIO.LE_LONG, i) * factorF * factorE;
+        return encoded.getAtIndex(VortexFormat.LE_LONG, i) * factorF * factorE;
     }
 
     /// Bulk-decodes through [#getDouble(long)] into a fresh little-endian `f64` segment.
@@ -44,7 +44,7 @@ public record LazyAlpDoubleArray(DType dtype, long length, MemorySegment encoded
         long n = length;
         MemorySegment dst = arena.allocate(n * 8L, 8);
         for (long i = 0; i < n; i++) {
-            dst.setAtIndex(PTypeIO.LE_DOUBLE, i, getDouble(i));
+            dst.setAtIndex(VortexFormat.LE_DOUBLE, i, getDouble(i));
         }
         return dst;
     }

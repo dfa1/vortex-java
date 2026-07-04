@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.reader.decode;
 
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
@@ -18,7 +18,7 @@ class SegmentBroadcastTest {
         try (Arena arena = Arena.ofConfined()) {
             // Given
             MemorySegment seg = arena.allocate(8);
-            seg.set(PTypeIO.LE_LONG, 0, 99L);
+            seg.set(VortexFormat.LE_LONG, 0, 99L);
 
             // When / Then
             assertThat(SegmentBroadcast.elementOffset(seg, 0, 8)).isZero();
@@ -48,7 +48,7 @@ class SegmentBroadcastTest {
         try (Arena arena = Arena.ofConfined()) {
             // Given
             MemorySegment src = arena.allocate(8);
-            src.set(PTypeIO.LE_LONG, 0, 0xCAFEBABEL);
+            src.set(VortexFormat.LE_LONG, 0, 0xCAFEBABEL);
             MemorySegment dst = arena.allocate(8 * 5);
 
             // When
@@ -56,7 +56,7 @@ class SegmentBroadcastTest {
 
             // Then
             for (long i = 0; i < 5; i++) {
-                assertThat(dst.getAtIndex(PTypeIO.LE_LONG, i)).isEqualTo(0xCAFEBABEL);
+                assertThat(dst.getAtIndex(VortexFormat.LE_LONG, i)).isEqualTo(0xCAFEBABEL);
             }
         }
     }

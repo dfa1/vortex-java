@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.core.compute;
 
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.io.PTypeIO;
 import io.github.dfa1.vortex.core.error.VortexException;
 
@@ -97,7 +98,7 @@ public final class PrimitiveArrays {
     public static MemorySegment fromLongs(long[] longs, PType ptype, SegmentAllocator arena) {
         if (ptype == PType.I64 || ptype == PType.U64) {
             MemorySegment dst = arena.allocate((long) longs.length * 8);
-            MemorySegment.copy(MemorySegment.ofArray(longs), ValueLayout.JAVA_LONG, 0L, dst, PTypeIO.LE_LONG, 0L, longs.length);
+            MemorySegment.copy(MemorySegment.ofArray(longs), ValueLayout.JAVA_LONG, 0L, dst, VortexFormat.LE_LONG, 0L, longs.length);
             return dst;
         }
         int n = longs.length;

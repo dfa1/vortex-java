@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.writer.encode;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.core.proto.ProtoVarBinMetadata;
 
@@ -50,11 +50,11 @@ public final class VarBinEncodingEncoder implements EncodingEncoder {
         MemorySegment offsetsBuf = arena.allocate((long) (n + 1) * Long.BYTES, Long.BYTES);
 
         long pos = 0;
-        offsetsBuf.setAtIndex(PTypeIO.LE_LONG, 0, 0L);
+        offsetsBuf.setAtIndex(VortexFormat.LE_LONG, 0, 0L);
         for (int i = 0; i < n; i++) {
             MemorySegment.copy(MemorySegment.ofArray(byteArrays[i]), 0, bytesBuf, pos, byteArrays[i].length);
             pos += byteArrays[i].length;
-            offsetsBuf.setAtIndex(PTypeIO.LE_LONG, (long) i + 1, pos);
+            offsetsBuf.setAtIndex(VortexFormat.LE_LONG, (long) i + 1, pos);
         }
 
         byte[] metaBytes = new ProtoVarBinMetadata(io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(PType.I64.ordinal())).encode();

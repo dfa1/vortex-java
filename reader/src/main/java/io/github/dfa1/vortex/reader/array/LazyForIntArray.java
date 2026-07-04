@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
@@ -21,7 +21,7 @@ public record LazyForIntArray(DType dtype, long length, MemorySegment encoded, i
 
     @Override
     public int getInt(long i) {
-        return encoded.getAtIndex(PTypeIO.LE_INT, i) + ref;
+        return encoded.getAtIndex(VortexFormat.LE_INT, i) + ref;
     }
 
     /// Bulk-decodes through [#getInt(long)] into a fresh little-endian `i32` segment.
@@ -36,7 +36,7 @@ public record LazyForIntArray(DType dtype, long length, MemorySegment encoded, i
         long n = length;
         MemorySegment dst = arena.allocate(n * 4L, 4);
         for (long i = 0; i < n; i++) {
-            dst.setAtIndex(PTypeIO.LE_INT, i, getInt(i));
+            dst.setAtIndex(VortexFormat.LE_INT, i, getInt(i));
         }
         return dst;
     }

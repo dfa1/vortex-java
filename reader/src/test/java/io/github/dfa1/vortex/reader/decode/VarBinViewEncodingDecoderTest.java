@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.reader.decode;
 
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
@@ -77,7 +77,7 @@ class VarBinViewEncodingDecoderTest {
     /// Writes a ≤12-byte inline view: length prefix then the bytes packed in-place.
     private static void writeInlineView(MemorySegment views, int row, byte[] bytes) {
         long off = (long) row * 16;
-        views.set(PTypeIO.LE_INT, off, bytes.length);
+        views.set(VortexFormat.LE_INT, off, bytes.length);
         MemorySegment.copy(MemorySegment.ofArray(bytes), 0, views, off + 4, bytes.length);
     }
 }

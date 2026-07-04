@@ -8,7 +8,7 @@ import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.reader.decode.BoolEncodingDecoder;
@@ -116,9 +116,9 @@ class MaskedEncodingEncoderTest {
         IntArray inner = (IntArray) result.inner();
 
         // Then
-        assertThat(inner.materialize(Arena.ofAuto()).get(PTypeIO.LE_INT, 0L)).isEqualTo(7);
-        assertThat(inner.materialize(Arena.ofAuto()).get(PTypeIO.LE_INT, 4L)).isEqualTo(8);
-        assertThat(inner.materialize(Arena.ofAuto()).get(PTypeIO.LE_INT, 8L)).isEqualTo(9);
+        assertThat(inner.materialize(Arena.ofAuto()).get(VortexFormat.LE_INT, 0L)).isEqualTo(7);
+        assertThat(inner.materialize(Arena.ofAuto()).get(VortexFormat.LE_INT, 4L)).isEqualTo(8);
+        assertThat(inner.materialize(Arena.ofAuto()).get(VortexFormat.LE_INT, 8L)).isEqualTo(9);
     }
 
     @Test

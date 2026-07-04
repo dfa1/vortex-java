@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.core.model;
 
 import io.github.dfa1.vortex.core.error.VortexException;
 
-import static io.github.dfa1.vortex.core.io.PTypeIO.LE_SHORT;
+import static io.github.dfa1.vortex.core.io.VortexFormat.LE_SHORT;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;

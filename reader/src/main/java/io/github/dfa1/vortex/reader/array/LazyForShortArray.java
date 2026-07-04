@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 
 import java.lang.foreign.MemorySegment;
 import java.util.function.LongBinaryOperator;
@@ -22,7 +22,7 @@ public record LazyForShortArray(DType dtype, long length, MemorySegment encoded,
 
     @Override
     public short getShort(long i) {
-        return (short) (encoded.getAtIndex(PTypeIO.LE_SHORT, i) + ref);
+        return (short) (encoded.getAtIndex(VortexFormat.LE_SHORT, i) + ref);
     }
 
     @Override
@@ -33,7 +33,7 @@ public record LazyForShortArray(DType dtype, long length, MemorySegment encoded,
         short r = ref;
         boolean unsigned = dtype instanceof DType.Primitive p && p.ptype() == PType.U16;
         for (long i = 0; i < n; i++) {
-            short v = (short) (seg.getAtIndex(PTypeIO.LE_SHORT, i) + r);
+            short v = (short) (seg.getAtIndex(VortexFormat.LE_SHORT, i) + r);
             result = op.applyAsLong(result, unsigned ? Short.toUnsignedLong(v) : (long) v);
         }
         return result;

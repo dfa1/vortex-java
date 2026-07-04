@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.reader.array;
 
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import org.junit.jupiter.api.Test;
@@ -23,9 +23,9 @@ class LazyDecimalArrayTest {
         // decimal(15, 2) with mantissa 4321 represents 43.21.
         try (Arena arena = Arena.ofConfined()) {
             MemorySegment buf = arena.allocate(24);
-            buf.set(PTypeIO.LE_LONG, 0, 4321L);
-            buf.set(PTypeIO.LE_LONG, 8, -100L);
-            buf.set(PTypeIO.LE_LONG, 16, 0L);
+            buf.set(VortexFormat.LE_LONG, 0, 4321L);
+            buf.set(VortexFormat.LE_LONG, 8, -100L);
+            buf.set(VortexFormat.LE_LONG, 16, 0L);
             DType.Decimal dec = new DType.Decimal((byte) 15, (byte) 2, false);
             LazyDecimalArray sut = new LazyDecimalArray(dec, 3, buf, 8);
 
@@ -52,16 +52,16 @@ class LazyDecimalArrayTest {
             assertThat(sut1.getDecimal(1)).isEqualByComparingTo(new BigDecimal("-0.5"));
 
             MemorySegment buf2 = arena.allocate(4);
-            buf2.set(PTypeIO.LE_SHORT, 0, (short) 1234);
-            buf2.set(PTypeIO.LE_SHORT, 2, (short) -7);
+            buf2.set(VortexFormat.LE_SHORT, 0, (short) 1234);
+            buf2.set(VortexFormat.LE_SHORT, 2, (short) -7);
             DType.Decimal dec2 = new DType.Decimal((byte) 4, (byte) 2, false);
             LazyDecimalArray sut2 = new LazyDecimalArray(dec2, 2, buf2, 2);
             assertThat(sut2.getDecimal(0)).isEqualByComparingTo(new BigDecimal("12.34"));
             assertThat(sut2.getDecimal(1)).isEqualByComparingTo(new BigDecimal("-0.07"));
 
             MemorySegment buf4 = arena.allocate(8);
-            buf4.set(PTypeIO.LE_INT, 0, 999_999);
-            buf4.set(PTypeIO.LE_INT, 4, -1);
+            buf4.set(VortexFormat.LE_INT, 0, 999_999);
+            buf4.set(VortexFormat.LE_INT, 4, -1);
             DType.Decimal dec4 = new DType.Decimal((byte) 9, (byte) 3, false);
             LazyDecimalArray sut4 = new LazyDecimalArray(dec4, 2, buf4, 4);
             assertThat(sut4.getDecimal(0)).isEqualByComparingTo(new BigDecimal("999.999"));

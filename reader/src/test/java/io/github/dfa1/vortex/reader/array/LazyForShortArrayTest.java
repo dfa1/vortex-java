@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
@@ -18,7 +18,7 @@ class LazyForShortArrayTest {
     private static LazyForShortArray of(short ref, short... encoded) {
         MemorySegment seg = Arena.ofAuto().allocate((long) encoded.length * 2, 2);
         for (int i = 0; i < encoded.length; i++) {
-            seg.setAtIndex(PTypeIO.LE_SHORT, i, encoded[i]);
+            seg.setAtIndex(VortexFormat.LE_SHORT, i, encoded[i]);
         }
         return new LazyForShortArray(I16, encoded.length, seg, ref);
     }

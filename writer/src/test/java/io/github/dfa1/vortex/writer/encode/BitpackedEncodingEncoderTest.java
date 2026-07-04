@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.encoding.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.core.proto.ProtoBitPackedMetadata;
@@ -56,7 +56,7 @@ class BitpackedEncodingEncoderTest {
 
         assertThat(result.length()).isEqualTo(data.length);
         for (int i = 0; i < data.length; i++) {
-            assertThat(result.materialize(Arena.ofAuto()).get(PTypeIO.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
+            assertThat(result.materialize(Arena.ofAuto()).get(VortexFormat.LE_INT, (long) i * 4)).as("index %d", i).isEqualTo(data[i]);
         }
     }
 
@@ -69,7 +69,7 @@ class BitpackedEncodingEncoderTest {
 
         assertThat(result.length()).isEqualTo(data.length);
         for (int i = 0; i < data.length; i++) {
-            assertThat(result.materialize(Arena.ofAuto()).get(PTypeIO.LE_LONG, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
+            assertThat(result.materialize(Arena.ofAuto()).get(VortexFormat.LE_LONG, (long) i * 8)).as("index %d", i).isEqualTo(data[i]);
         }
     }
 
@@ -98,7 +98,7 @@ class BitpackedEncodingEncoderTest {
 
         var seg = result.materialize(Arena.ofAuto());
         for (int i = 0; i < data.length; i++) {
-            assertThat(seg.get(PTypeIO.LE_INT, (long) i * 4)).as("width %d index %d", width, i).isEqualTo(data[i]);
+            assertThat(seg.get(VortexFormat.LE_INT, (long) i * 4)).as("width %d index %d", width, i).isEqualTo(data[i]);
         }
     }
 
@@ -111,7 +111,7 @@ class BitpackedEncodingEncoderTest {
 
         var seg = result.materialize(Arena.ofAuto());
         for (int i = 0; i < data.length; i++) {
-            assertThat(seg.get(PTypeIO.LE_LONG, (long) i * 8)).as("width %d index %d", width, i).isEqualTo(data[i]);
+            assertThat(seg.get(VortexFormat.LE_LONG, (long) i * 8)).as("width %d index %d", width, i).isEqualTo(data[i]);
         }
     }
 

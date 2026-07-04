@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LazyConstantByteArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantIntArray;
@@ -51,15 +51,15 @@ public final class ZigZagEncodingDecoder implements EncodingDecoder {
                     yield new LazyConstantByteArray(ctx.dtype(), n, (byte) ((u >>> 1) ^ -(u & 1)));
                 }
                 case I16 -> {
-                    int u = Short.toUnsignedInt(src.get(PTypeIO.LE_SHORT, 0));
+                    int u = Short.toUnsignedInt(src.get(VortexFormat.LE_SHORT, 0));
                     yield new LazyConstantShortArray(ctx.dtype(), n, (short) ((u >>> 1) ^ -(u & 1)));
                 }
                 case I32 -> {
-                    int u = src.get(PTypeIO.LE_INT, 0);
+                    int u = src.get(VortexFormat.LE_INT, 0);
                     yield new LazyConstantIntArray(ctx.dtype(), n, (u >>> 1) ^ -(u & 1));
                 }
                 case I64 -> {
-                    long u = src.get(PTypeIO.LE_LONG, 0);
+                    long u = src.get(VortexFormat.LE_LONG, 0);
                     yield new LazyConstantLongArray(ctx.dtype(), n, (u >>> 1) ^ -(u & 1L));
                 }
                 default -> throw new VortexException(EncodingId.VORTEX_ZIGZAG, "unreachable");

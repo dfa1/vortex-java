@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.reader.layout;
 
+
 import java.lang.foreign.MemorySegment;
 
 import io.github.dfa1.vortex.core.model.DType;
@@ -20,7 +21,7 @@ class ZonedStatsSchemaTest {
         void readsLittleEndianU32() {
             // Given — 8192 = 0x2000 stored as LE u32
             MemorySegment meta = MemorySegment.ofArray(new byte[4]);
-            meta.set(io.github.dfa1.vortex.core.io.PTypeIO.LE_INT, 0, 8192);
+            meta.set(io.github.dfa1.vortex.core.io.VortexFormat.LE_INT, 0, 8192);
 
             // When
             long result = ZonedStatsSchema.zoneLength(meta);
@@ -71,7 +72,7 @@ class ZonedStatsSchemaTest {
             // byte 0: 0b0101_1000 = 0x58 (bits 3,4,6)
             // byte 1: 0b0000_0001 = 0x01 (bit 8 → bit 0 of second byte)
             MemorySegment meta = MemorySegment.ofArray(new byte[4 + 2]);
-            meta.set(io.github.dfa1.vortex.core.io.PTypeIO.LE_INT, 0, 8192);
+            meta.set(io.github.dfa1.vortex.core.io.VortexFormat.LE_INT, 0, 8192);
             meta.set(java.lang.foreign.ValueLayout.JAVA_BYTE, 4, (byte) 0x58);
             meta.set(java.lang.foreign.ValueLayout.JAVA_BYTE, 5, (byte) 0x01);
 
@@ -103,7 +104,7 @@ class ZonedStatsSchemaTest {
             // Given — bit 31 set (beyond any known stat) plus MAX/MIN
             // byte 0: 0x18 (MAX|MIN), bytes 1-2: 0, byte 3: 0x80 (bit 31)
             MemorySegment meta = MemorySegment.ofArray(new byte[4 + 4]);
-            meta.set(io.github.dfa1.vortex.core.io.PTypeIO.LE_INT, 0, 8192);
+            meta.set(io.github.dfa1.vortex.core.io.VortexFormat.LE_INT, 0, 8192);
             meta.set(java.lang.foreign.ValueLayout.JAVA_BYTE, 4, (byte) 0x18);
             meta.set(java.lang.foreign.ValueLayout.JAVA_BYTE, 7, (byte) 0x80);
 
@@ -246,7 +247,7 @@ class ZonedStatsSchemaTest {
 
     private static MemorySegment metaWithBitset(int zoneLen, int firstByte) {
         MemorySegment meta = MemorySegment.ofArray(new byte[4 + 1]);
-        meta.set(io.github.dfa1.vortex.core.io.PTypeIO.LE_INT, 0, zoneLen);
+        meta.set(io.github.dfa1.vortex.core.io.VortexFormat.LE_INT, 0, zoneLen);
         meta.set(java.lang.foreign.ValueLayout.JAVA_BYTE, 4, (byte) firstByte);
         return meta;
     }

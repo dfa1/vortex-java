@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoRLEMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
@@ -129,8 +129,8 @@ public final class RleEncodingDecoder implements EncodingDecoder {
         for (int i = 0; i < count; i++) {
             long off = (i % cap) * elemSize;
             out[i] = switch (ptype) {
-                case I64 -> buf.get(PTypeIO.LE_LONG, off);
-                case U64 -> buf.get(PTypeIO.LE_LONG, off);
+                case I64 -> buf.get(VortexFormat.LE_LONG, off);
+                case U64 -> buf.get(VortexFormat.LE_LONG, off);
                 default -> throw new VortexException(EncodingId.FASTLANES_RLE, "expected I64/U64, got " + ptype);
             };
         }
@@ -143,7 +143,7 @@ public final class RleEncodingDecoder implements EncodingDecoder {
         long cap = SegmentBroadcast.capacity(buf, elemSize);
         for (int i = 0; i < count; i++) {
             long off = (i % cap) * elemSize;
-            out[i] = buf.get(PTypeIO.LE_INT, off);
+            out[i] = buf.get(VortexFormat.LE_INT, off);
         }
         return out;
     }
@@ -154,7 +154,7 @@ public final class RleEncodingDecoder implements EncodingDecoder {
         long cap = SegmentBroadcast.capacity(buf, elemSize);
         for (int i = 0; i < count; i++) {
             long off = (i % cap) * elemSize;
-            out[i] = buf.get(PTypeIO.LE_SHORT, off);
+            out[i] = buf.get(VortexFormat.LE_SHORT, off);
         }
         return out;
     }
@@ -180,7 +180,7 @@ public final class RleEncodingDecoder implements EncodingDecoder {
             }
             case U16 -> {
                 for (int i = 0; i < count; i++) {
-                    out[i] = Short.toUnsignedInt(buf.get(PTypeIO.LE_SHORT, (i % cap) * 2));
+                    out[i] = Short.toUnsignedInt(buf.get(VortexFormat.LE_SHORT, (i % cap) * 2));
                 }
             }
             default ->
@@ -197,9 +197,9 @@ public final class RleEncodingDecoder implements EncodingDecoder {
             long off = (i % cap) * elemSize;
             out[i] = switch (ptype) {
                 case U8 -> Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, off));
-                case U16 -> Short.toUnsignedLong(buf.get(PTypeIO.LE_SHORT, off));
-                case U32 -> Integer.toUnsignedLong(buf.get(PTypeIO.LE_INT, off));
-                case U64 -> buf.get(PTypeIO.LE_LONG, off);
+                case U16 -> Short.toUnsignedLong(buf.get(VortexFormat.LE_SHORT, off));
+                case U32 -> Integer.toUnsignedLong(buf.get(VortexFormat.LE_INT, off));
+                case U64 -> buf.get(VortexFormat.LE_LONG, off);
                 default ->
                         throw new VortexException(EncodingId.FASTLANES_RLE, "unsupported offsets ptype: " + ptype);
             };

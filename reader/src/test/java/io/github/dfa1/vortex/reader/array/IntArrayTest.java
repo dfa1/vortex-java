@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.reader.array;
 
 
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -66,7 +66,7 @@ class IntArrayTest {
         void logicalLengthExceedsCapacity_wrapsAround() {
             // Given — constant-encoding: 1-element buffer, logical length 4; all 4 visits yield same value
             MemorySegment seg = Arena.ofAuto().allocate(4, 4);
-            seg.setAtIndex(PTypeIO.LE_INT, 0, 7);
+            seg.setAtIndex(VortexFormat.LE_INT, 0, 7);
             IntArray sut = new MaterializedIntArray(DType.I32, 4, seg);
             List<Integer> collected = new ArrayList<>();
 

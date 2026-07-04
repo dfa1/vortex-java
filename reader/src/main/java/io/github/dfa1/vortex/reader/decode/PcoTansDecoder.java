@@ -4,8 +4,8 @@ import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
+
+import static io.github.dfa1.vortex.core.io.VortexFormat.LE_LONG;
 
 /// 4-way interleaved tANS decoder for one pco latent variable.
 ///
@@ -15,8 +15,6 @@ public final class PcoTansDecoder {
 
     public static final int BATCH_N = 256;
     public static final int ANS_INTERLEAVING = 4;
-    private static final ValueLayout.OfLong LE_LONG =
-            ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
     // All arrays indexed by state index in [0, tableSize).
     private final int[] nextStateIdxBase; // = (symbolXs[sym] << bitsToRead) - tableSize
     private final int[] bitsToRead;       // bits consumed from bit stream per ANS step

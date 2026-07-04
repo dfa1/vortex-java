@@ -8,9 +8,12 @@ import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.nio.ByteOrder;
 import java.util.Objects;
 import java.util.Optional;
+
+import static io.github.dfa1.vortex.core.io.VortexFormat.LE_INT;
+import static io.github.dfa1.vortex.core.io.VortexFormat.LE_LONG;
+import static io.github.dfa1.vortex.core.io.VortexFormat.LE_SHORT;
 
 /// Fallback [Array] for dtypes that lack a dedicated concrete subtype.
 ///
@@ -135,19 +138,13 @@ public final class GenericArray implements Array {
         return readSignedLe(buf, i * width, width);
     }
 
-    private static final ValueLayout.OfShort SHORT_LE =
-            ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-    private static final ValueLayout.OfInt INT_LE =
-            ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-    private static final ValueLayout.OfLong LONG_LE =
-            ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     private static BigInteger readSignedLe(MemorySegment buf, long offset, int width) {
         return switch (width) {
             case 1 -> BigInteger.valueOf(buf.get(ValueLayout.JAVA_BYTE, offset));
-            case 2 -> BigInteger.valueOf(buf.get(SHORT_LE, offset));
-            case 4 -> BigInteger.valueOf(buf.get(INT_LE, offset));
-            case 8 -> BigInteger.valueOf(buf.get(LONG_LE, offset));
+            case 2 -> BigInteger.valueOf(buf.get(LE_SHORT, offset));
+            case 4 -> BigInteger.valueOf(buf.get(LE_INT, offset));
+            case 8 -> BigInteger.valueOf(buf.get(LE_LONG, offset));
             case 16 -> readSigned128Le(buf, offset);
             default -> throw new VortexException("readSignedLe: unsupported width " + width);
         };

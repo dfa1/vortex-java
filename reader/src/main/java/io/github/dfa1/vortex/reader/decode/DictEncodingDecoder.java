@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoDictMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
@@ -164,12 +164,12 @@ public final class DictEncodingDecoder implements EncodingDecoder {
                 if (fast) {
                     for (long i = 0; i < rowCount; i++) {
                         long code = Byte.toUnsignedLong(codes.get(ValueLayout.JAVA_BYTE, i));
-                        out.setAtIndex(PTypeIO.LE_LONG, i, values.getAtIndex(PTypeIO.LE_LONG, code));
+                        out.setAtIndex(VortexFormat.LE_LONG, i, values.getAtIndex(VortexFormat.LE_LONG, code));
                     }
                 } else {
                     for (long i = 0; i < rowCount; i++) {
                         long code = Byte.toUnsignedLong(codes.get(ValueLayout.JAVA_BYTE, i % codesCap));
-                        out.setAtIndex(PTypeIO.LE_LONG, i, values.getAtIndex(PTypeIO.LE_LONG, code % valuesCap));
+                        out.setAtIndex(VortexFormat.LE_LONG, i, values.getAtIndex(VortexFormat.LE_LONG, code % valuesCap));
                     }
                 }
             }
@@ -177,12 +177,12 @@ public final class DictEncodingDecoder implements EncodingDecoder {
                 if (fast) {
                     for (long i = 0; i < rowCount; i++) {
                         long code = Byte.toUnsignedLong(codes.get(ValueLayout.JAVA_BYTE, i));
-                        out.setAtIndex(PTypeIO.LE_INT, i, values.getAtIndex(PTypeIO.LE_INT, code));
+                        out.setAtIndex(VortexFormat.LE_INT, i, values.getAtIndex(VortexFormat.LE_INT, code));
                     }
                 } else {
                     for (long i = 0; i < rowCount; i++) {
                         long code = Byte.toUnsignedLong(codes.get(ValueLayout.JAVA_BYTE, i % codesCap));
-                        out.setAtIndex(PTypeIO.LE_INT, i, values.getAtIndex(PTypeIO.LE_INT, code % valuesCap));
+                        out.setAtIndex(VortexFormat.LE_INT, i, values.getAtIndex(VortexFormat.LE_INT, code % valuesCap));
                     }
                 }
             }
@@ -190,12 +190,12 @@ public final class DictEncodingDecoder implements EncodingDecoder {
                 if (fast) {
                     for (long i = 0; i < rowCount; i++) {
                         long code = Byte.toUnsignedLong(codes.get(ValueLayout.JAVA_BYTE, i));
-                        out.setAtIndex(PTypeIO.LE_SHORT, i, values.getAtIndex(PTypeIO.LE_SHORT, code));
+                        out.setAtIndex(VortexFormat.LE_SHORT, i, values.getAtIndex(VortexFormat.LE_SHORT, code));
                     }
                 } else {
                     for (long i = 0; i < rowCount; i++) {
                         long code = Byte.toUnsignedLong(codes.get(ValueLayout.JAVA_BYTE, i % codesCap));
-                        out.setAtIndex(PTypeIO.LE_SHORT, i, values.getAtIndex(PTypeIO.LE_SHORT, code % valuesCap));
+                        out.setAtIndex(VortexFormat.LE_SHORT, i, values.getAtIndex(VortexFormat.LE_SHORT, code % valuesCap));
                     }
                 }
             }
@@ -236,51 +236,51 @@ public final class DictEncodingDecoder implements EncodingDecoder {
             case 8 -> {
                 if (fast) {
                     for (long i = 0; i < rowCount; i++) {
-                        long code = Short.toUnsignedLong(codes.get(PTypeIO.LE_SHORT, i * 2));
-                        out.setAtIndex(PTypeIO.LE_LONG, i, values.getAtIndex(PTypeIO.LE_LONG, code));
+                        long code = Short.toUnsignedLong(codes.get(VortexFormat.LE_SHORT, i * 2));
+                        out.setAtIndex(VortexFormat.LE_LONG, i, values.getAtIndex(VortexFormat.LE_LONG, code));
                     }
                 } else {
                     for (long i = 0; i < rowCount; i++) {
-                        long code = Short.toUnsignedLong(codes.get(PTypeIO.LE_SHORT, (i % codesCap) * 2));
-                        out.setAtIndex(PTypeIO.LE_LONG, i, values.getAtIndex(PTypeIO.LE_LONG, code % valuesCap));
+                        long code = Short.toUnsignedLong(codes.get(VortexFormat.LE_SHORT, (i % codesCap) * 2));
+                        out.setAtIndex(VortexFormat.LE_LONG, i, values.getAtIndex(VortexFormat.LE_LONG, code % valuesCap));
                     }
                 }
             }
             case 4 -> {
                 if (fast) {
                     for (long i = 0; i < rowCount; i++) {
-                        long code = Short.toUnsignedLong(codes.get(PTypeIO.LE_SHORT, i * 2));
-                        out.setAtIndex(PTypeIO.LE_INT, i, values.getAtIndex(PTypeIO.LE_INT, code));
+                        long code = Short.toUnsignedLong(codes.get(VortexFormat.LE_SHORT, i * 2));
+                        out.setAtIndex(VortexFormat.LE_INT, i, values.getAtIndex(VortexFormat.LE_INT, code));
                     }
                 } else {
                     for (long i = 0; i < rowCount; i++) {
-                        long code = Short.toUnsignedLong(codes.get(PTypeIO.LE_SHORT, (i % codesCap) * 2));
-                        out.setAtIndex(PTypeIO.LE_INT, i, values.getAtIndex(PTypeIO.LE_INT, code % valuesCap));
+                        long code = Short.toUnsignedLong(codes.get(VortexFormat.LE_SHORT, (i % codesCap) * 2));
+                        out.setAtIndex(VortexFormat.LE_INT, i, values.getAtIndex(VortexFormat.LE_INT, code % valuesCap));
                     }
                 }
             }
             case 2 -> {
                 if (fast) {
                     for (long i = 0; i < rowCount; i++) {
-                        long code = Short.toUnsignedLong(codes.get(PTypeIO.LE_SHORT, i * 2));
-                        out.setAtIndex(PTypeIO.LE_SHORT, i, values.getAtIndex(PTypeIO.LE_SHORT, code));
+                        long code = Short.toUnsignedLong(codes.get(VortexFormat.LE_SHORT, i * 2));
+                        out.setAtIndex(VortexFormat.LE_SHORT, i, values.getAtIndex(VortexFormat.LE_SHORT, code));
                     }
                 } else {
                     for (long i = 0; i < rowCount; i++) {
-                        long code = Short.toUnsignedLong(codes.get(PTypeIO.LE_SHORT, (i % codesCap) * 2));
-                        out.setAtIndex(PTypeIO.LE_SHORT, i, values.getAtIndex(PTypeIO.LE_SHORT, code % valuesCap));
+                        long code = Short.toUnsignedLong(codes.get(VortexFormat.LE_SHORT, (i % codesCap) * 2));
+                        out.setAtIndex(VortexFormat.LE_SHORT, i, values.getAtIndex(VortexFormat.LE_SHORT, code % valuesCap));
                     }
                 }
             }
             case 1 -> {
                 if (fast) {
                     for (long i = 0; i < rowCount; i++) {
-                        long code = Short.toUnsignedLong(codes.get(PTypeIO.LE_SHORT, i * 2));
+                        long code = Short.toUnsignedLong(codes.get(VortexFormat.LE_SHORT, i * 2));
                         out.set(ValueLayout.JAVA_BYTE, i, values.get(ValueLayout.JAVA_BYTE, code));
                     }
                 } else {
                     for (long i = 0; i < rowCount; i++) {
-                        long code = Short.toUnsignedLong(codes.get(PTypeIO.LE_SHORT, (i % codesCap) * 2));
+                        long code = Short.toUnsignedLong(codes.get(VortexFormat.LE_SHORT, (i % codesCap) * 2));
                         out.set(ValueLayout.JAVA_BYTE, i, values.get(ValueLayout.JAVA_BYTE, code % valuesCap));
                     }
                 }
@@ -288,12 +288,12 @@ public final class DictEncodingDecoder implements EncodingDecoder {
             default -> {
                 if (fast) {
                     for (long i = 0, outOff = 0; i < rowCount; i++, outOff += elemSize) {
-                        long code = Short.toUnsignedLong(codes.get(PTypeIO.LE_SHORT, i * 2));
+                        long code = Short.toUnsignedLong(codes.get(VortexFormat.LE_SHORT, i * 2));
                         MemorySegment.copy(values, code * elemSize, out, outOff, elemSize);
                     }
                 } else {
                     for (long i = 0, outOff = 0; i < rowCount; i++, outOff += elemSize) {
-                        long code = Short.toUnsignedLong(codes.get(PTypeIO.LE_SHORT, (i % codesCap) * 2));
+                        long code = Short.toUnsignedLong(codes.get(VortexFormat.LE_SHORT, (i % codesCap) * 2));
                         MemorySegment.copy(values, (code % valuesCap) * elemSize, out, outOff, elemSize);
                     }
                 }
@@ -309,51 +309,51 @@ public final class DictEncodingDecoder implements EncodingDecoder {
             case 8 -> {
                 if (fast) {
                     for (long i = 0; i < rowCount; i++) {
-                        long code = Integer.toUnsignedLong(codes.get(PTypeIO.LE_INT, i * 4));
-                        out.setAtIndex(PTypeIO.LE_LONG, i, values.getAtIndex(PTypeIO.LE_LONG, code));
+                        long code = Integer.toUnsignedLong(codes.get(VortexFormat.LE_INT, i * 4));
+                        out.setAtIndex(VortexFormat.LE_LONG, i, values.getAtIndex(VortexFormat.LE_LONG, code));
                     }
                 } else {
                     for (long i = 0; i < rowCount; i++) {
-                        long code = Integer.toUnsignedLong(codes.get(PTypeIO.LE_INT, (i % codesCap) * 4));
-                        out.setAtIndex(PTypeIO.LE_LONG, i, values.getAtIndex(PTypeIO.LE_LONG, code % valuesCap));
+                        long code = Integer.toUnsignedLong(codes.get(VortexFormat.LE_INT, (i % codesCap) * 4));
+                        out.setAtIndex(VortexFormat.LE_LONG, i, values.getAtIndex(VortexFormat.LE_LONG, code % valuesCap));
                     }
                 }
             }
             case 4 -> {
                 if (fast) {
                     for (long i = 0; i < rowCount; i++) {
-                        long code = Integer.toUnsignedLong(codes.get(PTypeIO.LE_INT, i * 4));
-                        out.setAtIndex(PTypeIO.LE_INT, i, values.getAtIndex(PTypeIO.LE_INT, code));
+                        long code = Integer.toUnsignedLong(codes.get(VortexFormat.LE_INT, i * 4));
+                        out.setAtIndex(VortexFormat.LE_INT, i, values.getAtIndex(VortexFormat.LE_INT, code));
                     }
                 } else {
                     for (long i = 0; i < rowCount; i++) {
-                        long code = Integer.toUnsignedLong(codes.get(PTypeIO.LE_INT, (i % codesCap) * 4));
-                        out.setAtIndex(PTypeIO.LE_INT, i, values.getAtIndex(PTypeIO.LE_INT, code % valuesCap));
+                        long code = Integer.toUnsignedLong(codes.get(VortexFormat.LE_INT, (i % codesCap) * 4));
+                        out.setAtIndex(VortexFormat.LE_INT, i, values.getAtIndex(VortexFormat.LE_INT, code % valuesCap));
                     }
                 }
             }
             case 2 -> {
                 if (fast) {
                     for (long i = 0; i < rowCount; i++) {
-                        long code = Integer.toUnsignedLong(codes.get(PTypeIO.LE_INT, i * 4));
-                        out.setAtIndex(PTypeIO.LE_SHORT, i, values.getAtIndex(PTypeIO.LE_SHORT, code));
+                        long code = Integer.toUnsignedLong(codes.get(VortexFormat.LE_INT, i * 4));
+                        out.setAtIndex(VortexFormat.LE_SHORT, i, values.getAtIndex(VortexFormat.LE_SHORT, code));
                     }
                 } else {
                     for (long i = 0; i < rowCount; i++) {
-                        long code = Integer.toUnsignedLong(codes.get(PTypeIO.LE_INT, (i % codesCap) * 4));
-                        out.setAtIndex(PTypeIO.LE_SHORT, i, values.getAtIndex(PTypeIO.LE_SHORT, code % valuesCap));
+                        long code = Integer.toUnsignedLong(codes.get(VortexFormat.LE_INT, (i % codesCap) * 4));
+                        out.setAtIndex(VortexFormat.LE_SHORT, i, values.getAtIndex(VortexFormat.LE_SHORT, code % valuesCap));
                     }
                 }
             }
             case 1 -> {
                 if (fast) {
                     for (long i = 0; i < rowCount; i++) {
-                        long code = Integer.toUnsignedLong(codes.get(PTypeIO.LE_INT, i * 4));
+                        long code = Integer.toUnsignedLong(codes.get(VortexFormat.LE_INT, i * 4));
                         out.set(ValueLayout.JAVA_BYTE, i, values.get(ValueLayout.JAVA_BYTE, code));
                     }
                 } else {
                     for (long i = 0; i < rowCount; i++) {
-                        long code = Integer.toUnsignedLong(codes.get(PTypeIO.LE_INT, (i % codesCap) * 4));
+                        long code = Integer.toUnsignedLong(codes.get(VortexFormat.LE_INT, (i % codesCap) * 4));
                         out.set(ValueLayout.JAVA_BYTE, i, values.get(ValueLayout.JAVA_BYTE, code % valuesCap));
                     }
                 }
@@ -361,12 +361,12 @@ public final class DictEncodingDecoder implements EncodingDecoder {
             default -> {
                 if (fast) {
                     for (long i = 0, outOff = 0; i < rowCount; i++, outOff += elemSize) {
-                        long code = Integer.toUnsignedLong(codes.get(PTypeIO.LE_INT, i * 4));
+                        long code = Integer.toUnsignedLong(codes.get(VortexFormat.LE_INT, i * 4));
                         MemorySegment.copy(values, code * elemSize, out, outOff, elemSize);
                     }
                 } else {
                     for (long i = 0, outOff = 0; i < rowCount; i++, outOff += elemSize) {
-                        long code = Integer.toUnsignedLong(codes.get(PTypeIO.LE_INT, (i % codesCap) * 4));
+                        long code = Integer.toUnsignedLong(codes.get(VortexFormat.LE_INT, (i % codesCap) * 4));
                         MemorySegment.copy(values, (code % valuesCap) * elemSize, out, outOff, elemSize);
                     }
                 }

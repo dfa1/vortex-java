@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.fbs.FbsArray;
 import io.github.dfa1.vortex.core.fbs.FbsArrayNode;
 import io.github.dfa1.vortex.core.fbs.FbsBuilder;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
 import org.junit.jupiter.api.Test;
 
@@ -66,7 +66,7 @@ class ArrayNodeDepthBombSecurityTest {
     private static MemorySegment wrapAsSegment(byte[] fb, Arena arena) {
         MemorySegment seg = arena.allocate(fb.length + 4L);
         MemorySegment.copy(MemorySegment.ofArray(fb), 0, seg, 0, fb.length);
-        seg.set(PTypeIO.LE_INT, fb.length, fb.length);
+        seg.set(VortexFormat.LE_INT, fb.length, fb.length);
         return seg;
     }
 

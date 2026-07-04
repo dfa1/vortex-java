@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.reader.array;
 
 
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
@@ -67,7 +67,7 @@ public non-sealed interface IntArray extends Array {
         long n = length();
         MemorySegment dst = arena.allocate(n * 4L, 4);
         for (long i = 0; i < n; i++) {
-            dst.setAtIndex(PTypeIO.LE_INT, i, getInt(i));
+            dst.setAtIndex(VortexFormat.LE_INT, i, getInt(i));
         }
         return dst;
     }

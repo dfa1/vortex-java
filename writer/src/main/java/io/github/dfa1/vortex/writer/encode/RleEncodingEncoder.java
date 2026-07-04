@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.io.PTypeIO;
 import io.github.dfa1.vortex.core.proto.ProtoRLEMetadata;
 
@@ -190,7 +191,7 @@ public final class RleEncodingEncoder implements EncodingEncoder {
     private static MemorySegment fromLongsU64(long[] values, int count, SegmentAllocator arena) {
         MemorySegment seg = arena.allocate((long) count * 8);
         for (int i = 0; i < count; i++) {
-            seg.setAtIndex(PTypeIO.LE_LONG, i, values[i]);
+            seg.setAtIndex(VortexFormat.LE_LONG, i, values[i]);
         }
         return seg;
     }
@@ -198,7 +199,7 @@ public final class RleEncodingEncoder implements EncodingEncoder {
     private static MemorySegment toIndicesSeg(short[] indices, int count, SegmentAllocator arena) {
         MemorySegment seg = arena.allocate((long) count * 2);
         for (int i = 0; i < count; i++) {
-            seg.setAtIndex(PTypeIO.LE_SHORT, i, indices[i]);
+            seg.setAtIndex(VortexFormat.LE_SHORT, i, indices[i]);
         }
         return seg;
     }

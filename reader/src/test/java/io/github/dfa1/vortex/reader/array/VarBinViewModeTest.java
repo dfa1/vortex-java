@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -67,10 +67,10 @@ class VarBinViewModeTest {
 
                 // One view referencing the data buffer at offset 0.
                 MemorySegment views = arena.allocate(VIEW_SIZE);
-                views.set(PTypeIO.LE_INT, 0, longStr.length());      // size
-                views.set(PTypeIO.LE_INT, 4, 0);                     // prefix (ignored on read)
-                views.set(PTypeIO.LE_INT, 8, 0);                     // buffer index
-                views.set(PTypeIO.LE_INT, 12, 0);                    // offset within buffer
+                views.set(VortexFormat.LE_INT, 0, longStr.length());      // size
+                views.set(VortexFormat.LE_INT, 4, 0);                     // prefix (ignored on read)
+                views.set(VortexFormat.LE_INT, 8, 0);                     // buffer index
+                views.set(VortexFormat.LE_INT, 12, 0);                    // offset within buffer
                 var sut = new VarBinArray.ViewMode(UTF8, 1, views, new MemorySegment[]{dataBuf});
 
                 // When/Then
@@ -91,9 +91,9 @@ class VarBinViewModeTest {
                 MemorySegment views = arena.allocate(2L * VIEW_SIZE);
                 writeInlineView(views, 0, "short");
                 // Row 1: referenced.
-                views.set(PTypeIO.LE_INT, VIEW_SIZE, longStr.length());
-                views.set(PTypeIO.LE_INT, VIEW_SIZE + 8, 0);
-                views.set(PTypeIO.LE_INT, VIEW_SIZE + 12, 0);
+                views.set(VortexFormat.LE_INT, VIEW_SIZE, longStr.length());
+                views.set(VortexFormat.LE_INT, VIEW_SIZE + 8, 0);
+                views.set(VortexFormat.LE_INT, VIEW_SIZE + 12, 0);
 
                 var sut = new VarBinArray.ViewMode(UTF8, 2, views, new MemorySegment[]{dataBuf});
 
@@ -144,7 +144,7 @@ class VarBinViewModeTest {
         if (bytes.length > 12) {
             throw new IllegalArgumentException("test helper only handles inline ≤ 12 byte values");
         }
-        views.set(PTypeIO.LE_INT, viewOff, bytes.length);
+        views.set(VortexFormat.LE_INT, viewOff, bytes.length);
         for (int j = 0; j < bytes.length; j++) {
             views.set(ValueLayout.JAVA_BYTE, viewOff + 4 + j, bytes[j]);
         }

@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoALPMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -81,7 +81,7 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
                 return new LazyAlpDoubleArray(ctx.dtype(), n, src, df, de);
             }
             // broadcast without patches: decode single encoded value → constant
-            double v = src.getAtIndex(PTypeIO.LE_LONG, 0) * df * de;
+            double v = src.getAtIndex(VortexFormat.LE_LONG, 0) * df * de;
             return new LazyConstantDoubleArray(ctx.dtype(), n, v);
         }
 
@@ -89,11 +89,11 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
         MemorySegment buf = ctx.arena().allocate(n * 8, 8);
         if (srcCap == n) {
             for (long i = 0; i < n; i++) {
-                buf.setAtIndex(PTypeIO.LE_DOUBLE, i, src.getAtIndex(PTypeIO.LE_LONG, i) * df * de);
+                buf.setAtIndex(VortexFormat.LE_DOUBLE, i, src.getAtIndex(VortexFormat.LE_LONG, i) * df * de);
             }
         } else {
             for (long i = 0; i < n; i++) {
-                buf.setAtIndex(PTypeIO.LE_DOUBLE, i, src.getAtIndex(PTypeIO.LE_LONG, i % srcCap) * df * de);
+                buf.setAtIndex(VortexFormat.LE_DOUBLE, i, src.getAtIndex(VortexFormat.LE_LONG, i % srcCap) * df * de);
             }
         }
         applyPatches(ctx, meta.patches(), buf, 8);
@@ -111,7 +111,7 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
                 return new LazyAlpFloatArray(ctx.dtype(), n, src, df, de);
             }
             // broadcast without patches: decode single encoded value → constant
-            float v = src.getAtIndex(PTypeIO.LE_INT, 0) * df * de;
+            float v = src.getAtIndex(VortexFormat.LE_INT, 0) * df * de;
             return new LazyConstantFloatArray(ctx.dtype(), n, v);
         }
 
@@ -119,11 +119,11 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
         MemorySegment buf = ctx.arena().allocate(n * 4, 4);
         if (srcCap == n) {
             for (long i = 0; i < n; i++) {
-                buf.setAtIndex(PTypeIO.LE_FLOAT, i, src.getAtIndex(PTypeIO.LE_INT, i) * df * de);
+                buf.setAtIndex(VortexFormat.LE_FLOAT, i, src.getAtIndex(VortexFormat.LE_INT, i) * df * de);
             }
         } else {
             for (long i = 0; i < n; i++) {
-                buf.setAtIndex(PTypeIO.LE_FLOAT, i, src.getAtIndex(PTypeIO.LE_INT, i % srcCap) * df * de);
+                buf.setAtIndex(VortexFormat.LE_FLOAT, i, src.getAtIndex(VortexFormat.LE_INT, i % srcCap) * df * de);
             }
         }
         applyPatches(ctx, meta.patches(), buf, 4);
@@ -157,9 +157,9 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
     private static long readUnsigned(MemorySegment seg, long off, PType ptype) {
         return switch (ptype) {
             case U8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, off));
-            case U16 -> Short.toUnsignedLong(seg.get(PTypeIO.LE_SHORT, off));
-            case U32 -> Integer.toUnsignedLong(seg.get(PTypeIO.LE_INT, off));
-            case U64 -> seg.get(PTypeIO.LE_LONG, off);
+            case U16 -> Short.toUnsignedLong(seg.get(VortexFormat.LE_SHORT, off));
+            case U32 -> Integer.toUnsignedLong(seg.get(VortexFormat.LE_INT, off));
+            case U64 -> seg.get(VortexFormat.LE_LONG, off);
             default -> throw new VortexException(EncodingId.VORTEX_ALP, "non-unsigned patch index ptype " + ptype);
         };
     }

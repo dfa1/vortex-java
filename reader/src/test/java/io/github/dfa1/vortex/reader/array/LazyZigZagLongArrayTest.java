@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.reader.array;
 
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
 import org.junit.jupiter.api.Test;
 
@@ -19,7 +19,7 @@ class LazyZigZagLongArrayTest {
     private static LazyZigZagLongArray of(long... encoded) {
         MemorySegment seg = Arena.ofAuto().allocate((long) encoded.length * 8, 8);
         for (int i = 0; i < encoded.length; i++) {
-            seg.setAtIndex(PTypeIO.LE_LONG, i, encoded[i]);
+            seg.setAtIndex(VortexFormat.LE_LONG, i, encoded[i]);
         }
         return new LazyZigZagLongArray(I64, encoded.length, seg);
     }

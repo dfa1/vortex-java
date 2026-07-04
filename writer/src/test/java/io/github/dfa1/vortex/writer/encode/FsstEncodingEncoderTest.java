@@ -8,7 +8,7 @@ import io.github.dfa1.vortex.encoding.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.core.proto.ProtoFSSTMetadata;
@@ -129,7 +129,7 @@ class FsstEncodingEncoderTest {
 
             MemorySegment symBuf = arena.allocate(Math.max(symbols.length * 8L, 1), 8);
             for (int i = 0; i < symbols.length; i++) {
-                symBuf.setAtIndex(PTypeIO.LE_LONG, i, symbols[i]);
+                symBuf.setAtIndex(VortexFormat.LE_LONG, i, symbols[i]);
             }
 
             MemorySegment symLenBuf = arena.allocate(Math.max(symLens.length, 1));
@@ -144,12 +144,12 @@ class FsstEncodingEncoderTest {
 
             MemorySegment uncompLenBuf = arena.allocate((long) uncompLens.length * Integer.BYTES, Integer.BYTES);
             for (int i = 0; i < uncompLens.length; i++) {
-                uncompLenBuf.setAtIndex(PTypeIO.LE_INT, i, uncompLens[i]);
+                uncompLenBuf.setAtIndex(VortexFormat.LE_INT, i, uncompLens[i]);
             }
 
             MemorySegment codesOffBuf = arena.allocate((long) codesOffsets.length * Integer.BYTES, Integer.BYTES);
             for (int i = 0; i < codesOffsets.length; i++) {
-                codesOffBuf.setAtIndex(PTypeIO.LE_INT, i, codesOffsets[i]);
+                codesOffBuf.setAtIndex(VortexFormat.LE_INT, i, codesOffsets[i]);
             }
 
             MemorySegment[] segs = {symBuf, symLenBuf, compBuf, uncompLenBuf, codesOffBuf};

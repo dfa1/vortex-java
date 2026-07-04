@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.writer.encode;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoFSSTMetadata;
 
 import java.lang.foreign.Arena;
@@ -80,7 +80,7 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
 
         MemorySegment symBuf = arena.allocate(Math.max(numSymbols * 8L, 1), 8);
         for (int i = 0; i < numSymbols; i++) {
-            symBuf.setAtIndex(PTypeIO.LE_LONG, i, symbolValues[i]);
+            symBuf.setAtIndex(VortexFormat.LE_LONG, i, symbolValues[i]);
         }
 
         MemorySegment symLenBuf = arena.allocate(Math.max(numSymbols, 1));
@@ -101,15 +101,15 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
 
         MemorySegment uncompLenBuf = arena.allocate(Math.max(n * 4L, 1), 4);
         for (int i = 0; i < n; i++) {
-            uncompLenBuf.setAtIndex(PTypeIO.LE_INT, i, byteArrays[i].length);
+            uncompLenBuf.setAtIndex(VortexFormat.LE_INT, i, byteArrays[i].length);
         }
 
         MemorySegment codesOffBuf = arena.allocate((long) (n + 1) * 4, 4);
         long off = 0;
-        codesOffBuf.setAtIndex(PTypeIO.LE_INT, 0, 0);
+        codesOffBuf.setAtIndex(VortexFormat.LE_INT, 0, 0);
         for (int i = 0; i < n; i++) {
             off += compressed[i].length;
-            codesOffBuf.setAtIndex(PTypeIO.LE_INT, (long) i + 1, (int) off);
+            codesOffBuf.setAtIndex(VortexFormat.LE_INT, (long) i + 1, (int) off);
         }
 
         byte[] metaBytes = new ProtoFSSTMetadata(

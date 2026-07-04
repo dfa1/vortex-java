@@ -4,8 +4,8 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.io.IoBounds;
-import io.github.dfa1.vortex.core.io.PTypeIO;
 import io.github.dfa1.vortex.core.proto.ProtoZstdMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
@@ -131,7 +131,7 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
 
         MemorySegment values = ctx.arena().allocate(totalDataBytes > 0 ? totalDataBytes : 1);
         MemorySegment offsets = ctx.arena().allocate((rowCount + 1) * 4L, 4);
-        offsets.setAtIndex(PTypeIO.LE_INT, 0, 0);
+        offsets.setAtIndex(VortexFormat.LE_INT, 0, 0);
 
         // Second pass reads the same positions the first pass already bounds-checked via
         // readVarBinLen, so a raw get/copy here cannot overrun; values is sized to the validated
@@ -140,13 +140,13 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
         long dataPos = 0;
         for (long i = 0; i < rowCount; i++) {
             if (validity.getBoolean(i)) {
-                int len = validValues.get(PTypeIO.LE_INT, readPos);
+                int len = validValues.get(VortexFormat.LE_INT, readPos);
                 readPos += 4;
                 MemorySegment.copy(validValues, readPos, values, dataPos, len);
                 readPos += len;
                 dataPos += len;
             }
-            offsets.setAtIndex(PTypeIO.LE_INT, i + 1, (int) dataPos);
+            offsets.setAtIndex(VortexFormat.LE_INT, i + 1, (int) dataPos);
         }
 
         return new VarBinArray.OffsetMode(dtype.withNullable(false), rowCount, values, offsets, PType.I32);
@@ -261,7 +261,7 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
     /// @return the validated element length in bytes
     private static int readVarBinLen(MemorySegment src, long pos) {
         IoBounds.checkRange(pos, 4, src.byteSize());
-        int len = src.get(PTypeIO.LE_INT, pos);
+        int len = src.get(VortexFormat.LE_INT, pos);
         // checkRange rejects len < 0 and a [pos+4, pos+4+len) range that overruns src.
         IoBounds.checkRange(pos + 4L, len, src.byteSize());
         return len;
@@ -278,7 +278,7 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
 
         MemorySegment values = ctx.arena().allocate(totalDataBytes);
         MemorySegment offsets = ctx.arena().allocate((n + 1) * 4L, 4);
-        offsets.setAtIndex(PTypeIO.LE_INT, 0, 0);
+        offsets.setAtIndex(VortexFormat.LE_INT, 0, 0);
 
         // Second pass reads the same positions the first pass already bounds-checked via
         // readVarBinLen, so a raw get/copy here cannot overrun; values is sized to the validated
@@ -286,12 +286,12 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
         pos = 0;
         long dataPos = 0;
         for (long i = 0; i < n; i++) {
-            int len = decompressed.get(PTypeIO.LE_INT, pos);
+            int len = decompressed.get(VortexFormat.LE_INT, pos);
             pos += 4;
             MemorySegment.copy(decompressed, pos, values, dataPos, len);
             pos += len;
             dataPos += len;
-            offsets.setAtIndex(PTypeIO.LE_INT, i + 1, (int) dataPos);
+            offsets.setAtIndex(VortexFormat.LE_INT, i + 1, (int) dataPos);
         }
 
         return new VarBinArray.OffsetMode(dtype, n, values, offsets, PType.I32);

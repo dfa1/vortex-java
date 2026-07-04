@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.reader.array;
 
 
 import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 
 import java.lang.foreign.MemorySegment;
 import java.util.function.LongBinaryOperator;
@@ -23,7 +23,7 @@ public final class MaterializedLongArray extends AbstractMaterializedArray imple
 
     @Override
     public long getLong(long i) {
-        return buffer.getAtIndex(PTypeIO.LE_LONG, length == elementCount ? i : i % elementCount);
+        return buffer.getAtIndex(VortexFormat.LE_LONG, length == elementCount ? i : i % elementCount);
     }
 
     @Override
@@ -32,11 +32,11 @@ public final class MaterializedLongArray extends AbstractMaterializedArray imple
         long n = length;
         if (n == elementCount) {
             for (long i = 0; i < n; i++) {
-                c.accept(buf.getAtIndex(PTypeIO.LE_LONG, i));
+                c.accept(buf.getAtIndex(VortexFormat.LE_LONG, i));
             }
         } else {
             for (long i = 0; i < n; i++) {
-                c.accept(buf.getAtIndex(PTypeIO.LE_LONG, i % elementCount));
+                c.accept(buf.getAtIndex(VortexFormat.LE_LONG, i % elementCount));
             }
         }
     }
@@ -48,11 +48,11 @@ public final class MaterializedLongArray extends AbstractMaterializedArray imple
         long result = identity;
         if (n == elementCount) {
             for (long i = 0; i < n; i++) {
-                result = op.applyAsLong(result, buf.getAtIndex(PTypeIO.LE_LONG, i));
+                result = op.applyAsLong(result, buf.getAtIndex(VortexFormat.LE_LONG, i));
             }
         } else {
             for (long i = 0; i < n; i++) {
-                result = op.applyAsLong(result, buf.getAtIndex(PTypeIO.LE_LONG, i % elementCount));
+                result = op.applyAsLong(result, buf.getAtIndex(VortexFormat.LE_LONG, i % elementCount));
             }
         }
         return result;

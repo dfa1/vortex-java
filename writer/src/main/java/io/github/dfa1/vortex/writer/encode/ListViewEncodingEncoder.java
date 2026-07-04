@@ -7,7 +7,7 @@ import io.github.dfa1.vortex.core.model.PType;
 
 import io.github.dfa1.vortex.core.model.EncodingId;
 
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 
 
 import io.github.dfa1.vortex.core.proto.ProtoListViewMetadata;
@@ -53,14 +53,14 @@ public final class ListViewEncodingEncoder implements EncodingEncoder {
 
         MemorySegment offsetsBuf = ctx.arena().allocate(n * Integer.BYTES, Integer.BYTES);
         for (int i = 0; i < n; i++) {
-            offsetsBuf.setAtIndex(PTypeIO.LE_INT, i, lvd.offsets()[i]);
+            offsetsBuf.setAtIndex(VortexFormat.LE_INT, i, lvd.offsets()[i]);
         }
         allBuffers.add(offsetsBuf);
         EncodeNode offsetsNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, elemBufCount);
 
         MemorySegment sizesBuf = ctx.arena().allocate(n * Integer.BYTES, Integer.BYTES);
         for (int i = 0; i < n; i++) {
-            sizesBuf.setAtIndex(PTypeIO.LE_INT, i, lvd.sizes()[i]);
+            sizesBuf.setAtIndex(VortexFormat.LE_INT, i, lvd.sizes()[i]);
         }
         allBuffers.add(sizesBuf);
         EncodeNode sizesNode = EncodeNode.leaf(EncodingId.VORTEX_PRIMITIVE, elemBufCount + 1);

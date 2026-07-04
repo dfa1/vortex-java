@@ -5,7 +5,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoZstdFrameMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoZstdMetadata;
 
@@ -226,7 +226,7 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
             long count = Math.min(valuesPerFrame, nValues - valueIdx);
             long start = pos;
             for (long k = 0; k < count; k++) {
-                int len = raw.get(PTypeIO.LE_INT, pos);
+                int len = raw.get(VortexFormat.LE_INT, pos);
                 pos += 4L + len;
             }
             byteLengths[f] = pos - start;
@@ -319,7 +319,7 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
                 short[] arr = (short[]) data;
                 MemorySegment seg = arena.allocate((long) arr.length * 2, 2);
                 for (int i = 0; i < arr.length; i++) {
-                    seg.setAtIndex(PTypeIO.LE_SHORT, i, arr[i]);
+                    seg.setAtIndex(VortexFormat.LE_SHORT, i, arr[i]);
                 }
                 yield seg;
             }
@@ -327,7 +327,7 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
                 int[] arr = (int[]) data;
                 MemorySegment seg = arena.allocate((long) arr.length * 4, 4);
                 for (int i = 0; i < arr.length; i++) {
-                    seg.setAtIndex(PTypeIO.LE_INT, i, arr[i]);
+                    seg.setAtIndex(VortexFormat.LE_INT, i, arr[i]);
                 }
                 yield seg;
             }
@@ -335,7 +335,7 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
                 long[] arr = (long[]) data;
                 MemorySegment seg = arena.allocate((long) arr.length * 8, 8);
                 for (int i = 0; i < arr.length; i++) {
-                    seg.setAtIndex(PTypeIO.LE_LONG, i, arr[i]);
+                    seg.setAtIndex(VortexFormat.LE_LONG, i, arr[i]);
                 }
                 yield seg;
             }
@@ -343,7 +343,7 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
                 float[] arr = (float[]) data;
                 MemorySegment seg = arena.allocate((long) arr.length * 4, 4);
                 for (int i = 0; i < arr.length; i++) {
-                    seg.setAtIndex(PTypeIO.LE_FLOAT, i, arr[i]);
+                    seg.setAtIndex(VortexFormat.LE_FLOAT, i, arr[i]);
                 }
                 yield seg;
             }
@@ -351,7 +351,7 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
                 double[] arr = (double[]) data;
                 MemorySegment seg = arena.allocate((long) arr.length * 8, 8);
                 for (int i = 0; i < arr.length; i++) {
-                    seg.setAtIndex(PTypeIO.LE_DOUBLE, i, arr[i]);
+                    seg.setAtIndex(VortexFormat.LE_DOUBLE, i, arr[i]);
                 }
                 yield seg;
             }
@@ -379,7 +379,7 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
         MemorySegment seg = arena.allocate(total > 0 ? total : 1);
         long pos = 0;
         for (byte[] bytes : encoded) {
-            seg.set(PTypeIO.LE_INT, pos, bytes.length);
+            seg.set(VortexFormat.LE_INT, pos, bytes.length);
             pos += 4;
             MemorySegment.copy(MemorySegment.ofArray(bytes), 0, seg, pos, bytes.length);
             pos += bytes.length;

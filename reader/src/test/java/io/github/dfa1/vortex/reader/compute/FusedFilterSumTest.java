@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.reader.compute;
 
 import io.github.dfa1.vortex.core.error.VortexException;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
@@ -286,7 +286,7 @@ class FusedFilterSumTest {
     private static Array longColumn(long[] values, boolean[] valid) {
         MemorySegment seg = ARENA.allocate(Math.max(8L, values.length * 8L), 8);
         for (int i = 0; i < values.length; i++) {
-            seg.setAtIndex(PTypeIO.LE_LONG, i, values[i]);
+            seg.setAtIndex(VortexFormat.LE_LONG, i, values[i]);
         }
         return wrap(new MaterializedLongArray(DType.I64, values.length, seg), valid);
     }
@@ -294,7 +294,7 @@ class FusedFilterSumTest {
     private static Array intColumn(long[] values, boolean[] valid) {
         MemorySegment seg = ARENA.allocate(Math.max(4L, values.length * 4L), 4);
         for (int i = 0; i < values.length; i++) {
-            seg.setAtIndex(PTypeIO.LE_INT, i, (int) values[i]);
+            seg.setAtIndex(VortexFormat.LE_INT, i, (int) values[i]);
         }
         return wrap(new MaterializedIntArray(DType.I32, values.length, seg), valid);
     }
@@ -302,7 +302,7 @@ class FusedFilterSumTest {
     private static Array shortColumn(long[] values, boolean[] valid, boolean unsigned) {
         MemorySegment seg = ARENA.allocate(Math.max(2L, values.length * 2L), 2);
         for (int i = 0; i < values.length; i++) {
-            seg.setAtIndex(PTypeIO.LE_SHORT, i, (short) values[i]);
+            seg.setAtIndex(VortexFormat.LE_SHORT, i, (short) values[i]);
         }
         return wrap(new MaterializedShortArray(unsigned ? DType.U16 : DType.I16, values.length, seg), valid);
     }
@@ -318,7 +318,7 @@ class FusedFilterSumTest {
     private static Array floatColumn(double[] values, boolean[] valid) {
         MemorySegment seg = ARENA.allocate(Math.max(4L, values.length * 4L), 4);
         for (int i = 0; i < values.length; i++) {
-            seg.setAtIndex(PTypeIO.LE_FLOAT, i, (float) values[i]);
+            seg.setAtIndex(VortexFormat.LE_FLOAT, i, (float) values[i]);
         }
         return wrap(new MaterializedFloatArray(DType.F32, values.length, seg), valid);
     }
@@ -326,7 +326,7 @@ class FusedFilterSumTest {
     private static Array doubleColumn(double[] values, boolean[] valid) {
         MemorySegment seg = ARENA.allocate(Math.max(8L, values.length * 8L), 8);
         for (int i = 0; i < values.length; i++) {
-            seg.setAtIndex(PTypeIO.LE_DOUBLE, i, values[i]);
+            seg.setAtIndex(VortexFormat.LE_DOUBLE, i, values[i]);
         }
         return wrap(new MaterializedDoubleArray(DType.F64, values.length, seg), valid);
     }

@@ -6,7 +6,7 @@ import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.compute.FastLanes;
 import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoDeltaMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
@@ -127,11 +127,11 @@ public final class DeltaEncodingDecoder implements EncodingDecoder {
             out[i] = switch (ptype) {
                 case I8 -> buf.get(ValueLayout.JAVA_BYTE, off);
                 case U8 -> Byte.toUnsignedLong(buf.get(ValueLayout.JAVA_BYTE, off));
-                case I16 -> buf.get(PTypeIO.LE_SHORT, off);
-                case U16 -> Short.toUnsignedLong(buf.get(PTypeIO.LE_SHORT, off));
-                case I32 -> buf.get(PTypeIO.LE_INT, off);
-                case U32 -> Integer.toUnsignedLong(buf.get(PTypeIO.LE_INT, off));
-                case I64, U64 -> buf.get(PTypeIO.LE_LONG, off);
+                case I16 -> buf.get(VortexFormat.LE_SHORT, off);
+                case U16 -> Short.toUnsignedLong(buf.get(VortexFormat.LE_SHORT, off));
+                case I32 -> buf.get(VortexFormat.LE_INT, off);
+                case U32 -> Integer.toUnsignedLong(buf.get(VortexFormat.LE_INT, off));
+                case I64, U64 -> buf.get(VortexFormat.LE_LONG, off);
                 default -> throw new VortexException(EncodingId.FASTLANES_DELTA, "unsupported ptype: " + ptype);
             };
         }

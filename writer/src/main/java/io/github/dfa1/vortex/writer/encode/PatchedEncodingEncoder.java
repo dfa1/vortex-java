@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.compute.FastLanes;
 import io.github.dfa1.vortex.core.compute.PrimitiveArrays;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.io.PTypeIO;
 import io.github.dfa1.vortex.core.proto.ProtoPatchedMetadata;
 
@@ -114,12 +115,12 @@ public final class PatchedEncodingEncoder implements EncodingEncoder {
 
             MemorySegment laneOffsBuf = ctx.arena().allocate(pd.laneOffsets.length * 4L);
             for (int i = 0; i < pd.laneOffsets.length; i++) {
-                laneOffsBuf.setAtIndex(PTypeIO.LE_INT, i, pd.laneOffsets[i]);
+                laneOffsBuf.setAtIndex(VortexFormat.LE_INT, i, pd.laneOffsets[i]);
             }
 
             MemorySegment patchIdxBuf = ctx.arena().allocate(Math.max(1L, (long) pd.nPatches * 2));
             for (int i = 0; i < pd.nPatches; i++) {
-                patchIdxBuf.setAtIndex(PTypeIO.LE_SHORT, i, pd.patchIndices[i]);
+                patchIdxBuf.setAtIndex(VortexFormat.LE_SHORT, i, pd.patchIndices[i]);
             }
 
             MemorySegment patchValBuf = ctx.arena().allocate(Math.max(1L, (long) pd.nPatches * elemBytes));

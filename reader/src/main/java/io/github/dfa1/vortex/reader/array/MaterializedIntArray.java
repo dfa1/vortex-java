@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.reader.array;
 
 
 import io.github.dfa1.vortex.core.model.DType;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 
 import java.lang.foreign.MemorySegment;
 import java.util.function.IntBinaryOperator;
@@ -23,7 +23,7 @@ public final class MaterializedIntArray extends AbstractMaterializedArray implem
 
     @Override
     public int getInt(long i) {
-        return buffer.getAtIndex(PTypeIO.LE_INT, length == elementCount ? i : i % elementCount);
+        return buffer.getAtIndex(VortexFormat.LE_INT, length == elementCount ? i : i % elementCount);
     }
 
     @Override
@@ -32,11 +32,11 @@ public final class MaterializedIntArray extends AbstractMaterializedArray implem
         long n = length;
         if (n == elementCount) {
             for (long i = 0; i < n; i++) {
-                c.accept(buf.getAtIndex(PTypeIO.LE_INT, i));
+                c.accept(buf.getAtIndex(VortexFormat.LE_INT, i));
             }
         } else {
             for (long i = 0; i < n; i++) {
-                c.accept(buf.getAtIndex(PTypeIO.LE_INT, i % elementCount));
+                c.accept(buf.getAtIndex(VortexFormat.LE_INT, i % elementCount));
             }
         }
     }
@@ -48,11 +48,11 @@ public final class MaterializedIntArray extends AbstractMaterializedArray implem
         int result = identity;
         if (n == elementCount) {
             for (long i = 0; i < n; i++) {
-                result = op.applyAsInt(result, buf.getAtIndex(PTypeIO.LE_INT, i));
+                result = op.applyAsInt(result, buf.getAtIndex(VortexFormat.LE_INT, i));
             }
         } else {
             for (long i = 0; i < n; i++) {
-                result = op.applyAsInt(result, buf.getAtIndex(PTypeIO.LE_INT, i % elementCount));
+                result = op.applyAsInt(result, buf.getAtIndex(VortexFormat.LE_INT, i % elementCount));
             }
         }
         return result;

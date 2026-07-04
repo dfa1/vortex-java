@@ -6,7 +6,7 @@ import io.github.dfa1.vortex.encoding.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.reader.decode.VarBinViewEncodingDecoder;
@@ -133,12 +133,12 @@ class VarBinViewEncodingEncoderTest {
             for (int i = 0; i < values.length; i++) {
                 byte[] b = bytesArr[i];
                 long viewOff = (long) i * 16;
-                views.set(PTypeIO.LE_INT, viewOff, b.length);
+                views.set(VortexFormat.LE_INT, viewOff, b.length);
                 if (b.length <= 12) {
                     MemorySegment.copy(MemorySegment.ofArray(b), 0, views, viewOff + 4, b.length);
                 } else {
-                    views.set(PTypeIO.LE_INT, viewOff + 8, 0);
-                    views.set(PTypeIO.LE_INT, viewOff + 12, dataOffset);
+                    views.set(VortexFormat.LE_INT, viewOff + 8, 0);
+                    views.set(VortexFormat.LE_INT, viewOff + 12, dataOffset);
                     MemorySegment.copy(MemorySegment.ofArray(b), 0, dataBuf, dataOffset, b.length);
                     dataOffset += b.length;
                 }

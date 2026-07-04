@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 import io.github.dfa1.vortex.core.proto.ProtoSparseMetadata;
@@ -161,7 +161,7 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
                     patchCursor++;
                 }
             }
-            outOffsets.setAtIndex(PTypeIO.LE_INT, pos + 1, (int) bytePos);
+            outOffsets.setAtIndex(VortexFormat.LE_INT, pos + 1, (int) bytePos);
         }
 
         return new VarBinArray.OffsetMode(ctx.dtype(), n, outBytes, outOffsets, PType.I32);
@@ -169,8 +169,8 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
 
     private static long readVarBinOffset(MemorySegment seg, long i, PType ptype) {
         return switch (ptype) {
-            case I32, U32 -> Integer.toUnsignedLong(seg.getAtIndex(PTypeIO.LE_INT, i));
-            case I64, U64 -> seg.getAtIndex(PTypeIO.LE_LONG, i);
+            case I32, U32 -> Integer.toUnsignedLong(seg.getAtIndex(VortexFormat.LE_INT, i));
+            case I64, U64 -> seg.getAtIndex(VortexFormat.LE_LONG, i);
             default -> throw new VortexException(EncodingId.VORTEX_SPARSE, "unsupported offset ptype " + ptype);
         };
     }
@@ -178,9 +178,9 @@ public final class SparseEncodingDecoder implements EncodingDecoder {
     private static long readUnsignedIdx(MemorySegment seg, long off, PType ptype) {
         return switch (ptype) {
             case U8 -> Byte.toUnsignedLong(seg.get(ValueLayout.JAVA_BYTE, off));
-            case U16 -> Short.toUnsignedLong(seg.get(PTypeIO.LE_SHORT, off));
-            case U32 -> Integer.toUnsignedLong(seg.get(PTypeIO.LE_INT, off));
-            case U64 -> seg.get(PTypeIO.LE_LONG, off);
+            case U16 -> Short.toUnsignedLong(seg.get(VortexFormat.LE_SHORT, off));
+            case U32 -> Integer.toUnsignedLong(seg.get(VortexFormat.LE_INT, off));
+            case U64 -> seg.get(VortexFormat.LE_LONG, off);
             default -> throw new VortexException(EncodingId.VORTEX_SPARSE, "non-unsigned index ptype " + ptype);
         };
     }

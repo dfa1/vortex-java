@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.reader.array;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
@@ -158,13 +158,13 @@ public sealed interface VarBinArray extends Array
         }
         MemorySegment outBytes = arena.allocate(totalBytes > 0 ? totalBytes : 1);
         MemorySegment outOffsets = arena.allocate((n + 1) * Long.BYTES, Long.BYTES);
-        outOffsets.setAtIndex(PTypeIO.LE_LONG, 0, 0L);
+        outOffsets.setAtIndex(VortexFormat.LE_LONG, 0, 0L);
         long bytePos = 0;
         for (long i = 0; i < n; i++) {
             byte[] b = src.getBytes(i);
             MemorySegment.copy(MemorySegment.ofArray(b), 0, outBytes, bytePos, b.length);
             bytePos += b.length;
-            outOffsets.setAtIndex(PTypeIO.LE_LONG, i + 1, bytePos);
+            outOffsets.setAtIndex(VortexFormat.LE_LONG, i + 1, bytePos);
         }
         return new OffsetMode(src.dtype(), n, outBytes.asReadOnly(), outOffsets, PType.I64);
     }
@@ -226,13 +226,13 @@ public sealed interface VarBinArray extends Array
             long n = length;
             if (offsetsPtype == PType.I32 || offsetsPtype == PType.U32) {
                 for (long i = 0; i < n; i++) {
-                    c.accept(offsetsSegment.getAtIndex(PTypeIO.LE_INT, i + 1)
-                            - offsetsSegment.getAtIndex(PTypeIO.LE_INT, i));
+                    c.accept(offsetsSegment.getAtIndex(VortexFormat.LE_INT, i + 1)
+                            - offsetsSegment.getAtIndex(VortexFormat.LE_INT, i));
                 }
             } else {
                 for (long i = 0; i < n; i++) {
-                    c.accept((int) (offsetsSegment.getAtIndex(PTypeIO.LE_LONG, i + 1)
-                            - offsetsSegment.getAtIndex(PTypeIO.LE_LONG, i)));
+                    c.accept((int) (offsetsSegment.getAtIndex(VortexFormat.LE_LONG, i + 1)
+                            - offsetsSegment.getAtIndex(VortexFormat.LE_LONG, i)));
                 }
             }
         }
@@ -252,9 +252,9 @@ public sealed interface VarBinArray extends Array
 
         private long readOffset(long i) {
             if (offsetsPtype == PType.I32 || offsetsPtype == PType.U32) {
-                return offsetsSegment.getAtIndex(PTypeIO.LE_INT, i);
+                return offsetsSegment.getAtIndex(VortexFormat.LE_INT, i);
             }
-            return offsetsSegment.getAtIndex(PTypeIO.LE_LONG, i);
+            return offsetsSegment.getAtIndex(VortexFormat.LE_LONG, i);
         }
     }
 
@@ -318,19 +318,19 @@ public sealed interface VarBinArray extends Array
         private long dictReadCode(long i) {
             return switch (dictCodesPType) {
                 case U8 -> Byte.toUnsignedLong(dictCodesSegs.get(ValueLayout.JAVA_BYTE, i));
-                case U16 -> Short.toUnsignedLong(dictCodesSegs.getAtIndex(PTypeIO.LE_SHORT, i));
-                case U32 -> Integer.toUnsignedLong(dictCodesSegs.getAtIndex(PTypeIO.LE_INT, i));
-                case I32 -> dictCodesSegs.getAtIndex(PTypeIO.LE_INT, i);
-                case I64, U64 -> dictCodesSegs.getAtIndex(PTypeIO.LE_LONG, i);
+                case U16 -> Short.toUnsignedLong(dictCodesSegs.getAtIndex(VortexFormat.LE_SHORT, i));
+                case U32 -> Integer.toUnsignedLong(dictCodesSegs.getAtIndex(VortexFormat.LE_INT, i));
+                case I32 -> dictCodesSegs.getAtIndex(VortexFormat.LE_INT, i);
+                case I64, U64 -> dictCodesSegs.getAtIndex(VortexFormat.LE_LONG, i);
                 default -> throw new VortexException("unsupported codes ptype: " + dictCodesPType);
             };
         }
 
         private long dictReadOff(long i) {
             if (dictValOffPType == PType.I32 || dictValOffPType == PType.U32) {
-                return dictValOffsets.getAtIndex(PTypeIO.LE_INT, i);
+                return dictValOffsets.getAtIndex(VortexFormat.LE_INT, i);
             }
-            return dictValOffsets.getAtIndex(PTypeIO.LE_LONG, i);
+            return dictValOffsets.getAtIndex(VortexFormat.LE_LONG, i);
         }
     }
 
@@ -495,19 +495,19 @@ public sealed interface VarBinArray extends Array
 
         @Override
         public int getByteLength(long i) {
-            return views.get(PTypeIO.LE_INT, i * VIEW_SIZE);
+            return views.get(VortexFormat.LE_INT, i * VIEW_SIZE);
         }
 
         @Override
         public byte[] getBytes(long i) {
             long viewOff = i * VIEW_SIZE;
-            int size = views.get(PTypeIO.LE_INT, viewOff);
+            int size = views.get(VortexFormat.LE_INT, viewOff);
             byte[] out = new byte[size];
             if (size <= MAX_INLINED_SIZE) {
                 MemorySegment.copy(views, viewOff + 4, MemorySegment.ofArray(out), 0, size);
             } else {
-                int bufferIndex = views.get(PTypeIO.LE_INT, viewOff + 8);
-                long srcOffset = Integer.toUnsignedLong(views.get(PTypeIO.LE_INT, viewOff + 12));
+                int bufferIndex = views.get(VortexFormat.LE_INT, viewOff + 8);
+                long srcOffset = Integer.toUnsignedLong(views.get(VortexFormat.LE_INT, viewOff + 12));
                 MemorySegment.copy(dataBufs[bufferIndex], srcOffset, MemorySegment.ofArray(out), 0, size);
             }
             return out;
@@ -522,7 +522,7 @@ public sealed interface VarBinArray extends Array
         public void forEachByteLength(IntConsumer c) {
             long n = length;
             for (long i = 0; i < n; i++) {
-                c.accept(views.get(PTypeIO.LE_INT, i * VIEW_SIZE));
+                c.accept(views.get(VortexFormat.LE_INT, i * VIEW_SIZE));
             }
         }
 

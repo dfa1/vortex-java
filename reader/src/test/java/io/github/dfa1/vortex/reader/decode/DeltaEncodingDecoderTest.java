@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.reader.decode;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.encoding.TestSegments;
 import io.github.dfa1.vortex.core.proto.ProtoDeltaMetadata;
 import io.github.dfa1.vortex.reader.ReadRegistry;
@@ -97,6 +97,6 @@ class DeltaEncodingDecoderTest {
         assertThat(result.getLong(0)).isEqualTo(5L);
         // sanity: materialized bytes are little-endian
         MemorySegment seg = result.materialize(Arena.ofAuto());
-        assertThat(seg.get(PTypeIO.LE_LONG, 0)).isEqualTo(5L);
+        assertThat(seg.get(VortexFormat.LE_LONG, 0)).isEqualTo(5L);
     }
 }

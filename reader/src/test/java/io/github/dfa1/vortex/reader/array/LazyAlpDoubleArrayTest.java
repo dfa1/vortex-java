@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.reader.array;
 
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -21,7 +21,7 @@ class LazyAlpDoubleArrayTest {
     private static LazyAlpDoubleArray of(double scale, long... encoded) {
         MemorySegment seg = Arena.ofAuto().allocate((long) encoded.length * 8, 8);
         for (int i = 0; i < encoded.length; i++) {
-            seg.setAtIndex(PTypeIO.LE_LONG, i, encoded[i]);
+            seg.setAtIndex(VortexFormat.LE_LONG, i, encoded[i]);
         }
         return new LazyAlpDoubleArray(F64, encoded.length, seg, scale, 1.0);
     }
@@ -122,7 +122,7 @@ class LazyAlpDoubleArrayTest {
 
                 // Then — each materialized row matches the lazy getter
                 for (int i = 0; i < 3; i++) {
-                    assertThat(seg.getAtIndex(PTypeIO.LE_DOUBLE, i)).as("row %d", i)
+                    assertThat(seg.getAtIndex(VortexFormat.LE_DOUBLE, i)).as("row %d", i)
                             .isCloseTo(sut.getDouble(i), offset(1e-12));
                 }
             }

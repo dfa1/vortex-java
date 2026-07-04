@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.writer.encode;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoScalarValue;
 
 import java.lang.foreign.Arena;
@@ -47,7 +47,7 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
                 short[] arr = (short[]) data;
                 MemorySegment seg = arena.allocate((long) arr.length * 2, 2);
                 for (int i = 0; i < arr.length; i++) {
-                    seg.setAtIndex(PTypeIO.LE_SHORT, i, arr[i]);
+                    seg.setAtIndex(VortexFormat.LE_SHORT, i, arr[i]);
                 }
                 yield seg;
             }
@@ -55,7 +55,7 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
                 int[] arr = (int[]) data;
                 MemorySegment seg = arena.allocate((long) arr.length * 4, 4);
                 for (int i = 0; i < arr.length; i++) {
-                    seg.setAtIndex(PTypeIO.LE_INT, i, arr[i]);
+                    seg.setAtIndex(VortexFormat.LE_INT, i, arr[i]);
                 }
                 yield seg;
             }
@@ -63,7 +63,7 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
                 long[] arr = (long[]) data;
                 MemorySegment seg = arena.allocate((long) arr.length * 8, 8);
                 for (int i = 0; i < arr.length; i++) {
-                    seg.setAtIndex(PTypeIO.LE_LONG, i, arr[i]);
+                    seg.setAtIndex(VortexFormat.LE_LONG, i, arr[i]);
                 }
                 yield seg;
             }
@@ -71,7 +71,7 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
                 float[] arr = (float[]) data;
                 MemorySegment seg = arena.allocate((long) arr.length * 4, 4);
                 for (int i = 0; i < arr.length; i++) {
-                    seg.setAtIndex(PTypeIO.LE_FLOAT, i, arr[i]);
+                    seg.setAtIndex(VortexFormat.LE_FLOAT, i, arr[i]);
                 }
                 yield seg;
             }
@@ -79,7 +79,7 @@ public final class PrimitiveEncodingEncoder implements EncodingEncoder {
                 double[] arr = (double[]) data;
                 MemorySegment seg = arena.allocate((long) arr.length * 8, 8);
                 for (int i = 0; i < arr.length; i++) {
-                    seg.setAtIndex(PTypeIO.LE_DOUBLE, i, arr[i]);
+                    seg.setAtIndex(VortexFormat.LE_DOUBLE, i, arr[i]);
                 }
                 yield seg;
             }

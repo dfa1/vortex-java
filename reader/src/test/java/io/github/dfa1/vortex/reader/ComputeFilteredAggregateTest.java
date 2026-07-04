@@ -1,6 +1,6 @@
 package io.github.dfa1.vortex.reader;
 
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -273,9 +273,9 @@ class ComputeFilteredAggregateTest {
         // comparison instead of the kernel's unsigned-aware order, 2^63 would come out as the min
         Array filter = dictColumn(new long[]{1, 2}, new int[]{1, 0, 1});
         MemorySegment seg = ARENA.allocate(24, 8);
-        seg.setAtIndex(PTypeIO.LE_LONG, 0, Long.MIN_VALUE);
-        seg.setAtIndex(PTypeIO.LE_LONG, 1, 7L);
-        seg.setAtIndex(PTypeIO.LE_LONG, 2, 5L);
+        seg.setAtIndex(VortexFormat.LE_LONG, 0, Long.MIN_VALUE);
+        seg.setAtIndex(VortexFormat.LE_LONG, 1, 7L);
+        seg.setAtIndex(VortexFormat.LE_LONG, 2, 5L);
         Array agg = new MaterializedLongArray(DType.U64, 3, seg);
         Chunk chunk = chunk(3, Map.of("f0", filter, "v", agg));
 
@@ -568,7 +568,7 @@ class ComputeFilteredAggregateTest {
         }
         MemorySegment poolSeg = ARENA.allocate(Math.max(8L, pool.size() * 8L), 8);
         for (int i = 0; i < pool.size(); i++) {
-            poolSeg.setAtIndex(PTypeIO.LE_LONG, i, pool.get(i));
+            poolSeg.setAtIndex(VortexFormat.LE_LONG, i, pool.get(i));
         }
         MaterializedLongArray poolArray = new MaterializedLongArray(DType.I64, pool.size(), poolSeg);
         ByteArray codesArray;
@@ -590,7 +590,7 @@ class ComputeFilteredAggregateTest {
     private static Array dictColumn(long[] pool, int[] codes) {
         MemorySegment poolSeg = ARENA.allocate(Math.max(8L, pool.length * 8L), 8);
         for (int i = 0; i < pool.length; i++) {
-            poolSeg.setAtIndex(PTypeIO.LE_LONG, i, pool[i]);
+            poolSeg.setAtIndex(VortexFormat.LE_LONG, i, pool[i]);
         }
         MaterializedLongArray poolArray = new MaterializedLongArray(DType.I64, pool.length, poolSeg);
         return DictLongArray.of(DType.I64, codes.length, poolArray, byteArray(codes, 0, codes.length));
@@ -600,7 +600,7 @@ class ComputeFilteredAggregateTest {
     private static Array dictDoubleColumn(double[] pool, int[] codes) {
         MemorySegment poolSeg = ARENA.allocate(Math.max(8L, pool.length * 8L), 8);
         for (int i = 0; i < pool.length; i++) {
-            poolSeg.setAtIndex(PTypeIO.LE_DOUBLE, i, pool[i]);
+            poolSeg.setAtIndex(VortexFormat.LE_DOUBLE, i, pool[i]);
         }
         MaterializedDoubleArray poolArray = new MaterializedDoubleArray(DType.F64, pool.length, poolSeg);
         return DictDoubleArray.of(DType.F64, codes.length, poolArray, byteArray(codes, 0, codes.length));
@@ -617,7 +617,7 @@ class ComputeFilteredAggregateTest {
     private static Array floatArray(float... values) {
         MemorySegment segment = ARENA.allocate(Math.max(4L, values.length * 4L), 4);
         for (int i = 0; i < values.length; i++) {
-            segment.setAtIndex(PTypeIO.LE_FLOAT, i, values[i]);
+            segment.setAtIndex(VortexFormat.LE_FLOAT, i, values[i]);
         }
         return new MaterializedFloatArray(DType.F32, values.length, segment);
     }
@@ -637,13 +637,13 @@ class ComputeFilteredAggregateTest {
         if (values.length % 2 == 0) {
             MemorySegment segment = ARENA.allocate(Math.max(8L, values.length * 8L), 8);
             for (int i = 0; i < values.length; i++) {
-                segment.setAtIndex(PTypeIO.LE_LONG, i, values[i]);
+                segment.setAtIndex(VortexFormat.LE_LONG, i, values[i]);
             }
             data = new MaterializedLongArray(DType.I64, values.length, segment);
         } else {
             MemorySegment segment = ARENA.allocate(Math.max(4L, values.length * 4L), 4);
             for (int i = 0; i < values.length; i++) {
-                segment.setAtIndex(PTypeIO.LE_INT, i, (int) values[i]);
+                segment.setAtIndex(VortexFormat.LE_INT, i, (int) values[i]);
             }
             data = new MaterializedIntArray(DType.I32, values.length, segment);
         }
@@ -657,7 +657,7 @@ class ComputeFilteredAggregateTest {
     private static Array doubleArray(double[] values) {
         MemorySegment segment = ARENA.allocate(Math.max(8L, values.length * 8L), 8);
         for (int i = 0; i < values.length; i++) {
-            segment.setAtIndex(PTypeIO.LE_DOUBLE, i, values[i]);
+            segment.setAtIndex(VortexFormat.LE_DOUBLE, i, values[i]);
         }
         return new MaterializedDoubleArray(DType.F64, values.length, segment);
     }
@@ -665,7 +665,7 @@ class ComputeFilteredAggregateTest {
     private static Array float16Array(float[] values) {
         MemorySegment segment = ARENA.allocate(Math.max(2L, values.length * 2L), 2);
         for (int i = 0; i < values.length; i++) {
-            segment.setAtIndex(PTypeIO.LE_SHORT, i, Float.floatToFloat16(values[i]));
+            segment.setAtIndex(VortexFormat.LE_SHORT, i, Float.floatToFloat16(values[i]));
         }
         return new MaterializedFloat16Array(DType.F16, values.length, segment);
     }

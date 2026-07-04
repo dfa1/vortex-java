@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoALPRDMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -102,7 +102,7 @@ public final class AlpRdEncodingDecoder implements EncodingDecoder {
         long valCap = SegmentBroadcast.capacity(valSeg, 2);
         short[] leftValues = new short[(int) numPatches];
         for (int j = 0; j < numPatches; j++) {
-            leftValues[j] = valSeg.getAtIndex(PTypeIO.LE_SHORT, j % valCap);
+            leftValues[j] = valSeg.getAtIndex(VortexFormat.LE_SHORT, j % valCap);
         }
         return new Patches(idxData, leftValues, offset);
     }

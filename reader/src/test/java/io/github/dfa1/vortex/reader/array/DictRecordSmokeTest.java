@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.error.VortexException;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -186,7 +186,7 @@ class DictRecordSmokeTest {
                     // materialize
                     MemorySegment m = sut.materialize(arena);
                     for (int i = 0; i < 3; i++) {
-                        assertThat(m.getAtIndex(PTypeIO.LE_LONG, i)).as(label).isEqualTo(expected[i]);
+                        assertThat(m.getAtIndex(VortexFormat.LE_LONG, i)).as(label).isEqualTo(expected[i]);
                     }
                 }
             }
@@ -276,7 +276,7 @@ class DictRecordSmokeTest {
                     assertThat(sut.fold(0, Integer::sum)).as(label).isEqualTo(600);
                     MemorySegment m = sut.materialize(arena);
                     for (int i = 0; i < 3; i++) {
-                        assertThat(m.getAtIndex(PTypeIO.LE_INT, i)).as(label).isEqualTo(expected[i]);
+                        assertThat(m.getAtIndex(VortexFormat.LE_INT, i)).as(label).isEqualTo(expected[i]);
                     }
                 }
             }
@@ -364,7 +364,7 @@ class DictRecordSmokeTest {
                     assertThat(sut.fold(0.0, Double::sum)).as(label).isEqualTo(7.5);
                     MemorySegment m = sut.materialize(arena);
                     for (int i = 0; i < 3; i++) {
-                        assertThat(m.getAtIndex(PTypeIO.LE_DOUBLE, i)).as(label).isEqualTo(expected[i]);
+                        assertThat(m.getAtIndex(VortexFormat.LE_DOUBLE, i)).as(label).isEqualTo(expected[i]);
                     }
                 }
             }
@@ -435,7 +435,7 @@ class DictRecordSmokeTest {
                     assertThat(sut.fold(0.0, Double::sum)).as(label).isEqualTo(7.5);
                     MemorySegment m = sut.materialize(arena);
                     for (int i = 0; i < 3; i++) {
-                        assertThat(m.getAtIndex(PTypeIO.LE_FLOAT, i)).as(label).isEqualTo(expected[i]);
+                        assertThat(m.getAtIndex(VortexFormat.LE_FLOAT, i)).as(label).isEqualTo(expected[i]);
                     }
                 }
             }

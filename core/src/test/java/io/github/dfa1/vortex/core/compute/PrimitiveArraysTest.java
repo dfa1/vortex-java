@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.core.compute;
 
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
@@ -142,7 +142,7 @@ class PrimitiveArraysTest {
 
             // Then it is stored little-endian (lowest byte first)
             assertThat(seg.get(ValueLayout.JAVA_BYTE, 0)).isEqualTo((byte) 0x08);
-            assertThat(seg.getAtIndex(PTypeIO.LE_LONG, 0)).isEqualTo(0x0102_0304_0506_0708L);
+            assertThat(seg.getAtIndex(VortexFormat.LE_LONG, 0)).isEqualTo(0x0102_0304_0506_0708L);
         }
     }
 
@@ -164,9 +164,9 @@ class PrimitiveArraysTest {
     private static long readElement(MemorySegment seg, PType ptype, int i) {
         return switch (ptype) {
             case I8, U8 -> seg.get(ValueLayout.JAVA_BYTE, i);
-            case I16, U16 -> seg.getAtIndex(PTypeIO.LE_SHORT, i);
-            case I32, U32 -> seg.getAtIndex(PTypeIO.LE_INT, i);
-            case I64, U64 -> seg.getAtIndex(PTypeIO.LE_LONG, i);
+            case I16, U16 -> seg.getAtIndex(VortexFormat.LE_SHORT, i);
+            case I32, U32 -> seg.getAtIndex(VortexFormat.LE_INT, i);
+            case I64, U64 -> seg.getAtIndex(VortexFormat.LE_LONG, i);
             default -> throw new IllegalArgumentException("not an integer ptype: " + ptype);
         };
     }

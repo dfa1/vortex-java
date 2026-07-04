@@ -2,7 +2,7 @@ package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.error.VortexException;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -357,17 +357,17 @@ class LazyConstantArrayTest {
 
         private short[] readShort(Arena arena) {
             MemorySegment seg = new LazyConstantDecimalArray(dtype, 2, value, 2).materialize(arena);
-            return new short[]{seg.get(PTypeIO.LE_SHORT, 0), seg.get(PTypeIO.LE_SHORT, 2)};
+            return new short[]{seg.get(VortexFormat.LE_SHORT, 0), seg.get(VortexFormat.LE_SHORT, 2)};
         }
 
         private int[] readInt(Arena arena) {
             MemorySegment seg = new LazyConstantDecimalArray(dtype, 2, value, 4).materialize(arena);
-            return new int[]{seg.get(PTypeIO.LE_INT, 0), seg.get(PTypeIO.LE_INT, 4)};
+            return new int[]{seg.get(VortexFormat.LE_INT, 0), seg.get(VortexFormat.LE_INT, 4)};
         }
 
         private long[] readLong(Arena arena) {
             MemorySegment seg = new LazyConstantDecimalArray(dtype, 2, value, 8).materialize(arena);
-            return new long[]{seg.get(PTypeIO.LE_LONG, 0), seg.get(PTypeIO.LE_LONG, 8)};
+            return new long[]{seg.get(VortexFormat.LE_LONG, 0), seg.get(VortexFormat.LE_LONG, 8)};
         }
     }
 }

@@ -1,7 +1,7 @@
 package io.github.dfa1.vortex.reader.compute;
 
 import io.github.dfa1.vortex.core.error.VortexException;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.GenericArray;
@@ -67,7 +67,7 @@ class ValuesTest {
         // widening must pass the raw value through rather than assume a primitive ptype
         DType extension = new DType.Extension("test.ext", DType.I32, null, false);
         MemorySegment seg = ARENA.allocate(4, 4);
-        seg.setAtIndex(PTypeIO.LE_INT, 0, -7);
+        seg.setAtIndex(VortexFormat.LE_INT, 0, -7);
         Array column = new MaterializedIntArray(extension, 1, seg);
 
         // When the value is boxed
@@ -130,7 +130,7 @@ class ValuesTest {
     private static Array shortArray(DType dtype, short... values) {
         MemorySegment seg = ARENA.allocate(Math.max(2L, values.length * 2L), 2);
         for (int i = 0; i < values.length; i++) {
-            seg.setAtIndex(PTypeIO.LE_SHORT, i, values[i]);
+            seg.setAtIndex(VortexFormat.LE_SHORT, i, values[i]);
         }
         return new MaterializedShortArray(dtype, values.length, seg);
     }
@@ -138,7 +138,7 @@ class ValuesTest {
     private static Array intArray(DType dtype, int... values) {
         MemorySegment seg = ARENA.allocate(Math.max(4L, values.length * 4L), 4);
         for (int i = 0; i < values.length; i++) {
-            seg.setAtIndex(PTypeIO.LE_INT, i, values[i]);
+            seg.setAtIndex(VortexFormat.LE_INT, i, values[i]);
         }
         return new MaterializedIntArray(dtype, values.length, seg);
     }

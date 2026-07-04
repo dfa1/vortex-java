@@ -4,7 +4,7 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -49,7 +49,7 @@ public final class ZigZagEncodingEncoder implements EncodingEncoder {
                 MemorySegment s = ctx.arena().allocate((long) arr.length * 2, 2);
                 for (int i = 0; i < arr.length; i++) {
                     short v = arr[i];
-                    s.setAtIndex(PTypeIO.LE_SHORT, i, (short) ((v << 1) ^ (v >> 15)));
+                    s.setAtIndex(VortexFormat.LE_SHORT, i, (short) ((v << 1) ^ (v >> 15)));
                 }
                 yield s;
             }
@@ -58,7 +58,7 @@ public final class ZigZagEncodingEncoder implements EncodingEncoder {
                 MemorySegment s = ctx.arena().allocate((long) arr.length * 4, 4);
                 for (int i = 0; i < arr.length; i++) {
                     int v = arr[i];
-                    s.setAtIndex(PTypeIO.LE_INT, i, (v << 1) ^ (v >> 31));
+                    s.setAtIndex(VortexFormat.LE_INT, i, (v << 1) ^ (v >> 31));
                 }
                 yield s;
             }
@@ -67,7 +67,7 @@ public final class ZigZagEncodingEncoder implements EncodingEncoder {
                 MemorySegment s = ctx.arena().allocate((long) arr.length * 8, 8);
                 for (int i = 0; i < arr.length; i++) {
                     long v = arr[i];
-                    s.setAtIndex(PTypeIO.LE_LONG, i, (v << 1) ^ (v >> 63));
+                    s.setAtIndex(VortexFormat.LE_LONG, i, (v << 1) ^ (v >> 63));
                 }
                 yield s;
             }

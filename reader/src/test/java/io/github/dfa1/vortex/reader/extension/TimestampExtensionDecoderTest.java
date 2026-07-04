@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.reader.extension;
 
+
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.TimeUnit;
@@ -46,7 +47,7 @@ class TimestampExtensionDecoderTest {
         // Then — byte 0 = ms ordinal, bytes 1..3 = 0 (tz_len = 0)
         assertThat(dtype.storageDType()).isEqualTo(DType.I64);
         assertThat(dtype.metadata().get(java.lang.foreign.ValueLayout.JAVA_BYTE, 0)).isEqualTo((byte) TimeUnit.Milliseconds.ordinal());
-        assertThat(dtype.metadata().get(io.github.dfa1.vortex.core.io.PTypeIO.LE_SHORT, 1)).isEqualTo((short) 0);
+        assertThat(dtype.metadata().get(io.github.dfa1.vortex.core.io.VortexFormat.LE_SHORT, 1)).isEqualTo((short) 0);
     }
 
     @Test
@@ -55,7 +56,7 @@ class TimestampExtensionDecoderTest {
         DType.Extension dtype = sut.dtype(TimeUnit.Microseconds, ZoneId.of("Europe/Paris"), false);
 
         // Then — header tz_len matches the UTF-8 length; the actual bytes follow
-        int tzLen = Short.toUnsignedInt(dtype.metadata().get(io.github.dfa1.vortex.core.io.PTypeIO.LE_SHORT, 1));
+        int tzLen = Short.toUnsignedInt(dtype.metadata().get(io.github.dfa1.vortex.core.io.VortexFormat.LE_SHORT, 1));
         assertThat(tzLen).isEqualTo("Europe/Paris".getBytes().length);
         assertThat(sut.timezone(dtype)).contains(ZoneId.of("Europe/Paris"));
     }

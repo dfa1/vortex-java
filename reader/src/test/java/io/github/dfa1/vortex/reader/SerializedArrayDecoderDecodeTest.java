@@ -13,7 +13,7 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.util.List;
 
-import static io.github.dfa1.vortex.core.io.PTypeIO.LE_INT;
+import static io.github.dfa1.vortex.core.io.VortexFormat.LE_INT;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 

@@ -3,7 +3,7 @@ package io.github.dfa1.vortex.reader.array;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.error.VortexException;
-import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -76,8 +76,8 @@ class ArrayMaterializeTest {
 
             // Then values come back little-endian in order
             assertThat(result.byteSize()).isEqualTo(3 * 8L);
-            assertThat(result.getAtIndex(PTypeIO.LE_LONG, 0)).isEqualTo(10L);
-            assertThat(result.getAtIndex(PTypeIO.LE_LONG, 2)).isEqualTo(30L);
+            assertThat(result.getAtIndex(VortexFormat.LE_LONG, 0)).isEqualTo(10L);
+            assertThat(result.getAtIndex(VortexFormat.LE_LONG, 2)).isEqualTo(30L);
         }
 
         @Test
@@ -111,8 +111,8 @@ class ArrayMaterializeTest {
             MemorySegment result = sut.materialize(arena);
 
             // Then each element is decoded + ref
-            assertThat(result.getAtIndex(PTypeIO.LE_LONG, 0)).isEqualTo(101L);
-            assertThat(result.getAtIndex(PTypeIO.LE_LONG, 2)).isEqualTo(103L);
+            assertThat(result.getAtIndex(VortexFormat.LE_LONG, 0)).isEqualTo(101L);
+            assertThat(result.getAtIndex(VortexFormat.LE_LONG, 2)).isEqualTo(103L);
         }
 
         @Test
@@ -124,10 +124,10 @@ class ArrayMaterializeTest {
             MemorySegment result = sut.materialize(arena);
 
             // Then
-            assertThat(result.getAtIndex(PTypeIO.LE_LONG, 0)).isEqualTo(0L);
-            assertThat(result.getAtIndex(PTypeIO.LE_LONG, 1)).isEqualTo(-1L);
-            assertThat(result.getAtIndex(PTypeIO.LE_LONG, 2)).isEqualTo(1L);
-            assertThat(result.getAtIndex(PTypeIO.LE_LONG, 3)).isEqualTo(-2L);
+            assertThat(result.getAtIndex(VortexFormat.LE_LONG, 0)).isEqualTo(0L);
+            assertThat(result.getAtIndex(VortexFormat.LE_LONG, 1)).isEqualTo(-1L);
+            assertThat(result.getAtIndex(VortexFormat.LE_LONG, 2)).isEqualTo(1L);
+            assertThat(result.getAtIndex(VortexFormat.LE_LONG, 3)).isEqualTo(-2L);
         }
 
         @Test
@@ -139,8 +139,8 @@ class ArrayMaterializeTest {
             MemorySegment result = sut.materialize(arena);
 
             // Then
-            assertThat(result.getAtIndex(PTypeIO.LE_DOUBLE, 0)).isEqualTo(1.0);
-            assertThat(result.getAtIndex(PTypeIO.LE_DOUBLE, 2)).isEqualTo(3.0);
+            assertThat(result.getAtIndex(VortexFormat.LE_DOUBLE, 0)).isEqualTo(1.0);
+            assertThat(result.getAtIndex(VortexFormat.LE_DOUBLE, 2)).isEqualTo(3.0);
         }
     }
 
@@ -158,9 +158,9 @@ class ArrayMaterializeTest {
 
             // Then one contiguous segment spanning both chunks
             assertThat(result.byteSize()).isEqualTo(5 * 8L);
-            assertThat(result.getAtIndex(PTypeIO.LE_LONG, 0)).isEqualTo(0L);
-            assertThat(result.getAtIndex(PTypeIO.LE_LONG, 3)).isEqualTo(3L);
-            assertThat(result.getAtIndex(PTypeIO.LE_LONG, 4)).isEqualTo(4L);
+            assertThat(result.getAtIndex(VortexFormat.LE_LONG, 0)).isEqualTo(0L);
+            assertThat(result.getAtIndex(VortexFormat.LE_LONG, 3)).isEqualTo(3L);
+            assertThat(result.getAtIndex(VortexFormat.LE_LONG, 4)).isEqualTo(4L);
         }
 
         @Test
@@ -173,9 +173,9 @@ class ArrayMaterializeTest {
 
             // Then each row resolves to values[code]
             assertThat(result.byteSize()).isEqualTo(3 * 8L);
-            assertThat(result.getAtIndex(PTypeIO.LE_LONG, 0)).isEqualTo(10L);
-            assertThat(result.getAtIndex(PTypeIO.LE_LONG, 1)).isEqualTo(20L);
-            assertThat(result.getAtIndex(PTypeIO.LE_LONG, 2)).isEqualTo(10L);
+            assertThat(result.getAtIndex(VortexFormat.LE_LONG, 0)).isEqualTo(10L);
+            assertThat(result.getAtIndex(VortexFormat.LE_LONG, 1)).isEqualTo(20L);
+            assertThat(result.getAtIndex(VortexFormat.LE_LONG, 2)).isEqualTo(10L);
         }
     }
 
@@ -194,8 +194,8 @@ class ArrayMaterializeTest {
 
             // Then every row holds the same little-endian mantissa
             assertThat(result.byteSize()).isEqualTo(3 * 8L);
-            assertThat(result.getAtIndex(PTypeIO.LE_LONG, 0)).isEqualTo(12345L);
-            assertThat(result.getAtIndex(PTypeIO.LE_LONG, 2)).isEqualTo(12345L);
+            assertThat(result.getAtIndex(VortexFormat.LE_LONG, 0)).isEqualTo(12345L);
+            assertThat(result.getAtIndex(VortexFormat.LE_LONG, 2)).isEqualTo(12345L);
         }
     }
 
@@ -211,8 +211,8 @@ class ArrayMaterializeTest {
             MemorySegment result = sut.materialize(arena);
 
             // Then the inner data segment is returned (validity is not surfaced here)
-            assertThat(result.getAtIndex(PTypeIO.LE_LONG, 0)).isEqualTo(7L);
-            assertThat(result.getAtIndex(PTypeIO.LE_LONG, 2)).isEqualTo(9L);
+            assertThat(result.getAtIndex(VortexFormat.LE_LONG, 0)).isEqualTo(7L);
+            assertThat(result.getAtIndex(VortexFormat.LE_LONG, 2)).isEqualTo(9L);
         }
     }
 
@@ -331,8 +331,8 @@ class ArrayMaterializeTest {
 
             // Then the kept prefix is written as little-endian f32
             assertThat(result.byteSize()).isEqualTo(3 * 4L);
-            assertThat(result.getAtIndex(PTypeIO.LE_FLOAT, 0)).isEqualTo(1.5f);
-            assertThat(result.getAtIndex(PTypeIO.LE_FLOAT, 2)).isEqualTo(3.5f);
+            assertThat(result.getAtIndex(VortexFormat.LE_FLOAT, 0)).isEqualTo(1.5f);
+            assertThat(result.getAtIndex(VortexFormat.LE_FLOAT, 2)).isEqualTo(3.5f);
         }
 
         @Test
@@ -359,8 +359,8 @@ class ArrayMaterializeTest {
 
             // Then little-endian i16
             assertThat(result.byteSize()).isEqualTo(3 * 2L);
-            assertThat(result.getAtIndex(PTypeIO.LE_SHORT, 0)).isEqualTo((short) 100);
-            assertThat(result.getAtIndex(PTypeIO.LE_SHORT, 2)).isEqualTo((short) 300);
+            assertThat(result.getAtIndex(VortexFormat.LE_SHORT, 0)).isEqualTo((short) 100);
+            assertThat(result.getAtIndex(VortexFormat.LE_SHORT, 2)).isEqualTo((short) 300);
         }
 
         @Test
@@ -373,8 +373,8 @@ class ArrayMaterializeTest {
 
             // Then little-endian i32
             assertThat(result.byteSize()).isEqualTo(3 * 4L);
-            assertThat(result.getAtIndex(PTypeIO.LE_INT, 0)).isEqualTo(1);
-            assertThat(result.getAtIndex(PTypeIO.LE_INT, 2)).isEqualTo(3);
+            assertThat(result.getAtIndex(VortexFormat.LE_INT, 0)).isEqualTo(1);
+            assertThat(result.getAtIndex(VortexFormat.LE_INT, 2)).isEqualTo(3);
         }
 
         @Test
@@ -387,15 +387,15 @@ class ArrayMaterializeTest {
 
             // Then little-endian f64
             assertThat(result.byteSize()).isEqualTo(2 * 8L);
-            assertThat(result.getAtIndex(PTypeIO.LE_DOUBLE, 0)).isEqualTo(1.5);
-            assertThat(result.getAtIndex(PTypeIO.LE_DOUBLE, 1)).isEqualTo(2.5);
+            assertThat(result.getAtIndex(VortexFormat.LE_DOUBLE, 0)).isEqualTo(1.5);
+            assertThat(result.getAtIndex(VortexFormat.LE_DOUBLE, 1)).isEqualTo(2.5);
         }
     }
 
     private MemorySegment encodedLongs(long... vs) {
         MemorySegment seg = arena.allocate(vs.length * 8L, 8);
         for (int i = 0; i < vs.length; i++) {
-            seg.setAtIndex(PTypeIO.LE_LONG, i, vs[i]);
+            seg.setAtIndex(VortexFormat.LE_LONG, i, vs[i]);
         }
         return seg;
     }
