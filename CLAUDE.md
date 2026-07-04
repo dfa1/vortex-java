@@ -198,7 +198,11 @@ in the Rust source for the exact schema, then implement from spec.
 - **Layout decode is pluggable via `LayoutDecoder` + `LayoutRegistry`** (`reader.layout`) — the
   Rust reference registers layouts at runtime, so ours are open too. Builder-registered only
   (`LayoutRegistry.builder().registerDefaults().register(custom).build()`, pass to
-  `VortexReader.open(path, readRegistry, layoutRegistry)`) — **no service file**. Unknown layouts
+  `VortexReader.open(path, readRegistry, layoutRegistry)`) — **no service file**, by decision:
+  Rust registers layouts explicitly on the session (no auto-discovery exists there), and a
+  classpath jar must not silently change scan traversal — layout registration stays visible at
+  the open() call site. Encodings keep ServiceLoader because they are leaf codecs with a
+  plausible drop-in-jar ecosystem. Unknown layouts
   fail loudly (`VortexException`, Rust default; no allowUnknown for layouts). Scope: the SPI covers
   full-column subtree decode; zone-map pruning, filtered scans, and chunk planning recognize the
   built-in layouts only.
