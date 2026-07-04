@@ -39,7 +39,10 @@ class RleEncodingEncoderTest {
         for (int i = 0; i < children.length; i++) {
             children[i] = toArrayNode(enc.children()[i]);
         }
-        return new KnownArrayNode(enc.encodingId(), enc.metadata(), children, enc.bufferIndices());
+        if (!(enc.encodingId() instanceof EncodingId.WellKnown wellKnown)) {
+            throw new IllegalStateException("expected well-known encoding id: " + enc.encodingId());
+        }
+        return new KnownArrayNode(wellKnown, enc.metadata(), children, enc.bufferIndices());
     }
 
     @Nested

@@ -99,8 +99,11 @@ public final class FlatSegmentDecoder {
         }
 
         MemorySegment meta = fbs.metadataAsSegment();
-        return EncodingId.parse(rawEncodingId)
-                .<ArrayNode>map(known -> new KnownArrayNode(known, meta, children, bufferIndices))
-                .orElseGet(() -> new UnknownArrayNode(rawEncodingId, meta, children, bufferIndices));
+        return switch (EncodingId.parse(rawEncodingId)) {
+            case EncodingId.WellKnown wellKnown ->
+                    new KnownArrayNode(wellKnown, meta, children, bufferIndices);
+            case EncodingId.Custom custom ->
+                    new UnknownArrayNode(custom.id(), meta, children, bufferIndices);
+        };
     }
 }

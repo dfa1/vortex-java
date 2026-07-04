@@ -29,7 +29,7 @@ class VortexReaderTest {
 
     private static ReadRegistry buildUniversalStubRegistry() {
         var b = ReadRegistry.builder();
-        for (EncodingId encodingId : EncodingId.values()) {
+        for (EncodingId encodingId : EncodingId.WellKnown.values()) {
             b.register(new EncodingDecoder() {
                 @Override
                 public EncodingId encodingId() {
