@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-07-04
+
+Identity gets **types**: encoding ids, layout ids, and column names are now validated domain
+primitives (`EncodingId`, `LayoutId`, `ColumnName` — sealed `WellKnown`/`Custom` shapes with a
+total `parse`, strings only at the wire boundary), layout decode becomes **pluggable** through
+`LayoutDecoder`/`LayoutRegistry`, and the reader gains compatibility with current Rust writers'
+`vortex.zoned` zone-map id. Field names are strict on both sides of the file boundary — the
+writer refuses what the reference toolchain cannot survive (a NUL-named column SIGABRTs its
+Arrow FFI), the reader rejects duplicate/blank/control names loudly instead of corrupting
+silently. Plus the dictionary code-scan lane lands in both fused compute kernels (~20×/~22×,
+multi-leaf `AND` ~11×), and `Chunk` columns are one order-preserving typed map. Every wire-level
+claim measured against the Rust (JNI) oracle; behavior divergences documented in
+[docs/compatibility.md](docs/compatibility.md).
+
 ### Added
 
 - `Compute.filteredSum(filterColumn, predicate, aggColumn)` fuses a filter and a sum into a single scan — a row folds into the total only when the predicate selects it (a null filter row is excluded) and the aggregate value is non-null — with no intermediate selection bitmap. It matches a hand-written fused loop and is ~1.5× faster than the two-pass `filter` + `sum`. ([57d2225b](https://github.com/dfa1/vortex-java/commit/57d2225b))
