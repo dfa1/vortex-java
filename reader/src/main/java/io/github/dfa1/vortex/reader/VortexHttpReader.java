@@ -1,12 +1,11 @@
 package io.github.dfa1.vortex.reader;
 
-import io.github.dfa1.vortex.reader.layout.Layout;
-
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.io.IoBounds;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.fbs.FbsPostscript;
+import io.github.dfa1.vortex.reader.layout.Layout;
 
 import java.io.IOException;
 import java.lang.foreign.Arena;

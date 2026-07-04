@@ -1,7 +1,5 @@
 package io.github.dfa1.vortex.reader;
 
-import io.github.dfa1.vortex.reader.layout.Layout;
-
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.io.IoBounds;
 import io.github.dfa1.vortex.core.model.LayoutId;
@@ -18,6 +16,7 @@ import io.github.dfa1.vortex.core.fbs.FbsStruct_;
 import io.github.dfa1.vortex.core.fbs.FbsType;
 import io.github.dfa1.vortex.core.fbs.FbsUtf8;
 import io.github.dfa1.vortex.core.fbs.FbsVariant;
+import io.github.dfa1.vortex.reader.layout.Layout;
 
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
