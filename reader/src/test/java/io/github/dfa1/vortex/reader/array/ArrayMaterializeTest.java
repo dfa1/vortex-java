@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.io.PTypeIO;
 import org.junit.jupiter.api.Nested;
@@ -303,7 +304,7 @@ class ArrayMaterializeTest {
         @Test
         void unknownArrayThrows() {
             // Given an undecoded foreign encoding
-            UnknownArray sut = new UnknownArray("vortex.mystery", I64, 3, null,
+            UnknownArray sut = new UnknownArray(EncodingId.parse("vortex.mystery"), I64, 3, null,
                     new MemorySegment[0], new Array[0]);
 
             // When / Then

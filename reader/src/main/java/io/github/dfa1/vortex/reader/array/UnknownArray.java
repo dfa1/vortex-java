@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.error.VortexException;
 
 import java.lang.foreign.MemorySegment;
@@ -15,7 +16,7 @@ import java.lang.foreign.SegmentAllocator;
 /// Constructed by `Registry` when `allowUnknown()` is set and an encoding id is not
 /// in the registry. Data access beyond `buffer(i)` and `child(i)` is not supported.
 ///
-/// @param encodingId the unrecognized encoding id string
+/// @param encodingId the unrecognized encoding id — a [EncodingId.Custom], or a [EncodingId.WellKnown] with no registered decoder
 /// @param dtype      logical type of the array
 /// @param length     number of logical rows
 /// @param metadata   raw encoding metadata bytes, or `null`
@@ -23,7 +24,7 @@ import java.lang.foreign.SegmentAllocator;
 /// @param children   decoded child arrays (also wrapped as unknown)
 @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
 public record UnknownArray(
-        String encodingId,
+        EncodingId encodingId,
         DType dtype,
         long length,
         MemorySegment metadata,

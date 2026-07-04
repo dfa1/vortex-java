@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader.array;
 
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.error.VortexException;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -321,7 +322,7 @@ class ArrayLimitedTest {
         @Test
         void unknownArrayThrows() {
             // Given
-            UnknownArray sut = new UnknownArray("vortex.mystery", I64, 3, null,
+            UnknownArray sut = new UnknownArray(EncodingId.parse("vortex.mystery"), I64, 3, null,
                     new MemorySegment[0], new Array[0]);
 
             // When / Then

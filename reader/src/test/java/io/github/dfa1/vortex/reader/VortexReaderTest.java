@@ -40,7 +40,7 @@ class VortexReaderTest {
                 public Array decode(DecodeContext ctx) {
                     // Generic zero-length stand-in: scan chunk row count comes from the
                     // layout, so the leaf array's contents are irrelevant to this test.
-                    return new UnknownArray("stub", ctx.dtype(), 0, null,
+                    return new UnknownArray(EncodingId.parse("stub"), ctx.dtype(), 0, null,
                             new MemorySegment[0], new Array[0]);
                 }
             });
@@ -198,7 +198,7 @@ class VortexReaderTest {
                 for (Array column : chunk.columns().values()) {
                     assertThat(column).isInstanceOf(UnknownArray.class);
                     UnknownArray foreign = (UnknownArray) column;
-                    assertThat(foreign.encodingId()).describedAs(name).startsWith("vortex.");
+                    assertThat(foreign.encodingId().id()).describedAs(name).startsWith("vortex.");
                 }
             }
         }

@@ -99,7 +99,6 @@ public final class ReadRegistry {
     }
 
     private static UnknownArray decodeUnknown(DecodeContext ctx, ArrayNode node) {
-        String rawId = node.encodingId().id();
         MemorySegment[] bufs = new MemorySegment[node.bufferIndices().length];
         for (int i = 0; i < bufs.length; i++) {
             bufs[i] = ctx.buffer(i);
@@ -113,7 +112,7 @@ public final class ReadRegistry {
             children[i] = decodeUnknown(childCtx, childNode);
         }
         return new UnknownArray(
-                rawId, ctx.dtype(), ctx.rowCount(),
+                node.encodingId(), ctx.dtype(), ctx.rowCount(),
                 node.metadata(), bufs, children);
     }
 

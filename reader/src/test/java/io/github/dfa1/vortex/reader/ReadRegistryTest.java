@@ -64,7 +64,7 @@ class ReadRegistryTest {
 
         // Then
         assertThat(result).isInstanceOf(UnknownArray.class);
-        assertThat(((UnknownArray) result).encodingId()).isEqualTo("vortex.primitive");
+        assertThat(((UnknownArray) result).encodingId()).isEqualTo(EncodingId.VORTEX_PRIMITIVE);
     }
 
     @Test
@@ -85,7 +85,7 @@ class ReadRegistryTest {
         // Then
         assertThat(result).isInstanceOf(UnknownArray.class);
         UnknownArray unknown = (UnknownArray) result;
-        assertThat(unknown.encodingId()).isEqualTo("some.unknown");
+        assertThat(unknown.encodingId()).isEqualTo(new EncodingId.Custom("some.unknown"));
         assertThat(unknown.dtype()).isEqualTo(DTypes.I32);
         assertThat(unknown.length()).isEqualTo(5L);
         assertThat(unknown.metadata()).isEqualTo(metadata);
@@ -114,7 +114,7 @@ class ReadRegistryTest {
         UnknownArray unknown = (UnknownArray) result;
         assertThat(unknown.children()).hasSize(1);
         assertThat(unknown.children()[0]).isInstanceOf(UnknownArray.class);
-        assertThat(((UnknownArray) unknown.children()[0]).encodingId()).isEqualTo("vortex.primitive");
+        assertThat(((UnknownArray) unknown.children()[0]).encodingId()).isEqualTo(EncodingId.VORTEX_PRIMITIVE);
         assertThat(sut.isAllowUnknown()).isTrue();
     }
 
