@@ -100,8 +100,8 @@ The file is complete and readable as soon as `VortexWriter` is closed.
 ## 4. Read it back
 
 ```java
-import io.github.dfa1.vortex.io.VortexReader;
-import io.github.dfa1.vortex.scan.ScanOptions;
+import io.github.dfa1.vortex.reader.VortexReader;
+import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 

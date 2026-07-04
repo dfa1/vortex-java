@@ -67,19 +67,13 @@ Per-encoding gotchas:
 ## Build
 
 - [ ] use JPMS, watch out for "dfa1" in package name
-- [ ] **Docs need a compiler** — living prose (CLAUDE.md, `docs/*.md`) drifts from code with no
-  gate (2026-07-04 found: phantom `register(ExtensionDecoder)`, stale "not yet implemented" on
-  MASKED/PATCHED, dead service-file path, stale FQNs after package moves). Tiered plan:
-  1. Markdown link checker in CI (relative links; the `docs/adr` → `adr/` move rewrote ~40 by hand).
-  2. `DocsConsistencyTest` (integration module): extract backticked FQNs / `Class#member` refs /
-     `META-INF/services` paths from living docs, assert existence via reflection. Historical files
-     (`adr/`, released CHANGELOG sections) exempt by policy.
-  3. Golden-test or generate enumerable tables (encodings/extensions/layout ids in
+- [ ] **Docs compiler — remaining tiers** — `DocsConsistencyTest` (integration) now gates FQNs,
+  method claims, service-file paths, and relative links in the living docs (first run caught 11
+  fossils the same-day manual audit missed). Remaining:
+  1. Golden-test or generate enumerable tables (encodings/extensions/layout ids in
      `docs/reference.md`, `docs/compatibility.md`) from `EncodingId.WellKnown`/`LayoutId.WellKnown`/
      service manifests — a declared capability the code lacks is a bug, in both directions.
-  4. Compile ` ```java ` blocks from living docs (defer until 1–3 pay rent).
-  Plus: standing stale-docs dimension in the vortex-reviewer agent (grep living docs for
-  identifiers a diff renames/moves/deletes).
+  2. Compile ` ```java ` blocks from living docs (tutorial imports were stale for months).
 
 ## Tooling
 

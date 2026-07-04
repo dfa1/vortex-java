@@ -181,3 +181,16 @@ run-once part and leave the hot, specialized part alone, with a comment saying w
 
 The throughline: let the tools point at the data, then decide with the context they do not
 have.
+
+## Docs consistency gate
+
+`DocsConsistencyTest` (integration module, plain surefire) machine-checks the living docs
+(`CLAUDE.md`, `README.md`, `docs/*.md`) against the codebase: project FQNs must resolve,
+`META-INF/services` mentions must name real files, relative links must not dangle, and
+backticked `Class.method(...)` claims must name real methods (external receivers live on a
+conscious allowlist in the test). Historical records (`adr/`, released CHANGELOG sections)
+are exempt. Run it alone with:
+
+```bash
+./mvnw test -pl integration -am -Dtest=DocsConsistencyTest
+```

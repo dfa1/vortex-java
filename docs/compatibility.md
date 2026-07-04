@@ -32,7 +32,7 @@ resolves only the standalone decoders in `reader`; no encoder class is loaded.
 | Item | Introduced | Java status |
 |------|------------|-------------|
 | `DType::Union` (`fbs.DType.Type.Union = 12`) | Rust 0.71.0 | ❌ Decode throws `VortexException("unsupported DType typeType=12")`. No `DType.Union` variant in Java's sealed type. |
-| `vortex.onpair` experimental string encoding | Rust 0.74.0 | ❌ Not registered. Files using it fail to decode unless `Registry.allowUnknown()` is enabled. |
+| `vortex.onpair` experimental string encoding | Rust 0.74.0 | ❌ Not registered. Files using it fail to decode unless `ReadRegistry.builder().allowUnknown()` is enabled. |
 | `vortex.variant` arbitrary nested objects | Rust (`vortex.parquet.variant`) | ⚠️ Java encodes/decodes variant columns of **typed scalar** values (constant / chunked-of-constants core, optional shredded child); Java↔Rust round-trip verified. Arbitrary nested JSON objects and real path-based shredding need the `vortex.parquet.variant` physical encoding — deferred ([ADR 0014](../adr/0014-variant-encoding-strategy.md)). |
 | Arrow extension array import affecting Variant shape | Rust 0.74.0 (#8125) | Untested. Re-run integration fixtures against v0.74.0 once published. |
 | Duplicate struct field names | Rust writer rejects ("StructLayout must have unique field names"); Rust reader tolerates foreign files (first-match access) | ⚠️ Deliberate divergence on read: Java rejects such files with `VortexException("duplicate field name in file schema")` instead of tolerating them — the name-keyed `Chunk` API cannot represent both columns, and silent column loss is worse than a loud failure on a file the reference writer refuses to produce. Java's writer mirrors the Rust writer's rejection. |
@@ -87,7 +87,7 @@ decoder falls into one of three shapes:
 - **Lazy** — output is a `LazyXxxArray` / `ChunkedXxxArray` record that holds the encoded child
   plus the transform parameters. Per-row `getXxx(i)` applies the transform on demand. No
   output buffer is allocated unless a caller explicitly materializes via
-  `ArraySegments.of(arr, arena)`.
+  `Array.materialize(arena)`.
 - **Materialized** — output is a buffer allocated from `ctx.arena()` populated during `decode()`.
   Required for decompression-style encodings (Bitpacked, Pco, Zstd, etc.) where reading element
   `i` would require decoding a window.
@@ -156,21 +156,21 @@ metadata. The Rust catalog lives in
 [`vortex-array/src/extension/`](https://github.com/vortex-data/vortex/tree/develop/vortex-array/src/extension);
 each subdir below names a canonical extension id and its on-disk shape.
 
-Extensions live in `io.github.dfa1.vortex.extension`. Each spec extension is a
-singleton implementing the `Extension` interface, with typed encode/decode
-methods on the concrete impl. Resolve a column to its impl via
-`Registry.lookup(ExtensionId)`, or grab the singleton directly:
+Read-side extensions live in `io.github.dfa1.vortex.reader.extension` (write-side encoders
+implement `ExtensionEncoder` in the writer module). Each spec extension is a singleton
+implementing the `ExtensionDecoder` interface, with typed decode methods on the concrete
+impl — grab the singleton directly:
 
 ```java
 DType.Extension dtype = (DType.Extension) schema.field("birthdays");
-List<LocalDate> values = DateExtension.INSTANCE.decodeAll(chunk.column("birthdays"));
+List<LocalDate> values = DateExtensionDecoder.INSTANCE.decodeAll(chunk.column("birthdays"));
 ```
 
 End-to-end round-trip — write a `List<LocalDate>`, read it back:
 
 ```java
 var schema = DType.structBuilder()
-        .field("birthdays", DateExtension.INSTANCE.dtype(false))
+        .field("birthdays", DateExtensionDecoder.INSTANCE.dtype(false))
         .build();
 writer.writeChunk(c -> c.put("birthdays", dates));              // Collection auto-routed
 
@@ -182,9 +182,8 @@ try (var iter = reader.scan(ScanOptions.all());
 
 `Chunk.as(name, Class)` hides the per-extension decode dispatch for the four
 spec extensions (`LocalDate` ↔ `vortex.date`, `LocalTime` ↔ `vortex.time`,
-`Instant` ↔ `vortex.timestamp`, `UUID` ↔ `vortex.uuid`). Third-party
-extensions still go through `Registry.lookup(ExtensionId)` and the impl's own
-typed methods.
+`Instant` ↔ `vortex.timestamp`, `UUID` ↔ `vortex.uuid`); the dispatch is closed over the
+spec set. Third-party extensions call their own impl's typed methods directly.
 
 `ExtensionId` is the enum of known spec ids (`VORTEX_DATE`, `VORTEX_TIME`,
 `VORTEX_TIMESTAMP`, `VORTEX_UUID`). Unknown wire ids on `DType.Extension`

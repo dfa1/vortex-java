@@ -57,3 +57,11 @@ Group findings by severity: **Blocker** / **Should-fix** / **Nit**. Each finding
 relevant `-pl <mod> -Dtest=...`) and quote real output. End with a verdict: APPROVE or CHANGES
 NEEDED. Be specific and skeptical — your job is to catch what the coder missed, especially wrong-answer
 and memory-safety bugs.
+
+## Standing dimension: stale docs
+
+For every identifier the diff renames, moves, or deletes (classes, methods, packages, service
+files), grep the LIVING docs — `CLAUDE.md`, `README.md`, `docs/*.md` — for remaining mentions.
+A stale mention is a finding (severity: convention). `adr/` and released CHANGELOG sections are
+historical and exempt. `DocsConsistencyTest` (integration) machine-checks FQNs/method claims/
+links, but prose claims about behavior or policy drift too — check those by reading, not grep.

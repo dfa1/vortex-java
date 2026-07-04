@@ -68,9 +68,9 @@ Re-measured 2026-06-08 against commit `051a794`.
 
 Two Parquet variants are measured to isolate format cost from API overhead:
 
-- **batch**: `ColumnReader.nextBatch()` + loop over `getDoubles()`/`getInts()` arrays — apples-to-apples with Vortex's
+- **batch**: Hardwood's `ColumnReader.nextBatch()` + loop over `getDoubles()`/`getInts()` arrays — apples-to-apples with Vortex's
   batch fold
-- **row-by-row**: `RowReader.next()` + `getDouble("col")` per row — measures the full row-cursor overhead on top of
+- **row-by-row**: Hardwood's `RowReader.next()` + `getDouble("col")` per row — measures the full row-cursor overhead on top of
   format decode
 
 | Benchmark                                                                | ops/s        | vs Parquet batch         |
@@ -367,8 +367,8 @@ vortexReader.scan(opts) → ScanIterator
 ScanIterator.next() → Chunk (per row-group, AutoCloseable; owns its own Arena)
   └─ decodeLayout(layout, dtype, chunk.arena)
        ├─ Flat   → slice MemorySegment from mmap region
-       │           └─ Registry.decodeSegment(seg, …)
-       │                └─ Encoding.decode(DecodeContext)  →  Array (zero-copy)
+       │           └─ SerializedArrayDecoder.decode(seg, …)
+       │                └─ ReadRegistry → EncodingDecoder.decode(DecodeContext)  →  Array (zero-copy)
        ├─ Chunked → collect Flat children, decode each, concatenate buffers
        ├─ Zoned   → skip zone-map metadata, recurse into child layout
        └─ Dict    → decode values layout + codes layout separately, then expand
@@ -394,21 +394,21 @@ writer.writeChunk(c -> c.put(column, data[]).put(...))
   └─ record Layout node (encoding ID + rowCount + segment index)
 
 writer.close()
-  └─ write DType blob  (Protobuf)
+  └─ write DType blob  (FlatBuffer)
   └─ write Footer blob (FlatBuffer) → SegmentSpec[] + ArraySpec[]
   └─ write Layout blob (FlatBuffer) → Struct → Zoned(Stats) → Chunked → [Flat …]
   └─ write Postscript  (FlatBuffer) → blob offsets + lengths
   └─ write 8-byte trailer           → version · postscriptLen · magic (VTXF)
 ```
 
-### How `Registry` resolves encodings
+### How `ReadRegistry` resolves encodings
 
-`Registry.loadAll()` uses `ServiceLoader` to discover all `Encoding`
-implementations on the classpath. Each encoding declares its ID via `encodingId()`.
-At decode time the registry maps the ID string from the Layout node to the right
-`Encoding` instance and calls `decode(DecodeContext)`.
+`ReadRegistry.loadAll()` uses `ServiceLoader` to discover all `EncodingDecoder`
+implementations on the classpath. Each decoder declares its identity via `encodingId()`.
+At decode time the registry maps the typed id from the array node to the right
+`EncodingDecoder` instance and calls `decode(DecodeContext)`.
 
-Custom encodings can be added at build time: `Registry.builder().register(myEncoding).build()`.
+Custom decoders can be added at build time: `ReadRegistry.builder().registerServiceLoaded().register(myDecoder).build()`.
 Files with unrecognized IDs throw `VortexException` unless the builder enabled `allowUnknown()`.
 
 ## Testing strategy
