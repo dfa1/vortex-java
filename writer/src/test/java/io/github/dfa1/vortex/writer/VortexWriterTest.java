@@ -77,6 +77,26 @@ class VortexWriterTest {
         }
     }
 
+    @Test
+    void create_duplicateFieldNames_throwsIllegalArgumentException(@TempDir Path tmp) throws IOException {
+        // Given — a duplicate-name schema built via the DType.Struct record, which validates
+        // nothing (only StructBuilder rejects duplicates). The reference writer refuses such
+        // schemas ("StructLayout must have unique field names"), so ours must too — otherwise
+        // we emit files the canonical implementation would never produce.
+        var schema = new DType.Struct(
+                List.of("dup", "dup"),
+                List.of(new DType.Primitive(PType.I64, false), new DType.Primitive(PType.I64, false)),
+                false);
+        Path file = tmp.resolve("dup.vtx");
+
+        // When / Then
+        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
+            assertThatThrownBy(() -> VortexWriter.create(ch, schema, WriteOptions.defaults()))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("duplicate field name: dup");
+        }
+    }
+
     // ── writeChunk validation ─────────────────────────────────────────────────
 
     @Test

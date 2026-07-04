@@ -131,6 +131,16 @@ public final class VortexWriter implements Closeable {
     private VortexWriter(
             WritableByteChannel channel, DType.Struct schema, WriteOptions options, List<EncodingEncoder> encodings
     ) {
+        // Wire contract, enforced by the reference writer ("StructLayout must have unique field
+        // names"): duplicate-name schemas are constructible via the DType.Struct record (only
+        // StructBuilder validates), so guard here — colChunks below is name-keyed and would
+        // silently collapse the duplicates anyway.
+        var uniqueNames = new java.util.HashSet<String>();
+        for (String name : schema.fieldNames()) {
+            if (!uniqueNames.add(name)) {
+                throw new IllegalArgumentException("duplicate field name: " + name);
+            }
+        }
         this.channel = channel;
         this.schema = schema;
         this.options = options;

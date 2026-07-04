@@ -95,18 +95,23 @@ Per-encoding gotchas:
     - See [ADR-0008](adr/0008-domain-primitives-unsigned-integers.md) and https://dfa1.github.io/articles/rethink-domain-primitives-with-valhalla
     - Candidates: `PType` integer kinds, buffer offsets, row indices, byte lengths
     - Goal: type-safety at zero cost (value class = no heap alloc, no boxing)
-- [ ] **Column identity: duplicate/empty field names (BUG + ADR candidate)** — measured 2026-07-04:
-  `""` and duplicate field names round-trip through our writer/reader (the `DType.Struct` record
-  constructor validates nothing; only `StructBuilder` rejects duplicates, and the proto decode path
-  bypasses it — it can also desync `fieldNames`/`fieldTypes` sizes). The Rust reference *documents*
-  duplicates as legal with **first**-match name resolution (`vortex-array/src/dtype/struct_.rs`),
-  but our `Chunk`'s `Map<String, Array>` silently drops columns (two `dup` fields → one entry) and
-  resolves **last**-wins — a legal Rust file loses data in our reader. Also: duplicate-name write
-  produced two chunks from one `writeChunk` (unexplained, investigate).
-  Fix direction (ADR): `Chunk` columns become ordered (list/parallel arrays) with name lookup =
-  first match, mirroring Rust; `columns()` map API rethought. Revisit `ColumnName` as a domain
-  primitive here — note the honest limit: `""` is wire-legal, so the per-value invariant is thin;
-  the real invariants are structural (ordered fields, first-match resolution, names/types arity).
+- [ ] **Column identity: duplicate/empty field names — remaining reader-side work** — measured
+  against the JNI oracle 2026-07-04 (`ColumnNameEdgeCasesIntegrationTest` pins the facts):
+  - `""` is a legal column name: round-trips both directions, DONE (pinned by tests).
+  - Duplicate names: Rust's in-memory `StructFields` allows them (first-match access) but its
+    FILE writer rejects them ("StructLayout must have unique field names"). Our writer now
+    mirrors that guard, DONE. The Rust READER tolerates a foreign duplicate-name file
+    (schema reports both fields); ours silently collapses them in `Chunk`'s
+    `Map<String, Array>` — a crafted file loses a column with no error. Open: reject loudly at
+    the parse edge (cheap, diverges from Rust reader tolerance) vs ordered first-match `Chunk`
+    columns (Rust-aligned, reshapes the `columns()` API) — ADR when picked up.
+  - `DType.Struct` record constructor validates nothing (arity `fieldNames`/`fieldTypes` desync
+    possible; only `StructBuilder` checks) — consider canonical-constructor validation.
+  - Unexplained: a duplicate-name write produced two chunks from one `writeChunk` (pre-guard);
+    understand before it bites elsewhere.
+  - `ColumnName` domain primitive verdict: per-value invariant is thin (`""` is legal); the real
+    invariant is structural and lives on the struct/file layer, exactly as the reference's error
+    message says.
 
 ## Compute
 
