@@ -95,23 +95,6 @@ Per-encoding gotchas:
     - See [ADR-0008](adr/0008-domain-primitives-unsigned-integers.md) and https://dfa1.github.io/articles/rethink-domain-primitives-with-valhalla
     - Candidates: `PType` integer kinds, buffer offsets, row indices, byte lengths
     - Goal: type-safety at zero cost (value class = no heap alloc, no boxing)
-- [ ] **Column identity: duplicate/empty field names — remaining reader-side work** — measured
-  against the JNI oracle 2026-07-04 (`ColumnNameEdgeCasesIntegrationTest` pins the facts):
-  - `""` is a legal column name: round-trips both directions, DONE (pinned by tests).
-  - Duplicate names: Rust's in-memory `StructFields` allows them (first-match access) but its
-    FILE writer rejects them ("StructLayout must have unique field names"). Our writer now
-    mirrors that guard, DONE. The Rust READER tolerates a foreign duplicate-name file
-    (schema reports both fields); ours silently collapses them in `Chunk`'s
-    `Map<String, Array>` — a crafted file loses a column with no error. Open: reject loudly at
-    the parse edge (cheap, diverges from Rust reader tolerance) vs ordered first-match `Chunk`
-    columns (Rust-aligned, reshapes the `columns()` API) — ADR when picked up.
-  - `DType.Struct` record constructor validates nothing (arity `fieldNames`/`fieldTypes` desync
-    possible; only `StructBuilder` checks) — consider canonical-constructor validation.
-  - Unexplained: a duplicate-name write produced two chunks from one `writeChunk` (pre-guard);
-    understand before it bites elsewhere.
-  - `ColumnName` domain primitive verdict: per-value invariant is thin (`""` is legal); the real
-    invariant is structural and lives on the struct/file layer, exactly as the reference's error
-    message says.
 
 ## Compute
 

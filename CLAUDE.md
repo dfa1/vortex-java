@@ -115,7 +115,7 @@ git push && git push --tags          # GitHub Actions deploys the tag to Maven C
 
 8-byte trailer at EOF: `version(u16 LE) | postscriptLen(u16 LE) | magic(VTXF)`. The postscript
 (FlatBuffer, immediately before the trailer) points (offset+length) to the Footer (FlatBuffer),
-DType (Protobuf), and Layout (FlatBuffer) blobs elsewhere in the file.
+DType (FlatBuffer), and Layout (FlatBuffer) blobs elsewhere in the file.
 
 Layout tree: `Struct → Zoned(Stats) → Chunked → [Flat, Flat, ...]`
 - **Flat** single encoded segment · **Chunked** sequence of Flats · **Struct** one child/column

@@ -20,6 +20,7 @@ import io.github.dfa1.vortex.reader.layout.Layout;
 
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 
 final class PostscriptParser {
@@ -238,10 +239,22 @@ final class PostscriptParser {
             case FbsType.FbsBinary -> new DType.Binary(fbs.type(new FbsBinary()).nullable());
             case FbsType.FbsStruct_ -> {
                 var s = fbs.type(new FbsStruct_());
+                if (s.namesLength() != s.dtypesLength()) {
+                    throw new VortexException("struct names/dtypes length mismatch: "
+                            + s.namesLength() + " names, " + s.dtypesLength() + " dtypes");
+                }
                 var names = new ArrayList<String>(s.namesLength());
                 var types = new ArrayList<DType>(s.dtypesLength());
+                var seen = new HashSet<String>();
                 for (int i = 0; i < s.namesLength(); i++) {
-                    names.add(s.names(i));
+                    String name = s.names(i);
+                    if (!seen.add(name)) {
+                        // Wire contract, enforced by the reference writer ("StructLayout must
+                        // have unique field names"): a duplicate here is a crafted or corrupt
+                        // file, and the name-keyed Chunk API would silently drop a column.
+                        throw new VortexException("duplicate field name in file schema: " + name);
+                    }
+                    names.add(name);
                 }
                 for (int i = 0; i < s.dtypesLength(); i++) {
                     types.add(convertDType(s.dtypes(i), depth + 1));

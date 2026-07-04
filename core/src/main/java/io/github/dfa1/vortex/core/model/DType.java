@@ -245,6 +245,25 @@ public sealed interface DType
             java.util.List<DType> fieldTypes,
             boolean nullable
     ) implements DType {
+
+        /// Validates that names and types pair 1:1. Duplicate names are legal in memory,
+        /// mirroring the Rust reference's `StructFields`; uniqueness is a file-boundary
+        /// contract, enforced by the writer and the file parser.
+        ///
+        /// @param fieldNames ordered list of field names
+        /// @param fieldTypes ordered list of field types, parallel to `fieldNames`
+        /// @param nullable   whether null values are permitted
+        /// @throws NullPointerException     if `fieldNames` or `fieldTypes` is `null`
+        /// @throws IllegalArgumentException if the two lists differ in size
+        public Struct {
+            java.util.Objects.requireNonNull(fieldNames, "fieldNames");
+            java.util.Objects.requireNonNull(fieldTypes, "fieldTypes");
+            if (fieldNames.size() != fieldTypes.size()) {
+                throw new IllegalArgumentException("fieldNames/fieldTypes size mismatch: "
+                        + fieldNames.size() + " names, " + fieldTypes.size() + " types");
+            }
+        }
+
         /// Returns the type of the field with the given name.
         ///
         /// @param name the field name to look up
