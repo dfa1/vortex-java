@@ -3,7 +3,7 @@
 - **Status:** Proposed — gated on a concrete downstream interop need
 - **Date:** 2026-06-18
 - **Deciders:** project maintainer
-- **Related:** [TODO.md §Tooling](../../TODO.md),
+- **Related:** [TODO.md §Tooling](../TODO.md),
   [ADR 0010 — Lazy decode](0010-lazy-decode.md),
   [ADR 0012 — Zero-copy layout decoding](0012-zero-copy-layout-decoding.md)
 
@@ -182,7 +182,7 @@ replacement.
 
 ## References
 
-- [TODO.md §Tooling — vortex-arrow bridge](../../TODO.md)
+- [TODO.md §Tooling — vortex-arrow bridge](../TODO.md)
 - Arrow Java (`arrow-vector`) — https://arrow.apache.org/docs/java/
 - Arrow C-Data Interface — https://arrow.apache.org/docs/format/CDataInterface.html
 - CLAUDE.md §Code style — no `sun.misc.Unsafe` / internal JDK APIs

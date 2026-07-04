@@ -3,7 +3,7 @@
 - **Status:** Accepted — CI workflow deleted; `bench-publish` script pending
 - **Date:** 2026-06-13
 - **Deciders:** project maintainer
-- **Related:** [TODO.md §Performance](../../TODO.md),
+- **Related:** [TODO.md §Performance](../TODO.md),
   `.github/workflows/benchmark.yml`
 
 ## Context
@@ -156,5 +156,5 @@ longer updated.
   multi-source comparison
 - [benchmark-action/github-action-benchmark](https://github.com/benchmark-action/github-action-benchmark)
   — the tool being retired
-- [TODO.md §Publish benchmarks](../../TODO.md)
-- [TODO.md §Publish reproducible perf artifacts](../../TODO.md)
+- [TODO.md §Publish benchmarks](../TODO.md)
+- [TODO.md §Publish reproducible perf artifacts](../TODO.md)

@@ -51,7 +51,7 @@ A Materialized branch may be deleted when **all** of these hold:
    (`RustWritesJavaReadsIntegrationTest`,
    `RustJavaReaderComparisonIntegrationTest`).
 3. The encoding's `Decode shape` row in
-   [`docs/compatibility.md`](../compatibility.md) reads `Lazy / Lazy`.
+   [`docs/compatibility.md`](../docs/compatibility.md) reads `Lazy / Lazy`.
 4. At least one production-shaped workload has decoded the encoding via
    the Lazy path — the NYC Yellow Taxi fixture set is the canonical
    stand-in until a broader corpus exists.

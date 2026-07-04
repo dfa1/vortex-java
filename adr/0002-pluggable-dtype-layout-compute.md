@@ -3,7 +3,7 @@
 - **Status:** Deferred — awaiting a real downstream consumer use case
 - **Date:** 2026-06-11
 - **Deciders:** project maintainer
-- **Related:** [ADR 0001 — Split read and write runtimes](0001-split-read-and-write-runtimes.md), [TODO.md §Audit runtime pluggability vs Rust impl](../../TODO.md)
+- **Related:** [ADR 0001 — Split read and write runtimes](0001-split-read-and-write-runtimes.md), [TODO.md §Audit runtime pluggability vs Rust impl](../TODO.md)
 
 ## Context
 
@@ -197,10 +197,10 @@ Until those four boxes can be ticked, the deferral stands.
 
 ## References
 
-- [TODO.md §"Audit runtime pluggability vs Rust impl"](../../TODO.md)
+- [TODO.md §"Audit runtime pluggability vs Rust impl"](../TODO.md)
   (line ~215, dated 2026-06-04)
 - [ADR 0001 — Split read and write runtimes out of `core`](0001-split-read-and-write-runtimes.md)
-- [docs/compatibility.md — Known wire-format gaps](../compatibility.md)
+- [docs/compatibility.md — Known wire-format gaps](../docs/compatibility.md)
   (notes `DType::Union` as one new variant Java does not yet decode)
 - Rust upstream:
   [`VortexSession`](https://docs.rs/vortex/latest/vortex/session/struct.VortexSession.html)

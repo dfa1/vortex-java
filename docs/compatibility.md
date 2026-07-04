@@ -33,7 +33,7 @@ resolves only the standalone decoders in `reader`; no encoder class is loaded.
 |------|------------|-------------|
 | `DType::Union` (`fbs.DType.Type.Union = 12`) | Rust 0.71.0 | ❌ Decode throws `VortexException("unsupported DType typeType=12")`. No `DType.Union` variant in Java's sealed type. |
 | `vortex.onpair` experimental string encoding | Rust 0.74.0 | ❌ Not registered. Files using it fail to decode unless `Registry.allowUnknown()` is enabled. |
-| `vortex.variant` arbitrary nested objects | Rust (`vortex.parquet.variant`) | ⚠️ Java encodes/decodes variant columns of **typed scalar** values (constant / chunked-of-constants core, optional shredded child); Java↔Rust round-trip verified. Arbitrary nested JSON objects and real path-based shredding need the `vortex.parquet.variant` physical encoding — deferred ([ADR 0014](adr/0014-variant-encoding-strategy.md)). |
+| `vortex.variant` arbitrary nested objects | Rust (`vortex.parquet.variant`) | ⚠️ Java encodes/decodes variant columns of **typed scalar** values (constant / chunked-of-constants core, optional shredded child); Java↔Rust round-trip verified. Arbitrary nested JSON objects and real path-based shredding need the `vortex.parquet.variant` physical encoding — deferred ([ADR 0014](../adr/0014-variant-encoding-strategy.md)). |
 | Arrow extension array import affecting Variant shape | Rust 0.74.0 (#8125) | Untested. Re-run integration fixtures against v0.74.0 once published. |
 
 ## Encodings
@@ -77,7 +77,7 @@ resolves only the standalone decoders in `reader`; no encoder class is loaded.
 
 ### Decode shape
 
-Per [ADR 0010](adr/0010-lazy-decode.md) and [ADR 0012](adr/0012-zero-copy-layout-decoding.md), each
+Per [ADR 0010](../adr/0010-lazy-decode.md) and [ADR 0012](../adr/0012-zero-copy-layout-decoding.md), each
 decoder falls into one of three shapes:
 
 - **Zero-copy** — output is a view over the memory-mapped file (or a wrapper over child arrays).

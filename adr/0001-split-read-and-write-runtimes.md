@@ -353,6 +353,6 @@ of CI / integration-test fallout, plus reviewer time. Not a weekend.
 
 - [PR #27 — `sec(parser): BoundedSegment + audit trail for untrusted asSlice`](https://github.com/dfa1/vortex-java/pull/27)
 - [Phase 1–4 commits — BoundedSegment introduction and migration](https://github.com/dfa1/vortex-java/pull/27/commits)
-- [SECURITY.md — the contract this work hardens](../../SECURITY.md)
-- [CLAUDE.md — current "three touch-points" rule for adding an encoding](../../CLAUDE.md)
-- [TODO.md — parser hardening backlog](../../TODO.md)
+- [SECURITY.md — the contract this work hardens](../SECURITY.md)
+- [CLAUDE.md — current "three touch-points" rule for adding an encoding](../CLAUDE.md)
+- [TODO.md — parser hardening backlog](../TODO.md)

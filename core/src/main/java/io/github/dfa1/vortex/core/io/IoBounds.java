@@ -18,7 +18,7 @@ import java.lang.foreign.MemorySegment;
 /// misuse and should throw [IndexOutOfBoundsException] via
 /// [java.util.Objects#checkIndex(long, long)], not a `VortexException`.
 ///
-/// See ADR 0003 (`docs/adr/0003-vortex-exception-sanitization.md`).
+/// See ADR 0003 (`adr/0003-vortex-exception-sanitization.md`).
 public final class IoBounds {
 
     private IoBounds() {

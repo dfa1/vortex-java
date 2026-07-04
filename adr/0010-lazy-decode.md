@@ -8,7 +8,7 @@
 - **Superseded by:** —
 - **Related:** [ADR 0005 — Vector API adoption](0005-vector-api-adoption.md),
   [ADR 0012 — Zero-copy layout decoding: lazy Chunked / Dict](0012-zero-copy-layout-decoding.md),
-  [CLAUDE.md §Memory model](../../CLAUDE.md)
+  [CLAUDE.md §Memory model](../CLAUDE.md)
 
 ## Context
 
@@ -651,7 +651,7 @@ across the lazy storage types from ADRs 0010 and 0012.
 - [ADR 0005](0005-vector-api-adoption.md) — Vector API is an
   optimization on top of an eager loop; lazy makes most of those loops
   conditional, changing what is even worth vectorizing.
-- [CLAUDE.md §Memory model — Encoding output allocation rule](../../CLAUDE.md)
+- [CLAUDE.md §Memory model — Encoding output allocation rule](../CLAUDE.md)
   — current rule mandates arena allocation for decode output. Phase 1
   changes this rule: lazy arrays do not allocate decode output, they
   hold the input.

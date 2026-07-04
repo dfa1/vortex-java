@@ -8,10 +8,10 @@
 
 ## Performance
 
-- [ ] **Benchmark publishing** — drop CI workflow, add `bench-publish` script; see [ADR-0006](docs/adr/0006-benchmark-publishing.md).
+- [ ] **Benchmark publishing** — drop CI workflow, add `bench-publish` script; see [ADR-0006](adr/0006-benchmark-publishing.md).
 - [ ] Performance tests must be peer-reviewed
 - [ ] Run performance tests on other machines (I have access only to Apple M5)
-- [ ] **Vector API adoption** — deferred; see [ADR-0005](docs/adr/0005-vector-api-adoption.md) for adoption criteria and candidate loops.
+- [ ] **Vector API adoption** — deferred; see [ADR-0005](adr/0005-vector-api-adoption.md) for adoption criteria and candidate loops.
 
 ## Security
 
@@ -44,7 +44,7 @@ Per-encoding gotchas:
 
 ### Resource caps
 
-- [ ] **Implement `ResourceLimits` + `ReadOptions`** — see [ADR-0004](docs/adr/0004-resource-caps-read-options.md) for design, defaults, and enforcement points. Also covers Pco page/bin caps.
+- [ ] **Implement `ResourceLimits` + `ReadOptions`** — see [ADR-0004](adr/0004-resource-caps-read-options.md) for design, defaults, and enforcement points. Also covers Pco page/bin caps.
 
 ### Fuzz infrastructure
 
@@ -70,23 +70,23 @@ Per-encoding gotchas:
 
 ## Tooling
 
-- [ ] Optional `vortex-arrow` bridge module for Arrow ecosystem interop — see [ADR-0016](docs/adr/0016-vortex-arrow-bridge.md)
+- [ ] Optional `vortex-arrow` bridge module for Arrow ecosystem interop — see [ADR-0016](adr/0016-vortex-arrow-bridge.md)
 
 ## API
 
 - [ ] **Error messages — structural sanitization of `VortexException`** —
   Phase E (bounds typing via `IoBounds`) shipped; remaining is Phases A–D (the `Sanitize`
-  helper + `VortexError` catalog). See [ADR-0003](docs/adr/0003-vortex-exception-sanitization.md)
+  helper + `VortexError` catalog). See [ADR-0003](adr/0003-vortex-exception-sanitization.md)
   for design and phasing.
 - [ ] Use domain primitives (`UInt32`, `UInt64`, etc.) as value classes via Project Valhalla instead of raw `long`/`int`
-    - See [ADR-0008](docs/adr/0008-domain-primitives-unsigned-integers.md) and https://dfa1.github.io/articles/rethink-domain-primitives-with-valhalla
+    - See [ADR-0008](adr/0008-domain-primitives-unsigned-integers.md) and https://dfa1.github.io/articles/rethink-domain-primitives-with-valhalla
     - Candidates: `PType` integer kinds, buffer offsets, row indices, byte lengths
     - Goal: type-safety at zero cost (value class = no heap alloc, no boxing)
 
 ## Compute
 
 - [ ] **Compute primitives — encoded-domain specialization & façade** — the remaining ADR-0013
-  follow-ups now the fused kernels have shipped. See [ADR-0013](docs/adr/0013-compute-primitives.md).
+  follow-ups now the fused kernels have shipped. See [ADR-0013](adr/0013-compute-primitives.md).
   Done: §4 `Predicate`; §5 `RowFilter` unified over `Predicate`; §6 zone-map aggregate push-down in
   both tiers — the whole-zone `ZoneReducer` fold wired into `VortexAggregatePushDownRule` (rewrites a
   whole-table `MIN`/`MAX`/`COUNT`/`SUM`/`AVG` to a single-row `Values`, auto-registered over a bare
@@ -100,7 +100,7 @@ Per-encoding gotchas:
   residual leaves tested per match). Multi-fork numbers: `fusedFilteredSumDict` 762 → 38 ms/op
   ≈ 20×; `fusedFilteredAggregateDict` 983 → 46 ms/op ≈ 22×; `fusedFilteredAggregateMulti`
   (2-leaf `AND` × 2 aggregates) 2269 → 201 ms/op ≈ 11×.
-  Next: the columnar transducer façade — [ADR-0019](docs/adr/0019-columnar-transducer-facade.md)
+  Next: the columnar transducer façade — [ADR-0019](adr/0019-columnar-transducer-facade.md)
   drafted (Proposed): declarative column-bound stages compiled to one fused pass; the remaining
   measured lever is the multi-aggregate single scan (≈ 2×) plus composition ergonomics for the
   Calcite boundary tier; review, then implement.

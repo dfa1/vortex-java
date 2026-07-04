@@ -369,7 +369,7 @@ What was **not** shipped (intentional):
 
 - [ADR 0010 — Lazy decode for 1:1 transform encodings](0010-lazy-decode.md)
 - [ADR 0001 — Split read and write runtimes out of core](0001-split-read-and-write-runtimes.md)
-- [CLAUDE.md §Memory model](../../CLAUDE.md) — hot-loop rule, encoding output allocation rule
+- [CLAUDE.md §Memory model](../CLAUDE.md) — hot-loop rule, encoding output allocation rule
 - Rust reference:
   - `vortex-array/src/arrays/chunked/array.rs` — ChunkedArray storage and `find_chunk_idx`
   - `vortex-array/src/arrays/dict/array.rs` — DictArray storage

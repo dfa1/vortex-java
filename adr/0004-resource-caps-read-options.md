@@ -3,7 +3,7 @@
 - **Status:** Accepted — implementation pending
 - **Date:** 2026-06-13
 - **Deciders:** project maintainer
-- **Related:** [SECURITY.md](../../SECURITY.md), [TODO.md §Resource caps](../../TODO.md)
+- **Related:** [SECURITY.md](../SECURITY.md), [TODO.md §Resource caps](../TODO.md)
 
 ## Context
 
@@ -167,6 +167,6 @@ a user-facing query limit, not a security cap.
 
 ## References
 
-- [SECURITY.md — zip-bomb and depth-bomb mitigations](../../SECURITY.md)
-- [TODO.md §Resource caps](../../TODO.md)
+- [SECURITY.md — zip-bomb and depth-bomb mitigations](../SECURITY.md)
+- [TODO.md §Resource caps](../TODO.md)
 - [ADR 0003 — VortexException sanitization](0003-vortex-exception-sanitization.md)
