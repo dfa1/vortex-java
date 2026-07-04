@@ -26,6 +26,21 @@ import java.util.Objects;
 /// frames let a slice scan decompress only the frames overlapping its row range.
 public final class ZstdEncodingEncoder implements EncodingEncoder {
 
+    // The io.github.dfa1.zstd binding is an OPTIONAL dependency: probe once so a writer
+    // touching vortex.zstd without it gets an actionable message instead of a raw
+    // NoClassDefFoundError surfacing from the first binding call.
+    private static final boolean ZSTD_BINDING_PRESENT = zstdBindingPresent();
+
+    private static boolean zstdBindingPresent() {
+        try {
+            Class.forName("io.github.dfa1.zstd.ZstdCompressContext", false,
+                    ZstdEncodingEncoder.class.getClassLoader());
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
+    }
+
     /// Values per zstd frame; `0` (or any non-positive value) means a single frame for the whole array.
     private final long valuesPerFrame;
 
@@ -62,6 +77,11 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
 
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
+        if (!ZSTD_BINDING_PRESENT) {
+            throw new VortexException(EncodingId.VORTEX_ZSTD, "vortex.zstd encoding requires the "
+                    + "optional zstd binding — add io.github.dfa1.zstd:zstd and "
+                    + "io.github.dfa1.zstd:zstd-platform (versions pinned by the vortex BOM)");
+        }
         if (data instanceof NullableData nd) {
             if (dtype instanceof DType.Primitive dt) {
                 return encodeNullablePrimitive(dt, nd, ctx);

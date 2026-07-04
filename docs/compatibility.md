@@ -23,6 +23,11 @@ A consumer that only needs to read Vortex files can depend on a strict subset:
 </dependency>
 ```
 
+The zstd binding is optional on both sides: files using `vortex.zstd` need
+`io.github.dfa1.zstd:zstd` plus `io.github.dfa1.zstd:zstd-platform` on the classpath (versions
+pinned by the vortex BOM); without them, touching a `vortex.zstd` segment fails with a
+`VortexException` that names the two artifacts. All other encodings are pure Java.
+
 `./mvnw -pl core,reader,inspector verify` builds the read-only artifact set
 without the writer module on the classpath. `ServiceLoader<EncodingDecoder>`
 resolves only the standalone decoders in `reader`; no encoder class is loaded.

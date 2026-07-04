@@ -29,6 +29,21 @@ import java.lang.foreign.MemorySegment;
 /// Read-only decoder for `vortex.zstd`.
 public final class ZstdEncodingDecoder implements EncodingDecoder {
 
+    // The io.github.dfa1.zstd binding is an OPTIONAL dependency: probe once so a reader
+    // touching vortex.zstd without it gets an actionable message instead of a raw
+    // NoClassDefFoundError surfacing from the first binding call.
+    private static final boolean ZSTD_BINDING_PRESENT = zstdBindingPresent();
+
+    private static boolean zstdBindingPresent() {
+        try {
+            Class.forName("io.github.dfa1.zstd.ZstdDecompressContext", false,
+                    ZstdEncodingDecoder.class.getClassLoader());
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
+    }
+
     /// Public no-arg constructor required by [java.util.ServiceLoader].
     public ZstdEncodingDecoder() {
     }
@@ -40,6 +55,11 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
 
     @Override
     public Array decode(DecodeContext ctx) {
+        if (!ZSTD_BINDING_PRESENT) {
+            throw new VortexException(EncodingId.VORTEX_ZSTD, "this file uses vortex.zstd, but the "
+                    + "optional zstd binding is not on the classpath — add io.github.dfa1.zstd:zstd "
+                    + "and io.github.dfa1.zstd:zstd-platform (versions pinned by the vortex BOM)");
+        }
         MemorySegment rawMeta = ctx.metadata();
         if (rawMeta == null) {
             throw new VortexException(EncodingId.VORTEX_ZSTD, "missing metadata");
