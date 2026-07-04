@@ -48,8 +48,8 @@ public interface VortexHandle extends Closeable {
     /// Returns the [ReadRegistry] this handle was opened with.
     ///
     /// **Internal escape hatch.** Exposed for tooling
-    /// (e.g. the inspector's dictionary preview) that needs to decode an
-    /// internal subtree node directly via [io.github.dfa1.vortex.reader.FlatSegmentDecoder].
+    /// (e.g. the inspector's dictionary preview) that needs to resolve encoding
+    /// decoders for an internal subtree node.
     /// Not part of the supported stability contract; signatures may change
     /// without deprecation.
     ///

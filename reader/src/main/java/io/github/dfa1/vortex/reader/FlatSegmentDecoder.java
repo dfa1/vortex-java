@@ -23,7 +23,7 @@ import java.util.List;
 ///
 /// [ReadRegistry] is pure dispatch; this class owns all file-format knowledge:
 /// FlatBuffer parsing, buffer-offset arithmetic, and encoding-spec lookup.
-public final class FlatSegmentDecoder {
+final class FlatSegmentDecoder {
 
     /// Hard cap on array-node recursion depth. The encoded array tree nests through child nodes
     /// (validity, patches, run-ends, dictionary codes/values, …); a crafted or self-referential
