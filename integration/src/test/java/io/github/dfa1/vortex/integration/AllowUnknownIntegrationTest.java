@@ -5,7 +5,7 @@ import dev.vortex.api.VortexWriter;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
 import io.github.dfa1.vortex.core.error.VortexException;
-import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.array.UnknownArray;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -87,8 +87,8 @@ class AllowUnknownIntegrationTest {
             iter.forEachRemaining(c -> {
                 totalRows.addAndGet(c.rowCount());
                 chunkCount.incrementAndGet();
-                for (Array col : c.columns().values()) {
-                    if (!(col instanceof UnknownArray)) {
+                for (Chunk.Column col : c.columns().values()) {
+                    if (!(col.array() instanceof UnknownArray)) {
                         allUnknown.set(false);
                     }
                 }
@@ -130,8 +130,8 @@ class AllowUnknownIntegrationTest {
              var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.all())) {
             iter.forEachRemaining(c -> {
                 chunkCount.incrementAndGet();
-                for (Array col : c.columns().values()) {
-                    if (col instanceof UnknownArray) {
+                for (Chunk.Column col : c.columns().values()) {
+                    if (col.array() instanceof UnknownArray) {
                         anyUnknown.set(true);
                     }
                 }

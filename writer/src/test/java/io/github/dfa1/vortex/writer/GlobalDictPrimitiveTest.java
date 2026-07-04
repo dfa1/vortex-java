@@ -188,7 +188,7 @@ class GlobalDictPrimitiveTest {
              var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("v"))) {
             var out = new java.util.ArrayList<Short>();
             iter.forEachRemaining(c -> {
-                var arr = (io.github.dfa1.vortex.reader.array.ShortArray) c.columns().get("v");
+                io.github.dfa1.vortex.reader.array.ShortArray arr = c.column("v");
                 for (long i = 0; i < arr.length(); i++) {
                     out.add(arr.getShort(i));
                 }

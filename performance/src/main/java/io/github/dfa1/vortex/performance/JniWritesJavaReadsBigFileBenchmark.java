@@ -179,7 +179,7 @@ public class JniWritesJavaReadsBigFileBenchmark {
              var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns("c0"))) {
             while (iter.hasNext()) {
                 try (Chunk c = iter.next()) {
-                    Array arr = c.columns().get("c0");
+                    Array arr = c.column("c0");
                     MemorySegment buf = arr.materialize(Arena.ofAuto());
                     long count = buf.byteSize() / Long.BYTES;
                     for (long i = 0; i < count; i++) {

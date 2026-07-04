@@ -195,9 +195,9 @@ class VortexReaderTest {
             try (Chunk chunk = iter.next()) {
                 assertThat(chunk.rowCount()).isGreaterThan(0);
                 assertThat(chunk.columns()).isNotEmpty();
-                for (Array column : chunk.columns().values()) {
-                    assertThat(column).isInstanceOf(UnknownArray.class);
-                    UnknownArray foreign = (UnknownArray) column;
+                for (Chunk.Column column : chunk.columns().values()) {
+                    assertThat(column.array()).isInstanceOf(UnknownArray.class);
+                    UnknownArray foreign = (UnknownArray) column.array();
                     assertThat(foreign.encodingId().id()).describedAs(name).startsWith("vortex.");
                 }
             }
@@ -265,8 +265,8 @@ class VortexReaderTest {
             while (iter.hasNext()) {
                 try (Chunk chunk = iter.next()) {
                     totalRows += chunk.rowCount();
-                    for (Array col : chunk.columns().values()) {
-                        assertThat(col.length()).isLessThanOrEqualTo(limit);
+                    for (Chunk.Column col : chunk.columns().values()) {
+                        assertThat(col.array().length()).isLessThanOrEqualTo(limit);
                     }
                 }
             }

@@ -125,7 +125,7 @@ class RustWritesJavaReadsIntegrationTest {
             iter.forEachRemaining(c -> {
                 var mat = new LinkedHashMap<String, Object>(c.columns().size());
                 for (var e : c.columns().entrySet()) {
-                    mat.put(e.getKey(), snapshotArray(e.getValue()));
+                    mat.put(e.getKey().value(), snapshotArray(e.getValue().array()));
                 }
                 results.add(new JavaChunk(c.rowCount(), mat));
             });
@@ -212,7 +212,7 @@ class RustWritesJavaReadsIntegrationTest {
              var iter = vf.scan(io.github.dfa1.vortex.reader.ScanOptions.columns(column))) {
             var longs = new ArrayList<Long>();
             iter.forEachRemaining(c -> {
-                LongArray arr = (LongArray) c.columns().get(column);
+                LongArray arr = c.column(column);
                 for (long i = 0; i < arr.length(); i++) {
                     longs.add(arr.getLong(i));
                 }

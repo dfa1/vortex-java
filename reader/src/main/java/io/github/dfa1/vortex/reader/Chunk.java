@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.reader;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -14,8 +15,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
+import java.util.SequencedMap;
 import java.util.UUID;
 import java.util.function.Consumer;
 
@@ -25,6 +26,11 @@ import java.util.function.Consumer;
 /// [Array] views returned by [#column(String)] and [#columns()] are zero-copy
 /// references into that arena (or into the underlying mmap region), valid only
 /// while this `Chunk` is open.
+///
+/// Columns are keyed by [ColumnName] — the validated name domain the file parser
+/// certifies at the read boundary, so every key here is policy-valid and unique.
+/// [#column(String)] keeps a string-sugar overload for callers that hold a raw
+/// name; it wraps the string in a [ColumnName] before looking it up.
 ///
 /// **Lifecycle.** `Chunk` is [AutoCloseable]. Always wrap consumption in
 /// try-with-resources:
@@ -43,19 +49,35 @@ import java.util.function.Consumer;
 public final class Chunk implements AutoCloseable {
 
     private final long rowCount;
-    private final Map<String, Array> columns;
-    private final Map<String, DType> columnDtypes;
+    private final SequencedMap<ColumnName, Column> columns;
     private final Arena arena;
     private final Consumer<Chunk> onClose;
     private boolean closed;
 
-    Chunk(long rowCount, Map<String, Array> columns, Map<String, DType> columnDtypes,
+    Chunk(long rowCount, SequencedMap<ColumnName, Column> columns,
             Arena arena, Consumer<Chunk> onClose) {
         this.rowCount = rowCount;
         this.columns = Objects.requireNonNull(columns);
-        this.columnDtypes = Objects.requireNonNull(columnDtypes);
         this.arena = Objects.requireNonNull(arena);
         this.onClose = Objects.requireNonNull(onClose);
+    }
+
+    /// One decoded column: its zero-copy [Array] view and the [DType] it was declared with in the
+    /// file's schema. The dtype travels with the array so extension decoding (see [#as(String, Class)])
+    /// and dtype-aware tooling need no second lookup.
+    ///
+    /// @param array the decoded column values, valid only while the owning [Chunk] is open
+    /// @param dtype the column's declared type from the file schema
+    public record Column(Array array, DType dtype) {
+
+        /// Binds a decoded array to its declared type.
+        ///
+        /// @param array the decoded column values
+        /// @param dtype the column's declared type
+        public Column {
+            Objects.requireNonNull(array, "array");
+            Objects.requireNonNull(dtype, "dtype");
+        }
     }
 
     /// Number of logical rows in this chunk (after any limit truncation).
@@ -65,28 +87,42 @@ public final class Chunk implements AutoCloseable {
         return rowCount;
     }
 
-    /// Returns the decoded columns by name. The map is unmodifiable; values are
-    /// valid only while this `Chunk` is open.
+    /// Returns the decoded columns in schema (projection) order. The map is unmodifiable and
+    /// preserves encounter order; each [Column] value is valid only while this `Chunk` is open.
     ///
-    /// @return projected columns keyed by name
-    public Map<String, Array> columns() {
+    /// @return projected columns keyed by [ColumnName], in schema order
+    public SequencedMap<ColumnName, Column> columns() {
         return columns;
     }
 
-    /// Looks up a column by name with a checked cast to the caller's expected
-    /// [Array] subtype.
+    /// Looks up a column by its raw string name with a checked cast to the caller's expected
+    /// [Array] subtype. The name is validated through [ColumnName#of(String)] first, so a
+    /// policy-invalid query name fails fast with the policy's [IllegalArgumentException] — it
+    /// could never match a certified column anyway.
     ///
     /// @param name column name as declared in the file's [io.github.dfa1.vortex.core.model.DType] schema
     /// @param <T>  expected concrete [Array] subtype
     /// @return the column array
+    /// @throws IllegalArgumentException if `name` violates the column-name policy
+    /// @throws VortexException          if no column with the given name is present in this chunk
+    public <T extends Array> T column(String name) {
+        return column(ColumnName.of(name));
+    }
+
+    /// Looks up a column by its validated [ColumnName] with a checked cast to the caller's
+    /// expected [Array] subtype.
+    ///
+    /// @param name validated column name as declared in the file's schema
+    /// @param <T>  expected concrete [Array] subtype
+    /// @return the column array
     /// @throws VortexException if no column with the given name is present in this chunk
     @SuppressWarnings("unchecked")
-    public <T extends Array> T column(String name) {
-        Array arr = columns.get(name);
-        if (arr == null) {
+    public <T extends Array> T column(ColumnName name) {
+        Column col = columns.get(name);
+        if (col == null) {
             throw new VortexException("unknown column: " + name);
         }
-        return (T) arr;
+        return (T) col.array();
     }
 
     /// Decodes an extension column into a typed `List<T>` of domain values.
@@ -110,16 +146,16 @@ public final class Chunk implements AutoCloseable {
     ///         or the requested `domainType` doesn't match the column's extension id
     @SuppressWarnings("unchecked")
     public <T> List<T> as(String name, Class<T> domainType) {
-        DType colDtype = columnDtypes.get(name);
-        if (colDtype == null) {
+        Column col = columns.get(ColumnName.of(name));
+        if (col == null) {
             throw new VortexException("unknown column: " + name);
         }
-        if (!(colDtype instanceof DType.Extension ext)) {
+        if (!(col.dtype() instanceof DType.Extension ext)) {
             throw new VortexException("not an extension column: " + name);
         }
         ExtensionId id = ExtensionId.parse(ext.extensionId())
                 .orElseThrow(() -> new VortexException("not a spec extension id: " + ext.extensionId()));
-        Array storage = column(name);
+        Array storage = col.array();
         Object result = switch (id) {
             case VORTEX_DATE -> {
                 requireDomainType(name, domainType, LocalDate.class);

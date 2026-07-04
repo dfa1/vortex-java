@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.fbs.FbsArray;
 import io.github.dfa1.vortex.core.fbs.FbsArrayNode;
 import io.github.dfa1.vortex.core.fbs.FbsBuilder;
@@ -87,7 +88,7 @@ class VortexReaderDecodeChunkTest {
             List<Long> resultA;
             try (Chunk result = reader.decodeChunk(chunkIndex, List.of("a"))) {
                 // Then — only the projected column is present, and it matches the stream
-                assertThat(result.columns().keySet()).containsExactly("a");
+                assertThat(result.columns().keySet()).containsExactly(ColumnName.of("a"));
                 resultA = values(result.column("a"));
             }
             assertThat(resultA).isEqualTo(streamed.get(chunkIndex).get("a"));
@@ -104,7 +105,8 @@ class VortexReaderDecodeChunkTest {
             try (Chunk result = reader.decodeChunk(0, List.of())) {
 
                 // Then — both columns decoded
-                assertThat(result.columns().keySet()).containsExactlyInAnyOrder("a", "b");
+                assertThat(result.columns().keySet())
+                        .containsExactlyInAnyOrder(ColumnName.of("a"), ColumnName.of("b"));
             }
         }
     }

@@ -96,7 +96,7 @@ class DictEncodingTest {
              var iter = vf.scan(ScanOptions.all())) {
             assertThat(iter.hasNext()).isTrue();
             try (Chunk c1 = iter.next()) {
-                Array a1 = c1.columns().get("category");
+                Array a1 = c1.column("category");
                 assertThat(a1.length()).isEqualTo(3L);
                 assertThat(a1.materialize(Arena.ofAuto()).get(PTypeIO.LE_INT, 0)).isEqualTo(10);
                 assertThat(a1.materialize(Arena.ofAuto()).get(PTypeIO.LE_INT, 4)).isEqualTo(20);
@@ -105,7 +105,7 @@ class DictEncodingTest {
 
             assertThat(iter.hasNext()).isTrue();
             try (Chunk c2 = iter.next()) {
-                Array a2 = c2.columns().get("category");
+                Array a2 = c2.column("category");
                 assertThat(a2.length()).isEqualTo(4L);
                 assertThat(a2.materialize(Arena.ofAuto()).get(PTypeIO.LE_INT, 0)).isEqualTo(30);
                 assertThat(a2.materialize(Arena.ofAuto()).get(PTypeIO.LE_INT, 4)).isEqualTo(10);

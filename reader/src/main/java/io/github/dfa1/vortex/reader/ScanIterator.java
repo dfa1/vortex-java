@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader;
 
 import static io.github.dfa1.vortex.core.io.PTypeIO.LE_INT;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.io.IoBounds;
 import io.github.dfa1.vortex.core.error.VortexException;
@@ -33,12 +34,14 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
 import java.lang.foreign.ValueLayout;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.SequencedMap;
 import java.util.function.Consumer;
 
 /// Iterates over decoded chunks from a [io.github.dfa1.vortex.reader.VortexReader].
@@ -73,17 +76,17 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     private final ScanOptions options;
 
     private List<ChunkSpec> chunks;
-    private List<String> projectedNames;
+    private List<ColumnName> projectedNames;
     private List<DType> projectedDtypes;
-    private Map<String, Layout> columnTopLayouts;
-    private Map<String, DType> columnDtypes;
+    private Map<ColumnName, Layout> columnTopLayouts;
+    private Map<ColumnName, DType> columnDtypes;
     private int chunkIndex;
     private int peekedChunkIdx = -1;
     private long rowsReturned;
     private Chunk openChunk;
     private boolean closed;
     private Arena sharedArena;
-    private Map<String, Array> sharedFullArrays;
+    private Map<ColumnName, Array> sharedFullArrays;
 
     public ScanIterator(VortexHandle file, ScanOptions options) {
         this.file = file;
@@ -112,11 +115,11 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         }
     }
 
-    private static List<ChunkSpec> buildChunks(Map<String, List<Layout>> columnFlats) {
+    private static List<ChunkSpec> buildChunks(Map<ColumnName, List<Layout>> columnFlats) {
         if (columnFlats.isEmpty()) {
             return List.of();
         }
-        String[] colNames = columnFlats.keySet().toArray(String[]::new);
+        ColumnName[] colNames = columnFlats.keySet().toArray(ColumnName[]::new);
         int numCols = colNames.length;
         int maxChunks = 0;
         int refCol = 0;
@@ -154,7 +157,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         return List.copyOf(result);
     }
 
-    private static ChunkSpec buildChunkSpec(String[] colNames, Map<String, List<Layout>> columnFlats,
+    private static ChunkSpec buildChunkSpec(ColumnName[] colNames, Map<ColumnName, List<Layout>> columnFlats,
             boolean[] shared, int chunkIdx, long sliceStart, long chunkRowCount) {
         int numCols = colNames.length;
         Layout[] layouts = new Layout[numCols];
@@ -176,37 +179,45 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     /// Returns the declared [DType] of column `col`, or `null` if the file is not a struct or has
     /// no such column. Resolved once from the file's struct schema and cached; used to drive
     /// zone-map comparisons by the column's true type rather than the filter value's boxing.
-    private DType columnDType(String col) {
+    private DType columnDType(ColumnName col) {
         if (columnDtypes == null) {
             columnDtypes = new HashMap<>();
             if (file.dtype() instanceof DType.Struct struct) {
                 for (int i = 0; i < struct.fieldNames().size(); i++) {
-                    columnDtypes.put(struct.fieldNames().get(i), struct.fieldTypes().get(i));
+                    columnDtypes.put(ColumnName.of(struct.fieldNames().get(i)), struct.fieldTypes().get(i));
                 }
             }
         }
         return columnDtypes.get(col);
     }
 
-    private static Map<String, Array> expandStruct(StructArray sa) {
+    private static SequencedMap<ColumnName, Chunk.Column> expandStruct(StructArray sa) {
         DType.Struct sd = (DType.Struct) sa.dtype();
         List<String> names = sd.fieldNames();
+        List<DType> types = sd.fieldTypes();
         int n = names.size();
-        var map = new LinkedHashMap<String, Array>(n);
+        var map = new LinkedHashMap<ColumnName, Chunk.Column>(n);
         for (int i = 0; i < n; i++) {
-            map.put(names.get(i), sa.field(i));
+            map.put(ColumnName.of(names.get(i)), new Chunk.Column(sa.field(i), types.get(i)));
         }
-        return Map.copyOf(map);
+        return unmodifiable(map);
     }
 
     // ── Zone-map pruning ──────────────────────────────────────────────────────
 
-    private static Map<String, Array> limitedColumns(Map<String, Array> columns, long rows) {
-        var result = new LinkedHashMap<String, Array>(columns.size());
+    private static SequencedMap<ColumnName, Chunk.Column> limitedColumns(
+            SequencedMap<ColumnName, Chunk.Column> columns, long rows) {
+        var result = new LinkedHashMap<ColumnName, Chunk.Column>(columns.size());
         for (var entry : columns.entrySet()) {
-            result.put(entry.getKey(), Array.limited(entry.getValue(), rows));
+            Chunk.Column col = entry.getValue();
+            result.put(entry.getKey(), new Chunk.Column(Array.limited(col.array(), rows), col.dtype()));
         }
-        return Map.copyOf(result);
+        return unmodifiable(result);
+    }
+
+    private static SequencedMap<ColumnName, Chunk.Column> unmodifiable(
+            SequencedMap<ColumnName, Chunk.Column> map) {
+        return Collections.unmodifiableSequencedMap(map);
     }
 
 
@@ -254,12 +265,12 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
 
         Arena arena = Arena.ofConfined();
         try {
-            Map<String, Array> columns = buildColumnMap(spec, arena);
+            SequencedMap<ColumnName, Chunk.Column> columns = buildColumnMap(spec, arena);
             if (chunkRows < spec.rowCount()) {
                 columns = limitedColumns(columns, chunkRows);
             }
             rowsReturned += chunkRows;
-            Chunk chunk = new Chunk(chunkRows, columns, projectedDtypeMap(), arena, this::onChunkClosed);
+            Chunk chunk = new Chunk(chunkRows, columns, arena, this::onChunkClosed);
             openChunk = chunk;
             return chunk;
         } catch (RuntimeException e) {
@@ -303,20 +314,12 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         ChunkSpec spec = chunks.get(chunkIndex);
         Arena arena = Arena.ofConfined();
         try {
-            Map<String, Array> columns = buildSelfContainedColumnMap(spec, arena);
-            return new Chunk(spec.rowCount(), columns, projectedDtypeMap(), arena, c -> { });
+            SequencedMap<ColumnName, Chunk.Column> columns = buildSelfContainedColumnMap(spec, arena);
+            return new Chunk(spec.rowCount(), columns, arena, c -> { });
         } catch (RuntimeException e) {
             arena.close();
             throw e;
         }
-    }
-
-    private Map<String, DType> projectedDtypeMap() {
-        Map<String, DType> map = new LinkedHashMap<>(projectedNames.size());
-        for (int i = 0; i < projectedNames.size(); i++) {
-            map.put(projectedNames.get(i), projectedDtypes.get(i));
-        }
-        return map;
     }
 
     /// Returns the row count of every chunk in scan order, without decoding values.
@@ -371,14 +374,15 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         if (chunks == null) {
             initialize();
         }
-        List<ArrayStats> fromTable = decodeZoneTable(column);
+        ColumnName name = ColumnName.of(column);
+        List<ArrayStats> fromTable = decodeZoneTable(name);
         if (fromTable != null) {
             return fromTable;
         }
         // No zone-map table — surface each chunk's embedded ArrayStats (sum absent).
         List<ArrayStats> out = new ArrayList<>(chunks.size());
         for (ChunkSpec spec : chunks) {
-            Layout flat = spec.layoutFor(column);
+            Layout flat = spec.layoutFor(name);
             out.add(flat == null ? ArrayStats.empty() : readFlatStats(flat));
         }
         return out;
@@ -389,7 +393,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     /// node stats). The table is a single flat segment encoding a struct with a subset of the
     /// `min`/`max`/`sum`/`null_count` fields (see [ZonedStatsSchema]); it is decoded into a
     /// short-lived confined arena and the scalar values are boxed out before the arena closes.
-    private List<ArrayStats> decodeZoneTable(String column) {
+    private List<ArrayStats> decodeZoneTable(ColumnName column) {
         Layout zoned = findZonedLayout(file.layout(), column);
         if (zoned == null || zoned.children().size() < 2) {
             return null;
@@ -435,11 +439,11 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
 
     /// Finds the first `vortex.stats` layout in the subtree of `column`'s top-level layout, or
     /// `null` when the column is not zone-mapped.
-    private Layout findZonedLayout(Layout root, String column) {
+    private Layout findZonedLayout(Layout root, ColumnName column) {
         if (!(file.dtype() instanceof DType.Struct struct) || !root.isStruct()) {
             return null;
         }
-        int idx = struct.fieldNames().indexOf(column);
+        int idx = struct.fieldNames().indexOf(column.value());
         if (idx < 0 || idx >= root.children().size()) {
             return null;
         }
@@ -533,18 +537,21 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         Layout rootLayout = file.layout();
         DType rootDtype = file.dtype();
 
-        var columnFlats = new LinkedHashMap<String, List<Layout>>();
-        var columnTopLayouts = new LinkedHashMap<String, Layout>();
-        Map<String, DType> columnDtypes = new LinkedHashMap<>();
+        var columnFlats = new LinkedHashMap<ColumnName, List<Layout>>();
+        var columnTopLayouts = new LinkedHashMap<ColumnName, Layout>();
+        Map<ColumnName, DType> columnDtypes = new LinkedHashMap<>();
 
         if (rootLayout.isStruct() && rootDtype instanceof DType.Struct structDtype) {
             List<String> projection = options.columns();
             for (int i = 0; i < rootLayout.children().size(); i++) {
-                String colName = structDtype.fieldNames().get(i);
+                String rawName = structDtype.fieldNames().get(i);
                 DType colDtype = structDtype.fieldTypes().get(i);
-                if (!projection.isEmpty() && !projection.contains(colName)) {
+                if (!projection.isEmpty() && !projection.contains(rawName)) {
                     continue;
                 }
+                // File-schema names are already policy-certified by PostscriptParser, so this
+                // ColumnName construction never throws — it just types the certified key.
+                ColumnName colName = ColumnName.of(rawName);
                 Layout colTop = rootLayout.children().get(i);
                 var flats = new ArrayList<Layout>();
                 collectFlats(colTop, flats);
@@ -555,9 +562,10 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         } else {
             var flats = new ArrayList<Layout>();
             collectFlats(rootLayout, flats);
-            columnFlats.put("_col", flats);
-            columnTopLayouts.put("_col", rootLayout);
-            columnDtypes.put("_col", rootDtype);
+            ColumnName colName = ColumnName.of("_col");
+            columnFlats.put(colName, flats);
+            columnTopLayouts.put(colName, rootLayout);
+            columnDtypes.put(colName, rootDtype);
         }
 
         projectedNames = List.copyOf(columnDtypes.keySet());
@@ -568,9 +576,9 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     }
 
     private void decodeSharedColumns(
-            Map<String, List<Layout>> columnFlats,
-            Map<String, Layout> columnTopLayouts,
-            Map<String, DType> columnDtypes) {
+            Map<ColumnName, List<Layout>> columnFlats,
+            Map<ColumnName, Layout> columnTopLayouts,
+            Map<ColumnName, DType> columnDtypes) {
         int maxFlats = 0;
         for (List<Layout> flats : columnFlats.values()) {
             if (flats.size() > maxFlats) {
@@ -586,19 +594,18 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             }
             if (sharedArena == null) {
                 sharedArena = Arena.ofConfined();
-                sharedFullArrays = new java.util.HashMap<>();
+                sharedFullArrays = new HashMap<>();
             }
-            String name = entry.getKey();
+            ColumnName name = entry.getKey();
             Layout topLayout = columnTopLayouts.get(name);
             DType dtype = columnDtypes.get(name);
             sharedFullArrays.put(name, decodeLayout(topLayout, dtype, sharedArena));
         }
     }
 
-    // Map.of with 1 or 2 args allocates Map1/Map2 (~2-4 fields) — avoids the
-    // LinkedHashMap + Map.copyOf pair that would otherwise allocate per chunk.
-    // Direct array index into ChunkSpec.columnLayouts avoids HashMap.get() per column.
-    private Map<String, Array> buildColumnMap(ChunkSpec chunk, Arena arena) {
+    // A LinkedHashMap preserves schema/projection order (the public columns() contract is a
+    // SequencedMap). Direct array index into ChunkSpec.columnLayouts avoids HashMap.get() per column.
+    private SequencedMap<ColumnName, Chunk.Column> buildColumnMap(ChunkSpec chunk, Arena arena) {
         Layout[] layouts = chunk.columnLayouts();
         long[] sliceOffsets = chunk.sliceOffsets();
         int n = projectedNames.size();
@@ -607,27 +614,21 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             if (arr instanceof StructArray sa) {
                 return expandStruct(sa);
             }
-            return Map.of(projectedNames.getFirst(), arr);
+            return singleColumn(0, arr);
         }
-        if (n == 2) {
-            return Map.of(
-                    projectedNames.get(0),
-                    decodeOrSlice(0, layouts[0], sliceOffsets[0], chunk.rowCount(), arena),
-                    projectedNames.get(1),
-                    decodeOrSlice(1, layouts[1], sliceOffsets[1], chunk.rowCount(), arena));
-        }
-        var scratch = new LinkedHashMap<String, Array>(n);
+        var scratch = new LinkedHashMap<ColumnName, Chunk.Column>(n);
         for (int i = 0; i < n; i++) {
-            scratch.put(projectedNames.get(i),
-                    decodeOrSlice(i, layouts[i], sliceOffsets[i], chunk.rowCount(), arena));
+            scratch.put(projectedNames.get(i), new Chunk.Column(
+                    decodeOrSlice(i, layouts[i], sliceOffsets[i], chunk.rowCount(), arena),
+                    projectedDtypes.get(i)));
         }
-        return Map.copyOf(scratch);
+        return unmodifiable(scratch);
     }
 
     /// Builds the column map for [#decodeChunkAt(int)]. Identical decode to [#buildColumnMap]
     /// except that a shared (single-flat) column is decoded into `arena` and sliced there,
     /// so the resulting [Chunk] owns every buffer and survives this iterator's close.
-    private Map<String, Array> buildSelfContainedColumnMap(ChunkSpec chunk, Arena arena) {
+    private SequencedMap<ColumnName, Chunk.Column> buildSelfContainedColumnMap(ChunkSpec chunk, Arena arena) {
         Layout[] layouts = chunk.columnLayouts();
         long[] sliceOffsets = chunk.sliceOffsets();
         int n = projectedNames.size();
@@ -636,14 +637,21 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             if (arr instanceof StructArray sa) {
                 return expandStruct(sa);
             }
-            return Map.of(projectedNames.getFirst(), arr);
+            return singleColumn(0, arr);
         }
-        var scratch = new LinkedHashMap<String, Array>(n);
+        var scratch = new LinkedHashMap<ColumnName, Chunk.Column>(n);
         for (int i = 0; i < n; i++) {
-            scratch.put(projectedNames.get(i),
-                    decodeOrSliceSelfContained(i, layouts[i], sliceOffsets[i], chunk.rowCount(), arena));
+            scratch.put(projectedNames.get(i), new Chunk.Column(
+                    decodeOrSliceSelfContained(i, layouts[i], sliceOffsets[i], chunk.rowCount(), arena),
+                    projectedDtypes.get(i)));
         }
-        return Map.copyOf(scratch);
+        return unmodifiable(scratch);
+    }
+
+    private SequencedMap<ColumnName, Chunk.Column> singleColumn(int colIdx, Array array) {
+        var map = new LinkedHashMap<ColumnName, Chunk.Column>(1);
+        map.put(projectedNames.get(colIdx), new Chunk.Column(array, projectedDtypes.get(colIdx)));
+        return unmodifiable(map);
     }
 
     private Array decodeOrSliceSelfContained(int colIdx, Layout layout, long sliceStart,
@@ -653,7 +661,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         }
         // Shared single-flat column: decode its full top layout into THIS chunk's arena and
         // slice, so the returned Chunk does not reference the iterator's shared arena.
-        String name = projectedNames.get(colIdx);
+        ColumnName name = projectedNames.get(colIdx);
         DType dtype = projectedDtypes.get(colIdx);
         Array full = decodeLayout(columnTopLayouts.get(name), dtype, arena);
         return sliceArray(full, sliceStart, rowCount, dtype);
@@ -713,12 +721,15 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                 yield false;
             }
             case RowFilter.Column(var col, var predicate) -> {
-                Layout flat = chunk.layoutFor(col);
+                // The filter's raw column string enters the typed internals here; a valid-but-absent
+                // name yields no layout (no pruning), matching the row-level scan it gates.
+                ColumnName name = ColumnName.of(col);
+                Layout flat = chunk.layoutFor(name);
                 if (flat == null) {
                     yield false;
                 }
                 ArrayStats stats = readFlatStats(flat);
-                yield canPrune(predicate, stats, flat.rowCount(), columnDType(col));
+                yield canPrune(predicate, stats, flat.rowCount(), columnDType(name));
             }
         };
     }
@@ -838,8 +849,8 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
 
     @SuppressWarnings("java:S6218") // internal data carrier; record components are arrays of immutable primitives or refs that flow through pipelines without ever being compared.
     private record ChunkSpec(
-            long rowCount, String[] columnNames, Layout[] columnLayouts, long[] sliceOffsets) {
-        Layout layoutFor(String col) {
+            long rowCount, ColumnName[] columnNames, Layout[] columnLayouts, long[] sliceOffsets) {
+        Layout layoutFor(ColumnName col) {
             for (int i = 0; i < columnNames.length; i++) {
                 if (columnNames[i].equals(col)) {
                     return columnLayouts[i];

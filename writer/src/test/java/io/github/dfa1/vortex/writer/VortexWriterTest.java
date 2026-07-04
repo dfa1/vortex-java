@@ -39,7 +39,9 @@ class VortexWriterTest {
         var snapshots = new ArrayList<ChunkSnapshot>();
         try (var iter = vf.scan(opts)) {
             iter.forEachRemaining(c ->
-                    snapshots.add(new ChunkSnapshot(c.rowCount(), java.util.Set.copyOf(c.columns().keySet()))));
+                    snapshots.add(new ChunkSnapshot(c.rowCount(), c.columns().keySet().stream()
+                            .map(io.github.dfa1.vortex.core.model.ColumnName::value)
+                            .collect(java.util.stream.Collectors.toUnmodifiableSet()))));
         }
         return snapshots;
     }
@@ -478,7 +480,7 @@ class VortexWriterTest {
              var iter = vf.scan(ScanOptions.all())) {
             assertThat(iter.hasNext()).isTrue();
             try (Chunk chunk = iter.next()) {
-                LongArray idArray = (LongArray) chunk.columns().get("id");
+                LongArray idArray = chunk.column("id");
                 assertThat(idArray.length()).isEqualTo(3L);
                 assertThat(idArray.getLong(0)).isEqualTo(42L);
                 assertThat(idArray.getLong(1)).isEqualTo(100L);

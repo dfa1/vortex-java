@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.core.io.PTypeIO;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
@@ -33,6 +34,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.SequencedMap;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -621,9 +623,9 @@ class ComputeFilteredAggregateTest {
     }
 
     private static Chunk chunk(long rows, Map<String, Array> columns) {
-        Map<String, DType> dtypes = new LinkedHashMap<>();
-        columns.forEach((name, array) -> dtypes.put(name, array.dtype()));
-        return new Chunk(rows, columns, dtypes, ARENA, c -> { /* no-op: the shared arena outlives the chunk */ });
+        SequencedMap<ColumnName, Chunk.Column> typed = new LinkedHashMap<>();
+        columns.forEach((name, array) -> typed.put(ColumnName.of(name), new Chunk.Column(array, array.dtype())));
+        return new Chunk(rows, typed, ARENA, c -> { /* no-op: the shared arena outlives the chunk */ });
     }
 
     /// Builds a long-domain column from a reference, optionally narrowing it to an `i32` array, and

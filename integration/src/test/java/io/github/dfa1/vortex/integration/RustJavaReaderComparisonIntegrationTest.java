@@ -21,6 +21,7 @@ import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.inspect.VortexInspector;
 import io.github.dfa1.vortex.reader.VortexReader;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.reader.Chunk;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.BigIntVector;
@@ -229,18 +230,19 @@ class RustJavaReaderComparisonIntegrationTest {
             while (iter.hasNext()) {
                 try (Chunk chunk = iter.next()) {
                     rowCount += chunk.rowCount();
-                    for (Map.Entry<String, Array> e : chunk.columns().entrySet()) {
-                        if (extensionCols.contains(e.getKey())) {
+                    for (Map.Entry<ColumnName, Chunk.Column> e : chunk.columns().entrySet()) {
+                        String name = e.getKey().value();
+                        if (extensionCols.contains(name)) {
                             continue;
                         }
-                        Array arr = e.getValue();
+                        Array arr = e.getValue().array();
                         Double numSum = numericSum(arr);
                         if (numSum != null) {
-                            numSums.merge(e.getKey(), numSum, Double::sum);
+                            numSums.merge(name, numSum, Double::sum);
                         }
                         Long strLen = stringByteLength(arr);
                         if (strLen != null && strLen > 0) {
-                            strLenSums.merge(e.getKey(), strLen, Long::sum);
+                            strLenSums.merge(name, strLen, Long::sum);
                         }
                     }
                 }

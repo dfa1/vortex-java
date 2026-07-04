@@ -65,7 +65,7 @@ class JavaRoundTripIntegrationTest {
              var iter = vf.scan(ScanOptions.columns(column))) {
             var ints = new ArrayList<Integer>();
             iter.forEachRemaining(c -> {
-                IntArray arr = (IntArray) c.columns().get(column);
+                IntArray arr = c.column(column);
                 for (long i = 0; i < arr.length(); i++) {
                     ints.add(arr.getInt(i));
                 }

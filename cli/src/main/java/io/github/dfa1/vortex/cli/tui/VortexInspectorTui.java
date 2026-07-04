@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.cli.tui;
 import io.github.dfa1.vortex.reader.layout.Layout;
 import io.github.dfa1.vortex.reader.SegmentSpec;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.cli.tui.term.Ansi;
 import io.github.dfa1.vortex.cli.tui.term.Key;
@@ -766,11 +767,12 @@ public final class VortexInspectorTui {
                         return;
                     }
                     try (Chunk chunk = it.next()) {
-                        Array array = chunk.columns().get(columnName);
-                        if (array == null) {
+                        Chunk.Column column = chunk.columns().get(ColumnName.of(columnName));
+                        if (column == null) {
                             dataCache.put(columnName, new DataState.Loaded(List.of()));
                             return;
                         }
+                        Array array = column.array();
                         int n = (int) Math.min(array.length(), DATA_PREVIEW_ROWS);
                         List<String> out = new ArrayList<>(n);
                         for (int i = 0; i < n; i++) {
