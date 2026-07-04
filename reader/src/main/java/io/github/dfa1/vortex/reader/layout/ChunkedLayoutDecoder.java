@@ -70,13 +70,15 @@ final class ChunkedLayoutDecoder implements LayoutDecoder {
             throw new VortexException(EncodingId.VORTEX_CHUNKED, "no flat children");
         }
         if (flats.size() == 1) {
-            return FlatLayoutDecoder.decodeFlat(ctx, flats.getFirst(), dtype);
+            return ctx.decodeChild(flats.getFirst(), dtype);
         }
         // ADR 0012: every primitive ptype gets the zero-copy ChunkedXxxArray shape.
         // The concat path is gone.
         var chunkArrays = new ArrayList<Array>(flats.size());
         for (Layout flat : flats) {
-            chunkArrays.add(FlatLayoutDecoder.decodeFlat(ctx, flat, dtype));
+            // Registry dispatch, not a direct decodeFlat call — a custom decoder registered for
+            // a leaf's layout id must be honored under a chunked parent too.
+            chunkArrays.add(ctx.decodeChild(flat, dtype));
         }
         if (dtype instanceof DType.Bool) {
             return ChunkedBoolArray.of(dtype, totalRows, chunkArrays);

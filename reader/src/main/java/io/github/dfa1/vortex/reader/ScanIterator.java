@@ -824,7 +824,13 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
 
         @Override
         public SegmentSpec segmentSpec(int index) {
-            return file.footer().segmentSpecs().get(index);
+            List<SegmentSpec> specs = file.footer().segmentSpecs();
+            if (index < 0 || index >= specs.size()) {
+                // Untrusted input: a malformed flat layout may carry any segment index.
+                throw new VortexException("segment index " + index
+                        + " out of bounds (segmentSpecs.size=" + specs.size() + ")");
+            }
+            return specs.get(index);
         }
     }
 

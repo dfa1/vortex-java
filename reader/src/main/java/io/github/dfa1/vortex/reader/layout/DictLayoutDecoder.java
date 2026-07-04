@@ -45,6 +45,11 @@ final class DictLayoutDecoder implements LayoutDecoder {
         PType codesPType = readDictLayoutCodesPType(rawMeta);
 
         // child[0] = values layout; child[1] = codes layout
+        if (dictLayout.children().size() < 2) {
+            // Untrusted input: a malformed dict layout may carry any child count.
+            throw new VortexException(EncodingId.VORTEX_DICT,
+                    "expected 2 children (values, codes), got " + dictLayout.children().size());
+        }
         Layout valuesLayout = dictLayout.children().get(0);
         Layout codesLayout = dictLayout.children().get(1);
         long n = codesLayout.rowCount();

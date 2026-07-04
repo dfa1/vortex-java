@@ -17,23 +17,11 @@ final class FlatLayoutDecoder implements LayoutDecoder {
 
     @Override
     public Array decode(LayoutDecodeContext ctx, Layout layout, DType dtype) {
-        return decodeFlat(ctx, layout, dtype);
-    }
-
-    /// Decodes one flat leaf: resolves its single segment index to a [SegmentSpec] and delegates
-    /// to the file handle. Shared with [ChunkedLayoutDecoder], which decodes each of its collected
-    /// leaves through exactly this path (not registry dispatch), preserving the original behavior.
-    ///
-    /// @param ctx   the decode context
-    /// @param flat  the flat layout node
-    /// @param dtype logical type of the decoded array
-    /// @return the decoded [Array]
-    static Array decodeFlat(LayoutDecodeContext ctx, Layout flat, DType dtype) {
-        if (flat.segments().isEmpty()) {
+        if (layout.segments().isEmpty()) {
             throw new VortexException("no segments");
         }
-        int segIdx = flat.segments().getFirst();
+        int segIdx = layout.segments().getFirst();
         SegmentSpec spec = ctx.segmentSpec(segIdx);
-        return ctx.decodeFlatSegment(spec, dtype, flat.rowCount());
+        return ctx.decodeFlatSegment(spec, dtype, layout.rowCount());
     }
 }

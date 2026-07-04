@@ -94,12 +94,13 @@ class LayoutRegistryTest {
         // Given — a LayoutRegistry whose built-ins are wrapped in counting delegators, so any decode
         // dispatch during a real scan is observable. This proves the open(path, reg, layoutReg)
         // overload threads the custom registry all the way into ScanIterator's decode path.
-        AtomicInteger dispatches = new AtomicInteger();
+        AtomicInteger flatDispatches = new AtomicInteger();
+        AtomicInteger otherDispatches = new AtomicInteger();
         LayoutRegistry custom = LayoutRegistry.builder()
-                .register(new CountingLayoutDecoder(new FlatLayoutDecoder(), dispatches))
-                .register(new CountingLayoutDecoder(new ChunkedLayoutDecoder(), dispatches))
-                .register(new CountingLayoutDecoder(new ZonedLayoutDecoder(), dispatches))
-                .register(new CountingLayoutDecoder(new DictLayoutDecoder(), dispatches))
+                .register(new CountingLayoutDecoder(new FlatLayoutDecoder(), flatDispatches))
+                .register(new CountingLayoutDecoder(new ChunkedLayoutDecoder(), otherDispatches))
+                .register(new CountingLayoutDecoder(new ZonedLayoutDecoder(), otherDispatches))
+                .register(new CountingLayoutDecoder(new DictLayoutDecoder(), otherDispatches))
                 .build();
         Path fixture = fixtureFile("primitives.vortex");
 
@@ -114,9 +115,11 @@ class LayoutRegistryTest {
             }
         }
 
-        // Then — the scan produced rows and routed every layout decode through the custom registry
+        // Then — the scan produced rows, and the FLAT delegator itself fired: leaf decode under a
+        // container layout goes through registry dispatch too (a custom flat decoder is honored),
+        // not through a direct built-in call that would bypass the registry.
         assertThat(rows).isPositive();
-        assertThat(dispatches.get()).isPositive();
+        assertThat(flatDispatches.get()).isPositive();
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
