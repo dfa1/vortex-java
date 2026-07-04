@@ -120,7 +120,7 @@ Layout tree: `Struct → Zoned(Stats) → Chunked → [Flat, Flat, ...]`
 - **Flat** single encoded segment · **Chunked** sequence of Flats · **Struct** one child/column
 - **Zoned** (`vortex.stats`) wraps a child with per-chunk min/max for zone-map pruning
 
-Encoding IDs are strings (`"vortex.flat"`, `"fastlanes.bitpacked"`). `ReadRegistry` maps IDs →
+Encoding IDs are strings (`"vortex.primitive"`, `"fastlanes.bitpacked"`). `ReadRegistry` maps IDs →
 `EncodingDecoder` via `ServiceLoader`; immutable after construction — register custom decoders on
 the builder: `ReadRegistry.builder().registerServiceLoaded().register(myDecoder).build()`.
 
