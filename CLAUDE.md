@@ -206,6 +206,15 @@ in the Rust source for the exact schema, then implement from spec.
 - **POM deps** grouped with comments: `<!-- production -->` then `<!-- testing -->`, each with
   project-internal (`io.github.dfa1.vortex:*`) deps first, then external. Omit empty sections.
 
+## Documentation is part of every change
+
+Living docs ship in the same commit/PR as the change they describe — never as a follow-up
+sweep. A change touching public API, module structure, wire behavior, or policy updates
+whichever apply: `docs/reference.md`, `docs/compatibility.md`, the CLAUDE.md module map /
+design decisions, and CHANGELOG (per its own rules). Historical records (`adr/`, released
+CHANGELOG sections) are exempt — they describe the past. Docs drift is a bug (2026-07-04: a
+single audit found phantom APIs, dead service files, and pre-refactor FQNs across four files).
+
 ## Code style
 
 - 4-space indent, **zero SonarQube bugs/smells**, no `sun.misc.Unsafe` or internal JDK APIs.
