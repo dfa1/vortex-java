@@ -22,6 +22,6 @@ final class FlatLayoutDecoder implements LayoutDecoder {
         }
         int segIdx = layout.segments().getFirst();
         SegmentSpec spec = ctx.segmentSpec(segIdx);
-        return ctx.decodeFlatSegment(spec, dtype, layout.rowCount());
+        return ctx.decodeSegment(spec, dtype, layout.rowCount());
     }
 }

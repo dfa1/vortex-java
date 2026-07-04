@@ -21,12 +21,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /// Both the trailing length field and each buffer descriptor's offset/length come straight
 /// from untrusted file bytes. After ADR 0003 Phase E, every malformed value must surface as
 /// a [VortexException], never a raw `IndexOutOfBoundsException` from `MemorySegment.asSlice`.
-class FlatSegmentBoundsSecurityTest {
+class SerializedArrayBoundsSecurityTest {
 
 
     private static final DType DTYPE = DType.I32;
 
-    private final FlatSegmentDecoder sut = new FlatSegmentDecoder(ReadRegistry.empty());
+    private final SerializedArrayDecoder sut = new SerializedArrayDecoder(ReadRegistry.empty());
 
     @Test
     void segmentSmallerThanLengthField_throwsVortexException() {

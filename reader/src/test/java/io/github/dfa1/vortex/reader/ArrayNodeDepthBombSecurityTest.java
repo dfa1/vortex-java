@@ -15,10 +15,10 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /// Adversarial tests for the encoded-array-tree recursion in
-/// [FlatSegmentDecoder]'s `convertArrayNode`.
+/// [SerializedArrayDecoder]'s `convertArrayNode`.
 ///
 /// The decoder walks the array node tree recursively (validity, patches, run-ends, dictionary
-/// codes/values, …). Without the [FlatSegmentDecoder#MAX_ARRAY_TREE_DEPTH] cap a crafted segment
+/// codes/values, …). Without the [SerializedArrayDecoder#MAX_ARRAY_TREE_DEPTH] cap a crafted segment
 /// with thousands of nested children produces a [StackOverflowError] — an `Error` that escapes the
 /// "malformed input must surface as [VortexException]" contract (ADR 0003).
 ///
@@ -29,7 +29,7 @@ class ArrayNodeDepthBombSecurityTest {
 
     private static final DType DTYPE = DType.I32;
 
-    private final FlatSegmentDecoder sut = new FlatSegmentDecoder(ReadRegistry.empty());
+    private final SerializedArrayDecoder sut = new SerializedArrayDecoder(ReadRegistry.empty());
 
     @Test
     void arrayTreeAtDepthLimit_clearsGuard() {
@@ -38,7 +38,7 @@ class ArrayNodeDepthBombSecurityTest {
             // depth == limit there, and `limit > limit` is false. The walk completes and only then
             // fails because the empty registry has no decoder. Kills `depth >` relaxed to `>=`,
             // which would wrongly reject this legal max-depth tree with the depth message.
-            byte[] fb = deeplyNestedArrayFlatBuffer(FlatSegmentDecoder.MAX_ARRAY_TREE_DEPTH);
+            byte[] fb = deeplyNestedArrayFlatBuffer(SerializedArrayDecoder.MAX_ARRAY_TREE_DEPTH);
             MemorySegment seg = wrapAsSegment(fb, arena);
 
             // When / Then
@@ -53,7 +53,7 @@ class ArrayNodeDepthBombSecurityTest {
         try (Arena arena = Arena.ofConfined()) {
             // Given — one level deeper: the deepest node reaches limit + 1, tripping the guard
             // before any StackOverflowError can escape.
-            byte[] fb = deeplyNestedArrayFlatBuffer(FlatSegmentDecoder.MAX_ARRAY_TREE_DEPTH + 1);
+            byte[] fb = deeplyNestedArrayFlatBuffer(SerializedArrayDecoder.MAX_ARRAY_TREE_DEPTH + 1);
             MemorySegment seg = wrapAsSegment(fb, arena);
 
             // When / Then — must surface as VortexException, not StackOverflowError

@@ -32,7 +32,7 @@ public interface VortexHandle extends Closeable {
     /// @param rowCount number of logical rows in the segment
     /// @param arena    allocator for decode output; lifetime matches the caller's chunk epoch
     /// @return the decoded array
-    Array decodeFlatSegment(SegmentSpec spec, DType dtype, long rowCount, SegmentAllocator arena);
+    Array decodeSegment(SegmentSpec spec, DType dtype, long rowCount, SegmentAllocator arena);
 
     /// Returns a read-only view of the bytes backing the given segment spec.
     /// Writes through the returned segment throw `UnsupportedOperationException`.

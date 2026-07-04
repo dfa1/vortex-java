@@ -17,7 +17,7 @@ import static io.github.dfa1.vortex.core.io.PTypeIO.LE_INT;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
-/// Successful flat-segment decode path — complements [FlatSegmentBoundsSecurityTest] (which only
+/// Successful flat-segment decode path — complements [SerializedArrayBoundsSecurityTest] (which only
 /// drives the rejection paths). A buffer descriptor with non-zero padding exercises the offset
 /// walk, and an unknown encoding id exercises the unknown-id passthrough through an
 /// allow-unknown registry. Together these pin two otherwise-untested spots:
@@ -25,12 +25,12 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 ///   negative offset and fails, so a clean decode proves the addition.
 /// - the unknown-id node construction: mishandling an unresolvable id there yields a
 ///   node the decode would not turn into an `UnknownArray`.
-class FlatSegmentDecoderDecodeTest {
+class SerializedArrayDecoderDecodeTest {
 
     @Test
     void decode_unknownEncodingWithBufferPadding_returnsUnknownArray() {
         ReadRegistry registry = ReadRegistry.builder().allowUnknown().build();
-        FlatSegmentDecoder sut = new FlatSegmentDecoder(registry);
+        SerializedArrayDecoder sut = new SerializedArrayDecoder(registry);
 
         try (Arena arena = Arena.ofConfined()) {
             // Given — a flat segment whose single buffer carries 8 bytes of leading padding and
@@ -56,7 +56,7 @@ class FlatSegmentDecoderDecodeTest {
     @Test
     void decode_blankEncodingId_throwsVortexException() {
         ReadRegistry registry = ReadRegistry.builder().allowUnknown().build();
-        FlatSegmentDecoder sut = new FlatSegmentDecoder(registry);
+        SerializedArrayDecoder sut = new SerializedArrayDecoder(registry);
 
         try (Arena arena = Arena.ofConfined()) {
             // Given — a zero-length FlatBuffer string in the spec table decodes to "", which

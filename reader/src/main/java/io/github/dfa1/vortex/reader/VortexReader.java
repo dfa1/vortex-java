@@ -317,13 +317,13 @@ public final class VortexReader implements VortexHandle {
     }
 
     @Override
-    public io.github.dfa1.vortex.reader.array.Array decodeFlatSegment(
+    public io.github.dfa1.vortex.reader.array.Array decodeSegment(
             io.github.dfa1.vortex.reader.SegmentSpec spec,
             DType dtype, long rowCount,
             java.lang.foreign.SegmentAllocator arena
     ) {
         MemorySegment seg = IoBounds.slice(fileSegment, spec.offset(), spec.length()).asReadOnly();
-        return new FlatSegmentDecoder(registry)
+        return new SerializedArrayDecoder(registry)
                 .decode(seg, footer.arraySpecs(), dtype, rowCount, arena);
     }
 

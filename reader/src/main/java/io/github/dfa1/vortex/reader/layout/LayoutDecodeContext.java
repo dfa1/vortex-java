@@ -31,7 +31,7 @@ public interface LayoutDecodeContext {
     /// @param dtype    logical type of the decoded array
     /// @param rowCount number of logical rows in the segment
     /// @return the decoded [Array]
-    Array decodeFlatSegment(SegmentSpec spec, DType dtype, long rowCount);
+    Array decodeSegment(SegmentSpec spec, DType dtype, long rowCount);
 
     /// Resolves a segment index (as stored on a flat [Layout]) to its [SegmentSpec] in the
     /// file's segment table.

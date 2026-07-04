@@ -410,7 +410,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         long nZones = statsFlat.rowCount();
         SegmentSpec spec = file.footer().segmentSpecs().get(segIdx);
         try (Arena tableArena = Arena.ofConfined()) {
-            Array decoded = file.decodeFlatSegment(spec, statsDtype, nZones, tableArena);
+            Array decoded = file.decodeSegment(spec, statsDtype, nZones, tableArena);
             if (!(decoded instanceof StructArray table)) {
                 return null;
             }
@@ -818,8 +818,8 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         }
 
         @Override
-        public Array decodeFlatSegment(SegmentSpec spec, DType dtype, long rowCount) {
-            return file.decodeFlatSegment(spec, dtype, rowCount, arena);
+        public Array decodeSegment(SegmentSpec spec, DType dtype, long rowCount) {
+            return file.decodeSegment(spec, dtype, rowCount, arena);
         }
 
         @Override

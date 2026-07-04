@@ -113,7 +113,7 @@ bounds/parse classes** — not the whole codebase. It measures whether the tests
 ```bash
 ./mvnw -pl core   -P pitest verify              # IoBounds, PTypeIO
 ./mvnw -pl reader -am -P pitest verify -DskipITs # Footer, Trailer, PostscriptParser,
-                                                 # SegmentSpec, Layout, FlatSegmentDecoder
+                                                 # SegmentSpec, Layout, SerializedArrayDecoder
 ./mvnw -pl writer -am -P pitest verify -DskipITs # ChunkImpl, WriteRegistry
 ```
 

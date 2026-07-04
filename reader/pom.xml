@@ -90,7 +90,7 @@
 								<param>io.github.dfa1.vortex.reader.PostscriptParser</param>
 								<param>io.github.dfa1.vortex.reader.SegmentSpec</param>
 								<param>io.github.dfa1.vortex.reader.layout.Layout</param>
-								<param>io.github.dfa1.vortex.reader.FlatSegmentDecoder</param>
+								<param>io.github.dfa1.vortex.reader.SerializedArrayDecoder</param>
 							</targetClasses>
 						</configuration>
 					</plugin>

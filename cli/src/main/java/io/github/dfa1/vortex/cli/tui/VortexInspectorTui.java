@@ -607,7 +607,7 @@ public final class VortexInspectorTui {
                     int segIdx = values.segments().getFirst();
                     SegmentSpec spec = tree.segmentSpecs().get(segIdx);
                     io.github.dfa1.vortex.reader.array.Array arr =
-                            handle.decodeFlatSegment(spec, dtype, values.rowCount(), arena);
+                            handle.decodeSegment(spec, dtype, values.rowCount(), arena);
                     int n = (int) Math.min(arr.length(), DATA_PREVIEW_ROWS);
                     List<String> out = new ArrayList<>(n);
                     for (int i = 0; i < n; i++) {
@@ -722,7 +722,7 @@ public final class VortexInspectorTui {
             }
             int segIdx = flat.segments().getFirst();
             SegmentSpec spec = tree.segmentSpecs().get(segIdx);
-            Array arr = handle.decodeFlatSegment(spec, statsDtype, flat.rowCount(), arena);
+            Array arr = handle.decodeSegment(spec, statsDtype, flat.rowCount(), arena);
             return InspectorRender.formatStatsArray(arr, statsDtype);
         }
 
