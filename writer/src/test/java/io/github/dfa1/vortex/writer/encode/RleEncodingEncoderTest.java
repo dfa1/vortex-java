@@ -9,7 +9,6 @@ import io.github.dfa1.vortex.encoding.DTypes;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
 
 import io.github.dfa1.vortex.core.model.EncodingId;
-import io.github.dfa1.vortex.reader.decode.KnownArrayNode;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.decode.TestRegistry;
 import io.github.dfa1.vortex.core.proto.ProtoRLEMetadata;
@@ -34,12 +33,12 @@ class RleEncodingEncoderTest {
     private static final RleEncodingDecoder DECODER = new RleEncodingDecoder();
     private static final ReadRegistry REGISTRY = TestRegistry.ofDecoders(DECODER, new PrimitiveEncodingDecoder());
 
-    private static KnownArrayNode toArrayNode(EncodeNode enc) {
+    private static ArrayNode toArrayNode(EncodeNode enc) {
         ArrayNode[] children = new ArrayNode[enc.children().length];
         for (int i = 0; i < children.length; i++) {
             children[i] = toArrayNode(enc.children()[i]);
         }
-        return new KnownArrayNode(enc.encodingId(), enc.metadata(), children, enc.bufferIndices());
+        return ArrayNode.of(enc.encodingId(), enc.metadata(), children, enc.bufferIndices());
     }
 
     @Nested
@@ -268,14 +267,14 @@ class RleEncodingEncoderTest {
             originalBufs.add(validityBuf);
             MemorySegment[] segments = originalBufs.toArray(new MemorySegment[0]);
 
-            KnownArrayNode origRoot = toArrayNode(encoded.rootNode());
-            KnownArrayNode origIndices = (KnownArrayNode) origRoot.children()[1];
+            ArrayNode origRoot = toArrayNode(encoded.rootNode());
+            ArrayNode origIndices = origRoot.children()[1];
             ArrayNode validityNode = ArrayNode.of(
                     EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{3});
-            ArrayNode nullableIndices = ArrayNode.of(
+            ArrayNode nullableIndices = new ArrayNode(
                     origIndices.encodingId(), origIndices.metadata(),
                     new ArrayNode[]{validityNode}, origIndices.bufferIndices());
-            ArrayNode root = ArrayNode.of(
+            ArrayNode root = new ArrayNode(
                     origRoot.encodingId(), origRoot.metadata(),
                     new ArrayNode[]{origRoot.children()[0], nullableIndices, origRoot.children()[2]},
                     origRoot.bufferIndices());

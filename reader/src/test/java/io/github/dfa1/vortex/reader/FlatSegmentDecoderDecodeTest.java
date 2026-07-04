@@ -17,11 +17,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /// Successful flat-segment decode path — complements [FlatSegmentBoundsSecurityTest] (which only
 /// drives the rejection paths). A buffer descriptor with non-zero padding exercises the offset
-/// walk, and an unknown encoding id exercises the `UnknownArrayNode` fallback through an
+/// walk, and an unknown encoding id exercises the unknown-id passthrough through an
 /// allow-unknown registry. Together these pin two otherwise-untested spots:
 /// - the `dataOffset += padding` accumulation: with padding > 0, flipping `+=` to `-=` slices at a
 ///   negative offset and fails, so a clean decode proves the addition.
-/// - the `orElseGet(() -> new UnknownArrayNode(...))` fallback: returning `null` there yields a
+/// - the unknown-id node construction: mishandling an unresolvable id there yields a
 ///   null node and the decode would not produce an `UnknownArray`.
 class FlatSegmentDecoderDecodeTest {
 
@@ -46,7 +46,7 @@ class FlatSegmentDecoderDecodeTest {
                     DType.I32, 0, arena);
 
             // Then — the allow-unknown path produced an UnknownArray (proves both the +padding
-            // walk and the UnknownArrayNode fallback ran)
+            // walk and the unknown-id passthrough ran)
             assertThat(result).isInstanceOf(UnknownArray.class);
         }
     }

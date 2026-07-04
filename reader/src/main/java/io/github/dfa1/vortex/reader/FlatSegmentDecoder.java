@@ -6,12 +6,9 @@ import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.io.IoBounds;
 import io.github.dfa1.vortex.reader.array.Array;
-import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.fbs.FbsBuffer;
 import io.github.dfa1.vortex.reader.decode.ArrayNode;
 import io.github.dfa1.vortex.reader.decode.DecodeContext;
-import io.github.dfa1.vortex.reader.decode.KnownArrayNode;
-import io.github.dfa1.vortex.reader.decode.UnknownArrayNode;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.SegmentAllocator;
@@ -99,8 +96,6 @@ public final class FlatSegmentDecoder {
         }
 
         MemorySegment meta = fbs.metadataAsSegment();
-        return EncodingId.parse(rawEncodingId)
-                .<ArrayNode>map(known -> new KnownArrayNode(known, meta, children, bufferIndices))
-                .orElseGet(() -> new UnknownArrayNode(rawEncodingId, meta, children, bufferIndices));
+        return new ArrayNode(rawEncodingId, meta, children, bufferIndices);
     }
 }
