@@ -55,9 +55,17 @@ shortcut returning a nullable copy), `withNullable(boolean)`, `DType.Struct.fiel
 
 ---
 
+### Identity types (`io.github.dfa1.vortex.core.model`)
+
+| Type | Shape | Notes |
+|------|-------|-------|
+| `EncodingId` | `sealed interface` — `WellKnown` enum + `Custom` record | Array-encoding identity; total `parse(String)` over non-blank ids; constants re-exported (`EncodingId.VORTEX_PRIMITIVE`, …) |
+| `LayoutId` | `sealed interface` — `WellKnown` enum + `Custom` record | Layout identity (separate namespace from encodings; `vortex.flat` is layout-only); both zoned aliases `vortex.zoned`/`vortex.stats` |
+| `ColumnName` | `record ColumnName(String value)` | Validated column name: non-blank, no control characters. `ColumnName.violation(String)` is the policy chokepoint shared by builder, writer, and file parser |
+
 ## Reader API
 
-### `VortexReader` (`io.github.dfa1.vortex.io.VortexReader`)
+### `VortexReader` (`io.github.dfa1.vortex.reader.VortexReader`)
 
 Memory-mapped handle to a Vortex file. Implements `AutoCloseable`. Closing releases the mmap region;
 all `Array` buffers obtained during scans become invalid.
@@ -66,6 +74,7 @@ all `Array` buffers obtained during scans become invalid.
 |---------------------------------------|---------------------------|-----------------------------------------------|
 | `static open(Path)`                   | `VortexReader`            | Uses `ReadRegistry.loadAll()`                 |
 | `static open(Path, ReadRegistry)`     | `VortexReader`            | Custom registry (e.g. `allowUnknown()`)       |
+| `static open(Path, ReadRegistry, LayoutRegistry)` | `VortexReader` | Custom layout decoders too                    |
 | `dtype()`                             | `DType`                   | Schema (typically `DType.Struct`)             |
 | `layout()`                            | `Layout`                  | Layout tree (Struct → Zoned → Chunked → Flat) |
 | `footer()`                            | `Footer`                  | Segment specs, encoding specs                 |
@@ -127,7 +136,7 @@ Record: `(int chunkSize, boolean enableZoneMaps, double compressionRatioThreshol
 
 ## Scan API
 
-### `ScanOptions` (`io.github.dfa1.vortex.scan.ScanOptions`)
+### `ScanOptions` (`io.github.dfa1.vortex.reader.ScanOptions`)
 
 Record: `(List<String> columns, RowFilter rowFilter, long limit)`. Empty `columns` = read all. `NO_LIMIT` =
 `Long.MAX_VALUE`.
@@ -142,7 +151,7 @@ Record: `(List<String> columns, RowFilter rowFilter, long limit)`. Empty `column
 | `.withLimit(long n)`                                | Cap rows                         |
 | `.hasProjection()` / `.hasFilter()` / `.hasLimit()` | Predicates                       |
 
-### `RowFilter` (`io.github.dfa1.vortex.scan.RowFilter`)
+### `RowFilter` (`io.github.dfa1.vortex.reader.RowFilter`)
 
 Sealed predicate used for zone-map pruning (per-chunk min/max). Chunks that cannot match are skipped entirely.
 
@@ -156,7 +165,7 @@ Sealed predicate used for zone-map pruning (per-chunk min/max). Chunks that cann
 | `RowFilter.Neq(column, value)` | `RowFilter.neq(col, val)`  | —            |
 | `RowFilter.And(filters)`       | `RowFilter.and(f1, f2, …)` | `f1.and(f2)` |
 
-### `ScanIterator` (`io.github.dfa1.vortex.scan.ScanIterator`)
+### `ScanIterator` (`io.github.dfa1.vortex.reader.ScanIterator`)
 
 Implements `Iterator<Chunk>` and `AutoCloseable`. Drives one scan.
 
@@ -167,7 +176,7 @@ Implements `Iterator<Chunk>` and `AutoCloseable`. Drives one scan.
 | `forEachRemaining(Consumer)` | Overridden to wrap each `next()` in try-with-resources so chunks auto-close.   |
 | `close()`              | Releases iterator state and closes any chunk still open.                             |
 
-### `Chunk` (`io.github.dfa1.vortex.scan.Chunk`)
+### `Chunk` (`io.github.dfa1.vortex.reader.Chunk`)
 
 Implements `AutoCloseable`. Each chunk owns a confined `Arena` holding the decoded
 columnar buffers; closing the chunk releases the arena. After `close()`, touching
@@ -213,6 +222,27 @@ Register custom encoding decoders via `ServiceLoader` by adding the fully qualif
 implementations are singletons invoked directly by their `ExtensionId`.
 
 ---
+
+## Layout registry
+
+### `LayoutRegistry` (`io.github.dfa1.vortex.reader.layout`)
+
+Maps `LayoutId` → `LayoutDecoder`, making layout decode pluggable the way `ReadRegistry` makes
+encodings pluggable. Programmatic registration only — no `ServiceLoader`. Unknown layouts fail
+loudly (`VortexException`); there is no allow-unknown mode for layouts (Rust default).
+
+| Method                      | Notes                                                              |
+|-----------------------------|--------------------------------------------------------------------|
+| `static defaults()`         | The four built-ins: flat, chunked, zoned (both aliases), dict      |
+| `static builder()`          | Returns a fresh `Builder`                                          |
+| `hasDecoder(LayoutId)`      | Lookup                                                             |
+| `decode(ctx, layout, dtype)`| Dispatch by the layout's typed id                                  |
+
+`Builder`: `register(LayoutDecoder)` (throws on duplicate id), `registerDefaults()`, `build()`.
+A decoder claims its ids via `LayoutDecoder.layoutIds()` (a set — the zoned decoder claims both
+`vortex.zoned` and legacy `vortex.stats`). Custom decoders receive a `LayoutDecodeContext`
+(`decodeChild`, `decodeSegment` access, `arena`) and are reachable end-to-end via
+`VortexReader.open(path, readRegistry, layoutRegistry)`.
 
 ## Parquet / CSV import
 

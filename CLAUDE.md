@@ -23,7 +23,7 @@ Benchmark classes follow this: `JavaVsJni{Read,Write,Filter}Benchmark`,
 
 ```
 core    — everything lives under `io.github.dfa1.vortex.core.*`:
-          core.model    DType, PType, TimeUnit, EncodingId, LayoutId, ExtensionId, TimeDtype, TimestampDtype
+          core.model    DType, PType, TimeUnit, EncodingId, LayoutId, ColumnName, ExtensionId, TimeDtype, TimestampDtype
           core.io       IoBounds, PTypeIO, VortexFormat
           core.error    VortexException
           core.compute  FastLanes, PrimitiveArrays
@@ -119,7 +119,7 @@ DType (FlatBuffer), and Layout (FlatBuffer) blobs elsewhere in the file.
 
 Layout tree: `Struct → Zoned(Stats) → Chunked → [Flat, Flat, ...]`
 - **Flat** single encoded segment · **Chunked** sequence of Flats · **Struct** one child/column
-- **Zoned** (`vortex.stats`) wraps a child with per-chunk min/max for zone-map pruning
+- **Zoned** (`vortex.stats`; reads also accept the newer Rust alias `vortex.zoned`) wraps a child with per-chunk min/max for zone-map pruning
 
 Encoding IDs are strings (`"vortex.primitive"`, `"fastlanes.bitpacked"`). `ReadRegistry` maps IDs →
 `EncodingDecoder` via `ServiceLoader`; immutable after construction — register custom decoders on
@@ -127,7 +127,7 @@ the builder: `ReadRegistry.builder().registerServiceLoaded().register(myDecoder)
 
 ### Adding an encoding
 
-Add `EncodingId` enum constant `VORTEX_FOO("vortex.foo")`, then per side:
+Add an `EncodingId.WellKnown` constant `VORTEX_FOO("vortex.foo")` (re-exported on the interface), then per side:
 - **Decode:** `FooEncodingDecoder implements EncodingDecoder` in `reader.decode` + FQN in
   `reader/.../META-INF/services/io.github.dfa1.vortex.reader.decode.EncodingDecoder`
 - **Encode:** `FooEncodingEncoder implements EncodingEncoder` in `writer.encode` + FQN in
