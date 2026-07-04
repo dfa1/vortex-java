@@ -144,6 +144,8 @@ public final class Chunk implements AutoCloseable {
     /// @return decoded values in row order
     /// @throws VortexException if `name` isn't present, isn't an extension column,
     ///         or the requested `domainType` doesn't match the column's extension id
+    /// @throws IllegalArgumentException if `name` violates the column-name policy
+    ///         ([io.github.dfa1.vortex.core.model.ColumnName]) — it could never match
     @SuppressWarnings("unchecked")
     public <T> List<T> as(String name, Class<T> domainType) {
         Column col = columns.get(ColumnName.of(name));
