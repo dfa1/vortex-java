@@ -72,10 +72,9 @@ public enum EncodingId {
     /// FastLanes run-length encoding (`fastlanes.rle`).
     FASTLANES_RLE("fastlanes.rle"),
 
-    // Known in Rust but not yet implemented; registered so EncodingId.parse() resolves
-    /// Masked encoding (not yet implemented; registered to prevent parse errors).
+    /// Masked encoding (`vortex.masked`): payload child plus optional validity bitmap child.
     VORTEX_MASKED("vortex.masked"),
-    /// Patched encoding (not yet implemented; registered to prevent parse errors).
+    /// Patched encoding (`vortex.patched`): base child with sparse positional patch overrides.
     VORTEX_PATCHED("vortex.patched"),
     /// Variant logical encoding: canonical container over `core_storage` plus an optional shredded child.
     VORTEX_VARIANT("vortex.variant"),
