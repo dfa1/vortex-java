@@ -20,10 +20,11 @@ off twice:
 2. The dict code-scan lane (`DictFilter`) showed that the wins now come from **encoding-aware
    structural dispatch**: the kernel inspects the filter column's shape (an offset slice over a
    dict view with `u8` codes) and swaps the whole loop, not the per-row callback. Measured on 100M
-   rows: 762 → 25.5 ms/op for `filteredSum`, 983 → 36 ms/op for `filteredAggregate` (the last 5×
-   of which required a profile-guided fix: the fold's aggregate read had to become monomorphic —
-   see ADR 0013's result table). A per-row lambda (`RowPredicate`) cannot express that — the lane
-   needs to see the *description* of the filter, not a compiled `test(i)`.
+   rows (3-fork means): 762 → 38 ms/op for `filteredSum`, 983 → 46 ms/op for `filteredAggregate`,
+   and 2269 → 201 ms/op for the two-leaf `AND` once the dict leaf drives the scan with residual
+   leaves tested per match — all with the filter arriving as data. A per-row lambda
+   (`RowPredicate`) cannot express any of that — the lane needs to see the *description* of the
+   filter, not a compiled `test(i)`.
 
 Meanwhile the caller side is growing. The Calcite adapter (ADR 0018) invokes `filteredAggregate`
 from the boundary-chunk tier of the aggregate push-down; each new capability (a second aggregate
@@ -89,15 +90,17 @@ one scan of the filter column.
 The two levers, pinned as benchmarks the implementation must beat — expressed the only way the
 current API allows:
 
-| Workload | Today | ms/op |
+| Workload | Today | ms/op (3 forks) |
 | --- | --- | --- |
-| 1 dict leaf × 2 aggregates (`fusedFilteredAggregateTwoAggregates`) | 2 kernel calls, filter re-scanned per aggregate | 137.3 ± 0.1 |
-| 2-leaf `AND` × 2 aggregates (`fusedFilteredAggregateMulti`, this ADR's example) | multi-leaf declines the dict lane → per-row `RowPredicate` path, × 2 calls | 2269.1 ± 19.8 |
+| 1 dict leaf × 2 aggregates (`fusedFilteredAggregateTwoAggregates`) | 2 kernel calls, filter re-scanned per aggregate | 142.9 ± 6.9 |
+| 2-leaf `AND` × 2 aggregates (`fusedFilteredAggregateMulti`, this ADR's example) | dict leaf drives the scan, residual per match, × 2 calls | 201.3 ± 1.6 |
 
-For scale: the single-leaf single-aggregate dict lane runs the same scan in 36.2 ms and the raw
-code scan in ~25 ms. The pipeline's compile step attacks both levers at once — the dict leaf drives
-the scan, the residual leaf is tested only on code matches, and every aggregate folds from that one
-pass — so the example workload's target is tens of milliseconds, not seconds.
+The multi-leaf driving scan shipped IN THE KERNEL after these baselines were pinned (2269 → 201
+ms/op, see ADR 0013) — precisely because the filter already arrives as data. What remains for the
+façade is therefore the multi-aggregate lever: both workloads above still scan the filter once PER
+aggregate call, so a single-pass multi-aggregate fold targets ≈ 2× on each (≈ 70 and ≈ 110 ms/op
+respectively) — plus the composition ergonomics for the Calcite boundary tier. This reframes the
+façade as an API/composition decision with a modest measured win, not a large perf unlock.
 
 ## Consequences
 

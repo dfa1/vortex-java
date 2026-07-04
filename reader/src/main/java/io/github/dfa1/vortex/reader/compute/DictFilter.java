@@ -22,6 +22,7 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.LongPredicate;
 
 /// The dict code-scan fast lane of the fused filter kernels: a comparison predicate over a
 /// dictionary-encoded filter column is resolved against the (tiny) value pool ONCE, then the scan
@@ -47,8 +48,9 @@ import java.util.List;
 /// Codes are walked as contiguous runs: each [ChunkedByteArray] child (or the single flat codes
 /// array) contributes one run scanned over its backing segment; a run whose child exposes no
 /// segment (or a broadcast-shortened one) falls back to the child's accessor for that run only.
-/// Filter validity and the aggregate's own validity are only read on matching rows, so the
-/// 100%-of-rows cost stays a single byte compare per element.
+/// Filter validity, the residual leaves of a multi-leaf `AND` (the dict leaf DRIVES the scan; the
+/// other leaves are lowered once and tested per match), and the aggregate's own validity are only
+/// read on matching rows, so the 100%-of-rows cost stays a single byte compare per element.
 final class DictFilter {
 
     /// Codes wider than one byte (a value pool past 256 entries) fall back to the generic lanes.
@@ -104,12 +106,15 @@ final class DictFilter {
     /// Attempts the dict code-scan lane for a count-only fold — the `COUNT(*)` shape of
     /// [Compute#filteredAggregate(Chunk, RowFilter, String)] with no aggregate column.
     ///
-    /// @param filterData the unwrapped filter array (possibly an offset slice over a dict array)
-    /// @param fVal       the filter validity bitmap, or `null` when every filter row is valid
-    /// @param predicate  the comparison-leaf predicate over numeric constants
+    /// @param filterData the unwrapped driving filter array (possibly an offset slice over a dict array)
+    /// @param fVal       the driving filter's validity bitmap, or `null` when every row is valid
+    /// @param predicate  the driving comparison-leaf predicate over numeric constants
+    /// @param residual   the conjunction of the filter's remaining leaves, tested only on code
+    ///                   matches, or `null` when the driver is the only leaf
     /// @param n          the row count
     /// @return the selected row count, or `null` when the filter does not qualify for this lane
-    static Long tryFilteredCount(Array filterData, BoolArray fVal, Predicate predicate, long n) {
+    static Long tryFilteredCount(Array filterData, BoolArray fVal, Predicate predicate,
+                                 LongPredicate residual, long n) {
         DictShape shape = shapeOf(filterData);
         if (shape == null || shape.codes().length() < shape.codeStart() + n) {
             return null;
@@ -121,7 +126,7 @@ final class DictFilter {
         if (table.matches() == 0) {
             return Long.valueOf(0L);
         }
-        return Long.valueOf(count(runsOf(shape.codes(), shape.codeStart(), n), table, fVal));
+        return Long.valueOf(count(runsOf(shape.codes(), shape.codeStart(), n), table, fVal, residual));
     }
 
     /// Attempts the dict code-scan lane for the full filtered-aggregate fold of
@@ -131,16 +136,19 @@ final class DictFilter {
     /// unsigned-aware order in the long domain, [Double#compare(double, double)] order and the
     /// column's element box in the double domain).
     ///
-    /// @param filterData the unwrapped filter array (possibly an offset slice over a dict array)
-    /// @param fVal       the filter validity bitmap, or `null` when every filter row is valid
-    /// @param predicate  the comparison-leaf predicate over numeric constants
+    /// @param filterData the unwrapped driving filter array (possibly an offset slice over a dict array)
+    /// @param fVal       the driving filter's validity bitmap, or `null` when every row is valid
+    /// @param predicate  the driving comparison-leaf predicate over numeric constants
+    /// @param residual   the conjunction of the filter's remaining leaves, tested only on code
+    ///                   matches, or `null` when the driver is the only leaf
     /// @param aggData    the unwrapped aggregate array
     /// @param aVal       the aggregate validity bitmap, or `null` when every aggregate row is valid
     /// @param n          the row count
     /// @return the fold, or `null` when the filter is not a `u8`-coded dict view or the aggregate
     ///         has no specialized long/double lane (an `f16` or non-numeric column)
     static FilteredAggregate tryFilteredAggregate(Array filterData, BoolArray fVal, Predicate predicate,
-                                                  Array aggData, BoolArray aVal, long n) {
+                                                  LongPredicate residual, Array aggData, BoolArray aVal,
+                                                  long n) {
         boolean aggLong = NumericColumns.isLongDomain(aggData);
         boolean aggDouble = aggData instanceof DoubleArray || aggData instanceof FloatArray;
         if (!aggLong && !aggDouble) {
@@ -165,14 +173,25 @@ final class DictFilter {
             return new FilteredAggregate(0L, 0L, Double.valueOf(0.0), null, null);
         }
         List<Run> runs = runsOf(shape.codes(), shape.codeStart(), n);
+        LongPredicate gate = gateOf(fVal, residual);
         if (aggLong) {
-            LongAggFold fold = new LongAggFold(aggData, aggData.dtype().isUnsigned(), fVal, aVal);
+            LongAggFold fold = new LongAggFold(aggData, aggData.dtype().isUnsigned(), gate, aVal);
             scanRunsLong(runs, table, fold);
             return fold.box();
         }
-        DoubleAggFold fold = new DoubleAggFold(aggData, aggData instanceof FloatArray, fVal, aVal);
+        DoubleAggFold fold = new DoubleAggFold(aggData, aggData instanceof FloatArray, gate, aVal);
         scanRunsDouble(runs, table, fold);
         return fold.box();
+    }
+
+    /// Reports whether a filter array can drive the code-scan lane: a `u8`-coded dict view
+    /// (optionally behind one offset slice). Used by [FusedFilterAggregate] to pick the driving
+    /// leaf of a multi-leaf `AND`.
+    ///
+    /// @param filterData the unwrapped filter array
+    /// @return `true` if the array is a scannable dict shape
+    static boolean isScannable(Array filterData) {
+        return shapeOf(filterData) != null;
     }
 
     // -------------------------------------------------------------------------------------------------
@@ -410,17 +429,20 @@ final class DictFilter {
         return acc;
     }
 
-    /// Counts the selected rows of every run: a code match that is not a null filter row.
+    /// Counts the selected rows of every run: a code match that is not a null filter row and that
+    /// the residual leaves (when present) accept.
     ///
-    /// @param runs  the code runs in row order
-    /// @param table the lowered match table
-    /// @param fVal  the filter validity bitmap, or `null`
+    /// @param runs     the code runs in row order
+    /// @param table    the lowered match table
+    /// @param fVal     the filter validity bitmap, or `null`
+    /// @param residual the conjunction of the remaining leaves, or `null`
     /// @return the selected row count
-    private static long count(List<Run> runs, CodeTable table, BoolArray fVal) {
+    private static long count(List<Run> runs, CodeTable table, BoolArray fVal, LongPredicate residual) {
         boolean[] match = table.match();
         boolean single = table.matches() == 1;
         byte only = (byte) table.only();
         boolean noFilterNull = fVal == null;
+        boolean noResidual = residual == null;
         long selected = 0L;
         for (Run run : runs) {
             MemorySegment seg = run.seg();
@@ -429,24 +451,30 @@ final class DictFilter {
             long len = run.len();
             if (seg != null && single) {
                 for (long j = 0; j < len; j++) {
-                    if (seg.get(ValueLayout.JAVA_BYTE, base + j) == only
-                            && (noFilterNull || fVal.getBoolean(rowBase + j))) {
-                        selected++;
+                    if (seg.get(ValueLayout.JAVA_BYTE, base + j) == only) {
+                        long row = rowBase + j;
+                        if ((noFilterNull || fVal.getBoolean(row)) && (noResidual || residual.test(row))) {
+                            selected++;
+                        }
                     }
                 }
             } else if (seg != null) {
                 for (long j = 0; j < len; j++) {
-                    if (match[seg.get(ValueLayout.JAVA_BYTE, base + j) & 0xFF]
-                            && (noFilterNull || fVal.getBoolean(rowBase + j))) {
-                        selected++;
+                    if (match[seg.get(ValueLayout.JAVA_BYTE, base + j) & 0xFF]) {
+                        long row = rowBase + j;
+                        if ((noFilterNull || fVal.getBoolean(row)) && (noResidual || residual.test(row))) {
+                            selected++;
+                        }
                     }
                 }
             } else {
                 ByteArray child = run.child();
                 for (long j = 0; j < len; j++) {
-                    if (match[child.getByte(base + j) & 0xFF]
-                            && (noFilterNull || fVal.getBoolean(rowBase + j))) {
-                        selected++;
+                    if (match[child.getByte(base + j) & 0xFF]) {
+                        long row = rowBase + j;
+                        if ((noFilterNull || fVal.getBoolean(row)) && (noResidual || residual.test(row))) {
+                            selected++;
+                        }
                     }
                 }
             }
@@ -605,6 +633,24 @@ final class DictFilter {
         }
     }
 
+    /// Fuses the driving filter's validity and the residual leaves into one nullable per-row gate,
+    /// so the folds' per-match hot path pays a single null check when neither exists (the common
+    /// no-null single-leaf case) instead of one branch per concern — the +20% the first residual
+    /// wiring measured on `fusedFilteredAggregateDict`.
+    ///
+    /// @param fVal     the driving filter's validity bitmap, or `null` when every row is valid
+    /// @param residual the conjunction of the remaining leaves, or `null` when the driver is alone
+    /// @return the combined per-row gate, or `null` when every code match is selected
+    private static LongPredicate gateOf(BoolArray fVal, LongPredicate residual) {
+        if (fVal == null) {
+            return residual;
+        }
+        if (residual == null) {
+            return fVal::getBoolean;
+        }
+        return row -> fVal.getBoolean(row) && residual.test(row);
+    }
+
     /// The long-domain filtered-aggregate accumulator: mirrors the kernel's own long lane — a
     /// wrapping sum and an unsigned-aware `MIN` / `MAX` over the selected non-null rows, reading
     /// each value through [NumericColumns#widenLong(Array, boolean, long)]. Only invoked on code
@@ -613,7 +659,7 @@ final class DictFilter {
 
         private final Array aggData;
         private final boolean unsigned;
-        private final BoolArray fVal;
+        private final LongPredicate gate;
         private final BoolArray aVal;
         private long selected;
         private long nonNull;
@@ -622,19 +668,20 @@ final class DictFilter {
         private long min;
         private long max;
 
-        LongAggFold(Array aggData, boolean unsigned, BoolArray fVal, BoolArray aVal) {
+        LongAggFold(Array aggData, boolean unsigned, LongPredicate gate, BoolArray aVal) {
             this.aggData = aggData;
             this.unsigned = unsigned;
-            this.fVal = fVal;
+            this.gate = gate;
             this.aVal = aVal;
         }
 
-        /// Folds one code-matching row: skipped when the filter row is null (three-valued logic);
-        /// counted as selected, then folded when the aggregate row is non-null.
+        /// Folds one code-matching row: skipped when the gate rejects it (a null filter row under
+        /// three-valued logic, or a residual leaf); counted as selected, then folded when the
+        /// aggregate row is non-null.
         ///
         /// @param row the matching row
         void accept(long row) {
-            if (fVal != null && !fVal.getBoolean(row)) {
+            if (gate != null && !gate.test(row)) {
                 return;
             }
             selected++;
@@ -701,7 +748,7 @@ final class DictFilter {
 
         private final Array aggData;
         private final boolean aggIsFloat;
-        private final BoolArray fVal;
+        private final LongPredicate gate;
         private final BoolArray aVal;
         private long selected;
         private long nonNull;
@@ -710,19 +757,20 @@ final class DictFilter {
         private double min;
         private double max;
 
-        DoubleAggFold(Array aggData, boolean aggIsFloat, BoolArray fVal, BoolArray aVal) {
+        DoubleAggFold(Array aggData, boolean aggIsFloat, LongPredicate gate, BoolArray aVal) {
             this.aggData = aggData;
             this.aggIsFloat = aggIsFloat;
-            this.fVal = fVal;
+            this.gate = gate;
             this.aVal = aVal;
         }
 
-        /// Folds one code-matching row: skipped when the filter row is null (three-valued logic);
-        /// counted as selected, then folded when the aggregate row is non-null.
+        /// Folds one code-matching row: skipped when the gate rejects it (a null filter row under
+        /// three-valued logic, or a residual leaf); counted as selected, then folded when the
+        /// aggregate row is non-null.
         ///
         /// @param row the matching row
         void accept(long row) {
-            if (fVal != null && !fVal.getBoolean(row)) {
+            if (gate != null && !gate.test(row)) {
                 return;
             }
             selected++;

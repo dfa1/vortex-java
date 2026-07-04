@@ -92,6 +92,11 @@ import org.openjdk.jmh.annotations.Warmup;
 /// - the future encoded-domain specialization — measured against `forLoopFilteredSum`, which it must
 ///   beat by comparing and reducing in the integer domain instead of decoding every element.
 ///
+/// Measurement discipline: single-fork numbers on the dict lanes swing ±20–50% across JVM
+/// launches (C2 inlining luck — `fusedFilteredSumDict` measured 25–57 ms/op on identical code).
+/// Numbers recorded in ADRs / javadoc must come from multi-fork runs (`-f 3`); treat any
+/// single-fork delta under ≈ 1.5× as noise until an A/B on the same session confirms it.
+///
 /// Run: java -jar performance/target/benchmarks.jar ComputeKernelBenchmark
 @State(Scope.Benchmark)
 @BenchmarkMode(Mode.AverageTime)
@@ -231,9 +236,10 @@ public class ComputeKernelBenchmark {
     /// dict accessor (chunk lookup + code read + value gather) unless the kernel scans the raw codes
     /// segment instead. Category and measure chunks are indexed in lockstep.
     ///
-    /// Result (2026-07-02, 100M rows): 762 ± 7 ms/op through the accessor chain; 25.5 ± 2.5 ms/op
-    /// once the kernel's dict code-scan lane (`DictFilter`) landed — ≈ 30×, matching the raw
-    /// [#forLoopDictSegment()] ceiling, so the lane adds no measurable overhead over the bare scan.
+    /// Result: 762 ± 7 ms/op through the accessor chain (2026-07-02); 38.1 ± 9.2 ms/op with the
+    /// `DictFilter` code-scan lane (2026-07-04, 3 forks — per-fork means span 28–57 ms/op, heavy
+    /// C2 inlining luck; the best forks match the raw [#forLoopDictSegment()] ceiling). ≈ 20×
+    /// typical, ≈ 30× on a good fork.
     ///
     /// @return the sum of `measure` over the rows where `category == 7` across the whole dataset
     @Benchmark
@@ -254,12 +260,12 @@ public class ComputeKernelBenchmark {
     /// dict-filtered workload as [#fusedFilteredSumDict()]. Folds the selected count and sum into
     /// the return value so JMH cannot eliminate the loop.
     ///
-    /// Result (2026-07-02, 100M rows): 982.5 ± 30.2 ms/op through the per-leaf accessor path;
-    /// 178.3 ± 4.1 ms/op with the `DictFilter` lane; 36.2 ± 1.1 ms/op (≈ 27×) once async-profiler +
-    /// PrintInlining exposed the fold's aggregate read as bimorphic — `NumericColumns.widenLong`
-    /// was shared with the match-table pool reads, polluting its receiver profile — and the fold
-    /// got its own monomorphic read. The remaining gap to [#fusedFilteredSumDict()]'s 25.5 ms is
-    /// the genuine per-match fold work (min, max, two counters).
+    /// Result (100M rows): 982.5 ± 30.2 ms/op through the per-leaf accessor path; 178.3 ± 4.1
+    /// ms/op with the `DictFilter` lane; 45.5 ± 1.4 ms/op (2026-07-04, 3 forks; ≈ 22×) once
+    /// async-profiler + PrintInlining exposed the fold's aggregate read as bimorphic —
+    /// `NumericColumns.widenLong` was shared with the match-table pool reads, polluting its
+    /// receiver profile — and the fold got its own monomorphic read. The residual gap to
+    /// [#fusedFilteredSumDict()] is the genuine per-match fold work (min, max, two counters).
     ///
     /// @return the selected row count plus the sum of `measure` where `category == 7`, folded
     ///         across the whole dataset
@@ -280,8 +286,8 @@ public class ComputeKernelBenchmark {
     /// aggregate column, so the filter column is re-scanned once per aggregate. The transducer
     /// façade folds every aggregate from one scan; this method is the number it must beat.
     ///
-    /// Result (2026-07-03, 100M rows): 137.3 ± 0.1 ms/op — ≈ 2× the single-aggregate lane, the
-    /// redundant re-scan plus the second aggregate's (random-access `plain`) match reads.
+    /// Result (2026-07-04, 100M rows, 3 forks): 142.9 ± 6.9 ms/op — ≈ 2× the single-aggregate
+    /// lane, the redundant re-scan plus the second aggregate's (random-access `plain`) match reads.
     ///
     /// @return the two folds' selected counts and sums combined, so JMH cannot eliminate either call
     @Benchmark
@@ -305,9 +311,10 @@ public class ComputeKernelBenchmark {
     /// with the dict leaf, tests the residual `price` leaf only on code matches, and feeds both
     /// aggregates from that single pass.
     ///
-    /// Result (2026-07-03, 100M rows): 2269.1 ± 19.8 ms/op — the multi-leaf decline costs ≈ 60×
-    /// the single-leaf dict lane's 36.2 ms; ADR 0019's target for this exact workload is tens of
-    /// milliseconds.
+    /// Result: 2269.1 ± 19.8 ms/op while a multi-leaf `AND` declined the dict lane (2026-07-03);
+    /// 201.3 ± 1.6 ms/op (2026-07-04, 3 forks; ≈ 11×) once the kernel's multi-leaf driving scan
+    /// landed. The remaining ≈ 2× is the per-aggregate re-scan — the ADR 0019 multi-aggregate
+    /// lever.
     ///
     /// @return the two folds' selected counts and sums combined, so JMH cannot eliminate either call
     @Benchmark

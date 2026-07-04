@@ -51,12 +51,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// plain `i64` / `i32` array or as a dict-encoded view (a value pool behind flat or chunked `u8`
 /// codes) — the same values either way — so the [io.github.dfa1.vortex.reader.compute] dict
 /// code-scan lane is swept against the identical brute-force reference, on both the shapes that
-/// drive it (a single comparison leaf) and the shapes it must decline (multi-leaf `AND`s, null
-/// tests). The explicit cases pin the corners the random space rarely hits exactly: an empty chunk,
+/// drive it (any `AND` holding a dict comparison leaf — that leaf drives the scan and the rest are
+/// residual-tested per match) and the shapes it must decline (null-test-only filters, no dict
+/// leaf). The explicit cases pin the corners the random space rarely hits exactly: an empty chunk,
 /// a no-match filter, an all-match filter, an all-null aggregate, a null in the filter column, a
 /// `COUNT(*)` with no aggregate column, a floating-domain filter + aggregate (the double
-/// accumulators), and the dict lane's own corners (`COUNT(*)` over codes, unsigned aggregate order,
-/// `f32` extreme boxing, a one-leaf `AND` unwrapping to the lane).
+/// accumulators), and the dict lane's own corners (`COUNT(*)` over codes with and without residual
+/// leaves, unsigned aggregate order, `f32` extreme boxing, a one-leaf `AND` unwrapping to the lane,
+/// driver discovery behind an earlier plain leaf, and a null-test residual leaf).
 class ComputeFilteredAggregateTest {
 
     private static final Arena ARENA = Arena.ofAuto();
@@ -302,6 +304,82 @@ class ComputeFilteredAggregateTest {
         assertThat(result.sum()).isInstanceOf(Double.class).isEqualTo(8.0);
         assertThat(result.min()).isInstanceOf(Float.class).isEqualTo(1.5f);
         assertThat(result.max()).isInstanceOf(Float.class).isEqualTo(4.0f);
+    }
+
+    @Test
+    void dictLeafDrivesTheMultiLeafAnd() {
+        // Given a two-leaf AND — a dict comparison leaf plus a plain long residual leaf. The dict
+        // leaf drives the code scan; the residual leaf must only be tested on the code matches.
+        Chunk chunk = chunk(6, Map.of(
+                "cat", dictColumn(new long[]{5, 7}, new int[]{1, 0, 1, 1, 0, 1}),
+                "score", longArray(new Reference(new long[]{10, 90, 20, 80, 70, 60}, null), false),
+                "v", longArray(new Reference(new long[]{1, 2, 4, 8, 16, 32}, null), false)));
+        RowFilter filter = RowFilter.eq("cat", 7L).and(RowFilter.gt("score", 50L));
+
+        // When the kernel folds `cat == 7 AND score > 50` — code matches at rows 0,2,3,5, of which
+        // the residual keeps rows 3 (80) and 5 (60)
+        FilteredAggregate result = Compute.filteredAggregate(chunk, filter, "v");
+
+        // Then only the doubly-selected rows fold
+        assertThat(result.selectedRows()).isEqualTo(2L);
+        assertThat(result.sum()).isEqualTo(8L + 32L);
+        assertThat(result.min()).isEqualTo(8L);
+        assertThat(result.max()).isEqualTo(32L);
+    }
+
+    @Test
+    void dictDriverIsFoundBehindAnEarlierPlainLeaf() {
+        // Given the same conjunction with the PLAIN leaf first — the lane must find the dict leaf
+        // wherever it sits in the AND, not just at the head
+        Chunk chunk = chunk(6, Map.of(
+                "cat", dictColumn(new long[]{5, 7}, new int[]{1, 0, 1, 1, 0, 1}),
+                "score", longArray(new Reference(new long[]{10, 90, 20, 80, 70, 60}, null), false),
+                "v", longArray(new Reference(new long[]{1, 2, 4, 8, 16, 32}, null), false)));
+        RowFilter filter = RowFilter.gt("score", 50L).and(RowFilter.eq("cat", 7L));
+
+        // When the kernel folds with the leaves in the opposite order
+        FilteredAggregate result = Compute.filteredAggregate(chunk, filter, "v");
+
+        // Then the selection is identical — AND is order-independent
+        assertThat(result.selectedRows()).isEqualTo(2L);
+        assertThat(result.sum()).isEqualTo(40L);
+    }
+
+    @Test
+    void residualNullTestLeafGatesTheCodeMatches() {
+        // Given a dict driver plus an IsNotNull residual leaf over a masked column — the residual
+        // lowering must keep the row loop's three-valued null semantics on the matched rows
+        Reference flags = new Reference(new long[]{1, 1, 1, 1, 1}, new boolean[]{true, false, true, false, true});
+        Chunk chunk = chunk(5, Map.of(
+                "cat", dictColumn(new long[]{5, 7}, new int[]{1, 1, 0, 1, 1}),
+                "flag", longArray(flags, true),
+                "v", longArray(new Reference(new long[]{1, 2, 4, 8, 16}, null), false)));
+        RowFilter filter = RowFilter.eq("cat", 7L).and(RowFilter.isNotNull("flag"));
+
+        // When the kernel folds `cat == 7 AND flag IS NOT NULL` — code matches at rows 0,1,3,4, of
+        // which flag is non-null at rows 0 and 4
+        FilteredAggregate result = Compute.filteredAggregate(chunk, filter, "v");
+
+        // Then only the non-null-flag matches fold
+        assertThat(result.selectedRows()).isEqualTo(2L);
+        assertThat(result.sum()).isEqualTo(1L + 16L);
+    }
+
+    @Test
+    void countStarWithResidualLeafCountsDoublySelectedRows() {
+        // Given a COUNT(*) fold over the same two-leaf AND — the count loop's residual gate
+        Chunk chunk = chunk(6, Map.of(
+                "cat", dictColumn(new long[]{5, 7}, new int[]{1, 0, 1, 1, 0, 1}),
+                "score", longArray(new Reference(new long[]{10, 90, 20, 80, 70, 60}, null), false)));
+        RowFilter filter = RowFilter.eq("cat", 7L).and(RowFilter.gt("score", 50L));
+
+        // When the kernel counts with no aggregate column
+        FilteredAggregate result = Compute.filteredAggregate(chunk, filter, null);
+
+        // Then only rows passing both leaves count, and the aggregate fields stay empty
+        assertThat(result.selectedRows()).isEqualTo(2L);
+        assertThat(result.aggNonNullCount()).isZero();
+        assertThat(result.sum()).isNull();
     }
 
     @Test

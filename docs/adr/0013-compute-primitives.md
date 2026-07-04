@@ -84,22 +84,34 @@ backing segment — no per-element `findChunk` binary search, no broadcast-guard
 | --- | --- |
 | `fusedFilteredSumDict` before (accessor chain per row) | 762.5 ± 7.4 ms/op |
 | `forLoopDictSegment` (raw segment scan ceiling) | 24.8 ms/op |
-| `fusedFilteredSumDict` after (`DictFilter` lane) | 25.5 ± 2.5 ms/op |
+| `fusedFilteredSumDict` after (`DictFilter` lane) | 38.1 ± 9.2 ms/op (3 forks; 28–57 per fork) |
 | `fusedFilteredAggregateDict` before (per-leaf `RowPredicate`) | 982.5 ± 30.2 ms/op |
 | `fusedFilteredAggregateDict` after (`DictFilter` lane) | 178.3 ± 4.1 ms/op |
-| `fusedFilteredAggregateDict` after profile-guided fold fix | 36.2 ± 1.1 ms/op |
+| `fusedFilteredAggregateDict` after profile-guided fold fix | 45.5 ± 1.4 ms/op (3 forks) |
+| `fusedFilteredAggregateMulti` before (2-leaf `AND` × 2 aggregates, per-leaf path) | 2269.1 ± 19.8 ms/op |
+| `fusedFilteredAggregateMulti` after the multi-leaf driving scan | 201.3 ± 1.6 ms/op (3 forks) |
 
-The `filteredSum` lane reproduces the raw-scan ceiling (≈ 30×) with no measurable kernel overhead.
-The `filteredAggregate` lane (a single comparison leaf driving the same code scan, extended to the
-full `SUM`/`MIN`/`MAX`/count fold and `COUNT(*)`) first landed at ≈ 5.5×; async-profiler +
-`PrintInlining` then showed the residual was NOT the fold arithmetic but a bimorphic aggregate
-read — the fold shared `NumericColumns.widenLong` with the match-table pool evaluation, so the
-merged receiver profile compiled the per-match read as a bimorphic guard with partially
-devirtualized segment reads. Giving the fold its own private read (its profile only ever sees
-aggregate receivers) brought the lane to ≈ 27×, within ≈ 10 ms of the sum lane — the honest
-per-match cost of the min/max/count fold. Lesson recorded: shared value-read helpers between a
-cold setup path and a hot loop poison the receiver profile; hot folds read through their own call
-sites.
+The `filteredSum` lane runs at ≈ 20× (best forks touch the raw-scan ceiling at ≈ 30×; see the
+variance note below). The `filteredAggregate` lane (a comparison leaf driving the same code scan,
+extended to the full `SUM`/`MIN`/`MAX`/count fold and `COUNT(*)`) first landed at ≈ 5.5×;
+async-profiler + `PrintInlining` then showed the residual was NOT the fold arithmetic but a
+bimorphic aggregate read — the fold shared `NumericColumns.widenLong` with the match-table pool
+evaluation, so the merged receiver profile compiled the per-match read as a bimorphic guard with
+partially devirtualized segment reads. Giving the fold its own private read (its profile only ever
+sees aggregate receivers) brought the lane to ≈ 22×. Lesson recorded: shared value-read helpers
+between a cold setup path and a hot loop poison the receiver profile; hot folds read through their
+own call sites.
+
+The multi-leaf extension then generalized the lane: any `AND` holding a dict comparison leaf uses
+that leaf to DRIVE the scan, lowers the remaining leaves once through the row loop's own
+`leafTest`, and tests them only on code matches — 2269 → 201 ms/op (≈ 11×) for
+`category = 7 AND price > 500` over two aggregate calls, with the single-leaf shapes unchanged.
+
+**Measurement-discipline note (2026-07-04):** single-fork numbers on these kernels carry heavy
+run-to-run C2 variance — `fusedFilteredSumDict` spans 28–57 ms/op across JVM launches (inlining
+luck; one fork deoptimized mid-run), and the previously recorded 25.5 ms and 36.2 ms were lucky
+forks. All numbers above are 3-fork means (`-f 3`); recorded results in this repo should be
+multi-fork from now on.
 
 ## Context
 

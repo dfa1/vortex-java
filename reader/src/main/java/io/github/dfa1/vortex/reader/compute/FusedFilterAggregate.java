@@ -10,6 +10,7 @@ import io.github.dfa1.vortex.reader.array.FloatArray;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.LongPredicate;
 
 /// The fused, one-pass multi-column filter-and-aggregate kernel: it evaluates a whole [RowFilter]
 /// (an n-ary `AND` of column-bound [Predicate] leaves, or a single leaf) and, over the rows it
@@ -43,10 +44,10 @@ import java.util.List;
 /// [Predicate] is lowered once (reusing [PrimitiveFilter#lowerLong(Predicate, long)] /
 /// [PrimitiveFilter#lowerDouble(Predicate)]), with the typed accessor and validity hoisted out of the
 /// row loop; a non-primitive or composite leaf falls back to the per-element predicate evaluator
-/// ([PredicateEvaluator#evaluate(Array, long, Predicate)]). A filter that is a single comparison
+/// ([PredicateEvaluator#evaluate(Array, long, Predicate)]). A filter whose `AND` holds a comparison
 /// leaf over a dict-encoded column takes the [DictFilter] code-scan lane instead of the row loop:
-/// the predicate is resolved against the value pool once and the raw `u8` codes are scanned from
-/// their backing segments.
+/// that leaf's predicate is resolved against the value pool once, the raw `u8` codes are scanned
+/// from their backing segments, and any remaining leaves are tested only on the code matches.
 final class FusedFilterAggregate {
 
     private FusedFilterAggregate() {
@@ -67,9 +68,9 @@ final class FusedFilterAggregate {
         if (dictResult != null) {
             return dictResult;
         }
-        List<RowPredicate> leafList = new ArrayList<>();
+        List<LongPredicate> leafList = new ArrayList<>();
         collectLeaves(chunk, filter, leafList);
-        RowPredicate[] leaves = leafList.toArray(RowPredicate[]::new);
+        LongPredicate[] leaves = leafList.toArray(LongPredicate[]::new);
 
         if (aggColumn == null) {
             long selected = 0L;
@@ -83,11 +84,14 @@ final class FusedFilterAggregate {
         return foldAggregate(chunk.column(aggColumn), leaves, n);
     }
 
-    /// Attempts the [DictFilter] code-scan lane: a filter that is a SINGLE comparison leaf over a
-    /// dict-encoded column scans raw `u8` codes instead of decoding every row through the
-    /// per-element [RowPredicate]. Returns `null` — leaving the generic row loop to run — for a
-    /// multi-leaf filter, a non-comparison predicate, a non-dict filter column, or an aggregate
-    /// without a specialized long/double lane.
+    /// Attempts the [DictFilter] code-scan lane: when the filter's flattened `AND` holds at least
+    /// one comparison leaf over a dict-encoded column, that leaf DRIVES the scan — raw `u8` codes
+    /// are compared instead of decoding every row — and the remaining leaves are lowered once (the
+    /// same [#leafTest(Array, Predicate)] lowering as the row loop) and tested only on the rows the
+    /// code scan matches. With ≈ 1/pool-size selectivity, the residual leaves' accessor reads run
+    /// on a small fraction of the rows instead of all of them. Returns `null` — leaving the generic
+    /// row loop to run — when no leaf qualifies as a driver, or for an aggregate without a
+    /// specialized long/double lane.
     ///
     /// @param chunk     the decoded chunk holding the filter and aggregate columns
     /// @param filter    the whole chunk predicate
@@ -95,36 +99,78 @@ final class FusedFilterAggregate {
     /// @param n         the chunk's row count
     /// @return the fold, or `null` when the shape does not qualify for the dict lane
     private static FilteredAggregate tryDictLane(Chunk chunk, RowFilter filter, String aggColumn, long n) {
-        RowFilter.Column leaf = singleLeaf(filter);
-        if (leaf == null || !isComparisonLeaf(leaf.predicate()) || !PrimitiveFilter.predicateOk(leaf.predicate())) {
+        List<RowFilter.Column> leaves = new ArrayList<>();
+        flattenLeaves(filter, leaves);
+        int driver = -1;
+        Array driverData = null;
+        for (int i = 0; i < leaves.size(); i++) {
+            RowFilter.Column leaf = leaves.get(i);
+            if (isComparisonLeaf(leaf.predicate()) && PrimitiveFilter.predicateOk(leaf.predicate())) {
+                Array data = NumericColumns.unwrap(chunk.column(leaf.column()));
+                if (DictFilter.isScannable(data)) {
+                    driver = i;
+                    driverData = data;
+                    break;
+                }
+            }
+        }
+        if (driver < 0) {
             return null;
         }
-        Array column = chunk.column(leaf.column());
-        Array filterData = NumericColumns.unwrap(column);
-        BoolArray filterValidity = NumericColumns.validityOf(column);
+        RowFilter.Column driverLeaf = leaves.get(driver);
+        BoolArray driverValidity = NumericColumns.validityOf(chunk.column(driverLeaf.column()));
+        LongPredicate residual = residualOf(chunk, leaves, driver);
         if (aggColumn == null) {
-            Long selected = DictFilter.tryFilteredCount(filterData, filterValidity, leaf.predicate(), n);
+            Long selected = DictFilter.tryFilteredCount(driverData, driverValidity,
+                    driverLeaf.predicate(), residual, n);
             if (selected == null) {
                 return null;
             }
             return new FilteredAggregate(selected.longValue(), 0L, null, null, null);
         }
         Array agg = chunk.column(aggColumn);
-        return DictFilter.tryFilteredAggregate(filterData, filterValidity, leaf.predicate(),
+        return DictFilter.tryFilteredAggregate(driverData, driverValidity, driverLeaf.predicate(), residual,
                 NumericColumns.unwrap(agg), NumericColumns.validityOf(agg), n);
     }
 
-    /// Unwraps a filter that is one column-bound leaf — a bare [RowFilter.Column] or an `AND`
-    /// chain that conjoins exactly one — the only shape the dict code-scan lane drives.
+    /// Lowers every non-driver leaf into one hoisted residual test, evaluated only on the rows the
+    /// driving code scan matches.
     ///
-    /// @param filter the whole chunk predicate
-    /// @return the single leaf, or `null` when the filter conjoins several
-    private static RowFilter.Column singleLeaf(RowFilter filter) {
-        return switch (filter) {
-            case RowFilter.Column column -> column;
-            case RowFilter.And(var parts) when parts.size() == 1 -> singleLeaf(parts.getFirst());
-            case RowFilter.And ignored -> null;
-        };
+    /// @param chunk  the chunk supplying each leaf's column
+    /// @param leaves the flattened column-bound leaves
+    /// @param driver the index of the leaf driving the code scan
+    /// @return the conjunction of the non-driver leaves, or `null` when the driver is the only leaf
+    private static LongPredicate residualOf(Chunk chunk, List<RowFilter.Column> leaves, int driver) {
+        List<LongPredicate> lowered = new ArrayList<>(leaves.size() - 1);
+        for (int i = 0; i < leaves.size(); i++) {
+            if (i != driver) {
+                RowFilter.Column leaf = leaves.get(i);
+                lowered.add(leafTest(chunk.column(leaf.column()), leaf.predicate()));
+            }
+        }
+        if (lowered.isEmpty()) {
+            return null;
+        }
+        if (lowered.size() == 1) {
+            return lowered.getFirst();
+        }
+        LongPredicate[] tests = lowered.toArray(LongPredicate[]::new);
+        return i -> allMatch(tests, i);
+    }
+
+    /// Flattens the filter tree into its column-bound leaves, in filter order.
+    ///
+    /// @param filter the (sub-)filter to walk
+    /// @param out    the collected leaves
+    private static void flattenLeaves(RowFilter filter, List<RowFilter.Column> out) {
+        switch (filter) {
+            case RowFilter.And(var parts) -> {
+                for (RowFilter part : parts) {
+                    flattenLeaves(part, out);
+                }
+            }
+            case RowFilter.Column column -> out.add(column);
+        }
     }
 
     /// Dispatches the fold on the aggregate's value domain — a boxing-free long or double lane, else the
@@ -136,7 +182,7 @@ final class FusedFilterAggregate {
     /// @param leaves the lowered filter leaves, all of which must accept a row for it to be selected
     /// @param n      the chunk's row count
     /// @return the fold over the selected non-null aggregate rows
-    private static FilteredAggregate foldAggregate(Array agg, RowPredicate[] leaves, long n) {
+    private static FilteredAggregate foldAggregate(Array agg, LongPredicate[] leaves, long n) {
         Array aggData = NumericColumns.unwrap(agg);
         BoolArray aggValidity = NumericColumns.validityOf(agg);
         if (NumericColumns.isLongDomain(aggData)) {
@@ -163,7 +209,7 @@ final class FusedFilterAggregate {
     /// @return the fold: selected count, non-null count, the [Long] sum, and the [Long] `MIN` / `MAX`
     ///         (`null` when no selected row is non-null)
     private static FilteredAggregate foldLongDomain(Array aggData, BoolArray validity, boolean unsigned,
-                                                    RowPredicate[] leaves, long n) {
+                                                    LongPredicate[] leaves, long n) {
         long selected = 0L;
         long nonNull = 0L;
         long sum = 0L;
@@ -209,7 +255,7 @@ final class FusedFilterAggregate {
     /// @return the fold: selected count, non-null count, the [Double] sum, and the boxed `MIN` / `MAX`
     ///         ([Float] for an `f32` column, `null` when no selected row is non-null)
     private static FilteredAggregate foldDoubleDomain(Array aggData, BoolArray validity, boolean isFloat,
-                                                      RowPredicate[] leaves, long n) {
+                                                      LongPredicate[] leaves, long n) {
         long selected = 0L;
         long nonNull = 0L;
         double sum = 0.0;
@@ -258,7 +304,7 @@ final class FusedFilterAggregate {
     /// @return the fold: selected count, non-null count, the [Double] sum (or `null` when non-numeric),
     ///         and the boxed `MIN` / `MAX` (`null` when no selected row is non-null)
     private static FilteredAggregate foldGeneric(Array agg, BoolArray validity, DType aggDtype,
-                                                 boolean numericPrimitive, RowPredicate[] leaves, long n) {
+                                                 boolean numericPrimitive, LongPredicate[] leaves, long n) {
         long selected = 0L;
         long nonNull = 0L;
         double sum = 0.0;
@@ -332,8 +378,8 @@ final class FusedFilterAggregate {
     /// @param leaves the lowered filter leaves
     /// @param i      the zero-based row
     /// @return `true` if every leaf accepts the row
-    private static boolean allMatch(RowPredicate[] leaves, long i) {
-        for (RowPredicate leaf : leaves) {
+    private static boolean allMatch(LongPredicate[] leaves, long i) {
+        for (LongPredicate leaf : leaves) {
             if (!leaf.test(i)) {
                 return false;
             }
@@ -341,13 +387,13 @@ final class FusedFilterAggregate {
         return true;
     }
 
-    /// Walks the filter tree, lowering each [RowFilter.Column] leaf into a hoisted [RowPredicate] over
+    /// Walks the filter tree, lowering each [RowFilter.Column] leaf into a hoisted [LongPredicate] over
     /// its decoded column and flattening the conjuncts of an n-ary `AND` into `out`.
     ///
     /// @param chunk  the chunk supplying each leaf's column
     /// @param filter the (sub-)filter to walk
     /// @param out    the collected per-leaf row predicates
-    private static void collectLeaves(Chunk chunk, RowFilter filter, List<RowPredicate> out) {
+    private static void collectLeaves(Chunk chunk, RowFilter filter, List<LongPredicate> out) {
         switch (filter) {
             case RowFilter.And(var parts) -> {
                 for (RowFilter part : parts) {
@@ -359,7 +405,7 @@ final class FusedFilterAggregate {
         }
     }
 
-    /// Lowers one column-bound [Predicate] into a hoisted [RowPredicate]: a null test reads validity
+    /// Lowers one column-bound [Predicate] into a hoisted [LongPredicate]: a null test reads validity
     /// directly, a numeric comparison leaf lowers once to the [PrimitiveFilter] range / operator, and
     /// any other shape falls back to the per-element predicate evaluator
     /// ([PredicateEvaluator#evaluate(Array, long, Predicate)]).
@@ -367,7 +413,7 @@ final class FusedFilterAggregate {
     /// @param column    the decoded filter column (possibly masked)
     /// @param predicate the column-bound predicate
     /// @return a row predicate that tests `predicate` against `column` at a given row
-    private static RowPredicate leafTest(Array column, Predicate predicate) {
+    private static LongPredicate leafTest(Array column, Predicate predicate) {
         Array data = NumericColumns.unwrap(column);
         BoolArray validity = NumericColumns.validityOf(column);
         if (predicate instanceof Predicate.IsNull) {
@@ -395,7 +441,7 @@ final class FusedFilterAggregate {
     /// @param validity  the filter validity bitmap, or `null` when every row is valid
     /// @param predicate the comparison leaf
     /// @return the lowered row predicate
-    private static RowPredicate longLeaf(Array data, BoolArray validity, Predicate predicate) {
+    private static LongPredicate longLeaf(Array data, BoolArray validity, Predicate predicate) {
         boolean unsigned = data.dtype().isUnsigned();
         long flip = unsigned ? Long.MIN_VALUE : 0L;
         PrimitiveFilter.LongRange range = PrimitiveFilter.lowerLong(predicate, flip);
@@ -424,7 +470,7 @@ final class FusedFilterAggregate {
     /// @param validity  the filter validity bitmap, or `null` when every row is valid
     /// @param predicate the comparison leaf
     /// @return the lowered row predicate
-    private static RowPredicate doubleLeaf(Array data, BoolArray validity, Predicate predicate) {
+    private static LongPredicate doubleLeaf(Array data, BoolArray validity, Predicate predicate) {
         PrimitiveFilter.DoubleBound bound = PrimitiveFilter.lowerDouble(predicate);
         PrimitiveFilter.DoubleOp op = bound.op();
         double lo = bound.lo();
@@ -459,15 +505,4 @@ final class FusedFilterAggregate {
                 || predicate instanceof Predicate.Between;
     }
 
-    /// A single filter leaf lowered to a boxing-free per-row test, hoisting its column accessor,
-    /// validity, and lowered predicate bounds out of the kernel's row loop.
-    @FunctionalInterface
-    private interface RowPredicate {
-
-        /// Reports whether the leaf accepts row `i`.
-        ///
-        /// @param i the zero-based row
-        /// @return `true` if the leaf's column value at `i` satisfies the leaf's predicate
-        boolean test(long i);
-    }
 }
