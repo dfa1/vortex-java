@@ -38,6 +38,14 @@
 			<artifactId>zstd</artifactId>
 		</dependency>
 		<dependency>
+			<!-- The CLI is an application, not a library: the uber-jar must read vortex.zstd
+			     files on a machine with no system libzstd, so the all-platform natives the
+			     FFM binding loads are bundled here (the library modules keep zstd optional). -->
+			<groupId>io.github.dfa1.zstd</groupId>
+			<artifactId>zstd-platform</artifactId>
+			<scope>runtime</scope>
+		</dependency>
+		<dependency>
 			<!-- Required by hardwood-core (via vortex-parquet) for ZSTD-compressed
 			     Parquet files; listed here explicitly so the shade plugin bundles
 			     the native classes into the uber-jar. -->

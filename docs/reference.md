@@ -278,6 +278,10 @@ CSV import is CLI-only — types are inferred from the data.
 
 ## CLI
 
+The `-all` uber-jar is self-contained: pure-Java code plus the native `libzstd` for all
+supported platforms (the FFM loader picks the right one at runtime) — no system libraries
+required.
+
 The `cli` module ships a fat jar with subcommands for inspecting and querying Vortex files.
 
 ```bash
