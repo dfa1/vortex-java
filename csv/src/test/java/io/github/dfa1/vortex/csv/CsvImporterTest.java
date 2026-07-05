@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.csv;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
@@ -32,7 +33,7 @@ class CsvImporterTest {
         try (VortexReader reader = VortexReader.open(vortex)) {
             assertThat(reader.dtype()).isInstanceOf(DType.Struct.class);
             DType.Struct schema = (DType.Struct) reader.dtype();
-            assertThat(schema.fieldNames()).containsExactly("id", "price", "active", "name");
+            assertThat(schema.fieldNames().stream().map(ColumnName::value).toList()).containsExactly("id", "price", "active", "name");
             assertThat(schema.fieldTypes().get(0)).isEqualTo(DType.I64);
             assertThat(schema.fieldTypes().get(1)).isEqualTo(DType.F64);
             assertThat(schema.fieldTypes().get(2)).isEqualTo(DType.BOOL);
@@ -66,7 +67,7 @@ class CsvImporterTest {
         // Then
         try (VortexReader reader = VortexReader.open(vortex)) {
             DType.Struct schema = (DType.Struct) reader.dtype();
-            assertThat(schema.fieldNames()).containsExactly("id", "name");
+            assertThat(schema.fieldNames().stream().map(ColumnName::value).toList()).containsExactly("id", "name");
         }
     }
 
@@ -83,7 +84,7 @@ class CsvImporterTest {
         // Then
         try (VortexReader reader = VortexReader.open(vortex)) {
             DType.Struct schema = (DType.Struct) reader.dtype();
-            assertThat(schema.fieldNames()).containsExactly("col0", "col1");
+            assertThat(schema.fieldNames().stream().map(ColumnName::value).toList()).containsExactly("col0", "col1");
         }
     }
 
@@ -94,7 +95,7 @@ class CsvImporterTest {
         Files.writeString(csv, "value\n42\n99\n");
         Path vortex = tmp.resolve("data.vortex");
         DType.Struct forcedSchema = new DType.Struct(
-                java.util.List.of("value"),
+                java.util.List.of(ColumnName.of("value")),
                 java.util.List.of(DType.UTF8),
                 false);
 

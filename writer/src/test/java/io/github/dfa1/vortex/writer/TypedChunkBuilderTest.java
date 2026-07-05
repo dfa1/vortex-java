@@ -1,5 +1,7 @@
 package io.github.dfa1.vortex.writer;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
+
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -36,9 +38,9 @@ class TypedChunkBuilderTest {
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
             // When
             sut.writeChunk(c -> c
-                    .put("timestamp", new long[]{1_700_000_000_000L, 1_700_000_001_000L})
-                    .put("symbol", new String[]{"AAPL", "AAPL"})
-                    .put("price", new double[]{189.95, 190.10}));
+                    .put(ColumnName.of("timestamp"), new long[]{1_700_000_000_000L, 1_700_000_001_000L})
+                    .put(ColumnName.of("symbol"), new String[]{"AAPL", "AAPL"})
+                    .put(ColumnName.of("price"), new double[]{189.95, 190.10}));
         }
 
         // Then — file is readable and values round-trip
@@ -58,7 +60,7 @@ class TypedChunkBuilderTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
             // When / Then
-            assertThatThrownBy(() -> sut.writeChunk(c -> c.put("nope", new long[]{1})))
+            assertThatThrownBy(() -> sut.writeChunk(c -> c.put(ColumnName.of("nope"), new long[]{1})))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("unknown column: nope");
         }
@@ -71,7 +73,7 @@ class TypedChunkBuilderTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
             // When / Then — int[] for I64 column
-            assertThatThrownBy(() -> sut.writeChunk(c -> c.put("timestamp", new int[]{1, 2})))
+            assertThatThrownBy(() -> sut.writeChunk(c -> c.put(ColumnName.of("timestamp"), new int[]{1, 2})))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("timestamp")
                     .hasMessageContaining("I64");
@@ -86,8 +88,8 @@ class TypedChunkBuilderTest {
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
             // When / Then
             assertThatThrownBy(() -> sut.writeChunk(c -> c
-                    .put("timestamp", new long[]{1L})
-                    .put("symbol", new String[]{"A"})))
+                    .put(ColumnName.of("timestamp"), new long[]{1L})
+                    .put(ColumnName.of("symbol"), new String[]{"A"})))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("missing column: price");
         }
@@ -104,7 +106,7 @@ class TypedChunkBuilderTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, nullableSchema, WriteOptions.defaults())) {
             // When
-            sut.writeChunk(c -> c.put("v", new Long[]{1L, null, 3L}));
+            sut.writeChunk(c -> c.put(ColumnName.of("v"), new Long[]{1L, null, 3L}));
         }
 
         // Then — file is well-formed; the masked encoding output is verified by the
@@ -119,7 +121,7 @@ class TypedChunkBuilderTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
             // When / Then
-            assertThatThrownBy(() -> sut.writeChunk(c -> c.put("timestamp", new Long[]{1L, 2L})))
+            assertThatThrownBy(() -> sut.writeChunk(c -> c.put(ColumnName.of("timestamp"), new Long[]{1L, 2L})))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("non-nullable")
                     .hasMessageContaining("timestamp");
@@ -134,8 +136,8 @@ class TypedChunkBuilderTest {
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
             // When / Then
             assertThatThrownBy(() -> sut.writeChunk(c -> c
-                    .put("timestamp", new long[]{1L})
-                    .put("timestamp", new long[]{2L})))
+                    .put(ColumnName.of("timestamp"), new long[]{1L})
+                    .put(ColumnName.of("timestamp"), new long[]{2L})))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("duplicate")
                     .hasMessageContaining("timestamp");
@@ -150,9 +152,9 @@ class TypedChunkBuilderTest {
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
             // When / Then — timestamp has 2 rows, symbol has 3, price has 2
             assertThatThrownBy(() -> sut.writeChunk(c -> c
-                    .put("timestamp", new long[]{1L, 2L})
-                    .put("symbol", new String[]{"A", "B", "C"})
-                    .put("price", new double[]{1.0, 2.0})))
+                    .put(ColumnName.of("timestamp"), new long[]{1L, 2L})
+                    .put(ColumnName.of("symbol"), new String[]{"A", "B", "C"})
+                    .put(ColumnName.of("price"), new double[]{1.0, 2.0})))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("symbol")
                     .hasMessageContaining("3 rows")

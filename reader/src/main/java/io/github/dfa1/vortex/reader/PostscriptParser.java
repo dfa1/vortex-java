@@ -267,7 +267,7 @@ final class PostscriptParser {
                     throw new VortexException("struct names/dtypes length mismatch: "
                             + s.namesLength() + " names, " + s.dtypesLength() + " dtypes");
                 }
-                var names = new ArrayList<String>(s.namesLength());
+                var names = new ArrayList<io.github.dfa1.vortex.core.model.ColumnName>(s.namesLength());
                 var types = new ArrayList<DType>(s.dtypesLength());
                 var seen = new HashSet<String>();
                 for (int i = 0; i < s.namesLength(); i++) {
@@ -289,7 +289,7 @@ final class PostscriptParser {
                                 + fieldIndex + "): " + reason
                                 + " — likely a bug in the pipeline that produced this file");
                     });
-                    names.add(name);
+                    names.add(io.github.dfa1.vortex.core.model.ColumnName.of(name));
                 }
                 for (int i = 0; i < s.dtypesLength(); i++) {
                     types.add(convertDType(s.dtypes(i), depth + 1));

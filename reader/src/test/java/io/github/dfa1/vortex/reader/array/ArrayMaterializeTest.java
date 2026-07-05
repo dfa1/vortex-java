@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.reader.array;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.error.VortexException;
@@ -233,7 +234,7 @@ class ArrayMaterializeTest {
         @Test
         void structArrayThrows() {
             // Given a two-field struct
-            DType.Struct dtype = new DType.Struct(List.of("a", "b"), List.of(I64, I64), false);
+            DType.Struct dtype = new DType.Struct(List.of(ColumnName.of("a"), ColumnName.of("b")), List.of(I64, I64), false);
             StructArray sut = new StructArray(dtype, 2, List.of(longs(1L, 2L), longs(3L, 4L)));
 
             // When / Then

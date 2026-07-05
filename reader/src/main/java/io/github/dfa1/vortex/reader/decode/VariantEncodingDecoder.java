@@ -83,9 +83,11 @@ public final class VariantEncodingDecoder implements EncodingDecoder {
         }
         if (proto.struct() != null) {
             var s = proto.struct();
-            var names = new ArrayList<String>(s.names().size());
+            var names = new ArrayList<io.github.dfa1.vortex.core.model.ColumnName>(s.names().size());
             var types = new ArrayList<DType>(s.dtypes().size());
-            names.addAll(s.names());
+            for (String name : s.names()) {
+                names.add(io.github.dfa1.vortex.core.model.ColumnName.of(name));
+            }
             for (io.github.dfa1.vortex.core.proto.ProtoDType child : s.dtypes()) {
                 types.add(dtypeFromProto(child));
             }

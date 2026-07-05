@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.writer;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.ReadRegistry;
@@ -24,12 +25,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ColumnZoneStatsTest {
 
     private static final DType.Struct SCHEMA = new DType.Struct(
-            List.of("id"),
+            List.of(ColumnName.of("id")),
             List.of(DType.I64),
             false);
 
     private static final DType.Struct F64_SCHEMA = new DType.Struct(
-            List.of("v"),
+            List.of(ColumnName.of("v")),
             List.of(DType.F64),
             false);
 

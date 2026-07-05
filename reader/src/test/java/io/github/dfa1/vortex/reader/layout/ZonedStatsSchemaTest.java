@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.reader.layout;
 
 import java.lang.foreign.MemorySegment;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import org.junit.jupiter.api.Nested;
@@ -131,7 +132,7 @@ class ZonedStatsSchemaTest {
             DType.Struct schema = ZonedStatsSchema.statsTableDtype(columnDtype, present);
 
             // Then — matches Rust's stats_table_dtype ordering exactly
-            assertThat(schema.fieldNames()).containsExactly(
+            assertThat(schema.fieldNames().stream().map(ColumnName::value).toList()).containsExactly(
                     "max", "max_is_truncated",
                     "min", "min_is_truncated",
                     "sum");
@@ -157,7 +158,7 @@ class ZonedStatsSchemaTest {
             DType.Struct schema = ZonedStatsSchema.statsTableDtype(new DType.Null(true), present);
 
             // Then — only null_count survives; truncation flags drop with their parent stat
-            assertThat(schema.fieldNames()).containsExactly("null_count");
+            assertThat(schema.fieldNames().stream().map(ColumnName::value).toList()).containsExactly("null_count");
             assertThat(schema.fieldTypes()).containsExactly(new DType.Primitive(PType.U64, true));
         }
 
@@ -174,7 +175,7 @@ class ZonedStatsSchemaTest {
             DType.Struct schema = ZonedStatsSchema.statsTableDtype(columnDtype, present);
 
             // Then
-            assertThat(schema.fieldNames()).containsExactly("min", "min_is_truncated", "null_count");
+            assertThat(schema.fieldNames().stream().map(ColumnName::value).toList()).containsExactly("min", "min_is_truncated", "null_count");
         }
 
         @Test
@@ -190,7 +191,7 @@ class ZonedStatsSchemaTest {
             DType.Struct schema = ZonedStatsSchema.statsTableDtype(columnDtype, present);
 
             // Then
-            assertThat(schema.fieldNames()).containsExactly("max", "max_is_truncated", "null_count");
+            assertThat(schema.fieldNames().stream().map(ColumnName::value).toList()).containsExactly("max", "max_is_truncated", "null_count");
         }
 
         @Test
@@ -204,7 +205,7 @@ class ZonedStatsSchemaTest {
             DType.Struct schema = ZonedStatsSchema.statsTableDtype(columnDtype, present);
 
             // Then
-            assertThat(schema.fieldNames()).containsExactly("max", "max_is_truncated", "nan_count");
+            assertThat(schema.fieldNames().stream().map(ColumnName::value).toList()).containsExactly("max", "max_is_truncated", "nan_count");
             assertThat(schema.fieldTypes()).element(2).isEqualTo(new DType.Primitive(PType.U64, true));
         }
 
@@ -220,7 +221,7 @@ class ZonedStatsSchemaTest {
             DType.Struct schema = ZonedStatsSchema.statsTableDtype(columnDtype, present);
 
             // Then — min keeps extension dtype, sum widens to i64 via storage
-            assertThat(schema.fieldNames()).containsExactly("min", "min_is_truncated", "sum");
+            assertThat(schema.fieldNames().stream().map(ColumnName::value).toList()).containsExactly("min", "min_is_truncated", "sum");
             assertThat(schema.fieldTypes().get(0)).isEqualTo(columnDtype.withNullable(true));
             assertThat(schema.fieldTypes().get(2)).isEqualTo(new DType.Primitive(PType.I64, true));
         }
@@ -235,7 +236,7 @@ class ZonedStatsSchemaTest {
             DType.Struct schema = ZonedStatsSchema.statsTableDtype(columnDtype, present);
 
             // Then — nan_count is dropped (i32 not float); everything else present.
-            assertThat(schema.fieldNames()).containsExactly(
+            assertThat(schema.fieldNames().stream().map(ColumnName::value).toList()).containsExactly(
                     "is_constant", "is_sorted", "is_strict_sorted",
                     "max", "max_is_truncated",
                     "min", "min_is_truncated",

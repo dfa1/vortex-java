@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.performance;
 
 import dev.vortex.api.Session;
 import dev.vortex.jni.NativeLoader;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.layout.Layout;
 import io.github.dfa1.vortex.reader.ReadRegistry;
@@ -99,7 +100,7 @@ public final class TaxiColumnByteDiff {
                 throw new IllegalStateException("expected struct root, got: " + dtype);
             }
             Layout structLayout = unwrapToStruct(root);
-            List<String> names = s.fieldNames();
+            List<String> names = s.fieldNames().stream().map(ColumnName::value).toList();
             List<Layout> children = structLayout.children();
             Map<String, Long> out = new LinkedHashMap<>();
             for (int i = 0; i < names.size(); i++) {

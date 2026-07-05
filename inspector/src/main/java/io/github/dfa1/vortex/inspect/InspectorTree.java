@@ -4,6 +4,7 @@ import static io.github.dfa1.vortex.core.io.VortexFormat.LE_INT;
 
 import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.core.model.EncodingId;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.Footer;
 import io.github.dfa1.vortex.reader.layout.Layout;
@@ -96,7 +97,8 @@ public record InspectorTree(
         Footer footer = handle.footer();
         Layout layout = handle.layout();
         DType dtype = handle.dtype();
-        List<String> colNames = (dtype instanceof DType.Struct s) ? s.fieldNames() : List.of();
+        List<String> colNames = (dtype instanceof DType.Struct s)
+                ? s.fieldNames().stream().map(ColumnName::value).toList() : List.of();
         Node root = shallowNode(layout, Optional.empty());
         if (layout.isStruct()) {
             List<Node> named = new ArrayList<>(root.children().size());
@@ -167,7 +169,8 @@ public record InspectorTree(
         int total = countPeekableSegments(layout, footer);
         int[] counter = {0};
 
-        List<String> colNames = (dtype instanceof DType.Struct s) ? s.fieldNames() : List.of();
+        List<String> colNames = (dtype instanceof DType.Struct s)
+                ? s.fieldNames().stream().map(ColumnName::value).toList() : List.of();
         Set<String> overallUsed = new LinkedHashSet<>();
         Node root = buildNode(layout, Optional.empty(), handle, footer.arraySpecs(),
                 overallUsed, progress, counter, total);

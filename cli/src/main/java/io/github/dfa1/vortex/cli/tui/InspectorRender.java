@@ -76,7 +76,7 @@ final class InspectorRender {
             // A single-field stats table (e.g. NULL_COUNT only) is decoded to the bare field, not
             // a StructArray (the struct decoder collapses one-field structs). Render that one stat.
             if (statsDtype.fieldTypes().size() == 1) {
-                String name = statsDtype.fieldNames().getFirst();
+                String name = statsDtype.fieldNames().getFirst().value();
                 DType fdtype = statsDtype.fieldTypes().getFirst();
                 int rowCount = (int) arr.length();
                 List<String> rows = new ArrayList<>(rowCount);
@@ -96,7 +96,7 @@ final class InspectorRender {
                 if (f > 0) {
                     sb.append(", ");
                 }
-                String name = statsDtype.fieldNames().get(f);
+                String name = statsDtype.fieldNames().get(f).value();
                 DType fdtype = statsDtype.fieldTypes().get(f);
                 Array field = sa.field(f);
                 sb.append(name).append('=').append(formatStatsCell(field, row, fdtype));

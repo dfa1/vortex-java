@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.reader.array;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.error.VortexException;
 
@@ -58,9 +59,9 @@ public final class StructArray implements Array {
     /// @param name the field name to look up
     /// @return the field array with the given name
     public Array field(String name) {
-        List<String> names = dtype.fieldNames();
+        List<ColumnName> names = dtype.fieldNames();
         for (int i = 0; i < names.size(); i++) {
-            if (names.get(i).equals(name)) {
+            if (names.get(i).value().equals(name)) {
                 return fields.get(i);
             }
         }

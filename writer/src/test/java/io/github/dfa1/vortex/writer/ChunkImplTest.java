@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.writer;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.encode.NullableData;
@@ -15,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class ChunkImplTest {
 
     private static DType.Struct schema(DType dtype) {
-        return new DType.Struct(List.of("c"), List.of(dtype), false);
+        return new DType.Struct(List.of(ColumnName.of("c")), List.of(dtype), false);
     }
 
     private static DType prim(PType ptype, boolean nullable) {
@@ -24,7 +25,7 @@ class ChunkImplTest {
 
     private static Object putGet(DType dtype, Object value) {
         ChunkImpl sut = new ChunkImpl(schema(dtype));
-        sut.put("c", value);
+        sut.put(ColumnName.of("c"), value);
         return sut.finish().get("c");
     }
 
@@ -37,7 +38,7 @@ class ChunkImplTest {
             ChunkImpl sut = new ChunkImpl(schema(prim(PType.I32, false)));
 
             // When / Then
-            assertThatThrownBy(() -> sut.put("nope", new int[]{1}))
+            assertThatThrownBy(() -> sut.put(ColumnName.of("nope"), new int[]{1}))
                     .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("unknown column");
         }
 
@@ -45,10 +46,10 @@ class ChunkImplTest {
         void duplicatePutRejected() {
             // Given
             ChunkImpl sut = new ChunkImpl(schema(prim(PType.I32, false)));
-            sut.put("c", new int[]{1});
+            sut.put(ColumnName.of("c"), new int[]{1});
 
             // When / Then
-            assertThatThrownBy(() -> sut.put("c", new int[]{2}))
+            assertThatThrownBy(() -> sut.put(ColumnName.of("c"), new int[]{2}))
                     .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("duplicate");
         }
 
@@ -58,7 +59,7 @@ class ChunkImplTest {
             ChunkImpl sut = new ChunkImpl(schema(prim(PType.I32, false)));
 
             // When
-            Chunk result = sut.put("c", new int[]{1});
+            Chunk result = sut.put(ColumnName.of("c"), new int[]{1});
 
             // Then
             assertThat(result).isSameAs(sut);
@@ -68,8 +69,8 @@ class ChunkImplTest {
         void finishRejectsMissingColumn() {
             // Given — schema has two columns, only one put
             ChunkImpl sut = new ChunkImpl(new DType.Struct(
-                    List.of("a", "b"), List.of(prim(PType.I32, false), prim(PType.I32, false)), false));
-            sut.put("a", new int[]{1});
+                    List.of(ColumnName.of("a"), ColumnName.of("b")), List.of(prim(PType.I32, false), prim(PType.I32, false)), false));
+            sut.put(ColumnName.of("a"), new int[]{1});
 
             // When / Then
             assertThatThrownBy(sut::finish)
@@ -81,7 +82,7 @@ class ChunkImplTest {
             // Given
             ChunkImpl sut = new ChunkImpl(schema(prim(PType.I32, false)));
             int[] col = {1, 2, 3};
-            sut.put("c", col);
+            sut.put(ColumnName.of("c"), col);
 
             // When
             Map<String, Object> result = sut.finish();

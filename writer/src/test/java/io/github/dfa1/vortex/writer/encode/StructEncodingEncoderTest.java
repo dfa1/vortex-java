@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.writer.encode;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.LongArray;
@@ -46,7 +47,7 @@ class StructEncodingEncoderTest {
         @Test
         void accepts_structDtype_trueForStruct_falseForPrimitive() {
             // Given
-            DType.Struct structDtype = new DType.Struct(List.of("x"), List.of(DTypes.I64), false);
+            DType.Struct structDtype = new DType.Struct(List.of(ColumnName.of("x")), List.of(DTypes.I64), false);
 
             // When
             // Then
@@ -60,7 +61,7 @@ class StructEncodingEncoderTest {
             long[] ids = {1L, 2L, 3L};
             long[] values = {10L, 20L, 30L};
             DType.Struct dtype = new DType.Struct(
-                    List.of("id", "value"), List.of(DTypes.I64, DTypes.I64), false);
+                    List.of(ColumnName.of("id"), ColumnName.of("value")), List.of(DTypes.I64, DTypes.I64), false);
             StructData data = new StructData(List.of(ids, values));
 
             // When
@@ -85,7 +86,7 @@ class StructEncodingEncoderTest {
         void singleField_encodeResult_hasOneChildAndNoBuffers() {
             // Given
             long[] data = {7L, 14L, 21L};
-            DType.Struct dtype = new DType.Struct(List.of("v"), List.of(DTypes.I64), false);
+            DType.Struct dtype = new DType.Struct(List.of(ColumnName.of("v")), List.of(DTypes.I64), false);
 
             // When
             EncodeResult result = ENCODER.encode(dtype, new StructData(List.of(data)), EncodeTestHelper.testCtx());
@@ -100,7 +101,7 @@ class StructEncodingEncoderTest {
         @Test
         void fieldCountMismatch_throwsVortexException() {
             // Given
-            DType.Struct dtype = new DType.Struct(List.of("a", "b"), List.of(DTypes.I64, DTypes.I64), false);
+            DType.Struct dtype = new DType.Struct(List.of(ColumnName.of("a"), ColumnName.of("b")), List.of(DTypes.I64, DTypes.I64), false);
             StructData data = new StructData(List.of(new long[]{1L}));
 
             // When

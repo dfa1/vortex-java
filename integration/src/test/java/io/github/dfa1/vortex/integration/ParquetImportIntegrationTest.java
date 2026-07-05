@@ -104,7 +104,7 @@ class ParquetImportIntegrationTest {
         try (VortexReader reader = VortexReader.open(vortexFile)) {
             assertThat(reader.dtype()).isInstanceOf(DType.Struct.class);
             DType.Struct schema = (DType.Struct) reader.dtype();
-            assertThat(schema.fieldNames()).containsExactlyElementsOf(parquetColumns);
+            assertThat(schema.fieldNames().stream().map(io.github.dfa1.vortex.core.model.ColumnName::value).toList()).containsExactlyElementsOf(parquetColumns);
 
             long vortexRows = countRows(reader);
             assertThat(vortexRows).isEqualTo(EXPECTED_ROWS);

@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.cli;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import org.junit.jupiter.api.Test;
@@ -85,7 +86,7 @@ class SchemaCommandTest {
                 arguments(new DType.Extension("vortex.uuid", i64, null, true), "ext<vortex.uuid>?"),
                 arguments(DType.VARIANT, "variant"),
                 arguments(new DType.Variant(true), "variant?"),
-                arguments(new DType.Struct(List.of("a", "b"), List.of(i64, DType.UTF8), false),
+                arguments(new DType.Struct(List.of(ColumnName.of("a"), ColumnName.of("b")), List.of(i64, DType.UTF8), false),
                         "struct<a: I64, b: utf8>"));
     }
 

@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.writer;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.array.LongArray;
@@ -25,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class VortexWriterTest {
 
     private static final DType.Struct SCHEMA = new DType.Struct(
-            List.of("id", "value"),
+            List.of(ColumnName.of("id"), ColumnName.of("value")),
             List.of(DType.I64,
                     DType.F64),
             false);
@@ -86,7 +87,7 @@ class VortexWriterTest {
         // schemas ("StructLayout must have unique field names"), so ours must too — otherwise
         // we emit files the canonical implementation would never produce.
         var schema = new DType.Struct(
-                List.of("dup", "dup"),
+                List.of(ColumnName.of("dup"), ColumnName.of("dup")),
                 List.of(new DType.Primitive(PType.I64, false), new DType.Primitive(PType.I64, false)),
                 false);
         Path file = tmp.resolve("dup.vtx");
@@ -101,43 +102,31 @@ class VortexWriterTest {
     }
 
     @Test
-    void create_fieldNameWithNulByte_throwsIllegalArgumentException(@TempDir Path tmp) throws IOException {
-        // Given — a NUL byte inside a field name. Legal in our pure-Java stack, but it aborts
-        // the reference toolchain's Arrow FFI export (panic-cannot-unwind in arrow-rs, SIGABRT,
-        // measured 2026-07-04) — so the writer must never emit it.
-        var schema = new DType.Struct(
-                List.of("col\u0000hidden"),
+    void schema_fieldNameWithNulByte_isUnbuildable() {
+        // Given a NUL byte inside a field name: legal in our pure-Java stack, but it aborts the
+        // reference toolchain's Arrow FFI export (panic-cannot-unwind in arrow-rs, SIGABRT,
+        // measured 2026-07-04). With fieldNames typed as ColumnName the schema can no longer even
+        // be constructed, so the footgun is rejected before it can reach the writer.
+        // When / Then
+        assertThatThrownBy(() -> new DType.Struct(
+                List.of(ColumnName.of("col\u0000hidden")),
                 List.of(new DType.Primitive(PType.I64, false)),
-                false);
-        Path file = tmp.resolve("nul.vtx");
-
-        // When / Then — options hoisted so only the subject call is in the lambda
-        WriteOptions opts = WriteOptions.defaults();
-        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
-            assertThatThrownBy(() -> VortexWriter.create(ch, schema, opts))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("U+0000");
-        }
+                false))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("U+0000");
     }
 
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.ValueSource(strings = {"", " ", "   ", "a\nb", "tab\there"})
-    void create_footgunFieldName_throwsIllegalArgumentException(String name, @TempDir Path tmp) throws IOException {
-        // Given — blank and control-character names are wire-legal but footguns: the write-side
-        // policy is stricter than the format on purpose (like a JSON library refusing to write
-        // a "" key it could parse). The reader mirrors this (PostscriptParserDTypeGuardsTest).
-        var schema = new DType.Struct(
-                List.of(name),
+    void schema_footgunFieldName_isUnbuildable(String name) {
+        // Given a blank or control-character field name — wire-legal footguns. With ColumnName-
+        // typed fieldNames the schema can't hold one; the write-side strictness is now structural.
+        // When / Then
+        assertThatThrownBy(() -> new DType.Struct(
+                List.of(ColumnName.of(name)),
                 List.of(new DType.Primitive(PType.I64, false)),
-                false);
-        Path file = tmp.resolve("footgun.vtx");
-
-        // When / Then — options hoisted so only the subject call is in the lambda
-        WriteOptions opts = WriteOptions.defaults();
-        try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
-            assertThatThrownBy(() -> VortexWriter.create(ch, schema, opts))
-                    .isInstanceOf(IllegalArgumentException.class);
-        }
+                false))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     // ── writeChunk validation ─────────────────────────────────────────────────
@@ -147,7 +136,7 @@ class VortexWriterTest {
         // Given — schema with a vortex.date column; user passes List<LocalDate> directly,
         // expecting the writer to call DateExtension.encodeAll under the hood
         var dateSchema = new DType.Struct(
-                List.of("birthdays"),
+                List.of(ColumnName.of("birthdays")),
                 List.of(io.github.dfa1.vortex.writer.encode.DateExtensionEncoder.INSTANCE.dtype(false)),
                 false);
         List<java.time.LocalDate> dates = List.of(
@@ -183,7 +172,7 @@ class VortexWriterTest {
         // by its element count: if it reported anything else, the two columns would look mismatched
         // and writeChunk would reject a perfectly valid chunk.
         var schema = new DType.Struct(
-                List.of("birthdays", "id"),
+                List.of(ColumnName.of("birthdays"), ColumnName.of("id")),
                 List.of(io.github.dfa1.vortex.writer.encode.DateExtensionEncoder.INSTANCE.dtype(false),
                         DType.I64),
                 false);
@@ -216,7 +205,7 @@ class VortexWriterTest {
         // only the builder accepted them. Both now share ChunkImpl.validateAndAdapt, so the map
         // form routes the column through nullable → MaskedEncoding. The null round-trip itself is
         // asserted end-to-end (through the JNI reader) by the integration masked test.
-        var schema = new DType.Struct(List.of("v"),
+        var schema = new DType.Struct(List.of(ColumnName.of("v")),
                 List.of(new DType.Primitive(PType.I64, true)), false);
         Path file = tmp.resolve("nullable_map.vtx");
 
@@ -253,7 +242,7 @@ class VortexWriterTest {
         // to keep the test focused — TimeExtension tests cover both).
         DType.Extension timeDtype = io.github.dfa1.vortex.writer.encode.TimeExtensionEncoder.INSTANCE.dtype(
                 io.github.dfa1.vortex.core.model.TimeUnit.Milliseconds, false);
-        var schema = new DType.Struct(List.of("clock"), List.of(timeDtype), false);
+        var schema = new DType.Struct(List.of(ColumnName.of("clock")), List.of(timeDtype), false);
         List<java.time.LocalTime> times = List.of(
                 java.time.LocalTime.of(0, 0, 0, 0),
                 java.time.LocalTime.of(1, 1, 1, 500_000_000),
@@ -282,7 +271,7 @@ class VortexWriterTest {
         // Given — pre-epoch + epoch + future to exercise sign + boundary; ms resolution
         DType.Extension tsDtype = io.github.dfa1.vortex.writer.encode.TimestampExtensionEncoder.INSTANCE.dtype(
                 io.github.dfa1.vortex.core.model.TimeUnit.Milliseconds, null, false);
-        var schema = new DType.Struct(List.of("events"), List.of(tsDtype), false);
+        var schema = new DType.Struct(List.of(ColumnName.of("events")), List.of(tsDtype), false);
         List<java.time.Instant> instants = List.of(
                 java.time.Instant.ofEpochMilli(-1_500L),
                 java.time.Instant.EPOCH,
@@ -310,7 +299,7 @@ class VortexWriterTest {
     void chunkAs_mismatchedDomainType_throws(@TempDir Path tmp) throws IOException {
         // Given — a vortex.date column on disk, but caller asks for Instant
         var dateSchema = new DType.Struct(
-                List.of("birthdays"),
+                List.of(ColumnName.of("birthdays")),
                 List.of(io.github.dfa1.vortex.writer.encode.DateExtensionEncoder.INSTANCE.dtype(false)),
                 false);
         Path file = tmp.resolve("dates2.vtx");
@@ -335,7 +324,7 @@ class VortexWriterTest {
     void writeChunk_roundTripsUuidExtension(@TempDir Path tmp) throws IOException {
         // Given — UUIDs cover both halves of the 16-byte buffer and a sign-extension edge
         DType.Extension uuidDtype = io.github.dfa1.vortex.writer.encode.UuidExtensionEncoder.INSTANCE.dtype(false);
-        var schema = new DType.Struct(List.of("ids"), List.of(uuidDtype), false);
+        var schema = new DType.Struct(List.of(ColumnName.of("ids")), List.of(uuidDtype), false);
         List<java.util.UUID> ids = List.of(
                 java.util.UUID.fromString("123e4567-e89b-12d3-a456-426614174000"),
                 new java.util.UUID(-1L, -1L),
@@ -365,7 +354,7 @@ class VortexWriterTest {
         // FrameOfReference + Bitpacked. Without cascade, storage stays as flat U64.
         DType.Extension tsDtype = io.github.dfa1.vortex.writer.encode.TimestampExtensionEncoder.INSTANCE.dtype(
                 io.github.dfa1.vortex.core.model.TimeUnit.Milliseconds, null, false);
-        var schema = new DType.Struct(List.of("events"), List.of(tsDtype), false);
+        var schema = new DType.Struct(List.of(ColumnName.of("events")), List.of(tsDtype), false);
         long base = 1_733_000_000_000L;
         List<java.time.Instant> instants = new ArrayList<>(4096);
         for (int i = 0; i < 4096; i++) {
@@ -400,7 +389,7 @@ class VortexWriterTest {
             throws IOException {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, options)) {
-            sut.writeChunk(Map.of(schema.fieldNames().get(0), data));
+            sut.writeChunk(Map.of(schema.fieldNames().get(0).value(), data));
         }
     }
 
@@ -572,7 +561,7 @@ class VortexWriterTest {
         // a deterministic order (WriteRegistry's TreeMap) plus an honest accepts() (composite
         // encoders like ChunkedEncodingEncoder no longer claim raw primitive dtypes) keep selection
         // both stable across platforms and correct.
-        var schema = new DType.Struct(List.of("v"),
+        var schema = new DType.Struct(List.of(ColumnName.of("v")),
                 List.of(DType.I64), false);
         Path file = tmp.resolve("registry.vortex");
         long[] data = {1L, 2L, 3L, 4L};

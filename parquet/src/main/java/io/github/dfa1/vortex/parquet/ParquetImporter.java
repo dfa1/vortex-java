@@ -8,6 +8,7 @@ import dev.hardwood.reader.RowReader;
 import dev.hardwood.schema.ColumnProjection;
 import dev.hardwood.schema.ColumnSchema;
 import dev.hardwood.schema.FileSchema;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.encode.DateTimePartsData;
@@ -64,10 +65,10 @@ public final class ParquetImporter {
                                                  : allColumns;
             int colCount = columns.size();
 
-            List<String> names = new ArrayList<>(colCount);
+            List<ColumnName> names = new ArrayList<>(colCount);
             List<DType> types = new ArrayList<>(colCount);
             for (ColumnSchema col : columns) {
-                names.add(col.name());
+                names.add(ColumnName.of(col.name()));
                 types.add(mapDType(col));
             }
             DType.Struct schema = new DType.Struct(names, types, false);

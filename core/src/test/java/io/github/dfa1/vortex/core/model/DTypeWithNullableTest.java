@@ -24,7 +24,7 @@ class DTypeWithNullableTest {
                 Arguments.of("Decimal", new DType.Decimal((byte) 10, (byte) 2, false)),
                 Arguments.of("Utf8", DType.UTF8),
                 Arguments.of("Binary", DType.BINARY),
-                Arguments.of("Struct", new DType.Struct(List.of("a", "b"), List.of(i32, DType.UTF8), false)),
+                Arguments.of("Struct", new DType.Struct(List.of(ColumnName.of("a"), ColumnName.of("b")), List.of(i32, DType.UTF8), false)),
                 Arguments.of("List", new DType.List(i32, false)),
                 Arguments.of("FixedSizeList", new DType.FixedSizeList(i32, 4, false)),
                 Arguments.of("Extension", new DType.Extension("ip.address", i32, null, false)),
@@ -82,14 +82,14 @@ class DTypeWithNullableTest {
     void withNullable_preservesCompoundPayload_struct() {
         // Given — a struct whose field names/types must ride through the flip verbatim
         DType i32 = DType.I32;
-        DType.Struct sut = new DType.Struct(List.of("id", "name"), List.of(i32, new DType.Utf8(true)), false);
+        DType.Struct sut = new DType.Struct(List.of(ColumnName.of("id"), ColumnName.of("name")), List.of(i32, new DType.Utf8(true)), false);
 
         // When
         DType.Struct result = (DType.Struct) sut.withNullable(true);
 
         // Then
         assertThat(result.nullable()).isTrue();
-        assertThat(result.fieldNames()).containsExactly("id", "name");
+        assertThat(result.fieldNames()).containsExactly(ColumnName.of("id"), ColumnName.of("name"));
         assertThat(result.fieldTypes()).containsExactly(i32, new DType.Utf8(true));
     }
 

@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.reader;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.reader.array.ListArray;
@@ -145,12 +146,12 @@ class VortexHttpReaderIT {
         // When
         try (var sut = VortexHttpReader.open(uri)) {
             DType.Struct schema = (DType.Struct) sut.dtype();
-            List<String> names = schema.fieldNames();
+            List<ColumnName> names = schema.fieldNames();
             List<DType> types = schema.fieldTypes();
             String listColName = null;
             for (int i = 0; i < types.size(); i++) {
                 if (types.get(i) instanceof DType.List) {
-                    listColName = names.get(i);
+                    listColName = names.get(i).value();
                     break;
                 }
             }
@@ -183,12 +184,12 @@ class VortexHttpReaderIT {
         // When
         try (var sut = VortexHttpReader.open(uri)) {
             DType.Struct schema = (DType.Struct) sut.dtype();
-            List<String> names = schema.fieldNames();
+            List<ColumnName> names = schema.fieldNames();
             List<DType> types = schema.fieldTypes();
             String listColName = null;
             for (int i = 0; i < types.size(); i++) {
                 if (types.get(i) instanceof DType.List) {
-                    listColName = names.get(i);
+                    listColName = names.get(i).value();
                     break;
                 }
             }

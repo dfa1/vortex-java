@@ -89,7 +89,7 @@ class ComputeFilteredAggregateTest {
         List<RowFilter> leaves = new ArrayList<>();
         int leafCount = 1 + random.nextInt(3);
         for (int k = 0; k < leafCount; k++) {
-            leaves.add(new RowFilter.Column("f" + random.nextInt(2), randomPredicate(random)));
+            leaves.add(new RowFilter.Column(ColumnName.of("f" + random.nextInt(2)), randomPredicate(random)));
         }
         RowFilter filter = leaves.size() == 1
                 ? leaves.getFirst()
@@ -483,7 +483,7 @@ class ComputeFilteredAggregateTest {
     private static boolean allLeavesAccept(List<RowFilter> leaves, Map<String, Reference> references, int i) {
         for (RowFilter leaf : leaves) {
             RowFilter.Column column = (RowFilter.Column) leaf;
-            if (!accepts(column.predicate(), references.get(column.column()), i)) {
+            if (!accepts(column.predicate(), references.get(column.column().value()), i)) {
                 return false;
             }
         }

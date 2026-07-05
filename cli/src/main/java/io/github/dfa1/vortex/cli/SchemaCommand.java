@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.cli;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.VortexReader;
 
@@ -41,8 +42,8 @@ final class SchemaCommand {
             out.printf("%s (%s rows, %d columns)%n%n",
                     path.getFileName(), formatRows(rowCount), n);
             int idxWidth = Integer.toString(n).length();
-            int nameWidth = s.fieldNames().stream().mapToInt(String::length).max().orElse(0);
-            List<String> names = s.fieldNames();
+            List<String> names = s.fieldNames().stream().map(ColumnName::value).toList();
+            int nameWidth = names.stream().mapToInt(String::length).max().orElse(0);
             List<DType> types = s.fieldTypes();
             for (int i = 0; i < n; i++) {
                 out.printf("  %" + idxWidth + "d  %-" + nameWidth + "s  %s%n",
@@ -67,7 +68,7 @@ final class SchemaCommand {
                     if (i > 0) {
                         sb.append(", ");
                     }
-                    sb.append(s.fieldNames().get(i)).append(": ").append(formatDType(s.fieldTypes().get(i)));
+                    sb.append(s.fieldNames().get(i).value()).append(": ").append(formatDType(s.fieldTypes().get(i)));
                 }
                 sb.append('>');
                 yield sb.toString();

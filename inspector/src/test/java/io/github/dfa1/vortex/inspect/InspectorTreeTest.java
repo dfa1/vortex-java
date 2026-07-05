@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.inspect;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.reader.CompressionScheme;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.EncodingId;
@@ -32,7 +33,7 @@ class InspectorTreeTest {
         Layout valLeaf = leaf("vortex.constant", 10);
         Layout root = struct(10, List.of(idLeaf, valLeaf));
         DType dtype = new DType.Struct(
-                List.of("id", "value"),
+                List.of(ColumnName.of("id"), ColumnName.of("value")),
                 List.of(DType.I64, DType.F64),
                 false);
         givenHandle(dtype, root, List.of("vortex.constant"), List.of());
@@ -52,7 +53,7 @@ class InspectorTreeTest {
         // Given — defensive path: malformed footer with a struct layout whose child count
         // exceeds the dtype's named fields. Should not throw; should fall back to col0/col1...
         Layout root = struct(0, List.of(leaf("vortex.constant", 0), leaf("vortex.constant", 0)));
-        DType dtype = new DType.Struct(List.of("only"),
+        DType dtype = new DType.Struct(List.of(ColumnName.of("only")),
                 List.of(DType.I32), false);
         givenHandle(dtype, root, List.of("vortex.constant"), List.of());
 
@@ -103,7 +104,7 @@ class InspectorTreeTest {
     void build_setsTotalRowCountFromRootLayout() {
         // Given — total rows is the root layout's row count, regardless of struct/non-struct
         Layout root = struct(12_345L, List.of(leaf("vortex.constant", 12_345L)));
-        DType dtype = new DType.Struct(List.of("c"),
+        DType dtype = new DType.Struct(List.of(ColumnName.of("c")),
                 List.of(DType.I32), false);
         givenHandle(dtype, root, List.of("vortex.constant"), List.of());
 
@@ -142,7 +143,7 @@ class InspectorTreeTest {
         Layout c2 = new Layout(LayoutId.parse("vortex.flat"), 0, null, List.of(), List.of(1));
         Layout c3 = new Layout(LayoutId.parse("vortex.flat"), 0, null, List.of(), List.of(2));
         Layout root = struct(0, List.of(c1, c2, c3));
-        DType dtype = new DType.Struct(List.of("a", "b", "c"),
+        DType dtype = new DType.Struct(List.of(ColumnName.of("a"), ColumnName.of("b"), ColumnName.of("c")),
                 List.of(DType.I32,
                         DType.I32,
                         DType.I32),
@@ -166,7 +167,7 @@ class InspectorTreeTest {
     void build_progressNoop_isAcceptedAndProducesSameTree() {
         // Given
         Layout root = struct(0, List.of(leaf("vortex.constant", 0)));
-        DType dtype = new DType.Struct(List.of("c"),
+        DType dtype = new DType.Struct(List.of(ColumnName.of("c")),
                 List.of(DType.I32), false);
         givenHandle(dtype, root, List.of("vortex.constant"), List.of());
 
@@ -183,7 +184,7 @@ class InspectorTreeTest {
         Layout col0 = new Layout(LayoutId.parse("vortex.flat"), 10, null, List.of(), List.of(0));
         Layout col1 = new Layout(LayoutId.parse("vortex.flat"), 10, null, List.of(), List.of(1));
         Layout root = struct(10, List.of(col0, col1));
-        DType dtype = new DType.Struct(List.of("id", "value"),
+        DType dtype = new DType.Struct(List.of(ColumnName.of("id"), ColumnName.of("value")),
                 List.of(DType.I64,
                         DType.F64),
                 false);

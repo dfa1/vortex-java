@@ -738,7 +738,7 @@ public final class VortexInspectorTui {
         private DType columnDtypeByName(String columnName) {
             DType root = tree.dtype();
             if (root instanceof DType.Struct s) {
-                int idx = s.fieldNames().indexOf(columnName);
+                int idx = s.fieldNames().indexOf(ColumnName.of(columnName));
                 if (idx >= 0) {
                     return s.fieldTypes().get(idx);
                 }

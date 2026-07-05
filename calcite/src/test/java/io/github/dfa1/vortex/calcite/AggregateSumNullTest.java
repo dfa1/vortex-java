@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.calcite;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.VortexWriter;
@@ -45,7 +46,7 @@ class AggregateSumNullTest {
     /// one per-zone SUM row. `values` holds the raw longs; `valid[i] == false` marks row `i` null.
     private SchemaPlus tableOf(long[] values, boolean[] valid) throws IOException {
         DType.Struct schema = new DType.Struct(
-                List.of("v"), List.of(new DType.Primitive(PType.I64, true)), false);
+                List.of(ColumnName.of("v")), List.of(new DType.Primitive(PType.I64, true)), false);
         Path file = tmp.resolve("sum-nulls.vortex");
         // Large chunk so the whole column is one chunk; zone maps on so the SUM stat is emitted.
         WriteOptions opts = new WriteOptions(1024, true, 0.90, 0, false, false);

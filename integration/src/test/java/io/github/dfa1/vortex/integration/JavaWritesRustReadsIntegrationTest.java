@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.integration;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import dev.vortex.api.DataSource;
 import dev.vortex.api.Expression;
 import dev.vortex.api.Partition;
@@ -82,58 +83,58 @@ class JavaWritesRustReadsIntegrationTest {
     private static final Session SESSION = Session.create();
     private static final BufferAllocator ALLOCATOR = ArrowAllocation.rootAllocator();
     private static final DType.Struct SCHEMA = new DType.Struct(
-            List.of("id", "value"),
+            List.of(ColumnName.of("id"), ColumnName.of("value")),
             List.of(DType.I64,
                     DType.F64),
             false);
 
     private static final DType.Struct I32_SCHEMA = new DType.Struct(
-            List.of("v"),
+            List.of(ColumnName.of("v")),
             List.of(DType.I32),
             false);
 
     private static final DType.Struct STRING_SCHEMA = new DType.Struct(
-            List.of("s"),
+            List.of(ColumnName.of("s")),
             List.of(DType.UTF8),
             false);
 
     private static final DType.Struct TS_SCHEMA = new DType.Struct(
-            List.of("ts"),
+            List.of(ColumnName.of("ts")),
             List.of(DType.I64),
             false);
 
     private static final DType.Struct F32_SCHEMA = new DType.Struct(
-            List.of("v"),
+            List.of(ColumnName.of("v")),
             List.of(DType.F32),
             false);
 
     private static final DType.Struct F64_SCHEMA = new DType.Struct(
-            List.of("v"),
+            List.of(ColumnName.of("v")),
             List.of(DType.F64),
             false);
 
     private static final DType.Struct F16_SCHEMA = new DType.Struct(
-            List.of("v"),
+            List.of(ColumnName.of("v")),
             List.of(DType.F16),
             false);
 
     private static final DType.Struct BOOL_SCHEMA = new DType.Struct(
-            List.of("b"),
+            List.of(ColumnName.of("b")),
             List.of(DType.BOOL),
             false);
 
     private static final DType.Struct NULL_SCHEMA = new DType.Struct(
-            List.of("n"),
+            List.of(ColumnName.of("n")),
             List.of(DType.NULL),
             false);
 
     private static final DType.Struct LIST_I64_SCHEMA = new DType.Struct(
-            List.of("items"),
+            List.of(ColumnName.of("items")),
             List.of(new DType.List(DType.I64, false)),
             false);
 
     private static final DType.Struct OHLC_SCHEMA = new DType.Struct(
-            List.of("date", "symbol", "open", "high", "low", "close", "volume"),
+            List.of(ColumnName.of("date"), ColumnName.of("symbol"), ColumnName.of("open"), ColumnName.of("high"), ColumnName.of("low"), ColumnName.of("close"), ColumnName.of("volume")),
             List.of(
                     DType.I32,
                     DType.UTF8,
@@ -1057,7 +1058,7 @@ class JavaWritesRustReadsIntegrationTest {
         // This is the direct Masked-over-primitive layout; nullable_date only covers Masked → Ext.
         Path file = tmp.resolve("java_masked_i64.vtx");
         DType.Struct schema = new DType.Struct(
-                List.of("v"),
+                List.of(ColumnName.of("v")),
                 List.of(new DType.Primitive(PType.I64, true)),
                 false);
         Long[] data = {10L, null, 30L, null, 50L, 60L};
@@ -1094,7 +1095,7 @@ class JavaWritesRustReadsIntegrationTest {
         // like nullable primitives. Regression guard: this path used to NPE in VarBin on the null
         // element because no masked wrapper was inserted for String[]-with-nulls.
         Path file = tmp.resolve("java_masked_utf8.vtx");
-        DType.Struct schema = new DType.Struct(List.of("s"), List.of(new DType.Utf8(true)), false);
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("s")), List.of(new DType.Utf8(true)), false);
         String[] data = {"alpha", null, "gamma", null, "epsilon"};
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
@@ -1235,7 +1236,7 @@ class JavaWritesRustReadsIntegrationTest {
         // of masked-wrapping: zstd strips nulls before compression and emits validity as child[0].
         // Verifies that nullable-zstd layout against the Rust reader.
         Path file = tmp.resolve("java_zstd_nullable_i64.vtx");
-        DType.Struct schema = new DType.Struct(List.of("v"), List.of(new DType.Primitive(PType.I64, true)), false);
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(new DType.Primitive(PType.I64, true)), false);
         Long[] data = {10L, null, 30L, null, 50L, 60L};
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, WriteOptions.defaults(),
@@ -1271,7 +1272,7 @@ class JavaWritesRustReadsIntegrationTest {
         // writeSegment masked-wraps), so this exercises the encoder's nullable varbin path against
         // the Rust reader: nulls stripped before compression, validity emitted as child[0].
         Path file = tmp.resolve("java_zstd_nullable_utf8.vtx");
-        DType.Struct schema = new DType.Struct(List.of("s"), List.of(new DType.Utf8(true)), false);
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("s")), List.of(new DType.Utf8(true)), false);
         String[] data = {"hello", null, "world", null};
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, WriteOptions.defaults(),
@@ -1364,7 +1365,7 @@ class JavaWritesRustReadsIntegrationTest {
         // Given — low-cardinality I64 column triggers global dict across two chunks
         Path file = tmp.resolve("java_globaldict_i64.vtx");
         DType.Struct schema = new DType.Struct(
-                List.of("v"),
+                List.of(ColumnName.of("v")),
                 List.of(DType.I64),
                 false);
         long[] chunk1 = {1L, 2L, 3L, 1L, 2L, 3L, 1L, 2L};
@@ -1389,7 +1390,7 @@ class JavaWritesRustReadsIntegrationTest {
         // Given — low-cardinality F64 column (e.g. a status field stored as float) triggers global dict
         Path file = tmp.resolve("java_globaldict_f64.vtx");
         DType.Struct schema = new DType.Struct(
-                List.of("v"),
+                List.of(ColumnName.of("v")),
                 List.of(DType.F64),
                 false);
         double[] chunk1 = {1.0, 2.0, 3.0, 1.0, 2.0, 3.0, 1.0, 2.0};
@@ -1417,7 +1418,7 @@ class JavaWritesRustReadsIntegrationTest {
         LocalDate d0 = LocalDate.of(1996, 2, 12);
         LocalDate d2 = LocalDate.of(2026, 6, 10);
         DType.Extension dateDtype = DateExtensionEncoder.INSTANCE.dtype(true);
-        DType.Struct schema = new DType.Struct(List.of("d"), List.of(dateDtype), false);
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("d")), List.of(dateDtype), false);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
             // When
@@ -1452,7 +1453,7 @@ class JavaWritesRustReadsIntegrationTest {
         LocalTime t0 = LocalTime.of(1, 1, 1);
         LocalTime t2 = LocalTime.of(12, 30, 0);
         DType.Extension timeDtype = TimeExtensionEncoder.INSTANCE.dtype(true);
-        DType.Struct schema = new DType.Struct(List.of("t"), List.of(timeDtype), false);
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("t")), List.of(timeDtype), false);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
             // When
@@ -1487,7 +1488,7 @@ class JavaWritesRustReadsIntegrationTest {
         Instant ts0 = Instant.ofEpochMilli(1_749_538_800_000L);
         Instant ts2 = Instant.ofEpochMilli(0L);
         DType.Extension tsDtype = TimestampExtensionEncoder.INSTANCE.dtype(true);
-        DType.Struct schema = new DType.Struct(List.of("ts"), List.of(tsDtype), false);
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("ts")), List.of(tsDtype), false);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
             // When
@@ -1525,7 +1526,7 @@ class JavaWritesRustReadsIntegrationTest {
         UUID u0 = UUID.fromString("12345678-1234-5678-9abc-def012345678");
         UUID u2 = UUID.fromString("00000000-0000-0000-0000-000000000001");
         DType.Extension uuidDtype = UuidExtensionEncoder.INSTANCE.dtype(true);
-        DType.Struct schema = new DType.Struct(List.of("u"), List.of(uuidDtype), false);
+        DType.Struct schema = new DType.Struct(List.of(ColumnName.of("u")), List.of(uuidDtype), false);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
             // When

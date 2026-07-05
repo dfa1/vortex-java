@@ -30,7 +30,7 @@ class DTypeIsUnsignedTest {
         List<DType> types = List.of(
                 DType.BOOL, DType.UTF8, DType.BINARY, DType.NULL, DType.VARIANT,
                 new DType.Decimal((byte) 10, (byte) 2, false),
-                new DType.Struct(List.of("u"), List.of(DType.U64), false));
+                new DType.Struct(List.of(ColumnName.of("u")), List.of(DType.U64), false));
 
         // When / Then
         assertThat(types).hasSize(7).allSatisfy(t -> assertThat(t.isUnsigned()).isFalse());

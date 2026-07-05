@@ -18,7 +18,7 @@ class DTypeStructValidationTest {
     @Test
     void construct_arityMismatch_throwsIllegalArgumentException() {
         // Given two names, one type: the record constructor rejects the desync
-        var names = List.of("a", "b");
+        var names = List.of(ColumnName.of("a"), ColumnName.of("b"));
         var types = List.of(I64);
         // When / Then
         assertThatThrownBy(() -> new DType.Struct(names, types, false))
@@ -38,7 +38,7 @@ class DTypeStructValidationTest {
     @Test
     void construct_nullTypes_throwsNullPointerException() {
         // Given a null types list
-        var names = List.of("a");
+        var names = List.of(ColumnName.of("a"));
         // When / Then
         assertThatThrownBy(() -> new DType.Struct(names, null, false))
                 .isInstanceOf(NullPointerException.class);
@@ -49,9 +49,10 @@ class DTypeStructValidationTest {
         // Given — duplicate names, mirroring Rust StructFields (uniqueness is enforced at the
         // file boundary by the writer and parser, not by the in-memory type)
         // When
-        DType.Struct result = new DType.Struct(List.of("dup", "dup"), List.of(I64, I64), false);
+        DType.Struct result = new DType.Struct(
+                List.of(ColumnName.of("dup"), ColumnName.of("dup")), List.of(I64, I64), false);
 
         // Then
-        assertThat(result.fieldNames()).containsExactly("dup", "dup");
+        assertThat(result.fieldNames()).containsExactly(ColumnName.of("dup"), ColumnName.of("dup"));
     }
 }

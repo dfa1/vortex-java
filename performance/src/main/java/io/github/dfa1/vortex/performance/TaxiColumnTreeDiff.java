@@ -4,6 +4,7 @@ import static io.github.dfa1.vortex.core.io.VortexFormat.LE_INT;
 
 import dev.vortex.api.Session;
 import dev.vortex.jni.NativeLoader;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.fbs.FbsArray;
@@ -87,7 +88,7 @@ public final class TaxiColumnTreeDiff {
             if (!(dtype instanceof DType.Struct s)) {
                 throw new IllegalStateException("expected struct root, got: " + dtype);
             }
-            int colIdx = s.fieldNames().indexOf(column);
+            int colIdx = s.fieldNames().indexOf(ColumnName.of(column));
             if (colIdx < 0) {
                 throw new IllegalArgumentException("missing column: " + column);
             }

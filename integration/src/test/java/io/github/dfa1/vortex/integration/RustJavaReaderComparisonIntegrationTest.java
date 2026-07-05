@@ -223,7 +223,7 @@ class RustJavaReaderComparisonIntegrationTest {
             if (reader.dtype() instanceof DType.Struct schema) {
                 for (int i = 0; i < schema.fieldNames().size(); i++) {
                     if (schema.fieldTypes().get(i) instanceof DType.Extension) {
-                        extensionCols.add(schema.fieldNames().get(i));
+                        extensionCols.add(schema.fieldNames().get(i).value());
                     }
                 }
             }

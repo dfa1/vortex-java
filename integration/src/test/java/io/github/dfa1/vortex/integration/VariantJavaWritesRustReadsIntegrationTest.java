@@ -4,6 +4,7 @@ import dev.vortex.api.DataSource;
 import dev.vortex.api.Session;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.proto.ProtoPrimitive;
 import io.github.dfa1.vortex.core.proto.ProtoScalar;
@@ -37,7 +38,7 @@ class VariantJavaWritesRustReadsIntegrationTest {
     private static final BufferAllocator ALLOCATOR = ArrowAllocation.rootAllocator();
 
     private static final DType.Struct VARIANT_SCHEMA = new DType.Struct(
-            List.of("v"),
+            List.of(ColumnName.of("v")),
             List.of(DType.VARIANT),
             false);
 

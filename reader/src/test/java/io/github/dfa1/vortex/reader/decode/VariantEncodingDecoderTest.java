@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.reader.decode;
 import io.github.dfa1.vortex.encoding.TestSegments;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.NullArray;
@@ -228,7 +229,7 @@ class VariantEncodingDecoderTest {
 
             // Then
             assertThat(result).isEqualTo(new DType.Struct(
-                    List.of("a", "b"),
+                    List.of(ColumnName.of("a"), ColumnName.of("b")),
                     List.of(DType.I32, new DType.Utf8(true)),
                     false));
         }

@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.core.testing;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 
@@ -27,7 +28,9 @@ public final class OhlcData {
     /// The column schema: `date` (I32 epoch day), `symbol` (Utf8), `open`/`high`/`low`/`close`
     /// (F64), `volume` (I64); all non-nullable.
     public static final DType.Struct SCHEMA = new DType.Struct(
-            List.of("date", "symbol", "open", "high", "low", "close", "volume"),
+            List.of(ColumnName.of("date"), ColumnName.of("symbol"), ColumnName.of("open"),
+                    ColumnName.of("high"), ColumnName.of("low"), ColumnName.of("close"),
+                    ColumnName.of("volume")),
             List.of(
                     new DType.Primitive(PType.I32, false),
                     new DType.Utf8(false),

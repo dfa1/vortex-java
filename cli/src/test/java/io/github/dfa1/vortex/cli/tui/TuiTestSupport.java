@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.cli.tui;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.VortexHandle;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -28,7 +29,7 @@ final class TuiTestSupport {
     static Path writeGridVortex(Path dir, String name, int rows) throws IOException {
         Path file = dir.resolve(name);
         DType.Struct schema = new DType.Struct(
-                List.of("a", "b", "c"),
+                List.of(ColumnName.of("a"), ColumnName.of("b"), ColumnName.of("c")),
                 List.of(
                         DType.I64,
                         DType.I64,
@@ -55,7 +56,7 @@ final class TuiTestSupport {
     static Path writeMultiTypeVortex(Path dir, String name) throws IOException {
         Path file = dir.resolve(name);
         DType.Struct schema = new DType.Struct(
-                List.of("i", "d", "flag", "name"),
+                List.of(ColumnName.of("i"), ColumnName.of("d"), ColumnName.of("flag"), ColumnName.of("name")),
                 List.of(
                         DType.I64,
                         DType.F64,
@@ -88,7 +89,7 @@ final class TuiTestSupport {
     static Path writeRichVortex(Path dir, String name, int rows) throws IOException {
         Path file = dir.resolve(name);
         DType.Struct schema = new DType.Struct(
-                List.of("label", "n"),
+                List.of(ColumnName.of("label"), ColumnName.of("n")),
                 List.of(DType.UTF8, DType.I64),
                 false);
         String[] labels = {"red", "green", "blue"};

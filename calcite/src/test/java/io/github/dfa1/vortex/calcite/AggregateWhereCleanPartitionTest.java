@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.calcite;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.VortexWriter;
@@ -155,7 +156,7 @@ class AggregateWhereCleanPartitionTest {
         // a same-type comparison would never fire — this guards that the widening compare folds
         // narrow columns. Two chunks: ids 0..3, then 10..13.
         DType.Struct schema = new DType.Struct(
-                List.of("id", "val"),
+                List.of(ColumnName.of("id"), ColumnName.of("val")),
                 List.of(new DType.Primitive(PType.I32, false), new DType.Primitive(PType.I32, false)),
                 false);
         Path f = tmp.resolve("i32.vortex");
@@ -185,7 +186,7 @@ class AggregateWhereCleanPartitionTest {
     void nullAwareSumAndCountOverKeptZones() throws Exception {
         // Given a non-null clustered key and a nullable value with two nulls in the kept chunk
         DType.Struct schema = new DType.Struct(
-                List.of("id", "val"),
+                List.of(ColumnName.of("id"), ColumnName.of("val")),
                 List.of(new DType.Primitive(PType.I64, false), new DType.Primitive(PType.I64, true)),
                 false);
         Path f = tmp.resolve("nullable.vortex");
@@ -217,7 +218,7 @@ class AggregateWhereCleanPartitionTest {
         // Given a clustered U64 key: a signed stat compare could fold the wrong zones past the high
         // bit, so the fold must abandon unsigned columns to the (unsigned-aware) scan
         DType.Struct schema = new DType.Struct(
-                List.of("id", "val"),
+                List.of(ColumnName.of("id"), ColumnName.of("val")),
                 List.of(new DType.Primitive(PType.U64, false), new DType.Primitive(PType.I64, false)),
                 false);
         Path f = tmp.resolve("u64.vortex");
@@ -301,7 +302,7 @@ class AggregateWhereCleanPartitionTest {
         // builds an IS NOT NULL mask, and reduces only its selected rows, so the fold answers
         // without a full scan.
         DType.Struct schema = new DType.Struct(
-                List.of("id", "val"),
+                List.of(ColumnName.of("id"), ColumnName.of("val")),
                 List.of(new DType.Primitive(PType.I64, false), new DType.Primitive(PType.I64, true)),
                 false);
         Path f = tmp.resolve("isnotnull-boundary.vortex");
@@ -413,7 +414,7 @@ class AggregateWhereCleanPartitionTest {
     /// `IS NULL` / `IS NOT NULL` clean-partition tests.
     private static Path nullPartitionedFile(String name) throws Exception {
         DType.Struct schema = new DType.Struct(
-                List.of("id", "val"),
+                List.of(ColumnName.of("id"), ColumnName.of("val")),
                 List.of(new DType.Primitive(PType.I64, false), new DType.Primitive(PType.I64, true)),
                 false);
         Path f = tmp.resolve(name);

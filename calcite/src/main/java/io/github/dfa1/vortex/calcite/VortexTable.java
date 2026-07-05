@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.calcite;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.Chunk;
@@ -103,7 +104,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// @return the column's aggregated statistics paired with the file's total row count
     public ColumnStats statsAndRows(String column) {
         try (VortexReader reader = VortexReader.open(file)) {
-            ArrayStats stats = reader.columnStats().getOrDefault(column, ArrayStats.empty());
+            ArrayStats stats = reader.columnStats().getOrDefault(ColumnName.of(column), ArrayStats.empty());
             return new ColumnStats(stats, countRows(reader));
         } catch (IOException e) {
             throw new UncheckedIOException("cannot read stats of " + file, e);
@@ -137,7 +138,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         try (VortexReader reader = VortexReader.open(file)) {
             Number sum = new ZoneReducer(reader).sum(column);
             Long nullCount = reader.columnStats()
-                    .getOrDefault(column, ArrayStats.empty()).nullCount();
+                    .getOrDefault(ColumnName.of(column), ArrayStats.empty()).nullCount();
             return new ZoneSum(sum, nullCount, countRows(reader));
         } catch (IOException e) {
             throw new UncheckedIOException("cannot read zone sum of " + file, e);
@@ -420,7 +421,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// @return the conjoined filter, or empty when any predicate is not fully translatable
     public Optional<RowFilter> translatePushedFilters(List<RexNode> filters) {
         DType.Struct struct = struct();
-        List<String> names = struct.fieldNames();
+        List<String> names = struct.fieldNames().stream().map(ColumnName::value).toList();
         List<DType> types = struct.fieldTypes();
         List<RowFilter> translated = new ArrayList<>();
         for (RexNode node : filters) {
@@ -467,7 +468,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                 yield allIn ? Match.IN : Match.BOUNDARY;
             }
             case RowFilter.Column(var col, var predicate) ->
-                    classifyColumn(predicate, zoneStats.get(col).get(zone), rowCount);
+                    classifyColumn(predicate, zoneStats.get(col.value()).get(zone), rowCount);
         };
     }
 
@@ -567,7 +568,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// Whether `column` is an unsigned primitive, whose signed stat ordering [#compareStat] cannot
     /// safely classify (the fold abandons such columns to the scan).
     private static boolean isUnsigned(DType.Struct struct, String column) {
-        int idx = struct.fieldNames().indexOf(column);
+        int idx = struct.fieldNames().indexOf(ColumnName.of(column));
         return idx >= 0 && struct.fieldTypes().get(idx) instanceof DType.Primitive p && p.ptype().isUnsigned();
     }
 
@@ -575,7 +576,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     /// ([Compare#values(Object, Object, DType)]) sorts NaN as the maximum and so cannot soundly fold a
     /// boundary partition (the fold abandons such a filter column to the NaN-correct scan).
     private static boolean isFloating(DType.Struct struct, String column) {
-        int idx = struct.fieldNames().indexOf(column);
+        int idx = struct.fieldNames().indexOf(ColumnName.of(column));
         return idx >= 0 && struct.fieldTypes().get(idx) instanceof DType.Primitive p && p.ptype().isFloating();
     }
 
@@ -640,7 +641,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         DType.Struct struct = struct();
         RelDataTypeFactory.Builder builder = typeFactory.builder();
         for (int i = 0; i < struct.fieldNames().size(); i++) {
-            builder.add(struct.fieldNames().get(i), toSqlType(typeFactory, struct.fieldTypes().get(i)));
+            builder.add(struct.fieldNames().get(i).value(), toSqlType(typeFactory, struct.fieldTypes().get(i)));
         }
         return builder.build();
     }
@@ -648,7 +649,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     @Override
     public Enumerable<Object[]> scan(DataContext root, List<RexNode> filters, int[] projects) {
         DType.Struct struct = struct();
-        List<String> allNames = struct.fieldNames();
+        List<String> allNames = struct.fieldNames().stream().map(ColumnName::value).toList();
 
         // Projection: the columns to decode and emit, in the order Calcite asked for. A null
         // projects array means "all columns".
@@ -847,7 +848,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
     private static void collectColumns(RowFilter filter, java.util.Set<String> out) {
         switch (filter) {
             case RowFilter.And(var parts) -> parts.forEach(f -> collectColumns(f, out));
-            case RowFilter.Column(var col, var ignored) -> out.add(col);
+            case RowFilter.Column(var col, var ignored) -> out.add(col.value());
         }
     }
 
