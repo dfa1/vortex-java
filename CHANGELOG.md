@@ -31,6 +31,8 @@ claim measured against the Rust (JNI) oracle; behavior divergences documented in
 
 ### Changed
 
+- `ScanOptions.columns()` returns `List<ColumnName>` instead of `List<String>`. The `columns(String...)` / `withColumns(String...)` factories still take strings at the API boundary but validate them into `ColumnName`, so a blank or control-character projection name fails fast rather than silently matching nothing. ([e478a3a7](https://github.com/dfa1/vortex-java/commit/e478a3a7))
+
 - `Footer.arraySpecs()` / `Footer.layoutSpecs()` return typed `List<EncodingId>` / `List<LayoutId>` instead of `List<String>`. The wire strings are parsed to their typed ids once at the footer boundary (with the blank-id guard), so array and layout nodes index directly into typed dictionaries — completing "strings at the boundary, types inside": the two scattered per-node `parse` calls in `SerializedArrayDecoder` and the layout converter are gone. ([0dd677ef](https://github.com/dfa1/vortex-java/commit/0dd677ef))
 
 - The CLI uber-jar is now fully self-contained for `vortex.zstd` files: it bundles the FFM binding's native `libzstd` for all six platforms (osx/linux/windows × x86_64/aarch64) via `zstd-platform` — previously it shipped the binding's classes but relied on a system libzstd. The library modules keep zstd optional. ([1983656b](https://github.com/dfa1/vortex-java/commit/1983656b))
