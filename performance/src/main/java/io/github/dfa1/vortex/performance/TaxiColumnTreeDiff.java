@@ -113,7 +113,7 @@ public final class TaxiColumnTreeDiff {
                 return;
             }
             MemorySegment seg = reader.rawSegment(spec);
-            dumpFlatRoot(seg, footer.arraySpecs(), indent + "  ");
+            dumpFlatRoot(seg, footer.arraySpecs().stream().map(EncodingId::id).toList(), indent + "  ");
         } else {
             System.out.println(header);
         }

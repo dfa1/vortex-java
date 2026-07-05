@@ -220,7 +220,7 @@ public final class VortexReader implements VortexHandle {
         validateColumns(requested);
         ScanOptions options = requested.isEmpty()
                 ? ScanOptions.all()
-                : new ScanOptions(requested, null, ScanOptions.NO_LIMIT);
+                : ScanOptions.columns(requested.toArray(new String[0]));
         try (ScanIterator iter = new ScanIterator(this, options)) {
             return iter.decodeChunkAt(chunkIndex);
         }

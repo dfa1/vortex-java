@@ -542,16 +542,16 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         Map<ColumnName, DType> columnDtypes = new LinkedHashMap<>();
 
         if (rootLayout.isStruct() && rootDtype instanceof DType.Struct structDtype) {
-            List<String> projection = options.columns();
+            List<ColumnName> projection = options.columns();
             for (int i = 0; i < rootLayout.children().size(); i++) {
                 String rawName = structDtype.fieldNames().get(i);
                 DType colDtype = structDtype.fieldTypes().get(i);
-                if (!projection.isEmpty() && !projection.contains(rawName)) {
-                    continue;
-                }
                 // File-schema names are already policy-certified by PostscriptParser, so this
                 // ColumnName construction never throws — it just types the certified key.
                 ColumnName colName = ColumnName.of(rawName);
+                if (!projection.isEmpty() && !projection.contains(colName)) {
+                    continue;
+                }
                 Layout colTop = rootLayout.children().get(i);
                 var flats = new ArrayList<Layout>();
                 collectFlats(colTop, flats);

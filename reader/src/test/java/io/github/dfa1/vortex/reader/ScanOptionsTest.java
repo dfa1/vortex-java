@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.reader;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -24,7 +25,7 @@ class ScanOptionsTest {
         ScanOptions sut = ScanOptions.all().withColumns("price", "qty");
 
         // Then
-        assertThat(sut.columns()).containsExactly("price", "qty");
+        assertThat(sut.columns()).containsExactly(ColumnName.of("price"), ColumnName.of("qty"));
         assertThat(sut.hasProjection()).isTrue();
         assertThat(sut.limit()).isEqualTo(ScanOptions.NO_LIMIT);
     }
@@ -51,7 +52,7 @@ class ScanOptionsTest {
                                   .withFilter(RowFilter.gte("price", 50));
 
         // Then
-        assertThat(sut.columns()).containsExactly("price", "qty");
+        assertThat(sut.columns()).containsExactly(ColumnName.of("price"), ColumnName.of("qty"));
         assertThat(sut.limit()).isEqualTo(10);
         assertThat(sut.hasFilter()).isTrue();
     }
