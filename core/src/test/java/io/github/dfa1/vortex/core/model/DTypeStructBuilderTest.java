@@ -92,10 +92,11 @@ class DTypeStructBuilderTest {
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.ValueSource(strings = {"", " ", "   ", "a\nb", "nul\u0000here"})
     void field_footgunName_throwsIllegalArgumentException(String name) {
-        // Given / When / Then — the friendly path enforces the write-side name policy up front:
+        // Given the friendly path, which enforces the write-side name policy up front:
         // blank and control-character names are wire-legal footguns vortex-java refuses to write
-        org.assertj.core.api.Assertions.assertThatThrownBy(
-                        () -> DType.structBuilder().field(name, DType.I64))
+        var builder = DType.structBuilder();
+        // When / Then
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> builder.field(name, DType.I64))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }

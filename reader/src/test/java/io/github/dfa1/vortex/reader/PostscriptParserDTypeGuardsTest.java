@@ -30,8 +30,10 @@ class PostscriptParserDTypeGuardsTest {
         // Given — a dtype blob whose root struct declares two fields named "dup"
         MemorySegment dtype = structDType(new String[]{"dup", "dup"}, 2);
 
-        // When / Then
-        assertThatThrownBy(() -> PostscriptParser.parseBlobs(minimalFooter(), flatLayout(), dtype))
+        // When / Then — footer/layout fixtures hoisted so only the subject call is in the lambda
+        MemorySegment footer = minimalFooter();
+        MemorySegment layout = flatLayout();
+        assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, dtype))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("duplicate field name in file schema: dup");
     }
@@ -41,8 +43,10 @@ class PostscriptParserDTypeGuardsTest {
         // Given — a dtype blob declaring two field names but only one field type
         MemorySegment dtype = structDType(new String[]{"a", "b"}, 1);
 
-        // When / Then
-        assertThatThrownBy(() -> PostscriptParser.parseBlobs(minimalFooter(), flatLayout(), dtype))
+        // When / Then — footer/layout fixtures hoisted so only the subject call is in the lambda
+        MemorySegment footer = minimalFooter();
+        MemorySegment layout = flatLayout();
+        assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, dtype))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("names/dtypes length mismatch");
     }
@@ -54,8 +58,10 @@ class PostscriptParserDTypeGuardsTest {
         // produce it) — rejected by policy with a message pointing at the producing pipeline
         MemorySegment dtype = structDType(new String[]{name}, 1);
 
-        // When / Then
-        assertThatThrownBy(() -> PostscriptParser.parseBlobs(minimalFooter(), flatLayout(), dtype))
+        // When / Then — footer/layout fixtures hoisted so only the subject call is in the lambda
+        MemorySegment footer = minimalFooter();
+        MemorySegment layout = flatLayout();
+        assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, dtype))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("invalid field name in file schema")
                 .hasMessageContaining("blank field name");
@@ -67,8 +73,10 @@ class PostscriptParserDTypeGuardsTest {
         // SQL/CSV/log renderings downstream, so the reader rejects it like the writer does
         MemorySegment dtype = structDType(new String[]{"a\nb"}, 1);
 
-        // When / Then
-        assertThatThrownBy(() -> PostscriptParser.parseBlobs(minimalFooter(), flatLayout(), dtype))
+        // When / Then — footer/layout fixtures hoisted so only the subject call is in the lambda
+        MemorySegment footer = minimalFooter();
+        MemorySegment layout = flatLayout();
+        assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, dtype))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("control character U+000A");
     }

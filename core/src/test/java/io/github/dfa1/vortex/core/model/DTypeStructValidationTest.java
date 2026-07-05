@@ -17,23 +17,30 @@ class DTypeStructValidationTest {
 
     @Test
     void construct_arityMismatch_throwsIllegalArgumentException() {
-        // Given / When / Then — two names, one type: the record constructor rejects the desync
-        assertThatThrownBy(() -> new DType.Struct(List.of("a", "b"), List.of(I64), false))
+        // Given two names, one type: the record constructor rejects the desync
+        var names = List.of("a", "b");
+        var types = List.of(I64);
+        // When / Then
+        assertThatThrownBy(() -> new DType.Struct(names, types, false))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("size mismatch");
     }
 
     @Test
     void construct_nullNames_throwsNullPointerException() {
-        // Given / When / Then
-        assertThatThrownBy(() -> new DType.Struct(null, List.of(I64), false))
+        // Given a null names list
+        var types = List.of(I64);
+        // When / Then
+        assertThatThrownBy(() -> new DType.Struct(null, types, false))
                 .isInstanceOf(NullPointerException.class);
     }
 
     @Test
     void construct_nullTypes_throwsNullPointerException() {
-        // Given / When / Then
-        assertThatThrownBy(() -> new DType.Struct(List.of("a"), null, false))
+        // Given a null types list
+        var names = List.of("a");
+        // When / Then
+        assertThatThrownBy(() -> new DType.Struct(names, null, false))
                 .isInstanceOf(NullPointerException.class);
     }
 

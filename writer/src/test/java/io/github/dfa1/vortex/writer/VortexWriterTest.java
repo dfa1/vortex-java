@@ -91,9 +91,10 @@ class VortexWriterTest {
                 false);
         Path file = tmp.resolve("dup.vtx");
 
-        // When / Then
+        // When / Then — options hoisted so only the subject call is in the lambda
+        WriteOptions opts = WriteOptions.defaults();
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
-            assertThatThrownBy(() -> VortexWriter.create(ch, schema, WriteOptions.defaults()))
+            assertThatThrownBy(() -> VortexWriter.create(ch, schema, opts))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessage("duplicate field name: dup");
         }
@@ -110,9 +111,10 @@ class VortexWriterTest {
                 false);
         Path file = tmp.resolve("nul.vtx");
 
-        // When / Then
+        // When / Then — options hoisted so only the subject call is in the lambda
+        WriteOptions opts = WriteOptions.defaults();
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
-            assertThatThrownBy(() -> VortexWriter.create(ch, schema, WriteOptions.defaults()))
+            assertThatThrownBy(() -> VortexWriter.create(ch, schema, opts))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("U+0000");
         }
@@ -130,9 +132,10 @@ class VortexWriterTest {
                 false);
         Path file = tmp.resolve("footgun.vtx");
 
-        // When / Then
+        // When / Then — options hoisted so only the subject call is in the lambda
+        WriteOptions opts = WriteOptions.defaults();
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
-            assertThatThrownBy(() -> VortexWriter.create(ch, schema, WriteOptions.defaults()))
+            assertThatThrownBy(() -> VortexWriter.create(ch, schema, opts))
                     .isInstanceOf(IllegalArgumentException.class);
         }
     }
@@ -235,7 +238,8 @@ class VortexWriterTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
             // When / Then
-            assertThatThrownBy(() -> sut.writeChunk(Map.of("id", new Long[]{1L, 2L})))
+            Map<String, Object> boxedColumn = Map.of("id", new Long[]{1L, 2L});
+            assertThatThrownBy(() -> sut.writeChunk(boxedColumn))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("non-nullable")
                     .hasMessageContaining("id");
@@ -407,7 +411,8 @@ class VortexWriterTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
             // When / Then
-            assertThatThrownBy(() -> sut.writeChunk(Map.of("id", new long[]{1L})))
+            Map<String, Object> partialColumns = Map.of("id", new long[]{1L});
+            assertThatThrownBy(() -> sut.writeChunk(partialColumns))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("missing column: value");
         }

@@ -25,6 +25,7 @@ class SerializedArrayBoundsSecurityTest {
 
 
     private static final DType DTYPE = DType.I32;
+    private static final List<String> FLAT_SPEC = List.of("vortex.flat");
 
     private final SerializedArrayDecoder sut = new SerializedArrayDecoder(ReadRegistry.empty());
 
@@ -35,7 +36,7 @@ class SerializedArrayBoundsSecurityTest {
             MemorySegment seg = arena.allocate(2);
 
             // When / Then the length-field read is bounds-checked, not left to crash get()
-            assertThatThrownBy(() -> sut.decode(seg, List.of("vortex.flat"), DTYPE, 1, arena))
+            assertThatThrownBy(() -> sut.decode(seg, FLAT_SPEC, DTYPE, 1, arena))
                     .isInstanceOf(VortexException.class);
         }
     }
@@ -49,7 +50,7 @@ class SerializedArrayBoundsSecurityTest {
             seg.set(VortexFormat.LE_INT, 12, 1_000_000);
 
             // When / Then
-            assertThatThrownBy(() -> sut.decode(seg, List.of("vortex.flat"), DTYPE, 1, arena))
+            assertThatThrownBy(() -> sut.decode(seg, FLAT_SPEC, DTYPE, 1, arena))
                     .isInstanceOf(VortexException.class);
         }
     }
@@ -62,7 +63,7 @@ class SerializedArrayBoundsSecurityTest {
             seg.set(VortexFormat.LE_INT, 12, -1);
 
             // When / Then the negative length is rejected (checkRange len < 0)
-            assertThatThrownBy(() -> sut.decode(seg, List.of("vortex.flat"), DTYPE, 1, arena))
+            assertThatThrownBy(() -> sut.decode(seg, FLAT_SPEC, DTYPE, 1, arena))
                     .isInstanceOf(VortexException.class);
         }
     }
@@ -78,7 +79,7 @@ class SerializedArrayBoundsSecurityTest {
             seg.set(VortexFormat.LE_INT, fb.length, fb.length);
 
             // When / Then the buffer slice is bounds-checked before asSlice
-            assertThatThrownBy(() -> sut.decode(seg, List.of("vortex.flat"), DTYPE, 1, arena))
+            assertThatThrownBy(() -> sut.decode(seg, FLAT_SPEC, DTYPE, 1, arena))
                     .isInstanceOf(VortexException.class);
         }
     }
