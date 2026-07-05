@@ -361,17 +361,17 @@ class PredicateTest {
 
         private static String label(Predicate predicate) {
             return switch (predicate) {
-                case Predicate.Eq ignored -> "eq";
-                case Predicate.Neq ignored -> "neq";
-                case Predicate.Lt ignored -> "lt";
-                case Predicate.Gt ignored -> "gt";
-                case Predicate.Lte ignored -> "lte";
-                case Predicate.Gte ignored -> "gte";
-                case Predicate.Between ignored -> "between";
-                case Predicate.IsNull ignored -> "isNull";
-                case Predicate.IsNotNull ignored -> "isNotNull";
-                case Predicate.And ignored -> "and";
-                case Predicate.Or ignored -> "or";
+                case Predicate.Eq _ -> "eq";
+                case Predicate.Neq _ -> "neq";
+                case Predicate.Lt _ -> "lt";
+                case Predicate.Gt _ -> "gt";
+                case Predicate.Lte _ -> "lte";
+                case Predicate.Gte _ -> "gte";
+                case Predicate.Between _ -> "between";
+                case Predicate.IsNull _ -> "isNull";
+                case Predicate.IsNotNull _ -> "isNotNull";
+                case Predicate.And _ -> "and";
+                case Predicate.Or _ -> "or";
             };
         }
     }

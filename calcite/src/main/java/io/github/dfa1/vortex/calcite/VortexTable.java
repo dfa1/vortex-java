@@ -519,7 +519,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                     (st, v) -> compareStat(st.min(), v) >= 0, (st, v) -> compareStat(st.max(), v) < 0);
             case Predicate.Lte(var value) -> compare(s, value,
                     (st, v) -> compareStat(st.min(), v) > 0, (st, v) -> compareStat(st.max(), v) <= 0);
-            case Predicate.IsNull ignored -> {
+            case Predicate.IsNull _ -> {
                 Long nulls = s.nullCount();
                 if (nulls == null) {
                     yield Match.BOUNDARY;
@@ -529,7 +529,7 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                 }
                 yield nulls == 0 ? Match.OUT : Match.BOUNDARY;
             }
-            case Predicate.IsNotNull ignored -> {
+            case Predicate.IsNotNull _ -> {
                 Long nulls = s.nullCount();
                 if (nulls == null) {
                     yield Match.BOUNDARY;
@@ -539,9 +539,9 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
                 }
                 yield nulls == rowCount ? Match.OUT : Match.BOUNDARY;
             }
-            case Predicate.Between ignored -> Match.BOUNDARY;
-            case Predicate.And ignored -> Match.BOUNDARY;
-            case Predicate.Or ignored -> Match.BOUNDARY;
+            case Predicate.Between _ -> Match.BOUNDARY;
+            case Predicate.And _ -> Match.BOUNDARY;
+            case Predicate.Or _ -> Match.BOUNDARY;
         };
     }
 

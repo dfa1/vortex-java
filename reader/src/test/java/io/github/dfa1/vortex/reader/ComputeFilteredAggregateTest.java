@@ -497,8 +497,8 @@ class ComputeFilteredAggregateTest {
         boolean isNull = column.isNull(i);
         long v = column.values()[i];
         return switch (predicate) {
-            case Predicate.IsNull ignored -> isNull;
-            case Predicate.IsNotNull ignored -> !isNull;
+            case Predicate.IsNull _ -> isNull;
+            case Predicate.IsNotNull _ -> !isNull;
             case Predicate.Eq eq -> !isNull && v == ((Number) eq.value()).longValue();
             case Predicate.Neq neq -> !isNull && v != ((Number) neq.value()).longValue();
             case Predicate.Lt lt -> !isNull && v < ((Number) lt.value()).longValue();

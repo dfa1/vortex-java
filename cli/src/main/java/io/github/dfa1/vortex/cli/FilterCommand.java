@@ -179,13 +179,13 @@ final class FilterCommand {
                     (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, (Comparable<?>) val) == 0;
             case Predicate.Neq(var val) ->
                     (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, (Comparable<?>) val) != 0;
-            case Predicate.IsNull ignored -> (chunk, rowIdx) -> isRowNull(chunk.column(col), rowIdx);
-            case Predicate.IsNotNull ignored -> (chunk, rowIdx) -> !isRowNull(chunk.column(col), rowIdx);
-            case Predicate.Between ignored ->
+            case Predicate.IsNull _ -> (chunk, rowIdx) -> isRowNull(chunk.column(col), rowIdx);
+            case Predicate.IsNotNull _ -> (chunk, rowIdx) -> !isRowNull(chunk.column(col), rowIdx);
+            case Predicate.Between _ ->
                     throw new IllegalArgumentException("BETWEEN filters are not supported on the command line");
-            case Predicate.And ignored ->
+            case Predicate.And _ ->
                     throw new IllegalArgumentException("nested predicate AND is not supported on the command line");
-            case Predicate.Or ignored ->
+            case Predicate.Or _ ->
                     throw new IllegalArgumentException("nested predicate OR is not supported on the command line");
         };
     }

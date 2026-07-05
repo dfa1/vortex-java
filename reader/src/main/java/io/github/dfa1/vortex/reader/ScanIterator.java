@@ -771,9 +771,9 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             case Predicate.Between(var lo, var hi) -> min != null && max != null
                     && (Compare.values(hi, min, ct) < 0 || Compare.values(lo, max, ct) > 0);
             // Zero nulls → no row is null → nothing can match IS NULL.
-            case Predicate.IsNull ignored -> nullCount != null && nullCount == 0;
+            case Predicate.IsNull _ -> nullCount != null && nullCount == 0;
             // Every row is null → no row is non-null → nothing can match IS NOT NULL.
-            case Predicate.IsNotNull ignored -> nullCount != null && nullCount == rowCount;
+            case Predicate.IsNotNull _ -> nullCount != null && nullCount == rowCount;
             // A conjunction is unsatisfiable if either side is; a disjunction only if both are.
             case Predicate.And(var left, var right) ->
                     canPrune(left, stats, rowCount, ct) || canPrune(right, stats, rowCount, ct);

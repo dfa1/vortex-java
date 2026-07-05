@@ -38,8 +38,8 @@ final class PredicateEvaluator {
             case Predicate.Gte gte -> !Values.isNullAt(array, i)
                     && Compare.values(Values.valueAt(array, i), gte.value(), array.dtype()) >= 0;
             case Predicate.Between between -> evaluateBetween(array, i, between);
-            case Predicate.IsNull ignored -> Values.isNullAt(array, i);
-            case Predicate.IsNotNull ignored -> !Values.isNullAt(array, i);
+            case Predicate.IsNull _ -> Values.isNullAt(array, i);
+            case Predicate.IsNotNull _ -> !Values.isNullAt(array, i);
             case Predicate.And and -> evaluate(array, i, and.left()) && evaluate(array, i, and.right());
             case Predicate.Or or -> evaluate(array, i, or.left()) || evaluate(array, i, or.right());
         };

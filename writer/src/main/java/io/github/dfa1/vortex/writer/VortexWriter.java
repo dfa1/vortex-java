@@ -911,7 +911,7 @@ public final class VortexWriter implements Closeable {
     private static Object zoneStatValues(DType minMaxDtype, List<byte[]> statBytes) throws IOException {
         return switch (minMaxDtype) {
             case DType.Primitive p -> statColumn(p.ptype(), statBytes);
-            case DType.Utf8 ignored -> statStringColumn(statBytes);
+            case DType.Utf8 _ -> statStringColumn(statBytes);
             default -> throw new IllegalStateException("no zone stat values for " + minMaxDtype);
         };
     }

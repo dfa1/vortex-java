@@ -130,7 +130,7 @@ public final class CodeGen {
                 emitScalarTableField(sb, accessor, e.underlying(), vt, field.defaultValue().orElse(null));
                 yield vtableIndex + 1;
             }
-            case Ast.UnionDecl u -> {
+            case Ast.UnionDecl _ -> {
                 emitUnionField(sb, accessor, vt);
                 yield vtableIndex + 2;
             }
@@ -230,7 +230,7 @@ public final class CodeGen {
             case Ast.EnumDecl e -> emitScalarVectorElements(sb, accessor, e.underlying(), vt);
             case Ast.TableDecl t -> emitObjectVectorElement(sb, accessor, className(t.name()), vt, 4, true);
             case Ast.StructDecl s -> emitObjectVectorElement(sb, accessor, className(s.name()), vt, registry.layoutOf(s).size(), false);
-            case Ast.UnionDecl u -> throw new FbsParseException("vectors of unions are not supported ('" + accessor + "')");
+            case Ast.UnionDecl _ -> throw new FbsParseException("vectors of unions are not supported ('" + accessor + "')");
         }
     }
 
