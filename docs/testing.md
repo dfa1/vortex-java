@@ -182,6 +182,17 @@ run-once part and leave the hot, specialized part alone, with a comment saying w
 The throughline: let the tools point at the data, then decide with the context they do not
 have.
 
+## Documentation fitness functions
+
+Two [architectural fitness functions](https://www.thoughtworks.com/insights/books/building-evolutionary-architectures)
+(atomic / triggered / static / automated) guard the living docs, both in the integration module:
+
+- `DocsConsistencyTest` — **accuracy**: FQNs resolve, method claims name real methods,
+  `META-INF/services` mentions exist, relative links don't dangle.
+- `EncodingTableFitnessTest` — **completeness**: the encodings table in `docs/compatibility.md`
+  lists exactly the encodings the code registers via `ServiceLoader` (id, decoder/encoder class,
+  ✅/❌ flags), asserted not generated — on drift it prints the exact rows to add.
+
 ## Docs consistency gate
 
 `DocsConsistencyTest` (integration module, plain surefire) machine-checks the living docs
