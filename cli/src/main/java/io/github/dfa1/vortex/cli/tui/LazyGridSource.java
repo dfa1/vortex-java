@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.cli.tui;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.Chunk;
@@ -59,7 +60,7 @@ public final class LazyGridSource implements AutoCloseable {
         if (!(handle.dtype() instanceof DType.Struct schema)) {
             throw new VortexException("view requires struct root dtype, got " + handle.dtype());
         }
-        this.columns = schema.fieldNames();
+        this.columns = schema.fieldNames().stream().map(ColumnName::value).toList();
         this.columnDtypes = schema.fieldTypes();
 
         AtomicReference<long[]> rowCountsRef = new AtomicReference<>();

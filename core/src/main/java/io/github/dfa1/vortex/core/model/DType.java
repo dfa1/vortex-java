@@ -156,7 +156,7 @@ public sealed interface DType
     /// Fluent builder for [Struct] dtypes. Use [#structBuilder()] to obtain one.
     /// Preserves insertion order and rejects duplicate field names at [#build()].
     final class StructBuilder {
-        private final LinkedHashMap<String, DType> fields = new LinkedHashMap<>();
+        private final LinkedHashMap<ColumnName, DType> fields = new LinkedHashMap<>();
         private boolean nullable;
 
         private StructBuilder() {
@@ -186,7 +186,7 @@ public sealed interface DType
         /// @return this builder
         /// @throws IllegalArgumentException if `name` duplicates a previously added field
         public StructBuilder field(ColumnName name, DType type) {
-            if (fields.putIfAbsent(name.value(), type) != null) {
+            if (fields.putIfAbsent(name, type) != null) {
                 throw new IllegalArgumentException("duplicate field name: " + name);
             }
             return this;
@@ -254,11 +254,11 @@ public sealed interface DType
 
     /// Struct logical type with named, typed fields.
     ///
-    /// @param fieldNames ordered list of field names
+    /// @param fieldNames ordered list of validated [ColumnName] field names
     /// @param fieldTypes ordered list of field types, parallel to `fieldNames`
     /// @param nullable   whether null values are permitted
     record Struct(
-            java.util.List<String> fieldNames,
+            java.util.List<ColumnName> fieldNames,
             java.util.List<DType> fieldTypes,
             boolean nullable
     ) implements DType {
@@ -287,7 +287,7 @@ public sealed interface DType
         /// @return the [DType] of the named field
         /// @throws IllegalArgumentException if no field with that name exists
         public DType field(String name) {
-            int i = fieldNames.indexOf(name);
+            int i = fieldNames.indexOf(ColumnName.of(name));
             if (i < 0) {
                 throw new IllegalArgumentException("unknown field: " + name);
             }

@@ -8,6 +8,7 @@ import dev.vortex.api.ScanOptions;
 import dev.vortex.api.Session;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
@@ -97,7 +98,7 @@ public class JavaVsJniReadBenchmark {
     ));
     private static final Session SESSION = Session.create();
     private static final DType.Struct JAVA_SCHEMA = new DType.Struct(
-            List.of("date", "symbol", "open", "high", "low", "close", "volume"),
+            List.of(ColumnName.of("date"), ColumnName.of("symbol"), ColumnName.of("open"), ColumnName.of("high"), ColumnName.of("low"), ColumnName.of("close"), ColumnName.of("volume")),
             List.of(
                     DType.I32,
                     DType.UTF8,

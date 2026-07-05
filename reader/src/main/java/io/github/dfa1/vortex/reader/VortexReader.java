@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.reader;
 
 import static io.github.dfa1.vortex.core.io.VortexFormat.LE_INT;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.io.IoBounds;
 import io.github.dfa1.vortex.core.error.VortexException;
@@ -230,9 +231,9 @@ public final class VortexReader implements VortexHandle {
         if (columns.isEmpty() || !(dtype instanceof DType.Struct struct)) {
             return;
         }
-        List<String> known = struct.fieldNames();
+        List<ColumnName> known = struct.fieldNames();
         for (String name : columns) {
-            if (!known.contains(name)) {
+            if (!known.contains(ColumnName.of(name))) {
                 throw new VortexException("decodeChunk: unknown column: " + name);
             }
         }
@@ -241,13 +242,13 @@ public final class VortexReader implements VortexHandle {
     /// Aggregated per-column statistics (global min/max across all chunks).
     /// Returns an empty map if the root layout is not a struct.
     /// Columns with no embedded stats return [ArrayStats#empty()].
-    public Map<String, ArrayStats> columnStats() {
+    public Map<ColumnName, ArrayStats> columnStats() {
         if (!layout.isStruct() || !(dtype instanceof DType.Struct schema)) {
             return Map.of();
         }
-        List<String> names = schema.fieldNames();
+        List<ColumnName> names = schema.fieldNames();
         List<Layout> colLayouts = layout.children();
-        Map<String, ArrayStats> result = new LinkedHashMap<>();
+        Map<ColumnName, ArrayStats> result = new LinkedHashMap<>();
         for (int i = 0; i < names.size() && i < colLayouts.size(); i++) {
             List<Layout> flats = new ArrayList<>();
             collectFlats(colLayouts.get(i), flats);

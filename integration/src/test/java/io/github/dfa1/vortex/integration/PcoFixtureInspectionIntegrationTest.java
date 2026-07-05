@@ -81,7 +81,7 @@ class PcoFixtureInspectionIntegrationTest {
     private static List<String> columnPath(DType root) {
         List<String> names = new ArrayList<>();
         if (root instanceof DType.Struct s) {
-            names.addAll(s.fieldNames());
+            names.addAll(s.fieldNames().stream().map(io.github.dfa1.vortex.core.model.ColumnName::value).toList());
         } else {
             names.add("<root>");
         }

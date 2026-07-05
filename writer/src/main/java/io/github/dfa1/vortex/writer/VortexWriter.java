@@ -5,6 +5,7 @@ import io.github.dfa1.vortex.writer.encode.DateTimePartsData;
 import io.github.dfa1.vortex.writer.encode.FixedSizeListData;
 import io.github.dfa1.vortex.writer.encode.ListData;
 import io.github.dfa1.vortex.writer.encode.ListViewData;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.io.VortexFormat;
@@ -65,9 +66,10 @@ import java.util.Set;
 ///
 /// Usage:
 /// ```java
-/// var schema = new DType.Struct(List.of("id", "value"),
-///                               List.of(DType.I64,
-///                                       DType.F64), false);
+/// var schema = DType.structBuilder()
+///         .field("id", DType.I64)
+///         .field("value", DType.F64)
+///         .build();
 /// try (var channel = FileChannel.open(path, CREATE, WRITE);
 ///      var writer = VortexWriter.create(channel, schema, WriteOptions.defaults())) {
 ///     writer.writeChunk(Map.of("id", idArray, "value", valueArray));
@@ -108,19 +110,19 @@ public final class VortexWriter implements Closeable {
     private final List<EncodingEncoder> cascadeCodecs;
     private final WriteRegistry cascadeRegistry;
     private final List<SegRef> segs = new ArrayList<>();
-    private final Map<String, List<ChunkRef>> colChunks = new LinkedHashMap<>();
+    private final Map<ColumnName, List<ChunkRef>> colChunks = new LinkedHashMap<>();
     private final Map<EncodingId, Integer> encodingIdx = new LinkedHashMap<>();
     private long bytesWritten = 0;
 
     // Global dict state: columns detected as low-cardinality on first chunk are buffered
     // here instead of encoded per-chunk. Flushed in close() as a single Dict layout.
-    private final Set<String> dictCandidates = new LinkedHashSet<>();
-    private final Map<String, List<Object>> dictBuffers = new LinkedHashMap<>();
-    private final Map<String, DictColRef> dictColRefs = new LinkedHashMap<>();
+    private final Set<ColumnName> dictCandidates = new LinkedHashSet<>();
+    private final Map<ColumnName, List<Object>> dictBuffers = new LinkedHashMap<>();
+    private final Map<ColumnName, DictColRef> dictColRefs = new LinkedHashMap<>();
     private boolean firstChunkSeen = false;
 
     // Per-column zone-maps, populated by flushZoneMaps() in close() when enableZoneMaps is set.
-    private final Map<String, ZoneMapRef> zoneMaps = new LinkedHashMap<>();
+    private final Map<ColumnName, ZoneMapRef> zoneMaps = new LinkedHashMap<>();
     // Stats (ProtoScalarValue bytes) of the most recently written segment, captured for ChunkRef.
     private byte[] lastStatsMin;
     private byte[] lastStatsMax;
@@ -134,21 +136,14 @@ public final class VortexWriter implements Closeable {
         // Wire contract, enforced by the reference writer ("StructLayout must have unique field
         // names"): duplicate-name schemas are constructible via the DType.Struct record (only
         // StructBuilder validates), so guard here — colChunks below is name-keyed and would
-        // silently collapse the duplicates anyway.
-        // Write-side name policy — stricter than the wire format on purpose (a JSON parser
-        // accepts a "" key; a good JSON library still refuses to encourage writing one). The
-        // reader stays tolerant: foreign files with blank or control-character names are legal
-        // and must open. Mirrored in DType.StructBuilder.field for earlier, friendlier failure.
-        var uniqueNames = new java.util.HashSet<String>();
-        for (String name : schema.fieldNames()) {
+        // silently collapse the duplicates anyway. The name policy itself (non-blank, no control
+        // characters — NUL additionally aborts the reference toolchain's Arrow FFI export) is
+        // already certified by the ColumnName type carried in schema.fieldNames().
+        var uniqueNames = new java.util.HashSet<ColumnName>();
+        for (ColumnName name : schema.fieldNames()) {
             if (!uniqueNames.add(name)) {
                 throw new IllegalArgumentException("duplicate field name: " + name);
             }
-            // Policy chokepoint: ColumnName.violation — NUL additionally aborts the reference
-            // toolchain's Arrow FFI export (SIGABRT in arrow-rs, measured 2026-07-04).
-            io.github.dfa1.vortex.core.model.ColumnName.violation(name).ifPresent(reason -> {
-                throw new IllegalArgumentException(reason);
-            });
         }
         this.channel = channel;
         this.schema = schema;
@@ -157,7 +152,7 @@ public final class VortexWriter implements Closeable {
         this.defaultRegistry = buildRegistry(encodings);
         this.cascadeCodecs = buildCascadeCodecs(options);
         this.cascadeRegistry = buildRegistry(this.cascadeCodecs);
-        for (String name : schema.fieldNames()) {
+        for (ColumnName name : schema.fieldNames()) {
             colChunks.put(name, new ArrayList<>());
         }
     }
@@ -257,7 +252,7 @@ public final class VortexWriter implements Closeable {
     /// Counts rows for the length-consistency check in [#writeChunk]. Accepts the
     /// same shapes the writer takes plus pre-conversion [java.util.Collection]s
     /// from the extension-column auto-route path.
-    private static long rowCountForValidation(String colName, Object data) {
+    private static long rowCountForValidation(ColumnName colName, Object data) {
         if (data instanceof java.util.Collection<?> coll) {
             return coll.size();
         }
@@ -322,7 +317,7 @@ public final class VortexWriter implements Closeable {
                 }
                 int[] nameOffsets = new int[s.fieldNames().size()];
                 for (int i = 0; i < nameOffsets.length; i++) {
-                    nameOffsets[i] = fbb.createString(s.fieldNames().get(i));
+                    nameOffsets[i] = fbb.createString(s.fieldNames().get(i).value());
                 }
                 int namesVec = io.github.dfa1.vortex.core.fbs.FbsStruct_.createNamesVector(fbb, nameOffsets);
                 int dtypesVec = io.github.dfa1.vortex.core.fbs.FbsStruct_.createDtypesVector(fbb, fieldOffsets);
@@ -392,10 +387,10 @@ public final class VortexWriter implements Closeable {
     ///
     /// ```java
     /// writer.writeChunk(c -> c
-    ///     .put("timestamp", new long[]   {1_700_000_000_000L, 1_700_000_001_000L})
-    ///     .put("symbol",    new String[] {"AAPL", "AAPL"})
-    ///     .put("price",     new double[] {189.95, 190.10})
-    ///     .put("volume",    new Long[]   {100L, null}));  // boxed → nullable
+    ///     .put(ColumnName.of("timestamp"), new long[]   {1_700_000_000_000L, 1_700_000_001_000L})
+    ///     .put(ColumnName.of("symbol"),    new String[] {"AAPL", "AAPL"})
+    ///     .put(ColumnName.of("price"),     new double[] {189.95, 190.10})
+    ///     .put(ColumnName.of("volume"),    new Long[]   {100L, null}));  // boxed → nullable
     /// ```
     ///
     /// @param builder consumer that populates a [Chunk] with all schema columns
@@ -421,14 +416,14 @@ public final class VortexWriter implements Closeable {
         // builder: boxed nullable arrays (Long[], Integer[], Boolean[], …) become NullableData,
         // raw primitive arrays pass through. Done before the row-count check so length validation
         // and encoding both see the normalized carrier.
-        Map<String, Object> adapted = new LinkedHashMap<>();
+        Map<ColumnName, Object> adapted = new LinkedHashMap<>();
         for (int i = 0; i < schema.fieldNames().size(); i++) {
-            String colName = schema.fieldNames().get(i);
-            Object data = columns.get(colName);
+            ColumnName colName = schema.fieldNames().get(i);
+            Object data = columns.get(colName.value());
             if (data == null) {
                 throw new IllegalArgumentException("missing column: " + colName);
             }
-            adapted.put(colName, ChunkImpl.validateAndAdapt(colName, schema.fieldTypes().get(i), data));
+            adapted.put(colName, ChunkImpl.validateAndAdapt(colName.value(), schema.fieldTypes().get(i), data));
         }
 
         // Pre-validate row counts so a length mismatch is rejected with a clear error
@@ -436,9 +431,9 @@ public final class VortexWriter implements Closeable {
         // file whose column chunks claim different row counts — readable but logically
         // inconsistent.
         long expectedLen = -1L;
-        String expectedFrom = null;
+        ColumnName expectedFrom = null;
         for (int i = 0; i < schema.fieldNames().size(); i++) {
-            String colName = schema.fieldNames().get(i);
+            ColumnName colName = schema.fieldNames().get(i);
             long len = rowCountForValidation(colName, adapted.get(colName));
             if (expectedLen < 0) {
                 expectedLen = len;
@@ -451,7 +446,7 @@ public final class VortexWriter implements Closeable {
         }
 
         for (int i = 0; i < schema.fieldNames().size(); i++) {
-            String colName = schema.fieldNames().get(i);
+            ColumnName colName = schema.fieldNames().get(i);
             DType colDtype = schema.fieldTypes().get(i);
             Object data = adapted.get(colName);
 
@@ -737,8 +732,8 @@ public final class VortexWriter implements Closeable {
         if (!options.enableZoneMaps()) {
             return;
         }
-        for (Map.Entry<String, List<ChunkRef>> e : colChunks.entrySet()) {
-            String colName = e.getKey();
+        for (Map.Entry<ColumnName, List<ChunkRef>> e : colChunks.entrySet()) {
+            ColumnName colName = e.getKey();
             List<ChunkRef> chunks = e.getValue();
             if (chunks.isEmpty()) {
                 continue;
@@ -760,7 +755,7 @@ public final class VortexWriter implements Closeable {
         // Dict-encoded columns (one zone per code chunk). MIN/MAX/SUM come from each chunk's logical
         // values (computed at dict-build time); NULL_COUNT always. Matches Rust, whose zone-map
         // stats are computed on the logical column dtype, independent of the dict encoding.
-        for (Map.Entry<String, DictColRef> e : dictColRefs.entrySet()) {
+        for (Map.Entry<ColumnName, DictColRef> e : dictColRefs.entrySet()) {
             DictColRef ref = e.getValue();
             DType colDtype = columnDtype(e.getKey());
             DType minMaxDtype = zoneMinMaxDtype(colDtype);
@@ -774,7 +769,7 @@ public final class VortexWriter implements Closeable {
         }
     }
 
-    private DType columnDtype(String colName) {
+    private DType columnDtype(ColumnName colName) {
         return schema.fieldTypes().get(schema.fieldNames().indexOf(colName));
     }
 
@@ -784,7 +779,7 @@ public final class VortexWriter implements Closeable {
     /// read only when the matching dtype is set; a `null` `sumBytes` entry marks an overflowed zone
     /// (recorded as a null sum). Field/bit order follows ZonedStatsSchema: MAX(3), MIN(4), SUM(5),
     /// NULL_COUNT(6).
-    private void emitZoneMap(String colName, DType minMaxDtype, List<byte[]> minBytes, List<byte[]> maxBytes,
+    private void emitZoneMap(ColumnName colName, DType minMaxDtype, List<byte[]> minBytes, List<byte[]> maxBytes,
                              DType sumDtype, List<byte[]> sumBytes, long[] nullCounts) throws IOException {
         int nZones = nullCounts.length;
         boolean[] allValid = new boolean[nZones];
@@ -819,7 +814,8 @@ public final class VortexWriter implements Closeable {
         types.add(new DType.Primitive(PType.U64, true));
         fields.add(new NullableData(nullCounts, allValid.clone()));
 
-        DType.Struct statsDtype = new DType.Struct(List.copyOf(names), List.copyOf(types), false);
+        DType.Struct statsDtype = new DType.Struct(
+                names.stream().map(ColumnName::of).toList(), List.copyOf(types), false);
         int zonesSegIdx = writeSegment(statsDtype, new StructData(fields), new StructEncodingEncoder());
         zoneMaps.put(colName,
                 new ZoneMapRef(zonesSegIdx, nZones, options.chunkSize(), minMaxDtype != null, sumDtype != null));
@@ -827,7 +823,7 @@ public final class VortexWriter implements Closeable {
 
     /// Wraps a column's data layout in a `vortex.stats` (zoned) layout when a zone-map was
     /// emitted for it; otherwise returns the data layout unchanged.
-    private int wrapZoneMap(FbsBuilder fbb, String colName, int dataLayout, long colRows) {
+    private int wrapZoneMap(FbsBuilder fbb, ColumnName colName, int dataLayout, long colRows) {
         ZoneMapRef zm = zoneMaps.get(colName);
         if (zm == null) {
             return dataLayout;
@@ -1072,7 +1068,7 @@ public final class VortexWriter implements Closeable {
         long totalRows = 0;
 
         for (int c = 0; c < colCount; c++) {
-            String colName = schema.fieldNames().get(c);
+            ColumnName colName = schema.fieldNames().get(c);
             DictColRef ref = dictColRefs.get(colName);
             if (ref != null) {
                 int dictLayout = buildDictColLayout(fbb, ref);
@@ -1147,7 +1143,7 @@ public final class VortexWriter implements Closeable {
     // ── Global dict helpers ───────────────────────────────────────────────────
 
     private void flushDictColumns() throws IOException {
-        for (String colName : dictCandidates) {
+        for (ColumnName colName : dictCandidates) {
             List<Object> chunks = dictBuffers.getOrDefault(colName, List.of());
             if (chunks.isEmpty()) {
                 continue;
@@ -1162,7 +1158,7 @@ public final class VortexWriter implements Closeable {
         }
     }
 
-    private void writeGlobalDictColumn(String colName, DType.Primitive dtype, List<Object> chunks)
+    private void writeGlobalDictColumn(ColumnName colName, DType.Primitive dtype, List<Object> chunks)
             throws IOException {
         PType ptype = dtype.ptype();
 
@@ -1234,7 +1230,7 @@ public final class VortexWriter implements Closeable {
                 chunkRowCounts, chunkNullCounts, chunkStatsMin, chunkStatsMax, chunkStatsSum));
     }
 
-    private void writeGlobalDictUtf8Column(String colName, DType.Utf8 dtype, List<Object> chunks)
+    private void writeGlobalDictUtf8Column(ColumnName colName, DType.Utf8 dtype, List<Object> chunks)
             throws IOException {
         // Build global string -> code map across all chunks (insertion order = code value).
         var valueMap = new LinkedHashMap<String, Integer>();

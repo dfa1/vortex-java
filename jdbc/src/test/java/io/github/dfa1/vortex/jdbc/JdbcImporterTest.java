@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.jdbc;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
@@ -63,7 +64,7 @@ class JdbcImporterTest {
             try (VortexReader reader = VortexReader.open(vortex)) {
                 assertThat(reader.dtype()).isInstanceOf(DType.Struct.class);
                 DType.Struct schema = (DType.Struct) reader.dtype();
-                assertThat(schema.fieldNames()).containsExactly("ID", "NAME", "SCORE", "ACTIVE");
+                assertThat(schema.fieldNames()).containsExactly(ColumnName.of("ID"), ColumnName.of("NAME"), ColumnName.of("SCORE"), ColumnName.of("ACTIVE"));
                 assertThat(schema.fieldTypes().get(0)).isEqualTo(DType.I64);
                 assertThat(schema.fieldTypes().get(1)).isEqualTo(DType.UTF8);
                 assertThat(schema.fieldTypes().get(2)).isEqualTo(DType.F64);
@@ -417,7 +418,7 @@ class JdbcImporterTest {
             // Then
             try (VortexReader reader = VortexReader.open(vortex)) {
                 DType.Struct schema = (DType.Struct) reader.dtype();
-                assertThat(schema.fieldNames()).containsExactly("ID", "LABEL");
+                assertThat(schema.fieldNames()).containsExactly(ColumnName.of("ID"), ColumnName.of("LABEL"));
                 try (ScanIterator iter = reader.scan(ScanOptions.all())) {
                     assertThat(iter.hasNext()).isTrue();
                     try (Chunk chunk = iter.next()) {

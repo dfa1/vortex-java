@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.parquet;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import dev.hardwood.metadata.FieldPath;
 import dev.hardwood.metadata.LogicalType;
 import dev.hardwood.metadata.PhysicalType;
@@ -196,7 +197,7 @@ class ParquetImporterTest {
             try (VortexReader reader = VortexReader.open(vortex)) {
                 assertThat(reader.dtype()).isInstanceOf(DType.Struct.class);
                 DType.Struct schema = (DType.Struct) reader.dtype();
-                assertThat(schema.fieldNames()).contains("c_customer_sk", "c_first_name");
+                assertThat(schema.fieldNames()).contains(ColumnName.of("c_customer_sk"), ColumnName.of("c_first_name"));
                 assertThat(countRows(reader)).isEqualTo(100L);
             }
         }
@@ -242,7 +243,7 @@ class ParquetImporterTest {
             // Then — only the projected column survives
             try (VortexReader reader = VortexReader.open(vortex)) {
                 DType.Struct schema = (DType.Struct) reader.dtype();
-                assertThat(schema.fieldNames()).containsExactly("c_customer_sk");
+                assertThat(schema.fieldNames()).containsExactly(ColumnName.of("c_customer_sk"));
                 assertThat(countRows(reader)).isEqualTo(100L);
             }
         }

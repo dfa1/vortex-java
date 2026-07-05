@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.calcite;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ScanIterator;
@@ -58,7 +59,7 @@ public final class VortexAggregates {
     /// @param column the numeric column name
     /// @return the column's aggregate summary
     public static Summary of(VortexReader reader, String column) {
-        ArrayStats stats = reader.columnStats().getOrDefault(column, ArrayStats.empty());
+        ArrayStats stats = reader.columnStats().getOrDefault(ColumnName.of(column), ArrayStats.empty());
         long totalRows = totalRows(reader);
         long nullCount = stats.nullCount() == null ? 0L : stats.nullCount();
         long count = totalRows - nullCount;

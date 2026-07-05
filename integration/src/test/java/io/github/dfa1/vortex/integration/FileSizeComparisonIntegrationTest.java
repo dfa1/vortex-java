@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.integration;
 import dev.vortex.api.Session;
 import dev.vortex.arrow.ArrowAllocation;
 import dev.vortex.jni.NativeLoader;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.testing.OhlcData;
 import io.github.dfa1.vortex.reader.array.LongArray;
@@ -52,7 +53,7 @@ class FileSizeComparisonIntegrationTest {
     private static final int BATCH_SIZE = 50_000;
 
     private static final DType.Struct JAVA_SCHEMA = new DType.Struct(
-            List.of("symbol", "date", "open", "high", "low", "close", "volume"),
+            List.of(ColumnName.of("symbol"), ColumnName.of("date"), ColumnName.of("open"), ColumnName.of("high"), ColumnName.of("low"), ColumnName.of("close"), ColumnName.of("volume")),
             List.of(
                     DType.UTF8,
                     DType.I32,
@@ -295,7 +296,7 @@ class FileSizeComparisonIntegrationTest {
         }
 
         DType.Struct javaSchema = new DType.Struct(
-                List.of("v"), List.of(DType.I64), false);
+                List.of(ColumnName.of("v")), List.of(DType.I64), false);
         Schema jniSchema = new Schema(List.of(
                 Field.notNullable("v", new ArrowType.Int(64, true))));
 
@@ -358,7 +359,7 @@ class FileSizeComparisonIntegrationTest {
             data[i] = new String(bytes, StandardCharsets.UTF_8);
         }
         DType.Struct javaSchema = new DType.Struct(
-                List.of("s"), List.of(DType.UTF8), false);
+                List.of(ColumnName.of("s")), List.of(DType.UTF8), false);
         Schema jniSchema = new Schema(List.of(
                 Field.notNullable("s", new ArrowType.Utf8())));
 

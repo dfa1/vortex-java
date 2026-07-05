@@ -81,7 +81,7 @@ all `Array` buffers obtained during scans become invalid.
 | `version()`                           | `int`                     | File format version                           |
 | `fileSize()`                          | `long`                    | File size in bytes                            |
 | `scan(ScanOptions)`                   | `ScanIterator`            | Open a scan                                   |
-| `columnStats()`                       | `Map<String, ArrayStats>` | Aggregated min/max per column                 |
+| `columnStats()`                       | `Map<ColumnName, ArrayStats>` | Aggregated min/max per column             |
 | `slice(offset, length)`               | `MemorySegment`           | Zero-copy slice of mmap region                |
 | `close()`                             | —                         | Releases mmap                                 |
 
@@ -138,7 +138,7 @@ Record: `(int chunkSize, boolean enableZoneMaps, double compressionRatioThreshol
 
 ### `ScanOptions` (`io.github.dfa1.vortex.reader.ScanOptions`)
 
-Record: `(List<String> columns, RowFilter rowFilter, long limit)`. Empty `columns` = read all. `NO_LIMIT` =
+Record: `(List<ColumnName> columns, RowFilter rowFilter, long limit)` (built via `columns(String...)`). Empty `columns` = read all. `NO_LIMIT` =
 `Long.MAX_VALUE`.
 
 | Factory / builder                                   | Effect                           |

@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.cli;
 
 import io.github.dfa1.vortex.reader.ArrayStats;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.VortexReader;
 
@@ -32,21 +33,21 @@ final class StatsCommand {
                 return ExitStatus.ERROR;
             }
             long totalRows = reader.layout().rowCount();
-            Map<String, ArrayStats> stats = reader.columnStats();
+            Map<ColumnName, ArrayStats> stats = reader.columnStats();
 
             System.out.printf("rows: %,d%n%n", totalRows);
             System.out.printf("%-20s  %-12s  %15s  %15s%n", "column", "type", "min", "max");
             System.out.println("-".repeat(67));
 
-            List<String> names = schema.fieldNames();
+            List<ColumnName> names = schema.fieldNames();
             List<DType> types = schema.fieldTypes();
             for (int i = 0; i < names.size(); i++) {
-                String name = names.get(i);
+                ColumnName name = names.get(i);
                 String type = formatDType(types.get(i));
                 ArrayStats s = stats.getOrDefault(name, ArrayStats.empty());
                 String min = s.min() != null ? s.min().toString() : "n/a";
                 String max = s.max() != null ? s.max().toString() : "n/a";
-                System.out.printf("%-20s  %-12s  %15s  %15s%n", name, type, min, max);
+                System.out.printf("%-20s  %-12s  %15s  %15s%n", name.value(), type, min, max);
             }
             return ExitStatus.OK;
         } catch (IOException e) {

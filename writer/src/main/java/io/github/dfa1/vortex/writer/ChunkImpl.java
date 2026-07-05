@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.writer;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.encode.NullableData;
@@ -13,14 +14,14 @@ import java.util.Map;
 final class ChunkImpl implements Chunk {
 
     private final DType.Struct schema;
-    private final Map<String, Object> data = new LinkedHashMap<>();
+    private final Map<ColumnName, Object> data = new LinkedHashMap<>();
 
     ChunkImpl(DType.Struct schema) {
         this.schema = schema;
     }
 
     @Override
-    public Chunk put(String column, Object value) {
+    public Chunk put(ColumnName column, Object value) {
         int idx = schema.fieldNames().indexOf(column);
         if (idx < 0) {
             throw new IllegalArgumentException("unknown column: " + column);
@@ -29,17 +30,21 @@ final class ChunkImpl implements Chunk {
             throw new IllegalArgumentException("duplicate put for column: " + column);
         }
         DType dtype = schema.fieldTypes().get(idx);
-        data.put(column, validateAndAdapt(column, dtype, value));
+        data.put(column, validateAndAdapt(column.value(), dtype, value));
         return this;
     }
 
     Map<String, Object> finish() {
-        for (String name : schema.fieldNames()) {
+        for (ColumnName name : schema.fieldNames()) {
             if (!data.containsKey(name)) {
                 throw new IllegalStateException("missing column: " + name);
             }
         }
-        return data;
+        // The map entry point ([VortexWriter#writeChunk(Map)]) is keyed by raw name, so surface
+        // the validated keys as strings at this internal boundary.
+        Map<String, Object> result = new LinkedHashMap<>(data.size());
+        data.forEach((name, value) -> result.put(name.value(), value));
+        return result;
     }
 
     /// Validates a column's raw data against its schema dtype and adapts boxed nullable arrays

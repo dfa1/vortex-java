@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.csv;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
@@ -23,7 +24,7 @@ class CsvExporterTest {
         // Given
         Path vortex = tmp.resolve("data.vortex");
         DType.Struct schema = new DType.Struct(
-                List.of("id", "name"),
+                List.of(ColumnName.of("id"), ColumnName.of("name")),
                 List.of(DType.I64, DType.UTF8),
                 false);
         try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
@@ -48,7 +49,7 @@ class CsvExporterTest {
         // Given
         Path vortex = tmp.resolve("data.vortex");
         DType.Struct schema = new DType.Struct(
-                List.of("x"),
+                List.of(ColumnName.of("x")),
                 List.of(DType.F64),
                 false);
         try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
@@ -73,7 +74,7 @@ class CsvExporterTest {
         // Given
         Path vortex = tmp.resolve("data.vortex");
         DType.Struct schema = new DType.Struct(
-                List.of("id"),
+                List.of(ColumnName.of("id")),
                 List.of(DType.I64),
                 false);
         try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);

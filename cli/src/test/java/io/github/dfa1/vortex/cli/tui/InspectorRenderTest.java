@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.cli.tui;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -139,7 +140,7 @@ class InspectorRenderTest {
         void unknownTypeFallsBackToAngleBrackets() {
             try (Arena arena = Arena.ofConfined()) {
                 // Given — StructArray has no scalar rendering
-                DType.Struct dtype = new DType.Struct(List.of("a"), List.of(I64), false);
+                DType.Struct dtype = new DType.Struct(List.of(ColumnName.of("a")), List.of(I64), false);
                 StructArray sut = new StructArray(dtype, 1, List.of(ArrayFixtures.longs(arena, 1L)));
 
                 // When / Then — falls into the default <ClassName dtype> branch
@@ -155,7 +156,7 @@ class InspectorRenderTest {
         void rendersOneRowPerStructEntry() {
             try (Arena arena = Arena.ofConfined()) {
                 // Given
-                DType.Struct statsDtype = new DType.Struct(List.of("min"), List.of(I64), false);
+                DType.Struct statsDtype = new DType.Struct(List.of(ColumnName.of("min")), List.of(I64), false);
                 StructArray stats = new StructArray(statsDtype, 2, List.of(ArrayFixtures.longs(arena, 5L, 6L)));
 
                 // When
@@ -170,7 +171,7 @@ class InspectorRenderTest {
         void maskedInvalidStatsCellRendersNull() {
             try (Arena arena = Arena.ofConfined()) {
                 // Given — field masked: row 0 valid (5), row 1 null
-                DType.Struct statsDtype = new DType.Struct(List.of("min"), List.of(I64), false);
+                DType.Struct statsDtype = new DType.Struct(List.of(ColumnName.of("min")), List.of(I64), false);
                 MaskedArray field = new MaskedArray(ArrayFixtures.longs(arena, 5L, 9L),
                         ArrayFixtures.bools(arena, true, false));
                 StructArray stats = new StructArray(statsDtype, 2, List.of(field));
@@ -187,7 +188,7 @@ class InspectorRenderTest {
         void multiFieldNonStructStatsArrayThrows() {
             try (Arena arena = Arena.ofConfined()) {
                 // Given — a multi-field stats schema but a non-struct payload
-                DType.Struct statsDtype = new DType.Struct(List.of("min", "max"), List.of(I64, I64), false);
+                DType.Struct statsDtype = new DType.Struct(List.of(ColumnName.of("min"), ColumnName.of("max")), List.of(I64, I64), false);
                 Array notAStruct = ArrayFixtures.longs(arena, 1L);
 
                 // When / Then
@@ -203,7 +204,7 @@ class InspectorRenderTest {
                 // Given — a single-field (NULL_COUNT-only) stats table decodes to the bare field,
                 // not a StructArray; the renderer must still render it
                 DType.Struct statsDtype = new DType.Struct(
-                        List.of("null_count"), List.of(new DType.Primitive(PType.U64, true)), false);
+                        List.of(ColumnName.of("null_count")), List.of(new DType.Primitive(PType.U64, true)), false);
                 Array oneStat = ArrayFixtures.longs(arena, 0L, 2L);
 
                 // When

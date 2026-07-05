@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.jdbc;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.VortexWriter;
@@ -83,11 +84,11 @@ public final class JdbcImporter {
     }
 
     private static DType.Struct buildSchema(ResultSetMetaData meta, int colCount) throws SQLException {
-        List<String> names = new ArrayList<>(colCount);
+        List<ColumnName> names = new ArrayList<>(colCount);
         List<DType> types = new ArrayList<>(colCount);
         for (int c = 1; c <= colCount; c++) {
             boolean nullable = meta.isNullable(c) != ResultSetMetaData.columnNoNulls;
-            names.add(meta.getColumnLabel(c));
+            names.add(ColumnName.of(meta.getColumnLabel(c)));
             types.add(SqlTypeToDType.map(meta.getColumnType(c), meta.getColumnTypeName(c), nullable));
         }
         return new DType.Struct(names, types, false);
@@ -270,7 +271,7 @@ public final class JdbcImporter {
 
     private static Map<String, Object> toChunkMap(DType.Struct schema, Object[] buffers,
             boolean[][] validity, boolean[] anyNull, int rows) {
-        List<String> names = schema.fieldNames();
+        List<String> names = schema.fieldNames().stream().map(ColumnName::value).toList();
         Map<String, Object> chunk = new LinkedHashMap<>();
         for (int c = 0; c < names.size(); c++) {
             Object trimmed = trimBuffer(buffers[c], rows);

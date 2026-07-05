@@ -161,9 +161,9 @@ public final class VortexInspector {
 
     private static void appendSchema(StringBuilder sb, DType dtype, String indent) {
         if (dtype instanceof DType.Struct s) {
-            int maxLen = s.fieldNames().stream().mapToInt(String::length).max().orElse(0);
+            int maxLen = s.fieldNames().stream().mapToInt(c -> c.value().length()).max().orElse(0);
             for (int i = 0; i < s.fieldNames().size(); i++) {
-                String name = s.fieldNames().get(i);
+                String name = s.fieldNames().get(i).value();
                 sb.append(indent).append(name)
                         .append(" ".repeat(maxLen - name.length() + 1))
                         .append(formatDType(s.fieldTypes().get(i))).append('\n');

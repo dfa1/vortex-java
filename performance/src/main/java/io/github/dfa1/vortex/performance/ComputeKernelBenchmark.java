@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.performance;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ReadRegistry;
@@ -130,7 +131,7 @@ public class ComputeKernelBenchmark {
             List.of("price", "measure", "category", "plain");
 
     private static final DType.Struct SCHEMA = new DType.Struct(
-            COLUMNS,
+            COLUMNS.stream().map(ColumnName::of).toList(),
             List.of(DType.F64, DType.I64, DType.I64, DType.I64),
             false);
 

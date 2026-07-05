@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.writer;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ReadRegistry;
@@ -28,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MultiChunkUtf8RoundTripTest {
 
     private static final DType.Struct STRING_SCHEMA = new DType.Struct(
-            List.of("s"), List.of(DType.UTF8), false);
+            List.of(ColumnName.of("s")), List.of(DType.UTF8), false);
 
     @Test
     void manyBatchesUtf8WithCascading_columnIsChunkedMode(@TempDir Path tmp) throws IOException {

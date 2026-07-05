@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.reader.layout;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 
 import static io.github.dfa1.vortex.core.io.VortexFormat.LE_INT;
@@ -141,20 +142,20 @@ public final class ZonedStatsSchema {
     /// @param present     stats present, in ordinal order
     /// @return reconstructed non-nullable struct dtype
     public static DType.Struct statsTableDtype(DType columnDtype, List<Stat> present) {
-        List<String> names = new ArrayList<>(present.size() * 2);
+        List<ColumnName> names = new ArrayList<>(present.size() * 2);
         List<DType> types = new ArrayList<>(present.size() * 2);
         for (Stat stat : present) {
             DType stype = statDtype(stat, columnDtype);
             if (stype == null) {
                 continue;
             }
-            names.add(stat.fieldName());
+            names.add(ColumnName.of(stat.fieldName()));
             types.add(stype.withNullable(true));
             if (stat == Stat.MAX) {
-                names.add(Stat.MAX_IS_TRUNCATED);
+                names.add(ColumnName.of(Stat.MAX_IS_TRUNCATED));
                 types.add(DType.BOOL);
             } else if (stat == Stat.MIN) {
-                names.add(Stat.MIN_IS_TRUNCATED);
+                names.add(ColumnName.of(Stat.MIN_IS_TRUNCATED));
                 types.add(DType.BOOL);
             }
         }

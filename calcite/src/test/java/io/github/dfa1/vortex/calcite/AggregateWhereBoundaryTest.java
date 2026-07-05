@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.calcite;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.VortexWriter;
@@ -201,7 +202,7 @@ class AggregateWhereBoundaryTest {
         // predicate `id > 0 AND id < 100` cuts chunk 0 (drops id 0, keeps ids 1,2,3) — a boundary
         // zone — and selects chunk 1 whole (IN).
         DType.Struct schema = new DType.Struct(
-                List.of("id", "val"),
+                List.of(ColumnName.of("id"), ColumnName.of("val")),
                 List.of(new DType.Primitive(PType.I64, false), new DType.Primitive(PType.I64, true)),
                 false);
         Path f = tmp.resolve("nullable-boundary.vortex");
@@ -238,7 +239,7 @@ class AggregateWhereBoundaryTest {
         // rewrite must abandon so the scan returns the value. chunk 0 id 0..3 / name {"a".."d"},
         // chunk 1 id 10..13 / name {"e".."h"}; `id > 0 AND id < 100` cuts chunk 0 (keeps b,c,d).
         DType.Struct schema = new DType.Struct(
-                List.of("id", "name"),
+                List.of(ColumnName.of("id"), ColumnName.of("name")),
                 List.of(new DType.Primitive(PType.I64, false), new DType.Utf8(false)),
                 false);
         Path f = tmp.resolve("strmin-boundary.vortex");
@@ -267,7 +268,7 @@ class AggregateWhereBoundaryTest {
         // past the high bit, so the fold abandons any unsigned column outright — even on the boundary
         // path. chunk 0 id 0..3, chunk 1 id 10..13; `id > 1 AND id < 13` cuts both chunks.
         DType.Struct schema = new DType.Struct(
-                List.of("id", "val"),
+                List.of(ColumnName.of("id"), ColumnName.of("val")),
                 List.of(new DType.Primitive(PType.U64, false), new DType.Primitive(PType.I64, false)),
                 false);
         Path f = tmp.resolve("u64-boundary.vortex");
@@ -334,7 +335,7 @@ class AggregateWhereBoundaryTest {
         // null row AND the 30 row must both drop. This confirms the boundary mask's three-valued
         // logic for `<>` — a case the equality/range tests do not reach.
         DType.Struct schema = new DType.Struct(
-                List.of("id", "amt"),
+                List.of(ColumnName.of("id"), ColumnName.of("amt")),
                 List.of(new DType.Primitive(PType.I64, false), new DType.Primitive(PType.I64, true)),
                 false);
         Path f = tmp.resolve("neq-null-boundary.vortex");
@@ -385,7 +386,7 @@ class AggregateWhereBoundaryTest {
         // NaN-correct. chunk 0 f {1.0,NaN,2.0,3.0}, chunk 1 f {4.0,5.0,6.0,7.0}; `f >= 1.5` cuts
         // chunk 0 (a boundary) and keeps chunk 1 whole.
         DType.Struct schema = new DType.Struct(
-                List.of("f", "val"),
+                List.of(ColumnName.of("f"), ColumnName.of("val")),
                 List.of(new DType.Primitive(PType.F64, false), new DType.Primitive(PType.I64, false)),
                 false);
         Path f = tmp.resolve("float-nan-boundary.vortex");

@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.writer;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.RowFilter;
@@ -26,7 +27,7 @@ class NullCountPruningTest {
     Path tmp;
 
     private static final DType.Struct SCHEMA = new DType.Struct(
-            List.of("v"), List.of(new DType.Primitive(PType.I64, true)), false);
+            List.of(ColumnName.of("v")), List.of(new DType.Primitive(PType.I64, true)), false);
 
     // chunkSize large so each writeChunk is exactly one chunk (one zone). Three chunks of distinct
     // sizes and null patterns: 3 rows / 0 nulls, 2 rows / 1 null, 4 rows / all null.
@@ -88,7 +89,7 @@ class NullCountPruningTest {
         // When
         Long result;
         try (VortexReader reader = VortexReader.open(file)) {
-            result = reader.columnStats().get("v").nullCount();
+            result = reader.columnStats().get(ColumnName.of("v")).nullCount();
         }
 
         // Then

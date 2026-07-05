@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.inspect;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.CompressionScheme;
 import io.github.dfa1.vortex.core.model.DType;
@@ -114,7 +115,7 @@ class VortexInspectorTest {
 
         InspectorTree sut = new InspectorTree(
                 1, 1024L,
-                new DType.Struct(List.of("v"), List.of(DType.I32), false),
+                new DType.Struct(List.of(ColumnName.of("v")), List.of(DType.I32), false),
                 List.of("vortex.flat"), Set.of(),
                 List.of(), 1000L, rootN);
 
@@ -143,7 +144,7 @@ class VortexInspectorTest {
                 Set.of("vortex.flat"), ArrayStats.empty(), List.of(chunkedN));
 
         InspectorTree sut = new InspectorTree(1, 1024L,
-                new DType.Struct(List.of("id"), List.of(DType.I64), false),
+                new DType.Struct(List.of(ColumnName.of("id")), List.of(DType.I64), false),
                 List.of("vortex.flat"), Set.of(), List.of(), 1000L, rootN);
 
         // When
@@ -192,7 +193,7 @@ class VortexInspectorTest {
                 ArrayStats.empty(), List.of(idNode, valNode));
 
         DType dtype = new DType.Struct(
-                List.of("id", "value"),
+                List.of(ColumnName.of("id"), ColumnName.of("value")),
                 List.of(DType.I64, DType.F64),
                 false);
 

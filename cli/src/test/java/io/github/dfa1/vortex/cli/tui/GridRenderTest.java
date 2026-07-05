@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.cli.tui;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.TimeUnit;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -208,7 +209,7 @@ class GridRenderTest {
     void unrenderableTypeFallsBackToAngleBrackets() {
         try (Arena arena = Arena.ofConfined()) {
             // Given — StructArray has no scalar rendering
-            DType.Struct dtype = new DType.Struct(List.of("a"), List.of(I64), false);
+            DType.Struct dtype = new DType.Struct(List.of(ColumnName.of("a")), List.of(I64), false);
             StructArray sut = new StructArray(dtype, 1, List.of(ArrayFixtures.longs(arena, 1L)));
 
             // When / Then — falls into the default <ClassName> branch

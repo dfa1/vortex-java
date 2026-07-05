@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.error.VortexException;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ReadRegistry;
@@ -37,12 +38,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class ZoneMapPruningTest {
 
     private static final DType.Struct SCHEMA = new DType.Struct(
-            List.of("id"),
+            List.of(ColumnName.of("id")),
             List.of(DType.I64),
             false);
 
     private static final DType.Struct U64_SCHEMA = new DType.Struct(
-            List.of("id"),
+            List.of(ColumnName.of("id")),
             List.of(DType.U64),
             false);
 
@@ -94,7 +95,7 @@ class ZoneMapPruningTest {
     }
 
     private static final DType.Struct F32_SCHEMA = new DType.Struct(
-            List.of("v"),
+            List.of(ColumnName.of("v")),
             List.of(DType.F32),
             false);
 
@@ -455,7 +456,7 @@ class ZoneMapPruningTest {
         void between_prunesChunksDisjointFromRange(@TempDir Path tmp) throws IOException {
             // Given — [40,60] overlaps chunks 1 (40..50) and 2 (51..60); chunk 3 is disjoint
             Path file = writeThreeChunks(tmp);
-            RowFilter filter = new RowFilter.Column("id", new Predicate.Between(40L, 60L));
+            RowFilter filter = new RowFilter.Column(ColumnName.of("id"), new Predicate.Between(40L, 60L));
 
             // When / Then — survivors match a brute-force scan (chunk 3 pruned, never wrongly)
             assertPrunesLikeOracle(file, filter, v -> v >= 40 && v <= 60);
@@ -465,7 +466,7 @@ class ZoneMapPruningTest {
         void between_disjointFromEveryChunk_prunesAll(@TempDir Path tmp) throws IOException {
             // Given — [200,300] lies above every chunk's max
             Path file = writeThreeChunks(tmp);
-            RowFilter filter = new RowFilter.Column("id", new Predicate.Between(200L, 300L));
+            RowFilter filter = new RowFilter.Column(ColumnName.of("id"), new Predicate.Between(200L, 300L));
 
             // When / Then — no chunk can match, so all are pruned
             assertPrunesLikeOracle(file, filter, v -> v >= 200 && v <= 300);
@@ -475,7 +476,7 @@ class ZoneMapPruningTest {
         void or_prunesOnlyChunksDisjointFromBothSides(@TempDir Path tmp) throws IOException {
             // Given — (id<40 OR id>120): chunk 1 matches the left, chunk 3 the right, chunk 2 neither
             Path file = writeThreeChunks(tmp);
-            RowFilter filter = new RowFilter.Column("id",
+            RowFilter filter = new RowFilter.Column(ColumnName.of("id"),
                     new Predicate.Or(new Predicate.Lt(40L), new Predicate.Gt(120L)));
 
             // When / Then — only the middle chunk (no row < 40 or > 120) is pruned

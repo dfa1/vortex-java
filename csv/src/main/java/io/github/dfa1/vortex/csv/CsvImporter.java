@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.csv;
 
 import de.siegmar.fastcsv.reader.CsvReader;
 import de.siegmar.fastcsv.reader.CsvRecord;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.VortexWriter;
@@ -143,7 +144,7 @@ public final class CsvImporter {
             }
         }
 
-        List<String> names = List.of(headers);
+        List<ColumnName> names = Arrays.stream(headers).map(ColumnName::of).toList();
         List<DType> types = new ArrayList<>(colCount);
         for (int c = 0; c < colCount; c++) {
             types.add(resolveType(canBeLong[c], canBeDouble[c], canBeBool[c]));
@@ -212,7 +213,7 @@ public final class CsvImporter {
         int n = rows.size();
         Map<String, Object> chunk = new LinkedHashMap<>();
         for (int c = 0; c < schema.fieldNames().size(); c++) {
-            chunk.put(schema.fieldNames().get(c), buildColumn(schema.fieldTypes().get(c), rows, c, n));
+            chunk.put(schema.fieldNames().get(c).value(), buildColumn(schema.fieldTypes().get(c), rows, c, n));
         }
         return chunk;
     }

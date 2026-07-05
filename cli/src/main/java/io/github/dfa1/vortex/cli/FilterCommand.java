@@ -151,7 +151,7 @@ final class FilterCommand {
 
     private static RowPredicate toRowPredicate(RowFilter filter) {
         return switch (filter) {
-            case RowFilter.Column(var col, var predicate) -> columnPredicate(col, predicate);
+            case RowFilter.Column(var col, var predicate) -> columnPredicate(col.value(), predicate);
             case RowFilter.And(var filters) -> {
                 RowPredicate[] preds = filters.stream().map(FilterCommand::toRowPredicate).toArray(RowPredicate[]::new);
                 yield (chunk, rowIdx) -> {

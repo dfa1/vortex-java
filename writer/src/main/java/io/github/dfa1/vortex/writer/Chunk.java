@@ -1,5 +1,7 @@
 package io.github.dfa1.vortex.writer;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
+
 /// Typed chunk builder for [VortexWriter#writeChunk(java.util.function.Consumer)].
 ///
 /// Validates each `put` against the writer's schema:
@@ -24,12 +26,12 @@ package io.github.dfa1.vortex.writer;
 /// | Bool | `boolean[]` | `Boolean[]` |
 public interface Chunk {
 
-    /// Adds a column's data to the chunk.
+    /// Adds a column's data to the chunk, addressing it by its validated [ColumnName].
     ///
     /// @param column the column name; must exist in the writer's schema
     /// @param data   the column data; type must match the schema (see class javadoc)
     /// @return this builder
     /// @throws IllegalArgumentException if `column` is not in the schema or
     ///         `data` is of the wrong type for the column
-    Chunk put(String column, Object data);
+    Chunk put(ColumnName column, Object data);
 }

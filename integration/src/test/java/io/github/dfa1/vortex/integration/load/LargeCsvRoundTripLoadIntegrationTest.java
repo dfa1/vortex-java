@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.siegmar.fastcsv.reader.CsvReader;
 import de.siegmar.fastcsv.reader.CsvRecord;
 import de.siegmar.fastcsv.writer.CsvWriter;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.csv.CsvExporter;
 import io.github.dfa1.vortex.csv.CsvImporter;
@@ -44,7 +45,7 @@ class LargeCsvRoundTripLoadIntegrationTest {
     /// Schema is fixed (not inferred) so column types never drift with the
     /// sampled first chunk. Field names double as the CSV header.
     private static final DType.Struct SCHEMA = new DType.Struct(
-            List.of("id", "a", "b", "x", "y", "flag", "sym", "note"),
+            List.of(ColumnName.of("id"), ColumnName.of("a"), ColumnName.of("b"), ColumnName.of("x"), ColumnName.of("y"), ColumnName.of("flag"), ColumnName.of("sym"), ColumnName.of("note")),
             List.of(
                     DType.I64,
                     DType.I64,
@@ -56,7 +57,7 @@ class LargeCsvRoundTripLoadIntegrationTest {
                     DType.UTF8),
             false);
 
-    private static final String[] HEADER = SCHEMA.fieldNames().toArray(String[]::new);
+    private static final String[] HEADER = SCHEMA.fieldNames().stream().map(io.github.dfa1.vortex.core.model.ColumnName::value).toArray(String[]::new);
 
     /// Low-cardinality symbol set — plain ASCII, no delimiter/quote chars.
     private static final String[] SYMS = {"AAPL", "MSFT", "GOOG", "AMZN", "META", "NVDA"};
@@ -126,8 +127,8 @@ class LargeCsvRoundTripLoadIntegrationTest {
                 throw new AssertionError("exported CSV is empty");
             }
             List<String> header = it.next().getFields();
-            if (!header.equals(SCHEMA.fieldNames())) {
-                throw new AssertionError("header mismatch: " + header + " != " + SCHEMA.fieldNames());
+            if (!header.equals(java.util.Arrays.asList(HEADER))) {
+                throw new AssertionError("header mismatch: " + header + " != " + java.util.Arrays.asList(HEADER));
             }
             long i = 0;
             while (it.hasNext()) {

@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.writer;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -25,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class GlobalDictPrimitiveTest {
 
     private static DType.Struct i64Schema() {
-        return new DType.Struct(List.of("v"), List.of(DType.I64), false);
+        return new DType.Struct(List.of(ColumnName.of("v")), List.of(DType.I64), false);
     }
 
     private static long[] writeI64(Path file, long[][] chunks, WriteOptions options) throws IOException {
@@ -149,7 +150,7 @@ class GlobalDictPrimitiveTest {
         // Given — a low-cardinality I32 column drives the global dict build through the int[]
         // unique-array and codes paths (the narrower I8/I16 carriers are NOT round-tripped here:
         // the reader's lazy dict rejects them — see lowCardinality_i16_globalDict_readerRejects).
-        var schema = new DType.Struct(List.of("v"), List.of(DType.I32), false);
+        var schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DType.I32), false);
         int[] data = {10, 20, 30, 10, 20, 30, 10, 20};
         Path file = tmp.resolve("i32.vortex");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
@@ -174,7 +175,7 @@ class GlobalDictPrimitiveTest {
         // excluded from dict candidacy — matching the Rust compressor, which does not dict narrow
         // ints (RustWritesJavaReadsIntegrationTest#jniWriter_javaReader_lowCardinalityI16) — so a
         // low-card I16 column encodes via the cascade and round-trips cleanly.
-        var schema = new DType.Struct(List.of("v"), List.of(DType.I16), false);
+        var schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DType.I16), false);
         short[] data = {1, 2, 3, 1, 2, 3, 1, 2};
         Path file = tmp.resolve("i16.vortex");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
@@ -207,7 +208,7 @@ class GlobalDictPrimitiveTest {
     void lowCardinality_f64_usesGlobalDict(@TempDir Path tmp) throws IOException {
         // Given — F64 is admitted to the dict path (unlike F16/F32); a low-card float column must
         // round-trip through the float dict build.
-        var schema = new DType.Struct(List.of("v"), List.of(DType.F64), false);
+        var schema = new DType.Struct(List.of(ColumnName.of("v")), List.of(DType.F64), false);
         double[] dictVals = {1.5, 2.5, 3.5};
         int rows = 900;
         double[] data = new double[rows];

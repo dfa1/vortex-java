@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.integration;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.ScanOptions;
@@ -30,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class JavaRoundTripIntegrationTest {
 
     private static final DType.Struct I32_SCHEMA = new DType.Struct(
-            List.of("v"),
+            List.of(ColumnName.of("v")),
             List.of(DType.I32),
             false);
 

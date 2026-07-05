@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.writer;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.writer.encode.BitpackedEncodingEncoder;
 import io.github.dfa1.vortex.reader.ReadRegistry;
@@ -23,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class BitpackedEncodingTest {
 
     private static final DType.Struct I32_SCHEMA = new DType.Struct(
-            List.of("value"),
+            List.of(ColumnName.of("value")),
             List.of(DType.I32),
             false);
 

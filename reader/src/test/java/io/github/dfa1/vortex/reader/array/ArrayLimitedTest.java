@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.reader.array;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.error.VortexException;
@@ -110,7 +111,7 @@ class ArrayLimitedTest {
         @Test
         void structLimitsEachField() {
             // Given
-            DType.Struct dtype = new DType.Struct(List.of("a", "b"), List.of(I64, I64), false);
+            DType.Struct dtype = new DType.Struct(List.of(ColumnName.of("a"), ColumnName.of("b")), List.of(I64, I64), false);
             StructArray sut = new StructArray(dtype, 3,
                     List.of(longs(1L, 2L, 3L), longs(10L, 20L, 30L)));
 

@@ -184,7 +184,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             columnDtypes = new HashMap<>();
             if (file.dtype() instanceof DType.Struct struct) {
                 for (int i = 0; i < struct.fieldNames().size(); i++) {
-                    columnDtypes.put(ColumnName.of(struct.fieldNames().get(i)), struct.fieldTypes().get(i));
+                    columnDtypes.put(struct.fieldNames().get(i), struct.fieldTypes().get(i));
                 }
             }
         }
@@ -193,12 +193,12 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
 
     private static SequencedMap<ColumnName, Chunk.Column> expandStruct(StructArray sa) {
         DType.Struct sd = (DType.Struct) sa.dtype();
-        List<String> names = sd.fieldNames();
+        List<ColumnName> names = sd.fieldNames();
         List<DType> types = sd.fieldTypes();
         int n = names.size();
         var map = new LinkedHashMap<ColumnName, Chunk.Column>(n);
         for (int i = 0; i < n; i++) {
-            map.put(ColumnName.of(names.get(i)), new Chunk.Column(sa.field(i), types.get(i)));
+            map.put(names.get(i), new Chunk.Column(sa.field(i), types.get(i)));
         }
         return unmodifiable(map);
     }
@@ -443,7 +443,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         if (!(file.dtype() instanceof DType.Struct struct) || !root.isStruct()) {
             return null;
         }
-        int idx = struct.fieldNames().indexOf(column.value());
+        int idx = struct.fieldNames().indexOf(column);
         if (idx < 0 || idx >= root.children().size()) {
             return null;
         }
@@ -464,7 +464,7 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
     }
 
     private static Array fieldOrNull(StructArray table, String field) {
-        if (((DType.Struct) table.dtype()).fieldNames().contains(field)) {
+        if (((DType.Struct) table.dtype()).fieldNames().contains(ColumnName.of(field))) {
             return table.field(field);
         }
         return null;
@@ -544,11 +544,8 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
         if (rootLayout.isStruct() && rootDtype instanceof DType.Struct structDtype) {
             List<ColumnName> projection = options.columns();
             for (int i = 0; i < rootLayout.children().size(); i++) {
-                String rawName = structDtype.fieldNames().get(i);
+                ColumnName colName = structDtype.fieldNames().get(i);
                 DType colDtype = structDtype.fieldTypes().get(i);
-                // File-schema names are already policy-certified by PostscriptParser, so this
-                // ColumnName construction never throws — it just types the certified key.
-                ColumnName colName = ColumnName.of(rawName);
                 if (!projection.isEmpty() && !projection.contains(colName)) {
                     continue;
                 }
@@ -721,9 +718,9 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
                 yield false;
             }
             case RowFilter.Column(var col, var predicate) -> {
-                // The filter's raw column string enters the typed internals here; a valid-but-absent
-                // name yields no layout (no pruning), matching the row-level scan it gates.
-                ColumnName name = ColumnName.of(col);
+                // A valid-but-absent name yields no layout (no pruning), matching the row-level
+                // scan it gates.
+                ColumnName name = col;
                 Layout flat = chunk.layoutFor(name);
                 if (flat == null) {
                     yield false;

@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.csv;
 
 import de.siegmar.fastcsv.writer.CsvWriter;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.reader.array.Array;
@@ -74,7 +75,9 @@ public final class CsvExporter {
         if (!(reader.dtype() instanceof DType.Struct schema)) {
             throw new VortexException("only struct root dtype supported for CSV export");
         }
-        List<String> colNames = options.hasProjection() ? options.columns() : schema.fieldNames();
+        List<String> colNames = options.hasProjection()
+                ? options.columns()
+                : schema.fieldNames().stream().map(ColumnName::value).toList();
         int colCount = colNames.size();
 
         if (options.writeHeader()) {

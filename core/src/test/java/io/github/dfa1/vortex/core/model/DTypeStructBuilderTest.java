@@ -20,7 +20,8 @@ class DTypeStructBuilderTest {
                 .build();
 
         // Then
-        assertThat(sut.fieldNames()).containsExactly("timestamp", "symbol", "price");
+        assertThat(sut.fieldNames()).containsExactly(
+                ColumnName.of("timestamp"), ColumnName.of("symbol"), ColumnName.of("price"));
         assertThat(sut.fieldTypes()).containsExactly(
                 DType.I64, DType.UTF8, DType.F64);
         assertThat(sut.nullable()).isFalse();
@@ -70,7 +71,7 @@ class DTypeStructBuilderTest {
 
         // When
         DType.Struct result = new DType.Struct(
-                List.of("a", "b"),
+                List.of(ColumnName.of("a"), ColumnName.of("b")),
                 List.of(DType.I32, DType.UTF8),
                 false);
 
@@ -85,8 +86,8 @@ class DTypeStructBuilderTest {
         DType.Struct resultY = DType.structBuilder().field("y", DType.UTF8).build();
 
         // Then
-        assertThat(resultX.fieldNames()).containsExactly("x");
-        assertThat(resultY.fieldNames()).containsExactly("y");
+        assertThat(resultX.fieldNames()).containsExactly(ColumnName.of("x"));
+        assertThat(resultY.fieldNames()).containsExactly(ColumnName.of("y"));
     }
 
     @org.junit.jupiter.params.ParameterizedTest

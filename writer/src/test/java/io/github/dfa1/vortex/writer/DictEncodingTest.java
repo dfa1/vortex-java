@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.writer;
 
 import io.github.dfa1.vortex.core.io.VortexFormat;
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.writer.encode.DictEncodingEncoder;
@@ -25,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DictEncodingTest {
 
     private static final DType.Struct SCHEMA = new DType.Struct(
-            List.of("category"),
+            List.of(ColumnName.of("category")),
             List.of(DType.I32),
             false);
 

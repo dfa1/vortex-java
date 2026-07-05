@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.calcite;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.reader.ScanIterator;
 import io.github.dfa1.vortex.reader.ScanOptions;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -224,7 +225,8 @@ class OhlcSqlDemoTest {
                     total += c;
                 }
             }
-            return new Pushdown(stats.get("low").min(), stats.get("high").max(), total);
+            return new Pushdown(stats.get(ColumnName.of("low")).min(),
+                    stats.get(ColumnName.of("high")).max(), total);
         }
     }
 

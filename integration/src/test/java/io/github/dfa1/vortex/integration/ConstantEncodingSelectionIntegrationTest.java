@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.integration;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.inspect.VortexInspector;
 import io.github.dfa1.vortex.reader.ReadRegistry;
@@ -24,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ConstantEncodingSelectionIntegrationTest {
 
     private static final DType.Struct SCHEMA = new DType.Struct(
-            List.of("v"),
+            List.of(ColumnName.of("v")),
             List.of(DType.I64),
             false);
 
