@@ -105,10 +105,13 @@
 	<profiles>
 		<profile>
 			<id>coverage</id>
-			<!-- When reporting coverage, promote key modules from test to compile scope so
-			     jacoco:report-aggregate can locate their class directories. The integration
-			     module is never published (maven.deploy.skip=true) so this has no downstream
-			     impact. -->
+			<!-- When reporting coverage, promote every dependency module exercised by the
+			     integration tests from test to compile scope so jacoco:report-aggregate can
+			     locate their class directories — otherwise their cross-module integration
+			     coverage never reaches Sonar (parquet/csv were previously omitted). The
+			     integration module is never published (maven.deploy.skip=true) so this has no
+			     downstream impact. Unit coverage of non-dependency modules (cli, calcite,
+			     fbs-gen, …) reaches Sonar through their own per-module jacoco.xml, not here. -->
 			<dependencies>
 				<dependency>
 					<groupId>io.github.dfa1.vortex</groupId>
@@ -128,6 +131,16 @@
 				<dependency>
 					<groupId>io.github.dfa1.vortex</groupId>
 					<artifactId>vortex-inspector</artifactId>
+					<scope>compile</scope>
+				</dependency>
+				<dependency>
+					<groupId>io.github.dfa1.vortex</groupId>
+					<artifactId>vortex-parquet</artifactId>
+					<scope>compile</scope>
+				</dependency>
+				<dependency>
+					<groupId>io.github.dfa1.vortex</groupId>
+					<artifactId>vortex-csv</artifactId>
 					<scope>compile</scope>
 				</dependency>
 			</dependencies>
