@@ -21,10 +21,6 @@ import java.lang.foreign.ValueLayout;
 /// Read-only decoder for `fastlanes.delta`.
 public final class DeltaEncodingDecoder implements EncodingDecoder {
 
-    /// Public no-arg constructor required by [java.util.ServiceLoader].
-    public DeltaEncodingDecoder() {
-    }
-
     @Override
     public EncodingId encodingId() {
         return EncodingId.FASTLANES_DELTA;
@@ -137,6 +133,5 @@ public final class DeltaEncodingDecoder implements EncodingDecoder {
         }
         return out;
     }
-
 
 }

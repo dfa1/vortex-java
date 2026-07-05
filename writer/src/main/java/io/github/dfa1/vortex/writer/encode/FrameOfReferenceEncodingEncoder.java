@@ -14,10 +14,6 @@ import java.util.List;
 /// Write-only encoder for `fastlanes.for` (Frame of Reference).
 public final class FrameOfReferenceEncodingEncoder implements EncodingEncoder {
 
-    /// Public no-arg constructor required by [java.util.ServiceLoader].
-    public FrameOfReferenceEncodingEncoder() {
-    }
-
     @Override
     public EncodingId encodingId() {
         return EncodingId.FASTLANES_FOR;
@@ -68,7 +64,6 @@ public final class FrameOfReferenceEncodingEncoder implements EncodingEncoder {
         ChildSlot slot = new ChildSlot(dtype, residualsAsNativeArray(longs, ref, ptype), 0);
         return new CascadeStep(partialRoot, List.of(), List.of(slot), null, null, true);
     }
-
 
     private static long computeRef(long[] longs, int n) {
         long ref = n > 0 ? longs[0] : 0L;
@@ -123,7 +118,6 @@ public final class FrameOfReferenceEncodingEncoder implements EncodingEncoder {
             default -> throw new VortexException(EncodingId.FASTLANES_FOR, "unsupported ptype: " + ptype);
         };
     }
-
 
     private static MemorySegment toResidualBuffer(long[] longs, long ref, PType ptype, EncodeContext ctx) {
         int n = longs.length;

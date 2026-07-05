@@ -11,10 +11,6 @@ import java.util.List;
 /// Write-only encoder for `vortex.decimal`.
 public final class DecimalEncodingEncoder implements EncodingEncoder {
 
-    /// Public no-arg constructor required by [java.util.ServiceLoader].
-    public DecimalEncodingEncoder() {
-    }
-
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_DECIMAL;

@@ -18,10 +18,6 @@ import java.lang.foreign.MemorySegment;
 /// Read-only decoder for `fastlanes.for` (Frame of Reference).
 public final class FrameOfReferenceEncodingDecoder implements EncodingDecoder {
 
-    /// Public no-arg constructor required by [java.util.ServiceLoader].
-    public FrameOfReferenceEncodingDecoder() {
-    }
-
     @Override
     public EncodingId encodingId() {
         return EncodingId.FASTLANES_FOR;

@@ -11,10 +11,6 @@ import java.util.List;
 /// Write-only encoder for `vortex.decimal_byte_parts`.
 public final class DecimalBytePartsEncodingEncoder implements EncodingEncoder {
 
-    /// Public no-arg constructor required by [java.util.ServiceLoader].
-    public DecimalBytePartsEncodingEncoder() {
-    }
-
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_DECIMAL_BYTE_PARTS;

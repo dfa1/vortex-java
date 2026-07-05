@@ -11,10 +11,6 @@ import java.lang.foreign.MemorySegment;
 /// Write-only encoder for `vortex.constant`.
 public final class ConstantEncodingEncoder implements EncodingEncoder {
 
-    /// Public no-arg constructor required by [java.util.ServiceLoader].
-    public ConstantEncodingEncoder() {
-    }
-
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_CONSTANT;

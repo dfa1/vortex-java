@@ -19,10 +19,6 @@ public final class FsstEncodingEncoder implements EncodingEncoder {
     private static final int MAX_SYMBOLS = 255;
     private static final int BIGRAM_COUNT = 65536;
 
-    /// Public no-arg constructor required by [java.util.ServiceLoader].
-    public FsstEncodingEncoder() {
-    }
-
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_FSST;

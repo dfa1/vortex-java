@@ -17,10 +17,6 @@ public final class VarBinEncodingEncoder implements EncodingEncoder {
 
     private static final byte[] EMPTY_BYTES = new byte[0];
 
-    /// Public no-arg constructor required by [java.util.ServiceLoader].
-    public VarBinEncodingEncoder() {
-    }
-
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_VARBIN;

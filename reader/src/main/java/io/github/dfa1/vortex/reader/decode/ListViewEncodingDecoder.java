@@ -14,10 +14,6 @@ import java.lang.foreign.MemorySegment;
 /// Read-only decoder for `vortex.listview`.
 public final class ListViewEncodingDecoder implements EncodingDecoder {
 
-    /// Public no-arg constructor required by [java.util.ServiceLoader].
-    public ListViewEncodingDecoder() {
-    }
-
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_LISTVIEW;

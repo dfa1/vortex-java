@@ -16,11 +16,6 @@ public final class UuidExtensionEncoder implements ExtensionEncoder {
     /// Singleton instance.
     public static final UuidExtensionEncoder INSTANCE = new UuidExtensionEncoder();
 
-    /// Public no-arg constructor for [java.util.ServiceLoader].
-    /// Prefer the [#INSTANCE] singleton in application code.
-    public UuidExtensionEncoder() {
-    }
-
     @Override
     public ExtensionId extensionId() {
         return ExtensionId.VORTEX_UUID;

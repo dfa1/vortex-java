@@ -18,10 +18,6 @@ public final class FsstEncodingDecoder implements EncodingDecoder {
 
     private static final int ESCAPE = 0xFF;
 
-    /// Public no-arg constructor required by [java.util.ServiceLoader].
-    public FsstEncodingDecoder() {
-    }
-
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_FSST;

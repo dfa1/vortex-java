@@ -2,12 +2,7 @@ package io.github.dfa1.vortex.writer.encode;
 
 import io.github.dfa1.vortex.core.model.DType;
 
-
-
 import io.github.dfa1.vortex.core.model.EncodingId;
-
-
-
 
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
@@ -15,10 +10,6 @@ import java.util.List;
 
 /// Write-only encoder for `vortex.fixed_size_list`.
 public final class FixedSizeListEncodingEncoder implements EncodingEncoder {
-
-    /// Public no-arg constructor required by [java.util.ServiceLoader].
-    public FixedSizeListEncodingEncoder() {
-    }
 
     private static final List<EncodingEncoder> FALLBACK = List.of(
             new PrimitiveEncodingEncoder(), new VarBinEncodingEncoder(), new BoolEncodingEncoder(),

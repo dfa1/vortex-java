@@ -21,10 +21,6 @@ import java.lang.foreign.MemorySegment;
 /// Read-only decoder for `vortex.alprd`.
 public final class AlpRdEncodingDecoder implements EncodingDecoder {
 
-    /// Public no-arg constructor required by [java.util.ServiceLoader].
-    public AlpRdEncodingDecoder() {
-    }
-
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_ALPRD;

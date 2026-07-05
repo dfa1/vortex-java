@@ -13,10 +13,6 @@ import java.lang.foreign.ValueLayout;
 /// Write-side encoder for `vortex.bool`.
 public final class BoolEncodingEncoder implements EncodingEncoder {
 
-    /// Public no-arg constructor required by [java.util.ServiceLoader].
-    public BoolEncodingEncoder() {
-    }
-
     private static MemorySegment encodeBool(boolean[] data, Arena arena) {
         long packedBytes = (data.length + 7L) / 8;
         if (packedBytes == 0) {

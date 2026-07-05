@@ -22,10 +22,6 @@ import java.util.List;
 public final class BitpackedEncodingEncoder implements EncodingEncoder {
     private static final int[] FL_ORDER = {0, 4, 2, 6, 1, 5, 3, 7};
 
-    /// Public no-arg constructor required by [java.util.ServiceLoader].
-    public BitpackedEncodingEncoder() {
-    }
-
     @Override
     public EncodingId encodingId() {
         return EncodingId.FASTLANES_BITPACKED;
@@ -238,8 +234,6 @@ public final class BitpackedEncodingEncoder implements EncodingEncoder {
         }
         return seg;
     }
-
-
 
     private static byte[] statsBytes(PType ptype, long value) {
         if (ptype.isUnsigned()) {

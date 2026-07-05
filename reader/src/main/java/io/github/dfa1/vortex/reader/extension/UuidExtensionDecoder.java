@@ -9,7 +9,6 @@ import io.github.dfa1.vortex.reader.array.FixedSizeListArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.core.model.ExtensionId;
 
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -19,11 +18,6 @@ public final class UuidExtensionDecoder implements ExtensionDecoder {
 
     /// Singleton instance.
     public static final UuidExtensionDecoder INSTANCE = new UuidExtensionDecoder();
-
-    /// Public no-arg constructor for [java.util.ServiceLoader].
-    /// Prefer the [#INSTANCE] singleton in application code.
-    public UuidExtensionDecoder() {
-    }
 
     @Override
     public ExtensionId extensionId() {

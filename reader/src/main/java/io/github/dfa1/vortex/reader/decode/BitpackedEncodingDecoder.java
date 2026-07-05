@@ -21,10 +21,6 @@ import java.lang.foreign.ValueLayout;
 public final class BitpackedEncodingDecoder implements EncodingDecoder {
     private static final int[] FL_ORDER = {0, 4, 2, 6, 1, 5, 3, 7};
 
-    /// Public no-arg constructor required by [java.util.ServiceLoader].
-    public BitpackedEncodingDecoder() {
-    }
-
     @Override
     public EncodingId encodingId() {
         return EncodingId.FASTLANES_BITPACKED;

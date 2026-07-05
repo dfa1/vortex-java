@@ -33,10 +33,6 @@ import java.lang.foreign.ValueLayout;
 /// Read-only decoder for `vortex.sparse`.
 public final class SparseEncodingDecoder implements EncodingDecoder {
 
-    /// Public no-arg constructor required by [java.util.ServiceLoader].
-    public SparseEncodingDecoder() {
-    }
-
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_SPARSE;

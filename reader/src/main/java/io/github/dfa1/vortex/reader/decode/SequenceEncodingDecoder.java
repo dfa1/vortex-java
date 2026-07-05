@@ -24,10 +24,6 @@ import java.lang.foreign.ValueLayout;
 /// Read-only decoder for `vortex.sequence` — `A[i] = base + i * multiplier`.
 public final class SequenceEncodingDecoder implements EncodingDecoder {
 
-    /// Public no-arg constructor required by [java.util.ServiceLoader].
-    public SequenceEncodingDecoder() {
-    }
-
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_SEQUENCE;

@@ -23,10 +23,6 @@ public final class DateTimePartsEncodingDecoder implements EncodingDecoder {
 
     private static final long SECONDS_PER_DAY = 86_400L;
 
-    /// Public no-arg constructor required by [java.util.ServiceLoader].
-    public DateTimePartsEncodingDecoder() {
-    }
-
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_DATETIMEPARTS;

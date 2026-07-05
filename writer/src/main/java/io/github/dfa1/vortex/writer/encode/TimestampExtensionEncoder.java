@@ -18,11 +18,6 @@ public final class TimestampExtensionEncoder implements ExtensionEncoder {
     /// Singleton instance.
     public static final TimestampExtensionEncoder INSTANCE = new TimestampExtensionEncoder();
 
-    /// Public no-arg constructor for [java.util.ServiceLoader].
-    /// Prefer the [#INSTANCE] singleton in application code.
-    public TimestampExtensionEncoder() {
-    }
-
     @Override
     public ExtensionId extensionId() {
         return ExtensionId.VORTEX_TIMESTAMP;

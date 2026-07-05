@@ -28,10 +28,6 @@ import java.lang.foreign.ValueLayout;
 /// Read-only decoder for `vortex.runend`.
 public final class RunEndEncodingDecoder implements EncodingDecoder {
 
-    /// Public no-arg constructor required by [java.util.ServiceLoader].
-    public RunEndEncodingDecoder() {
-    }
-
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_RUNEND;

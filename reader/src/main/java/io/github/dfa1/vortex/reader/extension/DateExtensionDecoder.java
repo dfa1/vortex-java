@@ -8,7 +8,6 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.core.model.ExtensionId;
 
-
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -19,11 +18,6 @@ public final class DateExtensionDecoder implements ExtensionDecoder {
 
     /// Singleton instance.
     public static final DateExtensionDecoder INSTANCE = new DateExtensionDecoder();
-
-    /// Public no-arg constructor for [java.util.ServiceLoader].
-    /// Prefer the [#INSTANCE] singleton in application code.
-    public DateExtensionDecoder() {
-    }
 
     @Override
     public ExtensionId extensionId() {

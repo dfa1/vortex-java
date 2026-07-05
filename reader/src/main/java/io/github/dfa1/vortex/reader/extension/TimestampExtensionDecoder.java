@@ -9,7 +9,6 @@ import io.github.dfa1.vortex.core.model.TimeUnit;
 import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.TimestampDtype;
 
-
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -23,11 +22,6 @@ public final class TimestampExtensionDecoder implements ExtensionDecoder {
 
     /// Singleton instance.
     public static final TimestampExtensionDecoder INSTANCE = new TimestampExtensionDecoder();
-
-    /// Public no-arg constructor for [java.util.ServiceLoader].
-    /// Prefer the [#INSTANCE] singleton in application code.
-    public TimestampExtensionDecoder() {
-    }
 
     @Override
     public ExtensionId extensionId() {

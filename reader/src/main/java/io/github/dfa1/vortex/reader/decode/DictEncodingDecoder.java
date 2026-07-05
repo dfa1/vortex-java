@@ -33,10 +33,6 @@ import java.lang.foreign.ValueLayout;
 /// make lazy wrapping non-trivial here — kept eager by design.
 public final class DictEncodingDecoder implements EncodingDecoder {
 
-    /// Public no-arg constructor required by [java.util.ServiceLoader].
-    public DictEncodingDecoder() {
-    }
-
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_DICT;

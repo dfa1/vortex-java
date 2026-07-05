@@ -20,10 +20,6 @@ import java.lang.foreign.MemorySegment;
 /// Read-only decoder for `vortex.patched`.
 public final class PatchedEncodingDecoder implements EncodingDecoder {
 
-    /// Public no-arg constructor required by [java.util.ServiceLoader].
-    public PatchedEncodingDecoder() {
-    }
-
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_PATCHED;

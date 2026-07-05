@@ -15,10 +15,6 @@ import java.util.List;
 /// Write-only encoder for `vortex.runend`.
 public final class RunEndEncodingEncoder implements EncodingEncoder {
 
-    /// Public no-arg constructor required by [java.util.ServiceLoader].
-    public RunEndEncodingEncoder() {
-    }
-
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_RUNEND;

@@ -14,10 +14,6 @@ import java.lang.foreign.MemorySegment;
 /// Read-only decoder for `vortex.varbin`.
 public final class VarBinEncodingDecoder implements EncodingDecoder {
 
-    /// Public no-arg constructor required by [java.util.ServiceLoader].
-    public VarBinEncodingDecoder() {
-    }
-
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_VARBIN;

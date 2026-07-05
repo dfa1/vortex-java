@@ -44,10 +44,6 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
         }
     }
 
-    /// Public no-arg constructor required by [java.util.ServiceLoader].
-    public ZstdEncodingDecoder() {
-    }
-
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_ZSTD;

@@ -9,10 +9,6 @@ import java.util.List;
 /// Write-only encoder for `vortex.ext` — wraps a storage-array encode in an ext node.
 public final class ExtEncodingEncoder implements EncodingEncoder {
 
-    /// Public no-arg constructor required by [java.util.ServiceLoader].
-    public ExtEncodingEncoder() {
-    }
-
     private static final List<EncodingEncoder> STORAGE_FALLBACK = List.of(
             new PrimitiveEncodingEncoder(),
             new FixedSizeListEncodingEncoder());

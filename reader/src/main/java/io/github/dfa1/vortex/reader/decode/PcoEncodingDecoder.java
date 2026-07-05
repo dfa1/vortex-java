@@ -30,11 +30,6 @@ public final class PcoEncodingDecoder implements EncodingDecoder {
     static final int BITS_TO_ENCODE_OFFSET_BITS_32 = 6;
     static final int BITS_TO_ENCODE_OFFSET_BITS_16 = 5;
 
-
-    /// Public no-arg constructor required by [java.util.ServiceLoader].
-    public PcoEncodingDecoder() {
-    }
-
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_PCO;

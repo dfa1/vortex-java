@@ -9,7 +9,6 @@ import io.github.dfa1.vortex.core.model.TimeUnit;
 import io.github.dfa1.vortex.core.model.ExtensionId;
 import io.github.dfa1.vortex.core.model.TimeDtype;
 
-
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -19,11 +18,6 @@ public final class TimeExtensionDecoder implements ExtensionDecoder {
 
     /// Singleton instance.
     public static final TimeExtensionDecoder INSTANCE = new TimeExtensionDecoder();
-
-    /// Public no-arg constructor for [java.util.ServiceLoader].
-    /// Prefer the [#INSTANCE] singleton in application code.
-    public TimeExtensionDecoder() {
-    }
 
     @Override
     public ExtensionId extensionId() {

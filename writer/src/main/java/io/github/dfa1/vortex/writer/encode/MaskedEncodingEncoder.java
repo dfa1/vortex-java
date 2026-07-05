@@ -3,11 +3,7 @@ package io.github.dfa1.vortex.writer.encode;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.error.VortexException;
 
-
 import io.github.dfa1.vortex.core.model.EncodingId;
-
-
-
 
 import java.lang.foreign.MemorySegment;
 import java.util.ArrayList;
@@ -16,10 +12,6 @@ import java.util.List;
 /// Write-only encoder for `vortex.masked`. Wraps the payload encode in a values + validity
 /// pair driven by a [NullableData] carrier.
 public final class MaskedEncodingEncoder implements EncodingEncoder {
-
-    /// Public no-arg constructor required by [java.util.ServiceLoader].
-    public MaskedEncodingEncoder() {
-    }
 
     private static final List<EncodingEncoder> INNER_FALLBACK = List.of(
             new PrimitiveEncodingEncoder(),

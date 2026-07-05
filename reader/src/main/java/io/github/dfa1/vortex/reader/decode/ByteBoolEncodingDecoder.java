@@ -11,10 +11,6 @@ import java.lang.foreign.ValueLayout;
 /// bit-packed [BoolArray] layout used by `vortex.bool`.
 public final class ByteBoolEncodingDecoder implements EncodingDecoder {
 
-    /// Public no-arg constructor required by [java.util.ServiceLoader].
-    public ByteBoolEncodingDecoder() {
-    }
-
     @Override
     public EncodingId encodingId() {
         return EncodingId.VORTEX_BYTEBOOL;
