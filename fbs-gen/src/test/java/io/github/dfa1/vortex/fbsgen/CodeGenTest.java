@@ -1,6 +1,7 @@
 package io.github.dfa1.vortex.fbsgen;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -10,6 +11,26 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class CodeGenTest {
+
+    @Test
+    void vectorOfUnions_throwsFbsParseException(@TempDir Path out) {
+        // Given a schema whose table field is a vector of a union type — the one array-element
+        // shape the FlatBuffers layout cannot express, so the generator must reject it.
+        String schema = """
+                namespace x;
+                table A { a: int; }
+                table B { b: int; }
+                union U { A, B }
+                table T { items: [U]; }
+                """;
+        Ast.SchemaFile file = new Parser(new Lexer(schema).tokenize()).parseFile();
+        CodeGen sut = new CodeGen(new TypeRegistry(List.of(file)));
+
+        // When / Then
+        assertThatThrownBy(() -> sut.emit(out))
+                .isInstanceOf(FbsParseException.class)
+                .hasMessageContaining("vectors of unions are not supported");
+    }
 
     @Test
     void emitsOneFilePerDeclarationForAllVortexSchemas(@TempDir Path out) throws IOException {

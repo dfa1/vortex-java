@@ -1,19 +1,24 @@
 package io.github.dfa1.vortex.cli;
 
+import io.github.dfa1.vortex.reader.compute.Predicate;
+import io.github.dfa1.vortex.csv.RowPredicate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.stream.Stream;
 
 import static io.github.dfa1.vortex.cli.CliTestSupport.capture;
 import static io.github.dfa1.vortex.cli.CliTestSupport.writeSmallVortex;
 import static io.github.dfa1.vortex.cli.CliTestSupport.writeTypedVortex;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class FilterCommandTest {
 
@@ -189,5 +194,36 @@ class FilterCommandTest {
         // The column won't exist; ERROR exit is expected, USAGE_ERROR is what we rule out.
         assertThat(elapsedMs).isLessThan(1000);
         assertThat(result.status()).isNotEqualTo(ExitStatus.USAGE_ERROR);
+    }
+
+    @Test
+    void columnPredicate_nullTestLeaves_compileToARowPredicate() {
+        // Given the null-test predicate variants — the CLI grammar never produces them, but
+        // columnPredicate must handle them for switch exhaustiveness over Predicate
+        // When
+        RowPredicate isNull = FilterCommand.columnPredicate("c", new Predicate.IsNull());
+        RowPredicate isNotNull = FilterCommand.columnPredicate("c", new Predicate.IsNotNull());
+
+        // Then — each compiles to a usable per-row test
+        assertThat(isNull).isNotNull();
+        assertThat(isNotNull).isNotNull();
+    }
+
+    @ParameterizedTest
+    @MethodSource("unsupportedCompositePredicates")
+    void columnPredicate_compositeAndRangeLeaves_throw(Predicate predicate) {
+        // Given a composite or range predicate the CLI cannot express
+        // When / Then — columnPredicate rejects it rather than silently mishandling
+        assertThatThrownBy(() -> FilterCommand.columnPredicate("c", predicate))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("not supported on the command line");
+    }
+
+    private static Stream<Predicate> unsupportedCompositePredicates() {
+        Predicate leaf = new Predicate.Gt(1L);
+        return Stream.of(
+                new Predicate.Between(1L, 2L),
+                new Predicate.And(leaf, leaf),
+                new Predicate.Or(leaf, leaf));
     }
 }

@@ -169,7 +169,10 @@ final class FilterCommand {
     /// Compiles a column-bound [Predicate] into a per-row test over the decoded chunk. Only the
     /// comparison and null-test leaves the filter grammar ([#parseFilter]) produces are supported;
     /// the composite and range predicate variants never arise from a parsed CLI expression.
-    private static RowPredicate columnPredicate(String col, Predicate predicate) {
+    ///
+    /// Package-private so the exhaustive switch's null-test and unsupported-composite arms — which
+    /// the CLI grammar never reaches — can be exercised directly.
+    static RowPredicate columnPredicate(String col, Predicate predicate) {
         return switch (predicate) {
             case Predicate.Gt(var val) -> (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, val) > 0;
             case Predicate.Gte(var val) -> (chunk, rowIdx) -> compareValue(chunk.column(col), rowIdx, val) >= 0;
