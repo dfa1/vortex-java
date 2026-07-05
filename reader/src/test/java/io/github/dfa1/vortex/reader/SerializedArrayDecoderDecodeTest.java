@@ -3,8 +3,8 @@ package io.github.dfa1.vortex.reader;
 import io.github.dfa1.vortex.core.fbs.FbsArrayNode;
 import io.github.dfa1.vortex.core.fbs.FbsBuffer;
 import io.github.dfa1.vortex.core.fbs.FbsBuilder;
-import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.UnknownArray;
 import org.junit.jupiter.api.Test;
@@ -15,7 +15,6 @@ import java.util.List;
 
 import static io.github.dfa1.vortex.core.io.VortexFormat.LE_INT;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowable;
 
 /// Successful flat-segment decode path — complements [SerializedArrayBoundsSecurityTest] (which only
 /// drives the rejection paths). A buffer descriptor with non-zero padding exercises the offset
@@ -44,7 +43,7 @@ class SerializedArrayDecoderDecodeTest {
             seg.set(LE_INT, padding + fb.length, fb.length);
 
             // When — encoding index 0 maps to an id no decoder handles
-            Array result = sut.decode(seg, List.of("vortex.nonexistent"),
+            Array result = sut.decode(seg, List.of(EncodingId.parse("vortex.nonexistent")),
                     DType.I32, 0, arena);
 
             // Then — the allow-unknown path produced an UnknownArray (proves both the +padding
@@ -53,30 +52,6 @@ class SerializedArrayDecoderDecodeTest {
         }
     }
 
-    @Test
-    void decode_blankEncodingId_throwsVortexException() {
-        ReadRegistry registry = ReadRegistry.builder().allowUnknown().build();
-        SerializedArrayDecoder sut = new SerializedArrayDecoder(registry);
-
-        try (Arena arena = Arena.ofConfined()) {
-            // Given — a zero-length FlatBuffer string in the spec table decodes to "", which
-            // EncodingId.parse rejects with IllegalArgumentException; untrusted input must
-            // surface as VortexException instead, even under allowUnknown
-            byte[] fb = arrayFlatBufferOneBuffer(0, 0L);
-            MemorySegment seg = arena.allocate((long) fb.length + 4);
-            MemorySegment.copy(MemorySegment.ofArray(fb), 0, seg, 0, fb.length);
-            seg.set(LE_INT, fb.length, fb.length);
-
-            // When
-            Throwable result = catchThrowable(() -> sut.decode(seg, List.of(""),
-                    DType.I32, 0, arena));
-
-            // Then
-            assertThat(result)
-                    .isInstanceOf(VortexException.class)
-                    .hasMessageContaining("blank encoding id");
-        }
-    }
 
     /// Builds an `Array` FlatBuffer with a single buffer descriptor of the given padding/length.
     private static byte[] arrayFlatBufferOneBuffer(int padding, long length) {

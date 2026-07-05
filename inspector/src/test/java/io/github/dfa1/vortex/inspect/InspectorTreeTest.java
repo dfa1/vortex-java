@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.inspect;
 
 import io.github.dfa1.vortex.reader.CompressionScheme;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.LayoutId;
 import io.github.dfa1.vortex.reader.Footer;
 import io.github.dfa1.vortex.reader.layout.Layout;
@@ -122,7 +123,7 @@ class InspectorTreeTest {
         given(handle.fileSize()).willReturn(123_456L);
         given(handle.dtype()).willReturn(dtype);
         given(handle.layout()).willReturn(root);
-        given(handle.footer()).willReturn(new Footer(List.of("vortex.flat"), List.of(), List.of(), List.of()));
+        given(handle.footer()).willReturn(new Footer(List.of(EncodingId.parse("vortex.flat")), List.of(), List.of(), List.of()));
 
         // When
         InspectorTree sut = InspectorTree.build(handle);
@@ -231,7 +232,7 @@ class InspectorTreeTest {
         InspectorTree.Node node = new InspectorTree.Node(flat, java.util.Optional.empty(),
                 Set.of(), io.github.dfa1.vortex.reader.ArrayStats.empty(), List.of());
         given(handle.footer()).willReturn(new io.github.dfa1.vortex.reader.Footer(
-                List.of("vortex.flat"), List.of(),
+                List.of(EncodingId.parse("vortex.flat")), List.of(),
                 List.of(new SegmentSpec(0, 100, (byte) 0, CompressionScheme.ZSTD)),
                 List.of()));
 
@@ -265,7 +266,8 @@ class InspectorTreeTest {
     private void givenHandle(DType dtype, Layout layout, List<String> arraySpecs, List<SegmentSpec> segs) {
         given(handle.dtype()).willReturn(dtype);
         given(handle.layout()).willReturn(layout);
-        given(handle.footer()).willReturn(new Footer(arraySpecs, List.of(), segs, List.of()));
+        given(handle.footer()).willReturn(new Footer(
+                arraySpecs.stream().map(EncodingId::parse).toList(), List.of(), segs, List.of()));
     }
 
     private static Layout struct(long rows, List<Layout> children) {

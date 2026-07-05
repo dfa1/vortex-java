@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.reader;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.fbs.FbsBuilder;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.fbs.FbsArray;
 import io.github.dfa1.vortex.core.fbs.FbsArrayNode;
@@ -25,7 +26,7 @@ class SerializedArrayBoundsSecurityTest {
 
 
     private static final DType DTYPE = DType.I32;
-    private static final List<String> FLAT_SPEC = List.of("vortex.flat");
+    private static final List<EncodingId> FLAT_SPEC = List.of(EncodingId.parse("vortex.flat"));
 
     private final SerializedArrayDecoder sut = new SerializedArrayDecoder(ReadRegistry.empty());
 

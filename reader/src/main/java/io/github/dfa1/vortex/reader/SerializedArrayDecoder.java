@@ -49,12 +49,12 @@ final class SerializedArrayDecoder {
     /// Decodes a flat segment from a memory-mapped region.
     ///
     /// @param seg           memory-mapped region for the flat segment
-    /// @param encodingSpecs ordered list of encoding id strings from the file's encoding table
+    /// @param encodingSpecs ordered list of [EncodingId] from the file's encoding table
     /// @param dtype         expected logical type for the decoded array
     /// @param rowCount      number of logical rows in this segment
     /// @param arena         allocator for decode output; lifetime matches the current chunk epoch
     /// @return the decoded [Array] for this segment
-    public Array decode(MemorySegment seg, List<String> encodingSpecs,
+    public Array decode(MemorySegment seg, List<EncodingId> encodingSpecs,
             DType dtype, long rowCount, SegmentAllocator arena) {
         int segLen = IoBounds.toIntSize(seg.byteSize());
 
@@ -82,19 +82,15 @@ final class SerializedArrayDecoder {
 
     private static ArrayNode convertArrayNode(
             io.github.dfa1.vortex.core.fbs.FbsArrayNode fbs,
-            List<String> encodingSpecs,
+            List<EncodingId> encodingSpecs,
             int depth
     ) {
         if (depth > MAX_ARRAY_TREE_DEPTH) {
             throw new VortexException(
                     "array tree depth exceeds limit (" + MAX_ARRAY_TREE_DEPTH + ")");
         }
-        String rawEncodingId = encodingSpecs.get(fbs.encoding());
-        if (rawEncodingId.isBlank()) {
-            // EncodingId.parse rejects blank ids with IllegalArgumentException; the file is
-            // untrusted input, so a blank spec entry must surface as VortexException instead.
-            throw new VortexException("blank encoding id at array spec index " + fbs.encoding());
-        }
+        // Already parsed (and blank-guarded) at the footer boundary.
+        EncodingId encodingId = encodingSpecs.get(fbs.encoding());
 
         ArrayNode[] children = new ArrayNode[fbs.childrenLength()];
         for (int i = 0; i < children.length; i++) {
@@ -107,6 +103,6 @@ final class SerializedArrayDecoder {
         }
 
         MemorySegment meta = fbs.metadataAsSegment();
-        return new ArrayNode(EncodingId.parse(rawEncodingId), meta, children, bufferIndices);
+        return new ArrayNode(encodingId, meta, children, bufferIndices);
     }
 }

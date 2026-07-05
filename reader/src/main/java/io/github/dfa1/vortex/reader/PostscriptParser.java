@@ -2,6 +2,7 @@ package io.github.dfa1.vortex.reader;
 
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.io.IoBounds;
+import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.LayoutId;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.core.error.VortexException;
@@ -136,15 +137,43 @@ final class PostscriptParser {
         return IoBounds.slice(seg, offset, length);
     }
 
+    /// Parses one array-spec wire string to its [EncodingId] at the footer boundary. A blank id
+    /// is untrusted-input corruption; [EncodingId#parse] would reject it with an
+    /// [IllegalArgumentException], so surface it as a [VortexException] with the spec index.
+    ///
+    /// @param raw   the wire string from the array spec dictionary
+    /// @param index the array spec index, for the error message
+    /// @return the typed [EncodingId]
+    private static EncodingId parseEncodingSpec(String raw, int index) {
+        if (raw.isBlank()) {
+            throw new VortexException("blank encoding id at array spec index " + index);
+        }
+        return EncodingId.parse(raw);
+    }
+
+    /// Parses one layout-spec wire string to its [LayoutId] at the footer boundary. A blank id
+    /// is untrusted-input corruption; [LayoutId#parse] would reject it with an
+    /// [IllegalArgumentException], so surface it as a [VortexException] with the spec index.
+    ///
+    /// @param raw   the wire string from the layout spec dictionary
+    /// @param index the layout spec index, for the error message
+    /// @return the typed [LayoutId]
+    private static LayoutId parseLayoutSpec(String raw, int index) {
+        if (raw.isBlank()) {
+            throw new VortexException("blank layout id at layout spec index " + index);
+        }
+        return LayoutId.parse(raw);
+    }
+
     static Footer convertFooter(io.github.dfa1.vortex.core.fbs.FbsFooter f) {
-        var arraySpecs = new ArrayList<String>(f.arraySpecsLength());
+        var arraySpecs = new ArrayList<EncodingId>(f.arraySpecsLength());
         for (int i = 0; i < f.arraySpecsLength(); i++) {
-            arraySpecs.add(f.arraySpecs(i).id());
+            arraySpecs.add(parseEncodingSpec(f.arraySpecs(i).id(), i));
         }
 
-        var layoutSpecs = new ArrayList<String>(f.layoutSpecsLength());
+        var layoutSpecs = new ArrayList<LayoutId>(f.layoutSpecsLength());
         for (int i = 0; i < f.layoutSpecsLength(); i++) {
-            layoutSpecs.add(f.layoutSpecs(i).id());
+            layoutSpecs.add(parseLayoutSpec(f.layoutSpecs(i).id(), i));
         }
 
         var segmentSpecs = new ArrayList<SegmentSpec>(f.segmentSpecsLength());
@@ -166,7 +195,7 @@ final class PostscriptParser {
                 List.copyOf(segmentSpecs), List.copyOf(compressionSpecs));
     }
 
-    private static Layout convertLayout(io.github.dfa1.vortex.core.fbs.FbsLayout l, List<String> layoutSpecs, int depth) {
+    private static Layout convertLayout(io.github.dfa1.vortex.core.fbs.FbsLayout l, List<LayoutId> layoutSpecs, int depth) {
         if (depth > MAX_LAYOUT_DEPTH) {
             throw new VortexException(
                     "layout tree depth exceeds limit (" + MAX_LAYOUT_DEPTH + ")");
@@ -177,13 +206,8 @@ final class PostscriptParser {
                     "layout encoding index " + encIdx
                             + " out of bounds (layoutSpecs.size=" + layoutSpecs.size() + ")");
         }
-        String rawLayoutId = layoutSpecs.get(encIdx);
-        if (rawLayoutId.isBlank()) {
-            // LayoutId.parse rejects blank ids with IllegalArgumentException; the file is
-            // untrusted input, so a blank spec entry must surface as VortexException instead.
-            throw new VortexException("blank layout id at layout spec index " + encIdx);
-        }
-        LayoutId layoutId = LayoutId.parse(rawLayoutId);
+        // Already parsed (and blank-guarded) at the footer boundary.
+        LayoutId layoutId = layoutSpecs.get(encIdx);
 
         MemorySegment metadata = l.metadataAsSegment();
         if (metadata != null && metadata.byteSize() > MAX_LAYOUT_METADATA_BYTES) {

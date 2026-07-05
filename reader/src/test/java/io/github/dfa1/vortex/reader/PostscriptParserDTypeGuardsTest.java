@@ -81,7 +81,35 @@ class PostscriptParserDTypeGuardsTest {
                 .hasMessageContaining("control character U+000A");
     }
 
+    @Test
+    void convertFooter_blankArraySpec_throwsVortexException() {
+        // Given — a footer whose array spec dictionary carries a blank encoding id (a zero-length
+        // FlatBuffer string). Parsing now happens once at the footer boundary, so the blank guard
+        // that used to live in the per-node decoder is exercised here.
+        MemorySegment footer = footerWithArraySpec("");
+        MemorySegment layout = flatLayout();
+        MemorySegment dtype = structDType(new String[]{"a"}, 1);
+
+        // When / Then
+        assertThatThrownBy(() -> PostscriptParser.parseBlobs(footer, layout, dtype))
+                .isInstanceOf(VortexException.class)
+                .hasMessageContaining("blank encoding id at array spec index 0");
+    }
+
     // ── FlatBuffer builders ─────────────────────────────────────────────────────
+
+    private static MemorySegment footerWithArraySpec(String arraySpec) {
+        var fbb = new FbsBuilder(256);
+        int asv = FbsFooter.createArraySpecsVector(fbb, new int[]{
+                FbsArraySpec.createFbsArraySpec(fbb, fbb.createString(arraySpec))});
+        int lsv = FbsFooter.createLayoutSpecsVector(fbb, new int[]{
+                FbsLayoutSpec.createFbsLayoutSpec(fbb, fbb.createString("vortex.flat"))});
+        FbsFooter.startSegmentSpecsVector(fbb, 0);
+        int ssv = fbb.endVector();
+        int footOff = FbsFooter.createFbsFooter(fbb, asv, lsv, ssv, 0, 0);
+        fbb.finish(footOff);
+        return fbb.dataSegment();
+    }
 
     /// Builds a struct dtype blob with the given field names and `dtypeCount` null-typed fields.
     private static MemorySegment structDType(String[] names, int dtypeCount) {

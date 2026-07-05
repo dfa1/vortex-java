@@ -53,7 +53,8 @@ class PcoFixtureInspectionIntegrationTest {
             out.append("dtype: ").append(formatDType(vf.dtype())).append('\n');
             out.append("size: ").append(vf.fileSize()).append(" bytes\n");
 
-            List<String> arraySpecs = vf.footer().arraySpecs();
+            List<String> arraySpecs = vf.footer().arraySpecs().stream()
+                    .map(io.github.dfa1.vortex.core.model.EncodingId::id).toList();
             List<SegmentSpec> segmentSpecs = vf.footer().segmentSpecs();
 
             PcoStats stats = new PcoStats();

@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.fbs.FbsArrayNode;
 import io.github.dfa1.vortex.core.fbs.FbsBuilder;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.EncodingId;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
@@ -42,7 +43,7 @@ class ArrayNodeDepthBombSecurityTest {
             MemorySegment seg = wrapAsSegment(fb, arena);
 
             // When / Then
-            assertThatThrownBy(() -> sut.decode(seg, List.of("vortex.flat"), DTYPE, 1, arena))
+            assertThatThrownBy(() -> sut.decode(seg, List.of(EncodingId.parse("vortex.flat")), DTYPE, 1, arena))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("no decoder");
         }
@@ -57,7 +58,7 @@ class ArrayNodeDepthBombSecurityTest {
             MemorySegment seg = wrapAsSegment(fb, arena);
 
             // When / Then — must surface as VortexException, not StackOverflowError
-            assertThatThrownBy(() -> sut.decode(seg, List.of("vortex.flat"), DTYPE, 1, arena))
+            assertThatThrownBy(() -> sut.decode(seg, List.of(EncodingId.parse("vortex.flat")), DTYPE, 1, arena))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("depth");
         }

@@ -3,6 +3,7 @@ package io.github.dfa1.vortex.inspect;
 import static io.github.dfa1.vortex.core.io.VortexFormat.LE_INT;
 
 import io.github.dfa1.vortex.reader.ArrayStats;
+import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.Footer;
 import io.github.dfa1.vortex.reader.layout.Layout;
@@ -112,7 +113,7 @@ public record InspectorTree(
                 handle.version(),
                 handle.fileSize(),
                 dtype,
-                footer.arraySpecs(),
+                footer.arraySpecs().stream().map(EncodingId::id).toList(),
                 Set.of(),
                 footer.segmentSpecs(),
                 layout.rowCount(),
@@ -186,7 +187,7 @@ public record InspectorTree(
                 handle.version(),
                 handle.fileSize(),
                 dtype,
-                footer.arraySpecs(),
+                footer.arraySpecs().stream().map(EncodingId::id).toList(),
                 Set.copyOf(overallUsed),
                 footer.segmentSpecs(),
                 layout.rowCount(),
@@ -194,7 +195,7 @@ public record InspectorTree(
     }
 
     private static Node buildNode(Layout layout, Optional<String> fieldName, VortexHandle handle,
-            List<String> arraySpecs, Set<String> overallUsed,
+            List<EncodingId> arraySpecs, Set<String> overallUsed,
             Progress progress, int[] counter, int total) {
         Set<String> localUsed = new LinkedHashSet<>();
         ArrayStats stats = ArrayStats.empty();
@@ -253,7 +254,7 @@ public record InspectorTree(
         void update(int current, int total);
     }
 
-    private static Peek peekFlatRoot(MemorySegment seg, List<String> arraySpecs) {
+    private static Peek peekFlatRoot(MemorySegment seg, List<EncodingId> arraySpecs) {
         int segLen = (int) seg.byteSize();
         int fbLen = seg.get(LE_INT, segLen - 4L);
         long fbStart = segLen - 4L - fbLen;
@@ -262,7 +263,7 @@ public record InspectorTree(
         if (root == null) {
             return new Peek(null, ArrayStats.empty());
         }
-        return new Peek(arraySpecs.get(root.encoding()), ArrayStats.fromFbs(root.stats()));
+        return new Peek(arraySpecs.get(root.encoding()).id(), ArrayStats.fromFbs(root.stats()));
     }
 
     /// Result of a single Flat segment peek - the resolved encoding id (or
