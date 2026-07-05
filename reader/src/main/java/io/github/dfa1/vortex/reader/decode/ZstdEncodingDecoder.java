@@ -32,15 +32,33 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
     // The io.github.dfa1.zstd binding is an OPTIONAL dependency: probe once so a reader
     // touching vortex.zstd without it gets an actionable message instead of a raw
     // NoClassDefFoundError surfacing from the first binding call.
-    private static final boolean ZSTD_BINDING_PRESENT = zstdBindingPresent();
+    private static final boolean ZSTD_BINDING_PRESENT =
+            bindingPresent("io.github.dfa1.zstd.ZstdDecompressContext");
 
-    private static boolean zstdBindingPresent() {
+    /// Reports whether the named binding class is loadable — package-private and
+    /// class-name-parameterized so both branches are unit-testable without the binding
+    /// having to actually be absent from the classpath.
+    ///
+    /// @param className fully qualified class name to probe
+    /// @return `true` if the class resolves, `false` if it is absent
+    static boolean bindingPresent(String className) {
         try {
-            Class.forName("io.github.dfa1.zstd.ZstdDecompressContext", false,
-                    ZstdEncodingDecoder.class.getClassLoader());
+            Class.forName(className, false, ZstdEncodingDecoder.class.getClassLoader());
             return true;
         } catch (ClassNotFoundException e) {
             return false;
+        }
+    }
+
+    /// Fails with an actionable [VortexException] when the optional zstd binding is absent.
+    ///
+    /// @param present whether the binding is on the classpath
+    /// @throws VortexException naming the two artifacts to add, if `present` is `false`
+    static void requireBinding(boolean present) {
+        if (!present) {
+            throw new VortexException(EncodingId.VORTEX_ZSTD, "this file uses vortex.zstd, but the "
+                    + "optional zstd binding is not on the classpath — add io.github.dfa1.zstd:zstd "
+                    + "and io.github.dfa1.zstd:zstd-platform (versions pinned by the vortex BOM)");
         }
     }
 
@@ -51,11 +69,7 @@ public final class ZstdEncodingDecoder implements EncodingDecoder {
 
     @Override
     public Array decode(DecodeContext ctx) {
-        if (!ZSTD_BINDING_PRESENT) {
-            throw new VortexException(EncodingId.VORTEX_ZSTD, "this file uses vortex.zstd, but the "
-                    + "optional zstd binding is not on the classpath — add io.github.dfa1.zstd:zstd "
-                    + "and io.github.dfa1.zstd:zstd-platform (versions pinned by the vortex BOM)");
-        }
+        requireBinding(ZSTD_BINDING_PRESENT);
         MemorySegment rawMeta = ctx.metadata();
         if (rawMeta == null) {
             throw new VortexException(EncodingId.VORTEX_ZSTD, "missing metadata");

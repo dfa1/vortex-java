@@ -29,15 +29,33 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
     // The io.github.dfa1.zstd binding is an OPTIONAL dependency: probe once so a writer
     // touching vortex.zstd without it gets an actionable message instead of a raw
     // NoClassDefFoundError surfacing from the first binding call.
-    private static final boolean ZSTD_BINDING_PRESENT = zstdBindingPresent();
+    private static final boolean ZSTD_BINDING_PRESENT =
+            bindingPresent("io.github.dfa1.zstd.ZstdCompressContext");
 
-    private static boolean zstdBindingPresent() {
+    /// Reports whether the named binding class is loadable — package-private and
+    /// class-name-parameterized so both branches are unit-testable without the binding
+    /// having to actually be absent from the classpath.
+    ///
+    /// @param className fully qualified class name to probe
+    /// @return `true` if the class resolves, `false` if it is absent
+    static boolean bindingPresent(String className) {
         try {
-            Class.forName("io.github.dfa1.zstd.ZstdCompressContext", false,
-                    ZstdEncodingEncoder.class.getClassLoader());
+            Class.forName(className, false, ZstdEncodingEncoder.class.getClassLoader());
             return true;
         } catch (ClassNotFoundException e) {
             return false;
+        }
+    }
+
+    /// Fails with an actionable [VortexException] when the optional zstd binding is absent.
+    ///
+    /// @param present whether the binding is on the classpath
+    /// @throws VortexException naming the two artifacts to add, if `present` is `false`
+    static void requireBinding(boolean present) {
+        if (!present) {
+            throw new VortexException(EncodingId.VORTEX_ZSTD, "vortex.zstd encoding requires the "
+                    + "optional zstd binding — add io.github.dfa1.zstd:zstd and "
+                    + "io.github.dfa1.zstd:zstd-platform (versions pinned by the vortex BOM)");
         }
     }
 
@@ -77,11 +95,7 @@ public final class ZstdEncodingEncoder implements EncodingEncoder {
 
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
-        if (!ZSTD_BINDING_PRESENT) {
-            throw new VortexException(EncodingId.VORTEX_ZSTD, "vortex.zstd encoding requires the "
-                    + "optional zstd binding — add io.github.dfa1.zstd:zstd and "
-                    + "io.github.dfa1.zstd:zstd-platform (versions pinned by the vortex BOM)");
-        }
+        requireBinding(ZSTD_BINDING_PRESENT);
         if (data instanceof NullableData nd) {
             if (dtype instanceof DType.Primitive dt) {
                 return encodeNullablePrimitive(dt, nd, ctx);
