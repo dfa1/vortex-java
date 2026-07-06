@@ -6,7 +6,6 @@ import dev.hardwood.metadata.RepetitionType;
 import dev.hardwood.reader.ParquetFileReader;
 import dev.hardwood.reader.RowReader;
 import dev.hardwood.schema.ColumnSchema;
-import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.csv.CsvExporter;
 import io.github.dfa1.vortex.csv.ExportOptions;
 import org.junit.jupiter.api.DynamicTest;
@@ -109,12 +108,14 @@ class RaincloudConformanceIntegrationTest {
     }
 
     private static void assertStillFails(Path vortex, Path parquet, String status) {
-        // Given / When — a decode gap still reproduces when the export itself throws;
-        // no oracle needed (the oracle may not even read this parquet, e.g. nested columns)
+        // Given / When — a decode gap still reproduces when the export itself throws; any
+        // RuntimeException counts (a gap may surface as IndexOutOfBoundsException before its
+        // decoder gains proper VortexException bounds guards, e.g. #215). No oracle needed
+        // (the oracle may not even read this parquet, e.g. nested columns).
         List<String> result;
         try {
             result = exportVortex(vortex);
-        } catch (VortexException e) {
+        } catch (RuntimeException e) {
             return;
         } catch (IOException e) {
             throw new UncheckedIOException(e);
