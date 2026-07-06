@@ -10,14 +10,18 @@ import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.LayoutId;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.ByteArray;
+import io.github.dfa1.vortex.reader.array.DictByteArray;
 import io.github.dfa1.vortex.reader.array.DictDoubleArray;
 import io.github.dfa1.vortex.reader.array.DictFloatArray;
 import io.github.dfa1.vortex.reader.array.DictIntArray;
 import io.github.dfa1.vortex.reader.array.DictLongArray;
+import io.github.dfa1.vortex.reader.array.DictShortArray;
 import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 
@@ -132,8 +136,11 @@ final class DictLayoutDecoder implements LayoutDecoder {
         return switch (ptype) {
             case I64, U64 -> DictLongArray.of(dtype, n, (LongArray) valuesData, codesData);
             case I32, U32 -> DictIntArray.of(dtype, n, (IntArray) valuesData, codesData);
+            case I16, U16 -> DictShortArray.of(dtype, n, (ShortArray) valuesData, codesData);
+            case I8, U8 -> DictByteArray.of(dtype, n, (ByteArray) valuesData, codesData);
             case F64 -> DictDoubleArray.of(dtype, n, (DoubleArray) valuesData, codesData);
             case F32 -> DictFloatArray.of(dtype, n, (FloatArray) valuesData, codesData);
+            // F16 has no Array subtype yet
             default -> throw new VortexException(EncodingId.VORTEX_DICT,
                     "layout: unsupported ptype for lazy dict: " + ptype);
         };

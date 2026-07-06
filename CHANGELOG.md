@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - CSV export renders unsigned integer columns (U8–U64) with their unsigned values — high-half values previously printed as two's-complement negatives (uci-wine `magnesium` U8 132 exported as -124), silent corruption found by the Raincloud conformance suite. ([#208](https://github.com/dfa1/vortex-java/issues/208))
 - `fastlanes.rle` decodes F64/F32 value pools (`LazyRleDoubleArray`, `LazyRleFloatArray`) — files from the Python bindings RLE-encode double columns with long constant runs, which previously failed to scan with `unsupported ptype F64`. ([#209](https://github.com/dfa1/vortex-java/issues/209))
+- Lazy dict decode now covers I8/U8/I16/U16 value columns (`DictByteArray`, `DictShortArray`) — files from the Python bindings dict-encode narrow-integer columns, which previously failed to scan with `unsupported ptype for lazy dict`. ([#206](https://github.com/dfa1/vortex-java/issues/206))
 
 ### Added
 

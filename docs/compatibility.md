@@ -62,11 +62,14 @@ Per-slug status lives in `integration/src/test/resources/raincloud/expected-stat
 (`ok` must pass; `gap:<issue>` must still fail, so a fix flips the entry in the same change;
 `untriaged` runs and reports without failing the build). A scheduled workflow
 (`raincloud-conformance.yml`) hydrates a size-capped subset weekly. Current triage —
-4 `ok`, 6 known gaps: lazy dict U8/U16 values
-([#206](https://github.com/dfa1/vortex-java/issues/206)), nested struct columns in scan
+5 `ok`, 5 known gaps: nested struct columns in scan
 ([#207](https://github.com/dfa1/vortex-java/issues/207)), unsigned integers rendered signed
 ([#208](https://github.com/dfa1/vortex-java/issues/208) — silent corruption), RLE over F64
-([#209](https://github.com/dfa1/vortex-java/issues/209)); 237 slugs untriaged.
+([#209](https://github.com/dfa1/vortex-java/issues/209)), nullable ALP validity dropped
+([#210](https://github.com/dfa1/vortex-java/issues/210) — silent corruption), all-null
+columns in CSV export ([#211](https://github.com/dfa1/vortex-java/issues/211));
+237 slugs untriaged. Fixed so far by this suite: lazy dict U8/U16 values
+([#206](https://github.com/dfa1/vortex-java/issues/206)).
 
 ## Encodings
 
