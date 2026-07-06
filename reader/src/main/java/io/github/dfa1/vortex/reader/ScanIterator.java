@@ -112,6 +112,13 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             for (int i = start; i < layout.children().size(); i++) {
                 collectFlats(layout.children().get(i), out);
             }
+        } else if (layout.isStruct()) {
+            // A nested struct column (a vortex.struct under the root struct) spans the same full
+            // row range as its parent — its per-field children are separate physical columns, not
+            // row chunks. Treat the whole subtree as one chunk source (like a dict leaf) so chunk
+            // planning sees a single full-range chunk; decode routes through the registry's
+            // StructLayoutDecoder, which reassembles a StructArray from the field children.
+            out.add(layout);
         }
     }
 
@@ -695,6 +702,17 @@ public final class ScanIterator implements Iterator<Chunk>, AutoCloseable {
             case ByteArray a -> new OffsetByteArray(dtype, length, a, offset);
             case BoolArray a -> new OffsetBoolArray(dtype, length, a, offset);
             case VarBinArray a -> new VarBinArray.SlicedMode(dtype, length, a, offset);
+            case StructArray s -> {
+                // A shared nested struct column is decoded once over the full range, then sliced
+                // per chunk by slicing each field into the same window. Field dtypes come from the
+                // struct dtype so each field slices with its own offset-array type.
+                DType.Struct sd = (DType.Struct) dtype;
+                var slicedFields = new ArrayList<Array>(s.fieldCount());
+                for (int i = 0; i < s.fieldCount(); i++) {
+                    slicedFields.add(sliceArray(s.field(i), offset, length, sd.fieldTypes().get(i)));
+                }
+                yield new StructArray(sd, length, slicedFields);
+            }
             default -> throw new VortexException(
                     "scan: cannot slice shared array of type " + full.getClass().getSimpleName());
         };
