@@ -43,6 +43,31 @@ resolves only the standalone decoders in `reader`; no encoder class is loaded.
 | Duplicate struct field names | Rust writer rejects ("StructLayout must have unique field names"); Rust reader tolerates foreign files (first-match access) | ⚠️ Deliberate divergence on read: Java rejects such files with `VortexException("duplicate field name in file schema")` instead of tolerating them — the name-keyed `Chunk` API cannot represent both columns, and silent column loss is worse than a loud failure on a file the reference writer refuses to produce. Java's writer mirrors the Rust writer's rejection. |
 | Blank / control-character field names | Wire-legal; the Rust writer produces `""` and whitespace-only names. NUL (`U+0000`) additionally aborts the Rust toolchain: Arrow FFI schema export hits a panic-cannot-unwind in `arrow-rs` (`ffi_stream::get_schema`) and SIGABRTs the process (measured against vortex-jni 0.75.0) | ⚠️ Deliberate strictness BOTH ways: vortex-java's writer refuses blank and control-character field names (`IllegalArgumentException`), and its reader rejects files carrying them (`VortexException` naming the producing pipeline as the likely bug) — the JSON-`""`-key principle: wire-legal is a floor, not a policy. Printable names of any shape (`$`-runs, spaces inside, emoji) are legal and round-trip intact both directions (measured; pinned by `ColumnNameEdgeCasesIntegrationTest`). |
 
+## Real-world conformance: the Raincloud corpus
+
+Cross-implementation conformance against [Raincloud](https://github.com/spiraldb/raincloud)
+(tracked in [#205](https://github.com/dfa1/vortex-java/issues/205)): 247 curated public
+datasets whose `.vortex` files are written by the Vortex **Python** bindings
+(`vortex-data 0.69.0`, pinned via Raincloud `v0.2.1`) with a Parquet sibling built from the
+same Arrow table. `RaincloudConformanceIntegrationTest` reads each hydrated `.vortex` with
+vortex-java, exports CSV, and diffs it against the Parquet sibling read by hardwood (the
+oracle) — a zero-diff proves every value survived the Python-write / Java-read boundary.
+
+```bash
+scripts/hydrate-raincloud-corpus.sh --max-mb 200      # cache → mirror → local build
+./mvnw verify -pl integration -am -Dit.test=RaincloudConformanceIntegrationTest
+```
+
+Per-slug status lives in `integration/src/test/resources/raincloud/expected-status.csv`
+(`ok` must pass; `gap:<issue>` must still fail, so a fix flips the entry in the same change;
+`untriaged` runs and reports without failing the build). A scheduled workflow
+(`raincloud-conformance.yml`) hydrates a size-capped subset weekly. Current triage —
+4 `ok`, 6 known gaps: lazy dict U8/U16 values
+([#206](https://github.com/dfa1/vortex-java/issues/206)), nested struct columns in scan
+([#207](https://github.com/dfa1/vortex-java/issues/207)), unsigned integers rendered signed
+([#208](https://github.com/dfa1/vortex-java/issues/208) — silent corruption), RLE over F64
+([#209](https://github.com/dfa1/vortex-java/issues/209)); 237 slugs untriaged.
+
 ## Encodings
 
 | Encoding ID                 | Decoder                          | Encoder                          | Decode | Encode | Notes                                                                 |

@@ -63,6 +63,8 @@ Trunk-based. PRs fine but always squash or rebase — no merge commits. Keep com
 ./mvnw verify -pl integration -am          # integration (failsafe, NOT surefire)
 ./mvnw verify -pl integration -am -Dit.test="RustWritesJavaReadsIntegrationTest#method"
 ./bench JavaVsJniReadBenchmark.javaReadVolume   # benchmark — always ClassName.methodName filter
+scripts/hydrate-raincloud-corpus.sh --max-mb 200   # hydrate real-world conformance corpus (#205),
+                                                   # then verify -Dit.test=RaincloudConformanceIntegrationTest
 ```
 
 Regenerate after editing `.fbs`/`.proto` (both generators are in-house, no external tools):
