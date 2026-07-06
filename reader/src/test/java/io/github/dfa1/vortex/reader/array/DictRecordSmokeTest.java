@@ -456,6 +456,248 @@ class DictRecordSmokeTest {
     }
 
     @Nested
+    class DictByte {
+
+        @Test
+        void u8CodesDispatch() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given a byte pool and U8 codes selecting out of order
+                ByteArray values = byteArray(arena, (byte) 10, (byte) 20, (byte) 30);
+                ByteArray codes = byteArray(arena, (byte) 0, (byte) 2);
+                DictByteArray sut = DictByteArray.of(U8, 2, values, codes);
+
+                // When/Then
+                assertThat(sut.getByte(0)).isEqualTo((byte) 10);
+                assertThat(sut.getByte(1)).isEqualTo((byte) 30);
+            }
+        }
+
+        @Test
+        void u8DtypeGetIntWidensUnsigned() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given a U8 pool holding 132 (0x84 — negative as a signed byte). This is the
+                // real-world shape from the Raincloud corpus (uci-wine magnesium): dict-encoded
+                // U8 values above 127 must widen unsigned through the ByteArray.getInt default.
+                ByteArray values = byteArray(arena, (byte) 132, (byte) 7);
+                ByteArray codes = byteArray(arena, (byte) 0, (byte) 1);
+                DictByteArray sut = DictByteArray.of(U8, 2, values, codes);
+
+                // When
+                int result = sut.getInt(0);
+
+                // Then — unsigned 132, not -124; the raw storage byte stays signed
+                assertThat(result).isEqualTo(132);
+                assertThat(sut.getByte(0)).isEqualTo((byte) -124);
+            }
+        }
+
+        @Test
+        void forEachByteMaterializesInOrder() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given
+                ByteArray values = byteArray(arena, (byte) 10, (byte) 20);
+                ByteArray codes = byteArray(arena, (byte) 1, (byte) 0, (byte) 1);
+                DictByteArray sut = DictByteArray.of(U8, 3, values, codes);
+
+                // When
+                var result = new ArrayList<Byte>();
+                sut.forEachByte(result::add);
+
+                // Then
+                assertThat(result).containsExactly((byte) 20, (byte) 10, (byte) 20);
+            }
+        }
+
+        @Test
+        void foldThroughCodes() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given codes = [0, 1, 1] -> values = [1, 5, 5] -> sum 11
+                ByteArray values = byteArray(arena, (byte) 1, (byte) 5);
+                ByteArray codes = byteArray(arena, (byte) 0, (byte) 1, (byte) 1);
+                DictByteArray sut = DictByteArray.of(U8, 3, values, codes);
+
+                // When
+                long result = sut.fold(0L, Long::sum);
+
+                // Then
+                assertThat(result).isEqualTo(11L);
+            }
+        }
+
+        @Test
+        void allCodeTypes_getForEachFoldMaterialize() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given — same selection [2,0,1] expressed as U8/U16/U32/U64 codes
+                ByteArray values = byteArray(arena, (byte) 100, (byte) 101, (byte) 102);
+                byte[] expected = {102, 100, 101};
+                List<Array> codeVariants = List.of(
+                        byteArray(arena, (byte) 2, (byte) 0, (byte) 1),
+                        shortArray(arena, U16, (short) 2, (short) 0, (short) 1),
+                        intArray(arena, U32, 2, 0, 1),
+                        longArray(arena, U64, 2L, 0L, 1L));
+
+                for (Array codes : codeVariants) {
+                    DictByteArray sut = DictByteArray.of(U8, 3, values, codes);
+                    String label = codes.getClass().getSimpleName();
+
+                    // getter
+                    for (int i = 0; i < 3; i++) {
+                        assertThat(sut.getByte(i)).as(label).isEqualTo(expected[i]);
+                    }
+                    // forEach
+                    var seen = new ArrayList<Byte>();
+                    sut.forEachByte(seen::add);
+                    assertThat(seen).as(label).containsExactly((byte) 102, (byte) 100, (byte) 101);
+                    // fold
+                    assertThat(sut.fold(0L, Long::sum)).as(label).isEqualTo(303L);
+                    // materialize
+                    MemorySegment m = sut.materialize(arena);
+                    for (int i = 0; i < 3; i++) {
+                        assertThat(m.get(ValueLayout.JAVA_BYTE, i)).as(label).isEqualTo(expected[i]);
+                    }
+                }
+            }
+        }
+
+        @Test
+        void bulkOps_invalidCodesType_throw() {
+            // Given — a record built directly (bypassing of()) with a non-int codes array
+            try (Arena arena = Arena.ofConfined()) {
+                ByteArray values = byteArray(arena, (byte) 1);
+                DictByteArray sut = new DictByteArray(U8, 1, values, floatArray(arena, 0f));
+
+                // When / Then — every bulk path hits the defensive default arm
+                assertThatThrownBy(() -> sut.materialize(arena))
+                        .isInstanceOf(VortexException.class).hasMessageContaining("invalid codes");
+                assertThatThrownBy(() -> sut.forEachByte(v -> { }))
+                        .isInstanceOf(VortexException.class);
+                assertThatThrownBy(() -> sut.fold(0L, Long::sum))
+                        .isInstanceOf(VortexException.class);
+            }
+        }
+    }
+
+    @Nested
+    class DictShort {
+
+        @Test
+        void u8CodesDispatch() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given
+                ShortArray values = shortArray(arena, U16, (short) 100, (short) 200, (short) 300);
+                ByteArray codes = byteArray(arena, (byte) 0, (byte) 2);
+                DictShortArray sut = DictShortArray.of(U16, 2, values, codes);
+
+                // When/Then
+                assertThat(sut.getShort(0)).isEqualTo((short) 100);
+                assertThat(sut.getShort(1)).isEqualTo((short) 300);
+            }
+        }
+
+        @Test
+        void u16DtypeGetIntWidensUnsigned() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given a U16 pool holding 40000 (negative as a signed short) — the U16
+                // sibling of the uci-wine U8 corner: values above 32767 must widen unsigned.
+                ShortArray values = shortArray(arena, U16, (short) 40000, (short) 7);
+                ByteArray codes = byteArray(arena, (byte) 0, (byte) 1);
+                DictShortArray sut = DictShortArray.of(U16, 2, values, codes);
+
+                // When
+                int result = sut.getInt(0);
+
+                // Then
+                assertThat(result).isEqualTo(40000);
+            }
+        }
+
+        @Test
+        void forEachShortMaterializesInOrder() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given
+                ShortArray values = shortArray(arena, U16, (short) 10, (short) 20);
+                ByteArray codes = byteArray(arena, (byte) 1, (byte) 0, (byte) 1);
+                DictShortArray sut = DictShortArray.of(U16, 3, values, codes);
+
+                // When
+                var result = new ArrayList<Short>();
+                sut.forEachShort(result::add);
+
+                // Then
+                assertThat(result).containsExactly((short) 20, (short) 10, (short) 20);
+            }
+        }
+
+        @Test
+        void foldThroughCodes() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given codes = [0, 1, 1] -> values = [1, 5, 5] -> sum 11
+                ShortArray values = shortArray(arena, U16, (short) 1, (short) 5);
+                ByteArray codes = byteArray(arena, (byte) 0, (byte) 1, (byte) 1);
+                DictShortArray sut = DictShortArray.of(U16, 3, values, codes);
+
+                // When
+                long result = sut.fold(0L, Long::sum);
+
+                // Then
+                assertThat(result).isEqualTo(11L);
+            }
+        }
+
+        @Test
+        void allCodeTypes_getForEachFoldMaterialize() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given — same selection [2,0,1] expressed as U8/U16/U32/U64 codes
+                ShortArray values = shortArray(arena, U16, (short) 100, (short) 200, (short) 300);
+                short[] expected = {300, 100, 200};
+                List<Array> codeVariants = List.of(
+                        byteArray(arena, (byte) 2, (byte) 0, (byte) 1),
+                        shortArray(arena, U16, (short) 2, (short) 0, (short) 1),
+                        intArray(arena, U32, 2, 0, 1),
+                        longArray(arena, U64, 2L, 0L, 1L));
+
+                for (Array codes : codeVariants) {
+                    DictShortArray sut = DictShortArray.of(U16, 3, values, codes);
+                    String label = codes.getClass().getSimpleName();
+
+                    // getter
+                    for (int i = 0; i < 3; i++) {
+                        assertThat(sut.getShort(i)).as(label).isEqualTo(expected[i]);
+                    }
+                    // forEach
+                    var seen = new ArrayList<Short>();
+                    sut.forEachShort(seen::add);
+                    assertThat(seen).as(label).containsExactly((short) 300, (short) 100, (short) 200);
+                    // fold
+                    assertThat(sut.fold(0L, Long::sum)).as(label).isEqualTo(600L);
+                    // materialize
+                    MemorySegment m = sut.materialize(arena);
+                    for (int i = 0; i < 3; i++) {
+                        assertThat(m.getAtIndex(VortexFormat.LE_SHORT, i)).as(label).isEqualTo(expected[i]);
+                    }
+                }
+            }
+        }
+
+        @Test
+        void bulkOps_invalidCodesType_throw() {
+            // Given — a record built directly (bypassing of()) with a non-int codes array
+            try (Arena arena = Arena.ofConfined()) {
+                ShortArray values = shortArray(arena, U16, (short) 1);
+                DictShortArray sut = new DictShortArray(U16, 1, values, floatArray(arena, 0f));
+
+                // When / Then — every bulk path hits the defensive default arm
+                assertThatThrownBy(() -> sut.materialize(arena))
+                        .isInstanceOf(VortexException.class).hasMessageContaining("invalid codes");
+                assertThatThrownBy(() -> sut.forEachShort(v -> { }))
+                        .isInstanceOf(VortexException.class);
+                assertThatThrownBy(() -> sut.fold(0L, Long::sum))
+                        .isInstanceOf(VortexException.class);
+            }
+        }
+    }
+
+    @Nested
     class MaskedValues {
 
         @Test
