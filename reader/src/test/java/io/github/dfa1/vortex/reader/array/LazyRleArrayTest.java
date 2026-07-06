@@ -1,9 +1,11 @@
 package io.github.dfa1.vortex.reader.array;
 
+import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.model.DType;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.lang.foreign.Arena;
 import java.util.ArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -421,6 +423,27 @@ class LazyRleArrayTest {
         }
 
         @Test
+        void preservesNaNAndInfinityBitPatterns() {
+            // Given a specific quiet-NaN payload plus +/-inf; the decode must copy raw
+            // IEEE-754 bits verbatim, so bit-exact equality (not value equality, since
+            // NaN != NaN) is the right assertion.
+            double nanPayload = Double.longBitsToDouble(0x7FF8_0000_0000_002AL);
+            double[] values = {nanPayload, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY};
+            int[] indices = new int[1024];
+            indices[0] = 0;
+            indices[1] = 1;
+            indices[2] = 2;
+            var sut = new LazyRleDoubleArray(F64, 3, values, indices,
+                    new long[]{0L}, 0L, 3L, 1, 0);
+
+            // When / Then — raw bits round-trip unchanged
+            assertThat(Double.doubleToRawLongBits(sut.getDouble(0)))
+                    .isEqualTo(0x7FF8_0000_0000_002AL);
+            assertThat(sut.getDouble(1)).isEqualTo(Double.POSITIVE_INFINITY);
+            assertThat(sut.getDouble(2)).isEqualTo(Double.NEGATIVE_INFINITY);
+        }
+
+        @Test
         void indexedClampAndEmptyChunk() {
             // Given an indexed chunk whose index[2] overruns the value range: it must
             // clamp to the last value (the writer leaves trailing bits 0 for constant runs).
@@ -510,12 +533,14 @@ class LazyRleArrayTest {
             var sut = new LazyRleFloatArray(F32, 3, values, indices,
                     new long[]{0L}, 0L, 2L, 1, 0);
 
-            try (var arena = java.lang.foreign.Arena.ofConfined()) {
+            // When
+            try (var arena = Arena.ofConfined()) {
                 var result = sut.materialize(arena);
 
-                assertThat(result.getAtIndex(io.github.dfa1.vortex.core.io.VortexFormat.LE_FLOAT, 0)).isEqualTo(10.5f);
-                assertThat(result.getAtIndex(io.github.dfa1.vortex.core.io.VortexFormat.LE_FLOAT, 1)).isEqualTo(20.5f);
-                assertThat(result.getAtIndex(io.github.dfa1.vortex.core.io.VortexFormat.LE_FLOAT, 2)).isEqualTo(20.5f);
+                // Then — each logical row decodes exactly (row 2 reuses value 1 via its index)
+                assertThat(result.getAtIndex(VortexFormat.LE_FLOAT, 0)).isEqualTo(10.5f);
+                assertThat(result.getAtIndex(VortexFormat.LE_FLOAT, 1)).isEqualTo(20.5f);
+                assertThat(result.getAtIndex(VortexFormat.LE_FLOAT, 2)).isEqualTo(20.5f);
             }
         }
     }
