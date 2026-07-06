@@ -140,10 +140,18 @@ public final class CsvExporter {
 
     private static String cellValue(Array arr, long rowIdx) {
         return switch (arr) {
-            case LongArray la -> Long.toString(la.getLong(rowIdx));
-            case IntArray ia -> Integer.toString(ia.getInt(rowIdx));
-            case ShortArray sa -> Short.toString(sa.getShort(rowIdx));
-            case ByteArray ba -> Byte.toString(ba.getByte(rowIdx));
+            // Long/IntArray have no dtype-aware getter, so gate the unsigned rendering on the
+            // ptype; U64/U32 high-half values would otherwise print as negative.
+            case LongArray la -> isUnsigned(la)
+                    ? Long.toUnsignedString(la.getLong(rowIdx))
+                    : Long.toString(la.getLong(rowIdx));
+            case IntArray ia -> isUnsigned(ia)
+                    ? Integer.toUnsignedString(ia.getInt(rowIdx))
+                    : Integer.toString(ia.getInt(rowIdx));
+            // Byte/ShortArray.getInt already zero-extends U8/U16 per their dtype, so widening to
+            // int and printing signed decimal yields the correct unsigned value.
+            case ShortArray sa -> Integer.toString(sa.getInt(rowIdx));
+            case ByteArray ba -> Integer.toString(ba.getInt(rowIdx));
             case DoubleArray da -> Double.toString(da.getDouble(rowIdx));
             case FloatArray fa -> Float.toString(fa.getFloat(rowIdx));
             case BoolArray ba -> Boolean.toString(ba.getBoolean(rowIdx));
@@ -154,5 +162,12 @@ public final class CsvExporter {
             default -> throw new VortexException(
                     "unsupported array type for CSV export: " + arr.getClass().getSimpleName());
         };
+    }
+
+    /// Whether the array's dtype is an unsigned integer, so high-half values must render as
+    /// unsigned decimal rather than the two's-complement negative that the raw signed getter
+    /// returns. A [MaskedArray]'s inner array carries the same ptype, so recursing is safe.
+    private static boolean isUnsigned(Array arr) {
+        return arr.dtype() instanceof DType.Primitive p && p.ptype().isUnsigned();
     }
 }

@@ -2,8 +2,10 @@ package io.github.dfa1.vortex.csv;
 
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
+import io.github.dfa1.vortex.writer.encode.NullableData;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -90,5 +92,120 @@ class CsvExporterTest {
         List<String> lines = Files.readAllLines(csv);
         assertThat(lines).hasSize(1);
         assertThat(lines.getFirst()).isEqualTo("7");
+    }
+
+    @Test
+    void rendersU8HighHalfAsUnsigned(@TempDir Path tmp) throws Exception {
+        // Given a non-nullable U8 column. 132 is 0x84, which is -124 as a signed byte — the
+        // uci-wine `magnesium` shape (values 70–162) that regressed to negative numbers.
+        Path vortex = tmp.resolve("u8.vortex");
+        DType.Struct schema = new DType.Struct(
+                List.of(ColumnName.of("magnesium")),
+                List.of(new DType.Primitive(PType.U8, false)),
+                false);
+        try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            writer.writeChunk(Map.of(ColumnName.of("magnesium"), new byte[]{70, (byte) 132, (byte) 255}));
+        }
+        Path csv = tmp.resolve("out.csv");
+
+        // When
+        CsvExporter.exportCsv(vortex, csv);
+
+        // Then
+        List<String> result = Files.readAllLines(csv);
+        assertThat(result).containsExactly("magnesium", "70", "132", "255");
+    }
+
+    @Test
+    void rendersNullableU8HighHalfAsUnsigned(@TempDir Path tmp) throws Exception {
+        // Given a nullable U8 column (dtype U8?), which decodes as a MaskedArray whose inner
+        // values array carries a non-nullable U8 dtype. This is the exact uci-wine layout; the
+        // fix must consult the inner array's ptype, not just the class, to widen 132 correctly.
+        Path vortex = tmp.resolve("u8n.vortex");
+        DType.Struct schema = new DType.Struct(
+                List.of(ColumnName.of("magnesium")),
+                List.of(new DType.Primitive(PType.U8, true)),
+                false);
+        try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            writer.writeChunk(Map.of(ColumnName.of("magnesium"),
+                    new NullableData(new byte[]{(byte) 132, 0, (byte) 162},
+                            new boolean[]{true, false, true})));
+        }
+        Path csv = tmp.resolve("out.csv");
+
+        // When
+        CsvExporter.exportCsv(vortex, csv);
+
+        // Then null rows render as empty; high-half valid rows render unsigned.
+        List<String> result = Files.readAllLines(csv);
+        assertThat(result).containsExactly("magnesium", "132", "", "162");
+    }
+
+    @Test
+    void rendersU16HighHalfAsUnsigned(@TempDir Path tmp) throws Exception {
+        // Given a non-nullable U16 column. 40000 is 0x9C40, which is -25536 as a signed short.
+        Path vortex = tmp.resolve("u16.vortex");
+        DType.Struct schema = new DType.Struct(
+                List.of(ColumnName.of("v")),
+                List.of(new DType.Primitive(PType.U16, false)),
+                false);
+        try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            writer.writeChunk(Map.of(ColumnName.of("v"), new short[]{1, (short) 40000, (short) 65535}));
+        }
+        Path csv = tmp.resolve("out.csv");
+
+        // When
+        CsvExporter.exportCsv(vortex, csv);
+
+        // Then
+        List<String> result = Files.readAllLines(csv);
+        assertThat(result).containsExactly("v", "1", "40000", "65535");
+    }
+
+    @Test
+    void rendersU32AboveIntMaxAsUnsigned(@TempDir Path tmp) throws Exception {
+        // Given a non-nullable U32 column. 0x9000_0000 (2415919104) is negative as a signed int.
+        Path vortex = tmp.resolve("u32.vortex");
+        DType.Struct schema = new DType.Struct(
+                List.of(ColumnName.of("v")),
+                List.of(new DType.Primitive(PType.U32, false)),
+                false);
+        try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            writer.writeChunk(Map.of(ColumnName.of("v"), new int[]{1, 0x9000_0000, 0xFFFF_FFFF}));
+        }
+        Path csv = tmp.resolve("out.csv");
+
+        // When
+        CsvExporter.exportCsv(vortex, csv);
+
+        // Then
+        List<String> result = Files.readAllLines(csv);
+        assertThat(result).containsExactly("v", "1", "2415919104", "4294967295");
+    }
+
+    @Test
+    void rendersU64AboveLongMaxAsUnsigned(@TempDir Path tmp) throws Exception {
+        // Given a non-nullable U64 column. -1L is the all-ones bit pattern: 2^64-1 unsigned.
+        Path vortex = tmp.resolve("u64.vortex");
+        DType.Struct schema = new DType.Struct(
+                List.of(ColumnName.of("v")),
+                List.of(new DType.Primitive(PType.U64, false)),
+                false);
+        try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            writer.writeChunk(Map.of(ColumnName.of("v"), new long[]{1L, Long.MIN_VALUE, -1L}));
+        }
+        Path csv = tmp.resolve("out.csv");
+
+        // When
+        CsvExporter.exportCsv(vortex, csv);
+
+        // Then
+        List<String> result = Files.readAllLines(csv);
+        assertThat(result).containsExactly("v", "1", "9223372036854775808", "18446744073709551615");
     }
 }
