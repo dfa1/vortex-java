@@ -240,7 +240,7 @@ loudly (`VortexException`); there is no allow-unknown mode for layouts (Rust def
 
 | Method                      | Notes                                                              |
 |-----------------------------|--------------------------------------------------------------------|
-| `static defaults()`         | The four built-ins: flat, chunked, zoned (both aliases), dict      |
+| `static defaults()`         | The built-ins: flat, chunked, zoned (both aliases), dict, struct   |
 | `static builder()`          | Returns a fresh `Builder`                                          |
 | `hasDecoder(LayoutId)`      | Lookup                                                             |
 | `decode(ctx, layout, dtype)`| Dispatch by the layout's typed id                                  |

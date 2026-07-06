@@ -33,8 +33,8 @@ public final class LayoutRegistry {
         this.decoders = Collections.unmodifiableMap(sorted);
     }
 
-    /// Returns a registry populated with the four built-in layout decoders (flat, chunked,
-    /// zoned/stats, dict).
+    /// Returns a registry populated with the built-in layout decoders (flat, chunked,
+    /// zoned/stats, dict, struct).
     ///
     /// @return an immutable [LayoutRegistry] with the built-in decoders registered
     public static LayoutRegistry defaults() {
@@ -99,14 +99,15 @@ public final class LayoutRegistry {
             return this;
         }
 
-        /// Registers the four built-in layout decoders (flat, chunked, zoned/stats, dict).
+        /// Registers the built-in layout decoders (flat, chunked, zoned/stats, dict, struct).
         ///
         /// @return this builder, for chaining
         public Builder registerDefaults() {
             return register(new FlatLayoutDecoder())
                     .register(new ChunkedLayoutDecoder())
                     .register(new ZonedLayoutDecoder())
-                    .register(new DictLayoutDecoder());
+                    .register(new DictLayoutDecoder())
+                    .register(new StructLayoutDecoder());
         }
 
         /// Builds an immutable [LayoutRegistry].

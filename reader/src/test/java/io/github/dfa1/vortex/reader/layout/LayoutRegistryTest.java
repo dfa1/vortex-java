@@ -32,16 +32,16 @@ import static org.mockito.Mockito.mock;
 class LayoutRegistryTest {
 
     @ParameterizedTest
-    @ValueSource(strings = {"vortex.flat", "vortex.chunked", "vortex.zoned", "vortex.stats", "vortex.dict"})
-    void defaults_containTheFourBuiltins_bothZonedAliasesResolve(String wireId) {
-        // Given — the registry populated with the four built-in decoders
+    @ValueSource(strings = {"vortex.flat", "vortex.chunked", "vortex.zoned", "vortex.stats", "vortex.dict", "vortex.struct"})
+    void defaults_containTheBuiltins_bothZonedAliasesResolve(String wireId) {
+        // Given — the registry populated with the built-in decoders
         LayoutRegistry sut = LayoutRegistry.defaults();
 
         // When
         boolean result = sut.hasDecoder(LayoutId.parse(wireId));
 
-        // Then — flat, chunked, dict, and BOTH zoned aliases (vortex.zoned + legacy vortex.stats)
-        // resolve to a decoder
+        // Then — flat, chunked, dict, struct, and BOTH zoned aliases (vortex.zoned + legacy
+        // vortex.stats) resolve to a decoder
         assertThat(result).isTrue();
     }
 
