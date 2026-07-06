@@ -144,6 +144,29 @@ class CsvExporterTest {
     }
 
     @Test
+    void keepsSignedI8Negative(@TempDir Path tmp) throws Exception {
+        // Given a SIGNED I8 column with a negative value — pins that the unsigned-rendering
+        // fix did not widen signed bytes: -5 must stay "-5", not become "251"
+        Path vortex = tmp.resolve("i8.vortex");
+        DType.Struct schema = new DType.Struct(
+                List.of(ColumnName.of("delta")),
+                List.of(new DType.Primitive(PType.I8, false)),
+                false);
+        try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
+            writer.writeChunk(Map.of(ColumnName.of("delta"), new byte[]{(byte) -5, (byte) 7}));
+        }
+        Path csv = tmp.resolve("out.csv");
+
+        // When
+        CsvExporter.exportCsv(vortex, csv);
+
+        // Then
+        List<String> result = Files.readAllLines(csv);
+        assertThat(result).containsExactly("delta", "-5", "7");
+    }
+
+    @Test
     void rendersU16HighHalfAsUnsigned(@TempDir Path tmp) throws Exception {
         // Given a non-nullable U16 column. 40000 is 0x9C40, which is -25536 as a signed short.
         Path vortex = tmp.resolve("u16.vortex");
