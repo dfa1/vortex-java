@@ -21,6 +21,8 @@ class LazyRleArrayTest {
     private static final DType I8 = DType.I8;
     private static final DType U16 = DType.U16;
     private static final DType I16 = DType.I16;
+    private static final DType F64 = DType.F64;
+    private static final DType F32 = DType.F32;
 
     @Nested
     class LongDispatch {
@@ -326,6 +328,195 @@ class LazyRleArrayTest {
             var sut = new LazyRleShortArray(U16, 5, new short[]{1, 2}, new int[2048],
                     new long[]{0L, 1L}, 0L, 2L, 2, 0, true);
             assertThat(sut.fold(0L, Long::sum)).isEqualTo(5L);
+        }
+    }
+
+    /// F64 RLE columns are produced by the Python Vortex writer for double weather
+    /// columns with long constant runs (issue #209). Fractional values are chosen so a
+    /// truncating or int-widening decode bug would surface as a wrong assertion.
+    @Nested
+    class DoubleDispatch {
+
+        @Test
+        void singleChunkAllSameValue_constantRunFastPath() {
+            // Given a single 1024-row chunk with 1 distinct value; the constant-run
+            // fast path must return it for every row without touching indices.
+            double[] values = {2.5};
+            int[] indices = new int[1024];
+            long[] valuesIdxOffsets = {0L};
+            var sut = new LazyRleDoubleArray(F64, 1024, values, indices,
+                    valuesIdxOffsets, 0L, 1L, 1, 0);
+
+            // When / Then
+            assertThat(sut.getDouble(0)).isEqualTo(2.5);
+            assertThat(sut.getDouble(500)).isEqualTo(2.5);
+            assertThat(sut.getDouble(1023)).isEqualTo(2.5);
+        }
+
+        @Test
+        void singleChunkWithIndices_perRowLookup() {
+            // Given one chunk with 3 distinct fractional values selected in a 0,1,2 cycle;
+            // fractional values catch any accidental integer narrowing in the value read.
+            double[] values = {1.1, 2.2, 3.3};
+            int[] indices = new int[1024];
+            for (int i = 0; i < 6; i++) {
+                indices[i] = i % 3;
+            }
+            long[] valuesIdxOffsets = {0L};
+            var sut = new LazyRleDoubleArray(F64, 6, values, indices,
+                    valuesIdxOffsets, 0L, 3L, 1, 0);
+
+            var result = new ArrayList<Double>();
+            sut.forEachDouble(result::add);
+
+            assertThat(result).containsExactly(1.1, 2.2, 3.3, 1.1, 2.2, 3.3);
+        }
+
+        @Test
+        void multiChunkBoundary_walksAcrossChunks() {
+            // Given two constant chunks (chunk 0 = -1.5, chunk 1 = 4.25); the negative
+            // value guards against a sign-loss bug and the boundary crosses a chunk.
+            double[] values = {-1.5, 4.25};
+            int[] indices = new int[2 * 1024];
+            long[] valuesIdxOffsets = {0L, 1L};
+            var sut = new LazyRleDoubleArray(F64, 1026, values, indices,
+                    valuesIdxOffsets, 0L, 2L, 2, 0);
+
+            // When / Then — rows straddle the 1024-row chunk boundary
+            assertThat(sut.getDouble(0)).isEqualTo(-1.5);
+            assertThat(sut.getDouble(1023)).isEqualTo(-1.5);
+            assertThat(sut.getDouble(1024)).isEqualTo(4.25);
+            assertThat(sut.getDouble(1025)).isEqualTo(4.25);
+        }
+
+        @Test
+        void offsetSkipsLeadingRows() {
+            // Given chunk 0 = constant 5.75; offset=100 maps logical row 0 to absolute 100,
+            // matching the slice-with-offset arrays the Python writer emits.
+            double[] values = {5.75};
+            int[] indices = new int[1024];
+            long[] valuesIdxOffsets = {0L};
+            var sut = new LazyRleDoubleArray(F64, 10, values, indices,
+                    valuesIdxOffsets, 0L, 1L, 1, 100);
+
+            // When / Then
+            assertThat(sut.getDouble(0)).isEqualTo(5.75);
+            assertThat(sut.getDouble(9)).isEqualTo(5.75);
+        }
+
+        @Test
+        void foldSumsFractionalValues() {
+            // Given two constant chunks (0.5 and 0.25); a fractional fold sum would be
+            // wrong if any element were truncated to a long during decode.
+            double[] values = {0.5, 0.25};
+            int[] indices = new int[2 * 1024];
+            long[] valuesIdxOffsets = {0L, 1L};
+            var sut = new LazyRleDoubleArray(F64, 1026, values, indices,
+                    valuesIdxOffsets, 0L, 2L, 2, 0);
+
+            double result = sut.fold(0.0, Double::sum);
+
+            // 1024 * 0.5 + 2 * 0.25 = 512.0 + 0.5 = 512.5
+            assertThat(result).isEqualTo(512.5);
+        }
+
+        @Test
+        void indexedClampAndEmptyChunk() {
+            // Given an indexed chunk whose index[2] overruns the value range: it must
+            // clamp to the last value (the writer leaves trailing bits 0 for constant runs).
+            int[] idx = new int[1024];
+            idx[0] = 0;
+            idx[1] = 1;
+            idx[2] = 9;
+            var sut = new LazyRleDoubleArray(F64, 3, new double[]{1.0, 2.0, 3.0}, idx,
+                    new long[]{0L}, 0L, 3L, 1, 0);
+
+            // When / Then — out-of-range index clamps to last
+            assertThat(sut.getDouble(2)).isEqualTo(3.0);
+
+            // empty chunk (0 distinct values) → 0.0 via getDouble and forEach
+            var empty = new LazyRleDoubleArray(F64, 2, new double[0], new int[1024],
+                    new long[]{0L}, 0L, 0L, 1, 0);
+            assertThat(empty.getDouble(0)).isZero();
+            var zeros = new ArrayList<Double>();
+            empty.forEachDouble(zeros::add);
+            assertThat(zeros).containsExactly(0.0, 0.0);
+        }
+    }
+
+    /// F32 RLE columns follow the same wire layout as F64 with a 4-byte value child
+    /// (issue #209); [LazyRleFloatArray] materializes rather than exposing a forEach.
+    @Nested
+    class FloatDispatch {
+
+        @Test
+        void singleChunkWithIndices_perRowLookup() {
+            // Given one chunk with 3 distinct float values in a 0,1,2 cycle; fractional
+            // 32-bit values catch a wrong-width read (reading 8 bytes as a double).
+            float[] values = {1.5f, 2.5f, 3.5f};
+            int[] indices = new int[1024];
+            for (int i = 0; i < 6; i++) {
+                indices[i] = i % 3;
+            }
+            var sut = new LazyRleFloatArray(F32, 6, values, indices,
+                    new long[]{0L}, 0L, 3L, 1, 0);
+
+            // When / Then
+            assertThat(sut.getFloat(0)).isEqualTo(1.5f);
+            assertThat(sut.getFloat(1)).isEqualTo(2.5f);
+            assertThat(sut.getFloat(5)).isEqualTo(3.5f);
+        }
+
+        @Test
+        void constantRunFastPathAndMultiChunk() {
+            // Given two constant chunks (chunk 0 = -2.25, chunk 1 = 8.75); crosses the
+            // 1024-row boundary and the negative value guards against sign loss.
+            var sut = new LazyRleFloatArray(F32, 1026, new float[]{-2.25f, 8.75f},
+                    new int[2 * 1024], new long[]{0L, 1L}, 0L, 2L, 2, 0);
+
+            // When / Then
+            assertThat(sut.getFloat(0)).isEqualTo(-2.25f);
+            assertThat(sut.getFloat(1024)).isEqualTo(8.75f);
+        }
+
+        @Test
+        void indexedClampAndEmptyChunk() {
+            // Given an indexed chunk whose index[2] overruns the value range → clamp to last.
+            int[] idx = new int[1024];
+            idx[0] = 0;
+            idx[1] = 1;
+            idx[2] = 9;
+            var sut = new LazyRleFloatArray(F32, 3, new float[]{1.0f, 2.0f, 3.0f}, idx,
+                    new long[]{0L}, 0L, 3L, 1, 0);
+
+            // When / Then — clamped to last value
+            assertThat(sut.getFloat(2)).isEqualTo(3.0f);
+
+            // empty chunk (0 distinct values) → 0.0f
+            var empty = new LazyRleFloatArray(F32, 2, new float[0], new int[1024],
+                    new long[]{0L}, 0L, 0L, 1, 0);
+            assertThat(empty.getFloat(0)).isZero();
+        }
+
+        @Test
+        void materializeDecodesEveryRow() {
+            // Given a mixed chunk; materialize must emit each logical row once, honoring
+            // the constant-run fast path only within a chunk (here indices vary).
+            float[] values = {10.5f, 20.5f};
+            int[] indices = new int[1024];
+            indices[0] = 0;
+            indices[1] = 1;
+            indices[2] = 1;
+            var sut = new LazyRleFloatArray(F32, 3, values, indices,
+                    new long[]{0L}, 0L, 2L, 1, 0);
+
+            try (var arena = java.lang.foreign.Arena.ofConfined()) {
+                var result = sut.materialize(arena);
+
+                assertThat(result.getAtIndex(io.github.dfa1.vortex.core.io.VortexFormat.LE_FLOAT, 0)).isEqualTo(10.5f);
+                assertThat(result.getAtIndex(io.github.dfa1.vortex.core.io.VortexFormat.LE_FLOAT, 1)).isEqualTo(20.5f);
+                assertThat(result.getAtIndex(io.github.dfa1.vortex.core.io.VortexFormat.LE_FLOAT, 2)).isEqualTo(20.5f);
+            }
         }
     }
 }

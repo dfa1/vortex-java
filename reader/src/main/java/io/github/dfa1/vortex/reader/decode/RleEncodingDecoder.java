@@ -9,10 +9,14 @@ import io.github.dfa1.vortex.core.proto.ProtoRLEMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantByteArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantDoubleArray;
+import io.github.dfa1.vortex.reader.array.LazyConstantFloatArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantIntArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantLongArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantShortArray;
 import io.github.dfa1.vortex.reader.array.LazyRleByteArray;
+import io.github.dfa1.vortex.reader.array.LazyRleDoubleArray;
+import io.github.dfa1.vortex.reader.array.LazyRleFloatArray;
 import io.github.dfa1.vortex.reader.array.LazyRleIntArray;
 import io.github.dfa1.vortex.reader.array.LazyRleLongArray;
 import io.github.dfa1.vortex.reader.array.LazyRleShortArray;
@@ -96,6 +100,12 @@ public final class RleEncodingDecoder implements EncodingDecoder {
                     readBytes(valuesSeg, (int) valuesLen),
                     indices, valuesIdxOffsets, firstOffset, valuesLen, numChunks, offset,
                     ptype == PType.U8);
+            case F64 -> new LazyRleDoubleArray(ctx.dtype(), rowCount,
+                    readDoubles(valuesSeg, (int) valuesLen),
+                    indices, valuesIdxOffsets, firstOffset, valuesLen, numChunks, offset);
+            case F32 -> new LazyRleFloatArray(ctx.dtype(), rowCount,
+                    readFloats(valuesSeg, (int) valuesLen),
+                    indices, valuesIdxOffsets, firstOffset, valuesLen, numChunks, offset);
             default -> throw new VortexException(EncodingId.FASTLANES_RLE, "unsupported ptype " + ptype);
         };
 
@@ -114,6 +124,8 @@ public final class RleEncodingDecoder implements EncodingDecoder {
             case I32, U32 -> new LazyConstantIntArray(dt, 0L, 0);
             case I16, U16 -> new LazyConstantShortArray(dt, 0L, (short) 0);
             case I8, U8 -> new LazyConstantByteArray(dt, 0L, (byte) 0);
+            case F64 -> new LazyConstantDoubleArray(dt, 0L, 0.0);
+            case F32 -> new LazyConstantFloatArray(dt, 0L, 0.0f);
             default -> throw new VortexException(EncodingId.FASTLANES_RLE, "unsupported ptype " + ptype);
         };
     }
@@ -151,6 +163,24 @@ public final class RleEncodingDecoder implements EncodingDecoder {
         for (int i = 0; i < count; i++) {
             long off = (i % cap) * elemSize;
             out[i] = buf.get(VortexFormat.LE_SHORT, off);
+        }
+        return out;
+    }
+
+    private static double[] readDoubles(MemorySegment buf, int count) {
+        double[] out = new double[count];
+        long cap = SegmentBroadcast.capacity(buf, 8);
+        for (int i = 0; i < count; i++) {
+            out[i] = buf.get(VortexFormat.LE_DOUBLE, (i % cap) * 8);
+        }
+        return out;
+    }
+
+    private static float[] readFloats(MemorySegment buf, int count) {
+        float[] out = new float[count];
+        long cap = SegmentBroadcast.capacity(buf, 4);
+        for (int i = 0; i < count; i++) {
+            out[i] = buf.get(VortexFormat.LE_FLOAT, (i % cap) * 4);
         }
         return out;
     }
