@@ -121,9 +121,9 @@ class FileSizeComparisonIntegrationTest {
              VortexWriter writer = VortexWriter.create(ch, JAVA_SCHEMA, opts)) {
             for (OhlcData.Batch b : batches) {
                 writer.writeChunk(Map.of(
-                        "symbol", b.symbol(), "date", b.date(),
-                        "open", b.open(), "high", b.high(),
-                        "low", b.low(), "close", b.close(), "volume", b.volume()));
+                        ColumnName.of("symbol"), b.symbol(), ColumnName.of("date"), b.date(),
+                        ColumnName.of("open"), b.open(), ColumnName.of("high"), b.high(),
+                        ColumnName.of("low"), b.low(), ColumnName.of("close"), b.close(), ColumnName.of("volume"), b.volume()));
             }
         }
         return file;
@@ -313,7 +313,7 @@ class FileSizeComparisonIntegrationTest {
         try (FileChannel ch = FileChannel.open(javaFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(
                      ch, javaSchema, WriteOptions.defaults(), List.of(new PcoEncodingEncoder()))) {
-            writer.writeChunk(Map.of("v", data));
+            writer.writeChunk(Map.of(ColumnName.of("v"), data));
         }
 
         Path jniFile = dir.resolve("pco-jni-" + name + ".vtx");
@@ -368,7 +368,7 @@ class FileSizeComparisonIntegrationTest {
         try (FileChannel ch = FileChannel.open(javaFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(
                      ch, javaSchema, WriteOptions.cascading(3).withGlobalDict(false))) {
-            writer.writeChunk(Map.of("s", data));
+            writer.writeChunk(Map.of(ColumnName.of("s"), data));
         }
 
         Path jniFile = tmp.resolve("hicard-jni.vtx");

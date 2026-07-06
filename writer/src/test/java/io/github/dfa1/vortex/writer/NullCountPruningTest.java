@@ -36,11 +36,11 @@ class NullCountPruningTest {
         WriteOptions opts = new WriteOptions(1024, true, 0.90, 0, false, false);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, opts)) {
-            sut.writeChunk(Map.of("v", new NullableData(
+            sut.writeChunk(Map.of(ColumnName.of("v"), new NullableData(
                     new long[]{1, 2, 3}, new boolean[]{true, true, true})));
-            sut.writeChunk(Map.of("v", new NullableData(
+            sut.writeChunk(Map.of(ColumnName.of("v"), new NullableData(
                     new long[]{4, 0}, new boolean[]{true, false})));
-            sut.writeChunk(Map.of("v", new NullableData(
+            sut.writeChunk(Map.of(ColumnName.of("v"), new NullableData(
                     new long[]{0, 0, 0, 0}, new boolean[]{false, false, false, false})));
         }
         return file;

@@ -269,20 +269,20 @@ public final class JdbcImporter {
                 "unsupported JDBC UUID representation: " + (raw == null ? "null" : raw.getClass().getName()));
     }
 
-    private static Map<String, Object> toChunkMap(DType.Struct schema, Object[] buffers,
+    private static Map<ColumnName, Object> toChunkMap(DType.Struct schema, Object[] buffers,
             boolean[][] validity, boolean[] anyNull, int rows) {
         List<String> names = schema.fieldNames().stream().map(ColumnName::value).toList();
-        Map<String, Object> chunk = new LinkedHashMap<>();
+        Map<ColumnName, Object> chunk = new LinkedHashMap<>();
         for (int c = 0; c < names.size(); c++) {
             Object trimmed = trimBuffer(buffers[c], rows);
             if (validity[c] != null && anyNull[c]) {
                 boolean[] trimmedValidity = rows == validity[c].length
                         ? validity[c]
                         : Arrays.copyOf(validity[c], rows);
-                chunk.put(names.get(c),
+                chunk.put(ColumnName.of(names.get(c)),
                         new io.github.dfa1.vortex.writer.encode.NullableData(trimmed, trimmedValidity));
             } else {
-                chunk.put(names.get(c), trimmed);
+                chunk.put(ColumnName.of(names.get(c)), trimmed);
             }
         }
         return chunk;

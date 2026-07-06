@@ -49,7 +49,7 @@ class WriterZoneMapTest {
                 for (int i = 0; i < 4; i++) {
                     v[i] = z * 4L + i;
                 }
-                sut.writeChunk(Map.of("v", v));
+                sut.writeChunk(Map.of(ColumnName.of("v"), v));
             }
         }
         return file;
@@ -143,9 +143,9 @@ class WriterZoneMapTest {
         Path file = tmp.resolve("nullable.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, opts)) {
-            sut.writeChunk(Map.of("v", new io.github.dfa1.vortex.writer.encode.NullableData(
+            sut.writeChunk(Map.of(ColumnName.of("v"), new io.github.dfa1.vortex.writer.encode.NullableData(
                     new long[]{10L, 0L}, new boolean[]{true, false})));
-            sut.writeChunk(Map.of("v", new io.github.dfa1.vortex.writer.encode.NullableData(
+            sut.writeChunk(Map.of(ColumnName.of("v"), new io.github.dfa1.vortex.writer.encode.NullableData(
                     new long[]{0L, 0L}, new boolean[]{false, false})));
         }
 
@@ -180,8 +180,8 @@ class WriterZoneMapTest {
         Path file = tmp.resolve("ptype-" + ptype + ".vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, opts)) {
-            sut.writeChunk(Map.of("v", sample(ptype, 0)));
-            sut.writeChunk(Map.of("v", sample(ptype, 2)));
+            sut.writeChunk(Map.of(ColumnName.of("v"), sample(ptype, 0)));
+            sut.writeChunk(Map.of(ColumnName.of("v"), sample(ptype, 2)));
         }
 
         // When / Then
@@ -221,8 +221,8 @@ class WriterZoneMapTest {
         Path file = tmp.resolve("partial.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, opts)) {
-            sut.writeChunk(Map.of("v", new long[]{1L, 2L}));
-            sut.writeChunk(Map.of("v", new long[]{}));
+            sut.writeChunk(Map.of(ColumnName.of("v"), new long[]{1L, 2L}));
+            sut.writeChunk(Map.of(ColumnName.of("v"), new long[]{}));
         }
 
         // When / Then — zoned with the SUM+NULL_COUNT bitset (bits 5+6 = 0x60), no MIN/MAX
@@ -245,8 +245,8 @@ class WriterZoneMapTest {
         Path file = tmp.resolve("utf8.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, opts)) {
-            sut.writeChunk(Map.of("s", new String[]{"apple", "banana"}));
-            sut.writeChunk(Map.of("s", new String[]{"cherry", "date"}));
+            sut.writeChunk(Map.of(ColumnName.of("s"), new String[]{"apple", "banana"}));
+            sut.writeChunk(Map.of(ColumnName.of("s"), new String[]{"cherry", "date"}));
         }
 
         // When / Then the column is zoned with MAX+MIN+NULL_COUNT and string min/max decode per zone
@@ -283,8 +283,8 @@ class WriterZoneMapTest {
         Path file = tmp.resolve("ext.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, opts)) {
-            sut.writeChunk(Map.of("t", new long[]{10, 11}));
-            sut.writeChunk(Map.of("t", new long[]{20, 21}));
+            sut.writeChunk(Map.of(ColumnName.of("t"), new long[]{10, 11}));
+            sut.writeChunk(Map.of(ColumnName.of("t"), new long[]{20, 21}));
         }
 
         // When / Then the column is zoned with MAX+MIN+NULL_COUNT and the stats decode per zone
@@ -320,8 +320,8 @@ class WriterZoneMapTest {
         Path file = tmp.resolve("dict.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, opts)) {
-            sut.writeChunk(Map.of("s", new String[]{"a", "a", "a", "b", "b", "b"}));
-            sut.writeChunk(Map.of("s", new String[]{"c", "c", "c", "a", "a", "a"}));
+            sut.writeChunk(Map.of(ColumnName.of("s"), new String[]{"a", "a", "a", "b", "b", "b"}));
+            sut.writeChunk(Map.of(ColumnName.of("s"), new String[]{"c", "c", "c", "a", "a", "a"}));
         }
 
         // When / Then — zoned over a dict data child, MAX+MIN+NULL_COUNT, string min/max per zone
@@ -357,8 +357,8 @@ class WriterZoneMapTest {
         Path file = tmp.resolve("primdict.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, opts)) {
-            sut.writeChunk(Map.of("v", new long[]{1, 1, 1, 2, 2, 2}));
-            sut.writeChunk(Map.of("v", new long[]{3, 3, 3, 1, 1, 1}));
+            sut.writeChunk(Map.of(ColumnName.of("v"), new long[]{1, 1, 1, 2, 2, 2}));
+            sut.writeChunk(Map.of(ColumnName.of("v"), new long[]{3, 3, 3, 1, 1, 1}));
         }
 
         // When / Then — zoned over a dict child with MAX+MIN+NULL_COUNT, numeric min/max per zone
@@ -402,7 +402,7 @@ class WriterZoneMapTest {
                 for (int i = 0; i < 4; i++) {
                     v[i] = z * 4.0 + i + 0.5;
                 }
-                sut.writeChunk(Map.of("v", v));
+                sut.writeChunk(Map.of(ColumnName.of("v"), v));
             }
         }
 
@@ -438,8 +438,8 @@ class WriterZoneMapTest {
         Path file = tmp.resolve("ptype-stats-" + ptype + ".vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, opts)) {
-            sut.writeChunk(Map.of("v", sample(ptype, 0)));
-            sut.writeChunk(Map.of("v", sample(ptype, 2)));
+            sut.writeChunk(Map.of(ColumnName.of("v"), sample(ptype, 0)));
+            sut.writeChunk(Map.of(ColumnName.of("v"), sample(ptype, 2)));
         }
 
         // When / Then min/max per zone match the source

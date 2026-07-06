@@ -67,7 +67,7 @@ class AggregateWhereCleanPartitionTest {
                     id[i] = v;
                     val[i] = v;
                 }
-                writer.writeChunk(Map.of("id", id, "val", val));
+                writer.writeChunk(Map.of(ColumnName.of("id"), id, ColumnName.of("val"), val));
             }
         }
     }
@@ -161,8 +161,8 @@ class AggregateWhereCleanPartitionTest {
                 false);
         Path f = tmp.resolve("i32.vortex");
         writeChunks(f, schema,
-                Map.of("id", new int[]{0, 1, 2, 3}, "val", new int[]{0, 1, 2, 3}),
-                Map.of("id", new int[]{10, 11, 12, 13}, "val", new int[]{10, 11, 12, 13}));
+                Map.of(ColumnName.of("id"), new int[]{0, 1, 2, 3}, ColumnName.of("val"), new int[]{0, 1, 2, 3}),
+                Map.of(ColumnName.of("id"), new int[]{10, 11, 12, 13}, ColumnName.of("val"), new int[]{10, 11, 12, 13}));
 
         try (Connection conn = connect(f)) {
             // When the first chunk is selected (id < 10), the aggregates fold from stats — no scan
@@ -191,10 +191,10 @@ class AggregateWhereCleanPartitionTest {
                 false);
         Path f = tmp.resolve("nullable.vortex");
         writeChunks(f, schema,
-                Map.of("id", new long[]{0, 1, 2, 3},
-                        "val", new NullableData(new long[]{10, 0, 30, 0}, new boolean[]{true, false, true, false})),
-                Map.of("id", new long[]{10, 11, 12, 13},
-                        "val", new NullableData(new long[]{1, 2, 3, 4}, new boolean[]{true, true, true, true})));
+                Map.of(ColumnName.of("id"), new long[]{0, 1, 2, 3},
+                        ColumnName.of("val"), new NullableData(new long[]{10, 0, 30, 0}, new boolean[]{true, false, true, false})),
+                Map.of(ColumnName.of("id"), new long[]{10, 11, 12, 13},
+                        ColumnName.of("val"), new NullableData(new long[]{1, 2, 3, 4}, new boolean[]{true, true, true, true})));
 
         try (Connection conn = connect(f)) {
             // When the first chunk is selected (id < 10) — folded from stats, no scan
@@ -223,8 +223,8 @@ class AggregateWhereCleanPartitionTest {
                 false);
         Path f = tmp.resolve("u64.vortex");
         writeChunks(f, schema,
-                Map.of("id", new long[]{0, 1, 2, 3}, "val", new long[]{0, 1, 2, 3}),
-                Map.of("id", new long[]{10, 11, 12, 13}, "val", new long[]{10, 11, 12, 13}));
+                Map.of(ColumnName.of("id"), new long[]{0, 1, 2, 3}, ColumnName.of("val"), new long[]{0, 1, 2, 3}),
+                Map.of(ColumnName.of("id"), new long[]{10, 11, 12, 13}, ColumnName.of("val"), new long[]{10, 11, 12, 13}));
 
         try (Connection conn = connect(f)) {
             // When id < 10 over the unsigned key — a scan is present (no stats fold)
@@ -307,10 +307,10 @@ class AggregateWhereCleanPartitionTest {
                 false);
         Path f = tmp.resolve("isnotnull-boundary.vortex");
         writeChunks(f, schema,
-                Map.of("id", new long[]{0, 1, 2, 3},
-                        "val", new NullableData(new long[]{5, 0, 7, 0}, new boolean[]{true, false, true, false})),
-                Map.of("id", new long[]{10, 11, 12, 13},
-                        "val", new NullableData(new long[]{10, 20, 30, 40}, new boolean[]{true, true, true, true})));
+                Map.of(ColumnName.of("id"), new long[]{0, 1, 2, 3},
+                        ColumnName.of("val"), new NullableData(new long[]{5, 0, 7, 0}, new boolean[]{true, false, true, false})),
+                Map.of(ColumnName.of("id"), new long[]{10, 11, 12, 13},
+                        ColumnName.of("val"), new NullableData(new long[]{10, 20, 30, 40}, new boolean[]{true, true, true, true})));
 
         try (Connection conn = connect(f)) {
             // When EXPLAIN runs, no scan is present — the boundary chunk was decoded and folded
@@ -419,15 +419,15 @@ class AggregateWhereCleanPartitionTest {
                 false);
         Path f = tmp.resolve(name);
         writeChunks(f, schema,
-                Map.of("id", new long[]{0, 1, 2, 3},
-                        "val", new NullableData(new long[]{0, 0, 0, 0}, new boolean[]{false, false, false, false})),
-                Map.of("id", new long[]{10, 11, 12, 13},
-                        "val", new NullableData(new long[]{10, 20, 30, 40}, new boolean[]{true, true, true, true})));
+                Map.of(ColumnName.of("id"), new long[]{0, 1, 2, 3},
+                        ColumnName.of("val"), new NullableData(new long[]{0, 0, 0, 0}, new boolean[]{false, false, false, false})),
+                Map.of(ColumnName.of("id"), new long[]{10, 11, 12, 13},
+                        ColumnName.of("val"), new NullableData(new long[]{10, 20, 30, 40}, new boolean[]{true, true, true, true})));
         return f;
     }
 
-    private static void writeChunks(Path file, DType.Struct schema, Map<String, Object> chunk0,
-                                    Map<String, Object> chunk1) throws Exception {
+    private static void writeChunks(Path file, DType.Struct schema, Map<ColumnName, Object> chunk0,
+                                    Map<ColumnName, Object> chunk1) throws Exception {
         // chunkSize large so each writeChunk is exactly one chunk (one zone).
         WriteOptions opts = new WriteOptions(1024, true, 0.90, 0, false, false);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);

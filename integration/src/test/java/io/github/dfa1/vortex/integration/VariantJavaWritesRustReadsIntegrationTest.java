@@ -58,7 +58,7 @@ class VariantJavaWritesRustReadsIntegrationTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, VARIANT_SCHEMA, WriteOptions.defaults())) {
             // When
-            sut.writeChunk(Map.of("v", data));
+            sut.writeChunk(Map.of(ColumnName.of("v"), data));
         }
 
         // Then — the Rust reader parses the variant layout and agrees on row count + schema.
@@ -82,7 +82,7 @@ class VariantJavaWritesRustReadsIntegrationTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, VARIANT_SCHEMA, WriteOptions.defaults())) {
             // When
-            sut.writeChunk(Map.of("v", data));
+            sut.writeChunk(Map.of(ColumnName.of("v"), data));
         }
 
         // Then — the Rust reader parses the chunked variant layout and agrees on row count + schema.
@@ -103,7 +103,7 @@ class VariantJavaWritesRustReadsIntegrationTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, VARIANT_SCHEMA, WriteOptions.defaults())) {
             // When
-            sut.writeChunk(Map.of("v", data));
+            sut.writeChunk(Map.of(ColumnName.of("v"), data));
         }
 
         // Then — the Rust reader parses the shredded variant layout and agrees on row count + schema.

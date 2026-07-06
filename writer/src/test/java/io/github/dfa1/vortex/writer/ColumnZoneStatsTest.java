@@ -40,9 +40,9 @@ class ColumnZoneStatsTest {
         Path file = tmp.resolve("zones.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
-            sut.writeChunk(Map.of("id", range(1L, 50L)));
-            sut.writeChunk(Map.of("id", range(51L, 100L)));
-            sut.writeChunk(Map.of("id", range(101L, 150L)));
+            sut.writeChunk(Map.of(ColumnName.of("id"), range(1L, 50L)));
+            sut.writeChunk(Map.of(ColumnName.of("id"), range(51L, 100L)));
+            sut.writeChunk(Map.of(ColumnName.of("id"), range(101L, 150L)));
         }
         return file;
     }
@@ -108,7 +108,7 @@ class ColumnZoneStatsTest {
         Path file = tmp.resolve("f64.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, F64_SCHEMA, WriteOptions.defaults())) {
-            sut.writeChunk(Map.of("v", new double[]{1.5, 2.5, 3.0}));
+            sut.writeChunk(Map.of(ColumnName.of("v"), new double[]{1.5, 2.5, 3.0}));
         }
 
         // When

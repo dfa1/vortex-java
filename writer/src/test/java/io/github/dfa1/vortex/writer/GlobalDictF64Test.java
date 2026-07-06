@@ -49,7 +49,7 @@ class GlobalDictF64Test {
                     // 95% dominant (0.5), 5% scattered across the other 7 values
                     data[i] = (i % 20 == 0) ? dict[1 + ((c + i) % 7)] : dict[0];
                 }
-                sut.writeChunk(Map.of("rate", data));
+                sut.writeChunk(Map.of(ColumnName.of("rate"), data));
             }
         }
 
@@ -86,7 +86,7 @@ class GlobalDictF64Test {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.cascading(3))) {
             // When
-            sut.writeChunk(Map.of("rate", data));
+            sut.writeChunk(Map.of(ColumnName.of("rate"), data));
         }
 
         // Then — correctness only; the dict path must give up cleanly when cardinality > cap.

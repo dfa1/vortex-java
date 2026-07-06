@@ -47,7 +47,7 @@ class DictEncodingTest {
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults(),
                      List.of(new DictEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("category", data));
+            sut.writeChunk(Map.of(ColumnName.of("category"), data));
         }
 
         // Then
@@ -68,7 +68,7 @@ class DictEncodingTest {
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults(),
                      List.of(new DictEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("category", data));
+            sut.writeChunk(Map.of(ColumnName.of("category"), data));
         }
 
         // Then
@@ -88,8 +88,8 @@ class DictEncodingTest {
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults(),
                      List.of(new DictEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("category", chunk1));
-            sut.writeChunk(Map.of("category", chunk2));
+            sut.writeChunk(Map.of(ColumnName.of("category"), chunk1));
+            sut.writeChunk(Map.of(ColumnName.of("category"), chunk2));
         }
 
         // Then — process each chunk inside try-with-resources; arena released after close()

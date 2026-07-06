@@ -45,7 +45,7 @@ final class TuiTestSupport {
         }
         try (FileChannel ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
-            writer.writeChunk(Map.of("a", a, "b", b, "c", c));
+            writer.writeChunk(Map.of(ColumnName.of("a"), a, ColumnName.of("b"), b, ColumnName.of("c"), c));
         }
         return file;
     }
@@ -66,15 +66,15 @@ final class TuiTestSupport {
         try (FileChannel ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
             writer.writeChunk(Map.of(
-                    "i", new long[]{0, 1, 2},
-                    "d", new double[]{0.5, 1.5, 2.5},
-                    "flag", new boolean[]{true, false, true},
-                    "name", new String[]{"a", "b", "c"}));
+                    ColumnName.of("i"), new long[]{0, 1, 2},
+                    ColumnName.of("d"), new double[]{0.5, 1.5, 2.5},
+                    ColumnName.of("flag"), new boolean[]{true, false, true},
+                    ColumnName.of("name"), new String[]{"a", "b", "c"}));
             writer.writeChunk(Map.of(
-                    "i", new long[]{3, 4},
-                    "d", new double[]{3.5, 4.5},
-                    "flag", new boolean[]{false, true},
-                    "name", new String[]{"d", "e"}));
+                    ColumnName.of("i"), new long[]{3, 4},
+                    ColumnName.of("d"), new double[]{3.5, 4.5},
+                    ColumnName.of("flag"), new boolean[]{false, true},
+                    ColumnName.of("name"), new String[]{"d", "e"}));
         }
         return file;
     }
@@ -101,7 +101,7 @@ final class TuiTestSupport {
         }
         try (FileChannel ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
-            writer.writeChunk(Map.of("label", label, "n", n));
+            writer.writeChunk(Map.of(ColumnName.of("label"), label, ColumnName.of("n"), n));
         }
         return file;
     }

@@ -31,7 +31,7 @@ final class CliTestSupport {
                 false);
         try (FileChannel ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
-            writer.writeChunk(Map.of("id", new long[]{1L, 2L, 3L}));
+            writer.writeChunk(Map.of(ColumnName.of("id"), new long[]{1L, 2L, 3L}));
         }
         return file;
     }
@@ -52,10 +52,10 @@ final class CliTestSupport {
         try (FileChannel ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
             writer.writeChunk(Map.of(
-                    "id", new long[]{1L, 2L, 3L},
-                    "qty", new int[]{10, 20, 30},
-                    "price", new double[]{100.0, 200.0, 300.0},
-                    "name", new String[]{"alice", "bob", "carol"}));
+                    ColumnName.of("id"), new long[]{1L, 2L, 3L},
+                    ColumnName.of("qty"), new int[]{10, 20, 30},
+                    ColumnName.of("price"), new double[]{100.0, 200.0, 300.0},
+                    ColumnName.of("name"), new String[]{"alice", "bob", "carol"}));
         }
         return file;
     }

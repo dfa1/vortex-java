@@ -464,13 +464,13 @@ public class JavaVsJniReadBenchmark {
                 }
                 day += n / NASDAQ_TICKERS.length;
                 writer.writeChunk(Map.of(
-                        "date", epochDays,
-                        "symbol", symbols,
-                        "open", open,
-                        "high", high,
-                        "low", low,
-                        "close", close,
-                        "volume", volume
+                        ColumnName.of("date"), epochDays,
+                        ColumnName.of("symbol"), symbols,
+                        ColumnName.of("open"), open,
+                        ColumnName.of("high"), high,
+                        ColumnName.of("low"), low,
+                        ColumnName.of("close"), close,
+                        ColumnName.of("volume"), volume
                 ));
                 rowsLeft -= n;
             }

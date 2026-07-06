@@ -26,7 +26,7 @@ class ChunkImplTest {
     private static Object putGet(DType dtype, Object value) {
         ChunkImpl sut = new ChunkImpl(schema(dtype));
         sut.put(ColumnName.of("c"), value);
-        return sut.finish().get("c");
+        return sut.finish().get(ColumnName.of("c"));
     }
 
     @Nested
@@ -85,10 +85,10 @@ class ChunkImplTest {
             sut.put(ColumnName.of("c"), col);
 
             // When
-            Map<String, Object> result = sut.finish();
+            Map<ColumnName, Object> result = sut.finish();
 
             // Then
-            assertThat(result).containsEntry("c", col);
+            assertThat(result).containsEntry(ColumnName.of("c"), col);
         }
 
         @Test

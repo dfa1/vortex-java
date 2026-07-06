@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.calcite;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.testing.OhlcData;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
@@ -23,14 +24,14 @@ final class OhlcGenerator {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var writer = VortexWriter.create(ch, OhlcData.SCHEMA, opts)) {
             for (OhlcData.Batch batch : OhlcData.generate(totalRows, chunkSize)) {
-                Map<String, Object> columns = new LinkedHashMap<>();
-                columns.put("date", batch.date());
-                columns.put("symbol", batch.symbol());
-                columns.put("open", batch.open());
-                columns.put("high", batch.high());
-                columns.put("low", batch.low());
-                columns.put("close", batch.close());
-                columns.put("volume", batch.volume());
+                Map<ColumnName, Object> columns = new LinkedHashMap<>();
+                columns.put(ColumnName.of("date"), batch.date());
+                columns.put(ColumnName.of("symbol"), batch.symbol());
+                columns.put(ColumnName.of("open"), batch.open());
+                columns.put(ColumnName.of("high"), batch.high());
+                columns.put(ColumnName.of("low"), batch.low());
+                columns.put(ColumnName.of("close"), batch.close());
+                columns.put(ColumnName.of("volume"), batch.volume());
                 writer.writeChunk(columns);
             }
         }

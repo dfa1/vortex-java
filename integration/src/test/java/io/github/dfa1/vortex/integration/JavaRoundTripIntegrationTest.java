@@ -53,7 +53,7 @@ class JavaRoundTripIntegrationTest {
              var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults(),
                      List.of(new PatchedEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("v", data));
+            sut.writeChunk(Map.of(ColumnName.of("v"), data));
         }
 
         // Then — the Java reader reconstructs base values + patched outliers exactly

@@ -46,9 +46,9 @@ class ZoneReducerTest {
         Path file = tmp.resolve("ints.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var w = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults())) {
-            w.writeChunk(Map.of("id", range(1L, 50L)));
-            w.writeChunk(Map.of("id", range(51L, 100L)));
-            w.writeChunk(Map.of("id", range(101L, 150L)));
+            w.writeChunk(Map.of(ColumnName.of("id"), range(1L, 50L)));
+            w.writeChunk(Map.of(ColumnName.of("id"), range(51L, 100L)));
+            w.writeChunk(Map.of(ColumnName.of("id"), range(101L, 150L)));
         }
 
         // When
@@ -66,7 +66,7 @@ class ZoneReducerTest {
         Path file = tmp.resolve("floats.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var w = VortexWriter.create(ch, F64_SCHEMA, WriteOptions.defaults())) {
-            w.writeChunk(Map.of("v", new double[]{1.5, 2.5, 3.0}));
+            w.writeChunk(Map.of(ColumnName.of("v"), new double[]{1.5, 2.5, 3.0}));
         }
 
         // When
@@ -85,7 +85,7 @@ class ZoneReducerTest {
         WriteOptions noZoneMaps = WriteOptions.defaults().withZoneMaps(false);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var w = VortexWriter.create(ch, I64_SCHEMA, noZoneMaps)) {
-            w.writeChunk(Map.of("id", range(1L, 50L)));
+            w.writeChunk(Map.of(ColumnName.of("id"), range(1L, 50L)));
         }
 
         // When
@@ -105,8 +105,8 @@ class ZoneReducerTest {
         Path file = tmp.resolve("overflow.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var w = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults())) {
-            w.writeChunk(Map.of("id", range(1L, 50L)));                                // sums fine
-            w.writeChunk(Map.of("id", new long[]{Long.MAX_VALUE, Long.MAX_VALUE}));    // overflows
+            w.writeChunk(Map.of(ColumnName.of("id"), range(1L, 50L)));                                // sums fine
+            w.writeChunk(Map.of(ColumnName.of("id"), new long[]{Long.MAX_VALUE, Long.MAX_VALUE}));    // overflows
         }
 
         // When

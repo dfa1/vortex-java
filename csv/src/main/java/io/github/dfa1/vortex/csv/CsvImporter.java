@@ -209,11 +209,11 @@ public final class CsvImporter {
         return DType.UTF8;
     }
 
-    static Map<String, Object> buildChunk(DType.Struct schema, List<String[]> rows) {
+    static Map<ColumnName, Object> buildChunk(DType.Struct schema, List<String[]> rows) {
         int n = rows.size();
-        Map<String, Object> chunk = new LinkedHashMap<>();
+        Map<ColumnName, Object> chunk = new LinkedHashMap<>();
         for (int c = 0; c < schema.fieldNames().size(); c++) {
-            chunk.put(schema.fieldNames().get(c).value(), buildColumn(schema.fieldTypes().get(c), rows, c, n));
+            chunk.put(schema.fieldNames().get(c), buildColumn(schema.fieldTypes().get(c), rows, c, n));
         }
         return chunk;
     }

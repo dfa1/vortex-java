@@ -52,7 +52,7 @@ class AggregateSumNullTest {
         WriteOptions opts = new WriteOptions(1024, true, 0.90, 0, false, false);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var writer = VortexWriter.create(ch, schema, opts)) {
-            writer.writeChunk(Map.of("v", new NullableData(values, valid)));
+            writer.writeChunk(Map.of(ColumnName.of("v"), new NullableData(values, valid)));
         }
         SchemaPlus root = Frameworks.createRootSchema(true);
         return root.add("vtx", new VortexSchema(Map.of("t", file)));

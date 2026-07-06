@@ -579,10 +579,10 @@ public class ComputeKernelBenchmark {
                     plainData[i] = rng.nextLong();
                 }
                 writer.writeChunk(Map.of(
-                        "price", priceData,
-                        "measure", measureData,
-                        "category", categoryData,
-                        "plain", plainData));
+                        ColumnName.of("price"), priceData,
+                        ColumnName.of("measure"), measureData,
+                        ColumnName.of("category"), categoryData,
+                        ColumnName.of("plain"), plainData));
             }
         }
     }

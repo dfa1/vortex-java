@@ -72,7 +72,7 @@ import java.util.Set;
 ///         .build();
 /// try (var channel = FileChannel.open(path, CREATE, WRITE);
 ///      var writer = VortexWriter.create(channel, schema, WriteOptions.defaults())) {
-///     writer.writeChunk(Map.of("id", idArray, "value", valueArray));
+///     writer.writeChunk(Map.of(ColumnName.of("id"), idArray, ColumnName.of("value"), valueArray));
 /// }
 /// ```
 public final class VortexWriter implements Closeable {
@@ -407,19 +407,19 @@ public final class VortexWriter implements Closeable {
     /// `Boolean[]`, …) with `null` marking absent rows; it routes through `MaskedEncoding` just like
     /// the builder form. Non-nullable columns take the raw primitive array (`long[]`, `int[]`, …).
     ///
-    /// @param columns map from column name to typed array data
+    /// @param columns map from [ColumnName] to typed array data
     /// @throws IOException              if an I/O error occurs writing to the underlying channel
     /// @throws IllegalArgumentException if a schema column is missing from `columns`,
     ///         or if column arrays disagree on row count
-    public void writeChunk(Map<String, Object> columns) throws IOException {
+    public void writeChunk(Map<ColumnName, Object> columns) throws IOException {
         // Adapt each column up front so the map entry point accepts the same shapes as the
-        // builder: boxed nullable arrays (Long[], Integer[], Boolean[], …) become NullableData,
+        // builder: boxed nullable arrays (Long[], Integer[], …) become NullableData,
         // raw primitive arrays pass through. Done before the row-count check so length validation
         // and encoding both see the normalized carrier.
         Map<ColumnName, Object> adapted = new LinkedHashMap<>();
         for (int i = 0; i < schema.fieldNames().size(); i++) {
             ColumnName colName = schema.fieldNames().get(i);
-            Object data = columns.get(colName.value());
+            Object data = columns.get(colName);
             if (data == null) {
                 throw new IllegalArgumentException("missing column: " + colName);
             }
