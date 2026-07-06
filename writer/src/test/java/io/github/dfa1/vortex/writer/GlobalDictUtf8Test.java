@@ -44,7 +44,7 @@ class GlobalDictUtf8Test {
                 for (int i = 0; i < rowsPerChunk; i++) {
                     data[i] = dict[(c + i) % dict.length];
                 }
-                sut.writeChunk(Map.of("status", data));
+                sut.writeChunk(Map.of(ColumnName.of("status"), data));
             }
         }
 
@@ -79,7 +79,7 @@ class GlobalDictUtf8Test {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.cascading(3))) {
             // When
-            sut.writeChunk(Map.of("status", data));
+            sut.writeChunk(Map.of(ColumnName.of("status"), data));
         }
 
         // Then — file is readable, all rows round-trip (correctness, not size).
@@ -107,7 +107,7 @@ class GlobalDictUtf8Test {
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.cascading(3))) {
-            sut.writeChunk(Map.of("status", data));
+            sut.writeChunk(Map.of(ColumnName.of("status"), data));
         }
 
         // Then — every value round-trips through the U16-coded dict
@@ -135,8 +135,8 @@ class GlobalDictUtf8Test {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.cascading(3))) {
             // When — 400 + 1700 = 2100 distinct > 2048
-            sut.writeChunk(Map.of("status", c0));
-            sut.writeChunk(Map.of("status", c1));
+            sut.writeChunk(Map.of(ColumnName.of("status"), c0));
+            sut.writeChunk(Map.of(ColumnName.of("status"), c1));
         }
 
         // Then — the fallback round-trips both chunks in order
@@ -161,7 +161,7 @@ class GlobalDictUtf8Test {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.cascading(3).withGlobalDict(false))) {
             // When
-            sut.writeChunk(Map.of("status", data));
+            sut.writeChunk(Map.of(ColumnName.of("status"), data));
         }
 
         // Then

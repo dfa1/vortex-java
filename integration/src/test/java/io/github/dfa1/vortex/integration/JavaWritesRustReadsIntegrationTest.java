@@ -436,13 +436,13 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, OHLC_SCHEMA, WriteOptions.cascading(3))) {
             for (OhlcData.Batch b : batches) {
                 sut.writeChunk(Map.of(
-                        "date", b.date(),
-                        "symbol", b.symbol(),
-                        "open", b.open(),
-                        "high", b.high(),
-                        "low", b.low(),
-                        "close", b.close(),
-                        "volume", b.volume()));
+                        ColumnName.of("date"), b.date(),
+                        ColumnName.of("symbol"), b.symbol(),
+                        ColumnName.of("open"), b.open(),
+                        ColumnName.of("high"), b.high(),
+                        ColumnName.of("low"), b.low(),
+                        ColumnName.of("close"), b.close(),
+                        ColumnName.of("volume"), b.volume()));
             }
         }
 
@@ -468,7 +468,7 @@ class JavaWritesRustReadsIntegrationTest {
         double[] vals = {1.1, 2.2, 3.3};
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
-            sut.writeChunk(Map.of("id", ids, "value", vals));
+            sut.writeChunk(Map.of(ColumnName.of("id"), ids, ColumnName.of("value"), vals));
         }
 
         // When
@@ -486,8 +486,8 @@ class JavaWritesRustReadsIntegrationTest {
         Path file = tmp.resolve("java_multi.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
-            sut.writeChunk(Map.of("id", new long[]{1L, 2L}, "value", new double[]{1.1, 2.2}));
-            sut.writeChunk(Map.of("id", new long[]{3L, 4L, 5L}, "value", new double[]{3.3, 4.4, 5.5}));
+            sut.writeChunk(Map.of(ColumnName.of("id"), new long[]{1L, 2L}, ColumnName.of("value"), new double[]{1.1, 2.2}));
+            sut.writeChunk(Map.of(ColumnName.of("id"), new long[]{3L, 4L, 5L}, ColumnName.of("value"), new double[]{3.3, 4.4, 5.5}));
         }
 
         // When
@@ -514,8 +514,8 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, SCHEMA, zoneMapped)) {
             for (int start = 0; start < 20; start += 4) {
                 sut.writeChunk(Map.of(
-                        "id", Arrays.copyOfRange(ids, start, start + 4),
-                        "value", Arrays.copyOfRange(vals, start, start + 4)));
+                        ColumnName.of("id"), Arrays.copyOfRange(ids, start, start + 4),
+                        ColumnName.of("value"), Arrays.copyOfRange(vals, start, start + 4)));
             }
         }
 
@@ -536,7 +536,7 @@ class JavaWritesRustReadsIntegrationTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults())) {
             // When
-            sut.writeChunk(Map.of("v", data));
+            sut.writeChunk(Map.of(ColumnName.of("v"), data));
         }
 
         // Then
@@ -553,7 +553,7 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults(),
                      List.of(new VarBinEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("s", data));
+            sut.writeChunk(Map.of(ColumnName.of("s"), data));
         }
 
         // Then
@@ -570,7 +570,7 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults(),
                      List.of(new FsstEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("s", data));
+            sut.writeChunk(Map.of(ColumnName.of("s"), data));
         }
 
         // Then
@@ -587,7 +587,7 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults(),
                      List.of(new VarBinViewEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("s", data));
+            sut.writeChunk(Map.of(ColumnName.of("s"), data));
         }
 
         // Then
@@ -604,7 +604,7 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults(),
                      List.of(new VarBinViewEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("s", data));
+            sut.writeChunk(Map.of(ColumnName.of("s"), data));
         }
 
         // Then
@@ -621,7 +621,7 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults(),
                      List.of(new VarBinViewEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("s", data));
+            sut.writeChunk(Map.of(ColumnName.of("s"), data));
         }
 
         // Then
@@ -639,7 +639,7 @@ class JavaWritesRustReadsIntegrationTest {
             try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
                  var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults(),
                          List.of(new VarBinViewEncodingEncoder()))) {
-                sut.writeChunk(Map.of("s", data));
+                sut.writeChunk(Map.of(ColumnName.of("s"), data));
             }
             String[] decoded = readStringColumn(file, "s");
             assertThat(decoded).containsExactly(data);
@@ -656,7 +656,7 @@ class JavaWritesRustReadsIntegrationTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults())) {
             // When — default pipeline selects DictEncoding for Utf8
-            sut.writeChunk(Map.of("s", data));
+            sut.writeChunk(Map.of(ColumnName.of("s"), data));
         }
 
         // Then
@@ -678,7 +678,7 @@ class JavaWritesRustReadsIntegrationTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
             // When
-            sut.writeChunk(Map.of("id", ids, "value", vals));
+            sut.writeChunk(Map.of(ColumnName.of("id"), ids, ColumnName.of("value"), vals));
         }
 
         // Then
@@ -698,7 +698,7 @@ class JavaWritesRustReadsIntegrationTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.cascading(3))) {
             // When
-            sut.writeChunk(Map.of("ts", ts));
+            sut.writeChunk(Map.of(ColumnName.of("ts"), ts));
         }
 
         // Then
@@ -715,9 +715,9 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, OHLC_SCHEMA, WriteOptions.cascading(3))) {
             for (OhlcData.Batch b : batches) {
                 sut.writeChunk(Map.of(
-                        "date", b.date(), "symbol", b.symbol(),
-                        "open", b.open(), "high", b.high(),
-                        "low", b.low(), "close", b.close(), "volume", b.volume()));
+                        ColumnName.of("date"), b.date(), ColumnName.of("symbol"), b.symbol(),
+                        ColumnName.of("open"), b.open(), ColumnName.of("high"), b.high(),
+                        ColumnName.of("low"), b.low(), ColumnName.of("close"), b.close(), ColumnName.of("volume"), b.volume()));
             }
         }
 
@@ -739,7 +739,7 @@ class JavaWritesRustReadsIntegrationTest {
             Path file = tmp.resolve("pbt_dict_utf8_ascii.vtx");
             try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
                  var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults())) {
-                sut.writeChunk(Map.of("s", data));
+                sut.writeChunk(Map.of(ColumnName.of("s"), data));
             }
             String[] decoded = readStringColumn(file, "s");
             assertThat(decoded).containsExactly(data);
@@ -757,7 +757,7 @@ class JavaWritesRustReadsIntegrationTest {
             Path file = tmp.resolve("pbt_dict_utf8_u16.vtx");
             try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
                  var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults())) {
-                sut.writeChunk(Map.of("s", data));
+                sut.writeChunk(Map.of(ColumnName.of("s"), data));
             }
             String[] decoded = readStringColumn(file, "s");
             assertThat(decoded).containsExactly(data);
@@ -775,7 +775,7 @@ class JavaWritesRustReadsIntegrationTest {
             Path file = tmp.resolve("pbt_dict_utf8_unicode.vtx");
             try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
                  var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults())) {
-                sut.writeChunk(Map.of("s", data));
+                sut.writeChunk(Map.of(ColumnName.of("s"), data));
             }
             String[] decoded = readStringColumn(file, "s");
             assertThat(decoded).containsExactly(data);
@@ -793,7 +793,7 @@ class JavaWritesRustReadsIntegrationTest {
             Path file = tmp.resolve("pbt_i64.vtx");
             try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
                  var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.defaults())) {
-                sut.writeChunk(Map.of("ts", data));
+                sut.writeChunk(Map.of(ColumnName.of("ts"), data));
             }
             long[] decoded = readLongColumn(file, "ts");
             assertThat(decoded).containsExactly(data);
@@ -811,7 +811,7 @@ class JavaWritesRustReadsIntegrationTest {
             Path file = tmp.resolve("pbt_f64.vtx");
             try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
                  var sut = VortexWriter.create(ch, F64_SCHEMA, WriteOptions.defaults())) {
-                sut.writeChunk(Map.of("v", data));
+                sut.writeChunk(Map.of(ColumnName.of("v"), data));
             }
             double[] decoded = readDoubleColumn(file, "v");
             assertThat(decoded).containsExactly(data);
@@ -829,7 +829,7 @@ class JavaWritesRustReadsIntegrationTest {
             Path file = tmp.resolve("pbt_f32.vtx");
             try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
                  var sut = VortexWriter.create(ch, F32_SCHEMA, WriteOptions.defaults())) {
-                sut.writeChunk(Map.of("v", data));
+                sut.writeChunk(Map.of(ColumnName.of("v"), data));
             }
             float[] decoded = readFloatColumn(file, "v");
             assertThat(decoded).containsExactly(data);
@@ -847,7 +847,7 @@ class JavaWritesRustReadsIntegrationTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, F64_SCHEMA, WriteOptions.defaults())) {
             // When
-            sut.writeChunk(Map.of("v", data));
+            sut.writeChunk(Map.of(ColumnName.of("v"), data));
         }
 
         // Then
@@ -864,7 +864,7 @@ class JavaWritesRustReadsIntegrationTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, F32_SCHEMA, WriteOptions.defaults())) {
             // When
-            sut.writeChunk(Map.of("v", data));
+            sut.writeChunk(Map.of(ColumnName.of("v"), data));
         }
 
         // Then
@@ -884,7 +884,7 @@ class JavaWritesRustReadsIntegrationTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, F16_SCHEMA, WriteOptions.defaults())) {
             // When
-            sut.writeChunk(Map.of("v", data));
+            sut.writeChunk(Map.of(ColumnName.of("v"), data));
         }
 
         // Then
@@ -901,7 +901,7 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults(),
                      List.of(new ZigZagEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("v", data));
+            sut.writeChunk(Map.of(ColumnName.of("v"), data));
         }
 
         // Then
@@ -918,7 +918,7 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.defaults(),
                      List.of(new ZigZagEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("ts", data));
+            sut.writeChunk(Map.of(ColumnName.of("ts"), data));
         }
 
         // Then
@@ -935,7 +935,7 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults(),
                      List.of(new RunEndEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("v", data));
+            sut.writeChunk(Map.of(ColumnName.of("v"), data));
         }
 
         // Then
@@ -952,7 +952,7 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.defaults(),
                      List.of(new RunEndEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("ts", data));
+            sut.writeChunk(Map.of(ColumnName.of("ts"), data));
         }
 
         // Then
@@ -969,7 +969,7 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults(),
                      List.of(new RleEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("v", data));
+            sut.writeChunk(Map.of(ColumnName.of("v"), data));
         }
 
         // Then
@@ -986,7 +986,7 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.defaults(),
                      List.of(new RleEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("ts", data));
+            sut.writeChunk(Map.of(ColumnName.of("ts"), data));
         }
 
         // Then
@@ -1003,7 +1003,7 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults(),
                      List.of(new ConstantEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("v", data));
+            sut.writeChunk(Map.of(ColumnName.of("v"), data));
         }
 
         // Then
@@ -1020,7 +1020,7 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults(),
                      List.of(new SparseEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("v", data));
+            sut.writeChunk(Map.of(ColumnName.of("v"), data));
         }
 
         // Then
@@ -1043,7 +1043,7 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.defaults(),
                      List.of(new DeltaEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("ts", data));
+            sut.writeChunk(Map.of(ColumnName.of("ts"), data));
         }
 
         // Then
@@ -1065,7 +1065,7 @@ class JavaWritesRustReadsIntegrationTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
             // When — boxed Long[] via the map entry point routes through the nullable → masked path
-            sut.writeChunk(Map.of("v", data));
+            sut.writeChunk(Map.of(ColumnName.of("v"), data));
         }
 
         // Then — Rust reads a nullable BigInt vector; null positions survive, values round-trip
@@ -1100,7 +1100,7 @@ class JavaWritesRustReadsIntegrationTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
             // When
-            sut.writeChunk(Map.of("s", data));
+            sut.writeChunk(Map.of(ColumnName.of("s"), data));
         }
 
         // Then — Rust reads the nullable Utf8 vector; null positions survive, values round-trip
@@ -1132,7 +1132,7 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, BOOL_SCHEMA, WriteOptions.defaults(),
                      List.of(new BoolEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("b", data));
+            sut.writeChunk(Map.of(ColumnName.of("b"), data));
         }
 
         // Then
@@ -1151,7 +1151,7 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, BOOL_SCHEMA, WriteOptions.defaults(),
                      List.of(new ByteBoolEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("b", data));
+            sut.writeChunk(Map.of(ColumnName.of("b"), data));
         }
 
         // Then
@@ -1168,7 +1168,7 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, NULL_SCHEMA, WriteOptions.defaults(),
                      List.of(new NullEncodingEncoder()))) {
             // When — data is ignored by NullEncoding; pass long[] to satisfy arrayLength
-            sut.writeChunk(Map.of("n", new long[(int) rowCount]));
+            sut.writeChunk(Map.of(ColumnName.of("n"), new long[(int) rowCount]));
         }
 
         // Then
@@ -1185,7 +1185,7 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.defaults(),
                      List.of(new ZstdEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("ts", data));
+            sut.writeChunk(Map.of(ColumnName.of("ts"), data));
         }
 
         // Then
@@ -1202,7 +1202,7 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults(),
                      List.of(new ZstdEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("s", data));
+            sut.writeChunk(Map.of(ColumnName.of("s"), data));
         }
 
         // Then
@@ -1221,7 +1221,7 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.defaults(),
                      List.of(new ZstdEncodingEncoder(3)))) {
             // When
-            sut.writeChunk(Map.of("ts", data));
+            sut.writeChunk(Map.of(ColumnName.of("ts"), data));
         }
 
         // Then
@@ -1242,7 +1242,7 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, schema, WriteOptions.defaults(),
                      List.of(new ZstdEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("v", data));
+            sut.writeChunk(Map.of(ColumnName.of("v"), data));
         }
 
         // Then — Rust reads a nullable BigInt vector; null positions survive, values round-trip
@@ -1278,7 +1278,7 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, schema, WriteOptions.defaults(),
                      List.of(new ZstdEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("s", data));
+            sut.writeChunk(Map.of(ColumnName.of("s"), data));
         }
 
         // Then — Rust reads the nullable Utf8 vector; null positions survive, values round-trip
@@ -1312,7 +1312,7 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, LIST_I64_SCHEMA, WriteOptions.defaults(),
                      List.of(new ListEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("items", data));
+            sut.writeChunk(Map.of(ColumnName.of("items"), data));
         }
 
         // Then
@@ -1332,7 +1332,7 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, LIST_I64_SCHEMA, WriteOptions.defaults(),
                      List.of(new ListViewEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("items", data));
+            sut.writeChunk(Map.of(ColumnName.of("items"), data));
         }
 
         // Then — Rust normalizes ListView to List on read; verify flattened elements
@@ -1352,7 +1352,7 @@ class JavaWritesRustReadsIntegrationTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, F64_SCHEMA, WriteOptions.cascading(3).withZstd(true))) {
             // When
-            sut.writeChunk(Map.of("v", data));
+            sut.writeChunk(Map.of(ColumnName.of("v"), data));
         }
 
         // Then — Rust reader must decode the file (whether via ALP or Zstd, value-equal)
@@ -1373,8 +1373,8 @@ class JavaWritesRustReadsIntegrationTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
             // When
-            sut.writeChunk(Map.of("v", chunk1));
-            sut.writeChunk(Map.of("v", chunk2));
+            sut.writeChunk(Map.of(ColumnName.of("v"), chunk1));
+            sut.writeChunk(Map.of(ColumnName.of("v"), chunk2));
         }
 
         // Then — Rust must decode the DictLayout and return original values
@@ -1398,8 +1398,8 @@ class JavaWritesRustReadsIntegrationTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
             // When
-            sut.writeChunk(Map.of("v", chunk1));
-            sut.writeChunk(Map.of("v", chunk2));
+            sut.writeChunk(Map.of(ColumnName.of("v"), chunk1));
+            sut.writeChunk(Map.of(ColumnName.of("v"), chunk2));
         }
 
         // Then
@@ -1422,7 +1422,7 @@ class JavaWritesRustReadsIntegrationTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
             // When
-            sut.writeChunk(Map.of("d", Arrays.asList(d0, null, d2)));
+            sut.writeChunk(Map.of(ColumnName.of("d"), Arrays.asList(d0, null, d2)));
         }
 
         // Then — Rust reads Date32 vector; row 1 null, rows 0/2 round-trip as epoch-day
@@ -1457,7 +1457,7 @@ class JavaWritesRustReadsIntegrationTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
             // When
-            sut.writeChunk(Map.of("t", Arrays.asList(t0, null, t2)));
+            sut.writeChunk(Map.of(ColumnName.of("t"), Arrays.asList(t0, null, t2)));
         }
 
         // Then — Rust reads Time32(ms) vector; row 1 null, rows 0/2 round-trip as millis-of-day
@@ -1492,7 +1492,7 @@ class JavaWritesRustReadsIntegrationTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
             // When
-            sut.writeChunk(Map.of("ts", Arrays.asList(ts0, null, ts2)));
+            sut.writeChunk(Map.of(ColumnName.of("ts"), Arrays.asList(ts0, null, ts2)));
         }
 
         // Then — Rust reads Timestamp(ms) vector; row 1 null, rows 0/2 round-trip as epoch millis
@@ -1530,7 +1530,7 @@ class JavaWritesRustReadsIntegrationTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
             // When
-            sut.writeChunk(Map.of("u", Arrays.asList(u0, null, u2)));
+            sut.writeChunk(Map.of(ColumnName.of("u"), Arrays.asList(u0, null, u2)));
         }
 
         // Then — Rust reads FixedSizeBinary(16) vector; row 1 null, rows 0/2 round-trip as UUID
@@ -1564,7 +1564,7 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.defaults(),
                      List.of(new PcoEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("ts", data));
+            sut.writeChunk(Map.of(ColumnName.of("ts"), data));
         }
 
         // Then
@@ -1581,7 +1581,7 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.defaults(),
                      List.of(new PcoEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("ts", data));
+            sut.writeChunk(Map.of(ColumnName.of("ts"), data));
         }
 
         // Then
@@ -1598,7 +1598,7 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults(),
                      List.of(new PcoEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("v", data));
+            sut.writeChunk(Map.of(ColumnName.of("v"), data));
         }
 
         // Then
@@ -1615,7 +1615,7 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, F64_SCHEMA, WriteOptions.defaults(),
                      List.of(new PcoEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("v", data));
+            sut.writeChunk(Map.of(ColumnName.of("v"), data));
         }
 
         // Then
@@ -1632,7 +1632,7 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, F32_SCHEMA, WriteOptions.defaults(),
                      List.of(new PcoEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("v", data));
+            sut.writeChunk(Map.of(ColumnName.of("v"), data));
         }
 
         // Then
@@ -1649,7 +1649,7 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.defaults(),
                      List.of(new PcoEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("ts", data));
+            sut.writeChunk(Map.of(ColumnName.of("ts"), data));
         }
 
         // Then
@@ -1666,7 +1666,7 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.defaults(),
                      List.of(new PcoEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("ts", data));
+            sut.writeChunk(Map.of(ColumnName.of("ts"), data));
         }
 
         // Then
@@ -1683,7 +1683,7 @@ class JavaWritesRustReadsIntegrationTest {
              var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.defaults(),
                      List.of(new PcoEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("ts", data));
+            sut.writeChunk(Map.of(ColumnName.of("ts"), data));
         }
 
         // Then
@@ -1711,7 +1711,7 @@ class JavaWritesRustReadsIntegrationTest {
             try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
                  var sut = VortexWriter.create(ch, TS_SCHEMA, WriteOptions.defaults(),
                          List.of(new PcoEncodingEncoder()))) {
-                sut.writeChunk(Map.of("ts", data));
+                sut.writeChunk(Map.of(ColumnName.of("ts"), data));
             }
             long[] decoded = readLongColumn(file, "ts");
             assertThat(decoded).containsExactly(data);

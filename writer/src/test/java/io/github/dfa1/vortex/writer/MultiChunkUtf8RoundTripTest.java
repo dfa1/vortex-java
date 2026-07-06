@@ -47,7 +47,7 @@ class MultiChunkUtf8RoundTripTest {
                 for (int r = 0; r < perBatch; r++) {
                     batch[r] = "row-" + b + "-" + r;
                 }
-                sut.writeChunk(Map.of("s", batch));
+                sut.writeChunk(Map.of(ColumnName.of("s"), batch));
             }
         }
 
@@ -88,7 +88,7 @@ class MultiChunkUtf8RoundTripTest {
         String[] strings = {"foo", "bar", "baz"};
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, STRING_SCHEMA, WriteOptions.defaults())) {
-            sut.writeChunk(Map.of("s", strings));
+            sut.writeChunk(Map.of(ColumnName.of("s"), strings));
         }
 
         // Then — column should be a leaf VarBinArray (OffsetMode or DictMode), not ChunkedMode

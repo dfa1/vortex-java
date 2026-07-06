@@ -36,7 +36,7 @@ class ConstantEncodingSelectionIntegrationTest {
         long[] zeros = new long[10_000];
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.cascading(3))) {
-            sut.writeChunk(Map.of("v", zeros));
+            sut.writeChunk(Map.of(ColumnName.of("v"), zeros));
         }
 
         // When

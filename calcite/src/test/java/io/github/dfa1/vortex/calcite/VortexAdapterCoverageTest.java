@@ -1,5 +1,7 @@
 package io.github.dfa1.vortex.calcite;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
+
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.ReadRegistry;
 import io.github.dfa1.vortex.reader.VortexReader;
@@ -56,18 +58,18 @@ class VortexAdapterCoverageTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var w = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
             w.writeChunk(Map.ofEntries(
-                    Map.entry("i8", new byte[]{1, 2, 3}),
-                    Map.entry("i16", new short[]{10, 20, 30}),
-                    Map.entry("i32", new int[]{100, 200, 300}),
-                    Map.entry("i64", new long[]{1000L, 2000L, 3000L}),
-                    Map.entry("u8", new byte[]{4, 5, 6}),
-                    Map.entry("u16", new short[]{40, 50, 60}),
-                    Map.entry("u32", new int[]{400, 500, 600}),
-                    Map.entry("u64", new long[]{4000L, 5000L, 6000L}),
-                    Map.entry("f32", new float[]{1.5f, 2.5f, 3.5f}),
-                    Map.entry("f64", new double[]{1.25, 2.25, 3.25}),
-                    Map.entry("s", new String[]{"a", "b", "c"}),
-                    Map.entry("b", new boolean[]{true, false, true})));
+                    Map.entry(ColumnName.of("i8"), new byte[]{1, 2, 3}),
+                    Map.entry(ColumnName.of("i16"), new short[]{10, 20, 30}),
+                    Map.entry(ColumnName.of("i32"), new int[]{100, 200, 300}),
+                    Map.entry(ColumnName.of("i64"), new long[]{1000L, 2000L, 3000L}),
+                    Map.entry(ColumnName.of("u8"), new byte[]{4, 5, 6}),
+                    Map.entry(ColumnName.of("u16"), new short[]{40, 50, 60}),
+                    Map.entry(ColumnName.of("u32"), new int[]{400, 500, 600}),
+                    Map.entry(ColumnName.of("u64"), new long[]{4000L, 5000L, 6000L}),
+                    Map.entry(ColumnName.of("f32"), new float[]{1.5f, 2.5f, 3.5f}),
+                    Map.entry(ColumnName.of("f64"), new double[]{1.25, 2.25, 3.25}),
+                    Map.entry(ColumnName.of("s"), new String[]{"a", "b", "c"}),
+                    Map.entry(ColumnName.of("b"), new boolean[]{true, false, true})));
         }
     }
 
@@ -278,18 +280,18 @@ class VortexAdapterCoverageTest {
             try (var ch = FileChannel.open(bare, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
                  var w = VortexWriter.create(ch, SCHEMA, noZoneMaps)) {
                 w.writeChunk(Map.ofEntries(
-                        Map.entry("i8", new byte[]{1, 2, 3}),
-                        Map.entry("i16", new short[]{10, 20, 30}),
-                        Map.entry("i32", new int[]{100, 200, 300}),
-                        Map.entry("i64", new long[]{1000L, 2000L, 3000L}),
-                        Map.entry("u8", new byte[]{4, 5, 6}),
-                        Map.entry("u16", new short[]{40, 50, 60}),
-                        Map.entry("u32", new int[]{400, 500, 600}),
-                        Map.entry("u64", new long[]{4000L, 5000L, 6000L}),
-                        Map.entry("f32", new float[]{1.5f, 2.5f, 3.5f}),
-                        Map.entry("f64", new double[]{1.25, 2.25, 3.25}),
-                        Map.entry("s", new String[]{"a", "b", "c"}),
-                        Map.entry("b", new boolean[]{true, false, true})));
+                        Map.entry(ColumnName.of("i8"), new byte[]{1, 2, 3}),
+                        Map.entry(ColumnName.of("i16"), new short[]{10, 20, 30}),
+                        Map.entry(ColumnName.of("i32"), new int[]{100, 200, 300}),
+                        Map.entry(ColumnName.of("i64"), new long[]{1000L, 2000L, 3000L}),
+                        Map.entry(ColumnName.of("u8"), new byte[]{4, 5, 6}),
+                        Map.entry(ColumnName.of("u16"), new short[]{40, 50, 60}),
+                        Map.entry(ColumnName.of("u32"), new int[]{400, 500, 600}),
+                        Map.entry(ColumnName.of("u64"), new long[]{4000L, 5000L, 6000L}),
+                        Map.entry(ColumnName.of("f32"), new float[]{1.5f, 2.5f, 3.5f}),
+                        Map.entry(ColumnName.of("f64"), new double[]{1.25, 2.25, 3.25}),
+                        Map.entry(ColumnName.of("s"), new String[]{"a", "b", "c"}),
+                        Map.entry(ColumnName.of("b"), new boolean[]{true, false, true})));
             }
 
             // When

@@ -68,7 +68,7 @@ class AggregateWhereBoundaryTest {
                     id[i] = v;
                     val[i] = v;
                 }
-                writer.writeChunk(Map.of("id", id, "val", val));
+                writer.writeChunk(Map.of(ColumnName.of("id"), id, ColumnName.of("val"), val));
             }
         }
     }
@@ -207,10 +207,10 @@ class AggregateWhereBoundaryTest {
                 false);
         Path f = tmp.resolve("nullable-boundary.vortex");
         writeChunks(f, schema,
-                Map.of("id", new long[]{0, 1, 2, 3},
-                        "val", new NullableData(new long[]{10, 0, 30, 0}, new boolean[]{true, false, true, false})),
-                Map.of("id", new long[]{10, 11, 12, 13},
-                        "val", new NullableData(new long[]{1, 2, 3, 4}, new boolean[]{true, true, true, true})));
+                Map.of(ColumnName.of("id"), new long[]{0, 1, 2, 3},
+                        ColumnName.of("val"), new NullableData(new long[]{10, 0, 30, 0}, new boolean[]{true, false, true, false})),
+                Map.of(ColumnName.of("id"), new long[]{10, 11, 12, 13},
+                        ColumnName.of("val"), new NullableData(new long[]{1, 2, 3, 4}, new boolean[]{true, true, true, true})));
 
         try (Connection conn = connect(f)) {
             // When the aggregates are taken — the boundary chunk is decoded and folded, no full scan
@@ -244,8 +244,8 @@ class AggregateWhereBoundaryTest {
                 false);
         Path f = tmp.resolve("strmin-boundary.vortex");
         writeChunks(f, schema,
-                Map.of("id", new long[]{0, 1, 2, 3}, "name", new String[]{"a", "b", "c", "d"}),
-                Map.of("id", new long[]{10, 11, 12, 13}, "name", new String[]{"e", "f", "g", "h"}));
+                Map.of(ColumnName.of("id"), new long[]{0, 1, 2, 3}, ColumnName.of("name"), new String[]{"a", "b", "c", "d"}),
+                Map.of(ColumnName.of("id"), new long[]{10, 11, 12, 13}, ColumnName.of("name"), new String[]{"e", "f", "g", "h"}));
 
         try (Connection conn = connect(f)) {
             // When MIN over the string column is taken across the boundary — the rewrite abandons, so
@@ -273,8 +273,8 @@ class AggregateWhereBoundaryTest {
                 false);
         Path f = tmp.resolve("u64-boundary.vortex");
         writeChunks(f, schema,
-                Map.of("id", new long[]{0, 1, 2, 3}, "val", new long[]{0, 1, 2, 3}),
-                Map.of("id", new long[]{10, 11, 12, 13}, "val", new long[]{10, 11, 12, 13}));
+                Map.of(ColumnName.of("id"), new long[]{0, 1, 2, 3}, ColumnName.of("val"), new long[]{0, 1, 2, 3}),
+                Map.of(ColumnName.of("id"), new long[]{10, 11, 12, 13}, ColumnName.of("val"), new long[]{10, 11, 12, 13}));
 
         try (Connection conn = connect(f)) {
             // When the aggregate spans the unsigned key across a boundary — a scan remains in the plan
@@ -340,10 +340,10 @@ class AggregateWhereBoundaryTest {
                 false);
         Path f = tmp.resolve("neq-null-boundary.vortex");
         writeChunks(f, schema,
-                Map.of("id", new long[]{0, 1, 2, 3},
-                        "amt", new NullableData(new long[]{10, 0, 30, 40}, new boolean[]{true, false, true, true})),
-                Map.of("id", new long[]{10, 11, 12, 13},
-                        "amt", new NullableData(new long[]{50, 60, 70, 80}, new boolean[]{true, true, true, true})));
+                Map.of(ColumnName.of("id"), new long[]{0, 1, 2, 3},
+                        ColumnName.of("amt"), new NullableData(new long[]{10, 0, 30, 40}, new boolean[]{true, false, true, true})),
+                Map.of(ColumnName.of("id"), new long[]{10, 11, 12, 13},
+                        ColumnName.of("amt"), new NullableData(new long[]{50, 60, 70, 80}, new boolean[]{true, true, true, true})));
 
         // Ground truth: reduce the same data, dropping the null row (UNKNOWN) and the amt == 30 row.
         long[] allAmt = {10, 0, 30, 40, 50, 60, 70, 80};
@@ -391,8 +391,8 @@ class AggregateWhereBoundaryTest {
                 false);
         Path f = tmp.resolve("float-nan-boundary.vortex");
         writeChunks(f, schema,
-                Map.of("f", new double[]{1.0, Double.NaN, 2.0, 3.0}, "val", new long[]{10, 20, 30, 40}),
-                Map.of("f", new double[]{4.0, 5.0, 6.0, 7.0}, "val", new long[]{50, 60, 70, 80}));
+                Map.of(ColumnName.of("f"), new double[]{1.0, Double.NaN, 2.0, 3.0}, ColumnName.of("val"), new long[]{10, 20, 30, 40}),
+                Map.of(ColumnName.of("f"), new double[]{4.0, 5.0, 6.0, 7.0}, ColumnName.of("val"), new long[]{50, 60, 70, 80}));
 
         // Ground truth: reduce the same data with SQL-NaN-correct `f >= 1.5` (NaN row excluded).
         double[] allF = {1.0, Double.NaN, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0};
@@ -453,8 +453,8 @@ class AggregateWhereBoundaryTest {
         return new Ground(sum, count, min, max);
     }
 
-    private static void writeChunks(Path file, DType.Struct schema, Map<String, Object> chunk0,
-                                    Map<String, Object> chunk1) throws Exception {
+    private static void writeChunks(Path file, DType.Struct schema, Map<ColumnName, Object> chunk0,
+                                    Map<ColumnName, Object> chunk1) throws Exception {
         // chunkSize large so each writeChunk is exactly one chunk (one zone).
         WriteOptions opts = new WriteOptions(1024, true, 0.90, 0, false, false);
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);

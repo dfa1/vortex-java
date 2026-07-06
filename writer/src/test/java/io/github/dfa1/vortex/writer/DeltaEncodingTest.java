@@ -44,7 +44,7 @@ class DeltaEncodingTest {
              var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults(),
                      List.of(new DeltaEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("ts", data));
+            sut.writeChunk(Map.of(ColumnName.of("ts"), data));
         }
 
         // Then
@@ -63,7 +63,7 @@ class DeltaEncodingTest {
              var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults(),
                      List.of(new DeltaEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("ts", data));
+            sut.writeChunk(Map.of(ColumnName.of("ts"), data));
         }
 
         // Then
@@ -82,7 +82,7 @@ class DeltaEncodingTest {
              var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults(),
                      List.of(new DeltaEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("ts", data));
+            sut.writeChunk(Map.of(ColumnName.of("ts"), data));
         }
 
         // Then
@@ -101,7 +101,7 @@ class DeltaEncodingTest {
              var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults(),
                      List.of(new DeltaEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("ts", data));
+            sut.writeChunk(Map.of(ColumnName.of("ts"), data));
         }
 
         // Then
@@ -120,7 +120,7 @@ class DeltaEncodingTest {
              var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults(),
                      List.of(new DeltaEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("ts", data));
+            sut.writeChunk(Map.of(ColumnName.of("ts"), data));
         }
 
         // Then
@@ -142,8 +142,8 @@ class DeltaEncodingTest {
              var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults(),
                      List.of(new DeltaEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("ts", chunk1));
-            sut.writeChunk(Map.of("ts", chunk2));
+            sut.writeChunk(Map.of(ColumnName.of("ts"), chunk1));
+            sut.writeChunk(Map.of(ColumnName.of("ts"), chunk2));
         }
 
         // Then
@@ -167,7 +167,7 @@ class DeltaEncodingTest {
              var sut = VortexWriter.create(ch, I64_SCHEMA, WriteOptions.defaults(),
                      List.of(new DeltaEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("ts", data));
+            sut.writeChunk(Map.of(ColumnName.of("ts"), data));
         }
 
         // Then

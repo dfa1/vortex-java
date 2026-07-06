@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.performance;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.calcite.VortexTable;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.Chunk;
@@ -205,7 +206,7 @@ public class CalciteBoundaryAggregateBenchmark {
                     id[i] = (long) c * CHUNK_SIZE + i;
                     val[i] = rng.nextInt(1_000);
                 }
-                writer.writeChunk(Map.of("id", id, "val", val));
+                writer.writeChunk(Map.of(ColumnName.of("id"), id, ColumnName.of("val"), val));
             }
         }
     }

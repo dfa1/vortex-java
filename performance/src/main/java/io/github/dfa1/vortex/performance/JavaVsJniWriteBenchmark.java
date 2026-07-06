@@ -214,14 +214,14 @@ public class JavaVsJniWriteBenchmark {
                 StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
              VortexWriter writer = VortexWriter.create(ch, JAVA_SCHEMA, WriteOptions.cascading(3))) {
             for (int b = 0; b < NUM_BATCHES; b++) {
-                Map<String, Object> chunk = Map.of(
-                        "date", batchDates[b],
-                        "symbol", batchSymbols[b],
-                        "open", batchOpen[b],
-                        "high", batchHigh[b],
-                        "low", batchLow[b],
-                        "close", batchClose[b],
-                        "volume", batchVolume[b]
+                Map<ColumnName, Object> chunk = Map.of(
+                        ColumnName.of("date"), batchDates[b],
+                        ColumnName.of("symbol"), batchSymbols[b],
+                        ColumnName.of("open"), batchOpen[b],
+                        ColumnName.of("high"), batchHigh[b],
+                        ColumnName.of("low"), batchLow[b],
+                        ColumnName.of("close"), batchClose[b],
+                        ColumnName.of("volume"), batchVolume[b]
                 );
                 writer.writeChunk(chunk);
             }
@@ -236,14 +236,14 @@ public class JavaVsJniWriteBenchmark {
                 StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
              VortexWriter writer = VortexWriter.create(ch, JAVA_SCHEMA, WriteOptions.defaults())) {
             for (int b = 0; b < NUM_BATCHES; b++) {
-                Map<String, Object> chunk = Map.of(
-                        "date", batchDates[b],
-                        "symbol", batchSymbols[b],
-                        "open", batchOpen[b],
-                        "high", batchHigh[b],
-                        "low", batchLow[b],
-                        "close", batchClose[b],
-                        "volume", batchVolume[b]
+                Map<ColumnName, Object> chunk = Map.of(
+                        ColumnName.of("date"), batchDates[b],
+                        ColumnName.of("symbol"), batchSymbols[b],
+                        ColumnName.of("open"), batchOpen[b],
+                        ColumnName.of("high"), batchHigh[b],
+                        ColumnName.of("low"), batchLow[b],
+                        ColumnName.of("close"), batchClose[b],
+                        ColumnName.of("volume"), batchVolume[b]
                 );
                 writer.writeChunk(chunk);
             }

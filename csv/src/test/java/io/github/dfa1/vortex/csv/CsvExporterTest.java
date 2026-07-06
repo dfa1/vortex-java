@@ -29,7 +29,7 @@ class CsvExporterTest {
                 false);
         try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
-            writer.writeChunk(Map.of("id", new long[]{1L, 2L}, "name", new String[]{"Alice", "Bob"}));
+            writer.writeChunk(Map.of(ColumnName.of("id"), new long[]{1L, 2L}, ColumnName.of("name"), new String[]{"Alice", "Bob"}));
         }
         Path csv = tmp.resolve("out.csv");
 
@@ -54,7 +54,7 @@ class CsvExporterTest {
                 false);
         try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
-            writer.writeChunk(Map.of("x", new double[]{1.5, 2.7}));
+            writer.writeChunk(Map.of(ColumnName.of("x"), new double[]{1.5, 2.7}));
         }
         StringWriter out = new StringWriter();
 
@@ -79,7 +79,7 @@ class CsvExporterTest {
                 false);
         try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
-            writer.writeChunk(Map.of("id", new long[]{7L}));
+            writer.writeChunk(Map.of(ColumnName.of("id"), new long[]{7L}));
         }
         Path csv = tmp.resolve("out.csv");
 

@@ -33,7 +33,7 @@ class GlobalDictPrimitiveTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, i64Schema(), options)) {
             for (long[] chunk : chunks) {
-                sut.writeChunk(Map.of("v", chunk));
+                sut.writeChunk(Map.of(ColumnName.of("v"), chunk));
             }
         }
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
@@ -155,7 +155,7 @@ class GlobalDictPrimitiveTest {
         Path file = tmp.resolve("i32.vortex");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, WriteOptions.cascading(3))) {
-            sut.writeChunk(Map.of("v", data));
+            sut.writeChunk(Map.of(ColumnName.of("v"), data));
         }
 
         // When
@@ -180,7 +180,7 @@ class GlobalDictPrimitiveTest {
         Path file = tmp.resolve("i16.vortex");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, WriteOptions.cascading(3))) {
-            sut.writeChunk(Map.of("v", data));
+            sut.writeChunk(Map.of(ColumnName.of("v"), data));
         }
 
         // When — I16 now encodes via the cascade (a ShortArray view), not a dict
@@ -221,7 +221,7 @@ class GlobalDictPrimitiveTest {
         double[] result;
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, WriteOptions.cascading(3))) {
-            sut.writeChunk(Map.of("v", data));
+            sut.writeChunk(Map.of(ColumnName.of("v"), data));
         }
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll())) {
             result = readAllDoubles(vf, "v");

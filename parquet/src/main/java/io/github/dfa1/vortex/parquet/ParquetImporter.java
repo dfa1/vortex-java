@@ -221,16 +221,16 @@ public final class ParquetImporter {
         }
     }
 
-    private static Map<String, Object> buildChunk(List<ColumnSchema> columns, List<DType> types,
+    private static Map<ColumnName, Object> buildChunk(List<ColumnSchema> columns, List<DType> types,
             Object[] buffers, int size) {
-        Map<String, Object> chunk = new LinkedHashMap<>();
+        Map<ColumnName, Object> chunk = new LinkedHashMap<>();
         for (int c = 0; c < columns.size(); c++) {
             Object buf = trimBuffer(buffers[c], size);
             if (types.get(c) instanceof DType.Extension) {
                 boolean nullable = types.get(c).nullable();
                 buf = new DateTimePartsData((long[]) buf, nullable);
             }
-            chunk.put(columns.get(c).name(), buf);
+            chunk.put(ColumnName.of(columns.get(c).name()), buf);
         }
         return chunk;
     }

@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.calcite;
 
+import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
@@ -47,17 +48,17 @@ class FilterPushDownTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var w = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
             w.writeChunk(Map.of(
-                    "i64", new long[]{1000L, 2000L, 3000L},
-                    "i32", new int[]{100, 200, 300},
-                    "f64", new double[]{1.0, 2.0, 3.0},
-                    "s", new String[]{"a", "b", "c"},
-                    "b", new boolean[]{true, false, true}));
+                    ColumnName.of("i64"), new long[]{1000L, 2000L, 3000L},
+                    ColumnName.of("i32"), new int[]{100, 200, 300},
+                    ColumnName.of("f64"), new double[]{1.0, 2.0, 3.0},
+                    ColumnName.of("s"), new String[]{"a", "b", "c"},
+                    ColumnName.of("b"), new boolean[]{true, false, true}));
             w.writeChunk(Map.of(
-                    "i64", new long[]{4000L, 5000L, 6000L},
-                    "i32", new int[]{400, 500, 600},
-                    "f64", new double[]{4.0, 5.0, 6.0},
-                    "s", new String[]{"d", "e", "f"},
-                    "b", new boolean[]{false, true, false}));
+                    ColumnName.of("i64"), new long[]{4000L, 5000L, 6000L},
+                    ColumnName.of("i32"), new int[]{400, 500, 600},
+                    ColumnName.of("f64"), new double[]{4.0, 5.0, 6.0},
+                    ColumnName.of("s"), new String[]{"d", "e", "f"},
+                    ColumnName.of("b"), new boolean[]{false, true, false}));
         }
     }
 

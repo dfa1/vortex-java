@@ -34,17 +34,13 @@ final class ChunkImpl implements Chunk {
         return this;
     }
 
-    Map<String, Object> finish() {
+    Map<ColumnName, Object> finish() {
         for (ColumnName name : schema.fieldNames()) {
             if (!data.containsKey(name)) {
                 throw new IllegalStateException("missing column: " + name);
             }
         }
-        // The map entry point ([VortexWriter#writeChunk(Map)]) is keyed by raw name, so surface
-        // the validated keys as strings at this internal boundary.
-        Map<String, Object> result = new LinkedHashMap<>(data.size());
-        data.forEach((name, value) -> result.put(name.value(), value));
-        return result;
+        return data;
     }
 
     /// Validates a column's raw data against its schema dtype and adapts boxed nullable arrays

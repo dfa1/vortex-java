@@ -52,9 +52,9 @@ class ZoneMapPruningTest {
         Path file = tmp.resolve("three_chunks.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
-            sut.writeChunk(Map.of("id", range(1L, 50L)));
-            sut.writeChunk(Map.of("id", range(51L, 100L)));
-            sut.writeChunk(Map.of("id", range(101L, 150L)));
+            sut.writeChunk(Map.of(ColumnName.of("id"), range(1L, 50L)));
+            sut.writeChunk(Map.of(ColumnName.of("id"), range(51L, 100L)));
+            sut.writeChunk(Map.of(ColumnName.of("id"), range(101L, 150L)));
         }
         return file;
     }
@@ -83,7 +83,7 @@ class ZoneMapPruningTest {
         Path file = tmp.resolve("i64_one.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
-            sut.writeChunk(Map.of("id", values));
+            sut.writeChunk(Map.of(ColumnName.of("id"), values));
         }
         return file;
     }
@@ -108,8 +108,8 @@ class ZoneMapPruningTest {
         Path file = tmp.resolve("u64_chunks.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, U64_SCHEMA, WriteOptions.defaults())) {
-            sut.writeChunk(Map.of("id", range(10L, 20L)));            // [10..20], 11 rows
-            sut.writeChunk(Map.of("id", urange(TWO_POW_63 + 10, 11))); // [2^63+10 .. 2^63+20], 11 rows
+            sut.writeChunk(Map.of(ColumnName.of("id"), range(10L, 20L)));            // [10..20], 11 rows
+            sut.writeChunk(Map.of(ColumnName.of("id"), urange(TWO_POW_63 + 10, 11))); // [2^63+10 .. 2^63+20], 11 rows
         }
         return file;
     }
@@ -128,9 +128,9 @@ class ZoneMapPruningTest {
         Path file = tmp.resolve("f32_chunks.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, F32_SCHEMA, WriteOptions.defaults())) {
-            sut.writeChunk(Map.of("v", f32range(1, 50)));
-            sut.writeChunk(Map.of("v", f32range(51, 100)));
-            sut.writeChunk(Map.of("v", f32range(101, 150)));
+            sut.writeChunk(Map.of(ColumnName.of("v"), f32range(1, 50)));
+            sut.writeChunk(Map.of(ColumnName.of("v"), f32range(51, 100)));
+            sut.writeChunk(Map.of(ColumnName.of("v"), f32range(101, 150)));
         }
         return file;
     }

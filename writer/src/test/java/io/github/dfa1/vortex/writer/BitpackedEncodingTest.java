@@ -42,7 +42,7 @@ class BitpackedEncodingTest {
              var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults(),
                      List.of(new BitpackedEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("value", data));
+            sut.writeChunk(Map.of(ColumnName.of("value"), data));
         }
 
         // Then
@@ -61,7 +61,7 @@ class BitpackedEncodingTest {
              var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults(),
                      List.of(new BitpackedEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("value", data));
+            sut.writeChunk(Map.of(ColumnName.of("value"), data));
         }
 
         // Then
@@ -80,7 +80,7 @@ class BitpackedEncodingTest {
              var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults(),
                      List.of(new BitpackedEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("value", data));
+            sut.writeChunk(Map.of(ColumnName.of("value"), data));
         }
 
         // Then
@@ -102,8 +102,8 @@ class BitpackedEncodingTest {
              var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults(),
                      List.of(new BitpackedEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("value", chunk1));
-            sut.writeChunk(Map.of("value", chunk2));
+            sut.writeChunk(Map.of(ColumnName.of("value"), chunk1));
+            sut.writeChunk(Map.of(ColumnName.of("value"), chunk2));
         }
 
         // Then — read both chunks, each in its own try-with-resources scope
@@ -126,7 +126,7 @@ class BitpackedEncodingTest {
              var sut = VortexWriter.create(ch, I32_SCHEMA, WriteOptions.defaults(),
                      List.of(new BitpackedEncodingEncoder()))) {
             // When
-            sut.writeChunk(Map.of("value", data));
+            sut.writeChunk(Map.of(ColumnName.of("value"), data));
         }
 
         // Then

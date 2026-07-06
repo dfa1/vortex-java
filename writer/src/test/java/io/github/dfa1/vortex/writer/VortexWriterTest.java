@@ -67,7 +67,7 @@ class VortexWriterTest {
             for (int c = 0; c < 3; c++) {
                 long[] id = {c * 3L, c * 3L + 1, c * 3L + 2};
                 double[] value = {c + 0.5, c + 1.5, c + 2.5};
-                sut.writeChunk(Map.of("id", id, "value", value));
+                sut.writeChunk(Map.of(ColumnName.of("id"), id, ColumnName.of("value"), value));
             }
         }
 
@@ -149,7 +149,7 @@ class VortexWriterTest {
         // logical Extension wrapper before picking a physical encoding.
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, dateSchema, WriteOptions.defaults())) {
-            sut.writeChunk(Map.of("birthdays", dates));
+            sut.writeChunk(Map.of(ColumnName.of("birthdays"), dates));
         }
 
         // Then — read back through DateExtension.decodeAll and assert end-to-end equality.
@@ -186,7 +186,7 @@ class VortexWriterTest {
         // When / Then — both columns are 3 rows, so the chunk is accepted and round-trips
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
-            sut.writeChunk(Map.of("birthdays", dates, "id", ids));
+            sut.writeChunk(Map.of(ColumnName.of("birthdays"), dates, ColumnName.of("id"), ids));
         }
         try (var vf = VortexReader.open(file, ReadRegistry.loadAll());
              var iter = vf.scan(ScanOptions.all())) {
@@ -212,7 +212,7 @@ class VortexWriterTest {
         // When
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
-            sut.writeChunk(Map.of("v", new Long[]{10L, null, 30L}));
+            sut.writeChunk(Map.of(ColumnName.of("v"), new Long[]{10L, null, 30L}));
         }
 
         // Then — the masked file is well-formed
@@ -227,7 +227,7 @@ class VortexWriterTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
             // When / Then
-            Map<String, Object> boxedColumn = Map.of("id", new Long[]{1L, 2L});
+            Map<ColumnName, Object> boxedColumn = Map.of(ColumnName.of("id"), new Long[]{1L, 2L});
             assertThatThrownBy(() -> sut.writeChunk(boxedColumn))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("non-nullable")
@@ -252,7 +252,7 @@ class VortexWriterTest {
         // When
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
-            sut.writeChunk(Map.of("clock", times));
+            sut.writeChunk(Map.of(ColumnName.of("clock"), times));
         }
 
         // Then
@@ -281,7 +281,7 @@ class VortexWriterTest {
         // When
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
-            sut.writeChunk(Map.of("events", instants));
+            sut.writeChunk(Map.of(ColumnName.of("events"), instants));
         }
 
         // Then
@@ -305,7 +305,7 @@ class VortexWriterTest {
         Path file = tmp.resolve("dates2.vtx");
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, dateSchema, WriteOptions.defaults())) {
-            sut.writeChunk(Map.of("birthdays",
+            sut.writeChunk(Map.of(ColumnName.of("birthdays"),
                     List.of(java.time.LocalDate.of(2026, 6, 10))));
         }
 
@@ -334,7 +334,7 @@ class VortexWriterTest {
         // When
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
-            sut.writeChunk(Map.of("ids", ids));
+            sut.writeChunk(Map.of(ColumnName.of("ids"), ids));
         }
 
         // Then
@@ -389,7 +389,7 @@ class VortexWriterTest {
             throws IOException {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, options)) {
-            sut.writeChunk(Map.of(schema.fieldNames().get(0).value(), data));
+            sut.writeChunk(Map.of(schema.fieldNames().get(0), data));
         }
     }
 
@@ -400,7 +400,7 @@ class VortexWriterTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
             // When / Then
-            Map<String, Object> partialColumns = Map.of("id", new long[]{1L});
+            Map<ColumnName, Object> partialColumns = Map.of(ColumnName.of("id"), new long[]{1L});
             assertThatThrownBy(() -> sut.writeChunk(partialColumns))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("missing column: value");
@@ -419,7 +419,7 @@ class VortexWriterTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
             // When
-            sut.writeChunk(Map.of("id", ids, "value", vals));
+            sut.writeChunk(Map.of(ColumnName.of("id"), ids, ColumnName.of("value"), vals));
         }
 
         // Then
@@ -440,8 +440,8 @@ class VortexWriterTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
             // When
-            sut.writeChunk(Map.of("id", new long[]{1L, 2L}, "value", new double[]{1.0, 2.0}));
-            sut.writeChunk(Map.of("id", new long[]{3L, 4L, 5L}, "value", new double[]{3.0, 4.0, 5.0}));
+            sut.writeChunk(Map.of(ColumnName.of("id"), new long[]{1L, 2L}, ColumnName.of("value"), new double[]{1.0, 2.0}));
+            sut.writeChunk(Map.of(ColumnName.of("id"), new long[]{3L, 4L, 5L}, ColumnName.of("value"), new double[]{3.0, 4.0, 5.0}));
         }
 
         // Then
@@ -465,7 +465,7 @@ class VortexWriterTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
             // When
-            sut.writeChunk(Map.of("id", ids, "value", new double[]{0.0, 0.0, 0.0}));
+            sut.writeChunk(Map.of(ColumnName.of("id"), ids, ColumnName.of("value"), new double[]{0.0, 0.0, 0.0}));
         }
 
         // Then
@@ -492,7 +492,7 @@ class VortexWriterTest {
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
-            sut.writeChunk(Map.of("id", ids, "value", new double[]{1.0, 2.0, 3.0}));
+            sut.writeChunk(Map.of(ColumnName.of("id"), ids, ColumnName.of("value"), new double[]{1.0, 2.0, 3.0}));
         }
 
         // When
@@ -516,7 +516,7 @@ class VortexWriterTest {
 
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
-            sut.writeChunk(Map.of("id", new long[]{1L}, "value", new double[]{1.0}));
+            sut.writeChunk(Map.of(ColumnName.of("id"), new long[]{1L}, ColumnName.of("value"), new double[]{1.0}));
         }
 
         // When / Then
@@ -540,7 +540,7 @@ class VortexWriterTest {
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, SCHEMA, WriteOptions.defaults())) {
             // When
-            sut.writeChunk(Map.of("id", new long[]{1L}, "value", new double[]{9.9}));
+            sut.writeChunk(Map.of(ColumnName.of("id"), new long[]{1L}, ColumnName.of("value"), new double[]{9.9}));
         }
 
         // Then
@@ -569,7 +569,7 @@ class VortexWriterTest {
         // When
         try (var ch = FileChannel.open(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
              var sut = VortexWriter.create(ch, schema, WriteOptions.defaults(), WriteRegistry.loadAll())) {
-            sut.writeChunk(Map.of("v", data));
+            sut.writeChunk(Map.of(ColumnName.of("v"), data));
         }
 
         // Then
