@@ -228,7 +228,7 @@ uci-phishing-websites,untriaged
 uci-predict-students-dropout-and-academic-success,untriaged
 uci-real-estate-valuation-data-set,untriaged
 uci-seeds,ok
-uci-seoul-bike-sharing-demand,gap:209
+uci-seoul-bike-sharing-demand,ok
 uci-sms-spam-collection,untriaged
 uci-spambase,untriaged
 uci-statlog-german-credit-data,untriaged

@@ -62,13 +62,13 @@ Per-slug status lives in `integration/src/test/resources/raincloud/expected-stat
 (`ok` must pass; `gap:<issue>` must still fail, so a fix flips the entry in the same change;
 `untriaged` runs and reports without failing the build). A scheduled workflow
 (`raincloud-conformance.yml`) hydrates a size-capped subset weekly. Current triage —
-13 `ok`, 7 known gaps: nested struct columns in scan
-([#207](https://github.com/dfa1/vortex-java/issues/207)), unsigned integers rendered signed
-([#208](https://github.com/dfa1/vortex-java/issues/208) — silent corruption, 4 datasets),
-RLE over F64 ([#209](https://github.com/dfa1/vortex-java/issues/209)), narrow dict-offset
-ptypes in string dicts ([#215](https://github.com/dfa1/vortex-java/issues/215));
+18 `ok`, 2 known gaps: nested struct columns in scan
+([#207](https://github.com/dfa1/vortex-java/issues/207)), narrow dict-offset ptypes in
+string dicts ([#215](https://github.com/dfa1/vortex-java/issues/215));
 227 slugs untriaged. Fixed so far by this suite: lazy dict U8/U16 values
-([#206](https://github.com/dfa1/vortex-java/issues/206)), row validity dropped by wrapper
+([#206](https://github.com/dfa1/vortex-java/issues/206)), unsigned integers rendered signed
+([#208](https://github.com/dfa1/vortex-java/issues/208) — silent corruption), RLE over F64
+([#209](https://github.com/dfa1/vortex-java/issues/209)), row validity dropped by wrapper
 decoders ([#210](https://github.com/dfa1/vortex-java/issues/210) — silent corruption),
 all-null columns in CSV export
 ([#211](https://github.com/dfa1/vortex-java/issues/211)).
