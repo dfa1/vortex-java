@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CSV export renders unsigned integer columns (U8–U64) with their unsigned values — high-half values previously printed as two's-complement negatives (uci-wine `magnesium` U8 132 exported as -124), silent corruption found by the Raincloud conformance suite. ([#208](https://github.com/dfa1/vortex-java/issues/208))
 - `fastlanes.rle` decodes F64/F32 value pools (`LazyRleDoubleArray`, `LazyRleFloatArray`) — files from the Python bindings RLE-encode double columns with long constant runs, which previously failed to scan with `unsupported ptype F64`. ([#209](https://github.com/dfa1/vortex-java/issues/209))
 
+### Added
+
+- Real-world conformance suite against the [Raincloud](https://github.com/spiraldb/raincloud) corpus: 247 public datasets whose Vortex files are written by the Python bindings, each validated value-for-value against its Parquet sibling. `scripts/hydrate-raincloud-corpus.sh` hydrates any subset (cache → mirror → local build), `RaincloudConformanceIntegrationTest` tests whatever is hydrated against the checked-in per-dataset status matrix, and a weekly workflow runs a size-capped sweep. First triage found four reader gaps on real data, including one silent-corruption bug (unsigned integers rendered as signed). ([#205](https://github.com/dfa1/vortex-java/issues/205))
+
 ## [0.12.0] — 2026-07-04
 
 Identity gets **types**: encoding ids, layout ids, and column names are now validated domain
