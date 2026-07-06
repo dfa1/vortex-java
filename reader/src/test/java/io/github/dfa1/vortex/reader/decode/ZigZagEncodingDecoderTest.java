@@ -10,7 +10,9 @@ import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
@@ -23,7 +25,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class ZigZagEncodingDecoderTest {
 
     private static final ZigZagEncodingDecoder SUT = new ZigZagEncodingDecoder();
-    private static final ReadRegistry REGISTRY = TestRegistry.ofDecoders(SUT, new PrimitiveEncodingDecoder());
+    private static final ReadRegistry REGISTRY = TestRegistry.ofDecoders(
+            SUT, new PrimitiveEncodingDecoder(), new BoolEncodingDecoder());
 
     // --- zigzag encode helpers (mirror of the decoder's (u >>> 1) ^ -(u & 1)) ---
 
@@ -210,5 +213,63 @@ class ZigZagEncodingDecoderTest {
         assertThatThrownBy(() -> SUT.decode(ctx))
                 .isInstanceOf(VortexException.class)
                 .hasMessageContaining("expected primitive dtype");
+    }
+
+    /// A zigzag array's validity IS its encoded child's (`ValidityChild<ZigZag>`, #210): when the
+    /// encoded primitive child is nullable it arrives as a [MaskedArray], and that mask must ride
+    /// through to the decoded result rather than being flattened to a raw segment.
+    @Nested
+    class MaskedChildPropagation {
+
+        @Test
+        void maskedEncodedChild_propagatesNullsAndDecodesValues() {
+            // Given — encoded I32 child [5,-3,7] with a validity child marking row 1 null
+            MemorySegment encoded = encodedInts(5, -3, 7);
+            MemorySegment validity = boolBitmap(true, false, true);
+
+            // When
+            Array result = decodeMasked(PType.I32, 3, encoded, validity);
+
+            // Then — nulls survive and valid rows decode correctly
+            MaskedArray masked = (MaskedArray) result;
+            assertThat(masked.isValid(0)).isTrue();
+            assertThat(masked.isValid(1)).isFalse();
+            assertThat(masked.isValid(2)).isTrue();
+            IntArray inner = (IntArray) masked.inner();
+            assertThat(inner.getInt(0)).isEqualTo(5);
+            assertThat(inner.getInt(1)).isEqualTo(-3);
+            assertThat(inner.getInt(2)).isEqualTo(7);
+        }
+
+        @Test
+        void plainEncodedChild_returnsPlainArray() {
+            // Given — a non-nullable encoded child (no validity): the no-regression path must NOT
+            // wrap the result in a MaskedArray.
+            Array result = decode(PType.I32, 3, encodedInts(5, -3, 7));
+
+            // Then
+            assertThat(result).isInstanceOf(IntArray.class).isNotInstanceOf(MaskedArray.class);
+        }
+
+        private Array decodeMasked(PType signed, long n, MemorySegment encoded, MemorySegment validity) {
+            DType dtype = new DType.Primitive(signed, true);
+            ArrayNode validityNode = new ArrayNode(EncodingId.VORTEX_BOOL, null, new ArrayNode[0], new int[]{1});
+            ArrayNode child = new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null,
+                    new ArrayNode[]{validityNode}, new int[]{0});
+            ArrayNode node = new ArrayNode(EncodingId.VORTEX_ZIGZAG, null, new ArrayNode[]{child}, new int[]{});
+            DecodeContext ctx = new DecodeContext(node, dtype, n,
+                    new MemorySegment[]{encoded, validity}, REGISTRY, Arena.ofAuto());
+            return SUT.decode(ctx);
+        }
+
+        private MemorySegment boolBitmap(boolean... valid) {
+            byte[] bytes = new byte[(valid.length + 7) / 8];
+            for (int i = 0; i < valid.length; i++) {
+                if (valid[i]) {
+                    bytes[i >>> 3] |= (byte) (1 << (i & 7));
+                }
+            }
+            return MemorySegment.ofArray(bytes);
+        }
     }
 }
