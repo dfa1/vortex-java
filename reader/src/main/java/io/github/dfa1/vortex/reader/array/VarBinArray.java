@@ -326,11 +326,37 @@ public sealed interface VarBinArray extends Array
             };
         }
 
+        /// Reads dictionary-value offset `i` at the true width of [#dictValOffPType].
+        ///
+        /// Offsets can arrive at any integer width — FSST decompresses its values to a
+        /// child with I32 offsets, legacy dicts use I64, and narrow sequence-encoded
+        /// offsets keep their U8/U16 ptype on the wire. Reading at the wrong width (e.g.
+        /// an 8-byte read against a 4-byte-stride buffer) walks off the segment. The
+        /// buffer bounds and ptype are untrusted input, so both are checked here and a
+        /// [VortexException] is thrown rather than a bare `IndexOutOfBoundsException`
+        /// (ADR 0003).
+        ///
+        /// @param i zero-based offset index (in `[0, dictSize]`)
+        /// @return the offset value widened to a signed long
         private long dictReadOff(long i) {
-            if (dictValOffPType == PType.I32 || dictValOffPType == PType.U32) {
-                return dictValOffsets.getAtIndex(VortexFormat.LE_INT, i);
+            int width = dictValOffPType.byteSize();
+            long byteOffset = i * width;
+            if (i < 0 || byteOffset + width > dictValOffsets.byteSize()) {
+                throw new VortexException("dict value offset index " + i + " (" + dictValOffPType
+                        + ", " + width + "-byte) out of range for offsets segment of "
+                        + dictValOffsets.byteSize() + " bytes");
             }
-            return dictValOffsets.getAtIndex(VortexFormat.LE_LONG, i);
+            return switch (dictValOffPType) {
+                case U8 -> Byte.toUnsignedLong(dictValOffsets.get(ValueLayout.JAVA_BYTE, byteOffset));
+                case I8 -> dictValOffsets.get(ValueLayout.JAVA_BYTE, byteOffset);
+                case U16 -> Short.toUnsignedLong(dictValOffsets.get(VortexFormat.LE_SHORT, byteOffset));
+                case I16 -> dictValOffsets.get(VortexFormat.LE_SHORT, byteOffset);
+                case U32 -> Integer.toUnsignedLong(dictValOffsets.get(VortexFormat.LE_INT, byteOffset));
+                case I32 -> dictValOffsets.get(VortexFormat.LE_INT, byteOffset);
+                case I64, U64 -> dictValOffsets.get(VortexFormat.LE_LONG, byteOffset);
+                default -> throw new VortexException(
+                        "unsupported dict value offset ptype: " + dictValOffPType);
+            };
         }
     }
 

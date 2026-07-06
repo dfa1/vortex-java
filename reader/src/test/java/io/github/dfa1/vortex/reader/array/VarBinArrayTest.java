@@ -1,9 +1,12 @@
 package io.github.dfa1.vortex.reader.array;
 
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
@@ -13,6 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class VarBinArrayTest {
 
@@ -180,6 +184,73 @@ class VarBinArrayTest {
 
             // Then
             assertThat(lengths).containsExactly(3, 1, 3);
+        }
+
+        /// The dict-value offsets can arrive at any integer width: FSST-decompressed
+        /// values carry I32 offsets, legacy dicts use I64, and narrow sequence-encoded
+        /// offsets keep their U8/U16 ptype. `dictReadOff` must read each at its true
+        /// stride — reading a 4-byte-stride buffer as 8 bytes was the #215 crash.
+        @ParameterizedTest
+        @EnumSource(value = PType.class, names = {"U8", "I8", "U16", "I16", "I32", "U32", "I64", "U64"})
+        void getString_resolvesOffsetsAtTrueWidth(PType offsetsPtype) {
+            // Given — dict=["foo","bar"] with offsets [0,3,6] packed at this ptype's width,
+            // codes=[1,0,1]. Small offsets fit every width including U8/I8, exercising the
+            // exact narrow-ptype shape from uci-magic-gamma-telescope's FSST dict.
+            VarBinArray sut = ofDictWithOffsets(new String[]{"foo", "bar"}, offsetsPtype, new int[]{1, 0, 1});
+
+            // When
+            String[] result = {sut.getString(0), sut.getString(1), sut.getString(2)};
+
+            // Then
+            assertThat(result).containsExactly("bar", "foo", "bar");
+            assertThat(sut.getByteLength(0)).isEqualTo(3);
+        }
+
+        /// The #215 shape exactly: an I32-width offsets buffer (4-byte stride) mislabeled
+        /// with an 8-byte ptype. The read must fail loudly with a helpful [VortexException],
+        /// never a bare `IndexOutOfBoundsException` (ADR 0003 bounds discipline).
+        @Test
+        void getString_widthOvershootsBuffer_throwsVortexException() {
+            // Given — 3 offsets packed as I32 (12-byte buffer) but the carrier claims I64.
+            // Reading index 1 as 8 bytes needs offset 8..16 against a 12-byte segment.
+            MemorySegment dictValBytes = MemorySegment.ofArray("foobar".getBytes(StandardCharsets.UTF_8));
+            MemorySegment offsetsI32Width = leInts(new int[]{0, 3, 6});
+            MemorySegment codes = leInts(new int[]{1});
+            VarBinArray sut = VarBinArray.ofDict(UTF8, 1,
+                    dictValBytes, offsetsI32Width, PType.I64, codes, PType.I32);
+
+            // When / Then
+            assertThatThrownBy(() -> sut.getString(0))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("out of range");
+        }
+
+        private static VarBinArray ofDictWithOffsets(String[] dictValues, PType offsetsPtype, int[] codes) {
+            byte[] allBytes = String.join("", dictValues).getBytes(StandardCharsets.UTF_8);
+            MemorySegment dictValBytes = MemorySegment.ofArray(allBytes);
+
+            int[] offs = new int[dictValues.length + 1];
+            for (int i = 0; i < dictValues.length; i++) {
+                offs[i + 1] = offs[i] + dictValues[i].getBytes(StandardCharsets.UTF_8).length;
+            }
+            MemorySegment dictValOffsets = packOffsets(offs, offsetsPtype);
+            MemorySegment dictCodes = leInts(codes);
+            return VarBinArray.ofDict(UTF8, codes.length,
+                    dictValBytes, dictValOffsets, offsetsPtype, dictCodes, PType.I32);
+        }
+
+        private static MemorySegment packOffsets(int[] offs, PType ptype) {
+            int width = ptype.byteSize();
+            ByteBuffer bb = ByteBuffer.allocate(offs.length * width).order(ByteOrder.LITTLE_ENDIAN);
+            for (int o : offs) {
+                switch (width) {
+                    case 1 -> bb.put((byte) o);
+                    case 2 -> bb.putShort((short) o);
+                    case 4 -> bb.putInt(o);
+                    default -> bb.putLong(o);
+                }
+            }
+            return MemorySegment.ofArray(bb.array());
         }
 
     }

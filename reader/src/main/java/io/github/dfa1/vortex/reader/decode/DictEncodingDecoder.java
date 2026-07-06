@@ -254,8 +254,13 @@ public final class DictEncodingDecoder implements EncodingDecoder {
         VarBinArray.OffsetMode dictValues = VarBinArray.toOffsetMode(valuesArr, ctx.arena());
 
         BoolArray rowValidity = rowValidity(ctx, codesBuf, codePType, codesValidity, poolValidity, n);
+        // Carry the offsets ptype that `dictValues` actually materialized. `toOffsetMode`
+        // only builds fresh I64 offsets on its slow path; on the fast path it returns the
+        // decoded values array unchanged, keeping its own ptype (e.g. FSST decompresses to
+        // I32 offsets). Hardcoding I64 here made the DictMode carrier disagree with its
+        // buffer width (4-byte stride read as 8) and threw IOOBE — see #215.
         Array dict = VarBinArray.ofDict(ctx.dtype(), n,
-                dictValues.bytesSegment(), dictValues.offsetsSegment(), PType.I64,
+                dictValues.bytesSegment(), dictValues.offsetsSegment(), dictValues.offsetsPtype(),
                 codesBuf, codePType);
         return rowValidity == null ? dict : new MaskedArray(dict, rowValidity);
     }
