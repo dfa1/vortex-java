@@ -108,7 +108,7 @@ at the call site.
 
 | Method                          | Notes                                                              |
 |---------------------------------|--------------------------------------------------------------------|
-| `put(String column, Object data)` | Adds one column; returns `this` for chaining                       |
+| `put(ColumnName column, Object data)` | Adds one column; returns `this` for chaining                   |
 
 Accepted array types per column `DType`:
 
