@@ -29,9 +29,20 @@ MATRIX="$REPO_ROOT/integration/src/test/resources/raincloud/expected-status.csv"
 
 MAX_MB=200
 if [[ "${1:-}" == "--max-mb" ]]; then
+    if [[ -z "${2:-}" ]]; then
+        echo "error: --max-mb needs a value" >&2
+        exit 2
+    fi
     MAX_MB="$2"
     shift 2
 fi
+# after the flag: any remaining --max-mb is misplaced, not a slug
+for arg in "$@"; do
+    if [[ "$arg" == --* ]]; then
+        echo "error: flags must come before slugs: $arg" >&2
+        exit 2
+    fi
+done
 
 if [[ ! -d "$VENV" ]]; then
     echo "creating venv for raincloud@$RAINCLOUD_TAG"
@@ -47,6 +58,12 @@ else
     while IFS= read -r slug; do
         SLUGS+=("$slug")
     done < <(grep -v '^#' "$MATRIX" | cut -d, -f1)
+fi
+
+# bash 3.2 + set -u: expanding an empty array is an unbound-variable error
+if [ ${#SLUGS[@]} -eq 0 ]; then
+    echo "error: no slugs to hydrate (empty matrix?)" >&2
+    exit 2
 fi
 
 mkdir -p "$(dirname "$MANIFEST")"
