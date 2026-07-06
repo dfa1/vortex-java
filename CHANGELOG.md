@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- CSV export renders unsigned integer columns (U8–U64) with their unsigned values — high-half values previously printed as two's-complement negatives (uci-wine `magnesium` U8 132 exported as -124), silent corruption found by the Raincloud conformance suite. ([#208](https://github.com/dfa1/vortex-java/issues/208))
+
 ## [0.12.0] — 2026-07-04
 
 Identity gets **types**: encoding ids, layout ids, and column names are now validated domain
@@ -92,6 +96,7 @@ A **`vortex.zstd` overhaul**: compression now runs through FFM bindings to the n
 
 ### Fixed
 
+- CSV export renders unsigned integer columns (U8–U64) with their unsigned values — high-half values previously printed as two's-complement negatives (uci-wine `magnesium` U8 132 exported as -124), silent corruption in every dtype-blind consumer of the typed getters. ([#208](https://github.com/dfa1/vortex-java/issues/208))
 - `vortex.zstd` segments compressed with a shared (trained) dictionary now decode, via the native `libzstd` dictionary support, instead of being rejected. The upstream `zstd.vortex` compatibility fixture is read end-to-end and matches the Rust reference. ([#104](https://github.com/dfa1/vortex-java/issues/104))
 - Writing a nullable `Utf8`/`Binary` column no longer throws `NullPointerException` (or silently drops nulls): nullable string columns now carry their validity like nullable primitives and round-trip through `vortex.masked`. As a result they decode as `MaskedArray` (validity + values child) rather than a bare `VarBinArray`. ([#168](https://github.com/dfa1/vortex-java/pull/168))
 - CSV export now handles nullable columns (`MaskedArray`): null rows export as an empty field instead of failing with "unsupported array type for CSV export". ([#168](https://github.com/dfa1/vortex-java/pull/168))
