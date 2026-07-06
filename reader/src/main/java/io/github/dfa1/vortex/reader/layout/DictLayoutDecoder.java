@@ -10,6 +10,7 @@ import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.model.LayoutId;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
 import io.github.dfa1.vortex.reader.array.DictByteArray;
 import io.github.dfa1.vortex.reader.array.DictDoubleArray;
@@ -23,6 +24,7 @@ import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
+import io.github.dfa1.vortex.reader.array.MaterializedBoolArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 
 import java.lang.foreign.MemorySegment;
@@ -87,7 +89,7 @@ final class DictLayoutDecoder implements LayoutDecoder {
             // mmap-bounded. Validate by inspecting the underlying segment without forcing
             // materialization of non-segment-backed codes (lazy variants).
             validateDictCodesCapacity(codes, codesPType, n);
-            return buildLazyDictPrimitive(pDtype, n, values, codes);
+            return buildLazyDictPrimitive(pDtype, n, values, codes, arena);
         }
         // Non-Utf8, non-Primitive dict — e.g. extension types backed by VarBin. Fall through
         // to the existing string expansion for compatibility.
@@ -120,20 +122,28 @@ final class DictLayoutDecoder implements LayoutDecoder {
         }
     }
 
-    /// Builds the matching `DictXxxArray` for a primitive dictionary, unwrapping
-    /// any [MaskedArray] layer on either side — dictionary lookups are keyed by code
-    /// so value-side validity is meaningless at this layer.
+    /// Builds the matching `DictXxxArray` for a primitive dictionary.
+    ///
+    /// Row validity mirrors the Rust reference (#210): a dict row is null when its CODE
+    /// is null (codes child arrives as a [MaskedArray]) or when the code points at an
+    /// invalid pool slot (nullable values pool arrives as a [MaskedArray]). Both masks
+    /// must be propagated to per-row validity — dropping either silently un-nulls rows.
     ///
     /// @param dtype  primitive logical type of dict values
     /// @param n      total logical row count
     /// @param values dictionary values
     /// @param codes  per-row codes into `values`
-    /// @return a lazy `DictXxxArray` matching the value ptype
-    private static Array buildLazyDictPrimitive(DType.Primitive dtype, long n, Array values, Array codes) {
+    /// @param arena  allocator for the gathered row-validity bitmap
+    /// @return a lazy `DictXxxArray` matching the value ptype, wrapped in a
+    ///         [MaskedArray] when either side carries validity
+    private static Array buildLazyDictPrimitive(DType.Primitive dtype, long n, Array values, Array codes,
+            SegmentAllocator arena) {
+        BoolArray poolValidity = values instanceof MaskedArray mv ? mv.validity() : null;
         Array valuesData = values instanceof MaskedArray mv ? mv.inner() : values;
+        BoolArray codesValidity = codes instanceof MaskedArray mc ? mc.validity() : null;
         Array codesData = codes instanceof MaskedArray mc ? mc.inner() : codes;
         PType ptype = dtype.ptype();
-        return switch (ptype) {
+        Array dict = switch (ptype) {
             case I64, U64 -> DictLongArray.of(dtype, n, (LongArray) valuesData, codesData);
             case I32, U32 -> DictIntArray.of(dtype, n, (IntArray) valuesData, codesData);
             case I16, U16 -> DictShortArray.of(dtype, n, (ShortArray) valuesData, codesData);
@@ -144,6 +154,46 @@ final class DictLayoutDecoder implements LayoutDecoder {
             default -> throw new VortexException(EncodingId.VORTEX_DICT,
                     "layout: unsupported ptype for lazy dict: " + ptype);
         };
+        if (poolValidity == null && codesValidity == null) {
+            return dict;
+        }
+        if (poolValidity == null) {
+            return new MaskedArray(dict, codesValidity);
+        }
+        return new MaskedArray(dict, gatherRowValidity(codesData, codesValidity, poolValidity, n, arena));
+    }
+
+    /// Combines codes-side and pool-side validity per row: row `i` is valid iff its code
+    /// is valid and the pool slot the code references is valid. Bit-packed LSB-first
+    /// ([MaterializedBoolArray] layout).
+    ///
+    /// @param codes         raw per-row codes
+    /// @param codesValidity per-row validity from the codes side, or `null`
+    /// @param poolValidity  validity of the values pool
+    /// @param n             logical row count
+    /// @param arena         allocator for the bitmap
+    /// @return a bit-packed row validity array of `n` bits
+    private static BoolArray gatherRowValidity(Array codes, BoolArray codesValidity, BoolArray poolValidity,
+            long n, SegmentAllocator arena) {
+        MemorySegment bits = arena.allocate((n + 7) >>> 3);
+        for (long i = 0; i < n; i++) {
+            long code = switch (codes) {
+                case ByteArray ba -> Byte.toUnsignedLong(ba.getByte(i));
+                case ShortArray sa -> Short.toUnsignedLong(sa.getShort(i));
+                case IntArray ia -> Integer.toUnsignedLong(ia.getInt(i));
+                case LongArray la -> la.getLong(i);
+                default -> throw new VortexException(EncodingId.VORTEX_DICT,
+                        "layout: invalid codes type: " + codes.getClass().getSimpleName());
+            };
+            boolean valid = (codesValidity == null || codesValidity.getBoolean(i))
+                    && poolValidity.getBoolean(code);
+            if (valid) {
+                long byteIdx = i >>> 3;
+                byte cur = bits.get(ValueLayout.JAVA_BYTE, byteIdx);
+                bits.set(ValueLayout.JAVA_BYTE, byteIdx, (byte) (cur | (1 << (i & 7))));
+            }
+        }
+        return new MaterializedBoolArray(DType.BOOL, n, bits.asReadOnly());
     }
 
     private static PType readDictLayoutCodesPType(MemorySegment rawMeta) {

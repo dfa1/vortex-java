@@ -6,6 +6,7 @@ import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.EncodingId;
 import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantByteArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantIntArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantLongArray;
@@ -14,6 +15,7 @@ import io.github.dfa1.vortex.reader.array.LazyZigZagByteArray;
 import io.github.dfa1.vortex.reader.array.LazyZigZagIntArray;
 import io.github.dfa1.vortex.reader.array.LazyZigZagLongArray;
 import io.github.dfa1.vortex.reader.array.LazyZigZagShortArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -35,10 +37,25 @@ public final class ZigZagEncodingDecoder implements EncodingDecoder {
         PType unsigned = toUnsigned(signed);
         long n = ctx.rowCount();
 
-        MemorySegment src = ctx.decodeChildSegment(0, new DType.Primitive(unsigned, false), n);
+        // Validity mirrors the Rust reference (`ValidityChild<ZigZag>`): a zigzag array's
+        // validity IS its encoded child's, and the child dtype inherits the nullability.
+        // Decode as an Array so a masked child is split rather than flattened (#210).
+        Array encoded = ctx.decodeChild(0, new DType.Primitive(unsigned, p.nullable()), n);
+        BoolArray validity = null;
+        Array rawEncoded = encoded;
+        if (encoded instanceof MaskedArray masked) {
+            rawEncoded = masked.inner();
+            validity = masked.validity();
+        }
+        MemorySegment src = ctx.materialize(rawEncoded);
         int elemBytes = signed.byteSize();
         long srcCap = SegmentBroadcast.capacity(src, elemBytes);
 
+        Array result = decodeUnwrapped(ctx, signed, n, src, srcCap);
+        return validity != null ? new MaskedArray(result, validity) : result;
+    }
+
+    private static Array decodeUnwrapped(DecodeContext ctx, PType signed, long n, MemorySegment src, long srcCap) {
         if (srcCap < n) {
             // Broadcast: single encoded value maps to all n rows — decode once, return constant
             return switch (signed) {
