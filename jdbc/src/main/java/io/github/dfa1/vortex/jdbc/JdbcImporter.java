@@ -271,7 +271,7 @@ public final class JdbcImporter {
 
     private static Map<ColumnName, Object> toChunkMap(DType.Struct schema, Object[] buffers,
             boolean[][] validity, boolean[] anyNull, int rows) {
-        List<String> names = schema.fieldNames().stream().map(ColumnName::value).toList();
+        List<ColumnName> names = schema.fieldNames();
         Map<ColumnName, Object> chunk = new LinkedHashMap<>();
         for (int c = 0; c < names.size(); c++) {
             Object trimmed = trimBuffer(buffers[c], rows);
@@ -279,10 +279,10 @@ public final class JdbcImporter {
                 boolean[] trimmedValidity = rows == validity[c].length
                         ? validity[c]
                         : Arrays.copyOf(validity[c], rows);
-                chunk.put(ColumnName.of(names.get(c)),
+                chunk.put(names.get(c),
                         new io.github.dfa1.vortex.writer.encode.NullableData(trimmed, trimmedValidity));
             } else {
-                chunk.put(ColumnName.of(names.get(c)), trimmed);
+                chunk.put(names.get(c), trimmed);
             }
         }
         return chunk;

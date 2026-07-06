@@ -177,7 +177,7 @@ End-to-end round-trip — write a `List<LocalDate>`, read it back:
 var schema = DType.structBuilder()
         .field("birthdays", DateExtensionDecoder.INSTANCE.dtype(false))
         .build();
-writer.writeChunk(c -> c.put("birthdays", dates));              // Collection auto-routed
+writer.writeChunk(c -> c.put(ColumnName.of("birthdays"), dates));              // Collection auto-routed
 
 try (var iter = reader.scan(ScanOptions.all());
      Chunk chunk = iter.next()) {

@@ -46,6 +46,7 @@ A Vortex file is a typed struct — every column has a declared type before any 
 
 ```java
 import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.core.model.ColumnName;
 
 DType.Struct schema = DType.structBuilder()
     .field("timestamp", DType.I64)                     // unix epoch millis
@@ -77,10 +78,10 @@ try (FileChannel ch = FileChannel.open(outPath, CREATE, WRITE, TRUNCATE_EXISTING
      VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults())) {
 
     writer.writeChunk(c -> c
-        .put("timestamp", new long[]   {1_700_000_000_000L, 1_700_000_001_000L, 1_700_000_002_000L})
-        .put("symbol",    new String[] {"AAPL", "AAPL", "MSFT"})
-        .put("price",     new double[] {189.95, 190.10, 374.20})
-        .put("volume",    new Long[]   {100L, null, 175L}));   // boxed → nullable column
+        .put(ColumnName.of("timestamp"), new long[]   {1_700_000_000_000L, 1_700_000_001_000L, 1_700_000_002_000L})
+        .put(ColumnName.of("symbol"),    new String[] {"AAPL", "AAPL", "MSFT"})
+        .put(ColumnName.of("price"),     new double[] {189.95, 190.10, 374.20})
+        .put(ColumnName.of("volume"),    new Long[]   {100L, null, 175L}));   // boxed → nullable column
 }
 ```
 
