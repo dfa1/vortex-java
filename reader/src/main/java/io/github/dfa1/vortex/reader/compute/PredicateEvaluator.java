@@ -25,23 +25,23 @@ final class PredicateEvaluator {
     /// @return `true` if the value at `i` satisfies `predicate`
     static boolean evaluate(Array array, long i, Predicate predicate) {
         return switch (predicate) {
-            case Predicate.Eq eq -> !Values.isNullAt(array, i)
-                    && Compare.values(Values.valueAt(array, i), eq.value(), array.dtype()) == 0;
-            case Predicate.Neq neq -> !Values.isNullAt(array, i)
-                    && Compare.values(Values.valueAt(array, i), neq.value(), array.dtype()) != 0;
-            case Predicate.Lt lt -> !Values.isNullAt(array, i)
-                    && Compare.values(Values.valueAt(array, i), lt.value(), array.dtype()) < 0;
-            case Predicate.Gt gt -> !Values.isNullAt(array, i)
-                    && Compare.values(Values.valueAt(array, i), gt.value(), array.dtype()) > 0;
-            case Predicate.Lte lte -> !Values.isNullAt(array, i)
-                    && Compare.values(Values.valueAt(array, i), lte.value(), array.dtype()) <= 0;
-            case Predicate.Gte gte -> !Values.isNullAt(array, i)
-                    && Compare.values(Values.valueAt(array, i), gte.value(), array.dtype()) >= 0;
+            case Predicate.Eq(var value) -> !Values.isNullAt(array, i)
+                    && Compare.values(Values.valueAt(array, i), value, array.dtype()) == 0;
+            case Predicate.Neq(var value) -> !Values.isNullAt(array, i)
+                    && Compare.values(Values.valueAt(array, i), value, array.dtype()) != 0;
+            case Predicate.Lt(var value) -> !Values.isNullAt(array, i)
+                    && Compare.values(Values.valueAt(array, i), value, array.dtype()) < 0;
+            case Predicate.Gt(var value) -> !Values.isNullAt(array, i)
+                    && Compare.values(Values.valueAt(array, i), value, array.dtype()) > 0;
+            case Predicate.Lte(var value) -> !Values.isNullAt(array, i)
+                    && Compare.values(Values.valueAt(array, i), value, array.dtype()) <= 0;
+            case Predicate.Gte(var value) -> !Values.isNullAt(array, i)
+                    && Compare.values(Values.valueAt(array, i), value, array.dtype()) >= 0;
             case Predicate.Between between -> evaluateBetween(array, i, between);
             case Predicate.IsNull _ -> Values.isNullAt(array, i);
             case Predicate.IsNotNull _ -> !Values.isNullAt(array, i);
-            case Predicate.And and -> evaluate(array, i, and.left()) && evaluate(array, i, and.right());
-            case Predicate.Or or -> evaluate(array, i, or.left()) || evaluate(array, i, or.right());
+            case Predicate.And(var left, var right) -> evaluate(array, i, left) && evaluate(array, i, right);
+            case Predicate.Or(var left, var right) -> evaluate(array, i, left) || evaluate(array, i, right);
         };
     }
 

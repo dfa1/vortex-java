@@ -300,44 +300,44 @@ public final class VortexWriter implements Closeable {
                 int inner = io.github.dfa1.vortex.core.fbs.FbsNull.endFbsNull(fbb);
                 yield io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsNull, inner);
             }
-            case DType.Bool b -> {
-                int inner = io.github.dfa1.vortex.core.fbs.FbsBool.createFbsBool(fbb, b.nullable());
+            case DType.Bool(var nullable) -> {
+                int inner = io.github.dfa1.vortex.core.fbs.FbsBool.createFbsBool(fbb, nullable);
                 yield io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsBool, inner);
             }
-            case DType.Primitive p -> {
+            case DType.Primitive(var ptype, var nullable) -> {
                 int inner = io.github.dfa1.vortex.core.fbs.FbsPrimitive.createFbsPrimitive(
-                        fbb, p.ptype().ordinal(), p.nullable());
+                        fbb, ptype.ordinal(), nullable);
                 yield io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsPrimitive, inner);
             }
-            case DType.Struct s -> {
+            case DType.Struct(var fieldNames, var fieldTypes, var nullable) -> {
                 // Build child DType tables first (FlatBuffers bottom-up requirement)
-                int[] fieldOffsets = new int[s.fieldTypes().size()];
+                int[] fieldOffsets = new int[fieldTypes.size()];
                 for (int i = 0; i < fieldOffsets.length; i++) {
-                    fieldOffsets[i] = serializeDType(fbb, s.fieldTypes().get(i));
+                    fieldOffsets[i] = serializeDType(fbb, fieldTypes.get(i));
                 }
-                int[] nameOffsets = new int[s.fieldNames().size()];
+                int[] nameOffsets = new int[fieldNames.size()];
                 for (int i = 0; i < nameOffsets.length; i++) {
-                    nameOffsets[i] = fbb.createString(s.fieldNames().get(i).value());
+                    nameOffsets[i] = fbb.createString(fieldNames.get(i).value());
                 }
                 int namesVec = io.github.dfa1.vortex.core.fbs.FbsStruct_.createNamesVector(fbb, nameOffsets);
                 int dtypesVec = io.github.dfa1.vortex.core.fbs.FbsStruct_.createDtypesVector(fbb, fieldOffsets);
                 int inner = io.github.dfa1.vortex.core.fbs.FbsStruct_.createFbsStruct_(
-                        fbb, namesVec, dtypesVec, s.nullable());
+                        fbb, namesVec, dtypesVec, nullable);
                 yield io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsStruct_, inner);
             }
-            case DType.Utf8 u -> {
-                int inner = io.github.dfa1.vortex.core.fbs.FbsUtf8.createFbsUtf8(fbb, u.nullable());
+            case DType.Utf8(var nullable) -> {
+                int inner = io.github.dfa1.vortex.core.fbs.FbsUtf8.createFbsUtf8(fbb, nullable);
                 yield io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsUtf8, inner);
             }
-            case DType.List l -> {
-                int elemTypeOff = serializeDType(fbb, l.elementType());
-                int inner = io.github.dfa1.vortex.core.fbs.FbsList.createFbsList(fbb, elemTypeOff, l.nullable());
+            case DType.List(var elementType, var nullable) -> {
+                int elemTypeOff = serializeDType(fbb, elementType);
+                int inner = io.github.dfa1.vortex.core.fbs.FbsList.createFbsList(fbb, elemTypeOff, nullable);
                 yield io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsList, inner);
             }
-            case DType.FixedSizeList fsl -> {
-                int elemTypeOff = serializeDType(fbb, fsl.elementType());
+            case DType.FixedSizeList(var elementType, var fixedSize, var nullable) -> {
+                int elemTypeOff = serializeDType(fbb, elementType);
                 int inner = io.github.dfa1.vortex.core.fbs.FbsFixedSizeList.createFbsFixedSizeList(
-                        fbb, elemTypeOff, fsl.fixedSize(), fsl.nullable());
+                        fbb, elemTypeOff, fixedSize, nullable);
                 yield io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsFixedSizeList, inner);
             }
             case DType.Extension e -> {
@@ -351,8 +351,8 @@ public final class VortexWriter implements Closeable {
                 int inner = FbsExtension.createFbsExtension(fbb, idOff, storageDtypeOff, metaOff);
                 yield io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsExtension, inner);
             }
-            case DType.Variant v -> {
-                int inner = io.github.dfa1.vortex.core.fbs.FbsVariant.createFbsVariant(fbb, v.nullable());
+            case DType.Variant(var nullable) -> {
+                int inner = io.github.dfa1.vortex.core.fbs.FbsVariant.createFbsVariant(fbb, nullable);
                 yield io.github.dfa1.vortex.core.fbs.FbsDType.createFbsDType(fbb, FbsType.FbsVariant, inner);
             }
             default -> throw new UnsupportedOperationException("unsupported DType: " + dtype);

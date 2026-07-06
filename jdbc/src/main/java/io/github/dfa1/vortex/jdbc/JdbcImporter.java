@@ -151,7 +151,7 @@ public final class JdbcImporter {
         // Bool nullable not yet wired (no Bool inner encoding on MaskedEncoding fallback).
         return switch (dt) {
             case DType.Primitive p -> p.nullable();
-            case DType.Utf8 u -> u.nullable();
+            case DType.Utf8(var nullable) -> nullable;
             default -> false;
         };
     }
