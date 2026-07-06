@@ -98,7 +98,7 @@ Writes a Vortex file. Implements `Closeable`. The file is complete and readable 
 | `static create(WritableByteChannel, DType.Struct, WriteOptions)`                 | Default codec set                                                                                                |
 | `static create(WritableByteChannel, DType.Struct, WriteOptions, List<Encoding>)` | Custom codec set                                                                                                 |
 | `writeChunk(Consumer<Chunk>)`                                                    | One batch of rows; typed builder validates column names + array types at each `.put`; missing columns throw `IllegalStateException` when the lambda returns. Preferred when columns are known at compile time. |
-| `writeChunk(Map<String, Object>)`                                                | One batch of rows by map. Validates that every schema column is present and that all columns share the same row count. Use when the column set is built dynamically (Parquet/JDBC importers, generic exporters). |
+| `writeChunk(Map<ColumnName, Object>)`                                                | One batch of rows by map. Validates that every schema column is present and that all columns share the same row count. Use when the column set is built dynamically (Parquet/JDBC importers, generic exporters). |
 | `close()`                                                                        | Finalizes file (footer, postscript, trailer)                                                                     |
 
 ### `Chunk` (`io.github.dfa1.vortex.writer.Chunk`)

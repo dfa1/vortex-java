@@ -115,10 +115,10 @@ try (var ch = FileChannel.open(Path.of("data/example.vortex"),
                                StandardOpenOption.CREATE, StandardOpenOption.WRITE);
      var writer = VortexWriter.create(ch, schema, WriteOptions.cascading(3))) {
     writer.writeChunk(c -> c
-            .put("timestamp", new long[]   {1_700_000_000_000L, 1_700_000_001_000L})
-            .put("symbol",    new String[] {"AAPL", "AAPL"})
-            .put("price",     new double[] {189.95, 190.10})
-            .put("volume",    new Long[]   {100L, null}));  // null in nullable col
+            .put(ColumnName.of("timestamp"), new long[]   {1_700_000_000_000L, 1_700_000_001_000L})
+            .put(ColumnName.of("symbol"),    new String[] {"AAPL", "AAPL"})
+            .put(ColumnName.of("price"),     new double[] {189.95, 190.10})
+            .put(ColumnName.of("volume"),    new Long[]   {100L, null}));  // null in nullable col
 }
 ```
 
