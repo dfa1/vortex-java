@@ -8,6 +8,8 @@ import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoBitPackedMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.BoolArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
 import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
 import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
@@ -59,13 +61,50 @@ public final class BitpackedEncodingDecoder implements EncodingDecoder {
             applyPatches(ctx, meta.patches(), output, ptype.byteSize());
         }
 
-        return switch (ptype) {
+        Array values = switch (ptype) {
             case I64, U64 -> new MaterializedLongArray(ctx.dtype(), rowCount, output);
             case I32, U32 -> new MaterializedIntArray(ctx.dtype(), rowCount, output);
             case I16, U16 -> new MaterializedShortArray(ctx.dtype(), rowCount, output);
             case I8, U8 -> new MaterializedByteArray(ctx.dtype(), rowCount, output);
             default -> throw new VortexException(EncodingId.FASTLANES_BITPACKED, "unsupported ptype " + ptype);
         };
+        return wrapValidity(ctx, meta, values, rowCount);
+    }
+
+    /// Row validity mirrors the Rust reference (`BitPacked` vtable `deserialize`): the
+    /// children are `[patch_indices, patch_values, patch_chunk_offsets?]` (present only
+    /// with patches) followed by an optional trailing bool validity child. Encodings
+    /// stacked above bitpacked (ALP, FoR, …) delegate their validity here
+    /// (`ValidityChild`), so dropping this child silently un-nulls rows (#210).
+    ///
+    /// @param ctx      decode context
+    /// @param meta     bitpacked metadata (patch shape determines the validity index)
+    /// @param values   the unpacked (and patched) values array
+    /// @param rowCount logical row count
+    /// @return `values`, wrapped in a [MaskedArray] when a validity child is present
+    private static Array wrapValidity(DecodeContext ctx, ProtoBitPackedMetadata meta, Array values, long rowCount) {
+        int validityIdx = validityChildIndex(meta);
+        int childCount = ctx.node().children().length;
+        if (childCount == validityIdx) {
+            return values;
+        }
+        if (childCount != validityIdx + 1) {
+            throw new VortexException(EncodingId.FASTLANES_BITPACKED,
+                    "expected " + validityIdx + " or " + (validityIdx + 1) + " children, got " + childCount);
+        }
+        Array va = ctx.decodeChild(validityIdx, DType.BOOL, rowCount);
+        if (!(va instanceof BoolArray validity)) {
+            throw new VortexException(EncodingId.FASTLANES_BITPACKED,
+                    "validity child decoded to unexpected type: " + va.getClass().getSimpleName());
+        }
+        return new MaskedArray(values, validity);
+    }
+
+    private static int validityChildIndex(ProtoBitPackedMetadata meta) {
+        if (meta.patches() == null) {
+            return 0;
+        }
+        return meta.patches().chunk_offsets_ptype() != null ? 3 : 2;
     }
 
     private static void fastlanesUnpackToSeg(

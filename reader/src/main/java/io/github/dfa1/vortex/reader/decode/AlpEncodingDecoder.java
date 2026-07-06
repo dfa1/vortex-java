@@ -8,10 +8,12 @@ import io.github.dfa1.vortex.core.io.VortexFormat;
 import io.github.dfa1.vortex.core.proto.ProtoALPMetadata;
 import io.github.dfa1.vortex.core.proto.ProtoPatchesMetadata;
 import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.LazyAlpDoubleArray;
 import io.github.dfa1.vortex.reader.array.LazyAlpFloatArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantDoubleArray;
 import io.github.dfa1.vortex.reader.array.LazyConstantFloatArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.MaterializedDoubleArray;
 import io.github.dfa1.vortex.reader.array.MaterializedFloatArray;
 
@@ -55,21 +57,38 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
         PType ptype = p.ptype();
         long n = ctx.rowCount();
 
-        return switch (ptype) {
-            case F64 -> decodeF64(ctx, meta, expE, expF, n);
-            case F32 -> decodeF32(ctx, meta, expE, expF, n);
+        // Validity mirrors the Rust reference (`ValidityChild<ALP>`): an ALP array's
+        // validity IS its encoded child's validity, and the encoded child's dtype
+        // inherits the ALP dtype's nullability. Decode the child as an Array so a
+        // nullable primitive surfaces its MaskedArray instead of being flattened to a
+        // raw segment (which silently dropped nulls — #210).
+        DType.Primitive encodedDtype = new DType.Primitive(
+                ptype == PType.F64 ? PType.I64 : PType.I32, p.nullable());
+        Array encoded = ctx.decodeChild(0, encodedDtype, n);
+        BoolArray validity = null;
+        Array rawEncoded = encoded;
+        if (encoded instanceof MaskedArray masked) {
+            rawEncoded = masked.inner();
+            validity = masked.validity();
+        }
+        MemorySegment src = ctx.materialize(rawEncoded);
+
+        Array result = switch (ptype) {
+            case F64 -> decodeF64(ctx, meta, expE, expF, n, src);
+            case F32 -> decodeF32(ctx, meta, expE, expF, n, src);
             default -> throw new VortexException(EncodingId.VORTEX_ALP, "unsupported dtype " + ptype);
         };
+        return validity != null ? new MaskedArray(result, validity) : result;
     }
 
-    private static Array decodeF64(DecodeContext ctx, ProtoALPMetadata meta, int expE, int expF, long n) {
+    private static Array decodeF64(DecodeContext ctx, ProtoALPMetadata meta, int expE, int expF, long n,
+            MemorySegment src) {
         // Decode formula mirrors the Rust reference (`ALPFloat::decode_single`): two-step
         // `encoded * F10[f] * IF10[e]`. A pre-multiplied `scale = F10[f] * IF10[e]`
         // gives different IEEE rounding for non-trivial `expF`, breaking round-trip with
         // the encoder's verify step.
         double df = F10_F64[expF];
         double de = IF10_F64[expE];
-        MemorySegment src = ctx.decodeChildSegment(0, DType.I64, n);
         long srcCap = SegmentBroadcast.capacity(src, 8);
 
         if (meta.patches() == null) {
@@ -96,10 +115,10 @@ public final class AlpEncodingDecoder implements EncodingDecoder {
         return new MaterializedDoubleArray(ctx.dtype(), n, buf.asReadOnly());
     }
 
-    private static Array decodeF32(DecodeContext ctx, ProtoALPMetadata meta, int expE, int expF, long n) {
+    private static Array decodeF32(DecodeContext ctx, ProtoALPMetadata meta, int expE, int expF, long n,
+            MemorySegment src) {
         float df = F10_F32[expF];
         float de = IF10_F32[expE];
-        MemorySegment src = ctx.decodeChildSegment(0, DType.I32, n);
         long srcCap = SegmentBroadcast.capacity(src, 4);
 
         if (meta.patches() == null) {

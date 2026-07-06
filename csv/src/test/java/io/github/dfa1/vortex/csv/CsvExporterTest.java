@@ -5,7 +5,9 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
+import io.github.dfa1.vortex.writer.encode.NullEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.NullableData;
+import io.github.dfa1.vortex.writer.encode.PrimitiveEncodingEncoder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -69,6 +71,32 @@ class CsvExporterTest {
         assertThat(lines[0]).isEqualTo("x");
         assertThat(lines[1]).isEqualTo("1.5");
         assertThat(lines[2]).isEqualTo("2.7");
+    }
+
+    @Test
+    void exportsAllNullColumnAsEmptyFields(@TempDir Path tmp) throws Exception {
+        // Given a file mixing a value column with an all-null (DType.Null) column —
+        // the shape that made real-world exports throw (#211); the long[] carrier for
+        // the null column only supplies the row count
+        Path vortex = tmp.resolve("data.vortex");
+        DType.Struct schema = new DType.Struct(
+                List.of(ColumnName.of("id"), ColumnName.of("empty")),
+                List.of(DType.I64, DType.NULL),
+                false);
+        try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             // explicit encoder list: the default cascading set has no DType.Null codec
+             VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults(),
+                     List.of(new NullEncodingEncoder(), new PrimitiveEncodingEncoder()))) {
+            writer.writeChunk(Map.of(ColumnName.of("id"), new long[]{1L, 2L}, ColumnName.of("empty"), new long[2]));
+        }
+        Path csv = tmp.resolve("out.csv");
+
+        // When
+        CsvExporter.exportCsv(vortex, csv);
+
+        // Then — null cells are empty fields, same as MaskedArray null rows
+        List<String> result = Files.readAllLines(csv);
+        assertThat(result).containsExactly("id,empty", "1,", "2,");
     }
 
     @Test
