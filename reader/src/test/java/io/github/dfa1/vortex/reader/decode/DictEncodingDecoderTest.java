@@ -14,6 +14,7 @@ import io.github.dfa1.vortex.reader.array.DoubleArray;
 import io.github.dfa1.vortex.reader.array.FloatArray;
 import io.github.dfa1.vortex.reader.array.IntArray;
 import io.github.dfa1.vortex.reader.array.LongArray;
+import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import org.junit.jupiter.api.Nested;
@@ -35,7 +36,7 @@ class DictEncodingDecoderTest {
 
     private static final DictEncodingDecoder SUT = new DictEncodingDecoder();
     private static final ReadRegistry REGISTRY = TestRegistry.ofDecoders(
-            SUT, new PrimitiveEncodingDecoder(), new VarBinEncodingDecoder());
+            SUT, new PrimitiveEncodingDecoder(), new VarBinEncodingDecoder(), new BoolEncodingDecoder());
 
     @Test
     void encodingId_isVortexDict() {
@@ -413,6 +414,145 @@ class DictEncodingDecoderTest {
             assertThatThrownBy(() -> SUT.decode(ctx))
                     .isInstanceOf(VortexException.class)
                     .hasMessageContaining("missing metadata for utf8 dict");
+        }
+    }
+
+    /// Per-row validity for the Rust proto primitive path (`decodeRustProto`, #210). A DictArray
+    /// row is null when its CODE is null (codes-side validity child) or when the code points at an
+    /// invalid pool slot (pool-null representation); both arrive as [MaskedArray] children and must
+    /// combine per row. Shapes mirror real Kepler columns: `koi_gmag` is pool-null, `koi_smet_err2`
+    /// is codes-side.
+    @Nested
+    class RowValidity {
+
+        @Test
+        void poolNull_masksRowsPointingAtInvalidSlot() {
+            // Given — pool [10,20,30] with slot 1 invalid (koi_gmag shape); codes point rows 1 and 3
+            // at that dead slot, so those rows are null while their expanded value is still present.
+            ArrayNode codesNode = primitiveNode(0);                 // plain codes: no codes-side nulls
+            ArrayNode valuesNode = maskedPrimitiveNode(1, 2);       // masked pool: slot validity
+            MemorySegment[] segs = {
+                    u8Codes(0, 1, 2, 1),
+                    TestSegments.leInts(10, 20, 30),
+                    boolBitmap(true, false, true)                   // slot 1 invalid
+            };
+
+            // When
+            Array result = decodeDict(DType.I32, PType.U8, 3, 4, segs, codesNode, valuesNode);
+
+            // Then
+            MaskedArray masked = assertMasked(result);
+            assertValidity(masked, true, false, true, false);
+            assertIntValues(masked, 10, 20, 30, 20);
+        }
+
+        @Test
+        void codesNull_masksRowsWithNullCode() {
+            // Given — pool [100,200] all valid; the codes child carries its own validity
+            // (koi_smet_err2 shape). Row nulls must mirror the codes mask exactly.
+            ArrayNode codesNode = maskedPrimitiveNode(0, 1);        // masked codes: rows 1,3 null
+            ArrayNode valuesNode = primitiveNode(2);                // plain pool: all valid
+            MemorySegment[] segs = {
+                    u8Codes(0, 1, 0, 1),
+                    boolBitmap(true, false, true, false),
+                    TestSegments.leInts(100, 200)
+            };
+
+            // When
+            Array result = decodeDict(DType.I32, PType.U8, 2, 4, segs, codesNode, valuesNode);
+
+            // Then
+            MaskedArray masked = assertMasked(result);
+            assertValidity(masked, true, false, true, false);
+            assertIntValues(masked, 100, 200, 100, 200);
+        }
+
+        @Test
+        void bothSides_combineWithAndSemantics() {
+            // Given — codes-side nulls AND a pool-null slot: row i is valid iff its code is valid and
+            // the pool slot it references is valid. Row 2 is null via its code; rows 1,3 via the pool.
+            ArrayNode codesNode = maskedPrimitiveNode(0, 1);        // codes: row 2 null
+            ArrayNode valuesNode = maskedPrimitiveNode(2, 3);       // pool: slot 1 invalid
+            MemorySegment[] segs = {
+                    u8Codes(0, 1, 2, 1),
+                    boolBitmap(true, true, false, true),            // codes valid except row 2
+                    TestSegments.leInts(10, 20, 30),
+                    boolBitmap(true, false, true)                   // pool slot 1 invalid
+            };
+
+            // When
+            Array result = decodeDict(DType.I32, PType.U8, 3, 4, segs, codesNode, valuesNode);
+
+            // Then — only row 0 survives both masks
+            MaskedArray masked = assertMasked(result);
+            assertValidity(masked, true, false, false, false);
+            assertIntValues(masked, 10, 20, 30, 20);
+        }
+
+        @Test
+        void codeOutOfRangeWithPoolValidity_throwsVortexException() {
+            // Given — a single-element pool (so expandU8 broadcasts, never reading out of bounds) with
+            // pool validity present, and an untrusted code 5 that overruns the validity bitmap. The
+            // poolValid guard must convert the overrun into a VortexException, not an IOOBE.
+            ArrayNode codesNode = primitiveNode(0);
+            ArrayNode valuesNode = maskedPrimitiveNode(1, 2);
+            MemorySegment[] segs = {
+                    u8Codes(0, 5),
+                    TestSegments.leInts(10),
+                    boolBitmap(true)                                // pool length 1
+            };
+
+            // When / Then
+            assertThatThrownBy(() -> decodeDict(DType.I32, PType.U8, 1, 2, segs, codesNode, valuesNode))
+                    .isInstanceOf(VortexException.class)
+                    .hasMessageContaining("out of range for pool validity");
+        }
+
+        private Array decodeDict(DType dtype, PType codePType, int valuesLen, long rowCount,
+                MemorySegment[] segs, ArrayNode codesNode, ArrayNode valuesNode) {
+            MemorySegment meta = MemorySegment.ofArray(
+                    new ProtoDictMetadata(valuesLen, protoPType(codePType), null, null).encode());
+            ArrayNode dictNode = new ArrayNode(EncodingId.VORTEX_DICT, meta,
+                    new ArrayNode[]{codesNode, valuesNode}, new int[]{});
+            DecodeContext ctx = new DecodeContext(dictNode, dtype, rowCount, segs, REGISTRY, Arena.ofAuto());
+            return SUT.decode(ctx);
+        }
+
+        private MaskedArray assertMasked(Array result) {
+            assertThat(result).isInstanceOf(MaskedArray.class);
+            return (MaskedArray) result;
+        }
+
+        private void assertValidity(MaskedArray masked, boolean... expected) {
+            for (int i = 0; i < expected.length; i++) {
+                assertThat(masked.isValid(i)).as("valid row %d", i).isEqualTo(expected[i]);
+            }
+        }
+
+        private void assertIntValues(MaskedArray masked, int... expected) {
+            IntArray inner = (IntArray) masked.inner();
+            for (int i = 0; i < expected.length; i++) {
+                assertThat(inner.getInt(i)).as("row %d", i).isEqualTo(expected[i]);
+            }
+        }
+
+        /// A primitive node whose single validity child (a `vortex.bool` bitmap) makes
+        /// [PrimitiveEncodingDecoder] surface it as a [MaskedArray].
+        private ArrayNode maskedPrimitiveNode(int dataBufIndex, int validityBufIndex) {
+            ArrayNode validity = new ArrayNode(EncodingId.VORTEX_BOOL, null, new ArrayNode[0],
+                    new int[]{validityBufIndex});
+            return new ArrayNode(EncodingId.VORTEX_PRIMITIVE, null, new ArrayNode[]{validity},
+                    new int[]{dataBufIndex});
+        }
+
+        private MemorySegment boolBitmap(boolean... valid) {
+            byte[] bytes = new byte[(valid.length + 7) / 8];
+            for (int i = 0; i < valid.length; i++) {
+                if (valid[i]) {
+                    bytes[i >>> 3] |= (byte) (1 << (i & 7));
+                }
+            }
+            return MemorySegment.ofArray(bytes);
         }
     }
 
