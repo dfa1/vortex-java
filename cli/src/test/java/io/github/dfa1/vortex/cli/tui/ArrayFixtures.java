@@ -47,6 +47,42 @@ final class ArrayFixtures {
         return new MaterializedIntArray(DType.I32, vs.length, seg.asReadOnly());
     }
 
+    /// Builds a `U64` [LongArray]; high-half values (bit 63 set) exercise unsigned rendering.
+    static LongArray ulongs(Arena arena, long... vs) {
+        MemorySegment seg = arena.allocate(vs.length * 8L, 8);
+        for (int i = 0; i < vs.length; i++) {
+            seg.setAtIndex(ValueLayout.JAVA_LONG, i, vs[i]);
+        }
+        return new MaterializedLongArray(DType.U64, vs.length, seg.asReadOnly());
+    }
+
+    /// Builds a `U32` [IntArray]; values with bit 31 set exercise unsigned rendering.
+    static IntArray uints(Arena arena, int... vs) {
+        MemorySegment seg = arena.allocate(vs.length * 4L, 4);
+        for (int i = 0; i < vs.length; i++) {
+            seg.setAtIndex(ValueLayout.JAVA_INT, i, vs[i]);
+        }
+        return new MaterializedIntArray(DType.U32, vs.length, seg.asReadOnly());
+    }
+
+    /// Builds a `U16` [ShortArray]; values with bit 15 set exercise unsigned zero-extension.
+    static ShortArray ushorts(Arena arena, short... vs) {
+        MemorySegment seg = arena.allocate(vs.length * 2L, 2);
+        for (int i = 0; i < vs.length; i++) {
+            seg.setAtIndex(ValueLayout.JAVA_SHORT, i, vs[i]);
+        }
+        return new MaterializedShortArray(DType.U16, vs.length, seg.asReadOnly());
+    }
+
+    /// Builds a `U8` [ByteArray]; values with bit 7 set exercise unsigned zero-extension.
+    static ByteArray ubytes(Arena arena, byte... vs) {
+        MemorySegment seg = arena.allocate(vs.length, 1);
+        for (int i = 0; i < vs.length; i++) {
+            seg.set(ValueLayout.JAVA_BYTE, i, vs[i]);
+        }
+        return new MaterializedByteArray(DType.U8, vs.length, seg.asReadOnly());
+    }
+
     static ShortArray shorts(Arena arena, short... vs) {
         MemorySegment seg = arena.allocate(vs.length * 2L, 2);
         for (int i = 0; i < vs.length; i++) {

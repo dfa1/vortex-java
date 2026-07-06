@@ -48,10 +48,18 @@ final class InspectorRender {
             }
         }
         return switch (array) {
-            case LongArray a -> Long.toString(a.getLong(i));
-            case IntArray a -> Integer.toString(a.getInt(i));
-            case ShortArray a -> Short.toString(a.getShort(i));
-            case ByteArray a -> Byte.toString(a.getByte(i));
+            // Long/IntArray have no dtype-aware getter, so gate the unsigned rendering on the
+            // ptype; a U64/U32 high-half value would otherwise show as a negative decimal.
+            case LongArray a -> isUnsigned(a)
+                    ? Long.toUnsignedString(a.getLong(i))
+                    : Long.toString(a.getLong(i));
+            case IntArray a -> isUnsigned(a)
+                    ? Integer.toUnsignedString(a.getInt(i))
+                    : Integer.toString(a.getInt(i));
+            // Short/ByteArray.getInt already zero-extends U16/U8, so a signed-decimal print of the
+            // widened int is the correct unsigned value.
+            case ShortArray a -> Integer.toString(a.getInt(i));
+            case ByteArray a -> Integer.toString(a.getInt(i));
             case DoubleArray a -> Double.toString(a.getDouble(i));
             case FloatArray a -> Float.toString(a.getFloat(i));
             case BoolArray a -> Boolean.toString(a.getBoolean(i));
@@ -114,6 +122,15 @@ final class InspectorRender {
             return formatValue(m.inner(), row, declared);
         }
         return formatValue(field, row, declared);
+    }
+
+    /// Whether the array's dtype is an unsigned integer, so high-half values must render as
+    /// unsigned decimal rather than the two's-complement negative the raw signed getter returns.
+    ///
+    /// @param arr the value array under inspection
+    /// @return `true` when the dtype is a `U8`–`U64` primitive
+    private static boolean isUnsigned(Array arr) {
+        return arr.dtype() instanceof DType.Primitive p && p.ptype().isUnsigned();
     }
 
     private static String tryDecimal(LongFunction<BigDecimal> reader, Array a, int i) {

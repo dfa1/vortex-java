@@ -1,6 +1,8 @@
 package io.github.dfa1.vortex.calcite;
 
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
+import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.ArrayStats;
 import io.github.dfa1.vortex.reader.Chunk;
 import io.github.dfa1.vortex.reader.ScanIterator;
@@ -83,6 +85,10 @@ public final class VortexAggregates {
                 Source.ZONE_STATS_PUSHDOWN, sumSource);
     }
 
+    private static boolean isUnsigned(Array arr) {
+        return arr.dtype() instanceof DType.Primitive p && p.ptype().isUnsigned();
+    }
+
     private static long totalRows(VortexReader reader) {
         try (ScanIterator scan = reader.scan(ScanOptions.all())) {
             long total = 0L;
@@ -103,13 +109,36 @@ public final class VortexAggregates {
                     long n = chunk.rowCount();
                     switch (chunk.<Array>column(column)) {
                         case LongArray a -> {
-                            for (long i = 0; i < n; i++) {
-                                longSum += a.getLong(i);
+                            // Branch-split on the loop-invariant unsigned flag so the signed body
+                            // stays vectorizable. A U64 element with the high bit set (>= 2^63) has
+                            // no signed-long home and would corrupt the sum, so fail loud — aligned
+                            // with VortexTable mapping U64 to signed BIGINT.
+                            if (isUnsigned(a)) {
+                                for (long i = 0; i < n; i++) {
+                                    long v = a.getLong(i);
+                                    if (v < 0) {
+                                        throw new VortexException("U64 value " + Long.toUnsignedString(v)
+                                                + " exceeds the signed BIGINT range SUM accumulates into");
+                                    }
+                                    longSum += v;
+                                }
+                            } else {
+                                for (long i = 0; i < n; i++) {
+                                    longSum += a.getLong(i);
+                                }
                             }
                         }
                         case IntArray a -> {
-                            for (long i = 0; i < n; i++) {
-                                longSum += a.getInt(i);
+                            // U32 widens losslessly into the signed accumulator via toUnsignedLong;
+                            // branch-split keeps the signed body free of the per-element widen.
+                            if (isUnsigned(a)) {
+                                for (long i = 0; i < n; i++) {
+                                    longSum += Integer.toUnsignedLong(a.getInt(i));
+                                }
+                            } else {
+                                for (long i = 0; i < n; i++) {
+                                    longSum += a.getInt(i);
+                                }
                             }
                         }
                         case DoubleArray a -> {

@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.cli;
 
+import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.array.Array;
 import io.github.dfa1.vortex.reader.array.BoolArray;
 import io.github.dfa1.vortex.reader.array.ByteArray;
@@ -198,12 +199,29 @@ final class FilterCommand {
         return arr instanceof MaskedArray masked && !masked.isValid(rowIdx);
     }
 
-    private static int compareValue(Array arr, long rowIdx, Comparable<?> value) {
+    /// Compares the row's column value against the filter literal. Package-private so the
+    /// per-dtype arms — in particular the unsigned paths, which the CLI grammar can only reach
+    /// with a real file — can be exercised directly against in-memory arrays.
+    ///
+    /// @param arr    the decoded column array
+    /// @param rowIdx zero-based row index into `arr`
+    /// @param value  the parsed filter literal ([Long], [Double], [Boolean], or [String])
+    /// @return a negative, zero, or positive int as the column value orders before, equal to, or
+    ///         after the literal
+    static int compareValue(Array arr, long rowIdx, Comparable<?> value) {
         return switch (arr) {
-            case LongArray la -> compareNumeric(la.getLong(rowIdx), value);
-            case IntArray ia -> compareNumeric(ia.getInt(rowIdx), value);
-            case ShortArray sa -> compareNumeric(sa.getShort(rowIdx), value);
-            case ByteArray ba -> compareNumeric(ba.getByte(rowIdx), value);
+            // U64 has no lossless signed-long home: keep the raw bits and compare unsigned when the
+            // dtype is unsigned, so high-half values (>= 2^63, which getLong returns as negative)
+            // order after the low half instead of before it. Silent wrong query results otherwise.
+            case LongArray la -> compareNumeric(la.getLong(rowIdx), isUnsigned(la), value);
+            // Byte/Short/Int widen losslessly into a non-negative long — U8/U16 via their
+            // dtype-aware getInt (zero-extend), U32 via toUnsignedLong — so a plain signed compare
+            // of the widened value is exact.
+            case IntArray ia -> compareNumeric(isUnsigned(ia)
+                    ? Integer.toUnsignedLong(ia.getInt(rowIdx))
+                    : ia.getInt(rowIdx), false, value);
+            case ShortArray sa -> compareNumeric(sa.getInt(rowIdx), false, value);
+            case ByteArray ba -> compareNumeric(ba.getInt(rowIdx), false, value);
             case DoubleArray da -> compareDouble(da.getDouble(rowIdx), value);
             case FloatArray fa -> compareDouble(fa.getFloat(rowIdx), value);
             case BoolArray ba -> Boolean.compare(ba.getBoolean(rowIdx), (Boolean) value);
@@ -216,11 +234,28 @@ final class FilterCommand {
         };
     }
 
-    private static int compareNumeric(long colVal, Comparable<?> value) {
+    private static boolean isUnsigned(Array arr) {
+        return arr.dtype() instanceof DType.Primitive p && p.ptype().isUnsigned();
+    }
+
+    private static int compareNumeric(long colVal, boolean unsigned, Comparable<?> value) {
         if (value instanceof Long l) {
-            return Long.compare(colVal, l);
+            return unsigned ? Long.compareUnsigned(colVal, l) : Long.compare(colVal, l);
         }
-        return Double.compare(colVal, (Double) value);
+        return Double.compare(unsigned ? unsignedToDouble(colVal) : colVal, (Double) value);
+    }
+
+    /// Converts a possibly-unsigned long to the nearest double without letting the sign bit flip it
+    /// negative. For values `<= Long.MAX_VALUE` this is exact; above it the standard split keeps the
+    /// magnitude correct.
+    ///
+    /// @param v the raw long, interpreted as unsigned
+    /// @return `v` as an unsigned magnitude in `double`
+    private static double unsignedToDouble(long v) {
+        if (v >= 0) {
+            return v;
+        }
+        return ((double) (v >>> 1)) * 2.0 + (v & 1L);
     }
 
     private static int compareDouble(double colVal, Comparable<?> value) {

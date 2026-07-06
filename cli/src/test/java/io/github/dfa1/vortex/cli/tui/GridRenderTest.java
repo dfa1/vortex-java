@@ -63,6 +63,29 @@ class GridRenderTest {
     }
 
     @Test
+    void rendersUnsignedHighHalfValuesAsUnsignedDecimal() {
+        try (Arena arena = Arena.ofConfined()) {
+            // Given — the canonical shape is an unsigned integer column (like uci-wine's magnesium,
+            // stored unsigned). Here each width carries a high-half value whose two's-complement
+            // signed reading is negative; the grid must show the unsigned decimal instead.
+            DType u64 = DType.U64;
+            DType u32 = DType.U32;
+            DType u16 = DType.U16;
+            DType u8 = DType.U8;
+
+            // When / Then — U64 2^63, U32 3e9, U16 60000, U8 200 all render positive
+            assertThat(GridRender.formatCell(ArrayFixtures.ulongs(arena, Long.MIN_VALUE), 0, u64))
+                    .isEqualTo("9223372036854775808");
+            assertThat(GridRender.formatCell(ArrayFixtures.uints(arena, (int) 3_000_000_000L), 0, u32))
+                    .isEqualTo("3000000000");
+            assertThat(GridRender.formatCell(ArrayFixtures.ushorts(arena, (short) 60_000), 0, u16))
+                    .isEqualTo("60000");
+            assertThat(GridRender.formatCell(ArrayFixtures.ubytes(arena, (byte) 200), 0, u8))
+                    .isEqualTo("200");
+        }
+    }
+
+    @Test
     void rendersDecimal() {
         // Given
         DType decimal = new DType.Decimal((byte) 10, (byte) 2, false);
