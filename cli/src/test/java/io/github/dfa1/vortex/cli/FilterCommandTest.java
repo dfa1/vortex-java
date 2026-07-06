@@ -1,8 +1,15 @@
 package io.github.dfa1.vortex.cli;
 
+import io.github.dfa1.vortex.core.model.DType;
+import io.github.dfa1.vortex.reader.array.Array;
+import io.github.dfa1.vortex.reader.array.MaterializedByteArray;
+import io.github.dfa1.vortex.reader.array.MaterializedIntArray;
+import io.github.dfa1.vortex.reader.array.MaterializedLongArray;
+import io.github.dfa1.vortex.reader.array.MaterializedShortArray;
 import io.github.dfa1.vortex.reader.compute.Predicate;
 import io.github.dfa1.vortex.csv.RowPredicate;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -11,6 +18,9 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.nio.file.Path;
 import java.util.stream.Stream;
 
@@ -225,5 +235,87 @@ class FilterCommandTest {
                 new Predicate.Between(1L, 2L),
                 new Predicate.And(leaf, leaf),
                 new Predicate.Or(leaf, leaf));
+    }
+
+    /// Direct tests of the unsigned comparison arms of [FilterCommand#compareValue]. The CLI
+    /// grammar can only reach these with a real file, so exercise them against in-memory arrays —
+    /// the bug they guard is silent wrong query results on unsigned columns (#216).
+    @Nested
+    class CompareValueUnsigned {
+
+        @Test
+        void unsignedHighHalfOrdersAfterSmallLiteral() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given — the magnesium filter shape: an unsigned column carrying a high-half value
+                // that the old signed getters read as negative, silently ordering it BEFORE the
+                // literal (so `col >= 130` wrongly excluded it). Each width holds such a value.
+                Long threshold = 130L;
+
+                // When / Then — every unsigned high-half value must compare greater than 130
+                assertThat(FilterCommand.compareValue(u64(arena, Long.MIN_VALUE), 0, threshold)).isPositive();
+                assertThat(FilterCommand.compareValue(u32(arena, (int) 3_000_000_000L), 0, threshold)).isPositive();
+                assertThat(FilterCommand.compareValue(u16(arena, (short) 60_000), 0, threshold)).isPositive();
+                assertThat(FilterCommand.compareValue(u8(arena, (byte) 200), 0, threshold)).isPositive();
+            }
+        }
+
+        @Test
+        void signedNegativeStillOrdersBeforeZero() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given — a signed column must keep its negative ordering: the unsigned path must
+                // not leak into signed dtypes.
+                // When / Then
+                assertThat(FilterCommand.compareValue(i64(arena, -1L), 0, 0L)).isNegative();
+                assertThat(FilterCommand.compareValue(i8(arena, (byte) -5), 0, 0L)).isNegative();
+            }
+        }
+
+        @Test
+        void unsignedU64ComparedToDoubleLiteral() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given — a fractional literal takes the double path; a U64 high-half value must
+                // convert to a large positive magnitude, not a negative double.
+                // When / Then
+                assertThat(FilterCommand.compareValue(u64(arena, Long.MIN_VALUE), 0, 130.5)).isPositive();
+            }
+        }
+
+        private Array u64(Arena arena, long v) {
+            return new MaterializedLongArray(DType.U64, 1, longSeg(arena, v));
+        }
+
+        private Array i64(Arena arena, long v) {
+            return new MaterializedLongArray(DType.I64, 1, longSeg(arena, v));
+        }
+
+        private Array u32(Arena arena, int v) {
+            MemorySegment seg = arena.allocate(4, 4);
+            seg.set(ValueLayout.JAVA_INT, 0, v);
+            return new MaterializedIntArray(DType.U32, 1, seg.asReadOnly());
+        }
+
+        private Array u16(Arena arena, short v) {
+            MemorySegment seg = arena.allocate(2, 2);
+            seg.set(ValueLayout.JAVA_SHORT, 0, v);
+            return new MaterializedShortArray(DType.U16, 1, seg.asReadOnly());
+        }
+
+        private Array u8(Arena arena, byte v) {
+            MemorySegment seg = arena.allocate(1, 1);
+            seg.set(ValueLayout.JAVA_BYTE, 0, v);
+            return new MaterializedByteArray(DType.U8, 1, seg.asReadOnly());
+        }
+
+        private Array i8(Arena arena, byte v) {
+            MemorySegment seg = arena.allocate(1, 1);
+            seg.set(ValueLayout.JAVA_BYTE, 0, v);
+            return new MaterializedByteArray(DType.I8, 1, seg.asReadOnly());
+        }
+
+        private MemorySegment longSeg(Arena arena, long v) {
+            MemorySegment seg = arena.allocate(8, 8);
+            seg.set(ValueLayout.JAVA_LONG, 0, v);
+            return seg.asReadOnly();
+        }
     }
 }

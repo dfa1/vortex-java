@@ -52,6 +52,23 @@ class InspectorRenderTest {
         }
 
         @Test
+        void rendersUnsignedHighHalfValuesAsUnsignedDecimal() {
+            try (Arena arena = Arena.ofConfined()) {
+                // Given — an unsigned integer column (uci-wine's magnesium is stored unsigned); the
+                // detail view must not surface the two's-complement negative for high-half values.
+                // When / Then — U64 2^63, U32 3e9, U16 60000, U8 200 render as unsigned decimals
+                assertThat(InspectorRender.formatValue(ArrayFixtures.ulongs(arena, Long.MIN_VALUE), 0, DType.U64))
+                        .isEqualTo("9223372036854775808");
+                assertThat(InspectorRender.formatValue(ArrayFixtures.uints(arena, (int) 3_000_000_000L), 0, DType.U32))
+                        .isEqualTo("3000000000");
+                assertThat(InspectorRender.formatValue(ArrayFixtures.ushorts(arena, (short) 60_000), 0, DType.U16))
+                        .isEqualTo("60000");
+                assertThat(InspectorRender.formatValue(ArrayFixtures.ubytes(arena, (byte) 200), 0, DType.U8))
+                        .isEqualTo("200");
+            }
+        }
+
+        @Test
         void rendersDecimal() {
             // Given
             DType decimal = new DType.Decimal((byte) 10, (byte) 2, false);

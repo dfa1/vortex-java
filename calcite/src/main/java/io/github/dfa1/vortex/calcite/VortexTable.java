@@ -1,5 +1,6 @@
 package io.github.dfa1.vortex.calcite;
 
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.core.model.ColumnName;
 import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.reader.ArrayStats;
@@ -809,10 +810,17 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
             case DType.Primitive p -> switch (p.ptype()) {
                 case F64 -> ((DoubleArray) array).getDouble(r);
                 case F32 -> (double) ((FloatArray) array).getFloat(r);
-                case I64, U64 -> ((LongArray) array).getLong(r);
+                case I64 -> ((LongArray) array).getLong(r);
+                // U64 maps to signed BIGINT (no wider SQL integer exists): values with the high bit
+                // set have no signed-long representation, so fail loud rather than surface a
+                // negative to SQL — silent wrong results are the worse outcome.
+                case U64 -> unsignedBigint(((LongArray) array).getLong(r));
+                // U32 exceeds signed INTEGER, so it maps to BIGINT and widens losslessly here.
+                case U32 -> Integer.toUnsignedLong(((IntArray) array).getInt(r));
                 // Narrow ints decode to their own array width (Byte/Short/Int), not IntArray —
-                // each exposes getInt(r) with the correct sign/zero extension.
-                case I32, U32 -> ((IntArray) array).getInt(r);
+                // each exposes getInt(r) with the correct sign/zero extension. U16/U8 zero-extend
+                // into the wider signed SQL type (INTEGER/SMALLINT) they map to.
+                case I32 -> ((IntArray) array).getInt(r);
                 case I16, U16 -> ((ShortArray) array).getInt(r);
                 case I8, U8 -> ((ByteArray) array).getInt(r);
                 default -> throw new IllegalStateException("unsupported ptype: " + p.ptype());
@@ -821,6 +829,20 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
             case DType.Bool _ -> ((BoolArray) array).getBoolean(r);
             default -> throw new IllegalStateException("unsupported column dtype: " + type);
         };
+    }
+
+    /// Guards a U64 value being surfaced to Calcite's signed `BIGINT`: values with the high bit set
+    /// (`>= 2^63`) have no lossless signed-long representation, so this throws rather than let a
+    /// negative reach SQL. Vortex has no wider unsigned SQL type to widen into, so loud beats wrong.
+    ///
+    /// @param raw the raw U64 bits read from the column
+    /// @return `raw` unchanged when it fits the non-negative signed-long range
+    private static long unsignedBigint(long raw) {
+        if (raw < 0) {
+            throw new VortexException("U64 value " + Long.toUnsignedString(raw)
+                    + " exceeds the signed BIGINT range Calcite maps U64 to");
+        }
+        return raw;
     }
 
     /// Translates the Calcite predicates into a zone-map [RowFilter], keeping only the comparisons
@@ -966,15 +988,23 @@ public final class VortexTable extends AbstractTable implements ProjectableFilte
         };
     }
 
+    /// Maps a Vortex dtype to a Calcite SQL type. Unsigned integers map to the next wider signed
+    /// SQL type so the declared type can hold their full range (`U8`->`SMALLINT`, `U16`->`INTEGER`,
+    /// `U32`->`BIGINT`); `U64` is the exception — no wider SQL integer exists, so it maps to
+    /// `BIGINT` and [#value(Object, DType, long)] guards the high-half values that cannot fit.
+    ///
+    /// @param factory the Calcite type factory
+    /// @param type    the Vortex column dtype
+    /// @return the nullable-adjusted SQL type
     private static RelDataType toSqlType(RelDataTypeFactory factory, DType type) {
         RelDataType sql = switch (type) {
             case DType.Primitive p -> switch (p.ptype()) {
                 case F64 -> factory.createSqlType(SqlTypeName.DOUBLE);
                 case F32 -> factory.createSqlType(SqlTypeName.REAL);
-                case I64, U64 -> factory.createSqlType(SqlTypeName.BIGINT);
-                case I32, U32 -> factory.createSqlType(SqlTypeName.INTEGER);
-                case I16, U16 -> factory.createSqlType(SqlTypeName.SMALLINT);
-                case I8, U8 -> factory.createSqlType(SqlTypeName.TINYINT);
+                case I64, U64, U32 -> factory.createSqlType(SqlTypeName.BIGINT);
+                case I32, U16 -> factory.createSqlType(SqlTypeName.INTEGER);
+                case I16, U8 -> factory.createSqlType(SqlTypeName.SMALLINT);
+                case I8 -> factory.createSqlType(SqlTypeName.TINYINT);
                 default -> throw new IllegalStateException("unsupported ptype: " + p.ptype());
             };
             case DType.Utf8 _ -> factory.createSqlType(SqlTypeName.VARCHAR);

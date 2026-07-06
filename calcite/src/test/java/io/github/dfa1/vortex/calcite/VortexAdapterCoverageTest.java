@@ -82,11 +82,13 @@ class VortexAdapterCoverageTest {
         // Given / When
         RelDataType rowType = new VortexTable(file).getRowType(new JavaTypeFactoryImpl());
 
-        // Then — one SqlTypeName per logical type
+        // Then — one SqlTypeName per logical type. Unsigned integers map to the next wider signed
+        // SQL type so the declared type holds their full range (#216); U64 is the exception (no
+        // wider SQL integer) and stays BIGINT with a value-side overflow guard.
         Map<String, SqlTypeName> expected = Map.ofEntries(
-                Map.entry("i8", SqlTypeName.TINYINT), Map.entry("u8", SqlTypeName.TINYINT),
-                Map.entry("i16", SqlTypeName.SMALLINT), Map.entry("u16", SqlTypeName.SMALLINT),
-                Map.entry("i32", SqlTypeName.INTEGER), Map.entry("u32", SqlTypeName.INTEGER),
+                Map.entry("i8", SqlTypeName.TINYINT), Map.entry("u8", SqlTypeName.SMALLINT),
+                Map.entry("i16", SqlTypeName.SMALLINT), Map.entry("u16", SqlTypeName.INTEGER),
+                Map.entry("i32", SqlTypeName.INTEGER), Map.entry("u32", SqlTypeName.BIGINT),
                 Map.entry("i64", SqlTypeName.BIGINT), Map.entry("u64", SqlTypeName.BIGINT),
                 Map.entry("f32", SqlTypeName.REAL), Map.entry("f64", SqlTypeName.DOUBLE),
                 Map.entry("s", SqlTypeName.VARCHAR), Map.entry("b", SqlTypeName.BOOLEAN));
