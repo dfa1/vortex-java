@@ -127,15 +127,15 @@ public final class VortexGridTui {
                     jumpCol(totalCols - 1);
                     yield true;
                 }
-                case Key.Char c when c.value() == 'g' -> {
+                case Key.Char(var value) when value == 'g' -> {
                     jumpRow(0);
                     yield true;
                 }
-                case Key.Char c when c.value() == 'G' -> {
+                case Key.Char(var value) when value == 'G' -> {
                     jumpRow(totalRows - 1);
                     yield true;
                 }
-                case Key.Char c when c.value() == 'q' -> false;
+                case Key.Char(var value) when value == 'q' -> false;
                 case Key.Escape _ -> false;
                 case Key.Eof _ -> false;
                 default -> true;

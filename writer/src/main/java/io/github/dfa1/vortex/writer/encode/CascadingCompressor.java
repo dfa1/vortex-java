@@ -29,7 +29,7 @@ public final class CascadingCompressor {
 
     private static int dataLength(Object data) {
         return switch (data) {
-            case StructData sd -> sd.fieldArrays().isEmpty() ? 0 : dataLength(sd.fieldArrays().getFirst());
+            case StructData(var fieldArrays) -> fieldArrays.isEmpty() ? 0 : dataLength(fieldArrays.getFirst());
             case byte[] a -> a.length;
             case short[] a -> a.length;
             case int[] a -> a.length;
@@ -48,8 +48,8 @@ public final class CascadingCompressor {
     /// Falls back to first-N when the data is short enough for one stride to span it.
     private static Object stratifiedSample(Object data, int sampleSize, long seed) {
         return switch (data) {
-            case StructData sd -> {
-                List<Object> sliced = sd.fieldArrays().stream()
+            case StructData(var fieldArrays) -> {
+                List<Object> sliced = fieldArrays.stream()
                         .map(f -> stratifiedSample(f, sampleSize, seed)).toList();
                 yield new StructData(sliced);
             }

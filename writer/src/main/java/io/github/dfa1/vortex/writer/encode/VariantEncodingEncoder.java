@@ -99,15 +99,15 @@ public final class VariantEncodingEncoder implements EncodingEncoder {
     /// Converts a shreddable scalar dtype to its protobuf form for `ProtoVariantMetadata`.
     private static io.github.dfa1.vortex.core.proto.ProtoDType toProtoDtype(DType dtype) {
         return switch (dtype) {
-            case DType.Primitive p -> io.github.dfa1.vortex.core.proto.ProtoDType.ofPrimitive(
+            case DType.Primitive(var ptype, var nullable) -> io.github.dfa1.vortex.core.proto.ProtoDType.ofPrimitive(
                     new io.github.dfa1.vortex.core.proto.ProtoPrimitive(
-                            io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(p.ptype().ordinal()), p.nullable()));
-            case DType.Bool b -> io.github.dfa1.vortex.core.proto.ProtoDType.ofBool(
-                    new io.github.dfa1.vortex.core.proto.ProtoBool(b.nullable()));
-            case DType.Utf8 u -> io.github.dfa1.vortex.core.proto.ProtoDType.ofUtf8(
-                    new io.github.dfa1.vortex.core.proto.ProtoUtf8(u.nullable()));
-            case DType.Binary bin -> io.github.dfa1.vortex.core.proto.ProtoDType.ofBinary(
-                    new io.github.dfa1.vortex.core.proto.ProtoBinary(bin.nullable()));
+                            io.github.dfa1.vortex.core.proto.ProtoPType.fromValue(ptype.ordinal()), nullable));
+            case DType.Bool(var nullable) -> io.github.dfa1.vortex.core.proto.ProtoDType.ofBool(
+                    new io.github.dfa1.vortex.core.proto.ProtoBool(nullable));
+            case DType.Utf8(var nullable) -> io.github.dfa1.vortex.core.proto.ProtoDType.ofUtf8(
+                    new io.github.dfa1.vortex.core.proto.ProtoUtf8(nullable));
+            case DType.Binary(var nullable) -> io.github.dfa1.vortex.core.proto.ProtoDType.ofBinary(
+                    new io.github.dfa1.vortex.core.proto.ProtoBinary(nullable));
             default -> throw new VortexException(EncodingId.VORTEX_VARIANT,
                     "shredded dtype not supported: " + dtype);
         };

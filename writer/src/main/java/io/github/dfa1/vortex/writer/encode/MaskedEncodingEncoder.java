@@ -30,14 +30,14 @@ public final class MaskedEncodingEncoder implements EncodingEncoder {
 
     @Override
     public EncodeResult encode(DType dtype, Object data, EncodeContext ctx) {
-        if (!(data instanceof NullableData nd)) {
+        if (!(data instanceof NullableData(var values, var validity))) {
             throw new VortexException(EncodingId.VORTEX_MASKED,
                     "expected NullableData, got " + (data == null ? "null" : data.getClass().getName()));
         }
         DType nonNullable = dtype.withNullable(false);
         EncodingEncoder inner = pickInner(nonNullable);
-        EncodeResult valuesResult = inner.encode(nonNullable, nd.values(), ctx);
-        EncodeResult validityResult = new BoolEncodingEncoder().encode(DType.BOOL, nd.validity(), ctx);
+        EncodeResult valuesResult = inner.encode(nonNullable, values, ctx);
+        EncodeResult validityResult = new BoolEncodingEncoder().encode(DType.BOOL, validity, ctx);
 
         int valuesBufCount = valuesResult.buffers().size();
         EncodeNode validityNode = EncodeNode.remapBufferIndices(validityResult.rootNode(), valuesBufCount);
