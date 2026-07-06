@@ -6,6 +6,7 @@ import dev.hardwood.metadata.RepetitionType;
 import dev.hardwood.reader.ParquetFileReader;
 import dev.hardwood.reader.RowReader;
 import dev.hardwood.schema.ColumnSchema;
+import io.github.dfa1.vortex.core.error.VortexException;
 import io.github.dfa1.vortex.csv.CsvExporter;
 import io.github.dfa1.vortex.csv.ExportOptions;
 import org.junit.jupiter.api.DynamicTest;
@@ -108,14 +109,16 @@ class RaincloudConformanceIntegrationTest {
     }
 
     private static void assertStillFails(Path vortex, Path parquet, String status) {
-        // Given / When — a decode gap still reproduces when the export itself throws; any
-        // RuntimeException counts (a gap may surface as IndexOutOfBoundsException before its
-        // decoder gains proper VortexException bounds guards, e.g. #215). No oracle needed
+        // Given / When — a decode gap still reproduces when the export itself throws.
+        // Only VortexException (the contractual untrusted-input failure) and, narrowly,
+        // IndexOutOfBoundsException count: the latter is itself a bounds-guard bug (#215
+        // throws it today) and this arm dies with that fix — a blanket RuntimeException
+        // catch would green unrelated regressions (NPEs, ...). No oracle needed here
         // (the oracle may not even read this parquet, e.g. nested columns).
         List<String> result;
         try {
             result = exportVortex(vortex);
-        } catch (RuntimeException e) {
+        } catch (VortexException | IndexOutOfBoundsException e) {
             return;
         } catch (IOException e) {
             throw new UncheckedIOException(e);
@@ -145,7 +148,9 @@ class RaincloudConformanceIntegrationTest {
 
     /// Reads the parquet sibling through hardwood; an oracle-side failure (nested
     /// columns, unsupported physical type) aborts the slug rather than failing it —
-    /// it says nothing about vortex-java.
+    /// it says nothing about vortex-java. Deliberate asymmetry: an `ok` slug whose
+    /// parquet the oracle cannot read stops being verified (visibly, as skipped) —
+    /// widen the oracle rather than let unverifiable entries fail the build.
     private static List<String> oracleLines(Path parquet) {
         StringWriter out = new StringWriter();
         try {

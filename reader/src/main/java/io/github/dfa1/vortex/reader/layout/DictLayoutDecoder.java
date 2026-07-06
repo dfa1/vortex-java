@@ -185,6 +185,13 @@ final class DictLayoutDecoder implements LayoutDecoder {
                 default -> throw new VortexException(EncodingId.VORTEX_DICT,
                         "layout: invalid codes type: " + codes.getClass().getSimpleName());
             };
+            // Untrusted-input guard: codes outside the pool must fail as VortexException,
+            // never as a raw JDK IndexOutOfBoundsException.
+            if (code >= poolValidity.length()) {
+                throw new VortexException(EncodingId.VORTEX_DICT,
+                        "layout: code " + code + " out of range for pool validity of length "
+                                + poolValidity.length());
+            }
             boolean valid = (codesValidity == null || codesValidity.getBoolean(i))
                     && poolValidity.getBoolean(code);
             if (valid) {

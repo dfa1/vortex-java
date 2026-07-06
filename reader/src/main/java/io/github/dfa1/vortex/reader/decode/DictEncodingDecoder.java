@@ -164,7 +164,7 @@ public final class DictEncodingDecoder implements EncodingDecoder {
         if (codesCap >= rowCount) {
             for (long i = 0; i < rowCount; i++) {
                 boolean valid = (codesValidity == null || codesValidity.getBoolean(i))
-                        && poolValidity.getBoolean(readCode(codesBuf, i, codePType));
+                        && poolValid(poolValidity, readCode(codesBuf, i, codePType));
                 if (valid) {
                     setBit(bits, i);
                 }
@@ -172,13 +172,24 @@ public final class DictEncodingDecoder implements EncodingDecoder {
         } else {
             for (long i = 0; i < rowCount; i++) {
                 boolean valid = (codesValidity == null || codesValidity.getBoolean(i))
-                        && poolValidity.getBoolean(readCode(codesBuf, i % codesCap, codePType));
+                        && poolValid(poolValidity, readCode(codesBuf, i % codesCap, codePType));
                 if (valid) {
                     setBit(bits, i);
                 }
             }
         }
         return new MaterializedBoolArray(DType.BOOL, rowCount, bits.asReadOnly());
+    }
+
+    /// Untrusted-input guard: a malformed file may carry codes outside the pool, and the
+    /// validity bitmap lookup must fail as [VortexException], never as a raw JDK
+    /// IndexOutOfBoundsException.
+    private static boolean poolValid(BoolArray poolValidity, long code) {
+        if (code >= poolValidity.length()) {
+            throw new VortexException(EncodingId.VORTEX_DICT,
+                    "code " + code + " out of range for pool validity of length " + poolValidity.length());
+        }
+        return poolValidity.getBoolean(code);
     }
 
     private static long readCode(MemorySegment codes, long i, PType codePType) {
