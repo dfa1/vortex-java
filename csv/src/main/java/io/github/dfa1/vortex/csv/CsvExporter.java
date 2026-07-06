@@ -166,7 +166,8 @@ public final class CsvExporter {
 
     /// Whether the array's dtype is an unsigned integer, so high-half values must render as
     /// unsigned decimal rather than the two's-complement negative that the raw signed getter
-    /// returns. A [MaskedArray]'s inner array carries the same ptype, so recursing is safe.
+    /// returns. Callers only pass leaf value arrays: the [MaskedArray] arm of `cellValue`
+    /// recurses into the inner array before any integer arm is reached.
     private static boolean isUnsigned(Array arr) {
         return arr.dtype() instanceof DType.Primitive p && p.ptype().isUnsigned();
     }
