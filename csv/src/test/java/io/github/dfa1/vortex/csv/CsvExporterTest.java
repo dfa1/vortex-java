@@ -5,9 +5,14 @@ import io.github.dfa1.vortex.core.model.DType;
 import io.github.dfa1.vortex.core.model.PType;
 import io.github.dfa1.vortex.writer.VortexWriter;
 import io.github.dfa1.vortex.writer.WriteOptions;
+import io.github.dfa1.vortex.writer.encode.BoolEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.MaskedEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.NullEncodingEncoder;
 import io.github.dfa1.vortex.writer.encode.NullableData;
 import io.github.dfa1.vortex.writer.encode.PrimitiveEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.StructData;
+import io.github.dfa1.vortex.writer.encode.StructEncodingEncoder;
+import io.github.dfa1.vortex.writer.encode.VarBinEncodingEncoder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -258,5 +263,161 @@ class CsvExporterTest {
         // Then
         List<String> result = Files.readAllLines(csv);
         assertThat(result).containsExactly("v", "1", "9223372036854775808", "18446744073709551615");
+    }
+
+    @Test
+    void rendersNestedStructColumnAsJsonObject(@TempDir Path tmp) throws Exception {
+        // Given a struct column of mixed field types (i64, utf8, f64), the shape #217 threw on:
+        // StructArray had no cellValue arm. The sibling plain columns confirm structs coexist
+        // with scalar columns in the same file.
+        Path vortex = tmp.resolve("nested.vortex");
+        DType.Struct inner = new DType.Struct(
+                List.of(ColumnName.of("id"), ColumnName.of("name"), ColumnName.of("score")),
+                List.of(DType.I64, DType.UTF8, DType.F64),
+                false);
+        DType.Struct schema = new DType.Struct(
+                List.of(ColumnName.of("region"), ColumnName.of("data")),
+                List.of(DType.UTF8, inner),
+                false);
+        try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             // Struct columns route through the recursive cascade (the flat first-match path has
+             // no struct encoder), so enable cascading here and in the other struct cases.
+             VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.cascading(3))) {
+            writer.writeChunk(Map.of(
+                    ColumnName.of("region"), new String[]{"north", "south"},
+                    ColumnName.of("data"), new StructData(List.of(
+                            new long[]{1L, 2L},
+                            new String[]{"Alice", "Bob"},
+                            new double[]{9.5, 3.25}))));
+        }
+        Path csv = tmp.resolve("out.csv");
+
+        // When
+        CsvExporter.exportCsv(vortex, csv);
+
+        // Then — the struct cell is a JSON object in declared field order; numbers/strings quoted
+        // per JSON, not CSV.
+        List<String> result = Files.readAllLines(csv);
+        assertThat(result).containsExactly(
+                "region,data",
+                "north,\"{\"\"id\"\":1,\"\"name\"\":\"\"Alice\"\",\"\"score\"\":9.5}\"",
+                "south,\"{\"\"id\"\":2,\"\"name\"\":\"\"Bob\"\",\"\"score\"\":3.25}\"");
+    }
+
+    @Test
+    void rendersNullStructFieldAsJsonNull(@TempDir Path tmp) throws Exception {
+        // Given a struct whose second field is nullable and null on the first row — the field must
+        // become the JSON token null (not an empty field, which is bare CSV's null convention and
+        // ambiguous inside a JSON object). Written on the flat path with an explicit struct encoder:
+        // StructEncodingEncoder wraps a NullableData field in the masked encoder, whereas the
+        // recursive cascade does not yet accept nullable struct fields. A `region` sibling keeps the
+        // struct column off the single-column path; `label` needs two struct fields to survive decode
+        // (a one-field struct is unwrapped to its bare field by StructEncodingDecoder).
+        Path vortex = tmp.resolve("nullfield.vortex");
+        DType.Struct inner = new DType.Struct(
+                List.of(ColumnName.of("id"), ColumnName.of("label")),
+                List.of(DType.I64, new DType.Primitive(PType.I64, true)),
+                false);
+        DType.Struct schema = new DType.Struct(
+                List.of(ColumnName.of("region"), ColumnName.of("data")),
+                List.of(DType.UTF8, inner),
+                false);
+        try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.defaults(),
+                     List.of(new StructEncodingEncoder(), new PrimitiveEncodingEncoder(),
+                             new VarBinEncodingEncoder(), new MaskedEncodingEncoder(),
+                             new BoolEncodingEncoder()))) {
+            writer.writeChunk(Map.of(
+                    ColumnName.of("region"), new String[]{"north", "south"},
+                    ColumnName.of("data"), new StructData(List.of(
+                            new long[]{1L, 2L},
+                            new NullableData(new long[]{0L, 42L}, new boolean[]{false, true})))));
+        }
+        Path csv = tmp.resolve("out.csv");
+
+        // When
+        CsvExporter.exportCsv(vortex, csv);
+
+        // Then the null field is the JSON token null; the valid field is the bare number.
+        List<String> result = Files.readAllLines(csv);
+        assertThat(result).containsExactly(
+                "region,data",
+                "north,\"{\"\"id\"\":1,\"\"label\"\":null}\"",
+                "south,\"{\"\"id\"\":2,\"\"label\"\":42}\"");
+    }
+
+    @Test
+    void escapesQuotesAndCommasInsideStructStringField(@TempDir Path tmp) throws Exception {
+        // Given a struct string field value containing a JSON-significant quote and a comma: the
+        // quote must be JSON-escaped (\") inside the object, and the CSV layer independently doubles
+        // the quotes of the whole cell. The comma must NOT split the CSV cell. Two struct fields
+        // (note, rank) keep the struct from being unwrapped on decode; the `label` sibling keeps it
+        // off the single-column path.
+        Path vortex = tmp.resolve("escape.vortex");
+        DType.Struct inner = new DType.Struct(
+                List.of(ColumnName.of("note"), ColumnName.of("rank")),
+                List.of(DType.UTF8, DType.I64),
+                false);
+        DType.Struct schema = new DType.Struct(
+                List.of(ColumnName.of("label"), ColumnName.of("data")),
+                List.of(DType.UTF8, inner),
+                false);
+        try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.cascading(3))) {
+            writer.writeChunk(Map.of(
+                    ColumnName.of("label"), new String[]{"x"},
+                    ColumnName.of("data"), new StructData(List.of(
+                            new String[]{"a\"b,c"},
+                            new long[]{7L}))));
+        }
+        Path csv = tmp.resolve("out.csv");
+
+        // When
+        CsvExporter.exportCsv(vortex, csv);
+
+        // Then — JSON escapes the inner quote to \"; the CSV layer then doubles every quote in the
+        // whole field. The comma stays inside the single quoted cell.
+        List<String> result = Files.readAllLines(csv);
+        assertThat(result).containsExactly(
+                "label,data",
+                "x,\"{\"\"note\"\":\"\"a\\\"\"b,c\"\",\"\"rank\"\":7}\"");
+    }
+
+    @Test
+    void rendersStructInStructAsNestedJsonObject(@TempDir Path tmp) throws Exception {
+        // Given a struct whose field is itself a struct: the inner struct must recurse into a nested
+        // JSON object, not throw. A `region` sibling keeps the struct column off the single-column
+        // path; every struct here has two fields so none is unwrapped on decode.
+        Path vortex = tmp.resolve("deep.vortex");
+        DType.Struct innermost = new DType.Struct(
+                List.of(ColumnName.of("lat"), ColumnName.of("lon")),
+                List.of(DType.F64, DType.F64),
+                false);
+        DType.Struct inner = new DType.Struct(
+                List.of(ColumnName.of("name"), ColumnName.of("coord")),
+                List.of(DType.UTF8, innermost),
+                false);
+        DType.Struct schema = new DType.Struct(
+                List.of(ColumnName.of("region"), ColumnName.of("data")),
+                List.of(DType.UTF8, inner),
+                false);
+        try (FileChannel ch = FileChannel.open(vortex, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             VortexWriter writer = VortexWriter.create(ch, schema, WriteOptions.cascading(3))) {
+            writer.writeChunk(Map.of(
+                    ColumnName.of("region"), new String[]{"north"},
+                    ColumnName.of("data"), new StructData(List.of(
+                            new String[]{"origin"},
+                            new StructData(List.of(new double[]{1.0}, new double[]{2.0}))))));
+        }
+        Path csv = tmp.resolve("out.csv");
+
+        // When
+        CsvExporter.exportCsv(vortex, csv);
+
+        // Then
+        List<String> result = Files.readAllLines(csv);
+        assertThat(result).containsExactly(
+                "region,data",
+                "north,\"{\"\"name\"\":\"\"origin\"\",\"\"coord\"\":{\"\"lat\"\":1.0,\"\"lon\"\":2.0}}\"");
     }
 }

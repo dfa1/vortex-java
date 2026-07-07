@@ -14,6 +14,7 @@ import io.github.dfa1.vortex.reader.array.LongArray;
 import io.github.dfa1.vortex.reader.array.ShortArray;
 import io.github.dfa1.vortex.reader.array.MaskedArray;
 import io.github.dfa1.vortex.reader.array.NullArray;
+import io.github.dfa1.vortex.reader.array.StructArray;
 import io.github.dfa1.vortex.reader.array.VarBinArray;
 import io.github.dfa1.vortex.reader.VortexReader;
 import io.github.dfa1.vortex.reader.ScanIterator;
@@ -139,6 +140,22 @@ public final class CsvExporter {
         state[1] = nextNotify;
     }
 
+    /// Renders one cell for the row `rowIdx` of column array `arr`.
+    ///
+    /// Leaf columns follow the JDK canonical rendering per type (signed/unsigned integer decimal,
+    /// `Double.toString`, `Boolean.toString`, the raw utf8 string); a null row (a [MaskedArray]
+    /// invalid row or a [NullArray]) renders as an empty CSV field.
+    ///
+    /// A nested struct column ([StructArray], possibly wrapped in a [MaskedArray] when nullable)
+    /// renders as a single JSON object cell `{"field":value,...}` with fields in the struct dtype's
+    /// declared order. Field values reuse the same leaf rendering rules — numbers and booleans
+    /// unquoted, strings JSON-escaped and double-quoted, nested structs recursed — and a null field
+    /// (or null nested row) becomes a JSON `null`. Only the JSON layer is escaped here; the CSV
+    /// writer independently quotes any cell containing the delimiter or a quote character.
+    ///
+    /// @param arr    the column array to read from
+    /// @param rowIdx the zero-based row index within `arr`
+    /// @return the rendered cell text
     private static String cellValue(Array arr, long rowIdx) {
         return switch (arr) {
             // Long/IntArray have no dtype-aware getter, so gate the unsigned rendering on the
@@ -163,9 +180,77 @@ public final class CsvExporter {
             // All-null columns (DType.Null) hold only a row count: every cell is an empty
             // field, same rule as a MaskedArray null row.
             case NullArray ignored -> "";
+            // Nested struct column: render the whole row as a JSON object cell.
+            case StructArray sa -> jsonObject(sa, rowIdx);
             default -> throw new VortexException(
                     "unsupported array type for CSV export: " + arr.getClass().getSimpleName());
         };
+    }
+
+    /// Renders one struct row as a JSON object `{"field":value,...}` with fields in the struct
+    /// dtype's declared order.
+    private static String jsonObject(StructArray struct, long rowIdx) {
+        DType.Struct dtype = (DType.Struct) struct.dtype();
+        List<ColumnName> names = dtype.fieldNames();
+        StringBuilder sb = new StringBuilder();
+        sb.append('{');
+        for (int i = 0; i < names.size(); i++) {
+            if (i > 0) {
+                sb.append(',');
+            }
+            jsonString(sb, names.get(i).value());
+            sb.append(':');
+            sb.append(jsonValue(struct.field(i), rowIdx));
+        }
+        sb.append('}');
+        return sb.toString();
+    }
+
+    /// Renders one struct field value as JSON text: a nested object for structs, a quoted escaped
+    /// string for utf8, JSON `null` for a null row/field, and the bare leaf rendering (unquoted
+    /// number/boolean) for everything else. Unlike [#cellValue(Array, long)], a null here is the
+    /// JSON token `null` rather than an empty field, because inside a JSON object the empty-field
+    /// convention of bare CSV would be ambiguous.
+    private static String jsonValue(Array arr, long rowIdx) {
+        return switch (arr) {
+            case StructArray sa -> jsonObject(sa, rowIdx);
+            case MaskedArray ma -> ma.isValid(rowIdx) ? jsonValue(ma.inner(), rowIdx) : "null";
+            case NullArray ignored -> "null";
+            case VarBinArray va -> {
+                StringBuilder sb = new StringBuilder();
+                jsonString(sb, va.getString(rowIdx));
+                yield sb.toString();
+            }
+            // Numeric and boolean leaves render identically to a top-level cell, unquoted.
+            default -> cellValue(arr, rowIdx);
+        };
+    }
+
+    /// Appends `value` to `sb` as a JSON string literal: wrapped in double quotes with `"`,
+    /// backslash, the standard short escapes, and any other control character below `U+0020`
+    /// escaped as `\\uXXXX`.
+    private static void jsonString(StringBuilder sb, String value) {
+        sb.append('"');
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            switch (c) {
+                case '"' -> sb.append("\\\"");
+                case '\\' -> sb.append("\\\\");
+                case '\n' -> sb.append("\\n");
+                case '\r' -> sb.append("\\r");
+                case '\t' -> sb.append("\\t");
+                case '\b' -> sb.append("\\b");
+                case '\f' -> sb.append("\\f");
+                default -> {
+                    if (c < 0x20) {
+                        sb.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        sb.append(c);
+                    }
+                }
+            }
+        }
+        sb.append('"');
     }
 
     /// Whether the array's dtype is an unsigned integer, so high-half values must render as
